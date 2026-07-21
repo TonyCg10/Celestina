@@ -12,17 +12,21 @@
 //!
 //! ## Iteration
 //!
-//! Create-folder, create-file and rename are implemented. Copy, move and Trash
-//! follow, each holding the guarantee that a source is never removed before its
-//! destination is verified. Every verb refuses to silently overwrite an existing
-//! target: a conflict is reported, never resolved by destroying data.
+//! Create-folder, create-file, rename, copy and move are implemented; Trash
+//! follows. Every verb holds the guarantee that a source is never removed before
+//! its destination is verified, and none silently overwrites an existing target:
+//! a conflict is reported, never resolved by destroying data.
 
+mod copy;
 mod create;
 mod error;
 mod name;
+mod relocate;
 mod rename;
 
+pub use copy::{copy, Progress};
 pub use create::{create_directory, create_file};
 pub use error::OpError;
 pub use name::{validate_name, NameError};
+pub use relocate::{move_entry, Moved};
 pub use rename::{rename, Renamed};

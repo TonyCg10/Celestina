@@ -19,6 +19,13 @@ pub enum OpError {
     AlreadyExists { path: PathBuf },
     /// A required source path was missing when the operation ran.
     SourceMissing { path: PathBuf },
+    /// The destination lies inside the source, which would recurse forever.
+    DestinationInsideSource {
+        source: PathBuf,
+        destination: PathBuf,
+    },
+    /// The source is a file type this domain will not copy (socket, fifo, device).
+    UnsupportedFileType { path: PathBuf },
     /// Any other IO failure, tagged with the path it happened on.
     Io {
         path: PathBuf,
@@ -48,6 +55,22 @@ impl fmt::Display for OpError {
             }
             Self::SourceMissing { path } => {
                 write!(formatter, "'{}' no longer exists", path.display())
+            }
+            Self::DestinationInsideSource {
+                source,
+                destination,
+            } => write!(
+                formatter,
+                "cannot copy '{}' into itself ('{}')",
+                source.display(),
+                destination.display()
+            ),
+            Self::UnsupportedFileType { path } => {
+                write!(
+                    formatter,
+                    "'{}' is a file type Siderita cannot copy",
+                    path.display()
+                )
             }
             Self::Io {
                 path,

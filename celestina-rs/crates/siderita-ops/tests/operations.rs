@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use celestina_core::CancellationToken;
-use siderita_ops::{create_directory, create_file, rename, OpError};
+use siderita_ops::{copy, create_directory, create_file, move_entry, rename, OpError, Progress};
 
 /// A throwaway directory in the system temp dir, removed on drop.
 struct TestDir(PathBuf);
@@ -150,4 +150,191 @@ fn create_and_rename_preserve_non_utf8_names() {
     let renamed = rename(&made, raw2, &live()).expect("rename non-utf8");
     assert_eq!(renamed.to.file_name(), Some(raw2));
     assert!(renamed.to.exists());
+}
+
+// ── copy ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn copy_duplicates_a_file_without_touching_the_source() {
+    let dir = TestDir::new("copy-file");
+    let source = dir.path().join("orig.txt");
+    let into = dir.path().join("dest");
+    fs::create_dir(&into).expect("mk dest");
+    fs::write(&source, b"hello").expect("seed");
+
+    let made = copy(&source, &into, &live(), &mut |_| {}).expect("copy");
+    assert_eq!(made, into.join("orig.txt"));
+    assert_eq!(fs::read(&made).expect("read copy"), b"hello");
+    assert_eq!(fs::read(&source).expect("source intact"), b"hello");
+}
+
+#[test]
+fn copy_recurses_a_directory_tree() {
+    let dir = TestDir::new("copy-tree");
+    let source = dir.path().join("tree");
+    fs::create_dir(&source).expect("mk tree");
+    fs::create_dir(source.join("sub")).expect("mk sub");
+    fs::write(source.join("top.txt"), b"top").expect("seed top");
+    fs::write(source.join("sub/leaf.txt"), b"leaf").expect("seed leaf");
+    let into = dir.path().join("into");
+    fs::create_dir(&into).expect("mk into");
+
+    let made = copy(&source, &into, &live(), &mut |_| {}).expect("copy tree");
+    assert_eq!(made, into.join("tree"));
+    assert_eq!(fs::read(made.join("top.txt")).expect("read top"), b"top");
+    assert_eq!(
+        fs::read(made.join("sub/leaf.txt")).expect("read leaf"),
+        b"leaf"
+    );
+    assert!(source.join("sub/leaf.txt").exists(), "source tree intact");
+}
+
+#[test]
+fn copy_refuses_to_overwrite_an_existing_destination() {
+    let dir = TestDir::new("copy-conflict");
+    let source = dir.path().join("f");
+    let into = dir.path().join("into");
+    fs::create_dir(&into).expect("mk into");
+    fs::write(&source, b"new").expect("seed source");
+    fs::write(into.join("f"), b"existing").expect("seed existing");
+
+    let error = copy(&source, &into, &live(), &mut |_| {}).expect_err("must refuse");
+    assert!(matches!(error, OpError::AlreadyExists { .. }));
+    assert_eq!(
+        fs::read(into.join("f")).expect("existing intact"),
+        b"existing"
+    );
+}
+
+#[test]
+fn copy_refuses_a_destination_inside_the_source() {
+    let dir = TestDir::new("copy-inside");
+    let source = dir.path().join("box");
+    fs::create_dir(&source).expect("mk box");
+    let inside = source.join("inner");
+    fs::create_dir(&inside).expect("mk inner");
+
+    let error = copy(&source, &inside, &live(), &mut |_| {}).expect_err("must refuse");
+    assert!(matches!(error, OpError::DestinationInsideSource { .. }));
+}
+
+#[test]
+fn copy_reports_cumulative_progress() {
+    let dir = TestDir::new("copy-progress");
+    let source = dir.path().join("data");
+    let into = dir.path().join("into");
+    fs::create_dir(&into).expect("mk into");
+    fs::write(&source, vec![0u8; 5000]).expect("seed");
+
+    let mut last = Progress::default();
+    copy(&source, &into, &live(), &mut |report| last = report).expect("copy");
+    assert_eq!(last.bytes, 5000);
+    assert_eq!(last.items, 1);
+}
+
+#[test]
+fn a_cancelled_copy_creates_no_destination() {
+    let dir = TestDir::new("copy-cancel");
+    let source = dir.path().join("src.txt");
+    let into = dir.path().join("into");
+    fs::create_dir(&into).expect("mk into");
+    fs::write(&source, b"data").expect("seed");
+
+    let token = CancellationToken::new();
+    token.cancel();
+    let error = copy(&source, &into, &token, &mut |_| {}).expect_err("cancelled");
+    assert!(matches!(error, OpError::Cancelled));
+    assert!(!into.join("src.txt").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn copy_preserves_a_symlink_as_a_link() {
+    let dir = TestDir::new("copy-symlink");
+    let target = dir.path().join("target.txt");
+    fs::write(&target, b"t").expect("seed target");
+    let link = dir.path().join("link");
+    std::os::unix::fs::symlink(&target, &link).expect("mk symlink");
+    let into = dir.path().join("into");
+    fs::create_dir(&into).expect("mk into");
+
+    let made = copy(&link, &into, &live(), &mut |_| {}).expect("copy symlink");
+    let meta = fs::symlink_metadata(&made).expect("stat copy");
+    assert!(meta.file_type().is_symlink(), "copy must remain a symlink");
+    assert_eq!(fs::read_link(&made).expect("read link"), target);
+}
+
+// ── move ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn move_entry_relocates_a_file_on_the_same_filesystem() {
+    let dir = TestDir::new("move-file");
+    let source = dir.path().join("m.txt");
+    let into = dir.path().join("into");
+    fs::create_dir(&into).expect("mk into");
+    fs::write(&source, b"move me").expect("seed");
+
+    let moved = move_entry(&source, &into, &live(), &mut |_| {}).expect("move");
+    assert_eq!(moved.to, into.join("m.txt"));
+    assert!(!source.exists());
+    assert_eq!(
+        fs::read(into.join("m.txt")).expect("read moved"),
+        b"move me"
+    );
+}
+
+#[test]
+fn move_entry_relocates_a_directory_tree() {
+    let dir = TestDir::new("move-tree");
+    let source = dir.path().join("d");
+    fs::create_dir(&source).expect("mk d");
+    fs::write(source.join("f.txt"), b"x").expect("seed");
+    let into = dir.path().join("into");
+    fs::create_dir(&into).expect("mk into");
+
+    move_entry(&source, &into, &live(), &mut |_| {}).expect("move dir");
+    assert!(!source.exists());
+    assert_eq!(fs::read(into.join("d/f.txt")).expect("read"), b"x");
+}
+
+#[test]
+fn move_entry_refuses_to_overwrite_and_keeps_the_source() {
+    let dir = TestDir::new("move-conflict");
+    let source = dir.path().join("s");
+    let into = dir.path().join("into");
+    fs::create_dir(&into).expect("mk into");
+    fs::write(&source, b"src").expect("seed src");
+    fs::write(into.join("s"), b"dst").expect("seed dst");
+
+    let error = move_entry(&source, &into, &live(), &mut |_| {}).expect_err("must refuse");
+    assert!(matches!(error, OpError::AlreadyExists { .. }));
+    assert_eq!(fs::read(&source).expect("source kept"), b"src");
+    assert_eq!(fs::read(into.join("s")).expect("dst intact"), b"dst");
+}
+
+#[test]
+fn move_entry_reports_a_missing_source() {
+    let dir = TestDir::new("move-missing");
+    let into = dir.path().join("into");
+    fs::create_dir(&into).expect("mk into");
+
+    let error =
+        move_entry(&dir.path().join("ghost"), &into, &live(), &mut |_| {}).expect_err("must fail");
+    assert!(matches!(error, OpError::SourceMissing { .. }));
+}
+
+#[test]
+fn a_cancelled_move_does_nothing() {
+    let dir = TestDir::new("move-cancel");
+    let source = dir.path().join("s");
+    let into = dir.path().join("into");
+    fs::create_dir(&into).expect("mk into");
+    fs::write(&source, b"keep").expect("seed");
+
+    let token = CancellationToken::new();
+    token.cancel();
+    let error = move_entry(&source, &into, &token, &mut |_| {}).expect_err("cancelled");
+    assert!(matches!(error, OpError::Cancelled));
+    assert!(source.exists(), "source untouched");
+    assert!(!into.join("s").exists());
 }
