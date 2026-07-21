@@ -21,11 +21,14 @@ thread and rejects stale results. The core preserves Unix and non-UTF-8 identity
 uses generations and opaque tokens, and provides cancellation/join; the 30
 workspace tests plus the host's own bookmark/places unit tests pass. The UI has
 grown past the minimal slice — multi-selection, context menus, sidebar places
-(XDG) and bookmarks — but stays read-only toward the user's files: the only writes
-are Siderita's own bookmark config under `~/.config`. Installation staging,
+(XDG), bookmarks and tabs — but stays read-only toward the user's files: the only
+writes are Siderita's own bookmark config under `~/.config`. Installation staging,
 watcher, `file://`, a native role-based model, UI tests and real-Wayland
 blur/frame numbers are still open, so Qt/QML stays a **provisional** first
-iteration.
+iteration. The arc from here is deliberate: **operations** (CP1) make it a
+manager, **interoperation** (CP2) make it a good desktop citizen, and **comfort**
+(CP3) adds what a daily manager is expected to have — each feature earned by a
+demonstrated need, never by parity.
 
 **Key decisions.** Siderita keeps its own roadmap and release; the Rust cores live
 in a separate workspace so each domain is testable without a toolkit; C++ is
@@ -55,6 +58,7 @@ resource report ratifies or rejects Qt/QML with data.
 - [x] Sidebar places — Inicio plus the standard XDG user folders (Escritorio, Documentos, Descargas, Música, Imágenes, Vídeos), resolved from `user-dirs.dirs` and shown only when they exist
 - [x] Sidebar bookmarks — add from a folder's context menu or by dragging it onto the sidebar, rename and remove, navigate; persisted across restarts to `~/.config/siderita/bookmarks.tsv`
 - [x] Header moved into the content box as independent glass pills (breadcrumb + search) that fade to glass on scroll; controls consolidated into a bottom bar; sidebar bottom info box
+- [x] Tabs — open a folder in a new tab (middle-click or its context menu), shown as a scrollable strip of isolated glass pills below the breadcrumb/search that fade to glass on scroll; each tab is an independent navigation context (its own history, scan worker and selection), closable via × / middle-click, with `Ctrl+T` / `Ctrl+W` / `Ctrl+Tab`
 - [x] Host-side Rust for `entry_path`, the bookmark store and the XDG places resolver, with unit tests (bookmark round-trip + sanitization, `user-dirs.dirs` parsing)
 - [x] Truthful loading / empty / error / degraded-watch states
 - [x] Freedesktop theme icons with minimal embedded SVG fallbacks
@@ -105,23 +109,48 @@ unratified.
 
 ## Checkpoint 1 — Loss-free operations (S1)
 **Goal:** create, rename, copy, move and send-to-Trash on disposable fixtures
-only, with no silent data loss.
+only, with no silent data loss — the step that turns the read-only viewer into a
+manager. Opening files through their handler lands here too; deeper handler
+management is CP2.
 
 - [ ] Wire the write-side domain from `celestina-rs` CP1 into the app
-- [ ] Preflight + conflict resolution + cancellation + per-item results
-- [ ] Freedesktop Trash support
+- [ ] Core verbs: new folder / new file, rename, copy, move, delete-to-Trash
+- [ ] Cut / copy / paste with clipboard interop — the URI-list + desktop file-clipboard convention, so paste works to and from other managers
+- [ ] Preflight + conflict resolution + cancellation + per-item results, with a progress surface for long copies and moves
+- [ ] Undo the last operation (move / rename / trash) — cheap insurance for the no-data-loss guarantee
+- [ ] Keyboard verbs: F2 rename, Delete → Trash, Ctrl+C / X / V
+- [ ] Activate a file → open with its default application (xdg-open); the Open-with… chooser and default-app management are CP2
+- [ ] Freedesktop Trash support (send here; restore is CP2)
 - [ ] Guarantee: a source is never removed after a partial copy or without revalidation
 
 ## Checkpoint 2 — Interoperable daily manager (S2)
 **Goal:** a manager good enough for daily use, integrated through standards.
 
-- [ ] XDG Trash restore, cross-filesystem moves, and volume handling
-- [ ] Safe open-with/handlers, drag-and-drop, and `org.freedesktop.FileManager1`
-- [ ] Full accessibility and daily-use resource budgets
+- [ ] XDG Trash restore, cross-filesystem moves, and removable-volume mount / unmount (the sidebar "removable files" the purpose promises)
+- [ ] Drag-and-drop to move / copy within the view and to and from other applications
+- [ ] Open-with… chooser, set-default-application, and safe `.desktop` handler wiring
+- [ ] `org.freedesktop.FileManager1` D-Bus, so "Show in file manager" from other apps lands here
+- [ ] Full accessibility (screen reader, focus order, contrast, animations) and daily-use resource budgets
 - [x] Consume the shared CelestinaStyle tokens, glass and fallback icons — the theme/glass now live canonically in `../celestina-style` and are compiled into this module; Siderita's private copies were removed (verified: builds + offscreen run clean). Installed-release form is tracked in CelestinaStyle CP0.
+
+## Checkpoint 3 — Comfortable daily manager (S3)
+**Goal:** the comforts a manager is expected to have, each earned by a
+demonstrated daily need and weighed against the resource budget — added one at a
+time, never as a batch for parity.
+
+- [ ] Properties / Get-Info — permissions, owner, MIME, timestamps, symlink target — with recursive folder size
+- [ ] Details / columns view with sortable size / date / type columns, beyond today's single subtitle line
+- [ ] Recursive filename search — a bounded, cancellable, non-indexed directory walk that is truthful about the scope it covered
+- [ ] Thumbnails + a spacebar quick-look preview (images / video / PDF) — gated hardest of all, since it adds the freedesktop thumbnail spec and a cache to the closure; ships only on a proven need
+- [ ] "Open terminal here" — launching the desktop's terminal, not an embedded one
 
 ## Non-goals
 
 No cloud/network, global indexer, archive VFS, plugins, IDE, terminal or suite
 daemon, and no features of other applications, before the declared local manager
 is complete.
+
+The boundary, not a loophole: CP3's bounded non-indexed filename search is not the
+global indexer ruled out here, and "open terminal here" launches an external
+terminal rather than embedding one. Everything else on this list stays out until
+the plain local manager (CP0–CP2) is complete and a daily need is shown.
