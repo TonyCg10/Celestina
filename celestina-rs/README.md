@@ -1,22 +1,21 @@
-# Celestina Rust cores
+# celestina-rs
 
-Este workspace contiene lógica de dominio reutilizable y neutral a la interfaz
-para la suite Celestina. La presentación continúa en cada aplicación.
+Interface-neutral Rust domain cores for the Celestina suite: reusable logic that
+carries no Qt, QML or Niri types. Presentation lives in each app.
+
+- **Role:** shared domain cores (part of the [Celestina suite](../ROADMAP.md))
+- **Toolchain:** Rust 2021, pinned 1.85.1 · `#![forbid(unsafe_code)]` · no third-party deps
 
 ## Crates
 
-| Crate | Responsabilidad |
+| Crate | Responsibility |
 |---|---|
-| `celestina-core` | Generaciones y cancelación cooperativa compartidas |
-| `siderita-core` | Identidad, snapshots, publicación vigente y executor acotado |
-| `siderita-qt` | Tokens de vista estables y adaptación del core para Qt/QML |
-| `celestina-dotfiles-core` | Planificación de cambios de dotfiles sin mutar el sistema |
+| `celestina-core` | shared generations and cooperative cancellation |
+| `siderita-core` | identity, snapshots, bounded scan executor, view projection, watch state |
+| `siderita-qt` | stable opaque view tokens — the contract toward Qt/QML |
+| `celestina-dotfiles-core` | read-only dotfiles change planning (no mutation yet) |
 
-Las aplicaciones siguen siendo proyectos y releases independientes. Durante
-el desarrollo pueden usar dependencias `path`; una instalación o release debe
-consumir versiones fijadas de estos crates.
-
-## Comprobaciones
+## Checks
 
 ```sh
 cargo fmt --all --check
@@ -24,7 +23,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-El primer corte no tiene dependencias de terceros. `siderita-core` es de solo
-lectura y `celestina-dotfiles-core` solo produce planes: todavía no existe una
-API para aplicar cambios. El QObject CXX-Qt se incorporará como feature del
-adaptador cuando Qt esté disponible en el entorno declarado.
+Apps use `path` dependencies during development; a release consumes pinned
+versions of these crates.
+
+See [ROADMAP.md](ROADMAP.md) for status and checkpoints.

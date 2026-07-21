@@ -1,16 +1,8 @@
-# CMake build artifacts
-build/
-cmake-build-*/
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
-compile_commands.json
+# Cargo build output
+/target/
 
-# Cargo build artifacts
-target/
-
-# Qt generated
-*.qmlc
+# cxx-qt / Qt tooling, regenerated per build (Siderita is Cargo + cxx-qt, not
+# CMake). A CMake build, if ever added, is covered by the root .gitignore.
 .qmlls.ini
-qmldir.qmltypes
+*.qmlc
+compile_commands.json
