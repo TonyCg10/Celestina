@@ -10,12 +10,12 @@
 //!
 //! [`CancellationToken`]: celestina_core::CancellationToken
 //!
-//! ## Iteration
+//! ## Verbs
 //!
-//! Create-folder, create-file, rename, copy and move are implemented; Trash
-//! follows. Every verb holds the guarantee that a source is never removed before
-//! its destination is verified, and none silently overwrites an existing target:
-//! a conflict is reported, never resolved by destroying data.
+//! Create-folder, create-file, rename, copy, move and send-to-Trash are all
+//! implemented. Every verb holds the guarantee that a source is never removed
+//! before its destination is verified, and none silently overwrites an existing
+//! target: a conflict is reported, never resolved by destroying data.
 
 mod copy;
 mod create;
@@ -23,6 +23,7 @@ mod error;
 mod name;
 mod relocate;
 mod rename;
+mod trash;
 
 pub use copy::{copy, Progress};
 pub use create::{create_directory, create_file};
@@ -30,3 +31,4 @@ pub use error::OpError;
 pub use name::{validate_name, NameError};
 pub use relocate::{move_entry, Moved};
 pub use rename::{rename, Renamed};
+pub use trash::{trash, Trashed};

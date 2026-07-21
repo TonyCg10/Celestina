@@ -133,12 +133,12 @@ fn remove_source(source: &Path) -> Result<(), OpError> {
 ///
 /// `EXDEV` is 18 on Linux, macOS and the BSDs — the platforms the suite targets.
 #[cfg(unix)]
-fn is_cross_device(error: &io::Error) -> bool {
+pub(crate) fn is_cross_device(error: &io::Error) -> bool {
     error.raw_os_error() == Some(18)
 }
 
 #[cfg(not(unix))]
-fn is_cross_device(error: &io::Error) -> bool {
+pub(crate) fn is_cross_device(error: &io::Error) -> bool {
     error.kind() == io::ErrorKind::CrossesDevices
 }
 
