@@ -1,5 +1,5 @@
 use core::pin::Pin;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
 use celestina_core::CancellationToken;
@@ -44,6 +44,8 @@ pub mod qobject {
         #[qproperty(QStringList, bookmark_paths)]
         #[qproperty(QString, op_error)]
         #[qproperty(bool, can_paste)]
+        #[qproperty(bool, can_undo)]
+        #[qproperty(QString, undo_label)]
         type SideritaController = super::SideritaControllerRust;
 
         #[qinvokable]
@@ -151,9 +153,36 @@ pub mod qobject {
 
         #[qinvokable]
         fn paste(self: Pin<&mut SideritaController>);
+
+        #[qinvokable]
+        fn undo(self: Pin<&mut SideritaController>);
     }
 
     impl cxx_qt::Threading for SideritaController {}
+}
+
+/// How to reverse the last loss-free operation. Only the three verbs the
+/// roadmap names as undoable are recorded — create and copy are not, since
+/// undoing them would mean deleting data the user did not ask to lose.
+enum UndoAction {
+    /// A rename: the entry now sits at `renamed`; put its `old_name` back.
+    Rename { renamed: PathBuf, old_name: OsString },
+    /// One or more moves (a cut-paste): move each entry from where it landed
+    /// back into the directory it came from.
+    Move { entries: Vec<(PathBuf, PathBuf)> },
+    /// One or more sends-to-Trash: restore each from its recorded `.trashinfo`.
+    Trash { infos: Vec<PathBuf> },
+}
+
+impl UndoAction {
+    /// A short Spanish label for what undo will reverse, for the menu/tooltip.
+    fn label(&self) -> &'static str {
+        match self {
+            Self::Rename { .. } => "Deshacer renombrar",
+            Self::Move { .. } => "Deshacer mover",
+            Self::Trash { .. } => "Deshacer enviar a la papelera",
+        }
+    }
 }
 
 pub struct SideritaControllerRust {
@@ -183,8 +212,11 @@ pub struct SideritaControllerRust {
     bookmark_paths: QStringList,
     op_error: QString,
     can_paste: bool,
+    can_undo: bool,
+    undo_label: QString,
     clipboard: Vec<PathBuf>,
     clipboard_cut: bool,
+    last_undo: Option<UndoAction>,
     bookmarks: Vec<crate::bookmarks::Bookmark>,
     places: std::collections::HashMap<String, String>,
 }
@@ -218,8 +250,11 @@ impl Default for SideritaControllerRust {
             bookmark_paths: QStringList::default(),
             op_error: QString::default(),
             can_paste: false,
+            can_undo: false,
+            undo_label: QString::default(),
             clipboard: Vec::new(),
             clipboard_cut: false,
+            last_undo: None,
             bookmarks: Vec::new(),
             places: crate::places::resolve()
                 .into_iter()
@@ -562,6 +597,10 @@ impl qobject::SideritaController {
         let name = name.to_string();
         let outcome =
             siderita_ops::create_directory(&parent, OsStr::new(&name), &CancellationToken::new());
+        // Creating is not undoable; a success supersedes the last undoable op.
+        if outcome.is_ok() {
+            self.as_mut().set_undo(None);
+        }
         self.finish_op(outcome.map(|_| ()));
     }
 
@@ -573,6 +612,9 @@ impl qobject::SideritaController {
         let name = name.to_string();
         let outcome =
             siderita_ops::create_file(&parent, OsStr::new(&name), &CancellationToken::new());
+        if outcome.is_ok() {
+            self.as_mut().set_undo(None);
+        }
         self.finish_op(outcome.map(|_| ()));
     }
 
@@ -581,6 +623,13 @@ impl qobject::SideritaController {
         let path = PathBuf::from(path.to_string());
         let new_name = new_name.to_string();
         let outcome = siderita_ops::rename(&path, OsStr::new(&new_name), &CancellationToken::new());
+        if let Ok(renamed) = &outcome {
+            let undo = path.file_name().map(|old_name| UndoAction::Rename {
+                renamed: renamed.to.clone(),
+                old_name: old_name.to_os_string(),
+            });
+            self.as_mut().set_undo(undo);
+        }
         self.finish_op(outcome.map(|_| ()));
     }
 
@@ -588,6 +637,11 @@ impl qobject::SideritaController {
         self.as_mut().set_op_error(QString::default());
         let path = PathBuf::from(path.to_string());
         let outcome = siderita_ops::trash(&path, &CancellationToken::new());
+        if let Ok(trashed) = &outcome {
+            self.as_mut().set_undo(Some(UndoAction::Trash {
+                infos: vec![trashed.info.clone()],
+            }));
+        }
         self.finish_op(outcome.map(|_| ()));
     }
 
@@ -602,10 +656,15 @@ impl qobject::SideritaController {
         }
         let cancellation = CancellationToken::new();
         let mut failures = Vec::new();
+        let mut infos = Vec::new();
         for path in &paths {
-            if let Err(error) = siderita_ops::trash(path, &cancellation) {
-                failures.push(format!("{}: {error}", display_name(path)));
+            match siderita_ops::trash(path, &cancellation) {
+                Ok(trashed) => infos.push(trashed.info),
+                Err(error) => failures.push(format!("{}: {error}", display_name(path))),
             }
+        }
+        if !infos.is_empty() {
+            self.as_mut().set_undo(Some(UndoAction::Trash { infos }));
         }
         self.as_mut().finish_batch(paths.len(), &failures);
     }
@@ -665,31 +724,108 @@ impl qobject::SideritaController {
         // On a cut, a moved source is gone; keep only the ones that failed so a
         // retry never re-moves an already-relocated (now missing) entry.
         let mut unmoved = Vec::new();
+        // For undo of a cut: where each entry landed and the directory it left.
+        let mut undo_moves = Vec::new();
         for source in &sources {
-            let outcome = if cut {
-                siderita_ops::move_entry(source, &destination, &cancellation, &mut |_| {})
-                    .map(|_| ())
-            } else {
-                siderita_ops::copy(source, &destination, &cancellation, &mut |_| {}).map(|_| ())
-            };
-            if let Err(error) = outcome {
-                failures.push(format!("{}: {error}", display_name(source)));
-                if cut {
-                    unmoved.push(source.clone());
+            if cut {
+                match siderita_ops::move_entry(source, &destination, &cancellation, &mut |_| {}) {
+                    Ok(moved) => {
+                        if let Some(parent) = moved.from.parent() {
+                            undo_moves.push((moved.to, parent.to_path_buf()));
+                        }
+                    }
+                    Err(error) => {
+                        failures.push(format!("{}: {error}", display_name(source)));
+                        unmoved.push(source.clone());
+                    }
                 }
+            } else if let Err(error) =
+                siderita_ops::copy(source, &destination, &cancellation, &mut |_| {})
+            {
+                failures.push(format!("{}: {error}", display_name(source)));
             }
         }
 
-        // A copy keeps the clipboard for reuse; a cut consumes what it moved and
-        // retains only the entries that could not be moved.
         if cut {
+            // A cut consumes what it moved and retains only the entries that
+            // could not be moved, and its inverse (move back) is undoable.
             if unmoved.is_empty() {
                 self.as_mut().clear_clipboard();
             } else {
                 self.as_mut().set_clipboard(unmoved, true);
             }
+            if !undo_moves.is_empty() {
+                self.as_mut()
+                    .set_undo(Some(UndoAction::Move { entries: undo_moves }));
+            }
+        } else if failures.len() < sources.len() {
+            // A copy keeps the clipboard for reuse but is not undoable; a partial
+            // or full success supersedes the last undoable operation.
+            self.as_mut().set_undo(None);
         }
         self.as_mut().finish_batch(sources.len(), &failures);
+    }
+
+    /// Reverses the last undoable operation (rename / move / trash). Single
+    /// level: the action is consumed, and like a batch write the view refreshes
+    /// once and any per-entry failures are reported together.
+    pub fn undo(mut self: Pin<&mut Self>) {
+        self.as_mut().set_op_error(QString::default());
+        let Some(action) = self.as_mut().rust_mut().get_mut().last_undo.take() else {
+            return;
+        };
+        self.as_mut().set_undo(None);
+
+        let cancellation = CancellationToken::new();
+        let mut failures = Vec::new();
+        let total = match &action {
+            UndoAction::Rename { .. } => 1,
+            UndoAction::Move { entries } => entries.len(),
+            UndoAction::Trash { infos } => infos.len(),
+        };
+
+        match action {
+            UndoAction::Rename { renamed, old_name } => {
+                if let Err(error) =
+                    siderita_ops::rename(&renamed, old_name.as_os_str(), &cancellation)
+                {
+                    failures.push(format!("{}: {error}", display_name(&renamed)));
+                }
+            }
+            UndoAction::Move { entries } => {
+                for (moved_to, original_parent) in &entries {
+                    if let Err(error) = siderita_ops::move_entry(
+                        moved_to,
+                        original_parent,
+                        &cancellation,
+                        &mut |_| {},
+                    ) {
+                        failures.push(format!("{}: {error}", display_name(moved_to)));
+                    }
+                }
+            }
+            UndoAction::Trash { infos } => {
+                for info in &infos {
+                    if let Err(error) = siderita_ops::restore_from_trash(info, &cancellation) {
+                        failures.push(format!("{}: {error}", display_name(info)));
+                    }
+                }
+            }
+        }
+
+        self.as_mut().finish_batch(total, &failures);
+    }
+
+    /// Records (or clears) how to reverse the last operation, keeping the
+    /// `can_undo` / `undo_label` properties in step for the menu and shortcut.
+    fn set_undo(mut self: Pin<&mut Self>, action: Option<UndoAction>) {
+        let (can_undo, label) = match &action {
+            Some(action) => (true, QString::from(action.label())),
+            None => (false, QString::default()),
+        };
+        self.as_mut().rust_mut().get_mut().last_undo = action;
+        self.as_mut().set_can_undo(can_undo);
+        self.as_mut().set_undo_label(label);
     }
 
     /// After a write: refresh the view on success, or surface the error on

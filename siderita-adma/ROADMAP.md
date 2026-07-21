@@ -127,14 +127,14 @@ source before its destination is verified.
 - [x] Guarantee: a source is never removed after a partial copy or without revalidation — domain-enforced and tested, including the cross-device cancel path
 - [ ] System-clipboard interop — the URI-list + desktop file-clipboard convention, so paste works to and from other managers
 - [ ] An async operation executor: conflict-resolution dialog (today a conflict is refused and reported), cancellation, per-item results and a progress surface for long copies / moves (today the verbs run synchronously)
-- [ ] Undo the last operation (move / rename / trash)
+- [x] Undo the last operation (move / rename / trash) — `Ctrl+Z` (or the empty-space menu, labelled for what it reverses) reverses the last rename, cut-paste move or send-to-Trash; trash undo uses the new `siderita_ops::restore_from_trash` primitive. Single level, batch-aware (a multi-trash restores every entry), and refuses to overwrite. Create and copy are deliberately not undoable and clear the pending undo on success
 - [x] Multi-select batch operations — copy, cut and send-to-Trash act on the whole selection when the right-clicked/focused entry is part of a multi-selection (else the single entry); each entry is attempted independently, the view refreshes once so successes appear, and failures are reported together (`N de M operaciones fallaron`). A partial cut keeps only the entries it could not move on the clipboard, so a retry never re-moves a relocated one
 - [x] Activate a file → open with its default application (xdg-open) — double-click or the entry menu's "Abrir" hands the path to the desktop's handler, detached and reaped, with a truthful `op_error` if the launcher can't start; the Open-with… chooser and default-app management are CP2
 
 ## Checkpoint 2 — Interoperable daily manager (S2)
 **Goal:** a manager good enough for daily use, integrated through standards.
 
-- [ ] XDG Trash restore, cross-filesystem moves, and removable-volume mount / unmount (the sidebar "removable files" the purpose promises)
+- [ ] XDG Trash restore, cross-filesystem moves, and removable-volume mount / unmount (the sidebar "removable files" the purpose promises) — the loss-free restore *primitive* (`siderita_ops::restore_from_trash`, reads the `.trashinfo`, refuses to overwrite) landed with CP1 undo; a Trash-browsing view to invoke it, plus mount/unmount, are still open here
 - [ ] Drag-and-drop to move / copy within the view and to and from other applications
 - [ ] Open-with… chooser, set-default-application, and safe `.desktop` handler wiring
 - [ ] `org.freedesktop.FileManager1` D-Bus, so "Show in file manager" from other apps lands here

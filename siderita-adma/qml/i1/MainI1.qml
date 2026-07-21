@@ -241,6 +241,12 @@ ApplicationWindow {
             onActivated: controller.paste()
         }
 
+        Shortcut {
+            sequence: StandardKey.Undo
+            enabled: root.active && controller.canUndo && !controller.loading
+            onActivated: controller.undo()
+        }
+
         TapHandler {
             id: historyMouseButtons
 
@@ -1851,6 +1857,15 @@ ApplicationWindow {
                 icon.name: "edit-paste"
                 icon.source: CelestinaTheme.fallbackIcon("file")
                 onTriggered: controller.paste()
+            }
+
+            GlassMenuItem {
+                text: controller.canUndo ? controller.undoLabel : "Deshacer"
+                visible: controller.canUndo
+                height: visible ? implicitHeight : 0
+                icon.name: "edit-undo"
+                icon.source: CelestinaTheme.fallbackIcon("view-refresh")
+                onTriggered: controller.undo()
             }
 
             MenuSeparator {
