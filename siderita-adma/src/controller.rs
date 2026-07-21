@@ -1,12 +1,15 @@
 use core::pin::Pin;
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
+use celestina_core::CancellationToken;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
 use siderita_core::{
     DirectorySnapshot, NavigationHistory, PublishOutcome, ScanCoordinator, ScanExecutor,
     ScanResult, SortDirection, SortField, ViewOptions,
 };
+use siderita_ops::OpError;
 use siderita_qt::{EntryRow, RowKind, SnapshotAdapter, ViewSnapshot};
 
 #[cxx_qt::bridge]
@@ -39,6 +42,8 @@ pub mod qobject {
         #[qproperty(i32, view_revision)]
         #[qproperty(QStringList, bookmark_names)]
         #[qproperty(QStringList, bookmark_paths)]
+        #[qproperty(QString, op_error)]
+        #[qproperty(bool, can_paste)]
         type SideritaController = super::SideritaControllerRust;
 
         #[qinvokable]
@@ -115,6 +120,27 @@ pub mod qobject {
 
         #[qinvokable]
         fn place_path(self: &SideritaController, key: &QString) -> QString;
+
+        #[qinvokable]
+        fn new_folder(self: Pin<&mut SideritaController>, name: &QString);
+
+        #[qinvokable]
+        fn new_file(self: Pin<&mut SideritaController>, name: &QString);
+
+        #[qinvokable]
+        fn rename_path(self: Pin<&mut SideritaController>, path: &QString, new_name: &QString);
+
+        #[qinvokable]
+        fn trash_path(self: Pin<&mut SideritaController>, path: &QString);
+
+        #[qinvokable]
+        fn copy_to_clipboard(self: Pin<&mut SideritaController>, path: &QString, cut: bool);
+
+        #[qinvokable]
+        fn clear_clipboard(self: Pin<&mut SideritaController>);
+
+        #[qinvokable]
+        fn paste(self: Pin<&mut SideritaController>);
     }
 
     impl cxx_qt::Threading for SideritaController {}
@@ -145,6 +171,10 @@ pub struct SideritaControllerRust {
     pending_location: Option<PathBuf>,
     bookmark_names: QStringList,
     bookmark_paths: QStringList,
+    op_error: QString,
+    can_paste: bool,
+    clipboard: Option<PathBuf>,
+    clipboard_cut: bool,
     bookmarks: Vec<crate::bookmarks::Bookmark>,
     places: std::collections::HashMap<String, String>,
 }
@@ -176,6 +206,10 @@ impl Default for SideritaControllerRust {
             pending_location: None,
             bookmark_names: QStringList::default(),
             bookmark_paths: QStringList::default(),
+            op_error: QString::default(),
+            can_paste: false,
+            clipboard: None,
+            clipboard_cut: false,
             bookmarks: Vec::new(),
             places: crate::places::resolve()
                 .into_iter()
@@ -493,6 +527,103 @@ impl qobject::SideritaController {
             .unwrap_or_default()
     }
 
+    pub fn new_folder(mut self: Pin<&mut Self>, name: &QString) {
+        self.as_mut().set_op_error(QString::default());
+        let Some(parent) = self.rust().history.current().map(Path::to_path_buf) else {
+            return;
+        };
+        let name = name.to_string();
+        let outcome =
+            siderita_ops::create_directory(&parent, OsStr::new(&name), &CancellationToken::new());
+        self.finish_op(outcome.map(|_| ()));
+    }
+
+    pub fn new_file(mut self: Pin<&mut Self>, name: &QString) {
+        self.as_mut().set_op_error(QString::default());
+        let Some(parent) = self.rust().history.current().map(Path::to_path_buf) else {
+            return;
+        };
+        let name = name.to_string();
+        let outcome =
+            siderita_ops::create_file(&parent, OsStr::new(&name), &CancellationToken::new());
+        self.finish_op(outcome.map(|_| ()));
+    }
+
+    pub fn rename_path(mut self: Pin<&mut Self>, path: &QString, new_name: &QString) {
+        self.as_mut().set_op_error(QString::default());
+        let path = PathBuf::from(path.to_string());
+        let new_name = new_name.to_string();
+        let outcome = siderita_ops::rename(&path, OsStr::new(&new_name), &CancellationToken::new());
+        self.finish_op(outcome.map(|_| ()));
+    }
+
+    pub fn trash_path(mut self: Pin<&mut Self>, path: &QString) {
+        self.as_mut().set_op_error(QString::default());
+        let path = PathBuf::from(path.to_string());
+        let outcome = siderita_ops::trash(&path, &CancellationToken::new());
+        self.finish_op(outcome.map(|_| ()));
+    }
+
+    pub fn copy_to_clipboard(mut self: Pin<&mut Self>, path: &QString, cut: bool) {
+        let path = path.to_string();
+        if path.is_empty() {
+            return;
+        }
+        {
+            let state = self.as_mut().rust_mut();
+            let state = state.get_mut();
+            state.clipboard = Some(PathBuf::from(path));
+            state.clipboard_cut = cut;
+        }
+        self.as_mut().set_can_paste(true);
+        self.as_mut().set_op_error(QString::default());
+    }
+
+    pub fn clear_clipboard(mut self: Pin<&mut Self>) {
+        {
+            let state = self.as_mut().rust_mut();
+            let state = state.get_mut();
+            state.clipboard = None;
+            state.clipboard_cut = false;
+        }
+        self.as_mut().set_can_paste(false);
+    }
+
+    pub fn paste(mut self: Pin<&mut Self>) {
+        self.as_mut().set_op_error(QString::default());
+        let Some(destination) = self.rust().history.current().map(Path::to_path_buf) else {
+            return;
+        };
+        let Some(source) = self.rust().clipboard.clone() else {
+            return;
+        };
+        let cut = self.rust().clipboard_cut;
+
+        let cancellation = CancellationToken::new();
+        let outcome = if cut {
+            siderita_ops::move_entry(&source, &destination, &cancellation, &mut |_| {}).map(|_| ())
+        } else {
+            siderita_ops::copy(&source, &destination, &cancellation, &mut |_| {}).map(|_| ())
+        };
+
+        // A successful cut consumes the clipboard; a copy keeps it for reuse.
+        if outcome.is_ok() && cut {
+            self.as_mut().clear_clipboard();
+        }
+        self.finish_op(outcome);
+    }
+
+    /// After a write: refresh the view on success, or surface the error on
+    /// failure without letting the async rescan wipe it.
+    fn finish_op(mut self: Pin<&mut Self>, outcome: Result<(), OpError>) {
+        match outcome {
+            Ok(()) => self.as_mut().refresh(),
+            Err(error) => self
+                .as_mut()
+                .set_op_error(QString::from(error.to_string().as_str())),
+        }
+    }
+
     fn refresh_bookmark_properties(mut self: Pin<&mut Self>) {
         let (names, paths): (QStringList, QStringList) = {
             let bookmarks = &self.rust().bookmarks;
@@ -545,6 +676,7 @@ impl qobject::SideritaController {
             .set_current_path(QString::from(display_path.as_ref()));
         self.as_mut().set_selected_token(QString::default());
         self.as_mut().set_error_text(QString::default());
+        self.as_mut().set_op_error(QString::default());
         self.as_mut().set_loading(true);
         self.as_mut()
             .set_status_text(QString::from("Leyendo carpeta…"));

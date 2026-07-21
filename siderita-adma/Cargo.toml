@@ -22,7 +22,9 @@ cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
     "qt_qml",
     "qt_quickcontrols",
 ] }
+celestina-core = { path = "../celestina-rs/crates/celestina-core" }
 siderita-core = { path = "../celestina-rs/crates/siderita-core" }
+siderita-ops = { path = "../celestina-rs/crates/siderita-ops" }
 siderita-qt = { path = "../celestina-rs/crates/siderita-qt" }
 
 [build-dependencies]

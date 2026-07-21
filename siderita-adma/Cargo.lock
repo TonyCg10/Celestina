@@ -1542,6 +1542,7 @@ dependencies = [
 name = "siderita-i1"
 version = "0.1.0"
 dependencies = [
+ "celestina-core",
  "cxx",
  "cxx-gen",
  "cxx-qt",
@@ -1550,7 +1551,15 @@ dependencies = [
  "qt-build-utils",
  "qt-version",
  "siderita-core",
+ "siderita-ops",
  "siderita-qt",
+]
+
+[[package]]
+name = "siderita-ops"
+version = "0.1.0"
+dependencies = [
+ "celestina-core",
 ]
 
 [[package]]

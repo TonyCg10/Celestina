@@ -190,6 +190,54 @@ ApplicationWindow {
             onActivated: controller.refresh()
         }
 
+        // Write verbs act on the focused entry (topBar.activeView.currentIndex).
+        Shortcut {
+            sequence: "F2"
+            enabled: root.active && !controller.loading
+            onActivated: {
+                const i = topBar.activeView.currentIndex
+                if (i >= 0)
+                    namePrompt.openRename(controller.entryPath(i),
+                                          controller.entryNames[i])
+            }
+        }
+
+        Shortcut {
+            sequence: "Delete"
+            enabled: root.active && !controller.loading
+            onActivated: {
+                const i = topBar.activeView.currentIndex
+                if (i >= 0)
+                    controller.trashPath(controller.entryPath(i))
+            }
+        }
+
+        Shortcut {
+            sequence: StandardKey.Copy
+            enabled: root.active
+            onActivated: {
+                const i = topBar.activeView.currentIndex
+                if (i >= 0)
+                    controller.copyToClipboard(controller.entryPath(i), false)
+            }
+        }
+
+        Shortcut {
+            sequence: StandardKey.Cut
+            enabled: root.active
+            onActivated: {
+                const i = topBar.activeView.currentIndex
+                if (i >= 0)
+                    controller.copyToClipboard(controller.entryPath(i), true)
+            }
+        }
+
+        Shortcut {
+            sequence: StandardKey.Paste
+            enabled: root.active && controller.canPaste
+            onActivated: controller.paste()
+        }
+
         TapHandler {
             id: historyMouseButtons
 
@@ -1073,6 +1121,33 @@ ApplicationWindow {
                 }
             }
 
+            // Feedback from a write operation (create / rename / trash / paste);
+            // cleared on the next operation or navigation.
+            Rectangle {
+                id: opErrorBanner
+                x: 16
+                y: errorBanner.visible ? errorBanner.y + errorBanner.height + 8 : 14
+                width: parent.width - 32
+                height: opErrorText.implicitHeight + 22
+                radius: CelestinaTheme.radiusSm
+                visible: controller.opError.length > 0
+                color: CelestinaTheme.dangerFill
+                border.width: 1
+                border.color: CelestinaTheme.dangerBorder
+                z: 4
+
+                Text {
+                    id: opErrorText
+                    anchors.fill: parent
+                    anchors.margins: 11
+                    text: controller.opError
+                    color: CelestinaTheme.dangerText
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontLabel
+                    wrapMode: Text.Wrap
+                }
+            }
+
             Text {
                 id: statusLine
                 x: busy.x + busy.width + 14
@@ -1639,6 +1714,34 @@ ApplicationWindow {
                 onTriggered: controller.addBookmark(entryMenu.targetPath)
             }
 
+            GlassMenuItem {
+                text: "Renombrar"
+                icon.name: "edit-rename"
+                icon.source: CelestinaTheme.fallbackIcon("file")
+                onTriggered: namePrompt.openRename(entryMenu.targetPath, entryMenu.targetName)
+            }
+
+            GlassMenuItem {
+                text: "Copiar"
+                icon.name: "edit-copy"
+                icon.source: CelestinaTheme.fallbackIcon("file")
+                onTriggered: controller.copyToClipboard(entryMenu.targetPath, false)
+            }
+
+            GlassMenuItem {
+                text: "Cortar"
+                icon.name: "edit-cut"
+                icon.source: CelestinaTheme.fallbackIcon("file")
+                onTriggered: controller.copyToClipboard(entryMenu.targetPath, true)
+            }
+
+            GlassMenuItem {
+                text: "Enviar a la papelera"
+                icon.name: "user-trash"
+                icon.source: CelestinaTheme.fallbackIcon("file")
+                onTriggered: controller.trashPath(entryMenu.targetPath)
+            }
+
             MenuSeparator {
                 contentItem: Rectangle {
                     implicitHeight: 1
@@ -1666,6 +1769,35 @@ ApplicationWindow {
             backdropSource: root
 
             GlassMenuItem {
+                text: "Nueva carpeta"
+                icon.name: "folder-new"
+                icon.source: CelestinaTheme.fallbackIcon("folder")
+                onTriggered: namePrompt.openCreate("folder")
+            }
+
+            GlassMenuItem {
+                text: "Nuevo archivo"
+                icon.name: "document-new"
+                icon.source: CelestinaTheme.fallbackIcon("file")
+                onTriggered: namePrompt.openCreate("file")
+            }
+
+            GlassMenuItem {
+                text: "Pegar"
+                enabled: controller.canPaste
+                icon.name: "edit-paste"
+                icon.source: CelestinaTheme.fallbackIcon("file")
+                onTriggered: controller.paste()
+            }
+
+            MenuSeparator {
+                contentItem: Rectangle {
+                    implicitHeight: 1
+                    color: CelestinaTheme.border
+                }
+            }
+
+            GlassMenuItem {
                 text: "Seleccionar todo"
                 onTriggered: mainPanel.selectAll()
             }
@@ -1689,6 +1821,131 @@ ApplicationWindow {
                       ? "Ocultar elementos ocultos"
                       : "Mostrar elementos ocultos"
                 onTriggered: controller.toggleHidden()
+            }
+        }
+
+        // ── Name prompt (new folder / new file / rename) ─────────────────
+        Rectangle {
+            id: namePrompt
+            anchors.fill: parent
+            z: 60
+            visible: false
+            color: Qt.rgba(0, 0, 0, 0.45)
+
+            property string mode: "folder"   // "folder" | "file" | "rename"
+            property string targetPath: ""
+            property string heading: ""
+
+            function openCreate(kind) {
+                namePrompt.mode = kind
+                namePrompt.targetPath = ""
+                namePrompt.heading = kind === "folder" ? "Nueva carpeta" : "Nuevo archivo"
+                promptField.text = ""
+                namePrompt.visible = true
+                promptField.forceActiveFocus()
+            }
+            function openRename(path, currentName) {
+                namePrompt.mode = "rename"
+                namePrompt.targetPath = path
+                namePrompt.heading = "Renombrar"
+                promptField.text = currentName
+                namePrompt.visible = true
+                promptField.forceActiveFocus()
+                promptField.selectAll()
+            }
+            function dismiss() {
+                namePrompt.visible = false
+                promptField.text = ""
+                fileList.forceActiveFocus()
+            }
+            function confirm() {
+                const value = promptField.text
+                if (value.length === 0) {
+                    namePrompt.dismiss()
+                    return
+                }
+                if (namePrompt.mode === "folder")
+                    controller.newFolder(value)
+                else if (namePrompt.mode === "file")
+                    controller.newFile(value)
+                else
+                    controller.renamePath(namePrompt.targetPath, value)
+                namePrompt.dismiss()
+            }
+
+            // Click on the dimmed backdrop cancels.
+            MouseArea {
+                anchors.fill: parent
+                onClicked: namePrompt.dismiss()
+            }
+
+            Rectangle {
+                anchors.centerIn: parent
+                width: Math.min(380, root.width - 48)
+                height: 142
+                radius: CelestinaTheme.radiusMd
+                color: CelestinaTheme.canvasRaised
+                border.width: 1
+                border.color: CelestinaTheme.borderStrong
+
+                // Swallow clicks so they never reach the dismiss backdrop.
+                MouseArea { anchors.fill: parent }
+
+                Text {
+                    id: promptHeading
+                    x: 18
+                    y: 16
+                    text: namePrompt.heading
+                    color: CelestinaTheme.text
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCallout
+                    font.weight: CelestinaTheme.weightDemiBold
+                }
+
+                TextField {
+                    id: promptField
+                    x: 18
+                    y: promptHeading.y + promptHeading.height + 12
+                    width: parent.width - 36
+                    height: CelestinaTheme.controlHeight
+                    color: CelestinaTheme.text
+                    selectionColor: CelestinaTheme.accentStrong
+                    selectedTextColor: CelestinaTheme.text
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontBody
+                    leftPadding: 12
+                    rightPadding: 12
+                    onAccepted: namePrompt.confirm()
+                    Keys.onPressed: function(event) {
+                        if (event.key === Qt.Key_Escape) {
+                            namePrompt.dismiss()
+                            event.accepted = true
+                        }
+                    }
+                    background: Rectangle {
+                        radius: CelestinaTheme.radiusSm
+                        color: CelestinaTheme.inputFillFocus
+                        border.width: 1
+                        border.color: CelestinaTheme.focus
+                    }
+                }
+
+                Row {
+                    anchors.right: parent.right
+                    anchors.rightMargin: 18
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 16
+                    spacing: 8
+
+                    Button {
+                        text: "Cancelar"
+                        onClicked: namePrompt.dismiss()
+                    }
+                    Button {
+                        text: "Aceptar"
+                        onClicked: namePrompt.confirm()
+                    }
+                }
             }
         }
     }
