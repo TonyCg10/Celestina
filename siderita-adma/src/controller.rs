@@ -9,7 +9,7 @@ use siderita_core::{
     DirectorySnapshot, NavigationHistory, PublishOutcome, ScanCoordinator, ScanExecutor,
     ScanResult, SortDirection, SortField, ViewOptions,
 };
-use siderita_ops::OpError;
+use siderita_ops::{OpError, Progress};
 use siderita_qt::{EntryRow, RowKind, SnapshotAdapter, ViewSnapshot};
 
 #[cxx_qt::bridge]
@@ -46,6 +46,11 @@ pub mod qobject {
         #[qproperty(bool, can_paste)]
         #[qproperty(bool, can_undo)]
         #[qproperty(QString, undo_label)]
+        #[qproperty(bool, op_running)]
+        #[qproperty(QString, op_current)]
+        #[qproperty(QString, op_detail)]
+        #[qproperty(i32, op_done)]
+        #[qproperty(i32, op_total)]
         type SideritaController = super::SideritaControllerRust;
 
         #[qinvokable]
@@ -155,6 +160,9 @@ pub mod qobject {
         fn paste(self: Pin<&mut SideritaController>);
 
         #[qinvokable]
+        fn cancel_op(self: Pin<&mut SideritaController>);
+
+        #[qinvokable]
         fn undo(self: Pin<&mut SideritaController>);
     }
 
@@ -214,6 +222,12 @@ pub struct SideritaControllerRust {
     can_paste: bool,
     can_undo: bool,
     undo_label: QString,
+    op_running: bool,
+    op_current: QString,
+    op_detail: QString,
+    op_done: i32,
+    op_total: i32,
+    op_cancel: Option<CancellationToken>,
     clipboard: Vec<PathBuf>,
     clipboard_cut: bool,
     last_undo: Option<UndoAction>,
@@ -252,6 +266,12 @@ impl Default for SideritaControllerRust {
             can_paste: false,
             can_undo: false,
             undo_label: QString::default(),
+            op_running: false,
+            op_current: QString::default(),
+            op_detail: QString::default(),
+            op_done: 0,
+            op_total: 0,
+            op_cancel: None,
             clipboard: Vec::new(),
             clipboard_cut: false,
             last_undo: None,
@@ -708,7 +728,15 @@ impl qobject::SideritaController {
         self.as_mut().set_can_paste(false);
     }
 
+    /// Pastes the clipboard into the current folder. Copies and moves can be
+    /// long, so the whole batch runs on a worker thread: it publishes progress
+    /// (current entry, count, bytes) back onto the Qt thread and honours the
+    /// cancellation token behind `cancel_op`, then finalises on the Qt thread via
+    /// `finish_paste`. A second paste is refused while one is running.
     pub fn paste(mut self: Pin<&mut Self>) {
+        if *self.op_running() {
+            return;
+        }
         self.as_mut().set_op_error(QString::default());
         let Some(destination) = self.rust().history.current().map(Path::to_path_buf) else {
             return;
@@ -719,36 +747,113 @@ impl qobject::SideritaController {
         }
         let cut = self.rust().clipboard_cut;
 
-        let cancellation = CancellationToken::new();
-        let mut failures = Vec::new();
-        // On a cut, a moved source is gone; keep only the ones that failed so a
-        // retry never re-moves an already-relocated (now missing) entry.
-        let mut unmoved = Vec::new();
-        // For undo of a cut: where each entry landed and the directory it left.
-        let mut undo_moves = Vec::new();
-        for source in &sources {
-            if cut {
-                match siderita_ops::move_entry(source, &destination, &cancellation, &mut |_| {}) {
-                    Ok(moved) => {
-                        if let Some(parent) = moved.from.parent() {
-                            undo_moves.push((moved.to, parent.to_path_buf()));
+        let token = CancellationToken::new();
+        self.as_mut().rust_mut().get_mut().op_cancel = Some(token.clone());
+        self.as_mut().set_op_running(true);
+        self.as_mut().set_op_total(sources.len().min(i32::MAX as usize) as i32);
+        self.as_mut().set_op_done(0);
+        self.as_mut().set_op_current(QString::default());
+        self.as_mut().set_op_detail(QString::default());
+        self.as_mut()
+            .set_status_text(QString::from(if cut { "Moviendo…" } else { "Copiando…" }));
+
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let total = sources.len();
+            let mut failures = Vec::new();
+            let mut unmoved = Vec::new();
+            let mut undo_moves = Vec::new();
+
+            for (index, source) in sources.iter().enumerate() {
+                if token.is_cancelled() {
+                    break;
+                }
+
+                let name = display_name(source);
+                let done = index as i32;
+                let announced = name.clone();
+                let _ = qt.queue(move |mut controller| {
+                    controller.as_mut().set_op_done(done);
+                    controller
+                        .as_mut()
+                        .set_op_current(QString::from(announced.as_str()));
+                    controller.as_mut().set_op_detail(QString::default());
+                });
+
+                // Throttled byte progress: at most ~one update per 60 ms, so a
+                // large file animates without flooding the Qt event loop.
+                let qt_progress = qt.clone();
+                let mut last = std::time::Instant::now();
+                let mut on_progress = move |progress: Progress| {
+                    if last.elapsed().as_millis() < 60 {
+                        return;
+                    }
+                    last = std::time::Instant::now();
+                    let detail = format!("{} copiados", format_size(progress.bytes));
+                    let _ = qt_progress.queue(move |mut controller| {
+                        controller
+                            .as_mut()
+                            .set_op_detail(QString::from(detail.as_str()));
+                    });
+                };
+
+                if cut {
+                    match siderita_ops::move_entry(source, &destination, &token, &mut on_progress) {
+                        Ok(moved) => {
+                            if let Some(parent) = moved.from.parent() {
+                                undo_moves.push((moved.to, parent.to_path_buf()));
+                            }
+                        }
+                        Err(error) => {
+                            failures.push(format!("{}: {error}", display_name(source)));
+                            unmoved.push(source.clone());
                         }
                     }
-                    Err(error) => {
-                        failures.push(format!("{}: {error}", display_name(source)));
-                        unmoved.push(source.clone());
-                    }
+                } else if let Err(error) =
+                    siderita_ops::copy(source, &destination, &token, &mut on_progress)
+                {
+                    failures.push(format!("{}: {error}", display_name(source)));
                 }
-            } else if let Err(error) =
-                siderita_ops::copy(source, &destination, &cancellation, &mut |_| {})
-            {
-                failures.push(format!("{}: {error}", display_name(source)));
             }
+
+            let cancelled = token.is_cancelled();
+            let _ = qt.queue(move |controller| {
+                controller.finish_paste(cut, unmoved, undo_moves, total, failures, cancelled);
+            });
+        });
+    }
+
+    /// Trips the running operation's cancellation token. The worker stops at the
+    /// next check and finalises through `finish_paste`, so a cancelled cross-
+    /// device move still leaves every source intact.
+    pub fn cancel_op(mut self: Pin<&mut Self>) {
+        if let Some(token) = self.as_mut().rust_mut().get_mut().op_cancel.as_ref() {
+            token.cancel();
         }
+        self.as_mut()
+            .set_status_text(QString::from("Cancelando…"));
+    }
+
+    /// Finalises a pasted batch back on the Qt thread: restores the idle state,
+    /// settles the clipboard and undo record, refreshes the view and reports any
+    /// per-entry failures (noting when the batch was cancelled part-way).
+    fn finish_paste(
+        mut self: Pin<&mut Self>,
+        cut: bool,
+        unmoved: Vec<PathBuf>,
+        undo_moves: Vec<(PathBuf, PathBuf)>,
+        total: usize,
+        failures: Vec<String>,
+        cancelled: bool,
+    ) {
+        self.as_mut().set_op_running(false);
+        self.as_mut().rust_mut().get_mut().op_cancel = None;
+        self.as_mut().set_op_current(QString::default());
+        self.as_mut().set_op_detail(QString::default());
+        self.as_mut().set_op_done(0);
+        self.as_mut().set_op_total(0);
 
         if cut {
-            // A cut consumes what it moved and retains only the entries that
-            // could not be moved, and its inverse (move back) is undoable.
             if unmoved.is_empty() {
                 self.as_mut().clear_clipboard();
             } else {
@@ -758,12 +863,15 @@ impl qobject::SideritaController {
                 self.as_mut()
                     .set_undo(Some(UndoAction::Move { entries: undo_moves }));
             }
-        } else if failures.len() < sources.len() {
-            // A copy keeps the clipboard for reuse but is not undoable; a partial
-            // or full success supersedes the last undoable operation.
+        } else if failures.len() < total {
             self.as_mut().set_undo(None);
         }
-        self.as_mut().finish_batch(sources.len(), &failures);
+
+        self.as_mut().finish_batch(total, &failures);
+        if cancelled && failures.is_empty() {
+            self.as_mut()
+                .set_status_text(QString::from("Operación cancelada"));
+        }
     }
 
     /// Reverses the last undoable operation (rename / move / trash). Single

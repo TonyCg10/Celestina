@@ -193,7 +193,7 @@ ApplicationWindow {
         // Write verbs act on the focused entry (topBar.activeView.currentIndex).
         Shortcut {
             sequence: "F2"
-            enabled: root.active && !controller.loading
+            enabled: root.active && !controller.loading && !controller.opRunning
             onActivated: {
                 const i = topBar.activeView.currentIndex
                 if (i >= 0)
@@ -204,7 +204,7 @@ ApplicationWindow {
 
         Shortcut {
             sequence: "Delete"
-            enabled: root.active && !controller.loading
+            enabled: root.active && !controller.loading && !controller.opRunning
             onActivated: {
                 const i = topBar.activeView.currentIndex
                 if (i >= 0)
@@ -237,13 +237,13 @@ ApplicationWindow {
 
         Shortcut {
             sequence: StandardKey.Paste
-            enabled: root.active && controller.canPaste
+            enabled: root.active && controller.canPaste && !controller.opRunning
             onActivated: controller.paste()
         }
 
         Shortcut {
             sequence: StandardKey.Undo
-            enabled: root.active && controller.canUndo && !controller.loading
+            enabled: root.active && controller.canUndo && !controller.loading && !controller.opRunning
             onActivated: controller.undo()
         }
 
@@ -1198,6 +1198,117 @@ ApplicationWindow {
                 }
             }
 
+            // Progress surface for a running copy / move: current entry, a
+            // determinate bar over the top-level count, bytes copied and a
+            // cancel button that trips the worker's cancellation token.
+            Rectangle {
+                id: opProgressCard
+                x: 16
+                y: opErrorBanner.visible
+                   ? opErrorBanner.y + opErrorBanner.height + 8
+                   : (errorBanner.visible ? errorBanner.y + errorBanner.height + 8 : 14)
+                width: parent.width - 32
+                height: 62
+                radius: CelestinaTheme.radiusSm
+                visible: controller.opRunning
+                color: CelestinaTheme.surface
+                border.width: 1
+                border.color: CelestinaTheme.border
+                z: 5
+
+                Text {
+                    id: opProgressTitle
+                    x: 12
+                    y: 9
+                    width: cancelOpButton.x - x - 12
+                    text: {
+                        var label = controller.opCurrent.length > 0
+                                    ? controller.opCurrent : "Preparando…"
+                        if (controller.opTotal > 1)
+                            label += "  ·  " + (controller.opDone + 1)
+                                     + " de " + controller.opTotal
+                        return label
+                    }
+                    color: CelestinaTheme.text
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontLabel
+                    elide: Text.ElideMiddle
+                }
+
+                Text {
+                    id: opProgressDetail
+                    x: 12
+                    anchors.top: opProgressTitle.bottom
+                    anchors.topMargin: 3
+                    width: cancelOpButton.x - x - 12
+                    text: controller.opDetail
+                    visible: controller.opDetail.length > 0
+                    color: CelestinaTheme.textMuted
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCaption
+                    elide: Text.ElideRight
+                }
+
+                // Determinate bar over the top-level entry count.
+                Rectangle {
+                    id: opProgressTrack
+                    x: 12
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 10
+                    width: cancelOpButton.x - x - 12
+                    height: 4
+                    radius: 2
+                    color: CelestinaTheme.controlFill
+
+                    Rectangle {
+                        height: parent.height
+                        radius: 2
+                        color: CelestinaTheme.accent
+                        width: controller.opTotal > 0
+                               ? parent.width * Math.min(1, controller.opDone / controller.opTotal)
+                               : 0
+                        Behavior on width {
+                            NumberAnimation { duration: CelestinaTheme.motionFast }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    id: cancelOpButton
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.right: parent.right
+                    anchors.rightMargin: 12
+                    width: cancelOpLabel.width + 22
+                    height: 28
+                    radius: CelestinaTheme.radiusXs
+                    color: cancelOpMouse.containsMouse
+                           ? CelestinaTheme.surfaceHover
+                           : CelestinaTheme.controlFill
+                    border.width: 1
+                    border.color: CelestinaTheme.border
+
+                    Accessible.role: Accessible.Button
+                    Accessible.name: "Cancelar la operación"
+
+                    Text {
+                        id: cancelOpLabel
+                        anchors.centerIn: parent
+                        text: "Cancelar"
+                        color: CelestinaTheme.text
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: CelestinaTheme.fontMini
+                        font.weight: CelestinaTheme.weightMedium
+                    }
+
+                    MouseArea {
+                        id: cancelOpMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: controller.cancelOp()
+                    }
+                }
+            }
+
             Text {
                 id: statusLine
                 x: busy.x + busy.width + 14
@@ -1853,7 +1964,7 @@ ApplicationWindow {
 
             GlassMenuItem {
                 text: "Pegar"
-                enabled: controller.canPaste
+                enabled: controller.canPaste && !controller.opRunning
                 icon.name: "edit-paste"
                 icon.source: CelestinaTheme.fallbackIcon("file")
                 onTriggered: controller.paste()
