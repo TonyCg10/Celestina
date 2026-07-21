@@ -37,6 +37,8 @@ pub mod qobject {
         #[qproperty(i32, sort_field)]
         #[qproperty(bool, sort_ascending)]
         #[qproperty(i32, view_revision)]
+        #[qproperty(QStringList, bookmark_names)]
+        #[qproperty(QStringList, bookmark_paths)]
         type SideritaController = super::SideritaControllerRust;
 
         #[qinvokable]
@@ -92,6 +94,21 @@ pub mod qobject {
 
         #[qinvokable]
         fn index_for_token(self: &SideritaController, token: &QString) -> i32;
+
+        #[qinvokable]
+        fn entry_path(self: &SideritaController, index: i32) -> QString;
+
+        #[qinvokable]
+        fn add_bookmark(self: Pin<&mut SideritaController>, path: &QString);
+
+        #[qinvokable]
+        fn remove_bookmark(self: Pin<&mut SideritaController>, index: i32);
+
+        #[qinvokable]
+        fn rename_bookmark(self: Pin<&mut SideritaController>, index: i32, name: &QString);
+
+        #[qinvokable]
+        fn place_path(self: &SideritaController, key: &QString) -> QString;
     }
 
     impl cxx_qt::Threading for SideritaController {}
@@ -120,6 +137,10 @@ pub struct SideritaControllerRust {
     snapshot: Option<DirectorySnapshot>,
     view: Option<ViewSnapshot>,
     pending_location: Option<PathBuf>,
+    bookmark_names: QStringList,
+    bookmark_paths: QStringList,
+    bookmarks: Vec<crate::bookmarks::Bookmark>,
+    places: std::collections::HashMap<String, String>,
 }
 
 impl Default for SideritaControllerRust {
@@ -147,6 +168,13 @@ impl Default for SideritaControllerRust {
             snapshot: None,
             view: None,
             pending_location: None,
+            bookmark_names: QStringList::default(),
+            bookmark_paths: QStringList::default(),
+            bookmarks: Vec::new(),
+            places: crate::places::resolve()
+                .into_iter()
+                .map(|(key, path)| (key, path.to_string_lossy().into_owned()))
+                .collect(),
         }
     }
 }
@@ -178,6 +206,10 @@ impl qobject::SideritaController {
             });
             self.as_mut().rust_mut().get_mut().executor = Some(executor);
         }
+
+        let loaded = crate::bookmarks::load();
+        self.as_mut().rust_mut().get_mut().bookmarks = loaded;
+        self.as_mut().refresh_bookmark_properties();
 
         if self.rust().history.current().is_none() {
             let initial = initial_location();
@@ -379,6 +411,79 @@ impl qobject::SideritaController {
             })
             .and_then(|index| i32::try_from(index).ok())
             .unwrap_or(-1)
+    }
+
+    pub fn entry_path(&self, index: i32) -> QString {
+        self.rust()
+            .row(index)
+            .map(|row| QString::from(row.path().to_string_lossy().as_ref()))
+            .unwrap_or_default()
+    }
+
+    pub fn add_bookmark(mut self: Pin<&mut Self>, path: &QString) {
+        let path = path.to_string();
+        if path.is_empty() || self.rust().bookmarks.iter().any(|entry| entry.path == path) {
+            return;
+        }
+        let name = crate::bookmarks::name_for(&path);
+        self.as_mut()
+            .rust_mut()
+            .get_mut()
+            .bookmarks
+            .push(crate::bookmarks::Bookmark { name, path });
+        self.as_mut().refresh_bookmark_properties();
+        let _ = crate::bookmarks::save(&self.rust().bookmarks);
+    }
+
+    pub fn remove_bookmark(mut self: Pin<&mut Self>, index: i32) {
+        let Ok(index) = usize::try_from(index) else {
+            return;
+        };
+        if index >= self.rust().bookmarks.len() {
+            return;
+        }
+        self.as_mut().rust_mut().get_mut().bookmarks.remove(index);
+        self.as_mut().refresh_bookmark_properties();
+        let _ = crate::bookmarks::save(&self.rust().bookmarks);
+    }
+
+    pub fn rename_bookmark(mut self: Pin<&mut Self>, index: i32, name: &QString) {
+        let Ok(index) = usize::try_from(index) else {
+            return;
+        };
+        let name = name.to_string();
+        if name.is_empty() || index >= self.rust().bookmarks.len() {
+            return;
+        }
+        self.as_mut().rust_mut().get_mut().bookmarks[index].name = name;
+        self.as_mut().refresh_bookmark_properties();
+        let _ = crate::bookmarks::save(&self.rust().bookmarks);
+    }
+
+    pub fn place_path(&self, key: &QString) -> QString {
+        self.rust()
+            .places
+            .get(&key.to_string())
+            .map(|path| QString::from(path.as_str()))
+            .unwrap_or_default()
+    }
+
+    fn refresh_bookmark_properties(mut self: Pin<&mut Self>) {
+        let (names, paths): (QStringList, QStringList) = {
+            let bookmarks = &self.rust().bookmarks;
+            (
+                bookmarks
+                    .iter()
+                    .map(|entry| QString::from(entry.name.as_str()))
+                    .collect(),
+                bookmarks
+                    .iter()
+                    .map(|entry| QString::from(entry.path.as_str()))
+                    .collect(),
+            )
+        };
+        self.as_mut().set_bookmark_names(names);
+        self.as_mut().set_bookmark_paths(paths);
     }
 
     fn request_scan(mut self: Pin<&mut Self>, destination: PathBuf) {

@@ -18,10 +18,14 @@ projects reached through desktop standards.
 read-only (Iteration 1): HOME/path navigation, filter, sort, hidden toggle, stable
 selection and truthful states, with a bounded scan worker that publishes on the Qt
 thread and rejects stale results. The core preserves Unix and non-UTF-8 identity,
-uses generations and opaque tokens, and provides cancellation/join; 30 workspace
-tests pass. Installation staging, watcher, `file://`, a native role-based model,
-UI tests and real-Wayland blur/frame numbers are still open, so Qt/QML stays a
-**provisional** first iteration.
+uses generations and opaque tokens, and provides cancellation/join; the 30
+workspace tests plus the host's own bookmark/places unit tests pass. The UI has
+grown past the minimal slice — multi-selection, context menus, sidebar places
+(XDG) and bookmarks — but stays read-only toward the user's files: the only writes
+are Siderita's own bookmark config under `~/.config`. Installation staging,
+watcher, `file://`, a native role-based model, UI tests and real-Wayland
+blur/frame numbers are still open, so Qt/QML stays a **provisional** first
+iteration.
 
 **Key decisions.** Siderita keeps its own roadmap and release; the Rust cores live
 in a separate workspace so each domain is testable without a toolkit; C++ is
@@ -45,6 +49,13 @@ resource report ratifies or rejects Qt/QML with data.
 - [x] HOME / path navigation (back / forward / up / home / refresh) incl. mouse side buttons
 - [x] Filter with 120 ms debounce; sort by name / size / date / kind, both directions, folders first; stable selection across re-sort; hidden toggle
 - [x] Segmented breadcrumb + list/grid view toggle
+- [x] Adjustable item size — a status-bar zoom slider (up to 190 %) scales rows/cells, glyphs, icons and labels in both views (session-local)
+- [x] Multi-selection — plain / Ctrl / Shift click, a drag-marquee zone, right-click-selects and select-all; the status line shows the count; token-keyed so it survives sort/filter and clears on navigation
+- [x] Per-item and empty-space (folder) context menus with the glass background
+- [x] Sidebar places — Inicio plus the standard XDG user folders (Escritorio, Documentos, Descargas, Música, Imágenes, Vídeos), resolved from `user-dirs.dirs` and shown only when they exist
+- [x] Sidebar bookmarks — add from a folder's context menu or by dragging it onto the sidebar, rename and remove, navigate; persisted across restarts to `~/.config/siderita/bookmarks.tsv`
+- [x] Header moved into the content box as independent glass pills (breadcrumb + search) that fade to glass on scroll; controls consolidated into a bottom bar; sidebar bottom info box
+- [x] Host-side Rust for `entry_path`, the bookmark store and the XDG places resolver, with unit tests (bookmark round-trip + sanitization, `user-dirs.dirs` parsing)
 - [x] Truthful loading / empty / error / degraded-watch states
 - [x] Freedesktop theme icons with minimal embedded SVG fallbacks
 - [x] Dependency inventory + size / memory / CPU / threads baselines (offscreen)
