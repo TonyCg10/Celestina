@@ -2,6 +2,7 @@
 members = [
     "crates/celestina-core",
     "crates/siderita-core",
+    "crates/siderita-ops",
     "crates/siderita-qt",
     "crates/dotfiles-core",
 ]

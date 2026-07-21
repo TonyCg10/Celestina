@@ -18,6 +18,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "siderita-ops"
+version = "0.1.0"
+dependencies = [
+ "celestina-core",
+]
+
+[[package]]
 name = "siderita-qt"
 version = "0.1.0"
 dependencies = [
