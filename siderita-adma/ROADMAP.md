@@ -128,7 +128,7 @@ source before its destination is verified.
 - [ ] System-clipboard interop — the URI-list + desktop file-clipboard convention, so paste works to and from other managers
 - [ ] An async operation executor: conflict-resolution dialog (today a conflict is refused and reported), cancellation, per-item results and a progress surface for long copies / moves (today the verbs run synchronously)
 - [ ] Undo the last operation (move / rename / trash)
-- [ ] Multi-select batch operations (today the verbs act on the single focused entry)
+- [x] Multi-select batch operations — copy, cut and send-to-Trash act on the whole selection when the right-clicked/focused entry is part of a multi-selection (else the single entry); each entry is attempted independently, the view refreshes once so successes appear, and failures are reported together (`N de M operaciones fallaron`). A partial cut keeps only the entries it could not move on the clipboard, so a retry never re-moves a relocated one
 - [x] Activate a file → open with its default application (xdg-open) — double-click or the entry menu's "Abrir" hands the path to the desktop's handler, detached and reaped, with a truthful `op_error` if the launcher can't start; the Open-with… chooser and default-app management are CP2
 
 ## Checkpoint 2 — Interoperable daily manager (S2)

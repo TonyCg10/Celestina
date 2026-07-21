@@ -208,7 +208,8 @@ ApplicationWindow {
             onActivated: {
                 const i = topBar.activeView.currentIndex
                 if (i >= 0)
-                    controller.trashPath(controller.entryPath(i))
+                    mainPanel.trashSelection(controller.entryToken(i),
+                                             controller.entryPath(i))
             }
         }
 
@@ -218,7 +219,8 @@ ApplicationWindow {
             onActivated: {
                 const i = topBar.activeView.currentIndex
                 if (i >= 0)
-                    controller.copyToClipboard(controller.entryPath(i), false)
+                    mainPanel.copySelection(controller.entryToken(i),
+                                            controller.entryPath(i), false)
             }
         }
 
@@ -228,7 +230,8 @@ ApplicationWindow {
             onActivated: {
                 const i = topBar.activeView.currentIndex
                 if (i >= 0)
-                    controller.copyToClipboard(controller.entryPath(i), true)
+                    mainPanel.copySelection(controller.entryToken(i),
+                                            controller.entryPath(i), true)
             }
         }
 
@@ -338,6 +341,47 @@ ApplicationWindow {
                 }
                 selectedTokens = s
                 selectionCount = Object.keys(s).length
+            }
+
+            // Paths of every currently-selected entry that is still visible in
+            // this view (a token filtered away resolves to -1 and is skipped, so
+            // a verb only ever touches what the user can see).
+            function selectedPaths() {
+                var out = []
+                for (var t in selectedTokens) {
+                    if (selectedTokens[t] === true) {
+                        var idx = controller.indexForToken(t)
+                        if (idx >= 0)
+                            out.push(controller.entryPath(idx))
+                    }
+                }
+                return out
+            }
+            // The set a verb should act on: the whole selection when the
+            // right-clicked / focused entry is part of a multi-selection, else
+            // just that one entry.
+            function operativePaths(primaryToken, primaryPath) {
+                if (selectionCount > 1 && isSelected(primaryToken))
+                    return selectedPaths()
+                return [primaryPath]
+            }
+            function actingCount(primaryToken) {
+                return (selectionCount > 1 && isSelected(primaryToken))
+                       ? selectionCount : 1
+            }
+            function copySelection(primaryToken, primaryPath, cut) {
+                var p = operativePaths(primaryToken, primaryPath)
+                if (p.length > 1)
+                    controller.copyPathsToClipboard(p, cut)
+                else
+                    controller.copyToClipboard(primaryPath, cut)
+            }
+            function trashSelection(primaryToken, primaryPath) {
+                var p = operativePaths(primaryToken, primaryPath)
+                if (p.length > 1)
+                    controller.trashPaths(p)
+                else
+                    controller.trashPath(primaryPath)
             }
 
             Connections {
@@ -1687,9 +1731,17 @@ ApplicationWindow {
             property string targetName: ""
             property bool targetDirectory: false
             property string targetPath: ""
+            // How many entries the batch-capable verbs (copy/cut/trash) will act
+            // on: the whole selection when the right-clicked entry is part of a
+            // multi-selection, otherwise just this one.
+            readonly property int actingCount:
+                    mainPanel.actingCount(targetToken)
+            readonly property bool multi: actingCount > 1
 
             GlassMenuItem {
                 text: entryMenu.targetDirectory ? "Abrir carpeta" : "Abrir"
+                visible: !entryMenu.multi
+                height: visible ? implicitHeight : 0
                 icon.name: entryMenu.targetDirectory ? "folder-open" : "text-x-generic"
                 icon.source: CelestinaTheme.fallbackIcon(
                                  entryMenu.targetDirectory ? "folder" : "file")
@@ -1698,7 +1750,7 @@ ApplicationWindow {
 
             GlassMenuItem {
                 text: "Abrir en pestaña nueva"
-                visible: entryMenu.targetDirectory
+                visible: entryMenu.targetDirectory && !entryMenu.multi
                 height: visible ? implicitHeight : 0
                 icon.name: "tab-new"
                 icon.source: CelestinaTheme.fallbackIcon("folder")
@@ -1707,7 +1759,7 @@ ApplicationWindow {
 
             GlassMenuItem {
                 text: "Añadir a marcadores"
-                visible: entryMenu.targetDirectory
+                visible: entryMenu.targetDirectory && !entryMenu.multi
                 height: visible ? implicitHeight : 0
                 icon.name: "bookmark-new"
                 icon.source: CelestinaTheme.fallbackIcon("folder")
@@ -1716,30 +1768,41 @@ ApplicationWindow {
 
             GlassMenuItem {
                 text: "Renombrar"
+                visible: !entryMenu.multi
+                height: visible ? implicitHeight : 0
                 icon.name: "edit-rename"
                 icon.source: CelestinaTheme.fallbackIcon("file")
                 onTriggered: namePrompt.openRename(entryMenu.targetPath, entryMenu.targetName)
             }
 
             GlassMenuItem {
-                text: "Copiar"
+                text: entryMenu.multi
+                      ? "Copiar " + entryMenu.actingCount + " elementos"
+                      : "Copiar"
                 icon.name: "edit-copy"
                 icon.source: CelestinaTheme.fallbackIcon("file")
-                onTriggered: controller.copyToClipboard(entryMenu.targetPath, false)
+                onTriggered: mainPanel.copySelection(
+                                 entryMenu.targetToken, entryMenu.targetPath, false)
             }
 
             GlassMenuItem {
-                text: "Cortar"
+                text: entryMenu.multi
+                      ? "Cortar " + entryMenu.actingCount + " elementos"
+                      : "Cortar"
                 icon.name: "edit-cut"
                 icon.source: CelestinaTheme.fallbackIcon("file")
-                onTriggered: controller.copyToClipboard(entryMenu.targetPath, true)
+                onTriggered: mainPanel.copySelection(
+                                 entryMenu.targetToken, entryMenu.targetPath, true)
             }
 
             GlassMenuItem {
-                text: "Enviar a la papelera"
+                text: entryMenu.multi
+                      ? "Enviar " + entryMenu.actingCount + " a la papelera"
+                      : "Enviar a la papelera"
                 icon.name: "user-trash"
                 icon.source: CelestinaTheme.fallbackIcon("file")
-                onTriggered: controller.trashPath(entryMenu.targetPath)
+                onTriggered: mainPanel.trashSelection(
+                                 entryMenu.targetToken, entryMenu.targetPath)
             }
 
             MenuSeparator {

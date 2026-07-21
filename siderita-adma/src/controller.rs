@@ -134,7 +134,17 @@ pub mod qobject {
         fn trash_path(self: Pin<&mut SideritaController>, path: &QString);
 
         #[qinvokable]
+        fn trash_paths(self: Pin<&mut SideritaController>, paths: &QStringList);
+
+        #[qinvokable]
         fn copy_to_clipboard(self: Pin<&mut SideritaController>, path: &QString, cut: bool);
+
+        #[qinvokable]
+        fn copy_paths_to_clipboard(
+            self: Pin<&mut SideritaController>,
+            paths: &QStringList,
+            cut: bool,
+        );
 
         #[qinvokable]
         fn clear_clipboard(self: Pin<&mut SideritaController>);
@@ -173,7 +183,7 @@ pub struct SideritaControllerRust {
     bookmark_paths: QStringList,
     op_error: QString,
     can_paste: bool,
-    clipboard: Option<PathBuf>,
+    clipboard: Vec<PathBuf>,
     clipboard_cut: bool,
     bookmarks: Vec<crate::bookmarks::Bookmark>,
     places: std::collections::HashMap<String, String>,
@@ -208,7 +218,7 @@ impl Default for SideritaControllerRust {
             bookmark_paths: QStringList::default(),
             op_error: QString::default(),
             can_paste: false,
-            clipboard: None,
+            clipboard: Vec::new(),
             clipboard_cut: false,
             bookmarks: Vec::new(),
             places: crate::places::resolve()
@@ -581,15 +591,48 @@ impl qobject::SideritaController {
         self.finish_op(outcome.map(|_| ()));
     }
 
+    /// Sends every path in a multi-selection to Trash. Each entry is attempted
+    /// independently; the view is refreshed once so successes appear, and any
+    /// failures are reported together without hiding the ones that did land.
+    pub fn trash_paths(mut self: Pin<&mut Self>, paths: &QStringList) {
+        self.as_mut().set_op_error(QString::default());
+        let paths = qstringlist_to_paths(paths);
+        if paths.is_empty() {
+            return;
+        }
+        let cancellation = CancellationToken::new();
+        let mut failures = Vec::new();
+        for path in &paths {
+            if let Err(error) = siderita_ops::trash(path, &cancellation) {
+                failures.push(format!("{}: {error}", display_name(path)));
+            }
+        }
+        self.as_mut().finish_batch(paths.len(), &failures);
+    }
+
     pub fn copy_to_clipboard(mut self: Pin<&mut Self>, path: &QString, cut: bool) {
         let path = path.to_string();
         if path.is_empty() {
             return;
         }
+        self.as_mut().set_clipboard(vec![PathBuf::from(path)], cut);
+    }
+
+    /// Loads a multi-selection into the internal clipboard for a later paste,
+    /// as either a copy (`cut = false`) or a move (`cut = true`).
+    pub fn copy_paths_to_clipboard(mut self: Pin<&mut Self>, paths: &QStringList, cut: bool) {
+        let paths = qstringlist_to_paths(paths);
+        if paths.is_empty() {
+            return;
+        }
+        self.as_mut().set_clipboard(paths, cut);
+    }
+
+    fn set_clipboard(mut self: Pin<&mut Self>, paths: Vec<PathBuf>, cut: bool) {
         {
             let state = self.as_mut().rust_mut();
             let state = state.get_mut();
-            state.clipboard = Some(PathBuf::from(path));
+            state.clipboard = paths;
             state.clipboard_cut = cut;
         }
         self.as_mut().set_can_paste(true);
@@ -600,7 +643,7 @@ impl qobject::SideritaController {
         {
             let state = self.as_mut().rust_mut();
             let state = state.get_mut();
-            state.clipboard = None;
+            state.clipboard.clear();
             state.clipboard_cut = false;
         }
         self.as_mut().set_can_paste(false);
@@ -611,23 +654,42 @@ impl qobject::SideritaController {
         let Some(destination) = self.rust().history.current().map(Path::to_path_buf) else {
             return;
         };
-        let Some(source) = self.rust().clipboard.clone() else {
+        let sources = self.rust().clipboard.clone();
+        if sources.is_empty() {
             return;
-        };
+        }
         let cut = self.rust().clipboard_cut;
 
         let cancellation = CancellationToken::new();
-        let outcome = if cut {
-            siderita_ops::move_entry(&source, &destination, &cancellation, &mut |_| {}).map(|_| ())
-        } else {
-            siderita_ops::copy(&source, &destination, &cancellation, &mut |_| {}).map(|_| ())
-        };
-
-        // A successful cut consumes the clipboard; a copy keeps it for reuse.
-        if outcome.is_ok() && cut {
-            self.as_mut().clear_clipboard();
+        let mut failures = Vec::new();
+        // On a cut, a moved source is gone; keep only the ones that failed so a
+        // retry never re-moves an already-relocated (now missing) entry.
+        let mut unmoved = Vec::new();
+        for source in &sources {
+            let outcome = if cut {
+                siderita_ops::move_entry(source, &destination, &cancellation, &mut |_| {})
+                    .map(|_| ())
+            } else {
+                siderita_ops::copy(source, &destination, &cancellation, &mut |_| {}).map(|_| ())
+            };
+            if let Err(error) = outcome {
+                failures.push(format!("{}: {error}", display_name(source)));
+                if cut {
+                    unmoved.push(source.clone());
+                }
+            }
         }
-        self.finish_op(outcome);
+
+        // A copy keeps the clipboard for reuse; a cut consumes what it moved and
+        // retains only the entries that could not be moved.
+        if cut {
+            if unmoved.is_empty() {
+                self.as_mut().clear_clipboard();
+            } else {
+                self.as_mut().set_clipboard(unmoved, true);
+            }
+        }
+        self.as_mut().finish_batch(sources.len(), &failures);
     }
 
     /// After a write: refresh the view on success, or surface the error on
@@ -639,6 +701,29 @@ impl qobject::SideritaController {
                 .as_mut()
                 .set_op_error(QString::from(error.to_string().as_str())),
         }
+    }
+
+    /// After a batch write: always refresh (a partial success still changed the
+    /// directory), then surface any per-entry failures together. `refresh`
+    /// clears `op_error` for the new scan, so the error is set last and survives
+    /// until the next operation or navigation.
+    fn finish_batch(mut self: Pin<&mut Self>, total: usize, failures: &[String]) {
+        self.as_mut().refresh();
+        if failures.is_empty() {
+            return;
+        }
+        let summary = if failures.len() == total {
+            failures.join("\n")
+        } else {
+            format!(
+                "{} de {} operaciones fallaron:\n{}",
+                failures.len(),
+                total,
+                failures.join("\n")
+            )
+        };
+        self.as_mut()
+            .set_op_error(QString::from(summary.as_str()));
     }
 
     fn refresh_bookmark_properties(mut self: Pin<&mut Self>) {
@@ -865,6 +950,24 @@ impl qobject::SideritaController {
     }
 }
 
+/// Collects a QML `list<string>` of paths into owned `PathBuf`s, skipping empty
+/// strings so a stray blank never becomes a filesystem operation on `""`.
+fn qstringlist_to_paths(list: &QStringList) -> Vec<PathBuf> {
+    list.iter()
+        .map(QString::to_string)
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .collect()
+}
+
+/// The final path component, for a compact per-entry line in a batch error.
+/// Falls back to the full lossy path when there is no file name (e.g. `/`).
+fn display_name(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.to_string_lossy().into_owned())
+}
+
 /// Launches `xdg-open PATH`, detached from Siderita's stdio, and reaps the
 /// short-lived launcher on a throwaway thread so it never lingers as a zombie.
 /// The opened application is reparented and outlives Siderita. Returns a
@@ -1004,6 +1107,14 @@ mod tests {
             resolve_location("hija", Some(Path::new("/base"))),
             PathBuf::from("/base/hija")
         );
+    }
+
+    #[test]
+    fn display_name_uses_the_final_component() {
+        assert_eq!(super::display_name(Path::new("/home/toni/nota.txt")), "nota.txt");
+        assert_eq!(super::display_name(Path::new("/home/toni/carpeta")), "carpeta");
+        // No file name (root) falls back to the whole path.
+        assert_eq!(super::display_name(Path::new("/")), "/");
     }
 
     #[test]
