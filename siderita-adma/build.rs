@@ -22,9 +22,20 @@ fn main() {
             "qml/i1/MainI1.qml",
         ]);
 
+    // The system-clipboard bridge (text/uri-list + x-special/gnome-copied-files)
+    // is the one piece of hand-written C++: cxx-qt-lib exposes no QClipboard /
+    // QMimeData, so a small shim under cpp/ implements it and the controller
+    // bridge declares its free functions. `cpp/` is put on the compiler's include
+    // path so both the generated bridge code and clipboard.cpp resolve
+    // "siderita/clipboard.h".
+    println!("cargo::rerun-if-changed=cpp/clipboard.cpp");
+    println!("cargo::rerun-if-changed=cpp/siderita/clipboard.h");
     let builder = CxxQtBuilder::new_qml_module(module)
         .qrc("qml/i1/icons.qrc")
+        .cpp_file("cpp/clipboard.cpp")
         .files(["src/controller.rs"]);
+    // SAFETY: only adds an include directory for our own headers.
+    let builder = unsafe { builder.cc_builder(|cc| { cc.include("cpp"); }) };
 
     // Qt QML links Network on macOS even though Siderita itself is offline.
     let builder = if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {

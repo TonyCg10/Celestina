@@ -20,6 +20,24 @@ pub mod qobject {
 
         include!("cxx-qt-lib/qstringlist.h");
         type QStringList = cxx_qt_lib::QStringList;
+
+        // The hand-written system-clipboard shim (see cpp/clipboard.cpp).
+        include!("siderita/clipboard.h");
+
+        #[rust_name = "system_clipboard_set_uris"]
+        fn siderita_set_clipboard_uris(paths: &QStringList, cut: bool);
+
+        #[rust_name = "system_clipboard_read_uris"]
+        fn siderita_read_clipboard_uris() -> QStringList;
+
+        #[rust_name = "system_clipboard_is_cut"]
+        fn siderita_clipboard_is_cut() -> bool;
+
+        #[rust_name = "system_clipboard_has_uris"]
+        fn siderita_clipboard_has_uris() -> bool;
+
+        #[rust_name = "system_clipboard_clear"]
+        fn siderita_clear_clipboard();
     }
 
     #[auto_cxx_name]
@@ -158,6 +176,9 @@ pub mod qobject {
 
         #[qinvokable]
         fn clear_clipboard(self: Pin<&mut SideritaController>);
+
+        #[qinvokable]
+        fn refresh_paste_state(self: Pin<&mut SideritaController>);
 
         #[qinvokable]
         fn paste(self: Pin<&mut SideritaController>);
@@ -770,6 +791,13 @@ impl qobject::SideritaController {
     }
 
     fn set_clipboard(mut self: Pin<&mut Self>, paths: Vec<PathBuf>, cut: bool) {
+        // Publish to the system clipboard too, so other file managers can paste
+        // what Siderita copied or cut (text/uri-list + gnome-copied-files).
+        let uris: QStringList = paths
+            .iter()
+            .map(|path| QString::from(path.to_string_lossy().as_ref()))
+            .collect();
+        qobject::system_clipboard_set_uris(&uris, cut);
         {
             let state = self.as_mut().rust_mut();
             let state = state.get_mut();
@@ -778,6 +806,15 @@ impl qobject::SideritaController {
         }
         self.as_mut().set_can_paste(true);
         self.as_mut().set_op_error(QString::default());
+    }
+
+    /// Recomputes whether a paste is available from either clipboard. Called when
+    /// the folder menu opens so "Pegar" also lights up for content another
+    /// manager copied, without polling for clipboard changes.
+    pub fn refresh_paste_state(mut self: Pin<&mut Self>) {
+        let available =
+            !self.rust().clipboard.is_empty() || qobject::system_clipboard_has_uris();
+        self.as_mut().set_can_paste(available);
     }
 
     pub fn clear_clipboard(mut self: Pin<&mut Self>) {
@@ -802,11 +839,21 @@ impl qobject::SideritaController {
         let Some(destination) = self.rust().history.current().map(Path::to_path_buf) else {
             return;
         };
-        let sources = self.rust().clipboard.clone();
+
+        // The system clipboard is the source of truth shared with other managers;
+        // fall back to the internal one only when the system clipboard holds no
+        // file URIs (e.g. it is unavailable).
+        let (sources, cut) = if qobject::system_clipboard_has_uris() {
+            (
+                qstringlist_to_paths(&qobject::system_clipboard_read_uris()),
+                qobject::system_clipboard_is_cut(),
+            )
+        } else {
+            (self.rust().clipboard.clone(), self.rust().clipboard_cut)
+        };
         if sources.is_empty() {
             return;
         }
-        let cut = self.rust().clipboard_cut;
 
         // Detect collisions up front, on the Qt thread, so the choice is made
         // once before any file is touched rather than mid-copy.
@@ -974,6 +1021,9 @@ impl qobject::SideritaController {
 
         if cut {
             if outcome.unmoved.is_empty() {
+                // A fully-consumed cut clears both clipboards, matching the
+                // convention other managers follow after a move-paste.
+                qobject::system_clipboard_clear();
                 self.as_mut().clear_clipboard();
             } else {
                 self.as_mut().set_clipboard(outcome.unmoved, true);

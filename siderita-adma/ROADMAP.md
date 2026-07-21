@@ -34,7 +34,9 @@ demonstrated need, never by parity.
 
 **Key decisions.** Siderita keeps its own roadmap and release; the Rust cores live
 in a separate workspace so each domain is testable without a toolkit; C++ is
-limited to the CXX-Qt bridge; internal glass lives in QML (bounded capture +
+limited to the CXX-Qt bridge plus one small hand-written shim for the system
+clipboard (`QClipboard`/`QMimeData`, absent from cxx-qt-lib); internal glass
+lives in QML (bounded capture +
 `MultiEffect`, translucent fallback); icons use freedesktop names with a minimal
 SVG fallback; Qt dependencies stay under an allowlist; the visible name is never
 identity (homonyms, rename and non-UTF-8 names are preserved); a source is never
@@ -125,7 +127,7 @@ source before its destination is verified.
 - [x] Cut / copy / paste inside Siderita (an internal clipboard) + a shared new-folder / new-file / rename prompt
 - [x] Freedesktop Trash support (send; restore is CP2)
 - [x] Guarantee: a source is never removed after a partial copy or without revalidation — domain-enforced and tested, including the cross-device cancel path
-- [ ] System-clipboard interop — the URI-list + desktop file-clipboard convention, so paste works to and from other managers
+- [x] System-clipboard interop — copy / cut now also publish to the system clipboard as `text/uri-list` + `x-special/gnome-copied-files` (the convention other managers honour), and paste reads file URIs from the system clipboard (the shared source of truth, with the internal one as fallback), so paste works to and from other managers; a consumed cut clears it. Implemented via a small hand-written `QClipboard`/`QMimeData` shim (`cpp/clipboard.cpp`) since cxx-qt-lib exposes neither. (Cross-manager behaviour builds/links/loads clean but awaits a real Wayland session to validate, like the read-side numbers.)
 - [x] An async operation executor: paste (copy / move) runs on a worker thread with a progress surface (current entry, top-level count, bytes) and a **Cancel** button that trips the cancellation token — a cancelled cross-device move still leaves every source intact; a second paste is refused while one runs, and the filesystem-mutating shortcuts/menu items are disabled meanwhile. Destination collisions are detected up front and raise a **skip / replace / keep-both** dialog (choice applied to the batch): replace sends the existing entry to Trash first (recoverable, nothing hard-deleted), keep-both places a freed `(copia)` name via the new loss-free `copy_as`/`move_as` primitives. Per-entry failures and a skipped count are surfaced. (Per-collision granularity and live progress/cancel interaction — the latter awaiting a real Wayland session — are the remaining polish.)
 - [x] Undo the last operation (move / rename / trash) — `Ctrl+Z` (or the empty-space menu, labelled for what it reverses) reverses the last rename, cut-paste move or send-to-Trash; trash undo uses the new `siderita_ops::restore_from_trash` primitive. Single level, batch-aware (a multi-trash restores every entry), and refuses to overwrite. Create and copy are deliberately not undoable and clear the pending undo on success
 - [x] Multi-select batch operations — copy, cut and send-to-Trash act on the whole selection when the right-clicked/focused entry is part of a multi-selection (else the single entry); each entry is attempted independently, the view refreshes once so successes appear, and failures are reported together (`N de M operaciones fallaron`). A partial cut keeps only the entries it could not move on the clipboard, so a retry never re-moves a relocated one

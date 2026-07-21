@@ -1948,6 +1948,10 @@ ApplicationWindow {
             id: folderMenu
             backdropSource: root
 
+            // Refresh paste availability so "Pegar" also lights up for file
+            // URIs another manager placed on the system clipboard.
+            onAboutToShow: controller.refreshPasteState()
+
             GlassMenuItem {
                 text: "Nueva carpeta"
                 icon.name: "folder-new"
