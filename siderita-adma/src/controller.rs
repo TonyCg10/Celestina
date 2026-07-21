@@ -45,6 +45,12 @@ pub mod qobject {
         fn start(self: Pin<&mut SideritaController>);
 
         #[qinvokable]
+        fn start_at(self: Pin<&mut SideritaController>, location: &QString);
+
+        #[qinvokable]
+        fn reload_bookmarks(self: Pin<&mut SideritaController>);
+
+        #[qinvokable]
         fn refresh(self: Pin<&mut SideritaController>);
 
         #[qinvokable]
@@ -196,7 +202,20 @@ impl SideritaControllerRust {
 }
 
 impl qobject::SideritaController {
-    pub fn start(mut self: Pin<&mut Self>) {
+    pub fn start(self: Pin<&mut Self>) {
+        let initial = initial_location();
+        self.start_common(initial);
+    }
+
+    /// Starts a tab directly at `location`, without the argv/HOME detour `start`
+    /// uses. New tabs open on the folder that spawned them, not the first tab's
+    /// initial location.
+    pub fn start_at(self: Pin<&mut Self>, location: &QString) {
+        let initial = resolve_location(&location.to_string(), None);
+        self.start_common(initial);
+    }
+
+    fn start_common(mut self: Pin<&mut Self>, initial: PathBuf) {
         if self.rust().executor.is_none() {
             let qt_thread = self.qt_thread();
             let executor = ScanExecutor::new(move |result| {
@@ -207,13 +226,10 @@ impl qobject::SideritaController {
             self.as_mut().rust_mut().get_mut().executor = Some(executor);
         }
 
-        let loaded = crate::bookmarks::load();
-        self.as_mut().rust_mut().get_mut().bookmarks = loaded;
-        self.as_mut().refresh_bookmark_properties();
+        self.as_mut().reload_bookmarks();
 
         if self.rust().history.current().is_none() {
-            let initial = initial_location();
-            self.as_mut().rust_mut().get_mut().history = NavigationHistory::new(initial);
+            self.as_mut().rust_mut().get_mut().history = NavigationHistory::new(initial.clone());
         }
 
         let destination = self
@@ -221,8 +237,17 @@ impl qobject::SideritaController {
             .history
             .current()
             .map(Path::to_path_buf)
-            .unwrap_or_else(initial_location);
+            .unwrap_or(initial);
         self.as_mut().request_scan(destination);
+    }
+
+    /// Re-reads the bookmark file into this controller and republishes the
+    /// name/path properties. Called on tab activation so a bookmark added in one
+    /// tab becomes visible in the others, and once as part of `start_common`.
+    pub fn reload_bookmarks(mut self: Pin<&mut Self>) {
+        let loaded = crate::bookmarks::load();
+        self.as_mut().rust_mut().get_mut().bookmarks = loaded;
+        self.as_mut().refresh_bookmark_properties();
     }
 
     pub fn refresh(mut self: Pin<&mut Self>) {
