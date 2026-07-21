@@ -35,7 +35,11 @@ fn main() {
         .cpp_file("cpp/clipboard.cpp")
         .files(["src/controller.rs"]);
     // SAFETY: only adds an include directory for our own headers.
-    let builder = unsafe { builder.cc_builder(|cc| { cc.include("cpp"); }) };
+    let builder = unsafe {
+        builder.cc_builder(|cc| {
+            cc.include("cpp");
+        })
+    };
 
     // Qt QML links Network on macOS even though Siderita itself is offline.
     let builder = if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {

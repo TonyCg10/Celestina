@@ -204,7 +204,10 @@ pub mod qobject {
 /// undoing them would mean deleting data the user did not ask to lose.
 enum UndoAction {
     /// A rename: the entry now sits at `renamed`; put its `old_name` back.
-    Rename { renamed: PathBuf, old_name: OsString },
+    Rename {
+        renamed: PathBuf,
+        old_name: OsString,
+    },
     /// One or more moves (a cut-paste): move each entry from where it landed
     /// back into the directory it came from.
     Move { entries: Vec<(PathBuf, PathBuf)> },
@@ -587,9 +590,7 @@ impl qobject::SideritaController {
                 self.as_mut()
                     .set_status_text(QString::from(message.as_str()));
             }
-            Err(error) => self
-                .as_mut()
-                .set_op_error(QString::from(error.as_str())),
+            Err(error) => self.as_mut().set_op_error(QString::from(error.as_str())),
         }
     }
 
@@ -812,8 +813,7 @@ impl qobject::SideritaController {
     /// the folder menu opens so "Pegar" also lights up for content another
     /// manager copied, without polling for clipboard changes.
     pub fn refresh_paste_state(mut self: Pin<&mut Self>) {
-        let available =
-            !self.rust().clipboard.is_empty() || qobject::system_clipboard_has_uris();
+        let available = !self.rust().clipboard.is_empty() || qobject::system_clipboard_has_uris();
         self.as_mut().set_can_paste(available);
     }
 
@@ -931,8 +931,11 @@ impl qobject::SideritaController {
         self.as_mut().set_op_done(0);
         self.as_mut().set_op_current(QString::default());
         self.as_mut().set_op_detail(QString::default());
-        self.as_mut()
-            .set_status_text(QString::from(if cut { "Moviendo…" } else { "Copiando…" }));
+        self.as_mut().set_status_text(QString::from(if cut {
+            "Moviendo…"
+        } else {
+            "Copiando…"
+        }));
 
         let qt = self.qt_thread();
         std::thread::spawn(move || {
@@ -1004,8 +1007,7 @@ impl qobject::SideritaController {
         if let Some(token) = self.as_mut().rust_mut().get_mut().op_cancel.as_ref() {
             token.cancel();
         }
-        self.as_mut()
-            .set_status_text(QString::from("Cancelando…"));
+        self.as_mut().set_status_text(QString::from("Cancelando…"));
     }
 
     /// Finalises a pasted batch back on the Qt thread: restores the idle state,
@@ -1146,8 +1148,7 @@ impl qobject::SideritaController {
                 failures.join("\n")
             )
         };
-        self.as_mut()
-            .set_op_error(QString::from(summary.as_str()));
+        self.as_mut().set_op_error(QString::from(summary.as_str()));
     }
 
     fn refresh_bookmark_properties(mut self: Pin<&mut Self>) {
@@ -1670,7 +1671,10 @@ mod tests {
         std::fs::write(&first, b"x").expect("seed copia");
         std::fs::write(dir.join("nota.txt"), b"x").expect("seed orig");
         let second = super::next_free_name(&dir, OsStr::new("nota.txt"));
-        assert_eq!(second.file_name().unwrap(), OsStr::new("nota (copia 2).txt"));
+        assert_eq!(
+            second.file_name().unwrap(),
+            OsStr::new("nota (copia 2).txt")
+        );
 
         // A name without an extension keeps the suffix at the end.
         let no_ext = super::next_free_name(&dir, OsStr::new("carpeta"));
@@ -1681,19 +1685,23 @@ mod tests {
 
     #[test]
     fn display_name_uses_the_final_component() {
-        assert_eq!(super::display_name(Path::new("/home/toni/nota.txt")), "nota.txt");
-        assert_eq!(super::display_name(Path::new("/home/toni/carpeta")), "carpeta");
+        assert_eq!(
+            super::display_name(Path::new("/home/toni/nota.txt")),
+            "nota.txt"
+        );
+        assert_eq!(
+            super::display_name(Path::new("/home/toni/carpeta")),
+            "carpeta"
+        );
         // No file name (root) falls back to the whole path.
         assert_eq!(super::display_name(Path::new("/")), "/");
     }
 
     #[test]
     fn spawn_opener_reports_a_missing_launcher() {
-        let error = super::spawn_opener(
-            "siderita-no-such-launcher-xyz",
-            Path::new("/tmp/whatever"),
-        )
-        .unwrap_err();
+        let error =
+            super::spawn_opener("siderita-no-such-launcher-xyz", Path::new("/tmp/whatever"))
+                .unwrap_err();
         assert!(
             error.contains("siderita-no-such-launcher-xyz"),
             "message should name the missing launcher: {error}"

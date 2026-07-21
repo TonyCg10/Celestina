@@ -21,13 +21,18 @@ states. The core preserves Unix and non-UTF-8 identity, uses generations and
 opaque tokens, and provides cancellation/join; the workspace tests (including
 `siderita-ops`' loss-free-operation coverage) plus the host's own bookmark/places
 unit tests pass. The UI has grown past the minimal slice — multi-selection,
-context menus, sidebar places (XDG), bookmarks and tabs — and CP1's loss-free
-write verbs (new folder/file, rename, copy, move, send-to-Trash) are now wired
-from the `siderita-ops` crate, each refusing to overwrite and never removing a
-source before its destination is verified. Installation staging,
+context menus, sidebar places (XDG), bookmarks and tabs — and CP1 is now
+functionally complete: the loss-free write verbs (new folder/file, rename,
+copy, move, send-to-Trash) plus file activation (xdg-open), multi-select batch
+operations, single-level undo backed by a freedesktop Trash-restore primitive,
+an async paste executor (worker thread, progress surface, cancellation and a
+skip/replace/keep-both conflict dialog) and system-clipboard interop are all
+wired from the `siderita-ops` crate, each verb refusing to overwrite and never
+removing a source before its destination is verified. Installation staging,
 watcher, `file://`, a native role-based model, UI tests and real-Wayland
 blur/frame numbers are still open, so Qt/QML stays a **provisional** first
-iteration. The arc from here is deliberate: **operations** (CP1) make it a
+iteration, and CP1's live interaction (progress/cancel, conflict dialog,
+cross-manager clipboard) still awaits a real Wayland session to validate. The arc from here is deliberate: **operations** (CP1) make it a
 manager, **interoperation** (CP2) make it a good desktop citizen, and **comfort**
 (CP3) adds what a daily manager is expected to have — each feature earned by a
 demonstrated need, never by parity.
@@ -117,9 +122,13 @@ only, with no silent data loss — the step that turns the read-only viewer into
 manager. Opening files through their handler lands here too; deeper handler
 management is CP2.
 
-The write-side domain lives in the `siderita-ops` crate — all six verbs, pure and
-toolkit-free, 34 tests. Every verb refuses to overwrite and never removes a
-source before its destination is verified.
+The write-side domain lives in the `siderita-ops` crate — create, rename, copy,
+move, send-to-Trash, restore-from-Trash and exact-name `copy_as`/`move_as`, all
+pure and toolkit-free, 43 tests. Every verb refuses to overwrite and never
+removes a source before its destination is verified. Every item below is now
+implemented; what remains for the checkpoint is real-Wayland validation of the
+live interaction (progress/cancel, the conflict dialog and cross-manager
+clipboard), tracked with CP0's real-Wayland goal.
 
 - [x] Wire the write-side domain into the app — `SideritaController` invokables → `siderita-ops`, view refresh on success, a truthful `op_error` on failure
 - [x] Core verbs: new folder / new file, rename, copy, move, delete-to-Trash — wired end-to-end (verified: a headless self-test drove create → rename → trash through the bridge and the filesystem matched)
