@@ -1,5 +1,0 @@
-module CelestinaStyle
-singleton CelestinaTheme 1.0 CelestinaTheme.qml
-CelestinaGlassPanel 1.0 CelestinaGlassPanel.qml
-CelestinaButton 1.0 CelestinaButton.qml
-CelestinaContextMenu 1.0 CelestinaContextMenu.qml
