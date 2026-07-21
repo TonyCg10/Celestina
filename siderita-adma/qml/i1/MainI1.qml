@@ -2137,6 +2137,97 @@ ApplicationWindow {
                 }
             }
         }
+
+        // ── Paste conflict dialog (skip / replace / keep both) ───────────
+        Rectangle {
+            id: conflictDialog
+            anchors.fill: parent
+            z: 62
+            visible: controller.conflictPending
+            color: Qt.rgba(0, 0, 0, 0.45)
+
+            // Clicking the dimmed backdrop cancels the whole paste.
+            MouseArea {
+                anchors.fill: parent
+                onClicked: controller.cancelConflicts()
+            }
+
+            Keys.onPressed: function(event) {
+                if (event.key === Qt.Key_Escape) {
+                    controller.cancelConflicts()
+                    event.accepted = true
+                }
+            }
+            focus: controller.conflictPending
+
+            Rectangle {
+                anchors.centerIn: parent
+                width: Math.min(420, root.width - 48)
+                height: 176
+                radius: CelestinaTheme.radiusMd
+                color: CelestinaTheme.canvasRaised
+                border.width: 1
+                border.color: CelestinaTheme.borderStrong
+
+                // Swallow clicks so they never reach the dismiss backdrop.
+                MouseArea { anchors.fill: parent }
+
+                Text {
+                    id: conflictHeading
+                    x: 18
+                    y: 16
+                    text: "Ya existe"
+                    color: CelestinaTheme.text
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCallout
+                    font.weight: CelestinaTheme.weightDemiBold
+                }
+
+                Text {
+                    id: conflictBody
+                    x: 18
+                    y: conflictHeading.y + conflictHeading.height + 10
+                    width: parent.width - 36
+                    wrapMode: Text.Wrap
+                    text: {
+                        var base = "«" + controller.conflictName
+                                   + "» ya existe en esta carpeta."
+                        if (controller.conflictCount > 1)
+                            base += " Y " + (controller.conflictCount - 1)
+                                    + " elemento(s) más. La elección se aplica a todos."
+                        return base
+                    }
+                    color: CelestinaTheme.textMuted
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontLabel
+                }
+
+                Row {
+                    anchors.right: parent.right
+                    anchors.rightMargin: 18
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 16
+                    spacing: 8
+
+                    Button {
+                        text: "Cancelar"
+                        onClicked: controller.cancelConflicts()
+                    }
+                    Button {
+                        text: "Omitir"
+                        onClicked: controller.resolveConflicts("skip")
+                    }
+                    Button {
+                        text: "Conservar ambos"
+                        onClicked: controller.resolveConflicts("keepboth")
+                    }
+                    Button {
+                        text: "Reemplazar"
+                        onClicked: controller.resolveConflicts("replace")
+                    }
+                }
+            }
+        }
     }
 
     // ── Window-level tab management shortcuts ────────────────────────────

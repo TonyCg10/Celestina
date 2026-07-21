@@ -51,6 +51,9 @@ pub mod qobject {
         #[qproperty(QString, op_detail)]
         #[qproperty(i32, op_done)]
         #[qproperty(i32, op_total)]
+        #[qproperty(bool, conflict_pending)]
+        #[qproperty(i32, conflict_count)]
+        #[qproperty(QString, conflict_name)]
         type SideritaController = super::SideritaControllerRust;
 
         #[qinvokable]
@@ -163,6 +166,12 @@ pub mod qobject {
         fn cancel_op(self: Pin<&mut SideritaController>);
 
         #[qinvokable]
+        fn resolve_conflicts(self: Pin<&mut SideritaController>, strategy: &QString);
+
+        #[qinvokable]
+        fn cancel_conflicts(self: Pin<&mut SideritaController>);
+
+        #[qinvokable]
         fn undo(self: Pin<&mut SideritaController>);
     }
 
@@ -191,6 +200,51 @@ impl UndoAction {
             Self::Trash { .. } => "Deshacer enviar a la papelera",
         }
     }
+}
+
+/// How to resolve entries whose paste destination already exists.
+#[derive(Clone, Copy)]
+enum ConflictStrategy {
+    /// Leave the existing entry; the source is not pasted.
+    Skip,
+    /// Send the existing entry to Trash (recoverable), then paste over it.
+    Replace,
+    /// Paste beside the existing entry under a freed "(copia)" name.
+    KeepBoth,
+}
+
+impl ConflictStrategy {
+    fn from_key(key: &str) -> Option<Self> {
+        match key {
+            "skip" => Some(Self::Skip),
+            "replace" => Some(Self::Replace),
+            "keepboth" => Some(Self::KeepBoth),
+            _ => None,
+        }
+    }
+}
+
+/// A paste held back because at least one destination already exists, waiting
+/// for the user's conflict choice before the worker starts.
+struct PendingPaste {
+    sources: Vec<PathBuf>,
+    destination: PathBuf,
+    cut: bool,
+}
+
+/// What a pasted batch did, carried from the worker thread to `finish_paste`.
+struct PasteOutcome {
+    total: usize,
+    failures: Vec<String>,
+    /// Cut sources that could not be moved (kept on the clipboard for a retry).
+    unmoved: Vec<PathBuf>,
+    /// Plain (non-colliding) moves, for the undo record.
+    undo_moves: Vec<(PathBuf, PathBuf)>,
+    skipped: usize,
+    /// Whether any entry went through replace/keep-both, which makes the batch
+    /// too tangled to offer a single-step undo for.
+    conflict_touched: bool,
+    cancelled: bool,
 }
 
 pub struct SideritaControllerRust {
@@ -228,6 +282,10 @@ pub struct SideritaControllerRust {
     op_done: i32,
     op_total: i32,
     op_cancel: Option<CancellationToken>,
+    conflict_pending: bool,
+    conflict_count: i32,
+    conflict_name: QString,
+    pending_paste: Option<PendingPaste>,
     clipboard: Vec<PathBuf>,
     clipboard_cut: bool,
     last_undo: Option<UndoAction>,
@@ -272,6 +330,10 @@ impl Default for SideritaControllerRust {
             op_done: 0,
             op_total: 0,
             op_cancel: None,
+            conflict_pending: false,
+            conflict_count: 0,
+            conflict_name: QString::default(),
+            pending_paste: None,
             clipboard: Vec::new(),
             clipboard_cut: false,
             last_undo: None,
@@ -728,13 +790,12 @@ impl qobject::SideritaController {
         self.as_mut().set_can_paste(false);
     }
 
-    /// Pastes the clipboard into the current folder. Copies and moves can be
-    /// long, so the whole batch runs on a worker thread: it publishes progress
-    /// (current entry, count, bytes) back onto the Qt thread and honours the
-    /// cancellation token behind `cancel_op`, then finalises on the Qt thread via
-    /// `finish_paste`. A second paste is refused while one is running.
+    /// Pastes the clipboard into the current folder. If any entry's destination
+    /// already exists the paste is held back and a conflict choice is requested
+    /// (see `resolve_conflicts`); otherwise it starts straight away on a worker
+    /// thread. A paste is refused while one is running or a conflict is pending.
     pub fn paste(mut self: Pin<&mut Self>) {
-        if *self.op_running() {
+        if *self.op_running() || *self.conflict_pending() {
             return;
         }
         self.as_mut().set_op_error(QString::default());
@@ -747,10 +808,79 @@ impl qobject::SideritaController {
         }
         let cut = self.rust().clipboard_cut;
 
+        // Detect collisions up front, on the Qt thread, so the choice is made
+        // once before any file is touched rather than mid-copy.
+        let collisions: Vec<&PathBuf> = sources
+            .iter()
+            .filter(|source| {
+                source
+                    .file_name()
+                    .map(|name| destination.join(name))
+                    .is_some_and(|target| std::fs::symlink_metadata(target).is_ok())
+            })
+            .collect();
+
+        if collisions.is_empty() {
+            self.as_mut()
+                .spawn_paste(sources, destination, cut, ConflictStrategy::Skip);
+            return;
+        }
+
+        let count = collisions.len();
+        let first = collisions
+            .first()
+            .map(|source| display_name(source))
+            .unwrap_or_default();
+        self.as_mut().rust_mut().get_mut().pending_paste = Some(PendingPaste {
+            sources,
+            destination,
+            cut,
+        });
+        self.as_mut()
+            .set_conflict_count(count.min(i32::MAX as usize) as i32);
+        self.as_mut()
+            .set_conflict_name(QString::from(first.as_str()));
+        self.as_mut().set_conflict_pending(true);
+    }
+
+    /// Applies the user's conflict choice ("skip" / "replace" / "keepboth") and
+    /// starts the held-back paste on the worker thread.
+    pub fn resolve_conflicts(mut self: Pin<&mut Self>, strategy: &QString) {
+        let Some(strategy) = ConflictStrategy::from_key(&strategy.to_string()) else {
+            return;
+        };
+        let Some(pending) = self.as_mut().rust_mut().get_mut().pending_paste.take() else {
+            return;
+        };
+        self.as_mut().set_conflict_pending(false);
+        self.as_mut()
+            .spawn_paste(pending.sources, pending.destination, pending.cut, strategy);
+    }
+
+    /// Dismisses a pending conflict without pasting anything.
+    pub fn cancel_conflicts(mut self: Pin<&mut Self>) {
+        self.as_mut().rust_mut().get_mut().pending_paste = None;
+        self.as_mut().set_conflict_pending(false);
+        self.as_mut()
+            .set_status_text(QString::from("Pegado cancelado"));
+    }
+
+    /// Starts the paste worker with a decided conflict `strategy`. Copies and
+    /// moves can be long, so the whole batch runs off the Qt thread: it publishes
+    /// progress back and honours the cancellation token behind `cancel_op`, then
+    /// finalises on the Qt thread via `finish_paste`.
+    fn spawn_paste(
+        mut self: Pin<&mut Self>,
+        sources: Vec<PathBuf>,
+        destination: PathBuf,
+        cut: bool,
+        strategy: ConflictStrategy,
+    ) {
         let token = CancellationToken::new();
         self.as_mut().rust_mut().get_mut().op_cancel = Some(token.clone());
         self.as_mut().set_op_running(true);
-        self.as_mut().set_op_total(sources.len().min(i32::MAX as usize) as i32);
+        self.as_mut()
+            .set_op_total(sources.len().min(i32::MAX as usize) as i32);
         self.as_mut().set_op_done(0);
         self.as_mut().set_op_current(QString::default());
         self.as_mut().set_op_detail(QString::default());
@@ -759,10 +889,15 @@ impl qobject::SideritaController {
 
         let qt = self.qt_thread();
         std::thread::spawn(move || {
-            let total = sources.len();
-            let mut failures = Vec::new();
-            let mut unmoved = Vec::new();
-            let mut undo_moves = Vec::new();
+            let mut outcome = PasteOutcome {
+                total: sources.len(),
+                failures: Vec::new(),
+                unmoved: Vec::new(),
+                undo_moves: Vec::new(),
+                skipped: 0,
+                conflict_touched: false,
+                cancelled: false,
+            };
 
             for (index, source) in sources.iter().enumerate() {
                 if token.is_cancelled() {
@@ -797,28 +932,20 @@ impl qobject::SideritaController {
                     });
                 };
 
-                if cut {
-                    match siderita_ops::move_entry(source, &destination, &token, &mut on_progress) {
-                        Ok(moved) => {
-                            if let Some(parent) = moved.from.parent() {
-                                undo_moves.push((moved.to, parent.to_path_buf()));
-                            }
-                        }
-                        Err(error) => {
-                            failures.push(format!("{}: {error}", display_name(source)));
-                            unmoved.push(source.clone());
-                        }
-                    }
-                } else if let Err(error) =
-                    siderita_ops::copy(source, &destination, &token, &mut on_progress)
-                {
-                    failures.push(format!("{}: {error}", display_name(source)));
-                }
+                paste_one(
+                    source,
+                    &destination,
+                    cut,
+                    strategy,
+                    &token,
+                    &mut on_progress,
+                    &mut outcome,
+                );
             }
 
-            let cancelled = token.is_cancelled();
+            outcome.cancelled = token.is_cancelled();
             let _ = qt.queue(move |controller| {
-                controller.finish_paste(cut, unmoved, undo_moves, total, failures, cancelled);
+                controller.finish_paste(cut, outcome);
             });
         });
     }
@@ -836,16 +963,8 @@ impl qobject::SideritaController {
 
     /// Finalises a pasted batch back on the Qt thread: restores the idle state,
     /// settles the clipboard and undo record, refreshes the view and reports any
-    /// per-entry failures (noting when the batch was cancelled part-way).
-    fn finish_paste(
-        mut self: Pin<&mut Self>,
-        cut: bool,
-        unmoved: Vec<PathBuf>,
-        undo_moves: Vec<(PathBuf, PathBuf)>,
-        total: usize,
-        failures: Vec<String>,
-        cancelled: bool,
-    ) {
+    /// per-entry failures (noting skips and part-way cancellation).
+    fn finish_paste(mut self: Pin<&mut Self>, cut: bool, outcome: PasteOutcome) {
         self.as_mut().set_op_running(false);
         self.as_mut().rust_mut().get_mut().op_cancel = None;
         self.as_mut().set_op_current(QString::default());
@@ -854,23 +973,34 @@ impl qobject::SideritaController {
         self.as_mut().set_op_total(0);
 
         if cut {
-            if unmoved.is_empty() {
+            if outcome.unmoved.is_empty() {
                 self.as_mut().clear_clipboard();
             } else {
-                self.as_mut().set_clipboard(unmoved, true);
+                self.as_mut().set_clipboard(outcome.unmoved, true);
             }
-            if !undo_moves.is_empty() {
-                self.as_mut()
-                    .set_undo(Some(UndoAction::Move { entries: undo_moves }));
+            // A batch that replaced or kept-both is too tangled to reverse in one
+            // step; only a clean set of plain moves offers undo.
+            if !outcome.conflict_touched && !outcome.undo_moves.is_empty() {
+                self.as_mut().set_undo(Some(UndoAction::Move {
+                    entries: outcome.undo_moves,
+                }));
+            } else {
+                self.as_mut().set_undo(None);
             }
-        } else if failures.len() < total {
+        } else if outcome.failures.len() < outcome.total {
             self.as_mut().set_undo(None);
         }
 
-        self.as_mut().finish_batch(total, &failures);
-        if cancelled && failures.is_empty() {
-            self.as_mut()
-                .set_status_text(QString::from("Operación cancelada"));
+        self.as_mut().finish_batch(outcome.total, &outcome.failures);
+        if outcome.failures.is_empty() {
+            if outcome.cancelled {
+                self.as_mut()
+                    .set_status_text(QString::from("Operación cancelada"));
+            } else if outcome.skipped > 0 {
+                let message = format!("{} omitidos", outcome.skipped);
+                self.as_mut()
+                    .set_status_text(QString::from(message.as_str()));
+            }
         }
     }
 
@@ -1204,6 +1334,125 @@ fn qstringlist_to_paths(list: &QStringList) -> Vec<PathBuf> {
         .collect()
 }
 
+/// Pastes one source into `destination_dir` on the worker thread, applying the
+/// decided `strategy` when the destination is already taken. Records the outcome
+/// (failure, skip, undoable move, kept-back cut) into `outcome`.
+fn paste_one(
+    source: &Path,
+    destination_dir: &Path,
+    cut: bool,
+    strategy: ConflictStrategy,
+    token: &CancellationToken,
+    on_progress: &mut dyn FnMut(Progress),
+    outcome: &mut PasteOutcome,
+) {
+    let Some(name) = source.file_name() else {
+        outcome
+            .failures
+            .push(format!("{}: sin nombre de archivo", display_name(source)));
+        return;
+    };
+    let target = destination_dir.join(name);
+    let colliding = std::fs::symlink_metadata(&target).is_ok();
+
+    if !colliding {
+        place_into(source, destination_dir, cut, token, on_progress, outcome);
+        return;
+    }
+
+    outcome.conflict_touched = true;
+    match strategy {
+        ConflictStrategy::Skip => outcome.skipped += 1,
+        ConflictStrategy::Replace => {
+            // Trash the existing entry (recoverable) before placing the source,
+            // so nothing is hard-deleted to make room.
+            if let Err(error) = siderita_ops::trash(&target, token) {
+                outcome
+                    .failures
+                    .push(format!("{}: {error}", display_name(source)));
+                if cut {
+                    outcome.unmoved.push(source.to_path_buf());
+                }
+                return;
+            }
+            place_into(source, destination_dir, cut, token, on_progress, outcome);
+        }
+        ConflictStrategy::KeepBoth => {
+            let freed = next_free_name(destination_dir, name);
+            let result = if cut {
+                siderita_ops::move_as(source, &freed, token, on_progress).map(|_| ())
+            } else {
+                siderita_ops::copy_as(source, &freed, token, on_progress)
+            };
+            if let Err(error) = result {
+                outcome
+                    .failures
+                    .push(format!("{}: {error}", display_name(source)));
+                if cut {
+                    outcome.unmoved.push(source.to_path_buf());
+                }
+            }
+        }
+    }
+}
+
+/// The plain placement (copy or move into a directory, keeping the source name),
+/// shared by the no-collision path and by "replace" after the old entry is gone.
+fn place_into(
+    source: &Path,
+    destination_dir: &Path,
+    cut: bool,
+    token: &CancellationToken,
+    on_progress: &mut dyn FnMut(Progress),
+    outcome: &mut PasteOutcome,
+) {
+    if cut {
+        match siderita_ops::move_entry(source, destination_dir, token, on_progress) {
+            Ok(moved) => {
+                if let Some(parent) = moved.from.parent() {
+                    outcome.undo_moves.push((moved.to, parent.to_path_buf()));
+                }
+            }
+            Err(error) => {
+                outcome
+                    .failures
+                    .push(format!("{}: {error}", display_name(source)));
+                outcome.unmoved.push(source.to_path_buf());
+            }
+        }
+    } else if let Err(error) = siderita_ops::copy(source, destination_dir, token, on_progress) {
+        outcome
+            .failures
+            .push(format!("{}: {error}", display_name(source)));
+    }
+}
+
+/// The first free `<stem> (copia)[.ext]`, `<stem> (copia 2)[.ext]`, … under
+/// `dir` — the "keep both" name. Operates on `OsStr` so non-UTF-8 names survive.
+fn next_free_name(dir: &Path, name: &OsStr) -> PathBuf {
+    let as_path = Path::new(name);
+    let stem = as_path.file_stem().unwrap_or(name);
+    let extension = as_path.extension();
+
+    for attempt in 1u64.. {
+        let mut candidate = stem.to_os_string();
+        if attempt == 1 {
+            candidate.push(" (copia)");
+        } else {
+            candidate.push(format!(" (copia {attempt})"));
+        }
+        if let Some(extension) = extension {
+            candidate.push(".");
+            candidate.push(extension);
+        }
+        let path = dir.join(&candidate);
+        if std::fs::symlink_metadata(&path).is_err() {
+            return path;
+        }
+    }
+    unreachable!("the free-name search always terminates before u64 wraps")
+}
+
 /// The final path component, for a compact per-entry line in a batch error.
 /// Falls back to the full lossy path when there is no file name (e.g. `/`).
 fn display_name(path: &Path) -> String {
@@ -1351,6 +1600,33 @@ mod tests {
             resolve_location("hija", Some(Path::new("/base"))),
             PathBuf::from("/base/hija")
         );
+    }
+
+    #[test]
+    fn next_free_name_suffixes_copia_around_the_extension() {
+        use std::ffi::OsStr;
+        let dir = std::env::temp_dir().join(format!(
+            "siderita-freename-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&dir).expect("mk test dir");
+
+        // Nothing exists yet → the first "(copia)" name.
+        let first = super::next_free_name(&dir, OsStr::new("nota.txt"));
+        assert_eq!(first.file_name().unwrap(), OsStr::new("nota (copia).txt"));
+
+        // Occupy it and the plain name; the next free is "(copia 2)".
+        std::fs::write(&first, b"x").expect("seed copia");
+        std::fs::write(dir.join("nota.txt"), b"x").expect("seed orig");
+        let second = super::next_free_name(&dir, OsStr::new("nota.txt"));
+        assert_eq!(second.file_name().unwrap(), OsStr::new("nota (copia 2).txt"));
+
+        // A name without an extension keeps the suffix at the end.
+        let no_ext = super::next_free_name(&dir, OsStr::new("carpeta"));
+        assert_eq!(no_ext.file_name().unwrap(), OsStr::new("carpeta (copia)"));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use celestina_core::CancellationToken;
 
-use crate::copy::{copy_to, plan_destination, rollback, Progress};
+use crate::copy::{copy_to, guard_not_inside, plan_destination, rollback, Progress};
 use crate::error::OpError;
 
 /// The paths a successful move went between.
@@ -59,6 +59,58 @@ pub fn move_entry(
             })
         }
         Err(error) => Err(OpError::io(&destination, &error)),
+    }
+}
+
+/// Moves `source` onto an exact `destination` path (not into a directory),
+/// choosing the target name explicitly — conflict resolution's "keep both" for a
+/// cut-paste. Same loss-free contract as [`move_entry`]: an atomic rename on one
+/// filesystem, copy → verify → remove-source across two, and it refuses both an
+/// existing destination and one inside the source.
+pub fn move_as(
+    source: &Path,
+    destination: &Path,
+    cancellation: &CancellationToken,
+    progress: &mut dyn FnMut(Progress),
+) -> Result<Moved, OpError> {
+    if cancellation.is_cancelled() {
+        return Err(OpError::Cancelled);
+    }
+    if let Some(parent) = destination.parent() {
+        guard_not_inside(source, parent, destination)?;
+    }
+    match fs::symlink_metadata(destination) {
+        Ok(_) => {
+            return Err(OpError::AlreadyExists {
+                path: destination.to_path_buf(),
+            })
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(OpError::io(destination, &error)),
+    }
+    match fs::symlink_metadata(source) {
+        Ok(_) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Err(OpError::SourceMissing {
+                path: source.to_path_buf(),
+            });
+        }
+        Err(error) => return Err(OpError::io(source, &error)),
+    }
+
+    match fs::rename(source, destination) {
+        Ok(()) => Ok(Moved {
+            from: source.to_path_buf(),
+            to: destination.to_path_buf(),
+        }),
+        Err(error) if is_cross_device(&error) => {
+            relocate_by_copy(source, destination, cancellation, progress)?;
+            Ok(Moved {
+                from: source.to_path_buf(),
+                to: destination.to_path_buf(),
+            })
+        }
+        Err(error) => Err(OpError::io(destination, &error)),
     }
 }
 
@@ -150,7 +202,7 @@ mod tests {
 
     use celestina_core::CancellationToken;
 
-    use super::relocate_by_copy;
+    use super::{move_as, relocate_by_copy};
     use crate::error::OpError;
 
     struct TestDir(PathBuf);
@@ -229,6 +281,36 @@ mod tests {
             fs::read(destination.join("nested/leaf.txt")).expect("read leaf"),
             b"leaf"
         );
+    }
+
+    #[test]
+    fn move_as_moves_to_the_chosen_name() {
+        let dir = TestDir::new("moveas");
+        let source = dir.path().join("orig.txt");
+        fs::write(&source, b"cut both").expect("seed");
+        let destination = dir.path().join("orig (copia).txt");
+
+        let moved =
+            move_as(&source, &destination, &CancellationToken::new(), &mut |_| {}).expect("move_as");
+
+        assert_eq!(moved.to, destination);
+        assert!(!source.exists(), "source is gone after a move");
+        assert_eq!(fs::read(&destination).expect("moved"), b"cut both");
+    }
+
+    #[test]
+    fn move_as_refuses_an_existing_destination() {
+        let dir = TestDir::new("moveas-exists");
+        let source = dir.path().join("a.txt");
+        let destination = dir.path().join("b.txt");
+        fs::write(&source, b"a").expect("seed source");
+        fs::write(&destination, b"do not clobber").expect("seed dest");
+
+        let error = move_as(&source, &destination, &CancellationToken::new(), &mut |_| {})
+            .expect_err("must refuse");
+        assert!(matches!(error, OpError::AlreadyExists { .. }));
+        assert!(source.exists(), "the source is kept on refusal");
+        assert_eq!(fs::read(&destination).expect("dest intact"), b"do not clobber");
     }
 
     // The guarantee: a cancelled cross-device move keeps the source and leaves

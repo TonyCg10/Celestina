@@ -27,11 +27,11 @@ mod rename;
 mod restore;
 mod trash;
 
-pub use copy::{copy, Progress};
+pub use copy::{copy, copy_as, Progress};
 pub use create::{create_directory, create_file};
 pub use error::OpError;
 pub use name::{validate_name, NameError};
-pub use relocate::{move_entry, Moved};
+pub use relocate::{move_as, move_entry, Moved};
 pub use rename::{rename, Renamed};
 pub use restore::{restore_from_trash, Restored};
 pub use trash::{trash, Trashed};
