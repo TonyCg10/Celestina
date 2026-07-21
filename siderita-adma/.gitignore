@@ -1,0 +1,16 @@
+# CMake build artifacts
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Cargo build artifacts
+target/
+
+# Qt generated
+*.qmlc
+.qmlls.ini
+qmldir.qmltypes

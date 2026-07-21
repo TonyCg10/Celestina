@@ -1,0 +1,23 @@
+[workspace]
+members = [
+    "crates/celestina-core",
+    "crates/siderita-core",
+    "crates/siderita-qt",
+    "crates/dotfiles-core",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.85"
+
+[workspace.dependencies]
+celestina-core = { path = "crates/celestina-core" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+double_must_use = "allow"
+

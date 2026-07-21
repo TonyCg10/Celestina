@@ -1,0 +1,13 @@
+[package]
+name = "siderita-qt"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+celestina-core.workspace = true
+siderita-core = { path = "../siderita-core" }
+
+[lints]
+workspace = true
+

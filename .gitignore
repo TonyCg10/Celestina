@@ -1,0 +1,25 @@
+# Celestina workspace — root ignore rules.
+# Per-project .gitignore files still apply within each subtree; these are a
+# catch-all so build output never lands in the monorepo regardless of depth.
+
+# Rust build output
+**/target/
+
+# CMake / Qt build output
+**/build/
+**/cmake-build-*/
+**/CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Qt generated
+*.qmlc
+qmldir.qmltypes
+.qmlls.ini
+
+# Editor / OS cruft
+.DS_Store
+*.swp
+*~
