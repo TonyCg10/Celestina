@@ -129,7 +129,7 @@ source before its destination is verified.
 - [ ] An async operation executor: conflict-resolution dialog (today a conflict is refused and reported), cancellation, per-item results and a progress surface for long copies / moves (today the verbs run synchronously)
 - [ ] Undo the last operation (move / rename / trash)
 - [ ] Multi-select batch operations (today the verbs act on the single focused entry)
-- [ ] Activate a file → open with its default application (xdg-open); the Open-with… chooser and default-app management are CP2
+- [x] Activate a file → open with its default application (xdg-open) — double-click or the entry menu's "Abrir" hands the path to the desktop's handler, detached and reaped, with a truthful `op_error` if the launcher can't start; the Open-with… chooser and default-app management are CP2
 
 ## Checkpoint 2 — Interoperable daily manager (S2)
 **Goal:** a manager good enough for daily use, integrated through standards.

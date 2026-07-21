@@ -422,9 +422,26 @@ impl qobject::SideritaController {
             }
         } else {
             self.as_mut().select_token(token);
-            let message = format!("{name} · vista de solo lectura en Iteración 1");
-            self.as_mut()
-                .set_status_text(QString::from(message.as_str()));
+            self.as_mut().open_in_default_app(&path, &name);
+        }
+    }
+
+    /// Hands a non-directory entry to the desktop's default handler via
+    /// `xdg-open`, the freedesktop way to reach a viewer/editor/player without
+    /// Siderita knowing anything about the file type. The launch is fire-and-
+    /// forget — `xdg-open` resolves the handler and exits — but a failure to even
+    /// start it (missing binary, no handler) is surfaced truthfully as `op_error`.
+    fn open_in_default_app(mut self: Pin<&mut Self>, path: &Path, name: &str) {
+        self.as_mut().set_op_error(QString::default());
+        match open_with_default(path) {
+            Ok(()) => {
+                let message = format!("Abriendo {name}…");
+                self.as_mut()
+                    .set_status_text(QString::from(message.as_str()));
+            }
+            Err(error) => self
+                .as_mut()
+                .set_op_error(QString::from(error.as_str())),
         }
     }
 
@@ -848,6 +865,41 @@ impl qobject::SideritaController {
     }
 }
 
+/// Launches `xdg-open PATH`, detached from Siderita's stdio, and reaps the
+/// short-lived launcher on a throwaway thread so it never lingers as a zombie.
+/// The opened application is reparented and outlives Siderita. Returns a
+/// user-facing Spanish message if the launcher could not even be spawned.
+fn open_with_default(path: &Path) -> Result<(), String> {
+    spawn_opener("xdg-open", path)
+}
+
+/// Spawns `program PATH` detached from Siderita's stdio and reaps the launcher on
+/// a throwaway thread. Split out from [`open_with_default`] so the spawn/error
+/// contract is testable without depending on `xdg-open` being installed.
+fn spawn_opener(program: &str, path: &Path) -> Result<(), String> {
+    use std::process::{Command, Stdio};
+
+    let child = Command::new(program)
+        .arg(path.as_os_str())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+
+    match child {
+        Ok(mut child) => {
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
+            Ok(())
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Err(format!("No se encontró «{program}» para abrir el archivo"))
+        }
+        Err(error) => Err(format!("No se pudo abrir el archivo: {error}")),
+    }
+}
+
 fn initial_location() -> PathBuf {
     std::env::args_os()
         .nth(1)
@@ -952,6 +1004,27 @@ mod tests {
             resolve_location("hija", Some(Path::new("/base"))),
             PathBuf::from("/base/hija")
         );
+    }
+
+    #[test]
+    fn spawn_opener_reports_a_missing_launcher() {
+        let error = super::spawn_opener(
+            "siderita-no-such-launcher-xyz",
+            Path::new("/tmp/whatever"),
+        )
+        .unwrap_err();
+        assert!(
+            error.contains("siderita-no-such-launcher-xyz"),
+            "message should name the missing launcher: {error}"
+        );
+    }
+
+    #[test]
+    fn spawn_opener_launches_an_existing_program() {
+        // `true` ignores its argument and exits 0 — a side-effect-free stand-in
+        // for xdg-open that proves the spawn path succeeds and reaps cleanly.
+        super::spawn_opener("true", Path::new("/tmp/whatever"))
+            .expect("spawning an existing launcher should succeed");
     }
 
     #[test]

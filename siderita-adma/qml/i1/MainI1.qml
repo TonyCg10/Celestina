@@ -1689,7 +1689,7 @@ ApplicationWindow {
             property string targetPath: ""
 
             GlassMenuItem {
-                text: entryMenu.targetDirectory ? "Abrir carpeta" : "Seleccionar archivo"
+                text: entryMenu.targetDirectory ? "Abrir carpeta" : "Abrir"
                 icon.name: entryMenu.targetDirectory ? "folder-open" : "text-x-generic"
                 icon.source: CelestinaTheme.fallbackIcon(
                                  entryMenu.targetDirectory ? "folder" : "file")
