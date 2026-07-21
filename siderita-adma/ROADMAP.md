@@ -13,16 +13,18 @@ projects reached through desktop standards.
 
 **Current state.** The earlier C++/Qt prototype was removed; the Rust host of
 `qml/i1` is the only implementation. It consumes the `celestina-rs` domain crates
-(`celestina-core`, `siderita-core`, `siderita-qt`) and now renders from the shared
-`celestina-style` module (tokens + glass). The functional slice is deliberately
-read-only (Iteration 1): HOME/path navigation, filter, sort, hidden toggle, stable
-selection and truthful states, with a bounded scan worker that publishes on the Qt
-thread and rejects stale results. The core preserves Unix and non-UTF-8 identity,
-uses generations and opaque tokens, and provides cancellation/join; the 30
-workspace tests plus the host's own bookmark/places unit tests pass. The UI has
-grown past the minimal slice — multi-selection, context menus, sidebar places
-(XDG), bookmarks and tabs — but stays read-only toward the user's files: the only
-writes are Siderita's own bookmark config under `~/.config`. Installation staging,
+(`celestina-core`, `siderita-core`, `siderita-ops`, `siderita-qt`) and now renders
+from the shared `celestina-style` module (tokens + glass). The read side is a
+bounded scan worker that publishes on the Qt thread and rejects stale results:
+HOME/path navigation, filter, sort, hidden toggle, stable selection and truthful
+states. The core preserves Unix and non-UTF-8 identity, uses generations and
+opaque tokens, and provides cancellation/join; the workspace tests (including
+`siderita-ops`' loss-free-operation coverage) plus the host's own bookmark/places
+unit tests pass. The UI has grown past the minimal slice — multi-selection,
+context menus, sidebar places (XDG), bookmarks and tabs — and CP1's loss-free
+write verbs (new folder/file, rename, copy, move, send-to-Trash) are now wired
+from the `siderita-ops` crate, each refusing to overwrite and never removing a
+source before its destination is verified. Installation staging,
 watcher, `file://`, a native role-based model, UI tests and real-Wayland
 blur/frame numbers are still open, so Qt/QML stays a **provisional** first
 iteration. The arc from here is deliberate: **operations** (CP1) make it a
@@ -113,15 +115,21 @@ only, with no silent data loss — the step that turns the read-only viewer into
 manager. Opening files through their handler lands here too; deeper handler
 management is CP2.
 
-- [ ] Wire the write-side domain from `celestina-rs` CP1 into the app
-- [ ] Core verbs: new folder / new file, rename, copy, move, delete-to-Trash
-- [ ] Cut / copy / paste with clipboard interop — the URI-list + desktop file-clipboard convention, so paste works to and from other managers
-- [ ] Preflight + conflict resolution + cancellation + per-item results, with a progress surface for long copies and moves
-- [ ] Undo the last operation (move / rename / trash) — cheap insurance for the no-data-loss guarantee
-- [ ] Keyboard verbs: F2 rename, Delete → Trash, Ctrl+C / X / V
+The write-side domain lives in the `siderita-ops` crate — all six verbs, pure and
+toolkit-free, 34 tests. Every verb refuses to overwrite and never removes a
+source before its destination is verified.
+
+- [x] Wire the write-side domain into the app — `SideritaController` invokables → `siderita-ops`, view refresh on success, a truthful `op_error` on failure
+- [x] Core verbs: new folder / new file, rename, copy, move, delete-to-Trash — wired end-to-end (verified: a headless self-test drove create → rename → trash through the bridge and the filesystem matched)
+- [x] Keyboard verbs: F2 rename, Delete → Trash, Ctrl+C / X / V
+- [x] Cut / copy / paste inside Siderita (an internal clipboard) + a shared new-folder / new-file / rename prompt
+- [x] Freedesktop Trash support (send; restore is CP2)
+- [x] Guarantee: a source is never removed after a partial copy or without revalidation — domain-enforced and tested, including the cross-device cancel path
+- [ ] System-clipboard interop — the URI-list + desktop file-clipboard convention, so paste works to and from other managers
+- [ ] An async operation executor: conflict-resolution dialog (today a conflict is refused and reported), cancellation, per-item results and a progress surface for long copies / moves (today the verbs run synchronously)
+- [ ] Undo the last operation (move / rename / trash)
+- [ ] Multi-select batch operations (today the verbs act on the single focused entry)
 - [ ] Activate a file → open with its default application (xdg-open); the Open-with… chooser and default-app management are CP2
-- [ ] Freedesktop Trash support (send here; restore is CP2)
-- [ ] Guarantee: a source is never removed after a partial copy or without revalidation
 
 ## Checkpoint 2 — Interoperable daily manager (S2)
 **Goal:** a manager good enough for daily use, integrated through standards.
