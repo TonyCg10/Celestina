@@ -75,6 +75,10 @@ pub mod qobject {
         #[qproperty(QStringList, trash_names)]
         #[qproperty(QStringList, trash_origins)]
         #[qproperty(QStringList, trash_dates)]
+        #[qproperty(bool, open_with_pending)]
+        #[qproperty(QString, open_with_target)]
+        #[qproperty(QStringList, open_with_apps)]
+        #[qproperty(i32, open_with_default_index)]
         type SideritaController = super::SideritaControllerRust;
 
         #[qinvokable]
@@ -206,6 +210,15 @@ pub mod qobject {
 
         #[qinvokable]
         fn restore_all_trash(self: Pin<&mut SideritaController>);
+
+        #[qinvokable]
+        fn open_with(self: Pin<&mut SideritaController>, path: &QString);
+
+        #[qinvokable]
+        fn open_with_app(self: Pin<&mut SideritaController>, index: i32, set_default: bool);
+
+        #[qinvokable]
+        fn cancel_open_with(self: Pin<&mut SideritaController>);
     }
 
     impl cxx_qt::Threading for SideritaController {}
@@ -326,6 +339,13 @@ pub struct SideritaControllerRust {
     trash_origins: QStringList,
     trash_dates: QStringList,
     trash_infos: Vec<PathBuf>,
+    open_with_pending: bool,
+    open_with_target: QString,
+    open_with_apps: QStringList,
+    open_with_default_index: i32,
+    open_with_path: PathBuf,
+    open_with_mime: String,
+    open_with_ids: Vec<String>,
     clipboard: Vec<PathBuf>,
     clipboard_cut: bool,
     last_undo: Option<UndoAction>,
@@ -378,6 +398,13 @@ impl Default for SideritaControllerRust {
             trash_origins: QStringList::default(),
             trash_dates: QStringList::default(),
             trash_infos: Vec::new(),
+            open_with_pending: false,
+            open_with_target: QString::default(),
+            open_with_apps: QStringList::default(),
+            open_with_default_index: -1,
+            open_with_path: PathBuf::new(),
+            open_with_mime: String::new(),
+            open_with_ids: Vec::new(),
             clipboard: Vec::new(),
             clipboard_cut: false,
             last_undo: None,
@@ -1214,6 +1241,89 @@ impl qobject::SideritaController {
             };
             self.as_mut().set_op_error(QString::from(summary.as_str()));
         }
+    }
+
+    /// Opens the "Abrir con…" chooser for `path`: classifies its MIME type,
+    /// gathers the applications that declare it (plus the current default) and
+    /// publishes them for the dialog. A type that cannot be classified is
+    /// reported through `op_error`.
+    pub fn open_with(mut self: Pin<&mut Self>, path: &QString) {
+        self.as_mut().set_op_error(QString::default());
+        let path = PathBuf::from(path.to_string());
+        if path.as_os_str().is_empty() {
+            return;
+        }
+
+        let Some(mime) = crate::apps::detect_mime(&path) else {
+            self.as_mut()
+                .set_op_error(QString::from("No se pudo determinar el tipo del archivo"));
+            return;
+        };
+
+        let apps = crate::apps::apps_for_mime(&mime);
+        let default_id = crate::apps::default_app_id(&mime);
+        let default_index = default_id
+            .as_ref()
+            .and_then(|id| apps.iter().position(|app| &app.id == id))
+            .and_then(|index| i32::try_from(index).ok())
+            .unwrap_or(-1);
+
+        let names: QStringList = apps
+            .iter()
+            .map(|app| QString::from(app.name.as_str()))
+            .collect();
+        let target = display_name(&path);
+
+        {
+            let state = self.as_mut().rust_mut();
+            let state = state.get_mut();
+            state.open_with_ids = apps.into_iter().map(|app| app.id).collect();
+            state.open_with_path = path;
+            state.open_with_mime = mime;
+        }
+        self.as_mut().set_open_with_apps(names);
+        self.as_mut().set_open_with_default_index(default_index);
+        self.as_mut()
+            .set_open_with_target(QString::from(target.as_str()));
+        self.as_mut().set_open_with_pending(true);
+    }
+
+    /// Launches the chosen application on the stored file, optionally making it
+    /// the default for the file's MIME type first. Closes the chooser.
+    pub fn open_with_app(mut self: Pin<&mut Self>, index: i32, set_default: bool) {
+        self.as_mut().set_open_with_pending(false);
+        let Ok(index) = usize::try_from(index) else {
+            return;
+        };
+        let (id, path, mime) = {
+            let state = self.rust();
+            let Some(id) = state.open_with_ids.get(index).cloned() else {
+                return;
+            };
+            (
+                id,
+                state.open_with_path.clone(),
+                state.open_with_mime.clone(),
+            )
+        };
+
+        if set_default {
+            if let Err(error) = crate::apps::set_default_app(&mime, &id) {
+                self.as_mut().set_op_error(QString::from(error.as_str()));
+            }
+        }
+        match crate::apps::launch_with(&id, &path) {
+            Ok(()) => {
+                let message = format!("Abriendo {}…", display_name(&path));
+                self.as_mut()
+                    .set_status_text(QString::from(message.as_str()));
+            }
+            Err(error) => self.as_mut().set_op_error(QString::from(error.as_str())),
+        }
+    }
+
+    pub fn cancel_open_with(mut self: Pin<&mut Self>) {
+        self.as_mut().set_open_with_pending(false);
     }
 
     /// Records (or clears) how to reverse the last operation, keeping the

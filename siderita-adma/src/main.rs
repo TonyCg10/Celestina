@@ -1,3 +1,4 @@
+mod apps;
 mod bookmarks;
 mod controller;
 mod places;
