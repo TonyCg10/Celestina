@@ -72,6 +72,9 @@ pub mod qobject {
         #[qproperty(bool, conflict_pending)]
         #[qproperty(i32, conflict_count)]
         #[qproperty(QString, conflict_name)]
+        #[qproperty(QStringList, trash_names)]
+        #[qproperty(QStringList, trash_origins)]
+        #[qproperty(QStringList, trash_dates)]
         type SideritaController = super::SideritaControllerRust;
 
         #[qinvokable]
@@ -194,6 +197,15 @@ pub mod qobject {
 
         #[qinvokable]
         fn undo(self: Pin<&mut SideritaController>);
+
+        #[qinvokable]
+        fn load_trash(self: Pin<&mut SideritaController>);
+
+        #[qinvokable]
+        fn restore_trash(self: Pin<&mut SideritaController>, index: i32);
+
+        #[qinvokable]
+        fn restore_all_trash(self: Pin<&mut SideritaController>);
     }
 
     impl cxx_qt::Threading for SideritaController {}
@@ -310,6 +322,10 @@ pub struct SideritaControllerRust {
     conflict_count: i32,
     conflict_name: QString,
     pending_paste: Option<PendingPaste>,
+    trash_names: QStringList,
+    trash_origins: QStringList,
+    trash_dates: QStringList,
+    trash_infos: Vec<PathBuf>,
     clipboard: Vec<PathBuf>,
     clipboard_cut: bool,
     last_undo: Option<UndoAction>,
@@ -358,6 +374,10 @@ impl Default for SideritaControllerRust {
             conflict_count: 0,
             conflict_name: QString::default(),
             pending_paste: None,
+            trash_names: QStringList::default(),
+            trash_origins: QStringList::default(),
+            trash_dates: QStringList::default(),
+            trash_infos: Vec::new(),
             clipboard: Vec::new(),
             clipboard_cut: false,
             last_undo: None,
@@ -1106,6 +1126,96 @@ impl qobject::SideritaController {
         self.as_mut().finish_batch(total, &failures);
     }
 
+    /// Reads the freedesktop Trash and publishes it to the Trash view (parallel
+    /// name / origin / date lists), keeping the info paths for restore-by-index.
+    pub fn load_trash(mut self: Pin<&mut Self>) {
+        self.as_mut().set_op_error(QString::default());
+        let entries = match siderita_ops::list_home_trash() {
+            Ok(entries) => entries,
+            Err(error) => {
+                self.as_mut()
+                    .set_op_error(QString::from(error.to_string().as_str()));
+                return;
+            }
+        };
+
+        let names: QStringList = entries
+            .iter()
+            .map(|entry| QString::from(entry.name.as_str()))
+            .collect();
+        let origins: QStringList = entries
+            .iter()
+            .map(|entry| QString::from(entry.original.to_string_lossy().as_ref()))
+            .collect();
+        let dates: QStringList = entries
+            .iter()
+            .map(|entry| QString::from(format_trash_date(&entry.deletion_date).as_str()))
+            .collect();
+        let infos: Vec<PathBuf> = entries.into_iter().map(|entry| entry.info).collect();
+
+        self.as_mut().rust_mut().get_mut().trash_infos = infos;
+        self.as_mut().set_trash_names(names);
+        self.as_mut().set_trash_origins(origins);
+        self.as_mut().set_trash_dates(dates);
+    }
+
+    /// Restores the trashed entry at `index` in the loaded Trash list, then
+    /// refreshes both the Trash view and the current folder (the entry may
+    /// reappear there). A refusal (its origin is taken) surfaces as `op_error`.
+    pub fn restore_trash(mut self: Pin<&mut Self>, index: i32) {
+        self.as_mut().set_op_error(QString::default());
+        let Ok(index) = usize::try_from(index) else {
+            return;
+        };
+        let Some(info) = self.rust().trash_infos.get(index).cloned() else {
+            return;
+        };
+        match siderita_ops::restore_from_trash(&info, &CancellationToken::new()) {
+            Ok(_) => {
+                self.as_mut().load_trash();
+                self.as_mut().refresh();
+            }
+            Err(error) => self
+                .as_mut()
+                .set_op_error(QString::from(error.to_string().as_str())),
+        }
+    }
+
+    /// Restores every entry currently in the Trash view. Each is attempted
+    /// independently; failures (e.g. an origin now occupied) are reported
+    /// together after the list and the folder are refreshed.
+    pub fn restore_all_trash(mut self: Pin<&mut Self>) {
+        self.as_mut().set_op_error(QString::default());
+        let infos = self.rust().trash_infos.clone();
+        if infos.is_empty() {
+            return;
+        }
+        let cancellation = CancellationToken::new();
+        let mut failures = Vec::new();
+        for info in &infos {
+            if let Err(error) = siderita_ops::restore_from_trash(info, &cancellation) {
+                failures.push(format!("{}: {error}", display_name(info)));
+            }
+        }
+        // Refresh first (both clear op_error), then report any failures last.
+        self.as_mut().load_trash();
+        self.as_mut().refresh();
+        if !failures.is_empty() {
+            let total = infos.len();
+            let summary = if failures.len() == total {
+                failures.join("\n")
+            } else {
+                format!(
+                    "{} de {} restauraciones fallaron:\n{}",
+                    failures.len(),
+                    total,
+                    failures.join("\n")
+                )
+            };
+            self.as_mut().set_op_error(QString::from(summary.as_str()));
+        }
+    }
+
     /// Records (or clears) how to reverse the last operation, keeping the
     /// `can_undo` / `undo_label` properties in step for the menu and shortcut.
     fn set_undo(mut self: Pin<&mut Self>, action: Option<UndoAction>) {
@@ -1504,6 +1614,25 @@ fn next_free_name(dir: &Path, name: &OsStr) -> PathBuf {
     unreachable!("the free-name search always terminates before u64 wraps")
 }
 
+/// Presents a spec `YYYY-MM-DDThh:mm:ss` Trash deletion date as `YYYY-MM-DD
+/// hh:mm` for the Trash view. Anything not in that shape is passed through, so a
+/// malformed record still shows what it has rather than nothing.
+fn format_trash_date(raw: &str) -> String {
+    if raw.is_empty() {
+        return String::new();
+    }
+    let Some((date, time)) = raw.split_once('T') else {
+        return raw.to_owned();
+    };
+    // Keep hh:mm; drop the seconds only when the time actually carries them
+    // (two colons), so an already-short hh:mm is left intact.
+    let hm = match (time.find(':'), time.rfind(':')) {
+        (Some(first), Some(last)) if first != last => &time[..last],
+        _ => time,
+    };
+    format!("{date} {hm}")
+}
+
 /// The final path component, for a compact per-entry line in a batch error.
 /// Falls back to the full lossy path when there is no file name (e.g. `/`).
 fn display_name(path: &Path) -> String {
@@ -1681,6 +1810,22 @@ mod tests {
         assert_eq!(no_ext.file_name().unwrap(), OsStr::new("carpeta (copia)"));
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn format_trash_date_is_compact_and_lenient() {
+        assert_eq!(
+            super::format_trash_date("2026-07-21T18:04:09"),
+            "2026-07-21 18:04"
+        );
+        // No seconds → left as-is (just the T replaced).
+        assert_eq!(
+            super::format_trash_date("2026-07-21T18:04"),
+            "2026-07-21 18:04"
+        );
+        assert_eq!(super::format_trash_date(""), "");
+        // A malformed value is passed through rather than dropped.
+        assert_eq!(super::format_trash_date("desconocido"), "desconocido");
     }
 
     #[test]

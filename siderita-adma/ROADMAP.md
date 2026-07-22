@@ -145,7 +145,7 @@ clipboard), tracked with CP0's real-Wayland goal.
 ## Checkpoint 2 — Interoperable daily manager (S2)
 **Goal:** a manager good enough for daily use, integrated through standards.
 
-- [ ] XDG Trash restore, cross-filesystem moves, and removable-volume mount / unmount (the sidebar "removable files" the purpose promises) — the loss-free restore *primitive* (`siderita_ops::restore_from_trash`, reads the `.trashinfo`, refuses to overwrite) landed with CP1 undo; a Trash-browsing view to invoke it, plus mount/unmount, are still open here
+- [~] XDG Trash restore, cross-filesystem moves, and removable-volume mount / unmount (the sidebar "removable files" the purpose promises) — **Trash restore done**: `siderita_ops::list_home_trash` + the loss-free `restore_from_trash` primitive back a sidebar "Papelera" view that lists trashed entries (name · origin · date, newest first) with per-entry Restore and Restaurar todo. **Cross-filesystem moves** already work at the domain level (`relocate_by_copy`: copy → verify → remove-source, used by move/paste). Still open here: **removable-volume mount / unmount** and the removable-files sidebar
 - [ ] Drag-and-drop to move / copy within the view and to and from other applications
 - [ ] Open-with… chooser, set-default-application, and safe `.desktop` handler wiring
 - [ ] `org.freedesktop.FileManager1` D-Bus, so "Show in file manager" from other apps lands here

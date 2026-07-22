@@ -2232,6 +2232,178 @@ ApplicationWindow {
                 }
             }
         }
+
+        // ── Trash view (list + restore) ──────────────────────────────────
+        Rectangle {
+            id: trashView
+            anchors.fill: parent
+            z: 64
+            visible: false
+            color: Qt.rgba(0, 0, 0, 0.45)
+
+            function dismiss() { trashView.visible = false }
+
+            // Click on the dimmed backdrop closes.
+            MouseArea {
+                anchors.fill: parent
+                onClicked: trashView.dismiss()
+            }
+            Keys.onPressed: function(event) {
+                if (event.key === Qt.Key_Escape) {
+                    trashView.dismiss()
+                    event.accepted = true
+                }
+            }
+            focus: trashView.visible
+
+            Rectangle {
+                anchors.centerIn: parent
+                width: Math.min(560, root.width - 48)
+                height: Math.min(460, root.height - 64)
+                radius: CelestinaTheme.radiusMd
+                color: CelestinaTheme.canvasRaised
+                border.width: 1
+                border.color: CelestinaTheme.borderStrong
+
+                // Swallow clicks so they never reach the dismiss backdrop.
+                MouseArea { anchors.fill: parent }
+
+                Text {
+                    id: trashHeading
+                    x: 18
+                    y: 16
+                    text: "Papelera"
+                    color: CelestinaTheme.text
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCallout
+                    font.weight: CelestinaTheme.weightDemiBold
+                }
+
+                Text {
+                    id: trashCount
+                    anchors.verticalCenter: trashHeading.verticalCenter
+                    anchors.left: trashHeading.right
+                    anchors.leftMargin: 8
+                    text: controller.trashNames.length > 0
+                          ? "· " + controller.trashNames.length : ""
+                    color: CelestinaTheme.textMuted
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontLabel
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    visible: controller.trashNames.length === 0
+                    text: "La papelera está vacía"
+                    color: CelestinaTheme.textMuted
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontBody
+                }
+
+                ListView {
+                    id: trashList
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 12
+                    anchors.top: trashHeading.bottom
+                    anchors.topMargin: 12
+                    anchors.bottom: trashButtons.top
+                    anchors.bottomMargin: 12
+                    clip: true
+                    spacing: 2
+                    model: controller.trashNames
+
+                    delegate: Item {
+                        id: trashRow
+                        required property int index
+                        required property string modelData
+                        width: ListView.view.width
+                        height: 48
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: CelestinaTheme.radiusSm
+                            color: trashRowMouse.containsMouse
+                                   ? CelestinaTheme.surfaceHover : "transparent"
+                        }
+
+                        IconImage {
+                            id: trashRowIcon
+                            x: 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: CelestinaTheme.iconSm
+                            height: CelestinaTheme.iconSm
+                            name: "text-x-generic"
+                            source: CelestinaTheme.fallbackIcon("file")
+                            color: CelestinaTheme.textMuted
+                        }
+
+                        Text {
+                            id: trashRowName
+                            x: trashRowIcon.x + trashRowIcon.width + 10
+                            y: 6
+                            width: restoreRowButton.x - x - 10
+                            text: trashRow.modelData
+                            color: CelestinaTheme.text
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontLabel
+                            elide: Text.ElideMiddle
+                        }
+
+                        Text {
+                            x: trashRowName.x
+                            anchors.top: trashRowName.bottom
+                            anchors.topMargin: 2
+                            width: restoreRowButton.x - x - 10
+                            text: {
+                                var origin = controller.trashOrigins[trashRow.index] || ""
+                                var date = controller.trashDates[trashRow.index] || ""
+                                return date.length > 0 ? origin + "  ·  " + date : origin
+                            }
+                            color: CelestinaTheme.textMuted
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontCaption
+                            elide: Text.ElideMiddle
+                        }
+
+                        MouseArea {
+                            id: trashRowMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                        }
+
+                        Button {
+                            id: restoreRowButton
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.right: parent.right
+                            anchors.rightMargin: 6
+                            text: "Restaurar"
+                            onClicked: controller.restoreTrash(trashRow.index)
+                        }
+                    }
+                }
+
+                Row {
+                    id: trashButtons
+                    anchors.right: parent.right
+                    anchors.rightMargin: 18
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 16
+                    spacing: 8
+
+                    Button {
+                        text: "Restaurar todo"
+                        enabled: controller.trashNames.length > 0
+                        onClicked: controller.restoreAllTrash()
+                    }
+                    Button {
+                        text: "Cerrar"
+                        onClicked: trashView.dismiss()
+                    }
+                }
+            }
+        }
     }
 
     // ── Window-level tab management shortcuts ────────────────────────────
@@ -2458,6 +2630,55 @@ ApplicationWindow {
                                 if (window.activeController)
                                     window.activeController.openLocation(placeRow.placePath)
                             }
+                        }
+                    }
+                }
+
+                // Papelera — not a folder scan; opens the Trash view overlay.
+                Item {
+                    id: trashPlace
+                    width: placesColumn.width
+                    height: 34
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.leftMargin: 2
+                        anchors.rightMargin: 2
+                        radius: CelestinaTheme.radiusSm
+                        color: trashPlaceMouse.containsMouse
+                               ? CelestinaTheme.surfaceHover : "transparent"
+                    }
+
+                    IconImage {
+                        id: trashPlaceIcon
+                        x: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: CelestinaTheme.iconSm
+                        height: CelestinaTheme.iconSm
+                        name: "user-trash"
+                        source: CelestinaTheme.fallbackIcon("user-trash")
+                        color: CelestinaTheme.textMuted
+                    }
+
+                    Text {
+                        x: trashPlaceIcon.x + trashPlaceIcon.width + 10
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - x - 12
+                        text: "Papelera"
+                        color: CelestinaTheme.text
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: CelestinaTheme.fontLabel
+                        elide: Text.ElideRight
+                    }
+
+                    MouseArea {
+                        id: trashPlaceMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            controller.loadTrash()
+                            trashView.visible = true
                         }
                     }
                 }
