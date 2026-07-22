@@ -33,7 +33,7 @@ fn main() {
     let builder = CxxQtBuilder::new_qml_module(module)
         .qrc("qml/i1/icons.qrc")
         .cpp_file("cpp/clipboard.cpp")
-        .files(["src/controller.rs"]);
+        .files(["src/controller.rs", "src/dbus.rs"]);
     // SAFETY: only adds an include directory for our own headers.
     let builder = unsafe {
         builder.cc_builder(|cc| {

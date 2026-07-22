@@ -122,6 +122,18 @@ ApplicationWindow {
         }
     }
 
+    // App-global org.freedesktop.FileManager1 service: "Show in file manager"
+    // from another application opens the folder in a new foreground tab and
+    // raises the window. One instance for the whole window, not per tab.
+    FileManager1Service {
+        id: fileManager1
+        Component.onCompleted: fileManager1.start()
+        onOpenFolderRequested: function(path) {
+            window.openTab(path, true)
+            window.requestActivate()
+        }
+    }
+
     // ── Document ─────────────────────────────────────────────────────────
     // One independent folder view: breadcrumb + search pills, the list/grid,
     // multi-selection, the entry/folder/sort context menus, and the per-tab

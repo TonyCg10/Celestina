@@ -1,6 +1,7 @@
 mod apps;
 mod bookmarks;
 mod controller;
+mod dbus;
 mod places;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQuickStyle, QString, QUrl};
