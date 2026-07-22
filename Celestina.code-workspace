@@ -11,6 +11,9 @@
     },
     {
       "path": "celestina-rs"
+    },
+    {
+      "path": "magnetita"
     }
   ],
   "settings": {},

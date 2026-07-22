@@ -10,5 +10,6 @@
     <file alias="folder.svg">icons/folder.svg</file>
     <file alias="file.svg">icons/file.svg</file>
     <file alias="symlink.svg">icons/symlink.svg</file>
+    <file alias="user-trash.svg">icons/user-trash.svg</file>
   </qresource>
 </RCC>

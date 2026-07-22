@@ -22,6 +22,9 @@ ApplicationWindow {
     // Bumped whenever the tab Repeater adds/removes an item, so the
     // `activeController` binding re-resolves itemAt() after the delegate exists.
     property int tabsRevision: 0
+    // The Trash ("Papelera") overlay is opened from the window-scope sidebar but
+    // lives per-tab; this flag lets the sidebar drive the active tab's overlay.
+    property bool trashViewOpen: false
     readonly property var activeController: {
         tabsRevision // re-evaluate when tabs are created or destroyed
         const holder = tabRepeater.itemAt(currentTabIndex)
@@ -226,7 +229,7 @@ ApplicationWindow {
         }
 
         Shortcut {
-            sequence: StandardKey.Copy
+            sequences: [StandardKey.Copy]
             enabled: root.active
             onActivated: {
                 const i = topBar.activeView.currentIndex
@@ -237,7 +240,7 @@ ApplicationWindow {
         }
 
         Shortcut {
-            sequence: StandardKey.Cut
+            sequences: [StandardKey.Cut]
             enabled: root.active
             onActivated: {
                 const i = topBar.activeView.currentIndex
@@ -248,13 +251,13 @@ ApplicationWindow {
         }
 
         Shortcut {
-            sequence: StandardKey.Paste
+            sequences: [StandardKey.Paste]
             enabled: root.active && controller.canPaste && !controller.opRunning
             onActivated: controller.paste()
         }
 
         Shortcut {
-            sequence: StandardKey.Undo
+            sequences: [StandardKey.Undo]
             enabled: root.active && controller.canUndo && !controller.loading && !controller.opRunning
             onActivated: controller.undo()
         }
@@ -2371,10 +2374,11 @@ ApplicationWindow {
             id: trashView
             anchors.fill: parent
             z: 64
-            visible: false
+            // Driven by the window-scope sidebar; only the active tab shows it.
+            visible: window.trashViewOpen && root.active
             color: Qt.rgba(0, 0, 0, 0.45)
 
-            function dismiss() { trashView.visible = false }
+            function dismiss() { window.trashViewOpen = false }
 
             // Click on the dimmed backdrop closes.
             MouseArea {
@@ -2931,8 +2935,9 @@ ApplicationWindow {
                     Accessible.role: Accessible.Button
                     Accessible.name: "Papelera"
                     Accessible.onPressAction: {
-                        controller.loadTrash()
-                        trashView.visible = true
+                        if (window.activeController)
+                            window.activeController.loadTrash()
+                        window.trashViewOpen = true
                     }
 
                     Rectangle {
@@ -2972,8 +2977,9 @@ ApplicationWindow {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            controller.loadTrash()
-                            trashView.visible = true
+                            if (window.activeController)
+                                window.activeController.loadTrash()
+                            window.trashViewOpen = true
                         }
                     }
                 }
