@@ -191,6 +191,14 @@ pub mod qobject {
         fn paste(self: Pin<&mut SideritaController>);
 
         #[qinvokable]
+        fn drop_uris(
+            self: Pin<&mut SideritaController>,
+            paths: &QStringList,
+            destination: &QString,
+            move_entries: bool,
+        );
+
+        #[qinvokable]
         fn cancel_op(self: Pin<&mut SideritaController>);
 
         #[qinvokable]
@@ -898,12 +906,59 @@ impl qobject::SideritaController {
         } else {
             (self.rust().clipboard.clone(), self.rust().clipboard_cut)
         };
+        self.begin_paste(sources, destination, cut);
+    }
+
+    /// Moves or copies dropped file URIs into `destination` (or the current
+    /// folder when it is empty) — the drag-and-drop entry point, sharing the same
+    /// conflict-detection and worker as paste. `move_entries` chooses move vs copy.
+    pub fn drop_uris(
+        mut self: Pin<&mut Self>,
+        paths: &QStringList,
+        destination: &QString,
+        move_entries: bool,
+    ) {
+        if *self.op_running() || *self.conflict_pending() {
+            return;
+        }
+        self.as_mut().set_op_error(QString::default());
+        let sources = qstringlist_to_paths(paths);
+
+        let destination = destination.to_string();
+        let destination = if destination.is_empty() {
+            self.rust().history.current().map(Path::to_path_buf)
+        } else {
+            Some(PathBuf::from(destination))
+        };
+        let Some(destination) = destination else {
+            return;
+        };
+
+        // A drop onto a folder that is itself one of the dragged entries, or into
+        // the folder an entry already lives in, is a no-op rather than an error.
+        let sources: Vec<PathBuf> = sources
+            .into_iter()
+            .filter(|source| {
+                source != &destination && source.parent() != Some(destination.as_path())
+            })
+            .collect();
+
+        self.begin_paste(sources, destination, move_entries);
+    }
+
+    /// Shared tail of paste / drop: refuse an empty set, detect destination
+    /// collisions up front (on the Qt thread), and either start the worker
+    /// straight away or hold the batch back for a conflict choice.
+    fn begin_paste(
+        mut self: Pin<&mut Self>,
+        sources: Vec<PathBuf>,
+        destination: PathBuf,
+        cut: bool,
+    ) {
         if sources.is_empty() {
             return;
         }
 
-        // Detect collisions up front, on the Qt thread, so the choice is made
-        // once before any file is touched rather than mid-copy.
         let collisions: Vec<&PathBuf> = sources
             .iter()
             .filter(|source| {

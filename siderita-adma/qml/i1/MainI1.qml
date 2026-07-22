@@ -389,6 +389,22 @@ ApplicationWindow {
                 else
                     controller.trashPath(primaryPath)
             }
+            // Converts dropped file:// URLs to local paths (percent-decoded),
+            // skipping any non-file URL, for controller.dropUris.
+            function urlsToPaths(urls) {
+                var out = []
+                for (var i = 0; i < urls.length; i++) {
+                    var u = urls[i].toString()
+                    if (u.indexOf("file://") === 0)
+                        out.push(decodeURIComponent(u.substring(7)))
+                }
+                return out
+            }
+            // Shift forces a move; the default for a cross-application drop is the
+            // safe copy.
+            function dropIsMove(drop) {
+                return (drop.keyboardModifiers & Qt.ShiftModifier) !== 0
+            }
 
             Connections {
                 target: controller
@@ -594,6 +610,38 @@ ApplicationWindow {
                 }
             }
 
+            // Accept external file drops into the current folder. Folder rows
+            // carry their own DropArea (below) that lands the drop in that folder
+            // instead; this one catches empty space and non-folder rows.
+            DropArea {
+                id: viewDrop
+                anchors.fill: parent
+                anchors.bottomMargin: 68
+                z: 1
+
+                onEntered: function(drag) {
+                    if (!drag.hasUrls)
+                        drag.accepted = false
+                }
+                onDropped: function(drop) {
+                    if (!drop.hasUrls)
+                        return
+                    controller.dropUris(mainPanel.urlsToPaths(drop.urls),
+                                        "", mainPanel.dropIsMove(drop))
+                    drop.accept()
+                }
+
+                Rectangle {
+                    anchors.fill: parent
+                    visible: viewDrop.containsDrag
+                    color: "transparent"
+                    border.width: 2
+                    border.color: CelestinaTheme.accent
+                    radius: CelestinaTheme.radiusLg
+                    z: 40
+                }
+            }
+
             ListView {
                 id: fileList
                 x: 8
@@ -732,6 +780,38 @@ ApplicationWindow {
                             ColorAnimation {
                                 duration: CelestinaTheme.motionFast
                             }
+                        }
+                    }
+
+                    // Drop external files onto this row when it is a folder → the
+                    // drop lands inside that folder rather than the current one.
+                    DropArea {
+                        anchors.fill: parent
+                        enabled: row.revision >= 0
+                                 && controller.entryIsDirectory(row.index)
+
+                        onEntered: function(drag) {
+                            if (!drag.hasUrls)
+                                drag.accepted = false
+                        }
+                        onDropped: function(drop) {
+                            if (!drop.hasUrls)
+                                return
+                            controller.dropUris(mainPanel.urlsToPaths(drop.urls),
+                                                controller.entryPath(row.index),
+                                                mainPanel.dropIsMove(drop))
+                            drop.accept()
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.leftMargin: 4
+                            anchors.rightMargin: 4
+                            visible: parent.containsDrag
+                            color: "transparent"
+                            radius: CelestinaTheme.radiusSm
+                            border.width: 2
+                            border.color: CelestinaTheme.accent
                         }
                     }
 
@@ -927,6 +1007,36 @@ ApplicationWindow {
                             ColorAnimation {
                                 duration: CelestinaTheme.motionFast
                             }
+                        }
+                    }
+
+                    // Drop external files onto this cell when it is a folder.
+                    DropArea {
+                        anchors.fill: parent
+                        anchors.margins: 5
+                        enabled: cell.revision >= 0
+                                 && controller.entryIsDirectory(cell.index)
+
+                        onEntered: function(drag) {
+                            if (!drag.hasUrls)
+                                drag.accepted = false
+                        }
+                        onDropped: function(drop) {
+                            if (!drop.hasUrls)
+                                return
+                            controller.dropUris(mainPanel.urlsToPaths(drop.urls),
+                                                controller.entryPath(cell.index),
+                                                mainPanel.dropIsMove(drop))
+                            drop.accept()
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            visible: parent.containsDrag
+                            color: "transparent"
+                            radius: CelestinaTheme.radiusSm
+                            border.width: 2
+                            border.color: CelestinaTheme.accent
                         }
                     }
 
