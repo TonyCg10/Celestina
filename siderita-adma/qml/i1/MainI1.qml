@@ -420,6 +420,23 @@ ApplicationWindow {
             function dropIsMove(drop) {
                 return (drop.keyboardModifiers & Qt.ShiftModifier) !== 0
             }
+            // True if the drag is an internal Siderita entry (a file/folder being
+            // dragged within the view), as opposed to external file URLs.
+            function isEntryDrag(drag) {
+                return drag.keys.indexOf("siderita-entry") >= 0
+            }
+            // Land a drop into `destPath` ("" = current folder): external file
+            // URLs (Shift = move, else copy), or an internal entry drag carrying
+            // the dragged path (Ctrl = copy, else move — the same-app default).
+            function dropOnto(destPath, drop) {
+                if (drop.hasUrls) {
+                    controller.dropUris(urlsToPaths(drop.urls), destPath,
+                                        dropIsMove(drop))
+                } else if (isEntryDrag(drop) && root.ghost.path.length > 0) {
+                    var move = (drop.keyboardModifiers & Qt.ControlModifier) === 0
+                    controller.dropUris([root.ghost.path], destPath, move)
+                }
+            }
 
             Connections {
                 target: controller
@@ -632,7 +649,9 @@ ApplicationWindow {
                 id: viewDrop
                 anchors.fill: parent
                 anchors.bottomMargin: 68
-                z: 1
+                // No z bump: the list/grid (declared after) and their per-folder
+                // DropAreas must stack above this, so a drop on a folder lands in
+                // that folder and only empty space falls through to here.
 
                 onEntered: function(drag) {
                     if (!drag.hasUrls)
@@ -798,23 +817,20 @@ ApplicationWindow {
                         }
                     }
 
-                    // Drop external files onto this row when it is a folder → the
-                    // drop lands inside that folder rather than the current one.
+                    // Drop onto this row when it is a folder → the drop lands
+                    // inside that folder. Accepts external file URLs and internal
+                    // entry drags (move a file/folder into this folder).
                     DropArea {
                         anchors.fill: parent
                         enabled: row.revision >= 0
                                  && controller.entryIsDirectory(row.index)
 
                         onEntered: function(drag) {
-                            if (!drag.hasUrls)
+                            if (!drag.hasUrls && !mainPanel.isEntryDrag(drag))
                                 drag.accepted = false
                         }
                         onDropped: function(drop) {
-                            if (!drop.hasUrls)
-                                return
-                            controller.dropUris(mainPanel.urlsToPaths(drop.urls),
-                                                controller.entryPath(row.index),
-                                                mainPanel.dropIsMove(drop))
+                            mainPanel.dropOnto(controller.entryPath(row.index), drop)
                             drop.accept()
                         }
 
@@ -941,13 +957,15 @@ ApplicationWindow {
                         id: rowDrag
                         target: null
                         dragThreshold: 8
+                        // Any entry is draggable (a file to move onto a folder, a
+                        // folder to move or to bookmark on the sidebar).
                         enabled: row.revision >= 0
-                                 && controller.entryIsDirectory(row.index)
                         onActiveChanged: {
                             if (active) {
-                                root.ghost.path = controller.entryPath(row.index)
-                                root.ghost.label = row.modelData
-                                root.ghost.Drag.active = true
+                                root.ghost.beginEntryDrag(
+                                    controller.entryPath(row.index),
+                                    row.modelData,
+                                    controller.entryIsDirectory(row.index))
                             } else {
                                 root.ghost.Drag.drop()
                                 root.ghost.Drag.active = false
@@ -1025,7 +1043,8 @@ ApplicationWindow {
                         }
                     }
 
-                    // Drop external files onto this cell when it is a folder.
+                    // Drop onto this cell when it is a folder (external file URLs
+                    // or an internal entry drag).
                     DropArea {
                         anchors.fill: parent
                         anchors.margins: 5
@@ -1033,15 +1052,11 @@ ApplicationWindow {
                                  && controller.entryIsDirectory(cell.index)
 
                         onEntered: function(drag) {
-                            if (!drag.hasUrls)
+                            if (!drag.hasUrls && !mainPanel.isEntryDrag(drag))
                                 drag.accepted = false
                         }
                         onDropped: function(drop) {
-                            if (!drop.hasUrls)
-                                return
-                            controller.dropUris(mainPanel.urlsToPaths(drop.urls),
-                                                controller.entryPath(cell.index),
-                                                mainPanel.dropIsMove(drop))
+                            mainPanel.dropOnto(controller.entryPath(cell.index), drop)
                             drop.accept()
                         }
 
@@ -1155,12 +1170,12 @@ ApplicationWindow {
                         target: null
                         dragThreshold: 8
                         enabled: cell.revision >= 0
-                                 && controller.entryIsDirectory(cell.index)
                         onActiveChanged: {
                             if (active) {
-                                root.ghost.path = controller.entryPath(cell.index)
-                                root.ghost.label = cell.modelData
-                                root.ghost.Drag.active = true
+                                root.ghost.beginEntryDrag(
+                                    controller.entryPath(cell.index),
+                                    cell.modelData,
+                                    controller.entryIsDirectory(cell.index))
                             } else {
                                 root.ghost.Drag.drop()
                                 root.ghost.Drag.active = false
@@ -2761,9 +2776,22 @@ ApplicationWindow {
             visible: Drag.active
             property string path: ""
             property string label: ""
-            Drag.keys: ["siderita-bookmark"]
+            property bool isDir: false
             Drag.hotSpot.x: 16
             Drag.hotSpot.y: 17
+
+            // Start dragging an entry: only folders carry the bookmark key (so a
+            // file can't be dropped on the sidebar), every entry carries the
+            // move key for folder-to-folder drops.
+            function beginEntryDrag(entryPath, entryLabel, entryIsDir) {
+                dragGhost.path = entryPath
+                dragGhost.label = entryLabel
+                dragGhost.isDir = entryIsDir
+                dragGhost.Drag.keys = entryIsDir
+                    ? ["siderita-entry", "siderita-bookmark"]
+                    : ["siderita-entry"]
+                dragGhost.Drag.active = true
+            }
 
             Rectangle {
                 anchors.fill: parent
@@ -2782,8 +2810,9 @@ ApplicationWindow {
                         anchors.verticalCenter: parent.verticalCenter
                         width: CelestinaTheme.iconSm
                         height: CelestinaTheme.iconSm
-                        name: "folder"
-                        source: CelestinaTheme.fallbackIcon("folder")
+                        name: dragGhost.isDir ? "folder" : "text-x-generic"
+                        source: CelestinaTheme.fallbackIcon(
+                                    dragGhost.isDir ? "folder" : "file")
                         color: CelestinaTheme.accent
                     }
 
