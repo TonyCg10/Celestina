@@ -19,6 +19,11 @@ pub mod qobject {
         type QString = cxx_qt_lib::QString;
     }
 
+    // Match the controller bridge: expose snake_case Rust names to QML in
+    // camelCase, so the signal is `openFolderRequested` (handler
+    // `onOpenFolderRequested`) — without this the QML sees the raw
+    // `open_folder_requested` and the handler assignment fails to resolve.
+    #[auto_cxx_name]
     extern "RustQt" {
         #[qobject]
         #[qml_element]
