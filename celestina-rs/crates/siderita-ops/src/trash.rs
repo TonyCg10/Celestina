@@ -151,7 +151,7 @@ fn trashinfo(original: &Path) -> String {
 }
 
 /// Home Trash directory, from `$XDG_DATA_HOME` or `$HOME/.local/share`.
-fn home_trash() -> Result<PathBuf, OpError> {
+pub(crate) fn home_trash() -> Result<PathBuf, OpError> {
     let data_home = std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())

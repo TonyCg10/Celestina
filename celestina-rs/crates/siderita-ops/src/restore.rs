@@ -6,6 +6,7 @@ use celestina_core::CancellationToken;
 
 use crate::error::OpError;
 use crate::relocate::{is_cross_device, relocate_by_copy};
+use crate::trashinfo::{parse_original_path, trashed_file_for};
 
 /// The paths a successful restore moved between.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -93,73 +94,6 @@ pub fn restore_from_trash(info: &Path, cancellation: &CancellationToken) -> Resu
     })
 }
 
-/// Derives `<trash_root>/files/<name>` from `<trash_root>/info/<name>.trashinfo`.
-fn trashed_file_for(info: &Path) -> Option<PathBuf> {
-    let info_dir = info.parent()?;
-    if info_dir.file_name() != Some(std::ffi::OsStr::new("info")) {
-        return None;
-    }
-    let trash_root = info_dir.parent()?;
-    let name = info.file_stem()?; // strips the ".trashinfo" extension
-    Some(trash_root.join("files").join(name))
-}
-
-/// Reads the `Path=` line from a `.trashinfo` body and percent-decodes it back
-/// into a path, byte-for-byte, so a non-UTF-8 original round-trips.
-fn parse_original_path(content: &str) -> Option<PathBuf> {
-    let value = content
-        .lines()
-        .find_map(|line| line.strip_prefix("Path="))?;
-    let bytes = url_decode(value)?;
-    if bytes.is_empty() {
-        return None;
-    }
-    Some(path_from_bytes(&bytes))
-}
-
-/// Reverses [`trash`](crate::trash)'s percent-encoding: `%XX` becomes one byte,
-/// every other byte is taken verbatim. Returns `None` on a malformed escape.
-fn url_decode(value: &str) -> Option<Vec<u8>> {
-    let raw = value.as_bytes();
-    let mut out = Vec::with_capacity(raw.len());
-    let mut index = 0;
-    while index < raw.len() {
-        match raw[index] {
-            b'%' => {
-                let high = hex_value(*raw.get(index + 1)?)?;
-                let low = hex_value(*raw.get(index + 2)?)?;
-                out.push((high << 4) | low);
-                index += 3;
-            }
-            byte => {
-                out.push(byte);
-                index += 1;
-            }
-        }
-    }
-    Some(out)
-}
-
-fn hex_value(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
-        _ => None,
-    }
-}
-
-#[cfg(unix)]
-fn path_from_bytes(bytes: &[u8]) -> PathBuf {
-    use std::os::unix::ffi::OsStrExt;
-    PathBuf::from(std::ffi::OsStr::from_bytes(bytes))
-}
-
-#[cfg(not(unix))]
-fn path_from_bytes(bytes: &[u8]) -> PathBuf {
-    PathBuf::from(String::from_utf8_lossy(bytes).into_owned())
-}
-
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -168,7 +102,7 @@ mod tests {
 
     use celestina_core::CancellationToken;
 
-    use super::{restore_from_trash, url_decode};
+    use super::restore_from_trash;
     use crate::error::OpError;
     use crate::trash::trash_into;
 
@@ -266,12 +200,5 @@ mod tests {
 
         assert_eq!(restored.to, source);
         assert_eq!(fs::read(&source).expect("read"), b"spaced");
-    }
-
-    #[test]
-    fn url_decode_reverses_percent_encoding() {
-        assert_eq!(url_decode("/home/u/a%20b").unwrap(), b"/home/u/a b");
-        assert_eq!(url_decode("/x/y.txt").unwrap(), b"/x/y.txt");
-        assert!(url_decode("/bad%2").is_none(), "a truncated escape is rejected");
     }
 }

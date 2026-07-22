@@ -12,11 +12,11 @@
 //!
 //! ## Verbs
 //!
-//! Create-folder, create-file, rename, copy, move, send-to-Trash and
-//! restore-from-Trash are all implemented. Every verb holds the guarantee that a
-//! source is never removed before its destination is verified, and none silently
-//! overwrites an existing target: a conflict is reported, never resolved by
-//! destroying data.
+//! Create-folder, create-file, rename, copy, move, send-to-Trash,
+//! list-Trash and restore-from-Trash are all implemented. Every verb holds the
+//! guarantee that a source is never removed before its destination is verified,
+//! and none silently overwrites an existing target: a conflict is reported,
+//! never resolved by destroying data.
 
 mod copy;
 mod create;
@@ -26,6 +26,7 @@ mod relocate;
 mod rename;
 mod restore;
 mod trash;
+mod trashinfo;
 
 pub use copy::{copy, copy_as, Progress};
 pub use create::{create_directory, create_file};
@@ -35,3 +36,4 @@ pub use relocate::{move_as, move_entry, Moved};
 pub use rename::{rename, Renamed};
 pub use restore::{restore_from_trash, Restored};
 pub use trash::{trash, Trashed};
+pub use trashinfo::{list_home_trash, TrashEntry};
