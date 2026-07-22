@@ -2291,6 +2291,8 @@ ApplicationWindow {
                 color: CelestinaTheme.canvasRaised
                 border.width: 1
                 border.color: CelestinaTheme.borderStrong
+                Accessible.role: Accessible.Dialog
+                Accessible.name: "Conflicto al pegar"
 
                 // Swallow clicks so they never reach the dismiss backdrop.
                 MouseArea { anchors.fill: parent }
@@ -2383,6 +2385,8 @@ ApplicationWindow {
                 color: CelestinaTheme.canvasRaised
                 border.width: 1
                 border.color: CelestinaTheme.borderStrong
+                Accessible.role: Accessible.Dialog
+                Accessible.name: "Papelera"
 
                 // Swallow clicks so they never reach the dismiss backdrop.
                 MouseArea { anchors.fill: parent }
@@ -2439,6 +2443,8 @@ ApplicationWindow {
                         required property string modelData
                         width: ListView.view.width
                         height: 48
+                        Accessible.role: Accessible.ListItem
+                        Accessible.name: trashRow.modelData
 
                         Rectangle {
                             anchors.fill: parent
@@ -2555,6 +2561,8 @@ ApplicationWindow {
                 color: CelestinaTheme.canvasRaised
                 border.width: 1
                 border.color: CelestinaTheme.borderStrong
+                Accessible.role: Accessible.Dialog
+                Accessible.name: "Abrir con"
 
                 MouseArea { anchors.fill: parent }
 
@@ -2600,6 +2608,9 @@ ApplicationWindow {
                         required property string modelData
                         width: ListView.view.width
                         height: 38
+                        Accessible.role: Accessible.ListItem
+                        Accessible.name: appRow.modelData
+                        Accessible.selected: openWithView.selected === appRow.index
 
                         Rectangle {
                             anchors.fill: parent
@@ -2905,6 +2916,12 @@ ApplicationWindow {
                     id: trashPlace
                     width: placesColumn.width
                     height: 34
+                    Accessible.role: Accessible.Button
+                    Accessible.name: "Papelera"
+                    Accessible.onPressAction: {
+                        controller.loadTrash()
+                        trashView.visible = true
+                    }
 
                     Rectangle {
                         anchors.fill: parent
