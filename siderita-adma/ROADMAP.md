@@ -87,7 +87,7 @@ resource report ratifies or rejects Qt/QML with data.
 
 | Metric | Limit | Current cut |
 |---|---:|---:|
-| Stripped isolated binary | 20 MiB | 1.62 MiB; staging pending |
+| Stripped isolated binary | 20 MiB | 4.23 MiB (was 1.62; +CP1/CP2 incl. zbus); staging pending |
 | First install closure (Qt) | 250 MiB | pending |
 | HOME mean PSS, 60 s | 120 MiB | 40.52 MiB, one offscreen run |
 | HOME one-core CPU, 60 s | 1 % | 0.000 %, one offscreen run |
