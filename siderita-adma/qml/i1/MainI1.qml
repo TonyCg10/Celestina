@@ -3437,7 +3437,8 @@ ApplicationWindow {
             x: 20
             y: 18
             width: 184
-            height: parent.height - y - 20
+            // Leave room below for the separate folder-info box (56 + 12 gap).
+            height: parent.height - y - 18 - 68
             radius: CelestinaTheme.radiusLg
             visible: parent.width >= 820
             color: CelestinaTheme.surface
@@ -3759,7 +3760,8 @@ ApplicationWindow {
                 x: 8
                 y: bookmarksLabel.y + 20
                 width: parent.width - 16
-                height: Math.max(0, readOnlyBadge.y - y - 12)
+                // Fill down to the bottom of the (now shorter) sidebar.
+                height: Math.max(0, sidebar.height - y - 14)
                 clip: true
                 model: window.activeController ? window.activeController.bookmarkNames : []
                 spacing: 2
@@ -3884,64 +3886,45 @@ ApplicationWindow {
                 }
             }
 
-            Rectangle {
-                id: readOnlyBadge
-                x: 14
-                y: sidebarInfo.y - height - 12
-                width: parent.width - 28
-                height: 32
-                radius: CelestinaTheme.radiusSm
-                color: CelestinaTheme.badgeFill
-                border.width: 1
-                border.color: CelestinaTheme.border
+        }
+
+        // A separate box below the sidebar (its own panel, not nested inside it):
+        // the current folder's item count.
+        Rectangle {
+            id: sidebarInfo
+            x: sidebar.x
+            width: sidebar.width
+            height: 56
+            y: parent.height - height - 18
+            visible: sidebar.visible
+            radius: CelestinaTheme.radiusLg
+            color: CelestinaTheme.surface
+            border.width: 1
+            border.color: CelestinaTheme.border
+
+            Column {
+                x: 16
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width - 32
+                spacing: 3
 
                 Text {
-                    anchors.centerIn: parent
-                    text: "SOLO LECTURA · I1"
-                    color: CelestinaTheme.accent
+                    text: "CARPETA"
+                    color: CelestinaTheme.textMuted
                     font.family: CelestinaTheme.sansFamily
                     font.pixelSize: CelestinaTheme.fontMini
+                    font.letterSpacing: 1.4
                     font.weight: CelestinaTheme.weightDemiBold
-                    font.letterSpacing: 0.8
                 }
-            }
 
-            // Bottom info box: folder count now, room for more later.
-            Rectangle {
-                id: sidebarInfo
-                x: 14
-                width: parent.width - 28
-                y: parent.height - height - 14
-                height: 62
-                radius: CelestinaTheme.radiusSm
-                color: CelestinaTheme.badgeFill
-                border.width: 1
-                border.color: CelestinaTheme.border
-
-                Column {
-                    x: 14
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width - 28
-                    spacing: 4
-
-                    Text {
-                        text: "CARPETA"
-                        color: CelestinaTheme.textMuted
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontMini
-                        font.letterSpacing: 1.4
-                        font.weight: CelestinaTheme.weightDemiBold
-                    }
-
-                    Text {
-                        readonly property int count: window.activeController
-                                                     ? window.activeController.entryNames.length : 0
-                        text: count + (count === 1 ? " elemento" : " elementos")
-                        color: CelestinaTheme.text
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontBody
-                        font.weight: CelestinaTheme.weightMedium
-                    }
+                Text {
+                    readonly property int count: window.activeController
+                                                 ? window.activeController.entryNames.length : 0
+                    text: count + (count === 1 ? " elemento" : " elementos")
+                    color: CelestinaTheme.text
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontBody
+                    font.weight: CelestinaTheme.weightMedium
                 }
             }
         }
