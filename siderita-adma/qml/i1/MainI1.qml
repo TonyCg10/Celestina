@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.impl
 import org.celestina.siderita 1.0
+import org.celestina.siderita.internal 1.0
 
 ApplicationWindow {
     id: window

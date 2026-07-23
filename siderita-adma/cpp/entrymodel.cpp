@@ -75,6 +75,9 @@ void SideritaEntryModel::setRows(const QStringList &names,
 
 void register_siderita_entry_model()
 {
-    qmlRegisterType<SideritaEntryModel>("org.celestina.siderita", 1, 0,
+    // A separate module namespace: cxx-qt registers org.celestina.siderita
+    // declaratively, and Qt forbids also registering a type into it
+    // imperatively ("namespace already used for type registration").
+    qmlRegisterType<SideritaEntryModel>("org.celestina.siderita.internal", 1, 0,
                                         "SideritaEntryModel");
 }
