@@ -320,6 +320,38 @@ struct PasteOutcome {
     cancelled: bool,
 }
 
+/// A navigation whose history change is held back until its scan succeeds, so a
+/// failed back / forward / up / home / activate never leaves the path pointing
+/// at an unreadable directory while the list still shows the previous one.
+enum PendingNav {
+    Back(PathBuf),
+    Forward(PathBuf),
+    To(PathBuf),
+}
+
+impl PendingNav {
+    fn destination(&self) -> &Path {
+        match self {
+            PendingNav::Back(path) | PendingNav::Forward(path) | PendingNav::To(path) => path,
+        }
+    }
+
+    /// Applies the navigation to `history` once its scan has succeeded.
+    fn commit(self, history: &mut NavigationHistory) {
+        match self {
+            PendingNav::Back(_) => {
+                history.go_back();
+            }
+            PendingNav::Forward(_) => {
+                history.go_forward();
+            }
+            PendingNav::To(path) => {
+                history.navigate_to(path);
+            }
+        }
+    }
+}
+
 pub struct SideritaControllerRust {
     current_path: QString,
     status_text: QString,
@@ -342,7 +374,7 @@ pub struct SideritaControllerRust {
     options: ViewOptions,
     snapshot: Option<DirectorySnapshot>,
     view: Option<ViewSnapshot>,
-    pending_location: Option<PathBuf>,
+    pending_nav: Option<PendingNav>,
     bookmark_names: QStringList,
     bookmark_paths: QStringList,
     op_error: QString,
@@ -406,7 +438,7 @@ impl Default for SideritaControllerRust {
             options: ViewOptions::default(),
             snapshot: None,
             view: None,
-            pending_location: None,
+            pending_nav: None,
             bookmark_names: QStringList::default(),
             bookmark_paths: QStringList::default(),
             op_error: QString::default(),
@@ -524,36 +556,36 @@ impl qobject::SideritaController {
 
     pub fn go_home(mut self: Pin<&mut Self>) {
         let destination = home_location();
-        if self
-            .as_mut()
-            .rust_mut()
-            .get_mut()
-            .history
-            .navigate_to(&destination)
-        {
-            self.as_mut().request_scan(destination);
-        }
+        self.as_mut().request_nav_scan(PendingNav::To(destination));
     }
 
     pub fn go_back(mut self: Pin<&mut Self>) {
-        let destination = self.as_mut().rust_mut().get_mut().history.go_back();
-        if let Some(destination) = destination {
-            self.as_mut().request_scan(destination);
-        }
+        let Some(destination) = self.rust().history.peek_back().map(Path::to_path_buf) else {
+            return;
+        };
+        self.as_mut()
+            .request_nav_scan(PendingNav::Back(destination));
     }
 
     pub fn go_forward(mut self: Pin<&mut Self>) {
-        let destination = self.as_mut().rust_mut().get_mut().history.go_forward();
-        if let Some(destination) = destination {
-            self.as_mut().request_scan(destination);
-        }
+        let Some(destination) = self.rust().history.peek_forward().map(Path::to_path_buf) else {
+            return;
+        };
+        self.as_mut()
+            .request_nav_scan(PendingNav::Forward(destination));
     }
 
     pub fn go_up(mut self: Pin<&mut Self>) {
-        let destination = self.as_mut().rust_mut().get_mut().history.go_up();
-        if let Some(destination) = destination {
-            self.as_mut().request_scan(destination);
-        }
+        let Some(destination) = self
+            .rust()
+            .history
+            .current()
+            .and_then(Path::parent)
+            .map(Path::to_path_buf)
+        else {
+            return;
+        };
+        self.as_mut().request_nav_scan(PendingNav::To(destination));
     }
 
     pub fn open_location(mut self: Pin<&mut Self>, location: &QString) {
@@ -567,7 +599,7 @@ impl qobject::SideritaController {
         }
 
         let destination = resolve_location(&input, self.rust().history.current());
-        self.as_mut().request_location_scan(destination);
+        self.as_mut().request_nav_scan(PendingNav::To(destination));
     }
 
     pub fn toggle_hidden(mut self: Pin<&mut Self>) {
@@ -643,15 +675,7 @@ impl qobject::SideritaController {
         };
 
         if kind == RowKind::Directory {
-            if self
-                .as_mut()
-                .rust_mut()
-                .get_mut()
-                .history
-                .navigate_to(&path)
-            {
-                self.as_mut().request_scan(path);
-            }
+            self.as_mut().request_nav_scan(PendingNav::To(path));
         } else {
             self.as_mut().select_token(token);
             self.as_mut().open_in_default_app(&path, &name);
@@ -1612,18 +1636,23 @@ impl qobject::SideritaController {
         self.as_mut().set_bookmark_paths(paths);
     }
 
+    /// Rescans the current location without a history change (refresh, initial).
     fn request_scan(mut self: Pin<&mut Self>, destination: PathBuf) {
-        self.as_mut().request_scan_inner(destination, false);
+        self.as_mut().rust_mut().get_mut().pending_nav = None;
+        self.as_mut().request_scan_inner(destination);
     }
 
-    fn request_location_scan(mut self: Pin<&mut Self>, destination: PathBuf) {
-        self.as_mut().request_scan_inner(destination, true);
+    /// Scans a navigation's destination and holds the history change back until
+    /// it succeeds — so a failed navigation never strands the path bar on an
+    /// unreadable directory. All of back / forward / up / home / activate / typed
+    /// path go through here.
+    fn request_nav_scan(mut self: Pin<&mut Self>, nav: PendingNav) {
+        let destination = nav.destination().to_path_buf();
+        self.as_mut().rust_mut().get_mut().pending_nav = Some(nav);
+        self.as_mut().request_scan_inner(destination);
     }
 
-    fn request_scan_inner(mut self: Pin<&mut Self>, destination: PathBuf, commit_on_success: bool) {
-        self.as_mut().rust_mut().get_mut().pending_location =
-            commit_on_success.then(|| destination.clone());
-
+    fn request_scan_inner(mut self: Pin<&mut Self>, destination: PathBuf) {
         let request = match self
             .as_mut()
             .rust_mut()
@@ -1633,7 +1662,7 @@ impl qobject::SideritaController {
         {
             Ok(request) => request,
             Err(error) => {
-                self.as_mut().rust_mut().get_mut().pending_location = None;
+                self.as_mut().rust_mut().get_mut().pending_nav = None;
                 self.as_mut().set_loading(false);
                 self.as_mut()
                     .set_error_text(QString::from(error.to_string().as_str()));
@@ -1664,7 +1693,7 @@ impl qobject::SideritaController {
             });
 
         if let Err(message) = submitted {
-            self.as_mut().rollback_pending_location();
+            self.as_mut().rollback_pending_nav();
             self.as_mut().set_loading(false);
             self.as_mut().set_error_text(QString::from(message));
         }
@@ -1690,17 +1719,21 @@ impl qobject::SideritaController {
 
                 let display_path = snapshot.location().to_string_lossy().into_owned();
                 let location = snapshot.location().to_path_buf();
-                let commits_location = self
-                    .rust()
-                    .pending_location
-                    .as_deref()
-                    .is_some_and(|pending| pending == location);
 
-                if commits_location {
+                // Commit the deferred navigation now that its scan succeeded —
+                // but only if it is still the one we are waiting for.
+                {
                     let state = self.as_mut().rust_mut();
                     let state = state.get_mut();
-                    state.history.navigate_to(&location);
-                    state.pending_location = None;
+                    let commits = state
+                        .pending_nav
+                        .as_ref()
+                        .is_some_and(|nav| nav.destination() == location);
+                    if commits {
+                        if let Some(nav) = state.pending_nav.take() {
+                            nav.commit(&mut state.history);
+                        }
+                    }
                 }
 
                 self.as_mut().rust_mut().get_mut().snapshot = Some(snapshot);
@@ -1723,7 +1756,7 @@ impl qobject::SideritaController {
                 }
 
                 let message = error.to_string();
-                self.as_mut().rollback_pending_location();
+                self.as_mut().rollback_pending_nav();
                 self.as_mut().set_loading(false);
                 self.as_mut()
                     .set_error_text(QString::from(message.as_str()));
@@ -1799,12 +1832,15 @@ impl qobject::SideritaController {
         self.as_mut().set_can_go_up(can_go_up);
     }
 
-    fn rollback_pending_location(mut self: Pin<&mut Self>) {
+    /// A deferred navigation failed (or could not be submitted): drop it and
+    /// restore the path bar to where the history still is, so nothing is stranded
+    /// on the unreadable destination.
+    fn rollback_pending_nav(mut self: Pin<&mut Self>) {
         let previous_location = {
             let state = self.as_mut().rust_mut();
             let state = state.get_mut();
-            let had_pending_location = state.pending_location.take().is_some();
-            had_pending_location
+            let had_pending = state.pending_nav.take().is_some();
+            had_pending
                 .then(|| state.history.current().map(Path::to_path_buf))
                 .flatten()
         };

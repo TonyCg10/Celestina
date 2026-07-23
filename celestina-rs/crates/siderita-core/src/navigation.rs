@@ -33,6 +33,20 @@ impl NavigationHistory {
         !self.forward.is_empty()
     }
 
+    /// The destination [`go_back`](Self::go_back) would move to, without mutating
+    /// the history — so a caller can scan it first and commit only on success.
+    #[must_use]
+    pub fn peek_back(&self) -> Option<&Path> {
+        self.back.last().map(PathBuf::as_path)
+    }
+
+    /// The destination [`go_forward`](Self::go_forward) would move to, without
+    /// mutating the history.
+    #[must_use]
+    pub fn peek_forward(&self) -> Option<&Path> {
+        self.forward.last().map(PathBuf::as_path)
+    }
+
     /// Records an explicit navigation and clears the forward branch.
     pub fn navigate_to(&mut self, destination: impl Into<PathBuf>) -> bool {
         let destination = destination.into();
@@ -112,5 +126,21 @@ mod tests {
 
         assert!(!history.navigate_to("/a"));
         assert!(!history.can_go_back());
+    }
+
+    #[test]
+    fn peek_does_not_mutate_and_matches_the_move() {
+        let mut history = NavigationHistory::new("/a");
+        history.navigate_to("/b");
+
+        // Peeking back reports /a without moving.
+        assert_eq!(history.peek_back(), Some(Path::new("/a")));
+        assert_eq!(history.current(), Some(Path::new("/b")));
+        // …and the real move goes exactly there.
+        assert_eq!(history.go_back().as_deref(), Some(Path::new("/a")));
+
+        assert_eq!(history.peek_forward(), Some(Path::new("/b")));
+        assert_eq!(history.current(), Some(Path::new("/a")));
+        assert_eq!(history.go_forward().as_deref(), Some(Path::new("/b")));
     }
 }
