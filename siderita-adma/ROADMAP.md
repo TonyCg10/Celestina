@@ -161,7 +161,7 @@ time, never as a batch for parity.
 - [ ] Details / columns view with sortable size / date / type columns, beyond today's single subtitle line
 - [x] Recursive filename search — a bounded, cancellable, non-indexed directory walk that is truthful about the scope it covered — pressing ⏎ in the search field walks the current folder (case-insensitive name match) on a worker thread, capped at 500 hits and never following symlinks (no loops/escape); a results overlay lists each hit (name · path, folder/file icon) and its summary states exactly what happened — "N carpetas exploradas", "detenida en el límite", or "búsqueda detenida" when cancelled. Opening a hit navigates into it (folder) or to its parent and selects it (file, via a one-shot `pending_select_path` applied on the next reproject). Domain `search.rs` with 3 unit tests (recursive match, cap→truncated, empty query)
 - [ ] Thumbnails + a spacebar quick-look preview (images / video / PDF) — gated hardest of all, since it adds the freedesktop thumbnail spec and a cache to the closure; ships only on a proven need
-- [ ] "Open terminal here" — launching the desktop's terminal, not an embedded one
+- [x] "Open terminal here" — launching the desktop's terminal, not an embedded one — the folder menu's "Abrir terminal aquí" spawns an external terminal with its working directory set to the current folder, honouring `$TERMINAL` then a list of common emulators (foot/alacritty/kitty/wezterm/gnome-terminal/konsole/xfce4-terminal/xterm), the first installed one winning; detached and reaped, with a truthful `op_error` if none is found. No embedded terminal — the CP3 boundary holds
 
 ## Non-goals
 

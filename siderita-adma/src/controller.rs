@@ -286,6 +286,9 @@ pub mod qobject {
 
         #[qinvokable]
         fn open_search_hit(self: Pin<&mut SideritaController>, index: i32);
+
+        #[qinvokable]
+        fn open_terminal(self: Pin<&mut SideritaController>);
     }
 
     impl cxx_qt::Threading for SideritaController {}
@@ -1869,6 +1872,18 @@ impl qobject::SideritaController {
         self.as_mut().request_nav_scan(PendingNav::To(target));
     }
 
+    /// Launches the desktop's terminal in the current folder (an external
+    /// terminal — Siderita never embeds one). A failure is surfaced truthfully.
+    pub fn open_terminal(mut self: Pin<&mut Self>) {
+        self.as_mut().set_op_error(QString::default());
+        let Some(dir) = self.rust().history.current().map(Path::to_path_buf) else {
+            return;
+        };
+        if let Err(error) = open_terminal_in(&dir) {
+            self.as_mut().set_op_error(QString::from(error.as_str()));
+        }
+    }
+
     /// Records (or clears) how to reverse the last operation, keeping the
     /// `can_undo` / `undo_label` properties in step for the menu and shortcut.
     fn set_undo(mut self: Pin<&mut Self>, action: Option<UndoAction>) {
@@ -2449,6 +2464,55 @@ fn spawn_opener(program: &str, path: &Path) -> Result<(), String> {
         }
         Err(error) => Err(format!("No se pudo abrir el archivo: {error}")),
     }
+}
+
+/// Launches an external terminal with its working directory set to `dir`.
+/// Honours `$TERMINAL`, then tries a list of common emulators, spawning the
+/// first that exists (they open in the inherited cwd); the launcher is detached
+/// and reaped like [`spawn_opener`].
+fn open_terminal_in(dir: &Path) -> Result<(), String> {
+    use std::process::{Command, Stdio};
+
+    let mut candidates: Vec<String> = Vec::new();
+    if let Some(terminal) = std::env::var_os("TERMINAL") {
+        candidates.push(terminal.to_string_lossy().into_owned());
+    }
+    candidates.extend(
+        [
+            "foot",
+            "alacritty",
+            "kitty",
+            "wezterm",
+            "gnome-terminal",
+            "konsole",
+            "xfce4-terminal",
+            "xterm",
+        ]
+        .iter()
+        .map(|name| (*name).to_owned()),
+    );
+
+    for program in &candidates {
+        let child = Command::new(program)
+            .current_dir(dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+        match child {
+            Ok(mut child) => {
+                std::thread::spawn(move || {
+                    let _ = child.wait();
+                });
+                return Ok(());
+            }
+            // Not installed — try the next candidate.
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(format!("No se pudo abrir la terminal: {error}")),
+        }
+    }
+
+    Err("No se encontró ninguna terminal (define $TERMINAL)".to_owned())
 }
 
 fn initial_location() -> PathBuf {

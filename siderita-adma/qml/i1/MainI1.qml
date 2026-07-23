@@ -2386,6 +2386,13 @@ ApplicationWindow {
             }
 
             GlassMenuItem {
+                text: "Abrir terminal aquí"
+                icon.name: "utilities-terminal"
+                icon.source: CelestinaTheme.fallbackIcon("file")
+                onTriggered: controller.openTerminal()
+            }
+
+            GlassMenuItem {
                 text: "Actualizar"
                 icon.name: "view-refresh"
                 icon.source: CelestinaTheme.fallbackIcon("view-refresh")
