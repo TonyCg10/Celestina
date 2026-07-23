@@ -6,3 +6,4 @@
 .qmlls.ini
 *.qmlc
 compile_commands.json
+target/stage/
