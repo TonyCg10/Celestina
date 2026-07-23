@@ -2489,14 +2489,38 @@ ApplicationWindow {
 
             function dismiss() { window.trashViewOpen = false }
 
+            property int focusedIndex: -1
+            readonly property int entryCount: controller.trashNames.length
+            onVisibleChanged: if (visible) focusedIndex = entryCount > 0 ? 0 : -1
+            onFocusedIndexChanged: if (focusedIndex >= 0)
+                                       trashList.positionViewAtIndex(
+                                           focusedIndex, ListView.Contain)
+
             // Click on the dimmed backdrop closes.
             MouseArea {
                 anchors.fill: parent
                 onClicked: trashView.dismiss()
             }
+            // Keyboard-operable: arrows move the focus, Enter restores it,
+            // Escape closes.
             Keys.onPressed: function(event) {
                 if (event.key === Qt.Key_Escape) {
                     trashView.dismiss()
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Down) {
+                    if (trashView.entryCount > 0)
+                        trashView.focusedIndex = Math.min(
+                            trashView.entryCount - 1, trashView.focusedIndex + 1)
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Up) {
+                    if (trashView.entryCount > 0)
+                        trashView.focusedIndex = Math.max(
+                            0, (trashView.focusedIndex < 0 ? 0 : trashView.focusedIndex) - 1)
+                    event.accepted = true
+                } else if ((event.key === Qt.Key_Return
+                            || event.key === Qt.Key_Enter)
+                           && trashView.focusedIndex >= 0) {
+                    controller.restoreTrash(trashView.focusedIndex)
                     event.accepted = true
                 }
             }
@@ -2574,8 +2598,10 @@ ApplicationWindow {
                         Rectangle {
                             anchors.fill: parent
                             radius: CelestinaTheme.radiusSm
-                            color: trashRowMouse.containsMouse
-                                   ? CelestinaTheme.surfaceHover : "transparent"
+                            color: trashView.focusedIndex === trashRow.index
+                                   ? CelestinaTheme.badgeAccentFill
+                                   : trashRowMouse.containsMouse
+                                     ? CelestinaTheme.surfaceHover : "transparent"
                         }
 
                         IconImage {
@@ -2665,15 +2691,36 @@ ApplicationWindow {
             color: Qt.rgba(0, 0, 0, 0.45)
 
             property int selected: -1
+            readonly property int appCount: controller.openWithApps.length
             onVisibleChanged: if (visible) selected = controller.openWithDefaultIndex
+            onSelectedChanged: if (selected >= 0)
+                                   openWithList.positionViewAtIndex(
+                                       selected, ListView.Contain)
 
             MouseArea {
                 anchors.fill: parent
                 onClicked: controller.cancelOpenWith()
             }
+            // Fully keyboard-operable: arrows move the selection, Enter opens
+            // it, Escape cancels.
             Keys.onPressed: function(event) {
                 if (event.key === Qt.Key_Escape) {
                     controller.cancelOpenWith()
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Down) {
+                    if (openWithView.appCount > 0)
+                        openWithView.selected = Math.min(
+                            openWithView.appCount - 1, openWithView.selected + 1)
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Up) {
+                    if (openWithView.appCount > 0)
+                        openWithView.selected = Math.max(
+                            0, (openWithView.selected < 0 ? 0 : openWithView.selected) - 1)
+                    event.accepted = true
+                } else if ((event.key === Qt.Key_Return
+                            || event.key === Qt.Key_Enter)
+                           && openWithView.selected >= 0) {
+                    controller.openWithApp(openWithView.selected, false)
                     event.accepted = true
                 }
             }
