@@ -16,6 +16,9 @@ fn main() {
         QQuickStyle::set_style(&QString::from("Basic"));
     }
 
+    // Register the native list model type before any QML is loaded.
+    controller::qobject::register_entry_model();
+
     let mut engine = QQmlApplicationEngine::new();
     if let Some(engine) = engine.as_mut() {
         engine.load(&QUrl::from(

@@ -30,9 +30,14 @@ fn main() {
     // "siderita/clipboard.h".
     println!("cargo::rerun-if-changed=cpp/clipboard.cpp");
     println!("cargo::rerun-if-changed=cpp/siderita/clipboard.h");
+    println!("cargo::rerun-if-changed=cpp/entrymodel.cpp");
+    println!("cargo::rerun-if-changed=cpp/siderita/entrymodel.h");
     let builder = CxxQtBuilder::new_qml_module(module)
         .qrc("qml/i1/icons.qrc")
         .cpp_file("cpp/clipboard.cpp")
+        // The native list model: the header is moc'd (Q_OBJECT), the .cpp compiled.
+        .cpp_file("cpp/entrymodel.cpp")
+        .cpp_file("cpp/siderita/entrymodel.h")
         .files(["src/controller.rs", "src/dbus.rs"]);
     // SAFETY: only adds an include directory for our own headers.
     let builder = unsafe {

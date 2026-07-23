@@ -43,6 +43,12 @@ pub mod qobject {
 
         #[rust_name = "system_clipboard_clear"]
         fn siderita_clear_clipboard();
+
+        // The hand-written native list model (see cpp/entrymodel.cpp).
+        include!("siderita/entrymodel.h");
+
+        #[rust_name = "register_entry_model"]
+        fn register_siderita_entry_model();
     }
 
     #[auto_cxx_name]
@@ -62,7 +68,6 @@ pub mod qobject {
         #[qproperty(bool, show_hidden)]
         #[qproperty(i32, sort_field)]
         #[qproperty(bool, sort_ascending)]
-        #[qproperty(i32, view_revision)]
         #[qproperty(QStringList, bookmark_names)]
         #[qproperty(QStringList, bookmark_paths)]
         #[qproperty(QString, op_error)]
@@ -157,15 +162,6 @@ pub mod qobject {
 
         #[qinvokable]
         fn entry_token(self: &SideritaController, index: i32) -> QString;
-
-        #[qinvokable]
-        fn entry_kind(self: &SideritaController, index: i32) -> QString;
-
-        #[qinvokable]
-        fn entry_subtitle(self: &SideritaController, index: i32) -> QString;
-
-        #[qinvokable]
-        fn entry_is_directory(self: &SideritaController, index: i32) -> bool;
 
         #[qinvokable]
         fn index_for_token(self: &SideritaController, token: &QString) -> i32;
@@ -289,6 +285,18 @@ pub mod qobject {
 
         #[qinvokable]
         fn open_terminal(self: Pin<&mut SideritaController>);
+
+        /// Emitted whenever the projected view changes; the QML feeds it straight
+        /// into the native SideritaEntryModel (parallel role columns).
+        #[qsignal]
+        fn rows_ready(
+            self: Pin<&mut SideritaController>,
+            names: QStringList,
+            tokens: QStringList,
+            kinds: QStringList,
+            subtitles: QStringList,
+            paths: QStringList,
+        );
     }
 
     impl cxx_qt::Threading for SideritaController {}
@@ -412,7 +420,6 @@ pub struct SideritaControllerRust {
     show_hidden: bool,
     sort_field: i32,
     sort_ascending: bool,
-    view_revision: i32,
     coordinator: ScanCoordinator,
     executor: Option<ScanExecutor>,
     history: NavigationHistory,
@@ -503,7 +510,6 @@ impl Default for SideritaControllerRust {
             show_hidden: false,
             sort_field: 0,
             sort_ascending: true,
-            view_revision: 0,
             coordinator: ScanCoordinator::new(),
             executor: None,
             history: NavigationHistory::default(),
@@ -804,27 +810,6 @@ impl qobject::SideritaController {
             .row(index)
             .map(|row| QString::from(row.token().to_string().as_str()))
             .unwrap_or_default()
-    }
-
-    pub fn entry_kind(&self, index: i32) -> QString {
-        self.rust()
-            .row(index)
-            .map(|row| QString::from(kind_key(row.kind())))
-            .unwrap_or_default()
-    }
-
-    pub fn entry_subtitle(&self, index: i32) -> QString {
-        self.rust()
-            .row(index)
-            .map(row_subtitle)
-            .map(|subtitle| QString::from(subtitle.as_str()))
-            .unwrap_or_default()
-    }
-
-    pub fn entry_is_directory(&self, index: i32) -> bool {
-        self.rust()
-            .row(index)
-            .is_some_and(|row| row.kind() == RowKind::Directory)
     }
 
     pub fn index_for_token(&self, token: &QString) -> i32 {
@@ -2106,6 +2091,27 @@ impl qobject::SideritaController {
             .iter()
             .map(|row| QString::from(row.display_name()))
             .collect();
+        // Parallel role columns for the native SideritaEntryModel.
+        let tokens: QStringList = view
+            .rows()
+            .iter()
+            .map(|row| QString::from(row.token().to_string().as_str()))
+            .collect();
+        let kinds: QStringList = view
+            .rows()
+            .iter()
+            .map(|row| QString::from(kind_key(row.kind())))
+            .collect();
+        let subtitles: QStringList = view
+            .rows()
+            .iter()
+            .map(|row| QString::from(row_subtitle(row).as_str()))
+            .collect();
+        let paths: QStringList = view
+            .rows()
+            .iter()
+            .map(|row| QString::from(row.path().to_string_lossy().as_ref()))
+            .collect();
         let visible = view.rows().len();
         let selected_is_visible = {
             let selected = self.selected_token().to_string();
@@ -2134,9 +2140,7 @@ impl qobject::SideritaController {
         };
 
         self.as_mut().rust_mut().get_mut().view = Some(view);
-        self.as_mut().set_entry_names(names);
-        let next_revision = self.view_revision().wrapping_add(1);
-        self.as_mut().set_view_revision(next_revision);
+        self.as_mut().set_entry_names(names.clone());
         if let Some(token) = select_token {
             self.as_mut()
                 .set_selected_token(QString::from(token.as_str()));
@@ -2151,6 +2155,10 @@ impl qobject::SideritaController {
         };
         self.as_mut()
             .set_status_text(QString::from(status.as_str()));
+
+        // Hand the projected rows to the native model.
+        self.as_mut()
+            .rows_ready(names, tokens, kinds, subtitles, paths);
     }
 
     fn update_navigation_state(mut self: Pin<&mut Self>) {

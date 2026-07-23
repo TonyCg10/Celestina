@@ -252,6 +252,18 @@ ApplicationWindow {
             id: controller
         }
 
+        // Native role model fed by the controller's rowsReady signal; the
+        // list/grid bind to it instead of a QStringList of names.
+        SideritaEntryModel {
+            id: entryModel
+        }
+        Connections {
+            target: controller
+            function onRowsReady(names, tokens, kinds, subtitles, paths) {
+                entryModel.setRows(names, tokens, kinds, subtitles, paths)
+            }
+        }
+
         // Per-tab shortcuts: only the active (visible) tab responds, so the
         // same sequence across tabs is never ambiguous.
         Shortcut {
@@ -779,7 +791,7 @@ ApplicationWindow {
                 width: parent.width - 16
                 height: parent.height - 68
                 visible: mainPanel.viewMode === "list"
-                model: controller.entryNames
+                model: entryModel
                 clip: true
                 spacing: 2
                 reuseItems: true
@@ -791,9 +803,10 @@ ApplicationWindow {
                 currentIndex: -1
 
                 Connections {
-                    target: controller
-
-                    function onViewRevisionChanged() {
+                    target: entryModel
+                    // The model reset clears currentIndex; restore it from the
+                    // controller's selected token.
+                    function onModelReset() {
                         fileList.currentIndex = controller.indexForToken(
                                     controller.selectedToken)
                     }
@@ -872,25 +885,21 @@ ApplicationWindow {
                 delegate: Item {
                     id: row
 
+                    // Roles from the native SideritaEntryModel.
                     required property int index
-                    required property string modelData
+                    required property string name
+                    required property string token
+                    required property string kind
+                    required property string subtitle
+                    required property string path
+                    required property bool isDirectory
 
-                    readonly property int revision: controller.viewRevision
-                    readonly property string token: revision >= 0
-                                                    ? controller.entryToken(index)
-                                                    : ""
-                    readonly property string kind: revision >= 0
-                                                   ? controller.entryKind(index)
-                                                   : ""
-                    readonly property string subtitle: revision >= 0
-                                                       ? controller.entrySubtitle(index)
-                                                       : ""
                     readonly property bool selected: mainPanel.isSelected(token)
 
                     width: fileList.width
                     height: mainPanel.listRowHeight
                     Accessible.role: Accessible.ListItem
-                    Accessible.name: modelData
+                    Accessible.name: name
                     Accessible.selected: selected
 
                     Rectangle {
@@ -918,15 +927,14 @@ ApplicationWindow {
                     // entry drags (move a file/folder into this folder).
                     DropArea {
                         anchors.fill: parent
-                        enabled: row.revision >= 0
-                                 && controller.entryIsDirectory(row.index)
+                        enabled: row.isDirectory
 
                         onEntered: function(drag) {
                             if (!drag.hasUrls && !mainPanel.isEntryDrag(drag))
                                 drag.accepted = false
                         }
                         onDropped: function(drop) {
-                            mainPanel.dropOnto(controller.entryPath(row.index), drop)
+                            mainPanel.dropOnto(row.path, drop)
                             drop.accept()
                         }
 
@@ -985,7 +993,7 @@ ApplicationWindow {
 
                         Text {
                             width: parent.width
-                            text: row.modelData
+                            text: row.name
                             color: CelestinaTheme.text
                             font.family: CelestinaTheme.sansFamily
                             font.pixelSize: Math.round(CelestinaTheme.fontBody * mainPanel.itemScale)
@@ -1012,9 +1020,9 @@ ApplicationWindow {
                         onClicked: function(mouse) {
                             if (mouse.button === Qt.MiddleButton) {
                                 // Middle-click a folder → new background tab.
-                                if (controller.entryIsDirectory(row.index))
+                                if (row.isDirectory)
                                     root.requestNewTab(
-                                        controller.entryPath(row.index), false)
+                                        row.path, false)
                                 return
                             }
                             fileList.forceActiveFocus()
@@ -1035,10 +1043,10 @@ ApplicationWindow {
                                                 root.overlayParent,
                                                 mouse.x, mouse.y)
                                 entryMenu.targetToken = row.token
-                                entryMenu.targetName = row.modelData
+                                entryMenu.targetName = row.name
                                 entryMenu.targetDirectory =
-                                        controller.entryIsDirectory(row.index)
-                                entryMenu.targetPath = controller.entryPath(row.index)
+                                        row.isDirectory
+                                entryMenu.targetPath = row.path
                                 entryMenu.popup(root.overlayParent, point)
                             }
                         }
@@ -1055,13 +1063,13 @@ ApplicationWindow {
                         dragThreshold: 8
                         // Any entry is draggable (a file to move onto a folder, a
                         // folder to move or to bookmark on the sidebar).
-                        enabled: row.revision >= 0
+                        enabled: true
                         onActiveChanged: {
                             if (active) {
                                 root.ghost.beginEntryDrag(
-                                    controller.entryPath(row.index),
-                                    row.modelData,
-                                    controller.entryIsDirectory(row.index))
+                                    row.path,
+                                    row.name,
+                                    row.isDirectory)
                             } else {
                                 root.ghost.Drag.drop()
                                 root.ghost.Drag.active = false
@@ -1090,7 +1098,7 @@ ApplicationWindow {
                 width: parent.width - 16
                 height: parent.height - 68
                 visible: mainPanel.viewMode === "grid"
-                model: controller.entryNames
+                model: entryModel
                 clip: true
                 cellWidth: mainPanel.gridCellWidth
                 cellHeight: mainPanel.gridCellHeight
@@ -1102,8 +1110,8 @@ ApplicationWindow {
                 currentIndex: -1
 
                 Connections {
-                    target: controller
-                    function onViewRevisionChanged() {
+                    target: entryModel
+                    function onModelReset() {
                         fileGrid.currentIndex = controller.indexForToken(
                                     controller.selectedToken)
                     }
@@ -1193,22 +1201,21 @@ ApplicationWindow {
                 delegate: Item {
                     id: cell
 
+                    // Roles from the native SideritaEntryModel.
                     required property int index
-                    required property string modelData
+                    required property string name
+                    required property string token
+                    required property string kind
+                    required property string subtitle
+                    required property string path
+                    required property bool isDirectory
 
-                    readonly property int revision: controller.viewRevision
-                    readonly property string token: revision >= 0
-                                                    ? controller.entryToken(index)
-                                                    : ""
-                    readonly property string kind: revision >= 0
-                                                   ? controller.entryKind(index)
-                                                   : ""
                     readonly property bool selected: mainPanel.isSelected(token)
 
                     width: fileGrid.cellWidth
                     height: fileGrid.cellHeight
                     Accessible.role: Accessible.ListItem
-                    Accessible.name: modelData
+                    Accessible.name: name
                     Accessible.selected: selected
 
                     Rectangle {
@@ -1235,15 +1242,14 @@ ApplicationWindow {
                     DropArea {
                         anchors.fill: parent
                         anchors.margins: 5
-                        enabled: cell.revision >= 0
-                                 && controller.entryIsDirectory(cell.index)
+                        enabled: cell.isDirectory
 
                         onEntered: function(drag) {
                             if (!drag.hasUrls && !mainPanel.isEntryDrag(drag))
                                 drag.accepted = false
                         }
                         onDropped: function(drop) {
-                            mainPanel.dropOnto(controller.entryPath(cell.index), drop)
+                            mainPanel.dropOnto(cell.path, drop)
                             drop.accept()
                         }
 
@@ -1296,7 +1302,7 @@ ApplicationWindow {
                         Text {
                             width: fileGrid.cellWidth - 22
                             horizontalAlignment: Text.AlignHCenter
-                            text: cell.modelData
+                            text: cell.name
                             color: CelestinaTheme.text
                             font.family: CelestinaTheme.sansFamily
                             font.pixelSize: Math.round(CelestinaTheme.fontCaption * mainPanel.itemScale)
@@ -1315,9 +1321,9 @@ ApplicationWindow {
                         onClicked: function(mouse) {
                             if (mouse.button === Qt.MiddleButton) {
                                 // Middle-click a folder → new background tab.
-                                if (controller.entryIsDirectory(cell.index))
+                                if (cell.isDirectory)
                                     root.requestNewTab(
-                                        controller.entryPath(cell.index), false)
+                                        cell.path, false)
                                 return
                             }
                             fileGrid.forceActiveFocus()
@@ -1338,10 +1344,10 @@ ApplicationWindow {
                                                 root.overlayParent,
                                                 mouse.x, mouse.y)
                                 entryMenu.targetToken = cell.token
-                                entryMenu.targetName = cell.modelData
+                                entryMenu.targetName = cell.name
                                 entryMenu.targetDirectory =
-                                        controller.entryIsDirectory(cell.index)
-                                entryMenu.targetPath = controller.entryPath(cell.index)
+                                        cell.isDirectory
+                                entryMenu.targetPath = cell.path
                                 entryMenu.popup(root.overlayParent, point)
                             }
                         }
@@ -1356,13 +1362,13 @@ ApplicationWindow {
                         id: cellDrag
                         target: null
                         dragThreshold: 8
-                        enabled: cell.revision >= 0
+                        enabled: true
                         onActiveChanged: {
                             if (active) {
                                 root.ghost.beginEntryDrag(
-                                    controller.entryPath(cell.index),
-                                    cell.modelData,
-                                    controller.entryIsDirectory(cell.index))
+                                    cell.path,
+                                    cell.name,
+                                    cell.isDirectory)
                             } else {
                                 root.ghost.Drag.drop()
                                 root.ghost.Drag.active = false
