@@ -720,6 +720,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
+name = "file-id"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1fc6a637b6dc58414714eddd9170ff187ecb0933d4c7024d1abbd23a3cc26e9"
+dependencies = [
+ "windows-sys 0.60.2",
+]
+
+[[package]]
 name = "filetime"
 version = "0.2.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1371,15 +1380,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "notify-debouncer-mini"
-version = "0.6.0"
+name = "notify-debouncer-full"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a689eb4262184d9a1727f9087cd03883ea716682ab03ed24efec57d7716dccb8"
+checksum = "d2d88b1a7538054351c8258338df7c931a590513fb3745e8c15eb9ff4199b8d1"
 dependencies = [
+ "file-id",
  "log",
  "notify",
  "notify-types",
- "tempfile",
+ "walkdir",
 ]
 
 [[package]]
@@ -1946,7 +1956,7 @@ dependencies = [
  "cxx-qt-build",
  "cxx-qt-lib",
  "libc",
- "notify-debouncer-mini",
+ "notify-debouncer-full",
  "qt-build-utils",
  "qt-version",
  "siderita-core",

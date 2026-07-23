@@ -5,15 +5,15 @@ use std::path::{Path, PathBuf};
 use celestina_core::CancellationToken;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
-use notify_debouncer_mini::notify::{RecommendedWatcher, RecursiveMode};
-use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
+use notify_debouncer_full::notify::{EventKind, RecommendedWatcher, RecursiveMode};
+use notify_debouncer_full::{new_debouncer, DebounceEventResult, Debouncer, RecommendedCache};
 use siderita_core::{
     DirectorySnapshot, NavigationHistory, PublishOutcome, ScanCoordinator, ScanExecutor,
     ScanResult, SortDirection, SortField, ViewOptions, WatchState,
 };
 
 /// The filesystem debouncer type kept alive for the controller's lifetime.
-type FsDebouncer = Debouncer<RecommendedWatcher>;
+type FsDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
 use siderita_ops::{OpError, Progress};
 use siderita_qt::{EntryRow, RowKind, SnapshotAdapter, ViewSnapshot};
 
@@ -1935,7 +1935,20 @@ impl qobject::SideritaController {
     /// Rescans the current location without a history change (refresh, initial).
     fn request_scan(mut self: Pin<&mut Self>, destination: PathBuf) {
         self.as_mut().rust_mut().get_mut().pending_nav = None;
-        self.as_mut().request_scan_inner(destination);
+        self.as_mut().request_scan_inner(destination, false);
+    }
+
+    /// A background rescan (the filesystem watcher) that must not disturb the UI:
+    /// it keeps the current list and selection on screen and never flashes the
+    /// "Leyendo carpeta…" loading state — the new snapshot simply replaces the old
+    /// when it lands. This is what keeps an actively-changing folder from
+    /// flickering.
+    fn refresh_quiet(mut self: Pin<&mut Self>) {
+        let Some(location) = self.rust().history.current().map(Path::to_path_buf) else {
+            return;
+        };
+        self.as_mut().rust_mut().get_mut().pending_nav = None;
+        self.as_mut().request_scan_inner(location, true);
     }
 
     /// Scans a navigation's destination and holds the history change back until
@@ -1945,10 +1958,12 @@ impl qobject::SideritaController {
     fn request_nav_scan(mut self: Pin<&mut Self>, nav: PendingNav) {
         let destination = nav.destination().to_path_buf();
         self.as_mut().rust_mut().get_mut().pending_nav = Some(nav);
-        self.as_mut().request_scan_inner(destination);
+        self.as_mut().request_scan_inner(destination, false);
     }
 
-    fn request_scan_inner(mut self: Pin<&mut Self>, destination: PathBuf) {
+    /// `quiet` = a background refresh (watcher): leave the list, selection and
+    /// status untouched and let the fresh snapshot swap in on success.
+    fn request_scan_inner(mut self: Pin<&mut Self>, destination: PathBuf, quiet: bool) {
         let request = match self
             .as_mut()
             .rust_mut()
@@ -1959,23 +1974,27 @@ impl qobject::SideritaController {
             Ok(request) => request,
             Err(error) => {
                 self.as_mut().rust_mut().get_mut().pending_nav = None;
-                self.as_mut().set_loading(false);
-                self.as_mut()
-                    .set_error_text(QString::from(error.to_string().as_str()));
+                if !quiet {
+                    self.as_mut().set_loading(false);
+                    self.as_mut()
+                        .set_error_text(QString::from(error.to_string().as_str()));
+                }
                 return;
             }
         };
 
-        let display_path = destination.to_string_lossy();
-        self.as_mut()
-            .set_current_path(QString::from(display_path.as_ref()));
-        self.as_mut().set_selected_token(QString::default());
-        self.as_mut().set_error_text(QString::default());
-        self.as_mut().set_op_error(QString::default());
-        self.as_mut().set_loading(true);
-        self.as_mut()
-            .set_status_text(QString::from("Leyendo carpeta…"));
-        self.as_mut().update_navigation_state();
+        if !quiet {
+            let display_path = destination.to_string_lossy();
+            self.as_mut()
+                .set_current_path(QString::from(display_path.as_ref()));
+            self.as_mut().set_selected_token(QString::default());
+            self.as_mut().set_error_text(QString::default());
+            self.as_mut().set_op_error(QString::default());
+            self.as_mut().set_loading(true);
+            self.as_mut()
+                .set_status_text(QString::from("Leyendo carpeta…"));
+            self.as_mut().update_navigation_state();
+        }
 
         let submitted = self
             .rust()
@@ -1990,8 +2009,10 @@ impl qobject::SideritaController {
 
         if let Err(message) = submitted {
             self.as_mut().rollback_pending_nav();
-            self.as_mut().set_loading(false);
-            self.as_mut().set_error_text(QString::from(message));
+            if !quiet {
+                self.as_mut().set_loading(false);
+                self.as_mut().set_error_text(QString::from(message));
+            }
         }
     }
 
@@ -2203,11 +2224,32 @@ impl qobject::SideritaController {
         let qt = self.qt_thread();
         let created = new_debouncer(
             std::time::Duration::from_millis(200),
+            None,
             move |result: DebounceEventResult| {
-                let degraded = result.is_err();
-                let _ = qt.queue(move |controller: Pin<&mut qobject::SideritaController>| {
-                    controller.on_fs_change(degraded);
-                });
+                match result {
+                    Ok(events) => {
+                        // Ignore Access events (open/close/read) — our own scan
+                        // opens the directory, which notify reports as IN_OPEN;
+                        // reacting to that would loop scan → open → scan. Only a
+                        // real content change (create/modify/remove/rename) counts.
+                        let content_changed = events
+                            .iter()
+                            .any(|event| !matches!(event.event.kind, EventKind::Access(_)));
+                        if content_changed {
+                            let _ = qt.queue(
+                                move |controller: Pin<&mut qobject::SideritaController>| {
+                                    controller.on_fs_change(false);
+                                },
+                            );
+                        }
+                    }
+                    Err(_errors) => {
+                        let _ =
+                            qt.queue(move |controller: Pin<&mut qobject::SideritaController>| {
+                                controller.on_fs_change(true);
+                            });
+                    }
+                }
             },
         );
         if let Ok(debouncer) = created {
@@ -2235,12 +2277,9 @@ impl qobject::SideritaController {
                 return;
             };
             if let Some(old) = state.watched.take() {
-                let _ = debouncer.watcher().unwatch(&old);
+                let _ = debouncer.unwatch(&old);
             }
-            match debouncer
-                .watcher()
-                .watch(location, RecursiveMode::NonRecursive)
-            {
+            match debouncer.watch(location, RecursiveMode::NonRecursive) {
                 Ok(()) => {
                     state.watched = Some(location.to_path_buf());
                     state.watch = Some(WatchState::active(location));
@@ -2278,7 +2317,9 @@ impl qobject::SideritaController {
             self.as_mut().set_watch_degraded(true);
         }
         if became_stale {
-            self.as_mut().refresh();
+            // Quiet: a watched folder changing must never flash the loading
+            // state or clear the list — it just swaps in the fresh snapshot.
+            self.as_mut().refresh_quiet();
         }
     }
 }
