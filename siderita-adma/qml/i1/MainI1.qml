@@ -1065,7 +1065,98 @@ ApplicationWindow {
                 cacheBuffer: 480
                 topMargin: 62 + (tabBar.visible ? tabBar.height + 8 : 0)
                 boundsBehavior: Flickable.StopAtBounds
+                activeFocusOnTab: true
+                keyNavigationEnabled: false
                 currentIndex: -1
+
+                Connections {
+                    target: controller
+                    function onViewRevisionChanged() {
+                        fileGrid.currentIndex = controller.indexForToken(
+                                    controller.selectedToken)
+                    }
+                }
+
+                function columns() {
+                    return Math.max(1, Math.floor(width / cellWidth))
+                }
+
+                function selectCell(i) {
+                    if (i < 0 || i >= count)
+                        return
+                    currentIndex = i
+                    const t = controller.entryToken(i)
+                    mainPanel.selectOnly(t)
+                    controller.selectToken(t)
+                    positionViewAtIndex(i, GridView.Contain)
+                }
+
+                function pageStep() {
+                    const rows = Math.max(1, Math.floor(height / cellHeight))
+                    return rows * columns()
+                }
+
+                Keys.onPressed: function(event) {
+                    if (count === 0)
+                        return
+
+                    const i = currentIndex
+                    const cols = columns()
+
+                    if (event.key === Qt.Key_Right) {
+                        selectCell(Math.min(count - 1, i + 1))
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Left) {
+                        selectCell(i < 0 ? count - 1 : Math.max(0, i - 1))
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Down) {
+                        selectCell(i < 0 ? 0 : Math.min(count - 1, i + cols))
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Up) {
+                        selectCell(i < 0 ? count - 1 : Math.max(0, i - cols))
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Home) {
+                        selectCell(0)
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_End) {
+                        selectCell(count - 1)
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_PageDown) {
+                        selectCell(Math.min(count - 1, (i < 0 ? 0 : i) + pageStep()))
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_PageUp) {
+                        selectCell(Math.max(0, (i < 0 ? 0 : i) - pageStep()))
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Backspace) {
+                        if (controller.canGoUp && !controller.loading)
+                            controller.goUp()
+                        event.accepted = true
+                    } else if (i >= 0
+                               && (event.key === Qt.Key_Return
+                                   || event.key === Qt.Key_Enter)) {
+                        controller.activateToken(controller.entryToken(i))
+                        event.accepted = true
+                    } else if (i >= 0 && event.key === Qt.Key_Space) {
+                        controller.selectToken(controller.entryToken(i))
+                        event.accepted = true
+                    } else if (event.modifiers === Qt.NoModifier
+                               && event.text.length === 1
+                               && event.text !== " "
+                               && event.text >= " ") {
+                        // type-ahead: jump to the next entry starting with the char
+                        const ch = event.text.toLowerCase()
+                        const start = i < 0 ? -1 : i
+                        for (let k = 1; k <= count; k++) {
+                            const j = (start + k) % count
+                            const name = controller.entryNames[j]
+                            if (name && name.toLowerCase().indexOf(ch) === 0) {
+                                selectCell(j)
+                                break
+                            }
+                        }
+                        event.accepted = true
+                    }
+                }
 
                 delegate: Item {
                     id: cell

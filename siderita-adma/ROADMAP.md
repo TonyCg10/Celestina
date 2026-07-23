@@ -78,7 +78,7 @@ resource report ratifies or rejects Qt/QML with data.
 - [x] Local `file://` URI handling — the path bar and the argv/initial location accept a `file://` URI (percent-decoded, authority stripped, non-UTF-8-safe) via the shared `dbus::uri_to_path`, so a desktop "open with" or a pasted URI resolves to its local path; a bare name that merely starts with "file" is left alone. Unit-tested
 - [ ] Watcher wired to `WatchState` (invalidate + rescan wins)
 - [ ] Replace `QStringList` with a native role-based `QAbstractListModel`, dropping the per-delegate token/kind/subtitle invokables and the `viewRevision` workaround
-- [ ] Give the grid view keyboard navigation (only the list handles keys today)
+- [x] Give the grid view keyboard navigation (only the list handled keys before) — the grid now mirrors the list: ←/→ move by cell, ↑/↓ by a full row (± the live column count), Home/End, PageUp/PageDown (rows×cols), Backspace = up a folder, Enter activates, Space selects, and type-ahead jumps to the next matching name — each keeping the focused cell in view and the selection in sync
 - [ ] Staged install with an allowlist (Basic + only the plugins actually used)
 - [ ] Real-Wayland validation: keyboard, contrast, animations, themed icons; blur on/off frame p95 ≤ 16.7 ms, measured three times
 - [ ] Ratify Qt/QML for the suite, or reopen the frontend decision, from the data
