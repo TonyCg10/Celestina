@@ -79,7 +79,7 @@ resource report ratifies or rejects Qt/QML with data.
 - [x] Watcher wired to `WatchState` (invalidate + rescan wins) — a `notify`-backed (inotify) debouncer watches the current folder non-recursively and coalesces bursts (200 ms); a change marshals to the Qt thread, `WatchState::observe_change` marks the snapshot stale, and a fresh rescan wins (read-only, so no feedback loop). Navigation moves the watch; a rescan of the same folder just `mark_rescanned`s it. A lost watch (`degrade`) flips a truthful "⚠ Vigilancia perdida · instantánea" status. Verified end-to-end against real create/remove events
 - [ ] Replace `QStringList` with a native role-based `QAbstractListModel`, dropping the per-delegate token/kind/subtitle invokables and the `viewRevision` workaround
 - [x] Give the grid view keyboard navigation (only the list handled keys before) — the grid now mirrors the list: ←/→ move by cell, ↑/↓ by a full row (± the live column count), Home/End, PageUp/PageDown (rows×cols), Backspace = up a folder, Enter activates, Space selects, and type-ahead jumps to the next matching name — each keeping the focused cell in view and the selection in sync
-- [ ] Staged install with an allowlist (Basic + only the plugins actually used)
+- [x] Staged install with an allowlist (Basic + only the plugins actually used) — `scripts/stage-i1.sh` stages the binary + an **allowlist** of QML modules (QtQml, QtQuick, QtQuick.Controls + **Basic** + impl, Templates, Effects, Layouts, Window) and plugins (wayland/xcb/offscreen platforms + wayland client integrations, SVG image-format + icon-engine) plus the **transitive Qt `.so` closure** (fixed-point `ldd` over the binary and every copied plugin), with a launcher that points `QML_IMPORT_PATH` / `QT_PLUGIN_PATH` / `LD_LIBRARY_PATH` at the stage. Verified self-contained: in a stripped env it loads every `libQt6*` and the Basic-style plugin from the stage, **zero from `/usr/lib`**
 - [ ] Real-Wayland validation: keyboard, contrast, animations, themed icons; blur on/off frame p95 ≤ 16.7 ms, measured three times
 - [ ] Ratify Qt/QML for the suite, or reopen the frontend decision, from the data
 
@@ -88,7 +88,7 @@ resource report ratifies or rejects Qt/QML with data.
 | Metric | Limit | Current cut |
 |---|---:|---:|
 | Stripped isolated binary | 20 MiB | 4.23 MiB (was 1.62; +CP1/CP2 incl. zbus); staging pending |
-| First install closure (Qt) | 250 MiB | pending |
+| First install closure (Qt) | 250 MiB | 50 MiB staged (allowlist; `scripts/stage-i1.sh`) |
 | HOME mean PSS, 60 s | 120 MiB | 40.52 MiB, one offscreen run |
 | HOME one-core CPU, 60 s | 1 % | 0.000 %, one offscreen run |
 | 10k-entry fixture mean PSS | 250 MiB | 46.47 MiB, one offscreen run |
