@@ -133,6 +133,8 @@ ApplicationWindow {
         id: pill
 
         property bool primary: false
+        // A danger-tinted outline variant for irreversible actions (empty Trash).
+        property bool destructive: false
 
         hoverEnabled: true
         implicitHeight: 30
@@ -147,7 +149,9 @@ ApplicationWindow {
             font: pill.font
             color: !pill.enabled
                    ? CelestinaTheme.textMuted
-                   : pill.primary ? CelestinaTheme.canvas : CelestinaTheme.text
+                   : pill.primary ? CelestinaTheme.canvas
+                   : pill.destructive ? CelestinaTheme.dangerText
+                   : CelestinaTheme.text
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
             elide: Text.ElideRight
@@ -163,13 +167,18 @@ ApplicationWindow {
                     return pill.down ? Qt.darker(CelestinaTheme.accent, 1.18)
                          : pill.hovered ? Qt.darker(CelestinaTheme.accent, 1.08)
                          : CelestinaTheme.accent
+                if (pill.destructive)
+                    return pill.down ? CelestinaTheme.danger
+                         : pill.hovered ? CelestinaTheme.dangerBorder
+                         : CelestinaTheme.dangerFill
                 return pill.down ? CelestinaTheme.surfaceStrong
                      : pill.hovered ? CelestinaTheme.surfaceHover
                      : CelestinaTheme.controlFill
             }
             border.width: pill.primary ? 0 : 1
-            border.color: pill.activeFocus
-                          ? CelestinaTheme.focus : CelestinaTheme.border
+            border.color: pill.activeFocus ? CelestinaTheme.focus
+                          : pill.destructive ? CelestinaTheme.dangerBorder
+                          : CelestinaTheme.border
 
             Behavior on color {
                 ColorAnimation { duration: CelestinaTheme.motionFast }
@@ -404,7 +413,11 @@ ApplicationWindow {
                 controller.saveViewConfig(viewMode, itemScale)
             }
 
-            readonly property int listRowHeight: Math.round(CelestinaTheme.rowHeight * itemScale)
+            // Row height tracks the glyph plus a *constant* 16 px of breathing
+            // room, so the selection bar (which fills the row) keeps a fixed 8 px
+            // gap around the icon/text at every zoom, instead of the gap growing
+            // with the scale as a flat rowHeight × scale would.
+            readonly property int listRowHeight: Math.round(CelestinaTheme.glyphTile * itemScale) + 16
             readonly property int gridCellWidth: Math.round(132 * itemScale)
             readonly property int gridCellHeight: Math.round(112 * itemScale)
 
@@ -558,6 +571,29 @@ ApplicationWindow {
                     controller.dropUris(urlsToPaths(drop.urls), destPath,
                                         dropIsMove(drop))
                 }
+            }
+            // Begin dragging an entry. The drag is Drag.Automatic (so it can also
+            // land in other apps as a uri-list), which hands the visual to the
+            // compositor — a manually-positioned QML ghost can't follow the
+            // cursor under a native drag and just strands itself at 0,0. So we
+            // grab the entry's icon into Drag.imageSource and let the platform
+            // render it at the pointer, hot-spotted on the icon's centre. If the
+            // grab can't start we still activate, so the drag never fails to run.
+            function startEntryDrag(entryPath, entryLabel, entryIsDir, glyphItem, handler) {
+                root.ghost.beginEntryDrag(entryPath, entryLabel, entryIsDir)
+                var started = glyphItem.grabToImage(function(result) {
+                    if (result) {
+                        root.ghost.Drag.imageSource = result.url
+                        root.ghost.Drag.hotSpot = Qt.point(glyphItem.width / 2,
+                                                           glyphItem.height / 2)
+                    }
+                    // The grab is a frame late; only start if the press is still
+                    // down, or a quick release would strand an active drag.
+                    if (handler.active)
+                        root.ghost.Drag.active = true
+                })
+                if (!started && handler.active)
+                    root.ghost.Drag.active = true
             }
 
             Connections {
@@ -807,7 +843,7 @@ ApplicationWindow {
                 y: 14
                 width: parent.width - 16
                 height: parent.height - 68
-                visible: mainPanel.viewMode === "list"
+                visible: mainPanel.viewMode === "list" && !controller.searchActive
                 model: entryModel
                 clip: true
                 spacing: 2
@@ -915,10 +951,13 @@ ApplicationWindow {
                     // Hidden (dotfile) entries are dimmed so they read as a
                     // distinct, secondary block.
                     readonly property bool hidden: name.charAt(0) === "."
+                    // Ghosted while it sits on the clipboard as a cut (pending
+                    // move); an italic name tells it apart from a mere dotfile.
+                    readonly property bool cut: controller.cutPaths.indexOf(path) >= 0
 
                     width: fileList.width
                     height: mainPanel.listRowHeight
-                    opacity: hidden ? 0.5 : 1.0
+                    opacity: cut ? 0.4 : hidden ? 0.5 : 1.0
                     Accessible.role: Accessible.ListItem
                     Accessible.name: name
                     Accessible.selected: selected
@@ -1019,6 +1058,7 @@ ApplicationWindow {
                             font.family: CelestinaTheme.sansFamily
                             font.pixelSize: Math.round(CelestinaTheme.fontBody * mainPanel.itemScale)
                             font.weight: CelestinaTheme.weightMedium
+                            font.italic: row.cut
                             elide: Text.ElideMiddle
                         }
 
@@ -1086,22 +1126,12 @@ ApplicationWindow {
                         // folder to move or to bookmark on the sidebar).
                         enabled: true
                         onActiveChanged: {
-                            if (active) {
-                                root.ghost.beginEntryDrag(
-                                    row.path,
-                                    row.name,
-                                    row.isDirectory)
-                            } else {
+                            if (active)
+                                mainPanel.startEntryDrag(
+                                    row.path, row.name, row.isDirectory, kindGlyph, rowDrag)
+                            else {
                                 root.ghost.Drag.drop()
                                 root.ghost.Drag.active = false
-                            }
-                        }
-                        onCentroidChanged: {
-                            if (active) {
-                                root.ghost.x = centroid.scenePosition.x
-                                              - root.ghost.Drag.hotSpot.x
-                                root.ghost.y = centroid.scenePosition.y
-                                              - root.ghost.Drag.hotSpot.y
                             }
                         }
                     }
@@ -1118,7 +1148,7 @@ ApplicationWindow {
                 y: 14
                 width: parent.width - 16
                 height: parent.height - 68
-                visible: mainPanel.viewMode === "grid"
+                visible: mainPanel.viewMode === "grid" && !controller.searchActive
                 model: entryModel
                 clip: true
                 cellWidth: mainPanel.gridCellWidth
@@ -1233,17 +1263,25 @@ ApplicationWindow {
 
                     readonly property bool selected: mainPanel.isSelected(token)
                     readonly property bool hidden: name.charAt(0) === "."
+                    // Ghosted while cut (pending move); italic name distinguishes
+                    // it from a dimmed dotfile.
+                    readonly property bool cut: controller.cutPaths.indexOf(path) >= 0
 
                     width: fileGrid.cellWidth
                     height: fileGrid.cellHeight
-                    opacity: hidden ? 0.5 : 1.0
+                    opacity: cut ? 0.4 : hidden ? 0.5 : 1.0
                     Accessible.role: Accessible.ListItem
                     Accessible.name: name
                     Accessible.selected: selected
 
+                    // The selection/hover highlight hugs the icon+label with a
+                    // constant margin instead of filling the whole cell, so the
+                    // gap around the content stays tight and does not balloon as
+                    // the cell grows with the zoom.
                     Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: 5
+                        anchors.centerIn: parent
+                        width: Math.min(parent.width - 6, cellContent.width + 22)
+                        height: Math.min(parent.height - 6, cellContent.height + 16)
                         radius: CelestinaTheme.radiusSm
                         color: cell.selected
                                ? CelestinaTheme.surfaceSelected
@@ -1287,10 +1325,12 @@ ApplicationWindow {
                     }
 
                     Column {
+                        id: cellContent
                         anchors.centerIn: parent
                         spacing: 8
 
                         Rectangle {
+                            id: cellGlyph
                             anchors.horizontalCenter: parent.horizontalCenter
                             width: Math.round(48 * mainPanel.itemScale)
                             height: Math.round(48 * mainPanel.itemScale)
@@ -1323,12 +1363,17 @@ ApplicationWindow {
                         }
 
                         Text {
-                            width: fileGrid.cellWidth - 22
+                            // Hug the label: a short name takes its natural width
+                            // (so the highlight wraps it tightly), a long one caps
+                            // at the cell and wraps to two lines.
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: Math.min(implicitWidth, fileGrid.cellWidth - 16)
                             horizontalAlignment: Text.AlignHCenter
                             text: cell.name
                             color: CelestinaTheme.text
                             font.family: CelestinaTheme.sansFamily
                             font.pixelSize: Math.round(CelestinaTheme.fontCaption * mainPanel.itemScale)
+                            font.italic: cell.cut
                             elide: Text.ElideRight
                             maximumLineCount: 2
                             wrapMode: Text.Wrap
@@ -1387,22 +1432,12 @@ ApplicationWindow {
                         dragThreshold: 8
                         enabled: true
                         onActiveChanged: {
-                            if (active) {
-                                root.ghost.beginEntryDrag(
-                                    cell.path,
-                                    cell.name,
-                                    cell.isDirectory)
-                            } else {
+                            if (active)
+                                mainPanel.startEntryDrag(
+                                    cell.path, cell.name, cell.isDirectory, cellGlyph, cellDrag)
+                            else {
                                 root.ghost.Drag.drop()
                                 root.ghost.Drag.active = false
-                            }
-                        }
-                        onCentroidChanged: {
-                            if (active) {
-                                root.ghost.x = centroid.scenePosition.x
-                                              - root.ghost.Drag.hotSpot.x
-                                root.ghost.y = centroid.scenePosition.y
-                                              - root.ghost.Drag.hotSpot.y
                             }
                         }
                     }
@@ -1481,6 +1516,7 @@ ApplicationWindow {
                 visible: !controller.loading
                          && controller.errorText.length === 0
                          && controller.entryNames.length === 0
+                         && !controller.searchActive
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -2662,8 +2698,15 @@ ApplicationWindow {
             function dismiss() { window.trashViewOpen = false }
 
             property int focusedIndex: -1
+            // Emptying is irreversible, so the button arms a confirmation rather
+            // than acting on the first click.
+            property bool confirmingEmpty: false
             readonly property int entryCount: controller.trashNames.length
-            onVisibleChanged: if (visible) focusedIndex = entryCount > 0 ? 0 : -1
+            onVisibleChanged: {
+                if (visible)
+                    focusedIndex = entryCount > 0 ? 0 : -1
+                confirmingEmpty = false
+            }
             onFocusedIndexChanged: if (focusedIndex >= 0)
                                        trashList.positionViewAtIndex(
                                            focusedIndex, ListView.Contain)
@@ -2826,6 +2869,44 @@ ApplicationWindow {
                             text: "Restaurar"
                             onClicked: controller.restoreTrash(trashRow.index)
                         }
+                    }
+                }
+
+                // The "Vaciar" affordance sits apart on the left so it is not
+                // mistaken for a restore; empty confirms in place before the
+                // irreversible purge.
+                Row {
+                    anchors.left: parent.left
+                    anchors.leftMargin: 18
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 16
+                    spacing: 8
+                    visible: controller.trashNames.length > 0
+
+                    Text {
+                        visible: trashView.confirmingEmpty
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "¿Vaciar? No se puede deshacer"
+                        color: CelestinaTheme.textMuted
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: CelestinaTheme.fontCaption
+                    }
+                    PillButton {
+                        text: trashView.confirmingEmpty ? "Vaciar definitivamente" : "Vaciar"
+                        destructive: true
+                        onClicked: {
+                            if (trashView.confirmingEmpty) {
+                                controller.emptyTrash()
+                                trashView.confirmingEmpty = false
+                            } else {
+                                trashView.confirmingEmpty = true
+                            }
+                        }
+                    }
+                    PillButton {
+                        visible: trashView.confirmingEmpty
+                        text: "Cancelar"
+                        onClicked: trashView.confirmingEmpty = false
                     }
                 }
 
@@ -3147,166 +3228,169 @@ ApplicationWindow {
             }
         }
 
-        // ── Recursive filename search results ────────────────────────────
-        Rectangle {
+        // ── Recursive filename search results ─────────────────────────────
+        // Shown inline in the content box (over the list/grid area, under the
+        // floating breadcrumb/search and tab rows), not as a modal — Enter in
+        // the search field just swaps the folder listing for its hits in place.
+        Item {
             id: searchView
-            anchors.fill: parent
-            z: 70
+            x: 8
+            y: 14
+            width: parent.width - 16
+            height: parent.height - 68
+            z: 5
             visible: controller.searchActive
-            color: Qt.rgba(0, 0, 0, 0.45)
+            focus: controller.searchActive
 
-            MouseArea {
-                anchors.fill: parent
-                onClicked: controller.closeSearch()
-            }
+            // Clear the floating breadcrumb/search (and tab) row exactly as the
+            // list's topMargin does, so the hits start just below them.
+            readonly property int headerClearance: 62 + (tabBar.visible ? tabBar.height + 8 : 0)
+
             Keys.onPressed: function(event) {
                 if (event.key === Qt.Key_Escape) {
                     controller.closeSearch()
                     event.accepted = true
                 }
             }
-            focus: controller.searchActive
 
-            GlassCard {
+            // Swallow stray clicks so they don't reach the folder menu /
+            // empty-space handlers on the (hidden) view behind.
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.AllButtons
+            }
+
+            Text {
+                id: searchHeading
+                anchors.left: parent.left
+                anchors.leftMargin: 6
+                anchors.right: searchControls.left
+                anchors.rightMargin: 12
+                y: searchView.headerClearance
+                text: "Buscar «" + controller.searchQuery + "»"
+                color: CelestinaTheme.text
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: CelestinaTheme.fontCallout
+                font.weight: CelestinaTheme.weightDemiBold
+                elide: Text.ElideRight
+            }
+
+            Text {
+                id: searchSummary
+                anchors.left: searchHeading.left
+                anchors.top: searchHeading.bottom
+                anchors.topMargin: 3
+                text: controller.searchSummary
+                color: CelestinaTheme.textMuted
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: CelestinaTheme.fontCaption
+            }
+
+            Row {
+                id: searchControls
+                anchors.right: parent.right
+                anchors.rightMargin: 6
+                y: searchView.headerClearance - 4
+                spacing: 8
+
+                PillButton {
+                    text: "Detener"
+                    visible: controller.searchRunning
+                    onClicked: controller.cancelSearch()
+                }
+                PillButton {
+                    text: "Cerrar"
+                    onClicked: controller.closeSearch()
+                }
+            }
+
+            Text {
                 anchors.centerIn: parent
-                width: Math.min(600, root.width - 48)
-                height: Math.min(520, root.height - 64)
-                backdropSource: mainPanel
-                Accessible.role: Accessible.Dialog
-                Accessible.name: "Resultados de búsqueda"
+                visible: !controller.searchRunning
+                         && controller.searchNames.length === 0
+                text: "Sin coincidencias"
+                color: CelestinaTheme.textMuted
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: CelestinaTheme.fontBody
+            }
 
-                MouseArea { anchors.fill: parent }
+            ListView {
+                id: searchList
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: 4
+                anchors.rightMargin: 4
+                anchors.top: searchSummary.bottom
+                anchors.topMargin: 12
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 4
+                clip: true
+                spacing: 2
+                model: controller.searchNames
 
-                Text {
-                    id: searchHeading
-                    x: 18
-                    y: 16
-                    width: parent.width - 36
-                    text: "Buscar «" + controller.searchQuery + "»"
-                    color: CelestinaTheme.text
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontCallout
-                    font.weight: CelestinaTheme.weightDemiBold
-                    elide: Text.ElideRight
-                }
+                delegate: Item {
+                    id: hitRow
+                    required property int index
+                    required property string modelData
+                    readonly property bool isDir:
+                        (controller.searchKinds[index] || "") === "directory"
+                    width: ListView.view.width
+                    height: 46
+                    Accessible.role: Accessible.ListItem
+                    Accessible.name: hitRow.modelData
 
-                Text {
-                    id: searchSummary
-                    anchors.left: searchHeading.left
-                    anchors.top: searchHeading.bottom
-                    anchors.topMargin: 3
-                    text: controller.searchSummary
-                    color: CelestinaTheme.textMuted
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontCaption
-                }
-
-                Text {
-                    anchors.centerIn: parent
-                    visible: !controller.searchRunning
-                             && controller.searchNames.length === 0
-                    text: "Sin coincidencias"
-                    color: CelestinaTheme.textMuted
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontBody
-                }
-
-                ListView {
-                    id: searchList
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.leftMargin: 12
-                    anchors.rightMargin: 12
-                    anchors.top: searchSummary.bottom
-                    anchors.topMargin: 12
-                    anchors.bottom: searchButtons.top
-                    anchors.bottomMargin: 12
-                    clip: true
-                    spacing: 2
-                    model: controller.searchNames
-
-                    delegate: Item {
-                        id: hitRow
-                        required property int index
-                        required property string modelData
-                        readonly property bool isDir:
-                            (controller.searchKinds[index] || "") === "directory"
-                        width: ListView.view.width
-                        height: 46
-                        Accessible.role: Accessible.ListItem
-                        Accessible.name: hitRow.modelData
-
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: CelestinaTheme.radiusSm
-                            color: hitMouse.containsMouse
-                                   ? CelestinaTheme.surfaceHover : "transparent"
-                        }
-
-                        IconImage {
-                            id: hitIcon
-                            x: 8
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: CelestinaTheme.iconSm
-                            height: CelestinaTheme.iconSm
-                            name: hitRow.isDir ? "folder" : "text-x-generic"
-                            source: CelestinaTheme.fallbackIcon(
-                                        hitRow.isDir ? "folder" : "file")
-                            color: hitRow.isDir ? CelestinaTheme.accent
-                                                : CelestinaTheme.textMuted
-                        }
-
-                        Text {
-                            id: hitName
-                            x: hitIcon.x + hitIcon.width + 10
-                            y: 5
-                            width: parent.width - x - 12
-                            text: hitRow.modelData
-                            color: CelestinaTheme.text
-                            font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: CelestinaTheme.fontLabel
-                            elide: Text.ElideMiddle
-                        }
-
-                        Text {
-                            x: hitName.x
-                            anchors.top: hitName.bottom
-                            anchors.topMargin: 1
-                            width: parent.width - x - 12
-                            text: controller.searchPaths[hitRow.index] || ""
-                            color: CelestinaTheme.textMuted
-                            font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: CelestinaTheme.fontMini
-                            elide: Text.ElideMiddle
-                        }
-
-                        MouseArea {
-                            id: hitMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: controller.openSearchHit(hitRow.index)
-                        }
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.leftMargin: 4
+                        anchors.rightMargin: 4
+                        radius: CelestinaTheme.radiusSm
+                        color: hitMouse.containsMouse
+                               ? CelestinaTheme.surfaceHover : "transparent"
                     }
-                }
 
-                Row {
-                    id: searchButtons
-                    anchors.right: parent.right
-                    anchors.rightMargin: 18
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 16
-                    spacing: 8
-
-                    PillButton {
-                        text: "Detener"
-                        visible: controller.searchRunning
-                        onClicked: controller.cancelSearch()
+                    IconImage {
+                        id: hitIcon
+                        x: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: CelestinaTheme.iconSm
+                        height: CelestinaTheme.iconSm
+                        name: hitRow.isDir ? "folder" : "text-x-generic"
+                        source: CelestinaTheme.fallbackIcon(
+                                    hitRow.isDir ? "folder" : "file")
+                        color: hitRow.isDir ? CelestinaTheme.accent
+                                            : CelestinaTheme.textMuted
                     }
-                    PillButton {
-                        text: "Cerrar"
-                        primary: true
-                        onClicked: controller.closeSearch()
+
+                    Text {
+                        id: hitName
+                        x: hitIcon.x + hitIcon.width + 10
+                        y: 5
+                        width: parent.width - x - 16
+                        text: hitRow.modelData
+                        color: CelestinaTheme.text
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: CelestinaTheme.fontLabel
+                        elide: Text.ElideMiddle
+                    }
+
+                    Text {
+                        x: hitName.x
+                        anchors.top: hitName.bottom
+                        anchors.topMargin: 1
+                        width: parent.width - x - 16
+                        text: controller.searchPaths[hitRow.index] || ""
+                        color: CelestinaTheme.textMuted
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: CelestinaTheme.fontMini
+                        elide: Text.ElideMiddle
+                    }
+
+                    MouseArea {
+                        id: hitMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: controller.openSearchHit(hitRow.index)
                     }
                 }
             }
@@ -3366,27 +3450,26 @@ ApplicationWindow {
             }
         }
 
-        // Floating ghost shown while dragging a folder toward the sidebar.
+        // The drag carrier: it holds the Drag state (keys, mime, image) for an
+        // entry drag but is never drawn itself — under Drag.Automatic the
+        // compositor renders the pixmap set in Drag.imageSource (the entry's
+        // grabbed icon; see mainPanel.startEntryDrag), which correctly tracks the
+        // cursor. `path` is read back by the drop handlers.
         Item {
             id: dragGhost
-            z: 100
-            width: 150
-            height: 34
-            visible: Drag.active
+            visible: false
             property string path: ""
             property string label: ""
             property bool isDir: false
-            Drag.hotSpot.x: 16
-            Drag.hotSpot.y: 17
             // Automatic so the drag also reaches other applications as a
             // text/uri-list; internal DropAreas still match on our keys.
             Drag.dragType: Drag.Automatic
             Drag.supportedActions: Qt.CopyAction | Qt.MoveAction
 
-            // Start dragging an entry: only folders carry the bookmark key (so a
-            // file can't be dropped on the sidebar), every entry carries the
-            // move key for folder-to-folder drops, and a file:// URI so other
-            // apps can accept the drop.
+            // Prime the drag payload (keys + uri-list); the caller sets the drag
+            // image and flips Drag.active. Only folders carry the bookmark key,
+            // so a file can't be dropped on the sidebar; every entry carries the
+            // move key for folder-to-folder drops and a file:// URI for other apps.
             function beginEntryDrag(entryPath, entryLabel, entryIsDir) {
                 dragGhost.path = entryPath
                 dragGhost.label = entryLabel
@@ -3397,42 +3480,6 @@ ApplicationWindow {
                 dragGhost.Drag.mimeData = {
                     "text/uri-list": "file://" + encodeURI(entryPath) + "\r\n"
                 }
-                dragGhost.Drag.active = true
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                radius: CelestinaTheme.radiusSm
-                color: CelestinaTheme.surfaceStrong
-                border.width: 1
-                border.color: CelestinaTheme.accent
-                opacity: 0.96
-
-                Row {
-                    x: 10
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 8
-
-                    IconImage {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: CelestinaTheme.iconSm
-                        height: CelestinaTheme.iconSm
-                        name: dragGhost.isDir ? "folder" : "text-x-generic"
-                        source: CelestinaTheme.fallbackIcon(
-                                    dragGhost.isDir ? "folder" : "file")
-                        color: CelestinaTheme.accent
-                    }
-
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 104
-                        text: dragGhost.label
-                        color: CelestinaTheme.text
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontLabel
-                        elide: Text.ElideRight
-                    }
-                }
             }
         }
 
@@ -3441,8 +3488,8 @@ ApplicationWindow {
             x: 20
             y: 18
             width: 184
-            // Leave room below for the separate item-info box (64 + gap).
-            height: parent.height - y - 18 - 78
+            // Leave room below for the separate item-info box (84 + gap).
+            height: parent.height - y - 18 - 98
             radius: CelestinaTheme.radiusLg
             visible: parent.width >= 820
             color: CelestinaTheme.surface
@@ -3545,7 +3592,7 @@ ApplicationWindow {
                             color: placeRow.current ? CelestinaTheme.accent
                                                     : CelestinaTheme.text
                             font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: CelestinaTheme.fontLabel
+                            font.pixelSize: CelestinaTheme.fontBody
                             font.weight: placeRow.current ? CelestinaTheme.weightMedium
                                                           : CelestinaTheme.weightRegular
                             elide: Text.ElideRight
@@ -3604,7 +3651,7 @@ ApplicationWindow {
                         text: "Papelera"
                         color: CelestinaTheme.text
                         font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontLabel
+                        font.pixelSize: CelestinaTheme.fontBody
                         elide: Text.ElideRight
                     }
 
@@ -3724,7 +3771,7 @@ ApplicationWindow {
                             color: volumeRow.current ? CelestinaTheme.accent
                                                      : CelestinaTheme.text
                             font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: CelestinaTheme.fontLabel
+                            font.pixelSize: CelestinaTheme.fontBody
                             elide: Text.ElideRight
                         }
 
@@ -3862,7 +3909,7 @@ ApplicationWindow {
                         color: bmRow.current ? CelestinaTheme.accent
                                              : CelestinaTheme.text
                         font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontLabel
+                        font.pixelSize: CelestinaTheme.fontBody
                         font.weight: bmRow.current ? CelestinaTheme.weightMedium
                                                    : CelestinaTheme.weightRegular
                         elide: Text.ElideRight
@@ -3938,7 +3985,7 @@ ApplicationWindow {
             id: sidebarInfo
             x: sidebar.x
             width: sidebar.width
-            height: 64
+            height: 84
             y: parent.height - height - 18
             visible: sidebar.visible
             radius: CelestinaTheme.radiusLg
@@ -3968,16 +4015,16 @@ ApplicationWindow {
                     : (ac && ac.folderSize.length > 0 ? "Total " + ac.folderSize : "")
 
             Column {
-                x: 16
+                x: 18
                 anchors.verticalCenter: parent.verticalCenter
-                width: parent.width - 32
-                spacing: 2
+                width: parent.width - 34
+                spacing: 4
 
                 Text {
                     text: sidebarInfo.header
                     color: CelestinaTheme.textMuted
                     font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontMini
+                    font.pixelSize: CelestinaTheme.fontLabel
                     font.letterSpacing: 1.4
                     font.weight: CelestinaTheme.weightDemiBold
                 }
@@ -3987,7 +4034,7 @@ ApplicationWindow {
                     text: sidebarInfo.primary
                     color: CelestinaTheme.text
                     font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontBody
+                    font.pixelSize: CelestinaTheme.fontCallout
                     font.weight: CelestinaTheme.weightMedium
                     elide: Text.ElideMiddle
                 }
@@ -3998,7 +4045,7 @@ ApplicationWindow {
                     text: sidebarInfo.secondary
                     color: CelestinaTheme.textMuted
                     font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontCaption
+                    font.pixelSize: CelestinaTheme.fontLabel
                     elide: Text.ElideRight
                 }
             }

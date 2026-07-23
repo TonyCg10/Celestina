@@ -72,6 +72,9 @@ pub mod qobject {
         #[qproperty(QStringList, bookmark_paths)]
         #[qproperty(QString, op_error)]
         #[qproperty(bool, can_paste)]
+        // Absolute paths currently held as a *cut* (not a copy); the views ghost
+        // any visible entry whose path is in this list. Empty for a copy.
+        #[qproperty(QStringList, cut_paths)]
         #[qproperty(bool, can_undo)]
         #[qproperty(QString, undo_label)]
         #[qproperty(bool, op_running)]
@@ -253,6 +256,9 @@ pub mod qobject {
 
         #[qinvokable]
         fn restore_all_trash(self: Pin<&mut SideritaController>);
+
+        #[qinvokable]
+        fn empty_trash(self: Pin<&mut SideritaController>);
 
         #[qinvokable]
         fn open_with(self: Pin<&mut SideritaController>, path: &QString);
@@ -486,6 +492,7 @@ pub struct SideritaControllerRust {
     bookmark_paths: QStringList,
     op_error: QString,
     can_paste: bool,
+    cut_paths: QStringList,
     can_undo: bool,
     undo_label: QString,
     op_running: bool,
@@ -593,6 +600,7 @@ impl Default for SideritaControllerRust {
             bookmark_paths: QStringList::default(),
             op_error: QString::default(),
             can_paste: false,
+            cut_paths: QStringList::default(),
             can_undo: false,
             undo_label: QString::default(),
             op_running: false,
@@ -1078,6 +1086,10 @@ impl qobject::SideritaController {
         }
         self.as_mut().set_can_paste(true);
         self.as_mut().set_op_error(QString::default());
+        // A cut marks its sources for a ghosted style in the view; a copy leaves
+        // no such mark and clears any earlier one.
+        self.as_mut()
+            .set_cut_paths(if cut { uris } else { QStringList::default() });
     }
 
     /// Recomputes whether a paste is available from either clipboard. Called when
@@ -1096,6 +1108,7 @@ impl qobject::SideritaController {
             state.clipboard_cut = false;
         }
         self.as_mut().set_can_paste(false);
+        self.as_mut().set_cut_paths(QStringList::default());
     }
 
     /// Pastes the clipboard into the current folder. If any entry's destination
@@ -1505,6 +1518,40 @@ impl qobject::SideritaController {
             } else {
                 format!(
                     "{} de {} restauraciones fallaron:\n{}",
+                    failures.len(),
+                    total,
+                    failures.join("\n")
+                )
+            };
+            self.as_mut().set_op_error(QString::from(summary.as_str()));
+        }
+    }
+
+    /// Permanently deletes every entry in the Trash view. Irreversible — the QML
+    /// gates this behind a confirmation. Each is purged independently; failures
+    /// are reported together after the list is refreshed. The current folder is
+    /// untouched (trashed entries live in the Trash, not here), so unlike
+    /// restore there is nothing to refresh but the Trash list itself.
+    pub fn empty_trash(mut self: Pin<&mut Self>) {
+        self.as_mut().set_op_error(QString::default());
+        let infos = self.rust().trash_infos.clone();
+        if infos.is_empty() {
+            return;
+        }
+        let mut failures = Vec::new();
+        for info in &infos {
+            if let Err(error) = siderita_ops::purge_from_trash(info) {
+                failures.push(format!("{}: {error}", display_name(info)));
+            }
+        }
+        self.as_mut().load_trash();
+        if !failures.is_empty() {
+            let total = infos.len();
+            let summary = if failures.len() == total {
+                failures.join("\n")
+            } else {
+                format!(
+                    "{} de {} no se pudieron borrar:\n{}",
                     failures.len(),
                     total,
                     failures.join("\n")
