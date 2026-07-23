@@ -55,6 +55,13 @@ fn compare_entries(
     right: &DirectoryEntry,
     options: &ViewOptions,
 ) -> Ordering {
+    // Hidden entries always sink below visible ones, whatever the sort field or
+    // direction — so the dotfiles form one block at the end, not interleaved.
+    let hidden_order = left.is_hidden().cmp(&right.is_hidden());
+    if hidden_order != Ordering::Equal {
+        return hidden_order;
+    }
+
     let group_order = entry_group(left.kind()).cmp(&entry_group(right.kind()));
     if group_order != Ordering::Equal {
         return group_order;
@@ -176,6 +183,28 @@ mod tests {
         assert_eq!(projected[0].display_name(), "folder");
         assert_eq!(projected[1].display_name(), "large");
         assert_eq!(projected[2].display_name(), "small");
+    }
+
+    #[test]
+    fn hidden_entries_sort_below_visible_ones() {
+        let fixture = TestDirectory::new();
+        fs::write(fixture.path().join("visible.txt"), b"v").expect("write visible");
+        fs::write(fixture.path().join(".hidden.txt"), b"h").expect("write hidden");
+        fs::create_dir(fixture.path().join(".hiddendir")).expect("hidden dir");
+        fs::create_dir(fixture.path().join("visibledir")).expect("visible dir");
+        let snapshot = scan_fixture(&fixture);
+        let options = ViewOptions {
+            show_hidden: true,
+            ..ViewOptions::default()
+        };
+
+        let names: Vec<String> = project_snapshot(&snapshot, &options)
+            .iter()
+            .map(|row| row.display_name().to_string())
+            .collect();
+
+        // Visible folder, visible file, then the hidden block (folder then file).
+        assert_eq!(names, ["visibledir", "visible.txt", ".hiddendir", ".hidden.txt"]);
     }
 
     #[test]
