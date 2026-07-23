@@ -30,6 +30,8 @@ siderita-qt = { path = "../celestina-rs/crates/siderita-qt" }
 zbus = "5"
 # Filesystem watch (inotify-backed) with burst coalescing, for auto-refresh.
 notify-debouncer-mini = "0.6"
+# Local-time conversion (localtime_r) for the properties panel timestamps.
+libc = "0.2"
 
 [build-dependencies]
 cxx-qt-build = "=0.9.1"

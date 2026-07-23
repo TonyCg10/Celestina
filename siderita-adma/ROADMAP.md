@@ -157,7 +157,7 @@ clipboard), tracked with CP0's real-Wayland goal.
 demonstrated daily need and weighed against the resource budget — added one at a
 time, never as a batch for parity.
 
-- [ ] Properties / Get-Info — permissions, owner, MIME, timestamps, symlink target — with recursive folder size
+- [x] Properties / Get-Info — permissions, owner, MIME, timestamps, symlink target — with recursive folder size — the entry menu's "Propiedades" opens a panel with name, path, kind, MIME (`xdg-mime`), size, `rwxr-xr-x` permissions, `user · group` owner (resolved from `/etc/passwd`+`/etc/group`), local-time modified/accessed (`localtime_r`), and the symlink target when it is one. A **folder's recursive size** is walked on a worker thread (cancellable, symlink-safe, cancelled when the panel closes or moves on) so a deep tree never blocks the UI. Domain `properties.rs` with unit-tested formatters; gather + walk verified against a real file, symlink and directory
 - [ ] Details / columns view with sortable size / date / type columns, beyond today's single subtitle line
 - [ ] Recursive filename search — a bounded, cancellable, non-indexed directory walk that is truthful about the scope it covered
 - [ ] Thumbnails + a spacebar quick-look preview (images / video / PDF) — gated hardest of all, since it adds the freedesktop thumbnail spec and a cache to the closure; ships only on a proven need

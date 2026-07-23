@@ -1945,6 +1945,7 @@ dependencies = [
  "cxx-qt",
  "cxx-qt-build",
  "cxx-qt-lib",
+ "libc",
  "notify-debouncer-mini",
  "qt-build-utils",
  "qt-version",

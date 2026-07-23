@@ -89,6 +89,18 @@ pub mod qobject {
         #[qproperty(QStringList, volume_mounts)]
         #[qproperty(bool, volume_busy)]
         #[qproperty(bool, watch_degraded)]
+        #[qproperty(bool, properties_pending)]
+        #[qproperty(QString, prop_name)]
+        #[qproperty(QString, prop_path)]
+        #[qproperty(QString, prop_kind)]
+        #[qproperty(QString, prop_mime)]
+        #[qproperty(QString, prop_size)]
+        #[qproperty(QString, prop_permissions)]
+        #[qproperty(QString, prop_owner)]
+        #[qproperty(QString, prop_modified)]
+        #[qproperty(QString, prop_accessed)]
+        #[qproperty(QString, prop_symlink)]
+        #[qproperty(bool, prop_is_dir)]
         type SideritaController = super::SideritaControllerRust;
 
         #[qinvokable]
@@ -249,6 +261,12 @@ pub mod qobject {
 
         #[qinvokable]
         fn open_volume(self: Pin<&mut SideritaController>, index: i32);
+
+        #[qinvokable]
+        fn open_properties(self: Pin<&mut SideritaController>, path: &QString);
+
+        #[qinvokable]
+        fn close_properties(self: Pin<&mut SideritaController>);
     }
 
     impl cxx_qt::Threading for SideritaController {}
@@ -385,6 +403,19 @@ pub struct SideritaControllerRust {
     watched: Option<PathBuf>,
     debouncer: Option<FsDebouncer>,
     watch_degraded: bool,
+    properties_pending: bool,
+    prop_name: QString,
+    prop_path: QString,
+    prop_kind: QString,
+    prop_mime: QString,
+    prop_size: QString,
+    prop_permissions: QString,
+    prop_owner: QString,
+    prop_modified: QString,
+    prop_accessed: QString,
+    prop_symlink: QString,
+    prop_is_dir: bool,
+    prop_size_cancel: Option<CancellationToken>,
     bookmark_names: QStringList,
     bookmark_paths: QStringList,
     op_error: QString,
@@ -453,6 +484,19 @@ impl Default for SideritaControllerRust {
             watched: None,
             debouncer: None,
             watch_degraded: false,
+            properties_pending: false,
+            prop_name: QString::default(),
+            prop_path: QString::default(),
+            prop_kind: QString::default(),
+            prop_mime: QString::default(),
+            prop_size: QString::default(),
+            prop_permissions: QString::default(),
+            prop_owner: QString::default(),
+            prop_modified: QString::default(),
+            prop_accessed: QString::default(),
+            prop_symlink: QString::default(),
+            prop_is_dir: false,
+            prop_size_cancel: None,
             bookmark_names: QStringList::default(),
             bookmark_paths: QStringList::default(),
             op_error: QString::default(),
@@ -1587,6 +1631,83 @@ impl qobject::SideritaController {
             .map(|volume| volume.object_path.clone())
     }
 
+    /// Opens the properties panel for `path`: the metadata is gathered inline
+    /// (fast), and a folder's recursive size is computed on a worker thread so a
+    /// deep tree never blocks the UI.
+    pub fn open_properties(mut self: Pin<&mut Self>, path: &QString) {
+        let path = PathBuf::from(path.to_string());
+        if path.as_os_str().is_empty() {
+            return;
+        }
+
+        // Cancel any directory-size walk still running from a previous open.
+        if let Some(token) = self.as_mut().rust_mut().get_mut().prop_size_cancel.take() {
+            token.cancel();
+        }
+
+        let props = crate::properties::gather(&path);
+        self.as_mut()
+            .set_prop_name(QString::from(props.name.as_str()));
+        self.as_mut()
+            .set_prop_path(QString::from(props.path.as_str()));
+        self.as_mut()
+            .set_prop_kind(QString::from(props.kind.as_str()));
+        self.as_mut()
+            .set_prop_mime(QString::from(props.mime.as_str()));
+        self.as_mut()
+            .set_prop_permissions(QString::from(props.permissions.as_str()));
+        self.as_mut()
+            .set_prop_owner(QString::from(props.owner.as_str()));
+        self.as_mut()
+            .set_prop_modified(QString::from(props.modified.as_str()));
+        self.as_mut()
+            .set_prop_accessed(QString::from(props.accessed.as_str()));
+        self.as_mut().set_prop_symlink(QString::from(
+            props.symlink_target.unwrap_or_default().as_str(),
+        ));
+        self.as_mut().set_prop_is_dir(props.is_dir);
+
+        match props.size {
+            Some(size) => self
+                .as_mut()
+                .set_prop_size(QString::from(format_size_full(size).as_str())),
+            None => {
+                self.as_mut().set_prop_size(QString::from("Calculando…"));
+                let token = CancellationToken::new();
+                self.as_mut().rust_mut().get_mut().prop_size_cancel = Some(token.clone());
+                let qt = self.qt_thread();
+                let dir = path.clone();
+                let dir_key = props.path.clone();
+                std::thread::spawn(move || {
+                    let size = crate::properties::directory_size(&dir, &token);
+                    if token.is_cancelled() {
+                        return;
+                    }
+                    let text = format_size_full(size);
+                    let _ = qt.queue(
+                        move |mut controller: Pin<&mut qobject::SideritaController>| {
+                            // Ignore if the panel has since moved to another entry.
+                            if controller.rust().prop_path.to_string() == dir_key {
+                                controller
+                                    .as_mut()
+                                    .set_prop_size(QString::from(text.as_str()));
+                            }
+                        },
+                    );
+                });
+            }
+        }
+
+        self.as_mut().set_properties_pending(true);
+    }
+
+    pub fn close_properties(mut self: Pin<&mut Self>) {
+        if let Some(token) = self.as_mut().rust_mut().get_mut().prop_size_cancel.take() {
+            token.cancel();
+        }
+        self.as_mut().set_properties_pending(false);
+    }
+
     /// Records (or clears) how to reverse the last operation, keeping the
     /// `can_undo` / `undo_label` properties in step for the menu and shortcut.
     fn set_undo(mut self: Pin<&mut Self>, action: Option<UndoAction>) {
@@ -2246,6 +2367,16 @@ fn format_size(bytes: u64) -> String {
         format!("{bytes} {}", UNITS[unit])
     } else {
         format!("{value:.1} {}", UNITS[unit])
+    }
+}
+
+/// A human size plus the exact byte count, for the properties panel — the byte
+/// count is dropped below 1 KiB where it would just repeat the human size.
+fn format_size_full(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{bytes} bytes")
+    } else {
+        format!("{} · {bytes} bytes", format_size(bytes))
     }
 }
 

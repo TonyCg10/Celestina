@@ -176,6 +176,38 @@ ApplicationWindow {
         }
     }
 
+    // One label : value line in the properties panel; hides itself when empty.
+    component PropRow: Item {
+        id: propRow
+        property string label: ""
+        property string value: ""
+        visible: value.length > 0
+        implicitHeight: visible ? Math.max(propValue.implicitHeight, 18) + 7 : 0
+        height: implicitHeight
+
+        Text {
+            id: propLabel
+            y: 3
+            width: 104
+            text: propRow.label
+            color: CelestinaTheme.textMuted
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: CelestinaTheme.fontLabel
+        }
+        Text {
+            id: propValue
+            anchors.left: propLabel.right
+            anchors.leftMargin: 8
+            y: 3
+            width: propRow.width - propLabel.width - 8
+            text: propRow.value
+            color: CelestinaTheme.text
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: CelestinaTheme.fontLabel
+            wrapMode: Text.WrapAnywhere
+        }
+    }
+
     // App-global org.freedesktop.FileManager1 service: "Show in file manager"
     // from another application opens the folder in a new foreground tab and
     // raises the window. One instance for the whole window, not per tab.
@@ -2241,6 +2273,15 @@ ApplicationWindow {
                                  entryMenu.targetToken, entryMenu.targetPath)
             }
 
+            GlassMenuItem {
+                text: "Propiedades"
+                visible: !entryMenu.multi
+                height: visible ? implicitHeight : 0
+                icon.name: "document-properties"
+                icon.source: CelestinaTheme.fallbackIcon("file")
+                onTriggered: controller.openProperties(entryMenu.targetPath)
+            }
+
             MenuSeparator {
                 contentItem: Rectangle {
                     implicitHeight: 1
@@ -2949,6 +2990,134 @@ ApplicationWindow {
                         primary: true
                         enabled: openWithView.selected >= 0
                         onClicked: controller.openWithApp(openWithView.selected, false)
+                    }
+                }
+            }
+        }
+
+        // ── Properties / Get-Info panel ──────────────────────────────────
+        Rectangle {
+            id: propertiesView
+            anchors.fill: parent
+            z: 68
+            visible: controller.propertiesPending
+            color: Qt.rgba(0, 0, 0, 0.45)
+
+            MouseArea {
+                anchors.fill: parent
+                onClicked: controller.closeProperties()
+            }
+            Keys.onPressed: function(event) {
+                if (event.key === Qt.Key_Escape) {
+                    controller.closeProperties()
+                    event.accepted = true
+                }
+            }
+            focus: controller.propertiesPending
+
+            Rectangle {
+                anchors.centerIn: parent
+                width: Math.min(500, root.width - 48)
+                height: Math.min(propertiesColumn.implicitHeight + propHeading.height + 90,
+                                 root.height - 64)
+                radius: CelestinaTheme.radiusMd
+                color: CelestinaTheme.canvasRaised
+                border.width: 1
+                border.color: CelestinaTheme.borderStrong
+                Accessible.role: Accessible.Dialog
+                Accessible.name: "Propiedades"
+
+                MouseArea { anchors.fill: parent }
+
+                IconImage {
+                    id: propIcon
+                    x: 18
+                    y: 18
+                    width: CelestinaTheme.iconMd
+                    height: CelestinaTheme.iconMd
+                    name: controller.propIsDir ? "folder" : "text-x-generic"
+                    source: CelestinaTheme.fallbackIcon(
+                                controller.propIsDir ? "folder" : "file")
+                    color: controller.propIsDir ? CelestinaTheme.accent
+                                                : CelestinaTheme.textMuted
+                }
+
+                Text {
+                    id: propHeading
+                    anchors.left: propIcon.right
+                    anchors.leftMargin: 12
+                    anchors.right: parent.right
+                    anchors.rightMargin: 18
+                    y: 20
+                    text: controller.propName
+                    color: CelestinaTheme.text
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCallout
+                    font.weight: CelestinaTheme.weightDemiBold
+                    elide: Text.ElideMiddle
+                }
+
+                Flickable {
+                    id: propFlick
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 18
+                    anchors.rightMargin: 18
+                    anchors.top: propIcon.bottom
+                    anchors.topMargin: 14
+                    anchors.bottom: propButtons.top
+                    anchors.bottomMargin: 12
+                    clip: true
+                    contentHeight: propertiesColumn.implicitHeight
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    Column {
+                        id: propertiesColumn
+                        width: propFlick.width
+
+                        PropRow { width: parent.width; label: "Ruta"; value: controller.propPath }
+                        PropRow { width: parent.width; label: "Tipo"; value: controller.propKind }
+                        PropRow {
+                            width: parent.width
+                            label: "Enlace a"
+                            value: controller.propSymlink
+                        }
+                        PropRow { width: parent.width; label: "MIME"; value: controller.propMime }
+                        PropRow { width: parent.width; label: "Tamaño"; value: controller.propSize }
+                        PropRow {
+                            width: parent.width
+                            label: "Permisos"
+                            value: controller.propPermissions
+                        }
+                        PropRow {
+                            width: parent.width
+                            label: "Propietario"
+                            value: controller.propOwner
+                        }
+                        PropRow {
+                            width: parent.width
+                            label: "Modificado"
+                            value: controller.propModified
+                        }
+                        PropRow {
+                            width: parent.width
+                            label: "Accedido"
+                            value: controller.propAccessed
+                        }
+                    }
+                }
+
+                Row {
+                    id: propButtons
+                    anchors.right: parent.right
+                    anchors.rightMargin: 18
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 16
+
+                    PillButton {
+                        text: "Cerrar"
+                        primary: true
+                        onClicked: controller.closeProperties()
                     }
                 }
             }
