@@ -32,6 +32,39 @@ ApplicationWindow {
         return holder ? holder.docController : null
     }
 
+    // ── Granular size scales (window-level so every tab and the sidebar share
+    // one persisted set) ─────────────────────────────────────────────────────
+    // Four independent zoom factors, loaded once a controller exists and saved
+    // on any change. Content scales drive the per-tab list/grid/search; sidebar
+    // scales drive the shared sidebar and its info box.
+    property real contentIconScale: 1.0
+    property real contentTextScale: 1.0
+    property real sidebarIconScale: 1.0
+    property real sidebarTextScale: 1.0
+    property bool sizingLoaded: false
+
+    // Sidebar rows grow to fit whichever of their icon or label is taller, so
+    // the two sidebar sliders never clip each other.
+    readonly property int sidebarRowHeight: Math.max(
+        Math.round(CelestinaTheme.iconSm * sidebarIconScale) + 16,
+        Math.round(CelestinaTheme.fontBody * sidebarTextScale) + 21)
+
+    function loadSizing() {
+        if (sizingLoaded || !activeController)
+            return
+        contentIconScale = activeController.savedContentIconScale()
+        contentTextScale = activeController.savedContentTextScale()
+        sidebarIconScale = activeController.savedSidebarIconScale()
+        sidebarTextScale = activeController.savedSidebarTextScale()
+        sizingLoaded = true
+    }
+
+    function persistSizing() {
+        if (activeController)
+            activeController.saveSizing(contentIconScale, contentTextScale,
+                                        sidebarIconScale, sidebarTextScale)
+    }
+
     function tabTitle(p) {
         if (!p || p.length === 0)
             return "…"
@@ -186,6 +219,82 @@ ApplicationWindow {
         }
     }
 
+    // A labelled zoom row for the sizing popup: caption · slider · percent.
+    // The consumer binds `value` to a scale and updates it in `onMoved`.
+    component SizeRow: Item {
+        id: sizeRow
+        property string label: ""
+        property alias value: sizeSlider.value
+        signal moved(real v)
+
+        implicitWidth: 252
+        implicitHeight: 30
+
+        Text {
+            id: sizeRowLabel
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            width: 94
+            text: sizeRow.label
+            color: CelestinaTheme.text
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: CelestinaTheme.fontLabel
+            elide: Text.ElideRight
+        }
+
+        Slider {
+            id: sizeSlider
+            anchors.left: sizeRowLabel.right
+            anchors.right: sizeRowValue.left
+            anchors.rightMargin: 10
+            anchors.verticalCenter: parent.verticalCenter
+            from: 0.8
+            to: 1.9
+            stepSize: 0.1
+            onMoved: sizeRow.moved(value)
+
+            background: Rectangle {
+                x: sizeSlider.leftPadding
+                y: sizeSlider.topPadding + sizeSlider.availableHeight / 2 - height / 2
+                width: sizeSlider.availableWidth
+                height: 4
+                radius: 2
+                color: CelestinaTheme.controlFill
+
+                Rectangle {
+                    width: sizeSlider.visualPosition * parent.width
+                    height: parent.height
+                    radius: 2
+                    color: CelestinaTheme.accent
+                }
+            }
+
+            handle: Rectangle {
+                x: sizeSlider.leftPadding
+                   + sizeSlider.visualPosition * (sizeSlider.availableWidth - width)
+                y: sizeSlider.topPadding + sizeSlider.availableHeight / 2 - height / 2
+                width: 15
+                height: 15
+                radius: 7.5
+                color: sizeSlider.pressed ? CelestinaTheme.accent : CelestinaTheme.text
+                border.width: 1
+                border.color: CelestinaTheme.borderStrong
+            }
+        }
+
+        Text {
+            id: sizeRowValue
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            width: 38
+            horizontalAlignment: Text.AlignRight
+            text: Math.round(sizeSlider.value * 100) + "%"
+            color: CelestinaTheme.textMuted
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: CelestinaTheme.fontCaption
+        }
+    }
+
     // One label : value line in the properties panel; hides itself when empty.
     component PropRow: Item {
         id: propRow
@@ -236,8 +345,10 @@ ApplicationWindow {
     Connections {
         target: window
         function onActiveControllerChanged() {
-            if (window.activeController)
+            if (window.activeController) {
                 window.activeController.loadVolumes()
+                window.loadSizing()
+            }
         }
     }
 
@@ -418,29 +529,25 @@ ApplicationWindow {
             id: mainPanel
 
             property string viewMode: "list"   // "list" | "grid"
-            property real itemScale: 1.0        // view zoom: row/cell + icon size
 
-            // Restore the last-used view mode and scale on open, and persist any
-            // change (list⇄grid, slider) so the choice survives restarts.
-            Component.onCompleted: {
-                viewMode = controller.savedViewMode()
-                itemScale = controller.savedScale()
-            }
-            function persist() {
-                controller.saveViewConfig(viewMode, itemScale)
-            }
+            // Restore the last-used view mode on open and persist a change
+            // (list⇄grid). The size scales are window-level and independent
+            // (window.contentIconScale / window.contentTextScale).
+            Component.onCompleted: viewMode = controller.savedViewMode()
+            function persist() { controller.saveViewMode(viewMode) }
 
-            readonly property int listRowHeight: Math.round(CelestinaTheme.rowHeight * itemScale)
-            readonly property int gridCellWidth: Math.round(132 * itemScale)
-            readonly property int gridCellHeight: Math.round(112 * itemScale)
-
-            // The row/cell (the "selection square") scales with itemScale; the
-            // icon and label scale *harder* above the default zoom, so they fill
-            // that square as you zoom in instead of the square outgrowing them.
-            // At or below 1× they track the view scale unchanged.
-            readonly property real contentScale: itemScale > 1
-                                                 ? 1 + (itemScale - 1) * 1.6
-                                                 : itemScale
+            // The content row/cell (the "selection square") sizes to fit
+            // whichever is taller — the icon or the independently-scaled text —
+            // so the two size sliders never clip one another.
+            readonly property int listRowHeight: Math.max(
+                Math.round(CelestinaTheme.glyphTile * window.contentIconScale),
+                Math.round((CelestinaTheme.fontBody + CelestinaTheme.fontCaption)
+                           * 1.35 * window.contentTextScale)) + 16
+            readonly property int gridCellWidth: Math.round(
+                132 * Math.max(window.contentIconScale, window.contentTextScale))
+            readonly property int gridCellHeight:
+                Math.round(48 * window.contentIconScale) + 8
+                + Math.round(CelestinaTheme.fontCaption * 2.9 * window.contentTextScale) + 20
 
             // ── Multi-selection (token-keyed, so it survives sort/filter) ────
             property var selectedTokens: ({})
@@ -1040,8 +1147,8 @@ ApplicationWindow {
                         id: kindGlyph
                         x: 14
                         anchors.verticalCenter: parent.verticalCenter
-                        width: Math.round(CelestinaTheme.glyphTile * mainPanel.contentScale)
-                        height: Math.round(CelestinaTheme.glyphTile * mainPanel.contentScale)
+                        width: Math.round(CelestinaTheme.glyphTile * window.contentIconScale)
+                        height: Math.round(CelestinaTheme.glyphTile * window.contentIconScale)
                         radius: CelestinaTheme.radiusSm
                         color: row.kind === "directory"
                                ? CelestinaTheme.glyphDirectory
@@ -1051,8 +1158,8 @@ ApplicationWindow {
 
                         IconImage {
                             anchors.centerIn: parent
-                            width: Math.round(CelestinaTheme.iconMd * mainPanel.contentScale)
-                            height: Math.round(CelestinaTheme.iconMd * mainPanel.contentScale)
+                            width: Math.round(CelestinaTheme.iconMd * window.contentIconScale)
+                            height: Math.round(CelestinaTheme.iconMd * window.contentIconScale)
                             name: row.kind === "directory"
                                   ? "folder"
                                   : row.kind === "symlink"
@@ -1082,7 +1189,7 @@ ApplicationWindow {
                             text: row.name
                             color: CelestinaTheme.text
                             font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: Math.round(CelestinaTheme.fontBody * mainPanel.contentScale)
+                            font.pixelSize: Math.round(CelestinaTheme.fontBody * window.contentTextScale)
                             font.weight: CelestinaTheme.weightMedium
                             font.italic: row.cut
                             elide: Text.ElideMiddle
@@ -1093,7 +1200,7 @@ ApplicationWindow {
                             text: row.subtitle
                             color: CelestinaTheme.textMuted
                             font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: Math.round(CelestinaTheme.fontCaption * mainPanel.contentScale)
+                            font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.contentTextScale)
                             elide: Text.ElideRight
                         }
                     }
@@ -1352,8 +1459,8 @@ ApplicationWindow {
                         Rectangle {
                             id: cellGlyph
                             anchors.horizontalCenter: parent.horizontalCenter
-                            width: Math.round(48 * mainPanel.contentScale)
-                            height: Math.round(48 * mainPanel.contentScale)
+                            width: Math.round(48 * window.contentIconScale)
+                            height: Math.round(48 * window.contentIconScale)
                             radius: CelestinaTheme.radiusSm
                             color: cell.kind === "directory"
                                    ? CelestinaTheme.glyphDirectory
@@ -1363,8 +1470,8 @@ ApplicationWindow {
 
                             IconImage {
                                 anchors.centerIn: parent
-                                width: Math.round(26 * mainPanel.contentScale)
-                                height: Math.round(26 * mainPanel.contentScale)
+                                width: Math.round(26 * window.contentIconScale)
+                                height: Math.round(26 * window.contentIconScale)
                                 name: cell.kind === "directory"
                                       ? "folder"
                                       : cell.kind === "symlink"
@@ -1388,7 +1495,7 @@ ApplicationWindow {
                             text: cell.name
                             color: CelestinaTheme.text
                             font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: Math.round(CelestinaTheme.fontCaption * mainPanel.contentScale)
+                            font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.contentTextScale)
                             font.italic: cell.cut
                             elide: Text.ElideRight
                             maximumLineCount: 2
@@ -1736,50 +1843,115 @@ ApplicationWindow {
                 elide: Text.ElideRight
             }
 
-            Slider {
-                id: zoomSlider
-
-                from: 0.8
-                to: 1.9
-                value: mainPanel.itemScale
-                stepSize: 0.1
+            // Opens a submenu of independent size sliders (content vs sidebar,
+            // icons vs text) — granular zoom, replacing the single slider.
+            Button {
+                id: sizeButton
                 width: 116
-                height: 22
+                height: 34
                 anchors.right: parent.right
                 anchors.rightMargin: 16
                 anchors.verticalCenter: bottomBar.verticalCenter
-                Accessible.name: "Tamaño de los elementos"
-                onMoved: {
-                    mainPanel.itemScale = value
-                    mainPanel.persist()
+                text: "Tamaño"
+                Accessible.name: "Ajustar tamaños"
+                onClicked: sizePopup.opened ? sizePopup.close() : sizePopup.open()
+
+                contentItem: Text {
+                    text: sizeButton.text
+                    color: CelestinaTheme.text
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCaption
+                    font.weight: CelestinaTheme.weightMedium
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    elide: Text.ElideRight
                 }
 
                 background: Rectangle {
-                    x: zoomSlider.leftPadding
-                    y: zoomSlider.topPadding + zoomSlider.availableHeight / 2 - height / 2
-                    width: zoomSlider.availableWidth
-                    height: 4
-                    radius: 2
-                    color: CelestinaTheme.controlFill
+                    radius: CelestinaTheme.radiusSm
+                    color: (sizeButton.hovered || sizePopup.opened)
+                           ? CelestinaTheme.surfaceHover
+                           : CelestinaTheme.controlFill
+                    border.width: sizeButton.activeFocus ? 1 : 0
+                    border.color: CelestinaTheme.focus
 
-                    Rectangle {
-                        width: zoomSlider.visualPosition * parent.width
-                        height: parent.height
-                        radius: 2
-                        color: CelestinaTheme.accent
+                    Behavior on color {
+                        ColorAnimation { duration: CelestinaTheme.motionFast }
                     }
                 }
 
-                handle: Rectangle {
-                    x: zoomSlider.leftPadding
-                       + zoomSlider.visualPosition * (zoomSlider.availableWidth - width)
-                    y: zoomSlider.topPadding + zoomSlider.availableHeight / 2 - height / 2
-                    width: 15
-                    height: 15
-                    radius: 7.5
-                    color: zoomSlider.pressed ? CelestinaTheme.accent : CelestinaTheme.text
-                    border.width: 1
-                    border.color: CelestinaTheme.borderStrong
+                Popup {
+                    id: sizePopup
+                    // Float above the button, right-aligned to it.
+                    y: -height - 10
+                    x: sizeButton.width - width
+                    padding: 16
+                    modal: false
+                    focus: true
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+                    background: Rectangle {
+                        radius: CelestinaTheme.radiusLg
+                        color: CelestinaTheme.surfaceStrong
+                        border.width: 1
+                        border.color: CelestinaTheme.borderStrong
+                    }
+
+                    contentItem: Column {
+                        spacing: 6
+
+                        Text {
+                            text: "ICONOS"
+                            color: CelestinaTheme.textMuted
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontMini
+                            font.letterSpacing: 1.4
+                            font.weight: CelestinaTheme.weightDemiBold
+                        }
+                        SizeRow {
+                            label: "Contenido"
+                            value: window.contentIconScale
+                            onMoved: function(v) {
+                                window.contentIconScale = v
+                                window.persistSizing()
+                            }
+                        }
+                        SizeRow {
+                            label: "Barra lateral"
+                            value: window.sidebarIconScale
+                            onMoved: function(v) {
+                                window.sidebarIconScale = v
+                                window.persistSizing()
+                            }
+                        }
+
+                        Item { width: 1; height: 4 }
+
+                        Text {
+                            text: "TEXTO"
+                            color: CelestinaTheme.textMuted
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontMini
+                            font.letterSpacing: 1.4
+                            font.weight: CelestinaTheme.weightDemiBold
+                        }
+                        SizeRow {
+                            label: "Contenido"
+                            value: window.contentTextScale
+                            onMoved: function(v) {
+                                window.contentTextScale = v
+                                window.persistSizing()
+                            }
+                        }
+                        SizeRow {
+                            label: "Barra lateral"
+                            value: window.sidebarTextScale
+                            onMoved: function(v) {
+                                window.sidebarTextScale = v
+                                window.persistSizing()
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -3340,6 +3512,7 @@ ApplicationWindow {
                 anchors.topMargin: 12
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: 4
+                visible: mainPanel.viewMode === "list"
                 clip: true
                 spacing: 2
                 model: controller.searchNames
@@ -3375,16 +3548,16 @@ ApplicationWindow {
                         id: hitGlyph
                         x: 14
                         anchors.verticalCenter: parent.verticalCenter
-                        width: Math.round(CelestinaTheme.glyphTile * mainPanel.contentScale)
-                        height: Math.round(CelestinaTheme.glyphTile * mainPanel.contentScale)
+                        width: Math.round(CelestinaTheme.glyphTile * window.contentIconScale)
+                        height: Math.round(CelestinaTheme.glyphTile * window.contentIconScale)
                         radius: CelestinaTheme.radiusSm
                         color: hitRow.isDir ? CelestinaTheme.glyphDirectory
                                             : CelestinaTheme.glyphFile
 
                         IconImage {
                             anchors.centerIn: parent
-                            width: Math.round(CelestinaTheme.iconMd * mainPanel.contentScale)
-                            height: Math.round(CelestinaTheme.iconMd * mainPanel.contentScale)
+                            width: Math.round(CelestinaTheme.iconMd * window.contentIconScale)
+                            height: Math.round(CelestinaTheme.iconMd * window.contentIconScale)
                             name: hitRow.isDir ? "folder" : "text-x-generic"
                             source: CelestinaTheme.fallbackIcon(
                                         hitRow.isDir ? "folder" : "file")
@@ -3404,7 +3577,7 @@ ApplicationWindow {
                             text: hitRow.modelData
                             color: CelestinaTheme.text
                             font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: Math.round(CelestinaTheme.fontBody * mainPanel.contentScale)
+                            font.pixelSize: Math.round(CelestinaTheme.fontBody * window.contentTextScale)
                             font.weight: CelestinaTheme.weightMedium
                             elide: Text.ElideMiddle
                         }
@@ -3414,7 +3587,7 @@ ApplicationWindow {
                             text: controller.searchPaths[hitRow.index] || ""
                             color: CelestinaTheme.textMuted
                             font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: Math.round(CelestinaTheme.fontCaption * mainPanel.contentScale)
+                            font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.contentTextScale)
                             elide: Text.ElideMiddle
                         }
                     }
@@ -3425,6 +3598,94 @@ ApplicationWindow {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: controller.openSearchHit(hitRow.index)
+                    }
+                }
+            }
+
+            // In grid view the hits mirror the content grid — a glyph tile with
+            // the name beneath — so search matches whichever layout is in use.
+            GridView {
+                id: searchGrid
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: 4
+                anchors.rightMargin: 4
+                anchors.top: searchSummary.bottom
+                anchors.topMargin: 12
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 4
+                visible: mainPanel.viewMode === "grid"
+                clip: true
+                cellWidth: mainPanel.gridCellWidth
+                cellHeight: mainPanel.gridCellHeight
+                model: controller.searchNames
+
+                delegate: Item {
+                    id: hitCell
+                    required property int index
+                    required property string modelData
+                    readonly property bool isDir:
+                        (controller.searchKinds[index] || "") === "directory"
+                    width: searchGrid.cellWidth
+                    height: searchGrid.cellHeight
+                    Accessible.role: Accessible.ListItem
+                    Accessible.name: hitCell.modelData
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: 5
+                        radius: CelestinaTheme.radiusSm
+                        color: hitCellMouse.containsMouse
+                               ? CelestinaTheme.surfaceHover : "transparent"
+
+                        Behavior on color {
+                            ColorAnimation { duration: CelestinaTheme.motionFast }
+                        }
+                    }
+
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 8
+
+                        Rectangle {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: Math.round(48 * window.contentIconScale)
+                            height: Math.round(48 * window.contentIconScale)
+                            radius: CelestinaTheme.radiusSm
+                            color: hitCell.isDir ? CelestinaTheme.glyphDirectory
+                                                 : CelestinaTheme.glyphFile
+
+                            IconImage {
+                                anchors.centerIn: parent
+                                width: Math.round(26 * window.contentIconScale)
+                                height: Math.round(26 * window.contentIconScale)
+                                name: hitCell.isDir ? "folder" : "text-x-generic"
+                                source: CelestinaTheme.fallbackIcon(
+                                            hitCell.isDir ? "folder" : "file")
+                                color: hitCell.isDir ? CelestinaTheme.accent
+                                                     : CelestinaTheme.textMuted
+                            }
+                        }
+
+                        Text {
+                            width: searchGrid.cellWidth - 22
+                            horizontalAlignment: Text.AlignHCenter
+                            text: hitCell.modelData
+                            color: CelestinaTheme.text
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.contentTextScale)
+                            elide: Text.ElideRight
+                            maximumLineCount: 2
+                            wrapMode: Text.Wrap
+                        }
+                    }
+
+                    MouseArea {
+                        id: hitCellMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: controller.openSearchHit(hitCell.index)
                     }
                 }
             }
@@ -3522,8 +3783,9 @@ ApplicationWindow {
             x: 20
             y: 18
             width: 184
-            // Leave room below for the separate item-info box (84 + gap).
-            height: parent.height - y - 18 - 98
+            // Leave room below for the separate item-info box (its height scales
+            // with the sidebar text) plus a gap.
+            height: parent.height - y - 18 - sidebarInfo.height - 14
             radius: CelestinaTheme.radiusLg
             visible: parent.width >= 820
             color: CelestinaTheme.surface
@@ -3591,7 +3853,7 @@ ApplicationWindow {
                                                                           ? window.activeController.currentPath : "")
 
                         visible: available
-                        height: available ? 34 : 0
+                        height: available ? window.sidebarRowHeight : 0
                         width: placesColumn.width
 
                         Rectangle {
@@ -3610,8 +3872,8 @@ ApplicationWindow {
                             id: placeIcon
                             x: 12
                             anchors.verticalCenter: parent.verticalCenter
-                            width: CelestinaTheme.iconSm
-                            height: CelestinaTheme.iconSm
+                            width: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
+                            height: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
                             name: placeRow.modelData.icon
                             source: CelestinaTheme.fallbackIcon(placeRow.modelData.fallback)
                             color: placeRow.current ? CelestinaTheme.accent
@@ -3626,7 +3888,7 @@ ApplicationWindow {
                             color: placeRow.current ? CelestinaTheme.accent
                                                     : CelestinaTheme.text
                             font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: CelestinaTheme.fontBody
+                            font.pixelSize: Math.round(CelestinaTheme.fontBody * window.sidebarTextScale)
                             font.weight: placeRow.current ? CelestinaTheme.weightMedium
                                                           : CelestinaTheme.weightRegular
                             elide: Text.ElideRight
@@ -3649,7 +3911,7 @@ ApplicationWindow {
                 Item {
                     id: trashPlace
                     width: placesColumn.width
-                    height: 34
+                    height: window.sidebarRowHeight
                     Accessible.role: Accessible.Button
                     Accessible.name: "Papelera"
                     Accessible.onPressAction: {
@@ -3671,8 +3933,8 @@ ApplicationWindow {
                         id: trashPlaceIcon
                         x: 12
                         anchors.verticalCenter: parent.verticalCenter
-                        width: CelestinaTheme.iconSm
-                        height: CelestinaTheme.iconSm
+                        width: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
+                        height: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
                         name: "user-trash"
                         source: CelestinaTheme.fallbackIcon("user-trash")
                         color: CelestinaTheme.textMuted
@@ -3685,7 +3947,7 @@ ApplicationWindow {
                         text: "Papelera"
                         color: CelestinaTheme.text
                         font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontBody
+                        font.pixelSize: Math.round(CelestinaTheme.fontBody * window.sidebarTextScale)
                         elide: Text.ElideRight
                     }
 
@@ -3721,7 +3983,7 @@ ApplicationWindow {
                         text: "DISPOSITIVOS"
                         color: CelestinaTheme.textMuted
                         font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontMini
+                        font.pixelSize: Math.round(CelestinaTheme.fontMini * window.sidebarTextScale)
                         font.letterSpacing: 1.4
                         font.weight: CelestinaTheme.weightDemiBold
                     }
@@ -3737,7 +3999,7 @@ ApplicationWindow {
                         color: unhideMouse.containsMouse ? CelestinaTheme.accent
                                                          : CelestinaTheme.textMuted
                         font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontMini
+                        font.pixelSize: Math.round(CelestinaTheme.fontMini * window.sidebarTextScale)
 
                         MouseArea {
                             id: unhideMouse
@@ -3769,7 +4031,7 @@ ApplicationWindow {
                                                ? window.activeController.currentPath : "")
 
                         width: placesColumn.width
-                        height: 34
+                        height: window.sidebarRowHeight
                         Accessible.role: Accessible.Button
                         Accessible.name: volumeRow.modelData
                                          + (volumeRow.mounted ? ", montado" : ", sin montar")
@@ -3789,8 +4051,8 @@ ApplicationWindow {
                             id: volumeIcon
                             x: 12
                             anchors.verticalCenter: parent.verticalCenter
-                            width: CelestinaTheme.iconSm
-                            height: CelestinaTheme.iconSm
+                            width: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
+                            height: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
                             name: "drive-removable-media"
                             source: CelestinaTheme.fallbackIcon("folder")
                             color: volumeRow.current ? CelestinaTheme.accent
@@ -3805,7 +4067,7 @@ ApplicationWindow {
                             color: volumeRow.current ? CelestinaTheme.accent
                                                      : CelestinaTheme.text
                             font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: CelestinaTheme.fontBody
+                            font.pixelSize: Math.round(CelestinaTheme.fontBody * window.sidebarTextScale)
                             elide: Text.ElideRight
                         }
 
@@ -3816,8 +4078,8 @@ ApplicationWindow {
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.right: parent.right
                             anchors.rightMargin: 10
-                            width: CelestinaTheme.iconSm
-                            height: CelestinaTheme.iconSm
+                            width: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
+                            height: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
                             visible: volumeRow.mounted
                             name: "media-eject"
                             source: CelestinaTheme.fallbackIcon("media-eject")
@@ -3873,7 +4135,7 @@ ApplicationWindow {
                 text: "MARCADORES"
                 color: CelestinaTheme.textMuted
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontMini
+                font.pixelSize: Math.round(CelestinaTheme.fontMini * window.sidebarTextScale)
                 font.letterSpacing: 1.4
                 font.weight: CelestinaTheme.weightDemiBold
             }
@@ -3908,7 +4170,7 @@ ApplicationWindow {
                     readonly property bool editing: bookmarksList.editIndex === index
 
                     width: bookmarksList.width
-                    height: 34
+                    height: window.sidebarRowHeight
 
                     Rectangle {
                         anchors.fill: parent
@@ -3926,8 +4188,8 @@ ApplicationWindow {
                         id: bmIcon
                         x: 12
                         anchors.verticalCenter: parent.verticalCenter
-                        width: CelestinaTheme.iconSm
-                        height: CelestinaTheme.iconSm
+                        width: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
+                        height: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
                         name: "folder"
                         source: CelestinaTheme.fallbackIcon("folder")
                         color: bmRow.current ? CelestinaTheme.accent
@@ -3943,7 +4205,7 @@ ApplicationWindow {
                         color: bmRow.current ? CelestinaTheme.accent
                                              : CelestinaTheme.text
                         font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontBody
+                        font.pixelSize: Math.round(CelestinaTheme.fontBody * window.sidebarTextScale)
                         font.weight: bmRow.current ? CelestinaTheme.weightMedium
                                                    : CelestinaTheme.weightRegular
                         elide: Text.ElideRight
@@ -4019,7 +4281,7 @@ ApplicationWindow {
             id: sidebarInfo
             x: sidebar.x
             width: sidebar.width
-            height: 84
+            height: Math.round(84 * window.sidebarTextScale)
             y: parent.height - height - 18
             visible: sidebar.visible
             radius: CelestinaTheme.radiusLg
@@ -4058,7 +4320,7 @@ ApplicationWindow {
                     text: sidebarInfo.header
                     color: CelestinaTheme.textMuted
                     font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontLabel
+                    font.pixelSize: Math.round(CelestinaTheme.fontLabel * window.sidebarTextScale)
                     font.letterSpacing: 1.4
                     font.weight: CelestinaTheme.weightDemiBold
                 }
@@ -4068,7 +4330,7 @@ ApplicationWindow {
                     text: sidebarInfo.primary
                     color: CelestinaTheme.text
                     font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontCallout
+                    font.pixelSize: Math.round(CelestinaTheme.fontCallout * window.sidebarTextScale)
                     font.weight: CelestinaTheme.weightMedium
                     elide: Text.ElideMiddle
                 }
@@ -4079,7 +4341,7 @@ ApplicationWindow {
                     text: sidebarInfo.secondary
                     color: CelestinaTheme.textMuted
                     font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontLabel
+                    font.pixelSize: Math.round(CelestinaTheme.fontLabel * window.sidebarTextScale)
                     elide: Text.ElideRight
                 }
             }

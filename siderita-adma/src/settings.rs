@@ -1,19 +1,30 @@
-//! Small persisted UI settings — the view mode and item scale the user last
-//! chose, and the removable devices they hid from the sidebar. Stored as a
-//! `key=value` file under the XDG config home; like bookmarks, it is a
-//! convenience that never fails the app when absent or unreadable.
+//! Small persisted UI settings — the view mode, the four independent size
+//! scales (content/sidebar × icons/text), sort and hidden-toggle state, and the
+//! removable devices the user hid from the sidebar. Stored as a `key=value` file
+//! under the XDG config home; like bookmarks, it is a convenience that never
+//! fails the app when absent or unreadable.
 
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+
+/// The inclusive range every size scale is clamped to on load and save.
+const SCALE_MIN: f64 = 0.8;
+const SCALE_MAX: f64 = 1.9;
 
 /// The persisted view configuration.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Settings {
     /// `"list"` or `"grid"`.
     pub view_mode: String,
-    /// Item scale (the zoom slider), clamped to a sane range on load.
-    pub scale: f64,
+    /// Content-view icon scale (the glyph tiles), clamped on load.
+    pub content_icon_scale: f64,
+    /// Content-view text scale (name + subtitle), clamped on load.
+    pub content_text_scale: f64,
+    /// Sidebar icon scale (place / bookmark / device icons), clamped on load.
+    pub sidebar_icon_scale: f64,
+    /// Sidebar text scale (labels + the info box), clamped on load.
+    pub sidebar_text_scale: f64,
     /// Sort field index (0 name, 1 size, 2 date, 3 kind).
     pub sort_field: i32,
     /// Ascending vs descending.
@@ -28,7 +39,10 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             view_mode: "list".to_owned(),
-            scale: 1.0,
+            content_icon_scale: 1.0,
+            content_text_scale: 1.0,
+            sidebar_icon_scale: 1.0,
+            sidebar_text_scale: 1.0,
             sort_field: 0,
             sort_ascending: true,
             show_hidden: false,
@@ -59,11 +73,23 @@ pub fn save(settings: &Settings) -> io::Result<()> {
     }
 }
 
+fn parse_scale(value: &str) -> Option<f64> {
+    value
+        .parse::<f64>()
+        .ok()
+        .map(|s| s.clamp(SCALE_MIN, SCALE_MAX))
+}
+
 fn load_from(path: &Path) -> Settings {
     let Ok(content) = fs::read_to_string(path) else {
         return Settings::default();
     };
     let mut settings = Settings::default();
+    // A pre-granular config held one `scale` for the whole content view; adopt
+    // it for both content scales unless the granular keys override.
+    let mut legacy_scale: Option<f64> = None;
+    let mut content_icon_seen = false;
+    let mut content_text_seen = false;
     for line in content.lines() {
         let Some((key, value)) = line.split_once('=') else {
             continue;
@@ -73,9 +99,27 @@ fn load_from(path: &Path) -> Settings {
             "view_mode" if value == "list" || value == "grid" => {
                 settings.view_mode = value.to_owned();
             }
-            "scale" => {
-                if let Ok(scale) = value.parse::<f64>() {
-                    settings.scale = scale.clamp(0.8, 1.9);
+            "scale" => legacy_scale = parse_scale(value),
+            "content_icon_scale" => {
+                if let Some(scale) = parse_scale(value) {
+                    settings.content_icon_scale = scale;
+                    content_icon_seen = true;
+                }
+            }
+            "content_text_scale" => {
+                if let Some(scale) = parse_scale(value) {
+                    settings.content_text_scale = scale;
+                    content_text_seen = true;
+                }
+            }
+            "sidebar_icon_scale" => {
+                if let Some(scale) = parse_scale(value) {
+                    settings.sidebar_icon_scale = scale;
+                }
+            }
+            "sidebar_text_scale" => {
+                if let Some(scale) = parse_scale(value) {
+                    settings.sidebar_text_scale = scale;
                 }
             }
             "sort_field" => {
@@ -93,6 +137,14 @@ fn load_from(path: &Path) -> Settings {
             _ => {}
         }
     }
+    if let Some(scale) = legacy_scale {
+        if !content_icon_seen {
+            settings.content_icon_scale = scale;
+        }
+        if !content_text_seen {
+            settings.content_text_scale = scale;
+        }
+    }
     settings
 }
 
@@ -101,13 +153,18 @@ fn save_to(path: &Path, settings: &Settings) -> io::Result<()> {
         fs::create_dir_all(parent)?;
     }
     let mut text = format!(
-        "view_mode={}\nscale={:.2}\nsort_field={}\nsort_ascending={}\nshow_hidden={}\n",
+        "view_mode={}\ncontent_icon_scale={:.2}\ncontent_text_scale={:.2}\n\
+         sidebar_icon_scale={:.2}\nsidebar_text_scale={:.2}\n\
+         sort_field={}\nsort_ascending={}\nshow_hidden={}\n",
         if settings.view_mode == "grid" {
             "grid"
         } else {
             "list"
         },
-        settings.scale.clamp(0.8, 1.9),
+        settings.content_icon_scale.clamp(SCALE_MIN, SCALE_MAX),
+        settings.content_text_scale.clamp(SCALE_MIN, SCALE_MAX),
+        settings.sidebar_icon_scale.clamp(SCALE_MIN, SCALE_MAX),
+        settings.sidebar_text_scale.clamp(SCALE_MIN, SCALE_MAX),
         settings.sort_field.clamp(0, 3),
         settings.sort_ascending,
         settings.show_hidden,
@@ -140,11 +197,14 @@ mod tests {
     }
 
     #[test]
-    fn round_trips_view_mode_scale_and_hidden_devices() {
+    fn round_trips_view_mode_scales_and_hidden_devices() {
         let file = temp_file("rt");
         let settings = Settings {
             view_mode: "grid".to_owned(),
-            scale: 1.3,
+            content_icon_scale: 1.3,
+            content_text_scale: 0.9,
+            sidebar_icon_scale: 1.5,
+            sidebar_text_scale: 1.1,
             sort_field: 2,
             sort_ascending: false,
             show_hidden: true,
@@ -156,13 +216,28 @@ mod tests {
     }
 
     #[test]
-    fn scale_is_clamped_and_bad_values_fall_back() {
+    fn scales_are_clamped_and_bad_values_fall_back() {
         let file = temp_file("clamp");
         fs::create_dir_all(file.parent().unwrap()).unwrap();
-        fs::write(&file, "view_mode=weird\nscale=99\n").unwrap();
+        fs::write(&file, "view_mode=weird\ncontent_icon_scale=99\n").unwrap();
         let loaded = load_from(&file);
         assert_eq!(loaded.view_mode, "list"); // invalid → default
-        assert_eq!(loaded.scale, 1.9); // clamped
+        assert_eq!(loaded.content_icon_scale, 1.9); // clamped
+        assert_eq!(loaded.content_text_scale, 1.0); // untouched default
+        let _ = fs::remove_dir_all(file.parent().unwrap());
+    }
+
+    #[test]
+    fn a_legacy_scale_migrates_to_both_content_scales() {
+        let file = temp_file("legacy");
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        // The old single-scale key seeds both content scales, but an explicit
+        // granular key still wins.
+        fs::write(&file, "scale=1.4\ncontent_text_scale=1.1\n").unwrap();
+        let loaded = load_from(&file);
+        assert_eq!(loaded.content_icon_scale, 1.4); // from legacy scale
+        assert_eq!(loaded.content_text_scale, 1.1); // explicit override
+        assert_eq!(loaded.sidebar_icon_scale, 1.0); // legacy never touched sidebar
         let _ = fs::remove_dir_all(file.parent().unwrap());
     }
 
