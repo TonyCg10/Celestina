@@ -93,7 +93,12 @@ pub mod qobject {
         #[qproperty(QStringList, volume_devices)]
         #[qproperty(QStringList, volume_mounts)]
         #[qproperty(bool, volume_busy)]
+        #[qproperty(i32, hidden_device_count)]
         #[qproperty(bool, watch_degraded)]
+        #[qproperty(QString, folder_size)]
+        // Mirrors the QML multi-selection count so the window-scope info box can
+        // read it from the active tab's controller.
+        #[qproperty(i32, selection_count)]
         #[qproperty(bool, properties_pending)]
         #[qproperty(QString, prop_name)]
         #[qproperty(QString, prop_path)]
@@ -165,6 +170,11 @@ pub mod qobject {
 
         #[qinvokable]
         fn index_for_token(self: &SideritaController, token: &QString) -> i32;
+
+        /// "Kind · size · date" for the entry at `index` — the info panel's line
+        /// for a single selected item.
+        #[qinvokable]
+        fn entry_detail(self: &SideritaController, index: i32) -> QString;
 
         #[qinvokable]
         fn entry_path(self: &SideritaController, index: i32) -> QString;
@@ -285,6 +295,21 @@ pub mod qobject {
 
         #[qinvokable]
         fn open_terminal(self: Pin<&mut SideritaController>);
+
+        #[qinvokable]
+        fn saved_view_mode(self: &SideritaController) -> QString;
+
+        #[qinvokable]
+        fn saved_scale(self: &SideritaController) -> f64;
+
+        #[qinvokable]
+        fn save_view_config(self: Pin<&mut SideritaController>, mode: &QString, scale: f64);
+
+        #[qinvokable]
+        fn hide_device(self: Pin<&mut SideritaController>, name: &QString);
+
+        #[qinvokable]
+        fn unhide_all_devices(self: Pin<&mut SideritaController>);
 
         /// Emitted whenever the projected view changes; the QML feeds it straight
         /// into the native SideritaEntryModel (parallel role columns).
@@ -432,6 +457,8 @@ pub struct SideritaControllerRust {
     watched: Option<PathBuf>,
     debouncer: Option<FsDebouncer>,
     watch_degraded: bool,
+    folder_size: QString,
+    selection_count: i32,
     properties_pending: bool,
     prop_name: QString,
     prop_path: QString,
@@ -486,7 +513,9 @@ pub struct SideritaControllerRust {
     volume_devices: QStringList,
     volume_mounts: QStringList,
     volume_busy: bool,
+    hidden_device_count: i32,
     volumes: Vec<crate::volumes::Volume>,
+    settings: crate::settings::Settings,
     clipboard: Vec<PathBuf>,
     clipboard_cut: bool,
     last_undo: Option<UndoAction>,
@@ -522,6 +551,8 @@ impl Default for SideritaControllerRust {
             watched: None,
             debouncer: None,
             watch_degraded: false,
+            folder_size: QString::default(),
+            selection_count: 0,
             properties_pending: false,
             prop_name: QString::default(),
             prop_path: QString::default(),
@@ -576,7 +607,9 @@ impl Default for SideritaControllerRust {
             volume_devices: QStringList::default(),
             volume_mounts: QStringList::default(),
             volume_busy: false,
+            hidden_device_count: 0,
             volumes: Vec::new(),
+            settings: crate::settings::load(),
             clipboard: Vec::new(),
             clipboard_cut: false,
             last_undo: None,
@@ -750,20 +783,16 @@ impl qobject::SideritaController {
     }
 
     pub fn select_token(mut self: Pin<&mut Self>, token: &QString) {
-        let selected = self.rust().row_by_token(token).map(|row| {
-            (
-                row.token().to_string(),
-                row.display_name().to_owned(),
-                row.kind(),
-            )
-        });
-
-        if let Some((token, name, kind)) = selected {
+        // The selected item's name and detail are shown in the sidebar info box
+        // (driven by selected_token), so selecting no longer writes the status
+        // line.
+        let selected = self
+            .rust()
+            .row_by_token(token)
+            .map(|row| row.token().to_string());
+        if let Some(token) = selected {
             self.as_mut()
                 .set_selected_token(QString::from(token.as_str()));
-            let message = format!("{} · {}", name, kind_label(kind));
-            self.as_mut()
-                .set_status_text(QString::from(message.as_str()));
         }
     }
 
@@ -810,6 +839,31 @@ impl qobject::SideritaController {
             .row(index)
             .map(|row| QString::from(row.token().to_string().as_str()))
             .unwrap_or_default()
+    }
+
+    pub fn entry_detail(&self, index: i32) -> QString {
+        let Some(row) = self.rust().row(index) else {
+            return QString::default();
+        };
+        let kind = kind_label(row.kind());
+        let date = row.modified().map(format_system_time).unwrap_or_default();
+        // Folders show kind + date (their entry size is not meaningful); files
+        // show kind · size · date.
+        let detail = if row.kind() == RowKind::Directory {
+            if date.is_empty() {
+                kind.to_owned()
+            } else {
+                format!("{kind} · {date}")
+            }
+        } else {
+            let size = format_size(row.size());
+            if date.is_empty() {
+                format!("{kind} · {size}")
+            } else {
+                format!("{kind} · {size} · {date}")
+            }
+        };
+        QString::from(detail.as_str())
     }
 
     pub fn index_for_token(&self, token: &QString) -> i32 {
@@ -1520,13 +1574,20 @@ impl qobject::SideritaController {
     /// sidebar (parallel name / device / mount-point lists), keeping the full
     /// records for mount / unmount by index. Read-only and quick — runs inline.
     pub fn load_volumes(mut self: Pin<&mut Self>) {
-        let volumes = match crate::volumes::list_volumes() {
+        let mut volumes = match crate::volumes::list_volumes() {
             Ok(volumes) => volumes,
             Err(error) => {
                 self.as_mut().set_op_error(QString::from(error.as_str()));
                 return;
             }
         };
+
+        // Drop the devices the user hid (read fresh so a hide in another tab is
+        // honoured here too).
+        let hidden = crate::settings::load().hidden_devices;
+        volumes.retain(|volume| !hidden.iter().any(|name| name == &volume.name));
+        self.as_mut()
+            .set_hidden_device_count(hidden.len().min(i32::MAX as usize) as i32);
 
         let names: QStringList = volumes
             .iter()
@@ -1869,6 +1930,61 @@ impl qobject::SideritaController {
         }
     }
 
+    /// The persisted list/grid mode and item scale, so a new tab opens the way
+    /// the user last left it.
+    pub fn saved_view_mode(&self) -> QString {
+        QString::from(self.rust().settings.view_mode.as_str())
+    }
+
+    pub fn saved_scale(&self) -> f64 {
+        self.rust().settings.scale
+    }
+
+    /// Persists the current view mode and scale.
+    pub fn save_view_config(mut self: Pin<&mut Self>, mode: &QString, scale: f64) {
+        let mode = mode.to_string();
+        {
+            let state = self.as_mut().rust_mut();
+            let state = state.get_mut();
+            state.settings.view_mode = if mode == "grid" {
+                "grid".to_owned()
+            } else {
+                "list".to_owned()
+            };
+            state.settings.scale = scale;
+            let _ = crate::settings::save(&state.settings);
+        }
+    }
+
+    /// Hides a removable device (by its display name) from the sidebar and
+    /// remembers the choice; the list is re-read so it disappears at once.
+    pub fn hide_device(mut self: Pin<&mut Self>, name: &QString) {
+        let name = name.to_string();
+        if name.is_empty() {
+            return;
+        }
+        {
+            let state = self.as_mut().rust_mut();
+            let state = state.get_mut();
+            if !state.settings.hidden_devices.contains(&name) {
+                state.settings.hidden_devices.push(name);
+                let _ = crate::settings::save(&state.settings);
+            }
+        }
+        self.as_mut().load_volumes();
+    }
+
+    /// Un-hides every previously-hidden device.
+    pub fn unhide_all_devices(mut self: Pin<&mut Self>) {
+        {
+            let state = self.as_mut().rust_mut();
+            let state = state.get_mut();
+            state.settings.hidden_devices.clear();
+            let _ = crate::settings::save(&state.settings);
+        }
+        self.as_mut().load_volumes();
+    }
+
     /// Records (or clears) how to reverse the last operation, keeping the
     /// `can_undo` / `undo_label` properties in step for the menu and shortcut.
     fn set_undo(mut self: Pin<&mut Self>, action: Option<UndoAction>) {
@@ -2169,13 +2285,37 @@ impl qobject::SideritaController {
             self.as_mut().set_selected_token(QString::default());
         }
 
+        // The item count and per-item detail live in the sidebar info box now;
+        // the bottom status line only carries transient state. Keep a filtered
+        // "N de M" hint there, but stay blank when nothing is filtered out.
         let status = if visible == total {
-            format!("{visible} elementos")
+            String::new()
         } else {
-            format!("{visible} de {total} elementos")
+            format!("{visible} de {total}")
         };
         self.as_mut()
             .set_status_text(QString::from(status.as_str()));
+
+        // Total size of the folder's files, for the info box's default line.
+        let total_size: u64 = self
+            .rust()
+            .view
+            .as_ref()
+            .map(|view| {
+                view.rows()
+                    .iter()
+                    .filter(|row| row.kind() != RowKind::Directory)
+                    .map(|row| row.size())
+                    .sum()
+            })
+            .unwrap_or(0);
+        let folder_size = if total_size > 0 {
+            format_size(total_size)
+        } else {
+            String::new()
+        };
+        self.as_mut()
+            .set_folder_size(QString::from(folder_size.as_str()));
 
         // Hand the projected rows to the native model.
         self.as_mut()
@@ -2661,6 +2801,15 @@ fn format_size(bytes: u64) -> String {
         format!("{bytes} {}", UNITS[unit])
     } else {
         format!("{value:.1} {}", UNITS[unit])
+    }
+}
+
+/// Formats a `SystemTime` as local `YYYY-MM-DD HH:MM`, reusing the properties
+/// panel's formatter. An empty string for a pre-epoch/absent time.
+fn format_system_time(time: std::time::SystemTime) -> String {
+    match time.duration_since(std::time::UNIX_EPOCH) {
+        Ok(elapsed) => crate::properties::format_time(elapsed.as_secs() as i64),
+        Err(_) => String::new(),
     }
 }
 

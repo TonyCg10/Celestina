@@ -164,7 +164,7 @@ fn lookup_name(database: &str, id: u32) -> Option<String> {
 
 /// Formats a Unix timestamp (seconds since the epoch) as local
 /// `YYYY-MM-DD HH:MM` via `localtime_r`. An empty string for a zero/absent time.
-fn format_time(secs: i64) -> String {
+pub(crate) fn format_time(secs: i64) -> String {
     if secs == 0 {
         return String::new();
     }

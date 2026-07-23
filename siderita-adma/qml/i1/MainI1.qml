@@ -394,6 +394,16 @@ ApplicationWindow {
             property string viewMode: "list"   // "list" | "grid"
             property real itemScale: 1.0        // view zoom: row/cell + icon size
 
+            // Restore the last-used view mode and scale on open, and persist any
+            // change (list⇄grid, slider) so the choice survives restarts.
+            Component.onCompleted: {
+                viewMode = controller.savedViewMode()
+                itemScale = controller.savedScale()
+            }
+            function persist() {
+                controller.saveViewConfig(viewMode, itemScale)
+            }
+
             readonly property int listRowHeight: Math.round(CelestinaTheme.rowHeight * itemScale)
             readonly property int gridCellWidth: Math.round(132 * itemScale)
             readonly property int gridCellHeight: Math.round(112 * itemScale)
@@ -402,6 +412,9 @@ ApplicationWindow {
             property var selectedTokens: ({})
             property int selectionCount: 0
             property string anchorToken: ""
+            // Mirror the count to the controller so the window-scope info box
+            // (which only reaches the active tab's controller) can read it.
+            onSelectionCountChanged: controller.selectionCount = selectionCount
 
             function isSelected(token) {
                 return token.length > 0 && selectedTokens[token] === true
@@ -706,7 +719,10 @@ ApplicationWindow {
                 height: 34
                 text: grid ? "Lista" : "Cuadrícula"
                 Accessible.name: "Cambiar vista"
-                onClicked: mainPanel.viewMode = grid ? "list" : "grid"
+                onClicked: {
+                    mainPanel.viewMode = grid ? "list" : "grid"
+                    mainPanel.persist()
+                }
 
                 contentItem: Text {
                     text: viewToggle.text
@@ -1648,13 +1664,13 @@ ApplicationWindow {
                 x: busy.x + busy.width + 14
                 anchors.verticalCenter: bottomBar.verticalCenter
                 width: Math.max(0, zoomSlider.x - x - 12)
-                // A lost watch is surfaced truthfully — the list is a snapshot
-                // that may lag until the next navigation or refresh.
+                // Only transient state here now (loading, a filtered count,
+                // operation status, errors); item counts and the selected item's
+                // details live in the sidebar info box. A lost watch is surfaced
+                // truthfully — the list is a snapshot that may lag.
                 text: controller.watchDegraded
                       ? "⚠ Vigilancia perdida · instantánea"
-                      : mainPanel.selectionCount > 1
-                        ? mainPanel.selectionCount + " seleccionados"
-                        : controller.statusText
+                      : controller.statusText
                 color: controller.watchDegraded
                        ? CelestinaTheme.dangerText : CelestinaTheme.textMuted
                 font.family: CelestinaTheme.sansFamily
@@ -1675,10 +1691,10 @@ ApplicationWindow {
                 anchors.rightMargin: 16
                 anchors.verticalCenter: bottomBar.verticalCenter
                 Accessible.name: "Tamaño de los elementos"
-                onMoved: mainPanel.itemScale = value
-
-                ToolTip.visible: hovered || pressed
-                ToolTip.text: Math.round(value * 100) + " %"
+                onMoved: {
+                    mainPanel.itemScale = value
+                    mainPanel.persist()
+                }
 
                 background: Rectangle {
                     x: zoomSlider.leftPadding
@@ -3437,8 +3453,8 @@ ApplicationWindow {
             x: 20
             y: 18
             width: 184
-            // Leave room below for the separate folder-info box (56 + 12 gap).
-            height: parent.height - y - 18 - 68
+            // Leave room below for the separate item-info box (64 + gap).
+            height: parent.height - y - 18 - 78
             radius: CelestinaTheme.radiusLg
             visible: parent.width >= 820
             color: CelestinaTheme.surface
@@ -3620,21 +3636,47 @@ ApplicationWindow {
                 // ── Removable volumes (UDisks2) ──────────────────────────
                 Item {
                     width: placesColumn.width
-                    height: volumesHeaderRow.height
-                    visible: window.activeController
-                             && window.activeController.volumeNames.length > 0
+                    readonly property var ac: window.activeController
+                    readonly property int hiddenCount: ac ? ac.hiddenDeviceCount : 0
+                    readonly property bool anyDevices:
+                        ac && (ac.volumeNames.length > 0 || hiddenCount > 0)
+                    height: anyDevices ? volumesHeaderRow.implicitHeight + 16 : 0
+                    visible: anyDevices
 
                     Text {
                         id: volumesHeaderRow
                         x: 14
+                        y: 12
                         text: "DISPOSITIVOS"
-                        topPadding: 12
-                        bottomPadding: 4
                         color: CelestinaTheme.textMuted
                         font.family: CelestinaTheme.sansFamily
                         font.pixelSize: CelestinaTheme.fontMini
                         font.letterSpacing: 1.4
                         font.weight: CelestinaTheme.weightDemiBold
+                    }
+
+                    // Un-hide affordance — reachable even when every device is
+                    // hidden (the header still shows).
+                    Text {
+                        anchors.verticalCenter: volumesHeaderRow.verticalCenter
+                        anchors.right: parent.right
+                        anchors.rightMargin: 12
+                        visible: parent.hiddenCount > 0
+                        text: parent.hiddenCount + " ocultos"
+                        color: unhideMouse.containsMouse ? CelestinaTheme.accent
+                                                         : CelestinaTheme.textMuted
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: CelestinaTheme.fontMini
+
+                        MouseArea {
+                            id: unhideMouse
+                            anchors.fill: parent
+                            anchors.margins: -6
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: if (window.activeController)
+                                           window.activeController.unhideAllDevices()
+                        }
                     }
                 }
 
@@ -3731,12 +3773,22 @@ ApplicationWindow {
                         MouseArea {
                             id: volumeMouse
                             anchors.fill: parent
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            // Open (mounting first if needed); eject has its own zone.
-                            onClicked: {
-                                if (window.activeController)
+                            // Left: open (mounting first if needed) — eject has its
+                            // own zone. Right: hide this device.
+                            onClicked: function(mouse) {
+                                if (!window.activeController)
+                                    return
+                                if (mouse.button === Qt.RightButton) {
+                                    deviceMenu.deviceName = volumeRow.modelData
+                                    const point = volumeRow.mapToItem(
+                                                    window.contentItem, mouse.x, mouse.y)
+                                    deviceMenu.popup(window.contentItem, point)
+                                } else {
                                     window.activeController.openVolume(volumeRow.index)
+                                }
                             }
                         }
                     }
@@ -3888,13 +3940,15 @@ ApplicationWindow {
 
         }
 
-        // A separate box below the sidebar (its own panel, not nested inside it):
-        // the current folder's item count.
+        // A separate box below the sidebar (its own panel, not nested inside it)
+        // showing item info: the folder's count + total size when nothing is
+        // selected, the selected item's name + kind · size · date for one, or the
+        // count for a multi-selection.
         Rectangle {
             id: sidebarInfo
             x: sidebar.x
             width: sidebar.width
-            height: 56
+            height: 64
             y: parent.height - height - 18
             visible: sidebar.visible
             radius: CelestinaTheme.radiusLg
@@ -3902,14 +3956,35 @@ ApplicationWindow {
             border.width: 1
             border.color: CelestinaTheme.border
 
+            readonly property var ac: window.activeController
+            readonly property int selCount: ac ? ac.selectionCount : 0
+            readonly property int count: ac ? ac.entryNames.length : 0
+            // Re-evaluated when the list changes (entryNames) so the index stays
+            // valid across sort/filter.
+            readonly property int selIdx: {
+                var _ = ac ? ac.entryNames.length : 0
+                return (ac && selCount === 1 && ac.selectedToken.length > 0)
+                       ? ac.indexForToken(ac.selectedToken) : -1
+            }
+
+            readonly property string header: selCount > 1 ? "SELECCIÓN"
+                                             : selIdx >= 0 ? "ELEMENTO" : "CARPETA"
+            readonly property string primary: selCount > 1
+                    ? selCount + " seleccionados"
+                    : selIdx >= 0 ? ac.entryNames[selIdx]
+                    : count + (count === 1 ? " elemento" : " elementos")
+            readonly property string secondary: selCount > 1 ? ""
+                    : selIdx >= 0 ? ac.entryDetail(selIdx)
+                    : (ac && ac.folderSize.length > 0 ? "Total " + ac.folderSize : "")
+
             Column {
                 x: 16
                 anchors.verticalCenter: parent.verticalCenter
                 width: parent.width - 32
-                spacing: 3
+                spacing: 2
 
                 Text {
-                    text: "CARPETA"
+                    text: sidebarInfo.header
                     color: CelestinaTheme.textMuted
                     font.family: CelestinaTheme.sansFamily
                     font.pixelSize: CelestinaTheme.fontMini
@@ -3918,13 +3993,23 @@ ApplicationWindow {
                 }
 
                 Text {
-                    readonly property int count: window.activeController
-                                                 ? window.activeController.entryNames.length : 0
-                    text: count + (count === 1 ? " elemento" : " elementos")
+                    width: parent.width
+                    text: sidebarInfo.primary
                     color: CelestinaTheme.text
                     font.family: CelestinaTheme.sansFamily
                     font.pixelSize: CelestinaTheme.fontBody
                     font.weight: CelestinaTheme.weightMedium
+                    elide: Text.ElideMiddle
+                }
+
+                Text {
+                    width: parent.width
+                    visible: sidebarInfo.secondary.length > 0
+                    text: sidebarInfo.secondary
+                    color: CelestinaTheme.textMuted
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCaption
+                    elide: Text.ElideRight
                 }
             }
         }
@@ -4006,6 +4091,35 @@ ApplicationWindow {
             onTriggered: {
                 if (window.activeController)
                     window.activeController.removeBookmark(bmMenu.targetIndex)
+            }
+        }
+    }
+
+    // Right-click menu for a device in the "Dispositivos" list.
+    GlassContextMenu {
+        id: deviceMenu
+        backdropSource: contentLayer
+
+        property string deviceName: ""
+
+        GlassMenuItem {
+            text: "Ocultar dispositivo"
+            icon.name: "list-remove"
+            icon.source: CelestinaTheme.fallbackIcon("file")
+            onTriggered: {
+                if (window.activeController)
+                    window.activeController.hideDevice(deviceMenu.deviceName)
+            }
+        }
+
+        GlassMenuItem {
+            text: "Mostrar dispositivos ocultos"
+            visible: window.activeController
+                     && window.activeController.hiddenDeviceCount > 0
+            height: visible ? implicitHeight : 0
+            onTriggered: {
+                if (window.activeController)
+                    window.activeController.unhideAllDevices()
             }
         }
     }
