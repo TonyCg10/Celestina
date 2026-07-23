@@ -4,14 +4,21 @@ import QtQuick.Effects
 // ─── GlassSurface ─────────────────────────────────────────────────────────────
 // Frosted-glass surface that blurs the real content behind it. The consumer
 // injects `backdropSource` (the item to sample); capture is bounded to this
-// surface's rectangle, taken once when shown, with no continuous rendering when
-// hidden. Falls back to a translucent tint if it cannot capture.
+// surface's rectangle. By default it is snapshotted once when shown, with no
+// continuous rendering when hidden — right for a transient menu. Set
+// `liveCapture` for a surface that content can move behind (a modal you can
+// scroll under), so the blur tracks it live while shown. Falls back to a
+// translucent tint if it cannot capture.
 // ──────────────────────────────────────────────────────────────────────────────
 Item {
     id: root
 
     required property Item backdropSource
     property bool captureEnabled: true
+    // One-shot snapshot on show (false) vs continuous re-capture while shown
+    // (true). Live tracks content moving behind the surface at a GPU cost, so
+    // reserve it for modals; menus stay one-shot.
+    property bool liveCapture: false
     property real cornerRadius: CelestinaTheme.radiusMd
     property int sampleMargin: CelestinaTheme.glassSampleMargin
     property real sampleScale: CelestinaTheme.glassSampleScale
@@ -61,7 +68,7 @@ Item {
             textureSize: Qt.size(
                 Math.max(1, Math.ceil(width * root.sampleScale)),
                 Math.max(1, Math.ceil(height * root.sampleScale)))
-            live: false
+            live: root.liveCapture
             recursive: false
             hideSource: false
             smooth: true
