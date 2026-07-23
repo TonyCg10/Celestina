@@ -79,6 +79,10 @@ pub mod qobject {
         #[qproperty(QString, open_with_target)]
         #[qproperty(QStringList, open_with_apps)]
         #[qproperty(i32, open_with_default_index)]
+        #[qproperty(QStringList, volume_names)]
+        #[qproperty(QStringList, volume_devices)]
+        #[qproperty(QStringList, volume_mounts)]
+        #[qproperty(bool, volume_busy)]
         type SideritaController = super::SideritaControllerRust;
 
         #[qinvokable]
@@ -227,6 +231,18 @@ pub mod qobject {
 
         #[qinvokable]
         fn cancel_open_with(self: Pin<&mut SideritaController>);
+
+        #[qinvokable]
+        fn load_volumes(self: Pin<&mut SideritaController>);
+
+        #[qinvokable]
+        fn mount_volume(self: Pin<&mut SideritaController>, index: i32);
+
+        #[qinvokable]
+        fn unmount_volume(self: Pin<&mut SideritaController>, index: i32);
+
+        #[qinvokable]
+        fn open_volume(self: Pin<&mut SideritaController>, index: i32);
     }
 
     impl cxx_qt::Threading for SideritaController {}
@@ -354,6 +370,11 @@ pub struct SideritaControllerRust {
     open_with_path: PathBuf,
     open_with_mime: String,
     open_with_ids: Vec<String>,
+    volume_names: QStringList,
+    volume_devices: QStringList,
+    volume_mounts: QStringList,
+    volume_busy: bool,
+    volumes: Vec<crate::volumes::Volume>,
     clipboard: Vec<PathBuf>,
     clipboard_cut: bool,
     last_undo: Option<UndoAction>,
@@ -413,6 +434,11 @@ impl Default for SideritaControllerRust {
             open_with_path: PathBuf::new(),
             open_with_mime: String::new(),
             open_with_ids: Vec::new(),
+            volume_names: QStringList::default(),
+            volume_devices: QStringList::default(),
+            volume_mounts: QStringList::default(),
+            volume_busy: false,
+            volumes: Vec::new(),
             clipboard: Vec::new(),
             clipboard_cut: false,
             last_undo: None,
@@ -1379,6 +1405,148 @@ impl qobject::SideritaController {
 
     pub fn cancel_open_with(mut self: Pin<&mut Self>) {
         self.as_mut().set_open_with_pending(false);
+    }
+
+    /// Reads the removable volumes UDisks2 reports and publishes them to the
+    /// sidebar (parallel name / device / mount-point lists), keeping the full
+    /// records for mount / unmount by index. Read-only and quick — runs inline.
+    pub fn load_volumes(mut self: Pin<&mut Self>) {
+        let volumes = match crate::volumes::list_volumes() {
+            Ok(volumes) => volumes,
+            Err(error) => {
+                self.as_mut().set_op_error(QString::from(error.as_str()));
+                return;
+            }
+        };
+
+        let names: QStringList = volumes
+            .iter()
+            .map(|volume| QString::from(volume.name.as_str()))
+            .collect();
+        let devices: QStringList = volumes
+            .iter()
+            .map(|volume| QString::from(volume.device.as_str()))
+            .collect();
+        let mounts: QStringList = volumes
+            .iter()
+            .map(|volume| QString::from(volume.mount_point.as_str()))
+            .collect();
+
+        self.as_mut().rust_mut().get_mut().volumes = volumes;
+        self.as_mut().set_volume_names(names);
+        self.as_mut().set_volume_devices(devices);
+        self.as_mut().set_volume_mounts(mounts);
+    }
+
+    /// Mounts the volume at `index` on a worker thread — mounting can block on a
+    /// polkit authorization prompt, so it must never run on the Qt thread — then
+    /// refreshes the list (or reports the failure) back on the Qt thread.
+    pub fn mount_volume(mut self: Pin<&mut Self>, index: i32) {
+        if *self.volume_busy() {
+            return;
+        }
+        self.as_mut().set_op_error(QString::default());
+        let Some(path) = self.volume_path(index) else {
+            return;
+        };
+        self.as_mut().set_volume_busy(true);
+        self.as_mut().set_status_text(QString::from("Montando…"));
+
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let result = crate::volumes::mount(&path);
+            let _ = qt.queue(move |mut controller| {
+                controller.as_mut().set_volume_busy(false);
+                match result {
+                    Ok(_) => controller.as_mut().load_volumes(),
+                    Err(error) => controller
+                        .as_mut()
+                        .set_op_error(QString::from(error.as_str())),
+                }
+            });
+        });
+    }
+
+    /// Unmounts the volume at `index` on a worker thread, then refreshes.
+    pub fn unmount_volume(mut self: Pin<&mut Self>, index: i32) {
+        if *self.volume_busy() {
+            return;
+        }
+        self.as_mut().set_op_error(QString::default());
+        let Some(path) = self.volume_path(index) else {
+            return;
+        };
+        self.as_mut().set_volume_busy(true);
+        self.as_mut().set_status_text(QString::from("Desmontando…"));
+
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let result = crate::volumes::unmount(&path);
+            let _ = qt.queue(move |mut controller| {
+                controller.as_mut().set_volume_busy(false);
+                match result {
+                    Ok(()) => controller.as_mut().load_volumes(),
+                    Err(error) => controller
+                        .as_mut()
+                        .set_op_error(QString::from(error.as_str())),
+                }
+            });
+        });
+    }
+
+    /// Opens the volume at `index`: navigates to its mount point, mounting it
+    /// first (on a worker thread) if it is not yet mounted.
+    pub fn open_volume(mut self: Pin<&mut Self>, index: i32) {
+        if *self.volume_busy() {
+            return;
+        }
+        self.as_mut().set_op_error(QString::default());
+        let Some(path) = self.volume_path(index) else {
+            return;
+        };
+        let mounted_at = usize::try_from(index)
+            .ok()
+            .and_then(|index| self.rust().volumes.get(index))
+            .map(|volume| volume.mount_point.clone())
+            .unwrap_or_default();
+
+        if !mounted_at.is_empty() {
+            self.as_mut()
+                .open_location(&QString::from(mounted_at.as_str()));
+            return;
+        }
+
+        self.as_mut().set_volume_busy(true);
+        self.as_mut().set_status_text(QString::from("Montando…"));
+
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let result = crate::volumes::mount(&path);
+            let _ = qt.queue(move |mut controller| {
+                controller.as_mut().set_volume_busy(false);
+                match result {
+                    Ok(mount_point) => {
+                        controller.as_mut().load_volumes();
+                        if !mount_point.is_empty() {
+                            controller
+                                .as_mut()
+                                .open_location(&QString::from(mount_point.as_str()));
+                        }
+                    }
+                    Err(error) => controller
+                        .as_mut()
+                        .set_op_error(QString::from(error.as_str())),
+                }
+            });
+        });
+    }
+
+    fn volume_path(&self, index: i32) -> Option<String> {
+        let index = usize::try_from(index).ok()?;
+        self.rust()
+            .volumes
+            .get(index)
+            .map(|volume| volume.object_path.clone())
     }
 
     /// Records (or clears) how to reverse the last operation, keeping the

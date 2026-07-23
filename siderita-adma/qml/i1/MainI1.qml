@@ -137,6 +137,17 @@ ApplicationWindow {
         }
     }
 
+    // Load the removable-volume list into whichever tab is active — once the
+    // first controller resolves, and again on each tab switch — so the
+    // window-scope "Dispositivos" sidebar always reflects the active tab.
+    Connections {
+        target: window
+        function onActiveControllerChanged() {
+            if (window.activeController)
+                window.activeController.loadVolumes()
+        }
+    }
+
     // ── Document ─────────────────────────────────────────────────────────
     // One independent folder view: breadcrumb + search pills, the list/grid,
     // multi-selection, the entry/folder/sort context menus, and the per-tab
@@ -3009,6 +3020,131 @@ ApplicationWindow {
                             if (window.activeController)
                                 window.activeController.loadTrash()
                             window.trashViewOpen = true
+                        }
+                    }
+                }
+
+                // ── Removable volumes (UDisks2) ──────────────────────────
+                Item {
+                    width: placesColumn.width
+                    height: volumesHeaderRow.height
+                    visible: window.activeController
+                             && window.activeController.volumeNames.length > 0
+
+                    Text {
+                        id: volumesHeaderRow
+                        x: 14
+                        text: "DISPOSITIVOS"
+                        topPadding: 12
+                        bottomPadding: 4
+                        color: CelestinaTheme.textMuted
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: CelestinaTheme.fontMini
+                        font.letterSpacing: 1.4
+                        font.weight: CelestinaTheme.weightDemiBold
+                    }
+                }
+
+                Repeater {
+                    model: window.activeController
+                           ? window.activeController.volumeNames : []
+
+                    delegate: Item {
+                        id: volumeRow
+                        required property int index
+                        required property string modelData
+                        readonly property string mountPoint:
+                            (window.activeController
+                             && index < window.activeController.volumeMounts.length)
+                            ? window.activeController.volumeMounts[index] : ""
+                        readonly property bool mounted: mountPoint.length > 0
+                        readonly property bool current: mounted
+                            && mountPoint === (window.activeController
+                                               ? window.activeController.currentPath : "")
+
+                        width: placesColumn.width
+                        height: 34
+                        Accessible.role: Accessible.Button
+                        Accessible.name: volumeRow.modelData
+                                         + (volumeRow.mounted ? ", montado" : ", sin montar")
+
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.leftMargin: 2
+                            anchors.rightMargin: 2
+                            radius: CelestinaTheme.radiusSm
+                            color: volumeRow.current
+                                   ? CelestinaTheme.badgeAccentFill
+                                   : volumeMouse.containsMouse
+                                     ? CelestinaTheme.surfaceHover : "transparent"
+                        }
+
+                        IconImage {
+                            id: volumeIcon
+                            x: 12
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: CelestinaTheme.iconSm
+                            height: CelestinaTheme.iconSm
+                            name: "drive-removable-media"
+                            source: CelestinaTheme.fallbackIcon("folder")
+                            color: volumeRow.current ? CelestinaTheme.accent
+                                                     : CelestinaTheme.textMuted
+                        }
+
+                        Text {
+                            x: volumeIcon.x + volumeIcon.width + 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: ejectButton.x - x - 6
+                            text: volumeRow.modelData
+                            color: volumeRow.current ? CelestinaTheme.accent
+                                                     : CelestinaTheme.text
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontLabel
+                            elide: Text.ElideRight
+                        }
+
+                        // Eject (unmount) when mounted; hidden otherwise.
+                        IconImage {
+                            id: ejectButton
+                            z: 3   // above the full-row open handler below
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.right: parent.right
+                            anchors.rightMargin: 10
+                            width: CelestinaTheme.iconSm
+                            height: CelestinaTheme.iconSm
+                            visible: volumeRow.mounted
+                            name: "media-eject"
+                            source: CelestinaTheme.fallbackIcon("media-eject")
+                            color: ejectMouse.containsMouse ? CelestinaTheme.accent
+                                                            : CelestinaTheme.textMuted
+                            opacity: ejectMouse.containsMouse ? 1.0 : 0.7
+                            Accessible.role: Accessible.Button
+                            Accessible.name: "Expulsar " + volumeRow.modelData
+
+                            MouseArea {
+                                id: ejectMouse
+                                anchors.fill: parent
+                                anchors.margins: -4
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (window.activeController)
+                                        window.activeController.unmountVolume(
+                                            volumeRow.index)
+                                }
+                            }
+                        }
+
+                        MouseArea {
+                            id: volumeMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            // Open (mounting first if needed); eject has its own zone.
+                            onClicked: {
+                                if (window.activeController)
+                                    window.activeController.openVolume(volumeRow.index)
+                            }
                         }
                     }
                 }

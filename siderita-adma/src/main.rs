@@ -3,6 +3,7 @@ mod bookmarks;
 mod controller;
 mod dbus;
 mod places;
+mod volumes;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQuickStyle, QString, QUrl};
 
