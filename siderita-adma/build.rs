@@ -17,6 +17,7 @@ fn main() {
         )
         .qml_files([
             "qml/i1/GlassSurface.qml",
+            "qml/i1/GlassCard.qml",
             "qml/i1/GlassContextMenu.qml",
             "qml/i1/GlassMenuItem.qml",
             "qml/i1/MainI1.qml",

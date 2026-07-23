@@ -912,9 +912,13 @@ ApplicationWindow {
                     required property bool isDirectory
 
                     readonly property bool selected: mainPanel.isSelected(token)
+                    // Hidden (dotfile) entries are dimmed so they read as a
+                    // distinct, secondary block.
+                    readonly property bool hidden: name.charAt(0) === "."
 
                     width: fileList.width
                     height: mainPanel.listRowHeight
+                    opacity: hidden ? 0.5 : 1.0
                     Accessible.role: Accessible.ListItem
                     Accessible.name: name
                     Accessible.selected: selected
@@ -1228,9 +1232,11 @@ ApplicationWindow {
                     required property bool isDirectory
 
                     readonly property bool selected: mainPanel.isSelected(token)
+                    readonly property bool hidden: name.charAt(0) === "."
 
                     width: fileGrid.cellWidth
                     height: fileGrid.cellHeight
+                    opacity: hidden ? 0.5 : 1.0
                     Accessible.role: Accessible.ListItem
                     Accessible.name: name
                     Accessible.selected: selected
@@ -2485,14 +2491,11 @@ ApplicationWindow {
                 onClicked: namePrompt.dismiss()
             }
 
-            Rectangle {
+            GlassCard {
                 anchors.centerIn: parent
                 width: Math.min(380, root.width - 48)
                 height: 142
-                radius: CelestinaTheme.radiusMd
-                color: CelestinaTheme.canvasRaised
-                border.width: 1
-                border.color: CelestinaTheme.borderStrong
+                backdropSource: mainPanel
 
                 // Swallow clicks so they never reach the dismiss backdrop.
                 MouseArea { anchors.fill: parent }
@@ -2578,14 +2581,11 @@ ApplicationWindow {
             }
             focus: controller.conflictPending
 
-            Rectangle {
+            GlassCard {
                 anchors.centerIn: parent
                 width: Math.min(420, root.width - 48)
                 height: 176
-                radius: CelestinaTheme.radiusMd
-                color: CelestinaTheme.canvasRaised
-                border.width: 1
-                border.color: CelestinaTheme.borderStrong
+                backdropSource: mainPanel
                 Accessible.role: Accessible.Dialog
                 Accessible.name: "Conflicto al pegar"
 
@@ -2698,14 +2698,11 @@ ApplicationWindow {
             }
             focus: trashView.visible
 
-            Rectangle {
+            GlassCard {
                 anchors.centerIn: parent
                 width: Math.min(560, root.width - 48)
                 height: Math.min(460, root.height - 64)
-                radius: CelestinaTheme.radiusMd
-                color: CelestinaTheme.canvasRaised
-                border.width: 1
-                border.color: CelestinaTheme.borderStrong
+                backdropSource: mainPanel
                 Accessible.role: Accessible.Dialog
                 Accessible.name: "Papelera"
 
@@ -2898,14 +2895,11 @@ ApplicationWindow {
             }
             focus: controller.openWithPending
 
-            Rectangle {
+            GlassCard {
                 anchors.centerIn: parent
                 width: Math.min(480, root.width - 48)
                 height: Math.min(420, root.height - 64)
-                radius: CelestinaTheme.radiusMd
-                color: CelestinaTheme.canvasRaised
-                border.width: 1
-                border.color: CelestinaTheme.borderStrong
+                backdropSource: mainPanel
                 Accessible.role: Accessible.Dialog
                 Accessible.name: "Abrir con"
 
@@ -3048,15 +3042,12 @@ ApplicationWindow {
             }
             focus: controller.propertiesPending
 
-            Rectangle {
+            GlassCard {
                 anchors.centerIn: parent
                 width: Math.min(500, root.width - 48)
                 height: Math.min(propertiesColumn.implicitHeight + propHeading.height + 90,
                                  root.height - 64)
-                radius: CelestinaTheme.radiusMd
-                color: CelestinaTheme.canvasRaised
-                border.width: 1
-                border.color: CelestinaTheme.borderStrong
+                backdropSource: mainPanel
                 Accessible.role: Accessible.Dialog
                 Accessible.name: "Propiedades"
 
@@ -3176,14 +3167,11 @@ ApplicationWindow {
             }
             focus: controller.searchActive
 
-            Rectangle {
+            GlassCard {
                 anchors.centerIn: parent
                 width: Math.min(600, root.width - 48)
                 height: Math.min(520, root.height - 64)
-                radius: CelestinaTheme.radiusMd
-                color: CelestinaTheme.canvasRaised
-                border.width: 1
-                border.color: CelestinaTheme.borderStrong
+                backdropSource: mainPanel
                 Accessible.role: Accessible.Dialog
                 Accessible.name: "Resultados de búsqueda"
 
@@ -3645,7 +3633,9 @@ ApplicationWindow {
 
                     Text {
                         id: volumesHeaderRow
-                        x: 14
+                        // placesColumn.x is 8, so x:8 here → the same absolute
+                        // left edge as MARCADORES (x:16), aligning the headers.
+                        x: 8
                         y: 12
                         text: "DISPOSITIVOS"
                         color: CelestinaTheme.textMuted

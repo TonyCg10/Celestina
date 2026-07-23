@@ -14,6 +14,12 @@ pub struct Settings {
     pub view_mode: String,
     /// Item scale (the zoom slider), clamped to a sane range on load.
     pub scale: f64,
+    /// Sort field index (0 name, 1 size, 2 date, 3 kind).
+    pub sort_field: i32,
+    /// Ascending vs descending.
+    pub sort_ascending: bool,
+    /// Whether hidden (dotfile) entries are shown.
+    pub show_hidden: bool,
     /// UDisks2 device names the user hid from the "Dispositivos" list.
     pub hidden_devices: Vec<String>,
 }
@@ -23,6 +29,9 @@ impl Default for Settings {
         Self {
             view_mode: "list".to_owned(),
             scale: 1.0,
+            sort_field: 0,
+            sort_ascending: true,
+            show_hidden: false,
             hidden_devices: Vec::new(),
         }
     }
@@ -69,6 +78,15 @@ fn load_from(path: &Path) -> Settings {
                     settings.scale = scale.clamp(0.8, 1.9);
                 }
             }
+            "sort_field" => {
+                if let Ok(field) = value.parse::<i32>() {
+                    if (0..=3).contains(&field) {
+                        settings.sort_field = field;
+                    }
+                }
+            }
+            "sort_ascending" => settings.sort_ascending = value != "false",
+            "show_hidden" => settings.show_hidden = value == "true",
             "hidden_device" if !value.is_empty() => {
                 settings.hidden_devices.push(value.to_owned());
             }
@@ -83,13 +101,16 @@ fn save_to(path: &Path, settings: &Settings) -> io::Result<()> {
         fs::create_dir_all(parent)?;
     }
     let mut text = format!(
-        "view_mode={}\nscale={:.2}\n",
+        "view_mode={}\nscale={:.2}\nsort_field={}\nsort_ascending={}\nshow_hidden={}\n",
         if settings.view_mode == "grid" {
             "grid"
         } else {
             "list"
         },
         settings.scale.clamp(0.8, 1.9),
+        settings.sort_field.clamp(0, 3),
+        settings.sort_ascending,
+        settings.show_hidden,
     );
     for device in &settings.hidden_devices {
         let device = device.replace(['\n', '\r'], "");
@@ -124,6 +145,9 @@ mod tests {
         let settings = Settings {
             view_mode: "grid".to_owned(),
             scale: 1.3,
+            sort_field: 2,
+            sort_ascending: false,
+            show_hidden: true,
             hidden_devices: vec!["MI USB".to_owned(), "sdb1".to_owned()],
         };
         save_to(&file, &settings).expect("save");

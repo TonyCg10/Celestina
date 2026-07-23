@@ -525,6 +525,19 @@ pub struct SideritaControllerRust {
 
 impl Default for SideritaControllerRust {
     fn default() -> Self {
+        // Restore the persisted sort / hidden config so a new tab opens the way
+        // the user left it.
+        let settings = crate::settings::load();
+        let options = ViewOptions {
+            sort_field: sort_field_from_index(settings.sort_field).unwrap_or(SortField::Name),
+            sort_direction: if settings.sort_ascending {
+                SortDirection::Ascending
+            } else {
+                SortDirection::Descending
+            },
+            show_hidden: settings.show_hidden,
+            ..ViewOptions::default()
+        };
         Self {
             current_path: QString::default(),
             status_text: QString::from("Preparando Siderita…"),
@@ -536,14 +549,14 @@ impl Default for SideritaControllerRust {
             can_go_back: false,
             can_go_forward: false,
             can_go_up: false,
-            show_hidden: false,
-            sort_field: 0,
-            sort_ascending: true,
+            show_hidden: settings.show_hidden,
+            sort_field: settings.sort_field,
+            sort_ascending: settings.sort_ascending,
             coordinator: ScanCoordinator::new(),
             executor: None,
             history: NavigationHistory::default(),
             adapter: SnapshotAdapter::new(),
-            options: ViewOptions::default(),
+            options,
             snapshot: None,
             view: None,
             pending_nav: None,
@@ -609,7 +622,7 @@ impl Default for SideritaControllerRust {
             volume_busy: false,
             hidden_device_count: 0,
             volumes: Vec::new(),
-            settings: crate::settings::load(),
+            settings,
             clipboard: Vec::new(),
             clipboard_cut: false,
             last_undo: None,
@@ -746,6 +759,7 @@ impl qobject::SideritaController {
         self.as_mut().set_show_hidden(show_hidden);
         self.as_mut().rust_mut().get_mut().options.show_hidden = show_hidden;
         self.as_mut().reproject();
+        self.as_mut().persist_view_settings();
     }
 
     pub fn change_sort_field(mut self: Pin<&mut Self>, field: i32) {
@@ -759,6 +773,7 @@ impl qobject::SideritaController {
         self.as_mut().rust_mut().get_mut().options.sort_field = sort_field;
         self.as_mut().set_sort_field(field);
         self.as_mut().reproject();
+        self.as_mut().persist_view_settings();
     }
 
     pub fn toggle_sort_direction(mut self: Pin<&mut Self>) {
@@ -770,6 +785,18 @@ impl qobject::SideritaController {
         };
         self.as_mut().set_sort_ascending(ascending);
         self.as_mut().reproject();
+        self.as_mut().persist_view_settings();
+    }
+
+    /// Saves the current sort field / direction / hidden toggle so they persist
+    /// (read fresh, change only these fields, write back — no cross-tab clobber).
+    fn persist_view_settings(mut self: Pin<&mut Self>) {
+        let mut settings = crate::settings::load();
+        settings.sort_field = *self.sort_field();
+        settings.sort_ascending = *self.sort_ascending();
+        settings.show_hidden = *self.show_hidden();
+        let _ = crate::settings::save(&settings);
+        self.as_mut().rust_mut().get_mut().settings = settings;
     }
 
     pub fn apply_query(mut self: Pin<&mut Self>, query: &QString) {
@@ -1943,17 +1970,17 @@ impl qobject::SideritaController {
     /// Persists the current view mode and scale.
     pub fn save_view_config(mut self: Pin<&mut Self>, mode: &QString, scale: f64) {
         let mode = mode.to_string();
-        {
-            let state = self.as_mut().rust_mut();
-            let state = state.get_mut();
-            state.settings.view_mode = if mode == "grid" {
-                "grid".to_owned()
-            } else {
-                "list".to_owned()
-            };
-            state.settings.scale = scale;
-            let _ = crate::settings::save(&state.settings);
-        }
+        // Read fresh, change only these two fields, write back — so a sort/hidden
+        // or device change in another tab is not clobbered.
+        let mut settings = crate::settings::load();
+        settings.view_mode = if mode == "grid" {
+            "grid".to_owned()
+        } else {
+            "list".to_owned()
+        };
+        settings.scale = scale;
+        let _ = crate::settings::save(&settings);
+        self.as_mut().rust_mut().get_mut().settings = settings;
     }
 
     /// Hides a removable device (by its display name) from the sidebar and
@@ -1963,25 +1990,21 @@ impl qobject::SideritaController {
         if name.is_empty() {
             return;
         }
-        {
-            let state = self.as_mut().rust_mut();
-            let state = state.get_mut();
-            if !state.settings.hidden_devices.contains(&name) {
-                state.settings.hidden_devices.push(name);
-                let _ = crate::settings::save(&state.settings);
-            }
+        let mut settings = crate::settings::load();
+        if !settings.hidden_devices.contains(&name) {
+            settings.hidden_devices.push(name);
+            let _ = crate::settings::save(&settings);
         }
+        self.as_mut().rust_mut().get_mut().settings = settings;
         self.as_mut().load_volumes();
     }
 
     /// Un-hides every previously-hidden device.
     pub fn unhide_all_devices(mut self: Pin<&mut Self>) {
-        {
-            let state = self.as_mut().rust_mut();
-            let state = state.get_mut();
-            state.settings.hidden_devices.clear();
-            let _ = crate::settings::save(&state.settings);
-        }
+        let mut settings = crate::settings::load();
+        settings.hidden_devices.clear();
+        let _ = crate::settings::save(&settings);
+        self.as_mut().rust_mut().get_mut().settings = settings;
         self.as_mut().load_volumes();
     }
 
