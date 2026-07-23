@@ -487,16 +487,18 @@ ApplicationWindow {
             function isEntryDrag(drag) {
                 return drag.keys.indexOf("siderita-entry") >= 0
             }
-            // Land a drop into `destPath` ("" = current folder): external file
-            // URLs (Shift = move, else copy), or an internal entry drag carrying
-            // the dragged path (Ctrl = copy, else move — the same-app default).
+            // Land a drop into `destPath` ("" = current folder). An internal
+            // entry drag is detected by our key FIRST (it now also carries a
+            // uri-list for external apps, so hasUrls is true too) and defaults to
+            // move (Ctrl = copy); a genuinely external drop uses the URLs and
+            // defaults to copy (Shift = move).
             function dropOnto(destPath, drop) {
-                if (drop.hasUrls) {
-                    controller.dropUris(urlsToPaths(drop.urls), destPath,
-                                        dropIsMove(drop))
-                } else if (isEntryDrag(drop) && root.ghost.path.length > 0) {
+                if (isEntryDrag(drop) && root.ghost.path.length > 0) {
                     var move = (drop.keyboardModifiers & Qt.ControlModifier) === 0
                     controller.dropUris([root.ghost.path], destPath, move)
+                } else if (drop.hasUrls) {
+                    controller.dropUris(urlsToPaths(drop.urls), destPath,
+                                        dropIsMove(drop))
                 }
             }
 
@@ -2922,10 +2924,15 @@ ApplicationWindow {
             property bool isDir: false
             Drag.hotSpot.x: 16
             Drag.hotSpot.y: 17
+            // Automatic so the drag also reaches other applications as a
+            // text/uri-list; internal DropAreas still match on our keys.
+            Drag.dragType: Drag.Automatic
+            Drag.supportedActions: Qt.CopyAction | Qt.MoveAction
 
             // Start dragging an entry: only folders carry the bookmark key (so a
             // file can't be dropped on the sidebar), every entry carries the
-            // move key for folder-to-folder drops.
+            // move key for folder-to-folder drops, and a file:// URI so other
+            // apps can accept the drop.
             function beginEntryDrag(entryPath, entryLabel, entryIsDir) {
                 dragGhost.path = entryPath
                 dragGhost.label = entryLabel
@@ -2933,6 +2940,9 @@ ApplicationWindow {
                 dragGhost.Drag.keys = entryIsDir
                     ? ["siderita-entry", "siderita-bookmark"]
                     : ["siderita-entry"]
+                dragGhost.Drag.mimeData = {
+                    "text/uri-list": "file://" + encodeURI(entryPath) + "\r\n"
+                }
                 dragGhost.Drag.active = true
             }
 
