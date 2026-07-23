@@ -101,6 +101,13 @@ pub mod qobject {
         #[qproperty(QString, prop_accessed)]
         #[qproperty(QString, prop_symlink)]
         #[qproperty(bool, prop_is_dir)]
+        #[qproperty(bool, search_active)]
+        #[qproperty(bool, search_running)]
+        #[qproperty(QString, search_query)]
+        #[qproperty(QString, search_summary)]
+        #[qproperty(QStringList, search_names)]
+        #[qproperty(QStringList, search_paths)]
+        #[qproperty(QStringList, search_kinds)]
         type SideritaController = super::SideritaControllerRust;
 
         #[qinvokable]
@@ -267,6 +274,18 @@ pub mod qobject {
 
         #[qinvokable]
         fn close_properties(self: Pin<&mut SideritaController>);
+
+        #[qinvokable]
+        fn search_recursive(self: Pin<&mut SideritaController>, query: &QString);
+
+        #[qinvokable]
+        fn cancel_search(self: Pin<&mut SideritaController>);
+
+        #[qinvokable]
+        fn close_search(self: Pin<&mut SideritaController>);
+
+        #[qinvokable]
+        fn open_search_hit(self: Pin<&mut SideritaController>, index: i32);
     }
 
     impl cxx_qt::Threading for SideritaController {}
@@ -416,6 +435,16 @@ pub struct SideritaControllerRust {
     prop_symlink: QString,
     prop_is_dir: bool,
     prop_size_cancel: Option<CancellationToken>,
+    search_active: bool,
+    search_running: bool,
+    search_query: QString,
+    search_summary: QString,
+    search_names: QStringList,
+    search_paths: QStringList,
+    search_kinds: QStringList,
+    search_hits: Vec<crate::search::SearchHit>,
+    search_cancel: Option<CancellationToken>,
+    pending_select_path: Option<PathBuf>,
     bookmark_names: QStringList,
     bookmark_paths: QStringList,
     op_error: QString,
@@ -497,6 +526,16 @@ impl Default for SideritaControllerRust {
             prop_symlink: QString::default(),
             prop_is_dir: false,
             prop_size_cancel: None,
+            search_active: false,
+            search_running: false,
+            search_query: QString::default(),
+            search_summary: QString::default(),
+            search_names: QStringList::default(),
+            search_paths: QStringList::default(),
+            search_kinds: QStringList::default(),
+            search_hits: Vec::new(),
+            search_cancel: None,
+            pending_select_path: None,
             bookmark_names: QStringList::default(),
             bookmark_paths: QStringList::default(),
             op_error: QString::default(),
@@ -1708,6 +1747,128 @@ impl qobject::SideritaController {
         self.as_mut().set_properties_pending(false);
     }
 
+    /// Runs a bounded recursive filename search of the current folder on a worker
+    /// thread and shows the results overlay. Truthful about scope: the summary
+    /// reports the match cap and whether the walk was cut short.
+    pub fn search_recursive(mut self: Pin<&mut Self>, query: &QString) {
+        let query = query.to_string();
+        if query.trim().is_empty() {
+            return;
+        }
+        let Some(root) = self.rust().history.current().map(Path::to_path_buf) else {
+            return;
+        };
+
+        if let Some(token) = self.as_mut().rust_mut().get_mut().search_cancel.take() {
+            token.cancel();
+        }
+        let token = CancellationToken::new();
+        self.as_mut().rust_mut().get_mut().search_cancel = Some(token.clone());
+        self.as_mut()
+            .set_search_query(QString::from(query.as_str()));
+        self.as_mut().set_search_active(true);
+        self.as_mut().set_search_running(true);
+        self.as_mut().set_search_summary(QString::from("Buscando…"));
+
+        const LIMIT: usize = 500;
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let outcome = crate::search::search(&root, &query, LIMIT, &token);
+            if token.is_cancelled() && outcome.hits.is_empty() {
+                // A search superseded before it found anything: drop it.
+                return;
+            }
+            let _ = qt.queue(move |controller: Pin<&mut qobject::SideritaController>| {
+                controller.publish_search(outcome);
+            });
+        });
+    }
+
+    /// Publishes a finished (or cancelled) search onto the Qt thread.
+    fn publish_search(mut self: Pin<&mut Self>, outcome: crate::search::SearchOutcome) {
+        let names: QStringList = outcome
+            .hits
+            .iter()
+            .map(|hit| QString::from(hit.name.as_str()))
+            .collect();
+        let paths: QStringList = outcome
+            .hits
+            .iter()
+            .map(|hit| QString::from(hit.path.as_str()))
+            .collect();
+        let kinds: QStringList = outcome
+            .hits
+            .iter()
+            .map(|hit| QString::from(if hit.is_dir { "directory" } else { "file" }))
+            .collect();
+
+        let summary = if outcome.cancelled {
+            format!(
+                "{} coincidencias · búsqueda detenida ({} carpetas)",
+                outcome.hits.len(),
+                outcome.dirs_scanned
+            )
+        } else if outcome.truncated {
+            format!(
+                "{}+ coincidencias · detenida en el límite ({} carpetas)",
+                outcome.hits.len(),
+                outcome.dirs_scanned
+            )
+        } else {
+            format!(
+                "{} coincidencias · {} carpetas exploradas",
+                outcome.hits.len(),
+                outcome.dirs_scanned
+            )
+        };
+
+        self.as_mut().rust_mut().get_mut().search_hits = outcome.hits;
+        self.as_mut().set_search_names(names);
+        self.as_mut().set_search_paths(paths);
+        self.as_mut().set_search_kinds(kinds);
+        self.as_mut()
+            .set_search_summary(QString::from(summary.as_str()));
+        self.as_mut().set_search_running(false);
+    }
+
+    pub fn cancel_search(mut self: Pin<&mut Self>) {
+        if let Some(token) = self.as_mut().rust_mut().get_mut().search_cancel.take() {
+            token.cancel();
+        }
+    }
+
+    pub fn close_search(mut self: Pin<&mut Self>) {
+        self.as_mut().cancel_search();
+        self.as_mut().set_search_active(false);
+    }
+
+    /// Opens the search hit at `index`: navigates into it (a folder) or to its
+    /// parent (a file), selecting the file once the folder lands. Closes search.
+    pub fn open_search_hit(mut self: Pin<&mut Self>, index: i32) {
+        let Ok(index) = usize::try_from(index) else {
+            return;
+        };
+        let Some(hit) = self.rust().search_hits.get(index).cloned() else {
+            return;
+        };
+        let hit_path = PathBuf::from(&hit.path);
+        let (target, select) = if hit.is_dir {
+            (Some(hit_path.clone()), None)
+        } else {
+            (
+                hit_path.parent().map(Path::to_path_buf),
+                Some(hit_path.clone()),
+            )
+        };
+        let Some(target) = target else {
+            return;
+        };
+
+        self.as_mut().rust_mut().get_mut().pending_select_path = select;
+        self.as_mut().close_search();
+        self.as_mut().request_nav_scan(PendingNav::To(target));
+    }
+
     /// Records (or clears) how to reverse the last operation, keeping the
     /// `can_undo` / `undo_label` properties in step for the menu and shortcut.
     fn set_undo(mut self: Pin<&mut Self>, action: Option<UndoAction>) {
@@ -1940,11 +2101,31 @@ impl qobject::SideritaController {
                     .any(|row| row.token().to_string() == selected)
         };
 
+        // A hit opened from search asks us to select a specific path once its
+        // folder lands (one-shot).
+        let select_token = {
+            let pending = self
+                .as_mut()
+                .rust_mut()
+                .get_mut()
+                .pending_select_path
+                .take();
+            pending.and_then(|path| {
+                view.rows()
+                    .iter()
+                    .find(|row| row.path() == path.as_path())
+                    .map(|row| row.token().to_string())
+            })
+        };
+
         self.as_mut().rust_mut().get_mut().view = Some(view);
         self.as_mut().set_entry_names(names);
         let next_revision = self.view_revision().wrapping_add(1);
         self.as_mut().set_view_revision(next_revision);
-        if !selected_is_visible {
+        if let Some(token) = select_token {
+            self.as_mut()
+                .set_selected_token(QString::from(token.as_str()));
+        } else if !selected_is_visible {
             self.as_mut().set_selected_token(QString::default());
         }
 

@@ -4,6 +4,7 @@ mod controller;
 mod dbus;
 mod places;
 mod properties;
+mod search;
 mod volumes;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQuickStyle, QString, QUrl};

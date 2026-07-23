@@ -1932,7 +1932,7 @@ ApplicationWindow {
                 height: CelestinaTheme.controlHeight
                 x: topBar.width - width - 14
                 anchors.verticalCenter: parent.verticalCenter
-                placeholderText: "Buscar en esta carpeta"
+                placeholderText: "Filtrar · ⏎ busca en subcarpetas"
                 color: CelestinaTheme.text
                 placeholderTextColor: CelestinaTheme.textMuted
                 selectionColor: CelestinaTheme.accentStrong
@@ -1942,6 +1942,9 @@ ApplicationWindow {
                 leftPadding: 13
                 rightPadding: 13
                 onTextEdited: searchDebounce.restart()
+                // Enter runs a recursive filename search of the current folder.
+                onAccepted: if (text.trim().length > 0)
+                                controller.searchRecursive(text)
 
                 background: Item {
                     Rectangle {
@@ -3118,6 +3121,174 @@ ApplicationWindow {
                         text: "Cerrar"
                         primary: true
                         onClicked: controller.closeProperties()
+                    }
+                }
+            }
+        }
+
+        // ── Recursive filename search results ────────────────────────────
+        Rectangle {
+            id: searchView
+            anchors.fill: parent
+            z: 70
+            visible: controller.searchActive
+            color: Qt.rgba(0, 0, 0, 0.45)
+
+            MouseArea {
+                anchors.fill: parent
+                onClicked: controller.closeSearch()
+            }
+            Keys.onPressed: function(event) {
+                if (event.key === Qt.Key_Escape) {
+                    controller.closeSearch()
+                    event.accepted = true
+                }
+            }
+            focus: controller.searchActive
+
+            Rectangle {
+                anchors.centerIn: parent
+                width: Math.min(600, root.width - 48)
+                height: Math.min(520, root.height - 64)
+                radius: CelestinaTheme.radiusMd
+                color: CelestinaTheme.canvasRaised
+                border.width: 1
+                border.color: CelestinaTheme.borderStrong
+                Accessible.role: Accessible.Dialog
+                Accessible.name: "Resultados de búsqueda"
+
+                MouseArea { anchors.fill: parent }
+
+                Text {
+                    id: searchHeading
+                    x: 18
+                    y: 16
+                    width: parent.width - 36
+                    text: "Buscar «" + controller.searchQuery + "»"
+                    color: CelestinaTheme.text
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCallout
+                    font.weight: CelestinaTheme.weightDemiBold
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    id: searchSummary
+                    anchors.left: searchHeading.left
+                    anchors.top: searchHeading.bottom
+                    anchors.topMargin: 3
+                    text: controller.searchSummary
+                    color: CelestinaTheme.textMuted
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCaption
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    visible: !controller.searchRunning
+                             && controller.searchNames.length === 0
+                    text: "Sin coincidencias"
+                    color: CelestinaTheme.textMuted
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontBody
+                }
+
+                ListView {
+                    id: searchList
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 12
+                    anchors.top: searchSummary.bottom
+                    anchors.topMargin: 12
+                    anchors.bottom: searchButtons.top
+                    anchors.bottomMargin: 12
+                    clip: true
+                    spacing: 2
+                    model: controller.searchNames
+
+                    delegate: Item {
+                        id: hitRow
+                        required property int index
+                        required property string modelData
+                        readonly property bool isDir:
+                            (controller.searchKinds[index] || "") === "directory"
+                        width: ListView.view.width
+                        height: 46
+                        Accessible.role: Accessible.ListItem
+                        Accessible.name: hitRow.modelData
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: CelestinaTheme.radiusSm
+                            color: hitMouse.containsMouse
+                                   ? CelestinaTheme.surfaceHover : "transparent"
+                        }
+
+                        IconImage {
+                            id: hitIcon
+                            x: 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: CelestinaTheme.iconSm
+                            height: CelestinaTheme.iconSm
+                            name: hitRow.isDir ? "folder" : "text-x-generic"
+                            source: CelestinaTheme.fallbackIcon(
+                                        hitRow.isDir ? "folder" : "file")
+                            color: hitRow.isDir ? CelestinaTheme.accent
+                                                : CelestinaTheme.textMuted
+                        }
+
+                        Text {
+                            id: hitName
+                            x: hitIcon.x + hitIcon.width + 10
+                            y: 5
+                            width: parent.width - x - 12
+                            text: hitRow.modelData
+                            color: CelestinaTheme.text
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontLabel
+                            elide: Text.ElideMiddle
+                        }
+
+                        Text {
+                            x: hitName.x
+                            anchors.top: hitName.bottom
+                            anchors.topMargin: 1
+                            width: parent.width - x - 12
+                            text: controller.searchPaths[hitRow.index] || ""
+                            color: CelestinaTheme.textMuted
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontMini
+                            elide: Text.ElideMiddle
+                        }
+
+                        MouseArea {
+                            id: hitMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: controller.openSearchHit(hitRow.index)
+                        }
+                    }
+                }
+
+                Row {
+                    id: searchButtons
+                    anchors.right: parent.right
+                    anchors.rightMargin: 18
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 16
+                    spacing: 8
+
+                    PillButton {
+                        text: "Detener"
+                        visible: controller.searchRunning
+                        onClicked: controller.cancelSearch()
+                    }
+                    PillButton {
+                        text: "Cerrar"
+                        primary: true
+                        onClicked: controller.closeSearch()
                     }
                 }
             }
