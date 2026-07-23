@@ -274,6 +274,16 @@ ApplicationWindow {
             }
         }
 
+        // Drop any active search — the live filter and the recursive results —
+        // and empty the field, returning the content box to the plain listing.
+        // Fired on navigation (so a sidebar/place click lands on a clean folder)
+        // and by the mouse Back button.
+        function clearSearch() {
+            searchField.text = ""
+            controller.applyQuery("")
+            controller.closeSearch()
+        }
+
         // Per-tab shortcuts: only the active (visible) tab responds, so the
         // same sequence across tabs is never ambiguous.
         Shortcut {
@@ -389,11 +399,18 @@ ApplicationWindow {
                 if (controller.loading)
                     return
 
-                if (button === Qt.BackButton && controller.canGoBack)
-                    controller.goBack()
-                else if (button === Qt.ForwardButton
-                         && controller.canGoForward)
+                if (button === Qt.BackButton) {
+                    // A search in progress (either the live filter or the
+                    // recursive results) bows out first — clearing the field and
+                    // hits and staying put — before Back walks history.
+                    if (searchField.text.length > 0 || controller.searchActive)
+                        root.clearSearch()
+                    else if (controller.canGoBack)
+                        controller.goBack()
+                } else if (button === Qt.ForwardButton
+                           && controller.canGoForward) {
                     controller.goForward()
+                }
             }
         }
 
@@ -413,13 +430,17 @@ ApplicationWindow {
                 controller.saveViewConfig(viewMode, itemScale)
             }
 
-            // Row height tracks the glyph plus a *constant* 16 px of breathing
-            // room, so the selection bar (which fills the row) keeps a fixed 8 px
-            // gap around the icon/text at every zoom, instead of the gap growing
-            // with the scale as a flat rowHeight × scale would.
-            readonly property int listRowHeight: Math.round(CelestinaTheme.glyphTile * itemScale) + 16
+            readonly property int listRowHeight: Math.round(CelestinaTheme.rowHeight * itemScale)
             readonly property int gridCellWidth: Math.round(132 * itemScale)
             readonly property int gridCellHeight: Math.round(112 * itemScale)
+
+            // The row/cell (the "selection square") scales with itemScale; the
+            // icon and label scale *harder* above the default zoom, so they fill
+            // that square as you zoom in instead of the square outgrowing them.
+            // At or below 1× they track the view scale unchanged.
+            readonly property real contentScale: itemScale > 1
+                                                 ? 1 + (itemScale - 1) * 1.6
+                                                 : itemScale
 
             // ── Multi-selection (token-keyed, so it survives sort/filter) ────
             property var selectedTokens: ({})
@@ -598,7 +619,12 @@ ApplicationWindow {
 
             Connections {
                 target: controller
-                function onCurrentPathChanged() { mainPanel.clearSelection() }
+                function onCurrentPathChanged() {
+                    mainPanel.clearSelection()
+                    // A new folder (sidebar/place click, breadcrumb, back/up…)
+                    // returns the content box to its plain listing.
+                    root.clearSearch()
+                }
             }
 
             anchors.fill: parent
@@ -1014,8 +1040,8 @@ ApplicationWindow {
                         id: kindGlyph
                         x: 14
                         anchors.verticalCenter: parent.verticalCenter
-                        width: Math.round(CelestinaTheme.glyphTile * mainPanel.itemScale)
-                        height: Math.round(CelestinaTheme.glyphTile * mainPanel.itemScale)
+                        width: Math.round(CelestinaTheme.glyphTile * mainPanel.contentScale)
+                        height: Math.round(CelestinaTheme.glyphTile * mainPanel.contentScale)
                         radius: CelestinaTheme.radiusSm
                         color: row.kind === "directory"
                                ? CelestinaTheme.glyphDirectory
@@ -1025,8 +1051,8 @@ ApplicationWindow {
 
                         IconImage {
                             anchors.centerIn: parent
-                            width: Math.round(CelestinaTheme.iconMd * mainPanel.itemScale)
-                            height: Math.round(CelestinaTheme.iconMd * mainPanel.itemScale)
+                            width: Math.round(CelestinaTheme.iconMd * mainPanel.contentScale)
+                            height: Math.round(CelestinaTheme.iconMd * mainPanel.contentScale)
                             name: row.kind === "directory"
                                   ? "folder"
                                   : row.kind === "symlink"
@@ -1056,7 +1082,7 @@ ApplicationWindow {
                             text: row.name
                             color: CelestinaTheme.text
                             font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: Math.round(CelestinaTheme.fontBody * mainPanel.itemScale)
+                            font.pixelSize: Math.round(CelestinaTheme.fontBody * mainPanel.contentScale)
                             font.weight: CelestinaTheme.weightMedium
                             font.italic: row.cut
                             elide: Text.ElideMiddle
@@ -1067,7 +1093,7 @@ ApplicationWindow {
                             text: row.subtitle
                             color: CelestinaTheme.textMuted
                             font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: Math.round(CelestinaTheme.fontCaption * mainPanel.itemScale)
+                            font.pixelSize: Math.round(CelestinaTheme.fontCaption * mainPanel.contentScale)
                             elide: Text.ElideRight
                         }
                     }
@@ -1274,14 +1300,9 @@ ApplicationWindow {
                     Accessible.name: name
                     Accessible.selected: selected
 
-                    // The selection/hover highlight hugs the icon+label with a
-                    // constant margin instead of filling the whole cell, so the
-                    // gap around the content stays tight and does not balloon as
-                    // the cell grows with the zoom.
                     Rectangle {
-                        anchors.centerIn: parent
-                        width: Math.min(parent.width - 6, cellContent.width + 22)
-                        height: Math.min(parent.height - 6, cellContent.height + 16)
+                        anchors.fill: parent
+                        anchors.margins: 5
                         radius: CelestinaTheme.radiusSm
                         color: cell.selected
                                ? CelestinaTheme.surfaceSelected
@@ -1325,15 +1346,14 @@ ApplicationWindow {
                     }
 
                     Column {
-                        id: cellContent
                         anchors.centerIn: parent
                         spacing: 8
 
                         Rectangle {
                             id: cellGlyph
                             anchors.horizontalCenter: parent.horizontalCenter
-                            width: Math.round(48 * mainPanel.itemScale)
-                            height: Math.round(48 * mainPanel.itemScale)
+                            width: Math.round(48 * mainPanel.contentScale)
+                            height: Math.round(48 * mainPanel.contentScale)
                             radius: CelestinaTheme.radiusSm
                             color: cell.kind === "directory"
                                    ? CelestinaTheme.glyphDirectory
@@ -1343,8 +1363,8 @@ ApplicationWindow {
 
                             IconImage {
                                 anchors.centerIn: parent
-                                width: Math.round(26 * mainPanel.itemScale)
-                                height: Math.round(26 * mainPanel.itemScale)
+                                width: Math.round(26 * mainPanel.contentScale)
+                                height: Math.round(26 * mainPanel.contentScale)
                                 name: cell.kind === "directory"
                                       ? "folder"
                                       : cell.kind === "symlink"
@@ -1363,16 +1383,12 @@ ApplicationWindow {
                         }
 
                         Text {
-                            // Hug the label: a short name takes its natural width
-                            // (so the highlight wraps it tightly), a long one caps
-                            // at the cell and wraps to two lines.
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            width: Math.min(implicitWidth, fileGrid.cellWidth - 16)
+                            width: fileGrid.cellWidth - 22
                             horizontalAlignment: Text.AlignHCenter
                             text: cell.name
                             color: CelestinaTheme.text
                             font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: Math.round(CelestinaTheme.fontCaption * mainPanel.itemScale)
+                            font.pixelSize: Math.round(CelestinaTheme.fontCaption * mainPanel.contentScale)
                             font.italic: cell.cut
                             elide: Text.ElideRight
                             maximumLineCount: 2
@@ -3328,6 +3344,9 @@ ApplicationWindow {
                 spacing: 2
                 model: controller.searchNames
 
+                // Each hit reads like a file-list row — the same glyph tile,
+                // name and (here, the path) subtitle, hover highlight and zoom —
+                // so search stays in the content box's visual language.
                 delegate: Item {
                     id: hitRow
                     required property int index
@@ -3335,7 +3354,7 @@ ApplicationWindow {
                     readonly property bool isDir:
                         (controller.searchKinds[index] || "") === "directory"
                     width: ListView.view.width
-                    height: 46
+                    height: mainPanel.listRowHeight
                     Accessible.role: Accessible.ListItem
                     Accessible.name: hitRow.modelData
 
@@ -3346,43 +3365,58 @@ ApplicationWindow {
                         radius: CelestinaTheme.radiusSm
                         color: hitMouse.containsMouse
                                ? CelestinaTheme.surfaceHover : "transparent"
+
+                        Behavior on color {
+                            ColorAnimation { duration: CelestinaTheme.motionFast }
+                        }
                     }
 
-                    IconImage {
-                        id: hitIcon
-                        x: 12
+                    Rectangle {
+                        id: hitGlyph
+                        x: 14
                         anchors.verticalCenter: parent.verticalCenter
-                        width: CelestinaTheme.iconSm
-                        height: CelestinaTheme.iconSm
-                        name: hitRow.isDir ? "folder" : "text-x-generic"
-                        source: CelestinaTheme.fallbackIcon(
-                                    hitRow.isDir ? "folder" : "file")
-                        color: hitRow.isDir ? CelestinaTheme.accent
-                                            : CelestinaTheme.textMuted
+                        width: Math.round(CelestinaTheme.glyphTile * mainPanel.contentScale)
+                        height: Math.round(CelestinaTheme.glyphTile * mainPanel.contentScale)
+                        radius: CelestinaTheme.radiusSm
+                        color: hitRow.isDir ? CelestinaTheme.glyphDirectory
+                                            : CelestinaTheme.glyphFile
+
+                        IconImage {
+                            anchors.centerIn: parent
+                            width: Math.round(CelestinaTheme.iconMd * mainPanel.contentScale)
+                            height: Math.round(CelestinaTheme.iconMd * mainPanel.contentScale)
+                            name: hitRow.isDir ? "folder" : "text-x-generic"
+                            source: CelestinaTheme.fallbackIcon(
+                                        hitRow.isDir ? "folder" : "file")
+                            color: hitRow.isDir ? CelestinaTheme.accent
+                                                : CelestinaTheme.textMuted
+                        }
                     }
 
-                    Text {
-                        id: hitName
-                        x: hitIcon.x + hitIcon.width + 10
-                        y: 5
-                        width: parent.width - x - 16
-                        text: hitRow.modelData
-                        color: CelestinaTheme.text
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontLabel
-                        elide: Text.ElideMiddle
-                    }
+                    Column {
+                        x: hitGlyph.x + hitGlyph.width + 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - x - 24
+                        spacing: 1
 
-                    Text {
-                        x: hitName.x
-                        anchors.top: hitName.bottom
-                        anchors.topMargin: 1
-                        width: parent.width - x - 16
-                        text: controller.searchPaths[hitRow.index] || ""
-                        color: CelestinaTheme.textMuted
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontMini
-                        elide: Text.ElideMiddle
+                        Text {
+                            width: parent.width
+                            text: hitRow.modelData
+                            color: CelestinaTheme.text
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: Math.round(CelestinaTheme.fontBody * mainPanel.contentScale)
+                            font.weight: CelestinaTheme.weightMedium
+                            elide: Text.ElideMiddle
+                        }
+
+                        Text {
+                            width: parent.width
+                            text: controller.searchPaths[hitRow.index] || ""
+                            color: CelestinaTheme.textMuted
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: Math.round(CelestinaTheme.fontCaption * mainPanel.contentScale)
+                            elide: Text.ElideMiddle
+                        }
                     }
 
                     MouseArea {
