@@ -125,6 +125,57 @@ ApplicationWindow {
         }
     }
 
+    // Themed push button for dialogs/overlays (the default QtQuick Basic Button
+    // is unstyled). `primary` fills with the accent; otherwise a control-fill
+    // pill with a border.
+    component PillButton: Button {
+        id: pill
+
+        property bool primary: false
+
+        hoverEnabled: true
+        implicitHeight: 30
+        leftPadding: 14
+        rightPadding: 14
+        font.family: CelestinaTheme.sansFamily
+        font.pixelSize: CelestinaTheme.fontLabel
+        font.weight: CelestinaTheme.weightMedium
+
+        contentItem: Text {
+            text: pill.text
+            font: pill.font
+            color: !pill.enabled
+                   ? CelestinaTheme.textMuted
+                   : pill.primary ? CelestinaTheme.canvas : CelestinaTheme.text
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+
+        background: Rectangle {
+            radius: CelestinaTheme.radiusSm
+            opacity: pill.enabled ? 1 : 0.5
+            color: {
+                if (!pill.enabled)
+                    return CelestinaTheme.controlFill
+                if (pill.primary)
+                    return pill.down ? Qt.darker(CelestinaTheme.accent, 1.18)
+                         : pill.hovered ? Qt.darker(CelestinaTheme.accent, 1.08)
+                         : CelestinaTheme.accent
+                return pill.down ? CelestinaTheme.surfaceStrong
+                     : pill.hovered ? CelestinaTheme.surfaceHover
+                     : CelestinaTheme.controlFill
+            }
+            border.width: pill.primary ? 0 : 1
+            border.color: pill.activeFocus
+                          ? CelestinaTheme.focus : CelestinaTheme.border
+
+            Behavior on color {
+                ColorAnimation { duration: CelestinaTheme.motionFast }
+            }
+        }
+    }
+
     // App-global org.freedesktop.FileManager1 service: "Show in file manager"
     // from another application opens the folder in a new foreground tab and
     // raises the window. One instance for the whole window, not per tab.
@@ -1620,11 +1671,21 @@ ApplicationWindow {
                 }
 
                 MouseArea {
+                    id: pathMouse
                     anchors.fill: parent
                     visible: !pathPill.editing
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
                     cursorShape: Qt.IBeamCursor
                     Accessible.name: "Editar ubicación"
-                    onClicked: pathPill.beginEditing()
+                    onClicked: function(mouse) {
+                        if (mouse.button === Qt.RightButton) {
+                            const point = pathMouse.mapToItem(
+                                            root.overlayParent, mouse.x, mouse.y)
+                            pathMenu.popup(root.overlayParent, point)
+                        } else {
+                            pathPill.beginEditing()
+                        }
+                    }
                 }
 
                 Row {
@@ -2104,6 +2165,26 @@ ApplicationWindow {
             }
         }
 
+        // Context menu for the breadcrumb / path bar: act on the current path.
+        GlassContextMenu {
+            id: pathMenu
+            backdropSource: root
+
+            GlassMenuItem {
+                text: "Añadir a marcadores"
+                icon.name: "bookmark-new"
+                icon.source: CelestinaTheme.fallbackIcon("folder")
+                onTriggered: controller.addBookmark(controller.currentPath)
+            }
+
+            GlassMenuItem {
+                text: "Abrir en pestaña nueva"
+                icon.name: "tab-new"
+                icon.source: CelestinaTheme.fallbackIcon("folder")
+                onTriggered: root.requestNewTab(controller.currentPath, true)
+            }
+        }
+
         GlassContextMenu {
             id: folderMenu
             backdropSource: root
@@ -2290,12 +2371,13 @@ ApplicationWindow {
                     anchors.bottomMargin: 16
                     spacing: 8
 
-                    Button {
+                    PillButton {
                         text: "Cancelar"
                         onClicked: namePrompt.dismiss()
                     }
-                    Button {
+                    PillButton {
                         text: "Aceptar"
+                        primary: true
                         onClicked: namePrompt.confirm()
                     }
                 }
@@ -2375,20 +2457,21 @@ ApplicationWindow {
                     anchors.bottomMargin: 16
                     spacing: 8
 
-                    Button {
+                    PillButton {
                         text: "Cancelar"
                         onClicked: controller.cancelConflicts()
                     }
-                    Button {
+                    PillButton {
                         text: "Omitir"
                         onClicked: controller.resolveConflicts("skip")
                     }
-                    Button {
+                    PillButton {
                         text: "Conservar ambos"
                         onClicked: controller.resolveConflicts("keepboth")
                     }
-                    Button {
+                    PillButton {
                         text: "Reemplazar"
+                        primary: true
                         onClicked: controller.resolveConflicts("replace")
                     }
                 }
@@ -2540,7 +2623,7 @@ ApplicationWindow {
                             hoverEnabled: true
                         }
 
-                        Button {
+                        PillButton {
                             id: restoreRowButton
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.right: parent.right
@@ -2559,12 +2642,13 @@ ApplicationWindow {
                     anchors.bottomMargin: 16
                     spacing: 8
 
-                    Button {
+                    PillButton {
                         text: "Restaurar todo"
+                        primary: true
                         enabled: controller.trashNames.length > 0
                         onClicked: controller.restoreAllTrash()
                     }
-                    Button {
+                    PillButton {
                         text: "Cerrar"
                         onClicked: trashView.dismiss()
                     }
@@ -2706,17 +2790,18 @@ ApplicationWindow {
                     anchors.bottomMargin: 16
                     spacing: 8
 
-                    Button {
+                    PillButton {
                         text: "Cancelar"
                         onClicked: controller.cancelOpenWith()
                     }
-                    Button {
+                    PillButton {
                         text: "Predeterminar y abrir"
                         enabled: openWithView.selected >= 0
                         onClicked: controller.openWithApp(openWithView.selected, true)
                     }
-                    Button {
+                    PillButton {
                         text: "Abrir"
+                        primary: true
                         enabled: openWithView.selected >= 0
                         onClicked: controller.openWithApp(openWithView.selected, false)
                     }
