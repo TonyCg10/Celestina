@@ -5,10 +5,15 @@ use std::path::{Path, PathBuf};
 use celestina_core::CancellationToken;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
+use notify_debouncer_mini::notify::{RecommendedWatcher, RecursiveMode};
+use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
 use siderita_core::{
     DirectorySnapshot, NavigationHistory, PublishOutcome, ScanCoordinator, ScanExecutor,
-    ScanResult, SortDirection, SortField, ViewOptions,
+    ScanResult, SortDirection, SortField, ViewOptions, WatchState,
 };
+
+/// The filesystem debouncer type kept alive for the controller's lifetime.
+type FsDebouncer = Debouncer<RecommendedWatcher>;
 use siderita_ops::{OpError, Progress};
 use siderita_qt::{EntryRow, RowKind, SnapshotAdapter, ViewSnapshot};
 
@@ -83,6 +88,7 @@ pub mod qobject {
         #[qproperty(QStringList, volume_devices)]
         #[qproperty(QStringList, volume_mounts)]
         #[qproperty(bool, volume_busy)]
+        #[qproperty(bool, watch_degraded)]
         type SideritaController = super::SideritaControllerRust;
 
         #[qinvokable]
@@ -375,6 +381,10 @@ pub struct SideritaControllerRust {
     snapshot: Option<DirectorySnapshot>,
     view: Option<ViewSnapshot>,
     pending_nav: Option<PendingNav>,
+    watch: Option<WatchState>,
+    watched: Option<PathBuf>,
+    debouncer: Option<FsDebouncer>,
+    watch_degraded: bool,
     bookmark_names: QStringList,
     bookmark_paths: QStringList,
     op_error: QString,
@@ -439,6 +449,10 @@ impl Default for SideritaControllerRust {
             snapshot: None,
             view: None,
             pending_nav: None,
+            watch: None,
+            watched: None,
+            debouncer: None,
+            watch_degraded: false,
             bookmark_names: QStringList::default(),
             bookmark_paths: QStringList::default(),
             op_error: QString::default(),
@@ -1742,6 +1756,7 @@ impl qobject::SideritaController {
                 self.as_mut().set_loading(false);
                 self.as_mut().set_error_text(QString::default());
                 self.as_mut().update_navigation_state();
+                self.as_mut().update_watch(&location);
                 self.as_mut().reproject();
             }
             Err(error) => {
@@ -1850,6 +1865,95 @@ impl qobject::SideritaController {
             self.as_mut()
                 .set_current_path(QString::from(display_path.as_ref()));
             self.as_mut().update_navigation_state();
+        }
+    }
+
+    /// Creates the filesystem debouncer once. Its callback runs on the notify
+    /// thread and only marshals a coalesced "something changed" back to the Qt
+    /// thread — it never touches Qt state directly.
+    fn ensure_debouncer(mut self: Pin<&mut Self>) {
+        if self.rust().debouncer.is_some() {
+            return;
+        }
+        let qt = self.qt_thread();
+        let created = new_debouncer(
+            std::time::Duration::from_millis(200),
+            move |result: DebounceEventResult| {
+                let degraded = result.is_err();
+                let _ = qt.queue(move |controller: Pin<&mut qobject::SideritaController>| {
+                    controller.on_fs_change(degraded);
+                });
+            },
+        );
+        if let Ok(debouncer) = created {
+            self.as_mut().rust_mut().get_mut().debouncer = Some(debouncer);
+        }
+    }
+
+    /// Points the watch at `location`: a rescan of the already-watched folder
+    /// just marks the snapshot fresh again; a new folder moves the (non-recursive)
+    /// watch there. Called after every successful scan.
+    fn update_watch(mut self: Pin<&mut Self>, location: &Path) {
+        if self.rust().watched.as_deref() == Some(location) {
+            if let Some(watch) = self.as_mut().rust_mut().get_mut().watch.as_mut() {
+                watch.mark_rescanned(location);
+            }
+            return;
+        }
+
+        self.as_mut().ensure_debouncer();
+
+        let established = {
+            let state = self.as_mut().rust_mut();
+            let state = state.get_mut();
+            let Some(debouncer) = state.debouncer.as_mut() else {
+                return;
+            };
+            if let Some(old) = state.watched.take() {
+                let _ = debouncer.watcher().unwatch(&old);
+            }
+            match debouncer
+                .watcher()
+                .watch(location, RecursiveMode::NonRecursive)
+            {
+                Ok(()) => {
+                    state.watched = Some(location.to_path_buf());
+                    state.watch = Some(WatchState::active(location));
+                    true
+                }
+                Err(_) => {
+                    state.watched = None;
+                    state.watch = None;
+                    false
+                }
+            }
+        };
+        self.as_mut().set_watch_degraded(!established);
+    }
+
+    /// A coalesced filesystem change (or watcher error) arrived for the watched
+    /// folder: invalidate the snapshot and let a fresh rescan win.
+    fn on_fs_change(mut self: Pin<&mut Self>, degraded: bool) {
+        let Some(watched) = self.rust().watched.clone() else {
+            return;
+        };
+        let became_stale = {
+            let state = self.as_mut().rust_mut();
+            let state = state.get_mut();
+            let Some(watch) = state.watch.as_mut() else {
+                return;
+            };
+            if degraded {
+                watch.degrade(&watched, "se perdió la vigilancia de la carpeta")
+            } else {
+                watch.observe_change(&watched)
+            }
+        };
+        if degraded {
+            self.as_mut().set_watch_degraded(true);
+        }
+        if became_stale {
+            self.as_mut().refresh();
         }
     }
 }

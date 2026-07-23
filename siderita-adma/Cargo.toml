@@ -28,6 +28,8 @@ siderita-ops = { path = "../celestina-rs/crates/siderita-ops" }
 siderita-qt = { path = "../celestina-rs/crates/siderita-qt" }
 # System-bus integration: org.freedesktop.FileManager1 and udisks2 volumes.
 zbus = "5"
+# Filesystem watch (inotify-backed) with burst coalescing, for auto-refresh.
+notify-debouncer-mini = "0.6"
 
 [build-dependencies]
 cxx-qt-build = "=0.9.1"

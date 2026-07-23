@@ -1609,10 +1609,15 @@ ApplicationWindow {
                 x: busy.x + busy.width + 14
                 anchors.verticalCenter: bottomBar.verticalCenter
                 width: Math.max(0, zoomSlider.x - x - 12)
-                text: mainPanel.selectionCount > 1
-                      ? mainPanel.selectionCount + " seleccionados"
-                      : controller.statusText
-                color: CelestinaTheme.textMuted
+                // A lost watch is surfaced truthfully — the list is a snapshot
+                // that may lag until the next navigation or refresh.
+                text: controller.watchDegraded
+                      ? "⚠ Vigilancia perdida · instantánea"
+                      : mainPanel.selectionCount > 1
+                        ? mainPanel.selectionCount + " seleccionados"
+                        : controller.statusText
+                color: controller.watchDegraded
+                       ? CelestinaTheme.dangerText : CelestinaTheme.textMuted
                 font.family: CelestinaTheme.sansFamily
                 font.pixelSize: CelestinaTheme.fontCaption
                 elide: Text.ElideRight
