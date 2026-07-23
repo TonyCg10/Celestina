@@ -75,7 +75,7 @@ resource report ratifies or rejects Qt/QML with data.
 
 ### To finish CP0
 - [x] Fix truthful-state gap: a failed navigation via back/forward/up/home/activate must not leave the path pointing at an unreadable directory while the list still shows the previous one — **all navigation now commits on success**. Every verb (back / forward / up / home / activate / typed path) peeks its destination without mutating history (`NavigationHistory::peek_back` / `peek_forward`), scans it, and the history change is applied by a `PendingNav { Back, Forward, To }` only when the scan succeeds; on failure the path bar rolls back to where the history still is. Core peek is unit-tested
-- [ ] Local `file://` URI handling
+- [x] Local `file://` URI handling — the path bar and the argv/initial location accept a `file://` URI (percent-decoded, authority stripped, non-UTF-8-safe) via the shared `dbus::uri_to_path`, so a desktop "open with" or a pasted URI resolves to its local path; a bare name that merely starts with "file" is left alone. Unit-tested
 - [ ] Watcher wired to `WatchState` (invalidate + rescan wins)
 - [ ] Replace `QStringList` with a native role-based `QAbstractListModel`, dropping the per-delegate token/kind/subtitle invokables and the `viewRevision` workaround
 - [ ] Give the grid view keyboard navigation (only the list handles keys today)

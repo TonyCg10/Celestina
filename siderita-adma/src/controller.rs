@@ -2046,10 +2046,19 @@ fn spawn_opener(program: &str, path: &Path) -> Result<(), String> {
 }
 
 fn initial_location() -> PathBuf {
-    std::env::args_os()
-        .nth(1)
-        .map(PathBuf::from)
-        .unwrap_or_else(home_location)
+    match std::env::args_os().nth(1) {
+        // Accept a `file://` URI argument (e.g. from a desktop "open with").
+        Some(arg) => {
+            let text = arg.to_string_lossy();
+            if text.starts_with("file:") {
+                if let Some(path) = crate::dbus::uri_to_path(&text) {
+                    return path;
+                }
+            }
+            PathBuf::from(arg)
+        }
+        None => home_location(),
+    }
 }
 
 fn home_location() -> PathBuf {
@@ -2059,6 +2068,13 @@ fn home_location() -> PathBuf {
 }
 
 fn resolve_location(input: &str, current: Option<&Path>) -> PathBuf {
+    // A local file:// URI (typed, pasted, or from another app) → its path.
+    if input.starts_with("file:") {
+        if let Some(path) = crate::dbus::uri_to_path(input) {
+            return path;
+        }
+    }
+
     let path = if input == "~" {
         home_location()
     } else if let Some(relative) = input.strip_prefix("~/") {
@@ -2148,6 +2164,19 @@ mod tests {
         assert_eq!(
             resolve_location("hija", Some(Path::new("/base"))),
             PathBuf::from("/base/hija")
+        );
+    }
+
+    #[test]
+    fn file_uri_resolves_to_its_local_path() {
+        assert_eq!(
+            resolve_location("file:///tmp/una%20carpeta", Some(Path::new("/base"))),
+            PathBuf::from("/tmp/una carpeta")
+        );
+        // A bare relative name that merely starts with "file" is not a URI.
+        assert_eq!(
+            resolve_location("filename.txt", Some(Path::new("/base"))),
+            PathBuf::from("/base/filename.txt")
         );
     }
 

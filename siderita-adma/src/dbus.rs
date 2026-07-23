@@ -115,8 +115,9 @@ fn parent_folder(uri: &str) -> Option<PathBuf> {
 }
 
 /// Converts a `file://` URI to a local path, percent-decoded byte-for-byte so a
-/// non-UTF-8 path round-trips. Returns `None` for a non-file URI.
-fn uri_to_path(uri: &str) -> Option<PathBuf> {
+/// non-UTF-8 path round-trips. Returns `None` for a non-file URI. Shared with the
+/// path bar's `file://` handling.
+pub(crate) fn uri_to_path(uri: &str) -> Option<PathBuf> {
     let rest = uri.strip_prefix("file://")?;
     // Drop an optional authority (host) before the path's leading '/'.
     let path = match rest.find('/') {
