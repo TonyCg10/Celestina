@@ -29,6 +29,7 @@ the need, and reuses the shared core and style.
 | Project | Role | Stack |
 |---|---|---|
 | Fluorita *(working name)* | media player — audio · video · image; later a shell widget | Rust · QML |
+| Grafita *(working name)* | text / code editor | Rust · QML |
 | [magnetita](magnetita/) | phone link | Rust · QML |
 
 **Fluorita** is the suite's media app. It opens and plays whatever media it is
@@ -40,6 +41,12 @@ embeddable **shell widget** — a playing movie or now-playing music, live in th
 panel — and that same widget backs a live-preview quick-look in Siderita. So the
 media weight lives in one place, behind a standards-based hand-off, and never
 leaks into the file manager.
+
+**Grafita** is the suite's text editor — graphite is what a pencil writes with.
+A light editor for text and code, not an IDE; it is where Siderita's read-only
+quick-look hands off when you want to *change* a file rather than just peek at it
+("Abrir con Grafita"). It shares the core's file and MIME handling and the one
+visual language, so editing a file feels like the same session as browsing it.
 
 ## Principles
 
