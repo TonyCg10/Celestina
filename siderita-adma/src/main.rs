@@ -17,6 +17,13 @@ fn main() {
         QQuickStyle::set_style(&QString::from("Basic"));
     }
 
+    // Pin the app's freedesktop icon theme before any QML (and thus any icon)
+    // loads. This Wayland session has no DE to supply one, so named icons would
+    // otherwise fall back to Adwaita/hicolor. Qogir is installed and covers
+    // every name Siderita uses; -Dark suits the dark glass chrome. Change this
+    // one string to retheme the whole app.
+    controller::qobject::apply_icon_theme(&QString::from("Qogir-Dark"));
+
     // Register the native list model type before any QML is loaded.
     controller::qobject::register_entry_model();
 

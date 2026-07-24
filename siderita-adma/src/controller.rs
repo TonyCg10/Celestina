@@ -59,6 +59,13 @@ pub mod qobject {
 
         #[rust_name = "register_thumbnail_provider"]
         fn register_siderita_thumbnail_provider(engine: Pin<&mut QQmlApplicationEngine>);
+
+        // Pins the freedesktop icon theme named icons resolve against
+        // (see cpp/icontheme.cpp), set once before the QML loads.
+        include!("siderita/icontheme.h");
+
+        #[rust_name = "apply_icon_theme"]
+        fn siderita_apply_icon_theme(theme: &QString);
     }
 
     #[auto_cxx_name]

@@ -35,6 +35,8 @@ fn main() {
     println!("cargo::rerun-if-changed=cpp/siderita/entrymodel.h");
     println!("cargo::rerun-if-changed=cpp/thumbnailprovider.cpp");
     println!("cargo::rerun-if-changed=cpp/siderita/thumbnailprovider.h");
+    println!("cargo::rerun-if-changed=cpp/icontheme.cpp");
+    println!("cargo::rerun-if-changed=cpp/siderita/icontheme.h");
     let builder = CxxQtBuilder::new_qml_module(module)
         .qrc("qml/i1/icons.qrc")
         .cpp_file("cpp/clipboard.cpp")
@@ -44,6 +46,8 @@ fn main() {
         // The freedesktop-thumbnail image provider (no Q_OBJECT of its own — it
         // only emits QQuickImageResponse's inherited signal — so just compiled).
         .cpp_file("cpp/thumbnailprovider.cpp")
+        // Pins the freedesktop icon theme before any QML loads (no Q_OBJECT).
+        .cpp_file("cpp/icontheme.cpp")
         .files(["src/controller.rs", "src/dbus.rs"]);
     // SAFETY: only adds an include directory for our own headers.
     let builder = unsafe {
