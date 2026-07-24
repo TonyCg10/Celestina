@@ -28,9 +28,15 @@ the need, and reuses the shared core and style.
 
 | Project | Role | Stack |
 |---|---|---|
-| Fluorita *(working name)* | media player — audio · video · image; later a shell widget | Rust · QML |
-| Grafita *(working name)* | text / code editor | Rust · QML |
+| [fluorita](fluorita/) *(working name)* | media player — audio · video · image; later a shell widget | Rust · QML |
+| [grafita](grafita/) *(working name)* | text / code editor | Rust · QML |
 | [magnetita](magnetita/) | phone link | Rust · QML |
+
+Each planned directory holds a README and a roadmap and nothing else: the design
+and the contracts are written down so the apps they point at can be *consumed* by
+name before they exist — Siderita already defers video thumbnails to Fluorita and
+its quick-look hand-off to Grafita. Writing the contract is not starting the
+project.
 
 **Fluorita** is the suite's media app. It opens and plays whatever media it is
 handed — a song, a clip, an image — a *player/viewer*, not a library (Siderita

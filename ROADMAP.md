@@ -64,12 +64,19 @@ celestina-rs ─────┐                 celestina-style ──┐
 [Planned](README.md#planned) section, each started only when a recurring daily
 gap proves the need and each reusing `celestina-rs` + `celestina-style`:
 
-- **Fluorita** *(working name)* — the media player (audio · video · image) that
-  produces the video/audio thumbnails Siderita consumes, and later runs as a
-  shell widget.
-- **Grafita** *(working name)* — a light text/code editor, the edit-side
-  companion to Siderita's read-only quick-look ("Abrir con Grafita").
-- **magnetita** — a phone link.
+- **[Fluorita](fluorita/)** *(working name)* — the media player (audio · video ·
+  image) that produces the video/audio thumbnails Siderita consumes, and later
+  runs as a shell widget.
+- **[Grafita](grafita/)** *(working name)* — a light text/code editor, the
+  edit-side companion to Siderita's read-only quick-look ("Abrir con Grafita").
+- **[magnetita](magnetita/)** — a phone link.
+
+Each has a directory holding a README and a roadmap and no code. That is
+deliberate: two of Siderita's shipped decisions (consuming video thumbnails it
+will not generate; a quick-look that hands video, audio and PDF to an info card
+naming Fluorita) are already promises to these projects, and a promise is worth
+writing down as a contract. The build gate is unchanged — each starts only when a
+recurring daily gap proves the need.
 
 ## Shared foundations (the stack contract)
 
