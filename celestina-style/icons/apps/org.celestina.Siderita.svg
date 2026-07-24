@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Siderita</title>
+  <!--
+    Siderite is an iron carbonate whose habit is a rhombohedron — not a cube.
+    The difference is the whole mark: a cube has vertical side edges and reads
+    as a box, so the solid here is sheared (the `w` edge leans left) and every
+    face is a rhombus. Three faces meet at the top vertex, which gives the
+    silhouette its lean and keeps it a crystal at any size.
+
+    Geometry is written as three equal edge vectors from the top vertex T, so
+    the shape stays a true rhombohedron if the numbers are ever tuned:
+      T = (256, 96)   u = (-124, 66)   v = (124, 66)   w = (-55, 130)
+      |u| = |v| = |w| ≈ 140
+    The group transform only centres and scales that solid inside the tile.
+
+    Colour is the mineral's: warm amber, the one warm note in a neutral palette
+    (CelestinaTheme.favorite is the same family). The folder glyph is left to
+    every other file manager on the system.
+  -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22252C"/>
+      <stop offset="1" stop-color="#0E1014"/>
+    </linearGradient>
+    <linearGradient id="face-top" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#FFF1D2"/>
+      <stop offset="1" stop-color="#F3C579"/>
+    </linearGradient>
+    <linearGradient id="face-left" x1="0" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#EFB067"/>
+      <stop offset="1" stop-color="#C9873C"/>
+    </linearGradient>
+    <linearGradient id="face-right" x1="0.2" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#A8642A"/>
+      <stop offset="1" stop-color="#7C441A"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.32"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- The rounded tile every app icon on this desktop wears. -->
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#tile)"/>
+  <rect x="16.75" y="16.75" width="478.5" height="478.5" rx="107.25"
+        fill="none" stroke="url(#rim)" stroke-width="1.5"/>
+
+  <!-- Centre the solid (its box spans 77..380 × 96..358) and fill ~72% of the tile. -->
+  <g transform="translate(256 256) scale(1.2) translate(-228.5 -227)">
+    <!-- top face, catching the light -->
+    <path d="M256 96 132 162 256 228 380 162Z" fill="url(#face-top)"/>
+    <!-- left face -->
+    <path d="M132 162 256 228 201 358 77 292Z" fill="url(#face-left)"/>
+    <!-- right face, turned away -->
+    <path d="M380 162 256 228 201 358 325 292Z" fill="url(#face-right)"/>
+    <!-- the lit edge along the two upper faces, the way a cleavage plane catches light -->
+    <path d="M132 162 256 96 380 162" fill="none" stroke="#FFF8E8"
+          stroke-opacity="0.55" stroke-width="3" stroke-linejoin="round"/>
+  </g>
+</svg>

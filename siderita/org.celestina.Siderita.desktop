@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Siderita
+GenericName=Administrador de archivos
+GenericName[en]=File Manager
+Comment=Administrador de archivos del entorno Celestina
+Comment[en]=File manager for the Celestina session
+Exec=siderita %U
+Icon=org.celestina.Siderita
+Terminal=false
+Categories=System;FileTools;FileManager;
+Keywords=archivos;carpetas;explorador;files;folders;
+MimeType=inode/directory;x-scheme-handler/file;
+StartupNotify=true
+StartupWMClass=org.celestina.Siderita

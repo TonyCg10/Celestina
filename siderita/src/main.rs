@@ -14,8 +14,26 @@ mod volumes;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQuickStyle, QString, QUrl};
 
+/// The freedesktop application ID: the basename of the installed `.desktop`
+/// entry, the name of the installed icon, and — because Qt reports it as the
+/// Wayland `app_id` — what the compositor matches a window against. All three
+/// must be this one string or the launcher shows a generic icon for a window it
+/// cannot tie back to its entry.
+const APP_ID: &str = "org.celestina.Siderita";
+
 fn main() {
     let mut app = QGuiApplication::new();
+
+    if let Some(mut app) = app.as_mut() {
+        app.as_mut().set_application_name(&QString::from("Siderita"));
+        app.as_mut()
+            .set_application_display_name(&QString::from("Siderita"));
+        app.as_mut()
+            .set_organization_name(&QString::from("Celestina"));
+        app.as_mut()
+            .set_organization_domain(&QString::from("celestina.org"));
+        QGuiApplication::set_desktop_file_name(&QString::from(APP_ID));
+    }
 
     if std::env::var_os("QT_QUICK_CONTROLS_STYLE").is_none() {
         QQuickStyle::set_style(&QString::from("Basic"));
