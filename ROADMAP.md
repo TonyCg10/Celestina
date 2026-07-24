@@ -33,8 +33,9 @@ parity with any existing desktop environment, and not a product for anyone but
 its author.
 
 **Current focus:** the Niri shell (`celestina-desktop`). The file manager
-(`siderita-adma`) has **completed its own roadmap** (CP0–CP3) and is in daily
-use; new apps wait behind a proven daily gap.
+(`siderita-adma`) has **completed CP0–CP3** and is in daily use; CP4 — the parts
+the user arranges (sidebar, order, per-folder view, session) — is implemented and
+waiting on real-Wayland validation. New apps wait behind a proven daily gap.
 
 ## The pieces
 
@@ -101,10 +102,14 @@ as a suite rather than four unrelated apps:
   siderita-adma; a clean-prefix installable release is still open.
 - `celestina-desktop` — host builds and QML-lints; geometry/zone/focus not yet
   verified on real Niri; no Rust yet.
-- `siderita-adma` — **its own roadmap is complete (CP0–CP3, all ratified)**:
-  staged self-contained install, loss-free operations, freedesktop interop, a
-  native role model with a live hotplug/FS watcher, list/grid/details views,
-  freedesktop thumbnails and a spacebar quick-look — validated on real Wayland.
+- `siderita-adma` — **CP0–CP3 complete and ratified**: staged self-contained
+  install, loss-free operations, freedesktop interop, a native role model with a
+  live hotplug/FS watcher, list/grid/details views, freedesktop thumbnails and a
+  spacebar quick-look — validated on real Wayland. **CP4** (natural name order,
+  favourites, an organizable sidebar, per-folder views, session restore, drag
+  comforts, batch rename, Recientes, per-collision conflicts) is implemented and
+  headless-verified; its drag gestures, its surfaces and the live-capture menu
+  blur still need the real session.
 
 ---
 
