@@ -108,10 +108,21 @@ pub mod qobject {
         // Trash shown as a content-view location (like search): its entries ride
         // the same entry model, so list/grid/details/thumbnails just work.
         #[qproperty(bool, trash_active)]
-        // Per-path custom icon overrides, exposed as parallel lists the QML
-        // folds into a path→icon map (bumped whenever one is set/cleared).
-        #[qproperty(QStringList, custom_icon_paths)]
-        #[qproperty(QStringList, custom_icon_names)]
+        // Recientes: the desktop's own recently-used list, read (never written)
+        // and shown as another content-view location.
+        #[qproperty(bool, recent_active)]
+        #[qproperty(i32, recent_count)]
+        // Per-path custom icon overrides, exposed as ONE list of `path\ticon`
+        // entries the QML folds into a path→icon map. Deliberately not two
+        // parallel lists: those are set in sequence, so a QML handler woken by
+        // the first sees the second still stale — the override then only
+        // appeared on the next start.
+        #[qproperty(QStringList, custom_icon_entries)]
+        // Starred entries — one `path\tkind` line each, where kind is
+        // `directory`, `file` or `missing` (a favourite outlives what it points
+        // at, and the sidebar says so rather than pretending). One property, so
+        // a reader never sees half an update.
+        #[qproperty(QStringList, favorite_entries)]
         #[qproperty(bool, open_with_pending)]
         #[qproperty(QString, open_with_target)]
         #[qproperty(QStringList, open_with_apps)]
@@ -121,6 +132,15 @@ pub mod qobject {
         #[qproperty(QStringList, volume_mounts)]
         #[qproperty(bool, volume_busy)]
         #[qproperty(i32, hidden_device_count)]
+        // The sidebar's places: the keys that exist on this machine, in the
+        // user's order, minus the ones they hid.
+        #[qproperty(QStringList, place_keys)]
+        #[qproperty(i32, hidden_place_count)]
+        // How this folder was left, if it was ever arranged: the view mode to
+        // show ("" = follow the global default) and whether a record exists at
+        // all (so the folder menu can offer to forget it).
+        #[qproperty(QString, folder_view_mode)]
+        #[qproperty(bool, folder_view_pinned)]
         #[qproperty(bool, watch_degraded)]
         #[qproperty(QString, folder_size)]
         // Mirrors the QML multi-selection count so the window-scope info box can
@@ -212,9 +232,28 @@ pub mod qobject {
         fn entry_kind(self: &SideritaController, index: i32) -> QString;
 
         /// Sets (or, with an empty `icon`, clears) the custom icon for `path`,
-        /// persisting it. Refreshes `custom_icon_paths` / `custom_icon_names`.
+        /// persisting it. Refreshes `custom_icon_entries`.
         #[qinvokable]
         fn set_custom_icon(self: Pin<&mut SideritaController>, path: &QString, icon: &QString);
+
+        /// Re-reads the saved overrides — how a tab picks up an icon another
+        /// tab just changed.
+        #[qinvokable]
+        fn reload_custom_icons(self: Pin<&mut SideritaController>);
+
+        /// Stars `path` if it is not starred, un-stars it if it is, and
+        /// persists either way. Refreshes `favorite_paths`.
+        #[qinvokable]
+        fn toggle_favorite(self: Pin<&mut SideritaController>, path: &QString);
+
+        /// Re-reads the starred paths — how a tab picks up a star another tab
+        /// just set.
+        #[qinvokable]
+        fn reload_favorites(self: Pin<&mut SideritaController>);
+
+        /// Navigates to the folder holding `path` and selects that entry.
+        #[qinvokable]
+        fn reveal_path(self: Pin<&mut SideritaController>, path: &QString);
 
         /// A bounded, read-only text preview of the file at `path` for the
         /// quick-look overlay: up to a fixed byte budget, decoded lossily.
@@ -232,8 +271,30 @@ pub mod qobject {
         #[qinvokable]
         fn rename_bookmark(self: Pin<&mut SideritaController>, index: i32, name: &QString);
 
+        /// Reorders the sidebar: moves the bookmark at `from` so it sits at
+        /// `to`, and persists the new order.
+        #[qinvokable]
+        fn move_bookmark(self: Pin<&mut SideritaController>, from: i32, to: i32);
+
         #[qinvokable]
         fn place_path(self: &SideritaController, key: &QString) -> QString;
+
+        /// Reorders the sidebar's places (indices into `place_keys`) and
+        /// persists the order.
+        #[qinvokable]
+        fn move_place(self: Pin<&mut SideritaController>, from: i32, to: i32);
+
+        /// Drops a place from the sidebar until the user asks for it back.
+        #[qinvokable]
+        fn hide_place(self: Pin<&mut SideritaController>, key: &QString);
+
+        /// Brings every hidden place back.
+        #[qinvokable]
+        fn unhide_all_places(self: Pin<&mut SideritaController>);
+
+        /// Re-reads the persisted place order and hidden set.
+        #[qinvokable]
+        fn reload_places(self: Pin<&mut SideritaController>);
 
         #[qinvokable]
         fn new_folder(self: Pin<&mut SideritaController>, name: &QString);
@@ -243,6 +304,15 @@ pub mod qobject {
 
         #[qinvokable]
         fn rename_path(self: Pin<&mut SideritaController>, path: &QString, new_name: &QString);
+
+        /// Renames a whole selection: `paths[i]` becomes `names[i]`. Each is
+        /// attempted independently; collisions fail alone and are reported.
+        #[qinvokable]
+        fn rename_paths(
+            self: Pin<&mut SideritaController>,
+            paths: &QStringList,
+            names: &QStringList,
+        );
 
         #[qinvokable]
         fn trash_path(self: Pin<&mut SideritaController>, path: &QString);
@@ -280,8 +350,15 @@ pub mod qobject {
         #[qinvokable]
         fn cancel_op(self: Pin<&mut SideritaController>);
 
+        /// Answers the collision currently being asked about with "skip" /
+        /// "replace" / "keepboth". With `apply_to_all`, the same answer settles
+        /// every collision left in the batch.
         #[qinvokable]
-        fn resolve_conflicts(self: Pin<&mut SideritaController>, strategy: &QString);
+        fn resolve_conflict(
+            self: Pin<&mut SideritaController>,
+            strategy: &QString,
+            apply_to_all: bool,
+        );
 
         #[qinvokable]
         fn cancel_conflicts(self: Pin<&mut SideritaController>);
@@ -293,6 +370,15 @@ pub mod qobject {
         fn load_trash(self: Pin<&mut SideritaController>);
 
         /// Opens Trash as a content-view location (fills the entry model with
+        /// Opens Recientes — the desktop's recently-used list — as a
+        /// content-view location.
+        #[qinvokable]
+        fn open_recent(self: Pin<&mut SideritaController>);
+
+        /// Leaves Recientes and repaints the folder underneath.
+        #[qinvokable]
+        fn close_recent(self: Pin<&mut SideritaController>);
+
         /// the trashed items and flips `trash_active`).
         #[qinvokable]
         fn open_trash(self: Pin<&mut SideritaController>);
@@ -376,6 +462,41 @@ pub mod qobject {
 
         #[qinvokable]
         fn save_view_mode(self: Pin<&mut SideritaController>, mode: &QString);
+
+        /// Remembers `mode` for the folder being shown, so returning to it
+        /// brings that view back.
+        #[qinvokable]
+        fn remember_view_mode(self: Pin<&mut SideritaController>, mode: &QString);
+
+        /// Drops this folder's remembered view and sort.
+        #[qinvokable]
+        fn forget_folder_view(self: Pin<&mut SideritaController>);
+
+        /// The window size to reopen at, and how to record a resize.
+        #[qinvokable]
+        fn saved_window_width(self: &SideritaController) -> i32;
+
+        #[qinvokable]
+        fn saved_window_height(self: &SideritaController) -> i32;
+
+        #[qinvokable]
+        fn save_window_size(self: Pin<&mut SideritaController>, width: i32, height: i32);
+
+        /// The folders that were open in tabs last time, and which was active.
+        #[qinvokable]
+        fn saved_tabs(self: &SideritaController) -> QStringList;
+
+        #[qinvokable]
+        fn saved_active_tab(self: &SideritaController) -> i32;
+
+        #[qinvokable]
+        fn save_tabs(self: Pin<&mut SideritaController>, paths: &QStringList, active: i32);
+
+        /// Whether the process was handed a location to open (argv or a
+        /// `file://` URI). A launch that names a folder is about that folder,
+        /// so the saved session must not talk over it.
+        #[qinvokable]
+        fn launch_path_given(self: &SideritaController) -> bool;
 
         /// Persists the four independent size scales (content icons/text, sidebar
         /// icons/text).
@@ -465,11 +586,20 @@ impl ConflictStrategy {
 }
 
 /// A paste held back because at least one destination already exists, waiting
-/// for the user's conflict choice before the worker starts.
+/// for the user's conflict choices before the worker starts.
+///
+/// The choice is per collision: `decisions[i]` is what to do with `sources[i]`,
+/// and `cursor` is the collision being asked about. Entries that do not collide
+/// carry `Skip` and never reach that code path. One "apply to all" fills the
+/// rest in at once — the old behaviour, now something the user opts into rather
+/// than the only option.
 struct PendingPaste {
     sources: Vec<PathBuf>,
     destination: PathBuf,
     cut: bool,
+    decisions: Vec<Option<ConflictStrategy>>,
+    colliding: Vec<usize>,
+    cursor: usize,
 }
 
 /// What a pasted batch did, carried from the worker thread to `finish_paste`.
@@ -562,9 +692,12 @@ pub struct SideritaControllerRust {
     prop_size_cancel: Option<CancellationToken>,
     search_active: bool,
     trash_active: bool,
-    custom_icon_paths: QStringList,
-    custom_icon_names: QStringList,
+    recent_active: bool,
+    recent_count: i32,
+    custom_icon_entries: QStringList,
     custom_icons: std::collections::HashMap<String, String>,
+    favorite_entries: QStringList,
+    favorites: std::collections::BTreeSet<String>,
     search_running: bool,
     search_query: QString,
     search_summary: QString,
@@ -609,6 +742,11 @@ pub struct SideritaControllerRust {
     // Set once the UDisks2 hotplug watch thread is running for this controller.
     volume_watch_started: bool,
     hidden_device_count: i32,
+    place_keys: QStringList,
+    hidden_place_count: i32,
+    folder_view_mode: QString,
+    folder_view_pinned: bool,
+    folder_views: Vec<crate::folder_views::FolderView>,
     volumes: Vec<crate::volumes::Volume>,
     settings: crate::settings::Settings,
     clipboard: Vec<PathBuf>,
@@ -634,15 +772,18 @@ impl Default for SideritaControllerRust {
             ..ViewOptions::default()
         };
         let custom_icons = crate::icons::load();
-        let (custom_icon_paths, custom_icon_names) = icon_override_lists(&custom_icons);
+        let custom_icon_entries = icon_override_entries(&custom_icons);
+        let favorites = crate::favorites::load();
+        let favorite_entries = favorite_entry_list(&favorites);
         Self {
             current_path: QString::default(),
             status_text: QString::from("Preparando Siderita…"),
             error_text: QString::default(),
             entry_names: QStringList::default(),
             custom_icons,
-            custom_icon_paths,
-            custom_icon_names,
+            custom_icon_entries,
+            favorites,
+            favorite_entries,
             selected_token: QString::default(),
             query: QString::default(),
             loading: false,
@@ -681,6 +822,8 @@ impl Default for SideritaControllerRust {
             prop_size_cancel: None,
             search_active: false,
             trash_active: false,
+            recent_active: false,
+            recent_count: 0,
             search_running: false,
             search_query: QString::default(),
             search_summary: QString::default(),
@@ -724,6 +867,11 @@ impl Default for SideritaControllerRust {
             volume_busy: false,
             volume_watch_started: false,
             hidden_device_count: 0,
+            place_keys: QStringList::default(),
+            hidden_place_count: 0,
+            folder_view_mode: QString::default(),
+            folder_view_pinned: false,
+            folder_views: crate::folder_views::load(),
             volumes: Vec::new(),
             settings,
             clipboard: Vec::new(),
@@ -751,6 +899,13 @@ impl SideritaControllerRust {
             .rows()
             .iter()
             .find(|row| row.token().value() == token)
+    }
+
+    /// Whether the rows on screen are a *location's* rows rather than a
+    /// folder's: search hits, the Trash, or Recientes. All three ride the same
+    /// `search_hits` list, so every row lookup takes the same path.
+    fn virtual_rows(&self) -> bool {
+        self.search_active || self.trash_active || self.recent_active
     }
 
     /// A search hit by its token (the hit's index in the results).
@@ -786,6 +941,7 @@ impl qobject::SideritaController {
         }
 
         self.as_mut().reload_bookmarks();
+        self.as_mut().refresh_place_props();
 
         if self.rust().history.current().is_none() {
             self.as_mut().rust_mut().get_mut().history = NavigationHistory::new(initial.clone());
@@ -809,7 +965,21 @@ impl qobject::SideritaController {
         self.as_mut().refresh_bookmark_properties();
     }
 
+    /// Repaints whatever is on screen — which is not always a folder. Trash and
+    /// Recientes are locations with their own listing, and a folder rescan would
+    /// land in a projection that (rightly) refuses to overwrite them, so an entry
+    /// deleted from one of those views stayed on screen. Each location refreshes
+    /// itself instead.
     pub fn refresh(mut self: Pin<&mut Self>) {
+        if self.rust().recent_active {
+            self.as_mut().open_recent();
+            return;
+        }
+        if self.rust().trash_active {
+            self.as_mut().load_trash();
+            self.as_mut().publish_trash();
+            return;
+        }
         if let Some(location) = self.rust().history.current().map(Path::to_path_buf) {
             self.as_mut().request_scan(location);
         }
@@ -906,6 +1076,147 @@ impl qobject::SideritaController {
         settings.show_hidden = *self.show_hidden();
         let _ = crate::settings::save(&settings);
         self.as_mut().rust_mut().get_mut().settings = settings;
+        // Arranging a folder is a statement about *that* folder, so it is also
+        // remembered for it — the global setting stays the default for folders
+        // the user has never arranged.
+        self.as_mut().remember_folder_view(None);
+    }
+
+    /// Records how the current folder is arranged. `view_mode` overrides what
+    /// the record should say (the mode lives in the QML, which hands it down
+    /// when the user switches); `None` keeps whatever the folder already had,
+    /// falling back to the global default.
+    fn remember_folder_view(mut self: Pin<&mut Self>, view_mode: Option<String>) {
+        let path = self.current_path().to_string();
+        if path.is_empty() || self.rust().virtual_rows() {
+            return;
+        }
+        let mode = view_mode
+            .or_else(|| {
+                crate::folder_views::find(&self.rust().folder_views, &path)
+                    .map(|record| record.view_mode.clone())
+            })
+            .unwrap_or_else(|| self.rust().settings.view_mode.clone());
+        let record = crate::folder_views::FolderView {
+            path,
+            view_mode: mode,
+            sort_field: *self.sort_field(),
+            sort_ascending: *self.sort_ascending(),
+        };
+        {
+            let records = &mut self.as_mut().rust_mut().get_mut().folder_views;
+            crate::folder_views::remember(records, record);
+        }
+        let _ = crate::folder_views::save(&self.rust().folder_views);
+        self.as_mut().refresh_folder_view_props();
+    }
+
+    /// Applies the record for the folder just opened, if it has one: the sort
+    /// takes effect here, and `folder_view_mode` tells the QML which view to
+    /// show. A folder with no record leaves both alone, so it inherits whatever
+    /// the user last chose.
+    fn apply_folder_view(mut self: Pin<&mut Self>) {
+        let path = self.current_path().to_string();
+        let record = crate::folder_views::find(&self.rust().folder_views, &path).cloned();
+        let Some(record) = record else {
+            self.as_mut().refresh_folder_view_props();
+            return;
+        };
+
+        let field_changed = *self.sort_field() != record.sort_field;
+        let direction_changed = *self.sort_ascending() != record.sort_ascending;
+        if let Some(sort_field) = sort_field_from_index(record.sort_field) {
+            if field_changed {
+                self.as_mut().rust_mut().get_mut().options.sort_field = sort_field;
+                self.as_mut().set_sort_field(record.sort_field);
+            }
+        }
+        if direction_changed {
+            self.as_mut().rust_mut().get_mut().options.sort_direction = if record.sort_ascending {
+                SortDirection::Ascending
+            } else {
+                SortDirection::Descending
+            };
+            self.as_mut().set_sort_ascending(record.sort_ascending);
+        }
+        self.as_mut().refresh_folder_view_props();
+        if field_changed || direction_changed {
+            self.as_mut().reproject();
+        }
+    }
+
+    fn refresh_folder_view_props(mut self: Pin<&mut Self>) {
+        let path = self.current_path().to_string();
+        let mode = crate::folder_views::find(&self.rust().folder_views, &path)
+            .map(|record| record.view_mode.clone())
+            .unwrap_or_default();
+        self.as_mut().set_folder_view_pinned(!mode.is_empty());
+        self.as_mut()
+            .set_folder_view_mode(QString::from(mode.as_str()));
+    }
+
+    /// Called by the QML when the user picks a view mode: this folder keeps it.
+    pub fn remember_view_mode(self: Pin<&mut Self>, mode: &QString) {
+        self.remember_folder_view(Some(mode.to_string()));
+    }
+
+    pub fn saved_window_width(&self) -> i32 {
+        self.rust().settings.window_width
+    }
+
+    pub fn saved_window_height(&self) -> i32 {
+        self.rust().settings.window_height
+    }
+
+    pub fn save_window_size(mut self: Pin<&mut Self>, width: i32, height: i32) {
+        let mut settings = crate::settings::load();
+        settings.window_width = width;
+        settings.window_height = height;
+        let _ = crate::settings::save(&settings);
+        self.as_mut().rust_mut().get_mut().settings = settings;
+    }
+
+    pub fn saved_tabs(&self) -> QStringList {
+        self.rust()
+            .settings
+            .tabs
+            .iter()
+            .map(|path| QString::from(path.as_str()))
+            .collect()
+    }
+
+    pub fn saved_active_tab(&self) -> i32 {
+        self.rust().settings.active_tab
+    }
+
+    pub fn save_tabs(mut self: Pin<&mut Self>, paths: &QStringList, active: i32) {
+        let tabs: Vec<String> = paths
+            .iter()
+            .map(ToString::to_string)
+            .filter(|path| !path.is_empty())
+            .collect();
+        let mut settings = crate::settings::load();
+        settings.tabs = tabs;
+        settings.active_tab = active;
+        let _ = crate::settings::save(&settings);
+        self.as_mut().rust_mut().get_mut().settings = settings;
+    }
+
+    pub fn launch_path_given(&self) -> bool {
+        std::env::args_os().nth(1).is_some()
+    }
+
+    /// Drops this folder's record, so it follows the global defaults again.
+    pub fn forget_folder_view(mut self: Pin<&mut Self>) {
+        let path = self.current_path().to_string();
+        let dropped = {
+            let records = &mut self.as_mut().rust_mut().get_mut().folder_views;
+            crate::folder_views::forget(records, &path)
+        };
+        if dropped {
+            let _ = crate::folder_views::save(&self.rust().folder_views);
+        }
+        self.as_mut().refresh_folder_view_props();
     }
 
     pub fn apply_query(mut self: Pin<&mut Self>, query: &QString) {
@@ -922,7 +1233,7 @@ impl qobject::SideritaController {
         // The selected item's name and detail are shown in the sidebar info box
         // (driven by selected_token), so selecting no longer writes the status
         // line. A search hit's token is its index — accepted as-is if in range.
-        if self.rust().search_active || self.rust().trash_active {
+        if self.rust().virtual_rows() {
             if self.rust().search_hit(token).is_some() {
                 self.as_mut().set_selected_token(token.clone());
             }
@@ -1003,7 +1314,7 @@ impl qobject::SideritaController {
     }
 
     pub fn entry_token(&self, index: i32) -> QString {
-        if self.rust().search_active || self.rust().trash_active {
+        if self.rust().virtual_rows() {
             let count = self.rust().search_hits.len() as i32;
             return if index >= 0 && index < count {
                 QString::from(index.to_string().as_str())
@@ -1070,7 +1381,7 @@ impl qobject::SideritaController {
     }
 
     pub fn index_for_token(&self, token: &QString) -> i32 {
-        if self.rust().search_active || self.rust().trash_active {
+        if self.rust().virtual_rows() {
             return token
                 .to_string()
                 .parse::<usize>()
@@ -1095,7 +1406,7 @@ impl qobject::SideritaController {
     }
 
     pub fn entry_path(&self, index: i32) -> QString {
-        if self.rust().search_active || self.rust().trash_active {
+        if self.rust().virtual_rows() {
             return usize::try_from(index)
                 .ok()
                 .and_then(|i| self.rust().search_hits.get(i))
@@ -1109,7 +1420,7 @@ impl qobject::SideritaController {
     }
 
     pub fn entry_kind(&self, index: i32) -> QString {
-        if self.rust().search_active || self.rust().trash_active {
+        if self.rust().virtual_rows() {
             return usize::try_from(index)
                 .ok()
                 .and_then(|i| self.rust().search_hits.get(i))
@@ -1140,10 +1451,60 @@ impl qobject::SideritaController {
         self.as_mut().refresh_custom_icon_props();
     }
 
+    /// Re-reads the saved overrides from disk. Each tab owns its own controller
+    /// and its own copy of the map, so after one tab writes an override the
+    /// others are told to reload — otherwise they keep the old icon until the
+    /// next start.
+    pub fn reload_custom_icons(mut self: Pin<&mut Self>) {
+        let loaded = crate::icons::load();
+        self.as_mut().rust_mut().get_mut().custom_icons = loaded;
+        self.as_mut().refresh_custom_icon_props();
+    }
+
     fn refresh_custom_icon_props(mut self: Pin<&mut Self>) {
-        let (paths, names) = icon_override_lists(&self.rust().custom_icons);
-        self.as_mut().set_custom_icon_paths(paths);
-        self.as_mut().set_custom_icon_names(names);
+        let entries = icon_override_entries(&self.rust().custom_icons);
+        self.as_mut().set_custom_icon_entries(entries);
+    }
+
+    pub fn toggle_favorite(mut self: Pin<&mut Self>, path: &QString) {
+        let path = path.to_string();
+        if path.is_empty() {
+            return;
+        }
+        {
+            let set = &mut self.as_mut().rust_mut().get_mut().favorites;
+            if !set.remove(&path) {
+                set.insert(path);
+            }
+        }
+        let _ = crate::favorites::save(&self.rust().favorites);
+        self.as_mut().refresh_favorite_props();
+    }
+
+    /// Like the icon overrides: each tab holds its own copy, so a tab re-reads
+    /// the file when it is activated rather than trusting what it loaded at
+    /// start.
+    pub fn reload_favorites(mut self: Pin<&mut Self>) {
+        let loaded = crate::favorites::load();
+        self.as_mut().rust_mut().get_mut().favorites = loaded;
+        self.as_mut().refresh_favorite_props();
+    }
+
+    fn refresh_favorite_props(mut self: Pin<&mut Self>) {
+        let entries = favorite_entry_list(&self.rust().favorites);
+        self.as_mut().set_favorite_entries(entries);
+    }
+
+    /// Opens the folder holding `path` and selects that entry once it lands —
+    /// how a starred *file* reveals itself from the sidebar, instead of the
+    /// sidebar quietly launching an application.
+    pub fn reveal_path(mut self: Pin<&mut Self>, path: &QString) {
+        let path = PathBuf::from(path.to_string());
+        let Some(parent) = path.parent().map(Path::to_path_buf) else {
+            return;
+        };
+        self.as_mut().rust_mut().get_mut().pending_select_path = Some(path);
+        self.as_mut().request_nav_scan(PendingNav::To(parent));
     }
 
     pub fn preview_text(&self, path: &QString) -> QString {
@@ -1212,6 +1573,21 @@ impl qobject::SideritaController {
         let _ = crate::bookmarks::save(&self.rust().bookmarks);
     }
 
+    pub fn move_bookmark(mut self: Pin<&mut Self>, from: i32, to: i32) {
+        let (Ok(from), Ok(to)) = (usize::try_from(from), usize::try_from(to)) else {
+            return;
+        };
+        let moved = {
+            let list = &mut self.as_mut().rust_mut().get_mut().bookmarks;
+            crate::bookmarks::move_item(list, from, to)
+        };
+        if !moved {
+            return;
+        }
+        self.as_mut().refresh_bookmark_properties();
+        let _ = crate::bookmarks::save(&self.rust().bookmarks);
+    }
+
     pub fn place_path(&self, key: &QString) -> QString {
         self.rust()
             .places
@@ -1262,6 +1638,34 @@ impl qobject::SideritaController {
             self.as_mut().set_undo(undo);
         }
         self.finish_op(outcome.map(|_| ()));
+    }
+
+    /// Renames a whole selection in one pass: `paths[i]` becomes `names[i]`.
+    /// Each rename is attempted independently and refuses to overwrite (the
+    /// domain guarantees that), so a name that collides fails alone and is
+    /// reported — nothing else in the batch is rolled back or lost.
+    pub fn rename_paths(mut self: Pin<&mut Self>, paths: &QStringList, names: &QStringList) {
+        self.as_mut().set_op_error(QString::default());
+        let paths = qstringlist_to_paths(paths);
+        let names: Vec<String> = names.iter().map(ToString::to_string).collect();
+        if paths.is_empty() || paths.len() != names.len() {
+            return;
+        }
+        let cancellation = CancellationToken::new();
+        let mut failures = Vec::new();
+        for (path, name) in paths.iter().zip(names.iter()) {
+            if name.is_empty() || name.contains('/') {
+                failures.push(format!("{}: nombre no válido", display_name(path)));
+                continue;
+            }
+            if let Err(error) = siderita_ops::rename(path, OsStr::new(name), &cancellation) {
+                failures.push(format!("{}: {error}", display_name(path)));
+            }
+        }
+        // Deliberately no undo: a batch rename is many renames, and the single
+        // undo slot can only honestly reverse one.
+        self.as_mut().set_undo(None);
+        self.as_mut().finish_batch(paths.len(), &failures);
     }
 
     pub fn trash_path(mut self: Pin<&mut Self>, path: &QString) {
@@ -1436,51 +1840,104 @@ impl qobject::SideritaController {
             return;
         }
 
-        let collisions: Vec<&PathBuf> = sources
+        let colliding: Vec<usize> = sources
             .iter()
-            .filter(|source| {
+            .enumerate()
+            .filter(|(_, source)| {
                 source
                     .file_name()
                     .map(|name| destination.join(name))
                     .is_some_and(|target| std::fs::symlink_metadata(target).is_ok())
             })
+            .map(|(index, _)| index)
             .collect();
 
-        if collisions.is_empty() {
+        if colliding.is_empty() {
+            let strategies = vec![ConflictStrategy::Skip; sources.len()];
             self.as_mut()
-                .spawn_paste(sources, destination, cut, ConflictStrategy::Skip);
+                .spawn_paste(sources, destination, cut, strategies);
             return;
         }
 
-        let count = collisions.len();
-        let first = collisions
-            .first()
-            .map(|source| display_name(source))
-            .unwrap_or_default();
+        let decisions = vec![None; sources.len()];
         self.as_mut().rust_mut().get_mut().pending_paste = Some(PendingPaste {
             sources,
             destination,
             cut,
+            decisions,
+            colliding,
+            cursor: 0,
         });
-        self.as_mut()
-            .set_conflict_count(count.min(i32::MAX as usize) as i32);
-        self.as_mut()
-            .set_conflict_name(QString::from(first.as_str()));
-        self.as_mut().set_conflict_pending(true);
+        self.as_mut().publish_conflict();
     }
 
-    /// Applies the user's conflict choice ("skip" / "replace" / "keepboth") and
-    /// starts the held-back paste on the worker thread.
-    pub fn resolve_conflicts(mut self: Pin<&mut Self>, strategy: &QString) {
+    /// Shows the collision now being asked about — its name and how many are
+    /// still undecided, this one included.
+    fn publish_conflict(mut self: Pin<&mut Self>) {
+        let (name, remaining) = match self.rust().pending_paste.as_ref() {
+            Some(pending) => {
+                let remaining = pending.colliding.len().saturating_sub(pending.cursor);
+                let name = pending
+                    .colliding
+                    .get(pending.cursor)
+                    .and_then(|index| pending.sources.get(*index))
+                    .map(|source| display_name(source))
+                    .unwrap_or_default();
+                (name, remaining)
+            }
+            None => (String::new(), 0),
+        };
+        self.as_mut()
+            .set_conflict_count(remaining.min(i32::MAX as usize) as i32);
+        self.as_mut()
+            .set_conflict_name(QString::from(name.as_str()));
+        self.as_mut().set_conflict_pending(remaining > 0);
+    }
+
+    /// Applies the user's choice ("skip" / "replace" / "keepboth") to the
+    /// collision being asked about — or, with `apply_to_all`, to every one that
+    /// is left — and starts the paste once nothing is undecided.
+    pub fn resolve_conflict(mut self: Pin<&mut Self>, strategy: &QString, apply_to_all: bool) {
         let Some(strategy) = ConflictStrategy::from_key(&strategy.to_string()) else {
             return;
         };
+        {
+            let Some(pending) = self.as_mut().rust_mut().get_mut().pending_paste.as_mut() else {
+                return;
+            };
+            if apply_to_all {
+                for position in pending.cursor..pending.colliding.len() {
+                    let index = pending.colliding[position];
+                    pending.decisions[index] = Some(strategy);
+                }
+                pending.cursor = pending.colliding.len();
+            } else if let Some(index) = pending.colliding.get(pending.cursor).copied() {
+                pending.decisions[index] = Some(strategy);
+                pending.cursor += 1;
+            }
+        }
+
+        let decided = self
+            .rust()
+            .pending_paste
+            .as_ref()
+            .is_some_and(|pending| pending.cursor >= pending.colliding.len());
+        if !decided {
+            self.as_mut().publish_conflict();
+            return;
+        }
+
         let Some(pending) = self.as_mut().rust_mut().get_mut().pending_paste.take() else {
             return;
         };
         self.as_mut().set_conflict_pending(false);
+        let strategies = pending
+            .decisions
+            .iter()
+            .map(|choice| choice.unwrap_or(ConflictStrategy::Skip))
+            .collect();
         self.as_mut()
-            .spawn_paste(pending.sources, pending.destination, pending.cut, strategy);
+            .spawn_paste(pending.sources, pending.destination, pending.cut, strategies);
     }
 
     /// Dismisses a pending conflict without pasting anything.
@@ -1500,7 +1957,9 @@ impl qobject::SideritaController {
         sources: Vec<PathBuf>,
         destination: PathBuf,
         cut: bool,
-        strategy: ConflictStrategy,
+        // One strategy per source, decided before the worker starts — so a
+        // batch can skip one collision and replace the next.
+        strategies: Vec<ConflictStrategy>,
     ) {
         let token = CancellationToken::new();
         self.as_mut().rust_mut().get_mut().op_cancel = Some(token.clone());
@@ -1565,7 +2024,10 @@ impl qobject::SideritaController {
                     source,
                     &destination,
                     cut,
-                    strategy,
+                    strategies
+                        .get(index)
+                        .copied()
+                        .unwrap_or(ConflictStrategy::Skip),
                     &token,
                     &mut on_progress,
                     &mut outcome,
@@ -1721,6 +2183,7 @@ impl qobject::SideritaController {
     /// render them exactly like a folder), flipping `trash_active`.
     pub fn open_trash(mut self: Pin<&mut Self>) {
         self.as_mut().exit_search();
+        self.as_mut().exit_recent();
         self.as_mut().load_trash();
         self.as_mut().publish_trash();
     }
@@ -1783,6 +2246,94 @@ impl qobject::SideritaController {
         self.as_mut().set_entry_names(names.clone());
         self.as_mut()
             .rows_ready(names, tokens, kinds, subtitles, paths, sections, sizes, dates);
+    }
+
+    /// Opens Recientes as a content-view location: the desktop's own
+    /// recently-used list (`recently-used.xbel`), read and published onto the
+    /// shared entry model so the list / grid / details render it like a folder.
+    /// Siderita only reads that file — the applications that open things are
+    /// what write it.
+    pub fn open_recent(mut self: Pin<&mut Self>) {
+        self.as_mut().exit_search();
+        self.as_mut().exit_trash();
+
+        let items = crate::recent::load(RECENT_LIMIT);
+        let names: QStringList = items
+            .iter()
+            .map(|item| QString::from(item.name.as_str()))
+            .collect();
+        let paths: QStringList = items
+            .iter()
+            .map(|item| QString::from(item.path.to_string_lossy().as_ref()))
+            .collect();
+        let kinds: QStringList = items
+            .iter()
+            .map(|item| QString::from(if item.path.is_dir() { "directory" } else { "file" }))
+            .collect();
+        let tokens: QStringList = (0..items.len())
+            .map(|i| QString::from(i.to_string().as_str()))
+            .collect();
+        // Where it lives, and the day it was last touched — the same two facts
+        // the Trash rows carry.
+        let subtitles: QStringList = items
+            .iter()
+            .map(|item| {
+                QString::from(search_hit_parent(&item.path.to_string_lossy()).as_str())
+            })
+            .collect();
+        let dates: QStringList = items
+            .iter()
+            .map(|item| QString::from(item.stamp.split('T').next().unwrap_or("")))
+            .collect();
+        let sizes: QStringList = items
+            .iter()
+            .map(|item| {
+                if item.path.is_dir() {
+                    QString::from("—")
+                } else {
+                    QString::from(
+                        std::fs::metadata(&item.path)
+                            .map(|meta| format_size(meta.len()))
+                            .unwrap_or_default()
+                            .as_str(),
+                    )
+                }
+            })
+            .collect();
+        let sections: QStringList = items.iter().map(|_| QString::default()).collect();
+
+        let hits: Vec<crate::search::SearchHit> = items
+            .iter()
+            .map(|item| crate::search::SearchHit {
+                name: item.name.clone(),
+                path: item.path.to_string_lossy().into_owned(),
+                is_dir: item.path.is_dir(),
+            })
+            .collect();
+
+        let count = hits.len().min(i32::MAX as usize) as i32;
+        self.as_mut().rust_mut().get_mut().search_hits = hits;
+        self.as_mut().set_recent_active(true);
+        self.as_mut().set_recent_count(count);
+        self.as_mut().set_selected_token(QString::default());
+        self.as_mut().set_entry_names(names.clone());
+        self.as_mut()
+            .rows_ready(names, tokens, kinds, subtitles, paths, sections, sizes, dates);
+    }
+
+    /// Leaves Recientes (a no-op when it is not shown, so any navigation can
+    /// call it) without repainting.
+    fn exit_recent(mut self: Pin<&mut Self>) {
+        if self.rust().recent_active {
+            self.as_mut().rust_mut().get_mut().search_hits.clear();
+            self.as_mut().set_recent_active(false);
+        }
+    }
+
+    /// Leaves Recientes and repaints the folder underneath.
+    pub fn close_recent(mut self: Pin<&mut Self>) {
+        self.as_mut().exit_recent();
+        self.as_mut().reproject();
     }
 
     /// Leaves the Trash location (only clears state if it is actually shown, so
@@ -2507,6 +3058,111 @@ impl qobject::SideritaController {
         self.as_mut().load_volumes();
     }
 
+    /// Republishes the sidebar's places: the keys that exist here, in the
+    /// user's order, minus the ones they hid — plus how many are hidden, so the
+    /// sidebar can offer them back.
+    fn refresh_place_props(mut self: Pin<&mut Self>) {
+        let (visible, hidden_count) = {
+            let rust = self.rust();
+            let existing: Vec<&str> = PLACE_CATALOGUE
+                .iter()
+                .copied()
+                // TRASH and RECENT are not XDG directories but locations the
+                // app always offers; the rest exist only if the folder does.
+                .filter(|key| matches!(*key, "TRASH" | "RECENT") || rust.places.contains_key(*key))
+                .collect();
+
+            // The saved order first (only keys that still exist), then anything
+            // it never mentioned, in catalogue order.
+            let mut ordered: Vec<&str> = Vec::with_capacity(existing.len());
+            for key in &rust.settings.place_order {
+                if let Some(found) = existing.iter().find(|candidate| *candidate == key) {
+                    if !ordered.contains(found) {
+                        ordered.push(found);
+                    }
+                }
+            }
+            for key in &existing {
+                if !ordered.contains(key) {
+                    ordered.push(key);
+                }
+            }
+
+            let hidden = &rust.settings.hidden_places;
+            let visible: QStringList = ordered
+                .iter()
+                .filter(|key| !hidden.iter().any(|h| h == *key))
+                .map(|key| QString::from(*key))
+                .collect();
+            let hidden_count = ordered
+                .iter()
+                .filter(|key| hidden.iter().any(|h| h == *key))
+                .count();
+            (visible, hidden_count)
+        };
+        self.as_mut().set_place_keys(visible);
+        self.as_mut()
+            .set_hidden_place_count(hidden_count.min(i32::MAX as usize) as i32);
+    }
+
+    /// Moves the place at `from` so it sits at `to` among the *visible* places,
+    /// and persists the whole order.
+    pub fn move_place(mut self: Pin<&mut Self>, from: i32, to: i32) {
+        let (Ok(from), Ok(to)) = (usize::try_from(from), usize::try_from(to)) else {
+            return;
+        };
+        let mut keys: Vec<String> = self
+            .place_keys()
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        if from == to || from >= keys.len() || to >= keys.len() {
+            return;
+        }
+        let moved = keys.remove(from);
+        keys.insert(to, moved);
+
+        let mut settings = crate::settings::load();
+        // Hidden places keep their relative place at the end, so un-hiding one
+        // does not scramble the order the user just set.
+        let hidden: Vec<String> = settings.hidden_places.clone();
+        settings.place_order = keys.into_iter().chain(hidden).collect();
+        let _ = crate::settings::save(&settings);
+        self.as_mut().rust_mut().get_mut().settings = settings;
+        self.as_mut().refresh_place_props();
+    }
+
+    /// Re-reads the sidebar settings — how a tab picks up an order or a hide
+    /// another tab just set (the bookmarks and icons do the same).
+    pub fn reload_places(mut self: Pin<&mut Self>) {
+        let settings = crate::settings::load();
+        self.as_mut().rust_mut().get_mut().settings = settings;
+        self.as_mut().refresh_place_props();
+    }
+
+    pub fn hide_place(mut self: Pin<&mut Self>, key: &QString) {
+        let key = key.to_string();
+        if key.is_empty() {
+            return;
+        }
+        let mut settings = crate::settings::load();
+        if !settings.hidden_places.contains(&key) {
+            settings.hidden_places.push(key);
+            let _ = crate::settings::save(&settings);
+        }
+        self.as_mut().rust_mut().get_mut().settings = settings;
+        self.as_mut().refresh_place_props();
+    }
+
+    /// Un-hides every previously-hidden place.
+    pub fn unhide_all_places(mut self: Pin<&mut Self>) {
+        let mut settings = crate::settings::load();
+        settings.hidden_places.clear();
+        let _ = crate::settings::save(&settings);
+        self.as_mut().rust_mut().get_mut().settings = settings;
+        self.as_mut().refresh_place_props();
+    }
+
     /// Un-hides every previously-hidden device.
     pub fn unhide_all_devices(mut self: Pin<&mut Self>) {
         let mut settings = crate::settings::load();
@@ -2603,8 +3259,10 @@ impl qobject::SideritaController {
     /// unreadable directory. All of back / forward / up / home / activate / typed
     /// path go through here.
     fn request_nav_scan(mut self: Pin<&mut Self>, nav: PendingNav) {
-        // Any explicit navigation leaves the Trash location (no-op otherwise).
+        // Any explicit navigation leaves the Trash / Recientes locations
+        // (no-ops otherwise).
         self.as_mut().exit_trash();
+        self.as_mut().exit_recent();
         let destination = nav.destination().to_path_buf();
         self.as_mut().rust_mut().get_mut().pending_nav = Some(nav);
         self.as_mut().request_scan_inner(destination, false);
@@ -2710,6 +3368,9 @@ impl qobject::SideritaController {
                 self.as_mut().update_navigation_state();
                 self.as_mut().update_watch(&location);
                 self.as_mut().reproject();
+                // After the projection, so a folder that remembers a different
+                // sort re-projects once with it rather than twice on arrival.
+                self.as_mut().apply_folder_view();
             }
             Err(error) => {
                 let is_current = self
@@ -2737,7 +3398,7 @@ impl qobject::SideritaController {
         // While search results occupy the content box, folder reprojections
         // (a watcher tick, a sort toggle) must not overwrite them; `close_search`
         // drops the flag first, then reprojects to restore the folder.
-        if self.rust().search_active || self.rust().trash_active {
+        if self.rust().virtual_rows() {
             return;
         }
         let projected = {
@@ -3332,14 +3993,51 @@ const fn sort_field_from_index(index: i32) -> Option<SortField> {
 
 /// Builds the parallel (paths, icons) QStringLists the QML folds into its
 /// custom-icon map, in a stable sorted order.
-fn icon_override_lists(
-    map: &std::collections::HashMap<String, String>,
-) -> (QStringList, QStringList) {
+/// The overrides as one `path\ticon` line per entry — a single property, so the
+/// QML sees a whole map or none of it, never half of one.
+fn icon_override_entries(map: &std::collections::HashMap<String, String>) -> QStringList {
     let mut entries: Vec<(&String, &String)> = map.iter().collect();
     entries.sort();
-    let paths: QStringList = entries.iter().map(|(k, _)| QString::from(k.as_str())).collect();
-    let names: QStringList = entries.iter().map(|(_, v)| QString::from(v.as_str())).collect();
-    (paths, names)
+    entries
+        .iter()
+        .map(|(path, icon)| QString::from(format!("{path}\t{icon}").as_str()))
+        .collect()
+}
+
+/// The starred paths as `path\tkind` lines. The kind is resolved here, once per
+/// refresh, so the sidebar can show a folder as a folder and say plainly when a
+/// favourite's target is gone rather than offering a row that leads nowhere.
+/// Every sidebar place Siderita knows how to offer, in the order it offers them
+/// before the user rearranges anything. The keys are the vocabulary the QML
+/// maps to a label and an icon; `TRASH` is Siderita's own, the rest are XDG.
+const PLACE_CATALOGUE: &[&str] = &[
+    "HOME",
+    "DESKTOP",
+    "DOCUMENTS",
+    "DOWNLOAD",
+    "MUSIC",
+    "PICTURES",
+    "VIDEOS",
+    "RECENT",
+    "TRASH",
+];
+
+/// How many recently-used entries Recientes shows. The desktop's file holds
+/// hundreds; a list that long is not "recent" and every row costs a `stat`.
+const RECENT_LIMIT: usize = 100;
+
+fn favorite_entry_list(paths: &std::collections::BTreeSet<String>) -> QStringList {
+    paths
+        .iter()
+        .map(|path| {
+            let kind = match std::fs::metadata(path) {
+                Ok(meta) if meta.is_dir() => "directory",
+                Ok(_) => "file",
+                Err(_) => "missing",
+            };
+            QString::from(format!("{path}\t{kind}").as_str())
+        })
+        .collect()
 }
 
 const fn kind_key(kind: RowKind) -> &'static str {

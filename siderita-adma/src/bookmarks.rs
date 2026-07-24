@@ -38,6 +38,18 @@ pub fn save(bookmarks: &[Bookmark]) -> io::Result<()> {
     }
 }
 
+/// Moves the bookmark at `from` so it sits at `to`, shifting the rest along.
+/// Returns whether the list actually changed — an out-of-range index or a move
+/// onto itself leaves it untouched, so a stray drag can never lose a bookmark.
+pub fn move_item(bookmarks: &mut Vec<Bookmark>, from: usize, to: usize) -> bool {
+    if from == to || from >= bookmarks.len() || to >= bookmarks.len() {
+        return false;
+    }
+    let moved = bookmarks.remove(from);
+    bookmarks.insert(to, moved);
+    true
+}
+
 /// Derives a default bookmark name from a path's final component.
 pub fn name_for(path: &str) -> String {
     if path == "/" {
@@ -143,6 +155,31 @@ mod tests {
         assert_eq!(loaded[0].path, "/x/y");
         assert!(!loaded[0].name.contains('\t') && !loaded[0].name.contains('\n'));
         let _ = fs::remove_dir_all(file.parent().unwrap());
+    }
+
+    #[test]
+    fn move_item_reorders_and_refuses_nonsense() {
+        let mk = |name: &str| Bookmark {
+            name: name.to_owned(),
+            path: format!("/{name}"),
+        };
+        let mut list = vec![mk("a"), mk("b"), mk("c")];
+
+        assert!(move_item(&mut list, 0, 2));
+        assert_eq!(names(&list), ["b", "c", "a"]);
+
+        assert!(move_item(&mut list, 2, 0));
+        assert_eq!(names(&list), ["a", "b", "c"]);
+
+        // No-ops: onto itself, or either index past the end.
+        assert!(!move_item(&mut list, 1, 1));
+        assert!(!move_item(&mut list, 3, 0));
+        assert!(!move_item(&mut list, 0, 9));
+        assert_eq!(names(&list), ["a", "b", "c"]);
+    }
+
+    fn names(list: &[Bookmark]) -> Vec<&str> {
+        list.iter().map(|b| b.name.as_str()).collect()
     }
 
     #[test]

@@ -12,9 +12,56 @@ ApplicationWindow {
     height: 720
     minimumWidth: 680
     minimumHeight: 480
-    visible: true
+    // Shown by Component.onCompleted, once the remembered size is on and the
+    // session's tabs exist — so the window never flashes at the default size
+    // and then jumps.
+    visible: false
     color: CelestinaTheme.canvas
     title: "Siderita · Iteración 1"
+
+    // ── Session ──────────────────────────────────────────────────────────
+    // A controller that owns no tab, used only to read and write what belongs
+    // to the window rather than to any one tab: its size and the set of open
+    // tabs. It is never started, so it runs no scan and holds no watch — it is
+    // the settings store the window needs before the first tab exists.
+    SideritaController {
+        id: sessionStore
+    }
+
+    function persistSession() {
+        const paths = []
+        for (var i = 0; i < tabRepeater.count; i++) {
+            const holder = tabRepeater.itemAt(i)
+            if (!holder)
+                continue
+            // A tab that has not been shown yet has no current path — it still
+            // belongs to the session, under the folder it was restored with.
+            const path = holder.docController && holder.docController.currentPath.length > 0
+                       ? holder.docController.currentPath
+                       : holder.initialPath
+            if (path.length > 0)
+                paths.push(path)
+        }
+        if (paths.length > 0)
+            sessionStore.saveTabs(paths, window.currentTabIndex)
+    }
+
+    // Both are chatty while a window is dragged or a folder is loading, so they
+    // settle first and write once.
+    Timer {
+        id: sessionSaver
+        interval: 700
+        onTriggered: window.persistSession()
+    }
+
+    Timer {
+        id: geometrySaver
+        interval: 700
+        onTriggered: sessionStore.saveWindowSize(window.width, window.height)
+    }
+
+    onWidthChanged: if (visible) geometrySaver.restart()
+    onHeightChanged: if (visible) geometrySaver.restart()
 
     // ── Tabs ─────────────────────────────────────────────────────────────
     // Each tab is an independent Document with its own SideritaController
@@ -24,9 +71,6 @@ ApplicationWindow {
     // Bumped whenever the tab Repeater adds/removes an item, so the
     // `activeController` binding re-resolves itemAt() after the delegate exists.
     property int tabsRevision: 0
-    // The Trash ("Papelera") overlay is opened from the window-scope sidebar but
-    // lives per-tab; this flag lets the sidebar drive the active tab's overlay.
-    property bool trashViewOpen: false
     readonly property var activeController: {
         tabsRevision // re-evaluate when tabs are created or destroyed
         const holder = tabRepeater.itemAt(currentTabIndex)
@@ -110,12 +154,32 @@ ApplicationWindow {
             (window.currentTabIndex + delta + tabsModel.count) % tabsModel.count
     }
 
-    // A freshly-activated tab may have been created before a bookmark was added
-    // in another tab; re-read the shared file so its sidebar is truthful.
+    // A freshly-activated tab may have been created before a bookmark, an icon
+    // override or a star was set in another tab; re-read the shared files so its
+    // sidebar and its entries are truthful.
     onCurrentTabIndexChanged: {
-        if (window.activeController)
+        sessionSaver.restart()
+        if (window.activeController) {
             window.activeController.reloadBookmarks()
+            window.activeController.reloadCustomIcons()
+            window.activeController.reloadFavorites()
+            window.activeController.reloadPlaces()
+        }
     }
+
+    // How to draw each sidebar place key. The controller owns which of these
+    // exist and in what order; this is only the label and the glyph.
+    readonly property var placeDefs: ({
+        "HOME":      { name: "Inicio",     icon: "user-home",        fallback: "go-home" },
+        "DESKTOP":   { name: "Escritorio", icon: "user-desktop",     fallback: "folder" },
+        "DOCUMENTS": { name: "Documentos", icon: "folder-documents", fallback: "folder" },
+        "DOWNLOAD":  { name: "Descargas",  icon: "folder-download",  fallback: "folder" },
+        "MUSIC":     { name: "Música",     icon: "folder-music",     fallback: "folder" },
+        "PICTURES":  { name: "Imágenes",   icon: "folder-pictures",  fallback: "folder" },
+        "VIDEOS":    { name: "Vídeos",     icon: "folder-videos",    fallback: "folder" },
+        "RECENT":    { name: "Recientes",  icon: "document-open-recent", fallback: "file" },
+        "TRASH":     { name: "Papelera",   icon: "user-trash",       fallback: "user-trash" }
+    })
 
     // Exposed as a property (not merely an id) so each per-tab Document can
     // reach it through `tabHost`; a plain child id is invisible as
@@ -124,6 +188,38 @@ ApplicationWindow {
 
     ListModel {
         id: tabsModelData
+    }
+
+    // ── FavoriteBadge ────────────────────────────────────────────────────
+    // The star a favourited entry wears, sat in the corner of its tile. It
+    // carries its own dark disc because it has to stay readable over a folder
+    // glyph, a photo thumbnail and an empty tile alike.
+    component FavoriteBadge: Item {
+        required property bool starred
+        // Sized by the caller against its tile — the list's glyph is half the
+        // grid's — and it rides the content-icon slider like everything else.
+        property int diameter: Math.round(19 * window.contentIconScale)
+
+        visible: starred
+        width: diameter
+        height: diameter
+
+        Rectangle {
+            anchors.fill: parent
+            radius: width / 2
+            color: CelestinaTheme.favoriteBadgeFill
+        }
+
+        // The bundled star, not the icon theme's: this is Siderita's own chrome
+        // (like the play badge), so it should look the same under any theme —
+        // the "don't tint" rule is about an entry's own icon, not about a badge.
+        IconImage {
+            anchors.centerIn: parent
+            width: Math.round(parent.width * 0.72)
+            height: width
+            source: CelestinaTheme.fallbackIcon("star")
+            color: CelestinaTheme.favorite
+        }
     }
 
     component NavButton: ToolButton {
@@ -222,6 +318,124 @@ ApplicationWindow {
             Behavior on color {
                 ColorAnimation { duration: CelestinaTheme.motionFast }
             }
+        }
+    }
+
+    // ── InfoPill ─────────────────────────────────────────────────────────
+    // A glass pill that hugs its own label, sized and shaped like a
+    // PillButton. The floating strips (the search summary, the Trash header)
+    // are built from these instead of one bar spanning the window, so a
+    // header reads as a few independent pills — the label is one, each action
+    // is its own — and the content behind shows through between them.
+    component InfoPill: Item {
+        id: infoPill
+
+        required property Item backdrop
+        property alias text: pillLabel.text
+        property string iconName: ""
+        property string iconFallback: "file"
+        // Ceiling for a label that would otherwise outgrow its strip; the text
+        // elides inside it. Unset (≤ 0) means "as wide as the text needs".
+        property int maxWidth: -1
+
+        readonly property int naturalWidth:
+                (pillIcon.visible ? 14 + pillIcon.width + 10 : 14)
+                + Math.ceil(pillLabel.implicitWidth) + 14
+
+        implicitHeight: 30
+        height: implicitHeight
+        width: maxWidth > 0 ? Math.min(naturalWidth, maxWidth) : naturalWidth
+
+        GlassSurface {
+            anchors.fill: parent
+            backdropSource: infoPill.backdrop
+            captureEnabled: infoPill.visible
+            liveCapture: true
+            cornerRadius: CelestinaTheme.radiusSm
+        }
+
+        IconImage {
+            id: pillIcon
+            visible: infoPill.iconName.length > 0
+            anchors.left: parent.left
+            anchors.leftMargin: 14
+            anchors.verticalCenter: parent.verticalCenter
+            width: CelestinaTheme.iconSm
+            height: CelestinaTheme.iconSm
+            name: infoPill.iconName
+            source: CelestinaTheme.fallbackIcon(infoPill.iconFallback)
+        }
+
+        Text {
+            id: pillLabel
+            anchors.left: pillIcon.visible ? pillIcon.right : parent.left
+            anchors.leftMargin: pillIcon.visible ? 10 : 14
+            anchors.right: parent.right
+            anchors.rightMargin: 14
+            anchors.verticalCenter: parent.verticalCenter
+            color: CelestinaTheme.text
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: Math.round(CelestinaTheme.fontLabel * window.interfaceTextScale)
+            font.weight: CelestinaTheme.weightMedium
+            elide: Text.ElideRight
+        }
+    }
+
+    // One rule field of the batch-rename dialog — the suite's input styling in
+    // the one place four of them sit side by side.
+    component RuleField: TextField {
+        id: ruleField
+
+        height: CelestinaTheme.controlHeight
+        color: CelestinaTheme.text
+        selectionColor: CelestinaTheme.accentStrong
+        selectedTextColor: CelestinaTheme.text
+        font.family: CelestinaTheme.sansFamily
+        font.pixelSize: CelestinaTheme.fontBody
+        leftPadding: 12
+        rightPadding: 12
+
+        background: Rectangle {
+            radius: CelestinaTheme.radiusSm
+            color: CelestinaTheme.inputFill
+            border.width: 1
+            border.color: ruleField.activeFocus ? CelestinaTheme.focus
+                                                : CelestinaTheme.inputBorder
+        }
+    }
+
+    // ── DragScrollEdge ───────────────────────────────────────────────────
+    // A thin strip over the top or bottom of a view: while a drag rests on it,
+    // the view scrolls, so a destination below the fold does not mean dropping
+    // the entry somewhere else first and picking it up again. It sits above the
+    // rows (a row would otherwise swallow the drag), so a release on it means
+    // the *current* folder — the same thing an empty-space drop means — and an
+    // entry dragged within its own folder simply has nowhere to go.
+    component DragScrollEdge: DropArea {
+        id: edge
+
+        required property Flickable view
+        required property int step
+
+        signal externalDrop(var drop)
+
+        z: 6
+        height: 30
+
+        Timer {
+            running: edge.containsDrag && edge.view !== null
+            interval: 16
+            repeat: true
+            onTriggered: {
+                const limit = Math.max(0, edge.view.contentHeight - edge.view.height)
+                edge.view.contentY = Math.max(
+                    0, Math.min(limit, edge.view.contentY + edge.step))
+            }
+        }
+
+        onDropped: function(drop) {
+            if (drop.hasUrls)
+                edge.externalDrop(drop)
         }
     }
 
@@ -429,12 +643,35 @@ ApplicationWindow {
             controller.closeSearch()
         }
 
+        // Back undoes wherever you are, in the order you got there: a search
+        // bows out first, then the Trash location, and only then does history
+        // move. Trash is a place you can be but not a folder in history, so
+        // without this the only way out was the sidebar.
+        readonly property bool canGoBackOrLeave:
+                !controller.loading
+                && (searchField.text.length > 0 || controller.searchActive
+                    || controller.trashActive || controller.recentActive
+                    || controller.canGoBack)
+
+        function goBackOrLeave() {
+            if (controller.loading)
+                return
+            if (searchField.text.length > 0 || controller.searchActive)
+                clearSearch()
+            else if (controller.trashActive)
+                controller.closeTrash()
+            else if (controller.recentActive)
+                controller.closeRecent()
+            else if (controller.canGoBack)
+                controller.goBack()
+        }
+
         // Per-tab shortcuts: only the active (visible) tab responds, so the
         // same sequence across tabs is never ambiguous.
         Shortcut {
             sequence: "Alt+Left"
-            enabled: root.active && controller.canGoBack && !controller.loading
-            onActivated: controller.goBack()
+            enabled: root.active && root.canGoBackOrLeave
+            onActivated: root.goBackOrLeave()
         }
 
         Shortcut {
@@ -570,13 +807,7 @@ ApplicationWindow {
                     return
 
                 if (button === Qt.BackButton) {
-                    // A search in progress (either the live filter or the
-                    // recursive results) bows out first — clearing the field and
-                    // hits and staying put — before Back walks history.
-                    if (searchField.text.length > 0 || controller.searchActive)
-                        root.clearSearch()
-                    else if (controller.canGoBack)
-                        controller.goBack()
+                    root.goBackOrLeave()
                 } else if (button === Qt.ForwardButton
                            && controller.canGoForward) {
                     controller.goForward()
@@ -595,9 +826,26 @@ ApplicationWindow {
             Component.onCompleted: {
                 viewMode = controller.savedViewMode()
                 rebuildFolderTypeIcons()
-                rebuildCustomIcons()
             }
-            function persist() { controller.saveViewMode(viewMode) }
+            // Picking a view is both a new default and a statement about this
+            // folder: the global keeps folders you have never arranged looking
+            // the way you last chose, and this folder now remembers its own.
+            function persist() {
+                controller.saveViewMode(viewMode)
+                controller.rememberViewMode(viewMode)
+            }
+
+            // A folder that remembers a view wins over the global default when
+            // it opens. `folderViewMode` is empty for folders never arranged,
+            // which leaves whatever the user is currently looking at alone.
+            Connections {
+                target: controller
+                function onFolderViewModeChanged() {
+                    const mode = controller.folderViewMode
+                    if (mode.length > 0 && mode !== mainPanel.viewMode)
+                        mainPanel.viewMode = mode
+                }
+            }
 
             // The content row/cell (the "selection square") sizes to fit
             // whichever is taller — the icon or the independently-scaled text —
@@ -658,20 +906,35 @@ ApplicationWindow {
                 return (path && folderTypeIcons[path]) ? folderTypeIcons[path] : "folder"
             }
             // User-chosen per-path icon overrides (Cambiar icono…), folded from
-            // the controller's parallel lists and rebuilt whenever one changes.
-            property var customIcons: ({})
-            function rebuildCustomIcons() {
+            // the controller's `path\ticon` list into a map. A binding, not a
+            // hand-rolled rebuild: it re-runs by itself whenever the list
+            // changes, so a new icon shows at once instead of at the next start.
+            readonly property var customIcons: {
                 var m = {}
-                var paths = controller.customIconPaths
-                var names = controller.customIconNames
-                for (var i = 0; i < paths.length && i < names.length; i++)
-                    m[paths[i]] = names[i]
-                customIcons = m
+                var entries = controller.customIconEntries
+                for (var i = 0; i < entries.length; i++) {
+                    var cut = entries[i].indexOf("\t")
+                    if (cut > 0)
+                        m[entries[i].substring(0, cut)] = entries[i].substring(cut + 1)
+                }
+                return m
             }
-            Connections {
-                target: controller
-                function onCustomIconPathsChanged() { mainPanel.rebuildCustomIcons() }
+            // Starred paths ("Añadir a favoritos"), folded into a set for O(1)
+            // lookup from every delegate. Same shape as customIcons: a binding,
+            // so a star appears the moment it is set.
+            readonly property var favorites: {
+                var s = {}
+                var entries = controller.favoriteEntries
+                for (var i = 0; i < entries.length; i++) {
+                    var cut = entries[i].indexOf("\t")
+                    s[cut > 0 ? entries[i].substring(0, cut) : entries[i]] = true
+                }
+                return s
             }
+            function isFavorite(path) {
+                return path.length > 0 && favorites[path] === true
+            }
+
             // The themed icon a non-thumbnailed entry shows — a user override if
             // set, else a media-type icon (video/audio/image), a type-specific
             // folder, else generic.
@@ -1132,9 +1395,10 @@ ApplicationWindow {
                 // columns (same rows, a different delegate body), and search
                 // (which always uses the sectioned list — a grid can't carry
                 // section headers).
-                visible: mainPanel.viewMode === "list"
-                         || mainPanel.viewMode === "details"
-                         || controller.searchActive
+                // Search results ride the same model as a folder, so they honour
+                // the chosen view like the Trash does — the one exception is the
+                // details columns, which a hit has no size or date for.
+                visible: mainPanel.viewMode !== "grid"
                 readonly property bool detailsMode: mainPanel.viewMode === "details"
                                                     && !controller.searchActive
                 // Column widths shared by the details rows and their header
@@ -1154,6 +1418,7 @@ ApplicationWindow {
                 topMargin: 62 + (tabBar.visible ? tabBar.height + 8 : 0)
                          + (searchBar.visible ? searchBar.height + 8 : 0)
                          + (trashHeader.visible ? trashHeader.height + 8 : 0)
+                         + (recentHeader.visible ? recentHeader.height + 8 : 0)
                          + (fileList.detailsMode ? detailsHeader.height + 8 : 0)
                 boundsBehavior: Flickable.StopAtBounds
 
@@ -1327,16 +1592,34 @@ ApplicationWindow {
                     // inside that folder. Accepts external file URLs and internal
                     // entry drags (move a file/folder into this folder).
                     DropArea {
+                        id: rowDrop
                         anchors.fill: parent
                         enabled: row.isDirectory
 
                         onEntered: function(drag) {
-                            if (!drag.hasUrls && !mainPanel.isEntryDrag(drag))
+                            if (!drag.hasUrls && !mainPanel.isEntryDrag(drag)) {
                                 drag.accepted = false
+                                return
+                            }
+                            springOpen.restart()
                         }
+                        onExited: springOpen.stop()
                         onDropped: function(drop) {
+                            springOpen.stop()
                             mainPanel.dropOnto(row.path, drop)
                             drop.accept()
+                        }
+
+                        // Spring-loaded: hold a drag over a folder and it opens,
+                        // so a move into somewhere deep does not mean dropping
+                        // it here first and picking it up again.
+                        Timer {
+                            id: springOpen
+                            interval: CelestinaTheme.springDelay
+                            onTriggered: {
+                                if (rowDrop.containsDrag)
+                                    controller.openLocation(row.path)
+                            }
                         }
 
                         Rectangle {
@@ -1395,7 +1678,13 @@ ApplicationWindow {
                             anchors.margins: 1
                             readonly property bool ready: kindGlyph.media !== ""
                                                           && status === Image.Ready
-                            visible: ready
+                            // Fades up as it decodes, so a folder of photos
+                            // fills in instead of flickering glyph→picture.
+                            visible: opacity > 0
+                            opacity: ready ? 1 : 0
+                            Behavior on opacity {
+                                NumberAnimation { duration: CelestinaTheme.motionNormal }
+                            }
                             source: kindGlyph.media !== ""
                                     ? "image://thumb/" + encodeURIComponent(row.path) : ""
                             sourceSize.width: 256
@@ -1404,6 +1693,14 @@ ApplicationWindow {
                             asynchronous: true
                             cache: true
                             smooth: true
+                        }
+
+                        FavoriteBadge {
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            anchors.margins: 1
+                            diameter: Math.round(13 * window.contentIconScale)
+                            starred: mainPanel.isFavorite(row.path)
                         }
 
                         // A small play badge marks a video's frame apart from a
@@ -1577,7 +1874,7 @@ ApplicationWindow {
                 y: 14
                 width: parent.width - 16
                 height: parent.height - 68
-                visible: mainPanel.viewMode === "grid" && !controller.searchActive
+                visible: mainPanel.viewMode === "grid"
                 model: entryModel
                 clip: true
                 // Stretch the columns to fill the width: fit as many natural-size
@@ -1590,6 +1887,7 @@ ApplicationWindow {
                 topMargin: 62 + (tabBar.visible ? tabBar.height + 8 : 0)
                          + (searchBar.visible ? searchBar.height + 8 : 0)
                          + (trashHeader.visible ? trashHeader.height + 8 : 0)
+                         + (recentHeader.visible ? recentHeader.height + 8 : 0)
                 boundsBehavior: Flickable.StopAtBounds
                 activeFocusOnTab: true
                 keyNavigationEnabled: false
@@ -1743,17 +2041,33 @@ ApplicationWindow {
                     // Drop onto this cell when it is a folder (external file URLs
                     // or an internal entry drag).
                     DropArea {
+                        id: cellDrop
                         anchors.fill: parent
                         anchors.margins: 5
                         enabled: cell.isDirectory
 
                         onEntered: function(drag) {
-                            if (!drag.hasUrls && !mainPanel.isEntryDrag(drag))
+                            if (!drag.hasUrls && !mainPanel.isEntryDrag(drag)) {
                                 drag.accepted = false
+                                return
+                            }
+                            cellSpringOpen.restart()
                         }
+                        onExited: cellSpringOpen.stop()
                         onDropped: function(drop) {
+                            cellSpringOpen.stop()
                             mainPanel.dropOnto(cell.path, drop)
                             drop.accept()
+                        }
+
+                        // Spring-loaded, like the list rows.
+                        Timer {
+                            id: cellSpringOpen
+                            interval: CelestinaTheme.springDelay
+                            onTriggered: {
+                                if (cellDrop.containsDrag)
+                                    controller.openLocation(cell.path)
+                            }
                         }
 
                         Rectangle {
@@ -1809,7 +2123,11 @@ ApplicationWindow {
                                 anchors.margins: 1
                                 readonly property bool ready: cellGlyph.media !== ""
                                                               && status === Image.Ready
-                                visible: ready
+                                visible: opacity > 0
+                                opacity: ready ? 1 : 0
+                                Behavior on opacity {
+                                    NumberAnimation { duration: CelestinaTheme.motionNormal }
+                                }
                                 source: cellGlyph.media !== ""
                                         ? "image://thumb/" + encodeURIComponent(cell.path) : ""
                                 sourceSize.width: 256
@@ -1818,6 +2136,13 @@ ApplicationWindow {
                                 asynchronous: true
                                 cache: true
                                 smooth: true
+                            }
+
+                            FavoriteBadge {
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                anchors.margins: 2
+                                starred: mainPanel.isFavorite(cell.path)
                             }
 
                             // Play badge on a video frame.
@@ -2846,7 +3171,16 @@ ApplicationWindow {
             // ── Trash-only actions ──
             GlassMenuItem {
                 text: "Restaurar"
-                visible: controller.trashActive
+                // Fades in place. Not a slide: these carry glass, and moving
+                // a glass surface mid-animation samples the wrong region.
+                visible: opacity > 0.01
+                opacity: controller.trashActive ? 1 : 0
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: CelestinaTheme.motionFast
+                        easing.type: CelestinaTheme.easeStandard
+                    }
+                }
                 height: visible ? implicitHeight : 0
                 icon.name: "edit-undo"
                 icon.source: CelestinaTheme.fallbackIcon("file")
@@ -2901,12 +3235,37 @@ ApplicationWindow {
             }
 
             GlassMenuItem {
+                text: mainPanel.isFavorite(entryMenu.targetPath)
+                      ? "Quitar de favoritos" : "Añadir a favoritos"
+                visible: !entryMenu.multi && !controller.trashActive
+                height: visible ? implicitHeight : 0
+                // The bundled star, deliberately not the theme's: this entry has
+                // to read as the same mark the badge draws on the tile, and not
+                // every theme carries both a filled and an outline star.
+                icon.source: CelestinaTheme.fallbackIcon(
+                                 mainPanel.isFavorite(entryMenu.targetPath)
+                                 ? "star" : "star-outline")
+                onTriggered: controller.toggleFavorite(entryMenu.targetPath)
+            }
+
+            GlassMenuItem {
                 text: "Renombrar"
                 visible: !entryMenu.multi && !controller.trashActive
                 height: visible ? implicitHeight : 0
                 icon.name: "edit-rename"
                 icon.source: CelestinaTheme.fallbackIcon("file")
                 onTriggered: namePrompt.openRename(entryMenu.targetPath, entryMenu.targetName)
+            }
+
+            GlassMenuItem {
+                text: "Renombrar " + entryMenu.actingCount + " elementos…"
+                visible: entryMenu.multi && !controller.trashActive
+                height: visible ? implicitHeight : 0
+                icon.name: "edit-rename"
+                icon.source: CelestinaTheme.fallbackIcon("file")
+                onTriggered: batchRename.open(
+                                 mainPanel.operativePaths(entryMenu.targetToken,
+                                                          entryMenu.targetPath))
             }
 
             GlassMenuItem {
@@ -3070,6 +3429,17 @@ ApplicationWindow {
                 onTriggered: controller.openTerminal()
             }
 
+            // Only offered once this folder actually remembers something, and
+            // it says plainly what it drops.
+            GlassMenuItem {
+                text: "Olvidar la vista de esta carpeta"
+                visible: controller.folderViewPinned
+                height: visible ? implicitHeight : 0
+                icon.name: "edit-clear"
+                icon.source: CelestinaTheme.fallbackIcon("view-refresh")
+                onTriggered: controller.forgetFolderView()
+            }
+
             GlassMenuItem {
                 text: "Actualizar"
                 icon.name: "view-refresh"
@@ -3090,7 +3460,18 @@ ApplicationWindow {
             id: namePrompt
             anchors.fill: parent
             z: 60
-            visible: false
+            property bool shown: false
+            // Fades rather than pops. Opacity only: a scale transform on a
+            // glass surface desyncs its backdrop sampling (see a995619), so the
+            // motion here never touches geometry.
+            visible: opacity > 0.01
+            opacity: shown ? 1 : 0
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: CelestinaTheme.motionFast
+                    easing.type: CelestinaTheme.easeStandard
+                }
+            }
             color: Qt.rgba(0, 0, 0, 0.45)
 
             property string mode: "folder"   // "folder" | "file" | "rename"
@@ -3102,7 +3483,7 @@ ApplicationWindow {
                 namePrompt.targetPath = ""
                 namePrompt.heading = kind === "folder" ? "Nueva carpeta" : "Nuevo archivo"
                 promptField.text = ""
-                namePrompt.visible = true
+                namePrompt.shown = true
                 promptField.forceActiveFocus()
             }
             function openRename(path, currentName) {
@@ -3110,12 +3491,12 @@ ApplicationWindow {
                 namePrompt.targetPath = path
                 namePrompt.heading = "Renombrar"
                 promptField.text = currentName
-                namePrompt.visible = true
+                namePrompt.shown = true
                 promptField.forceActiveFocus()
                 promptField.selectAll()
             }
             function dismiss() {
-                namePrompt.visible = false
+                namePrompt.shown = false
                 promptField.text = ""
                 fileList.forceActiveFocus()
             }
@@ -3209,12 +3590,310 @@ ApplicationWindow {
             }
         }
 
+        // ── Batch rename ─────────────────────────────────────────────────
+        // Renames a whole selection by a rule rather than one dialog at a time.
+        // Everything is previewed before anything is touched: the new name is
+        // shown per entry, and a name that would collide — with a sibling in the
+        // batch or with a file already in the folder — is marked and the rename
+        // refuses to run. The domain refuses to overwrite anyway; this just
+        // means the user finds out before, not after.
+        Rectangle {
+            id: batchRename
+            anchors.fill: parent
+            z: 61
+            property bool shown: false
+            // Fades rather than pops. Opacity only: a scale transform on a
+            // glass surface desyncs its backdrop sampling (see a995619), so the
+            // motion here never touches geometry.
+            visible: opacity > 0.01
+            opacity: shown ? 1 : 0
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: CelestinaTheme.motionFast
+                    easing.type: CelestinaTheme.easeStandard
+                }
+            }
+            color: Qt.rgba(0, 0, 0, 0.45)
+
+            property var targets: []          // [{path, name}]
+
+            function open(paths) {
+                var list = []
+                for (var i = 0; i < paths.length; i++) {
+                    var p = paths[i]
+                    var slash = p.lastIndexOf("/")
+                    list.push({ path: p,
+                                name: slash >= 0 ? p.substring(slash + 1) : p })
+                }
+                targets = list
+                findField.text = ""
+                replaceField.text = ""
+                patternField.text = ""
+                startField.text = "1"
+                batchRename.shown = true
+                findField.forceActiveFocus()
+            }
+            function dismiss() {
+                batchRename.shown = false
+                targets = []
+                fileList.forceActiveFocus()
+            }
+
+            // The name entry `i` would end up with. A pattern (with # for the
+            // number) replaces the whole name and keeps the extension; find /
+            // replace edits the name in place. An empty rule leaves it alone.
+            function newNameFor(index) {
+                const original = targets[index].name
+                const pattern = patternField.text
+                if (pattern.length > 0) {
+                    const start = parseInt(startField.text, 10)
+                    const n = (isNaN(start) ? 1 : start) + index
+                    const dot = original.lastIndexOf(".")
+                    const extension = dot > 0 ? original.substring(dot) : ""
+                    return pattern.replace(/#+/g, function(hashes) {
+                        var text = String(n)
+                        while (text.length < hashes.length)
+                            text = "0" + text
+                        return text
+                    }) + extension
+                }
+                if (findField.text.length > 0)
+                    return original.split(findField.text).join(replaceField.text)
+                return original
+            }
+
+            // Names that cannot be given: empty, path-separated, colliding with
+            // another entry in the batch, or with a name already in the folder
+            // that is not itself being renamed away.
+            readonly property var clashes: {
+                var seen = ({})
+                var bad = ({})
+                var keeping = ({})
+                var i
+                for (i = 0; i < targets.length; i++)
+                    keeping[targets[i].name] = true
+                for (i = 0; i < targets.length; i++) {
+                    var name = newNameFor(i)
+                    if (name.length === 0 || name.indexOf("/") >= 0) {
+                        bad[i] = true
+                        continue
+                    }
+                    if (seen[name] === true) {
+                        bad[i] = true
+                        continue
+                    }
+                    seen[name] = true
+                    if (name !== targets[i].name
+                            && controller.entryNames.indexOf(name) >= 0
+                            && keeping[name] !== true)
+                        bad[i] = true
+                }
+                return bad
+            }
+            readonly property bool anyClash: Object.keys(clashes).length > 0
+            readonly property bool anyChange: {
+                for (var i = 0; i < targets.length; i++)
+                    if (newNameFor(i) !== targets[i].name)
+                        return true
+                return false
+            }
+
+            function confirm() {
+                if (anyClash || !anyChange)
+                    return
+                var paths = []
+                var names = []
+                for (var i = 0; i < targets.length; i++) {
+                    var name = newNameFor(i)
+                    if (name === targets[i].name)
+                        continue
+                    paths.push(targets[i].path)
+                    names.push(name)
+                }
+                if (paths.length > 0)
+                    controller.renamePaths(paths, names)
+                batchRename.dismiss()
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                onClicked: batchRename.dismiss()
+            }
+            Keys.onPressed: function(event) {
+                if (event.key === Qt.Key_Escape) {
+                    batchRename.dismiss()
+                    event.accepted = true
+                }
+            }
+            focus: batchRename.shown
+
+            GlassCard {
+                anchors.centerIn: parent
+                width: Math.min(560, root.width - 48)
+                height: Math.min(460, root.height - 64)
+                backdropSource: mainPanel
+                Accessible.role: Accessible.Dialog
+                Accessible.name: "Renombrar en lote"
+
+                MouseArea { anchors.fill: parent }
+
+                Text {
+                    id: batchHeading
+                    x: 18
+                    y: 16
+                    text: "Renombrar " + batchRename.targets.length + " elementos"
+                    color: CelestinaTheme.text
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCallout
+                    font.weight: CelestinaTheme.weightDemiBold
+                }
+
+                Grid {
+                    id: batchFields
+                    x: 18
+                    y: batchHeading.y + batchHeading.height + 12
+                    width: parent.width - 36
+                    columns: 2
+                    columnSpacing: 10
+                    rowSpacing: 8
+
+                    readonly property real fieldWidth:
+                            (batchFields.width - batchFields.columnSpacing) / 2
+
+                    RuleField {
+                        id: findField
+                        width: batchFields.fieldWidth
+                        placeholderText: "Buscar"
+                    }
+                    RuleField {
+                        id: replaceField
+                        width: batchFields.fieldWidth
+                        placeholderText: "Reemplazar por"
+                    }
+                    RuleField {
+                        id: patternField
+                        width: batchFields.fieldWidth
+                        placeholderText: "Patrón, p. ej. foto-##"
+                    }
+                    RuleField {
+                        id: startField
+                        width: batchFields.fieldWidth
+                        placeholderText: "Empezar en"
+                        text: "1"
+                    }
+                }
+
+                Text {
+                    id: batchNote
+                    x: 18
+                    y: batchFields.y + batchFields.height + 10
+                    width: parent.width - 36
+                    text: batchRename.anyClash
+                          ? "Hay nombres repetidos o ya usados (marcados abajo)."
+                          : "El patrón sustituye el nombre y conserva la extensión; # es el número."
+                    color: batchRename.anyClash ? CelestinaTheme.dangerText
+                                                : CelestinaTheme.textMuted
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCaption
+                    wrapMode: Text.Wrap
+                }
+
+                ListView {
+                    id: batchPreview
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: batchNote.bottom
+                    anchors.bottom: batchButtons.top
+                    anchors.leftMargin: 18
+                    anchors.rightMargin: 18
+                    anchors.topMargin: 10
+                    anchors.bottomMargin: 12
+                    clip: true
+                    model: batchRename.targets.length
+                    spacing: 2
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    delegate: Item {
+                        required property int index
+                        width: batchPreview.width
+                        height: 24
+
+                        readonly property bool clashes:
+                                batchRename.clashes[index] === true
+                        readonly property string before:
+                                batchRename.targets[index].name
+                        readonly property string after: batchRename.newNameFor(index)
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width * 0.44
+                            text: parent.before
+                            color: CelestinaTheme.textMuted
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontCaption
+                            elide: Text.ElideMiddle
+                        }
+                        Text {
+                            x: parent.width * 0.46
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "→"
+                            color: CelestinaTheme.textMuted
+                            font.pixelSize: CelestinaTheme.fontCaption
+                        }
+                        Text {
+                            x: parent.width * 0.52
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width * 0.48
+                            text: parent.after
+                            color: parent.clashes ? CelestinaTheme.dangerText
+                                   : parent.after !== parent.before ? CelestinaTheme.accent
+                                   : CelestinaTheme.textMuted
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontCaption
+                            elide: Text.ElideMiddle
+                        }
+                    }
+                }
+
+                Row {
+                    id: batchButtons
+                    anchors.right: parent.right
+                    anchors.rightMargin: 18
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 16
+                    spacing: 8
+
+                    PillButton {
+                        text: "Cancelar"
+                        onClicked: batchRename.dismiss()
+                    }
+                    PillButton {
+                        text: "Renombrar"
+                        primary: true
+                        enabled: !batchRename.anyClash && batchRename.anyChange
+                        onClicked: batchRename.confirm()
+                    }
+                }
+            }
+        }
+
         // ── Paste conflict dialog (skip / replace / keep both) ───────────
         Rectangle {
             id: conflictDialog
             anchors.fill: parent
             z: 62
-            visible: controller.conflictPending
+            readonly property bool shown: controller.conflictPending
+            // Fades rather than pops. Opacity only: a scale transform on a
+            // glass surface desyncs its backdrop sampling (see a995619), so the
+            // motion here never touches geometry.
+            visible: opacity > 0.01
+            opacity: shown ? 1 : 0
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: CelestinaTheme.motionFast
+                    easing.type: CelestinaTheme.easeStandard
+                }
+            }
             color: Qt.rgba(0, 0, 0, 0.45)
 
             // Clicking the dimmed backdrop cancels the whole paste.
@@ -3229,12 +3908,12 @@ ApplicationWindow {
                     event.accepted = true
                 }
             }
-            focus: controller.conflictPending
+            focus: conflictDialog.shown
 
             GlassCard {
                 anchors.centerIn: parent
                 width: Math.min(420, root.width - 48)
-                height: 176
+                height: applyToAll.visible ? 214 : 176
                 backdropSource: mainPanel
                 // (not transform-scaled — a scale transform desynced the glass backdrop)
                 Accessible.role: Accessible.Dialog
@@ -3264,8 +3943,8 @@ ApplicationWindow {
                         var base = "«" + controller.conflictName
                                    + "» ya existe en esta carpeta."
                         if (controller.conflictCount > 1)
-                            base += " Y " + (controller.conflictCount - 1)
-                                    + " elemento(s) más. La elección se aplica a todos."
+                            base += " Quedan " + (controller.conflictCount - 1)
+                                    + " conflicto(s) después de este."
                         return base
                     }
                     color: CelestinaTheme.textMuted
@@ -3273,6 +3952,60 @@ ApplicationWindow {
                     font.pixelSize: CelestinaTheme.fontLabel
                 }
 
+                // Each collision is asked about on its own; answering for the
+                // whole batch is a choice, not the only option. Unticked again
+                // whenever a new batch opens, so a past "all" never decides a
+                // future paste.
+                CheckBox {
+                    id: applyToAll
+                    x: 14
+                    y: conflictBody.y + conflictBody.height + 10
+                    visible: controller.conflictCount > 1
+                    text: "Aplicar a los " + controller.conflictCount + " conflictos"
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontLabel
+                    Accessible.name: text
+
+                    contentItem: Text {
+                        text: applyToAll.text
+                        font: applyToAll.font
+                        color: CelestinaTheme.text
+                        verticalAlignment: Text.AlignVCenter
+                        leftPadding: applyToAll.indicator.width + 8
+                    }
+
+                    indicator: Rectangle {
+                        implicitWidth: 18
+                        implicitHeight: 18
+                        x: applyToAll.leftPadding
+                        y: applyToAll.height / 2 - height / 2
+                        radius: CelestinaTheme.radiusXs
+                        color: applyToAll.checked ? CelestinaTheme.accent
+                                                  : CelestinaTheme.inputFill
+                        border.width: 1
+                        border.color: applyToAll.checked ? CelestinaTheme.accent
+                                                         : CelestinaTheme.inputBorder
+
+                        Text {
+                            anchors.centerIn: parent
+                            visible: applyToAll.checked
+                            text: "✓"
+                            color: CelestinaTheme.canvas
+                            font.pixelSize: 12
+                            font.weight: CelestinaTheme.weightDemiBold
+                        }
+                    }
+                }
+
+                Connections {
+                    target: controller
+                    // A fresh batch starts unticked.
+                    function onOpRunningChanged() {
+                        if (controller.opRunning)
+                            applyToAll.checked = false
+                    }
+                }
+
                 Row {
                     anchors.right: parent.right
                     anchors.rightMargin: 18
@@ -3282,286 +4015,46 @@ ApplicationWindow {
 
                     PillButton {
                         text: "Cancelar"
-                        onClicked: controller.cancelConflicts()
+                        onClicked: {
+                            applyToAll.checked = false
+                            controller.cancelConflicts()
+                        }
                     }
                     PillButton {
                         text: "Omitir"
-                        onClicked: controller.resolveConflicts("skip")
+                        onClicked: controller.resolveConflict("skip", applyToAll.checked)
                     }
                     PillButton {
                         text: "Conservar ambos"
-                        onClicked: controller.resolveConflicts("keepboth")
+                        onClicked: controller.resolveConflict("keepboth", applyToAll.checked)
                     }
                     PillButton {
                         text: "Reemplazar"
                         primary: true
-                        onClicked: controller.resolveConflicts("replace")
+                        onClicked: controller.resolveConflict("replace", applyToAll.checked)
                     }
                 }
             }
         }
 
-        // ── Trash view (list + restore) ──────────────────────────────────
-        Rectangle {
-            id: trashView
-            anchors.fill: parent
-            z: 64
-            // Superseded by the in-content Trash location (controller.trashActive);
-            // kept dormant to avoid a large delete — never shown.
-            visible: false
-            // Opaque content panel — a location, not a dimmed modal.
-            color: CelestinaTheme.canvas
-
-            function dismiss() { window.trashViewOpen = false }
-
-            property int focusedIndex: -1
-            // Emptying is irreversible, so the button arms a confirmation rather
-            // than acting on the first click.
-            property bool confirmingEmpty: false
-            readonly property int entryCount: controller.trashNames.length
-            onVisibleChanged: {
-                if (visible)
-                    focusedIndex = entryCount > 0 ? 0 : -1
-                confirmingEmpty = false
-            }
-            onFocusedIndexChanged: if (focusedIndex >= 0)
-                                       trashList.positionViewAtIndex(
-                                           focusedIndex, ListView.Contain)
-
-            // Swallow clicks so the folder underneath stays inert; unlike a
-            // modal, clicking the panel does not dismiss it.
-            MouseArea { anchors.fill: parent }
-            // Navigating via the sidebar (a place / bookmark / device) changes
-            // the folder, which leaves this location.
-            Connections {
-                target: controller
-                function onCurrentPathChanged() { trashView.dismiss() }
-            }
-            // Keyboard-operable: arrows move the focus, Enter restores it,
-            // Escape closes.
-            Keys.onPressed: function(event) {
-                if (event.key === Qt.Key_Escape) {
-                    trashView.dismiss()
-                    event.accepted = true
-                } else if (event.key === Qt.Key_Down) {
-                    if (trashView.entryCount > 0)
-                        trashView.focusedIndex = Math.min(
-                            trashView.entryCount - 1, trashView.focusedIndex + 1)
-                    event.accepted = true
-                } else if (event.key === Qt.Key_Up) {
-                    if (trashView.entryCount > 0)
-                        trashView.focusedIndex = Math.max(
-                            0, (trashView.focusedIndex < 0 ? 0 : trashView.focusedIndex) - 1)
-                    event.accepted = true
-                } else if ((event.key === Qt.Key_Return
-                            || event.key === Qt.Key_Enter)
-                           && trashView.focusedIndex >= 0) {
-                    controller.restoreTrash(trashView.focusedIndex)
-                    event.accepted = true
-                }
-            }
-            focus: trashView.visible
-
-            Item {
-                anchors.fill: parent
-                Accessible.name: "Papelera"
-
-                IconImage {
-                    id: trashHeadingIcon
-                    x: 18
-                    y: 18
-                    width: CelestinaTheme.iconMd
-                    height: CelestinaTheme.iconMd
-                    name: "user-trash"
-                    source: CelestinaTheme.fallbackIcon("user-trash")
-                }
-                Text {
-                    id: trashHeading
-                    anchors.left: trashHeadingIcon.right
-                    anchors.leftMargin: 10
-                    anchors.verticalCenter: trashHeadingIcon.verticalCenter
-                    text: "Papelera"
-                    color: CelestinaTheme.text
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontTitle
-                    font.weight: CelestinaTheme.weightDemiBold
-                }
-
-                Text {
-                    id: trashCount
-                    anchors.verticalCenter: trashHeading.verticalCenter
-                    anchors.left: trashHeading.right
-                    anchors.leftMargin: 8
-                    text: controller.trashNames.length > 0
-                          ? "· " + controller.trashNames.length : ""
-                    color: CelestinaTheme.textMuted
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontLabel
-                }
-
-                Text {
-                    anchors.centerIn: parent
-                    visible: controller.trashNames.length === 0
-                    text: "La papelera está vacía"
-                    color: CelestinaTheme.textMuted
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontBody
-                }
-
-                ListView {
-                    id: trashList
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.leftMargin: 12
-                    anchors.rightMargin: 12
-                    anchors.top: trashHeading.bottom
-                    anchors.topMargin: 12
-                    anchors.bottom: trashButtons.top
-                    anchors.bottomMargin: 12
-                    clip: true
-                    spacing: 2
-                    model: controller.trashNames
-
-                    delegate: Item {
-                        id: trashRow
-                        required property int index
-                        required property string modelData
-                        width: ListView.view.width
-                        height: 48
-                        Accessible.role: Accessible.ListItem
-                        Accessible.name: trashRow.modelData
-
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: CelestinaTheme.radiusSm
-                            color: trashView.focusedIndex === trashRow.index
-                                   ? CelestinaTheme.badgeAccentFill
-                                   : trashRowMouse.containsMouse
-                                     ? CelestinaTheme.surfaceHover : "transparent"
-                        }
-
-                        IconImage {
-                            id: trashRowIcon
-                            x: 8
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: CelestinaTheme.iconSm
-                            height: CelestinaTheme.iconSm
-                            name: "text-x-generic"
-                            source: CelestinaTheme.fallbackIcon("file")
-                            color: CelestinaTheme.textMuted
-                        }
-
-                        Text {
-                            id: trashRowName
-                            x: trashRowIcon.x + trashRowIcon.width + 10
-                            y: 6
-                            width: restoreRowButton.x - x - 10
-                            text: trashRow.modelData
-                            color: CelestinaTheme.text
-                            font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: CelestinaTheme.fontLabel
-                            elide: Text.ElideMiddle
-                        }
-
-                        Text {
-                            x: trashRowName.x
-                            anchors.top: trashRowName.bottom
-                            anchors.topMargin: 2
-                            width: restoreRowButton.x - x - 10
-                            text: {
-                                var origin = controller.trashOrigins[trashRow.index] || ""
-                                var date = controller.trashDates[trashRow.index] || ""
-                                return date.length > 0 ? origin + "  ·  " + date : origin
-                            }
-                            color: CelestinaTheme.textMuted
-                            font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: CelestinaTheme.fontCaption
-                            elide: Text.ElideMiddle
-                        }
-
-                        MouseArea {
-                            id: trashRowMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                        }
-
-                        PillButton {
-                            id: restoreRowButton
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.right: parent.right
-                            anchors.rightMargin: 6
-                            text: "Restaurar"
-                            onClicked: controller.restoreTrash(trashRow.index)
-                        }
-                    }
-                }
-
-                // The "Vaciar" affordance sits apart on the left so it is not
-                // mistaken for a restore; empty confirms in place before the
-                // irreversible purge.
-                Row {
-                    anchors.left: parent.left
-                    anchors.leftMargin: 18
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 16
-                    spacing: 8
-                    visible: controller.trashNames.length > 0
-
-                    Text {
-                        visible: trashView.confirmingEmpty
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: "¿Vaciar? No se puede deshacer"
-                        color: CelestinaTheme.textMuted
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontCaption
-                    }
-                    PillButton {
-                        text: trashView.confirmingEmpty ? "Vaciar definitivamente" : "Vaciar"
-                        destructive: true
-                        onClicked: {
-                            if (trashView.confirmingEmpty) {
-                                controller.emptyTrash()
-                                trashView.confirmingEmpty = false
-                            } else {
-                                trashView.confirmingEmpty = true
-                            }
-                        }
-                    }
-                    PillButton {
-                        visible: trashView.confirmingEmpty
-                        text: "Cancelar"
-                        onClicked: trashView.confirmingEmpty = false
-                    }
-                }
-
-                Row {
-                    id: trashButtons
-                    anchors.right: parent.right
-                    anchors.rightMargin: 18
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 16
-                    spacing: 8
-
-                    PillButton {
-                        text: "Restaurar todo"
-                        primary: true
-                        enabled: controller.trashNames.length > 0
-                        onClicked: controller.restoreAllTrash()
-                    }
-                    PillButton {
-                        text: "Volver"
-                        onClicked: trashView.dismiss()
-                    }
-                }
-            }
-        }
 
         // ── "Abrir con…" application chooser ─────────────────────────────
         Rectangle {
             id: openWithView
             anchors.fill: parent
             z: 66
-            visible: controller.openWithPending
+            readonly property bool shown: controller.openWithPending
+            // Fades rather than pops. Opacity only: a scale transform on a
+            // glass surface desyncs its backdrop sampling (see a995619), so the
+            // motion here never touches geometry.
+            visible: opacity > 0.01
+            opacity: shown ? 1 : 0
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: CelestinaTheme.motionFast
+                    easing.type: CelestinaTheme.easeStandard
+                }
+            }
             color: Qt.rgba(0, 0, 0, 0.45)
 
             property int selected: -1
@@ -3598,7 +4091,7 @@ ApplicationWindow {
                     event.accepted = true
                 }
             }
-            focus: controller.openWithPending
+            focus: openWithView.shown
 
             GlassCard {
                 anchors.centerIn: parent
@@ -3733,7 +4226,18 @@ ApplicationWindow {
             id: propertiesView
             anchors.fill: parent
             z: 68
-            visible: controller.propertiesPending
+            readonly property bool shown: controller.propertiesPending
+            // Fades rather than pops. Opacity only: a scale transform on a
+            // glass surface desyncs its backdrop sampling (see a995619), so the
+            // motion here never touches geometry.
+            visible: opacity > 0.01
+            opacity: shown ? 1 : 0
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: CelestinaTheme.motionFast
+                    easing.type: CelestinaTheme.easeStandard
+                }
+            }
             color: Qt.rgba(0, 0, 0, 0.45)
 
             MouseArea {
@@ -3746,7 +4250,7 @@ ApplicationWindow {
                     event.accepted = true
                 }
             }
-            focus: controller.propertiesPending
+            focus: propertiesView.shown
 
             GlassCard {
                 anchors.centerIn: parent
@@ -3861,7 +4365,18 @@ ApplicationWindow {
             id: iconPicker
             anchors.fill: parent
             z: 69
-            visible: false
+            property bool shown: false
+            // Fades rather than pops. Opacity only: a scale transform on a
+            // glass surface desyncs its backdrop sampling (see a995619), so the
+            // motion here never touches geometry.
+            visible: opacity > 0.01
+            opacity: shown ? 1 : 0
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: CelestinaTheme.motionFast
+                    easing.type: CelestinaTheme.easeStandard
+                }
+            }
             color: Qt.rgba(0, 0, 0, 0.45)
 
             property string targetPath: ""
@@ -3885,13 +4400,15 @@ ApplicationWindow {
             function openFor(path, isFolder) {
                 targetPath = path
                 forFolder = isFolder
-                visible = true
+                shown = true
             }
             function choose(name) {
+                // This tab updates now; the others re-read the file when they
+                // are next activated (like bookmarks).
                 controller.setCustomIcon(targetPath, name)
-                visible = false
+                shown = false
             }
-            function dismiss() { visible = false }
+            function dismiss() { shown = false }
 
             MouseArea { anchors.fill: parent; onClicked: iconPicker.dismiss() }
             Keys.onPressed: function(event) {
@@ -3900,7 +4417,7 @@ ApplicationWindow {
                     event.accepted = true
                 }
             }
-            focus: iconPicker.visible
+            focus: iconPicker.shown
 
             GlassCard {
                 anchors.centerIn: parent
@@ -4003,9 +4520,20 @@ ApplicationWindow {
             id: quickLookView
             anchors.fill: parent
             z: 70
-            visible: root.quickLookOpen
+            readonly property bool shown: root.quickLookOpen
+            // Fades rather than pops. Opacity only: a scale transform on a
+            // glass surface desyncs its backdrop sampling (see a995619), so the
+            // motion here never touches geometry.
+            visible: opacity > 0.01
+            opacity: shown ? 1 : 0
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: CelestinaTheme.motionFast
+                    easing.type: CelestinaTheme.easeStandard
+                }
+            }
             color: Qt.rgba(0, 0, 0, 0.55)
-            focus: root.quickLookOpen
+            focus: quickLookView.shown
 
             // Everything is derived from the current selection, so stepping the
             // selection (below) re-previews with no extra state to keep in sync.
@@ -4194,39 +4722,28 @@ ApplicationWindow {
                 width: root.width - 24
                 height: 40
                 y: (tabBar.visible ? tabBar.y + tabBar.height : topBar.y + topBar.height) + 8
-                visible: controller.searchActive || controller.searchRunning
-
-                GlassSurface {
-                    anchors.fill: parent
-                    backdropSource: topBar.activeView
-                    captureEnabled: searchBar.visible
-                    liveCapture: true
-                    cornerRadius: CelestinaTheme.radiusSm
+                // Fades in place. Not a slide: these carry glass, and moving
+                // a glass surface mid-animation samples the wrong region.
+                visible: opacity > 0.01
+                opacity: (controller.searchActive || controller.searchRunning) ? 1 : 0
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: CelestinaTheme.motionFast
+                        easing.type: CelestinaTheme.easeStandard
+                    }
                 }
 
-                Rectangle {
-                    anchors.fill: parent
-                    radius: CelestinaTheme.radiusSm
-                    color: "transparent"
-                    border.width: 1
-                    border.color: CelestinaTheme.borderStrong
-                }
-
-                Text {
+                InfoPill {
                     id: searchBarLabel
                     anchors.left: parent.left
-                    anchors.leftMargin: 14
-                    anchors.right: searchBarControls.left
-                    anchors.rightMargin: 12
                     anchors.verticalCenter: parent.verticalCenter
+                    backdrop: topBar.activeView
+                    iconName: "edit-find"
+                    iconFallback: "file"
+                    maxWidth: searchBar.width - searchBarControls.width - 10
                     text: controller.searchRunning
                           ? "Buscando «" + controller.searchQuery + "»…"
                           : "«" + controller.searchQuery + "» · " + controller.searchSummary
-                    color: CelestinaTheme.text
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: Math.round(CelestinaTheme.fontLabel * window.interfaceTextScale)
-                    font.weight: CelestinaTheme.weightMedium
-                    elide: Text.ElideRight
                 }
 
                 Row {
@@ -4248,6 +4765,55 @@ ApplicationWindow {
                 }
             }
 
+            // ── Recientes location header ──────────────────────────────────
+            // The same shape as the Trash header: a pill that says where you
+            // are and how much is here, and the way back. Nothing else — this
+            // list belongs to the desktop, and Siderita only reads it.
+            Item {
+                id: recentHeader
+                z: 10
+                x: 12
+                width: root.width - 24
+                height: 40
+                y: (tabBar.visible ? tabBar.y + tabBar.height : topBar.y + topBar.height) + 8
+                // Fades in place. Not a slide: these carry glass, and moving
+                // a glass surface mid-animation samples the wrong region.
+                visible: opacity > 0.01
+                opacity: controller.recentActive ? 1 : 0
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: CelestinaTheme.motionFast
+                        easing.type: CelestinaTheme.easeStandard
+                    }
+                }
+
+                InfoPill {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    backdrop: topBar.activeView
+                    iconName: "document-open-recent"
+                    iconFallback: "file"
+                    maxWidth: recentHeader.width - recentHeaderControls.width - 10
+                    text: "Recientes" + (controller.recentCount > 0
+                                         ? "  ·  " + controller.recentCount
+                                         : "  ·  sin elementos")
+                }
+
+                Row {
+                    id: recentHeaderControls
+                    anchors.right: parent.right
+                    anchors.rightMargin: 8
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 8
+
+                    PillButton {
+                        text: "Volver"
+                        primary: true
+                        onClicked: controller.closeRecent()
+                    }
+                }
+            }
+
             // ── Trash location header ──────────────────────────────────────
             // Trashed items ride the same entryModel (like search), so the
             // content view renders them as list / grid / details with
@@ -4265,37 +4831,15 @@ ApplicationWindow {
                 property bool confirmingEmpty: false
                 onVisibleChanged: if (!visible) confirmingEmpty = false
 
-                GlassSurface {
-                    anchors.fill: parent
-                    backdropSource: topBar.activeView
-                    captureEnabled: trashHeader.visible
-                    liveCapture: true
-                    cornerRadius: CelestinaTheme.radiusSm
-                }
-
-                IconImage {
-                    id: trashHeaderIcon
+                InfoPill {
                     anchors.left: parent.left
-                    anchors.leftMargin: 12
                     anchors.verticalCenter: parent.verticalCenter
-                    width: CelestinaTheme.iconSm
-                    height: CelestinaTheme.iconSm
-                    name: "user-trash"
-                    source: CelestinaTheme.fallbackIcon("user-trash")
-                }
-                Text {
-                    anchors.left: trashHeaderIcon.right
-                    anchors.leftMargin: 10
-                    anchors.right: trashHeaderControls.left
-                    anchors.rightMargin: 12
-                    anchors.verticalCenter: parent.verticalCenter
+                    backdrop: topBar.activeView
+                    iconName: "user-trash"
+                    iconFallback: "user-trash"
+                    maxWidth: trashHeader.width - trashHeaderControls.width - 10
                     text: "Papelera" + (controller.trashNames.length > 0
                                         ? "  ·  " + controller.trashNames.length : "  ·  vacía")
-                    color: CelestinaTheme.text
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: Math.round(CelestinaTheme.fontLabel * window.interfaceTextScale)
-                    font.weight: CelestinaTheme.weightMedium
-                    elide: Text.ElideRight
                 }
 
                 Row {
@@ -4305,13 +4849,13 @@ ApplicationWindow {
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 8
 
-                    Text {
+                    // Its own pill too: the warning floats over the trash
+                    // listing, so it needs a surface to be readable on.
+                    InfoPill {
                         visible: trashHeader.confirmingEmpty
                         anchors.verticalCenter: parent.verticalCenter
+                        backdrop: topBar.activeView
                         text: "¿Vaciar? No se puede deshacer"
-                        color: CelestinaTheme.textMuted
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontCaption
                     }
                     PillButton {
                         text: trashHeader.confirmingEmpty ? "Vaciar definitivamente" : "Vaciar"
@@ -4336,6 +4880,42 @@ ApplicationWindow {
                         primary: true
                         onClicked: controller.closeTrash()
                     }
+                }
+            }
+
+            // ── Drag auto-scroll edges ─────────────────────────────────────
+            // Two thin strips over the top and bottom of the view: while a drag
+            // rests on one, the view scrolls, so a destination below the fold
+            // does not mean dropping the entry somewhere else first. They sit
+            // above the rows (a row would otherwise swallow the drag), so a
+            // release on one lands in the *current* folder — the same thing an
+            // empty-space drop does — and an entry dragged within its own
+            // folder simply has nowhere to go.
+            DragScrollEdge {
+                id: topScrollEdge
+                x: 8
+                y: 14
+                width: parent.width - 16
+                view: topBar.activeView
+                step: -18
+                onExternalDrop: function(drop) {
+                    controller.dropUris(mainPanel.urlsToPaths(drop.urls),
+                                        "", mainPanel.dropIsMove(drop))
+                    drop.accept()
+                }
+            }
+
+            DragScrollEdge {
+                id: bottomScrollEdge
+                x: 8
+                y: parent.height - 68 + 14 - height
+                width: parent.width - 16
+                view: topBar.activeView
+                step: 18
+                onExternalDrop: function(drop) {
+                    controller.dropUris(mainPanel.urlsToPaths(drop.urls),
+                                        "", mainPanel.dropIsMove(drop))
+                    drop.accept()
                 }
             }
 
@@ -4558,143 +5138,252 @@ ApplicationWindow {
                 width: parent.width - 16
                 spacing: 2
 
-                Repeater {
-                    model: [
-                        { name: "Inicio", icon: "user-home", key: "HOME", fallback: "go-home" },
-                        { name: "Escritorio", icon: "user-desktop", key: "DESKTOP", fallback: "folder" },
-                        { name: "Documentos", icon: "folder-documents", key: "DOCUMENTS", fallback: "folder" },
-                        { name: "Descargas", icon: "folder-download", key: "DOWNLOAD", fallback: "folder" },
-                        { name: "Música", icon: "folder-music", key: "MUSIC", fallback: "folder" },
-                        { name: "Imágenes", icon: "folder-pictures", key: "PICTURES", fallback: "folder" },
-                        { name: "Vídeos", icon: "folder-videos", key: "VIDEOS", fallback: "folder" }
-                    ]
+                // ── Places ───────────────────────────────────────────────
+                // The list, its order and what it leaves out all come from the
+                // controller: `placeKeys` is what exists here, arranged the way
+                // the user arranged it, minus what they hid. This side only
+                // knows how to draw a key.
+                ListView {
+                    id: placesList
+                    width: placesColumn.width
+                    height: count * rowPitch
+                    spacing: 2
+                    // Short and bounded — the sidebar scrolls, this never does,
+                    // and a non-interactive list leaves the wheel to the sidebar.
+                    interactive: false
+                    model: window.activeController
+                           ? window.activeController.placeKeys : []
+
+
+                    readonly property int rowPitch: window.sidebarRowHeight + spacing
+                    property int dragIndex: -1
+                    property int dropIndex: -1
+
+                    function moveDragged(from, to) {
+                        dragIndex = -1
+                        dropIndex = -1
+                        // Last: the move republishes placeKeys, which resets this
+                        // view and destroys the delegate that called us.
+                        if (to >= 0 && to !== from && window.activeController)
+                            window.activeController.movePlace(from, to)
+                    }
 
                     delegate: Item {
                         id: placeRow
 
-                        required property var modelData
+                        required property int index
+                        required property string modelData      // the place key
 
-                        readonly property string placePath: window.activeController
-                                                            ? window.activeController.placePath(modelData.key)
-                                                            : ""
-                        readonly property bool available: placePath.length > 0
-                        readonly property bool current: available
-                                                        && placePath === (window.activeController
-                                                                          ? window.activeController.currentPath : "")
+                        readonly property var def: window.placeDefs[modelData]
+                                                   || ({ name: modelData, icon: "folder",
+                                                         fallback: "folder" })
+                        readonly property bool isTrash: modelData === "TRASH"
+                        readonly property bool isRecent: modelData === "RECENT"
+                        // Trash and Recientes are locations, not folders: they
+                        // have no path to open, they flip a state instead.
+                        readonly property string placePath:
+                                isTrash || isRecent || !window.activeController
+                                ? "" : window.activeController.placePath(modelData)
+                        readonly property bool current: isTrash
+                                ? (window.activeController
+                                   && window.activeController.trashActive)
+                                : isRecent
+                                ? (window.activeController
+                                   && window.activeController.recentActive)
+                                : (placePath.length > 0
+                                   && placePath === (window.activeController
+                                                     ? window.activeController.currentPath : ""))
+                        readonly property bool dragging: placesList.dragIndex === index
+                        property bool justDragged: false
 
-                        visible: available
-                        height: available ? window.sidebarRowHeight : 0
-                        width: placesColumn.width
+                        width: placesList.width
+                        height: window.sidebarRowHeight
+                        z: dragging ? 2 : 0
 
+                        Accessible.role: Accessible.Button
+                        Accessible.name: def.name
+                        Accessible.onPressAction: placeRow.activate()
+
+                        function activate() {
+                            const ac = window.activeController
+                            if (!ac)
+                                return
+                            if (isTrash)
+                                ac.openTrash()
+                            else if (isRecent)
+                                ac.openRecent()
+                            else if (placePath.length > 0)
+                                ac.openLocation(placePath)
+                        }
+
+                        // Where the carried row would land.
                         Rectangle {
-                            anchors.fill: parent
-                            anchors.leftMargin: 2
-                            anchors.rightMargin: 2
-                            radius: CelestinaTheme.radiusSm
-                            color: placeRow.current
-                                   ? CelestinaTheme.badgeAccentFill
-                                   : placeMouse.containsMouse
-                                     ? CelestinaTheme.surfaceHover
-                                     : "transparent"
+                            z: 3
+                            visible: placesList.dragIndex >= 0
+                                     && placesList.dragIndex !== placeRow.index
+                                     && placesList.dropIndex === placeRow.index
+                            x: 2
+                            width: parent.width - 4
+                            height: 2
+                            radius: 1
+                            y: placesList.dropIndex > placesList.dragIndex
+                               ? parent.height - height : 0
+                            color: CelestinaTheme.accent
                         }
 
-                        IconImage {
-                            id: placeIcon
-                            x: 12
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
-                            height: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
-                            name: placeRow.modelData.icon
-                            source: CelestinaTheme.fallbackIcon(placeRow.modelData.fallback)
-                            // Native theme colours (no tint) — matches the content view.
-                        }
+                        Item {
+                            id: placeContent
+                            width: placeRow.width
+                            height: placeRow.height
+                            opacity: placeRow.dragging ? 0.9 : 1
 
-                        Text {
-                            x: placeIcon.x + placeIcon.width + 10
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width - x - 12
-                            text: placeRow.modelData.name
-                            color: placeRow.current ? CelestinaTheme.accent
-                                                    : CelestinaTheme.text
-                            font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: Math.round(CelestinaTheme.fontBody * window.sidebarTextScale)
-                            font.weight: placeRow.current ? CelestinaTheme.weightMedium
-                                                          : CelestinaTheme.weightRegular
-                            elide: Text.ElideRight
-                        }
+                            // Eases back into place when a drag ends where it
+                            // started; a drag that did move is replaced by the
+                            // republished list anyway.
+                            Behavior on y {
+                                enabled: !placeMouse.drag.active
+                                NumberAnimation {
+                                    duration: CelestinaTheme.motionFast
+                                    easing.type: CelestinaTheme.easeStandard
+                                }
+                            }
 
-                        MouseArea {
-                            id: placeMouse
-                            anchors.fill: parent
-                            acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: function(mouse) {
-                                if (mouse.button === Qt.MiddleButton)
-                                    window.openTab(placeRow.placePath, false)
-                                else if (window.activeController)
-                                    window.activeController.openLocation(placeRow.placePath)
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.leftMargin: 2
+                                anchors.rightMargin: 2
+                                radius: CelestinaTheme.radiusSm
+                                color: placeRow.dragging
+                                       ? CelestinaTheme.surfaceStrong
+                                       : placeRow.current
+                                         ? CelestinaTheme.badgeAccentFill
+                                         : placeMouse.containsMouse
+                                           ? CelestinaTheme.surfaceHover
+                                           : "transparent"
+
+                                Behavior on color {
+                                    ColorAnimation { duration: CelestinaTheme.motionFast }
+                                }
+                            }
+
+                            IconImage {
+                                id: placeIcon
+                                x: 12
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
+                                height: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
+                                name: placeRow.def.icon
+                                source: CelestinaTheme.fallbackIcon(placeRow.def.fallback)
+                                // Native theme colours (no tint).
+                            }
+
+                            Text {
+                                x: placeIcon.x + placeIcon.width + 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width - x - 12
+                                text: placeRow.def.name
+                                color: placeRow.current ? CelestinaTheme.accent
+                                                        : CelestinaTheme.text
+                                font.family: CelestinaTheme.sansFamily
+                                font.pixelSize: Math.round(CelestinaTheme.fontBody * window.sidebarTextScale)
+                                font.weight: placeRow.current ? CelestinaTheme.weightMedium
+                                                              : CelestinaTheme.weightRegular
+                                elide: Text.ElideRight
+                            }
+
+                            MouseArea {
+                                id: placeMouse
+                                anchors.fill: parent
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                drag.target: placeContent
+                                drag.axis: Drag.YAxis
+                                drag.smoothed: false
+                                drag.threshold: 6
+                                drag.minimumY: -placeRow.index * placesList.rowPitch
+                                drag.maximumY: (placesList.count - 1 - placeRow.index)
+                                               * placesList.rowPitch
+                                preventStealing: true
+
+                                onPositionChanged: {
+                                    if (!drag.active)
+                                        return
+                                    placesList.dragIndex = placeRow.index
+                                    placesList.dropIndex = Math.max(
+                                        0, Math.min(placesList.count - 1,
+                                                    placeRow.index + Math.round(
+                                                        placeContent.y / placesList.rowPitch)))
+                                }
+
+                                onReleased: {
+                                    if (placesList.dragIndex !== placeRow.index)
+                                        return
+                                    const from = placeRow.index
+                                    const to = placesList.dropIndex
+                                    placeRow.justDragged = true
+                                    placeContent.y = 0
+                                    placesList.moveDragged(from, to)
+                                }
+
+                                onCanceled: {
+                                    placeContent.y = 0
+                                    if (placesList.dragIndex === placeRow.index) {
+                                        placesList.dragIndex = -1
+                                        placesList.dropIndex = -1
+                                    }
+                                }
+
+                                onClicked: function(mouse) {
+                                    if (placeRow.justDragged) {
+                                        placeRow.justDragged = false
+                                        return
+                                    }
+                                    if (mouse.button === Qt.RightButton) {
+                                        const point = placeRow.mapToItem(window.contentItem,
+                                                                         mouse.x, mouse.y)
+                                        placeMenu.targetKey = placeRow.modelData
+                                        placeMenu.targetName = placeRow.def.name
+                                        placeMenu.targetPath = placeRow.placePath
+                                        placeMenu.popup(window.contentItem, point)
+                                    } else if (mouse.button === Qt.MiddleButton) {
+                                        if (placeRow.placePath.length > 0)
+                                            window.openTab(placeRow.placePath, false)
+                                    } else {
+                                        placeRow.activate()
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
-                // Papelera — opens Trash as a content-view location.
+                // Bring hidden places back — the same escape hatch the devices
+                // list offers, so hiding one is never a one-way door.
                 Item {
-                    id: trashPlace
                     width: placesColumn.width
-                    height: window.sidebarRowHeight
-                    readonly property bool current: window.activeController
-                                                    && window.activeController.trashActive
-                    Accessible.role: Accessible.Button
-                    Accessible.name: "Papelera"
-                    Accessible.onPressAction: {
-                        if (window.activeController)
-                            window.activeController.openTrash()
-                    }
-
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.leftMargin: 2
-                        anchors.rightMargin: 2
-                        radius: CelestinaTheme.radiusSm
-                        color: trashPlace.current
-                               ? CelestinaTheme.badgeAccentFill
-                               : trashPlaceMouse.containsMouse
-                                 ? CelestinaTheme.surfaceHover : "transparent"
-                    }
-
-                    IconImage {
-                        id: trashPlaceIcon
-                        x: 12
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
-                        height: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
-                        name: "user-trash"
-                        source: CelestinaTheme.fallbackIcon("user-trash")
-                        // Native theme colours (no tint).
-                    }
+                    readonly property int hidden: window.activeController
+                                                  ? window.activeController.hiddenPlaceCount : 0
+                    visible: hidden > 0
+                    height: visible ? window.sidebarRowHeight : 0
 
                     Text {
-                        x: trashPlaceIcon.x + trashPlaceIcon.width + 10
+                        x: 12 + Math.round(CelestinaTheme.iconSm * window.sidebarIconScale) + 10
                         anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - x - 12
-                        text: "Papelera"
-                        color: CelestinaTheme.text
+                        text: "Mostrar " + parent.hidden + " ocultos"
+                        color: unhidePlacesMouse.containsMouse ? CelestinaTheme.accent
+                                                               : CelestinaTheme.textMuted
                         font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: Math.round(CelestinaTheme.fontBody * window.sidebarTextScale)
-                        elide: Text.ElideRight
+                        font.pixelSize: Math.round(CelestinaTheme.fontLabel * window.sidebarTextScale)
                     }
 
                     MouseArea {
-                        id: trashPlaceMouse
+                        id: unhidePlacesMouse
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (window.activeController)
-                                window.activeController.openTrash()
-                        }
+                        onClicked: if (window.activeController)
+                                       window.activeController.unhideAllPlaces()
                     }
                 }
 
@@ -4861,10 +5550,157 @@ ApplicationWindow {
                 }
             }
 
+            // ── Favourites ───────────────────────────────────────────────
+            // Where the stars land. A starred folder opens; a starred file
+            // reveals itself in its folder rather than launching an app from a
+            // single click. The section disappears entirely when nothing is
+            // starred, so the sidebar costs nothing until it is used.
+            readonly property var favoriteRows: {
+                var rows = []
+                var ac = window.activeController
+                var entries = ac ? ac.favoriteEntries : []
+                for (var i = 0; i < entries.length; i++) {
+                    var cut = entries[i].indexOf("\t")
+                    if (cut <= 0)
+                        continue
+                    var path = entries[i].substring(0, cut)
+                    var slash = path.lastIndexOf("/")
+                    rows.push({
+                        path: path,
+                        kind: entries[i].substring(cut + 1),
+                        name: slash >= 0 && slash < path.length - 1
+                              ? path.substring(slash + 1) : path
+                    })
+                }
+                return rows
+            }
+
+            Text {
+                id: favoritesLabel
+                x: 16
+                y: placesColumn.y + placesColumn.height + 12
+                visible: sidebar.favoriteRows.length > 0
+                text: "FAVORITOS"
+                color: CelestinaTheme.textMuted
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: Math.round(CelestinaTheme.fontMini * window.sidebarTextScale)
+                font.letterSpacing: 1.4
+                font.weight: CelestinaTheme.weightDemiBold
+            }
+
+            ListView {
+                id: favoritesList
+                x: 8
+                y: favoritesLabel.y + (favoritesLabel.visible ? 20 : 0)
+                width: parent.width - 16
+                // Sized to its content and never scrollable: a section that
+                // scrolls inside a sidebar that also scrolls is two scrollbars
+                // arguing. The bookmarks below take whatever is left.
+                height: count * (window.sidebarRowHeight + spacing)
+                interactive: false
+                visible: count > 0
+                clip: true
+                model: sidebar.favoriteRows
+                spacing: 2
+                boundsBehavior: Flickable.StopAtBounds
+
+                delegate: Item {
+                    id: favRow
+
+                    required property var modelData
+                    readonly property bool missing: modelData.kind === "missing"
+                    readonly property bool current: !missing
+                            && modelData.path === (window.activeController
+                                                   ? window.activeController.currentPath : "")
+
+                    width: favoritesList.width
+                    height: window.sidebarRowHeight
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.leftMargin: 2
+                        anchors.rightMargin: 2
+                        radius: CelestinaTheme.radiusSm
+                        color: favRow.current
+                               ? CelestinaTheme.badgeAccentFill
+                               : favMouse.containsMouse
+                                 ? CelestinaTheme.surfaceHover
+                                 : "transparent"
+
+                        Behavior on color {
+                            ColorAnimation { duration: CelestinaTheme.motionFast }
+                        }
+                    }
+
+                    IconImage {
+                        id: favIcon
+                        x: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
+                        height: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
+                        opacity: favRow.missing ? 0.45 : 1
+                        name: favRow.modelData.kind === "directory"
+                              ? "folder" : "text-x-generic"
+                        source: CelestinaTheme.fallbackIcon(
+                                    favRow.modelData.kind === "directory" ? "folder" : "file")
+                    }
+
+                    Text {
+                        x: favIcon.x + favIcon.width + 10
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - x - 12
+                        text: favRow.modelData.name
+                        color: favRow.missing ? CelestinaTheme.textMuted
+                               : favRow.current ? CelestinaTheme.accent
+                               : CelestinaTheme.text
+                        // A favourite whose target is gone is struck through, not
+                        // hidden: it is still a star the user set, and only they
+                        // should decide to drop it.
+                        font.strikeout: favRow.missing
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: Math.round(CelestinaTheme.fontBody * window.sidebarTextScale)
+                        font.weight: favRow.current ? CelestinaTheme.weightMedium
+                                                    : CelestinaTheme.weightRegular
+                        elide: Text.ElideMiddle
+                    }
+
+                    MouseArea {
+                        id: favMouse
+                        anchors.fill: parent
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        ToolTip.visible: containsMouse
+                        ToolTip.delay: 600
+                        ToolTip.text: favRow.modelData.path
+                        onClicked: function(mouse) {
+                            const ac = window.activeController
+                            if (!ac || favRow.missing)
+                                return
+                            if (mouse.button === Qt.RightButton) {
+                                const point = favRow.mapToItem(window.contentItem,
+                                                               mouse.x, mouse.y)
+                                favMenu.targetPath = favRow.modelData.path
+                                favMenu.popup(window.contentItem, point)
+                            } else if (favRow.modelData.kind === "directory") {
+                                if (mouse.button === Qt.MiddleButton)
+                                    window.openTab(favRow.modelData.path, false)
+                                else
+                                    ac.openLocation(favRow.modelData.path)
+                            } else {
+                                ac.revealPath(favRow.modelData.path)
+                            }
+                        }
+                    }
+                }
+            }
+
             Text {
                 id: bookmarksLabel
                 x: 16
-                y: placesColumn.y + placesColumn.height + 12
+                y: favoritesList.visible
+                   ? favoritesList.y + favoritesList.height + 12
+                   : favoritesLabel.y
                 text: "MARCADORES"
                 color: CelestinaTheme.textMuted
                 font.family: CelestinaTheme.sansFamily
@@ -4887,6 +5723,24 @@ ApplicationWindow {
 
                 property int editIndex: -1
 
+                // ── Reordering ───────────────────────────────────────────
+                // The bookmarks are the user's own list, so their order is
+                // theirs too: drag a row to move it. `dragIndex` is the row
+                // being carried, `dropIndex` where it would land; the row
+                // lifts and every other row shows the landing line.
+                property int dragIndex: -1
+                property int dropIndex: -1
+                readonly property int rowPitch: window.sidebarRowHeight + spacing
+
+                function moveDragged(from, to) {
+                    dragIndex = -1
+                    dropIndex = -1
+                    // Last: the move republishes bookmarkNames, which resets
+                    // this view and destroys the delegate that called us.
+                    if (to >= 0 && to !== from && window.activeController)
+                        window.activeController.moveBookmark(from, to)
+                }
+
                 delegate: Item {
                     id: bmRow
 
@@ -4901,106 +5755,206 @@ ApplicationWindow {
                             && path === (window.activeController
                                          ? window.activeController.currentPath : "")
                     readonly property bool editing: bookmarksList.editIndex === index
+                    readonly property bool dragging: bookmarksList.dragIndex === index
+                    // Set on release so the click that ends a drag doesn't also
+                    // navigate; cleared by the click itself.
+                    property bool justDragged: false
 
                     width: bookmarksList.width
                     height: window.sidebarRowHeight
+                    // On the delegate, not on its content: z inside a row would
+                    // not lift it above the neighbouring rows it overlaps.
+                    z: dragging ? 2 : 0
 
+                    // Where the carried row would land, drawn on the row it
+                    // would land against — above it when moving up, below when
+                    // moving down.
                     Rectangle {
-                        anchors.fill: parent
-                        anchors.leftMargin: 2
-                        anchors.rightMargin: 2
-                        radius: CelestinaTheme.radiusSm
-                        color: bmRow.current
-                               ? CelestinaTheme.badgeAccentFill
-                               : bmMouse.containsMouse
-                                 ? CelestinaTheme.surfaceHover
-                                 : "transparent"
+                        z: 3
+                        visible: bookmarksList.dragIndex >= 0
+                                 && bookmarksList.dragIndex !== bmRow.index
+                                 && bookmarksList.dropIndex === bmRow.index
+                        x: 2
+                        width: parent.width - 4
+                        height: 2
+                        radius: 1
+                        y: bookmarksList.dropIndex > bookmarksList.dragIndex
+                           ? parent.height - height : 0
+                        color: CelestinaTheme.accent
                     }
 
-                    IconImage {
-                        id: bmIcon
-                        x: 12
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
-                        height: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
-                        name: "folder"
-                        source: CelestinaTheme.fallbackIcon("folder")
-                        // Native theme colours (no tint).
-                    }
+                    // Everything visible lives in here so a drag can carry the
+                    // row without fighting the view, which owns the delegate's
+                    // own position.
+                    Item {
+                        id: bmContent
+                        width: bmRow.width
+                        height: bmRow.height
+                        opacity: bmRow.dragging ? 0.9 : 1
 
-                    Text {
-                        visible: !bmRow.editing
-                        x: bmIcon.x + bmIcon.width + 10
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - x - 12
-                        text: bmRow.modelData
-                        color: bmRow.current ? CelestinaTheme.accent
-                                             : CelestinaTheme.text
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: Math.round(CelestinaTheme.fontBody * window.sidebarTextScale)
-                        font.weight: bmRow.current ? CelestinaTheme.weightMedium
-                                                   : CelestinaTheme.weightRegular
-                        elide: Text.ElideRight
-                    }
-
-                    TextField {
-                        id: bmField
-                        visible: bmRow.editing
-                        x: bmIcon.x + bmIcon.width + 6
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - x - 8
-                        height: 26
-                        text: bmRow.modelData
-                        color: CelestinaTheme.text
-                        selectionColor: CelestinaTheme.accentStrong
-                        selectedTextColor: CelestinaTheme.text
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontLabel
-                        leftPadding: 8
-                        rightPadding: 8
-                        background: Rectangle {
-                            radius: CelestinaTheme.radiusXs
-                            color: CelestinaTheme.inputFillFocus
-                            border.width: 1
-                            border.color: CelestinaTheme.focus
-                        }
-                        onVisibleChanged: if (visible) { forceActiveFocus(); selectAll() }
-                        onAccepted: {
-                            if (window.activeController)
-                                window.activeController.renameBookmark(bmRow.index, text)
-                            bookmarksList.editIndex = -1
-                        }
-                        onActiveFocusChanged: {
-                            if (!activeFocus && bookmarksList.editIndex === bmRow.index)
-                                bookmarksList.editIndex = -1
-                        }
-                        Keys.onPressed: function(event) {
-                            if (event.key === Qt.Key_Escape) {
-                                bookmarksList.editIndex = -1
-                                event.accepted = true
+                        Behavior on y {
+                            enabled: !bmMouse.drag.active
+                            NumberAnimation {
+                                duration: CelestinaTheme.motionFast
+                                easing.type: CelestinaTheme.easeStandard
                             }
                         }
-                    }
 
-                    MouseArea {
-                        id: bmMouse
-                        anchors.fill: parent
-                        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: function(mouse) {
-                            if (mouse.button === Qt.MiddleButton) {
-                                window.openTab(bmRow.path, false)
-                            } else if (mouse.button === Qt.RightButton) {
-                                const point = bmRow.mapToItem(window.contentItem,
-                                                              mouse.x, mouse.y)
-                                bmMenu.targetIndex = bmRow.index
-                                bmMenu.popup(window.contentItem, point)
-                            } else if (window.activeController) {
-                                window.activeController.openLocation(bmRow.path)
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.leftMargin: 2
+                            anchors.rightMargin: 2
+                            radius: CelestinaTheme.radiusSm
+                            color: bmRow.dragging
+                                   ? CelestinaTheme.surfaceStrong
+                                   : bmRow.current
+                                     ? CelestinaTheme.badgeAccentFill
+                                     : bmMouse.containsMouse
+                                       ? CelestinaTheme.surfaceHover
+                                       : "transparent"
+
+                            Behavior on color {
+                                ColorAnimation { duration: CelestinaTheme.motionFast }
                             }
                         }
-                        onDoubleClicked: bookmarksList.editIndex = bmRow.index
+
+                        IconImage {
+                            id: bmIcon
+                            x: 12
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
+                            height: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
+                            name: "folder"
+                            source: CelestinaTheme.fallbackIcon("folder")
+                            // Native theme colours (no tint).
+                        }
+
+                        Text {
+                            visible: !bmRow.editing
+                            x: bmIcon.x + bmIcon.width + 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width - x - 12
+                            text: bmRow.modelData
+                            color: bmRow.current ? CelestinaTheme.accent
+                                                 : CelestinaTheme.text
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: Math.round(CelestinaTheme.fontBody * window.sidebarTextScale)
+                            font.weight: bmRow.current ? CelestinaTheme.weightMedium
+                                                       : CelestinaTheme.weightRegular
+                            elide: Text.ElideRight
+                        }
+
+                        TextField {
+                            id: bmField
+                            visible: bmRow.editing
+                            x: bmIcon.x + bmIcon.width + 6
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width - x - 8
+                            height: 26
+                            text: bmRow.modelData
+                            color: CelestinaTheme.text
+                            selectionColor: CelestinaTheme.accentStrong
+                            selectedTextColor: CelestinaTheme.text
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontLabel
+                            leftPadding: 8
+                            rightPadding: 8
+                            background: Rectangle {
+                                radius: CelestinaTheme.radiusXs
+                                color: CelestinaTheme.inputFillFocus
+                                border.width: 1
+                                border.color: CelestinaTheme.focus
+                            }
+                            onVisibleChanged: if (visible) { forceActiveFocus(); selectAll() }
+                            // Leave edit mode *before* renaming: the rename republishes
+                            // bookmarkNames, which resets this ListView and destroys
+                            // this very delegate — anything touched afterwards (the
+                            // row's index, the list's id) is already gone.
+                            onAccepted: {
+                                const index = bmRow.index
+                                const value = text
+                                bookmarksList.editIndex = -1
+                                if (window.activeController)
+                                    window.activeController.renameBookmark(index, value)
+                            }
+                            onActiveFocusChanged: {
+                                if (!activeFocus && bookmarksList.editIndex === bmRow.index)
+                                    bookmarksList.editIndex = -1
+                            }
+                            Keys.onPressed: function(event) {
+                                if (event.key === Qt.Key_Escape) {
+                                    bookmarksList.editIndex = -1
+                                    event.accepted = true
+                                }
+                            }
+                        }
+
+                        MouseArea {
+                            id: bmMouse
+                            anchors.fill: parent
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            // Carry the row itself, bounded to the list so it can
+                            // never be dragged out of its own section. The list is
+                            // a Flickable, so hold the grab once the drag starts or
+                            // it would scroll instead of reorder.
+                            drag.target: bmRow.editing ? null : bmContent
+                            drag.axis: Drag.YAxis
+                            drag.smoothed: false
+                            drag.threshold: 6
+                            drag.minimumY: -bmRow.index * bookmarksList.rowPitch
+                            drag.maximumY: (bookmarksList.count - 1 - bmRow.index)
+                                           * bookmarksList.rowPitch
+                            preventStealing: true
+
+                            onPositionChanged: {
+                                if (!drag.active)
+                                    return
+                                bookmarksList.dragIndex = bmRow.index
+                                bookmarksList.dropIndex = Math.max(
+                                    0, Math.min(bookmarksList.count - 1,
+                                                bmRow.index + Math.round(
+                                                    bmContent.y / bookmarksList.rowPitch)))
+                            }
+
+                            onReleased: {
+                                if (bookmarksList.dragIndex !== bmRow.index)
+                                    return
+                                const from = bmRow.index
+                                const to = bookmarksList.dropIndex
+                                bmRow.justDragged = true
+                                bmContent.y = 0
+                                bookmarksList.moveDragged(from, to)
+                            }
+
+                            onCanceled: {
+                                bmContent.y = 0
+                                if (bookmarksList.dragIndex === bmRow.index) {
+                                    bookmarksList.dragIndex = -1
+                                    bookmarksList.dropIndex = -1
+                                }
+                            }
+
+                            onClicked: function(mouse) {
+                                // The release that ends a reorder is not a click.
+                                if (bmRow.justDragged) {
+                                    bmRow.justDragged = false
+                                    return
+                                }
+                                if (mouse.button === Qt.MiddleButton) {
+                                    window.openTab(bmRow.path, false)
+                                } else if (mouse.button === Qt.RightButton) {
+                                    const point = bmRow.mapToItem(window.contentItem,
+                                                                  mouse.x, mouse.y)
+                                    bmMenu.targetIndex = bmRow.index
+                                    bmMenu.popup(window.contentItem, point)
+                                } else if (window.activeController) {
+                                    window.activeController.openLocation(bmRow.path)
+                                }
+                            }
+                            onDoubleClicked: bookmarksList.editIndex = bmRow.index
+                        }
                     }
                 }
             }
@@ -5115,12 +6069,25 @@ ApplicationWindow {
                             window.openTab(path, foreground)
                         }
 
-                        Component.onCompleted: {
+                        // A tab scans when it is first *shown*, not when it is
+                        // created. A restored session of five tabs used to fire
+                        // five directory scans at once — four of them for
+                        // folders nobody was looking at — so a session on big
+                        // folders paid for all of them before the first frame.
+                        property bool started: false
+
+                        function startIfNeeded() {
+                            if (started || !tabHolder.visible)
+                                return
+                            started = true
                             if (tabHolder.initialPath.length > 0)
                                 doc.tabController.startAt(tabHolder.initialPath)
                             else
                                 doc.tabController.start()
                         }
+
+                        Component.onCompleted: startIfNeeded()
+                        onActiveChanged: startIfNeeded()
 
                         Connections {
                             target: doc.tabController
@@ -5128,6 +6095,7 @@ ApplicationWindow {
                                 tabsModel.setProperty(
                                     tabHolder.index, "title",
                                     window.tabTitle(doc.tabController.currentPath))
+                                sessionSaver.restart()
                             }
                         }
                     }
@@ -5137,8 +6105,8 @@ ApplicationWindow {
 
         Connections {
             target: tabRepeater
-            function onItemAdded() { window.tabsRevision++ }
-            function onItemRemoved() { window.tabsRevision++ }
+            function onItemAdded() { window.tabsRevision++; sessionSaver.restart() }
+            function onItemRemoved() { window.tabsRevision++; sessionSaver.restart() }
         }
     }
 
@@ -5153,11 +6121,112 @@ ApplicationWindow {
             onTriggered: bookmarksList.editIndex = bmMenu.targetIndex
         }
 
+        // The same reorder the drag does, reachable from the keyboard and a
+        // screen reader — a drag is not an accessible way to be the only one.
+        GlassMenuItem {
+            text: "Subir"
+            enabled: bmMenu.targetIndex > 0
+            icon.name: "go-up"
+            icon.source: CelestinaTheme.fallbackIcon("go-up")
+            onTriggered: {
+                if (window.activeController)
+                    window.activeController.moveBookmark(bmMenu.targetIndex,
+                                                         bmMenu.targetIndex - 1)
+            }
+        }
+
+        GlassMenuItem {
+            text: "Bajar"
+            enabled: bmMenu.targetIndex >= 0
+                     && bmMenu.targetIndex < bookmarksList.count - 1
+            icon.name: "go-down"
+            icon.source: CelestinaTheme.fallbackIcon("go-up")
+            onTriggered: {
+                if (window.activeController)
+                    window.activeController.moveBookmark(bmMenu.targetIndex,
+                                                         bmMenu.targetIndex + 1)
+            }
+        }
+
         GlassMenuItem {
             text: "Quitar de marcadores"
             onTriggered: {
                 if (window.activeController)
                     window.activeController.removeBookmark(bmMenu.targetIndex)
+            }
+        }
+    }
+
+    // Right-click menu for a sidebar place.
+    GlassContextMenu {
+        id: placeMenu
+        backdropSource: contentLayer
+
+        property string targetKey: ""
+        property string targetName: ""
+        property string targetPath: ""
+
+        GlassMenuItem {
+            text: "Abrir en pestaña nueva"
+            visible: placeMenu.targetPath.length > 0
+            height: visible ? implicitHeight : 0
+            icon.name: "tab-new"
+            icon.source: CelestinaTheme.fallbackIcon("folder")
+            onTriggered: window.openTab(placeMenu.targetPath, true)
+        }
+
+        GlassMenuItem {
+            text: "Ocultar «" + placeMenu.targetName + "»"
+            icon.name: "list-remove"
+            icon.source: CelestinaTheme.fallbackIcon("file")
+            onTriggered: {
+                if (window.activeController)
+                    window.activeController.hidePlace(placeMenu.targetKey)
+            }
+        }
+
+        GlassMenuItem {
+            text: "Mostrar lugares ocultos"
+            visible: window.activeController
+                     && window.activeController.hiddenPlaceCount > 0
+            height: visible ? implicitHeight : 0
+            onTriggered: {
+                if (window.activeController)
+                    window.activeController.unhideAllPlaces()
+            }
+        }
+    }
+
+    // Right-click menu for a row in the "Favoritos" list.
+    GlassContextMenu {
+        id: favMenu
+        backdropSource: contentLayer
+
+        property string targetPath: ""
+
+        GlassMenuItem {
+            text: "Abrir en pestaña nueva"
+            icon.name: "tab-new"
+            icon.source: CelestinaTheme.fallbackIcon("folder")
+            onTriggered: window.openTab(favMenu.targetPath, true)
+        }
+
+        GlassMenuItem {
+            text: "Mostrar en su carpeta"
+            icon.name: "folder-open"
+            icon.source: CelestinaTheme.fallbackIcon("folder")
+            onTriggered: {
+                if (window.activeController)
+                    window.activeController.revealPath(favMenu.targetPath)
+            }
+        }
+
+        GlassMenuItem {
+            text: "Quitar de favoritos"
+            icon.source: CelestinaTheme.fallbackIcon("star")
+            onTriggered: {
+                if (window.activeController)
+                    window.activeController.toggleFavorite(favMenu.targetPath)
             }
         }
     }
@@ -5192,7 +6261,22 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        tabsModel.append({ initialPath: "", title: "…" })
-        window.currentTabIndex = 0
+        window.width = sessionStore.savedWindowWidth()
+        window.height = sessionStore.savedWindowHeight()
+
+        // A launch that names a folder is about that folder: the saved session
+        // does not talk over it, it just does not reopen this time.
+        const saved = sessionStore.launchPathGiven() ? [] : sessionStore.savedTabs()
+        if (saved.length === 0) {
+            tabsModel.append({ initialPath: "", title: "…" })
+            window.currentTabIndex = 0
+        } else {
+            for (var i = 0; i < saved.length; i++)
+                tabsModel.append({ initialPath: saved[i],
+                                   title: window.tabTitle(saved[i]) })
+            window.currentTabIndex = Math.max(
+                0, Math.min(tabsModel.count - 1, sessionStore.savedActiveTab()))
+        }
+        window.visible = true
     }
 }

@@ -17,6 +17,17 @@ const SCALE_MAX: f64 = 2.0;
 /// Content icons alone may go larger — up to 150 % (factor 3.0).
 const CONTENT_ICON_SCALE_MAX: f64 = 3.0;
 
+/// The window size a first run opens at, and the bounds a remembered one is
+/// clamped to — a stale config must never reopen a window too small to use or
+/// larger than any real display.
+const DEFAULT_WINDOW_WIDTH: i32 = 1120;
+const DEFAULT_WINDOW_HEIGHT: i32 = 720;
+const MIN_WINDOW_WIDTH: i32 = 680;
+const MIN_WINDOW_HEIGHT: i32 = 480;
+const MAX_WINDOW_SIDE: i32 = 16384;
+/// Cap on the restored session, so a runaway config cannot open tabs forever.
+const MAX_TABS: usize = 32;
+
 /// The persisted view configuration.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Settings {
@@ -42,6 +53,20 @@ pub struct Settings {
     pub show_hidden: bool,
     /// UDisks2 device names the user hid from the "Dispositivos" list.
     pub hidden_devices: Vec<String>,
+    /// Sidebar place keys in the order the user arranged them. Keys the file
+    /// does not mention keep their catalogue order behind the ones it does, so
+    /// a place added by a later version simply appears at the end instead of
+    /// disappearing.
+    pub place_order: Vec<String>,
+    /// Place keys the user hid from the sidebar.
+    pub hidden_places: Vec<String>,
+    /// The window size to reopen at. Only the size: a Wayland client cannot
+    /// place its own window, so there is no honest position to remember.
+    pub window_width: i32,
+    pub window_height: i32,
+    /// The folders that were open in tabs, in order, and which one was active.
+    pub tabs: Vec<String>,
+    pub active_tab: i32,
 }
 
 impl Default for Settings {
@@ -58,6 +83,12 @@ impl Default for Settings {
             sort_ascending: true,
             show_hidden: false,
             hidden_devices: Vec::new(),
+            place_order: Vec::new(),
+            hidden_places: Vec::new(),
+            window_width: DEFAULT_WINDOW_WIDTH,
+            window_height: DEFAULT_WINDOW_HEIGHT,
+            tabs: Vec::new(),
+            active_tab: 0,
         }
     }
 }
@@ -155,6 +186,35 @@ fn load_from(path: &Path) -> Settings {
             "hidden_device" if !value.is_empty() => {
                 settings.hidden_devices.push(value.to_owned());
             }
+            "place_order" if !value.is_empty() => {
+                settings.place_order = value
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|key| !key.is_empty())
+                    .map(str::to_owned)
+                    .collect();
+            }
+            "hidden_place" if !value.is_empty() => {
+                settings.hidden_places.push(value.to_owned());
+            }
+            "window_width" => {
+                if let Ok(width) = value.parse::<i32>() {
+                    settings.window_width = width.clamp(MIN_WINDOW_WIDTH, MAX_WINDOW_SIDE);
+                }
+            }
+            "window_height" => {
+                if let Ok(height) = value.parse::<i32>() {
+                    settings.window_height = height.clamp(MIN_WINDOW_HEIGHT, MAX_WINDOW_SIDE);
+                }
+            }
+            "tab" if !value.is_empty() && settings.tabs.len() < MAX_TABS => {
+                settings.tabs.push(value.to_owned());
+            }
+            "active_tab" => {
+                if let Ok(index) = value.parse::<i32>() {
+                    settings.active_tab = index.max(0);
+                }
+            }
             _ => {}
         }
     }
@@ -203,6 +263,45 @@ fn save_to(path: &Path, settings: &Settings) -> io::Result<()> {
             text.push('\n');
         }
     }
+    // Place keys are a closed vocabulary (HOME, DOCUMENTS, TRASH …), so a comma
+    // list is safe here in a way a path list would not be.
+    let order: Vec<&str> = settings
+        .place_order
+        .iter()
+        .map(|key| key.trim())
+        .filter(|key| !key.is_empty() && !key.contains([',', '\n', '\r']))
+        .collect();
+    if !order.is_empty() {
+        text.push_str("place_order=");
+        text.push_str(&order.join(","));
+        text.push('\n');
+    }
+    for place in &settings.hidden_places {
+        let place = place.replace(['\n', '\r'], "");
+        if !place.is_empty() {
+            text.push_str("hidden_place=");
+            text.push_str(&place);
+            text.push('\n');
+        }
+    }
+    text.push_str(&format!(
+        "window_width={}\nwindow_height={}\n",
+        settings
+            .window_width
+            .clamp(MIN_WINDOW_WIDTH, MAX_WINDOW_SIDE),
+        settings
+            .window_height
+            .clamp(MIN_WINDOW_HEIGHT, MAX_WINDOW_SIDE),
+    ));
+    for tab in settings.tabs.iter().take(MAX_TABS) {
+        let tab = tab.replace(['\n', '\r'], "");
+        if !tab.is_empty() {
+            text.push_str("tab=");
+            text.push_str(&tab);
+            text.push('\n');
+        }
+    }
+    text.push_str(&format!("active_tab={}\n", settings.active_tab.max(0)));
     fs::write(path, text)
 }
 
@@ -237,9 +336,42 @@ mod tests {
             sort_ascending: false,
             show_hidden: true,
             hidden_devices: vec!["MI USB".to_owned(), "sdb1".to_owned()],
+            place_order: vec!["TRASH".to_owned(), "HOME".to_owned()],
+            hidden_places: vec!["MUSIC".to_owned()],
+            window_width: 1400,
+            window_height: 900,
+            tabs: vec!["/home/u".to_owned(), "/etc".to_owned()],
+            active_tab: 1,
         };
         save_to(&file, &settings).expect("save");
         assert_eq!(load_from(&file), settings);
+        let _ = fs::remove_dir_all(file.parent().unwrap());
+    }
+
+    #[test]
+    fn a_silly_window_size_is_clamped_and_the_session_is_capped() {
+        let file = temp_file("window");
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        let mut text = "window_width=10\nwindow_height=99999\n".to_owned();
+        for i in 0..MAX_TABS + 5 {
+            text.push_str(&format!("tab=/f{i}\n"));
+        }
+        fs::write(&file, text).unwrap();
+        let loaded = load_from(&file);
+        assert_eq!(loaded.window_width, MIN_WINDOW_WIDTH);
+        assert_eq!(loaded.window_height, MAX_WINDOW_SIDE);
+        assert_eq!(loaded.tabs.len(), MAX_TABS);
+        let _ = fs::remove_dir_all(file.parent().unwrap());
+    }
+
+    #[test]
+    fn a_config_without_place_keys_loads_the_defaults() {
+        let file = temp_file("noplaces");
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        fs::write(&file, "view_mode=grid\n").unwrap();
+        let loaded = load_from(&file);
+        assert!(loaded.place_order.is_empty());
+        assert!(loaded.hidden_places.is_empty());
         let _ = fs::remove_dir_all(file.parent().unwrap());
     }
 
