@@ -578,9 +578,9 @@ ApplicationWindow {
                 Math.round((CelestinaTheme.fontBody + CelestinaTheme.fontCaption)
                            * 1.35 * window.contentTextScale)) + 16
             readonly property int gridCellWidth: Math.round(
-                132 * Math.max(window.contentIconScale, window.contentTextScale))
+                104 * Math.max(window.contentIconScale, window.contentTextScale))
             readonly property int gridCellHeight:
-                Math.round(48 * window.contentIconScale) + 8
+                Math.round(72 * window.contentIconScale) + 8
                 + Math.round(CelestinaTheme.fontCaption * 2.9 * window.contentTextScale) + 20
 
             // ── Multi-selection (token-keyed, so it survives sort/filter) ────
@@ -1705,8 +1705,8 @@ ApplicationWindow {
                         Rectangle {
                             id: cellGlyph
                             anchors.horizontalCenter: parent.horizontalCenter
-                            width: Math.round(48 * window.contentIconScale)
-                            height: Math.round(48 * window.contentIconScale)
+                            width: Math.round(72 * window.contentIconScale)
+                            height: Math.round(72 * window.contentIconScale)
                             radius: CelestinaTheme.radiusSm
                             clip: true
                             color: cell.kind === "directory"
@@ -1721,8 +1721,8 @@ ApplicationWindow {
                             IconImage {
                                 anchors.centerIn: parent
                                 visible: !cellThumb.ready
-                                width: Math.round(26 * window.contentIconScale)
-                                height: Math.round(26 * window.contentIconScale)
+                                width: Math.round(54 * window.contentIconScale)
+                                height: Math.round(54 * window.contentIconScale)
                                 name: mainPanel.mediaIconName(cell.kind, cellGlyph.media)
                                 source: CelestinaTheme.fallbackIcon(
                                             cell.kind === "directory"
@@ -4283,8 +4283,7 @@ ApplicationWindow {
                             height: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
                             name: placeRow.modelData.icon
                             source: CelestinaTheme.fallbackIcon(placeRow.modelData.fallback)
-                            color: placeRow.current ? CelestinaTheme.accent
-                                                    : CelestinaTheme.textMuted
+                            // Native theme colours (no tint) — matches the content view.
                         }
 
                         Text {
@@ -4344,7 +4343,7 @@ ApplicationWindow {
                         height: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
                         name: "user-trash"
                         source: CelestinaTheme.fallbackIcon("user-trash")
-                        color: CelestinaTheme.textMuted
+                        // Native theme colours (no tint).
                     }
 
                     Text {
@@ -4462,8 +4461,7 @@ ApplicationWindow {
                             height: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
                             name: "drive-removable-media"
                             source: CelestinaTheme.fallbackIcon("folder")
-                            color: volumeRow.current ? CelestinaTheme.accent
-                                                     : CelestinaTheme.textMuted
+                            // Native theme colours (no tint).
                         }
 
                         Text {
@@ -4599,8 +4597,7 @@ ApplicationWindow {
                         height: Math.round(CelestinaTheme.iconSm * window.sidebarIconScale)
                         name: "folder"
                         source: CelestinaTheme.fallbackIcon("folder")
-                        color: bmRow.current ? CelestinaTheme.accent
-                                             : CelestinaTheme.textMuted
+                        // Native theme colours (no tint).
                     }
 
                     Text {

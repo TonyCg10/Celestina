@@ -110,7 +110,18 @@ Item {
         radius: root.cornerRadius
         color: root.active ? CelestinaTheme.glassTint : CelestinaTheme.surfaceStrong
         border.width: 1
-        border.color: CelestinaTheme.borderStrong
+        border.color: CelestinaTheme.glassBorder
+    }
+
+    // The One UI top-edge specular — a bright hairline just inside the outline
+    // that sells the "piece of glass". Inset so it clears the rounded corners.
+    Rectangle {
+        x: root.cornerRadius
+        y: 1
+        width: parent.width - root.cornerRadius * 2
+        height: 1
+        color: CelestinaTheme.glassHighlight
+        visible: root.active
     }
 
     Item {
