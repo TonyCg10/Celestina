@@ -297,9 +297,6 @@ pub mod qobject {
         fn close_search(self: Pin<&mut SideritaController>);
 
         #[qinvokable]
-        fn open_search_hit(self: Pin<&mut SideritaController>, index: i32);
-
-        #[qinvokable]
         fn open_terminal(self: Pin<&mut SideritaController>);
 
         #[qinvokable]
@@ -685,6 +682,12 @@ impl SideritaControllerRust {
             .iter()
             .find(|row| row.token().value() == token)
     }
+
+    /// A search hit by its token (the hit's index in the results).
+    fn search_hit(&self, token: &QString) -> Option<&crate::search::SearchHit> {
+        let index = token.to_string().parse::<usize>().ok()?;
+        self.search_hits.get(index)
+    }
 }
 
 impl qobject::SideritaController {
@@ -848,7 +851,13 @@ impl qobject::SideritaController {
     pub fn select_token(mut self: Pin<&mut Self>, token: &QString) {
         // The selected item's name and detail are shown in the sidebar info box
         // (driven by selected_token), so selecting no longer writes the status
-        // line.
+        // line. A search hit's token is its index — accepted as-is if in range.
+        if self.rust().search_active {
+            if self.rust().search_hit(token).is_some() {
+                self.as_mut().set_selected_token(token.clone());
+            }
+            return;
+        }
         let selected = self
             .rust()
             .row_by_token(token)
@@ -860,6 +869,27 @@ impl qobject::SideritaController {
     }
 
     pub fn activate_token(mut self: Pin<&mut Self>, token: &QString) {
+        // A search hit acts exactly like a folder entry: a folder navigates in
+        // (leaving search), a file opens in its default app (search stays up so
+        // more hits can be opened).
+        if self.rust().search_active {
+            let Some((path, is_dir, name)) = self
+                .rust()
+                .search_hit(token)
+                .map(|hit| (PathBuf::from(&hit.path), hit.is_dir, hit.name.clone()))
+            else {
+                return;
+            };
+            if is_dir {
+                self.as_mut().exit_search();
+                self.as_mut().request_nav_scan(PendingNav::To(path));
+            } else {
+                self.as_mut().set_selected_token(token.clone());
+                self.as_mut().open_in_default_app(&path, &name);
+            }
+            return;
+        }
+
         let selected = self.rust().row_by_token(token).map(|row| {
             (
                 row.path().to_path_buf(),
@@ -898,6 +928,14 @@ impl qobject::SideritaController {
     }
 
     pub fn entry_token(&self, index: i32) -> QString {
+        if self.rust().search_active {
+            let count = self.rust().search_hits.len() as i32;
+            return if index >= 0 && index < count {
+                QString::from(index.to_string().as_str())
+            } else {
+                QString::default()
+            };
+        }
         self.rust()
             .row(index)
             .map(|row| QString::from(row.token().to_string().as_str()))
@@ -905,6 +943,14 @@ impl qobject::SideritaController {
     }
 
     pub fn entry_detail(&self, index: i32) -> QString {
+        // A search hit's detail is where it lives — its containing folder.
+        if self.rust().search_active {
+            return usize::try_from(index)
+                .ok()
+                .and_then(|i| self.rust().search_hits.get(i))
+                .map(|hit| QString::from(search_hit_parent(&hit.path).as_str()))
+                .unwrap_or_default();
+        }
         let Some(row) = self.rust().row(index) else {
             return QString::default();
         };
@@ -930,6 +976,15 @@ impl qobject::SideritaController {
     }
 
     pub fn index_for_token(&self, token: &QString) -> i32 {
+        if self.rust().search_active {
+            return token
+                .to_string()
+                .parse::<usize>()
+                .ok()
+                .filter(|&i| i < self.rust().search_hits.len())
+                .and_then(|i| i32::try_from(i).ok())
+                .unwrap_or(-1);
+        }
         let Ok(token) = token.to_string().parse::<u64>() else {
             return -1;
         };
@@ -946,6 +1001,13 @@ impl qobject::SideritaController {
     }
 
     pub fn entry_path(&self, index: i32) -> QString {
+        if self.rust().search_active {
+            return usize::try_from(index)
+                .ok()
+                .and_then(|i| self.rust().search_hits.get(i))
+                .map(|hit| QString::from(hit.path.as_str()))
+                .unwrap_or_default();
+        }
         self.rust()
             .row(index)
             .map(|row| QString::from(row.path().to_string_lossy().as_ref()))
@@ -1917,7 +1979,8 @@ impl qobject::SideritaController {
         self.as_mut().rust_mut().get_mut().search_cancel = Some(token.clone());
         self.as_mut()
             .set_search_query(QString::from(query.as_str()));
-        self.as_mut().set_search_active(true);
+        // `search_active` only flips once results land and replace the folder
+        // rows — during the walk the folder view stays live and interactive.
         self.as_mut().set_search_running(true);
         self.as_mut().set_search_summary(QString::from("Buscando…"));
 
@@ -1973,13 +2036,29 @@ impl qobject::SideritaController {
             )
         };
 
+        // Parallel role columns so the hits ride the *same* model + roles the
+        // folder view uses — the list/grid then render and behave identically
+        // (single-click selects, double-click opens, keyboard, selection). The
+        // token is just the hit index; the subtitle is the containing folder.
+        let tokens: QStringList = (0..outcome.hits.len())
+            .map(|i| QString::from(i.to_string().as_str()))
+            .collect();
+        let subtitles: QStringList = outcome
+            .hits
+            .iter()
+            .map(|hit| QString::from(search_hit_parent(&hit.path).as_str()))
+            .collect();
+
         self.as_mut().rust_mut().get_mut().search_hits = outcome.hits;
-        self.as_mut().set_search_names(names);
-        self.as_mut().set_search_paths(paths);
-        self.as_mut().set_search_kinds(kinds);
         self.as_mut()
             .set_search_summary(QString::from(summary.as_str()));
         self.as_mut().set_search_running(false);
+        self.as_mut().set_search_active(true);
+        // A fresh result set drops any selection carried over from the folder.
+        self.as_mut().set_selected_token(QString::default());
+        self.as_mut().set_entry_names(names.clone());
+        self.as_mut()
+            .rows_ready(names, tokens, kinds, subtitles, paths);
     }
 
     pub fn cancel_search(mut self: Pin<&mut Self>) {
@@ -1988,36 +2067,19 @@ impl qobject::SideritaController {
         }
     }
 
-    pub fn close_search(mut self: Pin<&mut Self>) {
+    /// Leaves search without touching the view — the caller repaints (a folder
+    /// reproject, or a navigation scan) once it has decided what to show next.
+    fn exit_search(mut self: Pin<&mut Self>) {
         self.as_mut().cancel_search();
+        self.as_mut().rust_mut().get_mut().search_hits.clear();
+        self.as_mut().set_search_running(false);
         self.as_mut().set_search_active(false);
     }
 
-    /// Opens the search hit at `index`: navigates into it (a folder) or to its
-    /// parent (a file), selecting the file once the folder lands. Closes search.
-    pub fn open_search_hit(mut self: Pin<&mut Self>, index: i32) {
-        let Ok(index) = usize::try_from(index) else {
-            return;
-        };
-        let Some(hit) = self.rust().search_hits.get(index).cloned() else {
-            return;
-        };
-        let hit_path = PathBuf::from(&hit.path);
-        let (target, select) = if hit.is_dir {
-            (Some(hit_path.clone()), None)
-        } else {
-            (
-                hit_path.parent().map(Path::to_path_buf),
-                Some(hit_path.clone()),
-            )
-        };
-        let Some(target) = target else {
-            return;
-        };
-
-        self.as_mut().rust_mut().get_mut().pending_select_path = select;
-        self.as_mut().close_search();
-        self.as_mut().request_nav_scan(PendingNav::To(target));
+    /// Cancels search and returns the content box to the current folder's rows.
+    pub fn close_search(mut self: Pin<&mut Self>) {
+        self.as_mut().exit_search();
+        self.as_mut().reproject();
     }
 
     /// Launches the desktop's terminal in the current folder (an external
@@ -2339,6 +2401,12 @@ impl qobject::SideritaController {
     }
 
     fn reproject(mut self: Pin<&mut Self>) {
+        // While search results occupy the content box, folder reprojections
+        // (a watcher tick, a sort toggle) must not overwrite them; `close_search`
+        // drops the flag first, then reprojects to restore the folder.
+        if self.rust().search_active {
+            return;
+        }
         let projected = {
             let state = self.as_mut().rust_mut();
             let state = state.get_mut();
@@ -2924,6 +2992,15 @@ fn row_subtitle(row: &EntryRow) -> String {
     }
 
     format!("{} · {}", kind_label(row.kind()), format_size(row.size()))
+}
+
+/// The containing folder of a search hit, shown as its subtitle so a result
+/// carries where it lives (the one thing a flat folder row doesn't need).
+fn search_hit_parent(path: &str) -> String {
+    Path::new(path)
+        .parent()
+        .map(|parent| parent.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 fn format_size(bytes: u64) -> String {

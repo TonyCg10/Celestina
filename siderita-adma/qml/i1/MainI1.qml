@@ -737,6 +737,9 @@ ApplicationWindow {
                     // returns the content box to its plain listing.
                     root.clearSearch()
                 }
+                // Entering or leaving search swaps the whole row set (folder ↔
+                // hits, index-keyed vs token-keyed), so drop the old selection.
+                function onSearchActiveChanged() { mainPanel.clearSelection() }
             }
 
             anchors.fill: parent
@@ -981,13 +984,14 @@ ApplicationWindow {
                 y: 14
                 width: parent.width - 16
                 height: parent.height - 68
-                visible: mainPanel.viewMode === "list" && !controller.searchActive
+                visible: mainPanel.viewMode === "list"
                 model: entryModel
                 clip: true
                 spacing: 2
                 reuseItems: true
                 cacheBuffer: 420
                 topMargin: 62 + (tabBar.visible ? tabBar.height + 8 : 0)
+                         + (searchBar.visible ? searchBar.height + 8 : 0)
                 boundsBehavior: Flickable.StopAtBounds
                 activeFocusOnTab: true
                 keyNavigationEnabled: false
@@ -1019,6 +1023,11 @@ ApplicationWindow {
                 }
 
                 Keys.onPressed: function(event) {
+                    if (event.key === Qt.Key_Escape && controller.searchActive) {
+                        controller.closeSearch()
+                        event.accepted = true
+                        return
+                    }
                     if (count === 0)
                         return
 
@@ -1286,13 +1295,14 @@ ApplicationWindow {
                 y: 14
                 width: parent.width - 16
                 height: parent.height - 68
-                visible: mainPanel.viewMode === "grid" && !controller.searchActive
+                visible: mainPanel.viewMode === "grid"
                 model: entryModel
                 clip: true
                 cellWidth: mainPanel.gridCellWidth
                 cellHeight: mainPanel.gridCellHeight
                 cacheBuffer: 480
                 topMargin: 62 + (tabBar.visible ? tabBar.height + 8 : 0)
+                         + (searchBar.visible ? searchBar.height + 8 : 0)
                 boundsBehavior: Flickable.StopAtBounds
                 activeFocusOnTab: true
                 keyNavigationEnabled: false
@@ -1326,6 +1336,11 @@ ApplicationWindow {
                 }
 
                 Keys.onPressed: function(event) {
+                    if (event.key === Qt.Key_Escape && controller.searchActive) {
+                        controller.closeSearch()
+                        event.accepted = true
+                        return
+                    }
                     if (count === 0)
                         return
 
@@ -1644,11 +1659,14 @@ ApplicationWindow {
                 visible: !controller.loading
                          && controller.errorText.length === 0
                          && controller.entryNames.length === 0
-                         && !controller.searchActive
+                         && !controller.searchRunning
+
+                readonly property bool searchEmpty: controller.searchActive
+                                                    || controller.query.length > 0
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: controller.query.length > 0 ? "Sin coincidencias" : "Carpeta vacía"
+                    text: parent.searchEmpty ? "Sin coincidencias" : "Carpeta vacía"
                     color: CelestinaTheme.text
                     font.family: CelestinaTheme.sansFamily
                     font.pixelSize: CelestinaTheme.fontTitle
@@ -1657,7 +1675,7 @@ ApplicationWindow {
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: controller.query.length > 0
+                    text: parent.searchEmpty
                           ? "Prueba con otra búsqueda."
                           : "No hay elementos que mostrar."
                     color: CelestinaTheme.textMuted
@@ -2054,7 +2072,7 @@ ApplicationWindow {
 
                 x: 14
                 anchors.verticalCenter: parent.verticalCenter
-                width: Math.max(180, searchField.x - x - 12)
+                width: Math.max(180, subfolderButton.x - x - 12)
                 height: CelestinaTheme.controlHeight
                 radius: CelestinaTheme.radiusSm
                 clip: true
@@ -2200,13 +2218,51 @@ ApplicationWindow {
                 }
             }
 
+            // Typing filters the current folder live; this button (or ⏎) walks
+            // the subfolders. Disabled until there's something to search for.
+            Button {
+                id: subfolderButton
+                height: CelestinaTheme.controlHeight
+                anchors.verticalCenter: parent.verticalCenter
+                x: searchField.x - width - 8
+                width: subfolderLabel.implicitWidth + 24
+                enabled: searchField.text.trim().length > 0
+                Accessible.name: "Buscar en subcarpetas"
+                onClicked: controller.searchRecursive(searchField.text)
+
+                contentItem: Text {
+                    id: subfolderLabel
+                    text: "Subcarpetas"
+                    color: subfolderButton.enabled ? CelestinaTheme.text
+                                                   : CelestinaTheme.textMuted
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.interfaceTextScale)
+                    font.weight: CelestinaTheme.weightMedium
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                background: Rectangle {
+                    radius: CelestinaTheme.radiusSm
+                    opacity: subfolderButton.enabled ? 1 : 0.5
+                    color: subfolderButton.hovered
+                           ? CelestinaTheme.surfaceHover : CelestinaTheme.controlFill
+                    border.width: subfolderButton.activeFocus ? 1 : 0
+                    border.color: CelestinaTheme.focus
+
+                    Behavior on color {
+                        ColorAnimation { duration: CelestinaTheme.motionFast }
+                    }
+                }
+            }
+
             TextField {
                 id: searchField
                 width: Math.min(260, Math.max(170, topBar.width * 0.24))
                 height: CelestinaTheme.controlHeight
                 x: topBar.width - width - 14
                 anchors.verticalCenter: parent.verticalCenter
-                placeholderText: "Filtrar · ⏎ busca en subcarpetas"
+                placeholderText: "Filtrar en la carpeta"
                 color: CelestinaTheme.text
                 placeholderTextColor: CelestinaTheme.textMuted
                 selectionColor: CelestinaTheme.accentStrong
@@ -2216,7 +2272,7 @@ ApplicationWindow {
                 leftPadding: 13
                 rightPadding: 13
                 onTextEdited: searchDebounce.restart()
-                // Enter runs a recursive filename search of the current folder.
+                // ⏎ is an alias for the Subcarpetas button — a recursive walk.
                 onAccepted: if (text.trim().length > 0)
                                 controller.searchRecursive(text)
 
@@ -3437,281 +3493,73 @@ ApplicationWindow {
             }
         }
 
-        // ── Recursive filename search results ─────────────────────────────
-        // Shown inline in the content box (over the list/grid area, under the
-        // floating breadcrumb/search and tab rows), not as a modal — Enter in
-        // the search field just swaps the folder listing for its hits in place.
-        Item {
-            id: searchView
-            x: 8
-            y: 14
-            width: parent.width - 16
-            height: parent.height - 68
-            z: 5
-            visible: controller.searchActive
-            focus: controller.searchActive
+            // ── Recursive-search status bar ───────────────────────────────────
+            // The hits themselves ride the same entryModel as the folder, so the
+            // list/grid render and act on them identically (single-click selects,
+            // double-click opens, keyboard, selection). This slim glass bar just
+            // floats below the breadcrumb/tabs to show the query and offer Stop /
+            // Close — the search results are the content view.
+            Item {
+                id: searchBar
+                z: 10
+                x: 12
+                width: root.width - 24
+                height: 40
+                y: (tabBar.visible ? tabBar.y + tabBar.height : topBar.y + topBar.height) + 8
+                visible: controller.searchActive || controller.searchRunning
 
-            // Clear the floating breadcrumb/search (and tab) row exactly as the
-            // list's topMargin does, so the hits start just below them.
-            readonly property int headerClearance: 62 + (tabBar.visible ? tabBar.height + 8 : 0)
-
-            Keys.onPressed: function(event) {
-                if (event.key === Qt.Key_Escape) {
-                    controller.closeSearch()
-                    event.accepted = true
+                GlassSurface {
+                    anchors.fill: parent
+                    backdropSource: topBar.activeView
+                    captureEnabled: searchBar.visible
+                    liveCapture: true
+                    cornerRadius: CelestinaTheme.radiusSm
                 }
-            }
 
-            // Swallow stray clicks so they don't reach the folder menu /
-            // empty-space handlers on the (hidden) view behind.
-            MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.AllButtons
-            }
-
-            Text {
-                id: searchHeading
-                anchors.left: parent.left
-                anchors.leftMargin: 6
-                anchors.right: searchControls.left
-                anchors.rightMargin: 12
-                y: searchView.headerClearance
-                text: "Buscar «" + controller.searchQuery + "»"
-                color: CelestinaTheme.text
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontCallout
-                font.weight: CelestinaTheme.weightDemiBold
-                elide: Text.ElideRight
-            }
-
-            Text {
-                id: searchSummary
-                anchors.left: searchHeading.left
-                anchors.top: searchHeading.bottom
-                anchors.topMargin: 3
-                text: controller.searchSummary
-                color: CelestinaTheme.textMuted
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontCaption
-            }
-
-            Row {
-                id: searchControls
-                anchors.right: parent.right
-                anchors.rightMargin: 6
-                y: searchView.headerClearance - 4
-                spacing: 8
-
-                PillButton {
-                    text: "Detener"
-                    visible: controller.searchRunning
-                    onClicked: controller.cancelSearch()
+                Rectangle {
+                    anchors.fill: parent
+                    radius: CelestinaTheme.radiusSm
+                    color: "transparent"
+                    border.width: 1
+                    border.color: CelestinaTheme.borderStrong
                 }
-                PillButton {
-                    text: "Cerrar"
-                    onClicked: controller.closeSearch()
+
+                Text {
+                    id: searchBarLabel
+                    anchors.left: parent.left
+                    anchors.leftMargin: 14
+                    anchors.right: searchBarControls.left
+                    anchors.rightMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: controller.searchRunning
+                          ? "Buscando «" + controller.searchQuery + "»…"
+                          : "«" + controller.searchQuery + "» · " + controller.searchSummary
+                    color: CelestinaTheme.text
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: Math.round(CelestinaTheme.fontLabel * window.interfaceTextScale)
+                    font.weight: CelestinaTheme.weightMedium
+                    elide: Text.ElideRight
                 }
-            }
 
-            Text {
-                anchors.centerIn: parent
-                visible: !controller.searchRunning
-                         && controller.searchNames.length === 0
-                text: "Sin coincidencias"
-                color: CelestinaTheme.textMuted
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontBody
-            }
+                Row {
+                    id: searchBarControls
+                    anchors.right: parent.right
+                    anchors.rightMargin: 8
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 8
 
-            ListView {
-                id: searchList
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.leftMargin: 4
-                anchors.rightMargin: 4
-                anchors.top: searchSummary.bottom
-                anchors.topMargin: 12
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: 4
-                visible: mainPanel.viewMode === "list"
-                clip: true
-                spacing: 2
-                model: controller.searchNames
-
-                // Each hit reads like a file-list row — the same glyph tile,
-                // name and (here, the path) subtitle, hover highlight and zoom —
-                // so search stays in the content box's visual language.
-                delegate: Item {
-                    id: hitRow
-                    required property int index
-                    required property string modelData
-                    readonly property bool isDir:
-                        (controller.searchKinds[index] || "") === "directory"
-                    width: ListView.view.width
-                    height: mainPanel.listRowHeight
-                    Accessible.role: Accessible.ListItem
-                    Accessible.name: hitRow.modelData
-
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.leftMargin: 4
-                        anchors.rightMargin: 4
-                        radius: CelestinaTheme.radiusSm
-                        color: hitMouse.containsMouse
-                               ? CelestinaTheme.surfaceHover : "transparent"
-
-                        Behavior on color {
-                            ColorAnimation { duration: CelestinaTheme.motionFast }
-                        }
+                    PillButton {
+                        text: "Detener"
+                        visible: controller.searchRunning
+                        onClicked: controller.cancelSearch()
                     }
-
-                    Rectangle {
-                        id: hitGlyph
-                        x: 14
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: Math.round(CelestinaTheme.glyphTile * window.contentIconScale)
-                        height: Math.round(CelestinaTheme.glyphTile * window.contentIconScale)
-                        radius: CelestinaTheme.radiusSm
-                        color: hitRow.isDir ? CelestinaTheme.glyphDirectory
-                                            : CelestinaTheme.glyphFile
-
-                        IconImage {
-                            anchors.centerIn: parent
-                            width: Math.round(CelestinaTheme.iconMd * window.contentIconScale)
-                            height: Math.round(CelestinaTheme.iconMd * window.contentIconScale)
-                            name: hitRow.isDir ? "folder" : "text-x-generic"
-                            source: CelestinaTheme.fallbackIcon(
-                                        hitRow.isDir ? "folder" : "file")
-                            color: hitRow.isDir ? CelestinaTheme.accent
-                                                : CelestinaTheme.textMuted
-                        }
-                    }
-
-                    Column {
-                        x: hitGlyph.x + hitGlyph.width + 12
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - x - 24
-                        spacing: 1
-
-                        Text {
-                            width: parent.width
-                            text: hitRow.modelData
-                            color: CelestinaTheme.text
-                            font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: Math.round(CelestinaTheme.fontBody * window.contentTextScale)
-                            font.weight: CelestinaTheme.weightMedium
-                            elide: Text.ElideMiddle
-                        }
-
-                        Text {
-                            width: parent.width
-                            text: controller.searchPaths[hitRow.index] || ""
-                            color: CelestinaTheme.textMuted
-                            font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.contentTextScale)
-                            elide: Text.ElideMiddle
-                        }
-                    }
-
-                    MouseArea {
-                        id: hitMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: controller.openSearchHit(hitRow.index)
-                    }
-                }
-            }
-
-            // In grid view the hits mirror the content grid — a glyph tile with
-            // the name beneath — so search matches whichever layout is in use.
-            GridView {
-                id: searchGrid
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.leftMargin: 4
-                anchors.rightMargin: 4
-                anchors.top: searchSummary.bottom
-                anchors.topMargin: 12
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: 4
-                visible: mainPanel.viewMode === "grid"
-                clip: true
-                cellWidth: mainPanel.gridCellWidth
-                cellHeight: mainPanel.gridCellHeight
-                model: controller.searchNames
-
-                delegate: Item {
-                    id: hitCell
-                    required property int index
-                    required property string modelData
-                    readonly property bool isDir:
-                        (controller.searchKinds[index] || "") === "directory"
-                    width: searchGrid.cellWidth
-                    height: searchGrid.cellHeight
-                    Accessible.role: Accessible.ListItem
-                    Accessible.name: hitCell.modelData
-
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: 5
-                        radius: CelestinaTheme.radiusSm
-                        color: hitCellMouse.containsMouse
-                               ? CelestinaTheme.surfaceHover : "transparent"
-
-                        Behavior on color {
-                            ColorAnimation { duration: CelestinaTheme.motionFast }
-                        }
-                    }
-
-                    Column {
-                        anchors.centerIn: parent
-                        spacing: 8
-
-                        Rectangle {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            width: Math.round(48 * window.contentIconScale)
-                            height: Math.round(48 * window.contentIconScale)
-                            radius: CelestinaTheme.radiusSm
-                            color: hitCell.isDir ? CelestinaTheme.glyphDirectory
-                                                 : CelestinaTheme.glyphFile
-
-                            IconImage {
-                                anchors.centerIn: parent
-                                width: Math.round(26 * window.contentIconScale)
-                                height: Math.round(26 * window.contentIconScale)
-                                name: hitCell.isDir ? "folder" : "text-x-generic"
-                                source: CelestinaTheme.fallbackIcon(
-                                            hitCell.isDir ? "folder" : "file")
-                                color: hitCell.isDir ? CelestinaTheme.accent
-                                                     : CelestinaTheme.textMuted
-                            }
-                        }
-
-                        Text {
-                            width: searchGrid.cellWidth - 22
-                            horizontalAlignment: Text.AlignHCenter
-                            text: hitCell.modelData
-                            color: CelestinaTheme.text
-                            font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.contentTextScale)
-                            elide: Text.ElideRight
-                            maximumLineCount: 2
-                            wrapMode: Text.Wrap
-                        }
-                    }
-
-                    MouseArea {
-                        id: hitCellMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: controller.openSearchHit(hitCell.index)
+                    PillButton {
+                        text: "Cerrar"
+                        onClicked: controller.closeSearch()
                     }
                 }
             }
         }
-    }
 
     // ── Window-level tab management shortcuts ────────────────────────────
     Shortcut {
