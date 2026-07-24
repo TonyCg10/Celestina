@@ -570,6 +570,11 @@ ApplicationWindow {
             function isSelected(token) {
                 return token.length > 0 && selectedTokens[token] === true
             }
+            // Raster image types worth thumbnailing (the provider falls back to
+            // nothing for anything it can't decode, so a stray match is harmless).
+            function isImageName(n) {
+                return /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|jxl|heic|heif)$/i.test(n)
+            }
             function clearSelection() {
                 selectedTokens = ({})
                 selectionCount = 0
@@ -1244,9 +1249,14 @@ ApplicationWindow {
                                : row.kind === "symlink"
                                  ? CelestinaTheme.glyphSymlink
                                  : CelestinaTheme.glyphFile
+                        clip: true
+
+                        readonly property bool isImage: row.kind !== "directory"
+                                                        && mainPanel.isImageName(row.name)
 
                         IconImage {
                             anchors.centerIn: parent
+                            visible: !thumb.ready
                             width: Math.round(CelestinaTheme.iconMd * window.contentIconScale)
                             height: Math.round(CelestinaTheme.iconMd * window.contentIconScale)
                             name: row.kind === "directory"
@@ -1263,6 +1273,25 @@ ApplicationWindow {
                             color: row.kind === "directory"
                                    ? CelestinaTheme.accent
                                    : CelestinaTheme.textMuted
+                        }
+
+                        // The image itself, thumbnailed by the "thumb" provider,
+                        // covering the tile once decoded; until then the glyph shows.
+                        Image {
+                            id: thumb
+                            anchors.fill: parent
+                            anchors.margins: 1
+                            readonly property bool ready: kindGlyph.isImage
+                                                          && status === Image.Ready
+                            visible: ready
+                            source: kindGlyph.isImage
+                                    ? "image://thumb/" + encodeURIComponent(row.path) : ""
+                            sourceSize.width: 256
+                            sourceSize.height: 256
+                            fillMode: Image.PreserveAspectCrop
+                            asynchronous: true
+                            cache: true
+                            smooth: true
                         }
                     }
 
@@ -1616,14 +1645,19 @@ ApplicationWindow {
                             width: Math.round(48 * window.contentIconScale)
                             height: Math.round(48 * window.contentIconScale)
                             radius: CelestinaTheme.radiusSm
+                            clip: true
                             color: cell.kind === "directory"
                                    ? CelestinaTheme.glyphDirectory
                                    : cell.kind === "symlink"
                                      ? CelestinaTheme.glyphSymlink
                                      : CelestinaTheme.glyphFile
 
+                            readonly property bool isImage: cell.kind !== "directory"
+                                                            && mainPanel.isImageName(cell.name)
+
                             IconImage {
                                 anchors.centerIn: parent
+                                visible: !cellThumb.ready
                                 width: Math.round(26 * window.contentIconScale)
                                 height: Math.round(26 * window.contentIconScale)
                                 name: cell.kind === "directory"
@@ -1640,6 +1674,23 @@ ApplicationWindow {
                                 color: cell.kind === "directory"
                                        ? CelestinaTheme.accent
                                        : CelestinaTheme.textMuted
+                            }
+
+                            Image {
+                                id: cellThumb
+                                anchors.fill: parent
+                                anchors.margins: 1
+                                readonly property bool ready: cellGlyph.isImage
+                                                              && status === Image.Ready
+                                visible: ready
+                                source: cellGlyph.isImage
+                                        ? "image://thumb/" + encodeURIComponent(cell.path) : ""
+                                sourceSize.width: 256
+                                sourceSize.height: 256
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                cache: true
+                                smooth: true
                             }
                         }
 

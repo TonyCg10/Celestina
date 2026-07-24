@@ -33,12 +33,17 @@ fn main() {
     println!("cargo::rerun-if-changed=cpp/siderita/clipboard.h");
     println!("cargo::rerun-if-changed=cpp/entrymodel.cpp");
     println!("cargo::rerun-if-changed=cpp/siderita/entrymodel.h");
+    println!("cargo::rerun-if-changed=cpp/thumbnailprovider.cpp");
+    println!("cargo::rerun-if-changed=cpp/siderita/thumbnailprovider.h");
     let builder = CxxQtBuilder::new_qml_module(module)
         .qrc("qml/i1/icons.qrc")
         .cpp_file("cpp/clipboard.cpp")
         // The native list model: the header is moc'd (Q_OBJECT), the .cpp compiled.
         .cpp_file("cpp/entrymodel.cpp")
         .cpp_file("cpp/siderita/entrymodel.h")
+        // The freedesktop-thumbnail image provider (no Q_OBJECT of its own — it
+        // only emits QQuickImageResponse's inherited signal — so just compiled).
+        .cpp_file("cpp/thumbnailprovider.cpp")
         .files(["src/controller.rs", "src/dbus.rs"]);
     // SAFETY: only adds an include directory for our own headers.
     let builder = unsafe {

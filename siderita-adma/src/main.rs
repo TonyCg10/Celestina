@@ -21,7 +21,10 @@ fn main() {
     controller::qobject::register_entry_model();
 
     let mut engine = QQmlApplicationEngine::new();
-    if let Some(engine) = engine.as_mut() {
+    if let Some(mut engine) = engine.as_mut() {
+        // The thumbnail image provider must be on the engine before the QML that
+        // references image://thumb/… is loaded.
+        controller::qobject::register_thumbnail_provider(engine.as_mut());
         engine.load(&QUrl::from(
             "qrc:/qt/qml/org/celestina/siderita/qml/i1/MainI1.qml",
         ));
