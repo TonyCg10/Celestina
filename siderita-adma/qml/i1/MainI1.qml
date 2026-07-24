@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.impl
+import QtQuick.Layouts
 import org.celestina.siderita 1.0
 import org.celestina.siderita.internal 1.0
 
@@ -770,163 +771,161 @@ ApplicationWindow {
                 }
             }
 
-            Rectangle {
-                id: hiddenToggle
+            // Bottom-bar controls flow left-to-right and size to their (scaled)
+            // content, so a larger interface text never clips or overlaps them.
+            RowLayout {
+                id: bottomControls
                 x: 16
                 anchors.verticalCenter: bottomBar.verticalCenter
-                width: hiddenLabel.width + 20
-                height: 26
-                radius: CelestinaTheme.radiusXs
-                color: controller.showHidden
-                       ? CelestinaTheme.badgeAccentFill
-                       : hiddenMouse.containsMouse
-                         ? CelestinaTheme.surfaceHover
-                         : CelestinaTheme.controlFill
+                spacing: 10
 
-                Behavior on color {
-                    ColorAnimation { duration: CelestinaTheme.motionFast }
-                }
-
-                Accessible.role: Accessible.Button
-                Accessible.name: "Mostrar u ocultar elementos ocultos"
-
-                Text {
-                    id: hiddenLabel
-                    anchors.centerIn: parent
-                    text: "Ocultos"
+                Rectangle {
+                    id: hiddenToggle
+                    Layout.preferredWidth: hiddenLabel.implicitWidth + 22
+                    Layout.preferredHeight: 26
+                    radius: CelestinaTheme.radiusXs
                     color: controller.showHidden
-                           ? CelestinaTheme.accent
-                           : CelestinaTheme.textMuted
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: Math.round(CelestinaTheme.fontMini * window.interfaceTextScale)
-                    font.weight: CelestinaTheme.weightMedium
+                           ? CelestinaTheme.badgeAccentFill
+                           : hiddenMouse.containsMouse
+                             ? CelestinaTheme.surfaceHover
+                             : CelestinaTheme.controlFill
+
+                    Behavior on color {
+                        ColorAnimation { duration: CelestinaTheme.motionFast }
+                    }
+
+                    Accessible.role: Accessible.Button
+                    Accessible.name: "Mostrar u ocultar elementos ocultos"
+
+                    Text {
+                        id: hiddenLabel
+                        anchors.centerIn: parent
+                        text: "Ocultos"
+                        color: controller.showHidden
+                               ? CelestinaTheme.accent
+                               : CelestinaTheme.textMuted
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: Math.round(CelestinaTheme.fontMini * window.interfaceTextScale)
+                        font.weight: CelestinaTheme.weightMedium
+                    }
+
+                    MouseArea {
+                        id: hiddenMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: controller.toggleHidden()
+                    }
                 }
 
-                MouseArea {
-                    id: hiddenMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: controller.toggleHidden()
+                Button {
+                    id: sortButton
+
+                    readonly property var labels: [
+                        "Nombre", "Tamaño", "Fecha", "Tipo"
+                    ]
+
+                    Layout.preferredHeight: 34
+                    leftPadding: 16
+                    rightPadding: 16
+                    text: labels[controller.sortField]
+                    Accessible.name: "Ordenar por " + text
+                    onClicked: {
+                        // Button is at the bottom now — open the menu upward.
+                        // sortMenu.height can be 0 before the first open; fall back
+                        // to an estimate for the four sort options.
+                        const menuHeight = sortMenu.height > 0 ? sortMenu.height : 172
+                        const point = sortButton.mapToItem(
+                                        root.overlayParent, 0, -menuHeight - 6)
+                        sortMenu.popup(root.overlayParent, point)
+                    }
+
+                    contentItem: Text {
+                        text: "Orden: " + sortButton.text
+                        color: CelestinaTheme.text
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.interfaceTextScale)
+                        font.weight: CelestinaTheme.weightMedium
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        elide: Text.ElideRight
+                    }
+
+                    background: Rectangle {
+                        radius: CelestinaTheme.radiusSm
+                        color: sortButton.hovered
+                               ? CelestinaTheme.surfaceHover
+                               : CelestinaTheme.controlFill
+                        border.width: sortButton.activeFocus ? 1 : 0
+                        border.color: CelestinaTheme.focus
+
+                        Behavior on color {
+                            ColorAnimation { duration: CelestinaTheme.motionFast }
+                        }
+                    }
                 }
-            }
 
-            BusyIndicator {
-                id: busy
-                width: 26
-                height: 26
-                x: viewToggle.x + viewToggle.width + 12
-                anchors.verticalCenter: bottomBar.verticalCenter
-                running: controller.loading
-                visible: running
-            }
-
-            NavButton {
-                id: sortDirectionButton
-                x: sortButton.x + sortButton.width + 8
-                anchors.verticalCenter: bottomBar.verticalCenter
-                iconName: controller.sortAscending
-                          ? "view-sort-ascending"
-                          : "view-sort-descending"
-                fallbackIcon: controller.sortAscending
+                NavButton {
+                    id: sortDirectionButton
+                    Layout.alignment: Qt.AlignVCenter
+                    iconName: controller.sortAscending
                               ? "view-sort-ascending"
                               : "view-sort-descending"
-                helpText: controller.sortAscending
-                          ? "Orden ascendente"
-                          : "Orden descendente"
-                onClicked: controller.toggleSortDirection()
-            }
-
-            Button {
-                id: sortButton
-
-                readonly property var labels: [
-                    "Nombre", "Tamaño", "Fecha", "Tipo"
-                ]
-
-                x: hiddenToggle.x + hiddenToggle.width + 12
-                anchors.verticalCenter: bottomBar.verticalCenter
-                width: 116
-                height: 34
-                text: labels[controller.sortField]
-                Accessible.name: "Ordenar por " + text
-                onClicked: {
-                    // Button is at the bottom now — open the menu upward.
-                    // sortMenu.height can be 0 before the first open; fall back
-                    // to an estimate for the four sort options.
-                    const menuHeight = sortMenu.height > 0 ? sortMenu.height : 172
-                    const point = sortButton.mapToItem(
-                                    root.overlayParent, 0, -menuHeight - 6)
-                    sortMenu.popup(root.overlayParent, point)
+                    fallbackIcon: controller.sortAscending
+                                  ? "view-sort-ascending"
+                                  : "view-sort-descending"
+                    helpText: controller.sortAscending
+                              ? "Orden ascendente"
+                              : "Orden descendente"
+                    onClicked: controller.toggleSortDirection()
                 }
 
-                contentItem: Text {
-                    text: "Orden: " + sortButton.text
-                    color: CelestinaTheme.text
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.interfaceTextScale)
-                    font.weight: CelestinaTheme.weightMedium
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    elide: Text.ElideRight
-                }
+                Button {
+                    id: viewToggle
 
-                background: Rectangle {
-                    radius: CelestinaTheme.radiusSm
-                    color: sortButton.hovered
-                           ? CelestinaTheme.surfaceHover
-                           : CelestinaTheme.controlFill
-                    border.width: sortButton.activeFocus ? 1 : 0
-                    border.color: CelestinaTheme.focus
+                    readonly property bool grid: mainPanel.viewMode === "grid"
 
-                    Behavior on color {
-                        ColorAnimation {
-                            duration: CelestinaTheme.motionFast
+                    Layout.preferredHeight: 34
+                    leftPadding: 16
+                    rightPadding: 16
+                    text: grid ? "Lista" : "Cuadrícula"
+                    Accessible.name: "Cambiar vista"
+                    onClicked: {
+                        mainPanel.viewMode = grid ? "list" : "grid"
+                        mainPanel.persist()
+                    }
+
+                    contentItem: Text {
+                        text: viewToggle.text
+                        color: CelestinaTheme.text
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.interfaceTextScale)
+                        font.weight: CelestinaTheme.weightMedium
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        elide: Text.ElideRight
+                    }
+
+                    background: Rectangle {
+                        radius: CelestinaTheme.radiusSm
+                        color: viewToggle.hovered
+                               ? CelestinaTheme.surfaceHover
+                               : CelestinaTheme.controlFill
+                        border.width: viewToggle.activeFocus ? 1 : 0
+                        border.color: CelestinaTheme.focus
+
+                        Behavior on color {
+                            ColorAnimation { duration: CelestinaTheme.motionFast }
                         }
                     }
                 }
-            }
 
-            Button {
-                id: viewToggle
-
-                readonly property bool grid: mainPanel.viewMode === "grid"
-
-                x: sortDirectionButton.x + sortDirectionButton.width + 10
-                anchors.verticalCenter: bottomBar.verticalCenter
-                width: 116
-                height: 34
-                text: grid ? "Lista" : "Cuadrícula"
-                Accessible.name: "Cambiar vista"
-                onClicked: {
-                    mainPanel.viewMode = grid ? "list" : "grid"
-                    mainPanel.persist()
-                }
-
-                contentItem: Text {
-                    text: viewToggle.text
-                    color: CelestinaTheme.text
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.interfaceTextScale)
-                    font.weight: CelestinaTheme.weightMedium
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    elide: Text.ElideRight
-                }
-
-                background: Rectangle {
-                    radius: CelestinaTheme.radiusSm
-                    color: viewToggle.hovered
-                           ? CelestinaTheme.surfaceHover
-                           : CelestinaTheme.controlFill
-                    border.width: viewToggle.activeFocus ? 1 : 0
-                    border.color: CelestinaTheme.focus
-
-                    Behavior on color {
-                        ColorAnimation {
-                            duration: CelestinaTheme.motionFast
-                        }
-                    }
+                BusyIndicator {
+                    id: busy
+                    Layout.preferredWidth: 26
+                    Layout.preferredHeight: 26
+                    running: controller.loading
+                    visible: running
                 }
             }
 
@@ -1879,9 +1878,9 @@ ApplicationWindow {
 
             Text {
                 id: statusLine
-                x: busy.x + busy.width + 14
+                x: bottomControls.x + bottomControls.width + 14
                 anchors.verticalCenter: bottomBar.verticalCenter
-                width: Math.max(0, zoomSlider.x - x - 12)
+                width: Math.max(0, sizeButton.x - x - 12)
                 // Only transient state here now (loading, a filtered count,
                 // operation status, errors); item counts and the selected item's
                 // details live in the sidebar info box. A lost watch is surfaced
@@ -1900,8 +1899,9 @@ ApplicationWindow {
             // icons vs text) — granular zoom, replacing the single slider.
             Button {
                 id: sizeButton
-                width: 116
                 height: 34
+                leftPadding: 18
+                rightPadding: 18
                 anchors.right: parent.right
                 anchors.rightMargin: 16
                 anchors.verticalCenter: bottomBar.verticalCenter
@@ -2254,7 +2254,11 @@ ApplicationWindow {
 
             TextField {
                 id: searchField
-                width: Math.min(260, Math.max(170, topBar.width * 0.24))
+                // Flexes with the interface text scale — the field grows and the
+                // breadcrumb (which fills the rest) yields space — so a larger
+                // search text is never clipped.
+                width: Math.round(Math.min(topBar.width * 0.42,
+                                           Math.max(190, 180 * window.interfaceTextScale)))
                 height: CelestinaTheme.controlHeight
                 x: topBar.width - width - 14
                 anchors.verticalCenter: parent.verticalCenter
