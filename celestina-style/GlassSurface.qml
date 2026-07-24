@@ -109,19 +109,49 @@ Item {
         anchors.fill: parent
         radius: root.cornerRadius
         color: root.active ? CelestinaTheme.glassTint : CelestinaTheme.surfaceStrong
-        border.width: 1
-        border.color: CelestinaTheme.glassBorder
     }
 
-    // The One UI top-edge specular — a bright hairline just inside the outline
-    // that sells the "piece of glass". Inset so it clears the rounded corners.
-    Rectangle {
-        x: root.cornerRadius
-        y: 1
-        width: parent.width - root.cornerRadius * 2
-        height: 1
-        color: CelestinaTheme.glassHighlight
+    // The "lit glass edge": a rounded-rect stroke with a vertical gradient —
+    // brightest along the top, fading down the sides, gone at the bottom — so
+    // the surface catches light like a real pane instead of wearing a flat box
+    // border. A Canvas, because a Rectangle border cannot be a gradient.
+    Canvas {
+        id: edge
+        anchors.fill: parent
         visible: root.active
+        onWidthChanged: requestPaint()
+        onHeightChanged: requestPaint()
+        Component.onCompleted: requestPaint()
+        Connections {
+            target: root
+            function onCornerRadiusChanged() { edge.requestPaint() }
+        }
+        onPaint: {
+            var ctx = getContext("2d")
+            ctx.reset()
+            var lw = 1.3
+            var w = width - lw, h = height - lw
+            if (w <= 0 || h <= 0)
+                return
+            var b = CelestinaTheme.glassBorder
+            var g = ctx.createLinearGradient(0, 0, 0, height)
+            g.addColorStop(0.0, Qt.rgba(b.r, b.g, b.b, 0.44))   // lit top
+            g.addColorStop(0.35, Qt.rgba(b.r, b.g, b.b, 0.14))
+            g.addColorStop(0.7, Qt.rgba(b.r, b.g, b.b, 0.04))
+            g.addColorStop(1.0, Qt.rgba(b.r, b.g, b.b, 0.0))    // dark bottom
+            ctx.strokeStyle = g
+            ctx.lineWidth = lw
+            var r = Math.max(0, root.cornerRadius - lw / 2)
+            var x = lw / 2, y = lw / 2
+            ctx.beginPath()
+            ctx.moveTo(x + r, y)
+            ctx.arcTo(x + w, y, x + w, y + h, r)
+            ctx.arcTo(x + w, y + h, x, y + h, r)
+            ctx.arcTo(x, y + h, x, y, r)
+            ctx.arcTo(x, y, x + w, y, r)
+            ctx.closePath()
+            ctx.stroke()
+        }
     }
 
     Item {
