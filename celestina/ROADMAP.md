@@ -70,6 +70,42 @@ with verified fallbacks before Noctalia leaves autostart.
 - [ ] Dependency diagnostics + verified fallback keybindings
 - [ ] Remove Noctalia from autostart only after fallbacks are verified
 
+### The portal backends, and how they leave
+
+The session's desktop portals are the last place a foreign desktop still decides
+how this one behaves. The migration is deliberate and staged — each interface
+leaves only when something here can answer it truthfully.
+
+| Interface | Serves | Today | Next | Eventually |
+|---|---|---|---|---|
+| `FileChooser` | "open a file" / "save as" in every application | **siderita** | siderita | siderita |
+| `ScreenCast`, `Screenshot` | screen sharing and capture requests | gnome | **wlr** | celestina |
+| `Settings` | the light/dark preference applications read | gtk | gtk | celestina |
+| `Print`, `Notification`, `AppChooser`, `Access`, `Account`, `Email`, `Inhibit`, `Lockdown`, `DynamicLauncher` | the rest | gtk | gtk | gtk, until one of them proves a daily need |
+
+- [x] `FileChooser` — served by Siderita (its CP5), routed in `niri-portals.conf`
+- [ ] **Drop `xdg-desktop-portal-gnome`** by moving `ScreenCast` / `Screenshot`
+      to `xdg-desktop-portal-wlr`. Niri speaks both the Mutter screencast API
+      *and* `zwlr_screencopy_manager_v1`, so the wlroots backend can serve them —
+      and it carries no Nautilus dependency, which is the only reason a GNOME
+      file manager is still installed on this machine. **The cost is real and
+      must be measured before the swap is kept:** `wlr-screencopy` captures whole
+      outputs, so sharing a *single window* in a call is lost, and there are no
+      restore tokens
+- [ ] `Settings` from celestina — the smallest portal worth owning (it answers
+      with a colour scheme and an accent) and the one the session should own
+      anyway, since the shell is what decides how the session looks. This is the
+      first portal this project serves, and the step that makes the GTK backend
+      optional rather than assumed
+- [ ] `ScreenCast` / `Screenshot` from celestina — only after the shell has a
+      real Niri adapter (CP1): capture belongs to whoever knows the outputs and
+      windows, and that is the shell. Until then wlr holds the interface
+
+**Not a goal:** removing GTK. Zen is Firefox and Slack is Electron; both link the
+toolkit directly, so it stays on disk whatever the portals say. What is
+achievable — and what this section is about — is that GTK and GNOME stop
+*deciding* how this session's dialogs look and behave.
+
 ## Checkpoint 3 — Later
 **Goal:** add surfaces only when a real daily workflow proves the need.
 

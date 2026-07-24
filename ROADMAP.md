@@ -153,6 +153,19 @@ style release; no data-loss path exists in file operations.
 ## Checkpoint 2 — One suite
 **Goal:** the apps behave as one suite, not a folder of separate programs.
 
+- [ ] **Own the session's desktop portals.** A portal is where a foreign desktop
+      still decides how this one behaves: an application asks
+      `xdg-desktop-portal` for a file, a screen or the colour scheme, and a
+      *backend* answers. Siderita already serves `FileChooser`; the rest leaves
+      in stages — `ScreenCast`/`Screenshot` move from **gnome to
+      xdg-desktop-portal-wlr** (which drops the last reason Nautilus is
+      installed, at the cost of whole-output-only capture), then to `celestina`
+      once the shell has a real Niri adapter; `Settings` moves to `celestina` as
+      the first portal the shell serves. Everything else stays with **gtk** until
+      one of them proves a daily need. Detail and the interface table live in the
+      [shell's roadmap](celestina/ROADMAP.md). *Removing the GTK library is not a
+      goal — Firefox and Electron link it regardless; removing GTK's and GNOME's
+      say over this session's dialogs is*
 - [ ] Suite conventions: single-instance behavior, a small IPC/activation convention, `open-with`/handler wiring, drag-and-drop between first-party apps — all over freedesktop standards
 - [ ] One settings + theming source shared by the shell and every app
 - [ ] Additional first-party apps — **Grafita** (text/code editor), **Fluorita** (media player: audio · video · image) — added **one at a time**, each only after recurring friction with the tool it replaces proves the need; each reuses `celestina-rs` + `celestina-style` and adds its own domain crate
