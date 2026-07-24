@@ -1311,9 +1311,9 @@ ApplicationWindow {
                                         : row.kind === "symlink"
                                           ? "symlink"
                                           : "file")
-                            color: row.kind === "directory"
-                                   ? CelestinaTheme.accent
-                                   : CelestinaTheme.textMuted
+                            // No color tint: let the icon theme (Qogir) render
+                            // folders and mimetypes in their own colours. A tint
+                            // would flatten them to a solid silhouette.
                         }
 
                         // The cached image / video-frame / cover the "thumb"
@@ -1730,9 +1730,7 @@ ApplicationWindow {
                                             : cell.kind === "symlink"
                                               ? "symlink"
                                               : "file")
-                                color: cell.kind === "directory"
-                                       ? CelestinaTheme.accent
-                                       : CelestinaTheme.textMuted
+                                // No color tint — see the list delegate above.
                             }
 
                             Image {
