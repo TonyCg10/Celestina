@@ -3040,6 +3040,13 @@ ApplicationWindow {
                 width: Math.min(380, root.width - 48)
                 height: 142
                 backdropSource: mainPanel
+                // Grow the whole dialog with the interface size slider, clamped
+                // so it never spills past the viewport. At the default 1.0 this
+                // is an exact no-op, so the glass backdrop is untouched unless
+                // the user actually scales up.
+                transformOrigin: Item.Center
+                scale: Math.min(window.interfaceTextScale,
+                                (root.width - 24) / width, (root.height - 24) / height)
 
                 // Swallow clicks so they never reach the dismiss backdrop.
                 MouseArea { anchors.fill: parent }
@@ -3130,6 +3137,10 @@ ApplicationWindow {
                 width: Math.min(420, root.width - 48)
                 height: 176
                 backdropSource: mainPanel
+                // Scale with the interface slider, clamped to the viewport (1.0 = no-op).
+                transformOrigin: Item.Center
+                scale: Math.min(window.interfaceTextScale,
+                                (root.width - 24) / width, (root.height - 24) / height)
                 Accessible.role: Accessible.Dialog
                 Accessible.name: "Conflicto al pegar"
 
@@ -3254,6 +3265,10 @@ ApplicationWindow {
                 width: Math.min(560, root.width - 48)
                 height: Math.min(460, root.height - 64)
                 backdropSource: mainPanel
+                // Scale with the interface slider, clamped to the viewport (1.0 = no-op).
+                transformOrigin: Item.Center
+                scale: Math.min(window.interfaceTextScale,
+                                (root.width - 24) / width, (root.height - 24) / height)
                 Accessible.role: Accessible.Dialog
                 Accessible.name: "Papelera"
 
@@ -3489,6 +3504,10 @@ ApplicationWindow {
                 width: Math.min(480, root.width - 48)
                 height: Math.min(420, root.height - 64)
                 backdropSource: mainPanel
+                // Scale with the interface slider, clamped to the viewport (1.0 = no-op).
+                transformOrigin: Item.Center
+                scale: Math.min(window.interfaceTextScale,
+                                (root.width - 24) / width, (root.height - 24) / height)
                 Accessible.role: Accessible.Dialog
                 Accessible.name: "Abrir con"
 
@@ -3637,6 +3656,10 @@ ApplicationWindow {
                 height: Math.min(propertiesColumn.implicitHeight + propHeading.height + 90,
                                  root.height - 64)
                 backdropSource: mainPanel
+                // Scale with the interface slider, clamped to the viewport (1.0 = no-op).
+                transformOrigin: Item.Center
+                scale: Math.min(window.interfaceTextScale,
+                                (root.width - 24) / width, (root.height - 24) / height)
                 Accessible.role: Accessible.Dialog
                 Accessible.name: "Propiedades"
 
@@ -3798,6 +3821,10 @@ ApplicationWindow {
                 width: Math.min(720, root.width - 64)
                 height: Math.min(root.height - 80, 640)
                 backdropSource: mainPanel
+                // Scale with the interface slider, clamped to the viewport (1.0 = no-op).
+                transformOrigin: Item.Center
+                scale: Math.min(window.interfaceTextScale,
+                                (root.width - 24) / width, (root.height - 24) / height)
                 Accessible.role: Accessible.Dialog
                 Accessible.name: "Vista previa"
 
