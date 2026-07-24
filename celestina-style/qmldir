@@ -1,0 +1,15 @@
+# CelestinaStyle — importable straight from the source tree.
+#
+# The CMake build produces the compiled module; this file is the same contract
+# for anything that runs the plain QML (a `qml6` tool, a small session helper),
+# so a surface can wear the suite's language without a build step. Both must
+# list the same types — a component missing here is a component the tooling
+# cannot see.
+module CelestinaStyle
+
+singleton CelestinaTheme 1.0 CelestinaTheme.qml
+
+CelestinaButton 1.0 CelestinaButton.qml
+GlassSurface 1.0 GlassSurface.qml
+GlassContextMenu 1.0 GlassContextMenu.qml
+GlassMenuItem 1.0 GlassMenuItem.qml

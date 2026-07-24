@@ -84,14 +84,26 @@ leaves only when something here can answer it truthfully.
 | `Print`, `Notification`, `AppChooser`, `Access`, `Account`, `Email`, `Inhibit`, `Lockdown`, `DynamicLauncher` | the rest | gtk | gtk | gtk, until one of them proves a daily need |
 
 - [x] `FileChooser` — served by Siderita (its CP5), routed in `niri-portals.conf`
-- [ ] **Drop `xdg-desktop-portal-gnome`** by moving `ScreenCast` / `Screenshot`
-      to `xdg-desktop-portal-wlr`. Niri speaks both the Mutter screencast API
-      *and* `zwlr_screencopy_manager_v1`, so the wlroots backend can serve them —
-      and it carries no Nautilus dependency, which is the only reason a GNOME
-      file manager is still installed on this machine. **The cost is real and
-      must be measured before the swap is kept:** `wlr-screencopy` captures whole
-      outputs, so sharing a *single window* in a call is lost, and there are no
-      restore tokens
+- [x] **`ScreenCast` / `Screenshot` moved to `xdg-desktop-portal-wlr`.** Niri
+      speaks both the Mutter screencast API *and* `zwlr_screencopy_manager_v1`,
+      so the wlroots backend can serve them — and it carries no Nautilus
+      dependency, which was the only reason a GNOME file manager was still
+      installed. Verified end to end: a real ScreenCast request reached the wlr
+      backend and opened this project's own chooser. **The cost stands and is
+      not hidden:** `wlr-screencopy` captures whole outputs, so sharing a
+      *single window* in a call is lost, and there are no restore tokens. Undo is
+      two lines in `niri-portals.conf`
+- [x] **The output chooser is ours** (`qml/OutputChooser.qml` +
+      `scripts/output-chooser.sh`). xdpw brings no dialog of its own: it runs a
+      command and keeps whatever output name that command prints, which makes
+      the chooser a replaceable part — so the session can wear its own dialog
+      long before the shell serves the portal itself. It reads CelestinaStyle
+      straight from the source tree (the new `qmldir`), lists the real outputs
+      with their size and scale, answers to keyboard and mouse, and is a centred
+      card rather than a filled window because a tiling compositor decides the
+      window size, not the dialog
+- [ ] Remove the GNOME backend for good — `pacman -Rs xdg-desktop-portal-gnome
+      nautilus nautilus-python`, once a few real calls have been lived with
 - [ ] `Settings` from celestina — the smallest portal worth owning (it answers
       with a colour scheme and an accent) and the one the session should own
       anyway, since the shell is what decides how the session looks. This is the
