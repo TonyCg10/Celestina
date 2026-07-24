@@ -36,6 +36,10 @@ QtObject {
     readonly property color glyphDirectory: "#33343A42"
     readonly property color glyphSymlink: "#2C40444C"
     readonly property color glyphFile: "#2A2F3238"
+    // The one warm colour in a neutral palette, spent on the star a favourite
+    // wears: a mark the eye is meant to find without reading anything.
+    readonly property color favorite: "#F2C55C"
+    readonly property color favoriteBadgeFill: "#B3101114"
     readonly property color dangerFill: "#4D5A2020"
     readonly property color dangerBorder: "#8AD16A63"
     readonly property color dangerText: "#FFD9D6"
@@ -73,6 +77,8 @@ QtObject {
     readonly property color glyphDirectory: "#5A403D52"
     readonly property color glyphSymlink: "#4A403D52"
     readonly property color glyphFile: "#4A26233A"
+    readonly property color favorite: "#F6C177"
+    readonly property color favoriteBadgeFill: "#B3191724"
 
     // Danger / error banner
     readonly property color dangerFill: "#3DEB6F92"
@@ -138,6 +144,10 @@ QtObject {
     readonly property int motionFast: 110
     readonly property int motionNormal: 170
     readonly property int motionSlow: 260
+    // How long a drag must rest on a folder before it springs open. Long enough
+    // that crossing one on the way somewhere else never opens it, short enough
+    // that deliberately waiting does not feel broken.
+    readonly property int springDelay: 800
 
     // Easing vocabulary. easeEmphasized is the One UI "settle" (mild overshoot).
     readonly property int easeStandard: Easing.OutCubic

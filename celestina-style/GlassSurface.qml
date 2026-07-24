@@ -4,11 +4,11 @@ import QtQuick.Effects
 // ─── GlassSurface ─────────────────────────────────────────────────────────────
 // Frosted-glass surface that blurs the real content behind it. The consumer
 // injects `backdropSource` (the item to sample); capture is bounded to this
-// surface's rectangle. By default it is snapshotted once when shown, with no
-// continuous rendering when hidden — right for a transient menu. Set
-// `liveCapture` for a surface that content can move behind (a modal you can
-// scroll under), so the blur tracks it live while shown. Falls back to a
-// translucent tint if it cannot capture.
+// surface's rectangle. `liveCapture` decides whether the blur tracks what is
+// behind it frame by frame or is snapshotted once when shown; a one-shot
+// capture is cheaper but freezes, so it reads as a blurred screenshot the
+// moment anything behind it moves. Nothing renders while hidden either way.
+// Falls back to a translucent tint if it cannot capture.
 // ──────────────────────────────────────────────────────────────────────────────
 Item {
     id: root
@@ -16,8 +16,9 @@ Item {
     required property Item backdropSource
     property bool captureEnabled: true
     // One-shot snapshot on show (false) vs continuous re-capture while shown
-    // (true). Live tracks content moving behind the surface at a GPU cost, so
-    // reserve it for modals; menus stay one-shot.
+    // (true). Live costs a small per-frame render, but it is what makes the
+    // surface read as glass rather than as a frozen picture of the moment it
+    // opened, so anything the user can scroll, hover or drag under wants it.
     property bool liveCapture: false
     property real cornerRadius: CelestinaTheme.radiusMd
     property int sampleMargin: CelestinaTheme.glassSampleMargin
@@ -42,9 +43,19 @@ Item {
     }
 
     onActiveChanged: {
-        if (!active)
+        if (active)
+            refreshBackdrop()
+        else
             capture.sourceRect = Qt.rect(0, 0, 0, 0)
     }
+
+    // The sampled region has to follow the surface. Its size can still change
+    // after it is shown — a menu grows as its items decide to be visible — and
+    // a sourceRect left at the old size shows a stretched, wrong-looking region
+    // instead of what is actually behind. A consumer that *moves* the surface
+    // (a popup being positioned) re-arms this by calling refreshBackdrop().
+    onWidthChanged: refreshBackdrop()
+    onHeightChanged: refreshBackdrop()
 
     Rectangle {
         anchors.fill: parent

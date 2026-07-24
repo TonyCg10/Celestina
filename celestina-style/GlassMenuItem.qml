@@ -29,9 +29,10 @@ MenuItem {
                      || control.icon.source.toString().length > 0
             name: control.icon.name
             source: control.icon.source
-            color: control.enabled
-                   ? CelestinaTheme.text
-                   : CelestinaTheme.textMuted
+            // No colour: a tint repaints every pixel of a themed icon, which
+            // flattened Qogir's folder, trash and star into white blobs. The
+            // icon theme is trusted to fit a dark surface — the same call the
+            // content views make — and "disabled" is carried by opacity alone.
             opacity: control.enabled ? 1 : 0.55
         }
 

@@ -24,6 +24,11 @@ Menu {
         id: glassBackground
         backdropSource: root.backdropSource
         captureEnabled: root.visible
+        // The content behind a menu keeps moving while it is open — the wheel
+        // still scrolls the view, thumbnails arrive, rows light up under the
+        // cursor. A one-shot capture froze all of that, so the menu wore a
+        // blurred screenshot of the instant it opened instead of real glass.
+        liveCapture: true
     }
 
     enter: Transition {
@@ -74,4 +79,9 @@ Menu {
     onOpened: Qt.callLater(function() {
         glassBackground.refreshBackdrop()
     })
+    // …and again whenever the overlay moves the menu to keep it on screen. The
+    // surface itself re-samples on a size change; only its position is news
+    // that has to come from here.
+    onXChanged: glassBackground.refreshBackdrop()
+    onYChanged: glassBackground.refreshBackdrop()
 }
