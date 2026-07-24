@@ -353,6 +353,8 @@ pub mod qobject {
             subtitles: QStringList,
             paths: QStringList,
             sections: QStringList,
+            sizes: QStringList,
+            dates: QStringList,
         );
     }
 
@@ -2097,6 +2099,9 @@ impl qobject::SideritaController {
                 })
             })
             .collect();
+        // Search always renders as the sectioned list, never the details
+        // columns, so the size/date columns are left blank for hits.
+        let blank: QStringList = hits.iter().map(|_| QString::default()).collect();
 
         self.as_mut().rust_mut().get_mut().search_hits = hits;
         self.as_mut()
@@ -2106,8 +2111,16 @@ impl qobject::SideritaController {
         // A fresh result set drops any selection carried over from the folder.
         self.as_mut().set_selected_token(QString::default());
         self.as_mut().set_entry_names(names.clone());
-        self.as_mut()
-            .rows_ready(names, tokens, kinds, subtitles, paths, sections);
+        self.as_mut().rows_ready(
+            names,
+            tokens,
+            kinds,
+            subtitles,
+            paths,
+            sections,
+            blank.clone(),
+            blank,
+        );
     }
 
     pub fn cancel_search(mut self: Pin<&mut Self>) {
@@ -2179,10 +2192,10 @@ impl qobject::SideritaController {
         // Read fresh, change only this field, write back — so a sort/hidden,
         // sizing or device change in another tab is not clobbered.
         let mut settings = crate::settings::load();
-        settings.view_mode = if mode == "grid" {
-            "grid".to_owned()
-        } else {
-            "list".to_owned()
+        settings.view_mode = match mode.as_str() {
+            "grid" => "grid".to_owned(),
+            "details" => "details".to_owned(),
+            _ => "list".to_owned(),
         };
         let _ = crate::settings::save(&settings);
         self.as_mut().rust_mut().get_mut().settings = settings;
@@ -2506,6 +2519,32 @@ impl qobject::SideritaController {
             .collect();
         // A plain folder listing has no section headers.
         let sections: QStringList = view.rows().iter().map(|_| QString::default()).collect();
+        // Per-column text for the details view. A folder has no meaningful entry
+        // size in the listing (recursive size is a Properties action), so it
+        // shows a dash.
+        let sizes: QStringList = view
+            .rows()
+            .iter()
+            .map(|row| {
+                if row.kind() == RowKind::Directory {
+                    QString::from("—")
+                } else {
+                    QString::from(format_size(row.size()).as_str())
+                }
+            })
+            .collect();
+        let dates: QStringList = view
+            .rows()
+            .iter()
+            .map(|row| {
+                QString::from(
+                    row.modified()
+                        .map(format_system_time)
+                        .unwrap_or_default()
+                        .as_str(),
+                )
+            })
+            .collect();
         let visible = view.rows().len();
         let selected_is_visible = {
             let selected = self.selected_token().to_string();
@@ -2575,8 +2614,9 @@ impl qobject::SideritaController {
             .set_folder_size(QString::from(folder_size.as_str()));
 
         // Hand the projected rows to the native model.
-        self.as_mut()
-            .rows_ready(names, tokens, kinds, subtitles, paths, sections);
+        self.as_mut().rows_ready(
+            names, tokens, kinds, subtitles, paths, sections, sizes, dates,
+        );
     }
 
     fn update_navigation_state(mut self: Pin<&mut Self>) {

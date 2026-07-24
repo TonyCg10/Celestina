@@ -1,6 +1,7 @@
-//! Small persisted UI settings — the view mode, the four independent size
-//! scales (content/sidebar × icons/text), sort and hidden-toggle state, and the
-//! removable devices the user hid from the sidebar. Stored as a `key=value` file
+//! Small persisted UI settings — the view mode, the independent size scales
+//! (content / interface / sidebar × icons / text), sort and hidden-toggle
+//! state, and the removable devices the user hid from the sidebar. Stored as a
+//! `key=value` file
 //! under the XDG config home; like bookmarks, it is a convenience that never
 //! fails the app when absent or unreadable.
 
@@ -106,7 +107,7 @@ fn load_from(path: &Path) -> Settings {
         };
         let value = value.trim();
         match key.trim() {
-            "view_mode" if value == "list" || value == "grid" => {
+            "view_mode" if value == "list" || value == "grid" || value == "details" => {
                 settings.view_mode = value.to_owned();
             }
             "scale" => legacy_scale = parse_scale(value),
@@ -177,12 +178,14 @@ fn save_to(path: &Path, settings: &Settings) -> io::Result<()> {
          interface_icon_scale={:.2}\ninterface_text_scale={:.2}\n\
          sidebar_icon_scale={:.2}\nsidebar_text_scale={:.2}\n\
          sort_field={}\nsort_ascending={}\nshow_hidden={}\n",
-        if settings.view_mode == "grid" {
-            "grid"
-        } else {
-            "list"
+        match settings.view_mode.as_str() {
+            "grid" => "grid",
+            "details" => "details",
+            _ => "list",
         },
-        settings.content_icon_scale.clamp(SCALE_MIN, CONTENT_ICON_SCALE_MAX),
+        settings
+            .content_icon_scale
+            .clamp(SCALE_MIN, CONTENT_ICON_SCALE_MAX),
         settings.content_text_scale.clamp(SCALE_MIN, SCALE_MAX),
         settings.interface_icon_scale.clamp(SCALE_MIN, SCALE_MAX),
         settings.interface_text_scale.clamp(SCALE_MIN, SCALE_MAX),

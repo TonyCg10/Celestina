@@ -35,6 +35,10 @@ QVariant SideritaEntryModel::data(const QModelIndex &index, int role) const
         return entry.isDir;
     case SectionRole:
         return entry.section;
+    case SizeTextRole:
+        return entry.sizeText;
+    case DateTextRole:
+        return entry.dateText;
     default:
         return QVariant();
     }
@@ -50,6 +54,8 @@ QHash<int, QByteArray> SideritaEntryModel::roleNames() const
         {PathRole, QByteArrayLiteral("path")},
         {IsDirRole, QByteArrayLiteral("isDirectory")},
         {SectionRole, QByteArrayLiteral("section")},
+        {SizeTextRole, QByteArrayLiteral("sizeText")},
+        {DateTextRole, QByteArrayLiteral("dateText")},
     };
 }
 
@@ -58,7 +64,9 @@ void SideritaEntryModel::setRows(const QStringList &names,
                                  const QStringList &kinds,
                                  const QStringList &subtitles,
                                  const QStringList &paths,
-                                 const QStringList &sections)
+                                 const QStringList &sections,
+                                 const QStringList &sizes,
+                                 const QStringList &dates)
 {
     beginResetModel();
     m_rows.clear();
@@ -72,6 +80,8 @@ void SideritaEntryModel::setRows(const QStringList &names,
         entry.subtitle = subtitles.value(i);
         entry.path = paths.value(i);
         entry.section = sections.value(i);
+        entry.sizeText = sizes.value(i);
+        entry.dateText = dates.value(i);
         entry.isDir = entry.kind == QStringLiteral("directory");
         m_rows.push_back(entry);
     }

@@ -390,8 +390,8 @@ ApplicationWindow {
         }
         Connections {
             target: controller
-            function onRowsReady(names, tokens, kinds, subtitles, paths, sections) {
-                entryModel.setRows(names, tokens, kinds, subtitles, paths, sections)
+            function onRowsReady(names, tokens, kinds, subtitles, paths, sections, sizes, dates) {
+                entryModel.setRows(names, tokens, kinds, subtitles, paths, sections, sizes, dates)
             }
         }
 
@@ -882,42 +882,68 @@ ApplicationWindow {
                     onClicked: controller.toggleSortDirection()
                 }
 
-                Button {
-                    id: viewToggle
-
-                    readonly property bool grid: mainPanel.viewMode === "grid"
-
+                // Segmented view switch: Lista / Cuadrícula / Detalles, the
+                // active mode highlighted.
+                Rectangle {
+                    id: viewSeg
                     Layout.preferredHeight: 34
-                    leftPadding: 16
-                    rightPadding: 16
-                    text: grid ? "Lista" : "Cuadrícula"
-                    Accessible.name: "Cambiar vista"
-                    onClicked: {
-                        mainPanel.viewMode = grid ? "list" : "grid"
-                        mainPanel.persist()
-                    }
+                    Layout.preferredWidth: viewSegRow.implicitWidth + 6
+                    radius: CelestinaTheme.radiusSm
+                    color: CelestinaTheme.controlFill
 
-                    contentItem: Text {
-                        text: viewToggle.text
-                        color: CelestinaTheme.text
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.interfaceTextScale)
-                        font.weight: CelestinaTheme.weightMedium
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                        elide: Text.ElideRight
-                    }
+                    Row {
+                        id: viewSegRow
+                        anchors.centerIn: parent
+                        spacing: 3
 
-                    background: Rectangle {
-                        radius: CelestinaTheme.radiusSm
-                        color: viewToggle.hovered
-                               ? CelestinaTheme.surfaceHover
-                               : CelestinaTheme.controlFill
-                        border.width: viewToggle.activeFocus ? 1 : 0
-                        border.color: CelestinaTheme.focus
+                        Repeater {
+                            model: [
+                                { mode: "list", label: "Lista" },
+                                { mode: "grid", label: "Cuadrícula" },
+                                { mode: "details", label: "Detalles" }
+                            ]
 
-                        Behavior on color {
-                            ColorAnimation { duration: CelestinaTheme.motionFast }
+                            delegate: Rectangle {
+                                id: seg
+                                required property var modelData
+                                readonly property bool active: mainPanel.viewMode === modelData.mode
+                                width: segLabel.implicitWidth + 20
+                                height: 28
+                                radius: CelestinaTheme.radiusXs
+                                color: seg.active ? CelestinaTheme.surfaceSelected
+                                       : segMouse.containsMouse ? CelestinaTheme.surfaceHover
+                                       : "transparent"
+
+                                Behavior on color {
+                                    ColorAnimation { duration: CelestinaTheme.motionFast }
+                                }
+
+                                Accessible.role: Accessible.RadioButton
+                                Accessible.name: "Vista " + seg.modelData.label
+                                Accessible.checked: seg.active
+
+                                Text {
+                                    id: segLabel
+                                    anchors.centerIn: parent
+                                    text: seg.modelData.label
+                                    color: seg.active ? CelestinaTheme.text : CelestinaTheme.textMuted
+                                    font.family: CelestinaTheme.sansFamily
+                                    font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.interfaceTextScale)
+                                    font.weight: seg.active ? CelestinaTheme.weightMedium
+                                                            : CelestinaTheme.weightRegular
+                                }
+
+                                MouseArea {
+                                    id: segMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        mainPanel.viewMode = seg.modelData.mode
+                                        mainPanel.persist()
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -987,9 +1013,24 @@ ApplicationWindow {
                 y: 14
                 width: parent.width - 16
                 height: parent.height - 68
-                // Search always uses the list (grid can't carry section headers),
-                // so the results group under "En esta carpeta" / "En subcarpetas".
-                visible: mainPanel.viewMode === "list" || controller.searchActive
+                // The list backs three modes: plain "list", the "details"
+                // columns (same rows, a different delegate body), and search
+                // (which always uses the sectioned list — a grid can't carry
+                // section headers).
+                visible: mainPanel.viewMode === "list"
+                         || mainPanel.viewMode === "details"
+                         || controller.searchActive
+                readonly property bool detailsMode: mainPanel.viewMode === "details"
+                                                    && !controller.searchActive
+                // Column widths shared by the details rows and their header
+                // (name fills the rest); they track the content text scale.
+                readonly property int colSizeW: Math.round(92 * window.contentTextScale)
+                readonly property int colDateW: Math.round(150 * window.contentTextScale)
+                readonly property int colTypeW: Math.round(96 * window.contentTextScale)
+                // Where the name column starts — past the row's icon glyph — so
+                // the header lines up with the rows.
+                readonly property int detailsNameX: 14
+                        + Math.round(CelestinaTheme.glyphTile * window.contentIconScale) + 12
                 model: entryModel
                 clip: true
                 spacing: 2
@@ -997,6 +1038,7 @@ ApplicationWindow {
                 cacheBuffer: 420
                 topMargin: 62 + (tabBar.visible ? tabBar.height + 8 : 0)
                          + (searchBar.visible ? searchBar.height + 8 : 0)
+                         + (fileList.detailsMode ? detailsHeader.height + 8 : 0)
                 boundsBehavior: Flickable.StopAtBounds
 
                 // Empty for a plain folder listing (no headers); set to the group
@@ -1124,6 +1166,8 @@ ApplicationWindow {
                     required property string subtitle
                     required property string path
                     required property bool isDirectory
+                    required property string sizeText
+                    required property string dateText
 
                     readonly property bool selected: mainPanel.isSelected(token)
                     // Hidden (dotfile) entries are dimmed so they read as a
@@ -1222,8 +1266,10 @@ ApplicationWindow {
                         }
                     }
 
+                    // List / search body: name over the combined subtitle.
                     Column {
                         id: rowText
+                        visible: !fileList.detailsMode
                         x: kindGlyph.x + kindGlyph.width + 12
                         anchors.verticalCenter: parent.verticalCenter
                         width: parent.width - x - 24
@@ -1243,6 +1289,53 @@ ApplicationWindow {
                         Text {
                             width: parent.width
                             text: row.subtitle
+                            color: CelestinaTheme.textMuted
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.contentTextScale)
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    // Details body: name (fills) · size · date · type, aligned to
+                    // the header's columns.
+                    RowLayout {
+                        visible: fileList.detailsMode
+                        x: fileList.detailsNameX
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - x - 16
+                        spacing: 12
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: row.name
+                            color: CelestinaTheme.text
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: Math.round(CelestinaTheme.fontBody * window.contentTextScale)
+                            font.weight: CelestinaTheme.weightMedium
+                            font.italic: row.cut
+                            elide: Text.ElideMiddle
+                        }
+                        Text {
+                            Layout.preferredWidth: fileList.colSizeW
+                            horizontalAlignment: Text.AlignRight
+                            text: row.sizeText
+                            color: CelestinaTheme.textMuted
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.contentTextScale)
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            Layout.preferredWidth: fileList.colDateW
+                            text: row.dateText
+                            color: CelestinaTheme.textMuted
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.contentTextScale)
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            Layout.preferredWidth: fileList.colTypeW
+                            text: row.kind === "directory" ? "Carpeta"
+                                  : row.kind === "symlink" ? "Enlace" : "Archivo"
                             color: CelestinaTheme.textMuted
                             font.family: CelestinaTheme.sansFamily
                             font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.contentTextScale)
@@ -3582,6 +3675,88 @@ ApplicationWindow {
                     PillButton {
                         text: "Cerrar"
                         onClicked: controller.closeSearch()
+                    }
+                }
+            }
+
+            // ── Details-view column header ─────────────────────────────────
+            // A floating glass strip aligned to the list's columns; each title
+            // sorts by that field (a second click on the active one flips the
+            // direction) and carries an ↑/↓ arrow.
+            Item {
+                id: detailsHeader
+                z: 10
+                x: 8
+                width: parent.width - 16
+                height: Math.round(CelestinaTheme.fontCaption * window.contentTextScale) + 18
+                y: (tabBar.visible ? tabBar.y + tabBar.height : topBar.y + topBar.height) + 8
+                visible: fileList.detailsMode
+
+                GlassSurface {
+                    anchors.fill: parent
+                    backdropSource: fileList
+                    captureEnabled: detailsHeader.visible
+                    liveCapture: true
+                    cornerRadius: CelestinaTheme.radiusSm
+                }
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: CelestinaTheme.radiusSm
+                    color: "transparent"
+                    border.width: 1
+                    border.color: CelestinaTheme.borderStrong
+                }
+
+                RowLayout {
+                    x: fileList.detailsNameX - 4
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width - x - 16
+                    spacing: 12
+
+                    Repeater {
+                        model: [
+                            { label: "Nombre", field: 0, w: -1, align: Text.AlignLeft },
+                            { label: "Tamaño", field: 1, w: fileList.colSizeW, align: Text.AlignRight },
+                            { label: "Fecha", field: 2, w: fileList.colDateW, align: Text.AlignLeft },
+                            { label: "Tipo", field: 3, w: fileList.colTypeW, align: Text.AlignLeft }
+                        ]
+
+                        delegate: Item {
+                            id: hcell
+                            required property var modelData
+                            readonly property bool activeSort: controller.sortField === modelData.field
+                            Layout.fillWidth: modelData.w < 0
+                            Layout.preferredWidth: modelData.w < 0 ? 60 : modelData.w
+                            Layout.fillHeight: true
+
+                            Text {
+                                anchors.fill: parent
+                                verticalAlignment: Text.AlignVCenter
+                                horizontalAlignment: hcell.modelData.align
+                                text: hcell.modelData.label
+                                      + (hcell.activeSort
+                                         ? (controller.sortAscending ? "  ↑" : "  ↓") : "")
+                                color: hcell.activeSort ? CelestinaTheme.text
+                                                        : CelestinaTheme.textMuted
+                                font.family: CelestinaTheme.sansFamily
+                                font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.contentTextScale)
+                                font.weight: CelestinaTheme.weightDemiBold
+                                elide: Text.ElideRight
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (hcell.activeSort)
+                                        controller.toggleSortDirection()
+                                    else
+                                        controller.changeSortField(hcell.modelData.field)
+                                }
+                            }
+                        }
                     }
                 }
             }

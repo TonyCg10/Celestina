@@ -28,6 +28,10 @@ public:
         // A group label the ListView sections on (empty for a plain folder
         // listing; "En esta carpeta" / "En subcarpetas" for search results).
         SectionRole,
+        // Per-column text for the details view (empty in list/grid, where the
+        // combined subtitle is used instead).
+        SizeTextRole,
+        DateTextRole,
     };
 
     explicit SideritaEntryModel(QObject *parent = nullptr);
@@ -42,7 +46,9 @@ public:
                              const QStringList &kinds,
                              const QStringList &subtitles,
                              const QStringList &paths,
-                             const QStringList &sections);
+                             const QStringList &sections,
+                             const QStringList &sizes,
+                             const QStringList &dates);
 
 private:
     struct Row {
@@ -52,6 +58,8 @@ private:
         QString subtitle;
         QString path;
         QString section;
+        QString sizeText;
+        QString dateText;
         bool isDir;
     };
     QVector<Row> m_rows;
