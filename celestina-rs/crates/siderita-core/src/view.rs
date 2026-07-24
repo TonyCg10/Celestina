@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 
+use crate::name_order::compare_names;
 use crate::{DirectoryEntry, DirectorySnapshot, EntryKind};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -68,18 +69,18 @@ fn compare_entries(
     }
 
     let field_order = match options.sort_field {
-        SortField::Name => left.raw_name().cmp(right.raw_name()),
+        SortField::Name => compare_names(left.raw_name(), right.raw_name()),
         SortField::Size => left
             .size()
             .cmp(&right.size())
-            .then_with(|| left.raw_name().cmp(right.raw_name())),
+            .then_with(|| compare_names(left.raw_name(), right.raw_name())),
         SortField::Modified => left
             .modified()
             .cmp(&right.modified())
-            .then_with(|| left.raw_name().cmp(right.raw_name())),
+            .then_with(|| compare_names(left.raw_name(), right.raw_name())),
         SortField::Kind => entry_kind(left.kind())
             .cmp(&entry_kind(right.kind()))
-            .then_with(|| left.raw_name().cmp(right.raw_name())),
+            .then_with(|| compare_names(left.raw_name(), right.raw_name())),
     };
 
     match options.sort_direction {

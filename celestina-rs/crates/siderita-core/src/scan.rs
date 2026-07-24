@@ -1,5 +1,4 @@
 use std::error::Error;
-use std::ffi::OsStr;
 use std::fmt;
 use std::fs;
 use std::io;
@@ -8,6 +7,7 @@ use std::path::{Path, PathBuf};
 use celestina_core::{CancellationToken, Generation};
 
 use crate::entry::{DirectoryEntry, EntryKind};
+use crate::name_order::compare_names;
 
 #[derive(Clone, Debug)]
 pub struct ScanRequest {
@@ -222,10 +222,6 @@ const fn entry_rank(kind: EntryKind) -> u8 {
         EntryKind::Symlink => 2,
         EntryKind::Other => 3,
     }
-}
-
-fn compare_names(left: &OsStr, right: &OsStr) -> std::cmp::Ordering {
-    left.cmp(right)
 }
 
 #[cfg(test)]
