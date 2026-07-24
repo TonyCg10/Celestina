@@ -395,6 +395,30 @@ ApplicationWindow {
             }
         }
 
+        // ── Quick-look preview state (spacebar) ──────────────────────────
+        // The overlay (below) previews whatever entry is selected; ↑/↓ while it
+        // is open step the selection so the preview browses the folder without
+        // closing. On close, focus returns to the active view so the keyboard
+        // keeps working.
+        property bool quickLookOpen: false
+        onQuickLookOpenChanged: if (!quickLookOpen) {
+            if (mainPanel.viewMode === "grid")
+                fileGrid.forceActiveFocus()
+            else
+                fileList.forceActiveFocus()
+        }
+        function quickLookStep(delta) {
+            var n = controller.entryNames.length
+            if (n === 0)
+                return
+            var i = controller.indexForToken(controller.selectedToken)
+            var j = Math.max(0, Math.min(n - 1, (i < 0 ? 0 : i) + delta))
+            if (mainPanel.viewMode === "grid")
+                fileGrid.selectCell(j)
+            else
+                fileList.selectRow(j)
+        }
+
         // Drop any active search — the live filter and the recursive results —
         // and empty the field, returning the content box to the plain listing.
         // Fired on navigation (so a sidebar/place click lands on a clean folder)
@@ -1156,8 +1180,11 @@ ApplicationWindow {
                                    || event.key === Qt.Key_Enter)) {
                         controller.activateToken(controller.entryToken(i))
                         event.accepted = true
-                    } else if (i >= 0 && event.key === Qt.Key_Space) {
-                        controller.selectToken(controller.entryToken(i))
+                    } else if (event.key === Qt.Key_Space
+                               && controller.selectedToken.length > 0) {
+                        // Quick-look the selected entry (Space toggles it shut
+                        // again from inside the overlay's own key handler).
+                        root.quickLookOpen = true
                         event.accepted = true
                     } else if (event.modifiers === Qt.NoModifier
                                && event.text.length === 1
@@ -1570,8 +1597,11 @@ ApplicationWindow {
                                    || event.key === Qt.Key_Enter)) {
                         controller.activateToken(controller.entryToken(i))
                         event.accepted = true
-                    } else if (i >= 0 && event.key === Qt.Key_Space) {
-                        controller.selectToken(controller.entryToken(i))
+                    } else if (event.key === Qt.Key_Space
+                               && controller.selectedToken.length > 0) {
+                        // Quick-look the selected entry (Space toggles it shut
+                        // again from inside the overlay's own key handler).
+                        root.quickLookOpen = true
                         event.accepted = true
                     } else if (event.modifiers === Qt.NoModifier
                                && event.text.length === 1
@@ -3704,6 +3734,192 @@ ApplicationWindow {
                         primary: true
                         onClicked: controller.closeProperties()
                     }
+                }
+            }
+        }
+
+        // ── Quick-look preview (spacebar) ────────────────────────────────
+        // A read-only peek at the selected entry without opening an app:
+        // images render full-size, text/code shows in a monospace pane, and
+        // anything else (folders, video, audio, binaries) gets an info card.
+        // ↑/↓ browse the folder live; Space / Esc / click-outside dismiss.
+        Rectangle {
+            id: quickLookView
+            anchors.fill: parent
+            z: 70
+            visible: root.quickLookOpen
+            color: Qt.rgba(0, 0, 0, 0.55)
+            focus: root.quickLookOpen
+
+            // Everything is derived from the current selection, so stepping the
+            // selection (below) re-previews with no extra state to keep in sync.
+            readonly property int qlIndex: controller.indexForToken(controller.selectedToken)
+            readonly property string qlName: qlIndex >= 0 && qlIndex < controller.entryNames.length
+                                             ? controller.entryNames[qlIndex] : ""
+            readonly property string qlPath: qlIndex >= 0 ? controller.entryPath(qlIndex) : ""
+            readonly property string qlKind: qlIndex >= 0 ? controller.entryKind(qlIndex) : ""
+            readonly property string qlMedia: mainPanel.mediaKind(qlName)
+            readonly property bool qlIsImage: qlMedia === "image"
+            // Read text lazily and only when it could be text — the controller
+            // returns "" for a directory, an image or a binary, which the body
+            // reads as "show the info card instead".
+            readonly property string qlText: (root.quickLookOpen && qlKind !== "directory"
+                                              && !qlIsImage && qlPath.length > 0)
+                                             ? controller.previewText(qlPath) : ""
+            readonly property bool qlHasText: qlText.length > 0
+
+            // Per-segment encode so spaces / #, ? etc. in a name survive the
+            // file:// URL without mangling the path separators.
+            function fileUrl(p) {
+                return "file://" + p.split("/").map(encodeURIComponent).join("/")
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                onClicked: root.quickLookOpen = false
+            }
+            Keys.onPressed: function(event) {
+                if (event.key === Qt.Key_Escape || event.key === Qt.Key_Space) {
+                    root.quickLookOpen = false
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Down || event.key === Qt.Key_Right) {
+                    root.quickLookStep(1)
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Up || event.key === Qt.Key_Left) {
+                    root.quickLookStep(-1)
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                    root.quickLookOpen = false
+                    controller.activateToken(controller.selectedToken)
+                    event.accepted = true
+                }
+            }
+
+            GlassCard {
+                anchors.centerIn: parent
+                width: Math.min(720, root.width - 64)
+                height: Math.min(root.height - 80, 640)
+                backdropSource: mainPanel
+                Accessible.role: Accessible.Dialog
+                Accessible.name: "Vista previa"
+
+                MouseArea { anchors.fill: parent }   // clicks on the card don't dismiss
+
+                IconImage {
+                    id: qlIcon
+                    x: 18
+                    y: 16
+                    width: CelestinaTheme.iconSm
+                    height: CelestinaTheme.iconSm
+                    name: mainPanel.mediaIconName(quickLookView.qlKind, quickLookView.qlMedia)
+                    source: CelestinaTheme.fallbackIcon(
+                                quickLookView.qlKind === "directory" ? "folder" : "file")
+                    color: quickLookView.qlKind === "directory" ? CelestinaTheme.accent
+                                                                : CelestinaTheme.textMuted
+                }
+                Text {
+                    anchors.left: qlIcon.right
+                    anchors.leftMargin: 10
+                    anchors.right: parent.right
+                    anchors.rightMargin: 18
+                    y: 17
+                    text: quickLookView.qlName
+                    color: CelestinaTheme.text
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCallout
+                    font.weight: CelestinaTheme.weightDemiBold
+                    elide: Text.ElideMiddle
+                }
+
+                Item {
+                    id: qlBody
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: qlIcon.bottom
+                    anchors.topMargin: 12
+                    anchors.bottom: qlHint.top
+                    anchors.bottomMargin: 8
+                    anchors.leftMargin: 16
+                    anchors.rightMargin: 16
+                    clip: true
+
+                    // (1) Image — the real file, capped so a huge photo can't
+                    // blow up memory; not cached (previews are transient).
+                    Image {
+                        anchors.fill: parent
+                        visible: quickLookView.qlIsImage
+                        source: quickLookView.qlIsImage
+                                ? quickLookView.fileUrl(quickLookView.qlPath) : ""
+                        sourceSize.width: 1920
+                        sourceSize.height: 1920
+                        fillMode: Image.PreserveAspectFit
+                        asynchronous: true
+                        cache: false
+                        smooth: true
+                        mipmap: true
+                    }
+
+                    // (2) Text / code
+                    ScrollView {
+                        anchors.fill: parent
+                        visible: !quickLookView.qlIsImage && quickLookView.qlHasText
+                        clip: true
+                        TextArea {
+                            readOnly: true
+                            text: quickLookView.qlText
+                            wrapMode: TextArea.NoWrap
+                            selectByMouse: true
+                            background: null
+                            color: CelestinaTheme.text
+                            font.family: CelestinaTheme.monoFamily
+                            font.pixelSize: CelestinaTheme.fontCaption
+                        }
+                    }
+
+                    // (3) No renderable preview — a centred glyph + reason.
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 12
+                        visible: !quickLookView.qlIsImage && !quickLookView.qlHasText
+                        IconImage {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: 56
+                            height: 56
+                            name: mainPanel.mediaIconName(quickLookView.qlKind,
+                                                          quickLookView.qlMedia)
+                            source: CelestinaTheme.fallbackIcon(
+                                        quickLookView.qlKind === "directory" ? "folder" : "file")
+                            color: quickLookView.qlKind === "directory"
+                                   ? CelestinaTheme.accent : CelestinaTheme.textMuted
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            horizontalAlignment: Text.AlignHCenter
+                            text: quickLookView.qlKind === "directory" ? "Carpeta"
+                                : quickLookView.qlMedia === "video"
+                                  ? "Vídeo — vista previa en Fluorita (próximamente)"
+                                : quickLookView.qlMedia === "audio"
+                                  ? "Audio — vista previa en Fluorita (próximamente)"
+                                : "Sin vista previa"
+                            color: CelestinaTheme.textMuted
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontBody
+                        }
+                    }
+                }
+
+                Text {
+                    id: qlHint
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.margins: 14
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "Espacio o Esc para cerrar   ·   ↑ ↓ para navegar"
+                    color: CelestinaTheme.textMuted
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCaption
+                    opacity: 0.8
                 }
             }
         }

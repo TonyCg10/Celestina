@@ -192,6 +192,18 @@ pub mod qobject {
         #[qinvokable]
         fn entry_path(self: &SideritaController, index: i32) -> QString;
 
+        /// The kind ("directory" | "file" | "symlink") of the entry at `index`
+        /// — the quick-look overlay uses it to pick a folder/file glyph.
+        #[qinvokable]
+        fn entry_kind(self: &SideritaController, index: i32) -> QString;
+
+        /// A bounded, read-only text preview of the file at `path` for the
+        /// quick-look overlay: up to a fixed byte budget, decoded lossily.
+        /// Returns an empty string for a binary file (or one it cannot read),
+        /// which the overlay reads as "no text preview".
+        #[qinvokable]
+        fn preview_text(self: &SideritaController, path: &QString) -> QString;
+
         #[qinvokable]
         fn add_bookmark(self: Pin<&mut SideritaController>, path: &QString);
 
@@ -1028,6 +1040,46 @@ impl qobject::SideritaController {
             .row(index)
             .map(|row| QString::from(row.path().to_string_lossy().as_ref()))
             .unwrap_or_default()
+    }
+
+    pub fn entry_kind(&self, index: i32) -> QString {
+        if self.rust().search_active {
+            return usize::try_from(index)
+                .ok()
+                .and_then(|i| self.rust().search_hits.get(i))
+                .map(|hit| QString::from(if hit.is_dir { "directory" } else { "file" }))
+                .unwrap_or_default();
+        }
+        self.rust()
+            .row(index)
+            .map(|row| QString::from(kind_key(row.kind())))
+            .unwrap_or_default()
+    }
+
+    pub fn preview_text(&self, path: &QString) -> QString {
+        // Cap the read: a preview only needs the first screenful or two, and this
+        // runs on the GUI thread (the user pressed space), so it must stay cheap.
+        const MAX_BYTES: usize = 128 * 1024;
+        let path = path.to_string();
+        if path.is_empty() {
+            return QString::default();
+        }
+        let Ok(file) = std::fs::File::open(&path) else {
+            return QString::default();
+        };
+        use std::io::Read;
+        let mut buf = Vec::new();
+        if file.take(MAX_BYTES as u64).read_to_end(&mut buf).is_err() {
+            return QString::default();
+        }
+        // A NUL byte in the sample is the cheap, reliable "this is binary" tell —
+        // real text files don't carry them, most binaries do within 128 KiB.
+        if buf.contains(&0) {
+            return QString::default();
+        }
+        // Lossy so one stray non-UTF-8 byte shows a � rather than blanking the
+        // whole preview; genuinely binary content was already rejected above.
+        QString::from(String::from_utf8_lossy(&buf).as_ref())
     }
 
     pub fn add_bookmark(mut self: Pin<&mut Self>, path: &QString) {
