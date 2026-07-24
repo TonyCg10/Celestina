@@ -32,19 +32,20 @@ if [ ! -e "$import_root/CelestinaStyle" ]; then
     ln -sfn "$suite_root/celestina-style" "$import_root/CelestinaStyle"
 fi
 
+# El shell hospeda el selector (`celestina --pick-output`): así la ventana tiene
+# un app_id estable — `celestina`, lo que una regla de niri necesita para
+# flotarla en vez de tilearla — y responde por stdout de verdad.
+binario=$project_root/build/celestina
+
+if [ -x "$binario" ]; then
+    QML_IMPORT_PATH=$import_root exec "$binario" --pick-output
+fi
+
+# Sin compilar: el runtime genérico sirve, pero la ventana se identifica como
+# `org.qt-project.qml` y niri no puede distinguirla de cualquier otro QML.
 if ! command -v qml6 >/dev/null 2>&1; then
-    echo "output-chooser: falta qml6 (qt6-declarative)" >&2
+    echo "output-chooser: ni $binario ni qml6" >&2
     exit 1
 fi
-if [ ! -f "$qml_file" ]; then
-    echo "output-chooser: no existe $qml_file" >&2
-    exit 1
-fi
-
-salida=$(QT_ASSUME_STDERR_HAS_CONSOLE=1 QML_IMPORT_PATH=$import_root \
-    qml6 "$qml_file" 2>&1 >/dev/null | sed -n 's/.*CELESTINA-OUTPUT:\(.*\)$/\1/p' | head -1)
-
-if [ -z "$salida" ]; then
-    exit 1
-fi
-printf '%s\n' "$salida"
+echo "output-chooser: usando qml6 (compila el shell para el app_id correcto)" >&2
+QML_IMPORT_PATH=$import_root exec qml6 "$qml_file"

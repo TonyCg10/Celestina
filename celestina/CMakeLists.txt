@@ -23,6 +23,7 @@ qt_add_qml_module(celestina
     QML_FILES
         qml/Panel.qml
         qml/Clock.qml
+        qml/OutputChooser.qml
 )
 
 target_link_libraries(celestina PRIVATE

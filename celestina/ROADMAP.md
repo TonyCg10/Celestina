@@ -93,15 +93,21 @@ leaves only when something here can answer it truthfully.
       not hidden:** `wlr-screencopy` captures whole outputs, so sharing a
       *single window* in a call is lost, and there are no restore tokens. Undo is
       two lines in `niri-portals.conf`
-- [x] **The output chooser is ours** (`qml/OutputChooser.qml` +
-      `scripts/output-chooser.sh`). xdpw brings no dialog of its own: it runs a
-      command and keeps whatever output name that command prints, which makes
-      the chooser a replaceable part — so the session can wear its own dialog
-      long before the shell serves the portal itself. It reads CelestinaStyle
-      straight from the source tree (the new `qmldir`), lists the real outputs
-      with their size and scale, answers to keyboard and mouse, and is a centred
-      card rather than a filled window because a tiling compositor decides the
-      window size, not the dialog
+- [x] **The output chooser is ours** — `celestina --pick-output`
+      (`qml/OutputChooser.qml`, reached through `scripts/output-chooser.sh`).
+      xdpw brings no dialog of its own: it runs a command and keeps whatever
+      output name that command prints, which makes the chooser a replaceable
+      part — so the session wears its own dialog long before the shell serves
+      the portal itself. It lays the outputs out **in a row**, each tile keeping
+      its screen's real proportions, because a desktop is arranged left to right
+      and picking a monitor is a spatial gesture, not a menu choice.
+      *Hosted in the shell's own binary rather than a loose `qml` runtime*, which
+      buys the two things that matter: a real stdout to answer on, and a stable
+      Wayland `app_id` (`celestina`) — without it a window rule has nothing to
+      match, and niri tiles the dialog into a column. With the rule it opens
+      floating and centred (verified: `is_floating: true`). It is a centred card
+      inside its window regardless, since a tiling compositor decides window
+      size, not the dialog
 - [ ] Remove the GNOME backend for good — `pacman -Rs xdg-desktop-portal-gnome
       nautilus nautilus-python`, once a few real calls have been lived with
 - [ ] `Settings` from celestina — the smallest portal worth owning (it answers

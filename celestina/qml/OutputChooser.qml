@@ -12,20 +12,30 @@ import CelestinaStyle 1.0
 // nuestra — el primer trozo de la sesión que viste el lenguaje de Celestina sin
 // que el shell tenga que servir el portal todavía.
 //
-// Contrato con el backend: escribir `CELESTINA-OUTPUT:<nombre>` y salir con 0.
-// El envoltorio (`scripts/output-chooser.sh`) lo traduce a stdout, porque QML
-// sólo puede escribir por el canal de diagnóstico.
+// Las salidas se muestran **en fila**, no en lista: un escritorio está puesto de
+// izquierda a derecha, y elegir monitor es un gesto espacial, no de menú. Cada
+// tarjeta guarda la proporción real de su pantalla, así que la ultrawide se
+// reconoce por su forma antes que por su nombre.
+//
+// Lo lanza el shell (`celestina --pick-output`), que escribe el nombre elegido
+// por stdout y sale con 0; cancelar sale con 1 sin escribir nada.
 // ──────────────────────────────────────────────────────────────────────────────
 Window {
     id: chooser
 
-    // La tarjeta se dimensiona sola: cabecera + una fila por salida + pie. La
-    // *ventana* pide ese tamaño, pero un compositor con mosaico (niri) puede dar
-    // otro, así que la tarjeta va centrada y a tamaño fijo dentro de ella — así
-    // se ve igual la coloque donde la coloque.
-    readonly property int rowHeight: 74
-    readonly property int cardWidth: 560
-    readonly property int cardHeight: 118 + Qt.application.screens.length * (rowHeight + 8) + 58
+    // `chosen` es el contrato con el host en C++: al fijarlo, el host imprime y
+    // termina. Vacío + `cancelled` significa "el usuario no quiere compartir".
+    property string chosen: ""
+    property bool cancelled: false
+
+    readonly property var screens: Qt.application.screens
+    // La tarjeta más alta manda: las demás se alinean a su base.
+    readonly property int tileHeight: 132
+    readonly property int cardHeight: 96 + tileHeight + 66
+    readonly property int cardWidth: Math.min(
+            220 + screens.length * 236,
+            Screen.width > 0 ? Screen.width - 120 : 1200)
+
     width: cardWidth
     height: cardHeight
     visible: true
@@ -36,22 +46,16 @@ Window {
     property int selected: 0
 
     function choose(index) {
-        const screens = Qt.application.screens
         if (index < 0 || index >= screens.length)
             return
-        // El nombre del conector (DP-2, HDMI-A-1) es lo que espera el backend.
-        console.log("CELESTINA-OUTPUT:" + screens[index].name)
-        Qt.exit(0)
+        chosen = screens[index].name
     }
     function cancel() {
-        // Sin nombre y con código distinto de cero: el backend lo lee como
-        // "el usuario no quiere compartir", que no es lo mismo que un fallo.
-        Qt.exit(1)
+        cancelled = true
     }
 
-    // El panel: el mismo cristal, radio y borde encendido que el resto de la
-    // suite. Sin GlassSurface porque aquí no hay nada detrás que desenfocar —
-    // es una ventana suelta, no una superficie sobre contenido propio.
+    // Tarjeta centrada, no ventana rellena: en un compositor de mosaico el
+    // tamaño de la ventana lo decide él, y el diálogo debe verse igual.
     Rectangle {
         id: panel
         anchors.centerIn: parent
@@ -64,8 +68,8 @@ Window {
 
         Text {
             id: heading
-            x: 22
-            y: 18
+            x: 24
+            y: 20
             text: "Compartir pantalla"
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
@@ -75,10 +79,10 @@ Window {
 
         Text {
             id: subheading
-            x: 22
+            x: 24
             y: heading.y + heading.height + 2
-            width: parent.width - 44
-            text: Qt.application.screens.length > 1
+            width: parent.width - 48
+            text: chooser.screens.length > 1
                   ? "Elige qué salida verá la aplicación."
                   : "Se compartirá esta salida."
             color: CelestinaTheme.textMuted
@@ -87,19 +91,20 @@ Window {
             elide: Text.ElideRight
         }
 
+        // Las salidas, en fila y con su proporción real.
         ListView {
-            id: list
+            id: row
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: subheading.bottom
-            anchors.bottom: buttons.top
-            anchors.leftMargin: 14
-            anchors.rightMargin: 14
-            anchors.topMargin: 14
-            anchors.bottomMargin: 12
+            anchors.topMargin: 18
+            anchors.leftMargin: 20
+            anchors.rightMargin: 20
+            height: chooser.tileHeight
+            orientation: ListView.Horizontal
+            spacing: 14
             clip: true
-            spacing: 8
-            model: Qt.application.screens
+            model: chooser.screens
             currentIndex: chooser.selected
             boundsBehavior: Flickable.StopAtBounds
             focus: true
@@ -107,9 +112,9 @@ Window {
             Keys.onPressed: function(event) {
                 if (event.key === Qt.Key_Escape) {
                     chooser.cancel()
-                } else if (event.key === Qt.Key_Down) {
+                } else if (event.key === Qt.Key_Right) {
                     chooser.selected = Math.min(count - 1, chooser.selected + 1)
-                } else if (event.key === Qt.Key_Up) {
+                } else if (event.key === Qt.Key_Left) {
                     chooser.selected = Math.max(0, chooser.selected - 1)
                 } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                     chooser.choose(chooser.selected)
@@ -120,62 +125,78 @@ Window {
             }
 
             delegate: Rectangle {
-                id: row
+                id: tile
 
                 required property int index
                 required property var modelData
 
                 readonly property bool current: chooser.selected === index
 
-                width: list.width
-                height: chooser.rowHeight
+                width: 222
+                height: chooser.tileHeight
                 radius: CelestinaTheme.radiusSm
-                color: row.current ? CelestinaTheme.surfaceSelected
-                       : rowMouse.containsMouse ? CelestinaTheme.surfaceHover
+                color: tile.current ? CelestinaTheme.surfaceSelected
+                       : tileMouse.containsMouse ? CelestinaTheme.surfaceHover
                        : CelestinaTheme.controlFill
-                border.width: row.current ? 1 : 0
+                border.width: tile.current ? 1 : 0
                 border.color: CelestinaTheme.borderStrong
 
                 Behavior on color {
                     ColorAnimation { duration: CelestinaTheme.motionFast }
                 }
 
-                // Una miniatura proporcional a la salida real: dice de un
-                // vistazo cuál es la ultrawide y cuál la vertical.
+                // La pantalla, a escala: 16:9 se ve ancha, una vertical se ve
+                // alta. Se reconoce el monitor por su forma, no leyendo.
                 Rectangle {
-                    id: thumb
-                    x: 16
-                    anchors.verticalCenter: parent.verticalCenter
-                    readonly property real ratio: row.modelData.height > 0
-                            ? row.modelData.width / row.modelData.height : 1.6
-                    height: 40
-                    width: Math.round(height * ratio)
+                    id: glass
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: 16
+                    readonly property real ratio: tile.modelData.height > 0
+                            ? tile.modelData.width / tile.modelData.height : 1.6
+                    height: 52
+                    width: Math.min(170, Math.round(height * ratio))
                     radius: CelestinaTheme.radiusXs
                     color: CelestinaTheme.canvas
                     border.width: 1
-                    border.color: row.current ? CelestinaTheme.accent
-                                              : CelestinaTheme.border
+                    border.color: tile.current ? CelestinaTheme.accent
+                                               : CelestinaTheme.border
+
+                    // El pie del monitor: pequeño, pero es lo que lo hace legible
+                    // como pantalla y no como rectángulo.
+                    Rectangle {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.top: parent.bottom
+                        width: Math.round(parent.width * 0.22)
+                        height: 4
+                        radius: 2
+                        color: tile.current ? CelestinaTheme.accent
+                                            : CelestinaTheme.border
+                    }
                 }
 
                 Text {
                     id: name
-                    x: thumb.x + thumb.width + 16
-                    y: row.height / 2 - height - 1
-                    text: row.modelData.name
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: glass.y + glass.height + 16
+                    width: tile.width - 20
+                    horizontalAlignment: Text.AlignHCenter
+                    text: tile.modelData.name
                     color: CelestinaTheme.text
                     font.family: CelestinaTheme.sansFamily
                     font.pixelSize: CelestinaTheme.fontBody
                     font.weight: CelestinaTheme.weightMedium
+                    elide: Text.ElideRight
                 }
 
                 Text {
-                    x: name.x
-                    y: row.height / 2 + 1
-                    width: row.width - x - 18
-                    text: Math.round(row.modelData.width) + " × "
-                          + Math.round(row.modelData.height)
-                          + (row.modelData.devicePixelRatio > 1
-                             ? "  ·  ×" + row.modelData.devicePixelRatio.toFixed(1) : "")
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: name.y + name.height + 1
+                    width: tile.width - 20
+                    horizontalAlignment: Text.AlignHCenter
+                    text: Math.round(tile.modelData.width) + " × "
+                          + Math.round(tile.modelData.height)
+                          + (tile.modelData.devicePixelRatio > 1
+                             ? "  ·  ×" + tile.modelData.devicePixelRatio.toFixed(1) : "")
                     color: CelestinaTheme.textMuted
                     font.family: CelestinaTheme.sansFamily
                     font.pixelSize: CelestinaTheme.fontCaption
@@ -183,22 +204,21 @@ Window {
                 }
 
                 MouseArea {
-                    id: rowMouse
+                    id: tileMouse
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: chooser.selected = row.index
-                    onDoubleClicked: chooser.choose(row.index)
+                    onClicked: chooser.selected = tile.index
+                    onDoubleClicked: chooser.choose(tile.index)
                 }
             }
         }
 
         Row {
-            id: buttons
             anchors.right: parent.right
-            anchors.rightMargin: 18
+            anchors.rightMargin: 20
             anchors.bottom: parent.bottom
-            anchors.bottomMargin: 16
+            anchors.bottomMargin: 18
             spacing: 8
 
             ChooserButton {

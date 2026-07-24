@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <cstdlib>
 
 #include <QDebug>
@@ -6,6 +7,7 @@
 #include <QPointer>
 #include <QQmlComponent>
 #include <QQmlEngine>
+#include <QQmlContext>
 #include <QScreen>
 #include <QTimer>
 #include <QWindow>
@@ -192,6 +194,53 @@ private:
 };
 }
 
+// The session's "which screen do I share?" dialog.
+//
+// xdg-desktop-portal-wlr brings no dialog of its own: it runs a command and
+// keeps whatever output name that command prints. Hosting that chooser here —
+// rather than in a loose `qml` runtime — buys two things the session actually
+// needs: a real stdout to answer on, and a stable Wayland app_id (`celestina`),
+// which is what a window rule has to match on to float it instead of tiling it.
+//
+// It is only the chooser, not the portal. Serving ScreenCast itself waits for
+// the Niri adapter (CP1) — capture belongs to whoever knows the outputs and the
+// windows.
+int runOutputChooser(QGuiApplication &app, QQmlEngine &engine)
+{
+    QQmlComponent component(&engine);
+    component.loadFromModule("CelestinaDesktop", "OutputChooser");
+    if (component.isError()) {
+        for (const auto &error : component.errors())
+            qWarning() << "celestina --pick-output:" << error.toString();
+        return EXIT_FAILURE;
+    }
+
+    QScopedPointer<QObject> chooser(component.create());
+    if (chooser.isNull()) {
+        qWarning() << "celestina --pick-output: the chooser did not load";
+        return EXIT_FAILURE;
+    }
+
+    int status = EXIT_FAILURE;
+    // The window answers by setting `chosen` (or `cancelled`); the name goes to
+    // stdout, which is the only channel the portal backend reads.
+    QObject::connect(chooser.data(), SIGNAL(chosenChanged()), &app, SLOT(quit()));
+    QObject::connect(chooser.data(), SIGNAL(cancelledChanged()), &app, SLOT(quit()));
+    app.setQuitOnLastWindowClosed(true);
+    app.exec();
+
+    const QString chosen = chooser->property("chosen").toString();
+    if (!chosen.isEmpty()) {
+        std::fputs(qPrintable(chosen), stdout);
+        std::fputc('\n', stdout);
+        std::fflush(stdout);
+        status = EXIT_SUCCESS;
+    }
+    // Cancelling exits non-zero *without* a name: for the backend that reads as
+    // "the user does not want to share", which is not the same as a failure.
+    return status;
+}
+
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
@@ -202,6 +251,10 @@ int main(int argc, char *argv[])
     app.setQuitOnLastWindowClosed(false);
 
     QQmlEngine engine;
+
+    if (app.arguments().contains(QStringLiteral("--pick-output")))
+        return runOutputChooser(app, engine);
+
     PanelManager panels(&app, &engine);
     if (!panels.start())
         return EXIT_FAILURE;
