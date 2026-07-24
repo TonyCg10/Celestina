@@ -1949,6 +1949,7 @@ dependencies = [
 name = "siderita-i1"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
  "celestina-core",
  "cxx",
  "cxx-gen",

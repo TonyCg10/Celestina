@@ -1203,7 +1203,7 @@ impl qobject::SideritaController {
     }
 
     pub fn launch_path_given(&self) -> bool {
-        std::env::args_os().nth(1).is_some()
+        launch_argument().is_some()
     }
 
     /// Drops this folder's record, so it follows the global defaults again.
@@ -3934,7 +3934,7 @@ fn open_terminal_in(dir: &Path) -> Result<(), String> {
 }
 
 fn initial_location() -> PathBuf {
-    match std::env::args_os().nth(1) {
+    match launch_argument() {
         // Accept a `file://` URI argument (e.g. from a desktop "open with").
         Some(arg) => {
             let text = arg.to_string_lossy();
@@ -3947,6 +3947,14 @@ fn initial_location() -> PathBuf {
         }
         None => home_location(),
     }
+}
+
+/// The first non-flag argument: the location to open. Flags (`--portal`) are
+/// how the process is told *why* it started, not *where*.
+fn launch_argument() -> Option<std::ffi::OsString> {
+    std::env::args_os()
+        .skip(1)
+        .find(|arg| !arg.to_string_lossy().starts_with('-'))
 }
 
 fn home_location() -> PathBuf {

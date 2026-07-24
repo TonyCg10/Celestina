@@ -52,11 +52,15 @@ app_id=org.celestina.Siderita
 bin_dir=$prefix/bin
 apps_dir=$prefix/share/applications
 icons_dir=$prefix/share/icons/hicolor
+portals_dir=$prefix/share/xdg-desktop-portal/portals
+services_dir=$prefix/share/dbus-1/services
 sizes="16 22 24 32 48 64 128 256 512"
 
 if [ "$uninstall" -eq 1 ]; then
     rm -f "$bin_dir/siderita" "$apps_dir/$app_id.desktop"
     rm -f "$icons_dir/scalable/apps/$app_id.svg"
+    rm -f "$portals_dir/celestina.portal"
+    rm -f "$services_dir/org.freedesktop.impl.portal.desktop.celestina.service"
     for size in $sizes; do
         rm -f "$icons_dir/${size}x${size}/apps/$app_id.png"
     done
@@ -105,12 +109,29 @@ done
 mkdir -p "$apps_dir"
 install -m 0644 "$repo_root/$app_id.desktop" "$apps_dir/$app_id.desktop"
 
+# ── Portal backend ───────────────────────────────────────────────────────────
+# Registering the backend does not change any dialog on its own: xdg-desktop-portal
+# only routes to it when portals.conf says so (printed below). The D-Bus service
+# file lets it be started on demand, so a file dialog works whether or not
+# Siderita is already running — its Exec must be absolute, since the activation
+# environment is not the user's shell.
+mkdir -p "$portals_dir" "$services_dir"
+install -m 0644 "$repo_root/portal/celestina.portal" "$portals_dir/celestina.portal"
+sed "s|@BIN@|$bin_dir/siderita|" \
+    "$repo_root/portal/org.freedesktop.impl.portal.desktop.celestina.service" \
+    > "$services_dir/org.freedesktop.impl.portal.desktop.celestina.service"
+chmod 0644 "$services_dir/org.freedesktop.impl.portal.desktop.celestina.service"
+
 if command -v desktop-file-validate >/dev/null 2>&1; then
     desktop-file-validate "$apps_dir/$app_id.desktop" \
         || echo "aviso: la entrada .desktop no valida limpiamente" >&2
 fi
 update-desktop-database "$apps_dir" 2>/dev/null || true
 gtk-update-icon-cache -f -t "$icons_dir" 2>/dev/null || true
+# The bus only learns about a new service file when it re-reads its directories;
+# without this the portal backend is "not activatable" until the next login.
+busctl --user call org.freedesktop.DBus /org/freedesktop/DBus \
+    org.freedesktop.DBus ReloadConfig >/dev/null 2>&1 || true
 
 echo ">> instalado en $prefix" >&2
 echo "   binario:  $bin_dir/siderita" >&2
@@ -120,5 +141,13 @@ case ":$PATH:" in
     *":$bin_dir:"*) ;;
     *) echo "   aviso: $bin_dir no está en PATH" >&2 ;;
 esac
+echo "   portal:   $portals_dir/celestina.portal" >&2
+echo "   servicio: $services_dir/org.freedesktop.impl.portal.desktop.celestina.service" >&2
 echo "   para que sea el gestor por omisión:" >&2
 echo "     xdg-mime default $app_id.desktop inode/directory" >&2
+echo "   para que sea el selector de archivos del escritorio, en" >&2
+echo "   ~/.config/xdg-desktop-portal/portals.conf:" >&2
+echo "     [preferred]" >&2
+echo "     default=gtk;gnome" >&2
+echo "     org.freedesktop.impl.portal.FileChooser=celestina" >&2
+echo "   y reinicia el portal:  systemctl --user restart xdg-desktop-portal" >&2

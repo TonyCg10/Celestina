@@ -194,6 +194,49 @@ rule as CP3: each item earned by a demonstrated need, never by parity.
 - [x] Dropped the dormant Trash overlay — 254 lines of QML superseded when Trash became a content location, still instantiated **per tab**. Removing dead weight is the cheapest optimization there is
 - [ ] Real-Wayland validation of CP4 — the drag gestures (spring-open, edge scroll), the sidebar reorder drags, and the look of the new surfaces are input- and pixel-shaped, so they are unvalidated until they are used on the real session. The **menu blur p95 must be re-measured**: menus capture live now, which moves that cost from one snapshot to per-frame while a menu is open
 
+## Checkpoint 5 — The desktop's file chooser (S5)
+**Goal:** the dialog every application shows when it asks for a file becomes
+Siderita's, over the standard that exists for exactly this, without any of those
+applications knowing or changing.
+
+- [x] `org.freedesktop.impl.portal.FileChooser` backend — `OpenFile`, `SaveFile`
+      and `SaveFiles` served from the app (`src/portal.rs`, one more zbus
+      interface beside `FileManager1`). A backend's method reply *is* the answer,
+      so each call is held open on an async await point — not a blocked thread —
+      while the user browses, and the connection keeps serving other requests
+      meanwhile. Every request also exports an `impl.portal.Request` object so
+      the front-end can withdraw a dialog whose application has gone away
+- [x] The picker window — a window of its own with its own controller, not a tab
+      and not a modal of the main window: several applications can be asking at
+      once, and a picker can exist before the main window does. It reuses the
+      browsing core but deliberately **not** the browsing chrome — no tabs, no
+      drag-and-drop, no write verbs; a dialog that can rename and delete while an
+      application waits on it is a dialog that can surprise you. Open, save
+      (with a name field) and directory modes; multi-select when the caller asks
+- [x] Answered on delivery, not on click — the dialog closes when the backend
+      says the reply is on its way back, not when the button is pressed. A
+      portal-activated process can otherwise exit before the reply is flushed,
+      which is the same "a click is a request, never proof" rule the rest of the
+      app follows, applied to its own exit
+- [x] `--portal` activation — a `.portal` registration and a D-Bus service file
+      (installed by `scripts/install-i1.sh`) so a file dialog works whether or
+      not Siderita is running. Verified on the real session: with nothing
+      running, a call started `siderita --portal`, mapped a picker window with
+      `app_id = org.celestina.Siderita`, and `Close()` withdrew it and answered
+      cancelled
+- [ ] File-type filters — the caller's filter list is parsed but not yet applied;
+      the picker shows everything. Showing a superset is the safe failure (it can
+      never hide a file the application would accept), but the filter combo the
+      GTK chooser has is missing, and glob/MIME matching belongs in the core
+      beside the search matcher
+- [ ] Window parenting — `parent_window` arrives as a `wayland:` handle and is
+      currently ignored, so the picker is a free-floating dialog rather than a
+      transient child of the asking window. Fixing it needs the `xdg-foreign`
+      protocol
+- [ ] Daily-use validation — routing is opt-in until it has been lived with
+      (`portals.conf`); the failure mode of a bad file chooser is every
+      application's upload button, so it earns the switch rather than assuming it
+
 ## Non-goals
 
 No cloud/network, global indexer, archive VFS, plugins, IDE, terminal or suite

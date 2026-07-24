@@ -28,6 +28,9 @@ siderita-ops = { path = "../celestina-rs/crates/siderita-ops" }
 siderita-qt = { path = "../celestina-rs/crates/siderita-qt" }
 # System-bus integration: org.freedesktop.FileManager1 and udisks2 volumes.
 zbus = "5"
+# Already in the closure (zbus pulls it in); declared here so the portal backend
+# can park a held-open request on a real await point instead of a blocked thread.
+async-channel = "2"
 # Filesystem watch (inotify-backed) with burst coalescing, for auto-refresh.
 notify-debouncer-full = "0.5"
 # Local-time conversion (localtime_r) for the properties panel timestamps.

@@ -21,6 +21,7 @@ fn main() {
             "qml/i1/GlassContextMenu.qml",
             "qml/i1/GlassMenuItem.qml",
             "qml/i1/MainI1.qml",
+            "qml/i1/PickerWindow.qml",
         ]);
 
     // The system-clipboard bridge (text/uri-list + x-special/gnome-copied-files)
@@ -48,7 +49,7 @@ fn main() {
         .cpp_file("cpp/thumbnailprovider.cpp")
         // Pins the freedesktop icon theme before any QML loads (no Q_OBJECT).
         .cpp_file("cpp/icontheme.cpp")
-        .files(["src/controller.rs", "src/dbus.rs"]);
+        .files(["src/controller.rs", "src/dbus.rs", "src/portal.rs"]);
     // SAFETY: only adds an include directory for our own headers.
     let builder = unsafe {
         builder.cc_builder(|cc| {

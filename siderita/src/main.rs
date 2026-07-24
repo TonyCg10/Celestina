@@ -6,6 +6,7 @@ mod favorites;
 mod folder_views;
 mod icons;
 mod places;
+mod portal;
 mod properties;
 mod recent;
 mod search;

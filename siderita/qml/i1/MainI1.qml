@@ -563,6 +563,69 @@ ApplicationWindow {
         }
     }
 
+    // ── The desktop's file chooser ───────────────────────────────────────
+    // `org.freedesktop.impl.portal.FileChooser`: when the session routes that
+    // interface here, every "open a file" and "save as" dialog in every portal-
+    // using application becomes a picker window of ours. Each request gets its
+    // own window — several applications can be asking at once — and the window
+    // answers the waiting D-Bus call through `portalService.answer`.
+    FileChooserPortal {
+        id: portalService
+        Component.onCompleted: portalService.start()
+
+        onPickRequested: function(token, mode, appId, title, acceptLabel,
+                                  multiple, directory, currentFolder,
+                                  currentName, filters) {
+            pickerRequests.append({
+                token: token, mode: mode, appId: appId, title: title,
+                acceptLabel: acceptLabel, multiple: multiple,
+                directory: directory, currentFolder: currentFolder,
+                currentName: currentName
+            })
+        }
+
+        // The asking application went away: close that picker without answering
+        // (the call it was waiting on is already gone).
+        onPickWithdrawn: function(token) { window.dropPicker(token) }
+
+        // The answer reached the caller — now the dialog may go.
+        onPickAnswered: function(token) { window.dropPicker(token) }
+    }
+
+    ListModel {
+        id: pickerRequests
+    }
+
+    function dropPicker(token) {
+        for (var i = 0; i < pickerRequests.count; i++) {
+            if (pickerRequests.get(i).token === token) {
+                pickerRequests.remove(i)
+                return
+            }
+        }
+    }
+
+    Instantiator {
+        model: pickerRequests
+        // The roles come in through `model`, not as re-declared properties:
+        // re-declaring them here would shadow the window's own required ones
+        // (and `title` would collide with Window.title), leaving them unset and
+        // the delegate uncreatable.
+        delegate: PickerWindow {
+            required property var model
+
+            token: model.token
+            mode: model.mode
+            appId: model.appId
+            acceptLabel: model.acceptLabel
+            multiple: model.multiple
+            directory: model.directory
+            requestTitle: model.title
+            startFolder: model.currentFolder
+            suggestedName: model.currentName
+        }
+    }
+
     // Load the removable-volume list into whichever tab is active — once the
     // first controller resolves, and again on each tab switch — so the
     // window-scope "Dispositivos" sidebar always reflects the active tab.
@@ -6277,6 +6340,8 @@ ApplicationWindow {
             window.currentTabIndex = Math.max(
                 0, Math.min(tabsModel.count - 1, sessionStore.savedActiveTab()))
         }
-        window.visible = true
+        // Activated by the portal to serve a file chooser: this process has no
+        // main window, only the pickers it is asked for.
+        window.visible = !portalService.portalMode()
     }
 }
