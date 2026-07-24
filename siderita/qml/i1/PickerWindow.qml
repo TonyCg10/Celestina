@@ -31,6 +31,9 @@ Window {
     required property bool directory
     required property string startFolder
     required property string suggestedName
+    // Each entry is `name\tpattern|pattern` — the caller's type filters, with
+    // its MIME types already translated to name patterns by the backend.
+    required property var filters
 
 
     readonly property bool saving: mode === "save" || mode === "saves"
@@ -70,12 +73,42 @@ Window {
         }
     }
 
+    // The filters as the combo shows them, with an always-present "everything"
+    // row: a chooser must never be able to hide a file with no way back.
+    readonly property var filterRows: {
+        var rows = [{ label: "Todos los archivos", patterns: [] }]
+        for (var i = 0; i < filters.length; i++) {
+            var cut = filters[i].indexOf("\t")
+            if (cut <= 0)
+                continue
+            rows.push({
+                label: filters[i].substring(0, cut),
+                patterns: filters[i].substring(cut + 1).split("|").filter(function(p) {
+                    return p.length > 0
+                })
+            })
+        }
+        return rows
+    }
+
+    function applyFilter(index) {
+        if (index < 0 || index >= filterRows.length)
+            return
+        controller.applyNameFilters(filterRows[index].patterns)
+        clearChosen()
+    }
+
     Component.onCompleted: {
         if (startFolder.length > 0)
             controller.startAt(startFolder)
         else
             controller.start()
         nameField.text = suggestedName
+        // The caller's first filter is the one it expects to be active.
+        if (filterRows.length > 1) {
+            filterCombo.currentIndex = 1
+            applyFilter(1)
+        }
         entryList.forceActiveFocus()
     }
 
@@ -401,6 +434,39 @@ Window {
                 font.pixelSize: CelestinaTheme.fontCaption
             }
 
+            ComboBox {
+                id: filterCombo
+                visible: picker.filterRows.length > 1
+                anchors.left: parent.left
+                anchors.leftMargin: 16
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.min(260, parent.width * 0.4)
+                height: 30
+                model: picker.filterRows
+                textRole: "label"
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: CelestinaTheme.fontLabel
+                onActivated: picker.applyFilter(currentIndex)
+
+                contentItem: Text {
+                    leftPadding: 10
+                    rightPadding: filterCombo.indicator.width + 6
+                    text: filterCombo.displayText
+                    color: CelestinaTheme.text
+                    font: filterCombo.font
+                    verticalAlignment: Text.AlignVCenter
+                    elide: Text.ElideRight
+                }
+
+                background: Rectangle {
+                    radius: CelestinaTheme.radiusSm
+                    color: filterCombo.hovered ? CelestinaTheme.surfaceHover
+                                               : CelestinaTheme.controlFill
+                    border.width: 1
+                    border.color: CelestinaTheme.border
+                }
+            }
+
             Row {
                 anchors.right: parent.right
                 anchors.rightMargin: 14
@@ -420,6 +486,7 @@ Window {
             }
         }
     }
+
 
 
 

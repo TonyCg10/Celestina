@@ -576,6 +576,9 @@ ApplicationWindow {
         onPickRequested: function(token, mode, appId, title, acceptLabel,
                                   multiple, directory, currentFolder,
                                   currentName, filters) {
+            // `filters` is a plain JS array, so it rides in a property rather
+            // than a ListModel role (a role would flatten it to a string).
+            pickerFilters[token] = filters
             pickerRequests.append({
                 token: token, mode: mode, appId: appId, title: title,
                 acceptLabel: acceptLabel, multiple: multiple,
@@ -596,7 +599,11 @@ ApplicationWindow {
         id: pickerRequests
     }
 
+    // Per-request filter lists, keyed by token.
+    property var pickerFilters: ({})
+
     function dropPicker(token) {
+        delete pickerFilters[token]
         for (var i = 0; i < pickerRequests.count; i++) {
             if (pickerRequests.get(i).token === token) {
                 pickerRequests.remove(i)
@@ -623,6 +630,7 @@ ApplicationWindow {
             requestTitle: model.title
             startFolder: model.currentFolder
             suggestedName: model.currentName
+            filters: window.pickerFilters[model.token] || []
         }
     }
 

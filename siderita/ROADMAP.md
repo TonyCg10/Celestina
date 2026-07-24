@@ -224,11 +224,18 @@ applications knowing or changing.
       running, a call started `siderita --portal`, mapped a picker window with
       `app_id = org.celestina.Siderita`, and `Close()` withdrew it and answered
       cancelled
-- [ ] File-type filters — the caller's filter list is parsed but not yet applied;
-      the picker shows everything. Showing a superset is the safe failure (it can
-      never hide a file the application would accept), but the filter combo the
-      GTK chooser has is missing, and glob/MIME matching belongs in the core
-      beside the search matcher
+- [x] File-type filters — the caller's list drives a combo in the picker's
+      footer, and matching lives in the core beside the ordering
+      (`name_filter.rs`: `*`, `?` and literal text, case-insensitive, iterative
+      so a pattern full of stars cannot blow up; 6 unit tests). Two rules make it
+      safe rather than merely functional: **folders are never filtered** (a
+      filter says what you may pick, not where you may go), and an **unknown MIME
+      type widens to `*`** instead of hiding — the portal speaks MIME while a
+      listing knows names, so the common types are mapped to extensions in the
+      backend and anything unrecognised shows everything. There is always a
+      "Todos los archivos" row, so a filter can never trap the user. Verified
+      through a real portal call: `image/jpeg` became `*.jpg|*.jpeg`, `scan.JPG`
+      matched case-insensitively, and the folder survived the filter
 - [ ] Window parenting — `parent_window` arrives as a `wayland:` handle and is
       currently ignored, so the picker is a free-floating dialog rather than a
       transient child of the asking window. Fixing it needs the `xdg-foreign`

@@ -25,6 +25,11 @@ pub struct ViewOptions {
     pub query: String,
     pub sort_field: SortField,
     pub sort_direction: SortDirection,
+    /// Name patterns the listing is restricted to — the file-chooser portal's
+    /// "Images (*.png *.jpg)". Empty means everything, and **directories are
+    /// never filtered**: a filter narrows what you can pick, not where you can
+    /// go.
+    pub name_filters: Vec<String>,
 }
 
 /// Projects a snapshot without changing its entries or their identities.
@@ -44,6 +49,10 @@ pub fn project_snapshot<'a>(
                     .display_name()
                     .to_lowercase()
                     .contains(&normalized_query)
+        })
+        .filter(|entry| {
+            entry.kind() == EntryKind::Directory
+                || crate::name_filter::matches_any(&entry.display_name(), &options.name_filters)
         })
         .collect();
 
@@ -206,6 +215,28 @@ mod tests {
 
         // Visible folder, visible file, then the hidden block (folder then file).
         assert_eq!(names, ["visibledir", "visible.txt", ".hiddendir", ".hidden.txt"]);
+    }
+
+    #[test]
+    fn a_name_filter_narrows_files_but_never_folders() {
+        let fixture = TestDirectory::new();
+        fs::write(fixture.path().join("photo.png"), b"p").expect("write png");
+        fs::write(fixture.path().join("notes.txt"), b"n").expect("write txt");
+        fs::create_dir(fixture.path().join("album")).expect("create folder");
+        let snapshot = scan_fixture(&fixture);
+        let options = ViewOptions {
+            name_filters: vec!["*.png".to_owned()],
+            ..ViewOptions::default()
+        };
+
+        let names: Vec<String> = project_snapshot(&snapshot, &options)
+            .iter()
+            .map(|row| row.display_name().to_string())
+            .collect();
+
+        // The folder survives — a filter says what you may pick, not where you
+        // may go — and the non-matching file is gone.
+        assert_eq!(names, ["album", "photo.png"]);
     }
 
     #[test]

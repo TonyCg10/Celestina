@@ -206,6 +206,12 @@ pub mod qobject {
         #[qinvokable]
         fn apply_query(self: Pin<&mut SideritaController>, query: &QString);
 
+        /// Restricts the listing to these name patterns (`*.png`), the way a
+        /// file chooser's type filter does. An empty list shows everything;
+        /// folders are never filtered.
+        #[qinvokable]
+        fn apply_name_filters(self: Pin<&mut SideritaController>, patterns: &QStringList);
+
         #[qinvokable]
         fn select_token(self: Pin<&mut SideritaController>, token: &QString);
 
@@ -1226,6 +1232,19 @@ impl qobject::SideritaController {
 
         self.as_mut().set_query(query.clone());
         self.as_mut().rust_mut().get_mut().options.query = query.to_string();
+        self.as_mut().reproject();
+    }
+
+    pub fn apply_name_filters(mut self: Pin<&mut Self>, patterns: &QStringList) {
+        let patterns: Vec<String> = patterns
+            .iter()
+            .map(ToString::to_string)
+            .filter(|pattern| !pattern.is_empty())
+            .collect();
+        if self.rust().options.name_filters == patterns {
+            return;
+        }
+        self.as_mut().rust_mut().get_mut().options.name_filters = patterns;
         self.as_mut().reproject();
     }
 

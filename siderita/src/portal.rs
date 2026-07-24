@@ -380,11 +380,11 @@ fn filters(options: &HashMap<String, OwnedValue>) -> Vec<String> {
         .map(|(name, patterns)| {
             let joined = patterns
                 .into_iter()
-                .map(|(kind, pattern)| {
+                .flat_map(|(kind, pattern)| {
                     if kind == 1 {
-                        format!("mime:{pattern}")
+                        globs_for_mime(&pattern)
                     } else {
-                        pattern
+                        vec![pattern]
                     }
                 })
                 .collect::<Vec<_>>()
@@ -392,6 +392,41 @@ fn filters(options: &HashMap<String, OwnedValue>) -> Vec<String> {
             format!("{name}\t{joined}")
         })
         .collect()
+}
+
+/// The name patterns a MIME filter stands for.
+///
+/// The portal speaks MIME; the listing knows names. Rather than carry a MIME
+/// database into the core, the handful of types a file chooser actually asks
+/// for are mapped to their extensions here. **An unrecognised type widens to
+/// `*`**: a filter that cannot be understood must never hide a file the asking
+/// application would have accepted.
+fn globs_for_mime(mime: &str) -> Vec<String> {
+    let globs: &[&str] = match mime {
+        "image/*" => &[
+            "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.bmp", "*.svg", "*.avif", "*.tif",
+            "*.tiff", "*.ico", "*.heic",
+        ],
+        "video/*" => &[
+            "*.mp4", "*.mkv", "*.webm", "*.mov", "*.avi", "*.m4v", "*.mpg", "*.mpeg", "*.wmv",
+        ],
+        "audio/*" => &[
+            "*.mp3", "*.flac", "*.ogg", "*.opus", "*.wav", "*.m4a", "*.aac", "*.wma",
+        ],
+        "text/*" => &["*.txt", "*.md", "*.csv", "*.log", "*.json", "*.xml", "*.yml", "*.yaml"],
+        "application/pdf" => &["*.pdf"],
+        "image/png" => &["*.png"],
+        "image/jpeg" => &["*.jpg", "*.jpeg"],
+        "image/gif" => &["*.gif"],
+        "image/webp" => &["*.webp"],
+        "image/svg+xml" => &["*.svg"],
+        "text/plain" => &["*.txt", "*.md", "*.log"],
+        "text/csv" => &["*.csv"],
+        "application/json" => &["*.json"],
+        "application/zip" => &["*.zip"],
+        _ => &["*"],
+    };
+    globs.iter().map(|glob| (*glob).to_owned()).collect()
 }
 
 /// A local path as a `file://` URI, percent-encoding everything a URI cannot
@@ -412,6 +447,14 @@ fn path_to_uri(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_mime_filter_becomes_the_extensions_it_stands_for() {
+        assert!(globs_for_mime("image/png").contains(&"*.png".to_owned()));
+        assert!(globs_for_mime("image/*").contains(&"*.jpeg".to_owned()));
+        // The safety property: an unknown type widens rather than hides.
+        assert_eq!(globs_for_mime("application/x-invented"), vec!["*".to_owned()]);
+    }
 
     #[test]
     fn paths_become_percent_encoded_file_uris() {
