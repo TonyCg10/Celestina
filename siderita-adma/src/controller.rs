@@ -14,7 +14,7 @@ use siderita_core::{
 
 /// The filesystem debouncer type kept alive for the controller's lifetime.
 type FsDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
-use siderita_ops::{OpError, Progress};
+use siderita_ops::{OpError, Progress, TrashEntry};
 use siderita_qt::{EntryRow, RowKind, SnapshotAdapter, ViewSnapshot};
 
 #[cxx_qt::bridge]
@@ -105,6 +105,9 @@ pub mod qobject {
         #[qproperty(QStringList, trash_names)]
         #[qproperty(QStringList, trash_origins)]
         #[qproperty(QStringList, trash_dates)]
+        // Trash shown as a content-view location (like search): its entries ride
+        // the same entry model, so list/grid/details/thumbnails just work.
+        #[qproperty(bool, trash_active)]
         #[qproperty(bool, open_with_pending)]
         #[qproperty(QString, open_with_target)]
         #[qproperty(QStringList, open_with_apps)]
@@ -280,11 +283,24 @@ pub mod qobject {
         #[qinvokable]
         fn load_trash(self: Pin<&mut SideritaController>);
 
+        /// Opens Trash as a content-view location (fills the entry model with
+        /// the trashed items and flips `trash_active`).
+        #[qinvokable]
+        fn open_trash(self: Pin<&mut SideritaController>);
+
+        /// Leaves Trash and returns the content box to the current folder.
+        #[qinvokable]
+        fn close_trash(self: Pin<&mut SideritaController>);
+
         #[qinvokable]
         fn restore_trash(self: Pin<&mut SideritaController>, index: i32);
 
         #[qinvokable]
         fn restore_all_trash(self: Pin<&mut SideritaController>);
+
+        /// Permanently deletes one trashed entry (by its index in the list).
+        #[qinvokable]
+        fn purge_trash(self: Pin<&mut SideritaController>, index: i32);
 
         #[qinvokable]
         fn empty_trash(self: Pin<&mut SideritaController>);
@@ -536,6 +552,7 @@ pub struct SideritaControllerRust {
     prop_is_dir: bool,
     prop_size_cancel: Option<CancellationToken>,
     search_active: bool,
+    trash_active: bool,
     search_running: bool,
     search_query: QString,
     search_summary: QString,
@@ -565,7 +582,7 @@ pub struct SideritaControllerRust {
     trash_names: QStringList,
     trash_origins: QStringList,
     trash_dates: QStringList,
-    trash_infos: Vec<PathBuf>,
+    trash_entries: Vec<TrashEntry>,
     open_with_pending: bool,
     open_with_target: QString,
     open_with_apps: QStringList,
@@ -646,6 +663,7 @@ impl Default for SideritaControllerRust {
             prop_is_dir: false,
             prop_size_cancel: None,
             search_active: false,
+            trash_active: false,
             search_running: false,
             search_query: QString::default(),
             search_summary: QString::default(),
@@ -675,7 +693,7 @@ impl Default for SideritaControllerRust {
             trash_names: QStringList::default(),
             trash_origins: QStringList::default(),
             trash_dates: QStringList::default(),
-            trash_infos: Vec::new(),
+            trash_entries: Vec::new(),
             open_with_pending: false,
             open_with_target: QString::default(),
             open_with_apps: QStringList::default(),
@@ -887,7 +905,7 @@ impl qobject::SideritaController {
         // The selected item's name and detail are shown in the sidebar info box
         // (driven by selected_token), so selecting no longer writes the status
         // line. A search hit's token is its index — accepted as-is if in range.
-        if self.rust().search_active {
+        if self.rust().search_active || self.rust().trash_active {
             if self.rust().search_hit(token).is_some() {
                 self.as_mut().set_selected_token(token.clone());
             }
@@ -904,6 +922,11 @@ impl qobject::SideritaController {
     }
 
     pub fn activate_token(mut self: Pin<&mut Self>, token: &QString) {
+        // In Trash, activating an entry does nothing — restore / delete are the
+        // actions, offered by the context menu; nothing is "opened" from Trash.
+        if self.rust().trash_active {
+            return;
+        }
         // A search hit acts exactly like a folder entry: a folder navigates in
         // (leaving search), a file opens in its default app (search stays up so
         // more hits can be opened).
@@ -963,7 +986,7 @@ impl qobject::SideritaController {
     }
 
     pub fn entry_token(&self, index: i32) -> QString {
-        if self.rust().search_active {
+        if self.rust().search_active || self.rust().trash_active {
             let count = self.rust().search_hits.len() as i32;
             return if index >= 0 && index < count {
                 QString::from(index.to_string().as_str())
@@ -984,6 +1007,25 @@ impl qobject::SideritaController {
                 .ok()
                 .and_then(|i| self.rust().search_hits.get(i))
                 .map(|hit| QString::from(search_hit_parent(&hit.path).as_str()))
+                .unwrap_or_default();
+        }
+        // A trashed entry's detail is where it came from and when it was deleted.
+        if self.rust().trash_active {
+            return usize::try_from(index)
+                .ok()
+                .and_then(|i| self.rust().trash_entries.get(i))
+                .map(|e| {
+                    let origin = e.original.to_string_lossy();
+                    let date = format_trash_date(&e.deletion_date);
+                    QString::from(
+                        if date.is_empty() {
+                            origin.into_owned()
+                        } else {
+                            format!("{origin} · {date}")
+                        }
+                        .as_str(),
+                    )
+                })
                 .unwrap_or_default();
         }
         let Some(row) = self.rust().row(index) else {
@@ -1011,7 +1053,7 @@ impl qobject::SideritaController {
     }
 
     pub fn index_for_token(&self, token: &QString) -> i32 {
-        if self.rust().search_active {
+        if self.rust().search_active || self.rust().trash_active {
             return token
                 .to_string()
                 .parse::<usize>()
@@ -1036,7 +1078,7 @@ impl qobject::SideritaController {
     }
 
     pub fn entry_path(&self, index: i32) -> QString {
-        if self.rust().search_active {
+        if self.rust().search_active || self.rust().trash_active {
             return usize::try_from(index)
                 .ok()
                 .and_then(|i| self.rust().search_hits.get(i))
@@ -1050,7 +1092,7 @@ impl qobject::SideritaController {
     }
 
     pub fn entry_kind(&self, index: i32) -> QString {
-        if self.rust().search_active {
+        if self.rust().search_active || self.rust().trash_active {
             return usize::try_from(index)
                 .ok()
                 .and_then(|i| self.rust().search_hits.get(i))
@@ -1627,12 +1669,116 @@ impl qobject::SideritaController {
             .iter()
             .map(|entry| QString::from(format_trash_date(&entry.deletion_date).as_str()))
             .collect();
-        let infos: Vec<PathBuf> = entries.into_iter().map(|entry| entry.info).collect();
-
-        self.as_mut().rust_mut().get_mut().trash_infos = infos;
+        self.as_mut().rust_mut().get_mut().trash_entries = entries;
         self.as_mut().set_trash_names(names);
         self.as_mut().set_trash_origins(origins);
         self.as_mut().set_trash_dates(dates);
+    }
+
+    /// Opens Trash as a content-view location: loads the entries and publishes
+    /// them onto the shared entry model (so list / grid / details / thumbnails
+    /// render them exactly like a folder), flipping `trash_active`.
+    pub fn open_trash(mut self: Pin<&mut Self>) {
+        self.as_mut().exit_search();
+        self.as_mut().load_trash();
+        self.as_mut().publish_trash();
+    }
+
+    /// Builds the entry-model columns from the loaded trash entries. Reuses the
+    /// `search_hits` rendering path (so the lookups resolve) while `trash_entries`
+    /// keeps the restore/purge identity.
+    fn publish_trash(mut self: Pin<&mut Self>) {
+        let entries = self.rust().trash_entries.clone();
+        let names: QStringList = entries.iter().map(|e| QString::from(e.name.as_str())).collect();
+        let paths: QStringList = entries
+            .iter()
+            .map(|e| QString::from(e.trashed.to_string_lossy().as_ref()))
+            .collect();
+        let kinds: QStringList = entries
+            .iter()
+            .map(|e| QString::from(if e.trashed.is_dir() { "directory" } else { "file" }))
+            .collect();
+        let tokens: QStringList = (0..entries.len())
+            .map(|i| QString::from(i.to_string().as_str()))
+            .collect();
+        // Subtitle = where it was; date = when it went to trash; size from the
+        // trashed body (folders show "—", matching the folder view).
+        let subtitles: QStringList = entries
+            .iter()
+            .map(|e| QString::from(e.original.to_string_lossy().as_ref()))
+            .collect();
+        let dates: QStringList = entries
+            .iter()
+            .map(|e| QString::from(format_trash_date(&e.deletion_date).as_str()))
+            .collect();
+        let sizes: QStringList = entries
+            .iter()
+            .map(|e| {
+                if e.trashed.is_dir() {
+                    QString::from("—")
+                } else {
+                    QString::from(
+                        std::fs::metadata(&e.trashed)
+                            .map(|m| format_size(m.len()))
+                            .unwrap_or_default()
+                            .as_str(),
+                    )
+                }
+            })
+            .collect();
+        let sections: QStringList = entries.iter().map(|_| QString::default()).collect();
+
+        let hits: Vec<crate::search::SearchHit> = entries
+            .iter()
+            .map(|e| crate::search::SearchHit {
+                name: e.name.clone(),
+                path: e.trashed.to_string_lossy().into_owned(),
+                is_dir: e.trashed.is_dir(),
+            })
+            .collect();
+        self.as_mut().rust_mut().get_mut().search_hits = hits;
+        self.as_mut().set_trash_active(true);
+        self.as_mut().set_selected_token(QString::default());
+        self.as_mut().set_entry_names(names.clone());
+        self.as_mut()
+            .rows_ready(names, tokens, kinds, subtitles, paths, sections, sizes, dates);
+    }
+
+    /// Leaves the Trash location (only clears state if it is actually shown, so
+    /// it is safe to call on any navigation) and returns to the folder.
+    fn exit_trash(mut self: Pin<&mut Self>) {
+        if self.rust().trash_active {
+            self.as_mut().rust_mut().get_mut().search_hits.clear();
+            self.as_mut().set_trash_active(false);
+        }
+    }
+
+    /// Leaves Trash and repaints the current folder.
+    pub fn close_trash(mut self: Pin<&mut Self>) {
+        self.as_mut().exit_trash();
+        self.as_mut().reproject();
+    }
+
+    /// Permanently deletes one trashed entry by index, then refreshes the view.
+    pub fn purge_trash(mut self: Pin<&mut Self>, index: i32) {
+        self.as_mut().set_op_error(QString::default());
+        let Ok(index) = usize::try_from(index) else {
+            return;
+        };
+        let Some(info) = self.rust().trash_entries.get(index).map(|e| e.info.clone()) else {
+            return;
+        };
+        match siderita_ops::purge_from_trash(&info) {
+            Ok(_) => {
+                self.as_mut().load_trash();
+                if self.rust().trash_active {
+                    self.as_mut().publish_trash();
+                }
+            }
+            Err(error) => self
+                .as_mut()
+                .set_op_error(QString::from(error.to_string().as_str())),
+        }
     }
 
     /// Restores the trashed entry at `index` in the loaded Trash list, then
@@ -1643,13 +1789,17 @@ impl qobject::SideritaController {
         let Ok(index) = usize::try_from(index) else {
             return;
         };
-        let Some(info) = self.rust().trash_infos.get(index).cloned() else {
+        let Some(info) = self.rust().trash_entries.get(index).map(|e| e.info.clone()) else {
             return;
         };
         match siderita_ops::restore_from_trash(&info, &CancellationToken::new()) {
             Ok(_) => {
                 self.as_mut().load_trash();
-                self.as_mut().refresh();
+                if self.rust().trash_active {
+                    self.as_mut().publish_trash();
+                } else {
+                    self.as_mut().refresh();
+                }
             }
             Err(error) => self
                 .as_mut()
@@ -1662,7 +1812,8 @@ impl qobject::SideritaController {
     /// together after the list and the folder are refreshed.
     pub fn restore_all_trash(mut self: Pin<&mut Self>) {
         self.as_mut().set_op_error(QString::default());
-        let infos = self.rust().trash_infos.clone();
+        let infos: Vec<PathBuf> =
+            self.rust().trash_entries.iter().map(|e| e.info.clone()).collect();
         if infos.is_empty() {
             return;
         }
@@ -1675,7 +1826,11 @@ impl qobject::SideritaController {
         }
         // Refresh first (both clear op_error), then report any failures last.
         self.as_mut().load_trash();
-        self.as_mut().refresh();
+        if self.rust().trash_active {
+            self.as_mut().publish_trash();
+        } else {
+            self.as_mut().refresh();
+        }
         if !failures.is_empty() {
             let total = infos.len();
             let summary = if failures.len() == total {
@@ -1699,7 +1854,8 @@ impl qobject::SideritaController {
     /// restore there is nothing to refresh but the Trash list itself.
     pub fn empty_trash(mut self: Pin<&mut Self>) {
         self.as_mut().set_op_error(QString::default());
-        let infos = self.rust().trash_infos.clone();
+        let infos: Vec<PathBuf> =
+            self.rust().trash_entries.iter().map(|e| e.info.clone()).collect();
         if infos.is_empty() {
             return;
         }
@@ -1710,6 +1866,9 @@ impl qobject::SideritaController {
             }
         }
         self.as_mut().load_trash();
+        if self.rust().trash_active {
+            self.as_mut().publish_trash();
+        }
         if !failures.is_empty() {
             let total = infos.len();
             let summary = if failures.len() == total {
@@ -2403,6 +2562,8 @@ impl qobject::SideritaController {
     /// unreadable directory. All of back / forward / up / home / activate / typed
     /// path go through here.
     fn request_nav_scan(mut self: Pin<&mut Self>, nav: PendingNav) {
+        // Any explicit navigation leaves the Trash location (no-op otherwise).
+        self.as_mut().exit_trash();
         let destination = nav.destination().to_path_buf();
         self.as_mut().rust_mut().get_mut().pending_nav = Some(nav);
         self.as_mut().request_scan_inner(destination, false);
@@ -2535,7 +2696,7 @@ impl qobject::SideritaController {
         // While search results occupy the content box, folder reprojections
         // (a watcher tick, a sort toggle) must not overwrite them; `close_search`
         // drops the flag first, then reprojects to restore the folder.
-        if self.rust().search_active {
+        if self.rust().search_active || self.rust().trash_active {
             return;
         }
         let projected = {

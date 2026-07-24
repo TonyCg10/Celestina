@@ -491,6 +491,7 @@ ApplicationWindow {
         Shortcut {
             sequence: "Delete"
             enabled: root.active && !controller.loading && !controller.opRunning
+                     && !controller.trashActive
             onActivated: {
                 // Act on the whole selection — whatever set it (marquee,
                 // Ctrl/Shift-click or a single click). The keyboard cursor
@@ -511,7 +512,7 @@ ApplicationWindow {
 
         Shortcut {
             sequences: [StandardKey.Copy]
-            enabled: root.active
+            enabled: root.active && !controller.trashActive
             onActivated: {
                 // Selection first (marquee included), cursor only as fallback.
                 var p = mainPanel.selectedPaths()
@@ -529,7 +530,7 @@ ApplicationWindow {
 
         Shortcut {
             sequences: [StandardKey.Cut]
-            enabled: root.active
+            enabled: root.active && !controller.trashActive
             onActivated: {
                 // Selection first (marquee included), cursor only as fallback.
                 var p = mainPanel.selectedPaths()
@@ -1133,6 +1134,7 @@ ApplicationWindow {
                 cacheBuffer: 420
                 topMargin: 62 + (tabBar.visible ? tabBar.height + 8 : 0)
                          + (searchBar.visible ? searchBar.height + 8 : 0)
+                         + (trashHeader.visible ? trashHeader.height + 8 : 0)
                          + (fileList.detailsMode ? detailsHeader.height + 8 : 0)
                 boundsBehavior: Flickable.StopAtBounds
 
@@ -1568,6 +1570,7 @@ ApplicationWindow {
                 cacheBuffer: 480
                 topMargin: 62 + (tabBar.visible ? tabBar.height + 8 : 0)
                          + (searchBar.visible ? searchBar.height + 8 : 0)
+                         + (trashHeader.visible ? trashHeader.height + 8 : 0)
                 boundsBehavior: Flickable.StopAtBounds
                 activeFocusOnTab: true
                 keyNavigationEnabled: false
@@ -2821,9 +2824,29 @@ ApplicationWindow {
                     mainPanel.actingCount(targetToken)
             readonly property bool multi: actingCount > 1
 
+            // ── Trash-only actions ──
+            GlassMenuItem {
+                text: "Restaurar"
+                visible: controller.trashActive
+                height: visible ? implicitHeight : 0
+                icon.name: "edit-undo"
+                icon.source: CelestinaTheme.fallbackIcon("file")
+                onTriggered: controller.restoreTrash(
+                                 controller.indexForToken(entryMenu.targetToken))
+            }
+            GlassMenuItem {
+                text: "Eliminar permanentemente"
+                visible: controller.trashActive
+                height: visible ? implicitHeight : 0
+                icon.name: "edit-delete"
+                icon.source: CelestinaTheme.fallbackIcon("file")
+                onTriggered: controller.purgeTrash(
+                                 controller.indexForToken(entryMenu.targetToken))
+            }
+
             GlassMenuItem {
                 text: entryMenu.targetDirectory ? "Abrir carpeta" : "Abrir"
-                visible: !entryMenu.multi
+                visible: !entryMenu.multi && !controller.trashActive
                 height: visible ? implicitHeight : 0
                 icon.name: entryMenu.targetDirectory ? "folder-open" : "text-x-generic"
                 icon.source: CelestinaTheme.fallbackIcon(
@@ -2833,7 +2856,7 @@ ApplicationWindow {
 
             GlassMenuItem {
                 text: "Abrir con…"
-                visible: !entryMenu.targetDirectory && !entryMenu.multi
+                visible: !entryMenu.targetDirectory && !entryMenu.multi && !controller.trashActive
                 height: visible ? implicitHeight : 0
                 icon.name: "system-run"
                 icon.source: CelestinaTheme.fallbackIcon("file")
@@ -2842,7 +2865,7 @@ ApplicationWindow {
 
             GlassMenuItem {
                 text: "Abrir en pestaña nueva"
-                visible: entryMenu.targetDirectory && !entryMenu.multi
+                visible: entryMenu.targetDirectory && !entryMenu.multi && !controller.trashActive
                 height: visible ? implicitHeight : 0
                 icon.name: "tab-new"
                 icon.source: CelestinaTheme.fallbackIcon("folder")
@@ -2851,7 +2874,7 @@ ApplicationWindow {
 
             GlassMenuItem {
                 text: "Añadir a marcadores"
-                visible: entryMenu.targetDirectory && !entryMenu.multi
+                visible: entryMenu.targetDirectory && !entryMenu.multi && !controller.trashActive
                 height: visible ? implicitHeight : 0
                 icon.name: "bookmark-new"
                 icon.source: CelestinaTheme.fallbackIcon("folder")
@@ -2860,7 +2883,7 @@ ApplicationWindow {
 
             GlassMenuItem {
                 text: "Renombrar"
-                visible: !entryMenu.multi
+                visible: !entryMenu.multi && !controller.trashActive
                 height: visible ? implicitHeight : 0
                 icon.name: "edit-rename"
                 icon.source: CelestinaTheme.fallbackIcon("file")
@@ -2871,6 +2894,8 @@ ApplicationWindow {
                 text: entryMenu.multi
                       ? "Copiar " + entryMenu.actingCount + " elementos"
                       : "Copiar"
+                visible: !controller.trashActive
+                height: visible ? implicitHeight : 0
                 icon.name: "edit-copy"
                 icon.source: CelestinaTheme.fallbackIcon("file")
                 onTriggered: mainPanel.copySelection(
@@ -2881,6 +2906,8 @@ ApplicationWindow {
                 text: entryMenu.multi
                       ? "Cortar " + entryMenu.actingCount + " elementos"
                       : "Cortar"
+                visible: !controller.trashActive
+                height: visible ? implicitHeight : 0
                 icon.name: "edit-cut"
                 icon.source: CelestinaTheme.fallbackIcon("file")
                 onTriggered: mainPanel.copySelection(
@@ -2891,6 +2918,8 @@ ApplicationWindow {
                 text: entryMenu.multi
                       ? "Enviar " + entryMenu.actingCount + " a la papelera"
                       : "Enviar a la papelera"
+                visible: !controller.trashActive
+                height: visible ? implicitHeight : 0
                 icon.name: "user-trash"
                 icon.source: CelestinaTheme.fallbackIcon("file")
                 onTriggered: mainPanel.trashSelection(
@@ -3249,8 +3278,9 @@ ApplicationWindow {
             id: trashView
             anchors.fill: parent
             z: 64
-            // Driven by the window-scope sidebar; only the active tab shows it.
-            visible: window.trashViewOpen && root.active
+            // Superseded by the in-content Trash location (controller.trashActive);
+            // kept dormant to avoid a large delete — never shown.
+            visible: false
             // Opaque content panel — a location, not a dimmed modal.
             color: CelestinaTheme.canvas
 
@@ -4050,6 +4080,97 @@ ApplicationWindow {
                 }
             }
 
+            // ── Trash location header ──────────────────────────────────────
+            // Trashed items ride the same entryModel (like search), so the
+            // content view renders them as list / grid / details with
+            // thumbnails. This slim glass bar floats below the breadcrumb with
+            // the bulk actions and the way back.
+            Item {
+                id: trashHeader
+                z: 10
+                x: 12
+                width: root.width - 24
+                height: 40
+                y: (tabBar.visible ? tabBar.y + tabBar.height : topBar.y + topBar.height) + 8
+                visible: controller.trashActive
+
+                property bool confirmingEmpty: false
+                onVisibleChanged: if (!visible) confirmingEmpty = false
+
+                GlassSurface {
+                    anchors.fill: parent
+                    backdropSource: topBar.activeView
+                    captureEnabled: trashHeader.visible
+                    liveCapture: true
+                    cornerRadius: CelestinaTheme.radiusSm
+                }
+
+                IconImage {
+                    id: trashHeaderIcon
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: CelestinaTheme.iconSm
+                    height: CelestinaTheme.iconSm
+                    name: "user-trash"
+                    source: CelestinaTheme.fallbackIcon("user-trash")
+                }
+                Text {
+                    anchors.left: trashHeaderIcon.right
+                    anchors.leftMargin: 10
+                    anchors.right: trashHeaderControls.left
+                    anchors.rightMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Papelera" + (controller.trashNames.length > 0
+                                        ? "  ·  " + controller.trashNames.length : "  ·  vacía")
+                    color: CelestinaTheme.text
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: Math.round(CelestinaTheme.fontLabel * window.interfaceTextScale)
+                    font.weight: CelestinaTheme.weightMedium
+                    elide: Text.ElideRight
+                }
+
+                Row {
+                    id: trashHeaderControls
+                    anchors.right: parent.right
+                    anchors.rightMargin: 8
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 8
+
+                    Text {
+                        visible: trashHeader.confirmingEmpty
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "¿Vaciar? No se puede deshacer"
+                        color: CelestinaTheme.textMuted
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: CelestinaTheme.fontCaption
+                    }
+                    PillButton {
+                        text: trashHeader.confirmingEmpty ? "Vaciar definitivamente" : "Vaciar"
+                        destructive: true
+                        visible: controller.trashNames.length > 0
+                        onClicked: {
+                            if (trashHeader.confirmingEmpty) {
+                                controller.emptyTrash()
+                                trashHeader.confirmingEmpty = false
+                            } else {
+                                trashHeader.confirmingEmpty = true
+                            }
+                        }
+                    }
+                    PillButton {
+                        text: "Restaurar todo"
+                        visible: controller.trashNames.length > 0 && !trashHeader.confirmingEmpty
+                        onClicked: controller.restoreAllTrash()
+                    }
+                    PillButton {
+                        text: "Volver"
+                        primary: true
+                        onClicked: controller.closeTrash()
+                    }
+                }
+            }
+
             // ── Details-view column header ─────────────────────────────────
             // A floating glass strip aligned to the list's columns; each title
             // sorts by that field (a second click on the active one flips the
@@ -4350,17 +4471,18 @@ ApplicationWindow {
                     }
                 }
 
-                // Papelera — not a folder scan; opens the Trash view overlay.
+                // Papelera — opens Trash as a content-view location.
                 Item {
                     id: trashPlace
                     width: placesColumn.width
                     height: window.sidebarRowHeight
+                    readonly property bool current: window.activeController
+                                                    && window.activeController.trashActive
                     Accessible.role: Accessible.Button
                     Accessible.name: "Papelera"
                     Accessible.onPressAction: {
                         if (window.activeController)
-                            window.activeController.loadTrash()
-                        window.trashViewOpen = true
+                            window.activeController.openTrash()
                     }
 
                     Rectangle {
@@ -4368,8 +4490,10 @@ ApplicationWindow {
                         anchors.leftMargin: 2
                         anchors.rightMargin: 2
                         radius: CelestinaTheme.radiusSm
-                        color: trashPlaceMouse.containsMouse
-                               ? CelestinaTheme.surfaceHover : "transparent"
+                        color: trashPlace.current
+                               ? CelestinaTheme.badgeAccentFill
+                               : trashPlaceMouse.containsMouse
+                                 ? CelestinaTheme.surfaceHover : "transparent"
                     }
 
                     IconImage {
@@ -4401,8 +4525,7 @@ ApplicationWindow {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             if (window.activeController)
-                                window.activeController.loadTrash()
-                            window.trashViewOpen = true
+                                window.activeController.openTrash()
                         }
                     }
                 }
