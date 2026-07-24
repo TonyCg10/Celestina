@@ -21,6 +21,26 @@ Cores and style never depend on apps or the shell. Each project keeps its own
 README and ROADMAP; the monorepo holds shared history and the contracts between
 projects.
 
+### Planned
+
+Design-stage — not built; each is started only when a recurring daily gap proves
+the need, and reuses the shared core and style.
+
+| Project | Role | Stack |
+|---|---|---|
+| Fluorita *(working name)* | media player — audio · video · image; later a shell widget | Rust · QML |
+| [magnetita](magnetita/) | phone link | Rust · QML |
+
+**Fluorita** is the suite's media app. It opens and plays whatever media it is
+handed — a song, a clip, an image — a *player/viewer*, not a library (Siderita
+is the browser). It owns the media decode stack that Siderita deliberately does
+not carry, and produces video first-frames and audio covers into the shared
+freedesktop thumbnail cache, which Siderita simply consumes. Later it runs as an
+embeddable **shell widget** — a playing movie or now-playing music, live in the
+panel — and that same widget backs a live-preview quick-look in Siderita. So the
+media weight lives in one place, behind a standards-based hand-off, and never
+leaks into the file manager.
+
 ## Principles
 
 - Rust core, QML frontend, thin bridge.
