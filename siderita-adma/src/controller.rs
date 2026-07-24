@@ -546,6 +546,8 @@ pub struct SideritaControllerRust {
     volume_devices: QStringList,
     volume_mounts: QStringList,
     volume_busy: bool,
+    // Set once the UDisks2 hotplug watch thread is running for this controller.
+    volume_watch_started: bool,
     hidden_device_count: i32,
     volumes: Vec<crate::volumes::Volume>,
     settings: crate::settings::Settings,
@@ -654,6 +656,7 @@ impl Default for SideritaControllerRust {
             volume_devices: QStringList::default(),
             volume_mounts: QStringList::default(),
             volume_busy: false,
+            volume_watch_started: false,
             hidden_device_count: 0,
             volumes: Vec::new(),
             settings,
@@ -1771,6 +1774,32 @@ impl qobject::SideritaController {
         self.as_mut().set_volume_names(names);
         self.as_mut().set_volume_devices(devices);
         self.as_mut().set_volume_mounts(mounts);
+
+        // First load also arms the hotplug watch, so later plug/unplug events
+        // refresh the list on their own.
+        self.as_mut().start_volume_watch();
+    }
+
+    /// Starts, once per controller, a background thread that watches UDisks2 for
+    /// a device being added or removed and reloads the list on the Qt thread —
+    /// so plugging or unplugging a drive updates "Dispositivos" without a manual
+    /// refresh. Best-effort: an unavailable bus just logs and gives up.
+    fn start_volume_watch(mut self: Pin<&mut Self>) {
+        if self.rust().volume_watch_started {
+            return;
+        }
+        self.as_mut().rust_mut().get_mut().volume_watch_started = true;
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let result = crate::volumes::watch_changes(move || {
+                let _ = qt.queue(|controller: Pin<&mut qobject::SideritaController>| {
+                    controller.load_volumes();
+                });
+            });
+            if let Err(error) = result {
+                eprintln!("Siderita: watch de dispositivos no disponible: {error}");
+            }
+        });
     }
 
     /// Mounts the volume at `index` on a worker thread — mounting can block on a

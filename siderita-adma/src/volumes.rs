@@ -6,6 +6,8 @@
 //! rather than touching `/proc/mounts` or `mount(8)` directly.
 
 use std::collections::HashMap;
+use std::sync::mpsc;
+use std::time::Duration;
 
 use zbus::blocking::{Connection, Proxy};
 use zbus::zvariant::Value;
@@ -96,6 +98,55 @@ pub fn list_volumes() -> Result<Vec<Volume>, String> {
 
     volumes.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     Ok(volumes)
+}
+
+/// Blocks, invoking `on_change` whenever UDisks2 reports a device added or
+/// removed — a hotplug — so the caller can reload the list. Meant to run on a
+/// worker thread; returns only on a fatal bus error. Plugging one drive exposes
+/// several interfaces at once, so a burst is coalesced (300 ms quiet window)
+/// into a single `on_change` rather than a storm of reloads.
+pub fn watch_changes<F: Fn() + Send + 'static>(on_change: F) -> Result<(), String> {
+    let connection =
+        Connection::system().map_err(|error| format!("UDisks2 no disponible: {error}"))?;
+    let manager = zbus::blocking::fdo::ObjectManagerProxy::new(
+        &connection,
+        UDISKS,
+        "/org/freedesktop/UDisks2",
+    )
+    .map_err(|error| format!("UDisks2 no disponible: {error}"))?;
+
+    let added = manager
+        .receive_interfaces_added()
+        .map_err(|error| format!("UDisks2: {error}"))?;
+    let removed = manager
+        .receive_interfaces_removed()
+        .map_err(|error| format!("UDisks2: {error}"))?;
+
+    // One feeder thread per signal pushes a tick into a coalescing channel; the
+    // signal payloads are irrelevant — any add/remove means "re-enumerate".
+    let (tx, rx) = mpsc::channel::<()>();
+    let tx_removed = tx.clone();
+    std::thread::spawn(move || {
+        for _ in added {
+            if tx.send(()).is_err() {
+                break;
+            }
+        }
+    });
+    std::thread::spawn(move || {
+        for _ in removed {
+            if tx_removed.send(()).is_err() {
+                break;
+            }
+        }
+    });
+
+    while rx.recv().is_ok() {
+        // Drain the rest of the burst, then reload once it settles.
+        while rx.recv_timeout(Duration::from_millis(300)).is_ok() {}
+        on_change();
+    }
+    Ok(())
 }
 
 /// Mounts the volume at `object_path`, returning its mount point. May prompt for
