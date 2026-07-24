@@ -1327,7 +1327,11 @@ ApplicationWindow {
                 visible: mainPanel.viewMode === "grid" && !controller.searchActive
                 model: entryModel
                 clip: true
-                cellWidth: mainPanel.gridCellWidth
+                // Stretch the columns to fill the width: fit as many natural-size
+                // cells as possible, then divide the width evenly among them, so
+                // the leftover never piles up as one gap on the right.
+                readonly property int cols: Math.max(1, Math.floor(width / mainPanel.gridCellWidth))
+                cellWidth: Math.floor(width / cols)
                 cellHeight: mainPanel.gridCellHeight
                 cacheBuffer: 480
                 topMargin: 62 + (tabBar.visible ? tabBar.height + 8 : 0)
@@ -1346,7 +1350,7 @@ ApplicationWindow {
                 }
 
                 function columns() {
-                    return Math.max(1, Math.floor(width / cellWidth))
+                    return cols
                 }
 
                 function selectCell(i) {
@@ -1456,9 +1460,13 @@ ApplicationWindow {
                     Accessible.name: name
                     Accessible.selected: selected
 
+                    // The selection square keeps its natural size and centres in
+                    // the (stretched-to-fill) cell, rather than ballooning to the
+                    // full column width.
                     Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: 5
+                        anchors.centerIn: parent
+                        width: mainPanel.gridCellWidth - 10
+                        height: parent.height - 10
                         radius: CelestinaTheme.radiusSm
                         color: cell.selected
                                ? CelestinaTheme.surfaceSelected
@@ -1492,7 +1500,9 @@ ApplicationWindow {
                         }
 
                         Rectangle {
-                            anchors.fill: parent
+                            anchors.centerIn: parent
+                            width: mainPanel.gridCellWidth - 10
+                            height: parent.height - 10
                             visible: parent.containsDrag
                             color: "transparent"
                             radius: CelestinaTheme.radiusSm
@@ -1539,7 +1549,7 @@ ApplicationWindow {
                         }
 
                         Text {
-                            width: fileGrid.cellWidth - 22
+                            width: mainPanel.gridCellWidth - 22
                             horizontalAlignment: Text.AlignHCenter
                             text: cell.name
                             color: CelestinaTheme.text
@@ -2366,8 +2376,15 @@ ApplicationWindow {
 
                     readonly property bool activeTab: root.tabHost
                             && index === root.tabHost.currentTabIndex
+                    readonly property int tabCount: root.tabHost
+                            ? root.tabHost.tabsModel.count : 1
 
-                    width: 172
+                    // Tabs flex to share the strip's width (clamped), so they
+                    // shrink to fit as more open instead of overflowing off-edge;
+                    // only past the minimum does the strip start to scroll.
+                    width: Math.max(96, Math.min(200,
+                            (tabList.width - (chip.tabCount - 1) * tabList.spacing)
+                            / chip.tabCount))
                     height: tabList.height
 
                     // Solid pill at rest.
