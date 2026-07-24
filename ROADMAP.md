@@ -32,8 +32,9 @@ The goal is a session that is dependable, coherent and light — not feature
 parity with any existing desktop environment, and not a product for anyone but
 its author.
 
-**Current focus:** a minimal Niri shell (`celestina-desktop`) and the file
-manager (`siderita-adma`). Everything else waits behind a proven daily gap.
+**Current focus:** the Niri shell (`celestina-desktop`). The file manager
+(`siderita-adma`) has **completed its own roadmap** (CP0–CP3) and is in daily
+use; new apps wait behind a proven daily gap.
 
 ## The pieces
 
@@ -58,6 +59,17 @@ celestina-rs ─────┐                 celestina-style ──┐
 > `celestina-style`. `celestina-desktop` still uses a small inline palette;
 > finishing that half of the convergence is a Checkpoint 1 goal.
 
+**Planned apps** — design-stage, listed in the README's
+[Planned](README.md#planned) section, each started only when a recurring daily
+gap proves the need and each reusing `celestina-rs` + `celestina-style`:
+
+- **Fluorita** *(working name)* — the media player (audio · video · image) that
+  produces the video/audio thumbnails Siderita consumes, and later runs as a
+  shell widget.
+- **Grafita** *(working name)* — a light text/code editor, the edit-side
+  companion to Siderita's read-only quick-look ("Abrir con Grafita").
+- **magnetita** — a phone link.
+
 ## Shared foundations (the stack contract)
 
 These hold across every project and are the reason the suite is worth building
@@ -80,7 +92,7 @@ as a suite rather than four unrelated apps:
   consumed by pinned version for any release; path deps are a development
   convenience only. The monorepo owns shared history and the contracts.
 
-## Status snapshot (2026-07-20)
+## Status snapshot (2026-07-24)
 
 - ✅ Monorepo git baseline established (this repository).
 - `celestina-rs` — four cores compile; fmt, Clippy, 30 tests pass; read-only.
@@ -89,8 +101,10 @@ as a suite rather than four unrelated apps:
   siderita-adma; a clean-prefix installable release is still open.
 - `celestina-desktop` — host builds and QML-lints; geometry/zone/focus not yet
   verified on real Niri; no Rust yet.
-- `siderita-adma` — read-only slice runs; measured offscreen only; install
-  staging, watcher, native model and real-Wayland numbers still open.
+- `siderita-adma` — **its own roadmap is complete (CP0–CP3, all ratified)**:
+  staged self-contained install, loss-free operations, freedesktop interop, a
+  native role model with a live hotplug/FS watcher, list/grid/details views,
+  freedesktop thumbnails and a spacebar quick-look — validated on real Wayland.
 
 ---
 
@@ -102,7 +116,7 @@ truthful first slice; the shared contracts exist in a form apps can consume.
 - [ ] **celestina-rs CP0** — freeze & version the read-only core API
 - [ ] **celestina-style CP0** — module installable/importable from a clean prefix, glass APIs made truthful
 - [ ] **celestina-desktop CP0** — panel geometry, exclusive zone and no-focus verified on real Niri
-- [ ] **siderita-adma CP0** — ship the read-only slice from a staged install with real-Wayland resource/frame numbers; ratify or reopen Qt/QML
+- [x] **siderita-adma CP0** — ship the read-only slice from a staged install with real-Wayland resource/frame numbers; ratify or reopen Qt/QML
 
 **Done when:** no project needs a sibling source checkout to build; the shell
 maps correctly on every output without stealing focus; the file manager runs
@@ -114,7 +128,7 @@ visibly share one design language.
 
 - [ ] **celestina-desktop CP1** — real Niri workspaces + focused window via a Rust adapter, with pending/failed/confirmed focus requests
 - [ ] **celestina-desktop CP2** — opt-in Niri startup contract composing external session tools with verified fallbacks, before Noctalia leaves autostart
-- [ ] **siderita-adma CP1** — loss-free file operations (create/rename/copy/move/trash) on disposable fixtures, source never removed before destination is verified
+- [x] **siderita-adma CP1** — loss-free file operations (create/rename/copy/move/trash) on disposable fixtures, source never removed before destination is verified
 - [ ] **celestina-rs CP1** — the write-side domain those operations stand on
 - [ ] **celestina-style CP1** — stable, accessible design contract (compat/deprecation, truthful glass, font/icon fallbacks, a11y)
 - [x] **Convergence (Siderita)** — `siderita-adma` renders from the shared CelestinaStyle module (semantic tokens + working glass + icons); its private theme/glass were removed
@@ -129,7 +143,7 @@ style release; no data-loss path exists in file operations.
 
 - [ ] Suite conventions: single-instance behavior, a small IPC/activation convention, `open-with`/handler wiring, drag-and-drop between first-party apps — all over freedesktop standards
 - [ ] One settings + theming source shared by the shell and every app
-- [ ] Additional first-party apps (editor, viewer, media player) added **one at a time**, each only after recurring friction with the tool it replaces proves the need; each reuses `celestina-rs` + `celestina-style` and adds its own domain crate
+- [ ] Additional first-party apps — **Grafita** (text/code editor), **Fluorita** (media player: audio · video · image) — added **one at a time**, each only after recurring friction with the tool it replaces proves the need; each reuses `celestina-rs` + `celestina-style` and adds its own domain crate
 
 ## Later / someday
 - [ ] Packaging and distribution beyond the author's machine (reproducible install, dependency diagnostics), once the suite is worth shipping
