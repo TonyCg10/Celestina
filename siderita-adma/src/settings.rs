@@ -13,6 +13,8 @@ use std::path::{Path, PathBuf};
 /// historical default and reads as 50 %.
 const SCALE_MIN: f64 = 0.2;
 const SCALE_MAX: f64 = 2.0;
+/// Content icons alone may go larger — up to 150 % (factor 3.0).
+const CONTENT_ICON_SCALE_MAX: f64 = 3.0;
 
 /// The persisted view configuration.
 #[derive(Clone, Debug, PartialEq)]
@@ -109,8 +111,8 @@ fn load_from(path: &Path) -> Settings {
             }
             "scale" => legacy_scale = parse_scale(value),
             "content_icon_scale" => {
-                if let Some(scale) = parse_scale(value) {
-                    settings.content_icon_scale = scale;
+                if let Ok(scale) = value.parse::<f64>() {
+                    settings.content_icon_scale = scale.clamp(SCALE_MIN, CONTENT_ICON_SCALE_MAX);
                     content_icon_seen = true;
                 }
             }
@@ -180,7 +182,7 @@ fn save_to(path: &Path, settings: &Settings) -> io::Result<()> {
         } else {
             "list"
         },
-        settings.content_icon_scale.clamp(SCALE_MIN, SCALE_MAX),
+        settings.content_icon_scale.clamp(SCALE_MIN, CONTENT_ICON_SCALE_MAX),
         settings.content_text_scale.clamp(SCALE_MIN, SCALE_MAX),
         settings.interface_icon_scale.clamp(SCALE_MIN, SCALE_MAX),
         settings.interface_text_scale.clamp(SCALE_MIN, SCALE_MAX),
@@ -245,7 +247,7 @@ mod tests {
         fs::write(&file, "view_mode=weird\ncontent_icon_scale=99\n").unwrap();
         let loaded = load_from(&file);
         assert_eq!(loaded.view_mode, "list"); // invalid → default
-        assert_eq!(loaded.content_icon_scale, 2.0); // clamped to the max
+        assert_eq!(loaded.content_icon_scale, 3.0); // clamped to the 150% max
         assert_eq!(loaded.content_text_scale, 1.0); // untouched default
         let _ = fs::remove_dir_all(file.parent().unwrap());
     }

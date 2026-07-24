@@ -231,6 +231,8 @@ ApplicationWindow {
         id: sizeRow
         property string label: ""
         property alias value: sizeSlider.value
+        // Most scales cap at 2.0 (100 %); content icons may go to 3.0 (150 %).
+        property real maxValue: 2.0
         signal moved(real v)
 
         implicitWidth: 252
@@ -254,10 +256,10 @@ ApplicationWindow {
             anchors.right: sizeRowValue.left
             anchors.rightMargin: 10
             anchors.verticalCenter: parent.verticalCenter
-            // The factor runs 0.2–2.0 but reads to the user as 10 %–100 % (a
-            // fraction of the 2.0 maximum).
+            // The factor reads to the user as a fraction of 2.0 — 10 %–100 %
+            // (or up to 150 % where maxValue is raised).
             from: 0.2
-            to: 2.0
+            to: sizeRow.maxValue
             stepSize: 0.1
             onMoved: sizeRow.moved(value)
 
@@ -1978,6 +1980,7 @@ ApplicationWindow {
                         SizeRow {
                             label: "Contenido"
                             value: window.contentIconScale
+                            maxValue: 3.0
                             onMoved: function(v) {
                                 window.contentIconScale = v
                                 window.persistSizing()
