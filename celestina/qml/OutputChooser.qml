@@ -30,10 +30,19 @@ Window {
 
     readonly property var screens: Qt.application.screens
     // La tarjeta más alta manda: las demás se alinean a su base.
-    readonly property int tileHeight: 132
-    readonly property int cardHeight: 96 + tileHeight + 66
+    readonly property int tileHeight: 148
+    readonly property int tileWidth: 236
+    readonly property int tileSpacing: 16
+    // La fila se lleva algo más de alto que las tarjetas: el fondo del elemento
+    // marcado se dibuja hasta su borde, y pegado al recorte se veía cortado.
+    readonly property int rowHeight: tileHeight + 12
+    // Cabecera + fila + un respiro real antes de los botones + el pie.
+    readonly property int cardHeight: 84 + rowHeight + 26 + 64
+    // Justo lo que ocupan las tarjetas más sus márgenes: sin hueco sobrante a la
+    // derecha de la última pantalla. El suelo es lo que miden los dos botones.
     readonly property int cardWidth: Math.min(
-            220 + screens.length * 236,
+            Math.max(380, screens.length * tileWidth
+                          + Math.max(0, screens.length - 1) * tileSpacing + 56),
             Screen.width > 0 ? Screen.width - 120 : 1200)
 
     width: cardWidth
@@ -97,12 +106,12 @@ Window {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: subheading.bottom
-            anchors.topMargin: 18
-            anchors.leftMargin: 20
-            anchors.rightMargin: 20
-            height: chooser.tileHeight
+            anchors.topMargin: 16
+            anchors.leftMargin: 28
+            anchors.rightMargin: 28
+            height: chooser.rowHeight
             orientation: ListView.Horizontal
-            spacing: 14
+            spacing: chooser.tileSpacing
             clip: true
             model: chooser.screens
             currentIndex: chooser.selected
@@ -132,7 +141,7 @@ Window {
 
                 readonly property bool current: chooser.selected === index
 
-                width: 222
+                width: chooser.tileWidth
                 height: chooser.tileHeight
                 radius: CelestinaTheme.radiusSm
                 color: tile.current ? CelestinaTheme.surfaceSelected
@@ -216,10 +225,10 @@ Window {
 
         Row {
             anchors.right: parent.right
-            anchors.rightMargin: 20
+            anchors.rightMargin: 28
             anchors.bottom: parent.bottom
-            anchors.bottomMargin: 18
-            spacing: 8
+            anchors.bottomMargin: 20
+            spacing: 12
 
             ChooserButton {
                 text: "Cancelar"
@@ -240,9 +249,9 @@ Window {
         property bool primary: false
         signal clicked()
 
-        implicitWidth: label.implicitWidth + 30
+        implicitWidth: label.implicitWidth + 36
         width: implicitWidth
-        height: 32
+        height: 34
         radius: CelestinaTheme.radiusSm
         color: button.primary
                ? (buttonMouse.pressed ? Qt.darker(CelestinaTheme.accent, 1.18)

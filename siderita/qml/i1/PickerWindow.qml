@@ -43,10 +43,10 @@ Window {
             : directory ? "Elegir carpeta"
             : "Abrir"
 
-    width: 900
-    height: 620
-    minimumWidth: 520
-    minimumHeight: 380
+    width: 1180
+    height: 800
+    minimumWidth: 640
+    minimumHeight: 460
     visible: true
     color: CelestinaTheme.canvas
     title: requestTitle.length > 0 ? requestTitle
@@ -109,7 +109,7 @@ Window {
             filterCombo.currentIndex = 1
             applyFilter(1)
         }
-        entryList.forceActiveFocus()
+        entryGrid.forceActiveFocus()
     }
 
     // What Accept will hand back. A directory request answers with the folder
@@ -131,7 +131,7 @@ Window {
 
     function selectedPaths(foldersOnly) {
         const out = []
-        for (var i = 0; i < entryList.count; i++) {
+        for (var i = 0; i < entryGrid.count; i++) {
             if (chosen[controller.entryToken(i)] !== true)
                 continue
             const kind = controller.entryKind(i)
@@ -206,6 +206,22 @@ Window {
         target: controller
         // A folder change drops a selection that no longer means anything.
         function onCurrentPathChanged() { picker.clearChosen() }
+    }
+
+    // Los botones laterales del ratón navegan, igual que en la ventana
+    // principal: un diálogo de archivos se recorre con la mano en el ratón, y
+    // el gesto ya existe en el resto de la aplicación.
+    TapHandler {
+        acceptedButtons: Qt.BackButton | Qt.ForwardButton
+        gesturePolicy: TapHandler.ReleaseWithinBounds
+        onTapped: function(eventPoint, button) {
+            if (controller.loading)
+                return
+            if (button === Qt.BackButton && controller.canGoBack)
+                controller.goBack()
+            else if (button === Qt.ForwardButton && controller.canGoForward)
+                controller.goForward()
+        }
     }
 
     // ── Chrome ───────────────────────────────────────────────────────────
@@ -290,127 +306,157 @@ Window {
             }
         }
 
-        // The listing.
-        ListView {
-            id: entryList
+        // La rejilla: la vista de un selector de archivos es de reconocimiento,
+        // no de lectura — se busca *esa* foto, y una miniatura la encuentra
+        // antes que su nombre. Celdas grandes por la misma razón.
+        GridView {
+            id: entryGrid
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: header.bottom
             anchors.bottom: footer.top
+            anchors.margins: 10
             clip: true
             model: entryModel
             currentIndex: -1
+            cacheBuffer: 600
             boundsBehavior: Flickable.StopAtBounds
+            focus: true
+            // Columnas que llenan el ancho: el hueco sobrante se reparte entre
+            // ellas en vez de amontonarse a la derecha.
+            readonly property int cellSide: 136
+            readonly property int columns: Math.max(1, Math.floor(width / cellSide))
+            cellWidth: Math.floor(width / columns)
+            cellHeight: cellSide + 26
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
             Keys.onPressed: function(event) {
                 if (event.key === Qt.Key_Escape) {
                     picker.cancel()
-                    event.accepted = true
                 } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                     if (currentIndex >= 0)
                         picker.activate(currentIndex)
-                    event.accepted = true
                 } else if (event.key === Qt.Key_Backspace) {
                     controller.goUp()
-                    event.accepted = true
+                } else {
+                    return
                 }
+                event.accepted = true
             }
 
             delegate: Item {
-                id: row
+                id: cell
 
                 required property int index
                 required property string name
                 required property string token
                 required property string kind
                 required property string path
-                required property string sizeText
-                required property string dateText
 
                 readonly property bool isDirectory: kind === "directory"
-                // A file is not selectable when the app asked for a folder.
                 readonly property bool selectable: picker.directory ? isDirectory : true
                 readonly property bool chosen: picker.isChosen(token)
+                // Sólo lo que el proveedor de miniaturas sabe servir; el resto
+                // se queda con su icono de tipo, que ya es informativo.
+                readonly property bool previewable: !isDirectory
+                        && /\.(png|jpe?g|gif|webp|bmp|svg|avif|tiff?|ico|heic)$/i.test(name)
 
-                width: entryList.width
-                height: 34
+                width: entryGrid.cellWidth
+                height: entryGrid.cellHeight
 
                 Rectangle {
                     anchors.fill: parent
-                    anchors.leftMargin: 6
-                    anchors.rightMargin: 6
+                    anchors.margins: 4
                     radius: CelestinaTheme.radiusSm
-                    color: row.chosen ? CelestinaTheme.surfaceSelected
-                           : rowMouse.containsMouse ? CelestinaTheme.surfaceHover
+                    color: cell.chosen ? CelestinaTheme.surfaceSelected
+                           : cellMouse.containsMouse ? CelestinaTheme.surfaceHover
                            : "transparent"
+                    border.width: cell.chosen ? 1 : 0
+                    border.color: CelestinaTheme.borderStrong
                     Behavior on color {
                         ColorAnimation { duration: CelestinaTheme.motionFast }
                     }
                 }
 
-                IconImage {
-                    id: rowIcon
-                    x: 16
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: CelestinaTheme.iconSm
-                    height: CelestinaTheme.iconSm
-                    opacity: row.selectable ? 1 : 0.4
-                    name: row.isDirectory ? "folder" : "text-x-generic"
-                    source: CelestinaTheme.fallbackIcon(row.isDirectory ? "folder" : "file")
+                Rectangle {
+                    id: tile
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: 12
+                    width: 84
+                    height: 84
+                    radius: CelestinaTheme.radiusSm
+                    clip: true
+                    opacity: cell.selectable ? 1 : 0.4
+                    color: cell.isDirectory ? CelestinaTheme.glyphDirectory
+                                            : CelestinaTheme.glyphFile
+
+                    IconImage {
+                        anchors.centerIn: parent
+                        visible: !preview.ready
+                        width: 46
+                        height: 46
+                        name: cell.isDirectory ? "folder" : "text-x-generic"
+                        source: CelestinaTheme.fallbackIcon(
+                                    cell.isDirectory ? "folder" : "file")
+                    }
+
+                    // La caché compartida de freedesktop, la misma que lee la
+                    // ventana principal: si hay miniatura, aparece; si no, el
+                    // icono se queda y nadie espera por nada.
+                    Image {
+                        id: preview
+                        anchors.fill: parent
+                        anchors.margins: 1
+                        readonly property bool ready: cell.previewable
+                                                      && status === Image.Ready
+                        visible: opacity > 0
+                        opacity: ready ? 1 : 0
+                        source: cell.previewable
+                                ? "image://thumb/" + encodeURIComponent(cell.path) : ""
+                        sourceSize.width: 256
+                        sourceSize.height: 256
+                        fillMode: Image.PreserveAspectCrop
+                        asynchronous: true
+                        cache: true
+                        smooth: true
+                        Behavior on opacity {
+                            NumberAnimation { duration: CelestinaTheme.motionNormal }
+                        }
+                    }
                 }
 
                 Text {
-                    x: rowIcon.x + rowIcon.width + 10
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width - x - 220
-                    text: row.name
-                    color: row.selectable ? CelestinaTheme.text : CelestinaTheme.textMuted
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontBody
-                    elide: Text.ElideRight
-                }
-
-                Text {
-                    anchors.right: parent.right
-                    anchors.rightMargin: 120
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: row.sizeText
-                    color: CelestinaTheme.textMuted
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: tile.y + tile.height + 8
+                    width: parent.width - 14
+                    horizontalAlignment: Text.AlignHCenter
+                    text: cell.name
+                    color: cell.selectable ? CelestinaTheme.text
+                                           : CelestinaTheme.textMuted
                     font.family: CelestinaTheme.sansFamily
                     font.pixelSize: CelestinaTheme.fontCaption
-                }
-
-                Text {
-                    anchors.right: parent.right
-                    anchors.rightMargin: 18
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 96
-                    horizontalAlignment: Text.AlignRight
-                    text: row.dateText
-                    color: CelestinaTheme.textMuted
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontCaption
                     elide: Text.ElideRight
+                    maximumLineCount: 2
+                    wrapMode: Text.Wrap
                 }
 
                 MouseArea {
-                    id: rowMouse
+                    id: cellMouse
                     anchors.fill: parent
                     hoverEnabled: true
                     onClicked: function(mouse) {
-                        entryList.currentIndex = row.index
-                        entryList.forceActiveFocus()
-                        if (!row.selectable)
+                        entryGrid.currentIndex = cell.index
+                        entryGrid.forceActiveFocus()
+                        if (!cell.selectable)
                             return
                         if (picker.multiple && (mouse.modifiers & Qt.ControlModifier))
-                            picker.toggleChosen(row.token)
+                            picker.toggleChosen(cell.token)
                         else
-                            picker.selectOnly(row.token)
-                        if (picker.saving && !row.isDirectory)
-                            nameField.text = row.name
+                            picker.selectOnly(cell.token)
+                        if (picker.saving && !cell.isDirectory)
+                            nameField.text = cell.name
                     }
-                    onDoubleClicked: picker.activate(row.index)
+                    onDoubleClicked: picker.activate(cell.index)
                 }
             }
         }
@@ -421,7 +467,7 @@ Window {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
-            height: 56
+            height: 72
             color: CelestinaTheme.canvasRaised
 
             Text {
@@ -438,10 +484,10 @@ Window {
                 id: filterCombo
                 visible: picker.filterRows.length > 1
                 anchors.left: parent.left
-                anchors.leftMargin: 16
+                anchors.leftMargin: 22
                 anchors.verticalCenter: parent.verticalCenter
-                width: Math.min(260, parent.width * 0.4)
-                height: 30
+                width: Math.min(300, parent.width * 0.4)
+                height: 34
                 model: picker.filterRows
                 textRole: "label"
                 font.family: CelestinaTheme.sansFamily
@@ -469,9 +515,9 @@ Window {
 
             Row {
                 anchors.right: parent.right
-                anchors.rightMargin: 14
+                anchors.rightMargin: 22
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 8
+                spacing: 12
 
                 PickerButton {
                     text: "Cancelar"
@@ -499,9 +545,9 @@ Window {
         property string help: ""
 
         hoverEnabled: true
-        implicitHeight: 30
-        leftPadding: 14
-        rightPadding: 14
+        implicitHeight: 34
+        leftPadding: 18
+        rightPadding: 18
         font.family: CelestinaTheme.sansFamily
         font.pixelSize: CelestinaTheme.fontLabel
         ToolTip.visible: help.length > 0 && hovered
