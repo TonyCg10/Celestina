@@ -595,6 +595,7 @@ ApplicationWindow {
             Component.onCompleted: {
                 viewMode = controller.savedViewMode()
                 rebuildFolderTypeIcons()
+                rebuildCustomIcons()
             }
             function persist() { controller.saveViewMode(viewMode) }
 
@@ -656,9 +657,27 @@ ApplicationWindow {
             function folderIcon(path) {
                 return (path && folderTypeIcons[path]) ? folderTypeIcons[path] : "folder"
             }
-            // The themed icon a non-thumbnailed entry shows — a media-type icon
-            // (video/audio/image), a type-specific folder, else generic.
+            // User-chosen per-path icon overrides (Cambiar icono…), folded from
+            // the controller's parallel lists and rebuilt whenever one changes.
+            property var customIcons: ({})
+            function rebuildCustomIcons() {
+                var m = {}
+                var paths = controller.customIconPaths
+                var names = controller.customIconNames
+                for (var i = 0; i < paths.length && i < names.length; i++)
+                    m[paths[i]] = names[i]
+                customIcons = m
+            }
+            Connections {
+                target: controller
+                function onCustomIconPathsChanged() { mainPanel.rebuildCustomIcons() }
+            }
+            // The themed icon a non-thumbnailed entry shows — a user override if
+            // set, else a media-type icon (video/audio/image), a type-specific
+            // folder, else generic.
             function mediaIconName(kind, media, path) {
+                if (path && customIcons[path])
+                    return customIcons[path]
                 return kind === "directory" ? folderIcon(path)
                      : kind === "symlink" ? "emblem-symbolic-link"
                      : media === "image" ? "image-x-generic"
@@ -2927,6 +2946,15 @@ ApplicationWindow {
             }
 
             GlassMenuItem {
+                text: "Cambiar icono…"
+                visible: !entryMenu.multi && !controller.trashActive
+                height: visible ? implicitHeight : 0
+                icon.name: "preferences-desktop-icons"
+                icon.source: CelestinaTheme.fallbackIcon("file")
+                onTriggered: iconPicker.openFor(entryMenu.targetPath, entryMenu.targetDirectory)
+            }
+
+            GlassMenuItem {
                 text: "Propiedades"
                 visible: !entryMenu.multi
                 height: visible ? implicitHeight : 0
@@ -3821,6 +3849,146 @@ ApplicationWindow {
                         text: "Cerrar"
                         primary: true
                         onClicked: controller.closeProperties()
+                    }
+                }
+            }
+        }
+
+        // ── Icon picker (Cambiar icono…) ─────────────────────────────────
+        // Pick a custom icon for one entry from the theme's folder-type (or
+        // file-type) variants; the choice persists per path via the controller.
+        Rectangle {
+            id: iconPicker
+            anchors.fill: parent
+            z: 69
+            visible: false
+            color: Qt.rgba(0, 0, 0, 0.45)
+
+            property string targetPath: ""
+            property bool forFolder: true
+            readonly property var folderOptions: [
+                "folder", "folder-documents", "folder-download", "folder-music",
+                "folder-pictures", "folder-videos", "folder-desktop", "folder-templates",
+                "folder-publicshare", "folder-development", "folder-games", "folder-git",
+                "folder-github", "folder-image", "folder-important", "folder-favorites",
+                "folder-cloud", "folder-mail", "folder-print", "folder-script",
+                "folder-sync", "folder-text", "folder-video"
+            ]
+            readonly property var fileOptions: [
+                "text-x-generic", "text-x-script", "text-x-python", "text-html",
+                "application-json", "image-x-generic", "video-x-generic",
+                "audio-x-generic", "application-pdf", "application-x-archive",
+                "application-x-executable", "font-x-generic", "application-x-desktop"
+            ]
+            readonly property var options: forFolder ? folderOptions : fileOptions
+
+            function openFor(path, isFolder) {
+                targetPath = path
+                forFolder = isFolder
+                visible = true
+            }
+            function choose(name) {
+                controller.setCustomIcon(targetPath, name)
+                visible = false
+            }
+            function dismiss() { visible = false }
+
+            MouseArea { anchors.fill: parent; onClicked: iconPicker.dismiss() }
+            Keys.onPressed: function(event) {
+                if (event.key === Qt.Key_Escape) {
+                    iconPicker.dismiss()
+                    event.accepted = true
+                }
+            }
+            focus: iconPicker.visible
+
+            GlassCard {
+                anchors.centerIn: parent
+                width: Math.min(520, root.width - 48)
+                height: Math.min(440, root.height - 64)
+                backdropSource: mainPanel
+                Accessible.role: Accessible.Dialog
+                Accessible.name: "Cambiar icono"
+
+                MouseArea { anchors.fill: parent }
+
+                Text {
+                    id: iconPickerHeading
+                    x: 18
+                    y: 16
+                    text: "Elegir icono"
+                    color: CelestinaTheme.text
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCallout
+                    font.weight: CelestinaTheme.weightDemiBold
+                }
+
+                GridView {
+                    id: iconGrid
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: iconPickerHeading.bottom
+                    anchors.bottom: iconPickerButtons.top
+                    anchors.topMargin: 12
+                    anchors.bottomMargin: 12
+                    anchors.leftMargin: 14
+                    anchors.rightMargin: 14
+                    clip: true
+                    cellWidth: 78
+                    cellHeight: 78
+                    model: iconPicker.options
+
+                    delegate: Item {
+                        id: iconOpt
+                        required property string modelData
+                        width: iconGrid.cellWidth
+                        height: iconGrid.cellHeight
+
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: 4
+                            radius: CelestinaTheme.radiusSm
+                            color: iconOptMouse.containsMouse
+                                   ? CelestinaTheme.surfaceHover : "transparent"
+                            border.width: mainPanel.customIcons[iconPicker.targetPath] === iconOpt.modelData ? 1 : 0
+                            border.color: CelestinaTheme.borderStrong
+
+                            IconImage {
+                                anchors.centerIn: parent
+                                width: 42
+                                height: 42
+                                name: iconOpt.modelData
+                                source: CelestinaTheme.fallbackIcon(
+                                            iconPicker.forFolder ? "folder" : "file")
+                            }
+                        }
+
+                        MouseArea {
+                            id: iconOptMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: iconPicker.choose(iconOpt.modelData)
+                        }
+                    }
+                }
+
+                Row {
+                    id: iconPickerButtons
+                    anchors.right: parent.right
+                    anchors.rightMargin: 18
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 16
+                    spacing: 8
+
+                    PillButton {
+                        text: "Restablecer"
+                        onClicked: iconPicker.choose("")
+                    }
+                    PillButton {
+                        text: "Cerrar"
+                        primary: true
+                        onClicked: iconPicker.dismiss()
                     }
                 }
             }

@@ -2,6 +2,7 @@ mod apps;
 mod bookmarks;
 mod controller;
 mod dbus;
+mod icons;
 mod places;
 mod properties;
 mod search;

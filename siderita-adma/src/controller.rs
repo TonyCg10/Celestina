@@ -108,6 +108,10 @@ pub mod qobject {
         // Trash shown as a content-view location (like search): its entries ride
         // the same entry model, so list/grid/details/thumbnails just work.
         #[qproperty(bool, trash_active)]
+        // Per-path custom icon overrides, exposed as parallel lists the QML
+        // folds into a path→icon map (bumped whenever one is set/cleared).
+        #[qproperty(QStringList, custom_icon_paths)]
+        #[qproperty(QStringList, custom_icon_names)]
         #[qproperty(bool, open_with_pending)]
         #[qproperty(QString, open_with_target)]
         #[qproperty(QStringList, open_with_apps)]
@@ -206,6 +210,11 @@ pub mod qobject {
         /// — the quick-look overlay uses it to pick a folder/file glyph.
         #[qinvokable]
         fn entry_kind(self: &SideritaController, index: i32) -> QString;
+
+        /// Sets (or, with an empty `icon`, clears) the custom icon for `path`,
+        /// persisting it. Refreshes `custom_icon_paths` / `custom_icon_names`.
+        #[qinvokable]
+        fn set_custom_icon(self: Pin<&mut SideritaController>, path: &QString, icon: &QString);
 
         /// A bounded, read-only text preview of the file at `path` for the
         /// quick-look overlay: up to a fixed byte budget, decoded lossily.
@@ -553,6 +562,9 @@ pub struct SideritaControllerRust {
     prop_size_cancel: Option<CancellationToken>,
     search_active: bool,
     trash_active: bool,
+    custom_icon_paths: QStringList,
+    custom_icon_names: QStringList,
+    custom_icons: std::collections::HashMap<String, String>,
     search_running: bool,
     search_query: QString,
     search_summary: QString,
@@ -621,11 +633,16 @@ impl Default for SideritaControllerRust {
             show_hidden: settings.show_hidden,
             ..ViewOptions::default()
         };
+        let custom_icons = crate::icons::load();
+        let (custom_icon_paths, custom_icon_names) = icon_override_lists(&custom_icons);
         Self {
             current_path: QString::default(),
             status_text: QString::from("Preparando Siderita…"),
             error_text: QString::default(),
             entry_names: QStringList::default(),
+            custom_icons,
+            custom_icon_paths,
+            custom_icon_names,
             selected_token: QString::default(),
             query: QString::default(),
             loading: false,
@@ -1103,6 +1120,30 @@ impl qobject::SideritaController {
             .row(index)
             .map(|row| QString::from(kind_key(row.kind())))
             .unwrap_or_default()
+    }
+
+    pub fn set_custom_icon(mut self: Pin<&mut Self>, path: &QString, icon: &QString) {
+        let path = path.to_string();
+        if path.is_empty() {
+            return;
+        }
+        let icon = icon.to_string();
+        {
+            let map = &mut self.as_mut().rust_mut().get_mut().custom_icons;
+            if icon.is_empty() {
+                map.remove(&path);
+            } else {
+                map.insert(path, icon);
+            }
+        }
+        let _ = crate::icons::save(&self.rust().custom_icons);
+        self.as_mut().refresh_custom_icon_props();
+    }
+
+    fn refresh_custom_icon_props(mut self: Pin<&mut Self>) {
+        let (paths, names) = icon_override_lists(&self.rust().custom_icons);
+        self.as_mut().set_custom_icon_paths(paths);
+        self.as_mut().set_custom_icon_names(names);
     }
 
     pub fn preview_text(&self, path: &QString) -> QString {
@@ -3287,6 +3328,18 @@ const fn sort_field_from_index(index: i32) -> Option<SortField> {
         3 => Some(SortField::Kind),
         _ => None,
     }
+}
+
+/// Builds the parallel (paths, icons) QStringLists the QML folds into its
+/// custom-icon map, in a stable sorted order.
+fn icon_override_lists(
+    map: &std::collections::HashMap<String, String>,
+) -> (QStringList, QStringList) {
+    let mut entries: Vec<(&String, &String)> = map.iter().collect();
+    entries.sort();
+    let paths: QStringList = entries.iter().map(|(k, _)| QString::from(k.as_str())).collect();
+    let names: QStringList = entries.iter().map(|(_, v)| QString::from(v.as_str())).collect();
+    (paths, names)
 }
 
 const fn kind_key(kind: RowKind) -> &'static str {
