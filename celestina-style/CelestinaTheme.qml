@@ -9,10 +9,10 @@ import QtQuick
 // colors. Tune these to art-direct the suite without touching component files.
 // ──────────────────────────────────────────────────────────────────────────────
 QtObject {
-    // ══ PALETTE A — SAMSUNG ONE UI, white accent (PAUSED) ════════════════
-    // Kept for reference. To restore: comment out PALETTE B below and
-    // uncomment everything between the /* */ markers here.
-    /*
+    // ══ PALETTE A — SAMSUNG ONE UI, neutral (ACTIVE) ═════════════════════
+    // Dark near-black, neutral white accent (no lavender tint), native icon
+    // colours; the glass identity is carried by the hairline outline. To swap
+    // back to Rosé Pine: re-comment this block and un-comment PALETTE B below.
     readonly property color canvas: "#0B0C0E"
     readonly property color canvasRaised: "#16171A"
     readonly property color surface: "#D91E1F22"
@@ -42,10 +42,10 @@ QtObject {
     readonly property color gradientStart: "#0B0C0E"
     readonly property color gradientMid: "#111216"
     readonly property color gradientEnd: "#0C0D10"
-    */
 
-    // ══ PALETTE B — ROSÉ PINE, main (ACTIVE) ═════════════════════════════
+    // ══ PALETTE B — ROSÉ PINE (PAUSED) ═══════════════════════════════════
     // Iris lavender accent, muted purple-grey surfaces, love = error.
+    /*
     readonly property color canvas: "#191724"
     readonly property color canvasRaised: "#1F1D2E"
     readonly property color surface: "#D91F1D2E"
@@ -83,6 +83,7 @@ QtObject {
     readonly property color gradientStart: "#191724"
     readonly property color gradientMid: "#1E1B2B"
     readonly property color gradientEnd: "#16141F"
+    */
 
     // ── Typography ───────────────────────────────────────────────────────
     readonly property string sansFamily: Qt.application.font.family
@@ -147,8 +148,8 @@ QtObject {
 
     // ── Glass ────────────────────────────────────────────────────────────
     // Backdrop-blur parameters for GlassSurface.
-    // readonly property color glassTint: "#A6141519"   // Samsung (paused)
-    readonly property color glassTint: "#A61F1D2E"       // Rosé Pine
+    readonly property color glassTint: "#A6141519"       // Samsung One UI
+    // readonly property color glassTint: "#A61F1D2E"    // Rosé Pine (paused)
     readonly property real glassBlur: 0.54
     readonly property int glassBlurMax: 24
     readonly property real glassSaturation: 0.14
