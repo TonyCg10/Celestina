@@ -387,8 +387,8 @@ ApplicationWindow {
         }
         Connections {
             target: controller
-            function onRowsReady(names, tokens, kinds, subtitles, paths) {
-                entryModel.setRows(names, tokens, kinds, subtitles, paths)
+            function onRowsReady(names, tokens, kinds, subtitles, paths, sections) {
+                entryModel.setRows(names, tokens, kinds, subtitles, paths, sections)
             }
         }
 
@@ -986,7 +986,9 @@ ApplicationWindow {
                 y: 14
                 width: parent.width - 16
                 height: parent.height - 68
-                visible: mainPanel.viewMode === "list"
+                // Search always uses the list (grid can't carry section headers),
+                // so the results group under "En esta carpeta" / "En subcarpetas".
+                visible: mainPanel.viewMode === "list" || controller.searchActive
                 model: entryModel
                 clip: true
                 spacing: 2
@@ -995,6 +997,32 @@ ApplicationWindow {
                 topMargin: 62 + (tabBar.visible ? tabBar.height + 8 : 0)
                          + (searchBar.visible ? searchBar.height + 8 : 0)
                 boundsBehavior: Flickable.StopAtBounds
+
+                // Empty for a plain folder listing (no headers); set to the group
+                // label for search results.
+                section.property: "section"
+                section.criteria: ViewSection.FullString
+                section.delegate: Item {
+                    id: sectionHeader
+                    required property string section
+                    width: fileList.width
+                    height: sectionHeader.section.length > 0
+                            ? Math.round(CelestinaTheme.fontMini * window.contentTextScale) + 22
+                            : 0
+                    visible: sectionHeader.section.length > 0
+
+                    Text {
+                        x: 14
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: 6
+                        text: sectionHeader.section.toUpperCase()
+                        color: CelestinaTheme.textMuted
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: Math.round(CelestinaTheme.fontMini * window.contentTextScale)
+                        font.letterSpacing: 1.4
+                        font.weight: CelestinaTheme.weightDemiBold
+                    }
+                }
                 activeFocusOnTab: true
                 keyNavigationEnabled: false
                 currentIndex: -1
@@ -1297,7 +1325,7 @@ ApplicationWindow {
                 y: 14
                 width: parent.width - 16
                 height: parent.height - 68
-                visible: mainPanel.viewMode === "grid"
+                visible: mainPanel.viewMode === "grid" && !controller.searchActive
                 model: entryModel
                 clip: true
                 cellWidth: mainPanel.gridCellWidth
@@ -2078,7 +2106,7 @@ ApplicationWindow {
 
                 x: 14
                 anchors.verticalCenter: parent.verticalCenter
-                width: Math.max(180, subfolderButton.x - x - 12)
+                width: Math.max(180, searchField.x - x - 12)
                 height: CelestinaTheme.controlHeight
                 radius: CelestinaTheme.radiusSm
                 clip: true
@@ -2224,51 +2252,13 @@ ApplicationWindow {
                 }
             }
 
-            // Typing filters the current folder live; this button (or ⏎) walks
-            // the subfolders. Disabled until there's something to search for.
-            Button {
-                id: subfolderButton
-                height: CelestinaTheme.controlHeight
-                anchors.verticalCenter: parent.verticalCenter
-                x: searchField.x - width - 8
-                width: subfolderLabel.implicitWidth + 24
-                enabled: searchField.text.trim().length > 0
-                Accessible.name: "Buscar en subcarpetas"
-                onClicked: controller.searchRecursive(searchField.text)
-
-                contentItem: Text {
-                    id: subfolderLabel
-                    text: "Subcarpetas"
-                    color: subfolderButton.enabled ? CelestinaTheme.text
-                                                   : CelestinaTheme.textMuted
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.interfaceTextScale)
-                    font.weight: CelestinaTheme.weightMedium
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-
-                background: Rectangle {
-                    radius: CelestinaTheme.radiusSm
-                    opacity: subfolderButton.enabled ? 1 : 0.5
-                    color: subfolderButton.hovered
-                           ? CelestinaTheme.surfaceHover : CelestinaTheme.controlFill
-                    border.width: subfolderButton.activeFocus ? 1 : 0
-                    border.color: CelestinaTheme.focus
-
-                    Behavior on color {
-                        ColorAnimation { duration: CelestinaTheme.motionFast }
-                    }
-                }
-            }
-
             TextField {
                 id: searchField
                 width: Math.min(260, Math.max(170, topBar.width * 0.24))
                 height: CelestinaTheme.controlHeight
                 x: topBar.width - width - 14
                 anchors.verticalCenter: parent.verticalCenter
-                placeholderText: "Filtrar en la carpeta"
+                placeholderText: "Buscar aquí y en subcarpetas"
                 color: CelestinaTheme.text
                 placeholderTextColor: CelestinaTheme.textMuted
                 selectionColor: CelestinaTheme.accentStrong
@@ -2277,8 +2267,9 @@ ApplicationWindow {
                 font.pixelSize: Math.round(CelestinaTheme.fontBody * window.interfaceTextScale)
                 leftPadding: 13
                 rightPadding: 13
+                // Typing always searches — a recursive walk grouped into "in
+                // this folder" and "in subfolders"; clearing it exits search.
                 onTextEdited: searchDebounce.restart()
-                // ⏎ is an alias for the Subcarpetas button — a recursive walk.
                 onAccepted: if (text.trim().length > 0)
                                 controller.searchRecursive(text)
 
@@ -2312,9 +2303,14 @@ ApplicationWindow {
 
             Timer {
                 id: searchDebounce
-                interval: 120
+                interval: 220
                 repeat: false
-                onTriggered: controller.applyQuery(searchField.text)
+                onTriggered: {
+                    if (searchField.text.trim().length > 0)
+                        controller.searchRecursive(searchField.text)
+                    else
+                        controller.closeSearch()
+                }
             }
 
         }

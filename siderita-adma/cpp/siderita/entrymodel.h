@@ -25,6 +25,9 @@ public:
         SubtitleRole,
         PathRole,
         IsDirRole,
+        // A group label the ListView sections on (empty for a plain folder
+        // listing; "En esta carpeta" / "En subcarpetas" for search results).
+        SectionRole,
     };
 
     explicit SideritaEntryModel(QObject *parent = nullptr);
@@ -38,7 +41,8 @@ public:
                              const QStringList &tokens,
                              const QStringList &kinds,
                              const QStringList &subtitles,
-                             const QStringList &paths);
+                             const QStringList &paths,
+                             const QStringList &sections);
 
 private:
     struct Row {
@@ -47,6 +51,7 @@ private:
         QString kind;
         QString subtitle;
         QString path;
+        QString section;
         bool isDir;
     };
     QVector<Row> m_rows;

@@ -352,6 +352,7 @@ pub mod qobject {
             kinds: QStringList,
             subtitles: QStringList,
             paths: QStringList,
+            sections: QStringList,
         );
     }
 
@@ -2000,38 +2001,35 @@ impl qobject::SideritaController {
 
     /// Publishes a finished (or cancelled) search onto the Qt thread.
     fn publish_search(mut self: Pin<&mut Self>, outcome: crate::search::SearchOutcome) {
-        let names: QStringList = outcome
-            .hits
-            .iter()
-            .map(|hit| QString::from(hit.name.as_str()))
-            .collect();
-        let paths: QStringList = outcome
-            .hits
-            .iter()
-            .map(|hit| QString::from(hit.path.as_str()))
-            .collect();
-        let kinds: QStringList = outcome
-            .hits
-            .iter()
-            .map(|hit| QString::from(if hit.is_dir { "directory" } else { "file" }))
-            .collect();
+        let current = self.rust().history.current().map(Path::to_path_buf);
+        let in_current =
+            |hit: &crate::search::SearchHit| current.as_deref() == Path::new(&hit.path).parent();
+
+        // Group the hits: those in the searched folder first, then everything
+        // deeper — each group A→Z — so the two sections read contiguously.
+        let mut hits = outcome.hits;
+        hits.sort_by(|a, b| {
+            in_current(b)
+                .cmp(&in_current(a))
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
 
         let summary = if outcome.cancelled {
             format!(
                 "{} coincidencias · búsqueda detenida ({} carpetas)",
-                outcome.hits.len(),
+                hits.len(),
                 outcome.dirs_scanned
             )
         } else if outcome.truncated {
             format!(
                 "{}+ coincidencias · detenida en el límite ({} carpetas)",
-                outcome.hits.len(),
+                hits.len(),
                 outcome.dirs_scanned
             )
         } else {
             format!(
                 "{} coincidencias · {} carpetas exploradas",
-                outcome.hits.len(),
+                hits.len(),
                 outcome.dirs_scanned
             )
         };
@@ -2039,17 +2037,39 @@ impl qobject::SideritaController {
         // Parallel role columns so the hits ride the *same* model + roles the
         // folder view uses — the list/grid then render and behave identically
         // (single-click selects, double-click opens, keyboard, selection). The
-        // token is just the hit index; the subtitle is the containing folder.
-        let tokens: QStringList = (0..outcome.hits.len())
+        // token is the hit index, the subtitle its containing folder, and the
+        // section the header the list groups it under.
+        let names: QStringList = hits
+            .iter()
+            .map(|h| QString::from(h.name.as_str()))
+            .collect();
+        let paths: QStringList = hits
+            .iter()
+            .map(|h| QString::from(h.path.as_str()))
+            .collect();
+        let kinds: QStringList = hits
+            .iter()
+            .map(|h| QString::from(if h.is_dir { "directory" } else { "file" }))
+            .collect();
+        let tokens: QStringList = (0..hits.len())
             .map(|i| QString::from(i.to_string().as_str()))
             .collect();
-        let subtitles: QStringList = outcome
-            .hits
+        let subtitles: QStringList = hits
             .iter()
-            .map(|hit| QString::from(search_hit_parent(&hit.path).as_str()))
+            .map(|h| QString::from(search_hit_parent(&h.path).as_str()))
+            .collect();
+        let sections: QStringList = hits
+            .iter()
+            .map(|h| {
+                QString::from(if in_current(h) {
+                    "En esta carpeta"
+                } else {
+                    "En subcarpetas"
+                })
+            })
             .collect();
 
-        self.as_mut().rust_mut().get_mut().search_hits = outcome.hits;
+        self.as_mut().rust_mut().get_mut().search_hits = hits;
         self.as_mut()
             .set_search_summary(QString::from(summary.as_str()));
         self.as_mut().set_search_running(false);
@@ -2058,7 +2078,7 @@ impl qobject::SideritaController {
         self.as_mut().set_selected_token(QString::default());
         self.as_mut().set_entry_names(names.clone());
         self.as_mut()
-            .rows_ready(names, tokens, kinds, subtitles, paths);
+            .rows_ready(names, tokens, kinds, subtitles, paths, sections);
     }
 
     pub fn cancel_search(mut self: Pin<&mut Self>) {
@@ -2455,6 +2475,8 @@ impl qobject::SideritaController {
             .iter()
             .map(|row| QString::from(row.path().to_string_lossy().as_ref()))
             .collect();
+        // A plain folder listing has no section headers.
+        let sections: QStringList = view.rows().iter().map(|_| QString::default()).collect();
         let visible = view.rows().len();
         let selected_is_visible = {
             let selected = self.selected_token().to_string();
@@ -2525,7 +2547,7 @@ impl qobject::SideritaController {
 
         // Hand the projected rows to the native model.
         self.as_mut()
-            .rows_ready(names, tokens, kinds, subtitles, paths);
+            .rows_ready(names, tokens, kinds, subtitles, paths, sections);
     }
 
     fn update_navigation_state(mut self: Pin<&mut Self>) {
