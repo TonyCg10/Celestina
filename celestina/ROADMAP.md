@@ -79,7 +79,7 @@ leaves only when something here can answer it truthfully.
 | Interface | Serves | Today | Next | Eventually |
 |---|---|---|---|---|
 | `FileChooser` | "open a file" / "save as" in every application | **siderita** | siderita | siderita |
-| `ScreenCast`, `Screenshot` | screen sharing and capture requests | gnome | **wlr** | celestina |
+| `ScreenCast`, `Screenshot` | screen sharing and capture requests | **wlr** (+ our chooser) | wlr | celestina |
 | `Settings` | the light/dark preference applications read | gtk | gtk | celestina |
 | `Print`, `Notification`, `AppChooser`, `Access`, `Account`, `Email`, `Inhibit`, `Lockdown`, `DynamicLauncher` | the rest | gtk | gtk | gtk, until one of them proves a daily need |
 
