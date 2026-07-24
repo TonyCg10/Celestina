@@ -492,10 +492,20 @@ ApplicationWindow {
             sequence: "Delete"
             enabled: root.active && !controller.loading && !controller.opRunning
             onActivated: {
-                const i = topBar.activeView.currentIndex
-                if (i >= 0)
-                    mainPanel.trashSelection(controller.entryToken(i),
-                                             controller.entryPath(i))
+                // Act on the whole selection — whatever set it (marquee,
+                // Ctrl/Shift-click or a single click). The keyboard cursor
+                // (currentIndex) is only a fallback, because a marquee selection
+                // never moves it, which is why Delete used to miss it.
+                var p = mainPanel.selectedPaths()
+                if (p.length > 1)
+                    controller.trashPaths(p)
+                else if (p.length === 1)
+                    controller.trashPath(p[0])
+                else {
+                    const i = topBar.activeView.currentIndex
+                    if (i >= 0)
+                        controller.trashPath(controller.entryPath(i))
+                }
             }
         }
 
@@ -503,10 +513,17 @@ ApplicationWindow {
             sequences: [StandardKey.Copy]
             enabled: root.active
             onActivated: {
-                const i = topBar.activeView.currentIndex
-                if (i >= 0)
-                    mainPanel.copySelection(controller.entryToken(i),
-                                            controller.entryPath(i), false)
+                // Selection first (marquee included), cursor only as fallback.
+                var p = mainPanel.selectedPaths()
+                if (p.length > 1)
+                    controller.copyPathsToClipboard(p, false)
+                else if (p.length === 1)
+                    controller.copyToClipboard(p[0], false)
+                else {
+                    const i = topBar.activeView.currentIndex
+                    if (i >= 0)
+                        controller.copyToClipboard(controller.entryPath(i), false)
+                }
             }
         }
 
@@ -514,10 +531,17 @@ ApplicationWindow {
             sequences: [StandardKey.Cut]
             enabled: root.active
             onActivated: {
-                const i = topBar.activeView.currentIndex
-                if (i >= 0)
-                    mainPanel.copySelection(controller.entryToken(i),
-                                            controller.entryPath(i), true)
+                // Selection first (marquee included), cursor only as fallback.
+                var p = mainPanel.selectedPaths()
+                if (p.length > 1)
+                    controller.copyPathsToClipboard(p, true)
+                else if (p.length === 1)
+                    controller.copyToClipboard(p[0], true)
+                else {
+                    const i = topBar.activeView.currentIndex
+                    if (i >= 0)
+                        controller.copyToClipboard(controller.entryPath(i), true)
+                }
             }
         }
 
@@ -567,7 +591,10 @@ ApplicationWindow {
             // Restore the last-used view mode on open and persist a change
             // (list⇄grid). The size scales are window-level and independent
             // (window.contentIconScale / window.contentTextScale).
-            Component.onCompleted: viewMode = controller.savedViewMode()
+            Component.onCompleted: {
+                viewMode = controller.savedViewMode()
+                rebuildFolderTypeIcons()
+            }
             function persist() { controller.saveViewMode(viewMode) }
 
             // The content row/cell (the "selection square") sizes to fit
@@ -607,10 +634,31 @@ ApplicationWindow {
                     return "audio"
                 return ""
             }
+            // Map each XDG user directory's PATH to its freedesktop folder-type
+            // icon, so Documentos / Descargas / Música / … show their own glyph
+            // in the content view, not the generic folder. Rebuilt on open; the
+            // paths are user-level and stable.
+            property var folderTypeIcons: ({})
+            function rebuildFolderTypeIcons() {
+                var defs = { DESKTOP: "folder-desktop", DOCUMENTS: "folder-documents",
+                             DOWNLOAD: "folder-download", MUSIC: "folder-music",
+                             PICTURES: "folder-pictures", VIDEOS: "folder-videos",
+                             PUBLICSHARE: "folder-publicshare", TEMPLATES: "folder-templates" }
+                var m = {}
+                for (var k in defs) {
+                    var p = controller.placePath(k)
+                    if (p.length > 0)
+                        m[p] = defs[k]
+                }
+                folderTypeIcons = m
+            }
+            function folderIcon(path) {
+                return (path && folderTypeIcons[path]) ? folderTypeIcons[path] : "folder"
+            }
             // The themed icon a non-thumbnailed entry shows — a media-type icon
-            // (video/audio/image) where the desktop theme has one, else generic.
-            function mediaIconName(kind, media) {
-                return kind === "directory" ? "folder"
+            // (video/audio/image), a type-specific folder, else generic.
+            function mediaIconName(kind, media, path) {
+                return kind === "directory" ? folderIcon(path)
                      : kind === "symlink" ? "emblem-symbolic-link"
                      : media === "image" ? "image-x-generic"
                      : media === "video" ? "video-x-generic"
@@ -1304,7 +1352,7 @@ ApplicationWindow {
                             visible: !thumb.ready
                             width: Math.round(CelestinaTheme.iconMd * window.contentIconScale)
                             height: Math.round(CelestinaTheme.iconMd * window.contentIconScale)
-                            name: mainPanel.mediaIconName(row.kind, kindGlyph.media)
+                            name: mainPanel.mediaIconName(row.kind, kindGlyph.media, row.path)
                             source: CelestinaTheme.fallbackIcon(
                                         row.kind === "directory"
                                         ? "folder"
@@ -1723,7 +1771,7 @@ ApplicationWindow {
                                 visible: !cellThumb.ready
                                 width: Math.round(54 * window.contentIconScale)
                                 height: Math.round(54 * window.contentIconScale)
-                                name: mainPanel.mediaIconName(cell.kind, cellGlyph.media)
+                                name: mainPanel.mediaIconName(cell.kind, cellGlyph.media, cell.path)
                                 source: CelestinaTheme.fallbackIcon(
                                             cell.kind === "directory"
                                             ? "folder"
@@ -3836,7 +3884,7 @@ ApplicationWindow {
                     y: 16
                     width: CelestinaTheme.iconSm
                     height: CelestinaTheme.iconSm
-                    name: mainPanel.mediaIconName(quickLookView.qlKind, quickLookView.qlMedia)
+                    name: mainPanel.mediaIconName(quickLookView.qlKind, quickLookView.qlMedia, quickLookView.qlPath)
                     source: CelestinaTheme.fallbackIcon(
                                 quickLookView.qlKind === "directory" ? "folder" : "file")
                     color: quickLookView.qlKind === "directory" ? CelestinaTheme.accent
@@ -3911,7 +3959,7 @@ ApplicationWindow {
                             width: 56
                             height: 56
                             name: mainPanel.mediaIconName(quickLookView.qlKind,
-                                                          quickLookView.qlMedia)
+                                                          quickLookView.qlMedia, quickLookView.qlPath)
                             source: CelestinaTheme.fallbackIcon(
                                         quickLookView.qlKind === "directory" ? "folder" : "file")
                             color: quickLookView.qlKind === "directory"

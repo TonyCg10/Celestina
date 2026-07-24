@@ -148,7 +148,7 @@ QtObject {
 
     // ── Glass ────────────────────────────────────────────────────────────
     // Backdrop-blur parameters for GlassSurface.
-    readonly property color glassTint: "#D01E2028"       // Samsung One UI — milky frost
+    readonly property color glassTint: "#BD1E2028"       // Samsung One UI — frosted (mid)
     // readonly property color glassTint: "#A61F1D2E"    // Rosé Pine (paused)
     // One UI "glass with outline": a light hairline + a top-edge specular.
     readonly property color glassBorder: "#5CFFFFFF"
