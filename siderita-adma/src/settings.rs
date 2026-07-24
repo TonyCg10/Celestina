@@ -8,9 +8,11 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-/// The inclusive range every size scale is clamped to on load and save.
-const SCALE_MIN: f64 = 0.8;
-const SCALE_MAX: f64 = 1.9;
+/// The inclusive range every size scale is clamped to on load and save. The UI
+/// shows this as 10 %–100 % (a fraction of the 2.0 maximum); 1.0 is the
+/// historical default and reads as 50 %.
+const SCALE_MIN: f64 = 0.2;
+const SCALE_MAX: f64 = 2.0;
 
 /// The persisted view configuration.
 #[derive(Clone, Debug, PartialEq)]
@@ -243,7 +245,7 @@ mod tests {
         fs::write(&file, "view_mode=weird\ncontent_icon_scale=99\n").unwrap();
         let loaded = load_from(&file);
         assert_eq!(loaded.view_mode, "list"); // invalid → default
-        assert_eq!(loaded.content_icon_scale, 1.9); // clamped
+        assert_eq!(loaded.content_icon_scale, 2.0); // clamped to the max
         assert_eq!(loaded.content_text_scale, 1.0); // untouched default
         let _ = fs::remove_dir_all(file.parent().unwrap());
     }

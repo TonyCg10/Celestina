@@ -253,8 +253,10 @@ ApplicationWindow {
             anchors.right: sizeRowValue.left
             anchors.rightMargin: 10
             anchors.verticalCenter: parent.verticalCenter
-            from: 0.8
-            to: 1.9
+            // The factor runs 0.2–2.0 but reads to the user as 10 %–100 % (a
+            // fraction of the 2.0 maximum).
+            from: 0.2
+            to: 2.0
             stepSize: 0.1
             onMoved: sizeRow.moved(value)
 
@@ -293,7 +295,7 @@ ApplicationWindow {
             anchors.verticalCenter: parent.verticalCenter
             width: 38
             horizontalAlignment: Text.AlignRight
-            text: Math.round(sizeSlider.value * 100) + "%"
+            text: Math.round(sizeSlider.value / 2.0 * 100) + "%"
             color: CelestinaTheme.textMuted
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontCaption
@@ -1909,7 +1911,11 @@ ApplicationWindow {
                     y: -height - 10
                     x: sizeButton.width - width
                     padding: 16
-                    modal: false
+                    // Modal (but undimmed) so a click anywhere outside — including
+                    // a right-click that would otherwise open a context menu on
+                    // top — is caught and closes it, instead of leaving both open.
+                    modal: true
+                    dim: false
                     focus: true
                     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
