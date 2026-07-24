@@ -68,4 +68,10 @@ Menu {
     onAboutToShow: Qt.callLater(function() {
         glassBackground.refreshBackdrop()
     })
+    // Re-sample once the menu has its final position (aboutToShow fires before
+    // x/y are set), so the blur matches what is actually behind it — not a
+    // stale region captured at the origin.
+    onOpened: Qt.callLater(function() {
+        glassBackground.refreshBackdrop()
+    })
 }

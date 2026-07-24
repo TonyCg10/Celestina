@@ -2216,10 +2216,10 @@ ApplicationWindow {
                     y: -height - 10
                     x: sizeButton.width - width
                     padding: 16
-                    // Modal (but undimmed) so a click anywhere outside — including
-                    // a right-click that would otherwise open a context menu on
-                    // top — is caught and closes it, instead of leaving both open.
-                    modal: true
+                    // Non-modal so the content still scrolls (to watch items
+                    // resize) while sizes are adjusted; a click outside still
+                    // closes it via CloseOnPressOutside.
+                    modal: false
                     dim: false
                     focus: true
                     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
@@ -3088,13 +3088,7 @@ ApplicationWindow {
                 width: Math.min(380, root.width - 48)
                 height: 142
                 backdropSource: mainPanel
-                // Grow the whole dialog with the interface size slider, clamped
-                // so it never spills past the viewport. At the default 1.0 this
-                // is an exact no-op, so the glass backdrop is untouched unless
-                // the user actually scales up.
-                transformOrigin: Item.Center
-                scale: Math.min(window.interfaceTextScale,
-                                (root.width - 24) / width, (root.height - 24) / height)
+                // (not transform-scaled — a scale transform desynced the glass backdrop)
 
                 // Swallow clicks so they never reach the dismiss backdrop.
                 MouseArea { anchors.fill: parent }
@@ -3185,10 +3179,7 @@ ApplicationWindow {
                 width: Math.min(420, root.width - 48)
                 height: 176
                 backdropSource: mainPanel
-                // Scale with the interface slider, clamped to the viewport (1.0 = no-op).
-                transformOrigin: Item.Center
-                scale: Math.min(window.interfaceTextScale,
-                                (root.width - 24) / width, (root.height - 24) / height)
+                // (not transform-scaled — a scale transform desynced the glass backdrop)
                 Accessible.role: Accessible.Dialog
                 Accessible.name: "Conflicto al pegar"
 
@@ -3556,10 +3547,7 @@ ApplicationWindow {
                 width: Math.min(480, root.width - 48)
                 height: Math.min(420, root.height - 64)
                 backdropSource: mainPanel
-                // Scale with the interface slider, clamped to the viewport (1.0 = no-op).
-                transformOrigin: Item.Center
-                scale: Math.min(window.interfaceTextScale,
-                                (root.width - 24) / width, (root.height - 24) / height)
+                // (not transform-scaled — a scale transform desynced the glass backdrop)
                 Accessible.role: Accessible.Dialog
                 Accessible.name: "Abrir con"
 
@@ -3708,10 +3696,7 @@ ApplicationWindow {
                 height: Math.min(propertiesColumn.implicitHeight + propHeading.height + 90,
                                  root.height - 64)
                 backdropSource: mainPanel
-                // Scale with the interface slider, clamped to the viewport (1.0 = no-op).
-                transformOrigin: Item.Center
-                scale: Math.min(window.interfaceTextScale,
-                                (root.width - 24) / width, (root.height - 24) / height)
+                // (not transform-scaled — a scale transform desynced the glass backdrop)
                 Accessible.role: Accessible.Dialog
                 Accessible.name: "Propiedades"
 
@@ -3873,10 +3858,7 @@ ApplicationWindow {
                 width: Math.min(720, root.width - 64)
                 height: Math.min(root.height - 80, 640)
                 backdropSource: mainPanel
-                // Scale with the interface slider, clamped to the viewport (1.0 = no-op).
-                transformOrigin: Item.Center
-                scale: Math.min(window.interfaceTextScale,
-                                (root.width - 24) / width, (root.height - 24) / height)
+                // (not transform-scaled — a scale transform desynced the glass backdrop)
                 Accessible.role: Accessible.Dialog
                 Accessible.name: "Vista previa"
 
@@ -4355,10 +4337,13 @@ ApplicationWindow {
                         MouseArea {
                             id: placeMouse
                             anchors.fill: parent
+                            acceptedButtons: Qt.LeftButton | Qt.MiddleButton
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                if (window.activeController)
+                            onClicked: function(mouse) {
+                                if (mouse.button === Qt.MiddleButton)
+                                    window.openTab(placeRow.placePath, false)
+                                else if (window.activeController)
                                     window.activeController.openLocation(placeRow.placePath)
                             }
                         }
@@ -4709,11 +4694,13 @@ ApplicationWindow {
                     MouseArea {
                         id: bmMouse
                         anchors.fill: parent
-                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: function(mouse) {
-                            if (mouse.button === Qt.RightButton) {
+                            if (mouse.button === Qt.MiddleButton) {
+                                window.openTab(bmRow.path, false)
+                            } else if (mouse.button === Qt.RightButton) {
                                 const point = bmRow.mapToItem(window.contentItem,
                                                               mouse.x, mouse.y)
                                 bmMenu.targetIndex = bmRow.index
