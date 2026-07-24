@@ -3260,7 +3260,8 @@ ApplicationWindow {
             z: 64
             // Driven by the window-scope sidebar; only the active tab shows it.
             visible: window.trashViewOpen && root.active
-            color: Qt.rgba(0, 0, 0, 0.45)
+            // Opaque content panel — a location, not a dimmed modal.
+            color: CelestinaTheme.canvas
 
             function dismiss() { window.trashViewOpen = false }
 
@@ -3278,10 +3279,14 @@ ApplicationWindow {
                                        trashList.positionViewAtIndex(
                                            focusedIndex, ListView.Contain)
 
-            // Click on the dimmed backdrop closes.
-            MouseArea {
-                anchors.fill: parent
-                onClicked: trashView.dismiss()
+            // Swallow clicks so the folder underneath stays inert; unlike a
+            // modal, clicking the panel does not dismiss it.
+            MouseArea { anchors.fill: parent }
+            // Navigating via the sidebar (a place / bookmark / device) changes
+            // the folder, which leaves this location.
+            Connections {
+                target: controller
+                function onCurrentPathChanged() { trashView.dismiss() }
             }
             // Keyboard-operable: arrows move the focus, Enter restores it,
             // Escape closes.
@@ -3308,29 +3313,28 @@ ApplicationWindow {
             }
             focus: trashView.visible
 
-            GlassCard {
-                anchors.centerIn: parent
-                width: Math.min(560, root.width - 48)
-                height: Math.min(460, root.height - 64)
-                backdropSource: mainPanel
-                // Scale with the interface slider, clamped to the viewport (1.0 = no-op).
-                transformOrigin: Item.Center
-                scale: Math.min(window.interfaceTextScale,
-                                (root.width - 24) / width, (root.height - 24) / height)
-                Accessible.role: Accessible.Dialog
+            Item {
+                anchors.fill: parent
                 Accessible.name: "Papelera"
 
-                // Swallow clicks so they never reach the dismiss backdrop.
-                MouseArea { anchors.fill: parent }
-
+                IconImage {
+                    id: trashHeadingIcon
+                    x: 18
+                    y: 18
+                    width: CelestinaTheme.iconMd
+                    height: CelestinaTheme.iconMd
+                    name: "user-trash"
+                    source: CelestinaTheme.fallbackIcon("user-trash")
+                }
                 Text {
                     id: trashHeading
-                    x: 18
-                    y: 16
+                    anchors.left: trashHeadingIcon.right
+                    anchors.leftMargin: 10
+                    anchors.verticalCenter: trashHeadingIcon.verticalCenter
                     text: "Papelera"
                     color: CelestinaTheme.text
                     font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontCallout
+                    font.pixelSize: CelestinaTheme.fontTitle
                     font.weight: CelestinaTheme.weightDemiBold
                 }
 
@@ -3496,7 +3500,7 @@ ApplicationWindow {
                         onClicked: controller.restoreAllTrash()
                     }
                     PillButton {
-                        text: "Cerrar"
+                        text: "Volver"
                         onClicked: trashView.dismiss()
                     }
                 }
