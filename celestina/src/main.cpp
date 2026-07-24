@@ -14,7 +14,7 @@
 
 namespace {
 constexpr int panelHeight = 40;
-constexpr auto panelScope = "celestina-desktop-panel";
+constexpr auto panelScope = "celestina-panel";
 
 class PanelManager final : public QObject
 {
@@ -195,9 +195,9 @@ private:
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
-    app.setApplicationName("celestina-desktop");
+    app.setApplicationName("celestina");
     app.setApplicationDisplayName("Celestina Desktop");
-    app.setDesktopFileName("celestina-desktop");
+    app.setDesktopFileName("celestina");
     app.setOrganizationName("Celestina");
     app.setQuitOnLastWindowClosed(false);
 

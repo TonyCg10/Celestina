@@ -127,7 +127,7 @@ program with a tray icon.
       per-plugin toggles; a thin client of the daemon
 - [ ] **Suite IPC/activation** — ratify the daemon↔UI (and shell) convention this
       project forces; this becomes the suite's reference for that contract
-- [ ] **Shell surfacing** — connected device + battery in the `celestina-desktop`
+- [ ] **Shell surfacing** — connected device + battery in the `celestina`
       panel (notifications already flow via freedesktop)
 - [ ] **Siderita integration** — "Send to phone" in Siderita's context menu via
       `open-with`

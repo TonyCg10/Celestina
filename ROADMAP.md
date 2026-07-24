@@ -6,8 +6,8 @@
 >
 > Per-project roadmaps: [celestina-rs](celestina-rs/ROADMAP.md) ·
 > [celestina-style](celestina-style/ROADMAP.md) ·
-> [celestina-desktop](celestina-desktop/ROADMAP.md) ·
-> [siderita-adma](siderita-adma/ROADMAP.md)
+> [celestina](celestina/ROADMAP.md) ·
+> [siderita](siderita/ROADMAP.md)
 >
 > Checklist legend: `[x]` done · `[ ]` planned. Source presence is not runtime
 > evidence — a goal stays unchecked until it is verified, not merely written.
@@ -32,33 +32,33 @@ The goal is a session that is dependable, coherent and light — not feature
 parity with any existing desktop environment, and not a product for anyone but
 its author.
 
-**Current focus:** the Niri shell (`celestina-desktop`). The file manager
-(`siderita-adma`) has **completed CP0–CP3** and is in daily use; CP4 — the parts
-the user arranges (sidebar, order, per-folder view, session) — is implemented and
-waiting on real-Wayland validation. New apps wait behind a proven daily gap.
+**Current focus:** the Niri shell (`celestina`). The file manager (`siderita`)
+has **completed CP0–CP3** and is in daily use; CP4 — the parts the user arranges
+(sidebar, order, per-folder view, session) — is implemented and waiting on
+real-Wayland validation. New apps wait behind a proven daily gap.
 
 ## The pieces
 
 | Project | Role | Stack | Consumes | Consumed by |
 |---|---|---|---|---|
-| [celestina-rs](celestina-rs/) | Shared domain cores | Rust | — | siderita-adma, future apps |
-| [celestina-style](celestina-style/) | Shared visual language | QML | — | celestina-desktop, siderita-adma, future apps |
-| [celestina-desktop](celestina-desktop/) | Niri shell / session | C++ · QML (+ Rust bridge) | celestina-style | the session |
-| [siderita-adma](siderita-adma/) | File manager (first app) | Rust · QML (CXX-Qt) | celestina-rs | the user |
+| [celestina-rs](celestina-rs/) | Shared domain cores | Rust | — | siderita, future apps |
+| [celestina-style](celestina-style/) | Shared visual language | QML | — | celestina, siderita, future apps |
+| [celestina](celestina/) | Niri shell / session | C++ · QML (+ Rust bridge) | celestina-style | the session |
+| [siderita](siderita/) | File manager (first app) | Rust · QML (CXX-Qt) | celestina-rs | the user |
 
 Dependencies flow one way — cores and style never depend on apps or the shell:
 
 ```
-celestina-rs ─────┐                 celestina-style ──┐
-  (domain cores)  ├──► siderita-adma        (tokens +  ├──► celestina-desktop
-                  │      (file mgr)          components)│      (Niri shell)
-                  └──► future apps ◄────────────────────┘──► future apps
+celestina-rs ─────┐                    celestina-style ─────┐
+  (domain cores)  ├──► siderita            (tokens +        ├──► celestina
+                  │      (file mgr)         components)     │      (Niri shell)
+                  └──► future apps ◄──────────────────────── ┘──► future apps
 ```
 
-> `siderita-adma` now renders from the shared `celestina-style` module — its
-> private theme and glass were removed and the canonical copies live in
-> `celestina-style`. `celestina-desktop` still uses a small inline palette;
-> finishing that half of the convergence is a Checkpoint 1 goal.
+> `siderita` now renders from the shared `celestina-style` module — its private
+> theme and glass were removed and the canonical copies live in
+> `celestina-style`. `celestina` still uses a small inline palette; finishing
+> that half of the convergence is a Checkpoint 1 goal.
 
 **Planned apps** — design-stage, listed in the README's
 [Planned](README.md#planned) section, each started only when a recurring daily
@@ -106,12 +106,12 @@ as a suite rather than four unrelated apps:
 - `celestina-rs` — four cores compile; fmt, Clippy, 30 tests pass; read-only.
 - `celestina-style` — now the canonical shared module (semantic tokens +
   working glass + fallback icons), builds with CMake and is consumed by
-  siderita-adma; a clean-prefix installable release is still open.
-- `celestina-desktop` — host builds and QML-lints; geometry/zone/focus not yet
-  verified on real Niri; no Rust yet.
-- `siderita-adma` — **CP0–CP3 complete and ratified**: staged self-contained
-  install, loss-free operations, freedesktop interop, a native role model with a
-  live hotplug/FS watcher, list/grid/details views, freedesktop thumbnails and a
+  siderita; a clean-prefix installable release is still open.
+- `celestina` — host builds and QML-lints; geometry/zone/focus not yet verified
+  on real Niri; no Rust yet.
+- `siderita` — **CP0–CP3 complete and ratified**: staged self-contained install,
+  loss-free operations, freedesktop interop, a native role model with a live
+  hotplug/FS watcher, list/grid/details views, freedesktop thumbnails and a
   spacebar quick-look — validated on real Wayland. **CP4** (natural name order,
   favourites, an organizable sidebar, per-folder views, session restore, drag
   comforts, batch rename, Recientes, per-collision conflicts) is implemented and
@@ -127,8 +127,8 @@ truthful first slice; the shared contracts exist in a form apps can consume.
 - [x] Monorepo git baseline
 - [ ] **celestina-rs CP0** — freeze & version the read-only core API
 - [ ] **celestina-style CP0** — module installable/importable from a clean prefix, glass APIs made truthful
-- [ ] **celestina-desktop CP0** — panel geometry, exclusive zone and no-focus verified on real Niri
-- [x] **siderita-adma CP0** — ship the read-only slice from a staged install with real-Wayland resource/frame numbers; ratify or reopen Qt/QML
+- [ ] **celestina CP0** — panel geometry, exclusive zone and no-focus verified on real Niri
+- [x] **siderita CP0** — ship the read-only slice from a staged install with real-Wayland resource/frame numbers; ratify or reopen Qt/QML
 
 **Done when:** no project needs a sibling source checkout to build; the shell
 maps correctly on every output without stealing focus; the file manager runs
@@ -138,13 +138,13 @@ from an install and its budget is met or the frontend is explicitly reopened.
 **Goal:** the shell and file manager are usable as the primary session and
 visibly share one design language.
 
-- [ ] **celestina-desktop CP1** — real Niri workspaces + focused window via a Rust adapter, with pending/failed/confirmed focus requests
-- [ ] **celestina-desktop CP2** — opt-in Niri startup contract composing external session tools with verified fallbacks, before Noctalia leaves autostart
-- [x] **siderita-adma CP1** — loss-free file operations (create/rename/copy/move/trash) on disposable fixtures, source never removed before destination is verified
+- [ ] **celestina CP1** — real Niri workspaces + focused window via a Rust adapter, with pending/failed/confirmed focus requests
+- [ ] **celestina CP2** — opt-in Niri startup contract composing external session tools with verified fallbacks, before Noctalia leaves autostart
+- [x] **siderita CP1** — loss-free file operations (create/rename/copy/move/trash) on disposable fixtures, source never removed before destination is verified
 - [ ] **celestina-rs CP1** — the write-side domain those operations stand on
 - [ ] **celestina-style CP1** — stable, accessible design contract (compat/deprecation, truthful glass, font/icon fallbacks, a11y)
-- [x] **Convergence (Siderita)** — `siderita-adma` renders from the shared CelestinaStyle module (semantic tokens + working glass + icons); its private theme/glass were removed
-- [ ] **Convergence (desktop)** — migrate `celestina-desktop` off its inline palette onto CelestinaStyle
+- [x] **Convergence (Siderita)** — `siderita` renders from the shared CelestinaStyle module (semantic tokens + working glass + icons); its private theme/glass were removed
+- [ ] **Convergence (desktop)** — migrate `celestina` off its inline palette onto CelestinaStyle
 
 **Done when:** the author can run a Niri session on Celestina's shell with
 Siderita as the file manager for daily use; both consume the same installed

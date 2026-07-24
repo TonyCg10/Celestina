@@ -5,8 +5,8 @@ plus first-party apps that share one Rust core, one QML visual language and one
 set of conventions — lean alternatives to heavyweight external apps, made
 possible because the session owns its own shell.
 
-**Current focus:** a minimal Niri shell (`celestina-desktop`) and the file
-manager (`siderita-adma`).
+**Current focus:** a minimal Niri shell (`celestina`) and the file manager
+(`siderita`).
 
 ## Projects
 
@@ -14,8 +14,8 @@ manager (`siderita-adma`).
 |---|---|---|
 | [celestina-rs](celestina-rs/) | shared Rust domain cores | Rust |
 | [celestina-style](celestina-style/) | shared QML visual language | QML |
-| [celestina-desktop](celestina-desktop/) | Niri shell / session | C++ · QML |
-| [siderita-adma](siderita-adma/) | file manager (first app) | Rust · QML (CXX-Qt) |
+| [celestina](celestina/) | Niri shell / session | C++ · QML |
+| [siderita](siderita/) | file manager (first app) | Rust · QML (CXX-Qt) |
 
 Cores and style never depend on apps or the shell. Each project keeps its own
 README and ROADMAP; the monorepo holds shared history and the contracts between

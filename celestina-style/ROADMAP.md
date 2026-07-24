@@ -13,7 +13,7 @@ dotfiles or workflows. Consumers keep independent roadmaps and release timing.
 token singleton (promoted from Siderita), working backdrop-blur glass
 (`GlassSurface`/`GlassContextMenu`/`GlassMenuItem`, replacing the earlier
 `CelestinaGlassPanel` that blurred its own fill), `CelestinaButton` and bundled
-fallback icons. It builds with CMake and is consumed live by `siderita-adma`. A
+fallback icons. It builds with CMake and is consumed live by `siderita`. A
 clean-prefix installable release, a compatibility/deprecation policy and verified
 accessibility/motion behavior are still open.
 
@@ -32,7 +32,7 @@ they say.
 
 - [x] Canonical module builds with CMake: semantic token singleton (`CelestinaTheme`, promoted from Siderita) + working glass (`GlassSurface`, `GlassContextMenu`, `GlassMenuItem`) + `CelestinaButton` + bundled fallback icons
 - [x] Working backdrop-blur glass — the broken `CelestinaGlassPanel` (blurred its own fill, not the backdrop) and `CelestinaContextMenu` were removed and replaced by Siderita's proven `ShaderEffectSource`-capture `GlassSurface`
-- [x] First real consumer proven: `siderita-adma` renders entirely from this module (theme, glass, icons), verified by build + offscreen run
+- [x] First real consumer proven: `siderita` renders entirely from this module (theme, glass, icons), verified by build + offscreen run
 - [ ] Inventory the public QML types, imports, properties, assets and generated files
 - [ ] Choose the smallest complete install topology (module + plugin + type metadata) and make it importable from a clean prefix without the source checkout
 - [ ] Clean-prefix fixtures: one theme fixture + one interactive-control fixture that import only the staged prefix

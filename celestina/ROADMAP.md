@@ -12,7 +12,7 @@ launcher, notification daemon, lock screen, auth agent or wallpaper manager — 
 dependable personal shell that grows from demonstrated daily needs.
 
 **Current state.** A C++20/Qt Quick host maps one 40 px top layer-shell surface
-per output (scope `celestina-desktop-panel`), reserves each edge and rejects
+per output (scope `celestina-panel`), reserves each edge and rejects
 keyboard focus; the only visible information is a real minute-aligned clock, with
 no simulated workspaces or tray. Configure, build and QML lint pass; a live Niri
 check mapped exactly one namespaced, non-focus surface per output while Noctalia

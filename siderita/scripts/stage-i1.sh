@@ -91,7 +91,7 @@ rm -rf "$stage"
 mkdir -p "$stage/bin" "$stage/lib" "$stage/qml" "$stage/plugins"
 
 cp "$binary" "$stage/bin/siderita-i1"
-cp "$repo_root/siderita-adma.desktop" "$stage/" 2>/dev/null || true
+cp "$repo_root/siderita.desktop" "$stage/" 2>/dev/null || true
 
 echo ">> copiando módulos QML (lista blanca)" >&2
 for module in $qml_modules; do

@@ -7,7 +7,7 @@ of truth for how the suite looks.
 
 - **Role:** shared visual language (part of the [Celestina suite](../ROADMAP.md))
 - **Stack:** pure QML · Qt 6 Quick + `QtQuick.Effects` · CMake
-- **Consumed by:** [siderita-adma](../siderita-adma/) (live) · [celestina-desktop](../celestina-desktop/) (planned)
+- **Consumed by:** [siderita](../siderita/) (live) · [celestina](../celestina/) (planned)
 
 ## Build
 

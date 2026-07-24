@@ -15,7 +15,7 @@ notification daemon, lock screen, auth agent or wallpaper manager.
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build build --parallel
 cmake --build build --target all_qmllint
-QT_QPA_PLATFORM=wayland ./build/celestina-desktop
+QT_QPA_PLATFORM=wayland ./build/celestina
 ```
 
 During development, keep Noctalia running and hide only its bar so launcher,
@@ -23,11 +23,11 @@ notification, idle, lock, Polkit, theme and greeter services stay available:
 
 ```sh
 noctalia msg bar-hide
-QT_QPA_PLATFORM=wayland ./build/celestina-desktop
+QT_QPA_PLATFORM=wayland ./build/celestina
 noctalia msg bar-show
 ```
 
-Celestina uses its own layer-shell namespace (`celestina-desktop-panel`) so Niri
+Celestina uses its own layer-shell namespace (`celestina-panel`) so Niri
 rules and diagnostics can tell both shells apart.
 
 ## Layout

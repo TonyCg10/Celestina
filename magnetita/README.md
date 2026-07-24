@@ -31,7 +31,7 @@ while staying a good desktop citizen on the wire.
 
 Per suite discipline, Valent stays composed in autostart until Magnetita's
 transport is **verified** against a real device — the same way
-`celestina-desktop` keeps Noctalia until its own pieces are proven.
+`celestina` keeps Noctalia until its own pieces are proven.
 
 ## Shape
 

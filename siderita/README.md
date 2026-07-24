@@ -19,7 +19,7 @@ scripts/run-i1.sh                                    # build + run the I1 host o
 cargo build --release --locked                       # with a shared Qt visible to cxx-qt
 cargo build --release --locked --features qt-minimal # Qt bootstrap (CI / no system Qt)
 scripts/measure-i1.sh target/release/siderita-i1     # ELF inventory + process metrics
-desktop-file-validate siderita-adma.desktop
+desktop-file-validate siderita.desktop
 ```
 
 ## Layout

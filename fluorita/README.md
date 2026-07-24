@@ -38,8 +38,8 @@ So the media weight is not avoided by pretending nobody needs it — it is
 
 A **windowed app** like Siderita, plus — later — an **embeddable widget**. The
 widget is the interesting half: a playing movie or now-playing music live in the
-`celestina-desktop` panel, and that same component backing a live "trailer"
-quick-look inside Siderita. One player component, three hosts (its own window,
+`celestina` panel, and that same component backing a live "trailer" quick-look
+inside Siderita. One player component, three hosts (its own window,
 the shell, the file manager), which is only affordable because they share one
 visual language and one bridge convention.
 

@@ -26,8 +26,8 @@ and PDF to an info card that names Fluorita. Both are deliberate: the media
 weight is *located*, not avoided.
 
 **Shape.** A windowed app, and later an **embeddable widget** — the same player
-component hosted by its own window, by the `celestina-desktop` panel (a playing
-clip or now-playing music, live) and by Siderita's quick-look. Playback is
+component hosted by its own window, by the `celestina` panel (a playing clip or
+now-playing music, live) and by Siderita's quick-look. Playback is
 published over MPRIS2 so the shell, the media keys and Magnetita all read one
 source of truth.
 
@@ -100,8 +100,7 @@ rest of the session hosts.
 
 - [ ] The player surface extracted as an **embeddable widget** with a bounded,
       documented contract (size, lifecycle, what it costs while idle)
-- [ ] Shell widget — a playing clip or now-playing music in the
-      `celestina-desktop` panel
+- [ ] Shell widget — a playing clip or now-playing music in the `celestina` panel
 - [ ] Siderita live quick-look — the widget replaces the info card that names
       Fluorita today, so spacebar previews a clip instead of describing it
 - [ ] One settings source shared with the suite (volume, defaults, per-type
