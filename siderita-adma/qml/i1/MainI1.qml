@@ -39,6 +39,8 @@ ApplicationWindow {
     // scales drive the shared sidebar and its info box.
     property real contentIconScale: 1.0
     property real contentTextScale: 1.0
+    property real interfaceIconScale: 1.0
+    property real interfaceTextScale: 1.0
     property real sidebarIconScale: 1.0
     property real sidebarTextScale: 1.0
     property bool sizingLoaded: false
@@ -54,6 +56,8 @@ ApplicationWindow {
             return
         contentIconScale = activeController.savedContentIconScale()
         contentTextScale = activeController.savedContentTextScale()
+        interfaceIconScale = activeController.savedInterfaceIconScale()
+        interfaceTextScale = activeController.savedInterfaceTextScale()
         sidebarIconScale = activeController.savedSidebarIconScale()
         sidebarTextScale = activeController.savedSidebarTextScale()
         sizingLoaded = true
@@ -62,6 +66,7 @@ ApplicationWindow {
     function persistSizing() {
         if (activeController)
             activeController.saveSizing(contentIconScale, contentTextScale,
+                                        interfaceIconScale, interfaceTextScale,
                                         sidebarIconScale, sidebarTextScale)
     }
 
@@ -788,7 +793,7 @@ ApplicationWindow {
                            ? CelestinaTheme.accent
                            : CelestinaTheme.textMuted
                     font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontMini
+                    font.pixelSize: Math.round(CelestinaTheme.fontMini * window.interfaceTextScale)
                     font.weight: CelestinaTheme.weightMedium
                 }
 
@@ -854,7 +859,7 @@ ApplicationWindow {
                     text: "Orden: " + sortButton.text
                     color: CelestinaTheme.text
                     font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontCaption
+                    font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.interfaceTextScale)
                     font.weight: CelestinaTheme.weightMedium
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -897,7 +902,7 @@ ApplicationWindow {
                     text: viewToggle.text
                     color: CelestinaTheme.text
                     font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontCaption
+                    font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.interfaceTextScale)
                     font.weight: CelestinaTheme.weightMedium
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -1760,7 +1765,7 @@ ApplicationWindow {
                     visible: controller.opDetail.length > 0
                     color: CelestinaTheme.textMuted
                     font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontCaption
+                    font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.interfaceTextScale)
                     elide: Text.ElideRight
                 }
 
@@ -1839,7 +1844,7 @@ ApplicationWindow {
                 color: controller.watchDegraded
                        ? CelestinaTheme.dangerText : CelestinaTheme.textMuted
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontCaption
+                font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.interfaceTextScale)
                 elide: Text.ElideRight
             }
 
@@ -1860,7 +1865,7 @@ ApplicationWindow {
                     text: sizeButton.text
                     color: CelestinaTheme.text
                     font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontCaption
+                    font.pixelSize: Math.round(CelestinaTheme.fontCaption * window.interfaceTextScale)
                     font.weight: CelestinaTheme.weightMedium
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -1890,11 +1895,11 @@ ApplicationWindow {
                     focus: true
                     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-                    background: Rectangle {
-                        radius: CelestinaTheme.radiusLg
-                        color: CelestinaTheme.surfaceStrong
-                        border.width: 1
-                        border.color: CelestinaTheme.borderStrong
+                    // Frosted like the menus and dialogs — glass is the suite's
+                    // surface language. Samples the view behind it.
+                    background: GlassCard {
+                        backdropSource: mainPanel
+                        cornerRadius: CelestinaTheme.radiusLg
                     }
 
                     contentItem: Column {
@@ -1913,6 +1918,14 @@ ApplicationWindow {
                             value: window.contentIconScale
                             onMoved: function(v) {
                                 window.contentIconScale = v
+                                window.persistSizing()
+                            }
+                        }
+                        SizeRow {
+                            label: "Interfaz"
+                            value: window.interfaceIconScale
+                            onMoved: function(v) {
+                                window.interfaceIconScale = v
                                 window.persistSizing()
                             }
                         }
@@ -1940,6 +1953,14 @@ ApplicationWindow {
                             value: window.contentTextScale
                             onMoved: function(v) {
                                 window.contentTextScale = v
+                                window.persistSizing()
+                            }
+                        }
+                        SizeRow {
+                            label: "Interfaz"
+                            value: window.interfaceTextScale
+                            onMoved: function(v) {
+                                window.interfaceTextScale = v
                                 window.persistSizing()
                             }
                         }
@@ -2098,7 +2119,7 @@ ApplicationWindow {
                                 text: "›"
                                 color: CelestinaTheme.textMuted
                                 font.family: CelestinaTheme.sansFamily
-                                font.pixelSize: CelestinaTheme.fontLabel
+                                font.pixelSize: Math.round(CelestinaTheme.fontLabel * window.interfaceTextScale)
                             }
 
                             Rectangle {
@@ -2118,7 +2139,7 @@ ApplicationWindow {
                                            ? CelestinaTheme.text
                                            : CelestinaTheme.textMuted
                                     font.family: CelestinaTheme.sansFamily
-                                    font.pixelSize: CelestinaTheme.fontLabel
+                                    font.pixelSize: Math.round(CelestinaTheme.fontLabel * window.interfaceTextScale)
                                 }
 
                                 MouseArea {
@@ -2145,7 +2166,7 @@ ApplicationWindow {
                     selectionColor: CelestinaTheme.accentStrong
                     selectedTextColor: CelestinaTheme.text
                     font.family: CelestinaTheme.monoFamily
-                    font.pixelSize: CelestinaTheme.fontLabel
+                    font.pixelSize: Math.round(CelestinaTheme.fontLabel * window.interfaceTextScale)
                     background: null
                     Accessible.name: "Ubicación"
 
@@ -2191,7 +2212,7 @@ ApplicationWindow {
                 selectionColor: CelestinaTheme.accentStrong
                 selectedTextColor: CelestinaTheme.text
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontBody
+                font.pixelSize: Math.round(CelestinaTheme.fontBody * window.interfaceTextScale)
                 leftPadding: 13
                 rightPadding: 13
                 onTextEdited: searchDebounce.restart()
@@ -2327,7 +2348,7 @@ ApplicationWindow {
                         id: chipIcon
                         x: 12
                         anchors.verticalCenter: parent.verticalCenter
-                        width: CelestinaTheme.iconSm
+                        width: Math.round(CelestinaTheme.iconSm * window.interfaceIconScale)
                         height: CelestinaTheme.iconSm
                         name: "folder"
                         source: CelestinaTheme.fallbackIcon("folder")
@@ -2343,7 +2364,7 @@ ApplicationWindow {
                         color: chip.activeTab ? CelestinaTheme.text
                                               : CelestinaTheme.textMuted
                         font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontLabel
+                        font.pixelSize: Math.round(CelestinaTheme.fontLabel * window.interfaceTextScale)
                         font.weight: chip.activeTab ? CelestinaTheme.weightMedium
                                                     : CelestinaTheme.weightRegular
                         elide: Text.ElideRight
@@ -2364,7 +2385,7 @@ ApplicationWindow {
                             text: "×"
                             color: CelestinaTheme.textMuted
                             font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: CelestinaTheme.fontBody
+                            font.pixelSize: Math.round(CelestinaTheme.fontBody * window.interfaceTextScale)
                         }
 
                         MouseArea {

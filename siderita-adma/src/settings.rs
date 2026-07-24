@@ -21,6 +21,10 @@ pub struct Settings {
     pub content_icon_scale: f64,
     /// Content-view text scale (name + subtitle), clamped on load.
     pub content_text_scale: f64,
+    /// Chrome icon scale (top bar + tabs + bottom bar controls), clamped on load.
+    pub interface_icon_scale: f64,
+    /// Chrome text scale (breadcrumb, search, tabs, bottom bar), clamped on load.
+    pub interface_text_scale: f64,
     /// Sidebar icon scale (place / bookmark / device icons), clamped on load.
     pub sidebar_icon_scale: f64,
     /// Sidebar text scale (labels + the info box), clamped on load.
@@ -41,6 +45,8 @@ impl Default for Settings {
             view_mode: "list".to_owned(),
             content_icon_scale: 1.0,
             content_text_scale: 1.0,
+            interface_icon_scale: 1.0,
+            interface_text_scale: 1.0,
             sidebar_icon_scale: 1.0,
             sidebar_text_scale: 1.0,
             sort_field: 0,
@@ -112,6 +118,16 @@ fn load_from(path: &Path) -> Settings {
                     content_text_seen = true;
                 }
             }
+            "interface_icon_scale" => {
+                if let Some(scale) = parse_scale(value) {
+                    settings.interface_icon_scale = scale;
+                }
+            }
+            "interface_text_scale" => {
+                if let Some(scale) = parse_scale(value) {
+                    settings.interface_text_scale = scale;
+                }
+            }
             "sidebar_icon_scale" => {
                 if let Some(scale) = parse_scale(value) {
                     settings.sidebar_icon_scale = scale;
@@ -154,6 +170,7 @@ fn save_to(path: &Path, settings: &Settings) -> io::Result<()> {
     }
     let mut text = format!(
         "view_mode={}\ncontent_icon_scale={:.2}\ncontent_text_scale={:.2}\n\
+         interface_icon_scale={:.2}\ninterface_text_scale={:.2}\n\
          sidebar_icon_scale={:.2}\nsidebar_text_scale={:.2}\n\
          sort_field={}\nsort_ascending={}\nshow_hidden={}\n",
         if settings.view_mode == "grid" {
@@ -163,6 +180,8 @@ fn save_to(path: &Path, settings: &Settings) -> io::Result<()> {
         },
         settings.content_icon_scale.clamp(SCALE_MIN, SCALE_MAX),
         settings.content_text_scale.clamp(SCALE_MIN, SCALE_MAX),
+        settings.interface_icon_scale.clamp(SCALE_MIN, SCALE_MAX),
+        settings.interface_text_scale.clamp(SCALE_MIN, SCALE_MAX),
         settings.sidebar_icon_scale.clamp(SCALE_MIN, SCALE_MAX),
         settings.sidebar_text_scale.clamp(SCALE_MIN, SCALE_MAX),
         settings.sort_field.clamp(0, 3),
@@ -203,6 +222,8 @@ mod tests {
             view_mode: "grid".to_owned(),
             content_icon_scale: 1.3,
             content_text_scale: 0.9,
+            interface_icon_scale: 1.2,
+            interface_text_scale: 0.8,
             sidebar_icon_scale: 1.5,
             sidebar_text_scale: 1.1,
             sort_field: 2,

@@ -312,6 +312,12 @@ pub mod qobject {
         fn saved_content_text_scale(self: &SideritaController) -> f64;
 
         #[qinvokable]
+        fn saved_interface_icon_scale(self: &SideritaController) -> f64;
+
+        #[qinvokable]
+        fn saved_interface_text_scale(self: &SideritaController) -> f64;
+
+        #[qinvokable]
         fn saved_sidebar_icon_scale(self: &SideritaController) -> f64;
 
         #[qinvokable]
@@ -327,6 +333,8 @@ pub mod qobject {
             self: Pin<&mut SideritaController>,
             content_icon: f64,
             content_text: f64,
+            interface_icon: f64,
+            interface_text: f64,
             sidebar_icon: f64,
             sidebar_text: f64,
         );
@@ -2038,6 +2046,14 @@ impl qobject::SideritaController {
         self.rust().settings.content_text_scale
     }
 
+    pub fn saved_interface_icon_scale(&self) -> f64 {
+        self.rust().settings.interface_icon_scale
+    }
+
+    pub fn saved_interface_text_scale(&self) -> f64 {
+        self.rust().settings.interface_text_scale
+    }
+
     pub fn saved_sidebar_icon_scale(&self) -> f64 {
         self.rust().settings.sidebar_icon_scale
     }
@@ -2066,12 +2082,16 @@ impl qobject::SideritaController {
         mut self: Pin<&mut Self>,
         content_icon: f64,
         content_text: f64,
+        interface_icon: f64,
+        interface_text: f64,
         sidebar_icon: f64,
         sidebar_text: f64,
     ) {
         let mut settings = crate::settings::load();
         settings.content_icon_scale = content_icon;
         settings.content_text_scale = content_text;
+        settings.interface_icon_scale = interface_icon;
+        settings.interface_text_scale = interface_text;
         settings.sidebar_icon_scale = sidebar_icon;
         settings.sidebar_text_scale = sidebar_text;
         let _ = crate::settings::save(&settings);
