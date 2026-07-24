@@ -570,10 +570,28 @@ ApplicationWindow {
             function isSelected(token) {
                 return token.length > 0 && selectedTokens[token] === true
             }
-            // Raster image types worth thumbnailing (the provider falls back to
-            // nothing for anything it can't decode, so a stray match is harmless).
-            function isImageName(n) {
-                return /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|jxl|heic|heif)$/i.test(n)
+            // The media class of a file by extension — "image", "video",
+            // "audio" or "" — driving its themed icon and whether it asks the
+            // thumbnail provider (which reuses any cached thumbnail for any type,
+            // but only generates images itself; video/audio come from a producer).
+            function mediaKind(n) {
+                if (/\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|jxl|heic|heif)$/i.test(n))
+                    return "image"
+                if (/\.(mp4|mkv|webm|mov|avi|m4v|mpe?g|wmv|flv|3gp|ogv|ts)$/i.test(n))
+                    return "video"
+                if (/\.(mp3|flac|ogg|oga|opus|m4a|aac|wav|wma|aiff?|mka)$/i.test(n))
+                    return "audio"
+                return ""
+            }
+            // The themed icon a non-thumbnailed entry shows — a media-type icon
+            // (video/audio/image) where the desktop theme has one, else generic.
+            function mediaIconName(kind, media) {
+                return kind === "directory" ? "folder"
+                     : kind === "symlink" ? "emblem-symbolic-link"
+                     : media === "image" ? "image-x-generic"
+                     : media === "video" ? "video-x-generic"
+                     : media === "audio" ? "audio-x-generic"
+                     : "text-x-generic"
             }
             function clearSelection() {
                 selectedTokens = ({})
@@ -1251,19 +1269,15 @@ ApplicationWindow {
                                  : CelestinaTheme.glyphFile
                         clip: true
 
-                        readonly property bool isImage: row.kind !== "directory"
-                                                        && mainPanel.isImageName(row.name)
+                        readonly property string media: row.kind === "directory"
+                                                        ? "" : mainPanel.mediaKind(row.name)
 
                         IconImage {
                             anchors.centerIn: parent
                             visible: !thumb.ready
                             width: Math.round(CelestinaTheme.iconMd * window.contentIconScale)
                             height: Math.round(CelestinaTheme.iconMd * window.contentIconScale)
-                            name: row.kind === "directory"
-                                  ? "folder"
-                                  : row.kind === "symlink"
-                                    ? "emblem-symbolic-link"
-                                    : "text-x-generic"
+                            name: mainPanel.mediaIconName(row.kind, kindGlyph.media)
                             source: CelestinaTheme.fallbackIcon(
                                         row.kind === "directory"
                                         ? "folder"
@@ -1275,16 +1289,18 @@ ApplicationWindow {
                                    : CelestinaTheme.textMuted
                         }
 
-                        // The image itself, thumbnailed by the "thumb" provider,
-                        // covering the tile once decoded; until then the glyph shows.
+                        // The cached image / video-frame / cover the "thumb"
+                        // provider returns, covering the tile once decoded; the
+                        // themed glyph shows until then (or forever, for media the
+                        // cache has no thumbnail of).
                         Image {
                             id: thumb
                             anchors.fill: parent
                             anchors.margins: 1
-                            readonly property bool ready: kindGlyph.isImage
+                            readonly property bool ready: kindGlyph.media !== ""
                                                           && status === Image.Ready
                             visible: ready
-                            source: kindGlyph.isImage
+                            source: kindGlyph.media !== ""
                                     ? "image://thumb/" + encodeURIComponent(row.path) : ""
                             sourceSize.width: 256
                             sourceSize.height: 256
@@ -1292,6 +1308,23 @@ ApplicationWindow {
                             asynchronous: true
                             cache: true
                             smooth: true
+                        }
+
+                        // A small play badge marks a video's frame apart from a
+                        // still image.
+                        Rectangle {
+                            visible: thumb.ready && kindGlyph.media === "video"
+                            anchors.centerIn: parent
+                            width: Math.round(parent.width * 0.42)
+                            height: width
+                            radius: width / 2
+                            color: Qt.rgba(0, 0, 0, 0.45)
+                            Text {
+                                anchors.centerIn: parent
+                                text: "▶"
+                                color: "white"
+                                font.pixelSize: Math.round(parent.width * 0.5)
+                            }
                         }
                     }
 
@@ -1652,19 +1685,15 @@ ApplicationWindow {
                                      ? CelestinaTheme.glyphSymlink
                                      : CelestinaTheme.glyphFile
 
-                            readonly property bool isImage: cell.kind !== "directory"
-                                                            && mainPanel.isImageName(cell.name)
+                            readonly property string media: cell.kind === "directory"
+                                                            ? "" : mainPanel.mediaKind(cell.name)
 
                             IconImage {
                                 anchors.centerIn: parent
                                 visible: !cellThumb.ready
                                 width: Math.round(26 * window.contentIconScale)
                                 height: Math.round(26 * window.contentIconScale)
-                                name: cell.kind === "directory"
-                                      ? "folder"
-                                      : cell.kind === "symlink"
-                                        ? "emblem-symbolic-link"
-                                        : "text-x-generic"
+                                name: mainPanel.mediaIconName(cell.kind, cellGlyph.media)
                                 source: CelestinaTheme.fallbackIcon(
                                             cell.kind === "directory"
                                             ? "folder"
@@ -1680,10 +1709,10 @@ ApplicationWindow {
                                 id: cellThumb
                                 anchors.fill: parent
                                 anchors.margins: 1
-                                readonly property bool ready: cellGlyph.isImage
+                                readonly property bool ready: cellGlyph.media !== ""
                                                               && status === Image.Ready
                                 visible: ready
-                                source: cellGlyph.isImage
+                                source: cellGlyph.media !== ""
                                         ? "image://thumb/" + encodeURIComponent(cell.path) : ""
                                 sourceSize.width: 256
                                 sourceSize.height: 256
@@ -1691,6 +1720,22 @@ ApplicationWindow {
                                 asynchronous: true
                                 cache: true
                                 smooth: true
+                            }
+
+                            // Play badge on a video frame.
+                            Rectangle {
+                                visible: cellThumb.ready && cellGlyph.media === "video"
+                                anchors.centerIn: parent
+                                width: Math.round(parent.width * 0.4)
+                                height: width
+                                radius: width / 2
+                                color: Qt.rgba(0, 0, 0, 0.45)
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "▶"
+                                    color: "white"
+                                    font.pixelSize: Math.round(parent.width * 0.5)
+                                }
                             }
                         }
 

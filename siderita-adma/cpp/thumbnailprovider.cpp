@@ -30,6 +30,23 @@ QString cacheRoot()
 // at a comfortable zoom, and the size most desktops already cache.
 constexpr int kThumbMax = 256;
 
+// Whether Siderita will *generate* a thumbnail for this file itself — only raster
+// images, which Qt decodes with no extra dependency. Video / audio thumbnails
+// (first frames, embedded covers) need a media stack, so those are only ever
+// reused from the shared cache when something else — the system, or Celestina's
+// media app — produced them; Siderita never decodes them here.
+bool generatableImage(const QString &path)
+{
+    static const QStringList kImage = {
+        QStringLiteral("png"),  QStringLiteral("jpg"),  QStringLiteral("jpeg"),
+        QStringLiteral("gif"),  QStringLiteral("webp"), QStringLiteral("bmp"),
+        QStringLiteral("ico"),  QStringLiteral("tif"),  QStringLiteral("tiff"),
+        QStringLiteral("avif"), QStringLiteral("jxl"),  QStringLiteral("heic"),
+        QStringLiteral("heif"),
+    };
+    return kImage.contains(QFileInfo(path).suffix().toLower());
+}
+
 // Loads a thumbnail for `path`: a valid cached one from the shared cache, else a
 // freshly generated + cached one. Returns a null image for anything that is not
 // a loadable image (the delegate then keeps its generic glyph). Runs off-thread.
@@ -63,6 +80,13 @@ QImage loadThumbnail(const QString &path)
                 return cached;
             }
         }
+    }
+
+    // Past here we would generate — but only for images. A video / audio file
+    // with no cached thumbnail keeps its themed glyph until a media producer
+    // fills the cache.
+    if (!generatableImage(absolute)) {
+        return QImage();
     }
 
     // Generate. QImageReader decodes at a reduced size where the format allows
