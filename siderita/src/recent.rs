@@ -10,15 +10,6 @@ pub struct RecentItem {
     pub stamp: String,
 }
 
-fn data_home() -> Option<PathBuf> {
-    std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .filter(|value| value.is_absolute())
-        .or_else(|| {
-            std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local").join("share"))
-        })
-}
-
 /// Reads the freedesktop recently-used list, newest first, keeping only entries
 /// that still exist and at most `limit` of them.
 ///
@@ -26,7 +17,7 @@ fn data_home() -> Option<PathBuf> {
 /// application that opens something, and Siderita only reads it. Anything it
 /// cannot parse is skipped rather than guessed at.
 pub fn load(limit: usize) -> Vec<RecentItem> {
-    let Some(path) = data_home().map(|dir| dir.join("recently-used.xbel")) else {
+    let Some(path) = celestina_core::xdg::data_home().map(|dir| dir.join("recently-used.xbel")) else {
         return Vec::new();
     };
     let Ok(content) = std::fs::read_to_string(&path) else {

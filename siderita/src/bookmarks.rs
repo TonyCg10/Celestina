@@ -11,11 +11,7 @@ pub struct Bookmark {
 
 /// The XDG config file bookmarks are stored in, if a config home is resolvable.
 fn config_file() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .filter(|value| value.is_absolute())
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))?;
-    Some(base.join("siderita").join("bookmarks.tsv"))
+    Some(celestina_core::xdg::config_home()?.join("siderita").join("bookmarks.tsv"))
 }
 
 /// Loads saved bookmarks. Returns an empty list if none exist or on any error;

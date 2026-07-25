@@ -92,14 +92,7 @@ fn entry_handles(entry: &ParsedEntry, mime: &str) -> bool {
 fn application_dirs() -> Vec<std::path::PathBuf> {
     let mut dirs = Vec::new();
 
-    let data_home = std::env::var_os("XDG_DATA_HOME")
-        .map(std::path::PathBuf::from)
-        .filter(|path| path.is_absolute())
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .map(std::path::PathBuf::from)
-                .map(|home| home.join(".local").join("share"))
-        });
+    let data_home = celestina_core::xdg::data_home();
     if let Some(data_home) = data_home {
         dirs.push(data_home.join("applications"));
     }

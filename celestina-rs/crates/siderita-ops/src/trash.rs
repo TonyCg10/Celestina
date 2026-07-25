@@ -152,15 +152,7 @@ fn trashinfo(original: &Path) -> String {
 
 /// Home Trash directory, from `$XDG_DATA_HOME` or `$HOME/.local/share`.
 pub(crate) fn home_trash() -> Result<PathBuf, OpError> {
-    let data_home = std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .filter(|path| path.is_absolute())
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .map(PathBuf::from)
-                .filter(|path| path.is_absolute())
-                .map(|home| home.join(".local").join("share"))
-        })
+    let data_home = celestina_core::xdg::data_home()
         .ok_or_else(|| OpError::Io {
             path: PathBuf::new(),
             kind: io::ErrorKind::NotFound,

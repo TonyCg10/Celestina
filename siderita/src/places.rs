@@ -18,13 +18,6 @@ fn home() -> Option<PathBuf> {
         .filter(|value| value.is_absolute())
 }
 
-fn config_home() -> Option<PathBuf> {
-    std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .filter(|value| value.is_absolute())
-        .or_else(|| home().map(|dir| dir.join(".config")))
-}
-
 /// Resolves the standard user directories that exist, as a KEY -> path map.
 /// HOME is always included; the others only when the directory exists and is
 /// not HOME itself (an unconfigured `user-dirs.dirs` often points them at HOME).
@@ -49,7 +42,7 @@ pub fn resolve() -> HashMap<String, PathBuf> {
 }
 
 fn read_user_dirs(home: &Path) -> HashMap<String, PathBuf> {
-    match config_home() {
+    match celestina_core::xdg::config_home() {
         Some(config) => match std::fs::read_to_string(config.join("user-dirs.dirs")) {
             Ok(content) => parse_user_dirs(home, &content),
             Err(_) => HashMap::new(),

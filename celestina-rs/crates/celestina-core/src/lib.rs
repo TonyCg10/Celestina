@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod percent;
+pub mod xdg;
 
 use std::error::Error;
 use std::fmt;

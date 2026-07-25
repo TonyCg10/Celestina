@@ -94,11 +94,7 @@ impl Default for Settings {
 }
 
 fn config_file() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .filter(|value| value.is_absolute())
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))?;
-    Some(base.join("siderita").join("settings.conf"))
+    Some(celestina_core::xdg::config_home()?.join("siderita").join("settings.conf"))
 }
 
 pub fn load() -> Settings {

@@ -7,11 +7,7 @@ use std::path::{Path, PathBuf};
 /// One absolute path per line — a set, so the file is order-free and a repeated
 /// star costs nothing.
 fn config_file() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .filter(|value| value.is_absolute())
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))?;
-    Some(base.join("siderita").join("favorites.conf"))
+    Some(celestina_core::xdg::config_home()?.join("siderita").join("favorites.conf"))
 }
 
 /// Loads the starred paths. Any error yields an empty set — a star is a mark on
