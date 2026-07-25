@@ -558,6 +558,8 @@ enum UndoAction {
     Trash { infos: Vec<PathBuf> },
 }
 
+mod trash;
+
 impl UndoAction {
     /// A short Spanish label for what undo will reverse, for the menu/tooltip.
     fn label(&self) -> &'static str {
@@ -2166,335 +2168,17 @@ impl qobject::SideritaController {
         self.as_mut().finish_batch(total, &failures);
     }
 
-    /// Reads the freedesktop Trash and publishes it to the Trash view (parallel
-    /// name / origin / date lists), keeping the info paths for restore-by-index.
-    pub fn load_trash(mut self: Pin<&mut Self>) {
-        self.as_mut().set_op_error(QString::default());
-        let entries = match siderita_ops::list_home_trash() {
-            Ok(entries) => entries,
-            Err(error) => {
-                self.as_mut()
-                    .set_op_error(QString::from(error.to_string().as_str()));
-                return;
-            }
-        };
 
-        let names: QStringList = entries
-            .iter()
-            .map(|entry| QString::from(entry.name.as_str()))
-            .collect();
-        let origins: QStringList = entries
-            .iter()
-            .map(|entry| QString::from(entry.original.to_string_lossy().as_ref()))
-            .collect();
-        let dates: QStringList = entries
-            .iter()
-            .map(|entry| QString::from(format_trash_date(&entry.deletion_date).as_str()))
-            .collect();
-        self.as_mut().rust_mut().get_mut().trash_entries = entries;
-        self.as_mut().set_trash_names(names);
-        self.as_mut().set_trash_origins(origins);
-        self.as_mut().set_trash_dates(dates);
-    }
 
-    /// Opens Trash as a content-view location: loads the entries and publishes
-    /// them onto the shared entry model (so list / grid / details / thumbnails
-    /// render them exactly like a folder), flipping `trash_active`.
-    pub fn open_trash(mut self: Pin<&mut Self>) {
-        self.as_mut().exit_search();
-        self.as_mut().exit_recent();
-        self.as_mut().load_trash();
-        self.as_mut().publish_trash();
-    }
 
-    /// Builds the entry-model columns from the loaded trash entries. Reuses the
-    /// `search_hits` rendering path (so the lookups resolve) while `trash_entries`
-    /// keeps the restore/purge identity.
-    fn publish_trash(mut self: Pin<&mut Self>) {
-        let entries = self.rust().trash_entries.clone();
-        let names: QStringList = entries.iter().map(|e| QString::from(e.name.as_str())).collect();
-        let paths: QStringList = entries
-            .iter()
-            .map(|e| QString::from(e.trashed.to_string_lossy().as_ref()))
-            .collect();
-        let kinds: QStringList = entries
-            .iter()
-            .map(|e| QString::from(if e.trashed.is_dir() { "directory" } else { "file" }))
-            .collect();
-        let tokens: QStringList = (0..entries.len())
-            .map(|i| QString::from(i.to_string().as_str()))
-            .collect();
-        // Subtitle = where it was; date = when it went to trash; size from the
-        // trashed body (folders show "—", matching the folder view).
-        let subtitles: QStringList = entries
-            .iter()
-            .map(|e| QString::from(e.original.to_string_lossy().as_ref()))
-            .collect();
-        let dates: QStringList = entries
-            .iter()
-            .map(|e| QString::from(format_trash_date(&e.deletion_date).as_str()))
-            .collect();
-        let sizes: QStringList = entries
-            .iter()
-            .map(|e| {
-                if e.trashed.is_dir() {
-                    QString::from("—")
-                } else {
-                    QString::from(
-                        std::fs::metadata(&e.trashed)
-                            .map(|m| format_size(m.len()))
-                            .unwrap_or_default()
-                            .as_str(),
-                    )
-                }
-            })
-            .collect();
-        let sections: QStringList = entries.iter().map(|_| QString::default()).collect();
 
-        let hits: Vec<crate::search::SearchHit> = entries
-            .iter()
-            .map(|e| crate::search::SearchHit {
-                name: e.name.clone(),
-                path: e.trashed.to_string_lossy().into_owned(),
-                is_dir: e.trashed.is_dir(),
-            })
-            .collect();
-        self.as_mut().rust_mut().get_mut().search_hits = hits;
-        self.as_mut().set_trash_active(true);
-        self.as_mut().set_selected_token(QString::default());
-        self.as_mut().set_entry_names(names.clone());
-        self.as_mut()
-            .rows_ready(names, tokens, kinds, subtitles, paths, sections, sizes, dates);
-    }
 
-    /// Opens Recientes as a content-view location: the desktop's own
-    /// recently-used list (`recently-used.xbel`), read and published onto the
-    /// shared entry model so the list / grid / details render it like a folder.
-    /// Siderita only reads that file — the applications that open things are
-    /// what write it.
-    pub fn open_recent(mut self: Pin<&mut Self>) {
-        self.as_mut().exit_search();
-        self.as_mut().exit_trash();
 
-        let items = crate::recent::load(RECENT_LIMIT);
-        let names: QStringList = items
-            .iter()
-            .map(|item| QString::from(item.name.as_str()))
-            .collect();
-        let paths: QStringList = items
-            .iter()
-            .map(|item| QString::from(item.path.to_string_lossy().as_ref()))
-            .collect();
-        let kinds: QStringList = items
-            .iter()
-            .map(|item| QString::from(if item.path.is_dir() { "directory" } else { "file" }))
-            .collect();
-        let tokens: QStringList = (0..items.len())
-            .map(|i| QString::from(i.to_string().as_str()))
-            .collect();
-        // Where it lives, and the day it was last touched — the same two facts
-        // the Trash rows carry.
-        let subtitles: QStringList = items
-            .iter()
-            .map(|item| {
-                QString::from(search_hit_parent(&item.path.to_string_lossy()).as_str())
-            })
-            .collect();
-        let dates: QStringList = items
-            .iter()
-            .map(|item| QString::from(item.stamp.split('T').next().unwrap_or("")))
-            .collect();
-        let sizes: QStringList = items
-            .iter()
-            .map(|item| {
-                if item.path.is_dir() {
-                    QString::from("—")
-                } else {
-                    QString::from(
-                        std::fs::metadata(&item.path)
-                            .map(|meta| format_size(meta.len()))
-                            .unwrap_or_default()
-                            .as_str(),
-                    )
-                }
-            })
-            .collect();
-        let sections: QStringList = items.iter().map(|_| QString::default()).collect();
 
-        let hits: Vec<crate::search::SearchHit> = items
-            .iter()
-            .map(|item| crate::search::SearchHit {
-                name: item.name.clone(),
-                path: item.path.to_string_lossy().into_owned(),
-                is_dir: item.path.is_dir(),
-            })
-            .collect();
 
-        let count = hits.len().min(i32::MAX as usize) as i32;
-        self.as_mut().rust_mut().get_mut().search_hits = hits;
-        self.as_mut().set_recent_active(true);
-        self.as_mut().set_recent_count(count);
-        self.as_mut().set_selected_token(QString::default());
-        self.as_mut().set_entry_names(names.clone());
-        self.as_mut()
-            .rows_ready(names, tokens, kinds, subtitles, paths, sections, sizes, dates);
-    }
 
-    /// Leaves Recientes (a no-op when it is not shown, so any navigation can
-    /// call it) without repainting.
-    fn exit_recent(mut self: Pin<&mut Self>) {
-        if self.rust().recent_active {
-            self.as_mut().rust_mut().get_mut().search_hits.clear();
-            self.as_mut().set_recent_active(false);
-        }
-    }
 
-    /// Leaves Recientes and repaints the folder underneath.
-    pub fn close_recent(mut self: Pin<&mut Self>) {
-        self.as_mut().exit_recent();
-        self.as_mut().reproject();
-    }
 
-    /// Leaves the Trash location (only clears state if it is actually shown, so
-    /// it is safe to call on any navigation) and returns to the folder.
-    fn exit_trash(mut self: Pin<&mut Self>) {
-        if self.rust().trash_active {
-            self.as_mut().rust_mut().get_mut().search_hits.clear();
-            self.as_mut().set_trash_active(false);
-        }
-    }
-
-    /// Leaves Trash and repaints the current folder.
-    pub fn close_trash(mut self: Pin<&mut Self>) {
-        self.as_mut().exit_trash();
-        self.as_mut().reproject();
-    }
-
-    /// Permanently deletes one trashed entry by index, then refreshes the view.
-    pub fn purge_trash(mut self: Pin<&mut Self>, index: i32) {
-        self.as_mut().set_op_error(QString::default());
-        let Ok(index) = usize::try_from(index) else {
-            return;
-        };
-        let Some(info) = self.rust().trash_entries.get(index).map(|e| e.info.clone()) else {
-            return;
-        };
-        match siderita_ops::purge_from_trash(&info) {
-            Ok(_) => {
-                self.as_mut().load_trash();
-                if self.rust().trash_active {
-                    self.as_mut().publish_trash();
-                }
-            }
-            Err(error) => self
-                .as_mut()
-                .set_op_error(QString::from(error.to_string().as_str())),
-        }
-    }
-
-    /// Restores the trashed entry at `index` in the loaded Trash list, then
-    /// refreshes both the Trash view and the current folder (the entry may
-    /// reappear there). A refusal (its origin is taken) surfaces as `op_error`.
-    pub fn restore_trash(mut self: Pin<&mut Self>, index: i32) {
-        self.as_mut().set_op_error(QString::default());
-        let Ok(index) = usize::try_from(index) else {
-            return;
-        };
-        let Some(info) = self.rust().trash_entries.get(index).map(|e| e.info.clone()) else {
-            return;
-        };
-        match siderita_ops::restore_from_trash(&info, &CancellationToken::new()) {
-            Ok(_) => {
-                self.as_mut().load_trash();
-                if self.rust().trash_active {
-                    self.as_mut().publish_trash();
-                } else {
-                    self.as_mut().refresh();
-                }
-            }
-            Err(error) => self
-                .as_mut()
-                .set_op_error(QString::from(error.to_string().as_str())),
-        }
-    }
-
-    /// Restores every entry currently in the Trash view. Each is attempted
-    /// independently; failures (e.g. an origin now occupied) are reported
-    /// together after the list and the folder are refreshed.
-    pub fn restore_all_trash(mut self: Pin<&mut Self>) {
-        self.as_mut().set_op_error(QString::default());
-        let infos: Vec<PathBuf> =
-            self.rust().trash_entries.iter().map(|e| e.info.clone()).collect();
-        if infos.is_empty() {
-            return;
-        }
-        let cancellation = CancellationToken::new();
-        let mut failures = Vec::new();
-        for info in &infos {
-            if let Err(error) = siderita_ops::restore_from_trash(info, &cancellation) {
-                failures.push(format!("{}: {error}", display_name(info)));
-            }
-        }
-        // Refresh first (both clear op_error), then report any failures last.
-        self.as_mut().load_trash();
-        if self.rust().trash_active {
-            self.as_mut().publish_trash();
-        } else {
-            self.as_mut().refresh();
-        }
-        if !failures.is_empty() {
-            let total = infos.len();
-            let summary = if failures.len() == total {
-                failures.join("\n")
-            } else {
-                format!(
-                    "{} de {} restauraciones fallaron:\n{}",
-                    failures.len(),
-                    total,
-                    failures.join("\n")
-                )
-            };
-            self.as_mut().set_op_error(QString::from(summary.as_str()));
-        }
-    }
-
-    /// Permanently deletes every entry in the Trash view. Irreversible — the QML
-    /// gates this behind a confirmation. Each is purged independently; failures
-    /// are reported together after the list is refreshed. The current folder is
-    /// untouched (trashed entries live in the Trash, not here), so unlike
-    /// restore there is nothing to refresh but the Trash list itself.
-    pub fn empty_trash(mut self: Pin<&mut Self>) {
-        self.as_mut().set_op_error(QString::default());
-        let infos: Vec<PathBuf> =
-            self.rust().trash_entries.iter().map(|e| e.info.clone()).collect();
-        if infos.is_empty() {
-            return;
-        }
-        let mut failures = Vec::new();
-        for info in &infos {
-            if let Err(error) = siderita_ops::purge_from_trash(info) {
-                failures.push(format!("{}: {error}", display_name(info)));
-            }
-        }
-        self.as_mut().load_trash();
-        if self.rust().trash_active {
-            self.as_mut().publish_trash();
-        }
-        if !failures.is_empty() {
-            let total = infos.len();
-            let summary = if failures.len() == total {
-                failures.join("\n")
-            } else {
-                format!(
-                    "{} de {} no se pudieron borrar:\n{}",
-                    failures.len(),
-                    total,
-                    failures.join("\n")
-                )
-            };
-            self.as_mut().set_op_error(QString::from(summary.as_str()));
-        }
-    }
 
     /// Opens the "Abrir con…" chooser for `path`: classifies its MIME type,
     /// gathers the applications that declare it (plus the current default) and
@@ -3841,24 +3525,6 @@ fn next_free_name(dir: &Path, name: &OsStr) -> PathBuf {
     unreachable!("the free-name search always terminates before u64 wraps")
 }
 
-/// Presents a spec `YYYY-MM-DDThh:mm:ss` Trash deletion date as `YYYY-MM-DD
-/// hh:mm` for the Trash view. Anything not in that shape is passed through, so a
-/// malformed record still shows what it has rather than nothing.
-fn format_trash_date(raw: &str) -> String {
-    if raw.is_empty() {
-        return String::new();
-    }
-    let Some((date, time)) = raw.split_once('T') else {
-        return raw.to_owned();
-    };
-    // Keep hh:mm; drop the seconds only when the time actually carries them
-    // (two colons), so an already-short hh:mm is left intact.
-    let hm = match (time.find(':'), time.rfind(':')) {
-        (Some(first), Some(last)) if first != last => &time[..last],
-        _ => time,
-    };
-    format!("{date} {hm}")
-}
 
 /// The final path component, for a compact per-entry line in a batch error.
 /// Falls back to the full lossy path when there is no file name (e.g. `/`).
@@ -4051,6 +3717,25 @@ const PLACE_CATALOGUE: &[&str] = &[
 
 /// How many recently-used entries Recientes shows. The desktop's file holds
 /// hundreds; a list that long is not "recent" and every row costs a `stat`.
+/// Presents a spec `YYYY-MM-DDThh:mm:ss` Trash deletion date as `YYYY-MM-DD
+/// hh:mm` for the Trash view. Anything not in that shape is passed through, so a
+/// malformed record still shows what it has rather than nothing.
+fn format_trash_date(raw: &str) -> String {
+    if raw.is_empty() {
+        return String::new();
+    }
+    let Some((date, time)) = raw.split_once('T') else {
+        return raw.to_owned();
+    };
+    // Keep hh:mm; drop the seconds only when the time actually carries them
+    // (two colons), so an already-short hh:mm is left intact.
+    let hm = match (time.find(':'), time.rfind(':')) {
+        (Some(first), Some(last)) if first != last => &time[..last],
+        _ => time,
+    };
+    format!("{date} {hm}")
+}
+
 const RECENT_LIMIT: usize = 100;
 
 fn favorite_entry_list(paths: &std::collections::BTreeSet<String>) -> QStringList {
