@@ -19,6 +19,7 @@
 //! and none silently overwrites an existing target: a conflict is reported,
 //! never resolved by destroying data.
 
+mod available;
 mod copy;
 mod create;
 mod error;
@@ -30,6 +31,7 @@ mod restore;
 mod trash;
 mod trashinfo;
 
+pub use available::next_available;
 pub use copy::{copy, copy_as, Progress};
 pub use create::{create_directory, create_file};
 pub use error::OpError;

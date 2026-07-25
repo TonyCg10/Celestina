@@ -2535,7 +2535,7 @@ fn paste_one(
             place_into(source, destination_dir, cut, token, on_progress, outcome);
         }
         ConflictStrategy::KeepBoth => {
-            let freed = next_free_name(destination_dir, name);
+            let freed = siderita_ops::next_available(destination_dir, name, "copia");
             let result = if cut {
                 siderita_ops::move_as(source, &freed, token, on_progress).map(|_| ())
             } else {
@@ -2583,33 +2583,6 @@ fn place_into(
             .push(format!("{}: {error}", display_name(source)));
     }
 }
-
-/// The first free `<stem> (copia)[.ext]`, `<stem> (copia 2)[.ext]`, … under
-/// `dir` — the "keep both" name. Operates on `OsStr` so non-UTF-8 names survive.
-fn next_free_name(dir: &Path, name: &OsStr) -> PathBuf {
-    let as_path = Path::new(name);
-    let stem = as_path.file_stem().unwrap_or(name);
-    let extension = as_path.extension();
-
-    for attempt in 1u64.. {
-        let mut candidate = stem.to_os_string();
-        if attempt == 1 {
-            candidate.push(" (copia)");
-        } else {
-            candidate.push(format!(" (copia {attempt})"));
-        }
-        if let Some(extension) = extension {
-            candidate.push(".");
-            candidate.push(extension);
-        }
-        let path = dir.join(&candidate);
-        if std::fs::symlink_metadata(&path).is_err() {
-            return path;
-        }
-    }
-    unreachable!("the free-name search always terminates before u64 wraps")
-}
-
 
 /// The final path component, for a compact per-entry line in a batch error.
 /// Falls back to the full lossy path when there is no file name (e.g. `/`).
@@ -2940,36 +2913,6 @@ mod tests {
             resolve_location("filename.txt", Some(Path::new("/base"))),
             PathBuf::from("/base/filename.txt")
         );
-    }
-
-    #[test]
-    fn next_free_name_suffixes_copia_around_the_extension() {
-        use std::ffi::OsStr;
-        let dir = std::env::temp_dir().join(format!(
-            "siderita-freename-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        std::fs::create_dir_all(&dir).expect("mk test dir");
-
-        // Nothing exists yet → the first "(copia)" name.
-        let first = super::next_free_name(&dir, OsStr::new("nota.txt"));
-        assert_eq!(first.file_name().unwrap(), OsStr::new("nota (copia).txt"));
-
-        // Occupy it and the plain name; the next free is "(copia 2)".
-        std::fs::write(&first, b"x").expect("seed copia");
-        std::fs::write(dir.join("nota.txt"), b"x").expect("seed orig");
-        let second = super::next_free_name(&dir, OsStr::new("nota.txt"));
-        assert_eq!(
-            second.file_name().unwrap(),
-            OsStr::new("nota (copia 2).txt")
-        );
-
-        // A name without an extension keeps the suffix at the end.
-        let no_ext = super::next_free_name(&dir, OsStr::new("carpeta"));
-        assert_eq!(no_ext.file_name().unwrap(), OsStr::new("carpeta (copia)"));
-
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
