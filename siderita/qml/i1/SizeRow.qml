@@ -1,0 +1,86 @@
+import QtQuick
+import QtQuick.Controls
+import org.celestina.siderita 1.0
+
+// ─── SizeRow ──────────────────────────────────────────────────────────────────
+// Una fila del menú de tamaños: etiqueta, deslizador y el valor en porcentaje.
+// Cada pareja icono/texto tiene la suya porque agrandar el texto y agrandar los
+// iconos son dos deseos distintos, y un solo deslizador obliga a elegir.
+// ──────────────────────────────────────────────────────────────────────────────
+Item {
+    id: sizeRow
+    property string label: ""
+    property alias value: sizeSlider.value
+    // Most scales cap at 2.0 (100 %); content icons may go to 3.0 (150 %).
+    property real maxValue: 2.0
+    signal moved(real v)
+
+    implicitWidth: 252
+    implicitHeight: 30
+
+    Text {
+        id: sizeRowLabel
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        width: 94
+        text: sizeRow.label
+        color: CelestinaTheme.text
+        font.family: CelestinaTheme.sansFamily
+        font.pixelSize: CelestinaTheme.fontLabel
+        elide: Text.ElideRight
+    }
+
+    Slider {
+        id: sizeSlider
+        anchors.left: sizeRowLabel.right
+        anchors.right: sizeRowValue.left
+        anchors.rightMargin: 10
+        anchors.verticalCenter: parent.verticalCenter
+        // The factor reads to the user as a fraction of 2.0 — 10 %–100 %
+        // (or up to 150 % where maxValue is raised).
+        from: 0.2
+        to: sizeRow.maxValue
+        stepSize: 0.1
+        onMoved: sizeRow.moved(value)
+
+        background: Rectangle {
+            x: sizeSlider.leftPadding
+            y: sizeSlider.topPadding + sizeSlider.availableHeight / 2 - height / 2
+            width: sizeSlider.availableWidth
+            height: 4
+            radius: 2
+            color: CelestinaTheme.controlFill
+
+            Rectangle {
+                width: sizeSlider.visualPosition * parent.width
+                height: parent.height
+                radius: 2
+                color: CelestinaTheme.accent
+            }
+        }
+
+        handle: Rectangle {
+            x: sizeSlider.leftPadding
+               + sizeSlider.visualPosition * (sizeSlider.availableWidth - width)
+            y: sizeSlider.topPadding + sizeSlider.availableHeight / 2 - height / 2
+            width: 15
+            height: 15
+            radius: 7.5
+            color: sizeSlider.pressed ? CelestinaTheme.accent : CelestinaTheme.text
+            border.width: 1
+            border.color: CelestinaTheme.borderStrong
+        }
+    }
+
+    Text {
+        id: sizeRowValue
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        width: 38
+        horizontalAlignment: Text.AlignRight
+        text: Math.round(sizeSlider.value / 2.0 * 100) + "%"
+        color: CelestinaTheme.textMuted
+        font.family: CelestinaTheme.sansFamily
+        font.pixelSize: CelestinaTheme.fontCaption
+    }
+}

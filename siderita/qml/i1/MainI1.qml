@@ -199,189 +199,14 @@ ApplicationWindow {
     // importa — los tokens de relleno son translúcidos, así que el tinte deja
     // ver el desenfoque en vez de taparlo, y una pastilla activa sigue siendo
     // reconocible sobre el contenido que pasa por debajo.
-    component GlassPill: Rectangle {
-        id: glassPill
-
-        property Item backdrop
-        property bool floating: false
-        property color fill: CelestinaTheme.controlFill
-
-        radius: CelestinaTheme.radiusSm
-        color: "transparent"
-
-        GlassSurface {
-            anchors.fill: parent
-            backdropSource: glassPill.backdrop
-            // Sólo se captura cuando hay contenido detrás que desenfocar: al
-            // final de la lista no hay nada bajo el pie y el cristal se apaga.
-            captureEnabled: glassPill.floating
-            liveCapture: true
-            cornerRadius: glassPill.radius
-            opacity: glassPill.floating ? 1 : 0
-            Behavior on opacity {
-                NumberAnimation { duration: CelestinaTheme.motionNormal }
-            }
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            radius: glassPill.radius
-            color: glassPill.fill
-            Behavior on color {
-                ColorAnimation { duration: CelestinaTheme.motionFast }
-            }
-        }
-    }
 
     // El galón de las cabeceras del sidebar. Una sola punta que gira en vez de
     // dos glifos que se intercambian: el giro *cuenta* que la zona se abre, y el
     // salto entre "▸" y "▾" no cuenta nada.
-    component SidebarChevron: Text {
-        property bool collapsed: false
-
-        width: 8
-        text: "\u25BE"
-        color: CelestinaTheme.textMuted
-        font.family: CelestinaTheme.sansFamily
-        font.pixelSize: Math.round(CelestinaTheme.fontMini * window.sidebarTextScale)
-        horizontalAlignment: Text.AlignHCenter
-        transformOrigin: Item.Center
-        rotation: collapsed ? -90 : 0
-
-        Behavior on rotation {
-            NumberAnimation {
-                duration: CelestinaTheme.motionFast
-                easing.type: Easing.OutCubic
-            }
-        }
-    }
-
-    component FavoriteBadge: Item {
-        required property bool starred
-        // Sized by the caller against its tile — the list's glyph is half the
-        // grid's — and it rides the content-icon slider like everything else.
-        property int diameter: Math.round(19 * window.contentIconScale)
-
-        visible: starred
-        width: diameter
-        height: diameter
-
-        Rectangle {
-            anchors.fill: parent
-            radius: width / 2
-            color: CelestinaTheme.favoriteBadgeFill
-        }
-
-        // The bundled star, not the icon theme's: this is Siderita's own chrome
-        // (like the play badge), so it should look the same under any theme —
-        // the "don't tint" rule is about an entry's own icon, not about a badge.
-        IconImage {
-            anchors.centerIn: parent
-            width: Math.round(parent.width * 0.72)
-            height: width
-            source: CelestinaTheme.fallbackIcon("star")
-            color: CelestinaTheme.favorite
-        }
-    }
-
-    component NavButton: ToolButton {
-        id: control
-
-        required property string iconName
-        required property string fallbackIcon
-        required property string helpText
-
-        implicitWidth: CelestinaTheme.controlHeight
-        implicitHeight: CelestinaTheme.controlHeight
-        hoverEnabled: true
-        ToolTip.visible: hovered
-        ToolTip.text: helpText
-        ToolTip.delay: 550
-        Accessible.name: helpText
-        display: AbstractButton.IconOnly
-        icon.name: iconName
-        icon.source: CelestinaTheme.fallbackIcon(fallbackIcon)
-        icon.width: CelestinaTheme.iconSm
-        icon.height: CelestinaTheme.iconSm
-        icon.color: control.enabled
-                    ? CelestinaTheme.text
-                    : CelestinaTheme.textMuted
-
-        background: Rectangle {
-            radius: CelestinaTheme.radiusSm
-            color: control.hovered
-                   ? CelestinaTheme.surfaceHover
-                   : CelestinaTheme.surface
-            border.width: control.activeFocus ? 1 : 0
-            border.color: CelestinaTheme.focus
-
-            Behavior on color {
-                ColorAnimation {
-                    duration: CelestinaTheme.motionFast
-                }
-            }
-        }
-    }
 
     // Themed push button for dialogs/overlays (the default QtQuick Basic Button
     // is unstyled). `primary` fills with the accent; otherwise a control-fill
     // pill with a border.
-    component PillButton: Button {
-        id: pill
-
-        property bool primary: false
-        // A danger-tinted outline variant for irreversible actions (empty Trash).
-        property bool destructive: false
-
-        hoverEnabled: true
-        implicitHeight: 30
-        leftPadding: 14
-        rightPadding: 14
-        font.family: CelestinaTheme.sansFamily
-        font.pixelSize: CelestinaTheme.fontLabel
-        font.weight: CelestinaTheme.weightMedium
-
-        contentItem: Text {
-            text: pill.text
-            font: pill.font
-            color: !pill.enabled
-                   ? CelestinaTheme.textMuted
-                   : pill.primary ? CelestinaTheme.canvas
-                   : pill.destructive ? CelestinaTheme.dangerText
-                   : CelestinaTheme.text
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            elide: Text.ElideRight
-        }
-
-        background: Rectangle {
-            radius: CelestinaTheme.radiusSm
-            opacity: pill.enabled ? 1 : 0.5
-            color: {
-                if (!pill.enabled)
-                    return CelestinaTheme.controlFill
-                if (pill.primary)
-                    return pill.down ? Qt.darker(CelestinaTheme.accent, 1.18)
-                         : pill.hovered ? Qt.darker(CelestinaTheme.accent, 1.08)
-                         : CelestinaTheme.accent
-                if (pill.destructive)
-                    return pill.down ? CelestinaTheme.danger
-                         : pill.hovered ? CelestinaTheme.dangerBorder
-                         : CelestinaTheme.dangerFill
-                return pill.down ? CelestinaTheme.surfaceStrong
-                     : pill.hovered ? CelestinaTheme.surfaceHover
-                     : CelestinaTheme.controlFill
-            }
-            border.width: pill.primary ? 0 : 1
-            border.color: pill.activeFocus ? CelestinaTheme.focus
-                          : pill.destructive ? CelestinaTheme.dangerBorder
-                          : CelestinaTheme.border
-
-            Behavior on color {
-                ColorAnimation { duration: CelestinaTheme.motionFast }
-            }
-        }
-    }
 
     // ── InfoPill ─────────────────────────────────────────────────────────
     // A glass pill that hugs its own label, sized and shaped like a
@@ -389,82 +214,9 @@ ApplicationWindow {
     // are built from these instead of one bar spanning the window, so a
     // header reads as a few independent pills — the label is one, each action
     // is its own — and the content behind shows through between them.
-    component InfoPill: Item {
-        id: infoPill
-
-        required property Item backdrop
-        property alias text: pillLabel.text
-        property string iconName: ""
-        property string iconFallback: "file"
-        // Ceiling for a label that would otherwise outgrow its strip; the text
-        // elides inside it. Unset (≤ 0) means "as wide as the text needs".
-        property int maxWidth: -1
-
-        readonly property int naturalWidth:
-                (pillIcon.visible ? 14 + pillIcon.width + 10 : 14)
-                + Math.ceil(pillLabel.implicitWidth) + 14
-
-        implicitHeight: 30
-        height: implicitHeight
-        width: maxWidth > 0 ? Math.min(naturalWidth, maxWidth) : naturalWidth
-
-        GlassSurface {
-            anchors.fill: parent
-            backdropSource: infoPill.backdrop
-            captureEnabled: infoPill.visible
-            liveCapture: true
-            cornerRadius: CelestinaTheme.radiusSm
-        }
-
-        IconImage {
-            id: pillIcon
-            visible: infoPill.iconName.length > 0
-            anchors.left: parent.left
-            anchors.leftMargin: 14
-            anchors.verticalCenter: parent.verticalCenter
-            width: CelestinaTheme.iconSm
-            height: CelestinaTheme.iconSm
-            name: infoPill.iconName
-            source: CelestinaTheme.fallbackIcon(infoPill.iconFallback)
-        }
-
-        Text {
-            id: pillLabel
-            anchors.left: pillIcon.visible ? pillIcon.right : parent.left
-            anchors.leftMargin: pillIcon.visible ? 10 : 14
-            anchors.right: parent.right
-            anchors.rightMargin: 14
-            anchors.verticalCenter: parent.verticalCenter
-            color: CelestinaTheme.text
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: Math.round(CelestinaTheme.fontLabel * window.interfaceTextScale)
-            font.weight: CelestinaTheme.weightMedium
-            elide: Text.ElideRight
-        }
-    }
 
     // One rule field of the batch-rename dialog — the suite's input styling in
     // the one place four of them sit side by side.
-    component RuleField: TextField {
-        id: ruleField
-
-        height: CelestinaTheme.controlHeight
-        color: CelestinaTheme.text
-        selectionColor: CelestinaTheme.accentStrong
-        selectedTextColor: CelestinaTheme.text
-        font.family: CelestinaTheme.sansFamily
-        font.pixelSize: CelestinaTheme.fontBody
-        leftPadding: 12
-        rightPadding: 12
-
-        background: Rectangle {
-            radius: CelestinaTheme.radiusSm
-            color: CelestinaTheme.inputFill
-            border.width: 1
-            border.color: ruleField.activeFocus ? CelestinaTheme.focus
-                                                : CelestinaTheme.inputBorder
-        }
-    }
 
     // ── DragScrollEdge ───────────────────────────────────────────────────
     // A thin strip over the top or bottom of a view: while a drag rests on it,
@@ -473,145 +225,11 @@ ApplicationWindow {
     // rows (a row would otherwise swallow the drag), so a release on it means
     // the *current* folder — the same thing an empty-space drop means — and an
     // entry dragged within its own folder simply has nowhere to go.
-    component DragScrollEdge: DropArea {
-        id: edge
-
-        required property Flickable view
-        required property int step
-
-        signal externalDrop(var drop)
-
-        z: 6
-        height: 30
-
-        Timer {
-            running: edge.containsDrag && edge.view !== null
-            interval: 16
-            repeat: true
-            onTriggered: {
-                const limit = Math.max(0, edge.view.contentHeight - edge.view.height)
-                edge.view.contentY = Math.max(
-                    0, Math.min(limit, edge.view.contentY + edge.step))
-            }
-        }
-
-        onDropped: function(drop) {
-            if (drop.hasUrls)
-                edge.externalDrop(drop)
-        }
-    }
 
     // A labelled zoom row for the sizing popup: caption · slider · percent.
     // The consumer binds `value` to a scale and updates it in `onMoved`.
-    component SizeRow: Item {
-        id: sizeRow
-        property string label: ""
-        property alias value: sizeSlider.value
-        // Most scales cap at 2.0 (100 %); content icons may go to 3.0 (150 %).
-        property real maxValue: 2.0
-        signal moved(real v)
-
-        implicitWidth: 252
-        implicitHeight: 30
-
-        Text {
-            id: sizeRowLabel
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-            width: 94
-            text: sizeRow.label
-            color: CelestinaTheme.text
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontLabel
-            elide: Text.ElideRight
-        }
-
-        Slider {
-            id: sizeSlider
-            anchors.left: sizeRowLabel.right
-            anchors.right: sizeRowValue.left
-            anchors.rightMargin: 10
-            anchors.verticalCenter: parent.verticalCenter
-            // The factor reads to the user as a fraction of 2.0 — 10 %–100 %
-            // (or up to 150 % where maxValue is raised).
-            from: 0.2
-            to: sizeRow.maxValue
-            stepSize: 0.1
-            onMoved: sizeRow.moved(value)
-
-            background: Rectangle {
-                x: sizeSlider.leftPadding
-                y: sizeSlider.topPadding + sizeSlider.availableHeight / 2 - height / 2
-                width: sizeSlider.availableWidth
-                height: 4
-                radius: 2
-                color: CelestinaTheme.controlFill
-
-                Rectangle {
-                    width: sizeSlider.visualPosition * parent.width
-                    height: parent.height
-                    radius: 2
-                    color: CelestinaTheme.accent
-                }
-            }
-
-            handle: Rectangle {
-                x: sizeSlider.leftPadding
-                   + sizeSlider.visualPosition * (sizeSlider.availableWidth - width)
-                y: sizeSlider.topPadding + sizeSlider.availableHeight / 2 - height / 2
-                width: 15
-                height: 15
-                radius: 7.5
-                color: sizeSlider.pressed ? CelestinaTheme.accent : CelestinaTheme.text
-                border.width: 1
-                border.color: CelestinaTheme.borderStrong
-            }
-        }
-
-        Text {
-            id: sizeRowValue
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            width: 38
-            horizontalAlignment: Text.AlignRight
-            text: Math.round(sizeSlider.value / 2.0 * 100) + "%"
-            color: CelestinaTheme.textMuted
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontCaption
-        }
-    }
 
     // One label : value line in the properties panel; hides itself when empty.
-    component PropRow: Item {
-        id: propRow
-        property string label: ""
-        property string value: ""
-        visible: value.length > 0
-        implicitHeight: visible ? Math.max(propValue.implicitHeight, 18) + 7 : 0
-        height: implicitHeight
-
-        Text {
-            id: propLabel
-            y: 3
-            width: 104
-            text: propRow.label
-            color: CelestinaTheme.textMuted
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontLabel
-        }
-        Text {
-            id: propValue
-            anchors.left: propLabel.right
-            anchors.leftMargin: 8
-            y: 3
-            width: propRow.width - propLabel.width - 8
-            text: propRow.value
-            color: CelestinaTheme.text
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontLabel
-            wrapMode: Text.WrapAnywhere
-        }
-    }
 
     // App-global org.freedesktop.FileManager1 service: "Show in file manager"
     // from another application opens the folder in a new foreground tab and
@@ -2289,6 +1907,7 @@ ApplicationWindow {
                                 anchors.right: parent.right
                                 anchors.bottom: parent.bottom
                                 anchors.margins: 2
+                                iconScale: window.contentIconScale
                                 starred: mainPanel.isFavorite(cell.path)
                             }
 
@@ -4884,6 +4503,8 @@ ApplicationWindow {
                 }
 
                 InfoPill {
+
+                    textScale: window.interfaceTextScale
                     id: searchBarLabel
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
@@ -4938,6 +4559,8 @@ ApplicationWindow {
                 }
 
                 InfoPill {
+
+                    textScale: window.interfaceTextScale
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     backdrop: topBar.activeView
@@ -4982,6 +4605,8 @@ ApplicationWindow {
                 onVisibleChanged: if (!visible) confirmingEmpty = false
 
                 InfoPill {
+
+                    textScale: window.interfaceTextScale
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     backdrop: topBar.activeView
@@ -5002,6 +4627,7 @@ ApplicationWindow {
                     // Its own pill too: the warning floats over the trash
                     // listing, so it needs a surface to be readable on.
                     InfoPill {
+                        textScale: window.interfaceTextScale
                         visible: trashHeader.confirmingEmpty
                         anchors.verticalCenter: parent.verticalCenter
                         backdrop: topBar.activeView
@@ -5344,6 +4970,8 @@ ApplicationWindow {
                         height: 22
 
                         SidebarChevron {
+
+                            textScale: window.sidebarTextScale
                             x: -4
                             y: 9
                             collapsed: sidebar.placesCollapsed
@@ -5628,6 +5256,8 @@ ApplicationWindow {
                         visible: anyDevices
 
                         SidebarChevron {
+
+                            textScale: window.sidebarTextScale
                             x: -4
                             y: 13
                             collapsed: sidebar.devicesCollapsed
@@ -5806,6 +5436,8 @@ ApplicationWindow {
                     text: "FAVORITOS"
 
                     SidebarChevron {
+
+                        textScale: window.sidebarTextScale
                         x: -12
                         anchors.verticalCenter: parent.verticalCenter
                         collapsed: sidebar.favoritesCollapsed
@@ -5946,6 +5578,8 @@ ApplicationWindow {
                     text: "MARCADORES"
 
                     SidebarChevron {
+
+                        textScale: window.sidebarTextScale
                         x: -12
                         anchors.verticalCenter: parent.verticalCenter
                         collapsed: sidebar.bookmarksCollapsed
