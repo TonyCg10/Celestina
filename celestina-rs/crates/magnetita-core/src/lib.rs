@@ -12,13 +12,16 @@
 //!
 //! The protocol is line-delimited JSON over TLS: a device announces itself with
 //! an [`Identity`] over UDP, the two ends open a TCP link and re-exchange
-//! identities, TLS wraps it, and from then on every message is a
-//! [`NetworkPacket`] whose `body` a plugin owns. This crate starts with those
-//! two — the envelope and the identity — and grows one plugin body at a time as
-//! Magnetita earns each.
+//! identities, TLS wraps it, they trust each other through a [`Pairing`]
+//! handshake, and from then on every message is a [`NetworkPacket`] whose `body`
+//! a plugin owns. This crate grows one piece at a time as Magnetita earns each:
+//! the envelope, the identity, the pairing state machine, and then the plugin
+//! bodies.
 
 pub mod identity;
 pub mod packet;
+pub mod pair;
 
 pub use identity::{DeviceType, Identity, DEFAULT_PORT, PROTOCOL_VERSION, TYPE_IDENTITY};
 pub use packet::NetworkPacket;
+pub use pair::{PairAction, PairState, Pairing};

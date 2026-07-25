@@ -4,7 +4,8 @@
 > link only. Checklist legend: `[x]` done · `[ ]` planned. "Implemented" is not
 > "verified": pairing and every plugin must be proven against a real device on a
 > real network, tracked as its own goal. `magnetita-core` has begun — the packet
-> envelope and the identity packet, offline-tested; everything past the core
+> envelope, the identity packet and the pairing state machine, offline-tested
+> (21 tests); everything past the core
 > awaits the real phone.
 
 ## Overview
@@ -97,8 +98,10 @@ client) before anything is built on top of it.
 - [x] `magnetita-core` — `NetworkPacket` (de)serialization, the identity packet,
       capability sets and the `deviceId`/type model: pure Rust, unit-tested
       without I/O (8 tests)
-- [ ] `magnetita-core` — the `kdeconnect.pair` state machine (request / accept /
-      reject / ~30 s timeout), pure and unit-tested
+- [x] `magnetita-core` — the `kdeconnect.pair` state machine (request / accept /
+      reject / ~30 s timeout) and the pair packet body: pure, returning a
+      `PairAction` the transport runs, with no clock; 13 unit tests over every
+      flow (mutual request, rejection, both timeouts, unpair, restore)
 - [ ] `magnetita-net` — UDP identity broadcast + listen; TCP accept/connect
 - [ ] `magnetita-net` — TLS upgrade with a self-signed cert (`rcgen`) and a
       custom `rustls` verifier implementing TOFU pinning; per-device trust store
