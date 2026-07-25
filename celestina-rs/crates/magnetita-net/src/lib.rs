@@ -22,9 +22,11 @@
 //! [`Session`]: magnetita_core::Session
 
 pub mod cert;
+pub mod tls;
 pub mod trust;
 
 pub use cert::{fingerprint_der, DeviceCert};
+pub use tls::{peer_leaf_fingerprint, TlsConfigs};
 pub use trust::{TrustCheck, TrustStore, TrustedPeer};
 
 /// The transport's version, surfaced so the app and logs can report it.
