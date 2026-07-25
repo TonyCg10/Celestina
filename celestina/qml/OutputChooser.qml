@@ -47,8 +47,12 @@ Window {
                           + Math.max(0, screens.length - 1) * tileSpacing + 68),
             Screen.width > 0 ? Screen.width - 120 : 1200)
 
-    width: cardWidth
-    height: cardHeight
+    // La ventana pide 24 más que la tarjeta porque el panel se recorta a
+    // `width - 20` para no tocar los bordes: pidiendo justo la anchura de la
+    // tarjeta, el panel nacía 20 px más estrecho y la fila perdía ese ancho por
+    // la derecha — la última pantalla marcada se cortaba.
+    width: cardWidth + 24
+    height: cardHeight + 24
     visible: true
     color: "transparent"
     flags: Qt.Dialog | Qt.FramelessWindowHint

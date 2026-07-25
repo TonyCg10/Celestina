@@ -183,6 +183,55 @@ Window {
     }
     function isChosen(token) { return chosen[token] === true }
 
+    // El ancla del rango: dónde empezó la selección con la que Mayúsculas
+    // cuenta. Un clic normal la mueve; Mayúsculas la respeta.
+    property int anchorIndex: -1
+
+    // Selecciona de `from` a `to` inclusive, saltando lo que este diálogo no
+    // puede elegir (en modo carpeta, todo lo que no sea carpeta).
+    function selectRange(from, to, additive) {
+        if (from < 0 || to < 0)
+            return
+        var s = additive ? Object.assign({}, chosen) : {}
+        const lo = Math.min(from, to)
+        const hi = Math.max(from, to)
+        for (var i = lo; i <= hi && i < entryGrid.count; i++) {
+            if (picker.directory && controller.entryKind(i) !== "directory")
+                continue
+            s[controller.entryToken(i)] = true
+        }
+        chosen = s
+        chosenCount = Object.keys(s).length
+    }
+
+    // Las celdas que toca un rectángulo, por aritmética y no por recorrido: la
+    // rejilla es regular, así que se sabe qué filas y columnas cruza sin
+    // preguntarle a cada una de las mil que puede haber.
+    function selectIn(x1, y1, x2, y2, additive) {
+        const cw = entryGrid.cellWidth
+        const ch = entryGrid.cellHeight
+        const cols = entryGrid.columns
+        if (cw <= 0 || ch <= 0 || cols <= 0)
+            return
+        var s = additive ? Object.assign({}, chosen) : {}
+        const c0 = Math.max(0, Math.floor(x1 / cw))
+        const c1 = Math.min(cols - 1, Math.floor(x2 / cw))
+        const r0 = Math.max(0, Math.floor(y1 / ch))
+        const r1 = Math.floor(y2 / ch)
+        for (var r = r0; r <= r1; r++) {
+            for (var c = c0; c <= c1; c++) {
+                const i = r * cols + c
+                if (i < 0 || i >= entryGrid.count)
+                    continue
+                if (picker.directory && controller.entryKind(i) !== "directory")
+                    continue
+                s[controller.entryToken(i)] = true
+            }
+        }
+        chosen = s
+        chosenCount = Object.keys(s).length
+    }
+
     function activate(index) {
         const kind = controller.entryKind(index)
         const path = controller.entryPath(index)
@@ -310,6 +359,69 @@ Window {
                     event.accepted = true
                 }
 
+                // Arrastrar sobre el hueco selecciona: el gesto de "coge estos
+                // cuatro" no debería exigir una mano en el teclado. Vive bajo
+                // los delegados (z: -1), así que una celda se lleva su clic y
+                // el hueco se lleva el arrastre.
+                MouseArea {
+                    id: bandArea
+                    z: -1
+                    x: 0
+                    y: 0
+                    width: Math.max(entryGrid.contentWidth, entryGrid.width)
+                    height: Math.max(entryGrid.contentHeight, entryGrid.height)
+
+                    // Sin esto la Flickable se lleva el arrastre a los pocos
+                    // píxeles y la banda se convierte en un desplazamiento.
+                    // Sólo cuando hay algo que seleccionar en grupo: si el que
+                    // pregunta quiere un archivo, arrastrar sigue desplazando.
+                    preventStealing: picker.multiple
+
+                    property real startX: 0
+                    property real startY: 0
+                    property bool banding: false
+                    property bool additive: false
+
+                    readonly property real bx: Math.min(startX, mouseX)
+                    readonly property real by: Math.min(startY, mouseY)
+                    readonly property real bw: Math.abs(mouseX - startX)
+                    readonly property real bh: Math.abs(mouseY - startY)
+
+                    onPressed: function(mouse) {
+                        entryGrid.forceActiveFocus()
+                        startX = mouse.x
+                        startY = mouse.y
+                        additive = picker.multiple
+                                   && (mouse.modifiers & Qt.ControlModifier)
+                        banding = false
+                        if (!additive)
+                            picker.clearChosen()
+                    }
+                    onPositionChanged: {
+                        if (!picker.multiple)
+                            return
+                        // Un temblor no es un arrastre.
+                        if (!banding && (bw > 4 || bh > 4))
+                            banding = true
+                        if (banding)
+                            picker.selectIn(bx, by, bx + bw, by + bh, additive)
+                    }
+                    onReleased: banding = false
+                    onCanceled: banding = false
+
+                    Rectangle {
+                        visible: bandArea.banding
+                        x: bandArea.bx
+                        y: bandArea.by
+                        width: bandArea.bw
+                        height: bandArea.bh
+                        radius: CelestinaTheme.radiusXs
+                        color: CelestinaTheme.surfaceSelected
+                        border.width: 1
+                        border.color: CelestinaTheme.borderStrong
+                    }
+                }
+
                 delegate: Item {
                     id: cell
 
@@ -418,10 +530,18 @@ Window {
                             entryGrid.forceActiveFocus()
                             if (!cell.selectable)
                                 return
-                            if (picker.multiple && (mouse.modifiers & Qt.ControlModifier))
+                            if (picker.multiple && (mouse.modifiers & Qt.ShiftModifier)
+                                    && picker.anchorIndex >= 0) {
+                                picker.selectRange(picker.anchorIndex, cell.index,
+                                                   mouse.modifiers & Qt.ControlModifier)
+                            } else if (picker.multiple
+                                       && (mouse.modifiers & Qt.ControlModifier)) {
                                 picker.toggleChosen(cell.token)
-                            else
+                                picker.anchorIndex = cell.index
+                            } else {
                                 picker.selectOnly(cell.token)
+                                picker.anchorIndex = cell.index
+                            }
                             if (picker.saving && !cell.isDirectory)
                                 nameField.text = cell.name
                         }
@@ -634,6 +754,9 @@ Window {
         contentItem: Text {
             text: control.text
             font: control.font
+            // Deshabilitado deja de ser primario: texto apagado sobre el acento
+            // clarito no se leía. Un botón que no se puede pulsar tampoco tiene
+            // por qué gritar.
             color: !control.enabled ? CelestinaTheme.textMuted
                    : control.primary ? CelestinaTheme.canvas : CelestinaTheme.text
             horizontalAlignment: Text.AlignHCenter
@@ -643,15 +766,15 @@ Window {
         // Cristal también aquí: los botones flotan sobre la rejilla como los
         // de la ventana principal, no sobre una banda que no existe.
         background: GlassPill {
-            opacity: control.enabled ? 1 : 0.5
-            fill: control.primary
-                  ? (control.down ? Qt.darker(CelestinaTheme.accent, 1.18)
-                     : control.hovered ? Qt.darker(CelestinaTheme.accent, 1.08)
-                     : CelestinaTheme.accent)
-                  : (control.down ? CelestinaTheme.surfaceStrong
-                     : control.hovered ? CelestinaTheme.surfaceHover
-                     : CelestinaTheme.controlFill)
-            border.width: control.primary ? 0 : 1
+            fill: !control.enabled ? CelestinaTheme.controlFill
+                  : control.primary
+                    ? (control.down ? Qt.darker(CelestinaTheme.accent, 1.18)
+                       : control.hovered ? Qt.darker(CelestinaTheme.accent, 1.08)
+                       : CelestinaTheme.accent)
+                    : (control.down ? CelestinaTheme.surfaceStrong
+                       : control.hovered ? CelestinaTheme.surfaceHover
+                       : CelestinaTheme.controlFill)
+            border.width: control.primary && control.enabled ? 0 : 1
             border.color: CelestinaTheme.border
         }
     }
