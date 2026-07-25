@@ -22,8 +22,10 @@
 //! [`Session`]: magnetita_core::Session
 
 pub mod cert;
+pub mod trust;
 
 pub use cert::{fingerprint_der, DeviceCert};
+pub use trust::{TrustCheck, TrustStore, TrustedPeer};
 
 /// The transport's version, surfaced so the app and logs can report it.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
