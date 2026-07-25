@@ -176,22 +176,22 @@ Rectangle {
             readonly property real fieldWidth:
                     (batchFields.width - batchFields.columnSpacing) / 2
 
-            RuleField {
+            CelestinaTextField {
                 id: findField
                 width: batchFields.fieldWidth
                 placeholderText: "Buscar"
             }
-            RuleField {
+            CelestinaTextField {
                 id: replaceField
                 width: batchFields.fieldWidth
                 placeholderText: "Reemplazar por"
             }
-            RuleField {
+            CelestinaTextField {
                 id: patternField
                 width: batchFields.fieldWidth
                 placeholderText: "Patrón, p. ej. foto-##"
             }
-            RuleField {
+            CelestinaTextField {
                 id: startField
                 width: batchFields.fieldWidth
                 placeholderText: "Empezar en"

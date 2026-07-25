@@ -7,6 +7,7 @@ const QML_FILES: &[&str] = &[
     // Lenguaje visual compartido (enlaces a ../celestina-style).
     "qml/GlassSurface.qml",
     "qml/CelestinaButton.qml",
+    "qml/CelestinaTextField.qml",
     "qml/GlassCard.qml",
     "qml/GlassContextMenu.qml",
     "qml/GlassMenuItem.qml",
@@ -16,7 +17,6 @@ const QML_FILES: &[&str] = &[
     "qml/FavoriteBadge.qml",
     "qml/NavButton.qml",
     "qml/InfoPill.qml",
-    "qml/RuleField.qml",
     "qml/DragScrollEdge.qml",
     "qml/SizeRow.qml",
     "qml/PropRow.qml",

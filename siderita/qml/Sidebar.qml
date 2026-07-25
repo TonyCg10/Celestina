@@ -904,27 +904,18 @@ Item {
                             elide: Text.ElideRight
                         }
 
-                        TextField {
+                        CelestinaTextField {
                             id: bmField
                             visible: bmRow.editing
                             x: bmIcon.x + bmIcon.width + 6
                             anchors.verticalCenter: parent.verticalCenter
                             width: parent.width - x - 8
                             height: 26
+                            radius: CelestinaTheme.radiusXs
                             text: bmRow.modelData
-                            color: CelestinaTheme.text
-                            selectionColor: CelestinaTheme.accentStrong
-                            selectedTextColor: CelestinaTheme.text
-                            font.family: CelestinaTheme.sansFamily
                             font.pixelSize: CelestinaTheme.fontLabel
                             leftPadding: 8
                             rightPadding: 8
-                            background: Rectangle {
-                                radius: CelestinaTheme.radiusXs
-                                color: CelestinaTheme.inputFillFocus
-                                border.width: 1
-                                border.color: CelestinaTheme.focus
-                            }
                             onVisibleChanged: if (visible) { forceActiveFocus(); selectAll() }
                             // Leave edit mode *before* renaming: the rename republishes
                             // bookmarkNames, which resets this ListView and destroys

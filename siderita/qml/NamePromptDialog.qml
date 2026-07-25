@@ -93,31 +93,17 @@ Rectangle {
             font.weight: CelestinaTheme.weightDemiBold
         }
 
-        TextField {
+        CelestinaTextField {
             id: promptField
             x: 18
             y: promptHeading.y + promptHeading.height + 12
             width: parent.width - 36
-            height: CelestinaTheme.controlHeight
-            color: CelestinaTheme.text
-            selectionColor: CelestinaTheme.accentStrong
-            selectedTextColor: CelestinaTheme.text
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontBody
-            leftPadding: 12
-            rightPadding: 12
             onAccepted: namePrompt.confirm()
             Keys.onPressed: function(event) {
                 if (event.key === Qt.Key_Escape) {
                     namePrompt.dismiss()
                     event.accepted = true
                 }
-            }
-            background: Rectangle {
-                radius: CelestinaTheme.radiusSm
-                color: CelestinaTheme.inputFillFocus
-                border.width: 1
-                border.color: CelestinaTheme.focus
             }
         }
 
