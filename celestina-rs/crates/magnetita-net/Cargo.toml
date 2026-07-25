@@ -1,0 +1,26 @@
+[package]
+name = "magnetita-net"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "GPL-3.0-or-later"
+
+[dependencies]
+magnetita-core = { path = "../magnetita-core" }
+serde_json.workspace = true
+# The KDE Connect link is TLS with a self-signed, pinned peer cert (TOFU), not a
+# CA chain — rustls with the ring provider gives us that with a custom verifier
+# and no C toolchain. No async runtime: CP0 speaks to one phone over blocking
+# std::net sockets in a thread, so tokio is weight we have not earned yet.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+rustls-pemfile = "2"
+# One self-signed EC cert, generated in-process on first run and then pinned.
+# Pinned to the ring backend so it shares rustls's provider and pulls no C
+# toolchain (rcgen's default aws-lc-rs would want cmake); no openssl subprocess.
+rcgen = { version = "0.13", default-features = false, features = ["ring", "pem"] }
+# Already in the tree under rustls and rcgen; naming it directly costs no new
+# crate and gives us SHA-256 for certificate fingerprints from the same backend.
+ring = "0.17"
+
+[lints]
+workspace = true

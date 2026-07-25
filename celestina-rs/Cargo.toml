@@ -6,6 +6,7 @@ members = [
     "crates/siderita-qt",
     "crates/dotfiles-core",
     "crates/magnetita-core",
+    "crates/magnetita-net",
 ]
 resolver = "2"
 
