@@ -47,10 +47,39 @@ Item {
     SideritaEntryModel {
         id: entryModel
     }
+    // La última ubicación dibujada, para saber si un lote de filas es un cambio
+    // de sitio o un refresco del mismo. Ubicación = ruta + los modos que cambian
+    // la lista sin cambiar la ruta (papelera, recientes, búsqueda).
+    property string renderedKey: ""
+
     Connections {
         target: controller
         function onRowsReady(names, tokens, kinds, subtitles, paths, sections, sizes, dates) {
+            var view = mainPanel.viewMode === "grid" ? fileGrid : fileList
+            var key = controller.currentPath + "|" + controller.trashActive + "|"
+                    + controller.recentActive + "|" + controller.searchActive + "|"
+                    + controller.searchQuery
+            var samePlace = key === root.renderedKey
+            var savedY = view.contentY
+
             entryModel.setRows(names, tokens, kinds, subtitles, paths, sections, sizes, dates)
+            root.renderedKey = key
+
+            // `setRows` reinicia el modelo (beginResetModel), y un reset manda la
+            // vista al top en cada actualización. En la misma carpeta —un refresco
+            // del watch— eso te arranca de donde estabas leyendo; sólo al cambiar
+            // de ubicación tiene sentido ir arriba. Reponemos contentY tras el
+            // reset: se conserva la posición en un refresco, y va limpio al top al
+            // navegar, sin el rebote desde una posición fuera de rango (el tirón
+            // que se veía). Tras el reset, para que el nuevo contentHeight ya valga.
+            Qt.callLater(function() {
+                if (samePlace) {
+                    var maxY = Math.max(0, view.contentHeight - view.height)
+                    view.contentY = Math.max(0, Math.min(savedY, maxY))
+                } else {
+                    view.contentY = 0
+                }
+            })
         }
     }
 
