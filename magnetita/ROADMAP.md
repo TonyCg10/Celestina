@@ -4,8 +4,9 @@
 > link only. Checklist legend: `[x]` done · `[ ]` planned. "Implemented" is not
 > "verified": pairing and every plugin must be proven against a real device on a
 > real network, tracked as its own goal. `magnetita-core` has begun — the packet
-> envelope, the identity packet and the pairing state machine, offline-tested
-> (21 tests); everything past the core
+> envelope, identity, the pairing state machine and the device session (the pure
+> brain the transport drives), offline-tested (32 tests); the live transport and
+> everything past it
 > awaits the real phone.
 
 ## Overview
@@ -102,6 +103,10 @@ client) before anything is built on top of it.
       reject / ~30 s timeout) and the pair packet body: pure, returning a
       `PairAction` the transport runs, with no clock; 13 unit tests over every
       flow (mutual request, rejection, both timeouts, unpair, restore)
+- [x] `magnetita-core` — the device session (peer identity + pairing → a
+      `Reaction` of packets to send and events to log), the connection-event
+      vocabulary the log reads, and our desktop identity/capabilities: pure, no
+      clock, 11 more tests. The brain decides; the transport does the I/O
 - [ ] `magnetita-net` — UDP identity broadcast + listen; TCP accept/connect
 - [ ] `magnetita-net` — TLS upgrade with a self-signed cert (`rcgen`) and a
       custom `rustls` verifier implementing TOFU pinning; per-device trust store

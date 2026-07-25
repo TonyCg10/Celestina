@@ -128,8 +128,9 @@ as a suite rather than four unrelated apps:
   portal routing until it has been lived with.
 - `magnetita` — **started (2026-07-25)**: the suite's phone link over KDE Connect,
   its first cross-app integration and first networked app. `magnetita-core` has
-  begun — the packet envelope, the identity packet and the `kdeconnect.pair`
-  state machine, offline-tested (21 tests). Next is the transport underneath it
+  well underway — the packet envelope, identity, the `kdeconnect.pair` state
+  machine and the device session (the pure brain the transport drives),
+  offline-tested (32 tests). Next is the transport underneath it
   (`magnetita-net`: UDP discovery, TCP, TLS with TOFU pinning), a **standalone
   app** (pair, a
   connection log that says *why* a phone will not connect, and options), and the

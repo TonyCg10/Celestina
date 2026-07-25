@@ -64,6 +64,24 @@ pub struct Identity {
 }
 
 impl Identity {
+    /// Our own identity — what this desktop announces. `device_id` is stable and
+    /// bound to the trust key; `device_name` is what the phone shows. The
+    /// capabilities are the plugin packet types we actually handle: at CP0 just
+    /// ping, growing as Magnetita earns each plugin. We always name a `tcp_port`
+    /// because our announce invites the phone to connect back.
+    pub fn desktop(device_id: impl Into<String>, device_name: impl Into<String>) -> Identity {
+        let caps = vec![crate::ping::TYPE_PING.to_owned()];
+        Identity {
+            device_id: device_id.into(),
+            device_name: device_name.into(),
+            device_type: DeviceType::Desktop,
+            protocol_version: PROTOCOL_VERSION,
+            incoming_capabilities: caps.clone(),
+            outgoing_capabilities: caps,
+            tcp_port: Some(DEFAULT_PORT),
+        }
+    }
+
     /// Wraps this identity in a [`NetworkPacket`] stamped `id`.
     pub fn to_packet(&self, id: i64) -> NetworkPacket {
         NetworkPacket::new(
@@ -147,5 +165,16 @@ mod tests {
     fn a_non_identity_packet_yields_none() {
         let packet = NetworkPacket::new(1, "kdeconnect.ping", serde_json::json!({}));
         assert!(Identity::from_packet(&packet).is_none());
+    }
+
+    #[test]
+    fn our_desktop_identity_offers_the_plugins_we_handle() {
+        let me = Identity::desktop("celestina-abc", "toni's Celestina");
+        assert_eq!(me.device_type, DeviceType::Desktop);
+        assert_eq!(me.tcp_port, Some(super::DEFAULT_PORT));
+        assert!(me.can_send(crate::ping::TYPE_PING));
+        assert!(me.can_receive(crate::ping::TYPE_PING));
+        // What we do not implement yet, we do not claim.
+        assert!(!me.can_send("kdeconnect.sftp"));
     }
 }

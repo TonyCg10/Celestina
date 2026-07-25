@@ -18,10 +18,16 @@
 //! the envelope, the identity, the pairing state machine, and then the plugin
 //! bodies.
 
+pub mod event;
 pub mod identity;
 pub mod packet;
 pub mod pair;
+pub mod ping;
+pub mod session;
 
+pub use event::{ConnectionEvent, LostReason};
 pub use identity::{DeviceType, Identity, DEFAULT_PORT, PROTOCOL_VERSION, TYPE_IDENTITY};
 pub use packet::NetworkPacket;
 pub use pair::{PairAction, PairState, Pairing};
+pub use ping::{ping_packet, TYPE_PING};
+pub use session::{Outgoing, Reaction, Session};
