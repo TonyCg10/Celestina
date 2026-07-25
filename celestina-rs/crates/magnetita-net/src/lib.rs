@@ -22,10 +22,12 @@
 //! [`Session`]: magnetita_core::Session
 
 pub mod cert;
+pub mod discovery;
 pub mod tls;
 pub mod trust;
 
 pub use cert::{fingerprint_der, DeviceCert};
+pub use discovery::{parse_announcement, Announcement, Discovery};
 pub use tls::{peer_leaf_fingerprint, TlsConfigs};
 pub use trust::{TrustCheck, TrustStore, TrustedPeer};
 
