@@ -47,9 +47,9 @@ Item {
     SideritaEntryModel {
         id: entryModel
     }
-    // La última ubicación dibujada, para saber si un lote de filas es un cambio
-    // de sitio o un refresco del mismo. Ubicación = ruta + los modos que cambian
-    // la lista sin cambiar la ruta (papelera, recientes, búsqueda).
+    // La última ubicación dibujada, para distinguir un cambio de sitio de un
+    // refresco del mismo (ruta + los modos que cambian la lista sin cambiar la
+    // ruta: papelera, recientes, búsqueda).
     property string renderedKey: ""
 
     Connections {
@@ -65,21 +65,13 @@ Item {
             entryModel.setRows(names, tokens, kinds, subtitles, paths, sections, sizes, dates)
             root.renderedKey = key
 
-            // `setRows` reinicia el modelo (beginResetModel), y un reset manda la
-            // vista al top en cada actualización. En la misma carpeta —un refresco
-            // del watch— eso te arranca de donde estabas leyendo; sólo al cambiar
-            // de ubicación tiene sentido ir arriba. Reponemos contentY tras el
-            // reset: se conserva la posición en un refresco, y va limpio al top al
-            // navegar, sin el rebote desde una posición fuera de rango (el tirón
-            // que se veía). Tras el reset, para que el nuevo contentHeight ya valga.
-            Qt.callLater(function() {
-                if (samePlace) {
-                    var maxY = Math.max(0, view.contentHeight - view.height)
-                    view.contentY = Math.max(0, Math.min(savedY, maxY))
-                } else {
-                    view.contentY = 0
-                }
-            })
+            // setRows reinicia el modelo, y un reset manda la vista al top (que
+            // con el margen superior es contentY = -topMargin, no 0). En la misma
+            // ubicación —un refresco del watch— eso te arranca de donde leías, así
+            // que le devolvemos su contentY (la vista lo acota a rango sola). Al
+            // navegar no se toca: ir al top es lo correcto para una carpeta nueva.
+            if (samePlace)
+                view.contentY = savedY
         }
     }
 
@@ -601,9 +593,14 @@ Item {
             target: controller
             function onCurrentPathChanged() {
                 mainPanel.clearSelection()
-                // A new folder (sidebar/place click, breadcrumb, back/up…)
-                // returns the content box to its plain listing.
-                root.clearSearch()
+                // Salir de la búsqueda sólo si había una. clearSearch reproyecta
+                // el snapshot actual, y en plena navegación ese snapshot es aún
+                // el de la carpeta ANTERIOR (el escaneo del destino no ha
+                // llegado): reproyectarlo publicaba las filas viejas con la ruta
+                // ya cambiada, y la carpeta de antes se repintaba arriba antes de
+                // aparecer la nueva. Sin búsqueda activa no hay nada que cerrar.
+                if (controller.searchActive)
+                    root.clearSearch()
             }
             // Entering or leaving search swaps the whole row set (folder ↔
             // hits, index-keyed vs token-keyed), so drop the old selection.
