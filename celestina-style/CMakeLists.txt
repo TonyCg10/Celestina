@@ -21,6 +21,7 @@ qt_add_qml_module(celestina-style
         CelestinaTheme.qml
         CelestinaButton.qml
         GlassSurface.qml
+        GlassCard.qml
         GlassContextMenu.qml
         GlassMenuItem.qml
     RESOURCES
