@@ -36,6 +36,12 @@ Window {
     required property var filters
 
 
+    // Las mismas escalas persistidas que usa la ventana principal (el deslizador
+    // de "Tamaño"): un diálogo que ignora la preferencia de tamaño del usuario
+    // es un diálogo de otra aplicación. Se leen una vez, al abrir.
+    property real iconScale: 1.0
+    property real textScale: 1.0
+
     readonly property bool saving: mode === "save" || mode === "saves"
     readonly property string acceptText:
             acceptLabel.length > 0 ? acceptLabel
@@ -99,6 +105,8 @@ Window {
     }
 
     Component.onCompleted: {
+        iconScale = controller.savedContentIconScale()
+        textScale = controller.savedContentTextScale()
         if (startFolder.length > 0)
             controller.startAt(startFolder)
         else
@@ -324,10 +332,14 @@ Window {
             focus: true
             // Columnas que llenan el ancho: el hueco sobrante se reparte entre
             // ellas en vez de amontonarse a la derecha.
-            readonly property int cellSide: 136
+            // Mismas proporciones que la cuadrícula principal: la celda crece
+            // con la escala de iconos y la de texto, la que sea mayor.
+            readonly property int cellSide: Math.round(
+                    116 * Math.max(picker.iconScale, picker.textScale))
             readonly property int columns: Math.max(1, Math.floor(width / cellSide))
             cellWidth: Math.floor(width / columns)
-            cellHeight: cellSide + 26
+            cellHeight: cellSide + Math.round(
+                    CelestinaTheme.fontCaption * 2.6 * picker.textScale) + 14
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
             Keys.onPressed: function(event) {
@@ -382,8 +394,8 @@ Window {
                     id: tile
                     anchors.horizontalCenter: parent.horizontalCenter
                     y: 12
-                    width: 84
-                    height: 84
+                    width: Math.round(72 * picker.iconScale)
+                    height: width
                     radius: CelestinaTheme.radiusSm
                     clip: true
                     opacity: cell.selectable ? 1 : 0.4
@@ -393,8 +405,9 @@ Window {
                     IconImage {
                         anchors.centerIn: parent
                         visible: !preview.ready
-                        width: 46
-                        height: 46
+                        width: Math.round(54 * picker.iconScale)
+                        height: width
+                        sourceSize: Qt.size(width, width)
                         name: cell.isDirectory ? "folder" : "text-x-generic"
                         source: CelestinaTheme.fallbackIcon(
                                     cell.isDirectory ? "folder" : "file")
@@ -434,7 +447,8 @@ Window {
                     color: cell.selectable ? CelestinaTheme.text
                                            : CelestinaTheme.textMuted
                     font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontCaption
+                    font.pixelSize: Math.round(
+                            CelestinaTheme.fontCaption * picker.textScale)
                     elide: Text.ElideRight
                     maximumLineCount: 2
                     wrapMode: Text.Wrap
