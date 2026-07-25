@@ -432,16 +432,7 @@ fn globs_for_mime(mime: &str) -> Vec<String> {
 /// A local path as a `file://` URI, percent-encoding everything a URI cannot
 /// carry raw. Byte-wise, so a non-UTF-8 path survives the trip.
 fn path_to_uri(path: &str) -> String {
-    let mut uri = String::from("file://");
-    for byte in path.as_bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
-                uri.push(*byte as char);
-            }
-            _ => uri.push_str(&format!("%{byte:02X}")),
-        }
-    }
-    uri
+    format!("file://{}", celestina_core::percent::encode(path.as_bytes()))
 }
 
 #[cfg(test)]

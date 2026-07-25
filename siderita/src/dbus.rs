@@ -125,54 +125,11 @@ pub(crate) fn uri_to_path(uri: &str) -> Option<PathBuf> {
         Some(index) => &rest[index..],
         None => return None,
     };
-    let bytes = percent_decode(path);
+    let bytes = celestina_core::percent::decode(path);
     if bytes.is_empty() {
         return None;
     }
-    Some(path_from_bytes(&bytes))
-}
-
-/// Decodes `%XX` escapes to bytes; a malformed escape is kept verbatim so a
-/// stray `%` never drops the rest of the path.
-fn percent_decode(value: &str) -> Vec<u8> {
-    let raw = value.as_bytes();
-    let mut out = Vec::with_capacity(raw.len());
-    let mut index = 0;
-    while index < raw.len() {
-        if raw[index] == b'%' {
-            if let (Some(high), Some(low)) = (
-                raw.get(index + 1).and_then(|b| hex_value(*b)),
-                raw.get(index + 2).and_then(|b| hex_value(*b)),
-            ) {
-                out.push((high << 4) | low);
-                index += 3;
-                continue;
-            }
-        }
-        out.push(raw[index]);
-        index += 1;
-    }
-    out
-}
-
-fn hex_value(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
-        _ => None,
-    }
-}
-
-#[cfg(unix)]
-fn path_from_bytes(bytes: &[u8]) -> PathBuf {
-    use std::os::unix::ffi::OsStrExt;
-    PathBuf::from(std::ffi::OsStr::from_bytes(bytes))
-}
-
-#[cfg(not(unix))]
-fn path_from_bytes(bytes: &[u8]) -> PathBuf {
-    PathBuf::from(String::from_utf8_lossy(bytes).into_owned())
+    Some(celestina_core::percent::path_from_bytes(&bytes))
 }
 
 #[cfg(test)]

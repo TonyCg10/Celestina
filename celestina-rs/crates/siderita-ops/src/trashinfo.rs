@@ -3,6 +3,8 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use celestina_core::percent;
+
 use crate::error::OpError;
 use crate::trash::home_trash;
 
@@ -104,7 +106,7 @@ pub(crate) fn parse_original_path(content: &str) -> Option<PathBuf> {
     if bytes.is_empty() {
         return None;
     }
-    Some(path_from_bytes(&bytes))
+    Some(percent::path_from_bytes(&bytes))
 }
 
 /// Reads the raw `DeletionDate=` value from a `.trashinfo` body, if present.
@@ -118,44 +120,7 @@ pub(crate) fn parse_deletion_date(content: &str) -> Option<String> {
 /// Reverses [`trash`](crate::trash)'s percent-encoding: `%XX` becomes one byte,
 /// every other byte is taken verbatim. Returns `None` on a malformed escape.
 pub(crate) fn url_decode(value: &str) -> Option<Vec<u8>> {
-    let raw = value.as_bytes();
-    let mut out = Vec::with_capacity(raw.len());
-    let mut index = 0;
-    while index < raw.len() {
-        match raw[index] {
-            b'%' => {
-                let high = hex_value(*raw.get(index + 1)?)?;
-                let low = hex_value(*raw.get(index + 2)?)?;
-                out.push((high << 4) | low);
-                index += 3;
-            }
-            byte => {
-                out.push(byte);
-                index += 1;
-            }
-        }
-    }
-    Some(out)
-}
-
-fn hex_value(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
-        _ => None,
-    }
-}
-
-#[cfg(unix)]
-pub(crate) fn path_from_bytes(bytes: &[u8]) -> PathBuf {
-    use std::os::unix::ffi::OsStrExt;
-    PathBuf::from(OsStr::from_bytes(bytes))
-}
-
-#[cfg(not(unix))]
-pub(crate) fn path_from_bytes(bytes: &[u8]) -> PathBuf {
-    PathBuf::from(String::from_utf8_lossy(bytes).into_owned())
+    percent::decode_strict(value)
 }
 
 #[cfg(test)]

@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+pub mod percent;
+
 use std::error::Error;
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};

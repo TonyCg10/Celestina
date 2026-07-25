@@ -4,7 +4,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use celestina_core::CancellationToken;
+use celestina_core::{percent, CancellationToken};
 
 use crate::error::OpError;
 use crate::relocate::{is_cross_device, relocate_by_copy};
@@ -173,30 +173,7 @@ pub(crate) fn home_trash() -> Result<PathBuf, OpError> {
 /// everything else becomes `%XX`. Operates on raw bytes, so non-UTF-8 paths
 /// round-trip.
 fn url_encode(path: &Path) -> String {
-    const HEX: &[u8; 16] = b"0123456789ABCDEF";
-    let bytes = path_bytes(path);
-    let mut out = String::with_capacity(bytes.len());
-    for &byte in &bytes {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~' | b'/') {
-            out.push(byte as char);
-        } else {
-            out.push('%');
-            out.push(HEX[(byte >> 4) as usize] as char);
-            out.push(HEX[(byte & 0x0f) as usize] as char);
-        }
-    }
-    out
-}
-
-#[cfg(unix)]
-fn path_bytes(path: &Path) -> Vec<u8> {
-    use std::os::unix::ffi::OsStrExt;
-    path.as_os_str().as_bytes().to_vec()
-}
-
-#[cfg(not(unix))]
-fn path_bytes(path: &Path) -> Vec<u8> {
-    path.to_string_lossy().into_owned().into_bytes()
+    percent::encode(&percent::path_bytes(path))
 }
 
 fn deletion_date_now() -> String {
