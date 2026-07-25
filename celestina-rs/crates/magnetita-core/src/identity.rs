@@ -19,9 +19,12 @@ pub const TYPE_IDENTITY: &str = "kdeconnect.identity";
 /// The port KDE Connect listens and broadcasts on (UDP announce, TCP link).
 pub const DEFAULT_PORT: u16 = 1716;
 
-/// The protocol version this core speaks. 7 is the long-stable version the
-/// current Android app and Valent interoperate on.
-pub const PROTOCOL_VERSION: i32 = 7;
+/// The protocol version this core speaks. 8 is the current KDE Connect version:
+/// its handshake still sends the identity in the clear before TLS, and *also*
+/// re-exchanges it encrypted once the channel is up. We must declare 8 so a v8
+/// peer takes the same encrypted-re-exchange path we do — declaring less makes
+/// the peer skip it while we wait for it, and the link stalls.
+pub const PROTOCOL_VERSION: i32 = 8;
 
 /// What a device calls itself — drives the icon and, later, per-type behaviour.
 /// Unknown keeps a strange value from rejecting an otherwise-valid identity.
