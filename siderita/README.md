@@ -27,7 +27,11 @@ desktop-file-validate siderita.desktop
 | Path | Responsibility |
 |---|---|
 | `src/main.rs`, `src/controller.rs` | Rust host and the CXX-Qt QObject |
-| `qml/i1/MainI1.qml` | the Iteration-1 UI (Siderita-specific) |
+| `qml/i1/Main.qml` | the Iteration-1 window: session, tabs, size scales |
+| `qml/i1/FolderView.qml` | one folder view per tab (the bulk of the UI) |
+| `qml/i1/Sidebar.qml` | places/devices/favourites/bookmarks + their menus |
+| `qml/i1/PickerWindow.qml` | the portal file chooser |
+| `qml/i1/*.qml` (rest) | small shared types: pills, buttons, badges, rows |
 | `../celestina-style/` | shared theme, glass and icons (consumed) |
 | `../celestina-rs/crates/siderita-core` | read-only Rust domain |
 | `../celestina-rs/crates/siderita-qt` | stable view contract for QML |

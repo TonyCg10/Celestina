@@ -21,8 +21,9 @@ const QML_FILES: &[&str] = &[
     "qml/i1/SizeRow.qml",
     "qml/i1/PropRow.qml",
     // Vistas y ventanas.
+    "qml/i1/Sidebar.qml",
     "qml/i1/FolderView.qml",
-    "qml/i1/MainI1.qml",
+    "qml/i1/Main.qml",
     "qml/i1/PickerWindow.qml",
 ];
 
