@@ -204,6 +204,50 @@ Window {
         chosenCount = Object.keys(s).length
     }
 
+    // ── La banda de selección ────────────────────────────────────────────
+    // El estado vive aquí y no en un MouseArea porque el gesto empieza donde
+    // caiga: en una rejilla de celdas estiradas no hay "hueco" — los delegados
+    // cubren todo el ancho, así que el arrastre nace casi siempre sobre una
+    // celda. Cada MouseArea (las celdas y el fondo) le cuenta lo mismo a estas
+    // tres funciones, en coordenadas del contenido.
+    property bool banding: false
+    property bool bandAdditive: false
+    property real bandStartX: 0
+    property real bandStartY: 0
+    property real bandX: 0
+    property real bandY: 0
+    property real bandW: 0
+    property real bandH: 0
+    // Lo pone el gesto y lo consume el clic: un arrastre no es una pulsación.
+    property bool bandConsumed: false
+
+    function bandBegin(px, py, additive) {
+        bandStartX = px
+        bandStartY = py
+        bandAdditive = additive
+        bandX = px; bandY = py; bandW = 0; bandH = 0
+        banding = true
+        if (!additive)
+            clearChosen()
+    }
+
+    function bandUpdate(px, py) {
+        if (!banding)
+            return
+        bandX = Math.min(bandStartX, px)
+        bandY = Math.min(bandStartY, py)
+        bandW = Math.abs(px - bandStartX)
+        bandH = Math.abs(py - bandStartY)
+        selectIn(bandX, bandY, bandX + bandW, bandY + bandH, bandAdditive)
+    }
+
+    function bandFinish() {
+        if (!banding)
+            return
+        banding = false
+        bandConsumed = true
+    }
+
     // Las celdas que toca un rectángulo, por aritmética y no por recorrido: la
     // rejilla es regular, así que se sabe qué filas y columnas cruza sin
     // preguntarle a cada una de las mil que puede haber.
@@ -214,6 +258,10 @@ Window {
         if (cw <= 0 || ch <= 0 || cols <= 0)
             return
         var s = additive ? Object.assign({}, chosen) : {}
+        // Si el que pregunta quiere un archivo, la banda sigue sirviendo: se
+        // queda con el primero que toca. Un gesto que no hace nada es peor que
+        // uno que hace lo poco que se le permite.
+        var room = picker.multiple ? -1 : 1
         const c0 = Math.max(0, Math.floor(x1 / cw))
         const c1 = Math.min(cols - 1, Math.floor(x2 / cw))
         const r0 = Math.max(0, Math.floor(y1 / ch))
@@ -225,6 +273,10 @@ Window {
                     continue
                 if (picker.directory && controller.entryKind(i) !== "directory")
                     continue
+                if (room === 0)
+                    break
+                if (room > 0)
+                    room--
                 s[controller.entryToken(i)] = true
             }
         }
@@ -363,6 +415,9 @@ Window {
                 // cuatro" no debería exigir una mano en el teclado. Vive bajo
                 // los delegados (z: -1), así que una celda se lleva su clic y
                 // el hueco se lleva el arrastre.
+                // El fondo: el trozo que queda tras la última fila, y el ancho
+                // sobrante si las columnas no llenan. Está bajo los delegados,
+                // así que sólo recibe lo que ninguna celda quiso.
                 MouseArea {
                     id: bandArea
                     z: -1
@@ -370,56 +425,45 @@ Window {
                     y: 0
                     width: Math.max(entryGrid.contentWidth, entryGrid.width)
                     height: Math.max(entryGrid.contentHeight, entryGrid.height)
+                    preventStealing: true
 
-                    // Sin esto la Flickable se lleva el arrastre a los pocos
-                    // píxeles y la banda se convierte en un desplazamiento.
-                    // Sólo cuando hay algo que seleccionar en grupo: si el que
-                    // pregunta quiere un archivo, arrastrar sigue desplazando.
-                    preventStealing: picker.multiple
-
-                    property real startX: 0
-                    property real startY: 0
-                    property bool banding: false
-                    property bool additive: false
-
-                    readonly property real bx: Math.min(startX, mouseX)
-                    readonly property real by: Math.min(startY, mouseY)
-                    readonly property real bw: Math.abs(mouseX - startX)
-                    readonly property real bh: Math.abs(mouseY - startY)
+                    property bool armed: false
 
                     onPressed: function(mouse) {
                         entryGrid.forceActiveFocus()
-                        startX = mouse.x
-                        startY = mouse.y
-                        additive = picker.multiple
-                                   && (mouse.modifiers & Qt.ControlModifier)
-                        banding = false
-                        if (!additive)
+                        picker.bandStartX = mouse.x
+                        picker.bandStartY = mouse.y
+                        armed = true
+                        if (!(mouse.modifiers & Qt.ControlModifier))
                             picker.clearChosen()
                     }
-                    onPositionChanged: {
-                        if (!picker.multiple)
+                    onPositionChanged: function(mouse) {
+                        if (!armed)
                             return
-                        // Un temblor no es un arrastre.
-                        if (!banding && (bw > 4 || bh > 4))
-                            banding = true
-                        if (banding)
-                            picker.selectIn(bx, by, bx + bw, by + bh, additive)
+                        if (!picker.banding
+                                && (Math.abs(mouse.x - picker.bandStartX) > 4
+                                    || Math.abs(mouse.y - picker.bandStartY) > 4))
+                            picker.bandBegin(picker.bandStartX, picker.bandStartY,
+                                             mouse.modifiers & Qt.ControlModifier)
+                        picker.bandUpdate(mouse.x, mouse.y)
                     }
-                    onReleased: banding = false
-                    onCanceled: banding = false
+                    onReleased: { armed = false; picker.bandFinish() }
+                    onCanceled: { armed = false; picker.bandFinish() }
+                }
 
-                    Rectangle {
-                        visible: bandArea.banding
-                        x: bandArea.bx
-                        y: bandArea.by
-                        width: bandArea.bw
-                        height: bandArea.bh
-                        radius: CelestinaTheme.radiusXs
-                        color: CelestinaTheme.surfaceSelected
-                        border.width: 1
-                        border.color: CelestinaTheme.borderStrong
-                    }
+                // La banda, dibujada en coordenadas del contenido: se queda
+                // quieta sobre las celdas aunque la rejilla se desplace.
+                Rectangle {
+                    z: 5
+                    visible: picker.banding
+                    x: picker.bandX
+                    y: picker.bandY
+                    width: picker.bandW
+                    height: picker.bandH
+                    radius: CelestinaTheme.radiusXs
+                    color: CelestinaTheme.surfaceSelected
+                    border.width: 1
+                    border.color: CelestinaTheme.borderStrong
                 }
 
                 delegate: Item {
@@ -525,7 +569,47 @@ Window {
                         id: cellMouse
                         anchors.fill: parent
                         hoverEnabled: true
+                        // El arrastre empieza aquí tantas veces como en el
+                        // hueco: las celdas se estiran hasta llenar el ancho, así
+                        // que "el hueco" casi no existe. La celda cede el gesto a
+                        // la ventana en cuanto pasa de un temblor.
+                        preventStealing: picker.banding
+
+                        property bool armed: false
+                        property real pressX: 0
+                        property real pressY: 0
+
+                        function toContent(mouse) {
+                            return cellMouse.mapToItem(entryGrid.contentItem,
+                                                       mouse.x, mouse.y)
+                        }
+
+                        onPressed: function(mouse) {
+                            const p = toContent(mouse)
+                            pressX = p.x
+                            pressY = p.y
+                            armed = true
+                        }
+                        onPositionChanged: function(mouse) {
+                            if (!armed)
+                                return
+                            const p = toContent(mouse)
+                            if (!picker.banding
+                                    && (Math.abs(p.x - pressX) > 5
+                                        || Math.abs(p.y - pressY) > 5))
+                                picker.bandBegin(pressX, pressY,
+                                                 mouse.modifiers & Qt.ControlModifier)
+                            picker.bandUpdate(p.x, p.y)
+                        }
+                        onReleased: { armed = false; picker.bandFinish() }
+                        onCanceled: { armed = false; picker.bandFinish() }
+
                         onClicked: function(mouse) {
+                            // Un arrastre acaba en un clic que no lo es.
+                            if (picker.bandConsumed) {
+                                picker.bandConsumed = false
+                                return
+                            }
                             entryGrid.currentIndex = cell.index
                             entryGrid.forceActiveFocus()
                             if (!cell.selectable)
@@ -742,6 +826,17 @@ Window {
         property bool primary: false
         property string help: ""
 
+        // El acento, rebajado: la acción principal sigue siendo reconocible
+        // cuando todavía no se puede pulsar. Un botón apagado no debería
+        // confundirse con el de al lado — "Abrir" y "Cancelar" no son lo mismo
+        // aunque los dos estén quietos.
+        readonly property color accentSoft: Qt.rgba(
+                CelestinaTheme.accent.r, CelestinaTheme.accent.g,
+                CelestinaTheme.accent.b, 0.20)
+        readonly property color accentText: Qt.rgba(
+                CelestinaTheme.accent.r, CelestinaTheme.accent.g,
+                CelestinaTheme.accent.b, 0.75)
+
         hoverEnabled: true
         implicitHeight: 34
         leftPadding: 18
@@ -754,11 +849,9 @@ Window {
         contentItem: Text {
             text: control.text
             font: control.font
-            // Deshabilitado deja de ser primario: texto apagado sobre el acento
-            // clarito no se leía. Un botón que no se puede pulsar tampoco tiene
-            // por qué gritar.
-            color: !control.enabled ? CelestinaTheme.textMuted
-                   : control.primary ? CelestinaTheme.canvas : CelestinaTheme.text
+            color: control.primary
+                   ? (control.enabled ? CelestinaTheme.canvas : control.accentText)
+                   : (control.enabled ? CelestinaTheme.text : CelestinaTheme.textMuted)
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
         }
@@ -766,16 +859,22 @@ Window {
         // Cristal también aquí: los botones flotan sobre la rejilla como los
         // de la ventana principal, no sobre una banda que no existe.
         background: GlassPill {
-            fill: !control.enabled ? CelestinaTheme.controlFill
-                  : control.primary
-                    ? (control.down ? Qt.darker(CelestinaTheme.accent, 1.18)
-                       : control.hovered ? Qt.darker(CelestinaTheme.accent, 1.08)
-                       : CelestinaTheme.accent)
-                    : (control.down ? CelestinaTheme.surfaceStrong
-                       : control.hovered ? CelestinaTheme.surfaceHover
-                       : CelestinaTheme.controlFill)
-            border.width: control.primary && control.enabled ? 0 : 1
-            border.color: CelestinaTheme.border
+            fill: control.primary
+                  ? (!control.enabled ? control.accentSoft
+                     : control.down ? Qt.darker(CelestinaTheme.accent, 1.18)
+                     : control.hovered ? Qt.darker(CelestinaTheme.accent, 1.08)
+                     : CelestinaTheme.accent)
+                  : (!control.enabled ? CelestinaTheme.controlFill
+                     : control.down ? CelestinaTheme.surfaceStrong
+                     : control.hovered ? CelestinaTheme.surfaceHover
+                     : CelestinaTheme.controlFill)
+            // El borde dice de quién es el turno: el acento marca la acción
+            // principal aunque esté esperando, y el foco de teclado se ve.
+            border.width: control.activeFocus ? 2
+                          : (control.primary && !control.enabled) || !control.primary ? 1 : 0
+            border.color: control.activeFocus ? CelestinaTheme.focus
+                          : control.primary ? control.accentText
+                          : CelestinaTheme.border
         }
     }
 }
