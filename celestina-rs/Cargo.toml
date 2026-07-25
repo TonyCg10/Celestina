@@ -5,6 +5,7 @@ members = [
     "crates/siderita-ops",
     "crates/siderita-qt",
     "crates/dotfiles-core",
+    "crates/magnetita-core",
 ]
 resolver = "2"
 
@@ -14,6 +15,10 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 celestina-core = { path = "crates/celestina-core" }
+# JSON is the KDE Connect wire format; serde earns its place as the one parser
+# for packets with nested, per-plugin bodies (magnetita-core).
+serde = { version = "1", default-features = false, features = ["std"] }
+serde_json = "1"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

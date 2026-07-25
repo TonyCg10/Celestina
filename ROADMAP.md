@@ -7,7 +7,8 @@
 > Per-project roadmaps: [celestina-rs](celestina-rs/ROADMAP.md) ·
 > [celestina-style](celestina-style/ROADMAP.md) ·
 > [celestina](celestina/ROADMAP.md) ·
-> [siderita](siderita/ROADMAP.md)
+> [siderita](siderita/ROADMAP.md) ·
+> [magnetita](magnetita/ROADMAP.md)
 >
 > Checklist legend: `[x]` done · `[ ]` planned. Source presence is not runtime
 > evidence — a goal stays unchecked until it is verified, not merely written.
@@ -32,10 +33,10 @@ The goal is a session that is dependable, coherent and light — not feature
 parity with any existing desktop environment, and not a product for anyone but
 its author.
 
-**Current focus:** the Niri shell (`celestina`). The file manager (`siderita`)
-has **completed CP0–CP3** and is in daily use; CP4 — the parts the user arranges
-(sidebar, order, per-folder view, session) — is implemented and waiting on
-real-Wayland validation. New apps wait behind a proven daily gap.
+**Current focus:** the phone link (`magnetita`), just started — the suite's first
+cross-app integration and first networked app, built first because it hands the
+phone to Siderita, mounted and always there. `siderita` shipped **v1.0** and is in
+daily use; the Niri shell (`celestina`) awaits its Rust adapter.
 
 ## The pieces
 
@@ -45,6 +46,7 @@ real-Wayland validation. New apps wait behind a proven daily gap.
 | [celestina-style](celestina-style/) | Shared visual language | QML | — | celestina, siderita, future apps |
 | [celestina](celestina/) | Niri shell / session | C++ · QML (+ Rust bridge) | celestina-style | the session |
 | [siderita](siderita/) | File manager (first app) | Rust · QML (CXX-Qt) | celestina-rs | the user |
+| [magnetita](magnetita/) | Phone link (KDE Connect) | Rust · QML (CXX-Qt) | celestina-rs, celestina-style | the user, siderita (via `org.celestina.Devices1`) |
 
 Dependencies flow one way — cores and style never depend on apps or the shell:
 
@@ -69,9 +71,10 @@ gap proves the need and each reusing `celestina-rs` + `celestina-style`:
   runs as a shell widget.
 - **[Grafita](grafita/)** *(working name)* — a light text/code editor, the
   edit-side companion to Siderita's read-only quick-look ("Abrir con Grafita").
-- **[magnetita](magnetita/)** — a phone link.
 
-Each has a directory holding a README and a roadmap and no code. That is
+Fluorita and Grafita each have a directory holding a README and a roadmap and no
+code — **[Magnetita](magnetita/) has left this stage** (its protocol core has
+begun; see the status snapshot above). That is
 deliberate: two of Siderita's shipped decisions (consuming video thumbnails it
 will not generate; a quick-look that hands video, audio and PDF to an info card
 naming Fluorita) are already promises to these projects, and a promise is worth
@@ -100,10 +103,11 @@ as a suite rather than four unrelated apps:
   consumed by pinned version for any release; path deps are a development
   convenience only. The monorepo owns shared history and the contracts.
 
-## Status snapshot (2026-07-24)
+## Status snapshot (2026-07-25)
 
 - ✅ Monorepo git baseline established (this repository).
-- `celestina-rs` — four cores compile; fmt, Clippy, 30 tests pass; read-only.
+- `celestina-rs` — five cores compile (Magnetita's protocol core is the newest);
+  fmt, Clippy and the workspace tests pass.
 - `celestina-style` — now the canonical shared module (semantic tokens +
   working glass + fallback icons), builds with CMake and is consumed by
   siderita; a clean-prefix installable release is still open.
@@ -122,6 +126,13 @@ as a suite rather than four unrelated apps:
   items are carried past 1.0, named not hidden: CP4's drag/menu-blur real-Wayland
   validation, CP5's `parent_window` (needs `xdg-foreign`), and CP5's opt-in
   portal routing until it has been lived with.
+- `magnetita` — **started (2026-07-25)**: the suite's phone link over KDE Connect,
+  its first cross-app integration and first networked app. `magnetita-core` has
+  begun — the packet envelope and the identity packet, offline-tested (8 tests).
+  Next is the trusted TLS/pairing channel, a **standalone app** (pair, a
+  connection log that says *why* a phone will not connect, and options), and the
+  phone mounted in Siderita via a real sshfs mount plus `org.celestina.Devices1`,
+  the suite's **first internal contract**.
 
 ---
 
