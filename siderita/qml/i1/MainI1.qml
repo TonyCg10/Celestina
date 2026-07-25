@@ -194,6 +194,45 @@ ApplicationWindow {
     // The star a favourited entry wears, sat in the corner of its tile. It
     // carries its own dark disc because it has to stay readable over a folder
     // glyph, a photo thumbnail and an empty tile alike.
+    // ── GlassPill ────────────────────────────────────────────────────────
+    // La pastilla del pie: cristal debajo, tinte de estado encima. El orden
+    // importa — los tokens de relleno son translúcidos, así que el tinte deja
+    // ver el desenfoque en vez de taparlo, y una pastilla activa sigue siendo
+    // reconocible sobre el contenido que pasa por debajo.
+    component GlassPill: Rectangle {
+        id: glassPill
+
+        property Item backdrop
+        property bool floating: false
+        property color fill: CelestinaTheme.controlFill
+
+        radius: CelestinaTheme.radiusSm
+        color: "transparent"
+
+        GlassSurface {
+            anchors.fill: parent
+            backdropSource: glassPill.backdrop
+            // Sólo se captura cuando hay contenido detrás que desenfocar: al
+            // final de la lista no hay nada bajo el pie y el cristal se apaga.
+            captureEnabled: glassPill.floating
+            liveCapture: true
+            cornerRadius: glassPill.radius
+            opacity: glassPill.floating ? 1 : 0
+            Behavior on opacity {
+                NumberAnimation { duration: CelestinaTheme.motionNormal }
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: glassPill.radius
+            color: glassPill.fill
+            Behavior on color {
+                ColorAnimation { duration: CelestinaTheme.motionFast }
+            }
+        }
+    }
+
     // El galón de las cabeceras del sidebar. Una sola punta que gira en vez de
     // dos glifos que se intercambian: el giro *cuenta* que la zona se abre, y el
     // salto entre "▸" y "▾" no cuenta nada.
@@ -679,6 +718,15 @@ ApplicationWindow {
     // `overlayParent` (window.contentItem, where popups are placed).
     component Document: Item {
         id: root
+
+        // El pie flota sobre el contenido: hay cristal que enseñar mientras
+        // quede lista por debajo. Al llegar al final no queda nada detrás y las
+        // pastillas vuelven a su relleno liso.
+        readonly property Item bottomView: mainPanel.viewMode === "grid"
+                                           ? fileGrid : fileList
+        readonly property bool bottomFloating:
+                bottomView && bottomView.contentHeight > bottomView.height
+                && !bottomView.atYEnd
 
         property Item ghost
         property Item overlayParent
@@ -1247,20 +1295,17 @@ ApplicationWindow {
                 anchors.verticalCenter: bottomBar.verticalCenter
                 spacing: 10
 
-                Rectangle {
+                GlassPill {
                     id: hiddenToggle
                     Layout.preferredWidth: hiddenLabel.implicitWidth + 22
-                    Layout.preferredHeight: 26
-                    radius: CelestinaTheme.radiusXs
-                    color: controller.showHidden
-                           ? CelestinaTheme.badgeAccentFill
-                           : hiddenMouse.containsMouse
-                             ? CelestinaTheme.surfaceHover
-                             : CelestinaTheme.controlFill
-
-                    Behavior on color {
-                        ColorAnimation { duration: CelestinaTheme.motionFast }
-                    }
+                    Layout.preferredHeight: 30
+                    backdrop: root.bottomView
+                    floating: root.bottomFloating
+                    fill: controller.showHidden
+                          ? CelestinaTheme.badgeAccentFill
+                          : hiddenMouse.containsMouse
+                            ? CelestinaTheme.surfaceHover
+                            : CelestinaTheme.controlFill
 
                     Accessible.role: Accessible.Button
                     Accessible.name: "Mostrar u ocultar elementos ocultos"
@@ -1319,17 +1364,14 @@ ApplicationWindow {
                         elide: Text.ElideRight
                     }
 
-                    background: Rectangle {
-                        radius: CelestinaTheme.radiusSm
-                        color: sortButton.hovered
-                               ? CelestinaTheme.surfaceHover
-                               : CelestinaTheme.controlFill
+                    background: GlassPill {
+                        backdrop: root.bottomView
+                        floating: root.bottomFloating
+                        fill: sortButton.hovered
+                              ? CelestinaTheme.surfaceHover
+                              : CelestinaTheme.controlFill
                         border.width: sortButton.activeFocus ? 1 : 0
                         border.color: CelestinaTheme.focus
-
-                        Behavior on color {
-                            ColorAnimation { duration: CelestinaTheme.motionFast }
-                        }
                     }
                 }
 
@@ -1369,20 +1411,17 @@ ApplicationWindow {
                                 { mode: "details", label: "Detalles" }
                             ]
 
-                            delegate: Rectangle {
+                            delegate: GlassPill {
                                 id: seg
                                 required property var modelData
                                 readonly property bool active: mainPanel.viewMode === modelData.mode
                                 width: segLabel.implicitWidth + 22
                                 height: 30
-                                radius: CelestinaTheme.radiusSm
-                                color: seg.active ? CelestinaTheme.surfaceSelected
-                                       : segMouse.containsMouse ? CelestinaTheme.surfaceHover
-                                       : CelestinaTheme.controlFill
-
-                                Behavior on color {
-                                    ColorAnimation { duration: CelestinaTheme.motionFast }
-                                }
+                                backdrop: root.bottomView
+                                floating: root.bottomFloating
+                                fill: seg.active ? CelestinaTheme.surfaceSelected
+                                      : segMouse.containsMouse ? CelestinaTheme.surfaceHover
+                                      : CelestinaTheme.controlFill
 
                                 Accessible.role: Accessible.RadioButton
                                 Accessible.name: "Vista " + seg.modelData.label
@@ -1478,7 +1517,14 @@ ApplicationWindow {
                 x: 8
                 y: 14
                 width: parent.width - 16
-                height: parent.height - 68
+                // Llega hasta el borde: el pie flota encima, no le recorta sitio.
+                height: parent.height - 22
+                // …y un pie vacío devuelve el sitio por dentro, para que la
+                // última fila se pueda leer entera en vez de quedarse bajo las
+                // pastillas. Es un pie y no `bottomMargin` porque el margen entra
+                // en el cálculo de contentY y monta un bucle de enlace con el
+                // desplazamiento que vigila el cristal de la cabecera.
+                footer: Item { width: 1; height: 46 }
                 // The list backs three modes: plain "list", the "details"
                 // columns (same rows, a different delegate body), and search
                 // (which always uses the sectioned list — a grid can't carry
@@ -1745,6 +1791,11 @@ ApplicationWindow {
                             width: Math.round(CelestinaTheme.iconMd * window.contentIconScale)
                             height: Math.round(CelestinaTheme.iconMd * window.contentIconScale)
                             name: mainPanel.mediaIconName(row.kind, kindGlyph.media, row.path)
+                            // El icono elegido a mano suele ser simbólico, y los
+                            // simbólicos sólo se publican a 16 px: sin pedir el
+                            // tamaño explícito se dibujan diminutos dentro de una
+                            // celda hecha para una carpeta de 54.
+                            sourceSize: Qt.size(width, height)
                             source: CelestinaTheme.fallbackIcon(
                                         row.kind === "directory"
                                         ? "folder"
@@ -1961,7 +2012,14 @@ ApplicationWindow {
                 x: 8
                 y: 14
                 width: parent.width - 16
-                height: parent.height - 68
+                // Llega hasta el borde: el pie flota encima, no le recorta sitio.
+                height: parent.height - 22
+                // …y un pie vacío devuelve el sitio por dentro, para que la
+                // última fila se pueda leer entera en vez de quedarse bajo las
+                // pastillas. Es un pie y no `bottomMargin` porque el margen entra
+                // en el cálculo de contentY y monta un bucle de enlace con el
+                // desplazamiento que vigila el cristal de la cabecera.
+                footer: Item { width: 1; height: 46 }
                 visible: mainPanel.viewMode === "grid"
                 model: entryModel
                 clip: true
@@ -2196,6 +2254,7 @@ ApplicationWindow {
                                 width: Math.round(54 * window.contentIconScale)
                                 height: Math.round(54 * window.contentIconScale)
                                 name: mainPanel.mediaIconName(cell.kind, cellGlyph.media, cell.path)
+                                sourceSize: Qt.size(width, height)
                                 source: CelestinaTheme.fallbackIcon(
                                             cell.kind === "directory"
                                             ? "folder"
@@ -2632,17 +2691,14 @@ ApplicationWindow {
                     elide: Text.ElideRight
                 }
 
-                background: Rectangle {
-                    radius: CelestinaTheme.radiusSm
-                    color: (sizeButton.hovered || sizePopup.opened)
-                           ? CelestinaTheme.surfaceHover
-                           : CelestinaTheme.controlFill
+                background: GlassPill {
+                    backdrop: root.bottomView
+                    floating: root.bottomFloating
+                    fill: (sizeButton.hovered || sizePopup.opened)
+                          ? CelestinaTheme.surfaceHover
+                          : CelestinaTheme.controlFill
                     border.width: sizeButton.activeFocus ? 1 : 0
                     border.color: CelestinaTheme.focus
-
-                    Behavior on color {
-                        ColorAnimation { duration: CelestinaTheme.motionFast }
-                    }
                 }
 
                 Popup {
@@ -4765,6 +4821,7 @@ ApplicationWindow {
                             height: 56
                             name: mainPanel.mediaIconName(quickLookView.qlKind,
                                                           quickLookView.qlMedia, quickLookView.qlPath)
+                            sourceSize: Qt.size(width, height)
                             source: CelestinaTheme.fallbackIcon(
                                         quickLookView.qlKind === "directory" ? "folder" : "file")
                             color: quickLookView.qlKind === "directory"
