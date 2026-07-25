@@ -62,6 +62,14 @@ impl Session {
         self.pairing.is_paired()
     }
 
+    /// The peer has asked to pair and is waiting for our answer — the moment the
+    /// app prompts its user, or a headless daemon auto-accepts. Distinguishes a
+    /// pending *incoming* request from our own outgoing one, which look alike as
+    /// a [`Pairing`](crate::event::ConnectionEvent::Pairing) event.
+    pub fn peer_wants_to_pair(&self) -> bool {
+        self.pairing.state() == PairState::RequestedByPeer
+    }
+
     pub fn peer(&self) -> Option<&Identity> {
         self.peer.as_ref()
     }

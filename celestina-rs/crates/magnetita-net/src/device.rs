@@ -71,6 +71,12 @@ impl Device {
         self.session.is_paired()
     }
 
+    /// The peer asked to pair and awaits our answer — a headless caller can call
+    /// [`accept_pairing`](Device::accept_pairing) on this, a UI can prompt.
+    pub fn peer_wants_to_pair(&self) -> bool {
+        self.session.peer_wants_to_pair()
+    }
+
     /// Advance one turn: fire the pairing timeout if due, then read and process
     /// one packet. A read that hits the tick bound is an idle turn, not a close.
     pub fn pump(&mut self) -> Result<Pump, LinkError> {
@@ -245,16 +251,19 @@ mod tests {
         assert_eq!(ev, vec![ConnectionEvent::Pairing]);
         assert!(!desk.is_paired());
 
-        // The phone hears the request and must prompt its user.
+        // The phone hears the request and must prompt its user: this is an
+        // incoming request, distinct from an outgoing one that looks the same.
         let pumped = phone.pump().unwrap();
         assert!(pumped.open);
         assert_eq!(pumped.events, vec![ConnectionEvent::Pairing]);
         assert!(!phone.is_paired());
+        assert!(phone.peer_wants_to_pair());
 
         // The phone user accepts; the phone is paired and answers.
         let ev = phone.accept_pairing().unwrap();
         assert_eq!(ev, vec![ConnectionEvent::Paired]);
         assert!(phone.is_paired());
+        assert!(!phone.peer_wants_to_pair());
 
         // The desktop hears the acceptance and is paired too.
         let pumped = desk.pump().unwrap();

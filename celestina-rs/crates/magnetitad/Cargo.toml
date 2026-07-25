@@ -1,0 +1,18 @@
+[package]
+name = "magnetitad"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "GPL-3.0-or-later"
+
+[[bin]]
+name = "magnetitad"
+path = "src/main.rs"
+
+[dependencies]
+magnetita-core = { path = "../magnetita-core" }
+magnetita-net = { path = "../magnetita-net" }
+celestina-core.workspace = true
+
+[lints]
+workspace = true
