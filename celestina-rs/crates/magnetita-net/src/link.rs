@@ -51,6 +51,9 @@ impl<T: Read + Write + ?Sized> ReadWrite for T {}
 /// An established, encrypted, trusted-by-fingerprint link to one device.
 pub struct Link {
     reader: BufReader<Box<dyn Transport>>,
+    /// A second handle on the same socket, held only to change the read timeout
+    /// after the stream is boxed — so a caller's read loop can wake on idle.
+    sock: TcpStream,
     peer: Identity,
     peer_fingerprint: String,
     peer_addr: SocketAddr,
@@ -106,8 +109,10 @@ impl Link {
         };
 
         tcp.set_read_timeout(None).ok();
+        let sock = tcp.try_clone()?;
         Ok(Link {
             reader: BufReader::new(Box::new(StreamOwned::new(conn, tcp))),
+            sock,
             peer,
             peer_fingerprint: fingerprint,
             peer_addr: addr,
@@ -157,8 +162,10 @@ impl Link {
         };
 
         tcp.set_read_timeout(None).ok();
+        let sock = tcp.try_clone()?;
         Ok(Link {
             reader: BufReader::new(Box::new(StreamOwned::new(conn, tcp))),
+            sock,
             peer,
             peer_fingerprint: fingerprint,
             peer_addr,
@@ -178,6 +185,15 @@ impl Link {
     /// The address the link is to.
     pub fn peer_addr(&self) -> SocketAddr {
         self.peer_addr
+    }
+
+    /// Bound how long [`read_packet`](Link::read_packet) blocks, so a caller's
+    /// loop can wake on idle to check for a due pairing timeout or a queued
+    /// command. `None` blocks until a packet or a close. A read that hits the
+    /// bound surfaces as an [`io::ErrorKind::WouldBlock`]/`TimedOut` error, which
+    /// the caller treats as "nothing this tick", not a disconnect.
+    pub fn set_read_timeout(&self, dur: Option<Duration>) -> io::Result<()> {
+        self.sock.set_read_timeout(dur)
     }
 
     /// Read the next packet, blocking. `Ok(None)` is a clean close by the peer.
