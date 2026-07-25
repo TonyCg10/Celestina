@@ -109,14 +109,19 @@ as a suite rather than four unrelated apps:
   siderita; a clean-prefix installable release is still open.
 - `celestina` — host builds and QML-lints; geometry/zone/focus not yet verified
   on real Niri; no Rust yet.
-- `siderita` — **CP0–CP3 complete and ratified**: staged self-contained install,
-  loss-free operations, freedesktop interop, a native role model with a live
-  hotplug/FS watcher, list/grid/details views, freedesktop thumbnails and a
-  spacebar quick-look — validated on real Wayland. **CP4** (natural name order,
-  favourites, an organizable sidebar, per-folder views, session restore, drag
-  comforts, batch rename, Recientes, per-collision conflicts) is implemented and
-  headless-verified; its drag gestures, its surfaces and the live-capture menu
-  blur still need the real session.
+- `siderita` — **v1.0: Iteration 1 concluded (2026-07-25)**, the full CP0 → CP5
+  arc. CP0–CP3 are complete and ratified on real Wayland (staged self-contained
+  install, loss-free operations, freedesktop interop, a native role model with a
+  live hotplug/FS watcher, list/grid/details views, thumbnails, spacebar
+  quick-look). **CP4** — natural name order, favourites, an organizable sidebar,
+  per-folder views, drag comforts, batch rename, Recientes, per-collision
+  conflicts — is implemented and headless-verified. **CP5** makes Siderita the
+  desktop's file chooser: it serves `org.freedesktop.impl.portal.FileChooser`
+  (`OpenFile`/`SaveFile`/`SaveFiles`) with its own picker window, type filters
+  and `--portal` activation, verified end-to-end on the real session. Three
+  items are carried past 1.0, named not hidden: CP4's drag/menu-blur real-Wayland
+  validation, CP5's `parent_window` (needs `xdg-foreign`), and CP5's opt-in
+  portal routing until it has been lived with.
 
 ---
 

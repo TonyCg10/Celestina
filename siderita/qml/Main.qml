@@ -17,7 +17,7 @@ ApplicationWindow {
     // then jumps.
     visible: false
     color: CelestinaTheme.canvas
-    title: "Siderita · Iteración 1"
+    title: "Siderita"
 
     // ── Session ──────────────────────────────────────────────────────────
     // A controller that owns no tab, used only to read and write what belongs

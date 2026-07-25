@@ -6,6 +6,31 @@
 > the one CP4 leaves open, because a drag gesture and a blur have no headless
 > proof.
 
+## Version 1.0 — Iteration 1, concluded
+
+*2026-07-25.* Iteration 1 is the whole arc, CP0 → CP5: a truthful read-only
+slice grown into a loss-free file manager (CP1), a good desktop citizen (CP2), a
+comfortable daily driver (CP3), one that holds the user's arrangement (CP4), and
+finally the desktop's own file chooser (CP5). That arc is done and tagged
+**v1.0** — the Qt/QML host that was a *provisional* first iteration is now the
+shipped one, its name no longer carrying the iteration marker (`qml/`, crate
+`siderita`, not `siderita-i1`).
+
+What stays open is named, not hidden — three items that are input- or
+pixel-shaped, so they have no headless proof and are carried past 1.0 rather than
+claimed as verified:
+
+- **CP4 real-Wayland validation** — the drag gestures (spring-open, edge scroll,
+  sidebar reorder) and the live-capture menu-blur p95.
+- **CP5 window parenting** — `parent_window` needs `xdg-foreign`; the picker
+  floats free until then.
+- **CP5 daily-use validation** — portal routing stays opt-in in `portals.conf`
+  until it has been lived with, because a bad file chooser is every
+  application's upload button.
+
+Everything else in CP0–CP5 below is implemented, and the parts with a headless or
+unit-test proof are marked verified where they stand.
+
 ## Overview
 
 **Purpose.** The suite's independent file manager — navigate, organize and
@@ -30,11 +55,12 @@ operations, single-level undo backed by a freedesktop Trash-restore primitive,
 an async paste executor (worker thread, progress surface, cancellation and a
 skip/replace/keep-both conflict dialog) and system-clipboard interop are all
 wired from the `siderita-ops` crate, each verb refusing to overwrite and never
-removing a source before its destination is verified. Installation staging,
-watcher, `file://`, a native role-based model, UI tests and real-Wayland
-blur/frame numbers are still open, so Qt/QML stays a **provisional** first
-iteration, and CP1's live interaction (progress/cancel, conflict dialog,
-cross-manager clipboard) still awaits a real Wayland session to validate. The arc from here is deliberate: **operations** (CP1) make it a
+removing a source before its destination is verified. The items that once
+kept this provisional — installation staging, the hotplug/FS watcher, `file://`,
+a native role-based model, real-Wayland resource/frame numbers — are done, so
+Qt/QML is **ratified** as the shipped first iteration (v1.0); only the input- and
+pixel-shaped validation named at the top of this file is still to be lived with
+on the real session. The arc from here is deliberate: **operations** (CP1) make it a
 manager, **interoperation** (CP2) make it a good desktop citizen, **comfort**
 (CP3) adds what a daily manager is expected to have, and **arrangement** (CP4)
 hands the sidebar, the order, the per-folder view and the session back to the
