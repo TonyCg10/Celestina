@@ -42,6 +42,10 @@ Window {
     property real iconScale: 1.0
     property real textScale: 1.0
 
+    // La rejilla desborda ⇒ hay algo detrás de las pastillas que desenfocar.
+    // Las pastillas del picker comparten este fondo, así que se decide una vez.
+    readonly property bool gridScrolls: entryGrid.contentHeight > entryGrid.height
+
     readonly property bool saving: mode === "save" || mode === "saves"
     readonly property string acceptText:
             acceptLabel.length > 0 ? acceptLabel
@@ -647,6 +651,8 @@ Window {
 
             GlassPill {
                 id: pathPill
+                backdrop: entryGrid
+                floating: picker.gridScrolls
                 width: parent.width - navRow.width - 12
                 height: 54
                 radius: CelestinaTheme.radiusSm
@@ -711,6 +717,8 @@ Window {
                 onAccepted: if (picker.canAccept) picker.answer(picker.chosenPaths())
                 background: GlassPill {
                     radius: CelestinaTheme.radiusSm
+                    backdrop: entryGrid
+                    floating: picker.gridScrolls
                     fill: CelestinaTheme.inputFill
                     border.width: 1
                     border.color: nameField.activeFocus ? CelestinaTheme.focus
@@ -753,6 +761,8 @@ Window {
                 }
 
                 background: GlassPill {
+                    backdrop: entryGrid
+                    floating: picker.gridScrolls
                     fill: filterCombo.hovered ? CelestinaTheme.surfaceHover
                                               : CelestinaTheme.controlFill
                 }
@@ -784,36 +794,6 @@ Window {
                     enabled: picker.canAccept
                     onClicked: picker.answer(picker.chosenPaths())
                 }
-            }
-        }
-    }
-
-    // ── GlassPill ────────────────────────────────────────────────────────
-    // Cristal debajo, tinte de estado encima: los tokens de relleno son
-    // translúcidos, así que el tinte deja ver el desenfoque en vez de taparlo.
-    // Captura mientras haya rejilla que desenfocar debajo.
-    component GlassPill: Rectangle {
-        id: glassPill
-
-        property color fill: CelestinaTheme.controlFill
-
-        radius: CelestinaTheme.radiusSm
-        color: "transparent"
-
-        GlassSurface {
-            anchors.fill: parent
-            backdropSource: entryGrid
-            captureEnabled: entryGrid.contentHeight > entryGrid.height
-            liveCapture: true
-            cornerRadius: glassPill.radius
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            radius: glassPill.radius
-            color: glassPill.fill
-            Behavior on color {
-                ColorAnimation { duration: CelestinaTheme.motionFast }
             }
         }
     }
@@ -859,6 +839,8 @@ Window {
         // Cristal también aquí: los botones flotan sobre la rejilla como los
         // de la ventana principal, no sobre una banda que no existe.
         background: GlassPill {
+            backdrop: entryGrid
+            floating: picker.gridScrolls
             fill: control.primary
                   ? (!control.enabled ? control.accentSoft
                      : control.down ? Qt.darker(CelestinaTheme.accent, 1.18)

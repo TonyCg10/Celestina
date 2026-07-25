@@ -1677,10 +1677,9 @@ impl qobject::SideritaController {
         let cancellation = CancellationToken::new();
         let mut failures = Vec::new();
         for (path, name) in paths.iter().zip(names.iter()) {
-            if name.is_empty() || name.contains('/') {
-                failures.push(format!("{}: nombre no válido", display_name(path)));
-                continue;
-            }
+            // La validación del nombre la hace `siderita_ops::rename` (rechaza
+            // vacío, separador, `.`/`..` y NUL), igual que el renombrado de uno
+            // en uno; un pre-chequeo a mano aquí sólo repetía la mitad, peor.
             if let Err(error) = siderita_ops::rename(path, OsStr::new(name), &cancellation) {
                 failures.push(format!("{}: {error}", display_name(path)));
             }
