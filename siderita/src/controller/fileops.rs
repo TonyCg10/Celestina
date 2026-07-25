@@ -8,7 +8,7 @@ use siderita_ops::{OpError, Progress};
 
 use super::qobject;
 use super::{
-    display_name, format_size, paste_one, qstringlist_to_paths, ConflictStrategy,
+    display_name, paste_one, qstringlist_to_paths, ConflictStrategy,
     PasteOutcome, PendingPaste, UndoAction,
 };
 
@@ -321,7 +321,7 @@ impl qobject::SideritaController {
                         return;
                     }
                     last = std::time::Instant::now();
-                    let detail = format!("{} copiados", format_size(progress.bytes));
+                    let detail = format!("{} copiados", crate::format::size(progress.bytes));
                     let _ = qt_progress.queue(move |mut controller| {
                         controller
                             .as_mut()

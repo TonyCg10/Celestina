@@ -6,7 +6,7 @@ use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QString, QStringList};
 
 use super::qobject;
-use super::{display_name, format_size, format_trash_date, search_hit_parent, RECENT_LIMIT};
+use super::{display_name, search_hit_parent, RECENT_LIMIT};
 
 impl qobject::SideritaController {
     /// Leaves Trash and repaints the current folder.
@@ -38,7 +38,7 @@ impl qobject::SideritaController {
             .collect();
         let dates: QStringList = entries
             .iter()
-            .map(|entry| QString::from(format_trash_date(&entry.deletion_date).as_str()))
+            .map(|entry| QString::from(crate::format::trash_date(&entry.deletion_date).as_str()))
             .collect();
         self.as_mut().rust_mut().get_mut().trash_entries = entries;
         self.as_mut().set_trash_names(names);
@@ -79,7 +79,7 @@ impl qobject::SideritaController {
             .collect();
         let dates: QStringList = entries
             .iter()
-            .map(|e| QString::from(format_trash_date(&e.deletion_date).as_str()))
+            .map(|e| QString::from(crate::format::trash_date(&e.deletion_date).as_str()))
             .collect();
         let sizes: QStringList = entries
             .iter()
@@ -89,7 +89,7 @@ impl qobject::SideritaController {
                 } else {
                     QString::from(
                         std::fs::metadata(&e.trashed)
-                            .map(|m| format_size(m.len()))
+                            .map(|m| crate::format::size(m.len()))
                             .unwrap_or_default()
                             .as_str(),
                     )
@@ -148,7 +148,7 @@ impl qobject::SideritaController {
             .collect();
         let dates: QStringList = items
             .iter()
-            .map(|item| QString::from(item.stamp.split('T').next().unwrap_or("")))
+            .map(|item| QString::from(crate::format::date_only(&item.stamp)))
             .collect();
         let sizes: QStringList = items
             .iter()
@@ -158,7 +158,7 @@ impl qobject::SideritaController {
                 } else {
                     QString::from(
                         std::fs::metadata(&item.path)
-                            .map(|meta| format_size(meta.len()))
+                            .map(|meta| crate::format::size(meta.len()))
                             .unwrap_or_default()
                             .as_str(),
                     )

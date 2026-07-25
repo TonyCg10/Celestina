@@ -9,7 +9,7 @@ use siderita_core::{PublishOutcome, ScanResult, WatchState};
 use siderita_qt::RowKind;
 
 use super::qobject;
-use super::{format_size, format_system_time, kind_key, row_subtitle, PendingNav};
+use super::{kind_key, row_subtitle, PendingNav};
 
 impl qobject::SideritaController {
     /// Rescans the current location without a history change (refresh, initial).
@@ -238,7 +238,7 @@ impl qobject::SideritaController {
                 if row.kind() == RowKind::Directory {
                     QString::from("—")
                 } else {
-                    QString::from(format_size(row.size()).as_str())
+                    QString::from(crate::format::size(row.size()).as_str())
                 }
             })
             .collect();
@@ -248,7 +248,7 @@ impl qobject::SideritaController {
             .map(|row| {
                 QString::from(
                     row.modified()
-                        .map(format_system_time)
+                        .map(crate::format::system_time)
                         .unwrap_or_default()
                         .as_str(),
                 )
@@ -315,7 +315,7 @@ impl qobject::SideritaController {
             })
             .unwrap_or(0);
         let folder_size = if total_size > 0 {
-            format_size(total_size)
+            crate::format::size(total_size)
         } else {
             String::new()
         };

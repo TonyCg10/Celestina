@@ -1367,7 +1367,7 @@ impl qobject::SideritaController {
                 .and_then(|i| self.rust().trash_entries.get(i))
                 .map(|e| {
                     let origin = e.original.to_string_lossy();
-                    let date = format_trash_date(&e.deletion_date);
+                    let date = crate::format::trash_date(&e.deletion_date);
                     QString::from(
                         if date.is_empty() {
                             origin.into_owned()
@@ -1383,7 +1383,7 @@ impl qobject::SideritaController {
             return QString::default();
         };
         let kind = kind_label(row.kind());
-        let date = row.modified().map(format_system_time).unwrap_or_default();
+        let date = row.modified().map(crate::format::system_time).unwrap_or_default();
         // Folders show kind + date (their entry size is not meaningful); files
         // show kind · size · date.
         let detail = if row.kind() == RowKind::Directory {
@@ -1393,7 +1393,7 @@ impl qobject::SideritaController {
                 format!("{kind} · {date}")
             }
         } else {
-            let size = format_size(row.size());
+            let size = crate::format::size(row.size());
             if date.is_empty() {
                 format!("{kind} · {size}")
             } else {
@@ -2050,7 +2050,7 @@ impl qobject::SideritaController {
         match props.size {
             Some(size) => self
                 .as_mut()
-                .set_prop_size(QString::from(format_size_full(size).as_str())),
+                .set_prop_size(QString::from(crate::format::size_full(size).as_str())),
             None => {
                 self.as_mut().set_prop_size(QString::from("Calculando…"));
                 let token = CancellationToken::new();
@@ -2063,7 +2063,7 @@ impl qobject::SideritaController {
                     if token.is_cancelled() {
                         return;
                     }
-                    let text = format_size_full(size);
+                    let text = crate::format::size_full(size);
                     let _ = qt.queue(
                         move |mut controller: Pin<&mut qobject::SideritaController>| {
                             // Ignore if the panel has since moved to another entry.
@@ -2773,27 +2773,6 @@ const PLACE_CATALOGUE: &[&str] = &[
     "TRASH",
 ];
 
-/// How many recently-used entries Recientes shows. The desktop's file holds
-/// hundreds; a list that long is not "recent" and every row costs a `stat`.
-/// Presents a spec `YYYY-MM-DDThh:mm:ss` Trash deletion date as `YYYY-MM-DD
-/// hh:mm` for the Trash view. Anything not in that shape is passed through, so a
-/// malformed record still shows what it has rather than nothing.
-fn format_trash_date(raw: &str) -> String {
-    if raw.is_empty() {
-        return String::new();
-    }
-    let Some((date, time)) = raw.split_once('T') else {
-        return raw.to_owned();
-    };
-    // Keep hh:mm; drop the seconds only when the time actually carries them
-    // (two colons), so an already-short hh:mm is left intact.
-    let hm = match (time.find(':'), time.rfind(':')) {
-        (Some(first), Some(last)) if first != last => &time[..last],
-        _ => time,
-    };
-    format!("{date} {hm}")
-}
-
 const RECENT_LIMIT: usize = 100;
 
 fn favorite_entry_list(paths: &std::collections::BTreeSet<String>) -> QStringList {
@@ -2833,7 +2812,7 @@ fn row_subtitle(row: &EntryRow) -> String {
         return "Carpeta".to_owned();
     }
 
-    format!("{} · {}", kind_label(row.kind()), format_size(row.size()))
+    format!("{} · {}", kind_label(row.kind()), crate::format::size(row.size()))
 }
 
 /// The containing folder of a search hit, shown as its subtitle so a result
@@ -2843,41 +2822,6 @@ fn search_hit_parent(path: &str) -> String {
         .parent()
         .map(|parent| parent.to_string_lossy().into_owned())
         .unwrap_or_default()
-}
-
-fn format_size(bytes: u64) -> String {
-    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
-    let mut value = bytes as f64;
-    let mut unit = 0;
-    while value >= 1024.0 && unit < UNITS.len() - 1 {
-        value /= 1024.0;
-        unit += 1;
-    }
-
-    if unit == 0 {
-        format!("{bytes} {}", UNITS[unit])
-    } else {
-        format!("{value:.1} {}", UNITS[unit])
-    }
-}
-
-/// Formats a `SystemTime` as local `YYYY-MM-DD HH:MM`, reusing the properties
-/// panel's formatter. An empty string for a pre-epoch/absent time.
-fn format_system_time(time: std::time::SystemTime) -> String {
-    match time.duration_since(std::time::UNIX_EPOCH) {
-        Ok(elapsed) => crate::properties::format_time(elapsed.as_secs() as i64),
-        Err(_) => String::new(),
-    }
-}
-
-/// A human size plus the exact byte count, for the properties panel — the byte
-/// count is dropped below 1 KiB where it would just repeat the human size.
-fn format_size_full(bytes: u64) -> String {
-    if bytes < 1024 {
-        format!("{bytes} bytes")
-    } else {
-        format!("{} · {bytes} bytes", format_size(bytes))
-    }
 }
 
 #[cfg(test)]
@@ -2913,22 +2857,6 @@ mod tests {
             resolve_location("filename.txt", Some(Path::new("/base"))),
             PathBuf::from("/base/filename.txt")
         );
-    }
-
-    #[test]
-    fn format_trash_date_is_compact_and_lenient() {
-        assert_eq!(
-            super::format_trash_date("2026-07-21T18:04:09"),
-            "2026-07-21 18:04"
-        );
-        // No seconds → left as-is (just the T replaced).
-        assert_eq!(
-            super::format_trash_date("2026-07-21T18:04"),
-            "2026-07-21 18:04"
-        );
-        assert_eq!(super::format_trash_date(""), "");
-        // A malformed value is passed through rather than dropped.
-        assert_eq!(super::format_trash_date("desconocido"), "desconocido");
     }
 
     #[test]
