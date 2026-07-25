@@ -3,11 +3,12 @@
 > Part of the [Celestina suite](../ROADMAP.md). This roadmap covers the phone
 > link only. Checklist legend: `[x]` done · `[ ]` planned. "Implemented" is not
 > "verified": pairing and every plugin must be proven against a real device on a
-> real network, tracked as its own goal. `magnetita-core` has begun — the packet
-> envelope, identity, the pairing state machine and the device session (the pure
-> brain the transport drives), offline-tested (32 tests); the live transport and
-> everything past it
-> awaits the real phone.
+> real network, tracked as its own goal. **CP0 is done.** The from-scratch Rust
+> transport (`magnetita-net` — certificate, trust store, TLS/TOFU, discovery, the
+> v8 link, the device runtime) and the `magnetitad` daemon **pair live and stably
+> with the real phone** (a Galaxy S25 Ultra, protocol 8) and reconnect as
+> already-trusted with no re-pair. 53 offline tests, **no async runtime**, no C
+> toolchain, `unsafe` forbidden. CP1 — the app window — is next.
 
 ## Overview
 
@@ -31,7 +32,7 @@ does **not** include an Android app of its own. Interoperability on the wire is 
 hard contract — Magnetita never forks the protocol into private glue.
 
 **The protocol, briefly.** Four layers: (1) **discovery** — an identity packet
-(`deviceId`, `deviceName`, `deviceType`, `protocolVersion` `7`, `tcpPort`, and
+(`deviceId`, `deviceName`, `deviceType`, `protocolVersion` `8`, `tcpPort`, and
 `incomingCapabilities`/`outgoingCapabilities`) broadcast over UDP on port 1716
 (range 1716–1764); a peer connects back over TCP. (2) **packets** —
 line-delimited JSON `NetworkPacket`s `{ id, type: "kdeconnect.<name>", body }`,
@@ -71,14 +72,17 @@ forward here.
 - **Rust core, thin bridge, QML UI** — the suite stack. Protocol domain and
   transport are pure Rust and testable without Qt or a live phone; the app is a
   CXX-Qt client over `celestina-style`.
-- **The crypto/async closure is the one deliberately expensive dependency.**
-  TLS (`rustls`), self-signed certs (`rcgen`) and an async runtime are the
-  heaviest closure the suite has taken on. It is inherent (you cannot speak TLS
-  to a phone cheaply; Valent and KDE Connect pay it too), earned by a proven
-  daily need, and amortized as shared session infrastructure like the Qt
-  runtime. It is measured, not smuggled: closure size **and idle wakeups** (a
-  long-lived service) are in the budget. `unsafe_code` stays forbidden (workspace
-  lint) — `rustls`/`rcgen` keep us in safe Rust.
+- **The crypto closure is the one deliberately expensive dependency — and it
+  came in leaner than feared.** TLS (`rustls` with the `ring` provider) and
+  self-signed certs (`rcgen`) are the heaviest closure the suite has taken on. It
+  is inherent (you cannot speak TLS to a phone cheaply; Valent and KDE Connect pay
+  it too), earned by a proven daily need, and amortized as shared session
+  infrastructure. Kept lean at CP0: **no async runtime** — blocking `std::net` on
+  a thread, not tokio (one phone does not need a reactor) — and **no C toolchain**
+  (`ring`/`rcgen` pinned to their pure-Rust builds, never aws-lc-rs/cmake), so a
+  full TLS stack is ~15 crates. It is measured, not smuggled: closure size **and
+  idle wakeups** (a long-lived service) are in the budget. `unsafe_code` stays
+  forbidden (workspace lint) — `rustls`/`rcgen`/`ring` keep our code in safe Rust.
 - **Trust-on-first-use with a shown verification key.** Certs are pinned on
   pairing and verified on every reconnect; the pairing surface shows a key
   derived from both certificates so a human can confirm no MITM.
@@ -107,17 +111,26 @@ client) before anything is built on top of it.
       `Reaction` of packets to send and events to log), the connection-event
       vocabulary the log reads, and our desktop identity/capabilities: pure, no
       clock, 11 more tests. The brain decides; the transport does the I/O
-- [ ] `magnetita-net` — UDP identity broadcast + listen; TCP accept/connect
-- [ ] `magnetita-net` — TLS upgrade with a self-signed cert (`rcgen`) and a
-      custom `rustls` verifier implementing TOFU pinning; per-device trust store
-      persisted on disk
-- [ ] `magnetita-net` — structured connection events and a *reason* on every
-      failure (no reply, cert changed, pairing rejected/timed out), so CP1's log
-      has something truthful to show
-- [ ] `magnetitad` — CLI service: discover, pair, ping round-trip, clean
-      shutdown/join of the async runtime
-- [ ] **Verified** — pairs with the stock Android app and pings both ways on a
-      real network; reconnect re-verifies the pinned cert; unpair is honored
+- [x] `magnetita-net` — UDP identity broadcast + listen (`discovery`); TCP
+      connect (`link::connect`, the connector/TLS-server role) and accept
+      (`link::accept`); the exact KDE Connect **v8** handshake — plaintext identity
+      with `targetDeviceId`, then encrypted re-exchange for protocol ≥ 8
+- [x] `magnetita-net` — TLS upgrade with a self-signed cert (`rcgen`) and custom
+      `rustls` verifiers doing real handshake-signature checks but authority-free
+      TOFU pinning (`tls`, `cert`); per-device trust store persisted on disk
+      (`trust`, three verdicts: trusted / unknown / changed-and-refused)
+- [x] `magnetita-net` — structured connection events (`ConnectionEvent`) and a
+      typed *reason* on every failure (`LostReason`: no reply, cert changed,
+      pairing rejected/timed out), so CP1's log has something truthful to show
+- [x] `magnetitad` — headless service: discover, dial, pair (phone-driven,
+      auto-accepted), ping send; blocking-thread runtime, no async to join
+- [x] **Verified (pairing + reconnect)** — pairs with the stock Android app on a
+      real network (Galaxy S25 Ultra) and holds a stable link; a restart reconnects
+      and **re-verifies the pinned cert** as already-trusted with no re-pair; a
+      changed cert would be refused; unpair is forgotten from the trust store
+- [ ] **Verified (ping both ways)** — confirm `kdeconnect.ping` is seen on the
+      phone and one sent *from* the phone is logged (send path is live; the
+      round-trip is the last CP0 check)
 - [ ] **Measured** — installed closure size and service idle wakeups reported and
       inside a declared budget
 
