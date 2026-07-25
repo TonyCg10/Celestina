@@ -30,6 +30,24 @@ fn main() {
     // bridge declares its free functions. `cpp/` is put on the compiler's include
     // path so both the generated bridge code and clipboard.cpp resolve
     // "siderita/clipboard.h".
+    // Los QML también, y explícitamente: en cuanto este script imprime un solo
+    // `rerun-if-changed`, cargo deja de vigilar el paquete entero y sólo mira lo
+    // que se le nombra. Sin estas líneas una edición de QML compilaba "bien" y
+    // no entraba en el binario — un rato perdido persiguiendo un cambio que
+    // estaba en el fichero y no en la aplicación.
+    for qml in [
+        "qml/i1/CelestinaTheme.qml",
+        "qml/i1/GlassSurface.qml",
+        "qml/i1/GlassCard.qml",
+        "qml/i1/GlassContextMenu.qml",
+        "qml/i1/GlassMenuItem.qml",
+        "qml/i1/MainI1.qml",
+        "qml/i1/PickerWindow.qml",
+        "qml/i1/icons.qrc",
+    ] {
+        println!("cargo::rerun-if-changed={qml}");
+    }
+
     println!("cargo::rerun-if-changed=cpp/clipboard.cpp");
     println!("cargo::rerun-if-changed=cpp/siderita/clipboard.h");
     println!("cargo::rerun-if-changed=cpp/entrymodel.cpp");

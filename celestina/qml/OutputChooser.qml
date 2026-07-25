@@ -39,10 +39,12 @@ Window {
     // Cabecera + fila + un respiro real antes de los botones + el pie.
     readonly property int cardHeight: 84 + rowHeight + 26 + 64
     // Justo lo que ocupan las tarjetas más sus márgenes: sin hueco sobrante a la
-    // derecha de la última pantalla. El suelo es lo que miden los dos botones.
+    // derecha de la última pantalla. Los 12 de más son el aire que la fila se
+    // reserva por dentro para que el borde de la tarjeta marcada no muera
+    // pegado al recorte — la primera y la última se cortaban a lo largo.
     readonly property int cardWidth: Math.min(
             Math.max(380, screens.length * tileWidth
-                          + Math.max(0, screens.length - 1) * tileSpacing + 56),
+                          + Math.max(0, screens.length - 1) * tileSpacing + 68),
             Screen.width > 0 ? Screen.width - 120 : 1200)
 
     width: cardWidth
@@ -112,6 +114,11 @@ Window {
             height: chooser.rowHeight
             orientation: ListView.Horizontal
             spacing: chooser.tileSpacing
+            // El recorte se lleva lo que toque su borde: estos márgenes son los
+            // que dejan que el marcado se dibuje entero por los cuatro lados.
+            leftMargin: 6
+            rightMargin: 6
+            topMargin: 6
             clip: true
             model: chooser.screens
             currentIndex: chooser.selected

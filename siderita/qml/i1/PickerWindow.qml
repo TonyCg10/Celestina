@@ -76,6 +76,13 @@ Window {
         target: controller
         function onRowsReady(names, tokens, kinds, subtitles, paths, sections, sizes, dates) {
             entryModel.setRows(names, tokens, kinds, subtitles, paths, sections, sizes, dates)
+            // Al margen superior hay que ir: una Flickable no recoloca su
+            // contenido cuando el margen cambia o cuando llegan filas nuevas, y
+            // la primera fila nacía debajo de la pastilla en vez de bajo ella.
+            // Además una carpeta nueva se lee desde arriba.
+            Qt.callLater(function() {
+                entryGrid.contentY = entryGrid.originY - entryGrid.topMargin
+            })
         }
     }
 
@@ -233,48 +240,243 @@ Window {
     }
 
     // ── Chrome ───────────────────────────────────────────────────────────
-    Rectangle {
+    // La misma anatomía que la ventana principal: lienzo negro, una caja de
+    // contenido que no lo es, y los controles como pastillas que flotan encima
+    // en vez de barras que le roban sitio al contenido. Un diálogo que no se
+    // parece a la aplicación que lo sirve es un diálogo prestado.
+    Item {
         anchors.fill: parent
-        color: CelestinaTheme.canvas
 
-        // Header: where we are, and (for a save) what it will be called.
         Rectangle {
-            id: header
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
-            height: picker.saving ? 104 : 60
-            color: CelestinaTheme.canvasRaised
+            id: contentBox
+            x: 12
+            y: 12
+            width: parent.width - 24
+            height: parent.height - 24
+            radius: CelestinaTheme.radiusLg
+            color: CelestinaTheme.surface
+            border.width: 1
+            border.color: CelestinaTheme.border
+            clip: true
 
-            Text {
-                id: askedBy
-                x: 16
-                y: 10
-                width: parent.width - 32
-                text: picker.appId.length > 0
-                      ? "Para " + picker.appId : "Solicitado por otra aplicación"
-                color: CelestinaTheme.textMuted
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontMini
-                elide: Text.ElideRight
+            // La rejilla: la vista de un selector de archivos es de
+            // reconocimiento, no de lectura — se busca *esa* foto, y una
+            // miniatura la encuentra antes que su nombre.
+            GridView {
+                id: entryGrid
+                anchors.fill: parent
+                anchors.margins: 10
+                clip: true
+                model: entryModel
+                currentIndex: -1
+                cacheBuffer: 600
+                boundsBehavior: Flickable.StopAtBounds
+                focus: true
+                // El sitio de las pastillas se reserva por dentro, así el
+                // contenido pasa por detrás al desplazarse pero nunca se queda
+                // escondido al principio ni al final. Con márgenes y no con
+                // cabecera/pie: en una GridView el espaciador no desplaza la
+                // primera fila y las celdas nacían debajo de la pastilla.
+                topMargin: picker.saving ? 116 : 70
+                bottomMargin: 72
+
+                // Columnas que llenan el ancho: el hueco sobrante se reparte
+                // entre ellas en vez de amontonarse a la derecha.
+                readonly property int cellSide: Math.round(
+                        116 * Math.max(picker.iconScale, picker.textScale))
+                readonly property int columns: Math.max(1, Math.floor(width / cellSide))
+                cellWidth: Math.floor(width / columns)
+                // El alto lo dicta lo que hay dentro — icono, hueco, dos líneas
+                // de nombre y su respiro — y no el ancho de la columna. Es la
+                // misma cuenta que la cuadrícula principal; midiendo por el
+                // ancho, el recuadro de selección arrastraba un vacío abajo.
+                cellHeight: Math.round(72 * picker.iconScale) + 8
+                            + Math.round(CelestinaTheme.fontCaption * 2.9 * picker.textScale)
+                            + 20
+
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                Keys.onPressed: function(event) {
+                    if (event.key === Qt.Key_Escape) {
+                        picker.cancel()
+                    } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                        if (currentIndex >= 0)
+                            picker.activate(currentIndex)
+                    } else if (event.key === Qt.Key_Backspace) {
+                        controller.goUp()
+                    } else {
+                        return
+                    }
+                    event.accepted = true
+                }
+
+                delegate: Item {
+                    id: cell
+
+                    required property int index
+                    required property string name
+                    required property string token
+                    required property string kind
+                    required property string path
+
+                    readonly property bool isDirectory: kind === "directory"
+                    readonly property bool selectable: picker.directory ? isDirectory : true
+                    readonly property bool chosen: picker.isChosen(token)
+                    // Sólo lo que el proveedor de miniaturas sabe servir; el
+                    // resto se queda con su icono de tipo, que ya es
+                    // informativo.
+                    readonly property bool previewable: !isDirectory
+                            && /\.(png|jpe?g|gif|webp|bmp|svg|avif|tiff?|ico|heic)$/i.test(name)
+
+                    width: entryGrid.cellWidth
+                    height: entryGrid.cellHeight
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: 4
+                        radius: CelestinaTheme.radiusSm
+                        color: cell.chosen ? CelestinaTheme.surfaceSelected
+                               : cellMouse.containsMouse ? CelestinaTheme.surfaceHover
+                               : "transparent"
+                        border.width: cell.chosen ? 1 : 0
+                        border.color: CelestinaTheme.borderStrong
+                        Behavior on color {
+                            ColorAnimation { duration: CelestinaTheme.motionFast }
+                        }
+                    }
+
+                    Rectangle {
+                        id: tile
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        y: 10
+                        width: Math.round(72 * picker.iconScale)
+                        height: width
+                        radius: CelestinaTheme.radiusSm
+                        clip: true
+                        opacity: cell.selectable ? 1 : 0.4
+                        color: cell.isDirectory ? CelestinaTheme.glyphDirectory
+                                                : CelestinaTheme.glyphFile
+
+                        IconImage {
+                            anchors.centerIn: parent
+                            visible: !preview.ready
+                            width: Math.round(54 * picker.iconScale)
+                            height: width
+                            sourceSize: Qt.size(width, width)
+                            name: cell.isDirectory ? "folder" : "text-x-generic"
+                            source: CelestinaTheme.fallbackIcon(
+                                        cell.isDirectory ? "folder" : "file")
+                        }
+
+                        // La caché compartida de freedesktop, la misma que lee
+                        // la ventana principal: si hay miniatura, aparece; si
+                        // no, el icono se queda y nadie espera por nada.
+                        Image {
+                            id: preview
+                            anchors.fill: parent
+                            anchors.margins: 1
+                            readonly property bool ready: cell.previewable
+                                                          && status === Image.Ready
+                            visible: opacity > 0
+                            opacity: ready ? 1 : 0
+                            source: cell.previewable
+                                    ? "image://thumb/" + encodeURIComponent(cell.path) : ""
+                            sourceSize.width: 256
+                            sourceSize.height: 256
+                            fillMode: Image.PreserveAspectCrop
+                            asynchronous: true
+                            cache: true
+                            smooth: true
+                            Behavior on opacity {
+                                NumberAnimation { duration: CelestinaTheme.motionNormal }
+                            }
+                        }
+                    }
+
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        y: tile.y + tile.height + 8
+                        width: parent.width - 14
+                        horizontalAlignment: Text.AlignHCenter
+                        text: cell.name
+                        color: cell.selectable ? CelestinaTheme.text
+                                               : CelestinaTheme.textMuted
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: Math.round(
+                                CelestinaTheme.fontCaption * picker.textScale)
+                        elide: Text.ElideRight
+                        maximumLineCount: 2
+                        wrapMode: Text.Wrap
+                    }
+
+                    MouseArea {
+                        id: cellMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: function(mouse) {
+                            entryGrid.currentIndex = cell.index
+                            entryGrid.forceActiveFocus()
+                            if (!cell.selectable)
+                                return
+                            if (picker.multiple && (mouse.modifiers & Qt.ControlModifier))
+                                picker.toggleChosen(cell.token)
+                            else
+                                picker.selectOnly(cell.token)
+                            if (picker.saving && !cell.isDirectory)
+                                nameField.text = cell.name
+                        }
+                        onDoubleClicked: picker.activate(cell.index)
+                    }
+                }
             }
+        }
 
-            Text {
-                x: 16
-                y: askedBy.y + askedBy.height + 2
-                width: parent.width - 220
-                text: controller.currentPath
-                color: CelestinaTheme.text
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontBody
-                elide: Text.ElideMiddle
+        // ── Las pastillas de arriba ──────────────────────────────────────
+        // Quién pregunta y dónde estamos, en la misma pastilla: son la misma
+        // frase — "esta aplicación te está pidiendo algo de aquí".
+        Item {
+            id: topPills
+            x: contentBox.x + 12
+            y: contentBox.y + 12
+            width: contentBox.width - 24
+            height: picker.saving ? 100 : 54
+
+            GlassPill {
+                id: pathPill
+                width: parent.width - navRow.width - 12
+                height: 54
+                radius: CelestinaTheme.radiusSm
+
+                Text {
+                    id: askedBy
+                    x: 14
+                    y: 9
+                    width: parent.width - 28
+                    text: picker.appId.length > 0
+                          ? "Para " + picker.appId : "Solicitado por otra aplicación"
+                    color: CelestinaTheme.textMuted
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontMini
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    x: 14
+                    y: askedBy.y + askedBy.height + 2
+                    width: parent.width - 28
+                    text: controller.currentPath
+                    color: CelestinaTheme.text
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontBody
+                    elide: Text.ElideMiddle
+                }
             }
 
             Row {
+                id: navRow
                 anchors.right: parent.right
-                anchors.rightMargin: 14
-                y: askedBy.y + askedBy.height - 2
-                spacing: 6
+                y: 10
+                spacing: 8
 
                 PickerButton {
                     text: "↑"
@@ -289,216 +491,44 @@ Window {
                 }
             }
 
+            // Guardar: el nombre va debajo, en su propia pastilla.
             TextField {
                 id: nameField
                 visible: picker.saving
-                x: 16
-                width: parent.width - 32
-                height: 32
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: 8
+                width: parent.width
+                height: 38
+                y: 62
                 placeholderText: "Nombre del archivo"
                 color: CelestinaTheme.text
                 font.family: CelestinaTheme.sansFamily
                 font.pixelSize: CelestinaTheme.fontBody
-                leftPadding: 10
-                rightPadding: 10
+                leftPadding: 14
+                rightPadding: 14
                 onAccepted: if (picker.canAccept) picker.answer(picker.chosenPaths())
-                background: Rectangle {
+                background: GlassPill {
                     radius: CelestinaTheme.radiusSm
-                    color: CelestinaTheme.inputFill
+                    fill: CelestinaTheme.inputFill
                     border.width: 1
                     border.color: nameField.activeFocus ? CelestinaTheme.focus
-                                                        : CelestinaTheme.inputBorder
+                                                        : "transparent"
                 }
             }
         }
 
-        // La rejilla: la vista de un selector de archivos es de reconocimiento,
-        // no de lectura — se busca *esa* foto, y una miniatura la encuentra
-        // antes que su nombre. Celdas grandes por la misma razón.
-        GridView {
-            id: entryGrid
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: header.bottom
-            anchors.bottom: footer.top
-            anchors.margins: 10
-            clip: true
-            model: entryModel
-            currentIndex: -1
-            cacheBuffer: 600
-            boundsBehavior: Flickable.StopAtBounds
-            focus: true
-            // Columnas que llenan el ancho: el hueco sobrante se reparte entre
-            // ellas en vez de amontonarse a la derecha.
-            // Mismas proporciones que la cuadrícula principal: la celda crece
-            // con la escala de iconos y la de texto, la que sea mayor.
-            readonly property int cellSide: Math.round(
-                    116 * Math.max(picker.iconScale, picker.textScale))
-            readonly property int columns: Math.max(1, Math.floor(width / cellSide))
-            cellWidth: Math.floor(width / columns)
-            cellHeight: cellSide + Math.round(
-                    CelestinaTheme.fontCaption * 2.6 * picker.textScale) + 14
-            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-
-            Keys.onPressed: function(event) {
-                if (event.key === Qt.Key_Escape) {
-                    picker.cancel()
-                } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                    if (currentIndex >= 0)
-                        picker.activate(currentIndex)
-                } else if (event.key === Qt.Key_Backspace) {
-                    controller.goUp()
-                } else {
-                    return
-                }
-                event.accepted = true
-            }
-
-            delegate: Item {
-                id: cell
-
-                required property int index
-                required property string name
-                required property string token
-                required property string kind
-                required property string path
-
-                readonly property bool isDirectory: kind === "directory"
-                readonly property bool selectable: picker.directory ? isDirectory : true
-                readonly property bool chosen: picker.isChosen(token)
-                // Sólo lo que el proveedor de miniaturas sabe servir; el resto
-                // se queda con su icono de tipo, que ya es informativo.
-                readonly property bool previewable: !isDirectory
-                        && /\.(png|jpe?g|gif|webp|bmp|svg|avif|tiff?|ico|heic)$/i.test(name)
-
-                width: entryGrid.cellWidth
-                height: entryGrid.cellHeight
-
-                Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: 4
-                    radius: CelestinaTheme.radiusSm
-                    color: cell.chosen ? CelestinaTheme.surfaceSelected
-                           : cellMouse.containsMouse ? CelestinaTheme.surfaceHover
-                           : "transparent"
-                    border.width: cell.chosen ? 1 : 0
-                    border.color: CelestinaTheme.borderStrong
-                    Behavior on color {
-                        ColorAnimation { duration: CelestinaTheme.motionFast }
-                    }
-                }
-
-                Rectangle {
-                    id: tile
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    y: 12
-                    width: Math.round(72 * picker.iconScale)
-                    height: width
-                    radius: CelestinaTheme.radiusSm
-                    clip: true
-                    opacity: cell.selectable ? 1 : 0.4
-                    color: cell.isDirectory ? CelestinaTheme.glyphDirectory
-                                            : CelestinaTheme.glyphFile
-
-                    IconImage {
-                        anchors.centerIn: parent
-                        visible: !preview.ready
-                        width: Math.round(54 * picker.iconScale)
-                        height: width
-                        sourceSize: Qt.size(width, width)
-                        name: cell.isDirectory ? "folder" : "text-x-generic"
-                        source: CelestinaTheme.fallbackIcon(
-                                    cell.isDirectory ? "folder" : "file")
-                    }
-
-                    // La caché compartida de freedesktop, la misma que lee la
-                    // ventana principal: si hay miniatura, aparece; si no, el
-                    // icono se queda y nadie espera por nada.
-                    Image {
-                        id: preview
-                        anchors.fill: parent
-                        anchors.margins: 1
-                        readonly property bool ready: cell.previewable
-                                                      && status === Image.Ready
-                        visible: opacity > 0
-                        opacity: ready ? 1 : 0
-                        source: cell.previewable
-                                ? "image://thumb/" + encodeURIComponent(cell.path) : ""
-                        sourceSize.width: 256
-                        sourceSize.height: 256
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                        cache: true
-                        smooth: true
-                        Behavior on opacity {
-                            NumberAnimation { duration: CelestinaTheme.motionNormal }
-                        }
-                    }
-                }
-
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    y: tile.y + tile.height + 8
-                    width: parent.width - 14
-                    horizontalAlignment: Text.AlignHCenter
-                    text: cell.name
-                    color: cell.selectable ? CelestinaTheme.text
-                                           : CelestinaTheme.textMuted
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: Math.round(
-                            CelestinaTheme.fontCaption * picker.textScale)
-                    elide: Text.ElideRight
-                    maximumLineCount: 2
-                    wrapMode: Text.Wrap
-                }
-
-                MouseArea {
-                    id: cellMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: function(mouse) {
-                        entryGrid.currentIndex = cell.index
-                        entryGrid.forceActiveFocus()
-                        if (!cell.selectable)
-                            return
-                        if (picker.multiple && (mouse.modifiers & Qt.ControlModifier))
-                            picker.toggleChosen(cell.token)
-                        else
-                            picker.selectOnly(cell.token)
-                        if (picker.saving && !cell.isDirectory)
-                            nameField.text = cell.name
-                    }
-                    onDoubleClicked: picker.activate(cell.index)
-                }
-            }
-        }
-
-        // Footer: the two buttons an application's dialog is allowed to have.
-        Rectangle {
-            id: footer
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            height: 72
-            color: CelestinaTheme.canvasRaised
-
-            Text {
-                x: 16
-                anchors.verticalCenter: parent.verticalCenter
-                text: picker.multiple && picker.chosenCount > 1
-                      ? picker.chosenCount + " seleccionados" : ""
-                color: CelestinaTheme.textMuted
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontCaption
-            }
+        // ── Las pastillas de abajo ───────────────────────────────────────
+        // Las dos únicas acciones que un diálogo ajeno puede ofrecer, y el
+        // filtro de tipos que el que pregunta pidió.
+        Item {
+            id: bottomPills
+            x: contentBox.x + 12
+            width: contentBox.width - 24
+            height: 38
+            y: contentBox.y + contentBox.height - height - 12
 
             ComboBox {
                 id: filterCombo
                 visible: picker.filterRows.length > 1
                 anchors.left: parent.left
-                anchors.leftMargin: 22
                 anchors.verticalCenter: parent.verticalCenter
                 width: Math.min(300, parent.width * 0.4)
                 height: 34
@@ -509,7 +539,7 @@ Window {
                 onActivated: picker.applyFilter(currentIndex)
 
                 contentItem: Text {
-                    leftPadding: 10
+                    leftPadding: 12
                     rightPadding: filterCombo.indicator.width + 6
                     text: filterCombo.displayText
                     color: CelestinaTheme.text
@@ -518,20 +548,27 @@ Window {
                     elide: Text.ElideRight
                 }
 
-                background: Rectangle {
-                    radius: CelestinaTheme.radiusSm
-                    color: filterCombo.hovered ? CelestinaTheme.surfaceHover
-                                               : CelestinaTheme.controlFill
-                    border.width: 1
-                    border.color: CelestinaTheme.border
+                background: GlassPill {
+                    fill: filterCombo.hovered ? CelestinaTheme.surfaceHover
+                                              : CelestinaTheme.controlFill
                 }
+            }
+
+            Text {
+                anchors.left: filterCombo.visible ? filterCombo.right : parent.left
+                anchors.leftMargin: filterCombo.visible ? 14 : 4
+                anchors.verticalCenter: parent.verticalCenter
+                text: picker.multiple && picker.chosenCount > 1
+                      ? picker.chosenCount + " seleccionados" : ""
+                color: CelestinaTheme.textMuted
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: CelestinaTheme.fontCaption
             }
 
             Row {
                 anchors.right: parent.right
-                anchors.rightMargin: 22
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 12
+                spacing: 10
 
                 PickerButton {
                     text: "Cancelar"
@@ -547,8 +584,35 @@ Window {
         }
     }
 
+    // ── GlassPill ────────────────────────────────────────────────────────
+    // Cristal debajo, tinte de estado encima: los tokens de relleno son
+    // translúcidos, así que el tinte deja ver el desenfoque en vez de taparlo.
+    // Captura mientras haya rejilla que desenfocar debajo.
+    component GlassPill: Rectangle {
+        id: glassPill
 
+        property color fill: CelestinaTheme.controlFill
 
+        radius: CelestinaTheme.radiusSm
+        color: "transparent"
+
+        GlassSurface {
+            anchors.fill: parent
+            backdropSource: entryGrid
+            captureEnabled: entryGrid.contentHeight > entryGrid.height
+            liveCapture: true
+            cornerRadius: glassPill.radius
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: glassPill.radius
+            color: glassPill.fill
+            Behavior on color {
+                ColorAnimation { duration: CelestinaTheme.motionFast }
+            }
+        }
+    }
 
     // A button local to the picker: the suite's PillButton lives inside
     // MainI1's root object and inline components cannot be reached across files.
@@ -576,21 +640,19 @@ Window {
             verticalAlignment: Text.AlignVCenter
         }
 
-        background: Rectangle {
-            radius: CelestinaTheme.radiusSm
+        // Cristal también aquí: los botones flotan sobre la rejilla como los
+        // de la ventana principal, no sobre una banda que no existe.
+        background: GlassPill {
             opacity: control.enabled ? 1 : 0.5
-            color: control.primary
-                   ? (control.down ? Qt.darker(CelestinaTheme.accent, 1.18)
-                      : control.hovered ? Qt.darker(CelestinaTheme.accent, 1.08)
-                      : CelestinaTheme.accent)
-                   : (control.down ? CelestinaTheme.surfaceStrong
-                      : control.hovered ? CelestinaTheme.surfaceHover
-                      : CelestinaTheme.controlFill)
+            fill: control.primary
+                  ? (control.down ? Qt.darker(CelestinaTheme.accent, 1.18)
+                     : control.hovered ? Qt.darker(CelestinaTheme.accent, 1.08)
+                     : CelestinaTheme.accent)
+                  : (control.down ? CelestinaTheme.surfaceStrong
+                     : control.hovered ? CelestinaTheme.surfaceHover
+                     : CelestinaTheme.controlFill)
             border.width: control.primary ? 0 : 1
             border.color: CelestinaTheme.border
-            Behavior on color {
-                ColorAnimation { duration: CelestinaTheme.motionFast }
-            }
         }
     }
 }
