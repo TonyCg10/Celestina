@@ -23,6 +23,14 @@ const QML_FILES: &[&str] = &[
     // Vistas y ventanas.
     "qml/i1/Sidebar.qml",
     "qml/i1/FolderView.qml",
+    // Diálogos de la vista de carpeta.
+    "qml/i1/NamePromptDialog.qml",
+    "qml/i1/BatchRenameDialog.qml",
+    "qml/i1/ConflictDialog.qml",
+    "qml/i1/OpenWithDialog.qml",
+    "qml/i1/PropertiesDialog.qml",
+    "qml/i1/IconPickerDialog.qml",
+    "qml/i1/QuickLookView.qml",
     "qml/i1/Main.qml",
     "qml/i1/PickerWindow.qml",
 ];
