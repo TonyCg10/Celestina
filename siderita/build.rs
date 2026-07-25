@@ -20,7 +20,8 @@ const QML_FILES: &[&str] = &[
     "qml/i1/DragScrollEdge.qml",
     "qml/i1/SizeRow.qml",
     "qml/i1/PropRow.qml",
-    // Ventanas.
+    // Vistas y ventanas.
+    "qml/i1/FolderView.qml",
     "qml/i1/MainI1.qml",
     "qml/i1/PickerWindow.qml",
 ];
