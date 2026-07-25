@@ -13,8 +13,8 @@ ApplicationWindow {
     minimumWidth: 680
     minimumHeight: 480
     // Shown by Component.onCompleted, once the remembered size is on and the
-    // session's tabs exist — so the window never flashes at the default size
-    // and then jumps.
+    // first tab exists — so the window never flashes at the default size and
+    // then jumps.
     visible: false
     color: CelestinaTheme.canvas
     title: "Siderita · Iteración 1"
@@ -28,32 +28,8 @@ ApplicationWindow {
         id: sessionStore
     }
 
-    function persistSession() {
-        const paths = []
-        for (var i = 0; i < tabRepeater.count; i++) {
-            const holder = tabRepeater.itemAt(i)
-            if (!holder)
-                continue
-            // A tab that has not been shown yet has no current path — it still
-            // belongs to the session, under the folder it was restored with.
-            const path = holder.docController && holder.docController.currentPath.length > 0
-                       ? holder.docController.currentPath
-                       : holder.initialPath
-            if (path.length > 0)
-                paths.push(path)
-        }
-        if (paths.length > 0)
-            sessionStore.saveTabs(paths, window.currentTabIndex)
-    }
-
-    // Both are chatty while a window is dragged or a folder is loading, so they
-    // settle first and write once.
-    Timer {
-        id: sessionSaver
-        interval: 700
-        onTriggered: window.persistSession()
-    }
-
+    // Se posa antes de escribir: el tamaño cambia mucho mientras se arrastra la
+    // ventana, así que se guarda una sola vez al parar.
     Timer {
         id: geometrySaver
         interval: 700
@@ -158,7 +134,6 @@ ApplicationWindow {
     // override or a star was set in another tab; re-read the shared files so its
     // sidebar and its entries are truthful.
     onCurrentTabIndexChanged: {
-        sessionSaver.restart()
         if (window.activeController) {
             window.activeController.reloadBookmarks()
             window.activeController.reloadCustomIcons()
@@ -446,7 +421,6 @@ ApplicationWindow {
                                 tabsModel.setProperty(
                                     tabHolder.index, "title",
                                     window.tabTitle(doc.tabController.currentPath))
-                                sessionSaver.restart()
                             }
                         }
                     }
@@ -456,8 +430,8 @@ ApplicationWindow {
 
         Connections {
             target: tabRepeater
-            function onItemAdded() { window.tabsRevision++; sessionSaver.restart() }
-            function onItemRemoved() { window.tabsRevision++; sessionSaver.restart() }
+            function onItemAdded() { window.tabsRevision++ }
+            function onItemRemoved() { window.tabsRevision++ }
         }
     }
 
@@ -466,19 +440,13 @@ ApplicationWindow {
         window.width = sessionStore.savedWindowWidth()
         window.height = sessionStore.savedWindowHeight()
 
-        // A launch that names a folder is about that folder: the saved session
-        // does not talk over it, it just does not reopen this time.
-        const saved = sessionStore.launchPathGiven() ? [] : sessionStore.savedTabs()
-        if (saved.length === 0) {
-            tabsModel.append({ initialPath: "", title: "…" })
-            window.currentTabIndex = 0
-        } else {
-            for (var i = 0; i < saved.length; i++)
-                tabsModel.append({ initialPath: saved[i],
-                                   title: window.tabTitle(saved[i]) })
-            window.currentTabIndex = Math.max(
-                0, Math.min(tabsModel.count - 1, sessionStore.savedActiveTab()))
-        }
+        // Siempre abre en Inicio: una ventana nueva no vuelve a donde estabas la
+        // última vez. La pestaña vacía deja que el controlador resuelva Inicio, o
+        // la carpeta que se pase por línea de órdenes —esa sí manda—. El historial
+        // de atrás/adelante de los botones del ratón es de la sesión y se
+        // construye desde aquí, así que abrir en Inicio no lo rompe.
+        tabsModel.append({ initialPath: "", title: "…" })
+        window.currentTabIndex = 0
         // Activated by the portal to serve a file chooser: this process has no
         // main window, only the pickers it is asked for.
         window.visible = !portalService.portalMode()
