@@ -1,1 +1,0 @@
-../../../celestina-style/GlassSurface.qml

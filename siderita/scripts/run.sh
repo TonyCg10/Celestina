@@ -2,18 +2,18 @@
 
 set -eu
 
-# run-i1.sh — compila (si procede) y ejecuta el host Rust de la Primera
-# Iteración de Siderita (siderita-i1). Complementa scripts/measure-i1.sh.
+# run.sh — compila (si procede) y ejecuta el host Rust de la Primera
+# Iteración de Siderita (siderita). Complementa scripts/measure.sh.
 #
-# El QML de i1 se compila dentro del binario, así que el binario se puede
+# El QML se compila dentro del binario, así que el binario se puede
 # ejecutar desde cualquier directorio; RUTA es solo la carpeta a abrir.
 # Los cambios de QML solo se ven tras recompilar (no con --no-build).
 
 usage() {
     cat >&2 <<'EOF'
-uso: scripts/run-i1.sh [opciones] [RUTA]
+uso: scripts/run.sh [opciones] [RUTA]
 
-Compila (si procede) y ejecuta siderita-i1. Las opciones van antes de RUTA.
+Compila (si procede) y ejecuta siderita. Las opciones van antes de RUTA.
 RUTA es una carpeta a abrir (por defecto: HOME).
 
 opciones:
@@ -28,13 +28,13 @@ entorno:
   QT_QPA_PLATFORM  plataforma Qt (por defecto: wayland; --offscreen la fuerza)
 
 ejemplos:
-  scripts/run-i1.sh                 # compila release y abre HOME en Wayland
-  scripts/run-i1.sh ~/Descargas     # abre esa carpeta
-  scripts/run-i1.sh --no-build      # reejecuta el binario ya compilado
-  scripts/run-i1.sh --offscreen     # arranque headless de humo
-  scripts/run-i1.sh --minimal       # build con bootstrap de Qt
+  scripts/run.sh                 # compila release y abre HOME en Wayland
+  scripts/run.sh ~/Descargas     # abre esa carpeta
+  scripts/run.sh --no-build      # reejecuta el binario ya compilado
+  scripts/run.sh --offscreen     # arranque headless de humo
+  scripts/run.sh --minimal       # build con bootstrap de Qt
 
-para medir recursos: scripts/measure-i1.sh target/release/siderita-i1 [PID [SEG]]
+para medir recursos: scripts/measure.sh target/release/siderita [PID [SEG]]
 EOF
 }
 
@@ -61,7 +61,7 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 
-binary="$repo_root/target/$profile/siderita-i1"
+binary="$repo_root/target/$profile/siderita"
 
 if [ "$build" -eq 1 ]; then
     if ! command -v cargo >/dev/null 2>&1; then

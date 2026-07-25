@@ -2,23 +2,23 @@
 
 set -eu
 
-# stage-i1.sh — stage siderita-i1 into a self-contained prefix that runs without
+# stage.sh — stage siderita into a self-contained prefix that runs without
 # the system's Qt on QML_IMPORT_PATH, copying ONLY an allowlist of Qt QML modules
 # and plugins (Basic style + what the app actually imports) plus the transitive
 # Qt shared-library closure of the binary and every copied plugin .so.
 #
 # The point is the first-install closure the roadmap budgets at 250 MiB: after
 # staging, measure it with
-#   SIDERITA_CLOSURE_STAGE=<stage> scripts/measure-i1.sh <stage>/bin/siderita-i1
+#   SIDERITA_CLOSURE_STAGE=<stage> scripts/measure.sh <stage>/bin/siderita
 #
 # It does not vendor the system C/C++ runtime or the graphics stack (libwayland,
 # Mesa, fontconfig …) — those are assumed present, as on any target desktop.
 
 usage() {
     cat >&2 <<'EOF'
-uso: scripts/stage-i1.sh [--build] [STAGE_DIR]
+uso: scripts/stage.sh [--build] [STAGE_DIR]
 
-Copia siderita-i1 y su cierre Qt (lista blanca) a STAGE_DIR (por defecto
+Copia siderita y su cierre Qt (lista blanca) a STAGE_DIR (por defecto
 target/stage). Con --build compila release antes de copiar.
 
 entorno:
@@ -42,7 +42,7 @@ done
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 stage=${stage:-$repo_root/target/stage}
-binary=$repo_root/target/release/siderita-i1
+binary=$repo_root/target/release/siderita
 
 if [ "$build" -eq 1 ]; then
     ( cd "$repo_root" && cargo build --release --locked )
@@ -90,7 +90,7 @@ iconengines/libqsvgicon.so
 rm -rf "$stage"
 mkdir -p "$stage/bin" "$stage/lib" "$stage/qml" "$stage/plugins"
 
-cp "$binary" "$stage/bin/siderita-i1"
+cp "$binary" "$stage/bin/siderita"
 cp "$repo_root/org.celestina.Siderita.desktop" "$stage/" 2>/dev/null || true
 
 echo ">> copiando módulos QML (lista blanca)" >&2
@@ -129,7 +129,7 @@ resolve_qt_libs() {
 
 # Iterate to a fixed point: copied Qt libs can pull in more Qt libs.
 scan_objects=$(find "$stage/bin" "$stage/plugins" "$stage/qml" -type f \
-    \( -name '*.so' -o -name 'siderita-i1' \) 2>/dev/null)
+    \( -name '*.so' -o -name 'siderita' \) 2>/dev/null)
 copied=""
 while : ; do
     changed=0
@@ -146,7 +146,7 @@ while : ; do
 done
 
 # ── Launcher ─────────────────────────────────────────────────────────────────
-cat > "$stage/siderita-i1" <<'LAUNCH'
+cat > "$stage/siderita" <<'LAUNCH'
 #!/bin/sh
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 export LD_LIBRARY_PATH="$here/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
@@ -155,11 +155,11 @@ export QML2_IMPORT_PATH="$here/qml"
 export QT_PLUGIN_PATH="$here/plugins"
 export QT_QPA_PLATFORM_PLUGIN_PATH="$here/plugins/platforms"
 export QT_QUICK_CONTROLS_STYLE="${QT_QUICK_CONTROLS_STYLE:-Basic}"
-exec "$here/bin/siderita-i1" "$@"
+exec "$here/bin/siderita" "$@"
 LAUNCH
-chmod +x "$stage/siderita-i1"
+chmod +x "$stage/siderita"
 
 size=$(du -sh "$stage" | awk '{print $1}')
 echo ">> escenificado en $stage ($size)" >&2
-echo "   ejecuta: $stage/siderita-i1 [RUTA]" >&2
-echo "   mide el cierre: SIDERITA_CLOSURE_STAGE=$stage scripts/measure-i1.sh $stage/bin/siderita-i1" >&2
+echo "   ejecuta: $stage/siderita [RUTA]" >&2
+echo "   mide el cierre: SIDERITA_CLOSURE_STAGE=$stage scripts/measure.sh $stage/bin/siderita" >&2

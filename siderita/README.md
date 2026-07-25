@@ -15,10 +15,10 @@ or dotfiles manager inside it.
 Needs Rust and a development Qt visible to CXX-Qt.
 
 ```sh
-scripts/run-i1.sh                                    # build + run the I1 host on Wayland
+scripts/run.sh                                    # build + run the host on Wayland
 cargo build --release --locked                       # with a shared Qt visible to cxx-qt
 cargo build --release --locked --features qt-minimal # Qt bootstrap (CI / no system Qt)
-scripts/measure-i1.sh target/release/siderita-i1     # ELF inventory + process metrics
+scripts/measure.sh target/release/siderita     # ELF inventory + process metrics
 desktop-file-validate siderita.desktop
 ```
 
@@ -27,11 +27,11 @@ desktop-file-validate siderita.desktop
 | Path | Responsibility |
 |---|---|
 | `src/main.rs`, `src/controller.rs` | Rust host and the CXX-Qt QObject |
-| `qml/i1/Main.qml` | the Iteration-1 window: session, tabs, size scales |
-| `qml/i1/FolderView.qml` | one folder view per tab (the bulk of the UI) |
-| `qml/i1/Sidebar.qml` | places/devices/favourites/bookmarks + their menus |
-| `qml/i1/PickerWindow.qml` | the portal file chooser |
-| `qml/i1/*.qml` (rest) | small shared types: pills, buttons, badges, rows |
+| `qml/Main.qml` | the main window: session, tabs, size scales |
+| `qml/FolderView.qml` | one folder view per tab (the bulk of the UI) |
+| `qml/Sidebar.qml` | places/devices/favourites/bookmarks + their menus |
+| `qml/PickerWindow.qml` | the portal file chooser |
+| `qml/*.qml` (rest) | small shared types: pills, buttons, badges, rows |
 | `../celestina-style/` | shared theme, glass and icons (consumed) |
 | `../celestina-rs/crates/siderita-core` | read-only Rust domain |
 | `../celestina-rs/crates/siderita-qt` | stable view contract for QML |

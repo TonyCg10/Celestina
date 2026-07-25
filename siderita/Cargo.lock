@@ -1939,14 +1939,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
-name = "siderita-core"
-version = "0.1.0"
-dependencies = [
- "celestina-core",
-]
-
-[[package]]
-name = "siderita-i1"
+name = "siderita"
 version = "0.1.0"
 dependencies = [
  "async-channel",
@@ -1964,6 +1957,13 @@ dependencies = [
  "siderita-ops",
  "siderita-qt",
  "zbus",
+]
+
+[[package]]
+name = "siderita-core"
+version = "0.1.0"
+dependencies = [
+ "celestina-core",
 ]
 
 [[package]]

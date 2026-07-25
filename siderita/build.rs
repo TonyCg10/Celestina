@@ -5,48 +5,48 @@ use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
 // hacía que una edición de QML no llegara al binario.
 const QML_FILES: &[&str] = &[
     // Lenguaje visual compartido (enlaces a ../celestina-style).
-    "qml/i1/GlassSurface.qml",
-    "qml/i1/GlassCard.qml",
-    "qml/i1/GlassContextMenu.qml",
-    "qml/i1/GlassMenuItem.qml",
+    "qml/GlassSurface.qml",
+    "qml/GlassCard.qml",
+    "qml/GlassContextMenu.qml",
+    "qml/GlassMenuItem.qml",
     // Piezas de Siderita.
-    "qml/i1/GlassPill.qml",
-    "qml/i1/SidebarChevron.qml",
-    "qml/i1/FavoriteBadge.qml",
-    "qml/i1/NavButton.qml",
-    "qml/i1/PillButton.qml",
-    "qml/i1/InfoPill.qml",
-    "qml/i1/RuleField.qml",
-    "qml/i1/DragScrollEdge.qml",
-    "qml/i1/SizeRow.qml",
-    "qml/i1/PropRow.qml",
+    "qml/GlassPill.qml",
+    "qml/SidebarChevron.qml",
+    "qml/FavoriteBadge.qml",
+    "qml/NavButton.qml",
+    "qml/PillButton.qml",
+    "qml/InfoPill.qml",
+    "qml/RuleField.qml",
+    "qml/DragScrollEdge.qml",
+    "qml/SizeRow.qml",
+    "qml/PropRow.qml",
     // Vistas y ventanas.
-    "qml/i1/Sidebar.qml",
-    "qml/i1/FolderView.qml",
+    "qml/Sidebar.qml",
+    "qml/FolderView.qml",
     // Diálogos de la vista de carpeta.
-    "qml/i1/NamePromptDialog.qml",
-    "qml/i1/BatchRenameDialog.qml",
-    "qml/i1/ConflictDialog.qml",
-    "qml/i1/OpenWithDialog.qml",
-    "qml/i1/PropertiesDialog.qml",
-    "qml/i1/IconPickerDialog.qml",
-    "qml/i1/QuickLookView.qml",
-    "qml/i1/Main.qml",
-    "qml/i1/PickerWindow.qml",
+    "qml/NamePromptDialog.qml",
+    "qml/BatchRenameDialog.qml",
+    "qml/ConflictDialog.qml",
+    "qml/OpenWithDialog.qml",
+    "qml/PropertiesDialog.qml",
+    "qml/IconPickerDialog.qml",
+    "qml/QuickLookView.qml",
+    "qml/Main.qml",
+    "qml/PickerWindow.qml",
 ];
 
 fn main() {
     // The theme, glass components and fallback icons are the suite's shared
     // visual language and live canonically in ../celestina-style. They are
-    // symlinked into qml/i1/ (CelestinaTheme.qml, Glass*.qml, icons.qrc, icons/)
-    // so the module registers them under clean `qml/i1/...` resource paths.
+    // symlinked into qml/ (CelestinaTheme.qml, Glass*.qml, icons.qrc, icons/)
+    // so the module registers them under clean `qml/...` resource paths.
     // A direct `../celestina-style/...` source path would embed `..` in the qrc
     // alias (`org/celestina/siderita/../celestina-style/...`) and break QML type
     // resolution at runtime. El resto son de Siderita.
     let module = QmlModule::new("org.celestina.siderita")
         .version(1, 0)
         .qml_file(
-            QmlFile::from("qml/i1/CelestinaTheme.qml")
+            QmlFile::from("qml/CelestinaTheme.qml")
                 .version(1, 0)
                 .singleton(true),
         )
@@ -60,7 +60,7 @@ fn main() {
     for qml in QML_FILES
         .iter()
         .copied()
-        .chain(["qml/i1/CelestinaTheme.qml", "qml/i1/icons.qrc"])
+        .chain(["qml/CelestinaTheme.qml", "qml/icons.qrc"])
     {
         println!("cargo::rerun-if-changed={qml}");
     }
@@ -80,7 +80,7 @@ fn main() {
     println!("cargo::rerun-if-changed=cpp/icontheme.cpp");
     println!("cargo::rerun-if-changed=cpp/siderita/icontheme.h");
     let builder = CxxQtBuilder::new_qml_module(module)
-        .qrc("qml/i1/icons.qrc")
+        .qrc("qml/icons.qrc")
         .cpp_file("cpp/clipboard.cpp")
         // The native list model: the header is moc'd (Q_OBJECT), the .cpp compiled.
         .cpp_file("cpp/entrymodel.cpp")

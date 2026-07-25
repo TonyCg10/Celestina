@@ -2,13 +2,13 @@
 
 set -eu
 
-# install-i1.sh — install Siderita into the user's XDG prefix so the session
+# install.sh — install Siderita into the user's XDG prefix so the session
 # treats it exactly like a packaged application: a binary on PATH, a desktop
 # entry the launcher lists, and an icon in the hicolor theme.
 #
 # This is the *user* install (~/.local), which needs no root and is what a
 # personal session wants. It links against the system Qt, like a distro package
-# would; scripts/stage-i1.sh is the other shape — a self-contained prefix that
+# would; scripts/stage.sh is the other shape — a self-contained prefix that
 # carries its own Qt closure for a machine that has none.
 #
 # Everything is named org.celestina.Siderita: the entry, the icon, and the
@@ -17,7 +17,7 @@ set -eu
 
 usage() {
     cat >&2 <<'EOF'
-uso: scripts/install-i1.sh [--build] [--uninstall] [--prefix DIR]
+uso: scripts/install.sh [--build] [--uninstall] [--prefix DIR]
 
 Instala Siderita en el prefijo XDG del usuario (por defecto ~/.local):
   bin/siderita, share/applications/, share/icons/hicolor/…
@@ -74,7 +74,7 @@ if [ "$build" -eq 1 ]; then
     ( cd "$repo_root" && cargo build --release --locked )
 fi
 
-binary=$repo_root/target/release/siderita-i1
+binary=$repo_root/target/release/siderita
 if [ ! -x "$binary" ]; then
     echo "error: no existe el binario release: $binary (usa --build)" >&2
     exit 1
@@ -89,8 +89,7 @@ if ! command -v rsvg-convert >/dev/null 2>&1; then
 fi
 
 # ── Binary ───────────────────────────────────────────────────────────────────
-# Installed as `siderita`; the "i1" in the build artifact is the iteration, not
-# the command the user types.
+# The crate and the command share the name now: `siderita`.
 mkdir -p "$bin_dir"
 install -m 0755 "$binary" "$bin_dir/siderita"
 

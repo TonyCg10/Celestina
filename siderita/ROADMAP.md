@@ -14,7 +14,7 @@ editor, viewer, player, panel or dotfiles manager inside it; those are separate
 projects reached through desktop standards.
 
 **Current state.** The earlier C++/Qt prototype was removed; the Rust host of
-`qml/i1` is the only implementation. It consumes the `celestina-rs` domain crates
+`qml` is the only implementation. It consumes the `celestina-rs` domain crates
 (`celestina-core`, `siderita-core`, `siderita-ops`, `siderita-qt`) and now renders
 from the shared `celestina-style` module (tokens + glass). The read side is a
 bounded scan worker that publishes on the Qt thread and rejects stale results:
@@ -51,7 +51,7 @@ identity (homonyms, rename and non-UTF-8 names are preserved); a source is never
 deleted before its destination is verified; integration is via XDG/freedesktop;
 shared style comes by contract, never by importing another source tree.
 
-## Checkpoint 0 — Truthful, measured read-only slice (I1)
+## Checkpoint 0 — Truthful, measured read-only slice
 **Goal:** a staged install opens HOME, a path, or a local URI in a modern
 read-only view; a context menu demonstrates real in-scene glass; and the
 resource report ratifies or rejects Qt/QML with data.
@@ -59,7 +59,7 @@ resource report ratifies or rejects Qt/QML with data.
 ### Implemented
 - [x] `celestina-core` / `siderita-core` / `siderita-qt` neutral up to the Qt edge (PathBuf/OsString, EntryId, generations, opaque tokens)
 - [x] Bounded scan executor with cancellation and deterministic shutdown
-- [x] Qt Quick/QML UI + minimal CXX-Qt adapter (provisional for I1)
+- [x] Qt Quick/QML UI + minimal CXX-Qt adapter (provisional)
 - [x] Content layer separated from overlay + a shareable `GlassSurface` (bounded capture, no work at all when the surface is closed). The capture is now **live** for menus as well as modals: a one-shot snapshot froze the instant the surface opened, so anything scrolling, hovering or loading behind it turned the glass into a blurred screenshot. The sampled region follows the surface's size and position too, so a menu that grows as its items decide to be visible no longer stretches a stale region
 - [x] HOME / path navigation (back / forward / up / home / refresh) incl. mouse side buttons
 - [x] Filter with 120 ms debounce; sort by name / size / date / kind, both directions, folders first; stable selection across re-sort; hidden toggle
@@ -82,8 +82,8 @@ resource report ratifies or rejects Qt/QML with data.
 - [x] Watcher wired to `WatchState` (invalidate + rescan wins) — a `notify`-backed (inotify) debouncer (full, event-kind-aware) watches the current folder non-recursively and coalesces bursts (200 ms); a change marshals to the Qt thread, `WatchState::observe_change` marks the snapshot stale, and a fresh **quiet** rescan wins (keeps the list/selection/status on screen — no loading flash). `Access` events (open/close/read) are ignored, so the scan's own `read_dir` (which notify reports as `IN_OPEN`) can't feed a scan→open→scan loop. Navigation moves the watch; a rescan of the same folder just `mark_rescanned`s it. A lost watch (`degrade`) flips a truthful "⚠ Vigilancia perdida · instantánea" status. Verified end-to-end against real create/remove events
 - [x] Replace `QStringList` with a native role-based `QAbstractListModel`, dropping the per-delegate token/kind/subtitle invokables and the `viewRevision` workaround — done. Since cxx-qt 0.9.1 offers no `QAbstractListModel` virtual overrides from Rust, the model is a hand-written moc'd C++ class (`cpp/entrymodel.*`, `name`/`token`/`kind`/`subtitle`/`path`/`isDirectory` roles, `beginResetModel`) registered into the QML module; the controller pushes each projected view to it through a single `rowsReady` signal (parallel role columns), and the list/grid delegates read **roles** instead of calling `entryKind`/`entrySubtitle`/`entryIsDirectory` per row. The `viewRevision` counter is gone — the model's own reset signal drives the selection re-sync. (`entry_token` / `index_for_token` / `entry_names` remain only as the selection / type-ahead query API, not the model.) Verified end-to-end: the delegates use `required property` roles, so a clean Wayland load with a populated HOME proves every role is served (a missing one would error loudly)
 - [x] Give the grid view keyboard navigation (only the list handled keys before) — the grid now mirrors the list: ←/→ move by cell, ↑/↓ by a full row (± the live column count), Home/End, PageUp/PageDown (rows×cols), Backspace = up a folder, Enter activates, Space selects, and type-ahead jumps to the next matching name — each keeping the focused cell in view and the selection in sync
-- [x] Staged install with an allowlist (Basic + only the plugins actually used) — `scripts/stage-i1.sh` stages the binary + an **allowlist** of QML modules (QtQml, QtQuick, QtQuick.Controls + **Basic** + impl, Templates, Effects, Layouts, Window) and plugins (wayland/xcb/offscreen platforms + wayland client integrations, SVG image-format + icon-engine) plus the **transitive Qt `.so` closure** (fixed-point `ldd` over the binary and every copied plugin), with a launcher that points `QML_IMPORT_PATH` / `QT_PLUGIN_PATH` / `LD_LIBRARY_PATH` at the stage. Verified self-contained: in a stripped env it loads every `libQt6*` and the Basic-style plugin from the stage, **zero from `/usr/lib`**
-- [x] Real-Wayland validation: keyboard, contrast, animations, themed icons; blur on/off frame p95 ≤ 16.7 ms, measured three times — validated on the maintainer's real Wayland session: the functional pass (keyboard, contrast, animations, themed icons) checks out and the resource-budget + blur-frame measurement runs (`measure-i1.sh`, ×3) were completed
+- [x] Staged install with an allowlist (Basic + only the plugins actually used) — `scripts/stage.sh` stages the binary + an **allowlist** of QML modules (QtQml, QtQuick, QtQuick.Controls + **Basic** + impl, Templates, Effects, Layouts, Window) and plugins (wayland/xcb/offscreen platforms + wayland client integrations, SVG image-format + icon-engine) plus the **transitive Qt `.so` closure** (fixed-point `ldd` over the binary and every copied plugin), with a launcher that points `QML_IMPORT_PATH` / `QT_PLUGIN_PATH` / `LD_LIBRARY_PATH` at the stage. Verified self-contained: in a stripped env it loads every `libQt6*` and the Basic-style plugin from the stage, **zero from `/usr/lib`**
+- [x] Real-Wayland validation: keyboard, contrast, animations, themed icons; blur on/off frame p95 ≤ 16.7 ms, measured three times — validated on the maintainer's real Wayland session: the functional pass (keyboard, contrast, animations, themed icons) checks out and the resource-budget + blur-frame measurement runs (`measure.sh`, ×3) were completed
 - [x] Ratify Qt/QML for the suite, or reopen the frontend decision, from the data — **ratified**: the measured read-only slice met its budgets and the frontend holds, so Qt/QML is confirmed for the suite
 
 ### Provisional budget
@@ -91,7 +91,7 @@ resource report ratifies or rejects Qt/QML with data.
 | Metric | Limit | Current cut |
 |---|---:|---:|
 | Stripped isolated binary | 20 MiB | 5.60 MiB (4.23 before CP4); staging pending |
-| First install closure (Qt) | 250 MiB | 50 MiB staged (allowlist; `scripts/stage-i1.sh`) |
+| First install closure (Qt) | 250 MiB | 50 MiB staged (allowlist; `scripts/stage.sh`) |
 | HOME mean PSS, 60 s | 120 MiB | 86.2 MiB (82.1 before CP4), offscreen |
 | HOME one-core CPU, 60 s | 1 % | ~0.1 %, offscreen, idle |
 | 10k-entry fixture mean PSS | 250 MiB | 110.9 MiB (105.1 before CP4), offscreen |
@@ -219,7 +219,7 @@ applications knowing or changing.
       which is the same "a click is a request, never proof" rule the rest of the
       app follows, applied to its own exit
 - [x] `--portal` activation — a `.portal` registration and a D-Bus service file
-      (installed by `scripts/install-i1.sh`) so a file dialog works whether or
+      (installed by `scripts/install.sh`) so a file dialog works whether or
       not Siderita is running. Verified on the real session: with nothing
       running, a call started `siderita --portal`, mapped a picker window with
       `app_id = org.celestina.Siderita`, and `Close()` withdrew it and answered
