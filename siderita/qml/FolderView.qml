@@ -3012,12 +3012,12 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 8
 
-                PillButton {
+                CelestinaButton {
                     text: "Detener"
                     visible: controller.searchRunning
                     onClicked: controller.cancelSearch()
                 }
-                PillButton {
+                CelestinaButton {
                     text: "Cerrar"
                     onClicked: controller.closeSearch()
                 }
@@ -3067,7 +3067,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 8
 
-                PillButton {
+                CelestinaButton {
                     text: "Volver"
                     primary: true
                     onClicked: controller.closeRecent()
@@ -3121,7 +3121,7 @@ Item {
                     backdrop: topBar.activeView
                     text: "¿Vaciar? No se puede deshacer"
                 }
-                PillButton {
+                CelestinaButton {
                     text: trashHeader.confirmingEmpty ? "Vaciar definitivamente" : "Vaciar"
                     destructive: true
                     visible: controller.trashNames.length > 0
@@ -3134,12 +3134,12 @@ Item {
                         }
                     }
                 }
-                PillButton {
+                CelestinaButton {
                     text: "Restaurar todo"
                     visible: controller.trashNames.length > 0 && !trashHeader.confirmingEmpty
                     onClicked: controller.restoreAllTrash()
                 }
-                PillButton {
+                CelestinaButton {
                     text: "Volver"
                     primary: true
                     onClicked: controller.closeTrash()

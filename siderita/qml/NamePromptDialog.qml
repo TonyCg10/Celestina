@@ -128,11 +128,11 @@ Rectangle {
             anchors.bottomMargin: 16
             spacing: 8
 
-            PillButton {
+            CelestinaButton {
                 text: "Cancelar"
                 onClicked: namePrompt.dismiss()
             }
-            PillButton {
+            CelestinaButton {
                 text: "Aceptar"
                 primary: true
                 onClicked: namePrompt.confirm()

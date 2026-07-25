@@ -142,22 +142,22 @@ Rectangle {
             anchors.bottomMargin: 16
             spacing: 8
 
-            PillButton {
+            CelestinaButton {
                 text: "Cancelar"
                 onClicked: {
                     applyToAll.checked = false
                     controller.cancelConflicts()
                 }
             }
-            PillButton {
+            CelestinaButton {
                 text: "Omitir"
                 onClicked: controller.resolveConflict("skip", applyToAll.checked)
             }
-            PillButton {
+            CelestinaButton {
                 text: "Conservar ambos"
                 onClicked: controller.resolveConflict("keepboth", applyToAll.checked)
             }
-            PillButton {
+            CelestinaButton {
                 text: "Reemplazar"
                 primary: true
                 onClicked: controller.resolveConflict("replace", applyToAll.checked)

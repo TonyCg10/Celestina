@@ -241,11 +241,11 @@ Window {
             anchors.bottomMargin: 20
             spacing: 12
 
-            ChooserButton {
+            CelestinaButton {
                 text: "Cancelar"
                 onClicked: chooser.cancel()
             }
-            ChooserButton {
+            CelestinaButton {
                 text: "Compartir"
                 primary: true
                 onClicked: chooser.choose(chooser.selected)
@@ -253,47 +253,4 @@ Window {
         }
     }
 
-    component ChooserButton: Rectangle {
-        id: button
-
-        property string text: ""
-        property bool primary: false
-        signal clicked()
-
-        implicitWidth: label.implicitWidth + 36
-        width: implicitWidth
-        height: 34
-        radius: CelestinaTheme.radiusSm
-        color: button.primary
-               ? (buttonMouse.pressed ? Qt.darker(CelestinaTheme.accent, 1.18)
-                  : buttonMouse.containsMouse ? Qt.darker(CelestinaTheme.accent, 1.08)
-                  : CelestinaTheme.accent)
-               : (buttonMouse.pressed ? CelestinaTheme.surfaceStrong
-                  : buttonMouse.containsMouse ? CelestinaTheme.surfaceHover
-                  : CelestinaTheme.controlFill)
-        border.width: button.primary ? 0 : 1
-        border.color: CelestinaTheme.border
-
-        Behavior on color {
-            ColorAnimation { duration: CelestinaTheme.motionFast }
-        }
-
-        Text {
-            id: label
-            anchors.centerIn: parent
-            text: button.text
-            color: button.primary ? CelestinaTheme.canvas : CelestinaTheme.text
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontLabel
-            font.weight: CelestinaTheme.weightMedium
-        }
-
-        MouseArea {
-            id: buttonMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: button.clicked()
-        }
-    }
 }

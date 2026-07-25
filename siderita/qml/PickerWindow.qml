@@ -798,8 +798,11 @@ Window {
         }
     }
 
-    // A button local to the picker: the suite's PillButton lives inside
-    // MainI1's root object and inline components cannot be reached across files.
+    // Especialización de CelestinaButton para el picker, a propósito local: su
+    // fondo es de cristal (flota sobre la rejilla, no sobre una banda), y el
+    // deshabilitado conserva un acento tenue para que "Abrir" siga leyéndose
+    // como la acción principal aunque no se pueda pulsar todavía. Esos dos
+    // rasgos no los tiene el botón sólido compartido.
     component PickerButton: Button {
         id: control
 

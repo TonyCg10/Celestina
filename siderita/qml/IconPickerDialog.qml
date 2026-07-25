@@ -152,11 +152,11 @@ Rectangle {
             anchors.bottomMargin: 16
             spacing: 8
 
-            PillButton {
+            CelestinaButton {
                 text: "Restablecer"
                 onClicked: iconPicker.choose("")
             }
-            PillButton {
+            CelestinaButton {
                 text: "Cerrar"
                 primary: true
                 onClicked: iconPicker.dismiss()

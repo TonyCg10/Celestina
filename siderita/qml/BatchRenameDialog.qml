@@ -279,11 +279,11 @@ Rectangle {
             anchors.bottomMargin: 16
             spacing: 8
 
-            PillButton {
+            CelestinaButton {
                 text: "Cancelar"
                 onClicked: batchRename.dismiss()
             }
-            PillButton {
+            CelestinaButton {
                 text: "Renombrar"
                 primary: true
                 enabled: !batchRename.anyClash && batchRename.anyChange

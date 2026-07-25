@@ -170,16 +170,16 @@ Rectangle {
             anchors.bottomMargin: 16
             spacing: 8
 
-            PillButton {
+            CelestinaButton {
                 text: "Cancelar"
                 onClicked: controller.cancelOpenWith()
             }
-            PillButton {
+            CelestinaButton {
                 text: "Predeterminar y abrir"
                 enabled: openWithView.selected >= 0
                 onClicked: controller.openWithApp(openWithView.selected, true)
             }
-            PillButton {
+            CelestinaButton {
                 text: "Abrir"
                 primary: true
                 enabled: openWithView.selected >= 0

@@ -134,7 +134,7 @@ Rectangle {
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 16
 
-            PillButton {
+            CelestinaButton {
                 text: "Cerrar"
                 primary: true
                 onClicked: controller.closeProperties()
