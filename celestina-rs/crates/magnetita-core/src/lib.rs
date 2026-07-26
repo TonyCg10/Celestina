@@ -24,6 +24,7 @@ pub mod packet;
 pub mod pair;
 pub mod ping;
 pub mod session;
+pub mod sftp;
 
 pub use event::{ConnectionEvent, LostReason};
 pub use identity::{DeviceType, Identity, DEFAULT_PORT, PROTOCOL_VERSION, TYPE_IDENTITY};
@@ -31,3 +32,4 @@ pub use packet::NetworkPacket;
 pub use pair::{pair_packet, PairAction, PairState, Pairing, TIMEOUT_SECS, TYPE_PAIR};
 pub use ping::{ping_packet, TYPE_PING};
 pub use session::{Outgoing, Reaction, Session};
+pub use sftp::{read_sftp, request_packet, SftpMount, SftpReply, TYPE_SFTP, TYPE_SFTP_REQUEST};
