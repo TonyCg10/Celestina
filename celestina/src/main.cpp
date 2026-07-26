@@ -14,6 +14,8 @@
 
 #include <LayerShellQt/Window>
 
+#include "devicesclient.h"
+
 namespace {
 constexpr int panelHeight = 40;
 constexpr auto panelScope = "celestina-panel";
@@ -254,6 +256,11 @@ int main(int argc, char *argv[])
 
     if (app.arguments().contains(QStringLiteral("--pick-output")))
         return runOutputChooser(app, engine);
+
+    // The phone the panel draws. Parented to the app so it outlives the engine's
+    // teardown; exposed to every panel through the shared root context.
+    auto *phone = new DevicesClient(&app);
+    engine.rootContext()->setContextProperty(QStringLiteral("Phone"), phone);
 
     PanelManager panels(&app, &engine);
     if (!panels.start())

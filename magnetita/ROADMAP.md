@@ -243,8 +243,13 @@ live; Valent is stopped and disabled.
 **Goal:** the service, the app and the shell behave as one suite, in one visual
 language.
 
-- [ ] **Shell surfacing** — connected device + battery in the `celestina` panel
-      (notifications already flow via freedesktop)
+- [x] **Shell surfacing** — the connected phone and its battery show in the
+      `celestina` panel: a right-aligned `📱 <name> ⚡ <charge> %` indicator, drawn
+      only when Magnetita has a device. The shell is C++/Qt, so it reads the same
+      `org.celestina.Devices1` contract Siderita does through a small QtDBus client
+      (`DevicesClient`), refreshed live off the daemon's `Changed` signal. Battery
+      colours low/charging states. Live-verified against the phone: name + 79 %
+      charging. (Notifications already flow via freedesktop.)
 - [x] **Send to phone in Siderita** — an "Enviar al móvil" entry in Siderita's
       file context menu (shown for a single file when a phone is connected) calls
       the daemon's `SendFile` over D-Bus, complementing the browse-the-phone mount

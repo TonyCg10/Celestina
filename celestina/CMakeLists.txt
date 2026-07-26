@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Quick)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Quick DBus)
 find_package(LayerShellQt 6.6 REQUIRED)
 qt_standard_project_setup(REQUIRES 6.5)
 
@@ -15,6 +15,8 @@ endif()
 
 qt_add_executable(celestina
     src/main.cpp
+    src/devicesclient.h
+    src/devicesclient.cpp
 )
 
 qt_add_qml_module(celestina
@@ -28,5 +30,6 @@ qt_add_qml_module(celestina
 
 target_link_libraries(celestina PRIVATE
     Qt6::Quick
+    Qt6::DBus
     LayerShellQt::Interface
 )
