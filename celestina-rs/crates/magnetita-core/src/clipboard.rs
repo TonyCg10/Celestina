@@ -31,10 +31,21 @@ pub fn read_clipboard(packet: &NetworkPacket) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// A `kdeconnect.clipboard` carrying `content` — to push the desktop's clipboard
-/// to the phone (the send direction, for when it lands).
+/// A `kdeconnect.clipboard` carrying `content` — pushes a *change* of the
+/// desktop's clipboard to the phone.
 pub fn clipboard_packet(id: i64, content: &str) -> NetworkPacket {
     NetworkPacket::new(id, TYPE_CLIPBOARD, json!({ "content": content }))
+}
+
+/// A `kdeconnect.clipboard.connect` carrying `content` and the millisecond
+/// `timestamp` it was set — sent on connect so both ends sync their initial
+/// clipboard, the newer timestamp winning.
+pub fn clipboard_connect_packet(id: i64, content: &str, timestamp: i64) -> NetworkPacket {
+    NetworkPacket::new(
+        id,
+        TYPE_CLIPBOARD_CONNECT,
+        json!({ "content": content, "timestamp": timestamp }),
+    )
 }
 
 #[cfg(test)]

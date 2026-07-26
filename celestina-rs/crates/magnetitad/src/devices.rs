@@ -130,7 +130,7 @@ pub fn push_log(log: &Log, entry: LogEntry) {
 
 /// A control action the app asks of a live link — delivered to that link's own
 /// thread, which owns the [`Device`](magnetita_core::Session) and can act on it.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum Command {
     /// Ask the device to pair.
     RequestPair,
@@ -138,6 +138,8 @@ pub enum Command {
     Unpair,
     /// Ring the device (find-my-phone).
     Ring,
+    /// Push this text to the device as a clipboard change.
+    SendClipboard(String),
 }
 
 /// The per-device command channels, keyed by device id. A link registers its

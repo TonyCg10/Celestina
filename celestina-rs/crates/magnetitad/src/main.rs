@@ -23,7 +23,7 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::error::Error;
 use std::fs;
-use std::io::Write;
+use std::io::{BufRead, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, Mutex};
@@ -81,6 +81,9 @@ struct Daemon {
     /// phone-notification-id → freedesktop-server-id, so an update replaces and a
     /// cancel withdraws the right desktop notification.
     notifications: Mutex<HashMap<String, u32>>,
+    /// The last clipboard value we synced (sent or received), so our own
+    /// wl-copy of a received clipboard is not echoed back and no loop forms.
+    last_clipboard: Mutex<String>,
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
@@ -121,7 +124,11 @@ fn run() -> Result<(), Box<dyn Error>> {
         commands,
         dbus,
         notifications: Mutex::new(HashMap::new()),
+        last_clipboard: Mutex::new(String::new()),
     });
+
+    // Watch the desktop clipboard and push changes to connected phones.
+    spawn_clipboard_watch(Arc::clone(&daemon));
 
     log("id", &device_id);
     log("cert", &cert.fingerprint()?);
@@ -342,6 +349,7 @@ impl Daemon {
         if trusted {
             device.send(request_packet)?;
             device.send(magnetita_core::battery::request)?;
+            self.send_clipboard_connect(&mut device)?;
             asked_sftp = true;
             log("sftp", &format!("requesting {peer_name}'s storage"));
         }
@@ -359,6 +367,11 @@ impl Daemon {
                     Command::Ring => {
                         device.send(magnetita_core::findmyphone::request)?;
                         ui_log(self, peer_name, "sonando el móvil", false);
+                    }
+                    Command::SendClipboard(text) => {
+                        device.send(|id| {
+                            magnetita_core::clipboard::clipboard_packet(id, &text)
+                        })?;
                     }
                 }
             }
@@ -388,6 +401,7 @@ impl Daemon {
                         if !asked_sftp {
                             device.send(request_packet)?;
                             device.send(magnetita_core::battery::request)?;
+                            self.send_clipboard_connect(&mut device)?;
                             asked_sftp = true;
                             log("sftp", &format!("requesting {peer_name}'s storage"));
                         }
@@ -428,6 +442,8 @@ impl Daemon {
                     self.mirror_notification(peer_id, peer_name, note);
                 }
                 if let Some(text) = read_clipboard(packet) {
+                    // Record before wl-copy so the watcher does not echo it back.
+                    *self.last_clipboard.lock().unwrap() = text.clone();
                     if set_clipboard(&text) {
                         ui_log(self, peer_name, "portapapeles recibido", false);
                     }
@@ -475,6 +491,39 @@ impl Daemon {
     fn set_paired(&self, device_id: &str, paired: bool) {
         if let Some(entry) = self.devices.lock().unwrap().get_mut(device_id) {
             entry.paired = paired;
+        }
+    }
+
+    /// Send our current clipboard as a `clipboard.connect` on connect — the
+    /// handshake that tells the phone we are a clipboard peer, so it syncs its
+    /// clipboard to us too. Recorded as last-synced so the watcher does not
+    /// immediately re-send it.
+    fn send_clipboard_connect(
+        &self,
+        device: &mut Device,
+    ) -> Result<(), magnetita_net::LinkError> {
+        let clip = get_clipboard();
+        *self.last_clipboard.lock().unwrap() = clip.clone();
+        device.send(|id| magnetita_core::clipboard::clipboard_connect_packet(id, &clip, millis()))
+    }
+
+    /// A desktop clipboard change: push it to every connected device — unless it
+    /// is the value we just received from a phone (our own wl-copy echo), which
+    /// would otherwise loop back and forth forever.
+    fn push_clipboard(&self, text: String) {
+        if text.is_empty() {
+            return;
+        }
+        {
+            let mut last = self.last_clipboard.lock().unwrap();
+            if *last == text {
+                return;
+            }
+            *last = text.clone();
+        }
+        let senders: Vec<_> = self.commands.lock().unwrap().values().cloned().collect();
+        for sender in senders {
+            let _ = sender.send(Command::SendClipboard(text.clone()));
         }
     }
 
@@ -665,6 +714,57 @@ fn ensure_device_id(dir: &Path) -> Result<String, Box<dyn Error>> {
     let id: String = uuid.trim().chars().filter(|c| *c != '-').collect();
     fs::write(&path, &id)?;
     Ok(id)
+}
+
+/// Watches the Wayland clipboard and pushes each change to connected phones
+/// (desktop → phone). `wl-paste --watch` runs a helper on every change that
+/// prints the clipboard followed by a NUL, so a multi-line value splits off the
+/// stream cleanly. Best-effort: no wl-paste just means no desktop → phone sync.
+fn spawn_clipboard_watch(daemon: Arc<Daemon>) {
+    use std::process::{Command, Stdio};
+    thread::spawn(move || {
+        let mut child = match Command::new("wl-paste")
+            .args(["--watch", "sh", "-c", "cat; printf '\\0'"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+        {
+            Ok(child) => child,
+            Err(e) => {
+                log("clipboard", &format!("watch no disponible: {e}"));
+                return;
+            }
+        };
+        let Some(stdout) = child.stdout.take() else {
+            return;
+        };
+        let mut reader = std::io::BufReader::new(stdout);
+        let mut buf = Vec::new();
+        loop {
+            buf.clear();
+            match reader.read_until(0, &mut buf) {
+                Ok(0) => break, // wl-paste exited
+                Ok(_) => {
+                    if buf.last() == Some(&0) {
+                        buf.pop();
+                    }
+                    daemon.push_clipboard(String::from_utf8_lossy(&buf).into_owned());
+                }
+                Err(_) => break,
+            }
+        }
+    });
+}
+
+/// Reads the current desktop clipboard text via wl-paste, or empty on failure.
+fn get_clipboard() -> String {
+    std::process::Command::new("wl-paste")
+        .arg("--no-newline")
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+        .unwrap_or_default()
 }
 
 /// Puts text on the desktop (Wayland) clipboard via wl-copy. Returns whether it

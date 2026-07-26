@@ -97,6 +97,10 @@ impl Identity {
                 crate::sftp::TYPE_SFTP_REQUEST.to_owned(),
                 crate::battery::TYPE_BATTERY_REQUEST.to_owned(),
                 crate::findmyphone::TYPE_FINDMYPHONE_REQUEST.to_owned(),
+                // We push our clipboard too, so the phone treats us as a full
+                // bidirectional clipboard peer and auto-syncs both ways.
+                crate::clipboard::TYPE_CLIPBOARD.to_owned(),
+                crate::clipboard::TYPE_CLIPBOARD_CONNECT.to_owned(),
             ],
             tcp_port: Some(DEFAULT_PORT),
         }
