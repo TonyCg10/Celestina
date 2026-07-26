@@ -2702,6 +2702,17 @@ Item {
         }
 
         GlassMenuItem {
+            text: "Enviar al móvil"
+            // Only for a single file, and only when a phone is connected.
+            visible: !entryMenu.targetDirectory && !entryMenu.multi
+                     && !controller.trashActive && controller.phoneNames.length > 0
+            height: visible ? implicitHeight : 0
+            icon.name: "phone"
+            icon.source: CelestinaTheme.fallbackIcon("phone")
+            onTriggered: controller.sendToPhone(entryMenu.targetPath)
+        }
+
+        GlassMenuItem {
             text: "Abrir en pestaña nueva"
             visible: entryMenu.targetDirectory && !entryMenu.multi && !controller.trashActive
             height: visible ? implicitHeight : 0

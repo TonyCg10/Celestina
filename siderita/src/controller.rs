@@ -440,6 +440,9 @@ pub mod qobject {
         fn open_phone(self: Pin<&mut SideritaController>, index: i32);
 
         #[qinvokable]
+        fn send_to_phone(self: Pin<&mut SideritaController>, path: &QString);
+
+        #[qinvokable]
         fn open_properties(self: Pin<&mut SideritaController>, path: &QString);
 
         #[qinvokable]
@@ -1984,6 +1987,14 @@ impl qobject::SideritaController {
             .unwrap_or_default();
         if !mount.is_empty() {
             self.as_mut().open_location(&QString::from(mount.as_str()));
+        }
+    }
+
+    /// Send a local file to the connected phone (the "Enviar al móvil" menu
+    /// item). Sends to the first connected phone; a no-op if none is connected.
+    pub fn send_to_phone(self: Pin<&mut Self>, path: &QString) {
+        if let Some(phone) = self.rust().phones.first() {
+            crate::devices::send_file(&phone.id, &path.to_string());
         }
     }
 
