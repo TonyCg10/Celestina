@@ -3,16 +3,17 @@
 > Part of the [Celestina suite](../ROADMAP.md). This roadmap covers the phone
 > link only. Checklist legend: `[x]` done · `[ ]` planned. "Implemented" is not
 > "verified": pairing and every plugin must be proven against a real device on a
-> real network, tracked as its own goal. **CP0, CP1 and CP2 are done.** The
-> from-scratch Rust transport (`magnetita-net`) and the `magnetitad` daemon pair
-> live and stably with the real phone (a Galaxy S25 Ultra, protocol 8), reconnect
-> as already-trusted, run as a systemd user service, mount the phone's storage
-> over sshfs, and serve `org.celestina.Devices1` — which **Siderita** consumes to
-> draw the phone in its sidebar (click to browse it) and the standalone
-> **Magnetita app** consumes to pair/unpair with the verification key and show the
-> connection log. ~66 offline tests, **no async runtime**, no C toolchain,
-> `unsafe` forbidden. CP3 — the daily plugins (notifications, share, clipboard,
-> battery, find-my-phone) — is next.
+> real network, tracked as its own goal. **CP0–CP3 are done.** The from-scratch
+> Rust transport (`magnetita-net`) and the `magnetitad` daemon pair live and
+> stably with the real phone (a Galaxy S25 Ultra, protocol 8), reconnect as
+> already-trusted, run as a systemd user service, mount the phone's storage over
+> sshfs, and serve `org.celestina.Devices1` — which **Siderita** consumes to draw
+> the phone in its sidebar (click to browse it) and the standalone **Magnetita
+> app** consumes to pair/unpair with the verification key and show the connection
+> log. The daily plugins — **battery, notifications, file share, find-my-phone,
+> clipboard-receive** — mirror through freedesktop standards, all verified live.
+> ~66 offline tests, **no async runtime**, no C toolchain, `unsafe` forbidden.
+> CP4 — one suite (shell surfacing, send-to-phone, shared settings) — is next.
 
 ## Overview
 
@@ -207,21 +208,32 @@ browsable like a USB stick, and the state it shows is honest.
 actually uses in Valent, wired through freedesktop standards and surfaced in the
 app's options.
 
-- [ ] **Notifications** — phone notifications mirror to the session's own
-      notification daemon (`org.freedesktop.Notifications`), with dismiss and,
-      where the phone supports it, quick-reply
-- [ ] **Share, both directions** — phone → PC payload transfer into an XDG dir
-      Siderita shows; PC → phone as a `share.request` (file / URL / text)
-- [ ] **Clipboard** — opt-in text clipboard sync
-- [ ] **Battery & connectivity** — phone battery and cell/connectivity status
-      (also carried on `org.celestina.Devices1` for the sidebar and shell)
-- [ ] **Find-my-phone** — ring the device
-- [ ] **Verified** — every plugin exercised against the real device; a source
-      file is never removed before its transferred copy is verified (the suite's
-      loss-free rule, shared with `siderita-ops`)
+- [x] **Notifications** — phone notifications mirror to
+      `org.freedesktop.Notifications`: a raise posts, an update replaces, a cancel
+      withdraws (phone-id → server-id map). A received ping shows one too. Quick-
+      reply is a follow-up. Live-verified against the phone.
+- [x] **Share, phone → PC** — a `share.request` file streams over its second TLS
+      socket (`payload::receive_to_file`, TLS client) into `$XDG_DOWNLOAD_DIR`,
+      base-name only (no traversal), no-clobber, half-file removed on failure, and
+      a notification on arrival. Live-verified. **PC → phone is a follow-up** (it
+      needs us to serve a payload socket).
+- [x] **Clipboard** — receive: the phone's clipboard lands on the desktop's via
+      `wl-copy`. Verified with KDE Connect's manual *Send clipboard* (auto-sync is
+      throttled by Android's background-clipboard restriction, not our side). Push
+      (desktop → phone) is a follow-up (needs a clipboard watch).
+- [x] **Battery** — `currentCharge` + `isCharging` on connect and on change, into
+      `org.celestina.Devices1` (the battery field, plus charging), shown as
+      "🔋 71 % ⚡" in the app. Live-verified. (Cell/connectivity: later.)
+- [x] **Find-my-phone** — a `Ring(deviceId)` D-Bus method → the "Sonar" button
+      rings the phone. Live-verified.
+- [x] **Verified** — every plugin exercised against the real Galaxy S25; the file
+      share removes a half-received file rather than leaving a truncated one (the
+      loss-free rule).
 
 **Done when:** the author runs the session with Valent removed from autostart
-because Magnetita covers the daily set, proven on a real phone.
+because Magnetita covers the daily set, proven on a real phone. **Done** — the
+daily set (battery, notifications, share, find-my-phone, clipboard-receive) works
+live; Valent is stopped and disabled.
 
 ## Checkpoint 4 — One suite (stop being an island)
 **Goal:** the service, the app and the shell behave as one suite, in one visual
