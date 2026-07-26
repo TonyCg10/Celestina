@@ -20,13 +20,13 @@
 //! CP1 wraps this in a window; CP2 hangs the sftp mount and
 //! `org.celestina.Devices1` off the same trusted link.
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::error::Error;
 use std::fs;
 use std::io::Write;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -43,7 +43,7 @@ use magnetita_net::{
 
 mod devices;
 mod mount;
-use devices::{push_log, DeviceEntry, Devices, Log, LogEntry, Registry};
+use devices::{push_log, Command, Commands, DeviceEntry, Devices, Log, LogEntry, Registry};
 use mount::Mount;
 
 /// The KDE Connect port: UDP announce/listen and TCP link.
@@ -74,6 +74,7 @@ struct Daemon {
     trust: Mutex<TrustStore>,
     devices: Registry,
     log: Log,
+    commands: Commands,
     dbus: Option<zbus::blocking::Connection>,
 }
 
@@ -90,7 +91,12 @@ fn run() -> Result<(), Box<dyn Error>> {
     // Siderita cannot draw the phone, not that the link fails).
     let registry: Registry = Arc::new(Mutex::new(BTreeMap::new()));
     let event_log: Log = Arc::new(Mutex::new(VecDeque::new()));
-    let dbus = match serve_devices(Arc::clone(&registry), Arc::clone(&event_log)) {
+    let commands: Commands = Arc::new(Mutex::new(HashMap::new()));
+    let dbus = match serve_devices(
+        Arc::clone(&registry),
+        Arc::clone(&event_log),
+        Arc::clone(&commands),
+    ) {
         Ok(connection) => {
             log("dbus", &format!("serving {}", devices::INTERFACE));
             Some(connection)
@@ -107,6 +113,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         trust: Mutex::new(TrustStore::load(&dir.join("trust.json"))?),
         devices: registry,
         log: event_log,
+        commands,
         dbus,
     });
 
@@ -247,6 +254,7 @@ impl Daemon {
                     device_type: peer_type,
                     connected: true,
                     mounted: false,
+                    paired: false,
                     mount_path: String::new(),
                     battery: -1,
                     fingerprint,
@@ -263,6 +271,7 @@ impl Daemon {
             ui_log(self, &peer_name, &format!("error de enlace: {e}"), true);
         }
         self.devices.lock().unwrap().remove(&peer_id);
+        self.commands.lock().unwrap().remove(&peer_id);
         self.notify_change();
         log("closed", &format!("{peer_name} disconnected"));
         ui_log(self, &peer_name, "desconectado", false);
@@ -304,6 +313,14 @@ impl Daemon {
         };
 
         let mut device = Device::new(link, session, millis(), TICK)?;
+
+        // Register a command channel so the app can drive pair/unpair on this
+        // live link. serve() removes it when the link ends.
+        let (tx, commands) = mpsc::channel::<Command>();
+        self.commands.lock().unwrap().insert(peer_id.to_owned(), tx);
+        self.set_paired(peer_id, trusted);
+        self.notify_change();
+
         // The mount lives as long as this link: dropping it (here or on unpair)
         // unmounts, so a lost link never strands a dead mount.
         let mut mount: Option<Mount> = None;
@@ -319,6 +336,15 @@ impl Daemon {
         loop {
             let pumped = device.pump()?;
             let mut events = pumped.events;
+
+            // Commands the app forwarded for this device (its "Emparejar" /
+            // "Desvincular" buttons).
+            while let Ok(command) = commands.try_recv() {
+                match command {
+                    Command::RequestPair => events.extend(device.request_pairing()?),
+                    Command::Unpair => events.extend(device.unpair()?),
+                }
+            }
 
             // The phone asked and awaits us — accept (one clean exchange).
             if device.peer_wants_to_pair() {
@@ -339,6 +365,8 @@ impl Daemon {
                             fingerprint: peer_fp.clone(),
                         })?;
                         log("pinned", &format!("{peer_name} trusted; fingerprint saved"));
+                        self.set_paired(peer_id, true);
+                        self.notify_change();
                         device.send_ping()?;
                         if !asked_sftp {
                             device.send(request_packet)?;
@@ -351,6 +379,7 @@ impl Daemon {
                         log("unpaired", &format!("{peer_name} dropped the pairing; forgot it"));
                         mount = None; // drop → unmount
                         self.set_mount(peer_id, None);
+                        self.set_paired(peer_id, false);
                         self.notify_change();
                     }
                     _ => {}
@@ -390,6 +419,13 @@ impl Daemon {
         }
     }
 
+    /// Reflect a device's pairing state into the registry.
+    fn set_paired(&self, device_id: &str, paired: bool) {
+        if let Some(entry) = self.devices.lock().unwrap().get_mut(device_id) {
+            entry.paired = paired;
+        }
+    }
+
     /// Reflect a device's mount state into the registry.
     fn set_mount(&self, device_id: &str, path: Option<&Path>) {
         if let Some(entry) = self.devices.lock().unwrap().get_mut(device_id) {
@@ -422,10 +458,17 @@ impl Daemon {
 }
 
 /// Start serving `org.celestina.Devices1` on the session bus.
-fn serve_devices(registry: Registry, log: Log) -> zbus::Result<zbus::blocking::Connection> {
+fn serve_devices(
+    registry: Registry,
+    log: Log,
+    commands: Commands,
+) -> zbus::Result<zbus::blocking::Connection> {
     zbus::blocking::connection::Builder::session()?
         .name(devices::BUS_NAME)?
-        .serve_at(devices::OBJECT_PATH, Devices::new(registry, log))?
+        .serve_at(
+            devices::OBJECT_PATH,
+            Devices::new(registry, log, commands),
+        )?
         .build()
 }
 

@@ -29,6 +29,8 @@ pub mod qobject {
         #[qproperty(QStringList, device_mounts)]
         #[qproperty(QStringList, device_states)]
         #[qproperty(QStringList, device_fingerprints)]
+        // Per-device pairing flag ("true"/"false"), parallel to the lists above.
+        #[qproperty(QStringList, device_paired)]
         // The connection log — newest first — with a parallel failure flag
         // ("true"/"false") for red styling.
         #[qproperty(QStringList, log_lines)]
@@ -42,6 +44,14 @@ pub mod qobject {
         /// Open device `index`'s mount in the file manager.
         #[qinvokable]
         fn open_mount(self: Pin<&mut DevicesModel>, index: i32);
+
+        /// Ask device `index` to pair.
+        #[qinvokable]
+        fn pair_device(self: Pin<&mut DevicesModel>, index: i32);
+
+        /// Drop the pairing with device `index`.
+        #[qinvokable]
+        fn unpair_device(self: Pin<&mut DevicesModel>, index: i32);
     }
 
     impl cxx_qt::Threading for DevicesModel {}
@@ -54,6 +64,7 @@ pub struct DevicesModelRust {
     device_mounts: QStringList,
     device_states: QStringList,
     device_fingerprints: QStringList,
+    device_paired: QStringList,
     log_lines: QStringList,
     log_failures: QStringList,
     watch_started: bool,
@@ -87,6 +98,10 @@ impl qobject::DevicesModel {
             .iter()
             .map(|device| QString::from(device.fingerprint.as_str()))
             .collect();
+        let paired: QStringList = devices
+            .iter()
+            .map(|device| QString::from(if device.paired { "true" } else { "false" }))
+            .collect();
 
         self.as_mut().rust_mut().get_mut().devices = devices;
         self.as_mut().set_device_names(names);
@@ -94,10 +109,25 @@ impl qobject::DevicesModel {
         self.as_mut().set_device_mounts(mounts);
         self.as_mut().set_device_states(states);
         self.as_mut().set_device_fingerprints(fingerprints);
+        self.as_mut().set_device_paired(paired);
 
         self.as_mut().reload_log();
         self.as_mut().start_watch();
         self.as_mut().start_event_watch();
+    }
+
+    /// Ask device `index` to pair (its "Emparejar" button).
+    pub fn pair_device(self: Pin<&mut Self>, index: i32) {
+        if let Some(device) = usize::try_from(index).ok().and_then(|i| self.rust().devices.get(i)) {
+            crate::devices::request_pair(&device.id);
+        }
+    }
+
+    /// Drop the pairing with device `index` (its "Desvincular" button).
+    pub fn unpair_device(self: Pin<&mut Self>, index: i32) {
+        if let Some(device) = usize::try_from(index).ok().and_then(|i| self.rust().devices.get(i)) {
+            crate::devices::unpair(&device.id);
+        }
     }
 
     /// Re-read the connection log, newest first, into the parallel lists.

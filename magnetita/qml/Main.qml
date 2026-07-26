@@ -73,6 +73,8 @@ ApplicationWindow {
                 readonly property string fingerprint:
                     index < devices.deviceFingerprints.length ? devices.deviceFingerprints[index] : ""
                 readonly property bool mounted: mount.length > 0
+                readonly property bool paired:
+                    index < devices.devicePaired.length && devices.devicePaired[index] === "true"
 
                 width: deviceList.width
                 height: 90
@@ -84,7 +86,7 @@ ApplicationWindow {
                 Column {
                     anchors.left: parent.left
                     anchors.leftMargin: 18
-                    anchors.right: openButton.left
+                    anchors.right: actions.left
                     anchors.rightMargin: 12
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 3
@@ -117,34 +119,29 @@ ApplicationWindow {
                     }
                 }
 
-                Rectangle {
-                    id: openButton
+                Row {
+                    id: actions
                     anchors.right: parent.right
                     anchors.rightMargin: 14
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: row.mounted
-                    width: openLabel.implicitWidth + 26
-                    height: 34
-                    radius: CelestinaTheme.radiusSm
-                    color: openMouse.containsMouse ? CelestinaTheme.accentStrong
-                                                   : CelestinaTheme.accent
+                    spacing: 8
 
-                    Text {
-                        id: openLabel
-                        anchors.centerIn: parent
+                    CelestinaButton {
+                        visible: row.mounted
+                        primary: true
                         text: "Abrir"
-                        color: "white"
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontLabel
-                        font.weight: CelestinaTheme.weightDemiBold
-                    }
-
-                    MouseArea {
-                        id: openMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
                         onClicked: devices.openMount(row.index)
+                    }
+                    CelestinaButton {
+                        visible: !row.paired
+                        primary: true
+                        text: "Emparejar"
+                        onClicked: devices.pairDevice(row.index)
+                    }
+                    CelestinaButton {
+                        visible: row.paired
+                        text: "Desvincular"
+                        onClicked: devices.unpairDevice(row.index)
                     }
                 }
             }

@@ -39,6 +39,9 @@ pub struct DeviceEntry {
     pub device_type: String,
     pub connected: bool,
     pub mounted: bool,
+    /// Whether we trust this device (paired). A connected-but-unpaired device is
+    /// waiting on a pairing.
+    pub paired: bool,
     /// The local path the device is mounted at, or empty when not mounted.
     pub mount_path: String,
     /// Battery percent, or -1 when unknown (until CP3 reports it).
@@ -57,6 +60,7 @@ impl DeviceEntry {
             ("type", Value::from(self.device_type.clone())),
             ("connected", Value::from(self.connected)),
             ("mounted", Value::from(self.mounted)),
+            ("paired", Value::from(self.paired)),
             ("mountPath", Value::from(self.mount_path.clone())),
             ("battery", Value::from(self.battery)),
             ("fingerprint", Value::from(self.fingerprint.clone())),
@@ -121,22 +125,48 @@ pub fn push_log(log: &Log, entry: LogEntry) {
     }
 }
 
+/// A control action the app asks of a live link — delivered to that link's own
+/// thread, which owns the [`Device`](magnetita_core::Session) and can act on it.
+#[derive(Clone, Copy, Debug)]
+pub enum Command {
+    /// Ask the device to pair.
+    RequestPair,
+    /// Drop the pairing.
+    Unpair,
+}
+
+/// The per-device command channels, keyed by device id. A link registers its
+/// sender while it runs; the served interface looks one up to forward a request.
+pub type Commands = Arc<Mutex<HashMap<String, std::sync::mpsc::Sender<Command>>>>;
+
 /// The object served at [`OBJECT_PATH`].
 pub struct Devices {
     registry: Registry,
     log: Log,
+    commands: Commands,
 }
 
 impl Devices {
-    pub fn new(registry: Registry, log: Log) -> Devices {
-        Devices { registry, log }
+    pub fn new(registry: Registry, log: Log, commands: Commands) -> Devices {
+        Devices {
+            registry,
+            log,
+            commands,
+        }
+    }
+
+    /// Forwards a command to the device's link thread, if it is connected.
+    fn forward(&self, device_id: &str, command: Command) {
+        if let Some(sender) = self.commands.lock().unwrap().get(device_id) {
+            let _ = sender.send(command);
+        }
     }
 }
 
 #[zbus::interface(name = "org.celestina.Devices1")]
 impl Devices {
     /// The connected devices, each a dict with keys `id`, `name`, `type`,
-    /// `connected`, `mounted`, `mountPath`, `battery`, `fingerprint`.
+    /// `connected`, `mounted`, `paired`, `mountPath`, `battery`, `fingerprint`.
     fn list_devices(&self) -> Vec<HashMap<String, OwnedValue>> {
         self.registry
             .lock()
@@ -150,5 +180,15 @@ impl Devices {
     /// `failure`, `time`. Read on open; the `Event` signal marks new entries.
     fn recent_log(&self) -> Vec<HashMap<String, OwnedValue>> {
         self.log.lock().unwrap().iter().map(LogEntry::to_dict).collect()
+    }
+
+    /// Ask the connected device to pair (the app's "Emparejar").
+    fn request_pair(&self, device_id: String) {
+        self.forward(&device_id, Command::RequestPair);
+    }
+
+    /// Drop the pairing with the connected device (the app's "Desvincular").
+    fn unpair(&self, device_id: String) {
+        self.forward(&device_id, Command::Unpair);
     }
 }

@@ -23,6 +23,7 @@ pub struct Device {
     pub device_type: String,
     pub connected: bool,
     pub mounted: bool,
+    pub paired: bool,
     pub mount_path: String,
     /// The peer certificate fingerprint — the verification key to show.
     pub fingerprint: String,
@@ -107,6 +108,26 @@ fn watch<F: Fn() + Send + 'static>(signal: &'static str, on_change: F) -> Result
     Ok(())
 }
 
+/// Ask Magnetita to pair with the connected device (best-effort).
+pub fn request_pair(device_id: &str) {
+    call_method("RequestPair", device_id);
+}
+
+/// Ask Magnetita to drop the pairing (best-effort).
+pub fn unpair(device_id: &str) {
+    call_method("Unpair", device_id);
+}
+
+fn call_method(method: &'static str, device_id: &str) {
+    let Ok(connection) = Connection::session() else {
+        return;
+    };
+    let Ok(proxy) = Proxy::new(&connection, SERVICE, OBJECT, INTERFACE) else {
+        return;
+    };
+    let _: Result<(), zbus::Error> = proxy.call(method, &(device_id,));
+}
+
 fn parse_device(dict: &HashMap<String, OwnedValue>) -> Device {
     Device {
         id: str_field(dict, "id"),
@@ -114,6 +135,7 @@ fn parse_device(dict: &HashMap<String, OwnedValue>) -> Device {
         device_type: str_field(dict, "type"),
         connected: bool_field(dict, "connected"),
         mounted: bool_field(dict, "mounted"),
+        paired: bool_field(dict, "paired"),
         mount_path: str_field(dict, "mountPath"),
         fingerprint: str_field(dict, "fingerprint"),
     }
