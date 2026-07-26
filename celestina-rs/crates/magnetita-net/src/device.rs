@@ -19,18 +19,25 @@
 use std::io;
 use std::time::{Duration, Instant};
 
+use std::net::SocketAddr;
+
 use magnetita_core::{
-    pair_packet, ping_packet, ConnectionEvent, Identity, Outgoing, Reaction, Session, TIMEOUT_SECS,
+    pair_packet, ping_packet, ConnectionEvent, Identity, NetworkPacket, Outgoing, Reaction, Session,
+    TIMEOUT_SECS,
 };
 
 use crate::link::{Link, LinkError};
 
-/// One turn of the loop: the events it produced, and whether the link is still
-/// open (`false` once the peer has cleanly closed).
+/// One turn of the loop: the events it produced, whether the link is still open
+/// (`false` once the peer has cleanly closed), and the raw packet read this turn.
 #[derive(Clone, Debug)]
 pub struct Pump {
     pub events: Vec<ConnectionEvent>,
     pub open: bool,
+    /// The packet read this turn, if any. Pairing and ping are already handled
+    /// into `events`; this is here so the daemon can act on plugin packets the
+    /// pure session leaves untouched (sftp, battery, …).
+    pub packet: Option<NetworkPacket>,
 }
 
 /// A live connection to one device: its [`Link`], its [`Session`], and the
@@ -67,6 +74,12 @@ impl Device {
         self.link.peer_fingerprint()
     }
 
+    /// The address of the peer — its IP is where the phone's sftp server (and
+    /// every other plugin service) lives.
+    pub fn peer_addr(&self) -> SocketAddr {
+        self.link.peer_addr()
+    }
+
     pub fn is_paired(&self) -> bool {
         self.session.is_paired()
     }
@@ -93,15 +106,32 @@ impl Device {
             Ok(Some(packet)) => {
                 let reaction = self.session.handle(&packet);
                 events.extend(self.dispatch(reaction)?);
-                Ok(Pump { events, open: true })
+                Ok(Pump {
+                    events,
+                    open: true,
+                    packet: Some(packet),
+                })
             }
             Ok(None) => Ok(Pump {
                 events,
                 open: false,
+                packet: None,
             }),
-            Err(LinkError::Io(e)) if is_idle_timeout(&e) => Ok(Pump { events, open: true }),
+            Err(LinkError::Io(e)) if is_idle_timeout(&e) => Ok(Pump {
+                events,
+                open: true,
+                packet: None,
+            }),
             Err(e) => Err(e),
         }
+    }
+
+    /// Send a plugin packet the pure session does not own — the daemon builds it
+    /// (e.g. an sftp request) and we stamp it with the next id and put it on the
+    /// wire. Pairing and ping have their own methods; this is for everything else.
+    pub fn send(&mut self, make: impl FnOnce(i64) -> NetworkPacket) -> Result<(), LinkError> {
+        let id = self.next_id();
+        self.link.send_packet(&make(id))
     }
 
     /// Ask the peer to pair (the user pressed "pair" on our side).
@@ -283,5 +313,21 @@ mod tests {
         let pumped = desk.pump().unwrap();
         assert!(pumped.open);
         assert!(pumped.events.is_empty());
+        assert!(pumped.packet.is_none());
+    }
+
+    #[test]
+    fn a_plugin_packet_sends_and_arrives_raw_for_the_daemon() {
+        let (mut desk, mut phone) = linked_pair();
+        // The desktop sends an sftp request — a plugin packet the session does
+        // not own.
+        desk.send(magnetita_core::request_packet).unwrap();
+        let pumped = phone.pump().unwrap();
+        assert!(pumped.open);
+        // The pure session produced nothing from it...
+        assert!(pumped.events.is_empty());
+        // ...but the raw packet is surfaced for the daemon to act on.
+        let packet = pumped.packet.expect("the raw packet is surfaced");
+        assert!(packet.is(magnetita_core::TYPE_SFTP_REQUEST));
     }
 }

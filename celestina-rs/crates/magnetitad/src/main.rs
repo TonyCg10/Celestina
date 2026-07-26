@@ -31,12 +31,17 @@ use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use celestina_core::xdg;
-use magnetita_core::{ConnectionEvent, Identity, Session};
+use magnetita_core::{
+    read_sftp, request_packet, ConnectionEvent, Identity, Session, SftpReply,
+};
 use magnetita_net::discovery::ANNOUNCE_INTERVAL;
 use magnetita_net::{
     Announcement, Device, DeviceCert, Discovery, Link, TlsConfigs, TrustCheck, TrustStore,
     TrustedPeer,
 };
+
+mod mount;
+use mount::Mount;
 
 /// The KDE Connect port: UDP announce/listen and TCP link.
 const PORT: u16 = 1716;
@@ -83,6 +88,9 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     log("id", &device_id);
     log("cert", &cert.fingerprint()?);
+
+    // A previous run killed mid-mount can leave a dead sshfs behind; clear it.
+    mount::clear_stale();
 
     // UDP: announce ourselves, and hear phones announce.
     let discovery = Discovery::bind(SocketAddr::from(([0, 0, 0, 0], PORT)), &device_id)
@@ -201,9 +209,12 @@ impl Daemon {
     }
 
     /// Drive one link's session: trust-check it, let the phone drive pairing,
-    /// keep the trust store honest, ping on a fresh pair.
+    /// keep the trust store honest, and — once trusted — mount its storage.
     fn run_link(&self, link: Link, peer_id: &str, peer_name: &str) -> Result<(), Box<dyn Error>> {
         let peer_fp = link.peer_fingerprint().to_owned();
+        let link_host = link.peer_addr().ip().to_string();
+
+        let mut trusted = false;
         let session = match self.trust.lock().unwrap().check(peer_id, &peer_fp) {
             TrustCheck::Changed => {
                 log(
@@ -214,6 +225,7 @@ impl Daemon {
             }
             TrustCheck::Trusted => {
                 log("trust", &format!("{peer_name} is already paired"));
+                trusted = true;
                 Session::restored()
             }
             TrustCheck::Unknown => {
@@ -226,6 +238,18 @@ impl Daemon {
         };
 
         let mut device = Device::new(link, session, millis(), TICK)?;
+        // The mount lives as long as this link: dropping it (here or on unpair)
+        // unmounts, so a lost link never strands a dead mount.
+        let mut mount: Option<Mount> = None;
+        let mut asked_sftp = false;
+
+        // A device we already trust: ask for its storage right away.
+        if trusted {
+            device.send(request_packet)?;
+            asked_sftp = true;
+            log("sftp", &format!("requesting {peer_name}'s storage"));
+        }
+
         loop {
             let pumped = device.pump()?;
             let mut events = pumped.events;
@@ -247,18 +271,43 @@ impl Daemon {
                         })?;
                         log("pinned", &format!("{peer_name} trusted; fingerprint saved"));
                         device.send_ping()?;
-                        log("ping", "sent");
+                        if !asked_sftp {
+                            device.send(request_packet)?;
+                            asked_sftp = true;
+                            log("sftp", &format!("requesting {peer_name}'s storage"));
+                        }
                     }
                     ConnectionEvent::Unpaired => {
                         self.trust.lock().unwrap().forget(peer_id)?;
                         log("unpaired", &format!("{peer_name} dropped the pairing; forgot it"));
+                        mount = None; // drop → unmount
+                    }
+                    _ => {}
+                }
+            }
+
+            // The phone's sftp reply is a plugin packet the session leaves for us.
+            if let Some(packet) = &pumped.packet {
+                match read_sftp(packet) {
+                    Some(SftpReply::Mount(info)) if mount.is_none() => {
+                        let host = info.ip.clone().unwrap_or_else(|| link_host.clone());
+                        match Mount::open(peer_id, &host, &info) {
+                            Ok(m) => {
+                                log("mounted", &format!("{peer_name} at {}", m.path().display()));
+                                mount = Some(m);
+                            }
+                            Err(e) => log("mount", &format!("{peer_name}: {e}")),
+                        }
+                    }
+                    Some(SftpReply::Error(message)) => {
+                        log("sftp", &format!("{peer_name} refused: {message}"));
                     }
                     _ => {}
                 }
             }
 
             if !pumped.open {
-                return Ok(());
+                return Ok(()); // mount drops here → unmount
             }
         }
     }

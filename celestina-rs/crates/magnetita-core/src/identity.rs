@@ -73,14 +73,24 @@ impl Identity {
     /// ping, growing as Magnetita earns each plugin. We always name a `tcp_port`
     /// because our announce invites the phone to connect back.
     pub fn desktop(device_id: impl Into<String>, device_name: impl Into<String>) -> Identity {
-        let caps = vec![crate::ping::TYPE_PING.to_owned()];
         Identity {
             device_id: device_id.into(),
             device_name: device_name.into(),
             device_type: DeviceType::Desktop,
             protocol_version: PROTOCOL_VERSION,
-            incoming_capabilities: caps.clone(),
-            outgoing_capabilities: caps,
+            // What we accept, and what we send. A peer only sends a packet type
+            // the other side lists as *incoming*, so `kdeconnect.sftp` must be
+            // here for the phone to answer our mount request — declaring only
+            // ping is why an unlisted plugin stays silent. At CP2: ping both
+            // ways, plus the sftp plugin (we send the request, receive the reply).
+            incoming_capabilities: vec![
+                crate::ping::TYPE_PING.to_owned(),
+                crate::sftp::TYPE_SFTP.to_owned(),
+            ],
+            outgoing_capabilities: vec![
+                crate::ping::TYPE_PING.to_owned(),
+                crate::sftp::TYPE_SFTP_REQUEST.to_owned(),
+            ],
             tcp_port: Some(DEFAULT_PORT),
         }
     }
@@ -177,7 +187,10 @@ mod tests {
         assert_eq!(me.tcp_port, Some(super::DEFAULT_PORT));
         assert!(me.can_send(crate::ping::TYPE_PING));
         assert!(me.can_receive(crate::ping::TYPE_PING));
-        // What we do not implement yet, we do not claim.
-        assert!(!me.can_send("kdeconnect.sftp"));
+        // CP2: we send the sftp *request* and receive the sftp *reply*.
+        assert!(me.can_send(crate::sftp::TYPE_SFTP_REQUEST));
+        assert!(me.can_receive(crate::sftp::TYPE_SFTP));
+        // We send the request, never the reply.
+        assert!(!me.can_send(crate::sftp::TYPE_SFTP));
     }
 }
