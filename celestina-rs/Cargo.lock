@@ -427,7 +427,7 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
 name = "magnetita-core"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -435,7 +435,7 @@ dependencies = [
 
 [[package]]
 name = "magnetita-net"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "magnetita-core",
  "rcgen",
@@ -448,7 +448,7 @@ dependencies = [
 
 [[package]]
 name = "magnetitad"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "celestina-core",
  "magnetita-core",

@@ -3,7 +3,7 @@
 > Part of the [Celestina suite](../ROADMAP.md). This roadmap covers the phone
 > link only. Checklist legend: `[x]` done · `[ ]` planned. "Implemented" is not
 > "verified": pairing and every plugin must be proven against a real device on a
-> real network, tracked as its own goal. **CP0–CP3 are done.** The from-scratch
+> real network, tracked as its own goal. **Magnetita 1.0.0 — CP0–CP4 done.** The from-scratch
 > Rust transport (`magnetita-net`) and the `magnetitad` daemon pair live and
 > stably with the real phone (a Galaxy S25 Ultra, protocol 8), reconnect as
 > already-trusted, run as a systemd user service, mount the phone's storage over
@@ -16,6 +16,13 @@
 > forbidden. CP4 — one suite — is **done**: the phone and its battery surface in
 > the `celestina` panel, Siderita sends files to it, MPRIS media flows both ways,
 > and a Settings surface manages paired devices and per-plugin toggles.
+>
+> **Known limit (phone-side, not Magnetita):** clipboard is automatic desktop →
+> phone, but phone → desktop is manual ("Send clipboard"). Android 10+ forbids a
+> background app from reading the clipboard; KDE Connect's READ_LOGS workaround
+> fires only sporadically on Samsung One UI (its background-activity-start block
+> defeats the invisible-window trick). Magnetita already applies any clipboard the
+> phone pushes — the ceiling is the phone. Reliable auto needs root (Magisk).
 
 ## Overview
 
