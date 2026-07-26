@@ -32,8 +32,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use celestina_core::xdg;
 use magnetita_core::{
-    read_sftp, request_packet, ConnectionEvent, DeviceType, Identity, LostReason, Session,
-    SftpReply,
+    read_battery, read_sftp, request_packet, ConnectionEvent, DeviceType, Identity, LostReason,
+    Session, SftpReply,
 };
 use magnetita_net::discovery::ANNOUNCE_INTERVAL;
 use magnetita_net::{
@@ -257,6 +257,7 @@ impl Daemon {
                     paired: false,
                     mount_path: String::new(),
                     battery: -1,
+                    charging: false,
                     fingerprint,
                 },
             );
@@ -329,6 +330,7 @@ impl Daemon {
         // A device we already trust: ask for its storage right away.
         if trusted {
             device.send(request_packet)?;
+            device.send(magnetita_core::battery::request)?;
             asked_sftp = true;
             log("sftp", &format!("requesting {peer_name}'s storage"));
         }
@@ -370,6 +372,7 @@ impl Daemon {
                         device.send_ping()?;
                         if !asked_sftp {
                             device.send(request_packet)?;
+                            device.send(magnetita_core::battery::request)?;
                             asked_sftp = true;
                             log("sftp", &format!("requesting {peer_name}'s storage"));
                         }
@@ -386,8 +389,13 @@ impl Daemon {
                 }
             }
 
-            // The phone's sftp reply is a plugin packet the session leaves for us.
+            // Plugin packets the session leaves for us: the phone's battery and
+            // its sftp reply.
             if let Some(packet) = &pumped.packet {
+                if let Some(battery) = read_battery(packet) {
+                    self.set_battery(peer_id, battery.charge, battery.charging);
+                    self.notify_change();
+                }
                 match read_sftp(packet) {
                     Some(SftpReply::Mount(info)) if mount.is_none() => {
                         let host = info.ip.clone().unwrap_or_else(|| link_host.clone());
@@ -423,6 +431,14 @@ impl Daemon {
     fn set_paired(&self, device_id: &str, paired: bool) {
         if let Some(entry) = self.devices.lock().unwrap().get_mut(device_id) {
             entry.paired = paired;
+        }
+    }
+
+    /// Reflect a device's battery report into the registry.
+    fn set_battery(&self, device_id: &str, charge: i32, charging: bool) {
+        if let Some(entry) = self.devices.lock().unwrap().get_mut(device_id) {
+            entry.battery = charge;
+            entry.charging = charging;
         }
     }
 

@@ -86,10 +86,12 @@ impl Identity {
             incoming_capabilities: vec![
                 crate::ping::TYPE_PING.to_owned(),
                 crate::sftp::TYPE_SFTP.to_owned(),
+                crate::battery::TYPE_BATTERY.to_owned(),
             ],
             outgoing_capabilities: vec![
                 crate::ping::TYPE_PING.to_owned(),
                 crate::sftp::TYPE_SFTP_REQUEST.to_owned(),
+                crate::battery::TYPE_BATTERY_REQUEST.to_owned(),
             ],
             tcp_port: Some(DEFAULT_PORT),
         }

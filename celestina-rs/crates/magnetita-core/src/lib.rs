@@ -18,6 +18,7 @@
 //! the envelope, the identity, the pairing state machine, and then the plugin
 //! bodies.
 
+pub mod battery;
 pub mod event;
 pub mod identity;
 pub mod packet;
@@ -26,6 +27,7 @@ pub mod ping;
 pub mod session;
 pub mod sftp;
 
+pub use battery::{read_battery, Battery, TYPE_BATTERY, TYPE_BATTERY_REQUEST};
 pub use event::{ConnectionEvent, LostReason};
 pub use identity::{DeviceType, Identity, DEFAULT_PORT, PROTOCOL_VERSION, TYPE_IDENTITY};
 pub use packet::NetworkPacket;

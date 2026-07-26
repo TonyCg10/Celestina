@@ -44,8 +44,10 @@ pub struct DeviceEntry {
     pub paired: bool,
     /// The local path the device is mounted at, or empty when not mounted.
     pub mount_path: String,
-    /// Battery percent, or -1 when unknown (until CP3 reports it).
+    /// Battery percent, or -1 when unknown.
     pub battery: i32,
+    /// Whether the phone is charging.
+    pub charging: bool,
     /// The peer certificate's SHA-256 fingerprint — the verification key a human
     /// compares to be sure of no impostor.
     pub fingerprint: String,
@@ -63,6 +65,7 @@ impl DeviceEntry {
             ("paired", Value::from(self.paired)),
             ("mountPath", Value::from(self.mount_path.clone())),
             ("battery", Value::from(self.battery)),
+            ("charging", Value::from(self.charging)),
             ("fingerprint", Value::from(self.fingerprint.clone())),
         ];
         fields

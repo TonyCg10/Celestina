@@ -29,6 +29,8 @@ pub mod qobject {
         #[qproperty(QStringList, device_mounts)]
         #[qproperty(QStringList, device_states)]
         #[qproperty(QStringList, device_fingerprints)]
+        // Formatted battery per device ("58 %", "58 % ⚡", or "" if unknown).
+        #[qproperty(QStringList, device_battery)]
         // Per-device pairing flag ("true"/"false"), parallel to the lists above.
         #[qproperty(QStringList, device_paired)]
         // The connection log — newest first — with a parallel failure flag
@@ -64,6 +66,7 @@ pub struct DevicesModelRust {
     device_mounts: QStringList,
     device_states: QStringList,
     device_fingerprints: QStringList,
+    device_battery: QStringList,
     device_paired: QStringList,
     log_lines: QStringList,
     log_failures: QStringList,
@@ -102,6 +105,10 @@ impl qobject::DevicesModel {
             .iter()
             .map(|device| QString::from(if device.paired { "true" } else { "false" }))
             .collect();
+        let battery: QStringList = devices
+            .iter()
+            .map(|device| QString::from(battery_label(device).as_str()))
+            .collect();
 
         self.as_mut().rust_mut().get_mut().devices = devices;
         self.as_mut().set_device_names(names);
@@ -109,6 +116,7 @@ impl qobject::DevicesModel {
         self.as_mut().set_device_mounts(mounts);
         self.as_mut().set_device_states(states);
         self.as_mut().set_device_fingerprints(fingerprints);
+        self.as_mut().set_device_battery(battery);
         self.as_mut().set_device_paired(paired);
 
         self.as_mut().reload_log();
@@ -202,6 +210,17 @@ impl qobject::DevicesModel {
         if !mount.is_empty() {
             let _ = std::process::Command::new("xdg-open").arg(mount).spawn();
         }
+    }
+}
+
+/// A device's battery as text: "🔋 58 %", "🔋 58 % ⚡" charging, "" when unknown.
+fn battery_label(device: &crate::devices::Device) -> String {
+    if device.battery < 0 {
+        String::new()
+    } else if device.charging {
+        format!("🔋 {} % ⚡", device.battery)
+    } else {
+        format!("🔋 {} %", device.battery)
     }
 }
 

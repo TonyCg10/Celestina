@@ -25,6 +25,9 @@ pub struct Device {
     pub mounted: bool,
     pub paired: bool,
     pub mount_path: String,
+    /// Battery percent, or -1 when unknown.
+    pub battery: i32,
+    pub charging: bool,
     /// The peer certificate fingerprint — the verification key to show.
     pub fingerprint: String,
 }
@@ -137,6 +140,8 @@ fn parse_device(dict: &HashMap<String, OwnedValue>) -> Device {
         mounted: bool_field(dict, "mounted"),
         paired: bool_field(dict, "paired"),
         mount_path: str_field(dict, "mountPath"),
+        battery: i64_field(dict, "battery") as i32,
+        charging: bool_field(dict, "charging"),
         fingerprint: str_field(dict, "fingerprint"),
     }
 }

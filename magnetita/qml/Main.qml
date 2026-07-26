@@ -75,9 +75,11 @@ ApplicationWindow {
                 readonly property bool mounted: mount.length > 0
                 readonly property bool paired:
                     index < devices.devicePaired.length && devices.devicePaired[index] === "true"
+                readonly property string battery:
+                    index < devices.deviceBattery.length ? devices.deviceBattery[index] : ""
 
                 width: deviceList.width
-                height: 90
+                height: 106
                 radius: CelestinaTheme.radiusMd
                 color: CelestinaTheme.surface
                 border.color: CelestinaTheme.border
@@ -107,6 +109,13 @@ ApplicationWindow {
                         font.pixelSize: CelestinaTheme.fontCaption
                         elide: Text.ElideMiddle
                         width: parent.width
+                    }
+                    Text {
+                        visible: row.battery.length > 0
+                        text: row.battery
+                        color: CelestinaTheme.textMuted
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: CelestinaTheme.fontCaption
                     }
                     Text {
                         visible: row.fingerprint.length > 0
