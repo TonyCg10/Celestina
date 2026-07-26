@@ -145,7 +145,7 @@ fn parse_device(dict: &HashMap<String, OwnedValue>) -> Device {
         mounted: bool_field(dict, "mounted"),
         paired: bool_field(dict, "paired"),
         mount_path: str_field(dict, "mountPath"),
-        battery: i64_field(dict, "battery") as i32,
+        battery: i32_field(dict, "battery"),
         charging: bool_field(dict, "charging"),
         fingerprint: str_field(dict, "fingerprint"),
     }
@@ -176,4 +176,12 @@ fn i64_field(dict: &HashMap<String, OwnedValue>, key: &str) -> i64 {
     dict.get(key)
         .and_then(|value| i64::try_from(value.clone()).ok())
         .unwrap_or(0)
+}
+
+/// A D-Bus `i` (int32) field — the battery is sent as one, so `i64::try_from`
+/// (which only matches `x`) would miss it and read 0.
+fn i32_field(dict: &HashMap<String, OwnedValue>, key: &str) -> i32 {
+    dict.get(key)
+        .and_then(|value| i32::try_from(value.clone()).ok())
+        .unwrap_or(-1)
 }
