@@ -20,7 +20,7 @@
 //! CP1 wraps this in a window; CP2 hangs the sftp mount and
 //! `org.celestina.Devices1` off the same trusted link.
 
-use std::collections::HashSet;
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs;
 use std::io::Write;
@@ -32,7 +32,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use celestina_core::xdg;
 use magnetita_core::{
-    read_sftp, request_packet, ConnectionEvent, Identity, Session, SftpReply,
+    read_sftp, request_packet, ConnectionEvent, DeviceType, Identity, Session, SftpReply,
 };
 use magnetita_net::discovery::ANNOUNCE_INTERVAL;
 use magnetita_net::{
@@ -40,7 +40,9 @@ use magnetita_net::{
     TrustedPeer,
 };
 
+mod devices;
 mod mount;
+use devices::{DeviceEntry, Devices, Registry};
 use mount::Mount;
 
 /// The KDE Connect port: UDP announce/listen and TCP link.
@@ -63,12 +65,14 @@ fn main() -> std::process::ExitCode {
 }
 
 /// The shared state every link thread reads: who we are, how to wrap TLS, the
-/// trust store, and which devices already have a live link.
+/// trust store, the connected-device registry the contract exposes, and the
+/// session-bus connection used to announce changes.
 struct Daemon {
     identity: Identity,
     tls: TlsConfigs,
     trust: Mutex<TrustStore>,
-    connected: Mutex<HashSet<String>>,
+    devices: Registry,
+    dbus: Option<zbus::blocking::Connection>,
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
@@ -79,11 +83,27 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     let device_id = ensure_device_id(&dir)?;
     let cert = DeviceCert::ensure(&dir, &device_id)?;
+
+    // Serve org.celestina.Devices1 (best-effort: no session bus just means
+    // Siderita cannot draw the phone, not that the link fails).
+    let registry: Registry = Arc::new(Mutex::new(BTreeMap::new()));
+    let dbus = match serve_devices(Arc::clone(&registry)) {
+        Ok(connection) => {
+            log("dbus", &format!("serving {}", devices::INTERFACE));
+            Some(connection)
+        }
+        Err(e) => {
+            log("dbus", &format!("unavailable: {e}"));
+            None
+        }
+    };
+
     let daemon = Arc::new(Daemon {
         identity: Identity::desktop(&device_id, "Celestina"),
         tls: TlsConfigs::build(&cert)?,
         trust: Mutex::new(TrustStore::load(&dir.join("trust.json"))?),
-        connected: Mutex::new(HashSet::new()),
+        devices: registry,
+        dbus,
     });
 
     log("id", &device_id);
@@ -117,10 +137,10 @@ fn run() -> Result<(), Box<dyn Error>> {
             continue;
         }
         if daemon
-            .connected
+            .devices
             .lock()
             .unwrap()
-            .contains(&announcement.identity.device_id)
+            .contains_key(&announcement.identity.device_id)
         {
             continue; // already linked by one path or the other
         }
@@ -137,7 +157,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 fn spawn_announcer(discovery: &Discovery, daemon: Arc<Daemon>) {
     if let Ok(announcer) = discovery.try_clone() {
         thread::spawn(move || loop {
-            if daemon.connected.lock().unwrap().is_empty() {
+            if daemon.devices.lock().unwrap().is_empty() {
                 let _ = announcer.announce(&daemon.identity, millis());
             }
             thread::sleep(ANNOUNCE_INTERVAL);
@@ -193,18 +213,37 @@ impl Daemon {
     fn serve(self: &Arc<Self>, link: Link, how: &'static str) {
         let peer_id = link.peer().device_id.clone();
         let peer_name = link.peer().device_name.clone();
+        let peer_type = type_label(link.peer().device_type);
 
-        if !self.connected.lock().unwrap().insert(peer_id.clone()) {
-            // The other path already linked this device; drop the duplicate.
-            return;
+        {
+            // Hold the lock across check-and-insert so two paths cannot both
+            // pass; one link per device, the loser dropped here.
+            let mut devices = self.devices.lock().unwrap();
+            if devices.contains_key(&peer_id) {
+                return;
+            }
+            devices.insert(
+                peer_id.clone(),
+                DeviceEntry {
+                    id: peer_id.clone(),
+                    name: peer_name.clone(),
+                    device_type: peer_type,
+                    connected: true,
+                    mounted: false,
+                    mount_path: String::new(),
+                    battery: -1,
+                },
+            );
         }
+        self.notify_change();
         log(how, &format!("{peer_name} at {}", link.peer_addr()));
         log("secured", &format!("fingerprint {}", link.peer_fingerprint()));
 
         if let Err(e) = self.run_link(link, &peer_id, &peer_name) {
             log("link", &format!("{peer_name}: {e}"));
         }
-        self.connected.lock().unwrap().remove(&peer_id);
+        self.devices.lock().unwrap().remove(&peer_id);
+        self.notify_change();
         log("closed", &format!("{peer_name} disconnected"));
     }
 
@@ -281,6 +320,8 @@ impl Daemon {
                         self.trust.lock().unwrap().forget(peer_id)?;
                         log("unpaired", &format!("{peer_name} dropped the pairing; forgot it"));
                         mount = None; // drop → unmount
+                        self.set_mount(peer_id, None);
+                        self.notify_change();
                     }
                     _ => {}
                 }
@@ -294,6 +335,8 @@ impl Daemon {
                         match Mount::open(peer_id, &host, &info) {
                             Ok(m) => {
                                 log("mounted", &format!("{peer_name} at {}", m.path().display()));
+                                self.set_mount(peer_id, Some(m.path()));
+                                self.notify_change();
                                 mount = Some(m);
                             }
                             Err(e) => log("mount", &format!("{peer_name}: {e}")),
@@ -311,6 +354,57 @@ impl Daemon {
             }
         }
     }
+
+    /// Reflect a device's mount state into the registry.
+    fn set_mount(&self, device_id: &str, path: Option<&Path>) {
+        if let Some(entry) = self.devices.lock().unwrap().get_mut(device_id) {
+            match path {
+                Some(path) => {
+                    entry.mounted = true;
+                    entry.mount_path = path.to_string_lossy().into_owned();
+                }
+                None => {
+                    entry.mounted = false;
+                    entry.mount_path.clear();
+                }
+            }
+        }
+    }
+
+    /// Tell consumers of the contract that the device set or a device's state
+    /// changed, so they re-read it. Best-effort; a broken bus is not fatal.
+    fn notify_change(&self) {
+        if let Some(connection) = &self.dbus {
+            let _ = connection.emit_signal(
+                Option::<&str>::None,
+                devices::OBJECT_PATH,
+                devices::INTERFACE,
+                devices::CHANGED_SIGNAL,
+                &(),
+            );
+        }
+    }
+}
+
+/// Start serving `org.celestina.Devices1` on the session bus.
+fn serve_devices(registry: Registry) -> zbus::Result<zbus::blocking::Connection> {
+    zbus::blocking::connection::Builder::session()?
+        .name(devices::BUS_NAME)?
+        .serve_at(devices::OBJECT_PATH, Devices::new(registry))?
+        .build()
+}
+
+/// The contract's device-type label for a peer's declared type.
+fn type_label(device_type: DeviceType) -> String {
+    match device_type {
+        DeviceType::Phone => "phone",
+        DeviceType::Tablet => "tablet",
+        DeviceType::Laptop => "laptop",
+        DeviceType::Desktop => "desktop",
+        DeviceType::Tv => "tv",
+        DeviceType::Unknown => "unknown",
+    }
+    .to_owned()
 }
 
 /// Our stable 32-hex device id (a UUID with the dashes removed, the shape KDE

@@ -13,6 +13,10 @@ path = "src/main.rs"
 magnetita-core = { path = "../magnetita-core" }
 magnetita-net = { path = "../magnetita-net" }
 celestina-core.workspace = true
+# The device contract (org.celestina.Devices1) on the session bus — the same
+# zbus the suite's portal backend uses. Its blocking API keeps the daemon
+# thread-based; zbus runs its own small executor for the served interface.
+zbus = "5"
 
 [lints]
 workspace = true
