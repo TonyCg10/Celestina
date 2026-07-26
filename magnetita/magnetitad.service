@@ -1,0 +1,29 @@
+# Magnetita's CP0 daemon as a systemd *user* service — keeps the phone linked
+# across logins, the way Valent's daemon did (which this replaces).
+#
+# Install:
+#   cargo build --release -p magnetitad        # in celestina-rs/
+#   install -m755 celestina-rs/target/release/magnetitad ~/.local/bin/magnetitad
+#   install -m644 magnetita/magnetitad.service ~/.config/systemd/user/magnetitad.service
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now magnetitad.service
+#
+# Watch its connection story:
+#   journalctl --user -u magnetitad -f
+#
+# It binds UDP+TCP 1716, so Valent/kdeconnectd must be stopped and disabled:
+#   systemctl --user disable --now valent-daemon.service
+
+[Unit]
+Description=Magnetita — Celestina phone link (KDE Connect)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/magnetitad
+Restart=on-failure
+RestartSec=5
+SyslogIdentifier=magnetitad
+
+[Install]
+WantedBy=default.target
