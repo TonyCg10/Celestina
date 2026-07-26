@@ -23,6 +23,7 @@ pub mod clipboard;
 pub mod event;
 pub mod findmyphone;
 pub mod identity;
+pub mod mpris;
 pub mod notification;
 pub mod packet;
 pub mod pair;
@@ -38,6 +39,10 @@ pub use notification::{read_notification, Notification, TYPE_NOTIFICATION};
 pub use share::{read_share, share_request_packet, IncomingFile, TYPE_SHARE_REQUEST};
 pub use event::{ConnectionEvent, LostReason};
 pub use identity::{DeviceType, Identity, DEFAULT_PORT, PROTOCOL_VERSION, TYPE_IDENTITY};
+pub use mpris::{
+    read_mpris, read_mpris_request, MprisRequest, MprisUpdate, PlayerState, TYPE_MPRIS,
+    TYPE_MPRIS_REQUEST,
+};
 pub use packet::NetworkPacket;
 pub use pair::{pair_packet, PairAction, PairState, Pairing, TIMEOUT_SECS, TYPE_PAIR};
 pub use ping::{ping_packet, TYPE_PING};

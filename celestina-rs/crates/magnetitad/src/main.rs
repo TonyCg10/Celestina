@@ -32,9 +32,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use celestina_core::xdg;
 use magnetita_core::{
-    read_battery, read_clipboard, read_notification, read_sftp, read_share, request_packet,
-    ConnectionEvent, DeviceType, Identity, IncomingFile, LostReason, Notification, Session,
-    SftpReply,
+    read_battery, read_clipboard, read_mpris, read_mpris_request, read_notification, read_sftp,
+    read_share, request_packet, ConnectionEvent, DeviceType, Identity, IncomingFile, LostReason,
+    Notification, Session, SftpReply,
 };
 use magnetita_net::discovery::ANNOUNCE_INTERVAL;
 use magnetita_net::{
@@ -43,6 +43,7 @@ use magnetita_net::{
 };
 
 mod devices;
+mod media;
 mod mount;
 mod notify;
 use devices::{push_log, Command, Commands, DeviceEntry, Devices, Log, LogEntry, Registry};
@@ -272,6 +273,13 @@ impl Daemon {
                     battery: -1,
                     charging: false,
                     fingerprint,
+                    media_player: String::new(),
+                    media_title: String::new(),
+                    media_artist: String::new(),
+                    media_playing: false,
+                    media_can_pause: false,
+                    media_can_next: false,
+                    media_can_previous: false,
                 },
             );
         }
@@ -344,11 +352,15 @@ impl Daemon {
         // unmounts, so a lost link never strands a dead mount.
         let mut mount: Option<Mount> = None;
         let mut asked_sftp = false;
+        // The phone player we drive from the app: the first the phone lists,
+        // then whichever it last reported state for.
+        let mut mpris_player: Option<String> = None;
 
         // A device we already trust: ask for its storage right away.
         if trusted {
             device.send(request_packet)?;
             device.send(magnetita_core::battery::request)?;
+            device.send(magnetita_core::mpris::request_player_list)?;
             self.send_clipboard_connect(&mut device)?;
             asked_sftp = true;
             log("sftp", &format!("requesting {peer_name}'s storage"));
@@ -372,6 +384,15 @@ impl Daemon {
                         device.send(|id| {
                             magnetita_core::clipboard::clipboard_packet(id, &text)
                         })?;
+                    }
+                    Command::Media(action) => {
+                        // Drive the phone's active player; a report comes back
+                        // and refreshes the app's now-playing card.
+                        if let Some(player) = mpris_player.clone() {
+                            device.send(|id| {
+                                magnetita_core::mpris::action(id, &player, &action)
+                            })?;
+                        }
                     }
                     Command::SendFile(path) => {
                         let path = PathBuf::from(&path);
@@ -436,6 +457,7 @@ impl Daemon {
                         if !asked_sftp {
                             device.send(request_packet)?;
                             device.send(magnetita_core::battery::request)?;
+                            device.send(magnetita_core::mpris::request_player_list)?;
                             self.send_clipboard_connect(&mut device)?;
                             asked_sftp = true;
                             log("sftp", &format!("requesting {peer_name}'s storage"));
@@ -490,6 +512,47 @@ impl Daemon {
                     let host = link_host.clone();
                     let name = peer_name.to_owned();
                     thread::spawn(move || daemon.receive_file(name, host, file));
+                }
+                // The phone reporting its media (for the app's now-playing card).
+                if let Some(update) = read_mpris(packet) {
+                    if let Some(players) = update.players {
+                        if players.is_empty() {
+                            mpris_player = None;
+                            self.set_media(peer_id, None);
+                            self.notify_change();
+                        } else if mpris_player.is_none() {
+                            // Adopt the first player and ask for its state.
+                            let first = players[0].clone();
+                            mpris_player = Some(first.clone());
+                            device
+                                .send(|id| magnetita_core::mpris::request_now_playing(id, &first))?;
+                        }
+                    }
+                    if let Some(state) = update.state {
+                        mpris_player = Some(state.player.clone());
+                        self.set_media(peer_id, Some(&state));
+                        self.notify_change();
+                    }
+                }
+                // The phone driving *our* players (its KDE Connect media remote).
+                if let Some(request) = read_mpris_request(packet) {
+                    if request.request_player_list {
+                        let players = media::players();
+                        device.send(|id| magnetita_core::mpris::player_list_packet(id, &players))?;
+                    }
+                    if let Some(player) = request.player.as_deref() {
+                        if let Some(action) = request.action.as_deref() {
+                            media::control(player, action);
+                        }
+                        if let Some(volume) = request.set_volume {
+                            media::set_volume(player, volume);
+                        }
+                        if request.action.is_some() || request.request_now_playing {
+                            if let Some(state) = media::state(player) {
+                                device.send(|id| magnetita_core::mpris::state_packet(id, &state))?;
+                            }
+                        }
+                    }
                 }
                 match read_sftp(packet) {
                     Some(SftpReply::Mount(info)) if mount.is_none() => {
@@ -567,6 +630,33 @@ impl Daemon {
         if let Some(entry) = self.devices.lock().unwrap().get_mut(device_id) {
             entry.battery = charge;
             entry.charging = charging;
+        }
+    }
+
+    /// Reflect the phone's reported now-playing into the registry, or clear it
+    /// (an empty player list, or nothing playing).
+    fn set_media(&self, device_id: &str, state: Option<&magnetita_core::PlayerState>) {
+        if let Some(entry) = self.devices.lock().unwrap().get_mut(device_id) {
+            match state {
+                Some(state) => {
+                    entry.media_player = state.player.clone();
+                    entry.media_title = state.title.clone();
+                    entry.media_artist = state.artist.clone();
+                    entry.media_playing = state.is_playing;
+                    entry.media_can_pause = state.can_pause;
+                    entry.media_can_next = state.can_go_next;
+                    entry.media_can_previous = state.can_go_previous;
+                }
+                None => {
+                    entry.media_player.clear();
+                    entry.media_title.clear();
+                    entry.media_artist.clear();
+                    entry.media_playing = false;
+                    entry.media_can_pause = false;
+                    entry.media_can_next = false;
+                    entry.media_can_previous = false;
+                }
+            }
         }
     }
 

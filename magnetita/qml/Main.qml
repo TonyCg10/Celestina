@@ -18,6 +18,16 @@ ApplicationWindow {
         Component.onCompleted: reload()
     }
 
+    // The first connected device that is playing something, or -1 — the phone
+    // whose media the "Ahora suena" card controls.
+    readonly property int mediaIndex: {
+        for (var i = 0; i < devices.deviceMedia.length; i++) {
+            if (devices.deviceMedia[i].length > 0)
+                return i
+        }
+        return -1
+    }
+
     Column {
         anchors.fill: parent
         anchors.margins: 22
@@ -165,6 +175,76 @@ ApplicationWindow {
             }
         }
 
+        // ── Ahora suena — media control of the phone ─────────────────
+        Rectangle {
+            id: mediaCard
+            width: parent.width
+            visible: window.mediaIndex >= 0
+            height: 72
+            radius: CelestinaTheme.radiusMd
+            color: CelestinaTheme.surface
+            border.color: CelestinaTheme.border
+            border.width: 1
+
+            Column {
+                anchors.left: parent.left
+                anchors.leftMargin: 16
+                anchors.right: transport.left
+                anchors.rightMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 3
+
+                Text {
+                    text: "♪ AHORA SUENA"
+                    color: CelestinaTheme.textMuted
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontMini
+                    font.letterSpacing: 1.4
+                    font.weight: CelestinaTheme.weightDemiBold
+                }
+                Text {
+                    width: parent.width
+                    text: window.mediaIndex >= 0 ? devices.deviceMedia[window.mediaIndex] : ""
+                    color: CelestinaTheme.text
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCallout
+                    font.weight: CelestinaTheme.weightDemiBold
+                    elide: Text.ElideRight
+                }
+            }
+
+            Row {
+                id: transport
+                anchors.right: parent.right
+                anchors.rightMargin: 14
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 6
+
+                CelestinaButton {
+                    width: 46
+                    visible: window.mediaIndex >= 0
+                             && devices.deviceMediaPrevious[window.mediaIndex] === "true"
+                    text: "⏮"
+                    onClicked: devices.mediaPrevious(window.mediaIndex)
+                }
+                CelestinaButton {
+                    width: 46
+                    primary: true
+                    text: (window.mediaIndex >= 0
+                           && devices.deviceMediaPlaying[window.mediaIndex] === "true")
+                          ? "⏸" : "▶"
+                    onClicked: devices.mediaPlayPause(window.mediaIndex)
+                }
+                CelestinaButton {
+                    width: 46
+                    visible: window.mediaIndex >= 0
+                             && devices.deviceMediaNext[window.mediaIndex] === "true"
+                    text: "⏭"
+                    onClicked: devices.mediaNext(window.mediaIndex)
+                }
+            }
+        }
+
         // ── Connection log — "why won't it connect" ──────────────────
         Text {
             text: "ACTIVIDAD"
@@ -179,7 +259,8 @@ ApplicationWindow {
 
         Rectangle {
             width: parent.width
-            height: window.height - deviceList.height - 210
+            height: window.height - deviceList.height
+                    - (window.mediaIndex >= 0 ? mediaCard.height + 6 : 0) - 210
             radius: CelestinaTheme.radiusMd
             color: CelestinaTheme.canvasRaised
             border.color: CelestinaTheme.border

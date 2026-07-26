@@ -91,6 +91,10 @@ impl Identity {
                 crate::clipboard::TYPE_CLIPBOARD.to_owned(),
                 crate::clipboard::TYPE_CLIPBOARD_CONNECT.to_owned(),
                 crate::share::TYPE_SHARE_REQUEST.to_owned(),
+                // Media, both ways: we receive the phone's now-playing reports,
+                // and receive its requests to drive the desktop's own players.
+                crate::mpris::TYPE_MPRIS.to_owned(),
+                crate::mpris::TYPE_MPRIS_REQUEST.to_owned(),
             ],
             outgoing_capabilities: vec![
                 crate::ping::TYPE_PING.to_owned(),
@@ -101,6 +105,9 @@ impl Identity {
                 // bidirectional clipboard peer and auto-syncs both ways.
                 crate::clipboard::TYPE_CLIPBOARD.to_owned(),
                 crate::clipboard::TYPE_CLIPBOARD_CONNECT.to_owned(),
+                // We request and drive the phone's players, and report our own.
+                crate::mpris::TYPE_MPRIS.to_owned(),
+                crate::mpris::TYPE_MPRIS_REQUEST.to_owned(),
             ],
             tcp_port: Some(DEFAULT_PORT),
         }

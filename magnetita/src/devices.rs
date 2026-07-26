@@ -30,6 +30,15 @@ pub struct Device {
     pub charging: bool,
     /// The peer certificate fingerprint — the verification key to show.
     pub fingerprint: String,
+    /// The phone's now-playing, for the media card. `media_player` empty means
+    /// nothing is playing; the `can_*` flags gate the transport buttons.
+    pub media_player: String,
+    pub media_title: String,
+    pub media_artist: String,
+    pub media_playing: bool,
+    pub media_can_pause: bool,
+    pub media_can_next: bool,
+    pub media_can_previous: bool,
 }
 
 /// One connection-log entry from the daemon.
@@ -126,6 +135,17 @@ pub fn ring(device_id: &str) {
     call_method("Ring", device_id);
 }
 
+/// Ask Magnetita to drive the phone's media: "PlayPause", "Next" or "Previous".
+pub fn media_action(device_id: &str, action: &str) {
+    let Ok(connection) = Connection::session() else {
+        return;
+    };
+    let Ok(proxy) = Proxy::new(&connection, SERVICE, OBJECT, INTERFACE) else {
+        return;
+    };
+    let _: Result<(), zbus::Error> = proxy.call("MediaAction", &(device_id, action));
+}
+
 fn call_method(method: &'static str, device_id: &str) {
     let Ok(connection) = Connection::session() else {
         return;
@@ -148,6 +168,13 @@ fn parse_device(dict: &HashMap<String, OwnedValue>) -> Device {
         battery: i32_field(dict, "battery"),
         charging: bool_field(dict, "charging"),
         fingerprint: str_field(dict, "fingerprint"),
+        media_player: str_field(dict, "mediaPlayer"),
+        media_title: str_field(dict, "mediaTitle"),
+        media_artist: str_field(dict, "mediaArtist"),
+        media_playing: bool_field(dict, "mediaPlaying"),
+        media_can_pause: bool_field(dict, "mediaCanPause"),
+        media_can_next: bool_field(dict, "mediaCanNext"),
+        media_can_previous: bool_field(dict, "mediaCanPrevious"),
     }
 }
 

@@ -51,6 +51,16 @@ pub struct DeviceEntry {
     /// The peer certificate's SHA-256 fingerprint — the verification key a human
     /// compares to be sure of no impostor.
     pub fingerprint: String,
+    /// The phone's currently-reported media, for the app's now-playing card.
+    /// `media_player` is empty when nothing is playing; the rest is that
+    /// player's state, and the `can_*` flags gate the transport buttons.
+    pub media_player: String,
+    pub media_title: String,
+    pub media_artist: String,
+    pub media_playing: bool,
+    pub media_can_pause: bool,
+    pub media_can_next: bool,
+    pub media_can_previous: bool,
 }
 
 impl DeviceEntry {
@@ -67,6 +77,13 @@ impl DeviceEntry {
             ("battery", Value::from(self.battery)),
             ("charging", Value::from(self.charging)),
             ("fingerprint", Value::from(self.fingerprint.clone())),
+            ("mediaPlayer", Value::from(self.media_player.clone())),
+            ("mediaTitle", Value::from(self.media_title.clone())),
+            ("mediaArtist", Value::from(self.media_artist.clone())),
+            ("mediaPlaying", Value::from(self.media_playing)),
+            ("mediaCanPause", Value::from(self.media_can_pause)),
+            ("mediaCanNext", Value::from(self.media_can_next)),
+            ("mediaCanPrevious", Value::from(self.media_can_previous)),
         ];
         fields
             .into_iter()
@@ -142,6 +159,9 @@ pub enum Command {
     SendClipboard(String),
     /// Send this local file to the device.
     SendFile(String),
+    /// Send a media transport verb ("PlayPause", "Next", "Previous") to the
+    /// phone's active player.
+    Media(String),
 }
 
 /// The per-device command channels, keyed by device id. A link registers its
@@ -209,5 +229,11 @@ impl Devices {
     /// Send a local file to the connected device (Siderita's "Enviar al móvil").
     fn send_file(&self, device_id: String, path: String) {
         self.forward(&device_id, Command::SendFile(path));
+    }
+
+    /// Drive the phone's media: `action` is "PlayPause", "Next" or "Previous"
+    /// (the app's transport buttons on its now-playing card).
+    fn media_action(&self, device_id: String, action: String) {
+        self.forward(&device_id, Command::Media(action));
     }
 }

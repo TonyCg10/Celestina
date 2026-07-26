@@ -11,9 +11,10 @@
 > the phone in its sidebar (click to browse it) and the standalone **Magnetita
 > app** consumes to pair/unpair with the verification key and show the connection
 > log. The daily plugins — **battery, notifications, file share, find-my-phone,
-> clipboard-receive** — mirror through freedesktop standards, all verified live.
-> ~66 offline tests, **no async runtime**, no C toolchain, `unsafe` forbidden.
-> CP4 — one suite (shell surfacing, send-to-phone, shared settings) — is next.
+> clipboard** (both ways) — mirror through freedesktop standards, all verified
+> live. ~90 offline tests, **no async runtime**, no C toolchain, `unsafe`
+> forbidden. CP4 — one suite — is nearly done: shell surfacing, send-to-phone
+> and MPRIS media (both ways) land; only a shared settings source remains.
 
 ## Overview
 
@@ -254,9 +255,19 @@ language.
       file context menu (shown for a single file when a phone is connected) calls
       the daemon's `SendFile` over D-Bus, complementing the browse-the-phone mount
       of CP2. Live-verified: right-click → the file lands on the phone.
+- [x] **Media control (MPRIS)** — playback both ways over `kdeconnect.mpris`.
+      Desktop → phone: the app's "Ahora suena" card shows the phone's now-playing
+      (title/artist) with ⏮ ⏯ ⏭ transport, carried on the `Devices1` contract
+      (`mediaTitle`, `mediaArtist`, `mediaPlaying`, `mediaCan*`) and driven by a
+      new `MediaAction` method. Phone → desktop: the daemon answers the phone's
+      `mpris.request` from the desktop's own players via `playerctl` — lists them,
+      reports now-playing, and runs play-pause/next/previous. The wire lives in a
+      pure `magnetita-core::mpris` (10 tests); the desktop side is `media.rs`,
+      unit-tested and validated live against playerctl + a real player.
 - [ ] **One settings source** — paired devices and per-plugin toggles share the
-      suite's settings/theming source, not a private store
-- [ ] **Media control (MPRIS)** — control phone/desktop playback both ways
+      suite's settings/theming source, not a private store. (Theming is already
+      shared through `celestina-style`/`CelestinaTheme`; this is the remaining
+      half: a common store for device/plugin settings instead of per-app config.)
 
 **Done when:** pairing, status, transfers, the mount and settings are reachable
 from the suite's own surfaces in the suite's own visual language, over the suite's

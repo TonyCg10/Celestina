@@ -33,6 +33,13 @@ pub mod qobject {
         #[qproperty(QStringList, device_battery)]
         // Per-device pairing flag ("true"/"false"), parallel to the lists above.
         #[qproperty(QStringList, device_paired)]
+        // The phone's now-playing line ("Artista — Título"), "" when nothing is
+        // playing (which hides the media card), and parallel "true"/"false"
+        // flags for the play/pause state and whether next/prev are available.
+        #[qproperty(QStringList, device_media)]
+        #[qproperty(QStringList, device_media_playing)]
+        #[qproperty(QStringList, device_media_next)]
+        #[qproperty(QStringList, device_media_previous)]
         // The connection log — newest first — with a parallel failure flag
         // ("true"/"false") for red styling.
         #[qproperty(QStringList, log_lines)]
@@ -58,6 +65,18 @@ pub mod qobject {
         /// Ring device `index` (find-my-phone).
         #[qinvokable]
         fn ring_device(self: Pin<&mut DevicesModel>, index: i32);
+
+        /// Toggle play/pause on device `index`'s current player.
+        #[qinvokable]
+        fn media_play_pause(self: Pin<&mut DevicesModel>, index: i32);
+
+        /// Skip to the next track on device `index`.
+        #[qinvokable]
+        fn media_next(self: Pin<&mut DevicesModel>, index: i32);
+
+        /// Skip to the previous track on device `index`.
+        #[qinvokable]
+        fn media_previous(self: Pin<&mut DevicesModel>, index: i32);
     }
 
     impl cxx_qt::Threading for DevicesModel {}
@@ -72,6 +91,10 @@ pub struct DevicesModelRust {
     device_fingerprints: QStringList,
     device_battery: QStringList,
     device_paired: QStringList,
+    device_media: QStringList,
+    device_media_playing: QStringList,
+    device_media_next: QStringList,
+    device_media_previous: QStringList,
     log_lines: QStringList,
     log_failures: QStringList,
     watch_started: bool,
@@ -113,6 +136,22 @@ impl qobject::DevicesModel {
             .iter()
             .map(|device| QString::from(battery_label(device).as_str()))
             .collect();
+        let media: QStringList = devices
+            .iter()
+            .map(|device| QString::from(media_label(device).as_str()))
+            .collect();
+        let media_playing: QStringList = devices
+            .iter()
+            .map(|device| QString::from(flag(device.media_playing)))
+            .collect();
+        let media_next: QStringList = devices
+            .iter()
+            .map(|device| QString::from(flag(device.media_can_next)))
+            .collect();
+        let media_previous: QStringList = devices
+            .iter()
+            .map(|device| QString::from(flag(device.media_can_previous)))
+            .collect();
 
         self.as_mut().rust_mut().get_mut().devices = devices;
         self.as_mut().set_device_names(names);
@@ -122,6 +161,10 @@ impl qobject::DevicesModel {
         self.as_mut().set_device_fingerprints(fingerprints);
         self.as_mut().set_device_battery(battery);
         self.as_mut().set_device_paired(paired);
+        self.as_mut().set_device_media(media);
+        self.as_mut().set_device_media_playing(media_playing);
+        self.as_mut().set_device_media_next(media_next);
+        self.as_mut().set_device_media_previous(media_previous);
 
         self.as_mut().reload_log();
         self.as_mut().start_watch();
@@ -146,6 +189,28 @@ impl qobject::DevicesModel {
     pub fn ring_device(self: Pin<&mut Self>, index: i32) {
         if let Some(device) = usize::try_from(index).ok().and_then(|i| self.rust().devices.get(i)) {
             crate::devices::ring(&device.id);
+        }
+    }
+
+    /// Toggle play/pause on device `index`'s current player.
+    pub fn media_play_pause(self: Pin<&mut Self>, index: i32) {
+        self.media(index, "PlayPause");
+    }
+
+    /// Skip to the next track on device `index`.
+    pub fn media_next(self: Pin<&mut Self>, index: i32) {
+        self.media(index, "Next");
+    }
+
+    /// Skip to the previous track on device `index`.
+    pub fn media_previous(self: Pin<&mut Self>, index: i32) {
+        self.media(index, "Previous");
+    }
+
+    /// Forward a transport verb to device `index`'s active player.
+    fn media(self: Pin<&mut Self>, index: i32, action: &str) {
+        if let Some(device) = usize::try_from(index).ok().and_then(|i| self.rust().devices.get(i)) {
+            crate::devices::media_action(&device.id, action);
         }
     }
 
@@ -232,6 +297,29 @@ fn battery_label(device: &crate::devices::Device) -> String {
         format!("🔋 {} % ⚡", device.battery)
     } else {
         format!("🔋 {} %", device.battery)
+    }
+}
+
+/// The phone's now-playing as one line — "Artista — Título", or whichever half
+/// it sent — or "" when nothing is playing (which hides the media card).
+fn media_label(device: &crate::devices::Device) -> String {
+    if device.media_player.is_empty() {
+        return String::new();
+    }
+    match (device.media_artist.as_str(), device.media_title.as_str()) {
+        ("", "") => String::new(),
+        ("", title) => title.to_owned(),
+        (artist, "") => artist.to_owned(),
+        (artist, title) => format!("{artist} — {title}"),
+    }
+}
+
+/// A boolean as the "true"/"false" string the parallel flag lists carry.
+fn flag(value: bool) -> &'static str {
+    if value {
+        "true"
+    } else {
+        "false"
     }
 }
 
