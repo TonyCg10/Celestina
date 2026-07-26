@@ -373,6 +373,41 @@ impl Daemon {
                             magnetita_core::clipboard::clipboard_packet(id, &text)
                         })?;
                     }
+                    Command::SendFile(path) => {
+                        let path = PathBuf::from(&path);
+                        match std::fs::metadata(&path) {
+                            Ok(meta) if meta.is_file() => {
+                                let name = path
+                                    .file_name()
+                                    .and_then(|n| n.to_str())
+                                    .unwrap_or("archivo")
+                                    .to_owned();
+                                let size = meta.len() as i64;
+                                match magnetita_net::serve_file(&self.tls, &path) {
+                                    Ok(port) => {
+                                        device.send(|id| {
+                                            magnetita_core::share_request_packet(
+                                                id, &name, size, port,
+                                            )
+                                        })?;
+                                        ui_log(self, peer_name, &format!("enviando {name}…"), false);
+                                    }
+                                    Err(e) => ui_log(
+                                        self,
+                                        peer_name,
+                                        &format!("no se pudo enviar {name}: {e}"),
+                                        true,
+                                    ),
+                                }
+                            }
+                            _ => ui_log(
+                                self,
+                                peer_name,
+                                &format!("no se pudo leer {}", path.display()),
+                                true,
+                            ),
+                        }
+                    }
                 }
             }
 

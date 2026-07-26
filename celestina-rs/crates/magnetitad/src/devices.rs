@@ -140,6 +140,8 @@ pub enum Command {
     Ring,
     /// Push this text to the device as a clipboard change.
     SendClipboard(String),
+    /// Send this local file to the device.
+    SendFile(String),
 }
 
 /// The per-device command channels, keyed by device id. A link registers its
@@ -202,5 +204,10 @@ impl Devices {
     /// Ring the connected device (the app's "Sonar" — find-my-phone).
     fn ring(&self, device_id: String) {
         self.forward(&device_id, Command::Ring);
+    }
+
+    /// Send a local file to the connected device (Siderita's "Enviar al móvil").
+    fn send_file(&self, device_id: String, path: String) {
+        self.forward(&device_id, Command::SendFile(path));
     }
 }

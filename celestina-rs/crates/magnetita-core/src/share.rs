@@ -10,12 +10,23 @@
 //! or size, so [`read_share`] returns `None` and the daemon leaves them for a
 //! later, non-file path. CP3 does the file direction, phone → PC.
 
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::packet::NetworkPacket;
 
 /// The share packet type (file, text, or URL).
 pub const TYPE_SHARE_REQUEST: &str = "kdeconnect.share.request";
+
+/// Builds an outgoing file share: a `share.request` naming the file, with its
+/// `payloadSize` and the `payloadTransferInfo` port where *we* will serve the
+/// bytes over a second TLS socket. The phone dials that port and reads `size`
+/// bytes. The mirror of [`read_share`].
+pub fn share_request_packet(id: i64, filename: &str, size: i64, port: u16) -> NetworkPacket {
+    let mut packet = NetworkPacket::new(id, TYPE_SHARE_REQUEST, json!({ "filename": filename }));
+    packet.payload_size = Some(size);
+    packet.payload_transfer_info = Some(json!({ "port": port }));
+    packet
+}
 
 /// A file the phone is sending: its name, its size, and the port to fetch it on.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -92,5 +103,18 @@ mod tests {
     fn a_non_share_packet_is_ignored() {
         let ping = NetworkPacket::new(1, "kdeconnect.ping", serde_json::json!({}));
         assert!(read_share(&ping).is_none());
+    }
+
+    #[test]
+    fn an_outgoing_share_round_trips_through_read_share() {
+        let packet = super::share_request_packet(9, "nota.txt", 512, 1755);
+        assert_eq!(
+            read_share(&packet),
+            Some(IncomingFile {
+                filename: "nota.txt".to_owned(),
+                size: 512,
+                port: 1755,
+            })
+        );
     }
 }

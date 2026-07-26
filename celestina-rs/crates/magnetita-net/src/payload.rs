@@ -8,12 +8,13 @@
 
 use std::fs::File;
 use std::io::{self, Read, Write};
-use std::net::TcpStream;
-use std::path::Path;
-use std::time::Duration;
+use std::net::{TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use rustls::pki_types::ServerName;
-use rustls::{ClientConnection, StreamOwned};
+use rustls::{ClientConnection, ServerConnection, StreamOwned};
 
 use crate::tls::TlsConfigs;
 
@@ -52,4 +53,54 @@ pub fn receive_to_file(
     };
     file.flush()?;
     Ok(written)
+}
+
+/// Serve `path` to a phone over a one-shot TLS payload socket (the send
+/// direction). Binds an ephemeral port — returned so the caller can name it in
+/// the outgoing `share.request` — then, on its own thread, accepts one
+/// connection (we are the TLS *server* here, since we opened the port), streams
+/// the file, and closes. The phone reads the declared number of bytes.
+pub fn serve_file(tls: &TlsConfigs, path: &Path) -> io::Result<u16> {
+    let listener = TcpListener::bind(("0.0.0.0", 0))?;
+    let port = listener.local_addr()?.port();
+    let tls = tls.clone();
+    let path: PathBuf = path.to_owned();
+    thread::spawn(move || {
+        if let Err(e) = serve_one(&listener, &tls, &path) {
+            eprintln!("magnetita: payload send of {} failed: {e}", path.display());
+        }
+    });
+    Ok(port)
+}
+
+fn serve_one(listener: &TcpListener, tls: &TlsConfigs, path: &Path) -> io::Result<()> {
+    // Wait (bounded) for the phone to dial the port we advertised.
+    listener.set_nonblocking(true)?;
+    let deadline = Instant::now() + PAYLOAD_TIMEOUT;
+    let mut tcp = loop {
+        match listener.accept() {
+            Ok((tcp, _)) => break tcp,
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                if Instant::now() >= deadline {
+                    return Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "the phone did not fetch the file",
+                    ));
+                }
+                thread::sleep(Duration::from_millis(50));
+            }
+            Err(e) => return Err(e),
+        }
+    };
+    tcp.set_nonblocking(false)?;
+    tcp.set_write_timeout(Some(PAYLOAD_TIMEOUT))?;
+
+    let mut conn = ServerConnection::new(tls.server_config()).map_err(io::Error::other)?;
+    conn.complete_io(&mut tcp)?;
+
+    let mut stream = StreamOwned::new(conn, tcp);
+    let mut file = File::open(path)?;
+    io::copy(&mut file, &mut stream)?;
+    stream.flush()?;
+    Ok(())
 }
