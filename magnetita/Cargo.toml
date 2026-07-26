@@ -1,0 +1,33 @@
+[package]
+name = "magnetita"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "GPL-3.0-or-later"
+build = "build.rs"
+
+[[bin]]
+name = "magnetita"
+path = "src/main.rs"
+
+[dependencies]
+cxx = "=1.0.176"
+cxx-qt = "=0.9.1"
+cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
+    "qt_gui",
+    "qt_qml",
+    "qt_quickcontrols",
+] }
+# The app is a thin client of the magnetitad service — it reads
+# org.celestina.Devices1 over the session bus, no transport of its own.
+zbus = "5"
+
+[build-dependencies]
+cxx-qt-build = "=0.9.1"
+cxx-gen = "=0.7.176"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+panic = "abort"
+strip = "symbols"

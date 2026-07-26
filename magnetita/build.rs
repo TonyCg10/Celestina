@@ -1,0 +1,35 @@
+use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
+
+// The app's QML, in one place so it is both registered and watched — the same
+// single-list discipline Siderita learned the hard way.
+const QML_FILES: &[&str] = &["qml/Main.qml"];
+
+fn main() {
+    // CelestinaTheme is the suite's shared visual language; it lives canonically
+    // in ../celestina-style and is symlinked into qml/ so it registers under a
+    // clean `qml/...` resource path (a `../celestina-style/...` source path would
+    // embed `..` in the qrc alias and break QML type resolution at runtime).
+    let module = QmlModule::new("org.celestina.magnetita")
+        .version(1, 0)
+        .qml_file(
+            QmlFile::from("qml/CelestinaTheme.qml")
+                .version(1, 0)
+                .singleton(true),
+        )
+        .qml_files(QML_FILES);
+
+    // Naming any rerun-if-changed stops cargo watching the whole package, so
+    // every watched QML must be listed explicitly or an edit compiles "fine"
+    // without reaching the binary.
+    for qml in QML_FILES
+        .iter()
+        .copied()
+        .chain(["qml/CelestinaTheme.qml"])
+    {
+        println!("cargo::rerun-if-changed={qml}");
+    }
+
+    CxxQtBuilder::new_qml_module(module)
+        .files(["src/controller.rs"])
+        .build();
+}
