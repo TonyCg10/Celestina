@@ -32,8 +32,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use celestina_core::xdg;
 use magnetita_core::{
-    read_battery, read_sftp, request_packet, ConnectionEvent, DeviceType, Identity, LostReason,
-    Session, SftpReply,
+    read_battery, read_notification, read_sftp, request_packet, ConnectionEvent, DeviceType,
+    Identity, LostReason, Notification, Session, SftpReply,
 };
 use magnetita_net::discovery::ANNOUNCE_INTERVAL;
 use magnetita_net::{
@@ -43,6 +43,7 @@ use magnetita_net::{
 
 mod devices;
 mod mount;
+mod notify;
 use devices::{push_log, Command, Commands, DeviceEntry, Devices, Log, LogEntry, Registry};
 use mount::Mount;
 
@@ -76,6 +77,9 @@ struct Daemon {
     log: Log,
     commands: Commands,
     dbus: Option<zbus::blocking::Connection>,
+    /// phone-notification-id → freedesktop-server-id, so an update replaces and a
+    /// cancel withdraws the right desktop notification.
+    notifications: Mutex<HashMap<String, u32>>,
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
@@ -115,6 +119,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         log: event_log,
         commands,
         dbus,
+        notifications: Mutex::new(HashMap::new()),
     });
 
     log("id", &device_id);
@@ -400,6 +405,9 @@ impl Daemon {
                     self.set_battery(peer_id, battery.charge, battery.charging);
                     self.notify_change();
                 }
+                if let Some(note) = read_notification(packet) {
+                    self.mirror_notification(peer_id, peer_name, note);
+                }
                 match read_sftp(packet) {
                     Some(SftpReply::Mount(info)) if mount.is_none() => {
                         let host = info.ip.clone().unwrap_or_else(|| link_host.clone());
@@ -443,6 +451,42 @@ impl Daemon {
         if let Some(entry) = self.devices.lock().unwrap().get_mut(device_id) {
             entry.battery = charge;
             entry.charging = charging;
+        }
+    }
+
+    /// Mirror a phone notification to the desktop's notification server, keeping
+    /// the id map so an update replaces and a cancel withdraws the right one.
+    fn mirror_notification(&self, device_id: &str, device_name: &str, note: Notification) {
+        let Some(connection) = &self.dbus else {
+            return;
+        };
+        let key = format!("{device_id}\u{0}{}", note.id);
+        if note.is_cancel {
+            if let Some(server_id) = self.notifications.lock().unwrap().remove(&key) {
+                notify::close(connection, server_id);
+            }
+            return;
+        }
+        let app = if note.app_name.is_empty() {
+            device_name
+        } else {
+            &note.app_name
+        };
+        let summary = if note.title.is_empty() {
+            app.to_owned()
+        } else {
+            note.title.clone()
+        };
+        let replaces = self
+            .notifications
+            .lock()
+            .unwrap()
+            .get(&key)
+            .copied()
+            .unwrap_or(0);
+        if let Some(server_id) = notify::post(connection, app, replaces, &summary, &note.text) {
+            self.notifications.lock().unwrap().insert(key, server_id);
+            ui_log(self, device_name, &format!("🔔 {app}: {summary}"), false);
         }
     }
 
