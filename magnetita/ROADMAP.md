@@ -3,12 +3,14 @@
 > Part of the [Celestina suite](../ROADMAP.md). This roadmap covers the phone
 > link only. Checklist legend: `[x]` done · `[ ]` planned. "Implemented" is not
 > "verified": pairing and every plugin must be proven against a real device on a
-> real network, tracked as its own goal. **CP0 is done.** The from-scratch Rust
-> transport (`magnetita-net` — certificate, trust store, TLS/TOFU, discovery, the
-> v8 link, the device runtime) and the `magnetitad` daemon **pair live and stably
-> with the real phone** (a Galaxy S25 Ultra, protocol 8) and reconnect as
-> already-trusted with no re-pair. 53 offline tests, **no async runtime**, no C
-> toolchain, `unsafe` forbidden. CP1 — the app window — is next.
+> real network, tracked as its own goal. **CP0 and CP2 are done.** The
+> from-scratch Rust transport (`magnetita-net`) and the `magnetitad` daemon pair
+> live and stably with the real phone (a Galaxy S25 Ultra, protocol 8), reconnect
+> as already-trusted, run as a systemd user service, mount the phone's storage
+> over sshfs, and serve `org.celestina.Devices1` — which **Siderita consumes to
+> draw the phone in its sidebar** (click to browse it). ~66 offline tests, **no
+> async runtime**, no C toolchain, `unsafe` forbidden. CP1 — the standalone app
+> window (pair, diagnose, configure) — is next.
 
 ## Overview
 
@@ -170,22 +172,26 @@ when it will not connect — the window tells them why, in words.
 it — the integration that is the reason Magnetita comes first among the new apps.
 Built on CP0's channel; still service-side.
 
-- [ ] `magnetita-core` — the `kdeconnect.sftp` plugin bodies: request the mount
-      info, parse the reply (host, port, user, credentials, path roots). Pure,
-      unit-tested
-- [ ] `magnetitad` — mount the phone's SFTP with sshfs/FUSE at
-      `$XDG_RUNTIME_DIR/magnetita/<device-id>/`, **kept mounted** while the device
-      is connected and paired, unmounted cleanly on disconnect or shutdown
-- [ ] `magnetitad` — serve `org.celestina.Devices1` on the session bus: the
-      connected devices with id, name, type, battery, connection/mount state and
-      mount path; the contract is **versioned and documented** for Siderita to pin
-- [ ] **Siderita** — consume `org.celestina.Devices1` in the sidebar: draw the
-      phone under a devices section, open its mount path on click, reflect the
-      *connecting → mounting → mounted* state truthfully. Siderita's first time
-      *consuming* a suite contract rather than serving one
-- [ ] **Verified** — against the real phone: the mount appears, survives a
-      reconnect, and Siderita browses it; an unpair or a lost link removes it from
-      the sidebar without stranding a dead mount
+- [x] `magnetita-core` — the `kdeconnect.sftp` plugin bodies: request the mount
+      (`kdeconnect.sftp.request`), parse the reply into a typed `SftpMount` (port,
+      one-session user/password, root path, `multiPaths`/`pathNames`) or an
+      `SftpReply::Error`. Pure, 7 unit tests
+- [x] `magnetitad` — mount the phone's SFTP with sshfs/FUSE at
+      `$XDG_RUNTIME_DIR/magnetita/<device-id>/`, **kept mounted** while connected,
+      unmounted on disconnect (`Mount` drops → unmount) and swept at startup after
+      a killed run. Needed the identity to advertise the plugin — a peer only
+      sends a type the other lists as incoming
+- [x] `magnetitad` — serve `org.celestina.Devices1` on the session bus:
+      `ListDevices() -> aa{sv}` (id, name, type, connected, mounted, mountPath,
+      battery) plus a `Changed` signal, backed by a shared registry the links
+      update. Best-effort, on zbus (the suite's D-Bus stack)
+- [x] **Siderita** — consumes `org.celestina.Devices1`: a "MÓVIL" section in the
+      sidebar, click opens the mount, a still-mounting phone shows dimmed as
+      "conectando…". Live-refreshed off the `Changed` signal. Siderita's first
+      time *consuming* a suite contract rather than serving one
+- [x] **Verified** — against the real phone (Galaxy S25 Ultra): the phone mounts,
+      its storage browses, a reconnect re-mounts, and it appears under MÓVIL in
+      Siderita and opens on click
 - [ ] **Measured** — the always-on mount's idle cost (wakeups, memory) is a
       number inside the budget
 
