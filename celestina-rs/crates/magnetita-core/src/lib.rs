@@ -19,6 +19,7 @@
 //! bodies.
 
 pub mod battery;
+pub mod clipboard;
 pub mod event;
 pub mod findmyphone;
 pub mod identity;
@@ -30,6 +31,7 @@ pub mod session;
 pub mod sftp;
 
 pub use battery::{read_battery, Battery, TYPE_BATTERY, TYPE_BATTERY_REQUEST};
+pub use clipboard::{read_clipboard, TYPE_CLIPBOARD, TYPE_CLIPBOARD_CONNECT};
 pub use findmyphone::TYPE_FINDMYPHONE_REQUEST;
 pub use notification::{read_notification, Notification, TYPE_NOTIFICATION};
 pub use event::{ConnectionEvent, LostReason};

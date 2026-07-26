@@ -32,8 +32,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use celestina_core::xdg;
 use magnetita_core::{
-    read_battery, read_notification, read_sftp, request_packet, ConnectionEvent, DeviceType,
-    Identity, LostReason, Notification, Session, SftpReply,
+    read_battery, read_clipboard, read_notification, read_sftp, request_packet, ConnectionEvent,
+    DeviceType, Identity, LostReason, Notification, Session, SftpReply,
 };
 use magnetita_net::discovery::ANNOUNCE_INTERVAL;
 use magnetita_net::{
@@ -408,6 +408,11 @@ impl Daemon {
                 if let Some(note) = read_notification(packet) {
                     self.mirror_notification(peer_id, peer_name, note);
                 }
+                if let Some(text) = read_clipboard(packet) {
+                    if set_clipboard(&text) {
+                        ui_log(self, peer_name, "portapapeles recibido", false);
+                    }
+                }
                 match read_sftp(packet) {
                     Some(SftpReply::Mount(info)) if mount.is_none() => {
                         let host = info.ip.clone().unwrap_or_else(|| link_host.clone());
@@ -608,6 +613,26 @@ fn ensure_device_id(dir: &Path) -> Result<String, Box<dyn Error>> {
     let id: String = uuid.trim().chars().filter(|c| *c != '-').collect();
     fs::write(&path, &id)?;
     Ok(id)
+}
+
+/// Puts text on the desktop (Wayland) clipboard via wl-copy. Returns whether it
+/// ran. wl-copy reads stdin, forks a background server to hold the selection, and
+/// its foreground process exits — so we write the text, close stdin, and reap it.
+fn set_clipboard(text: &str) -> bool {
+    use std::process::{Command, Stdio};
+    let Ok(mut child) = Command::new("wl-copy")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    else {
+        return false;
+    };
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(text.as_bytes());
+    }
+    let _ = child.wait();
+    true
 }
 
 /// Millisecond wall clock for packet ids.
