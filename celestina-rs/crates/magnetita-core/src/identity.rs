@@ -90,6 +90,7 @@ impl Identity {
                 crate::notification::TYPE_NOTIFICATION.to_owned(),
                 crate::clipboard::TYPE_CLIPBOARD.to_owned(),
                 crate::clipboard::TYPE_CLIPBOARD_CONNECT.to_owned(),
+                crate::share::TYPE_SHARE_REQUEST.to_owned(),
             ],
             outgoing_capabilities: vec![
                 crate::ping::TYPE_PING.to_owned(),

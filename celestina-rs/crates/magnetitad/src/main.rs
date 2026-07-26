@@ -25,15 +25,16 @@ use std::error::Error;
 use std::fs;
 use std::io::Write;
 use std::net::{SocketAddr, TcpListener, TcpStream};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use celestina_core::xdg;
 use magnetita_core::{
-    read_battery, read_clipboard, read_notification, read_sftp, request_packet, ConnectionEvent,
-    DeviceType, Identity, LostReason, Notification, Session, SftpReply,
+    read_battery, read_clipboard, read_notification, read_sftp, read_share, request_packet,
+    ConnectionEvent, DeviceType, Identity, IncomingFile, LostReason, Notification, Session,
+    SftpReply,
 };
 use magnetita_net::discovery::ANNOUNCE_INTERVAL;
 use magnetita_net::{
@@ -285,7 +286,12 @@ impl Daemon {
 
     /// Drive one link's session: trust-check it, let the phone drive pairing,
     /// keep the trust store honest, and — once trusted — mount its storage.
-    fn run_link(&self, link: Link, peer_id: &str, peer_name: &str) -> Result<(), Box<dyn Error>> {
+    fn run_link(
+        self: &Arc<Self>,
+        link: Link,
+        peer_id: &str,
+        peer_name: &str,
+    ) -> Result<(), Box<dyn Error>> {
         let peer_fp = link.peer_fingerprint().to_owned();
         let link_host = link.peer_addr().ip().to_string();
 
@@ -413,6 +419,14 @@ impl Daemon {
                         ui_log(self, peer_name, "portapapeles recibido", false);
                     }
                 }
+                if let Some(file) = read_share(packet) {
+                    // A file streams over a second socket; receive it off the
+                    // pump thread so a big transfer never freezes the link.
+                    let daemon = Arc::clone(self);
+                    let host = link_host.clone();
+                    let name = peer_name.to_owned();
+                    thread::spawn(move || daemon.receive_file(name, host, file));
+                }
                 match read_sftp(packet) {
                     Some(SftpReply::Mount(info)) if mount.is_none() => {
                         let host = info.ip.clone().unwrap_or_else(|| link_host.clone());
@@ -456,6 +470,31 @@ impl Daemon {
         if let Some(entry) = self.devices.lock().unwrap().get_mut(device_id) {
             entry.battery = charge;
             entry.charging = charging;
+        }
+    }
+
+    /// Receive a shared file into the downloads dir, then notify and log. Runs on
+    /// its own thread. The name is reduced to its base component so the phone
+    /// cannot write outside the target dir, and a half-received file is removed.
+    fn receive_file(self: Arc<Self>, device_name: String, host: String, file: IncomingFile) {
+        let name = safe_filename(&file.filename);
+        let dir = download_dir();
+        if std::fs::create_dir_all(&dir).is_err() {
+            return;
+        }
+        let dest = unique_path(&dir, &name);
+        ui_log(&self, &device_name, &format!("recibiendo {name}…"), false);
+        match magnetita_net::receive_to_file(&host, file.port, file.size, &self.tls, &dest) {
+            Ok(_) => {
+                ui_log(&self, &device_name, &format!("recibido: {name}"), false);
+                if let Some(connection) = &self.dbus {
+                    notify::post(connection, &device_name, 0, "Archivo recibido", &name);
+                }
+            }
+            Err(e) => {
+                ui_log(&self, &device_name, &format!("fallo al recibir {name}: {e}"), true);
+                let _ = std::fs::remove_file(&dest);
+            }
         }
     }
 
@@ -633,6 +672,63 @@ fn set_clipboard(text: &str) -> bool {
     }
     let _ = child.wait();
     true
+}
+
+/// The XDG downloads dir for received files: `$XDG_DOWNLOAD_DIR`, else what
+/// `xdg-user-dir` reports, else `~/Downloads`.
+fn download_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("XDG_DOWNLOAD_DIR") {
+        return PathBuf::from(dir);
+    }
+    if let Ok(output) = std::process::Command::new("xdg-user-dir")
+        .arg("DOWNLOAD")
+        .output()
+    {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+            if !path.is_empty() {
+                return PathBuf::from(path);
+            }
+        }
+    }
+    let home = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/tmp"));
+    home.join("Downloads")
+}
+
+/// Only the file-name component of a shared name, so a crafted path cannot
+/// escape the downloads dir.
+fn safe_filename(name: &str) -> String {
+    Path::new(name)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or("archivo")
+        .to_owned()
+}
+
+/// A path in `dir` that does not clobber an existing file: `a.jpg`, then
+/// `a (1).jpg`, and so on.
+fn unique_path(dir: &Path, name: &str) -> PathBuf {
+    let candidate = dir.join(name);
+    if !candidate.exists() {
+        return candidate;
+    }
+    let path = Path::new(name);
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or(name);
+    let ext = path.extension().and_then(|e| e.to_str());
+    for n in 1..10_000 {
+        let alt = match ext {
+            Some(ext) => format!("{stem} ({n}).{ext}"),
+            None => format!("{stem} ({n})"),
+        };
+        let candidate = dir.join(alt);
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    dir.join(name)
 }
 
 /// Millisecond wall clock for packet ids.

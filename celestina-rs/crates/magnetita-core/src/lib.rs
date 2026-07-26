@@ -29,11 +29,13 @@ pub mod pair;
 pub mod ping;
 pub mod session;
 pub mod sftp;
+pub mod share;
 
 pub use battery::{read_battery, Battery, TYPE_BATTERY, TYPE_BATTERY_REQUEST};
 pub use clipboard::{read_clipboard, TYPE_CLIPBOARD, TYPE_CLIPBOARD_CONNECT};
 pub use findmyphone::TYPE_FINDMYPHONE_REQUEST;
 pub use notification::{read_notification, Notification, TYPE_NOTIFICATION};
+pub use share::{read_share, IncomingFile, TYPE_SHARE_REQUEST};
 pub use event::{ConnectionEvent, LostReason};
 pub use identity::{DeviceType, Identity, DEFAULT_PORT, PROTOCOL_VERSION, TYPE_IDENTITY};
 pub use packet::NetworkPacket;
