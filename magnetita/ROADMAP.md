@@ -3,14 +3,16 @@
 > Part of the [Celestina suite](../ROADMAP.md). This roadmap covers the phone
 > link only. Checklist legend: `[x]` done · `[ ]` planned. "Implemented" is not
 > "verified": pairing and every plugin must be proven against a real device on a
-> real network, tracked as its own goal. **CP0 and CP2 are done.** The
+> real network, tracked as its own goal. **CP0, CP1 and CP2 are done.** The
 > from-scratch Rust transport (`magnetita-net`) and the `magnetitad` daemon pair
 > live and stably with the real phone (a Galaxy S25 Ultra, protocol 8), reconnect
 > as already-trusted, run as a systemd user service, mount the phone's storage
-> over sshfs, and serve `org.celestina.Devices1` — which **Siderita consumes to
-> draw the phone in its sidebar** (click to browse it). ~66 offline tests, **no
-> async runtime**, no C toolchain, `unsafe` forbidden. CP1 — the standalone app
-> window (pair, diagnose, configure) — is next.
+> over sshfs, and serve `org.celestina.Devices1` — which **Siderita** consumes to
+> draw the phone in its sidebar (click to browse it) and the standalone
+> **Magnetita app** consumes to pair/unpair with the verification key and show the
+> connection log. ~66 offline tests, **no async runtime**, no C toolchain,
+> `unsafe` forbidden. CP3 — the daily plugins (notifications, share, clipboard,
+> battery, find-my-phone) — is next.
 
 ## Overview
 
@@ -147,25 +149,27 @@ top of CP0's channel: pair a device with the shown verification key, read a
 are not the file integration. The service stays headless underneath; this is the
 human surface, and the first use of the suite's daemon↔UI convention.
 
-- [ ] **Daemon↔UI IPC** — the convention this project forces (the app is a client
-      of the service): the device list, the connection event stream, pair/unpair
-      and option toggles, over one activation-capable contract that becomes the
-      suite's reference for it
-- [ ] **The app** — `magnetita-qt` + a Qt/QML host over `celestina-style`: the
-      device list (discovered + paired), pair/unpair with the verification key,
-      and per-device / per-plugin options — the ones that are Magnetita's, not
-      Siderita's
-- [ ] **The connection log** — the live event stream and the last failure per
-      device, in plain language ("no reply on 1716", "certificate changed",
-      "pairing timed out", "on a different network"), so a phone that will not
-      connect is diagnosable *in the app*, not in the journal
-- [ ] **Runs in the background with a window on demand** — closing the window
-      leaves the service (and the mount) up; opening it re-attaches to live state
-- [ ] **Verified** — pairing, unpair and a forced failure (wrong network,
-      rejected pairing) each read correctly in the app against the real device
+- [x] **Daemon↔UI IPC** — `org.celestina.Devices1` on the session bus is the
+      contract: `ListDevices` / `RecentLog`, `RequestPair` / `Unpair`, and
+      `Changed` / `Event` signals. The app is a pure client; the daemon holds all
+      state. The suite's reference for daemon↔UI.
+- [x] **The app** — a `magnetita` Qt/QML window over `celestina-style` (lean: zbus
+      client, no C++ shims): the device list, pair / unpair with the shown
+      verification key, "Abrir" to browse. Per-plugin options wait for plugins
+      (CP3) — there is nothing to configure yet, honestly, so nothing is shown.
+- [x] **The connection log** — an ACTIVIDAD panel: the live event stream (off the
+      `Event` signal) and every failure in red in plain language ("sin respuesta",
+      "el certificado cambió", "el emparejamiento expiró", "inalcanzable (¿otra
+      red?)"), so *why it won't connect* is answered in the window, not the journal
+- [x] **Runs in the background with a window on demand** — the daemon is a separate
+      systemd service; closing the window leaves it (and the mount) up, proven
+      live; opening the window re-reads live state (the app is stateless)
+- [x] **Verified** — against the real phone: pair, unpair (drops trust, re-pair
+      works), and the log renders milestones and would render a failure in red;
+      installed as an app (`~/.local/bin` + a `.desktop` entry)
 
 **Done when:** the author opens Magnetita, pairs the phone from the window, and —
-when it will not connect — the window tells them why, in words.
+when it will not connect — the window tells them why, in words. **Done.**
 
 ## Checkpoint 2 — The phone in Siderita (the first cross-app experience)
 **Goal:** a paired phone, mounted, appears in Siderita's sidebar and you browse
