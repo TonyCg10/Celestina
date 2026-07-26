@@ -28,6 +28,12 @@ ApplicationWindow {
         return -1
     }
 
+    // The primary device (the first connected) whose controls the second block
+    // drives; and the player the transport targets — the one playing, else the
+    // primary (so ▶ can wake the phone's last player).
+    readonly property int primaryIndex: devices.deviceNames.length > 0 ? 0 : -1
+    readonly property int mediaControlIndex: mediaIndex >= 0 ? mediaIndex : primaryIndex
+
     // Whether the Settings surface (paired devices + plugin toggles) is showing
     // instead of the device list.
     property bool settingsOpen: false
@@ -89,184 +95,200 @@ ApplicationWindow {
             bottomPadding: 8
         }
 
-        ListView {
-            id: deviceList
-            visible: !window.settingsOpen
+        // ── Bloque 1: dispositivo(s) — solo información, sin scroll ───
+        Column {
+            id: deviceBlock
+            visible: !window.settingsOpen && devices.deviceNames.length > 0
             width: parent.width
-            height: visible ? Math.min(contentHeight, window.height * 0.42) : 0
-            spacing: 10
-            clip: true
-            model: devices.deviceNames
+            spacing: 8
 
-            delegate: Rectangle {
-                id: row
-                required property int index
-                required property string modelData
-                readonly property string state:
-                    index < devices.deviceStates.length ? devices.deviceStates[index] : ""
-                readonly property string mount:
-                    index < devices.deviceMounts.length ? devices.deviceMounts[index] : ""
-                readonly property string fingerprint:
-                    index < devices.deviceFingerprints.length ? devices.deviceFingerprints[index] : ""
-                readonly property bool mounted: mount.length > 0
-                readonly property bool paired:
-                    index < devices.devicePaired.length && devices.devicePaired[index] === "true"
-                readonly property string battery:
-                    index < devices.deviceBattery.length ? devices.deviceBattery[index] : ""
+            Repeater {
+                model: devices.deviceNames
 
-                width: deviceList.width
-                height: 106
-                radius: CelestinaTheme.radiusMd
-                color: CelestinaTheme.surface
-                border.color: CelestinaTheme.border
-                border.width: 1
+                delegate: Rectangle {
+                    id: devRow
+                    required property int index
+                    required property string modelData
+                    readonly property string state:
+                        index < devices.deviceStates.length ? devices.deviceStates[index] : ""
+                    readonly property string mount:
+                        index < devices.deviceMounts.length ? devices.deviceMounts[index] : ""
+                    readonly property string fingerprint:
+                        index < devices.deviceFingerprints.length ? devices.deviceFingerprints[index] : ""
+                    readonly property bool mounted: mount.length > 0
+                    readonly property string battery:
+                        index < devices.deviceBattery.length ? devices.deviceBattery[index] : ""
 
-                Column {
-                    anchors.left: parent.left
-                    anchors.leftMargin: 18
-                    anchors.right: actions.left
-                    anchors.rightMargin: 12
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 3
+                    width: deviceBlock.width
+                    height: 96
+                    radius: CelestinaTheme.radiusMd
+                    color: CelestinaTheme.surface
+                    border.color: CelestinaTheme.border
+                    border.width: 1
 
-                    Text {
-                        text: row.modelData
-                        color: CelestinaTheme.text
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontCallout
-                        font.weight: CelestinaTheme.weightDemiBold
-                        elide: Text.ElideRight
-                        width: parent.width
-                    }
-                    Text {
-                        text: row.mounted ? row.state + " · " + row.mount : row.state
-                        color: row.mounted ? CelestinaTheme.accent : CelestinaTheme.textMuted
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontCaption
-                        elide: Text.ElideMiddle
-                        width: parent.width
-                    }
-                    Text {
-                        visible: row.battery.length > 0
-                        text: row.battery
-                        color: CelestinaTheme.textMuted
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontCaption
-                    }
-                    Text {
-                        visible: row.fingerprint.length > 0
-                        text: "🔑 " + row.fingerprint
-                        color: CelestinaTheme.textMuted
-                        font.family: CelestinaTheme.monoFamily
-                        font.pixelSize: CelestinaTheme.fontMini
-                        elide: Text.ElideRight
-                        width: parent.width
-                    }
-                }
+                    Column {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 18
+                        anchors.right: parent.right
+                        anchors.rightMargin: 18
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 3
 
-                Column {
-                    id: actions
-                    anchors.right: parent.right
-                    anchors.rightMargin: 14
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 6
-
-                    CelestinaButton {
-                        width: 118
-                        visible: row.mounted
-                        primary: true
-                        text: "Abrir"
-                        onClicked: devices.openMount(row.index)
-                    }
-                    CelestinaButton {
-                        width: 118
-                        visible: !row.paired
-                        primary: true
-                        text: "Emparejar"
-                        onClicked: devices.pairDevice(row.index)
-                    }
-                    CelestinaButton {
-                        width: 118
-                        visible: row.paired
-                        text: "Sonar"
-                        onClicked: devices.ringDevice(row.index)
-                    }
-                    CelestinaButton {
-                        width: 118
-                        visible: row.paired
-                        text: "Desvincular"
-                        onClicked: devices.unpairDevice(row.index)
+                        Text {
+                            width: parent.width
+                            text: devRow.modelData
+                            color: CelestinaTheme.text
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontCallout
+                            font.weight: CelestinaTheme.weightDemiBold
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            width: parent.width
+                            text: devRow.mounted ? devRow.state + " · " + devRow.mount : devRow.state
+                            color: devRow.mounted ? CelestinaTheme.accent : CelestinaTheme.textMuted
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontCaption
+                            elide: Text.ElideMiddle
+                        }
+                        Text {
+                            visible: devRow.battery.length > 0
+                            text: devRow.battery
+                            color: CelestinaTheme.textMuted
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontCaption
+                        }
+                        Text {
+                            width: parent.width
+                            visible: devRow.fingerprint.length > 0
+                            text: "🔑 " + devRow.fingerprint
+                            color: CelestinaTheme.textMuted
+                            font.family: CelestinaTheme.monoFamily
+                            font.pixelSize: CelestinaTheme.fontMini
+                            elide: Text.ElideRight
+                        }
                     }
                 }
             }
         }
 
-        // ── Ahora suena — media control of the phone ─────────────────
+        // ── Bloque 2: controles + medios del dispositivo principal ────
         Rectangle {
-            id: mediaCard
+            id: controlsBlock
+            visible: !window.settingsOpen && window.primaryIndex >= 0
             width: parent.width
-            visible: !window.settingsOpen && window.mediaIndex >= 0
-            height: 72
+            height: controlsColumn.implicitHeight + 26
             radius: CelestinaTheme.radiusMd
             color: CelestinaTheme.surface
             border.color: CelestinaTheme.border
             border.width: 1
 
             Column {
+                id: controlsColumn
+                anchors.top: parent.top
                 anchors.left: parent.left
-                anchors.leftMargin: 16
-                anchors.right: transport.left
-                anchors.rightMargin: 12
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 3
-
-                Text {
-                    text: "♪ AHORA SUENA"
-                    color: CelestinaTheme.textMuted
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontMini
-                    font.letterSpacing: 1.4
-                    font.weight: CelestinaTheme.weightDemiBold
-                }
-                Text {
-                    width: parent.width
-                    text: window.mediaIndex >= 0 ? devices.deviceMedia[window.mediaIndex] : ""
-                    color: CelestinaTheme.text
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontCallout
-                    font.weight: CelestinaTheme.weightDemiBold
-                    elide: Text.ElideRight
-                }
-            }
-
-            Row {
-                id: transport
                 anchors.right: parent.right
+                anchors.topMargin: 13
+                anchors.leftMargin: 14
                 anchors.rightMargin: 14
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 6
+                spacing: 10
 
-                CelestinaButton {
-                    width: 46
-                    visible: window.mediaIndex >= 0
-                             && devices.deviceMediaPrevious[window.mediaIndex] === "true"
-                    text: "⏮"
-                    onClicked: devices.mediaPrevious(window.mediaIndex)
+                // Acciones del dispositivo principal.
+                Row {
+                    id: actionRow
+                    spacing: 8
+                    readonly property bool paired:
+                        window.primaryIndex >= 0
+                        && window.primaryIndex < devices.devicePaired.length
+                        && devices.devicePaired[window.primaryIndex] === "true"
+                    readonly property bool mounted:
+                        window.primaryIndex >= 0
+                        && window.primaryIndex < devices.deviceMounts.length
+                        && devices.deviceMounts[window.primaryIndex].length > 0
+
+                    CelestinaButton {
+                        width: 116
+                        visible: actionRow.mounted
+                        primary: true
+                        text: "Abrir"
+                        onClicked: devices.openMount(window.primaryIndex)
+                    }
+                    CelestinaButton {
+                        width: 116
+                        visible: !actionRow.paired
+                        primary: true
+                        text: "Emparejar"
+                        onClicked: devices.pairDevice(window.primaryIndex)
+                    }
+                    CelestinaButton {
+                        width: 116
+                        visible: actionRow.paired
+                        text: "Sonar"
+                        onClicked: devices.ringDevice(window.primaryIndex)
+                    }
+                    CelestinaButton {
+                        width: 116
+                        visible: actionRow.paired
+                        text: "Desvincular"
+                        onClicked: devices.unpairDevice(window.primaryIndex)
+                    }
                 }
-                CelestinaButton {
-                    width: 46
-                    primary: true
-                    text: (window.mediaIndex >= 0
-                           && devices.deviceMediaPlaying[window.mediaIndex] === "true")
-                          ? "⏸" : "▶"
-                    onClicked: devices.mediaPlayPause(window.mediaIndex)
+
+                Rectangle {
+                    width: parent.width
+                    height: 1
+                    color: CelestinaTheme.border
                 }
-                CelestinaButton {
-                    width: 46
-                    visible: window.mediaIndex >= 0
-                             && devices.deviceMediaNext[window.mediaIndex] === "true"
-                    text: "⏭"
-                    onClicked: devices.mediaNext(window.mediaIndex)
+
+                // Medios — siempre visible; "Nada reproduciéndose" cuando no suena.
+                Item {
+                    id: mediaLine
+                    width: parent.width
+                    height: 34
+                    readonly property bool playing:
+                        window.mediaIndex >= 0
+                        && devices.deviceMediaPlaying[window.mediaIndex] === "true"
+
+                    Text {
+                        anchors.left: parent.left
+                        anchors.right: mediaRow.left
+                        anchors.rightMargin: 10
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: window.mediaIndex >= 0
+                              ? "♪ " + devices.deviceMedia[window.mediaIndex]
+                              : "♪ Nada reproduciéndose"
+                        color: window.mediaIndex >= 0
+                               ? CelestinaTheme.text : CelestinaTheme.textMuted
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: CelestinaTheme.fontCallout
+                        font.weight: window.mediaIndex >= 0
+                                     ? CelestinaTheme.weightDemiBold : Font.Normal
+                        elide: Text.ElideRight
+                    }
+
+                    Row {
+                        id: mediaRow
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 6
+
+                        CelestinaButton {
+                            width: 44
+                            text: "⏮"
+                            onClicked: devices.mediaPrevious(window.mediaControlIndex)
+                        }
+                        CelestinaButton {
+                            width: 44
+                            primary: mediaLine.playing
+                            text: mediaLine.playing ? "⏸" : "▶"
+                            onClicked: devices.mediaPlayPause(window.mediaControlIndex)
+                        }
+                        CelestinaButton {
+                            width: 44
+                            text: "⏭"
+                            onClicked: devices.mediaNext(window.mediaControlIndex)
+                        }
+                    }
                 }
             }
         }
@@ -287,8 +309,9 @@ ApplicationWindow {
         Rectangle {
             visible: !window.settingsOpen
             width: parent.width
-            height: window.height - deviceList.height
-                    - (window.mediaIndex >= 0 ? mediaCard.height + 6 : 0) - 210
+            // Fill the rest: the log is the only scrollable block.
+            height: Math.max(120, window.height - deviceBlock.height
+                    - controlsBlock.height - 196)
             radius: CelestinaTheme.radiusMd
             color: CelestinaTheme.canvasRaised
             border.color: CelestinaTheme.border

@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Magnetita</title>
+  <!--
+    Magnetite (Fe3O4) crystallises in the isometric system and its classic habit
+    is the octahedron — two square pyramids base to base. That is the whole mark,
+    the way siderite's is a rhombohedron: this reads as a crystal, not a gem, and
+    it is a different solid from Siderita's so the two apps never blur together.
+
+    The octahedron is drawn at a vertex, looking slightly down, so four of its
+    eight faces show and meet at a near vertex N below centre — giving the facet
+    ridges and the lean. Silhouette is the diamond T-R-B-L; N is interior.
+
+    Colour is the mineral's: iron-black with a metallic, faintly blue luster —
+    the natural lodestone, the one that is a magnet. Cool steel here, against
+    Siderita's warm amber, is the two minerals told apart and, not by accident,
+    the "magnet" the app is named for.
+  -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22252C"/>
+      <stop offset="1" stop-color="#0E1014"/>
+    </linearGradient>
+    <linearGradient id="oct-tl" x1="0.1" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#E8EEF6"/>
+      <stop offset="1" stop-color="#B4C2D3"/>
+    </linearGradient>
+    <linearGradient id="oct-tr" x1="0.3" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#94A2B5"/>
+      <stop offset="1" stop-color="#5E6D80"/>
+    </linearGradient>
+    <linearGradient id="oct-bl" x1="0" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#586675"/>
+      <stop offset="1" stop-color="#39434F"/>
+    </linearGradient>
+    <linearGradient id="oct-br" x1="0.3" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#333C47"/>
+      <stop offset="1" stop-color="#1D222A"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.32"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- The rounded tile every app icon on this desktop wears. -->
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#tile)"/>
+  <rect x="16.75" y="16.75" width="478.5" height="478.5" rx="107.25"
+        fill="none" stroke="url(#rim)" stroke-width="1.5"/>
+
+  <!-- Octahedron. T top, L/R side vertices, N near vertex (below centre), B bottom. -->
+  <!-- upper-left face, catching the light -->
+  <path d="M256 100 110 250 256 308Z" fill="url(#oct-tl)"/>
+  <!-- upper-right face -->
+  <path d="M256 100 256 308 402 250Z" fill="url(#oct-tr)"/>
+  <!-- lower-left face -->
+  <path d="M110 250 256 308 256 415Z" fill="url(#oct-bl)"/>
+  <!-- lower-right face, turned furthest from the light -->
+  <path d="M402 250 256 308 256 415Z" fill="url(#oct-br)"/>
+  <!-- the lit edge along the two upper faces, a cleavage plane catching light -->
+  <path d="M110 250 256 100 402 250" fill="none" stroke="#EEF4FB"
+        stroke-opacity="0.5" stroke-width="3" stroke-linejoin="round"/>
+</svg>
