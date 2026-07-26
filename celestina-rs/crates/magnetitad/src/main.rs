@@ -400,6 +400,19 @@ impl Daemon {
                         self.set_paired(peer_id, false);
                         self.notify_change();
                     }
+                    ConnectionEvent::Pinged => {
+                        // KDE Connect shows a notification for a received ping.
+                        if let Some(connection) = &self.dbus {
+                            notify::post(
+                                connection,
+                                peer_name,
+                                0,
+                                "Ping",
+                                &format!("{peer_name} te hizo ping"),
+                            );
+                        }
+                        ui_log(self, peer_name, "ping recibido", false);
+                    }
                     _ => {}
                 }
             }
