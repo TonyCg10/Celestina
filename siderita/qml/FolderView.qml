@@ -1828,7 +1828,9 @@ Item {
         Rectangle {
             id: errorBanner
             x: 16
-            y: 14
+            // Float above the bottom control bar, not over the breadcrumb.
+            anchors.bottom: bottomBar.top
+            anchors.bottomMargin: 8
             width: parent.width - 32
             height: errorText.implicitHeight + 22
             radius: CelestinaTheme.radiusSm
@@ -1855,7 +1857,9 @@ Item {
         Rectangle {
             id: opErrorBanner
             x: 16
-            y: errorBanner.visible ? errorBanner.y + errorBanner.height + 8 : 14
+            // Stacks upward from the bottom bar, above any general error banner.
+            anchors.bottom: errorBanner.visible ? errorBanner.top : bottomBar.top
+            anchors.bottomMargin: 8
             width: parent.width - 32
             height: opErrorText.implicitHeight + 22
             radius: CelestinaTheme.radiusSm
@@ -1883,9 +1887,11 @@ Item {
         Rectangle {
             id: opProgressCard
             x: 16
-            y: opErrorBanner.visible
-               ? opErrorBanner.y + opErrorBanner.height + 8
-               : (errorBanner.visible ? errorBanner.y + errorBanner.height + 8 : 14)
+            // Above the error banners, still stacking up from the bottom bar.
+            anchors.bottom: opErrorBanner.visible
+                            ? opErrorBanner.top
+                            : (errorBanner.visible ? errorBanner.top : bottomBar.top)
+            anchors.bottomMargin: 8
             width: parent.width - 32
             height: 62
             radius: CelestinaTheme.radiusSm
