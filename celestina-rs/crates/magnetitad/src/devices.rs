@@ -13,9 +13,13 @@
 //! shape is stable before CP3 fills it.
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use magnetita_net::TrustStore;
 use zbus::zvariant::{OwnedValue, Value};
+
+use crate::settings::Settings;
 
 /// The bus name Magnetita owns.
 pub const BUS_NAME: &str = "org.celestina.Magnetita";
@@ -173,14 +177,31 @@ pub struct Devices {
     registry: Registry,
     log: Log,
     commands: Commands,
+    /// The pinned peers — for listing and forgetting from the Settings surface,
+    /// including devices that are not currently connected.
+    trust: Arc<Mutex<TrustStore>>,
+    /// The per-plugin toggles the app reads and writes.
+    settings: Arc<Mutex<Settings>>,
+    /// Where those toggles persist.
+    settings_path: PathBuf,
 }
 
 impl Devices {
-    pub fn new(registry: Registry, log: Log, commands: Commands) -> Devices {
+    pub fn new(
+        registry: Registry,
+        log: Log,
+        commands: Commands,
+        trust: Arc<Mutex<TrustStore>>,
+        settings: Arc<Mutex<Settings>>,
+        settings_path: PathBuf,
+    ) -> Devices {
         Devices {
             registry,
             log,
             commands,
+            trust,
+            settings,
+            settings_path,
         }
     }
 
@@ -189,6 +210,16 @@ impl Devices {
         if let Some(sender) = self.commands.lock().unwrap().get(device_id) {
             let _ = sender.send(command);
         }
+    }
+
+    /// Whether a device id is currently connected (has a live entry).
+    fn is_connected(&self, device_id: &str) -> bool {
+        self.registry
+            .lock()
+            .unwrap()
+            .get(device_id)
+            .map(|entry| entry.connected)
+            .unwrap_or(false)
     }
 }
 
@@ -235,5 +266,63 @@ impl Devices {
     /// (the app's transport buttons on its now-playing card).
     fn media_action(&self, device_id: String, action: String) {
         self.forward(&device_id, Command::Media(action));
+    }
+
+    /// The paired devices, each a dict `id`, `name`, `fingerprint`, `connected`
+    /// — including devices remembered but not currently online. The Settings
+    /// surface lists these so a pairing can be dropped even when the phone is off.
+    fn list_paired(&self) -> Vec<HashMap<String, OwnedValue>> {
+        let peers: Vec<_> = self.trust.lock().unwrap().peers().collect();
+        peers
+            .into_iter()
+            .map(|peer| {
+                let connected = self.is_connected(&peer.device_id);
+                let fields = [
+                    ("id", Value::from(peer.device_id)),
+                    ("name", Value::from(peer.device_name)),
+                    ("fingerprint", Value::from(peer.fingerprint)),
+                    ("connected", Value::from(connected)),
+                ];
+                fields
+                    .into_iter()
+                    .map(|(key, value)| {
+                        (
+                            key.to_owned(),
+                            OwnedValue::try_from(value).expect("a basic value always converts"),
+                        )
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    /// Forget a pairing. A connected device is unpaired over its live link (so
+    /// the phone learns too, and the link thread drops the pin); an offline one
+    /// simply has its pin removed here.
+    fn forget(&self, device_id: String) {
+        if self.is_connected(&device_id) {
+            self.forward(&device_id, Command::Unpair);
+        } else {
+            let _ = self.trust.lock().unwrap().forget(&device_id);
+        }
+    }
+
+    /// The per-plugin toggles, as a `name → enabled` dict (the app's switches).
+    fn plugin_settings(&self) -> HashMap<String, bool> {
+        self.settings
+            .lock()
+            .unwrap()
+            .entries()
+            .iter()
+            .map(|(name, enabled)| ((*name).to_owned(), *enabled))
+            .collect()
+    }
+
+    /// Enable or disable a plugin and persist. An unknown name is ignored.
+    fn set_plugin(&self, plugin: String, enabled: bool) {
+        let mut settings = self.settings.lock().unwrap();
+        if settings.set(&plugin, enabled) {
+            let _ = settings.save(&self.settings_path);
+        }
     }
 }

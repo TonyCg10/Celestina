@@ -46,8 +46,10 @@ mod devices;
 mod media;
 mod mount;
 mod notify;
+mod settings;
 use devices::{push_log, Command, Commands, DeviceEntry, Devices, Log, LogEntry, Registry};
 use mount::Mount;
+use settings::Settings;
 
 /// The KDE Connect port: UDP announce/listen and TCP link.
 const PORT: u16 = 1716;
@@ -74,7 +76,13 @@ fn main() -> std::process::ExitCode {
 struct Daemon {
     identity: Identity,
     tls: TlsConfigs,
-    trust: Mutex<TrustStore>,
+    /// Shared with the served `Devices1` object so its Settings surface can list
+    /// and forget paired peers, not only the link threads that pin them.
+    trust: Arc<Mutex<TrustStore>>,
+    /// The per-plugin toggles, shared the same way: the app writes them (through
+    /// the served object, which owns persistence), the link threads read them to
+    /// gate each plugin's behaviour.
+    settings: Arc<Mutex<Settings>>,
     devices: Registry,
     log: Log,
     commands: Commands,
@@ -96,6 +104,13 @@ fn run() -> Result<(), Box<dyn Error>> {
     let device_id = ensure_device_id(&dir)?;
     let cert = DeviceCert::ensure(&dir, &device_id)?;
 
+    // The trust store and plugin settings are shared with the served interface,
+    // so the app can list/forget paired peers and toggle plugins, not just the
+    // link threads. Built before serving so both sides hold the same handle.
+    let trust = Arc::new(Mutex::new(TrustStore::load(&dir.join("trust.json"))?));
+    let settings_path = dir.join("settings.json");
+    let settings = Arc::new(Mutex::new(Settings::load(&settings_path)));
+
     // Serve org.celestina.Devices1 (best-effort: no session bus just means
     // Siderita cannot draw the phone, not that the link fails).
     let registry: Registry = Arc::new(Mutex::new(BTreeMap::new()));
@@ -105,6 +120,9 @@ fn run() -> Result<(), Box<dyn Error>> {
         Arc::clone(&registry),
         Arc::clone(&event_log),
         Arc::clone(&commands),
+        Arc::clone(&trust),
+        Arc::clone(&settings),
+        settings_path,
     ) {
         Ok(connection) => {
             log("dbus", &format!("serving {}", devices::INTERFACE));
@@ -119,7 +137,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     let daemon = Arc::new(Daemon {
         identity: Identity::desktop(&device_id, "Celestina"),
         tls: TlsConfigs::build(&cert)?,
-        trust: Mutex::new(TrustStore::load(&dir.join("trust.json"))?),
+        trust,
+        settings,
         devices: registry,
         log: event_log,
         commands,
@@ -356,12 +375,20 @@ impl Daemon {
         // then whichever it last reported state for.
         let mut mpris_player: Option<String> = None;
 
-        // A device we already trust: ask for its storage right away.
+        // A device we already trust: ask for its storage right away — and, for
+        // each enabled plugin, prime it (battery, media, clipboard handshake).
         if trusted {
+            let settings = *self.settings.lock().unwrap();
             device.send(request_packet)?;
-            device.send(magnetita_core::battery::request)?;
-            device.send(magnetita_core::mpris::request_player_list)?;
-            self.send_clipboard_connect(&mut device)?;
+            if settings.battery {
+                device.send(magnetita_core::battery::request)?;
+            }
+            if settings.media {
+                device.send(magnetita_core::mpris::request_player_list)?;
+            }
+            if settings.clipboard {
+                self.send_clipboard_connect(&mut device)?;
+            }
             asked_sftp = true;
             log("sftp", &format!("requesting {peer_name}'s storage"));
         }
@@ -369,6 +396,9 @@ impl Daemon {
         loop {
             let pumped = device.pump()?;
             let mut events = pumped.events;
+            // A snapshot of the toggles for this turn; a plugin switched off is
+            // one we neither drive nor react to.
+            let settings = *self.settings.lock().unwrap();
 
             // Commands the app forwarded for this device (its "Emparejar" /
             // "Desvincular" buttons).
@@ -376,16 +406,18 @@ impl Daemon {
                 match command {
                     Command::RequestPair => events.extend(device.request_pairing()?),
                     Command::Unpair => events.extend(device.unpair()?),
-                    Command::Ring => {
+                    Command::Ring if settings.findmyphone => {
                         device.send(magnetita_core::findmyphone::request)?;
                         ui_log(self, peer_name, "sonando el móvil", false);
                     }
-                    Command::SendClipboard(text) => {
+                    Command::Ring => {}
+                    Command::SendClipboard(text) if settings.clipboard => {
                         device.send(|id| {
                             magnetita_core::clipboard::clipboard_packet(id, &text)
                         })?;
                     }
-                    Command::Media(action) => {
+                    Command::SendClipboard(_) => {}
+                    Command::Media(action) if settings.media => {
                         // Drive the phone's active player; a report comes back
                         // and refreshes the app's now-playing card.
                         if let Some(player) = mpris_player.clone() {
@@ -394,6 +426,8 @@ impl Daemon {
                             })?;
                         }
                     }
+                    Command::Media(_) => {}
+                    Command::SendFile(_) if !settings.share => {}
                     Command::SendFile(path) => {
                         let path = PathBuf::from(&path);
                         match std::fs::metadata(&path) {
@@ -456,9 +490,15 @@ impl Daemon {
                         device.send_ping()?;
                         if !asked_sftp {
                             device.send(request_packet)?;
-                            device.send(magnetita_core::battery::request)?;
-                            device.send(magnetita_core::mpris::request_player_list)?;
-                            self.send_clipboard_connect(&mut device)?;
+                            if settings.battery {
+                                device.send(magnetita_core::battery::request)?;
+                            }
+                            if settings.media {
+                                device.send(magnetita_core::mpris::request_player_list)?;
+                            }
+                            if settings.clipboard {
+                                self.send_clipboard_connect(&mut device)?;
+                            }
                             asked_sftp = true;
                             log("sftp", &format!("requesting {peer_name}'s storage"));
                         }
@@ -491,65 +531,81 @@ impl Daemon {
             // Plugin packets the session leaves for us: the phone's battery and
             // its sftp reply.
             if let Some(packet) = &pumped.packet {
-                if let Some(battery) = read_battery(packet) {
-                    self.set_battery(peer_id, battery.charge, battery.charging);
-                    self.notify_change();
-                }
-                if let Some(note) = read_notification(packet) {
-                    self.mirror_notification(peer_id, peer_name, note);
-                }
-                if let Some(text) = read_clipboard(packet) {
-                    // Record before wl-copy so the watcher does not echo it back.
-                    *self.last_clipboard.lock().unwrap() = text.clone();
-                    if set_clipboard(&text) {
-                        ui_log(self, peer_name, "portapapeles recibido", false);
-                    }
-                }
-                if let Some(file) = read_share(packet) {
-                    // A file streams over a second socket; receive it off the
-                    // pump thread so a big transfer never freezes the link.
-                    let daemon = Arc::clone(self);
-                    let host = link_host.clone();
-                    let name = peer_name.to_owned();
-                    thread::spawn(move || daemon.receive_file(name, host, file));
-                }
-                // The phone reporting its media (for the app's now-playing card).
-                if let Some(update) = read_mpris(packet) {
-                    if let Some(players) = update.players {
-                        if players.is_empty() {
-                            mpris_player = None;
-                            self.set_media(peer_id, None);
-                            self.notify_change();
-                        } else if mpris_player.is_none() {
-                            // Adopt the first player and ask for its state.
-                            let first = players[0].clone();
-                            mpris_player = Some(first.clone());
-                            device
-                                .send(|id| magnetita_core::mpris::request_now_playing(id, &first))?;
-                        }
-                    }
-                    if let Some(state) = update.state {
-                        mpris_player = Some(state.player.clone());
-                        self.set_media(peer_id, Some(&state));
+                if settings.battery {
+                    if let Some(battery) = read_battery(packet) {
+                        self.set_battery(peer_id, battery.charge, battery.charging);
                         self.notify_change();
                     }
                 }
-                // The phone driving *our* players (its KDE Connect media remote).
-                if let Some(request) = read_mpris_request(packet) {
-                    if request.request_player_list {
-                        let players = media::players();
-                        device.send(|id| magnetita_core::mpris::player_list_packet(id, &players))?;
+                if settings.notifications {
+                    if let Some(note) = read_notification(packet) {
+                        self.mirror_notification(peer_id, peer_name, note);
                     }
-                    if let Some(player) = request.player.as_deref() {
-                        if let Some(action) = request.action.as_deref() {
-                            media::control(player, action);
+                }
+                if settings.clipboard {
+                    if let Some(text) = read_clipboard(packet) {
+                        // Record before wl-copy so the watcher does not echo it back.
+                        *self.last_clipboard.lock().unwrap() = text.clone();
+                        if set_clipboard(&text) {
+                            ui_log(self, peer_name, "portapapeles recibido", false);
                         }
-                        if let Some(volume) = request.set_volume {
-                            media::set_volume(player, volume);
+                    }
+                }
+                if settings.share {
+                    if let Some(file) = read_share(packet) {
+                        // A file streams over a second socket; receive it off the
+                        // pump thread so a big transfer never freezes the link.
+                        let daemon = Arc::clone(self);
+                        let host = link_host.clone();
+                        let name = peer_name.to_owned();
+                        thread::spawn(move || daemon.receive_file(name, host, file));
+                    }
+                }
+                // Media, both ways — only while the plugin is enabled.
+                if settings.media {
+                    // The phone reporting its media (for the now-playing card).
+                    if let Some(update) = read_mpris(packet) {
+                        if let Some(players) = update.players {
+                            if players.is_empty() {
+                                mpris_player = None;
+                                self.set_media(peer_id, None);
+                                self.notify_change();
+                            } else if mpris_player.is_none() {
+                                // Adopt the first player and ask for its state.
+                                let first = players[0].clone();
+                                mpris_player = Some(first.clone());
+                                device.send(|id| {
+                                    magnetita_core::mpris::request_now_playing(id, &first)
+                                })?;
+                            }
                         }
-                        if request.action.is_some() || request.request_now_playing {
-                            if let Some(state) = media::state(player) {
-                                device.send(|id| magnetita_core::mpris::state_packet(id, &state))?;
+                        if let Some(state) = update.state {
+                            mpris_player = Some(state.player.clone());
+                            self.set_media(peer_id, Some(&state));
+                            self.notify_change();
+                        }
+                    }
+                    // The phone driving *our* players (its media remote).
+                    if let Some(request) = read_mpris_request(packet) {
+                        if request.request_player_list {
+                            let players = media::players();
+                            device.send(|id| {
+                                magnetita_core::mpris::player_list_packet(id, &players)
+                            })?;
+                        }
+                        if let Some(player) = request.player.as_deref() {
+                            if let Some(action) = request.action.as_deref() {
+                                media::control(player, action);
+                            }
+                            if let Some(volume) = request.set_volume {
+                                media::set_volume(player, volume);
+                            }
+                            if request.action.is_some() || request.request_now_playing {
+                                if let Some(state) = media::state(player) {
+                                    device.send(|id| {
+                                        magnetita_core::mpris::state_packet(id, &state)
+                                    })?;
+                                }
                             }
                         }
                     }
@@ -609,7 +665,7 @@ impl Daemon {
     /// is the value we just received from a phone (our own wl-copy echo), which
     /// would otherwise loop back and forth forever.
     fn push_clipboard(&self, text: String) {
-        if text.is_empty() {
+        if text.is_empty() || !self.settings.lock().unwrap().clipboard {
             return;
         }
         {
@@ -757,12 +813,15 @@ fn serve_devices(
     registry: Registry,
     log: Log,
     commands: Commands,
+    trust: Arc<Mutex<TrustStore>>,
+    settings: Arc<Mutex<Settings>>,
+    settings_path: PathBuf,
 ) -> zbus::Result<zbus::blocking::Connection> {
     zbus::blocking::connection::Builder::session()?
         .name(devices::BUS_NAME)?
         .serve_at(
             devices::OBJECT_PATH,
-            Devices::new(registry, log, commands),
+            Devices::new(registry, log, commands, trust, settings, settings_path),
         )?
         .build()
 }

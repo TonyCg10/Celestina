@@ -453,6 +453,8 @@ dependencies = [
  "celestina-core",
  "magnetita-core",
  "magnetita-net",
+ "serde",
+ "serde_json",
  "zbus",
 ]
 

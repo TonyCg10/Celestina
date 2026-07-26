@@ -28,20 +28,45 @@ ApplicationWindow {
         return -1
     }
 
+    // Whether the Settings surface (paired devices + plugin toggles) is showing
+    // instead of the device list.
+    property bool settingsOpen: false
+
     Column {
         anchors.fill: parent
         anchors.margins: 22
         spacing: 6
 
-        Text {
-            text: "Magnetita"
-            color: CelestinaTheme.text
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontTitle
-            font.weight: CelestinaTheme.weightBold
+        // Header: the title and the gear that flips to the Settings surface.
+        Item {
+            width: parent.width
+            height: 34
+
+            Text {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                text: window.settingsOpen ? "Ajustes" : "Magnetita"
+                color: CelestinaTheme.text
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: CelestinaTheme.fontTitle
+                font.weight: CelestinaTheme.weightBold
+            }
+
+            CelestinaButton {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                width: 116
+                text: window.settingsOpen ? "‹ Volver" : "⚙ Ajustes"
+                onClicked: {
+                    window.settingsOpen = !window.settingsOpen
+                    if (window.settingsOpen)
+                        devices.reloadSettings()
+                }
+            }
         }
 
         Text {
+            visible: !window.settingsOpen
             text: devices.deviceNames.length > 0
                   ? devices.deviceNames.length + (devices.deviceNames.length === 1
                         ? " dispositivo conectado" : " dispositivos conectados")
@@ -54,7 +79,7 @@ ApplicationWindow {
 
         Text {
             width: parent.width
-            visible: devices.deviceNames.length === 0
+            visible: !window.settingsOpen && devices.deviceNames.length === 0
             text: "Abre KDE Connect en tu móvil y empareja.\nEl servicio (magnetitad) mantiene la conexión."
             color: CelestinaTheme.textMuted
             font.family: CelestinaTheme.sansFamily
@@ -66,8 +91,9 @@ ApplicationWindow {
 
         ListView {
             id: deviceList
+            visible: !window.settingsOpen
             width: parent.width
-            height: Math.min(contentHeight, window.height * 0.42)
+            height: visible ? Math.min(contentHeight, window.height * 0.42) : 0
             spacing: 10
             clip: true
             model: devices.deviceNames
@@ -179,7 +205,7 @@ ApplicationWindow {
         Rectangle {
             id: mediaCard
             width: parent.width
-            visible: window.mediaIndex >= 0
+            visible: !window.settingsOpen && window.mediaIndex >= 0
             height: 72
             radius: CelestinaTheme.radiusMd
             color: CelestinaTheme.surface
@@ -247,6 +273,7 @@ ApplicationWindow {
 
         // ── Connection log — "why won't it connect" ──────────────────
         Text {
+            visible: !window.settingsOpen
             text: "ACTIVIDAD"
             color: CelestinaTheme.textMuted
             font.family: CelestinaTheme.sansFamily
@@ -258,6 +285,7 @@ ApplicationWindow {
         }
 
         Rectangle {
+            visible: !window.settingsOpen
             width: parent.width
             height: window.height - deviceList.height
                     - (window.mediaIndex >= 0 ? mediaCard.height + 6 : 0) - 210
@@ -296,6 +324,140 @@ ApplicationWindow {
                 color: CelestinaTheme.textMuted
                 font.family: CelestinaTheme.sansFamily
                 font.pixelSize: CelestinaTheme.fontCaption
+            }
+        }
+
+        // ── Settings surface: paired devices + per-plugin toggles ────
+        Column {
+            id: settingsView
+            visible: window.settingsOpen
+            width: parent.width
+            spacing: 10
+
+            Text {
+                text: "DISPOSITIVOS EMPAREJADOS"
+                color: CelestinaTheme.textMuted
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: CelestinaTheme.fontMini
+                font.letterSpacing: 1.4
+                font.weight: CelestinaTheme.weightDemiBold
+                topPadding: 4
+            }
+
+            Text {
+                width: parent.width
+                visible: devices.pairedNames.length === 0
+                text: "Ningún dispositivo emparejado todavía."
+                color: CelestinaTheme.textMuted
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: CelestinaTheme.fontCaption
+            }
+
+            Repeater {
+                model: devices.pairedNames
+                delegate: Rectangle {
+                    required property int index
+                    required property string modelData
+                    readonly property string fingerprint:
+                        index < devices.pairedFingerprints.length ? devices.pairedFingerprints[index] : ""
+                    readonly property bool online:
+                        index < devices.pairedConnected.length && devices.pairedConnected[index] === "true"
+
+                    width: settingsView.width
+                    height: 74
+                    radius: CelestinaTheme.radiusMd
+                    color: CelestinaTheme.surface
+                    border.color: CelestinaTheme.border
+                    border.width: 1
+
+                    Column {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 16
+                        anchors.right: forget.left
+                        anchors.rightMargin: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 3
+
+                        Text {
+                            width: parent.width
+                            text: (online ? "🟢 " : "⚪ ") + modelData
+                            color: CelestinaTheme.text
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontCallout
+                            font.weight: CelestinaTheme.weightDemiBold
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            width: parent.width
+                            text: "🔑 " + fingerprint
+                            color: CelestinaTheme.textMuted
+                            font.family: CelestinaTheme.monoFamily
+                            font.pixelSize: CelestinaTheme.fontMini
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    CelestinaButton {
+                        id: forget
+                        anchors.right: parent.right
+                        anchors.rightMargin: 14
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 100
+                        text: "Olvidar"
+                        onClicked: devices.forgetPaired(index)
+                    }
+                }
+            }
+
+            Text {
+                text: "PLUGINS"
+                color: CelestinaTheme.textMuted
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: CelestinaTheme.fontMini
+                font.letterSpacing: 1.4
+                font.weight: CelestinaTheme.weightDemiBold
+                topPadding: 10
+            }
+
+            Repeater {
+                model: devices.pluginLabels
+                delegate: Rectangle {
+                    required property int index
+                    required property string modelData
+                    readonly property bool enabledFlag:
+                        index < devices.pluginEnabled.length && devices.pluginEnabled[index] === "true"
+
+                    width: settingsView.width
+                    height: 48
+                    radius: CelestinaTheme.radiusMd
+                    color: CelestinaTheme.surface
+                    border.color: CelestinaTheme.border
+                    border.width: 1
+
+                    Text {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 16
+                        anchors.right: toggle.left
+                        anchors.rightMargin: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: modelData
+                        color: CelestinaTheme.text
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: CelestinaTheme.fontCallout
+                        elide: Text.ElideRight
+                    }
+
+                    CelestinaButton {
+                        id: toggle
+                        anchors.right: parent.right
+                        anchors.rightMargin: 14
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 120
+                        primary: enabledFlag
+                        text: enabledFlag ? "Activado" : "Desactivado"
+                        onClicked: devices.togglePlugin(index)
+                    }
+                }
             }
         }
     }

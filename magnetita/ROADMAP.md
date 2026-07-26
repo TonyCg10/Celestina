@@ -12,9 +12,10 @@
 > app** consumes to pair/unpair with the verification key and show the connection
 > log. The daily plugins — **battery, notifications, file share, find-my-phone,
 > clipboard** (both ways) — mirror through freedesktop standards, all verified
-> live. ~90 offline tests, **no async runtime**, no C toolchain, `unsafe`
-> forbidden. CP4 — one suite — is nearly done: shell surfacing, send-to-phone
-> and MPRIS media (both ways) land; only a shared settings source remains.
+> live. ~100 offline tests, **no async runtime**, no C toolchain, `unsafe`
+> forbidden. CP4 — one suite — is **done**: the phone and its battery surface in
+> the `celestina` panel, Siderita sends files to it, MPRIS media flows both ways,
+> and a Settings surface manages paired devices and per-plugin toggles.
 
 ## Overview
 
@@ -264,10 +265,17 @@ language.
       reports now-playing, and runs play-pause/next/previous. The wire lives in a
       pure `magnetita-core::mpris` (10 tests); the desktop side is `media.rs`,
       unit-tested and validated live against playerctl + a real player.
-- [ ] **One settings source** — paired devices and per-plugin toggles share the
-      suite's settings/theming source, not a private store. (Theming is already
-      shared through `celestina-style`/`CelestinaTheme`; this is the remaining
-      half: a common store for device/plugin settings instead of per-app config.)
+- [x] **One settings source** — a Settings surface in the app (a gear flips the
+      window to it) manages the two things that outlive a session: **paired
+      devices** (listed from the trust store even when offline, each with its
+      verification key and an "Olvidar" to unpair) and **per-plugin toggles**
+      (battery, notifications, clipboard, share, find-my-phone, media). Both ride
+      the same `org.celestina.Devices1` contract — `ListPaired`/`Forget`,
+      `PluginSettings`/`SetPlugin` — sharing the trust store the daemon already
+      keeps; the toggles persist to `settings.json` in the config dir and the
+      daemon honours them live (a disabled plugin is one it stops acting on).
+      Theming is the other half, already shared through `celestina-style`/
+      `CelestinaTheme`. Verified live over the bus: list, toggle, persist, forget.
 
 **Done when:** pairing, status, transfers, the mount and settings are reachable
 from the suite's own surfaces in the suite's own visual language, over the suite's

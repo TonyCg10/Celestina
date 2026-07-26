@@ -41,6 +41,16 @@ pub struct Device {
     pub media_can_previous: bool,
 }
 
+/// A paired device from the trust store, for the Settings surface — includes
+/// devices remembered but currently offline.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Paired {
+    pub id: String,
+    pub name: String,
+    pub fingerprint: String,
+    pub connected: bool,
+}
+
 /// One connection-log entry from the daemon.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LogEntry {
@@ -146,6 +156,50 @@ pub fn media_action(device_id: &str, action: &str) {
     let _: Result<(), zbus::Error> = proxy.call("MediaAction", &(device_id, action));
 }
 
+/// The paired devices (from the trust store), for the Settings surface. Empty
+/// when Magnetita is not up.
+pub fn list_paired() -> Vec<Paired> {
+    let Ok(connection) = Connection::session() else {
+        return Vec::new();
+    };
+    let Ok(proxy) = Proxy::new(&connection, SERVICE, OBJECT, INTERFACE) else {
+        return Vec::new();
+    };
+    let raw: Vec<HashMap<String, OwnedValue>> = match proxy.call("ListPaired", &()) {
+        Ok(paired) => paired,
+        Err(_) => return Vec::new(),
+    };
+    raw.iter().map(parse_paired).collect()
+}
+
+/// Ask Magnetita to forget (unpair) a device — connected or not.
+pub fn forget(device_id: &str) {
+    call_method("Forget", device_id);
+}
+
+/// The per-plugin toggles, as a `name → enabled` map. Empty when Magnetita is
+/// not up (the controller then shows every plugin as on, the default).
+pub fn plugin_settings() -> HashMap<String, bool> {
+    let Ok(connection) = Connection::session() else {
+        return HashMap::new();
+    };
+    let Ok(proxy) = Proxy::new(&connection, SERVICE, OBJECT, INTERFACE) else {
+        return HashMap::new();
+    };
+    proxy.call("PluginSettings", &()).unwrap_or_default()
+}
+
+/// Enable or disable a plugin (best-effort).
+pub fn set_plugin(plugin: &str, enabled: bool) {
+    let Ok(connection) = Connection::session() else {
+        return;
+    };
+    let Ok(proxy) = Proxy::new(&connection, SERVICE, OBJECT, INTERFACE) else {
+        return;
+    };
+    let _: Result<(), zbus::Error> = proxy.call("SetPlugin", &(plugin, enabled));
+}
+
 fn call_method(method: &'static str, device_id: &str) {
     let Ok(connection) = Connection::session() else {
         return;
@@ -175,6 +229,15 @@ fn parse_device(dict: &HashMap<String, OwnedValue>) -> Device {
         media_can_pause: bool_field(dict, "mediaCanPause"),
         media_can_next: bool_field(dict, "mediaCanNext"),
         media_can_previous: bool_field(dict, "mediaCanPrevious"),
+    }
+}
+
+fn parse_paired(dict: &HashMap<String, OwnedValue>) -> Paired {
+    Paired {
+        id: str_field(dict, "id"),
+        name: str_field(dict, "name"),
+        fingerprint: str_field(dict, "fingerprint"),
+        connected: bool_field(dict, "connected"),
     }
 }
 

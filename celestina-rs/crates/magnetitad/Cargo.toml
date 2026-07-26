@@ -17,6 +17,9 @@ celestina-core.workspace = true
 # zbus the suite's portal backend uses. Its blocking API keeps the daemon
 # thread-based; zbus runs its own small executor for the served interface.
 zbus = "5"
+# Plugin settings persist as JSON in the config dir (settings.rs).
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 
 [lints]
 workspace = true

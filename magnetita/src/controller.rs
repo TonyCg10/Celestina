@@ -44,6 +44,14 @@ pub mod qobject {
         // ("true"/"false") for red styling.
         #[qproperty(QStringList, log_lines)]
         #[qproperty(QStringList, log_failures)]
+        // The Settings surface: paired devices (name + fingerprint + a
+        // "true"/"false" connected flag) and the per-plugin toggles (label +
+        // "true"/"false" enabled flag), all parallel lists.
+        #[qproperty(QStringList, paired_names)]
+        #[qproperty(QStringList, paired_fingerprints)]
+        #[qproperty(QStringList, paired_connected)]
+        #[qproperty(QStringList, plugin_labels)]
+        #[qproperty(QStringList, plugin_enabled)]
         type DevicesModel = super::DevicesModelRust;
 
         /// Re-read the devices Magnetita reports.
@@ -77,6 +85,18 @@ pub mod qobject {
         /// Skip to the previous track on device `index`.
         #[qinvokable]
         fn media_previous(self: Pin<&mut DevicesModel>, index: i32);
+
+        /// Load the Settings surface: paired devices and plugin toggles.
+        #[qinvokable]
+        fn reload_settings(self: Pin<&mut DevicesModel>);
+
+        /// Forget (unpair) paired device `index`.
+        #[qinvokable]
+        fn forget_paired(self: Pin<&mut DevicesModel>, index: i32);
+
+        /// Flip plugin `index`'s enabled state and persist it.
+        #[qinvokable]
+        fn toggle_plugin(self: Pin<&mut DevicesModel>, index: i32);
     }
 
     impl cxx_qt::Threading for DevicesModel {}
@@ -97,10 +117,27 @@ pub struct DevicesModelRust {
     device_media_previous: QStringList,
     log_lines: QStringList,
     log_failures: QStringList,
+    paired_names: QStringList,
+    paired_fingerprints: QStringList,
+    paired_connected: QStringList,
+    plugin_labels: QStringList,
+    plugin_enabled: QStringList,
     watch_started: bool,
     event_watch_started: bool,
     devices: Vec<crate::devices::Device>,
+    paired: Vec<crate::devices::Paired>,
+    plugin_states: Vec<bool>,
 }
+
+/// The plugins the Settings surface shows, in order: (D-Bus key, Spanish label).
+const PLUGINS: [(&str, &str); 6] = [
+    ("battery", "Batería"),
+    ("notifications", "Notificaciones del móvil"),
+    ("clipboard", "Portapapeles"),
+    ("share", "Compartir archivos"),
+    ("findmyphone", "Sonar el móvil"),
+    ("media", "Control de medios"),
+];
 
 impl qobject::DevicesModel {
     /// Reads the reported devices into the parallel lists, then arms the watch so
@@ -212,6 +249,68 @@ impl qobject::DevicesModel {
         if let Some(device) = usize::try_from(index).ok().and_then(|i| self.rust().devices.get(i)) {
             crate::devices::media_action(&device.id, action);
         }
+    }
+
+    /// Load the Settings surface — the paired devices and the plugin toggles.
+    pub fn reload_settings(mut self: Pin<&mut Self>) {
+        let paired = crate::devices::list_paired();
+        let flags = crate::devices::plugin_settings();
+
+        let paired_names: QStringList = paired
+            .iter()
+            .map(|device| QString::from(device.name.as_str()))
+            .collect();
+        let paired_fingerprints: QStringList = paired
+            .iter()
+            .map(|device| QString::from(device.fingerprint.as_str()))
+            .collect();
+        let paired_connected: QStringList = paired
+            .iter()
+            .map(|device| QString::from(flag(device.connected)))
+            .collect();
+
+        // A key missing from the map means Magnetita is down; default to on.
+        let states: Vec<bool> = PLUGINS
+            .iter()
+            .map(|(key, _)| flags.get(*key).copied().unwrap_or(true))
+            .collect();
+        let plugin_labels: QStringList =
+            PLUGINS.iter().map(|(_, label)| QString::from(*label)).collect();
+        let plugin_enabled: QStringList =
+            states.iter().map(|on| QString::from(flag(*on))).collect();
+
+        self.as_mut().rust_mut().get_mut().paired = paired;
+        self.as_mut().rust_mut().get_mut().plugin_states = states;
+        self.as_mut().set_paired_names(paired_names);
+        self.as_mut().set_paired_fingerprints(paired_fingerprints);
+        self.as_mut().set_paired_connected(paired_connected);
+        self.as_mut().set_plugin_labels(plugin_labels);
+        self.as_mut().set_plugin_enabled(plugin_enabled);
+    }
+
+    /// Forget (unpair) paired device `index`, then refresh the surface.
+    pub fn forget_paired(mut self: Pin<&mut Self>, index: i32) {
+        let id = usize::try_from(index)
+            .ok()
+            .and_then(|i| self.rust().paired.get(i))
+            .map(|device| device.id.clone());
+        if let Some(id) = id {
+            crate::devices::forget(&id);
+        }
+        self.as_mut().reload_settings();
+    }
+
+    /// Flip plugin `index`'s enabled state, persist it, and refresh.
+    pub fn toggle_plugin(mut self: Pin<&mut Self>, index: i32) {
+        let Some(i) = usize::try_from(index).ok() else {
+            return;
+        };
+        let Some((key, _)) = PLUGINS.get(i) else {
+            return;
+        };
+        let current = self.rust().plugin_states.get(i).copied().unwrap_or(true);
+        crate::devices::set_plugin(key, !current);
+        self.as_mut().reload_settings();
     }
 
     /// Re-read the connection log, newest first, into the parallel lists.
