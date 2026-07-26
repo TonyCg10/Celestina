@@ -6,10 +6,10 @@ import org.celestina.magnetita
 ApplicationWindow {
     id: window
     visible: true
-    width: 440
-    height: 600
-    minimumWidth: 360
-    minimumHeight: 420
+    width: 460
+    height: 680
+    minimumWidth: 380
+    minimumHeight: 480
     title: "Magnetita"
     color: CelestinaTheme.canvas
 
@@ -39,10 +39,9 @@ ApplicationWindow {
             color: CelestinaTheme.textMuted
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontBody
-            bottomPadding: 14
+            bottomPadding: 12
         }
 
-        // Empty state.
         Text {
             width: parent.width
             visible: devices.deviceNames.length === 0
@@ -52,12 +51,13 @@ ApplicationWindow {
             font.pixelSize: CelestinaTheme.fontCallout
             wrapMode: Text.WordWrap
             lineHeight: 1.3
+            bottomPadding: 8
         }
 
         ListView {
-            id: list
+            id: deviceList
             width: parent.width
-            height: window.height - 150
+            height: Math.min(contentHeight, window.height * 0.42)
             spacing: 10
             clip: true
             model: devices.deviceNames
@@ -70,10 +70,12 @@ ApplicationWindow {
                     index < devices.deviceStates.length ? devices.deviceStates[index] : ""
                 readonly property string mount:
                     index < devices.deviceMounts.length ? devices.deviceMounts[index] : ""
+                readonly property string fingerprint:
+                    index < devices.deviceFingerprints.length ? devices.deviceFingerprints[index] : ""
                 readonly property bool mounted: mount.length > 0
 
-                width: list.width
-                height: 66
+                width: deviceList.width
+                height: 90
                 radius: CelestinaTheme.radiusMd
                 color: CelestinaTheme.surface
                 border.color: CelestinaTheme.border
@@ -102,6 +104,15 @@ ApplicationWindow {
                         font.family: CelestinaTheme.sansFamily
                         font.pixelSize: CelestinaTheme.fontCaption
                         elide: Text.ElideMiddle
+                        width: parent.width
+                    }
+                    Text {
+                        visible: row.fingerprint.length > 0
+                        text: "🔑 " + row.fingerprint
+                        color: CelestinaTheme.textMuted
+                        font.family: CelestinaTheme.monoFamily
+                        font.pixelSize: CelestinaTheme.fontMini
+                        elide: Text.ElideRight
                         width: parent.width
                     }
                 }
@@ -136,6 +147,59 @@ ApplicationWindow {
                         onClicked: devices.openMount(row.index)
                     }
                 }
+            }
+        }
+
+        // ── Connection log — "why won't it connect" ──────────────────
+        Text {
+            text: "ACTIVIDAD"
+            color: CelestinaTheme.textMuted
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: CelestinaTheme.fontMini
+            font.letterSpacing: 1.4
+            font.weight: CelestinaTheme.weightDemiBold
+            topPadding: 14
+            bottomPadding: 4
+        }
+
+        Rectangle {
+            width: parent.width
+            height: window.height - deviceList.height - 210
+            radius: CelestinaTheme.radiusMd
+            color: CelestinaTheme.canvasRaised
+            border.color: CelestinaTheme.border
+            border.width: 1
+
+            ListView {
+                id: logList
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 5
+                clip: true
+                model: devices.logLines
+
+                delegate: Text {
+                    required property int index
+                    required property string modelData
+                    readonly property bool failure:
+                        index < devices.logFailures.length
+                        && devices.logFailures[index] === "true"
+                    width: logList.width
+                    text: modelData
+                    color: failure ? CelestinaTheme.danger : CelestinaTheme.textMuted
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCaption
+                    wrapMode: Text.WordWrap
+                }
+            }
+
+            Text {
+                anchors.centerIn: parent
+                visible: devices.logLines.length === 0
+                text: "Sin actividad todavía"
+                color: CelestinaTheme.textMuted
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: CelestinaTheme.fontCaption
             }
         }
     }

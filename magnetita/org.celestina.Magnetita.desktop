@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Magnetita
+GenericName=Enlace con el móvil
+Comment=Empareja, diagnostica y navega tu móvil (KDE Connect)
+Exec=magnetita
+Icon=org.celestina.Magnetita
+Terminal=false
+Categories=Network;RemoteAccess;
+Keywords=phone;móvil;kdeconnect;magnetita;celestina;
+StartupNotify=true
+StartupWMClass=org.celestina.Magnetita

@@ -28,6 +28,11 @@ pub mod qobject {
         #[qproperty(QStringList, device_types)]
         #[qproperty(QStringList, device_mounts)]
         #[qproperty(QStringList, device_states)]
+        #[qproperty(QStringList, device_fingerprints)]
+        // The connection log — newest first — with a parallel failure flag
+        // ("true"/"false") for red styling.
+        #[qproperty(QStringList, log_lines)]
+        #[qproperty(QStringList, log_failures)]
         type DevicesModel = super::DevicesModelRust;
 
         /// Re-read the devices Magnetita reports.
@@ -48,7 +53,11 @@ pub struct DevicesModelRust {
     device_types: QStringList,
     device_mounts: QStringList,
     device_states: QStringList,
+    device_fingerprints: QStringList,
+    log_lines: QStringList,
+    log_failures: QStringList,
     watch_started: bool,
+    event_watch_started: bool,
     devices: Vec<crate::devices::Device>,
 }
 
@@ -74,14 +83,62 @@ impl qobject::DevicesModel {
             .iter()
             .map(|device| QString::from(state_label(device)))
             .collect();
+        let fingerprints: QStringList = devices
+            .iter()
+            .map(|device| QString::from(device.fingerprint.as_str()))
+            .collect();
 
         self.as_mut().rust_mut().get_mut().devices = devices;
         self.as_mut().set_device_names(names);
         self.as_mut().set_device_types(types);
         self.as_mut().set_device_mounts(mounts);
         self.as_mut().set_device_states(states);
+        self.as_mut().set_device_fingerprints(fingerprints);
 
+        self.as_mut().reload_log();
         self.as_mut().start_watch();
+        self.as_mut().start_event_watch();
+    }
+
+    /// Re-read the connection log, newest first, into the parallel lists.
+    pub fn reload_log(mut self: Pin<&mut Self>) {
+        let entries = crate::devices::recent_log().unwrap_or_default();
+
+        // Newest at the top.
+        let lines: QStringList = entries
+            .iter()
+            .rev()
+            .map(|entry| {
+                QString::from(format!("{} — {}", entry.device, entry.message).as_str())
+            })
+            .collect();
+        let failures: QStringList = entries
+            .iter()
+            .rev()
+            .map(|entry| QString::from(if entry.failure { "true" } else { "false" }))
+            .collect();
+
+        self.as_mut().set_log_lines(lines);
+        self.as_mut().set_log_failures(failures);
+    }
+
+    /// Watches the daemon's `Event` signal to keep the log live.
+    fn start_event_watch(mut self: Pin<&mut Self>) {
+        if self.rust().event_watch_started {
+            return;
+        }
+        self.as_mut().rust_mut().get_mut().event_watch_started = true;
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let result = crate::devices::watch_events(move || {
+                let _ = qt.queue(|model: Pin<&mut qobject::DevicesModel>| {
+                    model.reload_log();
+                });
+            });
+            if let Err(error) = result {
+                eprintln!("Magnetita: watch de eventos no disponible: {error}");
+            }
+        });
     }
 
     /// Starts, once, a thread that watches Magnetita's `Changed` signal and

@@ -20,7 +20,7 @@
 //! CP1 wraps this in a window; CP2 hangs the sftp mount and
 //! `org.celestina.Devices1` off the same trusted link.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::error::Error;
 use std::fs;
 use std::io::Write;
@@ -32,7 +32,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use celestina_core::xdg;
 use magnetita_core::{
-    read_sftp, request_packet, ConnectionEvent, DeviceType, Identity, Session, SftpReply,
+    read_sftp, request_packet, ConnectionEvent, DeviceType, Identity, LostReason, Session,
+    SftpReply,
 };
 use magnetita_net::discovery::ANNOUNCE_INTERVAL;
 use magnetita_net::{
@@ -42,7 +43,7 @@ use magnetita_net::{
 
 mod devices;
 mod mount;
-use devices::{DeviceEntry, Devices, Registry};
+use devices::{push_log, DeviceEntry, Devices, Log, LogEntry, Registry};
 use mount::Mount;
 
 /// The KDE Connect port: UDP announce/listen and TCP link.
@@ -72,6 +73,7 @@ struct Daemon {
     tls: TlsConfigs,
     trust: Mutex<TrustStore>,
     devices: Registry,
+    log: Log,
     dbus: Option<zbus::blocking::Connection>,
 }
 
@@ -87,7 +89,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     // Serve org.celestina.Devices1 (best-effort: no session bus just means
     // Siderita cannot draw the phone, not that the link fails).
     let registry: Registry = Arc::new(Mutex::new(BTreeMap::new()));
-    let dbus = match serve_devices(Arc::clone(&registry)) {
+    let event_log: Log = Arc::new(Mutex::new(VecDeque::new()));
+    let dbus = match serve_devices(Arc::clone(&registry), Arc::clone(&event_log)) {
         Ok(connection) => {
             log("dbus", &format!("serving {}", devices::INTERFACE));
             Some(connection)
@@ -103,6 +106,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         tls: TlsConfigs::build(&cert)?,
         trust: Mutex::new(TrustStore::load(&dir.join("trust.json"))?),
         devices: registry,
+        log: event_log,
         dbus,
     });
 
@@ -173,7 +177,15 @@ fn spawn_accepter(listener: TcpListener, daemon: Arc<Daemon>) {
             let daemon = Arc::clone(&daemon);
             thread::spawn(move || match accept_link(&daemon, tcp) {
                 Ok(link) => daemon.serve(link, "accepted"),
-                Err(e) => log("accept", &format!("handshake failed: {e}")),
+                Err(e) => {
+                    log("accept", &format!("handshake failed: {e}"));
+                    ui_log(
+                        &daemon,
+                        "un dispositivo",
+                        &format!("un intento de conexión falló: {e}"),
+                        true,
+                    );
+                }
             });
         }
     });
@@ -191,7 +203,11 @@ fn spawn_dialer(daemon: Arc<Daemon>, announcement: Announcement) {
             HANDSHAKE_TIMEOUT,
         ) {
             Ok(link) => daemon.serve(link, "dialed"),
-            Err(e) => log("dial", &format!("{}: {e}", announcement.identity.device_name)),
+            Err(e) => {
+                let name = &announcement.identity.device_name;
+                log("dial", &format!("{name}: {e}"));
+                ui_log(&daemon, name, &format!("no se pudo conectar: {e}"), true);
+            }
         }
     });
 }
@@ -214,6 +230,7 @@ impl Daemon {
         let peer_id = link.peer().device_id.clone();
         let peer_name = link.peer().device_name.clone();
         let peer_type = type_label(link.peer().device_type);
+        let fingerprint = link.peer_fingerprint().to_owned();
 
         {
             // Hold the lock across check-and-insert so two paths cannot both
@@ -232,19 +249,23 @@ impl Daemon {
                     mounted: false,
                     mount_path: String::new(),
                     battery: -1,
+                    fingerprint,
                 },
             );
         }
         self.notify_change();
         log(how, &format!("{peer_name} at {}", link.peer_addr()));
         log("secured", &format!("fingerprint {}", link.peer_fingerprint()));
+        ui_log(self, &peer_name, "conectado y cifrado", false);
 
         if let Err(e) = self.run_link(link, &peer_id, &peer_name) {
             log("link", &format!("{peer_name}: {e}"));
+            ui_log(self, &peer_name, &format!("error de enlace: {e}"), true);
         }
         self.devices.lock().unwrap().remove(&peer_id);
         self.notify_change();
         log("closed", &format!("{peer_name} disconnected"));
+        ui_log(self, &peer_name, "desconectado", false);
     }
 
     /// Drive one link's session: trust-check it, let the phone drive pairing,
@@ -259,6 +280,12 @@ impl Daemon {
                 log(
                     "REFUSED",
                     &format!("{peer_name}: certificate changed — unpair and re-pair on purpose"),
+                );
+                ui_log(
+                    self,
+                    peer_name,
+                    "RECHAZADO: el certificado cambió — vuelve a emparejar a propósito",
+                    true,
                 );
                 return Ok(());
             }
@@ -301,6 +328,9 @@ impl Daemon {
 
             for event in &events {
                 log_event(event);
+                if let Some((message, failure)) = event_line(event) {
+                    ui_log(self, peer_name, message, failure);
+                }
                 match event {
                     ConnectionEvent::Paired => {
                         self.trust.lock().unwrap().pin(TrustedPeer {
@@ -335,15 +365,20 @@ impl Daemon {
                         match Mount::open(peer_id, &host, &info) {
                             Ok(m) => {
                                 log("mounted", &format!("{peer_name} at {}", m.path().display()));
+                                ui_log(self, peer_name, "archivos montados", false);
                                 self.set_mount(peer_id, Some(m.path()));
                                 self.notify_change();
                                 mount = Some(m);
                             }
-                            Err(e) => log("mount", &format!("{peer_name}: {e}")),
+                            Err(e) => {
+                                log("mount", &format!("{peer_name}: {e}"));
+                                ui_log(self, peer_name, &format!("no se pudo montar: {e}"), true);
+                            }
                         }
                     }
                     Some(SftpReply::Error(message)) => {
                         log("sftp", &format!("{peer_name} refused: {message}"));
+                        ui_log(self, peer_name, &format!("el móvil rechazó el montaje: {message}"), true);
                     }
                     _ => {}
                 }
@@ -387,11 +422,56 @@ impl Daemon {
 }
 
 /// Start serving `org.celestina.Devices1` on the session bus.
-fn serve_devices(registry: Registry) -> zbus::Result<zbus::blocking::Connection> {
+fn serve_devices(registry: Registry, log: Log) -> zbus::Result<zbus::blocking::Connection> {
     zbus::blocking::connection::Builder::session()?
         .name(devices::BUS_NAME)?
-        .serve_at(devices::OBJECT_PATH, Devices::new(registry))?
+        .serve_at(devices::OBJECT_PATH, Devices::new(registry, log))?
         .build()
+}
+
+/// Record a connection-log line for the app, and signal that a new entry landed.
+/// Best-effort on the bus; the entry is kept regardless so the app sees it on
+/// its next read.
+fn ui_log(daemon: &Daemon, device: &str, message: &str, failure: bool) {
+    push_log(
+        &daemon.log,
+        LogEntry {
+            device: device.to_owned(),
+            message: message.to_owned(),
+            failure,
+            time_ms: millis(),
+        },
+    );
+    if let Some(connection) = &daemon.dbus {
+        let _ = connection.emit_signal(
+            Option::<&str>::None,
+            devices::OBJECT_PATH,
+            devices::INTERFACE,
+            devices::EVENT_SIGNAL,
+            &(),
+        );
+    }
+}
+
+/// A connection event as a log line for the app, or `None` for the noisy or
+/// purely-internal ones. The `bool` marks a failure worth showing in red.
+fn event_line(event: &ConnectionEvent) -> Option<(&'static str, bool)> {
+    use ConnectionEvent::*;
+    Some(match event {
+        Pairing => ("emparejamiento en curso", false),
+        Paired => ("emparejado", false),
+        Unpaired => ("desemparejado", false),
+        Lost(LostReason::NoReply) => ("sin respuesta", true),
+        Lost(LostReason::Unreachable) => ("inalcanzable (¿otra red?)", true),
+        Lost(LostReason::TlsFailed) => ("falló el cifrado TLS", true),
+        Lost(LostReason::CertChanged) => ("el certificado cambió — posible impostor", true),
+        Lost(LostReason::PairRejected) => ("emparejamiento rechazado", true),
+        Lost(LostReason::PairTimedOut) => ("el emparejamiento expiró", true),
+        Lost(LostReason::PeerClosed) => ("el dispositivo cerró el enlace", true),
+        // Discovered / Linking / Secured / Identified / Pinged: too low-level or
+        // too noisy for the log; the daemon logs its own milestones instead.
+        _ => return None,
+    })
 }
 
 /// The contract's device-type label for a peer's declared type.

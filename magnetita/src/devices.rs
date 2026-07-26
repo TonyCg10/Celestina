@@ -24,6 +24,17 @@ pub struct Device {
     pub connected: bool,
     pub mounted: bool,
     pub mount_path: String,
+    /// The peer certificate fingerprint — the verification key to show.
+    pub fingerprint: String,
+}
+
+/// One connection-log entry from the daemon.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LogEntry {
+    pub device: String,
+    pub message: String,
+    pub failure: bool,
+    pub time_ms: i64,
 }
 
 /// Lists the devices Magnetita reports. `Ok(vec![])` when Magnetita is not on the
@@ -42,21 +53,46 @@ pub fn list_devices() -> Result<Vec<Device>, String> {
     Ok(raw.iter().map(parse_device).collect())
 }
 
-/// Blocks watching the `Changed` signal, calling `on_change` (coalesced over a
-/// short burst) on each change. The match rule is set up even if Magnetita is not
-/// up yet, so it fires once Magnetita appears.
+/// The recent connection log, oldest first. Empty when Magnetita is not up.
+pub fn recent_log() -> Result<Vec<LogEntry>, String> {
+    let Ok(connection) = Connection::session() else {
+        return Ok(Vec::new());
+    };
+    let Ok(proxy) = Proxy::new(&connection, SERVICE, OBJECT, INTERFACE) else {
+        return Ok(Vec::new());
+    };
+    let raw: Vec<HashMap<String, OwnedValue>> = match proxy.call("RecentLog", &()) {
+        Ok(entries) => entries,
+        Err(_) => return Ok(Vec::new()),
+    };
+    Ok(raw.iter().map(parse_log).collect())
+}
+
+/// Blocks watching the device-set `Changed` signal, coalesced.
 pub fn watch_changes<F: Fn() + Send + 'static>(on_change: F) -> Result<(), String> {
+    watch("Changed", on_change)
+}
+
+/// Blocks watching the connection-log `Event` signal, coalesced.
+pub fn watch_events<F: Fn() + Send + 'static>(on_event: F) -> Result<(), String> {
+    watch("Event", on_event)
+}
+
+/// The shared signal-watch loop: subscribe, coalesce a burst, call back. The
+/// match rule is set up even if Magnetita is not up yet, so it fires once it
+/// appears.
+fn watch<F: Fn() + Send + 'static>(signal: &'static str, on_change: F) -> Result<(), String> {
     let connection =
         Connection::session().map_err(|error| format!("bus de sesión no disponible: {error}"))?;
     let proxy = Proxy::new(&connection, SERVICE, OBJECT, INTERFACE)
         .map_err(|error| format!("Magnetita no disponible: {error}"))?;
-    let changed = proxy
-        .receive_signal("Changed")
+    let signals = proxy
+        .receive_signal(signal)
         .map_err(|error| format!("Magnetita: {error}"))?;
 
     let (tx, rx) = mpsc::channel::<()>();
     std::thread::spawn(move || {
-        for _ in changed {
+        for _ in signals {
             if tx.send(()).is_err() {
                 break;
             }
@@ -79,6 +115,16 @@ fn parse_device(dict: &HashMap<String, OwnedValue>) -> Device {
         connected: bool_field(dict, "connected"),
         mounted: bool_field(dict, "mounted"),
         mount_path: str_field(dict, "mountPath"),
+        fingerprint: str_field(dict, "fingerprint"),
+    }
+}
+
+fn parse_log(dict: &HashMap<String, OwnedValue>) -> LogEntry {
+    LogEntry {
+        device: str_field(dict, "device"),
+        message: str_field(dict, "message"),
+        failure: bool_field(dict, "failure"),
+        time_ms: i64_field(dict, "time"),
     }
 }
 
@@ -92,4 +138,10 @@ fn bool_field(dict: &HashMap<String, OwnedValue>, key: &str) -> bool {
     dict.get(key)
         .and_then(|value| bool::try_from(value.clone()).ok())
         .unwrap_or(false)
+}
+
+fn i64_field(dict: &HashMap<String, OwnedValue>, key: &str) -> i64 {
+    dict.get(key)
+        .and_then(|value| i64::try_from(value.clone()).ok())
+        .unwrap_or(0)
 }
