@@ -92,6 +92,7 @@ impl Identity {
                 crate::ping::TYPE_PING.to_owned(),
                 crate::sftp::TYPE_SFTP_REQUEST.to_owned(),
                 crate::battery::TYPE_BATTERY_REQUEST.to_owned(),
+                crate::findmyphone::TYPE_FINDMYPHONE_REQUEST.to_owned(),
             ],
             tcp_port: Some(DEFAULT_PORT),
         }

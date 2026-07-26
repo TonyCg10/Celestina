@@ -128,26 +128,35 @@ ApplicationWindow {
                     }
                 }
 
-                Row {
+                Column {
                     id: actions
                     anchors.right: parent.right
                     anchors.rightMargin: 14
                     anchors.verticalCenter: parent.verticalCenter
-                    spacing: 8
+                    spacing: 6
 
                     CelestinaButton {
+                        width: 118
                         visible: row.mounted
                         primary: true
                         text: "Abrir"
                         onClicked: devices.openMount(row.index)
                     }
                     CelestinaButton {
+                        width: 118
                         visible: !row.paired
                         primary: true
                         text: "Emparejar"
                         onClicked: devices.pairDevice(row.index)
                     }
                     CelestinaButton {
+                        width: 118
+                        visible: row.paired
+                        text: "Sonar"
+                        onClicked: devices.ringDevice(row.index)
+                    }
+                    CelestinaButton {
+                        width: 118
                         visible: row.paired
                         text: "Desvincular"
                         onClicked: devices.unpairDevice(row.index)

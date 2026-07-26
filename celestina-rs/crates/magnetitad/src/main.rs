@@ -345,6 +345,10 @@ impl Daemon {
                 match command {
                     Command::RequestPair => events.extend(device.request_pairing()?),
                     Command::Unpair => events.extend(device.unpair()?),
+                    Command::Ring => {
+                        device.send(magnetita_core::findmyphone::request)?;
+                        ui_log(self, peer_name, "sonando el móvil", false);
+                    }
                 }
             }
 

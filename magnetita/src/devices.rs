@@ -121,6 +121,11 @@ pub fn unpair(device_id: &str) {
     call_method("Unpair", device_id);
 }
 
+/// Ask Magnetita to ring the device (find-my-phone).
+pub fn ring(device_id: &str) {
+    call_method("Ring", device_id);
+}
+
 fn call_method(method: &'static str, device_id: &str) {
     let Ok(connection) = Connection::session() else {
         return;

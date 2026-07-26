@@ -54,6 +54,10 @@ pub mod qobject {
         /// Drop the pairing with device `index`.
         #[qinvokable]
         fn unpair_device(self: Pin<&mut DevicesModel>, index: i32);
+
+        /// Ring device `index` (find-my-phone).
+        #[qinvokable]
+        fn ring_device(self: Pin<&mut DevicesModel>, index: i32);
     }
 
     impl cxx_qt::Threading for DevicesModel {}
@@ -135,6 +139,13 @@ impl qobject::DevicesModel {
     pub fn unpair_device(self: Pin<&mut Self>, index: i32) {
         if let Some(device) = usize::try_from(index).ok().and_then(|i| self.rust().devices.get(i)) {
             crate::devices::unpair(&device.id);
+        }
+    }
+
+    /// Ring device `index` (its "Sonar" button — find-my-phone).
+    pub fn ring_device(self: Pin<&mut Self>, index: i32) {
+        if let Some(device) = usize::try_from(index).ok().and_then(|i| self.rust().devices.get(i)) {
+            crate::devices::ring(&device.id);
         }
     }
 

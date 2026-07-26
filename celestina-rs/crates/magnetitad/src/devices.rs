@@ -136,6 +136,8 @@ pub enum Command {
     RequestPair,
     /// Drop the pairing.
     Unpair,
+    /// Ring the device (find-my-phone).
+    Ring,
 }
 
 /// The per-device command channels, keyed by device id. A link registers its
@@ -193,5 +195,10 @@ impl Devices {
     /// Drop the pairing with the connected device (the app's "Desvincular").
     fn unpair(&self, device_id: String) {
         self.forward(&device_id, Command::Unpair);
+    }
+
+    /// Ring the connected device (the app's "Sonar" — find-my-phone).
+    fn ring(&self, device_id: String) {
+        self.forward(&device_id, Command::Ring);
     }
 }
