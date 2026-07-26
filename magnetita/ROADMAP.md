@@ -217,10 +217,14 @@ app's options.
       base-name only (no traversal), no-clobber, half-file removed on failure, and
       a notification on arrival. Live-verified. **PC → phone is a follow-up** (it
       needs us to serve a payload socket).
-- [x] **Clipboard** — receive: the phone's clipboard lands on the desktop's via
-      `wl-copy`. Verified with KDE Connect's manual *Send clipboard* (auto-sync is
-      throttled by Android's background-clipboard restriction, not our side). Push
-      (desktop → phone) is a follow-up (needs a clipboard watch).
+- [x] **Clipboard** — bidirectional: **desktop → phone auto-syncs** (a `wl-paste
+      --watch` pushes each change, a last-synced guard suppresses the echo, we
+      advertise the outgoing capability and send a `clipboard.connect` handshake);
+      **phone → desktop** applies whatever the phone sends (via `wl-copy`). The
+      phone auto-sends only through KDE Connect's manual *Send clipboard* —
+      confirmed live: 0 packets on an ordinary copy, 1 on the manual send —
+      because Android blocks background clipboard reads. That last gap is a
+      phone/Android limit, not our side.
 - [x] **Battery** — `currentCharge` + `isCharging` on connect and on change, into
       `org.celestina.Devices1` (the battery field, plus charging), shown as
       "🔋 71 % ⚡" in the app. Live-verified. (Cell/connectivity: later.)
