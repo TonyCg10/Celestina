@@ -592,6 +592,103 @@ Item {
                         }
                     }
                 }
+
+                // ── Phone (Magnetita / org.celestina.Devices1) ───────────
+                Item {
+                    width: placesColumn.width
+                    readonly property var ac: root.hostWindow.activeController
+                    readonly property bool anyPhones: ac && ac.phoneNames.length > 0
+                    height: anyPhones ? phoneHeader.implicitHeight + 16 : 0
+                    visible: anyPhones
+
+                    Text {
+                        id: phoneHeader
+                        x: 8
+                        y: 12
+                        text: "MÓVIL"
+                        color: CelestinaTheme.textMuted
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: Math.round(CelestinaTheme.fontMini * root.hostWindow.sidebarTextScale)
+                        font.letterSpacing: 1.4
+                        font.weight: CelestinaTheme.weightDemiBold
+                    }
+                }
+
+                Repeater {
+                    model: root.hostWindow.activeController
+                           ? root.hostWindow.activeController.phoneNames : []
+
+                    delegate: Item {
+                        id: phoneRow
+                        required property int index
+                        required property string modelData
+                        readonly property string mountPath:
+                            (root.hostWindow.activeController
+                             && index < root.hostWindow.activeController.phoneMounts.length)
+                            ? root.hostWindow.activeController.phoneMounts[index] : ""
+                        readonly property bool mounted: mountPath.length > 0
+                        readonly property bool current: mounted
+                            && mountPath === (root.hostWindow.activeController
+                                              ? root.hostWindow.activeController.currentPath : "")
+
+                        width: placesColumn.width
+                        height: root.hostWindow.sidebarRowHeight
+                        Accessible.role: Accessible.Button
+                        Accessible.name: phoneRow.modelData
+                                         + (phoneRow.mounted ? ", montado" : ", conectando")
+
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.leftMargin: 2
+                            anchors.rightMargin: 2
+                            radius: CelestinaTheme.radiusSm
+                            color: phoneRow.current
+                                   ? CelestinaTheme.badgeAccentFill
+                                   : (phoneRow.mounted && phoneMouse.containsMouse)
+                                     ? CelestinaTheme.surfaceHover : "transparent"
+                        }
+
+                        IconImage {
+                            id: phoneIcon
+                            x: 12
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: Math.round(CelestinaTheme.iconSm * root.hostWindow.sidebarIconScale)
+                            height: Math.round(CelestinaTheme.iconSm * root.hostWindow.sidebarIconScale)
+                            name: "phone"
+                            source: CelestinaTheme.fallbackIcon("phone")
+                            // Dim until the mount is ready.
+                            opacity: phoneRow.mounted ? 1.0 : 0.5
+                        }
+
+                        Text {
+                            x: phoneIcon.x + phoneIcon.width + 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width - x - 10
+                            text: phoneRow.mounted ? phoneRow.modelData
+                                                   : phoneRow.modelData + " — conectando…"
+                            color: phoneRow.current ? CelestinaTheme.accent
+                                                    : phoneRow.mounted ? CelestinaTheme.text
+                                                                       : CelestinaTheme.textMuted
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: Math.round(CelestinaTheme.fontBody * root.hostWindow.sidebarTextScale)
+                            elide: Text.ElideRight
+                        }
+
+                        MouseArea {
+                            id: phoneMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            // Only openable once mounted; connecting is not a target.
+                            enabled: phoneRow.mounted
+                            cursorShape: phoneRow.mounted ? Qt.PointingHandCursor
+                                                          : Qt.ArrowCursor
+                            onClicked: {
+                                if (root.hostWindow.activeController && phoneRow.mounted)
+                                    root.hostWindow.activeController.openPhone(phoneRow.index)
+                            }
+                        }
+                    }
+                }
             }
 
 

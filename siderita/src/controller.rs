@@ -132,6 +132,12 @@ pub mod qobject {
         #[qproperty(QStringList, volume_mounts)]
         #[qproperty(bool, volume_busy)]
         #[qproperty(i32, hidden_device_count)]
+        // Connected phones from Magnetita (org.celestina.Devices1): parallel
+        // name / type / mount-path lists. An empty mount means connected but not
+        // yet mounted (so not openable).
+        #[qproperty(QStringList, phone_names)]
+        #[qproperty(QStringList, phone_types)]
+        #[qproperty(QStringList, phone_mounts)]
         // The sidebar's places: the keys that exist on this machine, in the
         // user's order, minus the ones they hid.
         #[qproperty(QStringList, place_keys)]
@@ -426,6 +432,12 @@ pub mod qobject {
 
         #[qinvokable]
         fn open_volume(self: Pin<&mut SideritaController>, index: i32);
+
+        #[qinvokable]
+        fn load_phones(self: Pin<&mut SideritaController>);
+
+        #[qinvokable]
+        fn open_phone(self: Pin<&mut SideritaController>, index: i32);
 
         #[qinvokable]
         fn open_properties(self: Pin<&mut SideritaController>, path: &QString);
@@ -752,6 +764,12 @@ pub struct SideritaControllerRust {
     // Set once the UDisks2 hotplug watch thread is running for this controller.
     volume_watch_started: bool,
     hidden_device_count: i32,
+    phone_names: QStringList,
+    phone_types: QStringList,
+    phone_mounts: QStringList,
+    // Set once the Magnetita Changed-signal watch thread is running.
+    phone_watch_started: bool,
+    phones: Vec<crate::devices::Device>,
     place_keys: QStringList,
     hidden_place_count: i32,
     folder_view_mode: QString,
@@ -877,6 +895,11 @@ impl Default for SideritaControllerRust {
             volume_busy: false,
             volume_watch_started: false,
             hidden_device_count: 0,
+            phone_names: QStringList::default(),
+            phone_types: QStringList::default(),
+            phone_mounts: QStringList::default(),
+            phone_watch_started: false,
+            phones: Vec::new(),
             place_keys: QStringList::default(),
             hidden_place_count: 0,
             folder_view_mode: QString::default(),
@@ -1898,6 +1921,70 @@ impl qobject::SideritaController {
                 eprintln!("Siderita: watch de dispositivos no disponible: {error}");
             }
         });
+    }
+
+    /// Reads the phones Magnetita reports and publishes them to the sidebar
+    /// (parallel name / type / mount-path lists), keeping the records for
+    /// open-by-index. Read-only and quick — runs inline. Also arms the watch so
+    /// later connect / mount / leave events refresh on their own.
+    pub fn load_phones(mut self: Pin<&mut Self>) {
+        let phones = crate::devices::list_devices().unwrap_or_default();
+
+        let names: QStringList = phones
+            .iter()
+            .map(|phone| QString::from(phone.name.as_str()))
+            .collect();
+        let types: QStringList = phones
+            .iter()
+            .map(|phone| QString::from(phone.device_type.as_str()))
+            .collect();
+        let mounts: QStringList = phones
+            .iter()
+            .map(|phone| QString::from(phone.mount_path.as_str()))
+            .collect();
+
+        self.as_mut().rust_mut().get_mut().phones = phones;
+        self.as_mut().set_phone_names(names);
+        self.as_mut().set_phone_types(types);
+        self.as_mut().set_phone_mounts(mounts);
+
+        self.as_mut().start_phone_watch();
+    }
+
+    /// Starts, once per controller, a thread that watches Magnetita's `Changed`
+    /// signal and reloads the phone list on the Qt thread — so a phone
+    /// connecting, mounting or leaving updates "Dispositivos" without a manual
+    /// refresh. Best-effort: an unavailable bus just logs and gives up.
+    fn start_phone_watch(mut self: Pin<&mut Self>) {
+        if self.rust().phone_watch_started {
+            return;
+        }
+        self.as_mut().rust_mut().get_mut().phone_watch_started = true;
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let result = crate::devices::watch_changes(move || {
+                let _ = qt.queue(|controller: Pin<&mut qobject::SideritaController>| {
+                    controller.load_phones();
+                });
+            });
+            if let Err(error) = result {
+                eprintln!("Siderita: watch de Magnetita no disponible: {error}");
+            }
+        });
+    }
+
+    /// Opens the phone at `index` by navigating to its mount path. A phone that
+    /// is connected but not yet mounted has no path, so this is a no-op until it
+    /// is — the sidebar reflects that by not offering it as openable.
+    pub fn open_phone(mut self: Pin<&mut Self>, index: i32) {
+        let mount = usize::try_from(index)
+            .ok()
+            .and_then(|index| self.rust().phones.get(index))
+            .map(|phone| phone.mount_path.clone())
+            .unwrap_or_default();
+        if !mount.is_empty() {
+            self.as_mut().open_location(&QString::from(mount.as_str()));
+        }
     }
 
     /// Mounts the volume at `index` on a worker thread — mounting can block on a

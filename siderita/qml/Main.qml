@@ -260,6 +260,7 @@ ApplicationWindow {
         function onActiveControllerChanged() {
             if (window.activeController) {
                 window.activeController.loadVolumes()
+                window.activeController.loadPhones()
                 window.loadSizing()
             }
         }
