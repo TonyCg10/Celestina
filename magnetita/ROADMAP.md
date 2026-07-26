@@ -212,11 +212,11 @@ app's options.
       `org.freedesktop.Notifications`: a raise posts, an update replaces, a cancel
       withdraws (phone-id → server-id map). A received ping shows one too. Quick-
       reply is a follow-up. Live-verified against the phone.
-- [x] **Share, phone → PC** — a `share.request` file streams over its second TLS
-      socket (`payload::receive_to_file`, TLS client) into `$XDG_DOWNLOAD_DIR`,
-      base-name only (no traversal), no-clobber, half-file removed on failure, and
-      a notification on arrival. Live-verified. **PC → phone is a follow-up** (it
-      needs us to serve a payload socket).
+- [x] **Share, both directions** — phone → PC streams a `share.request` file over
+      its second TLS socket into `$XDG_DOWNLOAD_DIR` (base-name only, no-clobber,
+      half-file removed on failure, notification on arrival); PC → phone serves
+      the file on a port in KDE Connect's own 1739–1764 range (we are the TLS
+      server) and the phone fetches it. Both live-verified against the Galaxy S25.
 - [x] **Clipboard** — bidirectional: **desktop → phone auto-syncs** (a `wl-paste
       --watch` pushes each change, a last-synced guard suppresses the echo, we
       advertise the outgoing capability and send a `clipboard.connect` handshake);
@@ -245,8 +245,10 @@ language.
 
 - [ ] **Shell surfacing** — connected device + battery in the `celestina` panel
       (notifications already flow via freedesktop)
-- [ ] **Send to phone in Siderita** — an entry in Siderita's context menu via
-      `open-with`, complementing the browse-the-phone mount of CP2
+- [x] **Send to phone in Siderita** — an "Enviar al móvil" entry in Siderita's
+      file context menu (shown for a single file when a phone is connected) calls
+      the daemon's `SendFile` over D-Bus, complementing the browse-the-phone mount
+      of CP2. Live-verified: right-click → the file lands on the phone.
 - [ ] **One settings source** — paired devices and per-plugin toggles share the
       suite's settings/theming source, not a private store
 - [ ] **Media control (MPRIS)** — control phone/desktop playback both ways
