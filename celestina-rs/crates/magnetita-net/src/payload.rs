@@ -61,19 +61,36 @@ pub fn receive_to_file(
 /// connection (we are the TLS *server* here, since we opened the port), streams
 /// the file, and closes. The phone reads the declared number of bytes.
 pub fn serve_file(tls: &TlsConfigs, path: &Path) -> io::Result<u16> {
-    let listener = TcpListener::bind(("0.0.0.0", 0))?;
+    let listener = bind_payload_port()?;
     let port = listener.local_addr()?.port();
     let tls = tls.clone();
     let path: PathBuf = path.to_owned();
-    thread::spawn(move || {
-        if let Err(e) = serve_one(&listener, &tls, &path) {
-            eprintln!("magnetita: payload send of {} failed: {e}", path.display());
-        }
+    thread::spawn(move || match serve_one(&listener, &tls, &path) {
+        Ok(bytes) => eprintln!(
+            "magnetita: payload send of {} ok ({bytes} bytes on port {port})",
+            path.display()
+        ),
+        Err(e) => eprintln!(
+            "magnetita: payload send of {} failed on port {port}: {e}",
+            path.display()
+        ),
     });
     Ok(port)
 }
 
-fn serve_one(listener: &TcpListener, tls: &TlsConfigs, path: &Path) -> io::Result<()> {
+/// KDE Connect serves payloads on a port in 1739–1764; bind the first free one so
+/// the phone connects where its own implementation expects, falling back to an
+/// ephemeral port only if the whole range is taken.
+fn bind_payload_port() -> io::Result<TcpListener> {
+    for port in 1739..=1764 {
+        if let Ok(listener) = TcpListener::bind(("0.0.0.0", port)) {
+            return Ok(listener);
+        }
+    }
+    TcpListener::bind(("0.0.0.0", 0))
+}
+
+fn serve_one(listener: &TcpListener, tls: &TlsConfigs, path: &Path) -> io::Result<u64> {
     // Wait (bounded) for the phone to dial the port we advertised.
     listener.set_nonblocking(true)?;
     let deadline = Instant::now() + PAYLOAD_TIMEOUT;
@@ -100,7 +117,7 @@ fn serve_one(listener: &TcpListener, tls: &TlsConfigs, path: &Path) -> io::Resul
 
     let mut stream = StreamOwned::new(conn, tcp);
     let mut file = File::open(path)?;
-    io::copy(&mut file, &mut stream)?;
+    let bytes = io::copy(&mut file, &mut stream)?;
     stream.flush()?;
-    Ok(())
+    Ok(bytes)
 }
