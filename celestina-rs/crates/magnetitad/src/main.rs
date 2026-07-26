@@ -60,6 +60,13 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 /// How often [`Device::pump`] wakes to check the pairing clock while idle.
 const TICK: Duration = Duration::from_secs(1);
 
+/// How often to (re)ask the phone for its media players. The connect-time
+/// request can land before the phone's mpris plugin is ready — and the phone
+/// does not push its player list unsolicited — so a periodic poll is what makes
+/// now-playing appear at all. One tiny packet; KDE Connect's own applet polls
+/// the same way.
+const MPRIS_POLL_MS: i64 = 5000;
+
 fn main() -> std::process::ExitCode {
     match run() {
         Ok(()) => std::process::ExitCode::SUCCESS,
@@ -246,7 +253,17 @@ fn spawn_dialer(daemon: Arc<Daemon>, announcement: Announcement) {
             Err(e) => {
                 let name = &announcement.identity.device_name;
                 log("dial", &format!("{name}: {e}"));
-                ui_log(&daemon, name, &format!("no se pudo conectar: {e}"), true);
+                // A dial that loses the race to the accept path — the phone dialed
+                // us first, so it ignores our dial and the handshake times out — is
+                // expected once we are connected, not a failure to surface.
+                let connected = daemon
+                    .devices
+                    .lock()
+                    .unwrap()
+                    .contains_key(&announcement.identity.device_id);
+                if !connected {
+                    ui_log(&daemon, name, &format!("no se pudo conectar: {e}"), true);
+                }
             }
         }
     });
@@ -308,8 +325,14 @@ impl Daemon {
         ui_log(self, &peer_name, "conectado y cifrado", false);
 
         if let Err(e) = self.run_link(link, &peer_id, &peer_name) {
-            log("link", &format!("{peer_name}: {e}"));
-            ui_log(self, &peer_name, &format!("error de enlace: {e}"), true);
+            let message = e.to_string();
+            log("link", &format!("{peer_name}: {message}"));
+            // A reset / broken pipe / EOF is the phone dropping the link — a
+            // disconnect, which the "desconectado" line below already reports.
+            // Only a genuinely unexpected error is worth the red banner.
+            if !is_disconnect(&message) {
+                ui_log(self, &peer_name, &format!("error de enlace: {message}"), true);
+            }
         }
         self.devices.lock().unwrap().remove(&peer_id);
         self.commands.lock().unwrap().remove(&peer_id);
@@ -374,6 +397,8 @@ impl Daemon {
         // The phone player we drive from the app: the first the phone lists,
         // then whichever it last reported state for.
         let mut mpris_player: Option<String> = None;
+        // When we last polled for players (0 → poll on the first loop turn).
+        let mut last_mpris_poll = 0i64;
 
         // A device we already trust: ask for its storage right away — and, for
         // each enabled plugin, prime it (battery, media, clipboard handshake).
@@ -399,6 +424,17 @@ impl Daemon {
             // A snapshot of the toggles for this turn; a plugin switched off is
             // one we neither drive nor react to.
             let settings = *self.settings.lock().unwrap();
+
+            // Poll the phone's players (and the current one's now-playing) — the
+            // connect-time request is often dropped before the phone is ready,
+            // and it never pushes the list on its own.
+            if settings.media && millis() - last_mpris_poll >= MPRIS_POLL_MS {
+                last_mpris_poll = millis();
+                device.send(magnetita_core::mpris::request_player_list)?;
+                if let Some(player) = mpris_player.clone() {
+                    device.send(|id| magnetita_core::mpris::request_now_playing(id, &player))?;
+                }
+            }
 
             // Commands the app forwarded for this device (its "Emparejar" /
             // "Desvincular" buttons).
@@ -869,6 +905,20 @@ fn event_line(event: &ConnectionEvent) -> Option<(&'static str, bool)> {
         // too noisy for the log; the daemon logs its own milestones instead.
         _ => return None,
     })
+}
+
+/// Whether a link-error message is just the phone dropping the connection — a
+/// reset, a broken pipe or an unexpected EOF — rather than a fault to surface.
+/// These are the ordinary shape of a Wi-Fi phone going away; the "desconectado"
+/// line already tells the user, so the red error banner would only be noise.
+fn is_disconnect(message: &str) -> bool {
+    let m = message.to_lowercase();
+    m.contains("reset by peer")
+        || m.contains("broken pipe")
+        || m.contains("os error 104") // ECONNRESET
+        || m.contains("os error 32") // EPIPE
+        || m.contains("unexpected end")
+        || m.contains("unexpectedeof")
 }
 
 /// The contract's device-type label for a peer's declared type.
