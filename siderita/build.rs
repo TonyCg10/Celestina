@@ -35,6 +35,7 @@ const QML_FILES: &[&str] = &[
     "qml/FolderSortMenu.qml",
     "qml/PathMenu.qml",
     "qml/FolderMenu.qml",
+    "qml/EntryContextMenu.qml",
     "qml/Main.qml",
     "qml/PickerWindow.qml",
 ];
