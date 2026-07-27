@@ -2566,7 +2566,7 @@ Item {
         // A floating glass strip aligned to the list's columns; each title
         // sorts by that field (a second click on the active one flips the
         // direction) and carries an ↑/↓ arrow.
-        Item {
+        DetailsHeader {
             id: detailsHeader
             z: 10
             x: 8
@@ -2574,73 +2574,8 @@ Item {
             height: Math.round(CelestinaTheme.fontCaption * root.hostWindow.contentTextScale) + 18
             y: (tabBar.visible ? tabBar.y + tabBar.height : topBar.y + topBar.height) + 8
             visible: fileList.detailsMode
-
-            GlassSurface {
-                anchors.fill: parent
-                backdropSource: fileList
-                captureEnabled: detailsHeader.visible
-                liveCapture: true
-                cornerRadius: CelestinaTheme.radiusSm
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                radius: CelestinaTheme.radiusSm
-                color: "transparent"
-                border.width: 1
-                border.color: CelestinaTheme.borderStrong
-            }
-
-            RowLayout {
-                x: fileList.detailsNameX - 4
-                anchors.verticalCenter: parent.verticalCenter
-                width: parent.width - x - 16
-                spacing: 12
-
-                Repeater {
-                    model: [
-                        { label: "Nombre", field: 0, w: -1, align: Text.AlignLeft },
-                        { label: "Tamaño", field: 1, w: fileList.colSizeW, align: Text.AlignRight },
-                        { label: "Fecha", field: 2, w: fileList.colDateW, align: Text.AlignLeft },
-                        { label: "Tipo", field: 3, w: fileList.colTypeW, align: Text.AlignLeft }
-                    ]
-
-                    delegate: Item {
-                        id: hcell
-                        required property var modelData
-                        readonly property bool activeSort: controller.sortField === modelData.field
-                        Layout.fillWidth: modelData.w < 0
-                        Layout.preferredWidth: modelData.w < 0 ? 60 : modelData.w
-                        Layout.fillHeight: true
-
-                        Text {
-                            anchors.fill: parent
-                            verticalAlignment: Text.AlignVCenter
-                            horizontalAlignment: hcell.modelData.align
-                            text: hcell.modelData.label
-                                  + (hcell.activeSort
-                                     ? (controller.sortAscending ? "  ↑" : "  ↓") : "")
-                            color: hcell.activeSort ? CelestinaTheme.text
-                                                    : CelestinaTheme.textMuted
-                            font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: Math.round(CelestinaTheme.fontCaption * root.hostWindow.contentTextScale)
-                            font.weight: CelestinaTheme.weightDemiBold
-                            elide: Text.ElideRight
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                if (hcell.activeSort)
-                                    controller.toggleSortDirection()
-                                else
-                                    controller.changeSortField(hcell.modelData.field)
-                            }
-                        }
-                    }
-                }
-            }
+            controller: controller
+            view: fileList
+            textScale: root.hostWindow.contentTextScale
         }
 }
