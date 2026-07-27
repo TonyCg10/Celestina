@@ -115,7 +115,7 @@ Item {
     // Fired on navigation (so a sidebar/place click lands on a clean folder)
     // and by the mouse Back button.
     function clearSearch() {
-        searchField.text = ""
+        topBar.searchText = ""
         controller.applyQuery("")
         controller.closeSearch()
     }
@@ -126,14 +126,14 @@ Item {
     // without this the only way out was the sidebar.
     readonly property bool canGoBackOrLeave:
             !controller.loading
-            && (searchField.text.length > 0 || controller.searchActive
+            && (topBar.searchText.length > 0 || controller.searchActive
                 || controller.trashActive || controller.recentActive
                 || controller.canGoBack)
 
     function goBackOrLeave() {
         if (controller.loading)
             return
-        if (searchField.text.length > 0 || controller.searchActive)
+        if (topBar.searchText.length > 0 || controller.searchActive)
             clearSearch()
         else if (controller.trashActive)
             controller.closeTrash()
@@ -166,16 +166,13 @@ Item {
     Shortcut {
         sequence: "Ctrl+L"
         enabled: root.active
-        onActivated: pathPill.beginEditing()
+        onActivated: topBar.beginEditing()
     }
 
     Shortcut {
         sequence: "Ctrl+F"
         enabled: root.active
-        onActivated: {
-            searchField.forceActiveFocus()
-            searchField.selectAll()
-        }
+        onActivated: topBar.focusSearch()
     }
 
     Shortcut {
@@ -1899,294 +1896,19 @@ Item {
         }
     }
 
-    Item {
+    TopBar {
         id: topBar
         z: 10
         x: 12
         y: 12
         width: root.width - 24
         height: 52
-
-        // Scroll offset of the active view (0 at the very top).
-        readonly property real scrollY: mainPanel.viewMode === "grid"
-                                        ? fileGrid.contentY + fileGrid.topMargin
-                                        : fileList.contentY + fileList.topMargin
-        // Once scrolled, each independent pill fades to glass in place.
-        readonly property bool floating: scrollY > 6
-        readonly property Item activeView: mainPanel.viewMode === "grid"
-                                           ? fileGrid : fileList
-
-        // Pulsed each time the pills refresh their capture, so the floating
-        // tab pills below refresh their glass in the same beat.
-        signal glassTick()
-
-        function refreshGlass() {
-            pathGlass.refreshBackdrop()
-            searchGlass.refreshBackdrop()
-            topBar.glassTick()
-        }
-
-        onFloatingChanged: if (floating) Qt.callLater(topBar.refreshGlass)
-
-        // Refresh the blur as content scrolls under the pills; work stops
-        // when scrolling stops (no continuous work at rest).
-        Connections {
-            target: topBar.activeView
-            function onContentYChanged() {
-                if (topBar.floating)
-                    topBar.refreshGlass()
-            }
-        }
-
-        Rectangle {
-            id: pathPill
-
-            property bool editing: false
-
-            function beginEditing() {
-                editing = true
-                locationField.text = controller.currentPath
-                locationField.forceActiveFocus()
-                locationField.selectAll()
-            }
-
-            function cancelEditing() {
-                editing = false
-                fileList.forceActiveFocus()
-            }
-
-            function pathSegments(p) {
-                if (!p || p.length === 0)
-                    return []
-                const parts = p.split("/")
-                const segs = []
-                let acc = ""
-                for (let idx = 0; idx < parts.length; idx++) {
-                    const part = parts[idx]
-                    if (part.length === 0) {
-                        if (idx === 0)
-                            segs.push({ name: "/", path: "/" })
-                        continue
-                    }
-                    acc = acc + "/" + part
-                    segs.push({ name: part, path: acc })
-                }
-                return segs
-            }
-
-            x: 14
-            anchors.verticalCenter: parent.verticalCenter
-            width: Math.max(180, searchField.x - x - 12)
-            height: CelestinaTheme.controlHeight
-            radius: CelestinaTheme.radiusSm
-            clip: true
-            color: CelestinaTheme.inputFill
-            border.width: 1
-            border.color: topBar.floating ? "transparent" : CelestinaTheme.inputBorder
-
-            GlassSurface {
-                id: pathGlass
-                anchors.fill: parent
-                backdropSource: topBar.activeView
-                captureEnabled: topBar.floating
-                cornerRadius: parent.radius
-                opacity: topBar.floating ? 1 : 0
-                Behavior on opacity {
-                    NumberAnimation { duration: CelestinaTheme.motionNormal }
-                }
-            }
-
-            MouseArea {
-                id: pathMouse
-                anchors.fill: parent
-                visible: !pathPill.editing
-                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                cursorShape: Qt.IBeamCursor
-                Accessible.name: "Editar ubicación"
-                onClicked: function(mouse) {
-                    if (mouse.button === Qt.RightButton) {
-                        const point = pathMouse.mapToItem(
-                                        root.overlayParent, mouse.x, mouse.y)
-                        pathMenu.popup(root.overlayParent, point)
-                    } else {
-                        pathPill.beginEditing()
-                    }
-                }
-            }
-
-            Row {
-                id: crumbRow
-                anchors.right: parent.right
-                anchors.rightMargin: 13
-                anchors.verticalCenter: parent.verticalCenter
-                visible: !pathPill.editing
-                spacing: 3
-
-                Repeater {
-                    id: crumbRepeater
-                    model: pathPill.pathSegments(controller.currentPath)
-
-                    delegate: Row {
-                        id: crumb
-
-                        required property var modelData
-                        required property int index
-
-                        spacing: 3
-                        anchors.verticalCenter: parent.verticalCenter
-
-                        Text {
-                            visible: crumb.index > 0
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: "›"
-                            color: CelestinaTheme.textMuted
-                            font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: Math.round(CelestinaTheme.fontLabel * root.hostWindow.interfaceTextScale)
-                        }
-
-                        Rectangle {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: crumbText.implicitWidth + 12
-                            height: 24
-                            radius: CelestinaTheme.radiusXs
-                            color: crumbMouse.containsMouse
-                                   ? CelestinaTheme.surfaceHover
-                                   : "transparent"
-
-                            Text {
-                                id: crumbText
-                                anchors.centerIn: parent
-                                text: crumb.modelData.name
-                                color: crumb.index === crumbRepeater.count - 1
-                                       ? CelestinaTheme.text
-                                       : CelestinaTheme.textMuted
-                                font.family: CelestinaTheme.sansFamily
-                                font.pixelSize: Math.round(CelestinaTheme.fontLabel * root.hostWindow.interfaceTextScale)
-                            }
-
-                            MouseArea {
-                                id: crumbMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: controller.openLocation(
-                                               crumb.modelData.path)
-                            }
-                        }
-                    }
-                }
-            }
-
-            TextField {
-                id: locationField
-
-                anchors.fill: parent
-                visible: pathPill.editing
-                leftPadding: 13
-                rightPadding: 13
-                color: CelestinaTheme.text
-                selectionColor: CelestinaTheme.accentStrong
-                selectedTextColor: CelestinaTheme.text
-                font.family: CelestinaTheme.monoFamily
-                font.pixelSize: Math.round(CelestinaTheme.fontLabel * root.hostWindow.interfaceTextScale)
-                background: null
-                Accessible.name: "Ubicación"
-
-                onActiveFocusChanged: {
-                    if (!activeFocus && pathPill.editing)
-                        pathPill.editing = false
-                }
-
-                onAccepted: {
-                    const location = text
-                    pathPill.editing = false
-                    controller.openLocation(location)
-                    fileList.forceActiveFocus()
-                }
-
-                Keys.onPressed: function(event) {
-                    if (event.key === Qt.Key_Escape) {
-                        pathPill.cancelEditing()
-                        event.accepted = true
-                    }
-                }
-            }
-
-            Connections {
-                target: controller
-
-                function onCurrentPathChanged() {
-                    if (pathPill.editing)
-                        pathPill.editing = false
-                }
-            }
-        }
-
-        TextField {
-            id: searchField
-            // Flexes with the interface text scale — the field grows and the
-            // breadcrumb (which fills the rest) yields space — so a larger
-            // search text is never clipped.
-            width: Math.round(Math.min(topBar.width * 0.42,
-                                       Math.max(190, 180 * root.hostWindow.interfaceTextScale)))
-            height: CelestinaTheme.controlHeight
-            x: topBar.width - width - 14
-            anchors.verticalCenter: parent.verticalCenter
-            placeholderText: "Buscar aquí y en subcarpetas"
-            color: CelestinaTheme.text
-            placeholderTextColor: CelestinaTheme.textMuted
-            selectionColor: CelestinaTheme.accentStrong
-            selectedTextColor: CelestinaTheme.text
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: Math.round(CelestinaTheme.fontBody * root.hostWindow.interfaceTextScale)
-            leftPadding: 13
-            rightPadding: 13
-            // Typing always searches — a recursive walk grouped into "in
-            // this folder" and "in subfolders"; clearing it exits search.
-            onTextEdited: searchDebounce.restart()
-            onAccepted: if (text.trim().length > 0)
-                            controller.searchRecursive(text)
-
-            background: Item {
-                Rectangle {
-                    anchors.fill: parent
-                    radius: CelestinaTheme.radiusSm
-                    color: searchField.activeFocus
-                           ? CelestinaTheme.inputFillFocus
-                           : CelestinaTheme.inputFill
-                    border.width: 1
-                    border.color: topBar.floating
-                                  ? "transparent"
-                                  : searchField.activeFocus
-                                    ? CelestinaTheme.focus
-                                    : CelestinaTheme.inputBorder
-                }
-                GlassSurface {
-                    id: searchGlass
-                    anchors.fill: parent
-                    backdropSource: topBar.activeView
-                    captureEnabled: topBar.floating
-                    cornerRadius: CelestinaTheme.radiusSm
-                    opacity: topBar.floating ? 1 : 0
-                    Behavior on opacity {
-                        NumberAnimation { duration: CelestinaTheme.motionNormal }
-                    }
-                }
-            }
-        }
-
-        Timer {
-            id: searchDebounce
-            interval: 220
-            repeat: false
-            onTriggered: {
-                if (searchField.text.trim().length > 0)
-                    controller.searchRecursive(searchField.text)
-                else
-                    controller.closeSearch()
-            }
-        }
-
+        controller: controller
+        activeView: mainPanel.viewMode === "grid" ? fileGrid : fileList
+        hostWindow: root.hostWindow
+        overlayParent: root.overlayParent
+        pathMenu: pathMenu
+        onViewFocusRequested: fileList.forceActiveFocus()
     }
 
     // ── Tab pills ────────────────────────────────────────────────────

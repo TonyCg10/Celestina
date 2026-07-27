@@ -43,6 +43,7 @@ const QML_FILES: &[&str] = &[
     "qml/TabStrip.qml",
     "qml/DetailsHeader.qml",
     "qml/BottomControls.qml",
+    "qml/TopBar.qml",
     "qml/Main.qml",
     "qml/PickerWindow.qml",
 ];
