@@ -130,6 +130,15 @@ impl qobject::SideritaController {
         let _ = crate::bookmarks::save(&self.rust().bookmarks);
     }
 
+    /// Re-reads the bookmark file into this controller and republishes the
+    /// name/path properties. Called on tab activation so a bookmark added in one
+    /// tab becomes visible in the others, and once as part of `start_common`.
+    pub fn reload_bookmarks(mut self: Pin<&mut Self>) {
+        let loaded = crate::bookmarks::load();
+        self.as_mut().rust_mut().get_mut().bookmarks = loaded;
+        self.as_mut().refresh_bookmark_properties();
+    }
+
     pub(crate) fn refresh_bookmark_properties(mut self: Pin<&mut Self>) {
         let (names, paths): (QStringList, QStringList) = {
             let bookmarks = &self.rust().bookmarks;
