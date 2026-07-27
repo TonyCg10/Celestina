@@ -575,6 +575,7 @@ pub(crate) enum UndoAction {
 
 mod fileops;
 mod find;
+mod marks;
 mod mounts;
 mod scan;
 mod session;
@@ -1264,68 +1265,6 @@ impl qobject::SideritaController {
             .unwrap_or_default()
     }
 
-    pub fn set_custom_icon(mut self: Pin<&mut Self>, path: &QString, icon: &QString) {
-        let path = path.to_string();
-        if path.is_empty() {
-            return;
-        }
-        let icon = icon.to_string();
-        {
-            let map = &mut self.as_mut().rust_mut().get_mut().custom_icons;
-            if icon.is_empty() {
-                map.remove(&path);
-            } else {
-                map.insert(path, icon);
-            }
-        }
-        let _ = crate::icons::save(&self.rust().custom_icons);
-        self.as_mut().refresh_custom_icon_props();
-    }
-
-    /// Re-reads the saved overrides from disk. Each tab owns its own controller
-    /// and its own copy of the map, so after one tab writes an override the
-    /// others are told to reload — otherwise they keep the old icon until the
-    /// next start.
-    pub fn reload_custom_icons(mut self: Pin<&mut Self>) {
-        let loaded = crate::icons::load();
-        self.as_mut().rust_mut().get_mut().custom_icons = loaded;
-        self.as_mut().refresh_custom_icon_props();
-    }
-
-    fn refresh_custom_icon_props(mut self: Pin<&mut Self>) {
-        let entries = icon_override_entries(&self.rust().custom_icons);
-        self.as_mut().set_custom_icon_entries(entries);
-    }
-
-    pub fn toggle_favorite(mut self: Pin<&mut Self>, path: &QString) {
-        let path = path.to_string();
-        if path.is_empty() {
-            return;
-        }
-        {
-            let set = &mut self.as_mut().rust_mut().get_mut().favorites;
-            if !set.remove(&path) {
-                set.insert(path);
-            }
-        }
-        let _ = crate::favorites::save(&self.rust().favorites);
-        self.as_mut().refresh_favorite_props();
-    }
-
-    /// Like the icon overrides: each tab holds its own copy, so a tab re-reads
-    /// the file when it is activated rather than trusting what it loaded at
-    /// start.
-    pub fn reload_favorites(mut self: Pin<&mut Self>) {
-        let loaded = crate::favorites::load();
-        self.as_mut().rust_mut().get_mut().favorites = loaded;
-        self.as_mut().refresh_favorite_props();
-    }
-
-    fn refresh_favorite_props(mut self: Pin<&mut Self>) {
-        let entries = favorite_entry_list(&self.rust().favorites);
-        self.as_mut().set_favorite_entries(entries);
-    }
-
     /// Opens the folder holding `path` and selects that entry once it lands —
     /// how a starred *file* reveals itself from the sidebar, instead of the
     /// sidebar quietly launching an application.
@@ -1362,69 +1301,6 @@ impl qobject::SideritaController {
         // Lossy so one stray non-UTF-8 byte shows a � rather than blanking the
         // whole preview; genuinely binary content was already rejected above.
         QString::from(String::from_utf8_lossy(&buf).as_ref())
-    }
-
-    pub fn add_bookmark(mut self: Pin<&mut Self>, path: &QString) {
-        let path = path.to_string();
-        if path.is_empty() || self.rust().bookmarks.iter().any(|entry| entry.path == path) {
-            return;
-        }
-        let name = crate::bookmarks::name_for(&path);
-        self.as_mut()
-            .rust_mut()
-            .get_mut()
-            .bookmarks
-            .push(crate::bookmarks::Bookmark { name, path });
-        self.as_mut().refresh_bookmark_properties();
-        let _ = crate::bookmarks::save(&self.rust().bookmarks);
-    }
-
-    pub fn remove_bookmark(mut self: Pin<&mut Self>, index: i32) {
-        let Ok(index) = usize::try_from(index) else {
-            return;
-        };
-        if index >= self.rust().bookmarks.len() {
-            return;
-        }
-        self.as_mut().rust_mut().get_mut().bookmarks.remove(index);
-        self.as_mut().refresh_bookmark_properties();
-        let _ = crate::bookmarks::save(&self.rust().bookmarks);
-    }
-
-    pub fn rename_bookmark(mut self: Pin<&mut Self>, index: i32, name: &QString) {
-        let Ok(index) = usize::try_from(index) else {
-            return;
-        };
-        let name = name.to_string();
-        if name.is_empty() || index >= self.rust().bookmarks.len() {
-            return;
-        }
-        self.as_mut().rust_mut().get_mut().bookmarks[index].name = name;
-        self.as_mut().refresh_bookmark_properties();
-        let _ = crate::bookmarks::save(&self.rust().bookmarks);
-    }
-
-    pub fn move_bookmark(mut self: Pin<&mut Self>, from: i32, to: i32) {
-        let (Ok(from), Ok(to)) = (usize::try_from(from), usize::try_from(to)) else {
-            return;
-        };
-        let moved = {
-            let list = &mut self.as_mut().rust_mut().get_mut().bookmarks;
-            crate::bookmarks::move_item(list, from, to)
-        };
-        if !moved {
-            return;
-        }
-        self.as_mut().refresh_bookmark_properties();
-        let _ = crate::bookmarks::save(&self.rust().bookmarks);
-    }
-
-    pub fn place_path(&self, key: &QString) -> QString {
-        self.rust()
-            .places
-            .get(&key.to_string())
-            .map(|path| QString::from(path.as_str()))
-            .unwrap_or_default()
     }
 
     pub fn new_folder(mut self: Pin<&mut Self>, name: &QString) {
@@ -1609,129 +1485,6 @@ impl qobject::SideritaController {
             token.cancel();
         }
         self.as_mut().set_properties_pending(false);
-    }
-
-    /// Republishes the sidebar's places: the keys that exist here, in the
-    /// user's order, minus the ones they hid — plus how many are hidden, so the
-    /// sidebar can offer them back.
-    fn refresh_place_props(mut self: Pin<&mut Self>) {
-        let (visible, hidden_count) = {
-            let rust = self.rust();
-            let existing: Vec<&str> = PLACE_CATALOGUE
-                .iter()
-                .copied()
-                // TRASH and RECENT are not XDG directories but locations the
-                // app always offers; the rest exist only if the folder does.
-                .filter(|key| matches!(*key, "TRASH" | "RECENT") || rust.places.contains_key(*key))
-                .collect();
-
-            // The saved order first (only keys that still exist), then anything
-            // it never mentioned, in catalogue order.
-            let mut ordered: Vec<&str> = Vec::with_capacity(existing.len());
-            for key in &rust.settings.place_order {
-                if let Some(found) = existing.iter().find(|candidate| *candidate == key) {
-                    if !ordered.contains(found) {
-                        ordered.push(found);
-                    }
-                }
-            }
-            for key in &existing {
-                if !ordered.contains(key) {
-                    ordered.push(key);
-                }
-            }
-
-            let hidden = &rust.settings.hidden_places;
-            let visible: QStringList = ordered
-                .iter()
-                .filter(|key| !hidden.iter().any(|h| h == *key))
-                .map(|key| QString::from(*key))
-                .collect();
-            let hidden_count = ordered
-                .iter()
-                .filter(|key| hidden.iter().any(|h| h == *key))
-                .count();
-            (visible, hidden_count)
-        };
-        self.as_mut().set_place_keys(visible);
-        self.as_mut()
-            .set_hidden_place_count(hidden_count.min(i32::MAX as usize) as i32);
-    }
-
-    /// Moves the place at `from` so it sits at `to` among the *visible* places,
-    /// and persists the whole order.
-    pub fn move_place(mut self: Pin<&mut Self>, from: i32, to: i32) {
-        let (Ok(from), Ok(to)) = (usize::try_from(from), usize::try_from(to)) else {
-            return;
-        };
-        let mut keys: Vec<String> = self
-            .place_keys()
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>();
-        if from == to || from >= keys.len() || to >= keys.len() {
-            return;
-        }
-        let moved = keys.remove(from);
-        keys.insert(to, moved);
-
-        let mut settings = crate::settings::load();
-        // Hidden places keep their relative place at the end, so un-hiding one
-        // does not scramble the order the user just set.
-        let hidden: Vec<String> = settings.hidden_places.clone();
-        settings.place_order = keys.into_iter().chain(hidden).collect();
-        let _ = crate::settings::save(&settings);
-        self.as_mut().rust_mut().get_mut().settings = settings;
-        self.as_mut().refresh_place_props();
-    }
-
-    /// Re-reads the sidebar settings — how a tab picks up an order or a hide
-    /// another tab just set (the bookmarks and icons do the same).
-    pub fn reload_places(mut self: Pin<&mut Self>) {
-        let settings = crate::settings::load();
-        self.as_mut().rust_mut().get_mut().settings = settings;
-        self.as_mut().refresh_place_props();
-    }
-
-    pub fn hide_place(mut self: Pin<&mut Self>, key: &QString) {
-        let key = key.to_string();
-        if key.is_empty() {
-            return;
-        }
-        let mut settings = crate::settings::load();
-        if !settings.hidden_places.contains(&key) {
-            settings.hidden_places.push(key);
-            let _ = crate::settings::save(&settings);
-        }
-        self.as_mut().rust_mut().get_mut().settings = settings;
-        self.as_mut().refresh_place_props();
-    }
-
-    /// Un-hides every previously-hidden place.
-    pub fn unhide_all_places(mut self: Pin<&mut Self>) {
-        let mut settings = crate::settings::load();
-        settings.hidden_places.clear();
-        let _ = crate::settings::save(&settings);
-        self.as_mut().rust_mut().get_mut().settings = settings;
-        self.as_mut().refresh_place_props();
-    }
-
-    fn refresh_bookmark_properties(mut self: Pin<&mut Self>) {
-        let (names, paths): (QStringList, QStringList) = {
-            let bookmarks = &self.rust().bookmarks;
-            (
-                bookmarks
-                    .iter()
-                    .map(|entry| QString::from(entry.name.as_str()))
-                    .collect(),
-                bookmarks
-                    .iter()
-                    .map(|entry| QString::from(entry.path.as_str()))
-                    .collect(),
-            )
-        };
-        self.as_mut().set_bookmark_names(names);
-        self.as_mut().set_bookmark_paths(paths);
     }
 }
 
@@ -1925,26 +1678,11 @@ fn icon_override_entries(map: &std::collections::HashMap<String, String>) -> QSt
         .collect()
 }
 
+const RECENT_LIMIT: usize = 100;
+
 /// The starred paths as `path\tkind` lines. The kind is resolved here, once per
 /// refresh, so the sidebar can show a folder as a folder and say plainly when a
 /// favourite's target is gone rather than offering a row that leads nowhere.
-/// Every sidebar place Siderita knows how to offer, in the order it offers them
-/// before the user rearranges anything. The keys are the vocabulary the QML
-/// maps to a label and an icon; `TRASH` is Siderita's own, the rest are XDG.
-const PLACE_CATALOGUE: &[&str] = &[
-    "HOME",
-    "DESKTOP",
-    "DOCUMENTS",
-    "DOWNLOAD",
-    "MUSIC",
-    "PICTURES",
-    "VIDEOS",
-    "RECENT",
-    "TRASH",
-];
-
-const RECENT_LIMIT: usize = 100;
-
 fn favorite_entry_list(paths: &std::collections::BTreeSet<String>) -> QStringList {
     paths
         .iter()
