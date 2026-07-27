@@ -1409,7 +1409,10 @@ impl qobject::SideritaController {
             return QString::default();
         };
         let kind = kind_label(row.kind());
-        let date = row.modified().map(crate::format::system_time).unwrap_or_default();
+        let date = row
+            .modified()
+            .map(crate::format::system_time)
+            .unwrap_or_default();
         // Folders show kind + date (their entry size is not meaningful); files
         // show kind · size · date.
         let detail = if row.kind() == RowKind::Directory {
@@ -1751,33 +1754,6 @@ impl qobject::SideritaController {
         }
         self.as_mut().finish_batch(paths.len(), &failures);
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     /// Opens the "Abrir con…" chooser for `path`: classifies its MIME type,
     /// gathers the applications that declare it (plus the current default) and
@@ -2546,9 +2522,6 @@ impl qobject::SideritaController {
         self.as_mut().load_volumes();
     }
 
-
-
-
     fn refresh_bookmark_properties(mut self: Pin<&mut Self>) {
         let (names, paths): (QStringList, QStringList) = {
             let bookmarks = &self.rust().bookmarks;
@@ -2566,17 +2539,6 @@ impl qobject::SideritaController {
         self.as_mut().set_bookmark_names(names);
         self.as_mut().set_bookmark_paths(paths);
     }
-
-
-
-
-
-
-
-
-
-
-
 }
 
 /// Collects a QML `list<string>` of paths into owned `PathBuf`s, skipping empty
@@ -2910,7 +2872,11 @@ fn row_subtitle(row: &EntryRow) -> String {
         return "Carpeta".to_owned();
     }
 
-    format!("{} · {}", kind_label(row.kind()), crate::format::size(row.size()))
+    format!(
+        "{} · {}",
+        kind_label(row.kind()),
+        crate::format::size(row.size())
+    )
 }
 
 /// The containing folder of a search hit, shown as its subtitle so a result

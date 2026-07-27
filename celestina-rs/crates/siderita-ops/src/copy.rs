@@ -317,7 +317,13 @@ mod tests {
         fs::write(&source, b"keep both").expect("seed");
         let destination = dir.path().join("orig (copia).txt");
 
-        copy_as(&source, &destination, &CancellationToken::new(), &mut |_| {}).expect("copy_as");
+        copy_as(
+            &source,
+            &destination,
+            &CancellationToken::new(),
+            &mut |_| {},
+        )
+        .expect("copy_as");
 
         assert_eq!(fs::read(&source).expect("source kept"), b"keep both");
         assert_eq!(fs::read(&destination).expect("copy made"), b"keep both");
@@ -331,9 +337,17 @@ mod tests {
         fs::write(&source, b"a").expect("seed source");
         fs::write(&destination, b"do not clobber").expect("seed dest");
 
-        let error = copy_as(&source, &destination, &CancellationToken::new(), &mut |_| {})
-            .expect_err("must refuse");
+        let error = copy_as(
+            &source,
+            &destination,
+            &CancellationToken::new(),
+            &mut |_| {},
+        )
+        .expect_err("must refuse");
         assert!(matches!(error, OpError::AlreadyExists { .. }));
-        assert_eq!(fs::read(&destination).expect("dest intact"), b"do not clobber");
+        assert_eq!(
+            fs::read(&destination).expect("dest intact"),
+            b"do not clobber"
+        );
     }
 }

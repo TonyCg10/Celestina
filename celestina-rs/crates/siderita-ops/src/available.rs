@@ -63,7 +63,10 @@ mod tests {
         std::fs::write(&first, b"x").expect("seed copia");
         std::fs::write(dir.join("nota.txt"), b"x").expect("seed orig");
         let second = next_available(&dir, OsStr::new("nota.txt"), "copia");
-        assert_eq!(second.file_name().unwrap(), OsStr::new("nota (copia 2).txt"));
+        assert_eq!(
+            second.file_name().unwrap(),
+            OsStr::new("nota (copia 2).txt")
+        );
 
         // A name without an extension keeps the suffix at the end.
         let no_ext = next_available(&dir, OsStr::new("carpeta"), "copia");

@@ -19,10 +19,14 @@ use std::io;
 use std::sync::Arc;
 
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::crypto::{ring, verify_tls12_signature, verify_tls13_signature, WebPkiSupportedAlgorithms};
+use rustls::crypto::{
+    ring, verify_tls12_signature, verify_tls13_signature, WebPkiSupportedAlgorithms,
+};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::server::danger::{ClientCertVerified, ClientCertVerifier};
-use rustls::{ClientConfig, DigitallySignedStruct, DistinguishedName, ServerConfig, SignatureScheme};
+use rustls::{
+    ClientConfig, DigitallySignedStruct, DistinguishedName, ServerConfig, SignatureScheme,
+};
 
 use crate::cert::{fingerprint_der, DeviceCert};
 

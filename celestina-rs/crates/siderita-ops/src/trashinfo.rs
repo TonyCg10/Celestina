@@ -185,7 +185,10 @@ mod tests {
         assert_eq!(entries[0].name, "nota.txt");
         assert_eq!(entries[0].original, trashed.original);
         assert_eq!(entries[0].info, trashed.info);
-        assert!(entries[0].deletion_date.contains('T'), "records a spec date");
+        assert!(
+            entries[0].deletion_date.contains('T'),
+            "records a spec date"
+        );
     }
 
     #[test]
@@ -205,6 +208,9 @@ mod tests {
     fn url_decode_reverses_percent_encoding() {
         assert_eq!(url_decode("/home/u/a%20b").unwrap(), b"/home/u/a b");
         assert_eq!(url_decode("/x/y.txt").unwrap(), b"/x/y.txt");
-        assert!(url_decode("/bad%2").is_none(), "a truncated escape is rejected");
+        assert!(
+            url_decode("/bad%2").is_none(),
+            "a truncated escape is rejected"
+        );
     }
 }

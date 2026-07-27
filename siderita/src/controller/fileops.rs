@@ -1,15 +1,15 @@
 use core::pin::Pin;
 use std::path::{Path, PathBuf};
 
+use celestina_core::CancellationToken;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
-use celestina_core::CancellationToken;
 use siderita_ops::{OpError, Progress};
 
 use super::qobject;
 use super::{
-    display_name, paste_one, qstringlist_to_paths, ConflictStrategy,
-    PasteOutcome, PendingPaste, UndoAction,
+    display_name, paste_one, qstringlist_to_paths, ConflictStrategy, PasteOutcome, PendingPaste,
+    UndoAction,
 };
 
 impl qobject::SideritaController {
@@ -245,8 +245,12 @@ impl qobject::SideritaController {
             .iter()
             .map(|choice| choice.unwrap_or(ConflictStrategy::Skip))
             .collect();
-        self.as_mut()
-            .spawn_paste(pending.sources, pending.destination, pending.cut, strategies);
+        self.as_mut().spawn_paste(
+            pending.sources,
+            pending.destination,
+            pending.cut,
+            strategies,
+        );
     }
 
     /// Dismisses a pending conflict without pasting anything.

@@ -22,8 +22,8 @@ use std::time::{Duration, Instant};
 use std::net::SocketAddr;
 
 use magnetita_core::{
-    pair_packet, ping_packet, ConnectionEvent, Identity, NetworkPacket, Outgoing, Reaction, Session,
-    TIMEOUT_SECS,
+    pair_packet, ping_packet, ConnectionEvent, Identity, NetworkPacket, Outgoing, Reaction,
+    Session, TIMEOUT_SECS,
 };
 
 use crate::link::{Link, LinkError};
@@ -186,7 +186,8 @@ impl Device {
         for event in events {
             match event {
                 ConnectionEvent::Pairing => {
-                    self.pairing_deadline = Some(Instant::now() + Duration::from_secs(TIMEOUT_SECS));
+                    self.pairing_deadline =
+                        Some(Instant::now() + Duration::from_secs(TIMEOUT_SECS));
                 }
                 ConnectionEvent::Paired | ConnectionEvent::Unpaired | ConnectionEvent::Lost(_) => {
                     self.pairing_deadline = None;
@@ -243,7 +244,13 @@ mod tests {
                     tcp,
                     &phone_identity,
                     &phone_tls,
-                    &mut { let mut n = 0; move || { n += 1; n } },
+                    &mut {
+                        let mut n = 0;
+                        move || {
+                            n += 1;
+                            n
+                        }
+                    },
                     Duration::from_secs(5),
                 )
                 .unwrap()
@@ -260,7 +267,13 @@ mod tests {
             &announcement,
             &desk_identity,
             &desk_tls,
-            &mut { let mut n = 0; move || { n += 1; n } },
+            &mut {
+                let mut n = 0;
+                move || {
+                    n += 1;
+                    n
+                }
+            },
             Duration::from_secs(5),
         )
         .unwrap();

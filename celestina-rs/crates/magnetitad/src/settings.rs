@@ -137,7 +137,8 @@ mod tests {
         let _ = std::fs::remove_file(&missing);
         assert_eq!(Settings::load(&missing), Settings::default());
 
-        let corrupt = std::env::temp_dir().join(format!("mag-settings-bad-{}.json", std::process::id()));
+        let corrupt =
+            std::env::temp_dir().join(format!("mag-settings-bad-{}.json", std::process::id()));
         std::fs::write(&corrupt, "{ not json").unwrap();
         assert_eq!(Settings::load(&corrupt), Settings::default());
         std::fs::remove_file(&corrupt).unwrap();
@@ -145,7 +146,8 @@ mod tests {
 
     #[test]
     fn it_round_trips_through_a_file() {
-        let path = std::env::temp_dir().join(format!("mag-settings-rt-{}.json", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("mag-settings-rt-{}.json", std::process::id()));
         let mut settings = Settings::default();
         settings.set("notifications", false);
         settings.set("media", false);

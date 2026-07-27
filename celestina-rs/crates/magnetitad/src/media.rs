@@ -39,7 +39,10 @@ pub fn state(player: &str) -> Option<PlayerState> {
     if !output.status.success() {
         return None;
     }
-    Some(parse_state(player, &String::from_utf8_lossy(&output.stdout)))
+    Some(parse_state(
+        player,
+        &String::from_utf8_lossy(&output.stdout),
+    ))
 }
 
 /// Run a KDE Connect transport verb on a desktop player. Best-effort; an unknown
@@ -76,9 +79,19 @@ fn parse_state(player: &str, line: &str) -> PlayerState {
     let title = fields.next().unwrap_or_default().to_owned();
     let artist = fields.next().unwrap_or_default().to_owned();
     let album = fields.next().unwrap_or_default().to_owned();
-    let length_us = fields.next().unwrap_or_default().trim().parse().unwrap_or(-1);
+    let length_us = fields
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .parse()
+        .unwrap_or(-1);
     let status = fields.next().unwrap_or_default().trim();
-    let volume_unit: f64 = fields.next().unwrap_or_default().trim().parse().unwrap_or(-1.0);
+    let volume_unit: f64 = fields
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .parse()
+        .unwrap_or(-1.0);
 
     let now_playing = match (artist.is_empty(), title.is_empty()) {
         (_, true) => String::new(),

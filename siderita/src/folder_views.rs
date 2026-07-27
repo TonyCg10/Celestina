@@ -18,7 +18,11 @@ pub struct FolderView {
 const MAX_RECORDS: usize = 250;
 
 fn config_file() -> Option<PathBuf> {
-    Some(celestina_core::xdg::config_home()?.join("siderita").join("folder-views.conf"))
+    Some(
+        celestina_core::xdg::config_home()?
+            .join("siderita")
+            .join("folder-views.conf"),
+    )
 }
 
 /// Loads the per-folder records, oldest first. Any error yields an empty list —
@@ -143,7 +147,10 @@ mod tests {
         let mut records = vec![view("/a", "grid"), view("/b", "list")];
         remember(&mut records, view("/a", "details"));
         assert_eq!(records.len(), 2);
-        assert_eq!(find(&records, "/a").map(|r| r.view_mode.as_str()), Some("details"));
+        assert_eq!(
+            find(&records, "/a").map(|r| r.view_mode.as_str()),
+            Some("details")
+        );
         // …and it is now the most recent, so it outlives older records.
         assert_eq!(records.last().map(|r| r.path.as_str()), Some("/a"));
     }
@@ -172,8 +179,11 @@ mod tests {
     fn a_corrupt_line_is_skipped_not_fatal() {
         let file = temp_file("corrupt");
         fs::create_dir_all(file.parent().unwrap()).expect("dir");
-        fs::write(&file, "/a\tgrid\t0\ttrue\nnonsense\n/b\tweird\t0\ttrue\n/c\tlist\tx\ttrue\n")
-            .expect("write");
+        fs::write(
+            &file,
+            "/a\tgrid\t0\ttrue\nnonsense\n/b\tweird\t0\ttrue\n/c\tlist\tx\ttrue\n",
+        )
+        .expect("write");
         let loaded = load_from(&file);
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].path, "/a");

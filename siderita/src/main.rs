@@ -3,9 +3,9 @@ mod bookmarks;
 mod controller;
 mod dbus;
 mod devices;
-mod format;
 mod favorites;
 mod folder_views;
+mod format;
 mod icons;
 mod places;
 mod portal;
@@ -28,7 +28,8 @@ fn main() {
     let mut app = QGuiApplication::new();
 
     if let Some(mut app) = app.as_mut() {
-        app.as_mut().set_application_name(&QString::from("Siderita"));
+        app.as_mut()
+            .set_application_name(&QString::from("Siderita"));
         app.as_mut()
             .set_application_display_name(&QString::from("Siderita"));
         app.as_mut()

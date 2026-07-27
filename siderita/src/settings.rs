@@ -94,7 +94,11 @@ impl Default for Settings {
 }
 
 fn config_file() -> Option<PathBuf> {
-    Some(celestina_core::xdg::config_home()?.join("siderita").join("settings.conf"))
+    Some(
+        celestina_core::xdg::config_home()?
+            .join("siderita")
+            .join("settings.conf"),
+    )
 }
 
 pub fn load() -> Settings {

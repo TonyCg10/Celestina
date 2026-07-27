@@ -290,8 +290,13 @@ mod tests {
         fs::write(&source, b"cut both").expect("seed");
         let destination = dir.path().join("orig (copia).txt");
 
-        let moved =
-            move_as(&source, &destination, &CancellationToken::new(), &mut |_| {}).expect("move_as");
+        let moved = move_as(
+            &source,
+            &destination,
+            &CancellationToken::new(),
+            &mut |_| {},
+        )
+        .expect("move_as");
 
         assert_eq!(moved.to, destination);
         assert!(!source.exists(), "source is gone after a move");
@@ -306,11 +311,19 @@ mod tests {
         fs::write(&source, b"a").expect("seed source");
         fs::write(&destination, b"do not clobber").expect("seed dest");
 
-        let error = move_as(&source, &destination, &CancellationToken::new(), &mut |_| {})
-            .expect_err("must refuse");
+        let error = move_as(
+            &source,
+            &destination,
+            &CancellationToken::new(),
+            &mut |_| {},
+        )
+        .expect_err("must refuse");
         assert!(matches!(error, OpError::AlreadyExists { .. }));
         assert!(source.exists(), "the source is kept on refusal");
-        assert_eq!(fs::read(&destination).expect("dest intact"), b"do not clobber");
+        assert_eq!(
+            fs::read(&destination).expect("dest intact"),
+            b"do not clobber"
+        );
     }
 
     // The guarantee: a cancelled cross-device move keeps the source and leaves

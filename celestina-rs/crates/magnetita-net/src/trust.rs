@@ -216,7 +216,8 @@ mod tests {
         let _ = std::fs::remove_file(&missing);
         assert_eq!(TrustStore::load(&missing).unwrap().peers().count(), 0);
 
-        let corrupt = std::env::temp_dir().join(format!("mag-trust-bad-{}.json", std::process::id()));
+        let corrupt =
+            std::env::temp_dir().join(format!("mag-trust-bad-{}.json", std::process::id()));
         std::fs::write(&corrupt, "{ not json").unwrap();
         assert!(TrustStore::load(&corrupt).is_err());
         std::fs::remove_file(&corrupt).unwrap();

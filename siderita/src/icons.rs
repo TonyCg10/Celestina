@@ -6,7 +6,11 @@ use std::path::PathBuf;
 /// The XDG config file per-path custom icon overrides live in, if a config home
 /// is resolvable. One `path\ticon-name` line each.
 fn config_file() -> Option<PathBuf> {
-    Some(celestina_core::xdg::config_home()?.join("siderita").join("icons.conf"))
+    Some(
+        celestina_core::xdg::config_home()?
+            .join("siderita")
+            .join("icons.conf"),
+    )
 }
 
 /// Loads the saved icon overrides (absolute path → freedesktop icon name). Any

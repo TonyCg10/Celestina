@@ -214,7 +214,10 @@ mod tests {
             .collect();
 
         // Visible folder, visible file, then the hidden block (folder then file).
-        assert_eq!(names, ["visibledir", "visible.txt", ".hiddendir", ".hidden.txt"]);
+        assert_eq!(
+            names,
+            ["visibledir", "visible.txt", ".hiddendir", ".hidden.txt"]
+        );
     }
 
     #[test]

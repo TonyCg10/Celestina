@@ -160,7 +160,10 @@ mod tests {
         assert_eq!(
             m.directories(),
             vec![
-                ("/storage/emulated/0".to_owned(), "Internal storage".to_owned()),
+                (
+                    "/storage/emulated/0".to_owned(),
+                    "Internal storage".to_owned()
+                ),
                 ("/storage/1A2B-3C4D".to_owned(), "SD card".to_owned()),
             ]
         );

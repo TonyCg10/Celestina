@@ -168,7 +168,8 @@ impl FileChooser {
         title: String,
         options: HashMap<String, OwnedValue>,
     ) -> (u32, HashMap<String, OwnedValue>) {
-        self.run(server, handle, "open", app_id, title, options).await
+        self.run(server, handle, "open", app_id, title, options)
+            .await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -181,7 +182,8 @@ impl FileChooser {
         title: String,
         options: HashMap<String, OwnedValue>,
     ) -> (u32, HashMap<String, OwnedValue>) {
-        self.run(server, handle, "save", app_id, title, options).await
+        self.run(server, handle, "save", app_id, title, options)
+            .await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -371,9 +373,11 @@ fn filters(options: &HashMap<String, OwnedValue>) -> Vec<String> {
     let Some(value) = options.get("filters") else {
         return Vec::new();
     };
-    let Ok(list) = Vec::<(String, Vec<(u32, String)>)>::try_from(value.try_clone().unwrap_or_else(
-        |_| OwnedValue::try_from(Value::from(0u32)).expect("scalar value"),
-    )) else {
+    let Ok(list) = Vec::<(String, Vec<(u32, String)>)>::try_from(
+        value
+            .try_clone()
+            .unwrap_or_else(|_| OwnedValue::try_from(Value::from(0u32)).expect("scalar value")),
+    ) else {
         return Vec::new();
     };
     list.into_iter()
@@ -413,7 +417,9 @@ fn globs_for_mime(mime: &str) -> Vec<String> {
         "audio/*" => &[
             "*.mp3", "*.flac", "*.ogg", "*.opus", "*.wav", "*.m4a", "*.aac", "*.wma",
         ],
-        "text/*" => &["*.txt", "*.md", "*.csv", "*.log", "*.json", "*.xml", "*.yml", "*.yaml"],
+        "text/*" => &[
+            "*.txt", "*.md", "*.csv", "*.log", "*.json", "*.xml", "*.yml", "*.yaml",
+        ],
         "application/pdf" => &["*.pdf"],
         "image/png" => &["*.png"],
         "image/jpeg" => &["*.jpg", "*.jpeg"],
@@ -432,7 +438,10 @@ fn globs_for_mime(mime: &str) -> Vec<String> {
 /// A local path as a `file://` URI, percent-encoding everything a URI cannot
 /// carry raw. Byte-wise, so a non-UTF-8 path survives the trip.
 fn path_to_uri(path: &str) -> String {
-    format!("file://{}", celestina_core::percent::encode(path.as_bytes()))
+    format!(
+        "file://{}",
+        celestina_core::percent::encode(path.as_bytes())
+    )
 }
 
 #[cfg(test)]
@@ -444,7 +453,10 @@ mod tests {
         assert!(globs_for_mime("image/png").contains(&"*.png".to_owned()));
         assert!(globs_for_mime("image/*").contains(&"*.jpeg".to_owned()));
         // The safety property: an unknown type widens rather than hides.
-        assert_eq!(globs_for_mime("application/x-invented"), vec!["*".to_owned()]);
+        assert_eq!(
+            globs_for_mime("application/x-invented"),
+            vec!["*".to_owned()]
+        );
     }
 
     #[test]

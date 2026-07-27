@@ -25,8 +25,7 @@ use magnetita_core::{Identity, NetworkPacket, DEFAULT_PORT};
 pub const DISCOVERY_PORT: u16 = DEFAULT_PORT;
 
 /// The subnet broadcast address our announce goes to.
-pub const BROADCAST: SocketAddr =
-    SocketAddr::new(IpAddr::V4(Ipv4Addr::BROADCAST), DISCOVERY_PORT);
+pub const BROADCAST: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::BROADCAST), DISCOVERY_PORT);
 
 /// How often to re-announce so a phone that opens its app mid-session still finds
 /// us. KDE Connect announces on a similar cadence.

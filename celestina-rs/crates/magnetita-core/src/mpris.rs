@@ -107,11 +107,14 @@ pub fn read_mpris(packet: &NetworkPacket) -> Option<MprisUpdate> {
     }
     let body = packet.body.as_object()?;
 
-    let players = body.get("playerList").and_then(Value::as_array).map(|list| {
-        list.iter()
-            .filter_map(|v| v.as_str().map(str::to_owned))
-            .collect()
-    });
+    let players = body
+        .get("playerList")
+        .and_then(Value::as_array)
+        .map(|list| {
+            list.iter()
+                .filter_map(|v| v.as_str().map(str::to_owned))
+                .collect()
+        });
 
     // A state packet names a `player` and carries at least one now-playing
     // field; a bare list packet also has `player` on some peers, so require a
@@ -163,8 +166,14 @@ pub fn read_mpris_request(packet: &NetworkPacket) -> Option<MprisRequest> {
             .and_then(Value::as_str)
             .map(str::to_owned),
         request_now_playing: bool_field(body, "requestNowPlaying"),
-        action: body.get("action").and_then(Value::as_str).map(str::to_owned),
-        set_volume: body.get("setVolume").and_then(Value::as_i64).map(|v| v as i32),
+        action: body
+            .get("action")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        set_volume: body
+            .get("setVolume")
+            .and_then(Value::as_i64)
+            .map(|v| v as i32),
     };
     // Ignore a request that carries nothing actionable.
     if !request.request_player_list

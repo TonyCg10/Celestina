@@ -31,7 +31,10 @@ pub struct Restored {
 /// Takes the info-file path (not the trashed file) because the info file is the
 /// spec's authoritative record of where the entry belongs, so the same primitive
 /// serves both undo-of-trash and a CP2 Trash browser.
-pub fn restore_from_trash(info: &Path, cancellation: &CancellationToken) -> Result<Restored, OpError> {
+pub fn restore_from_trash(
+    info: &Path,
+    cancellation: &CancellationToken,
+) -> Result<Restored, OpError> {
     if cancellation.is_cancelled() {
         return Err(OpError::Cancelled);
     }

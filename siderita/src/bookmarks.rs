@@ -11,7 +11,11 @@ pub struct Bookmark {
 
 /// The XDG config file bookmarks are stored in, if a config home is resolvable.
 fn config_file() -> Option<PathBuf> {
-    Some(celestina_core::xdg::config_home()?.join("siderita").join("bookmarks.tsv"))
+    Some(
+        celestina_core::xdg::config_home()?
+            .join("siderita")
+            .join("bookmarks.tsv"),
+    )
 }
 
 /// Loads saved bookmarks. Returns an empty list if none exist or on any error;

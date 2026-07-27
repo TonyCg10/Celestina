@@ -59,14 +59,23 @@ impl qobject::SideritaController {
     /// keeps the restore/purge identity.
     pub(crate) fn publish_trash(mut self: Pin<&mut Self>) {
         let entries = self.rust().trash_entries.clone();
-        let names: QStringList = entries.iter().map(|e| QString::from(e.name.as_str())).collect();
+        let names: QStringList = entries
+            .iter()
+            .map(|e| QString::from(e.name.as_str()))
+            .collect();
         let paths: QStringList = entries
             .iter()
             .map(|e| QString::from(e.trashed.to_string_lossy().as_ref()))
             .collect();
         let kinds: QStringList = entries
             .iter()
-            .map(|e| QString::from(if e.trashed.is_dir() { "directory" } else { "file" }))
+            .map(|e| {
+                QString::from(if e.trashed.is_dir() {
+                    "directory"
+                } else {
+                    "file"
+                })
+            })
             .collect();
         let tokens: QStringList = (0..entries.len())
             .map(|i| QString::from(i.to_string().as_str()))
@@ -110,8 +119,9 @@ impl qobject::SideritaController {
         self.as_mut().set_trash_active(true);
         self.as_mut().set_selected_token(QString::default());
         self.as_mut().set_entry_names(names.clone());
-        self.as_mut()
-            .rows_ready(names, tokens, kinds, subtitles, paths, sections, sizes, dates);
+        self.as_mut().rows_ready(
+            names, tokens, kinds, subtitles, paths, sections, sizes, dates,
+        );
     }
     /// Opens Recientes as a content-view location: the desktop's own
     /// recently-used list (`recently-used.xbel`), read and published onto the
@@ -133,7 +143,13 @@ impl qobject::SideritaController {
             .collect();
         let kinds: QStringList = items
             .iter()
-            .map(|item| QString::from(if item.path.is_dir() { "directory" } else { "file" }))
+            .map(|item| {
+                QString::from(if item.path.is_dir() {
+                    "directory"
+                } else {
+                    "file"
+                })
+            })
             .collect();
         let tokens: QStringList = (0..items.len())
             .map(|i| QString::from(i.to_string().as_str()))
@@ -142,9 +158,7 @@ impl qobject::SideritaController {
         // the Trash rows carry.
         let subtitles: QStringList = items
             .iter()
-            .map(|item| {
-                QString::from(search_hit_parent(&item.path.to_string_lossy()).as_str())
-            })
+            .map(|item| QString::from(search_hit_parent(&item.path.to_string_lossy()).as_str()))
             .collect();
         let dates: QStringList = items
             .iter()
@@ -182,8 +196,9 @@ impl qobject::SideritaController {
         self.as_mut().set_recent_count(count);
         self.as_mut().set_selected_token(QString::default());
         self.as_mut().set_entry_names(names.clone());
-        self.as_mut()
-            .rows_ready(names, tokens, kinds, subtitles, paths, sections, sizes, dates);
+        self.as_mut().rows_ready(
+            names, tokens, kinds, subtitles, paths, sections, sizes, dates,
+        );
     }
     /// Leaves Recientes (a no-op when it is not shown, so any navigation can
     /// call it) without repainting.
@@ -257,8 +272,12 @@ impl qobject::SideritaController {
     /// together after the list and the folder are refreshed.
     pub fn restore_all_trash(mut self: Pin<&mut Self>) {
         self.as_mut().set_op_error(QString::default());
-        let infos: Vec<PathBuf> =
-            self.rust().trash_entries.iter().map(|e| e.info.clone()).collect();
+        let infos: Vec<PathBuf> = self
+            .rust()
+            .trash_entries
+            .iter()
+            .map(|e| e.info.clone())
+            .collect();
         if infos.is_empty() {
             return;
         }
@@ -298,8 +317,12 @@ impl qobject::SideritaController {
     /// restore there is nothing to refresh but the Trash list itself.
     pub fn empty_trash(mut self: Pin<&mut Self>) {
         self.as_mut().set_op_error(QString::default());
-        let infos: Vec<PathBuf> =
-            self.rust().trash_entries.iter().map(|e| e.info.clone()).collect();
+        let infos: Vec<PathBuf> = self
+            .rust()
+            .trash_entries
+            .iter()
+            .map(|e| e.info.clone())
+            .collect();
         if infos.is_empty() {
             return;
         }

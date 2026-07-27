@@ -210,21 +210,30 @@ impl qobject::DevicesModel {
 
     /// Ask device `index` to pair (its "Emparejar" button).
     pub fn pair_device(self: Pin<&mut Self>, index: i32) {
-        if let Some(device) = usize::try_from(index).ok().and_then(|i| self.rust().devices.get(i)) {
+        if let Some(device) = usize::try_from(index)
+            .ok()
+            .and_then(|i| self.rust().devices.get(i))
+        {
             crate::devices::request_pair(&device.id);
         }
     }
 
     /// Drop the pairing with device `index` (its "Desvincular" button).
     pub fn unpair_device(self: Pin<&mut Self>, index: i32) {
-        if let Some(device) = usize::try_from(index).ok().and_then(|i| self.rust().devices.get(i)) {
+        if let Some(device) = usize::try_from(index)
+            .ok()
+            .and_then(|i| self.rust().devices.get(i))
+        {
             crate::devices::unpair(&device.id);
         }
     }
 
     /// Ring device `index` (its "Sonar" button — find-my-phone).
     pub fn ring_device(self: Pin<&mut Self>, index: i32) {
-        if let Some(device) = usize::try_from(index).ok().and_then(|i| self.rust().devices.get(i)) {
+        if let Some(device) = usize::try_from(index)
+            .ok()
+            .and_then(|i| self.rust().devices.get(i))
+        {
             crate::devices::ring(&device.id);
         }
     }
@@ -246,7 +255,10 @@ impl qobject::DevicesModel {
 
     /// Forward a transport verb to device `index`'s active player.
     fn media(self: Pin<&mut Self>, index: i32, action: &str) {
-        if let Some(device) = usize::try_from(index).ok().and_then(|i| self.rust().devices.get(i)) {
+        if let Some(device) = usize::try_from(index)
+            .ok()
+            .and_then(|i| self.rust().devices.get(i))
+        {
             crate::devices::media_action(&device.id, action);
         }
     }
@@ -274,8 +286,10 @@ impl qobject::DevicesModel {
             .iter()
             .map(|(key, _)| flags.get(*key).copied().unwrap_or(true))
             .collect();
-        let plugin_labels: QStringList =
-            PLUGINS.iter().map(|(_, label)| QString::from(*label)).collect();
+        let plugin_labels: QStringList = PLUGINS
+            .iter()
+            .map(|(_, label)| QString::from(*label))
+            .collect();
         let plugin_enabled: QStringList =
             states.iter().map(|on| QString::from(flag(*on))).collect();
 
@@ -321,9 +335,7 @@ impl qobject::DevicesModel {
         let lines: QStringList = entries
             .iter()
             .rev()
-            .map(|entry| {
-                QString::from(format!("{} — {}", entry.device, entry.message).as_str())
-            })
+            .map(|entry| QString::from(format!("{} — {}", entry.device, entry.message).as_str()))
             .collect();
         let failures: QStringList = entries
             .iter()

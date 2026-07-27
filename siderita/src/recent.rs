@@ -17,7 +17,8 @@ pub struct RecentItem {
 /// application that opens something, and Siderita only reads it. Anything it
 /// cannot parse is skipped rather than guessed at.
 pub fn load(limit: usize) -> Vec<RecentItem> {
-    let Some(path) = celestina_core::xdg::data_home().map(|dir| dir.join("recently-used.xbel")) else {
+    let Some(path) = celestina_core::xdg::data_home().map(|dir| dir.join("recently-used.xbel"))
+    else {
         return Vec::new();
     };
     let Ok(content) = std::fs::read_to_string(&path) else {
@@ -95,7 +96,11 @@ mod tests {
     #[test]
     fn parses_local_bookmarks_and_percent_decodes_them() {
         let items = parse(SAMPLE);
-        assert_eq!(items.len(), 2, "the remote and the truncated tag are skipped");
+        assert_eq!(
+            items.len(),
+            2,
+            "the remote and the truncated tag are skipped"
+        );
         assert_eq!(items[0].path, PathBuf::from("/tmp/a b.txt"));
         assert_eq!(items[0].name, "a b.txt");
     }

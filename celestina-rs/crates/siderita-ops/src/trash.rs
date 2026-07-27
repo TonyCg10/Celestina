@@ -152,12 +152,11 @@ fn trashinfo(original: &Path) -> String {
 
 /// Home Trash directory, from `$XDG_DATA_HOME` or `$HOME/.local/share`.
 pub(crate) fn home_trash() -> Result<PathBuf, OpError> {
-    let data_home = celestina_core::xdg::data_home()
-        .ok_or_else(|| OpError::Io {
-            path: PathBuf::new(),
-            kind: io::ErrorKind::NotFound,
-            message: "no XDG_DATA_HOME or HOME to locate the Trash".to_owned(),
-        })?;
+    let data_home = celestina_core::xdg::data_home().ok_or_else(|| OpError::Io {
+        path: PathBuf::new(),
+        kind: io::ErrorKind::NotFound,
+        message: "no XDG_DATA_HOME or HOME to locate the Trash".to_owned(),
+    })?;
     Ok(data_home.join("Trash"))
 }
 

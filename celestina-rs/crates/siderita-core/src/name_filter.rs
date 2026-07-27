@@ -116,7 +116,7 @@ mod tests {
     fn a_pattern_of_many_stars_does_not_blow_up() {
         // The naive recursive matcher goes exponential here.
         let name = "a".repeat(64);
-        assert!(matches(&name, "*a*a*a*a*a*a*a*a*a*b") == false);
+        assert!(!matches(&name, "*a*a*a*a*a*a*a*a*a*b"));
         assert!(matches(&name, "*a*a*a*a*a*a*a*a*a*a"));
     }
 
