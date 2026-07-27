@@ -1,0 +1,42 @@
+# CI mínima de la suite: la parte verificable sin Qt — el workspace celestina-rs
+# (los cores puros + todo el backend de Magnetita). Las apps CXX-Qt (siderita,
+# magnetita) y el shell necesitan Qt 6.8+ y quedan fuera hasta que ganarse el
+# coste de instalarlo aquí; localmente las cubre la puerta del CLAUDE.md.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  celestina-rs:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: celestina-rs
+    steps:
+      - uses: actions/checkout@v4
+
+      # rustup lee celestina-rs/rust-toolchain.toml (1.97.1, clippy + rustfmt).
+      - name: Instalar el toolchain pinneado
+        run: rustup toolchain install
+
+      - name: Cache de cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            celestina-rs/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('celestina-rs/Cargo.lock', 'celestina-rs/rust-toolchain.toml') }}
+
+      - name: Formato
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace
