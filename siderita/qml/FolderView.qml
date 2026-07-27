@@ -2831,95 +2831,13 @@ Item {
         onNewTabRequested: function(path, foreground) { root.requestNewTab(path, foreground) }
     }
 
-    GlassContextMenu {
+    FolderMenu {
         id: folderMenu
         backdropSource: root
-
-        // Refresh paste availability so "Pegar" also lights up for file
-        // URIs another manager placed on the system clipboard.
-        onAboutToShow: controller.refreshPasteState()
-
-        GlassMenuItem {
-            text: "Nueva carpeta"
-            icon.name: "folder-new"
-            icon.source: CelestinaTheme.fallbackIcon("folder")
-            onTriggered: namePrompt.openCreate("folder")
-        }
-
-        GlassMenuItem {
-            text: "Nuevo archivo"
-            icon.name: "document-new"
-            icon.source: CelestinaTheme.fallbackIcon("file")
-            onTriggered: namePrompt.openCreate("file")
-        }
-
-        GlassMenuItem {
-            text: "Pegar"
-            enabled: controller.canPaste && !controller.opRunning
-            icon.name: "edit-paste"
-            icon.source: CelestinaTheme.fallbackIcon("file")
-            onTriggered: controller.paste()
-        }
-
-        GlassMenuItem {
-            text: controller.canUndo ? controller.undoLabel : "Deshacer"
-            visible: controller.canUndo
-            height: visible ? implicitHeight : 0
-            icon.name: "edit-undo"
-            icon.source: CelestinaTheme.fallbackIcon("view-refresh")
-            onTriggered: controller.undo()
-        }
-
-        MenuSeparator {
-            contentItem: Rectangle {
-                implicitHeight: 1
-                color: CelestinaTheme.border
-            }
-        }
-
-        GlassMenuItem {
-            text: "Seleccionar todo"
-            onTriggered: mainPanel.selectAll()
-        }
-
-        GlassMenuItem {
-            text: "Abrir en pestaña nueva"
-            icon.name: "tab-new"
-            icon.source: CelestinaTheme.fallbackIcon("folder")
-            onTriggered: root.requestNewTab(controller.currentPath, true)
-        }
-
-        GlassMenuItem {
-            text: "Abrir terminal aquí"
-            icon.name: "utilities-terminal"
-            icon.source: CelestinaTheme.fallbackIcon("file")
-            onTriggered: controller.openTerminal()
-        }
-
-        // Only offered once this folder actually remembers something, and
-        // it says plainly what it drops.
-        GlassMenuItem {
-            text: "Olvidar la vista de esta carpeta"
-            visible: controller.folderViewPinned
-            height: visible ? implicitHeight : 0
-            icon.name: "edit-clear"
-            icon.source: CelestinaTheme.fallbackIcon("view-refresh")
-            onTriggered: controller.forgetFolderView()
-        }
-
-        GlassMenuItem {
-            text: "Actualizar"
-            icon.name: "view-refresh"
-            icon.source: CelestinaTheme.fallbackIcon("view-refresh")
-            onTriggered: controller.refresh()
-        }
-
-        GlassMenuItem {
-            text: controller.showHidden
-                  ? "Ocultar elementos ocultos"
-                  : "Mostrar elementos ocultos"
-            onTriggered: controller.toggleHidden()
-        }
+        controller: controller
+        panel: mainPanel
+        namePrompt: namePrompt
+        onNewTabRequested: function(path, foreground) { root.requestNewTab(path, foreground) }
     }
 
     // Los diálogos y overlays de esta vista, cada uno en su fichero.
