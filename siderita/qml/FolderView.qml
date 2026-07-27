@@ -2674,7 +2674,7 @@ Item {
         // content view renders them as list / grid / details with
         // thumbnails. This slim glass bar floats below the breadcrumb with
         // the bulk actions and the way back.
-        Item {
+        TrashHeader {
             id: trashHeader
             z: 10
             x: 12
@@ -2682,63 +2682,9 @@ Item {
             height: 40
             y: (tabBar.visible ? tabBar.y + tabBar.height : topBar.y + topBar.height) + 8
             visible: controller.trashActive
-
-            property bool confirmingEmpty: false
-            onVisibleChanged: if (!visible) confirmingEmpty = false
-
-            InfoPill {
-
-                textScale: root.hostWindow.interfaceTextScale
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                backdrop: topBar.activeView
-                iconName: "user-trash"
-                iconFallback: "user-trash"
-                maxWidth: trashHeader.width - trashHeaderControls.width - 10
-                text: "Papelera" + (controller.trashNames.length > 0
-                                    ? "  ·  " + controller.trashNames.length : "  ·  vacía")
-            }
-
-            Row {
-                id: trashHeaderControls
-                anchors.right: parent.right
-                anchors.rightMargin: 8
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 8
-
-                // Its own pill too: the warning floats over the trash
-                // listing, so it needs a surface to be readable on.
-                InfoPill {
-                    textScale: root.hostWindow.interfaceTextScale
-                    visible: trashHeader.confirmingEmpty
-                    anchors.verticalCenter: parent.verticalCenter
-                    backdrop: topBar.activeView
-                    text: "¿Vaciar? No se puede deshacer"
-                }
-                CelestinaButton {
-                    text: trashHeader.confirmingEmpty ? "Vaciar definitivamente" : "Vaciar"
-                    destructive: true
-                    visible: controller.trashNames.length > 0
-                    onClicked: {
-                        if (trashHeader.confirmingEmpty) {
-                            controller.emptyTrash()
-                            trashHeader.confirmingEmpty = false
-                        } else {
-                            trashHeader.confirmingEmpty = true
-                        }
-                    }
-                }
-                CelestinaButton {
-                    text: "Restaurar todo"
-                    visible: controller.trashNames.length > 0 && !trashHeader.confirmingEmpty
-                    onClicked: controller.restoreAllTrash()
-                }
-                CelestinaButton {
-                    text: "Volver"
-                    primary: true
-                    onClicked: controller.closeTrash()
-                }
-            }
+            controller: controller
+            backdrop: topBar.activeView
+            textScale: root.hostWindow.interfaceTextScale
         }
 
         // ── Drag auto-scroll edges ─────────────────────────────────────
