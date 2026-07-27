@@ -1,0 +1,324 @@
+//! Acting on the current entry: single-click selection, double-click activation
+//! (navigate into a folder, open a file, reveal a starred file), the read-only
+//! accessors the QML calls per row (token / detail / path / kind / index) and a
+//! text preview, plus the properties panel (metadata inline, a folder's
+//! recursive size computed on a worker thread). Search hits and trashed entries
+//! are read from their own lists so every row lookup takes the same path.
+
+use core::pin::Pin;
+use std::path::{Path, PathBuf};
+
+use celestina_core::CancellationToken;
+use cxx_qt::{CxxQtType, Threading};
+use cxx_qt_lib::QString;
+use siderita_qt::RowKind;
+
+use super::qobject;
+use super::{kind_key, kind_label, search_hit_parent, PendingNav};
+
+impl qobject::SideritaController {
+    pub fn select_token(mut self: Pin<&mut Self>, token: &QString) {
+        // The selected item's name and detail are shown in the sidebar info box
+        // (driven by selected_token), so selecting no longer writes the status
+        // line. A search hit's token is its index — accepted as-is if in range.
+        if self.rust().virtual_rows() {
+            if self.rust().search_hit(token).is_some() {
+                self.as_mut().set_selected_token(token.clone());
+            }
+            return;
+        }
+        let selected = self
+            .rust()
+            .row_by_token(token)
+            .map(|row| row.token().to_string());
+        if let Some(token) = selected {
+            self.as_mut()
+                .set_selected_token(QString::from(token.as_str()));
+        }
+    }
+
+    pub fn activate_token(mut self: Pin<&mut Self>, token: &QString) {
+        // In Trash, activating an entry does nothing — restore / delete are the
+        // actions, offered by the context menu; nothing is "opened" from Trash.
+        if self.rust().trash_active {
+            return;
+        }
+        // A search hit acts exactly like a folder entry: a folder navigates in
+        // (leaving search), a file opens in its default app (search stays up so
+        // more hits can be opened).
+        if self.rust().search_active {
+            let Some((path, is_dir, name)) = self
+                .rust()
+                .search_hit(token)
+                .map(|hit| (PathBuf::from(&hit.path), hit.is_dir, hit.name.clone()))
+            else {
+                return;
+            };
+            if is_dir {
+                self.as_mut().exit_search();
+                self.as_mut().request_nav_scan(PendingNav::To(path));
+            } else {
+                self.as_mut().set_selected_token(token.clone());
+                self.as_mut().open_in_default_app(&path, &name);
+            }
+            return;
+        }
+
+        let selected = self.rust().row_by_token(token).map(|row| {
+            (
+                row.path().to_path_buf(),
+                row.kind(),
+                row.display_name().to_owned(),
+            )
+        });
+
+        let Some((path, kind, name)) = selected else {
+            return;
+        };
+
+        if kind == RowKind::Directory {
+            self.as_mut().request_nav_scan(PendingNav::To(path));
+        } else {
+            self.as_mut().select_token(token);
+            self.as_mut().open_in_default_app(&path, &name);
+        }
+    }
+
+    pub fn entry_token(&self, index: i32) -> QString {
+        if self.rust().virtual_rows() {
+            let count = self.rust().search_hits.len() as i32;
+            return if index >= 0 && index < count {
+                QString::from(index.to_string().as_str())
+            } else {
+                QString::default()
+            };
+        }
+        self.rust()
+            .row(index)
+            .map(|row| QString::from(row.token().to_string().as_str()))
+            .unwrap_or_default()
+    }
+
+    pub fn entry_detail(&self, index: i32) -> QString {
+        // A search hit's detail is where it lives — its containing folder.
+        if self.rust().search_active {
+            return usize::try_from(index)
+                .ok()
+                .and_then(|i| self.rust().search_hits.get(i))
+                .map(|hit| QString::from(search_hit_parent(&hit.path).as_str()))
+                .unwrap_or_default();
+        }
+        // A trashed entry's detail is where it came from and when it was deleted.
+        if self.rust().trash_active {
+            return usize::try_from(index)
+                .ok()
+                .and_then(|i| self.rust().trash_entries.get(i))
+                .map(|e| {
+                    let origin = e.original.to_string_lossy();
+                    let date = crate::format::trash_date(&e.deletion_date);
+                    QString::from(
+                        if date.is_empty() {
+                            origin.into_owned()
+                        } else {
+                            format!("{origin} · {date}")
+                        }
+                        .as_str(),
+                    )
+                })
+                .unwrap_or_default();
+        }
+        let Some(row) = self.rust().row(index) else {
+            return QString::default();
+        };
+        let kind = kind_label(row.kind());
+        let date = row
+            .modified()
+            .map(crate::format::system_time)
+            .unwrap_or_default();
+        // Folders show kind + date (their entry size is not meaningful); files
+        // show kind · size · date.
+        let detail = if row.kind() == RowKind::Directory {
+            if date.is_empty() {
+                kind.to_owned()
+            } else {
+                format!("{kind} · {date}")
+            }
+        } else {
+            let size = crate::format::size(row.size());
+            if date.is_empty() {
+                format!("{kind} · {size}")
+            } else {
+                format!("{kind} · {size} · {date}")
+            }
+        };
+        QString::from(detail.as_str())
+    }
+
+    pub fn index_for_token(&self, token: &QString) -> i32 {
+        if self.rust().virtual_rows() {
+            return token
+                .to_string()
+                .parse::<usize>()
+                .ok()
+                .filter(|&i| i < self.rust().search_hits.len())
+                .and_then(|i| i32::try_from(i).ok())
+                .unwrap_or(-1);
+        }
+        let Ok(token) = token.to_string().parse::<u64>() else {
+            return -1;
+        };
+        self.rust()
+            .view
+            .as_ref()
+            .and_then(|view| {
+                view.rows()
+                    .iter()
+                    .position(|row| row.token().value() == token)
+            })
+            .and_then(|index| i32::try_from(index).ok())
+            .unwrap_or(-1)
+    }
+
+    pub fn entry_path(&self, index: i32) -> QString {
+        if self.rust().virtual_rows() {
+            return usize::try_from(index)
+                .ok()
+                .and_then(|i| self.rust().search_hits.get(i))
+                .map(|hit| QString::from(hit.path.as_str()))
+                .unwrap_or_default();
+        }
+        self.rust()
+            .row(index)
+            .map(|row| QString::from(row.path().to_string_lossy().as_ref()))
+            .unwrap_or_default()
+    }
+
+    pub fn entry_kind(&self, index: i32) -> QString {
+        if self.rust().virtual_rows() {
+            return usize::try_from(index)
+                .ok()
+                .and_then(|i| self.rust().search_hits.get(i))
+                .map(|hit| QString::from(if hit.is_dir { "directory" } else { "file" }))
+                .unwrap_or_default();
+        }
+        self.rust()
+            .row(index)
+            .map(|row| QString::from(kind_key(row.kind())))
+            .unwrap_or_default()
+    }
+
+    /// Opens the folder holding `path` and selects that entry once it lands —
+    /// how a starred *file* reveals itself from the sidebar, instead of the
+    /// sidebar quietly launching an application.
+    pub fn reveal_path(mut self: Pin<&mut Self>, path: &QString) {
+        let path = PathBuf::from(path.to_string());
+        let Some(parent) = path.parent().map(Path::to_path_buf) else {
+            return;
+        };
+        self.as_mut().rust_mut().get_mut().pending_select_path = Some(path);
+        self.as_mut().request_nav_scan(PendingNav::To(parent));
+    }
+
+    pub fn preview_text(&self, path: &QString) -> QString {
+        // Cap the read: a preview only needs the first screenful or two, and this
+        // runs on the GUI thread (the user pressed space), so it must stay cheap.
+        const MAX_BYTES: usize = 128 * 1024;
+        let path = path.to_string();
+        if path.is_empty() {
+            return QString::default();
+        }
+        let Ok(file) = std::fs::File::open(&path) else {
+            return QString::default();
+        };
+        use std::io::Read;
+        let mut buf = Vec::new();
+        if file.take(MAX_BYTES as u64).read_to_end(&mut buf).is_err() {
+            return QString::default();
+        }
+        // A NUL byte in the sample is the cheap, reliable "this is binary" tell —
+        // real text files don't carry them, most binaries do within 128 KiB.
+        if buf.contains(&0) {
+            return QString::default();
+        }
+        // Lossy so one stray non-UTF-8 byte shows a � rather than blanking the
+        // whole preview; genuinely binary content was already rejected above.
+        QString::from(String::from_utf8_lossy(&buf).as_ref())
+    }
+
+    /// Opens the properties panel for `path`: the metadata is gathered inline
+    /// (fast), and a folder's recursive size is computed on a worker thread so a
+    /// deep tree never blocks the UI.
+    pub fn open_properties(mut self: Pin<&mut Self>, path: &QString) {
+        let path = PathBuf::from(path.to_string());
+        if path.as_os_str().is_empty() {
+            return;
+        }
+
+        // Cancel any directory-size walk still running from a previous open.
+        if let Some(token) = self.as_mut().rust_mut().get_mut().prop_size_cancel.take() {
+            token.cancel();
+        }
+
+        let props = crate::properties::gather(&path);
+        self.as_mut()
+            .set_prop_name(QString::from(props.name.as_str()));
+        self.as_mut()
+            .set_prop_path(QString::from(props.path.as_str()));
+        self.as_mut()
+            .set_prop_kind(QString::from(props.kind.as_str()));
+        self.as_mut()
+            .set_prop_mime(QString::from(props.mime.as_str()));
+        self.as_mut()
+            .set_prop_permissions(QString::from(props.permissions.as_str()));
+        self.as_mut()
+            .set_prop_owner(QString::from(props.owner.as_str()));
+        self.as_mut()
+            .set_prop_modified(QString::from(props.modified.as_str()));
+        self.as_mut()
+            .set_prop_accessed(QString::from(props.accessed.as_str()));
+        self.as_mut().set_prop_symlink(QString::from(
+            props.symlink_target.unwrap_or_default().as_str(),
+        ));
+        self.as_mut().set_prop_is_dir(props.is_dir);
+
+        match props.size {
+            Some(size) => self
+                .as_mut()
+                .set_prop_size(QString::from(crate::format::size_full(size).as_str())),
+            None => {
+                self.as_mut().set_prop_size(QString::from("Calculando…"));
+                let token = CancellationToken::new();
+                self.as_mut().rust_mut().get_mut().prop_size_cancel = Some(token.clone());
+                let qt = self.qt_thread();
+                let dir = path.clone();
+                let dir_key = props.path.clone();
+                std::thread::spawn(move || {
+                    let size = crate::properties::directory_size(&dir, &token);
+                    if token.is_cancelled() {
+                        return;
+                    }
+                    let text = crate::format::size_full(size);
+                    let _ = qt.queue(
+                        move |mut controller: Pin<&mut qobject::SideritaController>| {
+                            // Ignore if the panel has since moved to another entry.
+                            if controller.rust().prop_path.to_string() == dir_key {
+                                controller
+                                    .as_mut()
+                                    .set_prop_size(QString::from(text.as_str()));
+                            }
+                        },
+                    );
+                });
+            }
+        }
+
+        self.as_mut().set_properties_pending(true);
+    }
+
+    pub fn close_properties(mut self: Pin<&mut Self>) {
+        if let Some(token) = self.as_mut().rust_mut().get_mut().prop_size_cancel.take() {
+            token.cancel();
+        }
+        self.as_mut().set_properties_pending(false);
+    }
+}
