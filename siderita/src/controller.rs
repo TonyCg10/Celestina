@@ -1,5 +1,5 @@
 use core::pin::Pin;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use celestina_core::CancellationToken;
@@ -1074,113 +1074,6 @@ impl qobject::SideritaController {
 
         let destination = resolve_location(&input, self.rust().history.current());
         self.as_mut().request_nav_scan(PendingNav::To(destination));
-    }
-
-    pub fn new_folder(mut self: Pin<&mut Self>, name: &QString) {
-        self.as_mut().set_op_error(QString::default());
-        let Some(parent) = self.rust().history.current().map(Path::to_path_buf) else {
-            return;
-        };
-        let name = name.to_string();
-        let outcome =
-            siderita_ops::create_directory(&parent, OsStr::new(&name), &CancellationToken::new());
-        // Creating is not undoable; a success supersedes the last undoable op.
-        if outcome.is_ok() {
-            self.as_mut().set_undo(None);
-        }
-        self.finish_op(outcome.map(|_| ()));
-    }
-
-    pub fn new_file(mut self: Pin<&mut Self>, name: &QString) {
-        self.as_mut().set_op_error(QString::default());
-        let Some(parent) = self.rust().history.current().map(Path::to_path_buf) else {
-            return;
-        };
-        let name = name.to_string();
-        let outcome =
-            siderita_ops::create_file(&parent, OsStr::new(&name), &CancellationToken::new());
-        if outcome.is_ok() {
-            self.as_mut().set_undo(None);
-        }
-        self.finish_op(outcome.map(|_| ()));
-    }
-
-    pub fn rename_path(mut self: Pin<&mut Self>, path: &QString, new_name: &QString) {
-        self.as_mut().set_op_error(QString::default());
-        let path = PathBuf::from(path.to_string());
-        let new_name = new_name.to_string();
-        let outcome = siderita_ops::rename(&path, OsStr::new(&new_name), &CancellationToken::new());
-        if let Ok(renamed) = &outcome {
-            let undo = path.file_name().map(|old_name| UndoAction::Rename {
-                renamed: renamed.to.clone(),
-                old_name: old_name.to_os_string(),
-            });
-            self.as_mut().set_undo(undo);
-        }
-        self.finish_op(outcome.map(|_| ()));
-    }
-
-    /// Renames a whole selection in one pass: `paths[i]` becomes `names[i]`.
-    /// Each rename is attempted independently and refuses to overwrite (the
-    /// domain guarantees that), so a name that collides fails alone and is
-    /// reported — nothing else in the batch is rolled back or lost.
-    pub fn rename_paths(mut self: Pin<&mut Self>, paths: &QStringList, names: &QStringList) {
-        self.as_mut().set_op_error(QString::default());
-        let paths = qstringlist_to_paths(paths);
-        let names: Vec<String> = names.iter().map(ToString::to_string).collect();
-        if paths.is_empty() || paths.len() != names.len() {
-            return;
-        }
-        let cancellation = CancellationToken::new();
-        let mut failures = Vec::new();
-        for (path, name) in paths.iter().zip(names.iter()) {
-            // La validación del nombre la hace `siderita_ops::rename` (rechaza
-            // vacío, separador, `.`/`..` y NUL), igual que el renombrado de uno
-            // en uno; un pre-chequeo a mano aquí sólo repetía la mitad, peor.
-            if let Err(error) = siderita_ops::rename(path, OsStr::new(name), &cancellation) {
-                failures.push(format!("{}: {error}", display_name(path)));
-            }
-        }
-        // Deliberately no undo: a batch rename is many renames, and the single
-        // undo slot can only honestly reverse one.
-        self.as_mut().set_undo(None);
-        self.as_mut().finish_batch(paths.len(), &failures);
-    }
-
-    pub fn trash_path(mut self: Pin<&mut Self>, path: &QString) {
-        self.as_mut().set_op_error(QString::default());
-        let path = PathBuf::from(path.to_string());
-        let outcome = siderita_ops::trash(&path, &CancellationToken::new());
-        if let Ok(trashed) = &outcome {
-            self.as_mut().set_undo(Some(UndoAction::Trash {
-                infos: vec![trashed.info.clone()],
-            }));
-        }
-        self.finish_op(outcome.map(|_| ()));
-    }
-
-    /// Sends every path in a multi-selection to Trash. Each entry is attempted
-    /// independently; the view is refreshed once so successes appear, and any
-    /// failures are reported together without hiding the ones that did land.
-    pub fn trash_paths(mut self: Pin<&mut Self>, paths: &QStringList) {
-        self.as_mut().set_op_error(QString::default());
-        let paths = qstringlist_to_paths(paths);
-        if paths.is_empty() {
-            return;
-        }
-        let cancellation = CancellationToken::new();
-        let mut failures = Vec::new();
-        let mut infos = Vec::new();
-        for path in &paths {
-            match siderita_ops::trash(path, &cancellation) {
-                Ok(trashed) => infos.push(trashed.info),
-                Err(error) => failures.push(format!("{}: {error}", display_name(path))),
-            }
-        }
-        if !infos.is_empty() {
-            self.as_mut().set_undo(Some(UndoAction::Trash { infos }));
-        }
-        self.as_mut().finish_batch(paths.len(), &failures);
     }
 }
 
