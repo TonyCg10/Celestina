@@ -32,7 +32,6 @@ pub struct Device {
     pub mount_path: String,
 }
 
-/// Lists the devices Magnetita reports. `Ok(vec![])` when Magnetita is not on the
 /// Send a local file to a device via Magnetita (best-effort — no bus or no
 /// Magnetita simply does nothing).
 pub fn send_file(device_id: &str, path: &str) {
@@ -45,7 +44,8 @@ pub fn send_file(device_id: &str, path: &str) {
     let _: Result<(), zbus::Error> = proxy.call("SendFile", &(device_id, path));
 }
 
-/// bus — an empty list, not a failure to surface.
+/// Lists the devices Magnetita reports. `Ok(vec![])` when Magnetita is not on
+/// the bus — an empty list, not a failure to surface.
 pub fn list_devices() -> Result<Vec<Device>, String> {
     let Ok(connection) = Connection::session() else {
         return Ok(Vec::new());

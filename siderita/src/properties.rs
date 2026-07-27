@@ -75,7 +75,7 @@ pub fn gather(path: &Path) -> Properties {
         crate::apps::detect_mime(path).unwrap_or_default()
     };
 
-    props.size = (!file_type.is_dir()).then(|| meta.len());
+    props.size = (!file_type.is_dir()).then_some(meta.len());
     props.permissions = format_permissions(meta.mode());
     props.owner = format_owner(meta.uid(), meta.gid());
     props.modified = format_time(meta.mtime());

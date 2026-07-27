@@ -1,0 +1,5 @@
+# The CXX-Qt bridge signals (rows_ready, pick_requested) carry up to 12 flat
+# arguments because a Qt signal's arity IS the QML contract — there is no
+# struct to pass across the bridge. Raising the threshold here keeps the
+# source free of inline #[allow] while still catching a 13th argument.
+too-many-arguments-threshold = 12

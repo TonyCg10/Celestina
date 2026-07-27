@@ -144,7 +144,7 @@ pub fn apps_for_mime(mime: &str) -> Vec<DesktopApp> {
         }
     }
 
-    apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    apps.sort_by_key(|a| a.name.to_lowercase());
     apps
 }
 

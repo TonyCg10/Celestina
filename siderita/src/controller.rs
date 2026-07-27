@@ -381,7 +381,6 @@ pub mod qobject {
         #[qinvokable]
         fn load_trash(self: Pin<&mut SideritaController>);
 
-        /// Opens Trash as a content-view location (fills the entry model with
         /// Opens Recientes — the desktop's recently-used list — as a
         /// content-view location.
         #[qinvokable]
@@ -391,6 +390,7 @@ pub mod qobject {
         #[qinvokable]
         fn close_recent(self: Pin<&mut SideritaController>);
 
+        /// Opens Trash as a content-view location (fills the entry model with
         /// the trashed items and flips `trash_active`).
         #[qinvokable]
         fn open_trash(self: Pin<&mut SideritaController>);

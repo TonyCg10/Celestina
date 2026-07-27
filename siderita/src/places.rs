@@ -101,7 +101,7 @@ XDG_PROJECTS_DIR=\"$HOME/\"
         assert_eq!(map.get("DOWNLOAD"), Some(&home.join("Descargas")));
         assert_eq!(map.get("PICTURES"), Some(&home.join("Imágenes")));
         // Comments and unrelated keys are ignored; MUSIC is absent here.
-        assert!(map.get("MUSIC").is_none());
+        assert!(!map.contains_key("MUSIC"));
     }
 
     #[test]
