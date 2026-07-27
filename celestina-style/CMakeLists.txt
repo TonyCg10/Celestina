@@ -36,6 +36,10 @@ qt_add_qml_module(celestina-style
         icons/folder.svg
         icons/file.svg
         icons/symlink.svg
+        icons/user-trash.svg
+        icons/media-eject.svg
+        icons/star.svg
+        icons/star-outline.svg
 )
 
 target_link_libraries(celestina-style PRIVATE Qt6::Quick)
