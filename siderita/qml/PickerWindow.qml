@@ -361,7 +361,7 @@ Window {
             radius: CelestinaTheme.radiusLg
             color: CelestinaTheme.surface
             border.width: 1
-            border.color: CelestinaTheme.border
+            border.color: CelestinaTheme.divider
             clip: true
 
             // La rejilla: la vista de un selector de archivos es de
@@ -464,10 +464,10 @@ Window {
                     y: picker.bandY
                     width: picker.bandW
                     height: picker.bandH
-                    radius: CelestinaTheme.radiusXs
+                    radius: CelestinaTheme.radiusSm
                     color: CelestinaTheme.surfaceSelected
                     border.width: 1
-                    border.color: CelestinaTheme.borderStrong
+                    border.color: CelestinaTheme.dividerStrong
                 }
 
                 delegate: Item {
@@ -499,7 +499,7 @@ Window {
                                : cellMouse.containsMouse ? CelestinaTheme.surfaceHover
                                : "transparent"
                         border.width: cell.chosen ? 1 : 0
-                        border.color: CelestinaTheme.borderStrong
+                        border.color: CelestinaTheme.dividerStrong
                         Behavior on color {
                             ColorAnimation { duration: CelestinaTheme.motionFast }
                         }
@@ -721,7 +721,7 @@ Window {
                     floating: picker.gridScrolls
                     fill: CelestinaTheme.inputFill
                     border.width: 1
-                    border.color: nameField.activeFocus ? CelestinaTheme.focus
+                    border.color: nameField.activeFocus ? CelestinaTheme.focusRing
                                                         : "transparent"
                 }
             }
@@ -747,7 +747,7 @@ Window {
                 model: picker.filterRows
                 textRole: "label"
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontLabel
+                font.pixelSize: CelestinaTheme.fontRowSecondary
                 onActivated: picker.applyFilter(currentIndex)
 
                 contentItem: Text {
@@ -825,7 +825,7 @@ Window {
         leftPadding: 18
         rightPadding: 18
         font.family: CelestinaTheme.sansFamily
-        font.pixelSize: CelestinaTheme.fontLabel
+        font.pixelSize: CelestinaTheme.fontRowSecondary
         ToolTip.visible: help.length > 0 && hovered
         ToolTip.text: help
 
@@ -857,9 +857,9 @@ Window {
             // principal aunque esté esperando, y el foco de teclado se ve.
             border.width: control.activeFocus ? 2
                           : (control.primary && !control.enabled) || !control.primary ? 1 : 0
-            border.color: control.activeFocus ? CelestinaTheme.focus
+            border.color: control.activeFocus ? CelestinaTheme.focusRing
                           : control.primary ? control.accentText
-                          : CelestinaTheme.border
+                          : CelestinaTheme.divider
         }
     }
 }

@@ -608,7 +608,7 @@ Item {
         radius: CelestinaTheme.radiusLg
         color: CelestinaTheme.surface
         border.width: 1
-        border.color: CelestinaTheme.border
+        border.color: CelestinaTheme.divider
 
         // Bottom control bar: all controls and status render along the
         // bottom of the content box; the list/grid fill from the top.
@@ -630,7 +630,7 @@ Item {
             id: bottomControls
             x: 16
             anchors.verticalCenter: bottomBar.verticalCenter
-            controller: controller
+            controller: tabController
             panel: mainPanel
             bottomView: root.bottomView
             bottomFloating: root.bottomFloating
@@ -691,6 +691,19 @@ Item {
 
         ListView {
             id: fileList
+
+            // Mouse wheel scrolls ~2.5× faster than the platform default; the
+            // touchpad keeps its natural pixel-precise scroll (tune the 180).
+            WheelHandler {
+                acceptedDevices: PointerDevice.Mouse
+                onWheel: function(ev) {
+                    const max = Math.max(0, fileList.contentHeight - fileList.height)
+                    fileList.contentY = Math.max(0, Math.min(max,
+                        fileList.contentY - ev.angleDelta.y / 120 * 180))
+                    ev.accepted = true
+                }
+            }
+
             x: 8
             y: 14
             width: parent.width - 16
@@ -852,7 +865,7 @@ Item {
 
             delegate: FolderRowDelegate {
                 panel: mainPanel
-                controller: controller
+                controller: tabController
                 view: fileList
                 hostWindow: root.hostWindow
                 ghost: root.ghost
@@ -876,6 +889,19 @@ Item {
 
         GridView {
             id: fileGrid
+
+            // Mouse wheel scrolls ~2.5× faster than the platform default; the
+            // touchpad keeps its natural pixel-precise scroll (tune the 180).
+            WheelHandler {
+                acceptedDevices: PointerDevice.Mouse
+                onWheel: function(ev) {
+                    const max = Math.max(0, fileGrid.contentHeight - fileGrid.height)
+                    fileGrid.contentY = Math.max(0, Math.min(max,
+                        fileGrid.contentY - ev.angleDelta.y / 120 * 180))
+                    ev.accepted = true
+                }
+            }
+
             x: 8
             y: 14
             width: parent.width - 16
@@ -1005,7 +1031,7 @@ Item {
 
             delegate: FolderCellDelegate {
                 panel: mainPanel
-                controller: controller
+                controller: tabController
                 view: fileGrid
                 hostWindow: root.hostWindow
                 ghost: root.ghost
@@ -1105,7 +1131,7 @@ Item {
                 text: parent.searchEmpty ? "Sin coincidencias" : "Carpeta vacía"
                 color: CelestinaTheme.text
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontTitle
+                font.pixelSize: CelestinaTheme.fontHeaderCollapsed
                 font.weight: CelestinaTheme.weightMedium
             }
 
@@ -1116,7 +1142,7 @@ Item {
                       : "No hay elementos que mostrar."
                 color: CelestinaTheme.textMuted
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontLabel
+                font.pixelSize: CelestinaTheme.fontRowSecondary
             }
         }
 
@@ -1140,9 +1166,9 @@ Item {
                 anchors.fill: parent
                 anchors.margins: 11
                 text: controller.errorText
-                color: CelestinaTheme.dangerText
+                color: CelestinaTheme.dangerFillInk
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontLabel
+                font.pixelSize: CelestinaTheme.fontRowSecondary
                 wrapMode: Text.Wrap
             }
         }
@@ -1169,9 +1195,9 @@ Item {
                 anchors.fill: parent
                 anchors.margins: 11
                 text: controller.opError
-                color: CelestinaTheme.dangerText
+                color: CelestinaTheme.dangerFillInk
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontLabel
+                font.pixelSize: CelestinaTheme.fontRowSecondary
                 wrapMode: Text.Wrap
             }
         }
@@ -1193,7 +1219,7 @@ Item {
             visible: controller.opRunning
             color: CelestinaTheme.surface
             border.width: 1
-            border.color: CelestinaTheme.border
+            border.color: CelestinaTheme.divider
             z: 5
 
             Text {
@@ -1211,7 +1237,7 @@ Item {
                 }
                 color: CelestinaTheme.text
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontLabel
+                font.pixelSize: CelestinaTheme.fontRowSecondary
                 elide: Text.ElideMiddle
             }
 
@@ -1260,12 +1286,12 @@ Item {
                 anchors.rightMargin: 12
                 width: cancelOpLabel.width + 22
                 height: 28
-                radius: CelestinaTheme.radiusXs
+                radius: CelestinaTheme.radiusSm
                 color: cancelOpMouse.containsMouse
                        ? CelestinaTheme.surfaceHover
                        : CelestinaTheme.controlFill
                 border.width: 1
-                border.color: CelestinaTheme.border
+                border.color: CelestinaTheme.divider
 
                 Accessible.role: Accessible.Button
                 Accessible.name: "Cancelar la operación"
@@ -1302,7 +1328,7 @@ Item {
                   ? "⚠ Vigilancia perdida · instantánea"
                   : controller.statusText
             color: controller.watchDegraded
-                   ? CelestinaTheme.dangerText : CelestinaTheme.textMuted
+                   ? CelestinaTheme.dangerFillInk : CelestinaTheme.textMuted
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: Math.round(CelestinaTheme.fontCaption * root.hostWindow.interfaceTextScale)
             elide: Text.ElideRight
@@ -1340,7 +1366,7 @@ Item {
                       ? CelestinaTheme.surfaceHover
                       : CelestinaTheme.controlFill
                 border.width: sizeButton.activeFocus ? 1 : 0
-                border.color: CelestinaTheme.focus
+                border.color: CelestinaTheme.focusRing
             }
 
             SizePopup {
@@ -1361,7 +1387,7 @@ Item {
         y: 12
         width: root.width - 24
         height: 52
-        controller: controller
+        controller: tabController
         activeView: mainPanel.viewMode === "grid" ? fileGrid : fileList
         hostWindow: root.hostWindow
         overlayParent: root.overlayParent
@@ -1382,7 +1408,7 @@ Item {
         width: root.width - 24
         height: 34
         visible: root.hostWindow !== undefined && root.hostWindow.tabsModel.count >= 2
-        controller: controller
+        controller: tabController
         hostWindow: root.hostWindow
         topBar: topBar
         active: root.active
@@ -1391,13 +1417,13 @@ Item {
     FolderSortMenu {
         id: sortMenu
         backdropSource: root
-        controller: controller
+        controller: tabController
     }
 
     EntryContextMenu {
         id: entryMenu
         backdropSource: root
-        controller: controller
+        controller: tabController
         panel: mainPanel
         namePrompt: namePrompt
         batchRename: batchRename
@@ -1409,14 +1435,14 @@ Item {
     PathMenu {
         id: pathMenu
         backdropSource: root
-        controller: controller
+        controller: tabController
         onNewTabRequested: function(path, foreground) { root.requestNewTab(path, foreground) }
     }
 
     FolderMenu {
         id: folderMenu
         backdropSource: root
-        controller: controller
+        controller: tabController
         panel: mainPanel
         namePrompt: namePrompt
         onNewTabRequested: function(path, foreground) { root.requestNewTab(path, foreground) }
@@ -1425,44 +1451,44 @@ Item {
     // Los diálogos y overlays de esta vista, cada uno en su fichero.
     NamePromptDialog {
         id: namePrompt
-        controller: controller
+        controller: tabController
         owner: root
     }
 
     BatchRenameDialog {
         id: batchRename
-        controller: controller
+        controller: tabController
         owner: root
     }
 
     ConflictDialog {
         id: conflictDialog
-        controller: controller
+        controller: tabController
         owner: root
     }
 
     OpenWithDialog {
         id: openWithView
-        controller: controller
+        controller: tabController
         owner: root
     }
 
     PropertiesDialog {
         id: propertiesView
-        controller: controller
+        controller: tabController
         owner: root
     }
 
     IconPickerDialog {
         id: iconPicker
-        controller: controller
+        controller: tabController
         owner: root
         panel: mainPanel
     }
 
     QuickLookView {
         id: quickLookView
-        controller: controller
+        controller: tabController
         owner: root
         panel: mainPanel
     }
@@ -1497,7 +1523,7 @@ Item {
                     easing.type: CelestinaTheme.easeStandard
                 }
             }
-            controller: controller
+            controller: tabController
             backdrop: topBar.activeView
             textScale: root.hostWindow.interfaceTextScale
         }
@@ -1523,7 +1549,7 @@ Item {
                     easing.type: CelestinaTheme.easeStandard
                 }
             }
-            controller: controller
+            controller: tabController
             backdrop: topBar.activeView
             textScale: root.hostWindow.interfaceTextScale
         }
@@ -1541,7 +1567,7 @@ Item {
             height: 40
             y: (tabBar.visible ? tabBar.y + tabBar.height : topBar.y + topBar.height) + 8
             visible: controller.trashActive
-            controller: controller
+            controller: tabController
             backdrop: topBar.activeView
             textScale: root.hostWindow.interfaceTextScale
         }
@@ -1594,7 +1620,7 @@ Item {
             height: Math.round(CelestinaTheme.fontCaption * root.hostWindow.contentTextScale) + 18
             y: (tabBar.visible ? tabBar.y + tabBar.height : topBar.y + topBar.height) + 8
             visible: fileList.detailsMode
-            controller: controller
+            controller: tabController
             view: fileList
             textScale: root.hostWindow.contentTextScale
         }

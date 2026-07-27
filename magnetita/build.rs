@@ -4,7 +4,12 @@ use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
 // single-list discipline Siderita learned the hard way. CelestinaButton is the
 // suite's shared button (symlinked from celestina-style), so the app never forks
 // its own.
-const QML_FILES: &[&str] = &["qml/CelestinaButton.qml", "qml/Main.qml"];
+const QML_FILES: &[&str] = &[
+    "qml/CelestinaButton.qml",
+    "qml/CelestinaSwitch.qml",
+    "qml/ListSection.qml",
+    "qml/Main.qml",
+];
 
 fn main() {
     // CelestinaTheme is the suite's shared visual language; it lives canonically
@@ -23,11 +28,18 @@ fn main() {
     // Naming any rerun-if-changed stops cargo watching the whole package, so
     // every watched QML must be listed explicitly or an edit compiles "fine"
     // without reaching the binary.
-    for qml in QML_FILES.iter().copied().chain(["qml/CelestinaTheme.qml"]) {
+    for qml in QML_FILES
+        .iter()
+        .copied()
+        .chain(["qml/CelestinaTheme.qml", "qml/fonts.qrc"])
+    {
         println!("cargo::rerun-if-changed={qml}");
     }
 
     CxxQtBuilder::new_qml_module(module)
+        // Inter Variable, compiled in so the app renders in the suite's typeface
+        // (the canonical fonts.qrc lives in ../celestina-style, symlinked into qml/).
+        .qrc("qml/fonts.qrc")
         .files(["src/controller.rs"])
         .build();
 }

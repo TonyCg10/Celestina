@@ -11,9 +11,9 @@ Menu {
 
     required property Item backdropSource
 
-    width: CelestinaTheme.menuWidth
-    padding: CelestinaTheme.menuPadding
-    margins: CelestinaTheme.menuMargins
+    width: CelestinaTheme.compMenuWidth
+    padding: CelestinaTheme.compMenuPadding
+    margins: CelestinaTheme.compMenuMargins
     modal: false
     dim: false
     popupType: Popup.Item
@@ -24,6 +24,9 @@ Menu {
         id: glassBackground
         backdropSource: root.backdropSource
         captureEnabled: root.visible
+        // A menu is a floating layer (L2) — give it the drop shadow so it reads
+        // as hovering over the content instead of pasted onto it.
+        elevation: 2
         // The content behind a menu keeps moving while it is open — the wheel
         // still scrolls the view, thumbnails arrive, rows light up under the
         // cursor. A one-shot capture froze all of that, so the menu wore a

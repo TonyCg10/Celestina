@@ -28,12 +28,18 @@ tree (see [ROADMAP.md](ROADMAP.md), STYLE-D).
 
 | Path | Responsibility |
 |---|---|
-| `CelestinaTheme.qml` | singleton design tokens: color, type, spacing, radius, motion, glass |
+| `DESIGN.md` | the design contract: One UI 8.5 desktop-adapted — reference values, platform ceiling, target system, build phases |
+| `CelestinaTheme.qml` | singleton design tokens, tiered `ref`→`scheme`→`sys`: the dark `ColorScheme` as data (surface→ink pairs), Inter Variable, type/radius/motion/glass scales |
 | `GlassSurface.qml` | frosted surface that blurs injected backdrop content (bounded capture, one-shot or live) |
 | `GlassCard.qml` | `GlassSurface` specialization for modal dialog cards |
 | `GlassContextMenu.qml`, `GlassMenuItem.qml` | glass `Menu` + styled item |
 | `CelestinaButton.qml` | the suite button, in its three roles: normal / primary / destructive |
 | `CelestinaTextField.qml` | the suite text field, themed fill and focus border |
-| `icons/`, `icons.qrc` | minimal freedesktop-name SVG fallbacks + the app launcher icons |
+| `CelestinaSwitch.qml` | the One UI pill toggle: white thumb, accent track when on |
+| `ListSection.qml` | the grouped-card list (One UI's "focus block" signature) with an optional header |
+| `gallery/` | dev-only review surface — every token, control and glass surface on one screen (`gallery/run.sh`) |
+| `icons/`, `icons.qrc` | the Lucide (ISC) icon set behind freedesktop names, the app launcher icons + the glass noise-dither texture |
+| `fonts/`, `fonts.qrc` | Inter Variable (OFL) — the suite typeface, compiled into each app's binary |
 
-See [ROADMAP.md](ROADMAP.md) for status, checkpoints and the design decisions.
+See [DESIGN.md](DESIGN.md) for the design contract (One UI 8.5,
+desktop-adapted) and [ROADMAP.md](ROADMAP.md) for status and checkpoints.

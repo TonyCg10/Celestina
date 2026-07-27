@@ -43,7 +43,7 @@ Item {
         visible: parent.width >= 820
         color: CelestinaTheme.surface
         border.width: 1
-        border.color: CelestinaTheme.border
+        border.color: CelestinaTheme.divider
 
         DropArea {
             anchors.fill: parent
@@ -399,7 +399,7 @@ Item {
                         color: unhidePlacesMouse.containsMouse ? CelestinaTheme.accent
                                                                : CelestinaTheme.textMuted
                         font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: Math.round(CelestinaTheme.fontLabel * root.hostWindow.sidebarTextScale)
+                        font.pixelSize: Math.round(CelestinaTheme.fontRowSecondary * root.hostWindow.sidebarTextScale)
                     }
 
                     MouseArea {
@@ -1008,9 +1008,9 @@ Item {
                             anchors.verticalCenter: parent.verticalCenter
                             width: parent.width - x - 8
                             height: 26
-                            radius: CelestinaTheme.radiusXs
+                            radius: CelestinaTheme.radiusSm
                             text: bmRow.modelData
-                            font.pixelSize: CelestinaTheme.fontLabel
+                            font.pixelSize: CelestinaTheme.fontRowSecondary
                             leftPadding: 8
                             rightPadding: 8
                             onVisibleChanged: if (visible) { forceActiveFocus(); selectAll() }
@@ -1125,7 +1125,7 @@ Item {
         radius: CelestinaTheme.radiusLg
         color: CelestinaTheme.surface
         border.width: 1
-        border.color: CelestinaTheme.border
+        border.color: CelestinaTheme.divider
 
         readonly property var ac: root.hostWindow.activeController
         readonly property int selCount: ac ? ac.selectionCount : 0
@@ -1158,7 +1158,7 @@ Item {
                 text: sidebarInfo.header
                 color: CelestinaTheme.textMuted
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: Math.round(CelestinaTheme.fontLabel * root.hostWindow.sidebarTextScale)
+                font.pixelSize: Math.round(CelestinaTheme.fontRowSecondary * root.hostWindow.sidebarTextScale)
                 font.letterSpacing: 1.4
                 font.weight: CelestinaTheme.weightDemiBold
             }
@@ -1168,7 +1168,7 @@ Item {
                 text: sidebarInfo.primary
                 color: CelestinaTheme.text
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: Math.round(CelestinaTheme.fontCallout * root.hostWindow.sidebarTextScale)
+                font.pixelSize: Math.round(CelestinaTheme.fontRowTitle * root.hostWindow.sidebarTextScale)
                 font.weight: CelestinaTheme.weightMedium
                 elide: Text.ElideMiddle
             }
@@ -1179,7 +1179,7 @@ Item {
                 text: sidebarInfo.secondary
                 color: CelestinaTheme.textMuted
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: Math.round(CelestinaTheme.fontLabel * root.hostWindow.sidebarTextScale)
+                font.pixelSize: Math.round(CelestinaTheme.fontRowSecondary * root.hostWindow.sidebarTextScale)
                 elide: Text.ElideRight
             }
         }

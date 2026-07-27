@@ -11,7 +11,7 @@ MenuItem {
 
     property bool current: false
 
-    implicitWidth: CelestinaTheme.menuWidth - CelestinaTheme.menuPadding * 2
+    implicitWidth: CelestinaTheme.compMenuWidth - CelestinaTheme.compMenuPadding * 2
     implicitHeight: CelestinaTheme.controlHeight
     leftPadding: CelestinaTheme.spaceMd
     rightPadding: CelestinaTheme.spaceMd
@@ -57,7 +57,7 @@ MenuItem {
     }
 
     background: Rectangle {
-        radius: CelestinaTheme.radiusXs
+        radius: CelestinaTheme.radiusSm
         color: control.highlighted || control.current
                ? CelestinaTheme.surfaceHover
                : "transparent"

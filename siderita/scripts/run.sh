@@ -2,106 +2,121 @@
 
 set -eu
 
-# run.sh — compila (si procede) y ejecuta el host Rust de la Primera
-# Iteración de Siderita (siderita). Complementa scripts/measure.sh.
+# run.sh — build Siderita in release and install it into the user's XDG prefix
+# (~/.local), so the session treats it like a packaged app: a binary on PATH, a
+# desktop entry the launcher lists, an icon in the hicolor theme, and the file-
+# chooser portal backend. The one script Siderita needs — run it to build and
+# ship the current tree to the launcher.
 #
-# El QML se compila dentro del binario, así que el binario se puede
-# ejecutar desde cualquier directorio; RUTA es solo la carpeta a abrir.
-# Los cambios de QML solo se ven tras recompilar (no con --no-build).
+# Everything is named org.celestina.Siderita: the entry, the icon, and the
+# Wayland app_id the binary reports (src/main.rs). If those three disagree, the
+# launcher shows a generic icon for a window it cannot tie back to its entry.
 
 usage() {
     cat >&2 <<'EOF'
-uso: scripts/run.sh [opciones] [RUTA]
+uso: scripts/run.sh [--uninstall] [--prefix DIR]
 
-Compila (si procede) y ejecuta siderita. Las opciones van antes de RUTA.
-RUTA es una carpeta a abrir (por defecto: HOME).
+Compila Siderita en release y la instala en el prefijo XDG (por defecto ~/.local):
+  bin/siderita, share/applications/, share/icons/hicolor/…, el portal de archivos
 
 opciones:
-  --debug        compila/ejecuta el perfil debug (por defecto: release)
-  --release      compila/ejecuta el perfil release (por defecto)
-  --minimal      usa la feature qt-minimal (bootstrap de Qt; CI o sin Qt del sistema)
-  --offscreen    ejecuta con QT_QPA_PLATFORM=offscreen (sin ventana; humo/headless)
-  --no-build     no compila; ejecuta el binario existente (QML de la última build)
-  -h, --help     muestra esta ayuda
-
-entorno:
-  QT_QPA_PLATFORM  plataforma Qt (por defecto: wayland; --offscreen la fuerza)
-
-ejemplos:
-  scripts/run.sh                 # compila release y abre HOME en Wayland
-  scripts/run.sh ~/Descargas     # abre esa carpeta
-  scripts/run.sh --no-build      # reejecuta el binario ya compilado
-  scripts/run.sh --offscreen     # arranque headless de humo
-  scripts/run.sh --minimal       # build con bootstrap de Qt
-
-para medir recursos: scripts/measure.sh target/release/siderita [PID [SEG]]
+  --uninstall   elimina lo instalado y sale (no compila)
+  --prefix DIR  prefijo alternativo (por defecto ~/.local)
 EOF
 }
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
-
-profile=release
-features=
-platform=
-build=1
+uninstall=0
+prefix=${HOME}/.local
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
         -h|--help) usage; exit 0 ;;
-        --debug) profile=debug ;;
-        --release) profile=release ;;
-        --minimal|--qt-minimal) features="--features qt-minimal" ;;
-        --offscreen) platform=offscreen ;;
-        --no-build) build=0 ;;
-        --) shift; break ;;
-        -*) echo "error: opción desconocida: $1" >&2; usage; exit 2 ;;
-        *) break ;;
+        --uninstall) uninstall=1 ;;
+        --prefix) shift; prefix=${1:?--prefix necesita un directorio} ;;
+        *) echo "error: opción desconocida: $1" >&2; usage; exit 2 ;;
     esac
     shift
 done
 
-binary="$repo_root/target/$profile/siderita"
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
+style_icons=$repo_root/../celestina-style/icons/apps
 
-if [ "$build" -eq 1 ]; then
-    if ! command -v cargo >/dev/null 2>&1; then
-        echo "error: cargo no está en PATH; instala Rust (rustup) o usa --no-build" >&2
-        exit 127
-    fi
-    if [ -z "$features" ]; then
-        if ! { command -v qmake6 >/dev/null 2>&1 \
-               || command -v qmake >/dev/null 2>&1 \
-               || [ -n "${QMAKE:-}" ]; }; then
-            echo "aviso: no se encontró qmake (Qt) en PATH; si el build falla, usa --minimal o define QMAKE=/ruta/a/qmake" >&2
-        fi
-    fi
+app_id=org.celestina.Siderita
+bin_dir=$prefix/bin
+apps_dir=$prefix/share/applications
+icons_dir=$prefix/share/icons/hicolor
+portals_dir=$prefix/share/xdg-desktop-portal/portals
+services_dir=$prefix/share/dbus-1/services
+sizes="16 22 24 32 48 64 128 256 512"
 
-    # No usar `set --` aquí: "$@" guarda la RUTA a reenviar al binario.
-    cargo_flags="--locked"
-    if [ "$profile" = "release" ]; then
-        cargo_flags="$cargo_flags --release"
-    fi
-    if [ -n "$features" ]; then
-        cargo_flags="$cargo_flags $features"
-    fi
-
-    echo ">> cargo build $cargo_flags" >&2
-    # $cargo_flags sin comillas a propósito, para separarlo en palabras.
-    ( cd "$repo_root" && cargo build $cargo_flags )
+if [ "$uninstall" -eq 1 ]; then
+    rm -f "$bin_dir/siderita" "$apps_dir/$app_id.desktop"
+    rm -f "$icons_dir/scalable/apps/$app_id.svg"
+    rm -f "$portals_dir/celestina.portal"
+    rm -f "$services_dir/org.freedesktop.impl.portal.desktop.celestina.service"
+    for size in $sizes; do
+        rm -f "$icons_dir/${size}x${size}/apps/$app_id.png"
+    done
+    update-desktop-database "$apps_dir" 2>/dev/null || true
+    gtk-update-icon-cache -f -t "$icons_dir" 2>/dev/null || true
+    echo ">> desinstalado de $prefix" >&2
+    exit 0
 fi
 
-if [ ! -x "$binary" ]; then
-    echo "error: no existe el binario: $binary" >&2
-    echo "       compila primero (quita --no-build) o revisa el perfil" >&2
+# ── Build ────────────────────────────────────────────────────────────────────
+( cd "$repo_root" && cargo build --release --locked )
+
+binary=$repo_root/target/release/siderita
+if [ ! -f "$style_icons/$app_id.svg" ]; then
+    echo "error: falta el icono: $style_icons/$app_id.svg" >&2
+    exit 1
+fi
+if ! command -v rsvg-convert >/dev/null 2>&1; then
+    echo "error: se necesita rsvg-convert (librsvg) para generar los PNG" >&2
     exit 1
 fi
 
-if [ -z "$platform" ]; then
-    platform="${QT_QPA_PLATFORM:-wayland}"
-fi
-if [ "$platform" = "wayland" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then
-    echo "aviso: WAYLAND_DISPLAY vacío; usa --offscreen o exporta QT_QPA_PLATFORM" >&2
-fi
+# ── Binary ───────────────────────────────────────────────────────────────────
+mkdir -p "$bin_dir"
+install -m 0755 "$binary" "$bin_dir/siderita"
 
-echo ">> QT_QPA_PLATFORM=$platform $binary $*" >&2
-exec env QT_QPA_PLATFORM="$platform" "$binary" "$@"
+# ── Icon ─────────────────────────────────────────────────────────────────────
+# The SVG is the master (it lives with the shared visual language); the PNGs are
+# generated, because a theme lookup at 16 px should not rasterize an SVG.
+mkdir -p "$icons_dir/scalable/apps"
+install -m 0644 "$style_icons/$app_id.svg" "$icons_dir/scalable/apps/$app_id.svg"
+for size in $sizes; do
+    mkdir -p "$icons_dir/${size}x${size}/apps"
+    rsvg-convert -w "$size" -h "$size" "$style_icons/$app_id.svg" \
+        -o "$icons_dir/${size}x${size}/apps/$app_id.png"
+done
+
+# ── Desktop entry ────────────────────────────────────────────────────────────
+mkdir -p "$apps_dir"
+install -m 0644 "$repo_root/$app_id.desktop" "$apps_dir/$app_id.desktop"
+
+# ── Portal backend ───────────────────────────────────────────────────────────
+# The D-Bus service file lets the file-chooser backend start on demand, so a
+# file dialog works whether or not Siderita is already running; its Exec must be
+# absolute, since the activation environment is not the user's shell.
+mkdir -p "$portals_dir" "$services_dir"
+install -m 0644 "$repo_root/portal/celestina.portal" "$portals_dir/celestina.portal"
+sed "s|@BIN@|$bin_dir/siderita|" \
+    "$repo_root/portal/org.freedesktop.impl.portal.desktop.celestina.service" \
+    > "$services_dir/org.freedesktop.impl.portal.desktop.celestina.service"
+chmod 0644 "$services_dir/org.freedesktop.impl.portal.desktop.celestina.service"
+
+update-desktop-database "$apps_dir" 2>/dev/null || true
+gtk-update-icon-cache -f -t "$icons_dir" 2>/dev/null || true
+# The bus only learns about a new service file when it re-reads its directories.
+busctl --user call org.freedesktop.DBus /org/freedesktop/DBus \
+    org.freedesktop.DBus ReloadConfig >/dev/null 2>&1 || true
+
+echo ">> Siderita compilada e instalada en $prefix" >&2
+echo "   binario: $bin_dir/siderita" >&2
+case ":$PATH:" in
+    *":$bin_dir:"*) ;;
+    *) echo "   aviso: $bin_dir no está en PATH" >&2 ;;
+esac
+echo "   ábrela desde el launcher (ciérrala antes si estaba abierta)." >&2

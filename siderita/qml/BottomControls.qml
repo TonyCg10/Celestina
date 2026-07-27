@@ -100,7 +100,7 @@ RowLayout {
                   ? CelestinaTheme.surfaceHover
                   : CelestinaTheme.controlFill
             border.width: sortButton.activeFocus ? 1 : 0
-            border.color: CelestinaTheme.focus
+            border.color: CelestinaTheme.focusRing
         }
     }
 

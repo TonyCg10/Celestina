@@ -67,7 +67,7 @@ Item {
                  ? CelestinaTheme.surfaceHover
                  : "transparent"
         border.width: root.selected ? 1 : 0
-        border.color: CelestinaTheme.borderStrong
+        border.color: CelestinaTheme.dividerStrong
 
         Behavior on color {
             ColorAnimation {

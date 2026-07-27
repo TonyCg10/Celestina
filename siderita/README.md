@@ -15,12 +15,15 @@ or dotfiles manager inside it.
 Needs Rust and a development Qt visible to CXX-Qt.
 
 ```sh
-scripts/run.sh                                    # build + run the host on Wayland
-cargo build --release --locked                       # with a shared Qt visible to cxx-qt
+scripts/run.sh                                       # build (release) + install to ~/.local
+cargo build --release --locked                       # just the binary (shared Qt for cxx-qt)
 cargo build --release --locked --features qt-minimal # Qt bootstrap (CI / no system Qt)
-scripts/measure.sh target/release/siderita     # ELF inventory + process metrics
-desktop-file-validate siderita.desktop
 ```
+
+`scripts/run.sh` is the one script Siderita needs: it builds in release and
+installs the binary, the squircle icon, the desktop entry and the file-chooser
+portal into `~/.local`, so the launcher runs the current tree (`--uninstall` to
+remove it).
 
 ## Layout
 
@@ -32,10 +35,10 @@ desktop-file-validate siderita.desktop
 | `qml/Sidebar.qml` | places/devices/favourites/bookmarks + their menus |
 | `qml/PickerWindow.qml` | the portal file chooser |
 | `qml/*.qml` (rest) | small shared types: pills, buttons, badges, rows |
-| `../celestina-style/` | shared theme, glass and icons (consumed) |
+| `../celestina-style/` | shared theme, glass, icons and font (consumed) |
 | `../celestina-rs/crates/siderita-core` | read-only Rust domain |
 | `../celestina-rs/crates/siderita-qt` | stable view contract for QML |
-| `scripts/` | run and measurement scripts |
+| `scripts/run.sh` | build in release + install to `~/.local` (binary, icon, entry, portal) |
 
 See [ROADMAP.md](ROADMAP.md) for status, checkpoints, the implemented cut,
 measured budget and the design decisions.

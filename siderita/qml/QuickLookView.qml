@@ -28,7 +28,7 @@ Rectangle {
             easing.type: CelestinaTheme.easeStandard
         }
     }
-    color: Qt.rgba(0, 0, 0, 0.55)
+    color: CelestinaTheme.scrim
     focus: quickLookView.shown
 
     // Everything is derived from the current selection, so stepping the
@@ -107,7 +107,7 @@ Rectangle {
             text: quickLookView.qlName
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontCallout
+            font.pixelSize: CelestinaTheme.fontRowTitle
             font.weight: CelestinaTheme.weightDemiBold
             elide: Text.ElideMiddle
         }

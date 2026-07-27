@@ -12,15 +12,22 @@ set_source_files_properties(CelestinaTheme.qml PROPERTIES QT_QML_SINGLETON_TYPE 
 
 # ── QML Module ─────────────────────────────────────────────────────────────────
 # Pure-QML plugin — the singleton tokens and generic glass/controls of the suite.
+# OUTPUT_DIRECTORY ends in the module's target path (CelestinaStyle) so the
+# generated qmldir/qmltypes land where the URI says they should; without it Qt
+# warns that qmllint may not resolve the module (the S1 fix for the parked
+# `OUTPUT_DIRECTORY` warning — celestina-style ROADMAP CP0).
 qt_add_qml_module(celestina-style
     URI CelestinaStyle
     VERSION 1.0
     PLUGIN_TARGET celestina-style-plugin
     NO_PLUGIN_OPTIONAL
+    OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/CelestinaStyle
     QML_FILES
         CelestinaTheme.qml
         CelestinaButton.qml
         CelestinaTextField.qml
+        CelestinaSwitch.qml
+        ListSection.qml
         GlassSurface.qml
         GlassCard.qml
         GlassContextMenu.qml
@@ -40,6 +47,10 @@ qt_add_qml_module(celestina-style
         icons/media-eject.svg
         icons/star.svg
         icons/star-outline.svg
+        icons/phone.svg
+        icons/battery-charging.svg
+        icons/glass-noise.png
+        fonts/InterVariable.ttf
 )
 
 target_link_libraries(celestina-style PRIVATE Qt6::Quick)

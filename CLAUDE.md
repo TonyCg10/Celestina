@@ -20,7 +20,7 @@ ellos — escribir el contrato no es empezar el proyecto.
   "en Magnetita" casi siempre toca estos crates, no `magnetita/`.
 - `magnetita/` — solo la app QML fina (cliente D-Bus del demonio) + packaging.
 - `siderita/` — la app CXX-Qt: `src/` puente e integración D-Bus/XDG, `qml/`
-  vistas, `cpp/` shims para huecos de cxx-qt, `scripts/` run/install/stage.
+  vistas, `cpp/` shims para huecos de cxx-qt, `scripts/run.sh` (build + install).
   **Es un package fuera del workspace**: no hereda sus lints; mantiene los suyos.
 - `celestina-style/` — el lenguaje visual: `CelestinaTheme.qml` (tokens) +
   componentes compartidos.
@@ -81,13 +81,21 @@ ellos — escribir el contrato no es empezar el proyecto.
 - **Prohibido escribir colores en QML de apps** (ni hex ni nombres). Todo color
   sale de `CelestinaTheme`. Única excepción documentada: el relleno-máscara
   interno de `GlassSurface`.
-- Los tokens funcionan **en pares fondo → texto**, y en la paleta activa
-  (One UI neutra) **`accent` es BLANCO**: poner `text` (casi blanco) sobre
-  `accent` da blanco-sobre-blanco. Pares correctos:
-  - `canvas` / `canvasRaised` / `surface*` / `controlFill` / `inputFill` /
+- Los tokens funcionan **en pares superficie → tinta (foreground)**. El acento
+  es **azul One UI `#387aff`**, solo para elementos interactivos/activos
+  (seleccionado, checked, enlaces, botón primario); nunca como blanco decorativo.
+  Cada superficie opaca lleva su token de tinta explícito; los lavados
+  translúcidos comparten `text`/`textMuted`. Pares correctos:
+  - `canvas` / `card` / `elevated` → su tinta `canvasInk` / `cardInk` /
+    `elevatedInk` (todas ≈ `text`); `surface*` / `controlFill` / `inputFill` /
     `badgeFill` / cristal (`glassTint`) → `text` (secundario: `textMuted`)
-  - `accent` → **`canvas`** como texto (así lo hace `CelestinaButton` primary)
-  - `dangerFill` → `dangerText`; `danger` como fondo → `canvas`
+  - `accent` → **`accentInk`** (así lo hace `CelestinaButton` primary; el viejo
+    par `accent → canvas` MURIÓ con el acento blanco)
+  - `danger`/`success`/`warning` como fondo sólido → `dangerInk`/`successInk`/
+    `warningInk`; banner `dangerFill` → `dangerFillInk`
+  - Nomenclatura: el contrato (DESIGN §6.9) llama a estos pares `on*`
+    (`onAccent`…), pero QML reserva el espacio `on<Mayúscula>` para manejadores
+    de señal, así que viajan como `<superficie>Ink` (`accentInk` = `onAccent`).
 - **No reconstruir controles.** Un botón ES `CelestinaButton`
   (`primary`/`destructive`), un campo ES `CelestinaTextField`, una superficie
   flotante ES `GlassSurface`/`GlassCard`, un menú ES `GlassContextMenu` +
@@ -98,8 +106,14 @@ ellos — escribir el contrato no es empezar el proyecto.
   (patrón `magnetita/qml/`). Copiar un archivo del estilo crea deriva
   silenciosa: si encuentras una copia, conviértela en symlink.
 - Tocar `CelestinaTheme`/componentes = tocar todas las apps: busca consumidores
-  (grep) antes de cambiar semántica. Un token nuevo se añade a **las dos
-  paletas** (A activa y B comentada) con su par de contraste pensado en ambas.
+  (grep) antes de cambiar semántica. El esquema es **datos, no comentarios**: la
+  paleta vive en el objeto `ColorScheme schemeDark` (Rosé Pine y el bloque
+  comentado se retiraron en S1). Un token de superficie nuevo se añade como
+  **rol de `ColorScheme`** con su par de tinta (`<algo>` + `<algo>Ink`); el
+  `required` obliga a que todo esquema lo defina. Un esquema claro futuro es una
+  instancia `ColorScheme` nueva (un `flip` de `scheme:`), jamás un intercambio de
+  comentarios. Los tres niveles: `ref.*` (primitivas, las apps nunca las tocan) →
+  esquema (roles) → tokens `sys` planos que consumen las apps.
 - `CelestinaTheme.fallbackIcon()` solo funciona si la app registra
   `qml/icons.qrc` en su `build.rs` (Siderita lo hace; Magnetita no — no usarlo
   allí sin registrarlo antes).
@@ -121,9 +135,11 @@ ellos — escribir el contrato no es empezar el proyecto.
   `grabToImage(...)` sobre un Item **declarado en QML** (no
   `window.contentItem`) y guarde un PNG. Los colores y el contraste sí se ven
   offscreen; solo el blur del cristal queda en blanco (necesita display real).
-- Siderita tiene `scripts/run.sh` (`--offscreen`, `--no-build`); la app
-  Magnetita se lanza con `cargo run`. Un cambio de color/contraste no se
-  declara correcto sin captura o ventana real.
+- Cada app tiene un único `scripts/run.sh` que compila en release y la
+  **instala** en `~/.local` (el shell: compila y **activa** el panel); para el
+  humo offscreen se corre el binario directamente (`target/release/<app>` o
+  `~/.local/bin/<app>`) con las variables de arriba. Un cambio de
+  color/contraste no se declara correcto sin captura o ventana real.
 
 ## README y ROADMAP (la deriva doc↔código es el defecto histórico del repo)
 

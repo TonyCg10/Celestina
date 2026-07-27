@@ -32,6 +32,82 @@ compositor effects belong to the surface owner; accessibility is part of a
 public control's contract; the component set grows only from proven reuse
 (widget count is not progress).
 
+**Design contract.** The visual direction — One UI 8.5 adapted to desktop:
+reference values, the Qt/niri platform ceiling, the audit of the current
+system, the target system and a phased build plan (S1–S5) — lives in
+[DESIGN.md](DESIGN.md) (v1.0, decisions sealed). This roadmap tracks
+execution; the design contract says what "done" looks like.
+
+**Phase status.** **S1 (tokens v2 + typography) — done** (2026-07-27): the
+singleton was rebuilt into `ref`→`scheme`→`sys` tiers with the dark `ColorScheme`
+as data (Rosé Pine and the comment-toggled palette retired); every opaque surface
+carries its foreground pair (`<surface>Ink`, the contract's `on*` — QML reserves
+`on<Capital>`); the accent moved from white to One UI blue `#387aff` with
+`accentInk` (`CelestinaButton` primary adopts it, killing `accent → canvas`);
+Inter Variable (OFL) ships embedded in each app's qrc; radius/type/motion scales
+match DESIGN §6.3/§6.6/§6.7 (the One UI bezier tokens are defined, ready for S2's
+motion retune); all consumers (siderita, magnetita, the shell chooser, the six
+shared components) were migrated. Verified by app builds + offscreen smokes +
+grabbed swatch/button/window captures, and a clean module `all_qmllint`.
+
+**S2 (glass v2 + elevation) — done** (2026-07-27): `GlassSurface` was rebuilt to
+the 8.5 recipe (DESIGN §6.5) — bounded capture → pyramid blur → *slight
+desaturation* (the earlier saturation boost is gone) → tint/dim → tiled noise
+dither → a thin dark outline → the lit top-edge glow, now a GPU
+`Shape`/CurveRenderer gradient ring instead of the CPU `Canvas`. `elevation`
+adds the L2 `RectangularShadow` under floating layers (menus float instead of
+pasting); modals (L3) dim with the `scrim` token, never a shadow. The surface
+self-tracks its scene position (a `FrameAnimation` while live), so menus/cards
+dropped their hand-wired `refreshBackdrop()` choreography. Verified on the real
+session (blur/shadow do not render under the offscreen QPA): grabbed glass /
+elevated-surface / real Siderita-window captures, plus app builds + offscreen
+smokes + clean `all_qmllint`. Deferred within the recipe: the composite
+QQEM/qsb shader (blur+desaturate+tint+noise+stroke in one pass) stays layered
+for now.
+
+**S3 (iconography) — icon set done, squircle pending** (2026-07-27): the ad-hoc
+hand-drawn fallbacks were replaced by the **Lucide** set (ISC, license shipped
+in `icons/`) behind the existing freedesktop-name mapping, so consumers keep
+resolving by name; a `phone` icon was added (Siderita's sidebar referenced a
+`phone` fallback that did not exist). The shell panel's emoji glyphs (`📱`,`⚡`)
+became real icons, compiled into the shell from the canonical files. `eject`
+has no Lucide equivalent, so the existing (Lucide-consistent) mark is kept.
+The app-icon tiles became true **squircles** (a superellipse n=5 shared by both
+launcher marks, replacing the rounded-rect tile — One UI reserves the
+superellipse for app icons, §6.3); the amber-rhombohedron / steel-octahedron
+marks are unchanged. Verified by offscreen icon + app-icon specimens + app/shell
+builds + smokes. **Still open (out of S3):** the panel's broader migration off
+its hardcoded Rosé Pine palette (shell buildout, gated by CLAUDE.md).
+
+**S4 (gallery + first components) — done** (2026-07-27): the two One UI
+signature controls landed — **`CelestinaSwitch`** (the pill toggle, white thumb
+on an accent track) and **`ListSection`** (the grouped-card "focus block"), with
+**Magnetita's Settings surface** as their first real consumer (CP2 satisfied):
+its plugin toggles are now switches and its device/plugin lists are grouped
+cards, dropping the 🟢/⚪/🔑 emoji for a status dot and tabular fingerprints, and
+the toggle keeps truthful state (the switch re-binds to the daemon's answer, not
+the optimistic click). The **gallery** (`gallery/Gallery.qml`, run via
+`gallery/run.sh` — dev-only, no build step) puts every token, control, icon and
+glass surface on one scrollable screen: the review surface DESIGN §7 asked for.
+Verified by a full real-session gallery grab + a standalone component grab +
+Magnetita build/smoke + module `all_qmllint`. Still on demand (CP2): further
+components (`CelestinaDialog`, `TabPills`, `Toast`…) wait for their first
+consumers.
+
+**S5 (panel compositor glass) — done** (2026-07-27): the shell panel was migrated
+off its hardcoded Rosé Pine palette onto `CelestinaTheme` (Panel + Clock), with a
+translucent `glassTint` background, and the shell now asks the compositor to blur
+the wallpaper behind it — `KWindowEffects::enableBlurBehind` on the layer-shell
+surface, driving niri's `ext-background-effect` (best-effort: a compositor
+without it just leaves the panel a translucent tint). `main.cpp` self-provisions
+the `CelestinaStyle` import path (a runtime symlink under the URI name), so the
+panel and the output chooser resolve the style from source without a wrapper
+pre-setting `QML_IMPORT_PATH`. Verified by the shell build (KWindowSystem
+linked), a live run confirming both outputs map and the theme resolves with no
+token errors, and the author confirming the panel renders on the session (a clean
+screenshot is obstructed by the session's own bars). The suite's phased restyle
+(S1–S5, DESIGN §8) is complete.
+
 ## Checkpoint 0 — The canonical source, enforced (STYLE-0)
 **Goal:** one canonical source tree that every consumer compiles from, with
 drift made impossible, and glass APIs that mean what they say.
@@ -41,7 +117,7 @@ drift made impossible, and glass APIs that mean what they say.
 - [x] First real consumer proven: `siderita` renders entirely from this module (theme, glass, icons), verified by build + offscreen run
 - [x] Single source made real and enforced: both apps consume by symlink into their own CXX-Qt modules (Siderita's six committed copies were replaced by links, 2026-07-26), and CI refuses any style file in an app's `qml/` that is not a symlink
 - [ ] Inventory the public QML types, imports, properties, assets and generated files
-- [ ] Resolve the qmllint `OUTPUT_DIRECTORY` module-path warning
+- [x] Resolve the qmllint `OUTPUT_DIRECTORY` module-path warning — the module now sets `OUTPUT_DIRECTORY .../CelestinaStyle` to match its URI; verified by a clean `cmake` configure (no `Qt6QmlMacros` warning) and a clean `all_qmllint` (S1, 2026-07-27)
 
 **Done when:** every consumer builds from the one canonical tree with no copy
 anywhere, the guard proves it on every push, and the public surface is written
@@ -64,7 +140,7 @@ independently.
 
 - [ ] Compatibility + deprecation policy for the 1.0 surface
 - [ ] Truthful glass APIs — tint/glow/tokens vs. real in-scene blur vs. compositor blur kept clearly separate
-- [ ] Font + icon fallback contracts (Inter / JetBrains Mono / icon set)
+- [~] Font + icon fallback contracts — Inter Variable (OFL) now ships embedded in each app's qrc, with an honest fallback where it is not compiled in (the shell chooser → application default); the mono face, the Lucide icon adoption (S3) and the written fallback policy remain
 - [ ] Keyboard, focus, AT-SPI, reduced-motion and high-contrast behavior for the finite component set
 - [x] Both apps consume the same canonical source (symlink-compiled; an installed release belongs to STYLE-D)
 

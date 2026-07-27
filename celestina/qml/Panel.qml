@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Window
+import CelestinaStyle
 
 Window {
     id: panel
@@ -7,7 +8,10 @@ Window {
     width: Screen.width
     height: 40
     visible: false
-    color: "#191724"
+    // Translucent glass tint so the compositor's blur behind the panel
+    // (enableBlurBehind, main.cpp) reads through it. A compositor without the
+    // effect just shows this tint over the wallpaper.
+    color: CelestinaTheme.glassTint
     title: qsTr("Celestina Panel")
     flags: Qt.FramelessWindowHint | Qt.WindowDoesNotAcceptFocus
 
@@ -26,27 +30,48 @@ Window {
         spacing: 6
         visible: Phone.phoneConnected
 
-        Text {
+        Image {
             anchors.verticalCenter: parent.verticalCenter
-            text: "📱"
-            font.pixelSize: 13
+            source: "qrc:/qt/qml/CelestinaDesktop/phone.svg"
+            sourceSize: Qt.size(15, 15)
+            width: 15
+            height: 15
+            smooth: true
         }
 
         Text {
             anchors.verticalCenter: parent.verticalCenter
             text: Phone.phoneName
-            color: "#e0def4"
+            color: CelestinaTheme.text
+            font.family: CelestinaTheme.sansFamily
             font.pixelSize: 13
         }
 
-        Text {
+        Row {
             anchors.verticalCenter: parent.verticalCenter
+            spacing: 3
             visible: Phone.phoneBattery >= 0
-            text: (Phone.phoneCharging ? "⚡ " : "") + Phone.phoneBattery + " %"
-            color: Phone.phoneBattery <= 15 ? "#eb6f92"
-                 : Phone.phoneBattery <= 30 ? "#f6c177"
-                 : "#908caa"
-            font.pixelSize: 13
+
+            Image {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: Phone.phoneCharging
+                source: "qrc:/qt/qml/CelestinaDesktop/battery-charging.svg"
+                sourceSize: Qt.size(15, 15)
+                width: 15
+                height: 15
+                smooth: true
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: Phone.phoneBattery + " %"
+                color: Phone.phoneBattery <= 15 ? CelestinaTheme.danger
+                     : Phone.phoneBattery <= 30 ? CelestinaTheme.warning
+                     : CelestinaTheme.textMuted
+                font.family: CelestinaTheme.sansFamily
+                font.features: CelestinaTheme.fontFeaturesTabular
+                font.pixelSize: 13
+            }
         }
     }
 
@@ -55,6 +80,6 @@ Window {
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         height: 1
-        color: "#403d52"
+        color: CelestinaTheme.divider
     }
 }

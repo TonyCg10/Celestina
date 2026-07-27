@@ -21,7 +21,7 @@ Item {
         text: propRow.label
         color: CelestinaTheme.textMuted
         font.family: CelestinaTheme.sansFamily
-        font.pixelSize: CelestinaTheme.fontLabel
+        font.pixelSize: CelestinaTheme.fontRowSecondary
     }
     Text {
         id: propValue
@@ -32,7 +32,7 @@ Item {
         text: propRow.value
         color: CelestinaTheme.text
         font.family: CelestinaTheme.sansFamily
-        font.pixelSize: CelestinaTheme.fontLabel
+        font.pixelSize: CelestinaTheme.fontRowSecondary
         wrapMode: Text.WrapAnywhere
     }
 }

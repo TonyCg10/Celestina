@@ -23,7 +23,7 @@ Rectangle {
             easing.type: CelestinaTheme.easeStandard
         }
     }
-    color: Qt.rgba(0, 0, 0, 0.45)
+    color: CelestinaTheme.scrim
 
     MouseArea {
         anchors.fill: parent
@@ -72,7 +72,7 @@ Rectangle {
             text: controller.propName
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontCallout
+            font.pixelSize: CelestinaTheme.fontRowTitle
             font.weight: CelestinaTheme.weightDemiBold
             elide: Text.ElideMiddle
         }

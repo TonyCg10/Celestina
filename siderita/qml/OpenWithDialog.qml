@@ -23,7 +23,7 @@ Rectangle {
             easing.type: CelestinaTheme.easeStandard
         }
     }
-    color: Qt.rgba(0, 0, 0, 0.45)
+    color: CelestinaTheme.scrim
 
     property int selected: -1
     readonly property int appCount: controller.openWithApps.length
@@ -80,7 +80,7 @@ Rectangle {
             text: "Abrir «" + controller.openWithTarget + "» con"
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontCallout
+            font.pixelSize: CelestinaTheme.fontRowTitle
             font.weight: CelestinaTheme.weightDemiBold
             elide: Text.ElideRight
         }
@@ -136,7 +136,7 @@ Rectangle {
                     color: openWithView.selected === appRow.index
                            ? CelestinaTheme.accent : CelestinaTheme.text
                     font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontLabel
+                    font.pixelSize: CelestinaTheme.fontRowSecondary
                     elide: Text.ElideRight
                 }
 

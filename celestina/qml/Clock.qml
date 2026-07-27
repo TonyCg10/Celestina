@@ -1,4 +1,5 @@
 import QtQuick
+import CelestinaStyle
 
 Item {
     id: root
@@ -28,10 +29,11 @@ Item {
         id: clockText
 
         text: root.timeString
-        color: "#e0def4"
-        font.family: "monospace"
+        color: CelestinaTheme.text
+        font.family: CelestinaTheme.monoFamily
+        font.features: CelestinaTheme.fontFeaturesTabular
         font.pixelSize: 15
-        font.weight: Font.Medium
+        font.weight: CelestinaTheme.weightMedium
     }
 
     Component.onCompleted: updateClock()

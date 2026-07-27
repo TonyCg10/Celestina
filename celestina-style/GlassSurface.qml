@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Effects
+import QtQuick.Shapes
 
 // ─── GlassSurface ─────────────────────────────────────────────────────────────
 // Frosted-glass surface that blurs the real content behind it. The consumer
@@ -9,6 +10,12 @@ import QtQuick.Effects
 // capture is cheaper but freezes, so it reads as a blurred screenshot the
 // moment anything behind it moves. Nothing renders while hidden either way.
 // Falls back to a translucent tint if it cannot capture.
+//
+// Recipe (One UI 8.5, DESIGN §6.5): bounded capture → pyramid blur → *slight
+// desaturation* + tint/dim → a thin dark outline for definition → the lit
+// top-edge glow. `elevation > 0` adds the L2 drop shadow (a floating layer
+// stops pasting and starts floating). The shadow lives outside the clipped
+// body, so the root itself does not clip.
 // ──────────────────────────────────────────────────────────────────────────────
 Item {
     id: root
@@ -23,14 +30,16 @@ Item {
     property real cornerRadius: CelestinaTheme.radiusMd
     property int sampleMargin: CelestinaTheme.glassSampleMargin
     property real sampleScale: CelestinaTheme.glassSampleScale
+    // Elevation level (DESIGN §6.4): 0 = flush (grouped card, separation by
+    // grouping), 2 = floating (menu, tooltip, pill, toast) → L2 drop shadow.
+    // Modals (L3) use a scrim behind, never a shadow, so they stay at 0.
+    property int elevation: 0
     default property alias contentData: foreground.data
 
     readonly property bool active: captureEnabled
                                    && backdropSource !== null
                                    && width > 0
                                    && height > 0
-
-    clip: true
 
     function refreshBackdrop() {
         if (!active)
@@ -57,116 +66,165 @@ Item {
     onWidthChanged: refreshBackdrop()
     onHeightChanged: refreshBackdrop()
 
-    Rectangle {
-        anchors.fill: parent
+    // A moving surface (a popup being positioned) re-arms the sample from its
+    // consumer, on the event that moved it — NOT every frame. An earlier
+    // self-tracking FrameAnimation re-sampled on the GUI thread each frame while
+    // live, which starved input and pinned the CPU even at idle; the wiring below
+    // (GlassContextMenu / GlassCard) is cheaper and does the same job.
+
+    // L2 drop shadow, behind the body and outside its clip. RectangularShadow is
+    // an analytic SDF (Qt 6.9+) — far cheaper than a MultiEffect shadow and it
+    // extends past the rect, which is why the root must not clip.
+    RectangularShadow {
+        anchors.fill: body
+        visible: root.elevation > 0
         radius: root.cornerRadius
-        color: CelestinaTheme.surfaceStrong
+        blur: CelestinaTheme.shadowBlur
+        spread: CelestinaTheme.shadowSpread
+        offset.y: CelestinaTheme.shadowOffsetY
+        color: CelestinaTheme.shadow
     }
 
+    // The glass itself, clipped to the rounded rectangle. Everything visible
+    // lives here so the shadow above can spill while the content cannot.
     Item {
-        id: sampleLayer
-        x: -root.sampleMargin
-        y: -root.sampleMargin
-        width: root.width + root.sampleMargin * 2
-        height: root.height + root.sampleMargin * 2
-        visible: root.active
+        id: body
+        anchors.fill: parent
+        clip: true
 
-        ShaderEffectSource {
-            id: capture
+        Rectangle {
             anchors.fill: parent
-            sourceItem: root.active ? root.backdropSource : null
-            sourceRect: Qt.rect(0, 0, 0, 0)
-            textureSize: Qt.size(
-                Math.max(1, Math.ceil(width * root.sampleScale)),
-                Math.max(1, Math.ceil(height * root.sampleScale)))
-            live: root.liveCapture
-            recursive: false
-            hideSource: false
-            smooth: true
-            visible: false
+            radius: root.cornerRadius
+            color: CelestinaTheme.surfaceStrong
         }
 
         Item {
-            id: roundedMask
-            anchors.fill: parent
-            visible: false
-            layer.enabled: true
+            id: sampleLayer
+            x: -root.sampleMargin
+            y: -root.sampleMargin
+            width: root.width + root.sampleMargin * 2
+            height: root.height + root.sampleMargin * 2
+            visible: root.active
 
-            Rectangle {
-                x: root.sampleMargin
-                y: root.sampleMargin
-                width: root.width
-                height: root.height
-                radius: root.cornerRadius
-                color: "white"
+            ShaderEffectSource {
+                id: capture
+                anchors.fill: parent
+                sourceItem: root.active ? root.backdropSource : null
+                sourceRect: Qt.rect(0, 0, 0, 0)
+                textureSize: Qt.size(
+                    Math.max(1, Math.ceil(width * root.sampleScale)),
+                    Math.max(1, Math.ceil(height * root.sampleScale)))
+                live: root.liveCapture
+                recursive: false
+                hideSource: false
+                smooth: true
+                visible: false
+            }
+
+            Item {
+                id: roundedMask
+                anchors.fill: parent
+                visible: false
+                layer.enabled: true
+
+                Rectangle {
+                    x: root.sampleMargin
+                    y: root.sampleMargin
+                    width: root.width
+                    height: root.height
+                    radius: root.cornerRadius
+                    color: "white"
+                }
+            }
+
+            MultiEffect {
+                anchors.fill: parent
+                source: capture
+                visible: root.active
+                blurEnabled: true
+                blur: CelestinaTheme.glassBlur
+                blurMax: CelestinaTheme.glassBlurMax
+                // Slight desaturation of the backdrop — the 8.5 recipe, not the
+                // earlier saturation boost (a negative value here desaturates).
+                saturation: CelestinaTheme.glassSaturation
+                autoPaddingEnabled: false
+                maskEnabled: true
+                maskSource: roundedMask
             }
         }
 
-        MultiEffect {
+        Rectangle {
             anchors.fill: parent
-            source: capture
+            radius: root.cornerRadius
+            color: root.active ? CelestinaTheme.glassTint : CelestinaTheme.surfaceStrong
+        }
+
+        // Fine noise dither over the blur — breaks the banding the downsample
+        // pyramid leaves. Tiled at a low opacity; the body clip keeps it inside.
+        Image {
+            anchors.fill: parent
             visible: root.active
-            blurEnabled: true
-            blur: CelestinaTheme.glassBlur
-            blurMax: CelestinaTheme.glassBlurMax
-            saturation: CelestinaTheme.glassSaturation
-            autoPaddingEnabled: false
-            maskEnabled: true
-            maskSource: roundedMask
+            source: "qrc:/qt/qml/CelestinaStyle/icons/glass-noise.png"
+            fillMode: Image.Tile
+            opacity: CelestinaTheme.glassNoiseOpacity
+            smooth: false
         }
-    }
 
-    Rectangle {
-        anchors.fill: parent
-        radius: root.cornerRadius
-        color: root.active ? CelestinaTheme.glassTint : CelestinaTheme.surfaceStrong
-    }
-
-    // The "lit glass edge": a rounded-rect stroke with a vertical gradient —
-    // brightest along the top, fading down the sides, gone at the bottom — so
-    // the surface catches light like a real pane instead of wearing a flat box
-    // border. A Canvas, because a Rectangle border cannot be a gradient.
-    Canvas {
-        id: edge
-        anchors.fill: parent
-        visible: root.active
-        onWidthChanged: requestPaint()
-        onHeightChanged: requestPaint()
-        Component.onCompleted: requestPaint()
-        Connections {
-            target: root
-            function onCornerRadiusChanged() { edge.requestPaint() }
+        // A thin dark outline (dark outside) — gives the pane an edge against a
+        // light backdrop where the lit glow alone would wash out. One UI's glass
+        // wears both: a dark hairline and the lit top edge.
+        Rectangle {
+            anchors.fill: parent
+            radius: root.cornerRadius
+            color: "transparent"
+            border.width: 1
+            border.color: CelestinaTheme.glassOutline
         }
-        onPaint: {
-            var ctx = getContext("2d")
-            ctx.reset()
-            var lw = 1.3
-            var w = width - lw, h = height - lw
-            if (w <= 0 || h <= 0)
-                return
-            var b = CelestinaTheme.glassBorder
-            var g = ctx.createLinearGradient(0, 0, 0, height)
-            g.addColorStop(0.0, Qt.rgba(b.r, b.g, b.b, 0.44))   // lit top
-            g.addColorStop(0.35, Qt.rgba(b.r, b.g, b.b, 0.14))
-            g.addColorStop(0.7, Qt.rgba(b.r, b.g, b.b, 0.04))
-            g.addColorStop(1.0, Qt.rgba(b.r, b.g, b.b, 0.0))    // dark bottom
-            ctx.strokeStyle = g
-            ctx.lineWidth = lw
-            var r = Math.max(0, root.cornerRadius - lw / 2)
-            var x = lw / 2, y = lw / 2
-            ctx.beginPath()
-            ctx.moveTo(x + r, y)
-            ctx.arcTo(x + w, y, x + w, y + h, r)
-            ctx.arcTo(x + w, y + h, x, y + h, r)
-            ctx.arcTo(x, y + h, x, y, r)
-            ctx.arcTo(x, y, x + w, y, r)
-            ctx.closePath()
-            ctx.stroke()
-        }
-    }
 
-    Item {
-        id: foreground
-        anchors.fill: parent
+        // The lit glass edge: a rounded-rect gradient stroke, brightest along the
+        // top and fading to nothing at the bottom, so the pane catches light like
+        // real glass instead of wearing a flat box border. A GPU Shape
+        // (CurveRenderer) fills a ~1.3px ring — two rounded PathRectangles under
+        // an odd-even fill — with a vertical gradient. Replaces the CPU Canvas,
+        // which re-rastered the whole edge on every resize (DESIGN §6.5).
+        Shape {
+            anchors.fill: parent
+            visible: root.active
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                fillRule: ShapePath.OddEvenFill
+                strokeWidth: 0
+                fillColor: "transparent"
+                fillGradient: LinearGradient {
+                    x1: 0
+                    y1: 0
+                    x2: 0
+                    y2: root.height
+                    GradientStop { position: 0.0; color: Qt.rgba(CelestinaTheme.glassBorder.r, CelestinaTheme.glassBorder.g, CelestinaTheme.glassBorder.b, 0.5) }
+                    GradientStop { position: 0.35; color: Qt.rgba(CelestinaTheme.glassBorder.r, CelestinaTheme.glassBorder.g, CelestinaTheme.glassBorder.b, 0.16) }
+                    GradientStop { position: 0.7; color: Qt.rgba(CelestinaTheme.glassBorder.r, CelestinaTheme.glassBorder.g, CelestinaTheme.glassBorder.b, 0.05) }
+                    GradientStop { position: 1.0; color: Qt.rgba(CelestinaTheme.glassBorder.r, CelestinaTheme.glassBorder.g, CelestinaTheme.glassBorder.b, 0.0) }
+                }
+                PathRectangle {
+                    x: 0
+                    y: 0
+                    width: root.width
+                    height: root.height
+                    radius: root.cornerRadius
+                }
+                PathRectangle {
+                    x: 1.3
+                    y: 1.3
+                    width: root.width - 2.6
+                    height: root.height - 2.6
+                    radius: Math.max(0, root.cornerRadius - 1.3)
+                }
+            }
+        }
+
+        Item {
+            id: foreground
+            anchors.fill: parent
+        }
     }
 }

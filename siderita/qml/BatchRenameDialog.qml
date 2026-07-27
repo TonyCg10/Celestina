@@ -29,7 +29,7 @@ Rectangle {
             easing.type: CelestinaTheme.easeStandard
         }
     }
-    color: Qt.rgba(0, 0, 0, 0.45)
+    color: CelestinaTheme.scrim
 
     property var targets: []          // [{path, name}]
 
@@ -160,7 +160,7 @@ Rectangle {
             text: "Renombrar " + batchRename.targets.length + " elementos"
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontCallout
+            font.pixelSize: CelestinaTheme.fontRowTitle
             font.weight: CelestinaTheme.weightDemiBold
         }
 
@@ -207,7 +207,7 @@ Rectangle {
             text: batchRename.anyClash
                   ? "Hay nombres repetidos o ya usados (marcados abajo)."
                   : "El patrón sustituye el nombre y conserva la extensión; # es el número."
-            color: batchRename.anyClash ? CelestinaTheme.dangerText
+            color: batchRename.anyClash ? CelestinaTheme.dangerFillInk
                                         : CelestinaTheme.textMuted
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontCaption
@@ -261,7 +261,7 @@ Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width * 0.48
                     text: parent.after
-                    color: parent.clashes ? CelestinaTheme.dangerText
+                    color: parent.clashes ? CelestinaTheme.dangerFillInk
                            : parent.after !== parent.before ? CelestinaTheme.accent
                            : CelestinaTheme.textMuted
                     font.family: CelestinaTheme.sansFamily

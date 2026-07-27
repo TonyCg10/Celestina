@@ -23,7 +23,7 @@ Rectangle {
             easing.type: CelestinaTheme.easeStandard
         }
     }
-    color: Qt.rgba(0, 0, 0, 0.45)
+    color: CelestinaTheme.scrim
 
     property string mode: "folder"   // "folder" | "file" | "rename"
     property string targetPath: ""
@@ -89,7 +89,7 @@ Rectangle {
             text: namePrompt.heading
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontCallout
+            font.pixelSize: CelestinaTheme.fontRowTitle
             font.weight: CelestinaTheme.weightDemiBold
         }
 

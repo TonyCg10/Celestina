@@ -26,7 +26,7 @@ Rectangle {
             easing.type: CelestinaTheme.easeStandard
         }
     }
-    color: Qt.rgba(0, 0, 0, 0.45)
+    color: CelestinaTheme.scrim
 
     property string targetPath: ""
     property bool forFolder: true
@@ -85,7 +85,7 @@ Rectangle {
             text: "Elegir icono"
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontCallout
+            font.pixelSize: CelestinaTheme.fontRowTitle
             font.weight: CelestinaTheme.weightDemiBold
         }
 
@@ -117,7 +117,7 @@ Rectangle {
                     color: iconOptMouse.containsMouse
                            ? CelestinaTheme.surfaceHover : "transparent"
                     border.width: panel.customIcons[iconPicker.targetPath] === iconOpt.modelData ? 1 : 0
-                    border.color: CelestinaTheme.borderStrong
+                    border.color: CelestinaTheme.dividerStrong
 
                     IconImage {
                         anchors.centerIn: parent

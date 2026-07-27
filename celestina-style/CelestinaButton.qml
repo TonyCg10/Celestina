@@ -25,7 +25,7 @@ Button {
     leftPadding: 14
     rightPadding: 14
     font.family: CelestinaTheme.sansFamily
-    font.pixelSize: CelestinaTheme.fontLabel
+    font.pixelSize: CelestinaTheme.fontRowSecondary
     font.weight: CelestinaTheme.weightMedium
 
     ToolTip.visible: helpText.length > 0 && hovered
@@ -36,8 +36,8 @@ Button {
         font: control.font
         color: !control.enabled
                ? CelestinaTheme.textMuted
-               : control.primary ? CelestinaTheme.canvas
-               : control.destructive ? CelestinaTheme.dangerText
+               : control.primary ? CelestinaTheme.accentInk
+               : control.destructive ? CelestinaTheme.dangerFillInk
                : CelestinaTheme.text
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
@@ -63,9 +63,9 @@ Button {
                  : CelestinaTheme.controlFill
         }
         border.width: control.primary ? 0 : 1
-        border.color: control.activeFocus ? CelestinaTheme.focus
+        border.color: control.activeFocus ? CelestinaTheme.focusRing
                       : control.destructive ? CelestinaTheme.dangerBorder
-                      : CelestinaTheme.border
+                      : CelestinaTheme.divider
 
         Behavior on color {
             ColorAnimation { duration: CelestinaTheme.motionFast }

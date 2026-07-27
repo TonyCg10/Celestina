@@ -2,6 +2,9 @@
 #include <cstdlib>
 
 #include <QDebug>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QHash>
 #include <QPointer>
@@ -9,9 +12,11 @@
 #include <QQmlEngine>
 #include <QQmlContext>
 #include <QScreen>
+#include <QStandardPaths>
 #include <QTimer>
 #include <QWindow>
 
+#include <KWindowEffects>
 #include <LayerShellQt/Window>
 
 #include "devicesclient.h"
@@ -173,6 +178,12 @@ private:
         // fixed before the compositor creates the surface.
         window->show();
 
+        // The panel's glass: ask the compositor (niri's ext-background-effect)
+        // to blur the wallpaper behind the translucent panel. Best-effort — a
+        // compositor that does not implement it simply leaves the panel a plain
+        // translucent tint, no worse than before.
+        KWindowEffects::enableBlurBehind(window, true);
+
         qInfo() << "Celestina panel mapped on output" << screen->name()
                 << "geometry" << screen->geometry()
                 << "scale" << screen->devicePixelRatio();
@@ -253,6 +264,29 @@ int main(int argc, char *argv[])
     app.setQuitOnLastWindowClosed(false);
 
     QQmlEngine engine;
+
+    // Make CelestinaStyle importable from source. The style tree's directory is
+    // named `celestina-style`, but its module URI is `CelestinaStyle`, so expose
+    // it under that name via a runtime symlink and add the import path. Self-
+    // provisioning here means the panel and the chooser both resolve the style
+    // without a wrapper pre-setting QML_IMPORT_PATH.
+    {
+        QString runtime =
+            QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+        if (runtime.isEmpty())
+            runtime = QDir::tempPath();
+        const QString importRoot =
+            QDir(runtime).filePath(QStringLiteral("celestina-shell-import"));
+        QDir().mkpath(importRoot);
+        const QString styleLink =
+            importRoot + QStringLiteral("/CelestinaStyle");
+        // Always relink — a stale link (an older checkout, another build) would
+        // silently feed the shell the wrong CelestinaStyle. QFile::remove clears
+        // the symlink itself, not its target, and is a no-op when absent.
+        QFile::remove(styleLink);
+        QFile::link(QStringLiteral(CELESTINA_STYLE_DIR), styleLink);
+        engine.addImportPath(importRoot);
+    }
 
     if (app.arguments().contains(QStringLiteral("--pick-output")))
         return runOutputChooser(app, engine);

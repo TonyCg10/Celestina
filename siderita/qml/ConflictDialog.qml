@@ -23,7 +23,7 @@ Rectangle {
             easing.type: CelestinaTheme.easeStandard
         }
     }
-    color: Qt.rgba(0, 0, 0, 0.45)
+    color: CelestinaTheme.scrim
 
     // Clicking the dimmed backdrop cancels the whole paste.
     MouseArea {
@@ -58,7 +58,7 @@ Rectangle {
             text: "Ya existe"
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontCallout
+            font.pixelSize: CelestinaTheme.fontRowTitle
             font.weight: CelestinaTheme.weightDemiBold
         }
 
@@ -78,7 +78,7 @@ Rectangle {
             }
             color: CelestinaTheme.textMuted
             font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontLabel
+            font.pixelSize: CelestinaTheme.fontRowSecondary
         }
 
         // Each collision is asked about on its own; answering for the
@@ -92,7 +92,7 @@ Rectangle {
             visible: controller.conflictCount > 1
             text: "Aplicar a los " + controller.conflictCount + " conflictos"
             font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontLabel
+            font.pixelSize: CelestinaTheme.fontRowSecondary
             Accessible.name: text
 
             contentItem: Text {
@@ -108,7 +108,7 @@ Rectangle {
                 implicitHeight: 18
                 x: applyToAll.leftPadding
                 y: applyToAll.height / 2 - height / 2
-                radius: CelestinaTheme.radiusXs
+                radius: CelestinaTheme.radiusSm
                 color: applyToAll.checked ? CelestinaTheme.accent
                                           : CelestinaTheme.inputFill
                 border.width: 1

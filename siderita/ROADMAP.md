@@ -112,6 +112,12 @@ resource report ratifies or rejects Qt/QML with data.
 - [x] Real-Wayland validation: keyboard, contrast, animations, themed icons; blur on/off frame p95 ≤ 16.7 ms, measured three times — validated on the maintainer's real Wayland session: the functional pass (keyboard, contrast, animations, themed icons) checks out and the resource-budget + blur-frame measurement runs (`measure.sh`, ×3) were completed
 - [x] Ratify Qt/QML for the suite, or reopen the frontend decision, from the data — **ratified**: the measured read-only slice met its budgets and the frontend holds, so Qt/QML is confirmed for the suite
 
+> Packaging note (2026-07-27): the `install.sh` / `stage.sh` / `measure.sh`
+> scripts referenced above were consolidated into a single `scripts/run.sh`
+> (build in release + install to `~/.local`). The self-contained staged install
+> and the resource-measurement tooling were retired for the single-author,
+> system-Qt setup; the measurements they produced stand as the record here.
+
 ### Provisional budget
 
 | Metric | Limit | Current cut |
@@ -245,7 +251,7 @@ applications knowing or changing.
       which is the same "a click is a request, never proof" rule the rest of the
       app follows, applied to its own exit
 - [x] `--portal` activation — a `.portal` registration and a D-Bus service file
-      (installed by `scripts/install.sh`) so a file dialog works whether or
+      (installed by `scripts/run.sh`) so a file dialog works whether or
       not Siderita is running. Verified on the real session: with nothing
       running, a call started `siderita --portal`, mapped a picker window with
       `app_id = org.celestina.Siderita`, and `Close()` withdrew it and answered
