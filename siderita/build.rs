@@ -44,6 +44,7 @@ const QML_FILES: &[&str] = &[
     "qml/DetailsHeader.qml",
     "qml/BottomControls.qml",
     "qml/TopBar.qml",
+    "qml/FolderRowDelegate.qml",
     "qml/Main.qml",
     "qml/PickerWindow.qml",
 ];
