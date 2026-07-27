@@ -33,6 +33,7 @@ const QML_FILES: &[&str] = &[
     "qml/QuickLookView.qml",
     // Piezas extraídas de FolderView (menús, cabeceras, delegados).
     "qml/FolderSortMenu.qml",
+    "qml/PathMenu.qml",
     "qml/Main.qml",
     "qml/PickerWindow.qml",
 ];

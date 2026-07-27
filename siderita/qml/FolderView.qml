@@ -2824,23 +2824,11 @@ Item {
     }
 
     // Context menu for the breadcrumb / path bar: act on the current path.
-    GlassContextMenu {
+    PathMenu {
         id: pathMenu
         backdropSource: root
-
-        GlassMenuItem {
-            text: "Añadir a marcadores"
-            icon.name: "bookmark-new"
-            icon.source: CelestinaTheme.fallbackIcon("folder")
-            onTriggered: controller.addBookmark(controller.currentPath)
-        }
-
-        GlassMenuItem {
-            text: "Abrir en pestaña nueva"
-            icon.name: "tab-new"
-            icon.source: CelestinaTheme.fallbackIcon("folder")
-            onTriggered: root.requestNewTab(controller.currentPath, true)
-        }
+        controller: controller
+        onNewTabRequested: function(path, foreground) { root.requestNewTab(path, foreground) }
     }
 
     GlassContextMenu {
