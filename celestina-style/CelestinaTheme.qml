@@ -121,11 +121,16 @@ QtObject {
         required property color gradientStart
         required property color gradientMid
         required property color gradientEnd
-        // Glass — the recipe rebuild is S2; only the tint neutralises now so the
-        // colour family stops fighting the near-black. Border/highlight unchanged.
+        // Glass (v2 recipe, S2): tint+dim, the lit-edge glow (glassBorder base),
+        // a thin dark outline for definition against a light backdrop, and the
+        // highlight. glassHighlight is reserved for the composite shader (S2+).
         required property color glassTint
         required property color glassBorder
         required property color glassHighlight
+        required property color glassOutline
+        // Elevation — the drop shadow under floating layers (L2). Soft and light
+        // per the depth doctrine; on near-black it reads as a faint dark halo.
+        required property color shadow
     }
 
     readonly property ColorScheme schemeDark: ColorScheme {
@@ -151,7 +156,7 @@ QtObject {
         successInk: theme.ref.night
         warning: theme.ref.warning
         warningInk: theme.ref.night
-        scrim: "#66000000"
+        scrim: "#73000000"
         // Washes re-based off the neutral ramp (were a blue-grey cast).
         surface: "#d917171a"
         surfaceStrong: "#f01d1d20"
@@ -181,6 +186,8 @@ QtObject {
         glassTint: "#a61c1c1f"
         glassBorder: "#5cffffff"
         glassHighlight: "#2effffff"
+        glassOutline: "#66000000"
+        shadow: "#96000000"
     }
 
     // The active scheme — the single switch point. Bindings re-evaluate once if
@@ -236,6 +243,8 @@ QtObject {
     readonly property color glassTint: scheme.glassTint
     readonly property color glassBorder: scheme.glassBorder
     readonly property color glassHighlight: scheme.glassHighlight
+    readonly property color glassOutline: scheme.glassOutline
+    readonly property color shadow: scheme.shadow
 
     // ── Typography ───────────────────────────────────────────────────────────
     // Inter Variable ships inside the module (celestina-style/fonts, OFL) so the
@@ -330,13 +339,26 @@ QtObject {
     readonly property real overshoot: 1.15
 
     // ── Glass parameters (scalars) ─────────────────────────────────────────────
-    // Backdrop-blur knobs for GlassSurface. The colours (glassTint/Border/
-    // Highlight) live in the scheme; the full glass-v2 recipe is S2.
+    // Backdrop-blur knobs for GlassSurface (colours live in the scheme). The 8.5
+    // recipe pairs blur with a *slight desaturation* of the backdrop (negative
+    // saturation) — the earlier boost was half the recipe (audit §5.4). blurMax
+    // stays ≤ 32 (the MultiEffect pyramid is 4 passes at 32).
     readonly property real glassBlur: 0.60
     readonly property int glassBlurMax: 30
-    readonly property real glassSaturation: 0.14
+    readonly property real glassSaturation: -0.18
     readonly property real glassSampleScale: 0.66
     readonly property int glassSampleMargin: 20
+    // Fine noise dither over the blur — kills the banding the downsample pyramid
+    // leaves behind (DESIGN §4/§6.5). Tiled texture at a low opacity.
+    readonly property real glassNoiseOpacity: 0.04
+
+    // ── Elevation (scalars) ──────────────────────────────────────────────────
+    // The L2 drop shadow (RectangularShadow) under floating layers. Soft, large
+    // blur, low opacity, little offset — "must not suggest 3D depth" (§2). The
+    // colour is `shadow` in the scheme; on near-black the shadow is a faint halo.
+    readonly property int shadowBlur: 28
+    readonly property int shadowSpread: 0
+    readonly property int shadowOffsetY: 4
 
     // ── Component knobs (comp.*) ───────────────────────────────────────────────
     // Per-component geometry, kept minimal — only the glass menu needs it today.

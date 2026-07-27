@@ -14,5 +14,6 @@
     <file alias="media-eject.svg">icons/media-eject.svg</file>
     <file alias="star.svg">icons/star.svg</file>
     <file alias="star-outline.svg">icons/star-outline.svg</file>
+    <file alias="glass-noise.png">icons/glass-noise.png</file>
   </qresource>
 </RCC>

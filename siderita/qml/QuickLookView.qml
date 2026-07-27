@@ -28,7 +28,7 @@ Rectangle {
             easing.type: CelestinaTheme.easeStandard
         }
     }
-    color: Qt.rgba(0, 0, 0, 0.55)
+    color: CelestinaTheme.scrim
     focus: quickLookView.shown
 
     // Everything is derived from the current selection, so stepping the

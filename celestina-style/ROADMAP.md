@@ -48,8 +48,22 @@ Inter Variable (OFL) ships embedded in each app's qrc; radius/type/motion scales
 match DESIGN §6.3/§6.6/§6.7 (the One UI bezier tokens are defined, ready for S2's
 motion retune); all consumers (siderita, magnetita, the shell chooser, the six
 shared components) were migrated. Verified by app builds + offscreen smokes +
-grabbed swatch/button/window captures, and a clean module `all_qmllint`. S2
-(glass v2 + elevation) is next and gated on the author.
+grabbed swatch/button/window captures, and a clean module `all_qmllint`.
+
+**S2 (glass v2 + elevation) — done** (2026-07-27): `GlassSurface` was rebuilt to
+the 8.5 recipe (DESIGN §6.5) — bounded capture → pyramid blur → *slight
+desaturation* (the earlier saturation boost is gone) → tint/dim → tiled noise
+dither → a thin dark outline → the lit top-edge glow, now a GPU
+`Shape`/CurveRenderer gradient ring instead of the CPU `Canvas`. `elevation`
+adds the L2 `RectangularShadow` under floating layers (menus float instead of
+pasting); modals (L3) dim with the `scrim` token, never a shadow. The surface
+self-tracks its scene position (a `FrameAnimation` while live), so menus/cards
+dropped their hand-wired `refreshBackdrop()` choreography. Verified on the real
+session (blur/shadow do not render under the offscreen QPA): grabbed glass /
+elevated-surface / real Siderita-window captures, plus app builds + offscreen
+smokes + clean `all_qmllint`. Deferred within the recipe: the composite
+QQEM/qsb shader (blur+desaturate+tint+noise+stroke in one pass) stays layered
+for now. S3 (iconography) is next and gated on the author.
 
 ## Checkpoint 0 — The canonical source, enforced (STYLE-0)
 **Goal:** one canonical source tree that every consumer compiles from, with
