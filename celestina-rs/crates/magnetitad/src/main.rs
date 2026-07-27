@@ -43,11 +43,13 @@ use magnetita_net::{
 };
 
 mod devices;
+mod lock;
 mod media;
 mod mount;
 mod notify;
 mod settings;
 use devices::{push_log, Command, Commands, DeviceEntry, Devices, Log, LogEntry, Registry};
+use lock::LockOk;
 use mount::Mount;
 use settings::Settings;
 
@@ -174,7 +176,10 @@ fn run() -> Result<(), Box<dyn Error>> {
     spawn_accepter(listener, Arc::clone(&daemon));
 
     // Hear + dial (this thread): a phone we hear and are not linked to, we dial.
-    log("ready", "listening for the phone — keep KDE Connect open on it");
+    log(
+        "ready",
+        "listening for the phone — keep KDE Connect open on it",
+    );
     loop {
         let announcement = match discovery.recv() {
             Ok(Some(a)) => a,
@@ -189,8 +194,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         }
         if daemon
             .devices
-            .lock()
-            .unwrap()
+            .lock_ok()
             .contains_key(&announcement.identity.device_id)
         {
             continue; // already linked by one path or the other
@@ -208,7 +212,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 fn spawn_announcer(discovery: &Discovery, daemon: Arc<Daemon>) {
     if let Ok(announcer) = discovery.try_clone() {
         thread::spawn(move || loop {
-            if daemon.devices.lock().unwrap().is_empty() {
+            if daemon.devices.lock_ok().is_empty() {
                 let _ = announcer.announce(&daemon.identity, millis());
             }
             thread::sleep(ANNOUNCE_INTERVAL);
@@ -258,8 +262,7 @@ fn spawn_dialer(daemon: Arc<Daemon>, announcement: Announcement) {
                 // expected once we are connected, not a failure to surface.
                 let connected = daemon
                     .devices
-                    .lock()
-                    .unwrap()
+                    .lock_ok()
                     .contains_key(&announcement.identity.device_id);
                 if !connected {
                     ui_log(&daemon, name, &format!("no se pudo conectar: {e}"), true);
@@ -292,7 +295,7 @@ impl Daemon {
         {
             // Hold the lock across check-and-insert so two paths cannot both
             // pass; one link per device, the loser dropped here.
-            let mut devices = self.devices.lock().unwrap();
+            let mut devices = self.devices.lock_ok();
             if devices.contains_key(&peer_id) {
                 return;
             }
@@ -321,7 +324,10 @@ impl Daemon {
         }
         self.notify_change();
         log(how, &format!("{peer_name} at {}", link.peer_addr()));
-        log("secured", &format!("fingerprint {}", link.peer_fingerprint()));
+        log(
+            "secured",
+            &format!("fingerprint {}", link.peer_fingerprint()),
+        );
         ui_log(self, &peer_name, "conectado y cifrado", false);
 
         if let Err(e) = self.run_link(link, &peer_id, &peer_name) {
@@ -331,11 +337,16 @@ impl Daemon {
             // disconnect, which the "desconectado" line below already reports.
             // Only a genuinely unexpected error is worth the red banner.
             if !is_disconnect(&message) {
-                ui_log(self, &peer_name, &format!("error de enlace: {message}"), true);
+                ui_log(
+                    self,
+                    &peer_name,
+                    &format!("error de enlace: {message}"),
+                    true,
+                );
             }
         }
-        self.devices.lock().unwrap().remove(&peer_id);
-        self.commands.lock().unwrap().remove(&peer_id);
+        self.devices.lock_ok().remove(&peer_id);
+        self.commands.lock_ok().remove(&peer_id);
         self.notify_change();
         log("closed", &format!("{peer_name} disconnected"));
         ui_log(self, &peer_name, "desconectado", false);
@@ -353,7 +364,7 @@ impl Daemon {
         let link_host = link.peer_addr().ip().to_string();
 
         let mut trusted = false;
-        let session = match self.trust.lock().unwrap().check(peer_id, &peer_fp) {
+        let session = match self.trust.lock_ok().check(peer_id, &peer_fp) {
             TrustCheck::Changed => {
                 log(
                     "REFUSED",
@@ -386,7 +397,7 @@ impl Daemon {
         // Register a command channel so the app can drive pair/unpair on this
         // live link. serve() removes it when the link ends.
         let (tx, commands) = mpsc::channel::<Command>();
-        self.commands.lock().unwrap().insert(peer_id.to_owned(), tx);
+        self.commands.lock_ok().insert(peer_id.to_owned(), tx);
         self.set_paired(peer_id, trusted);
         self.notify_change();
 
@@ -403,7 +414,7 @@ impl Daemon {
         // A device we already trust: ask for its storage right away — and, for
         // each enabled plugin, prime it (battery, media, clipboard handshake).
         if trusted {
-            let settings = *self.settings.lock().unwrap();
+            let settings = *self.settings.lock_ok();
             device.send(request_packet)?;
             if settings.battery {
                 device.send(magnetita_core::battery::request)?;
@@ -423,7 +434,7 @@ impl Daemon {
             let mut events = pumped.events;
             // A snapshot of the toggles for this turn; a plugin switched off is
             // one we neither drive nor react to.
-            let settings = *self.settings.lock().unwrap();
+            let settings = *self.settings.lock_ok();
 
             // Poll the phone's players (and the current one's now-playing) — the
             // connect-time request is often dropped before the phone is ready,
@@ -448,18 +459,15 @@ impl Daemon {
                     }
                     Command::Ring => {}
                     Command::SendClipboard(text) if settings.clipboard => {
-                        device.send(|id| {
-                            magnetita_core::clipboard::clipboard_packet(id, &text)
-                        })?;
+                        device.send(|id| magnetita_core::clipboard::clipboard_packet(id, &text))?;
                     }
                     Command::SendClipboard(_) => {}
                     Command::Media(action) if settings.media => {
                         // Drive the phone's active player; a report comes back
                         // and refreshes the app's now-playing card.
                         if let Some(player) = mpris_player.clone() {
-                            device.send(|id| {
-                                magnetita_core::mpris::action(id, &player, &action)
-                            })?;
+                            device
+                                .send(|id| magnetita_core::mpris::action(id, &player, &action))?;
                         }
                     }
                     Command::Media(_) => {}
@@ -481,7 +489,12 @@ impl Daemon {
                                                 id, &name, size, port,
                                             )
                                         })?;
-                                        ui_log(self, peer_name, &format!("enviando {name}…"), false);
+                                        ui_log(
+                                            self,
+                                            peer_name,
+                                            &format!("enviando {name}…"),
+                                            false,
+                                        );
                                     }
                                     Err(e) => ui_log(
                                         self,
@@ -515,7 +528,7 @@ impl Daemon {
                 }
                 match event {
                     ConnectionEvent::Paired => {
-                        self.trust.lock().unwrap().pin(TrustedPeer {
+                        self.trust.lock_ok().pin(TrustedPeer {
                             device_id: peer_id.to_owned(),
                             device_name: peer_name.to_owned(),
                             fingerprint: peer_fp.clone(),
@@ -540,8 +553,11 @@ impl Daemon {
                         }
                     }
                     ConnectionEvent::Unpaired => {
-                        self.trust.lock().unwrap().forget(peer_id)?;
-                        log("unpaired", &format!("{peer_name} dropped the pairing; forgot it"));
+                        self.trust.lock_ok().forget(peer_id)?;
+                        log(
+                            "unpaired",
+                            &format!("{peer_name} dropped the pairing; forgot it"),
+                        );
                         mount = None; // drop → unmount
                         self.set_mount(peer_id, None);
                         self.set_paired(peer_id, false);
@@ -581,7 +597,7 @@ impl Daemon {
                 if settings.clipboard {
                     if let Some(text) = read_clipboard(packet) {
                         // Record before wl-copy so the watcher does not echo it back.
-                        *self.last_clipboard.lock().unwrap() = text.clone();
+                        *self.last_clipboard.lock_ok() = text.clone();
                         if set_clipboard(&text) {
                             ui_log(self, peer_name, "portapapeles recibido", false);
                         }
@@ -665,7 +681,12 @@ impl Daemon {
                     }
                     Some(SftpReply::Error(message)) => {
                         log("sftp", &format!("{peer_name} refused: {message}"));
-                        ui_log(self, peer_name, &format!("el móvil rechazó el montaje: {message}"), true);
+                        ui_log(
+                            self,
+                            peer_name,
+                            &format!("el móvil rechazó el montaje: {message}"),
+                            true,
+                        );
                     }
                     _ => {}
                 }
@@ -679,7 +700,7 @@ impl Daemon {
 
     /// Reflect a device's pairing state into the registry.
     fn set_paired(&self, device_id: &str, paired: bool) {
-        if let Some(entry) = self.devices.lock().unwrap().get_mut(device_id) {
+        if let Some(entry) = self.devices.lock_ok().get_mut(device_id) {
             entry.paired = paired;
         }
     }
@@ -688,12 +709,9 @@ impl Daemon {
     /// handshake that tells the phone we are a clipboard peer, so it syncs its
     /// clipboard to us too. Recorded as last-synced so the watcher does not
     /// immediately re-send it.
-    fn send_clipboard_connect(
-        &self,
-        device: &mut Device,
-    ) -> Result<(), magnetita_net::LinkError> {
+    fn send_clipboard_connect(&self, device: &mut Device) -> Result<(), magnetita_net::LinkError> {
         let clip = get_clipboard();
-        *self.last_clipboard.lock().unwrap() = clip.clone();
+        *self.last_clipboard.lock_ok() = clip.clone();
         device.send(|id| magnetita_core::clipboard::clipboard_connect_packet(id, &clip, millis()))
     }
 
@@ -701,17 +719,17 @@ impl Daemon {
     /// is the value we just received from a phone (our own wl-copy echo), which
     /// would otherwise loop back and forth forever.
     fn push_clipboard(&self, text: String) {
-        if text.is_empty() || !self.settings.lock().unwrap().clipboard {
+        if text.is_empty() || !self.settings.lock_ok().clipboard {
             return;
         }
         {
-            let mut last = self.last_clipboard.lock().unwrap();
+            let mut last = self.last_clipboard.lock_ok();
             if *last == text {
                 return;
             }
             *last = text.clone();
         }
-        let senders: Vec<_> = self.commands.lock().unwrap().values().cloned().collect();
+        let senders: Vec<_> = self.commands.lock_ok().values().cloned().collect();
         for sender in senders {
             let _ = sender.send(Command::SendClipboard(text.clone()));
         }
@@ -719,7 +737,7 @@ impl Daemon {
 
     /// Reflect a device's battery report into the registry.
     fn set_battery(&self, device_id: &str, charge: i32, charging: bool) {
-        if let Some(entry) = self.devices.lock().unwrap().get_mut(device_id) {
+        if let Some(entry) = self.devices.lock_ok().get_mut(device_id) {
             entry.battery = charge;
             entry.charging = charging;
         }
@@ -728,7 +746,7 @@ impl Daemon {
     /// Reflect the phone's reported now-playing into the registry, or clear it
     /// (an empty player list, or nothing playing).
     fn set_media(&self, device_id: &str, state: Option<&magnetita_core::PlayerState>) {
-        if let Some(entry) = self.devices.lock().unwrap().get_mut(device_id) {
+        if let Some(entry) = self.devices.lock_ok().get_mut(device_id) {
             match state {
                 Some(state) => {
                     entry.media_player = state.player.clone();
@@ -771,7 +789,12 @@ impl Daemon {
                 }
             }
             Err(e) => {
-                ui_log(&self, &device_name, &format!("fallo al recibir {name}: {e}"), true);
+                ui_log(
+                    &self,
+                    &device_name,
+                    &format!("fallo al recibir {name}: {e}"),
+                    true,
+                );
                 let _ = std::fs::remove_file(&dest);
             }
         }
@@ -785,7 +808,7 @@ impl Daemon {
         };
         let key = format!("{device_id}\u{0}{}", note.id);
         if note.is_cancel {
-            if let Some(server_id) = self.notifications.lock().unwrap().remove(&key) {
+            if let Some(server_id) = self.notifications.lock_ok().remove(&key) {
                 notify::close(connection, server_id);
             }
             return;
@@ -800,22 +823,16 @@ impl Daemon {
         } else {
             note.title.clone()
         };
-        let replaces = self
-            .notifications
-            .lock()
-            .unwrap()
-            .get(&key)
-            .copied()
-            .unwrap_or(0);
+        let replaces = self.notifications.lock_ok().get(&key).copied().unwrap_or(0);
         if let Some(server_id) = notify::post(connection, app, replaces, &summary, &note.text) {
-            self.notifications.lock().unwrap().insert(key, server_id);
+            self.notifications.lock_ok().insert(key, server_id);
             ui_log(self, device_name, &format!("🔔 {app}: {summary}"), false);
         }
     }
 
     /// Reflect a device's mount state into the registry.
     fn set_mount(&self, device_id: &str, path: Option<&Path>) {
-        if let Some(entry) = self.devices.lock().unwrap().get_mut(device_id) {
+        if let Some(entry) = self.devices.lock_ok().get_mut(device_id) {
             match path {
                 Some(path) => {
                     entry.mounted = true;

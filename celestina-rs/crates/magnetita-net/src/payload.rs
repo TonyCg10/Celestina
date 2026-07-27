@@ -21,9 +21,15 @@ use crate::tls::TlsConfigs;
 /// How long to wait for the payload socket to connect and for its reads.
 const PAYLOAD_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Dial the phone's payload socket at `host:port`, TLS-wrap it, and stream up to
-/// `size` bytes into `dest` (`size < 0` means read until the peer closes).
-/// Returns the bytes written.
+/// The most a declared payload may claim. Generous — phones legitimately share
+/// multi-gigabyte videos — while refusing an absurd or negative declaration
+/// before a single byte lands on disk.
+pub const MAX_PAYLOAD_SIZE: i64 = 64 * 1024 * 1024 * 1024;
+
+/// Dial the phone's payload socket at `host:port`, TLS-wrap it, and stream the
+/// declared `size` bytes into `dest`. A negative or over-[`MAX_PAYLOAD_SIZE`]
+/// declaration is refused up front — the share packet always names the real
+/// size, so an unbounded read has no honest sender. Returns the bytes written.
 pub fn receive_to_file(
     host: &str,
     port: u16,
@@ -31,6 +37,12 @@ pub fn receive_to_file(
     tls: &TlsConfigs,
     dest: &Path,
 ) -> io::Result<u64> {
+    if !(0..=MAX_PAYLOAD_SIZE).contains(&size) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("refusing payload with declared size {size}"),
+        ));
+    }
     let addr = format!("{host}:{port}");
     let socket = addr
         .parse()
@@ -44,13 +56,9 @@ pub fn receive_to_file(
         ClientConnection::new(tls.client_config(), server_name).map_err(io::Error::other)?;
     conn.complete_io(&mut tcp)?;
 
-    let mut stream = StreamOwned::new(conn, tcp);
+    let stream = StreamOwned::new(conn, tcp);
     let mut file = File::create(dest)?;
-    let written = if size >= 0 {
-        io::copy(&mut stream.take(size as u64), &mut file)?
-    } else {
-        io::copy(&mut stream, &mut file)?
-    };
+    let written = io::copy(&mut stream.take(size as u64), &mut file)?;
     file.flush()?;
     Ok(written)
 }
@@ -120,4 +128,24 @@ fn serve_one(listener: &TcpListener, tls: &TlsConfigs, path: &Path) -> io::Resul
     let bytes = io::copy(&mut file, &mut stream)?;
     stream.flush()?;
     Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{receive_to_file, MAX_PAYLOAD_SIZE};
+    use crate::cert::DeviceCert;
+    use crate::tls::TlsConfigs;
+
+    #[test]
+    fn absurd_declared_sizes_are_refused_before_dialing() {
+        let cert = DeviceCert::generate("cccccccccccccccccccccccccccccccc");
+        let tls = TlsConfigs::build(&cert).unwrap();
+        let dest = std::env::temp_dir().join("magnetita-payload-refused");
+        // Nothing listens on the port: any error other than InvalidInput would
+        // mean the network was tried before the size was checked.
+        for size in [-1, MAX_PAYLOAD_SIZE + 1] {
+            let err = receive_to_file("127.0.0.1", 9, size, &tls, &dest).unwrap_err();
+            assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+        }
+    }
 }

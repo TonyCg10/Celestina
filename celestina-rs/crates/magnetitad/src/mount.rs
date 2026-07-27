@@ -26,7 +26,7 @@ impl Mount {
     /// phone's address (from the link). Blocks until sshfs has established the
     /// mount (it then backgrounds itself).
     pub fn open(device_id: &str, host: &str, sftp: &SftpMount) -> io::Result<Mount> {
-        let mountpoint = mountpoint_for(device_id);
+        let mountpoint = mountpoint_for(device_id)?;
         std::fs::create_dir_all(&mountpoint)?;
         // Clear any stale mount left by a previous crash before remounting.
         let _ = unmount(&mountpoint);
@@ -51,7 +51,11 @@ impl Mount {
         if !output.status.success() {
             let reason = String::from_utf8_lossy(&output.stderr);
             let reason = reason.trim();
-            let reason = if reason.is_empty() { "sshfs failed" } else { reason };
+            let reason = if reason.is_empty() {
+                "sshfs failed"
+            } else {
+                reason
+            };
             return Err(io::Error::other(reason.to_owned()));
         }
         Ok(Mount { mountpoint })
@@ -78,8 +82,22 @@ fn base_dir() -> PathBuf {
 }
 
 /// The mount path for a device: `$XDG_RUNTIME_DIR/magnetita/<device-id>/`.
-pub fn mountpoint_for(device_id: &str) -> PathBuf {
-    base_dir().join(device_id)
+/// The id arrives off the network and becomes a single path component, so
+/// anything that could walk out of the base directory — separators, `..`,
+/// `.`, emptiness, a NUL — is refused. A legitimate KDE Connect id is 32 hex
+/// chars; odd-but-safe ids still get a mountpoint.
+pub fn mountpoint_for(device_id: &str) -> io::Result<PathBuf> {
+    if device_id.is_empty()
+        || device_id == "."
+        || device_id == ".."
+        || device_id.contains(['/', '\\', '\0'])
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("refusing device id {device_id:?} as a mount path component"),
+        ));
+    }
+    Ok(base_dir().join(device_id))
 }
 
 /// Unmount anything left under our runtime dir by a previous run. A graceful
@@ -129,3 +147,17 @@ const SSHFS_OPTIONS: &[&str] = &[
     "-o",
     "ServerAliveCountMax=3",
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::mountpoint_for;
+
+    #[test]
+    fn a_device_id_is_a_single_path_component_or_nothing() {
+        for bad in ["", ".", "..", "../..", "a/b", "a\\b", "x\0y"] {
+            assert!(mountpoint_for(bad).is_err(), "{bad:?} must be refused");
+        }
+        let ok = mountpoint_for("689da02afffe4b1282577c0a2f0ed5e3").unwrap();
+        assert!(ok.ends_with("689da02afffe4b1282577c0a2f0ed5e3"));
+    }
+}

@@ -51,6 +51,10 @@ impl<T: Read + Write + ?Sized> ReadWrite for T {}
 /// An established, encrypted, trusted-by-fingerprint link to one device.
 pub struct Link {
     reader: BufReader<Box<dyn Transport>>,
+    /// Bytes of a packet line read so far but not yet newline-terminated —
+    /// preserved across a read timeout so a line split by an idle tick is
+    /// never dropped mid-frame.
+    pending: Vec<u8>,
     /// A second handle on the same socket, held only to change the read timeout
     /// after the stream is boxed — so a caller's read loop can wake on idle.
     sock: TcpStream,
@@ -80,8 +84,12 @@ impl Link {
         tcp.set_write_timeout(Some(timeout))?;
 
         // 1. Our identity in the clear, telling the phone we mean it specifically.
-        let plaintext =
-            plaintext_identity_line(ours, &announcement.identity.device_id, peer_proto, next_id());
+        let plaintext = plaintext_identity_line(
+            ours,
+            &announcement.identity.device_id,
+            peer_proto,
+            next_id(),
+        );
         tcp.write_all(plaintext.as_bytes())?;
         tcp.flush()?;
 
@@ -112,6 +120,7 @@ impl Link {
         let sock = tcp.try_clone()?;
         Ok(Link {
             reader: BufReader::new(Box::new(StreamOwned::new(conn, tcp))),
+            pending: Vec::new(),
             sock,
             peer,
             peer_fingerprint: fingerprint,
@@ -165,6 +174,7 @@ impl Link {
         let sock = tcp.try_clone()?;
         Ok(Link {
             reader: BufReader::new(Box::new(StreamOwned::new(conn, tcp))),
+            pending: Vec::new(),
             sock,
             peer,
             peer_fingerprint: fingerprint,
@@ -198,13 +208,16 @@ impl Link {
 
     /// Read the next packet, blocking. `Ok(None)` is a clean close by the peer.
     /// Blank keep-alive lines are skipped rather than reported as a close.
+    /// A line may not exceed [`MAX_PACKET_LINE`], and one cut short by a read
+    /// timeout is kept for the next call rather than dropped mid-frame.
     pub fn read_packet(&mut self) -> Result<Option<NetworkPacket>, LinkError> {
         loop {
-            let mut line = String::new();
-            if self.reader.read_line(&mut line)? == 0 {
+            if !fill_line(&mut self.reader, &mut self.pending)? {
                 return Ok(None);
             }
-            let trimmed = line.trim();
+            let line = std::mem::take(&mut self.pending);
+            let text = String::from_utf8_lossy(&line);
+            let trimmed = text.trim();
             if trimmed.is_empty() {
                 continue;
             }
@@ -224,6 +237,35 @@ impl Link {
     }
 }
 
+/// Longest packet line [`read_packet`](Link::read_packet) accepts. Real packets
+/// top out at a few KiB (notification and mpris metadata are the largest); the
+/// bound only exists so a connected peer cannot grow one unterminated line —
+/// and our memory with it — without limit.
+const MAX_PACKET_LINE: usize = 512 * 1024;
+
+/// Reads one bounded, `\n`-terminated line into `pending`, keeping whatever a
+/// timed-out read already consumed. `Ok(true)` means a full line (newline
+/// included) sits in `pending`; `Ok(false)` means the peer closed.
+fn fill_line<R: BufRead>(reader: &mut R, pending: &mut Vec<u8>) -> Result<bool, LinkError> {
+    while pending.last() != Some(&b'\n') {
+        let budget = (MAX_PACKET_LINE + 1).saturating_sub(pending.len());
+        if budget == 0 {
+            pending.clear();
+            return Err(LinkError::LineTooLong);
+        }
+        if reader
+            .by_ref()
+            .take(budget as u64)
+            .read_until(b'\n', pending)?
+            == 0
+        {
+            // EOF — a partial line without its newline died with the peer.
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 /// The plaintext identity line the connector sends first: our identity plus the
 /// `targetDeviceId`/`targetProtocolVersion` a v8 peer checks to know the dial is
 /// meant for it.
@@ -234,7 +276,10 @@ fn plaintext_identity_line(ours: &Identity, target_id: &str, target_proto: i32, 
             "targetDeviceId".to_owned(),
             Value::String(target_id.to_owned()),
         );
-        map.insert("targetProtocolVersion".to_owned(), Value::from(target_proto));
+        map.insert(
+            "targetProtocolVersion".to_owned(),
+            Value::from(target_proto),
+        );
     }
     format!("{}\n", packet.to_line())
 }
@@ -305,6 +350,9 @@ pub enum LinkError {
     NoPeerCertificate,
     /// The peer sent no usable identity where one was required.
     PeerIdentityMissing,
+    /// A single packet line exceeded [`MAX_PACKET_LINE`] — reading on would
+    /// grow memory without bound, so the link is dropped instead.
+    LineTooLong,
 }
 
 impl From<io::Error> for LinkError {
@@ -323,6 +371,9 @@ impl fmt::Display for LinkError {
             LinkError::HandshakeIncomplete => write!(f, "the peer closed during the handshake"),
             LinkError::NoPeerCertificate => write!(f, "the peer presented no certificate"),
             LinkError::PeerIdentityMissing => write!(f, "the peer sent no usable identity"),
+            LinkError::LineTooLong => {
+                write!(f, "a packet line exceeded {MAX_PACKET_LINE} bytes")
+            }
         }
     }
 }
@@ -404,7 +455,10 @@ mod tests {
         )
         .expect("desktop links to the phone");
 
-        let mut phone_link = phone_accept.join().unwrap().expect("phone accepts the desktop");
+        let mut phone_link = phone_accept
+            .join()
+            .unwrap()
+            .expect("phone accepts the desktop");
 
         // Each learned the other's identity, and pinned the other's certificate.
         assert_eq!(desk_link.peer().device_id, phone_id);
@@ -414,7 +468,77 @@ mod tests {
 
         // The framed channel carries a packet: the desktop pings, the phone reads.
         desk_link.send_packet(&ping_packet(1)).unwrap();
-        let got = phone_link.read_packet().unwrap().expect("a packet, not a close");
+        let got = phone_link
+            .read_packet()
+            .unwrap()
+            .expect("a packet, not a close");
         assert!(got.is("kdeconnect.ping"));
+    }
+
+    #[test]
+    fn a_line_past_the_cap_errors_instead_of_growing() {
+        use super::{fill_line, LinkError, MAX_PACKET_LINE};
+        use std::io::{BufReader, Cursor};
+
+        let mut giant = vec![b'x'; MAX_PACKET_LINE + 10];
+        giant.push(b'\n');
+        let mut reader = BufReader::new(Cursor::new(giant));
+        let mut pending = Vec::new();
+        match fill_line(&mut reader, &mut pending) {
+            Err(LinkError::LineTooLong) => {}
+            other => panic!("expected LineTooLong, got {other:?}"),
+        }
+        assert!(pending.is_empty(), "an over-cap line must not accumulate");
+
+        // A normal line right after is unaffected by the bound.
+        let mut reader = BufReader::new(Cursor::new(b"{\"ok\":1}\n".to_vec()));
+        let mut pending = Vec::new();
+        assert!(fill_line(&mut reader, &mut pending).unwrap());
+        assert_eq!(pending, b"{\"ok\":1}\n");
+    }
+
+    #[test]
+    fn a_line_split_by_a_timeout_is_not_lost() {
+        use super::{fill_line, LinkError};
+        use std::collections::VecDeque;
+        use std::io::{BufReader, Read};
+
+        /// Yields its chunks one `read` at a time, including mid-line errors —
+        /// the shape of a socket whose read timeout fires between TLS records.
+        struct Choppy {
+            chunks: VecDeque<std::io::Result<Vec<u8>>>,
+        }
+        impl Read for Choppy {
+            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                match self.chunks.pop_front() {
+                    Some(Ok(bytes)) => {
+                        buf[..bytes.len()].copy_from_slice(&bytes);
+                        Ok(bytes.len())
+                    }
+                    Some(Err(e)) => Err(e),
+                    None => Ok(0),
+                }
+            }
+        }
+
+        let packet = br#"{"id":1,"type":"kdeconnect.ping","body":{}}"#;
+        let (head, tail) = packet.split_at(10);
+        let mut chunks = VecDeque::new();
+        chunks.push_back(Ok(head.to_vec()));
+        chunks.push_back(Err(std::io::Error::from(std::io::ErrorKind::WouldBlock)));
+        chunks.push_back(Ok([tail, b"\n"].concat()));
+        let mut reader = BufReader::new(Choppy { chunks });
+        let mut pending = Vec::new();
+
+        // The timeout surfaces as an error with half the line consumed…
+        assert!(matches!(
+            fill_line(&mut reader, &mut pending),
+            Err(LinkError::Io(_))
+        ));
+        assert_eq!(pending, head, "the consumed half must be preserved");
+
+        // …and the retry completes that same line, losing nothing.
+        assert!(fill_line(&mut reader, &mut pending).unwrap());
+        assert_eq!(&pending[..pending.len() - 1], packet);
     }
 }

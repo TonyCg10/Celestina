@@ -19,6 +19,7 @@ use std::sync::{Arc, Mutex};
 use magnetita_net::TrustStore;
 use zbus::zvariant::{OwnedValue, Value};
 
+use crate::lock::LockOk;
 use crate::settings::Settings;
 
 /// The bus name Magnetita owns.
@@ -142,7 +143,7 @@ pub type Log = Arc<Mutex<VecDeque<LogEntry>>>;
 
 /// Appends an entry, dropping the oldest past [`LOG_CAPACITY`].
 pub fn push_log(log: &Log, entry: LogEntry) {
-    let mut log = log.lock().unwrap();
+    let mut log = log.lock_ok();
     log.push_back(entry);
     while log.len() > LOG_CAPACITY {
         log.pop_front();
@@ -207,7 +208,7 @@ impl Devices {
 
     /// Forwards a command to the device's link thread, if it is connected.
     fn forward(&self, device_id: &str, command: Command) {
-        if let Some(sender) = self.commands.lock().unwrap().get(device_id) {
+        if let Some(sender) = self.commands.lock_ok().get(device_id) {
             let _ = sender.send(command);
         }
     }
@@ -215,8 +216,7 @@ impl Devices {
     /// Whether a device id is currently connected (has a live entry).
     fn is_connected(&self, device_id: &str) -> bool {
         self.registry
-            .lock()
-            .unwrap()
+            .lock_ok()
             .get(device_id)
             .map(|entry| entry.connected)
             .unwrap_or(false)
@@ -229,8 +229,7 @@ impl Devices {
     /// `connected`, `mounted`, `paired`, `mountPath`, `battery`, `fingerprint`.
     fn list_devices(&self) -> Vec<HashMap<String, OwnedValue>> {
         self.registry
-            .lock()
-            .unwrap()
+            .lock_ok()
             .values()
             .map(DeviceEntry::to_dict)
             .collect()
@@ -239,7 +238,7 @@ impl Devices {
     /// The recent connection log, oldest first — each a dict `device`, `message`,
     /// `failure`, `time`. Read on open; the `Event` signal marks new entries.
     fn recent_log(&self) -> Vec<HashMap<String, OwnedValue>> {
-        self.log.lock().unwrap().iter().map(LogEntry::to_dict).collect()
+        self.log.lock_ok().iter().map(LogEntry::to_dict).collect()
     }
 
     /// Ask the connected device to pair (the app's "Emparejar").
@@ -272,7 +271,7 @@ impl Devices {
     /// — including devices remembered but not currently online. The Settings
     /// surface lists these so a pairing can be dropped even when the phone is off.
     fn list_paired(&self) -> Vec<HashMap<String, OwnedValue>> {
-        let peers: Vec<_> = self.trust.lock().unwrap().peers().collect();
+        let peers: Vec<_> = self.trust.lock_ok().peers().collect();
         peers
             .into_iter()
             .map(|peer| {
@@ -303,15 +302,14 @@ impl Devices {
         if self.is_connected(&device_id) {
             self.forward(&device_id, Command::Unpair);
         } else {
-            let _ = self.trust.lock().unwrap().forget(&device_id);
+            let _ = self.trust.lock_ok().forget(&device_id);
         }
     }
 
     /// The per-plugin toggles, as a `name → enabled` dict (the app's switches).
     fn plugin_settings(&self) -> HashMap<String, bool> {
         self.settings
-            .lock()
-            .unwrap()
+            .lock_ok()
             .entries()
             .iter()
             .map(|(name, enabled)| ((*name).to_owned(), *enabled))
@@ -320,7 +318,7 @@ impl Devices {
 
     /// Enable or disable a plugin and persist. An unknown name is ignored.
     fn set_plugin(&self, plugin: String, enabled: bool) {
-        let mut settings = self.settings.lock().unwrap();
+        let mut settings = self.settings.lock_ok();
         if settings.set(&plugin, enabled) {
             let _ = settings.save(&self.settings_path);
         }
