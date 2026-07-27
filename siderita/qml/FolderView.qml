@@ -2621,7 +2621,7 @@ Item {
         // double-click opens, keyboard, selection). This slim glass bar just
         // floats below the breadcrumb/tabs to show the query and offer Stop /
         // Close — the search results are the content view.
-        Item {
+        SearchBar {
             id: searchBar
             z: 10
             x: 12
@@ -2638,39 +2638,9 @@ Item {
                     easing.type: CelestinaTheme.easeStandard
                 }
             }
-
-            InfoPill {
-
-                textScale: root.hostWindow.interfaceTextScale
-                id: searchBarLabel
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                backdrop: topBar.activeView
-                iconName: "edit-find"
-                iconFallback: "file"
-                maxWidth: searchBar.width - searchBarControls.width - 10
-                text: controller.searchRunning
-                      ? "Buscando «" + controller.searchQuery + "»…"
-                      : "«" + controller.searchQuery + "» · " + controller.searchSummary
-            }
-
-            Row {
-                id: searchBarControls
-                anchors.right: parent.right
-                anchors.rightMargin: 8
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 8
-
-                CelestinaButton {
-                    text: "Detener"
-                    visible: controller.searchRunning
-                    onClicked: controller.cancelSearch()
-                }
-                CelestinaButton {
-                    text: "Cerrar"
-                    onClicked: controller.closeSearch()
-                }
-            }
+            controller: controller
+            backdrop: topBar.activeView
+            textScale: root.hostWindow.interfaceTextScale
         }
 
         // ── Recientes location header ──────────────────────────────────
