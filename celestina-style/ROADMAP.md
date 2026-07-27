@@ -38,6 +38,19 @@ system, the target system and a phased build plan (S1–S5) — lives in
 [DESIGN.md](DESIGN.md) (v1.0, decisions sealed). This roadmap tracks
 execution; the design contract says what "done" looks like.
 
+**Phase status.** **S1 (tokens v2 + typography) — done** (2026-07-27): the
+singleton was rebuilt into `ref`→`scheme`→`sys` tiers with the dark `ColorScheme`
+as data (Rosé Pine and the comment-toggled palette retired); every opaque surface
+carries its foreground pair (`<surface>Ink`, the contract's `on*` — QML reserves
+`on<Capital>`); the accent moved from white to One UI blue `#387aff` with
+`accentInk` (`CelestinaButton` primary adopts it, killing `accent → canvas`);
+Inter Variable (OFL) ships embedded in each app's qrc; radius/type/motion scales
+match DESIGN §6.3/§6.6/§6.7 (the One UI bezier tokens are defined, ready for S2's
+motion retune); all consumers (siderita, magnetita, the shell chooser, the six
+shared components) were migrated. Verified by app builds + offscreen smokes +
+grabbed swatch/button/window captures, and a clean module `all_qmllint`. S2
+(glass v2 + elevation) is next and gated on the author.
+
 ## Checkpoint 0 — The canonical source, enforced (STYLE-0)
 **Goal:** one canonical source tree that every consumer compiles from, with
 drift made impossible, and glass APIs that mean what they say.
@@ -47,7 +60,7 @@ drift made impossible, and glass APIs that mean what they say.
 - [x] First real consumer proven: `siderita` renders entirely from this module (theme, glass, icons), verified by build + offscreen run
 - [x] Single source made real and enforced: both apps consume by symlink into their own CXX-Qt modules (Siderita's six committed copies were replaced by links, 2026-07-26), and CI refuses any style file in an app's `qml/` that is not a symlink
 - [ ] Inventory the public QML types, imports, properties, assets and generated files
-- [ ] Resolve the qmllint `OUTPUT_DIRECTORY` module-path warning
+- [x] Resolve the qmllint `OUTPUT_DIRECTORY` module-path warning — the module now sets `OUTPUT_DIRECTORY .../CelestinaStyle` to match its URI; verified by a clean `cmake` configure (no `Qt6QmlMacros` warning) and a clean `all_qmllint` (S1, 2026-07-27)
 
 **Done when:** every consumer builds from the one canonical tree with no copy
 anywhere, the guard proves it on every push, and the public surface is written
@@ -70,7 +83,7 @@ independently.
 
 - [ ] Compatibility + deprecation policy for the 1.0 surface
 - [ ] Truthful glass APIs — tint/glow/tokens vs. real in-scene blur vs. compositor blur kept clearly separate
-- [ ] Font + icon fallback contracts (Inter / JetBrains Mono / icon set)
+- [~] Font + icon fallback contracts — Inter Variable (OFL) now ships embedded in each app's qrc, with an honest fallback where it is not compiled in (the shell chooser → application default); the mono face, the Lucide icon adoption (S3) and the written fallback policy remain
 - [ ] Keyboard, focus, AT-SPI, reduced-motion and high-contrast behavior for the finite component set
 - [x] Both apps consume the same canonical source (symlink-compiled; an installed release belongs to STYLE-D)
 

@@ -89,7 +89,7 @@ Rectangle {
             text: namePrompt.heading
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontCallout
+            font.pixelSize: CelestinaTheme.fontRowTitle
             font.weight: CelestinaTheme.weightDemiBold
         }
 

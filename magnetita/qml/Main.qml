@@ -54,8 +54,8 @@ ApplicationWindow {
                 text: window.settingsOpen ? "Ajustes" : "Magnetita"
                 color: CelestinaTheme.text
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontTitle
-                font.weight: CelestinaTheme.weightBold
+                font.pixelSize: CelestinaTheme.fontHeaderCollapsed
+                font.weight: CelestinaTheme.weightDemiBold
             }
 
             CelestinaButton {
@@ -89,7 +89,7 @@ ApplicationWindow {
             text: "Abre KDE Connect en tu móvil y empareja.\nEl servicio (magnetitad) mantiene la conexión."
             color: CelestinaTheme.textMuted
             font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontCallout
+            font.pixelSize: CelestinaTheme.fontRowTitle
             wrapMode: Text.WordWrap
             lineHeight: 1.3
             bottomPadding: 8
@@ -123,7 +123,7 @@ ApplicationWindow {
                     height: 96
                     radius: CelestinaTheme.radiusMd
                     color: CelestinaTheme.surface
-                    border.color: CelestinaTheme.border
+                    border.color: CelestinaTheme.divider
                     border.width: 1
 
                     Column {
@@ -139,7 +139,7 @@ ApplicationWindow {
                             text: devRow.modelData
                             color: CelestinaTheme.text
                             font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: CelestinaTheme.fontCallout
+                            font.pixelSize: CelestinaTheme.fontRowTitle
                             font.weight: CelestinaTheme.weightDemiBold
                             elide: Text.ElideRight
                         }
@@ -180,7 +180,7 @@ ApplicationWindow {
             height: controlsColumn.implicitHeight + 26
             radius: CelestinaTheme.radiusMd
             color: CelestinaTheme.surface
-            border.color: CelestinaTheme.border
+            border.color: CelestinaTheme.divider
             border.width: 1
 
             Column {
@@ -237,7 +237,7 @@ ApplicationWindow {
                 Rectangle {
                     width: parent.width
                     height: 1
-                    color: CelestinaTheme.border
+                    color: CelestinaTheme.divider
                 }
 
                 // Medios — siempre visible; "Nada reproduciéndose" cuando no suena.
@@ -260,7 +260,7 @@ ApplicationWindow {
                         color: window.mediaIndex >= 0
                                ? CelestinaTheme.text : CelestinaTheme.textMuted
                         font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontCallout
+                        font.pixelSize: CelestinaTheme.fontRowTitle
                         font.weight: window.mediaIndex >= 0
                                      ? CelestinaTheme.weightDemiBold : Font.Normal
                         elide: Text.ElideRight
@@ -313,8 +313,8 @@ ApplicationWindow {
             height: Math.max(120, window.height - deviceBlock.height
                     - controlsBlock.height - 196)
             radius: CelestinaTheme.radiusMd
-            color: CelestinaTheme.canvasRaised
-            border.color: CelestinaTheme.border
+            color: CelestinaTheme.card
+            border.color: CelestinaTheme.divider
             border.width: 1
 
             ListView {
@@ -390,7 +390,7 @@ ApplicationWindow {
                     height: 74
                     radius: CelestinaTheme.radiusMd
                     color: CelestinaTheme.surface
-                    border.color: CelestinaTheme.border
+                    border.color: CelestinaTheme.divider
                     border.width: 1
 
                     Column {
@@ -406,7 +406,7 @@ ApplicationWindow {
                             text: (online ? "🟢 " : "⚪ ") + modelData
                             color: CelestinaTheme.text
                             font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: CelestinaTheme.fontCallout
+                            font.pixelSize: CelestinaTheme.fontRowTitle
                             font.weight: CelestinaTheme.weightDemiBold
                             elide: Text.ElideRight
                         }
@@ -454,7 +454,7 @@ ApplicationWindow {
                     height: 48
                     radius: CelestinaTheme.radiusMd
                     color: CelestinaTheme.surface
-                    border.color: CelestinaTheme.border
+                    border.color: CelestinaTheme.divider
                     border.width: 1
 
                     Text {
@@ -466,7 +466,7 @@ ApplicationWindow {
                         text: modelData
                         color: CelestinaTheme.text
                         font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontCallout
+                        font.pixelSize: CelestinaTheme.fontRowTitle
                         elide: Text.ElideRight
                     }
 

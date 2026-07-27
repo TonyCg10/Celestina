@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/qt/qml/CelestinaStyle/fonts">
+    <file alias="InterVariable.ttf">fonts/InterVariable.ttf</file>
+  </qresource>
+</RCC>

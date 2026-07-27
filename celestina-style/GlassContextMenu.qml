@@ -11,9 +11,9 @@ Menu {
 
     required property Item backdropSource
 
-    width: CelestinaTheme.menuWidth
-    padding: CelestinaTheme.menuPadding
-    margins: CelestinaTheme.menuMargins
+    width: CelestinaTheme.compMenuWidth
+    padding: CelestinaTheme.compMenuPadding
+    margins: CelestinaTheme.compMenuMargins
     modal: false
     dim: false
     popupType: Popup.Item

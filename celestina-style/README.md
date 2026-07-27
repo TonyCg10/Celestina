@@ -29,13 +29,14 @@ tree (see [ROADMAP.md](ROADMAP.md), STYLE-D).
 | Path | Responsibility |
 |---|---|
 | `DESIGN.md` | the design contract: One UI 8.5 desktop-adapted — reference values, platform ceiling, target system, build phases |
-| `CelestinaTheme.qml` | singleton design tokens: color, type, spacing, radius, motion, glass |
+| `CelestinaTheme.qml` | singleton design tokens, tiered `ref`→`scheme`→`sys`: the dark `ColorScheme` as data (surface→ink pairs), Inter Variable, type/radius/motion/glass scales |
 | `GlassSurface.qml` | frosted surface that blurs injected backdrop content (bounded capture, one-shot or live) |
 | `GlassCard.qml` | `GlassSurface` specialization for modal dialog cards |
 | `GlassContextMenu.qml`, `GlassMenuItem.qml` | glass `Menu` + styled item |
 | `CelestinaButton.qml` | the suite button, in its three roles: normal / primary / destructive |
 | `CelestinaTextField.qml` | the suite text field, themed fill and focus border |
 | `icons/`, `icons.qrc` | minimal freedesktop-name SVG fallbacks + the app launcher icons |
+| `fonts/`, `fonts.qrc` | Inter Variable (OFL) — the suite typeface, compiled into each app's binary |
 
 See [DESIGN.md](DESIGN.md) for the design contract (One UI 8.5,
 desktop-adapted) and [ROADMAP.md](ROADMAP.md) for status and checkpoints.

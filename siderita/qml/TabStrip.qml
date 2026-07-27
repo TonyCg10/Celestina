@@ -71,7 +71,7 @@ Item {
                                       : chipMouse.containsMouse ? CelestinaTheme.surfaceHover
                                       : CelestinaTheme.inputFill
                 border.width: chip.activeTab ? 1 : (root.topBar.floating ? 0 : 1)
-                border.color: chip.activeTab ? CelestinaTheme.borderStrong
+                border.color: chip.activeTab ? CelestinaTheme.dividerStrong
                                              : CelestinaTheme.inputBorder
 
                 Behavior on color {
@@ -118,7 +118,7 @@ Item {
                 color: chip.activeTab ? CelestinaTheme.text
                                       : CelestinaTheme.textMuted
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: Math.round(CelestinaTheme.fontLabel * root.hostWindow.interfaceTextScale)
+                font.pixelSize: Math.round(CelestinaTheme.fontRowSecondary * root.hostWindow.interfaceTextScale)
                 font.weight: chip.activeTab ? CelestinaTheme.weightMedium
                                             : CelestinaTheme.weightRegular
                 elide: Text.ElideRight
@@ -130,7 +130,7 @@ Item {
                 x: parent.width - width - 8
                 width: 20
                 height: 20
-                radius: CelestinaTheme.radiusXs
+                radius: CelestinaTheme.radiusSm
                 color: closeMouse.containsMouse
                        ? CelestinaTheme.surfaceHover : "transparent"
 

@@ -18,7 +18,7 @@ TextField {
 
     height: CelestinaTheme.controlHeight
     color: CelestinaTheme.text
-    selectionColor: CelestinaTheme.accentStrong
+    selectionColor: CelestinaTheme.accentPressed
     selectedTextColor: CelestinaTheme.text
     placeholderTextColor: CelestinaTheme.textMuted
     font.family: CelestinaTheme.sansFamily
@@ -31,7 +31,7 @@ TextField {
         color: field.activeFocus ? CelestinaTheme.inputFillFocus
                                  : CelestinaTheme.inputFill
         border.width: 1
-        border.color: field.activeFocus ? CelestinaTheme.focus
+        border.color: field.activeFocus ? CelestinaTheme.focusRing
                                         : CelestinaTheme.inputBorder
 
         Behavior on color {

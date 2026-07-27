@@ -608,7 +608,7 @@ Item {
         radius: CelestinaTheme.radiusLg
         color: CelestinaTheme.surface
         border.width: 1
-        border.color: CelestinaTheme.border
+        border.color: CelestinaTheme.divider
 
         // Bottom control bar: all controls and status render along the
         // bottom of the content box; the list/grid fill from the top.
@@ -1105,7 +1105,7 @@ Item {
                 text: parent.searchEmpty ? "Sin coincidencias" : "Carpeta vacía"
                 color: CelestinaTheme.text
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontTitle
+                font.pixelSize: CelestinaTheme.fontHeaderCollapsed
                 font.weight: CelestinaTheme.weightMedium
             }
 
@@ -1116,7 +1116,7 @@ Item {
                       : "No hay elementos que mostrar."
                 color: CelestinaTheme.textMuted
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontLabel
+                font.pixelSize: CelestinaTheme.fontRowSecondary
             }
         }
 
@@ -1140,9 +1140,9 @@ Item {
                 anchors.fill: parent
                 anchors.margins: 11
                 text: controller.errorText
-                color: CelestinaTheme.dangerText
+                color: CelestinaTheme.dangerFillInk
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontLabel
+                font.pixelSize: CelestinaTheme.fontRowSecondary
                 wrapMode: Text.Wrap
             }
         }
@@ -1169,9 +1169,9 @@ Item {
                 anchors.fill: parent
                 anchors.margins: 11
                 text: controller.opError
-                color: CelestinaTheme.dangerText
+                color: CelestinaTheme.dangerFillInk
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontLabel
+                font.pixelSize: CelestinaTheme.fontRowSecondary
                 wrapMode: Text.Wrap
             }
         }
@@ -1193,7 +1193,7 @@ Item {
             visible: controller.opRunning
             color: CelestinaTheme.surface
             border.width: 1
-            border.color: CelestinaTheme.border
+            border.color: CelestinaTheme.divider
             z: 5
 
             Text {
@@ -1211,7 +1211,7 @@ Item {
                 }
                 color: CelestinaTheme.text
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontLabel
+                font.pixelSize: CelestinaTheme.fontRowSecondary
                 elide: Text.ElideMiddle
             }
 
@@ -1260,12 +1260,12 @@ Item {
                 anchors.rightMargin: 12
                 width: cancelOpLabel.width + 22
                 height: 28
-                radius: CelestinaTheme.radiusXs
+                radius: CelestinaTheme.radiusSm
                 color: cancelOpMouse.containsMouse
                        ? CelestinaTheme.surfaceHover
                        : CelestinaTheme.controlFill
                 border.width: 1
-                border.color: CelestinaTheme.border
+                border.color: CelestinaTheme.divider
 
                 Accessible.role: Accessible.Button
                 Accessible.name: "Cancelar la operación"
@@ -1302,7 +1302,7 @@ Item {
                   ? "⚠ Vigilancia perdida · instantánea"
                   : controller.statusText
             color: controller.watchDegraded
-                   ? CelestinaTheme.dangerText : CelestinaTheme.textMuted
+                   ? CelestinaTheme.dangerFillInk : CelestinaTheme.textMuted
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: Math.round(CelestinaTheme.fontCaption * root.hostWindow.interfaceTextScale)
             elide: Text.ElideRight
@@ -1340,7 +1340,7 @@ Item {
                       ? CelestinaTheme.surfaceHover
                       : CelestinaTheme.controlFill
                 border.width: sizeButton.activeFocus ? 1 : 0
-                border.color: CelestinaTheme.focus
+                border.color: CelestinaTheme.focusRing
             }
 
             SizePopup {

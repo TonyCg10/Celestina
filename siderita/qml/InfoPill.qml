@@ -59,8 +59,11 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         color: CelestinaTheme.text
         font.family: CelestinaTheme.sansFamily
-        font.pixelSize: Math.round(CelestinaTheme.fontLabel * textScale)
+        font.pixelSize: Math.round(CelestinaTheme.fontRowSecondary * textScale)
         font.weight: CelestinaTheme.weightMedium
+        // Tabular figures so the counts in these floating strips (search summary,
+        // trash header) keep an even width as they change.
+        font.features: CelestinaTheme.fontFeaturesTabular
         elide: Text.ElideRight
     }
 }

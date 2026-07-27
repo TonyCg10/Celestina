@@ -72,7 +72,7 @@ Rectangle {
             text: controller.propName
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontCallout
+            font.pixelSize: CelestinaTheme.fontRowTitle
             font.weight: CelestinaTheme.weightDemiBold
             elide: Text.ElideMiddle
         }

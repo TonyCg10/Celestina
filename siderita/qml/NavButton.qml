@@ -37,7 +37,7 @@ ToolButton {
                ? CelestinaTheme.surfaceHover
                : CelestinaTheme.surface
         border.width: control.activeFocus ? 1 : 0
-        border.color: CelestinaTheme.focus
+        border.color: CelestinaTheme.focusRing
 
         Behavior on color {
             ColorAnimation {

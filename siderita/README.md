@@ -32,7 +32,7 @@ desktop-file-validate siderita.desktop
 | `qml/Sidebar.qml` | places/devices/favourites/bookmarks + their menus |
 | `qml/PickerWindow.qml` | the portal file chooser |
 | `qml/*.qml` (rest) | small shared types: pills, buttons, badges, rows |
-| `../celestina-style/` | shared theme, glass and icons (consumed) |
+| `../celestina-style/` | shared theme, glass, icons and font (consumed) |
 | `../celestina-rs/crates/siderita-core` | read-only Rust domain |
 | `../celestina-rs/crates/siderita-qt` | stable view contract for QML |
 | `scripts/` | run and measurement scripts |

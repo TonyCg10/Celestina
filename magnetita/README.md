@@ -100,7 +100,7 @@ and the packaging.
 | `../celestina-rs/crates/magnetitad` | the headless daemon: device links, the sshfs mount, notifications, MPRIS, settings, and the `org.celestina.Devices1` service |
 | `src/`, `qml/` | the standalone Qt/QML app — a thin D-Bus client of the daemon; the CXX-Qt bridge lives in `src/controller.rs` |
 | `magnetitad.service`, `org.celestina.Magnetita.desktop` | the daemon's systemd user unit and the app's desktop entry |
-| `../celestina-style/` | shared theme and button, symlinked into `qml/` (consumed) |
+| `../celestina-style/` | shared theme, button and font, symlinked into `qml/` (consumed) |
 
 ## Standards & interop
 

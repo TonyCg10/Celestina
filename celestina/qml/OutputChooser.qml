@@ -79,7 +79,7 @@ Window {
         radius: CelestinaTheme.radiusLg
         color: CelestinaTheme.surfaceStrong
         border.width: 1
-        border.color: CelestinaTheme.border
+        border.color: CelestinaTheme.divider
 
         Text {
             id: heading
@@ -88,7 +88,7 @@ Window {
             text: "Compartir pantalla"
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontCallout
+            font.pixelSize: CelestinaTheme.fontRowTitle
             font.weight: CelestinaTheme.weightDemiBold
         }
 
@@ -159,7 +159,7 @@ Window {
                        : tileMouse.containsMouse ? CelestinaTheme.surfaceHover
                        : CelestinaTheme.controlFill
                 border.width: tile.current ? 1 : 0
-                border.color: CelestinaTheme.borderStrong
+                border.color: CelestinaTheme.dividerStrong
 
                 Behavior on color {
                     ColorAnimation { duration: CelestinaTheme.motionFast }
@@ -175,11 +175,11 @@ Window {
                             ? tile.modelData.width / tile.modelData.height : 1.6
                     height: 52
                     width: Math.min(170, Math.round(height * ratio))
-                    radius: CelestinaTheme.radiusXs
+                    radius: CelestinaTheme.radiusSm
                     color: CelestinaTheme.canvas
                     border.width: 1
                     border.color: tile.current ? CelestinaTheme.accent
-                                               : CelestinaTheme.border
+                                               : CelestinaTheme.divider
 
                     // El pie del monitor: pequeño, pero es lo que lo hace legible
                     // como pantalla y no como rectángulo.
@@ -190,7 +190,7 @@ Window {
                         height: 4
                         radius: 2
                         color: tile.current ? CelestinaTheme.accent
-                                            : CelestinaTheme.border
+                                            : CelestinaTheme.divider
                     }
                 }
 

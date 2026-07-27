@@ -150,7 +150,7 @@ truthful first slice; the shared contracts exist in a form apps can consume.
 
 - [x] Monorepo git baseline
 - [ ] **celestina-rs CP0** — freeze & version the read-only core API
-- [ ] **celestina-style CP0** — one canonical source compiled into every consumer (symlinks, CI-guarded — done); public-type inventory and the qmllint warning still open. The installable clean-prefix module is deferred until an out-of-tree consumer exists
+- [ ] **celestina-style CP0** — one canonical source compiled into every consumer (symlinks, CI-guarded — done); the qmllint `OUTPUT_DIRECTORY` warning is fixed (S1); the public-type inventory is still open. The installable clean-prefix module is deferred until an out-of-tree consumer exists
 - [ ] **celestina CP0** — panel geometry, exclusive zone and no-focus verified on real Niri
 - [x] **siderita CP0** — ship the read-only slice from a staged install with real-Wayland resource/frame numbers; ratify or reopen Qt/QML
 

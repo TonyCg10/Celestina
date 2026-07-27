@@ -161,14 +161,14 @@ Item {
                         text: "›"
                         color: CelestinaTheme.textMuted
                         font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: Math.round(CelestinaTheme.fontLabel * root.hostWindow.interfaceTextScale)
+                        font.pixelSize: Math.round(CelestinaTheme.fontRowSecondary * root.hostWindow.interfaceTextScale)
                     }
 
                     Rectangle {
                         anchors.verticalCenter: parent.verticalCenter
                         width: crumbText.implicitWidth + 12
                         height: 24
-                        radius: CelestinaTheme.radiusXs
+                        radius: CelestinaTheme.radiusSm
                         color: crumbMouse.containsMouse
                                ? CelestinaTheme.surfaceHover
                                : "transparent"
@@ -181,7 +181,7 @@ Item {
                                    ? CelestinaTheme.text
                                    : CelestinaTheme.textMuted
                             font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: Math.round(CelestinaTheme.fontLabel * root.hostWindow.interfaceTextScale)
+                            font.pixelSize: Math.round(CelestinaTheme.fontRowSecondary * root.hostWindow.interfaceTextScale)
                         }
 
                         MouseArea {
@@ -205,10 +205,10 @@ Item {
             leftPadding: 13
             rightPadding: 13
             color: CelestinaTheme.text
-            selectionColor: CelestinaTheme.accentStrong
+            selectionColor: CelestinaTheme.accentPressed
             selectedTextColor: CelestinaTheme.text
             font.family: CelestinaTheme.monoFamily
-            font.pixelSize: Math.round(CelestinaTheme.fontLabel * root.hostWindow.interfaceTextScale)
+            font.pixelSize: Math.round(CelestinaTheme.fontRowSecondary * root.hostWindow.interfaceTextScale)
             background: null
             Accessible.name: "Ubicación"
 
@@ -255,7 +255,7 @@ Item {
         placeholderText: "Buscar aquí y en subcarpetas"
         color: CelestinaTheme.text
         placeholderTextColor: CelestinaTheme.textMuted
-        selectionColor: CelestinaTheme.accentStrong
+        selectionColor: CelestinaTheme.accentPressed
         selectedTextColor: CelestinaTheme.text
         font.family: CelestinaTheme.sansFamily
         font.pixelSize: Math.round(CelestinaTheme.fontBody * root.hostWindow.interfaceTextScale)
@@ -278,7 +278,7 @@ Item {
                 border.color: root.floating
                               ? "transparent"
                               : searchField.activeFocus
-                                ? CelestinaTheme.focus
+                                ? CelestinaTheme.focusRing
                                 : CelestinaTheme.inputBorder
             }
             GlassSurface {

@@ -26,7 +26,7 @@ Item {
         text: sizeRow.label
         color: CelestinaTheme.text
         font.family: CelestinaTheme.sansFamily
-        font.pixelSize: CelestinaTheme.fontLabel
+        font.pixelSize: CelestinaTheme.fontRowSecondary
         elide: Text.ElideRight
     }
 
@@ -68,7 +68,7 @@ Item {
             radius: 7.5
             color: sizeSlider.pressed ? CelestinaTheme.accent : CelestinaTheme.text
             border.width: 1
-            border.color: CelestinaTheme.borderStrong
+            border.color: CelestinaTheme.dividerStrong
         }
     }
 
@@ -82,5 +82,7 @@ Item {
         color: CelestinaTheme.textMuted
         font.family: CelestinaTheme.sansFamily
         font.pixelSize: CelestinaTheme.fontCaption
+        // Tabular figures so the percentage does not shift width as it counts.
+        font.features: CelestinaTheme.fontFeaturesTabular
     }
 }

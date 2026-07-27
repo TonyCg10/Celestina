@@ -199,7 +199,7 @@ GlassContextMenu {
     MenuSeparator {
         contentItem: Rectangle {
             implicitHeight: 1
-            color: CelestinaTheme.border
+            color: CelestinaTheme.divider
         }
     }
 

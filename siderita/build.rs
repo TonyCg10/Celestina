@@ -72,11 +72,11 @@ fn main() {
     // que se le nombra. Sin estas líneas una edición de QML compilaba "bien" y
     // no entraba en el binario — un rato perdido persiguiendo un cambio que
     // estaba en el fichero y no en la aplicación.
-    for qml in QML_FILES
-        .iter()
-        .copied()
-        .chain(["qml/CelestinaTheme.qml", "qml/icons.qrc"])
-    {
+    for qml in QML_FILES.iter().copied().chain([
+        "qml/CelestinaTheme.qml",
+        "qml/icons.qrc",
+        "qml/fonts.qrc",
+    ]) {
         println!("cargo::rerun-if-changed={qml}");
     }
 
@@ -96,6 +96,9 @@ fn main() {
     println!("cargo::rerun-if-changed=cpp/siderita/icontheme.h");
     let builder = CxxQtBuilder::new_qml_module(module)
         .qrc("qml/icons.qrc")
+        // Inter Variable, compiled in so the suite's typeface travels with the
+        // binary (the canonical fonts.qrc lives in ../celestina-style, symlinked).
+        .qrc("qml/fonts.qrc")
         .cpp_file("cpp/clipboard.cpp")
         // The native list model: the header is moc'd (Q_OBJECT), the .cpp compiled.
         .cpp_file("cpp/entrymodel.cpp")

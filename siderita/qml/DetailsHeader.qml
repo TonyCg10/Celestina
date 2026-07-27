@@ -29,7 +29,7 @@ Item {
         radius: CelestinaTheme.radiusSm
         color: "transparent"
         border.width: 1
-        border.color: CelestinaTheme.borderStrong
+        border.color: CelestinaTheme.dividerStrong
     }
 
     RowLayout {

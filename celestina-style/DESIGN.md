@@ -1,10 +1,15 @@
 # CelestinaStyle — Design Contract (One UI 8.5, desktop-adapted)
 
-> **Status: v1.0 (2026-07-27) — the four author decisions are sealed (§9);
-> no code yet.** Grounded in Samsung's real shipped values (the SESL/One UI
+> **Status: v1.0 (2026-07-27) — the four author decisions are sealed (§9).
+> S1 (tokens v2 + typography, §8) shipped 2026-07-27; S2–S5 gated on the
+> author.** Grounded in Samsung's real shipped values (the SESL/One UI
 > support library and the official One UI design guide), not in
-> screenshots-by-eye, and in verified Qt 6.11 / niri 26.04 capabilities. The
-> phased build plan in §8 starts on request.
+> screenshots-by-eye, and in verified Qt 6.11 / niri 26.04 capabilities.
+>
+> One implementation note where the platform overrode the contract: the `on*`
+> foreground pairs (§6.9/§9.1) ship as `<surface>Ink` (`accentInk` = `onAccent`)
+> because QML reserves the `on<Capital>` identifier namespace for signal
+> handlers — same pairs, a spelling the engine accepts.
 
 ## 1. Direction
 
