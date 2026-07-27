@@ -57,6 +57,25 @@ ellos — escribir el contrato no es empezar el proyecto.
   `magnetitad`), tamaños declarados por el par con techo de cordura.
 - Un feature aterriza con sus tests `#[cfg(test)]` en el mismo cambio.
 
+## Modularidad — nada de monolitos
+
+- Un archivo no nace para crecer sin techo: pasadas **~800 líneas** (Rust o
+  QML), se extrae antes de añadir — un componente QML por región de UI con API
+  mínima (propiedades + señales, sin alcanzar ids de fuera), un módulo Rust por
+  responsabilidad (patrón existente: `siderita/src/controller/{scan,fileops,trash}.rs`).
+- El bloque `#[cxx_qt::bridge]` es la excepción inevitable (cxx-qt 0.9 exige
+  declarar propiedades e invocables en un solo bloque): el *contrato* puede ser
+  largo, pero la *lógica* jamás vive dentro — cada invocable delega en un
+  módulo.
+- Un QObject no acumula dominios sin fin: si una superficie nueva no comparte
+  estado con el controlador, va en su propio QObject (precedente:
+  `FileManager1Service` y `FileChooserPortal` son objetos aparte).
+- Todo componente QML nuevo se registra en el `build.rs` de su app
+  (`QML_FILES`) — un QML sin listar compila "bien" sin llegar al binario.
+- Deuda nombrada: `siderita/qml/FolderView.qml` (~3,3k) y
+  `siderita/src/controller.rs` (~3k) son los dos monolitos heredados.
+  Prohibido crecerlos; al tocarlos, extrae primero la pieza que vas a tocar.
+
 ## Estilo y UI — cómo no volver a fabricar un botón ilegible
 
 - **Prohibido escribir colores en QML de apps** (ni hex ni nombres). Todo color
@@ -141,6 +160,3 @@ ellos — escribir el contrato no es empezar el proyecto.
   auto-aceptamos); quien marca el TCP hace de **servidor** TLS; los payloads se
   sirven en el rango **1739–1764** o el teléfono no los descarga;
   portapapeles teléfono→PC es manual por límite de Android, no bug nuestro.
-- Archivos en el límite de tamaño: `siderita/qml/FolderView.qml` (~3,3k líneas)
-  y `siderita/src/controller.rs` (~3k). No crecerlos más: al añadir algo ahí,
-  extrae primero una pieza a un archivo/módulo propio.
