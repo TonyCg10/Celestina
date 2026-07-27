@@ -355,130 +355,136 @@ ApplicationWindow {
             id: settingsView
             visible: window.settingsOpen
             width: parent.width
-            spacing: 10
+            spacing: 16
 
-            Text {
-                text: "DISPOSITIVOS EMPAREJADOS"
-                color: CelestinaTheme.textMuted
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontMini
-                font.letterSpacing: 1.4
-                font.weight: CelestinaTheme.weightDemiBold
-                topPadding: 4
-            }
-
-            Text {
+            // Paired devices, grouped into one card (the One UI signature).
+            ListSection {
                 width: parent.width
-                visible: devices.pairedNames.length === 0
-                text: "Ningún dispositivo emparejado todavía."
-                color: CelestinaTheme.textMuted
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontCaption
-            }
+                title: "DISPOSITIVOS EMPAREJADOS"
 
-            Repeater {
-                model: devices.pairedNames
-                delegate: Rectangle {
-                    required property int index
-                    required property string modelData
-                    readonly property string fingerprint:
-                        index < devices.pairedFingerprints.length ? devices.pairedFingerprints[index] : ""
-                    readonly property bool online:
-                        index < devices.pairedConnected.length && devices.pairedConnected[index] === "true"
+                Text {
+                    width: parent.width
+                    leftPadding: 16
+                    rightPadding: 16
+                    topPadding: 8
+                    bottomPadding: 8
+                    visible: devices.pairedNames.length === 0
+                    text: "Ningún dispositivo emparejado todavía."
+                    color: CelestinaTheme.textMuted
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCaption
+                    wrapMode: Text.Wrap
+                }
 
-                    width: settingsView.width
-                    height: 74
-                    radius: CelestinaTheme.radiusMd
-                    color: CelestinaTheme.surface
-                    border.color: CelestinaTheme.divider
-                    border.width: 1
+                Repeater {
+                    model: devices.pairedNames
+                    delegate: Item {
+                        required property int index
+                        required property string modelData
+                        readonly property string fingerprint:
+                            index < devices.pairedFingerprints.length ? devices.pairedFingerprints[index] : ""
+                        readonly property bool online:
+                            index < devices.pairedConnected.length && devices.pairedConnected[index] === "true"
 
-                    Column {
-                        anchors.left: parent.left
-                        anchors.leftMargin: 16
-                        anchors.right: forget.left
-                        anchors.rightMargin: 12
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 3
+                        width: settingsView.width
+                        height: 66
 
-                        Text {
-                            width: parent.width
-                            text: (online ? "🟢 " : "⚪ ") + modelData
-                            color: CelestinaTheme.text
-                            font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: CelestinaTheme.fontRowTitle
-                            font.weight: CelestinaTheme.weightDemiBold
-                            elide: Text.ElideRight
+                        // Online status: a colour dot (was the 🟢/⚪ emoji).
+                        Rectangle {
+                            id: dot
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: parent.online ? CelestinaTheme.success : CelestinaTheme.textMuted
+                            anchors.left: parent.left
+                            anchors.leftMargin: 16
+                            anchors.verticalCenter: parent.verticalCenter
                         }
-                        Text {
-                            width: parent.width
-                            text: "🔑 " + fingerprint
-                            color: CelestinaTheme.textMuted
-                            font.family: CelestinaTheme.monoFamily
-                            font.pixelSize: CelestinaTheme.fontMini
-                            elide: Text.ElideRight
-                        }
-                    }
 
-                    CelestinaButton {
-                        id: forget
-                        anchors.right: parent.right
-                        anchors.rightMargin: 14
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 100
-                        text: "Olvidar"
-                        onClicked: devices.forgetPaired(index)
+                        Column {
+                            anchors.left: dot.right
+                            anchors.leftMargin: 12
+                            anchors.right: forget.left
+                            anchors.rightMargin: 12
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 3
+
+                            Text {
+                                width: parent.width
+                                text: modelData
+                                color: CelestinaTheme.text
+                                font.family: CelestinaTheme.sansFamily
+                                font.pixelSize: CelestinaTheme.fontRowTitle
+                                font.weight: CelestinaTheme.weightDemiBold
+                                elide: Text.ElideRight
+                            }
+                            Text {
+                                width: parent.width
+                                text: fingerprint
+                                color: CelestinaTheme.textMuted
+                                font.family: CelestinaTheme.monoFamily
+                                font.pixelSize: CelestinaTheme.fontMini
+                                font.features: CelestinaTheme.fontFeaturesTabular
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        CelestinaButton {
+                            id: forget
+                            anchors.right: parent.right
+                            anchors.rightMargin: 14
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 100
+                            text: "Olvidar"
+                            onClicked: devices.forgetPaired(index)
+                        }
                     }
                 }
             }
 
-            Text {
-                text: "PLUGINS"
-                color: CelestinaTheme.textMuted
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontMini
-                font.letterSpacing: 1.4
-                font.weight: CelestinaTheme.weightDemiBold
-                topPadding: 10
-            }
+            // Plugin toggles — the CelestinaSwitch, grouped into a card.
+            ListSection {
+                width: parent.width
+                title: "PLUGINS"
 
-            Repeater {
-                model: devices.pluginLabels
-                delegate: Rectangle {
-                    required property int index
-                    required property string modelData
-                    readonly property bool enabledFlag:
-                        index < devices.pluginEnabled.length && devices.pluginEnabled[index] === "true"
+                Repeater {
+                    model: devices.pluginLabels
+                    delegate: Item {
+                        required property int index
+                        required property string modelData
+                        readonly property bool enabledFlag:
+                            index < devices.pluginEnabled.length && devices.pluginEnabled[index] === "true"
 
-                    width: settingsView.width
-                    height: 48
-                    radius: CelestinaTheme.radiusMd
-                    color: CelestinaTheme.surface
-                    border.color: CelestinaTheme.divider
-                    border.width: 1
+                        width: settingsView.width
+                        height: 46
 
-                    Text {
-                        anchors.left: parent.left
-                        anchors.leftMargin: 16
-                        anchors.right: toggle.left
-                        anchors.rightMargin: 12
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: modelData
-                        color: CelestinaTheme.text
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontRowTitle
-                        elide: Text.ElideRight
-                    }
+                        Text {
+                            anchors.left: parent.left
+                            anchors.leftMargin: 16
+                            anchors.right: toggle.left
+                            anchors.rightMargin: 12
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: modelData
+                            color: CelestinaTheme.text
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontRowTitle
+                            elide: Text.ElideRight
+                        }
 
-                    CelestinaButton {
-                        id: toggle
-                        anchors.right: parent.right
-                        anchors.rightMargin: 14
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 120
-                        primary: enabledFlag
-                        text: enabledFlag ? "Activado" : "Desactivado"
-                        onClicked: devices.togglePlugin(index)
+                        CelestinaSwitch {
+                            id: toggle
+                            anchors.right: parent.right
+                            anchors.rightMargin: 14
+                            anchors.verticalCenter: parent.verticalCenter
+                            checked: parent.enabledFlag
+                            // Truthful state: the click is a request. Re-bind to
+                            // the model so the switch shows what the daemon
+                            // confirms, not the optimistic toggle.
+                            onClicked: {
+                                checked = Qt.binding(function() { return parent.enabledFlag })
+                                devices.togglePlugin(index)
+                            }
+                        }
                     }
                 }
             }

@@ -77,8 +77,23 @@ launcher marks, replacing the rounded-rect tile — One UI reserves the
 superellipse for app icons, §6.3); the amber-rhombohedron / steel-octahedron
 marks are unchanged. Verified by offscreen icon + app-icon specimens + app/shell
 builds + smokes. **Still open (out of S3):** the panel's broader migration off
-its hardcoded Rosé Pine palette (shell buildout, gated by CLAUDE.md). S4
-(gallery + components) follows, gated on the author.
+its hardcoded Rosé Pine palette (shell buildout, gated by CLAUDE.md).
+
+**S4 (gallery + first components) — done** (2026-07-27): the two One UI
+signature controls landed — **`CelestinaSwitch`** (the pill toggle, white thumb
+on an accent track) and **`ListSection`** (the grouped-card "focus block"), with
+**Magnetita's Settings surface** as their first real consumer (CP2 satisfied):
+its plugin toggles are now switches and its device/plugin lists are grouped
+cards, dropping the 🟢/⚪/🔑 emoji for a status dot and tabular fingerprints, and
+the toggle keeps truthful state (the switch re-binds to the daemon's answer, not
+the optimistic click). The **gallery** (`gallery/Gallery.qml`, run via
+`gallery/run.sh` — dev-only, no build step) puts every token, control, icon and
+glass surface on one scrollable screen: the review surface DESIGN §7 asked for.
+Verified by a full real-session gallery grab + a standalone component grab +
+Magnetita build/smoke + module `all_qmllint`. Still on demand (CP2): further
+components (`CelestinaDialog`, `TabPills`, `Toast`…) wait for their first
+consumers. **S5 (panel compositor glass) is gated — it needs the panel built
+out (a shell stub today, CLAUDE.md).**
 
 ## Checkpoint 0 — The canonical source, enforced (STYLE-0)
 **Goal:** one canonical source tree that every consumer compiles from, with

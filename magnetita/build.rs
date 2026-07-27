@@ -4,7 +4,12 @@ use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
 // single-list discipline Siderita learned the hard way. CelestinaButton is the
 // suite's shared button (symlinked from celestina-style), so the app never forks
 // its own.
-const QML_FILES: &[&str] = &["qml/CelestinaButton.qml", "qml/Main.qml"];
+const QML_FILES: &[&str] = &[
+    "qml/CelestinaButton.qml",
+    "qml/CelestinaSwitch.qml",
+    "qml/ListSection.qml",
+    "qml/Main.qml",
+];
 
 fn main() {
     // CelestinaTheme is the suite's shared visual language; it lives canonically

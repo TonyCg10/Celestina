@@ -11,6 +11,8 @@ singleton CelestinaTheme 1.0 CelestinaTheme.qml
 
 CelestinaButton 1.0 CelestinaButton.qml
 CelestinaTextField 1.0 CelestinaTextField.qml
+CelestinaSwitch 1.0 CelestinaSwitch.qml
+ListSection 1.0 ListSection.qml
 GlassSurface 1.0 GlassSurface.qml
 GlassCard 1.0 GlassCard.qml
 GlassContextMenu 1.0 GlassContextMenu.qml

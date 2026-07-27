@@ -1,9 +1,11 @@
 # CelestinaStyle — Design Contract (One UI 8.5, desktop-adapted)
 
 > **Status: v1.0 (2026-07-27) — the four author decisions are sealed (§9).
-> S1 (tokens v2 + typography), S2 (glass v2 + elevation) and S3 (iconography —
-> the Lucide set, the panel de-emoji and the app-icon squircle template, §8)
-> shipped 2026-07-27; S4–S5 are gated on the author.** Grounded in Samsung's
+> S1 (tokens v2 + typography), S2 (glass v2 + elevation), S3 (iconography —
+> the Lucide set, the panel de-emoji and the app-icon squircle template) and
+> S4's first cut (the gallery + `CelestinaSwitch`/`ListSection` with Magnetita
+> Settings as consumer, §8) shipped 2026-07-27; further on-demand components and
+> S5 (panel compositor glass) are gated on the author.** Grounded in Samsung's
 > real shipped
 > values (the SESL/One UI support library and the official One UI design
 > guide), not in screenshots-by-eye, and in verified Qt 6.11 / niri 26.04

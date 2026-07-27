@@ -35,6 +35,9 @@ tree (see [ROADMAP.md](ROADMAP.md), STYLE-D).
 | `GlassContextMenu.qml`, `GlassMenuItem.qml` | glass `Menu` + styled item |
 | `CelestinaButton.qml` | the suite button, in its three roles: normal / primary / destructive |
 | `CelestinaTextField.qml` | the suite text field, themed fill and focus border |
+| `CelestinaSwitch.qml` | the One UI pill toggle: white thumb, accent track when on |
+| `ListSection.qml` | the grouped-card list (One UI's "focus block" signature) with an optional header |
+| `gallery/` | dev-only review surface — every token, control and glass surface on one screen (`gallery/run.sh`) |
 | `icons/`, `icons.qrc` | the Lucide (ISC) icon set behind freedesktop names, the app launcher icons + the glass noise-dither texture |
 | `fonts/`, `fonts.qrc` | Inter Variable (OFL) — the suite typeface, compiled into each app's binary |
 

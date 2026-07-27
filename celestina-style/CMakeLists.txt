@@ -26,6 +26,8 @@ qt_add_qml_module(celestina-style
         CelestinaTheme.qml
         CelestinaButton.qml
         CelestinaTextField.qml
+        CelestinaSwitch.qml
+        ListSection.qml
         GlassSurface.qml
         GlassCard.qml
         GlassContextMenu.qml
