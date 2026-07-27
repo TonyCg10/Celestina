@@ -72,12 +72,13 @@ resolving by name; a `phone` icon was added (Siderita's sidebar referenced a
 `phone` fallback that did not exist). The shell panel's emoji glyphs (`📱`,`⚡`)
 became real icons, compiled into the shell from the canonical files. `eject`
 has no Lucide equivalent, so the existing (Lucide-consistent) mark is kept.
-Verified by an offscreen icon specimen + app/shell builds + smokes. **Open:**
-the app-icon squircle template (the launcher marks exist as designed rhombus/
-magnetite icons; the One UI squircle container is an author design decision),
-and the panel's broader migration off its hardcoded Rosé Pine palette (shell
-buildout, gated by CLAUDE.md). S4 (gallery + components) follows, gated on the
-author.
+The app-icon tiles became true **squircles** (a superellipse n=5 shared by both
+launcher marks, replacing the rounded-rect tile — One UI reserves the
+superellipse for app icons, §6.3); the amber-rhombohedron / steel-octahedron
+marks are unchanged. Verified by offscreen icon + app-icon specimens + app/shell
+builds + smokes. **Still open (out of S3):** the panel's broader migration off
+its hardcoded Rosé Pine palette (shell buildout, gated by CLAUDE.md). S4
+(gallery + components) follows, gated on the author.
 
 ## Checkpoint 0 — The canonical source, enforced (STYLE-0)
 **Goal:** one canonical source tree that every consumer compiles from, with
