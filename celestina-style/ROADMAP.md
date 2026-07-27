@@ -63,7 +63,21 @@ session (blur/shadow do not render under the offscreen QPA): grabbed glass /
 elevated-surface / real Siderita-window captures, plus app builds + offscreen
 smokes + clean `all_qmllint`. Deferred within the recipe: the composite
 QQEM/qsb shader (blur+desaturate+tint+noise+stroke in one pass) stays layered
-for now. S3 (iconography) is next and gated on the author.
+for now.
+
+**S3 (iconography) — icon set done, squircle pending** (2026-07-27): the ad-hoc
+hand-drawn fallbacks were replaced by the **Lucide** set (ISC, license shipped
+in `icons/`) behind the existing freedesktop-name mapping, so consumers keep
+resolving by name; a `phone` icon was added (Siderita's sidebar referenced a
+`phone` fallback that did not exist). The shell panel's emoji glyphs (`📱`,`⚡`)
+became real icons, compiled into the shell from the canonical files. `eject`
+has no Lucide equivalent, so the existing (Lucide-consistent) mark is kept.
+Verified by an offscreen icon specimen + app/shell builds + smokes. **Open:**
+the app-icon squircle template (the launcher marks exist as designed rhombus/
+magnetite icons; the One UI squircle container is an author design decision),
+and the panel's broader migration off its hardcoded Rosé Pine palette (shell
+buildout, gated by CLAUDE.md). S4 (gallery + components) follows, gated on the
+author.
 
 ## Checkpoint 0 — The canonical source, enforced (STYLE-0)
 **Goal:** one canonical source tree that every consumer compiles from, with

@@ -45,6 +45,8 @@ qt_add_qml_module(celestina-style
         icons/media-eject.svg
         icons/star.svg
         icons/star-outline.svg
+        icons/phone.svg
+        icons/battery-charging.svg
         icons/glass-noise.png
         fonts/InterVariable.ttf
 )

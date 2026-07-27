@@ -26,10 +26,13 @@ Window {
         spacing: 6
         visible: Phone.phoneConnected
 
-        Text {
+        Image {
             anchors.verticalCenter: parent.verticalCenter
-            text: "📱"
-            font.pixelSize: 13
+            source: "qrc:/qt/qml/CelestinaDesktop/phone.svg"
+            sourceSize: Qt.size(15, 15)
+            width: 15
+            height: 15
+            smooth: true
         }
 
         Text {
@@ -39,14 +42,29 @@ Window {
             font.pixelSize: 13
         }
 
-        Text {
+        Row {
             anchors.verticalCenter: parent.verticalCenter
+            spacing: 3
             visible: Phone.phoneBattery >= 0
-            text: (Phone.phoneCharging ? "⚡ " : "") + Phone.phoneBattery + " %"
-            color: Phone.phoneBattery <= 15 ? "#eb6f92"
-                 : Phone.phoneBattery <= 30 ? "#f6c177"
-                 : "#908caa"
-            font.pixelSize: 13
+
+            Image {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: Phone.phoneCharging
+                source: "qrc:/qt/qml/CelestinaDesktop/battery-charging.svg"
+                sourceSize: Qt.size(15, 15)
+                width: 15
+                height: 15
+                smooth: true
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: Phone.phoneBattery + " %"
+                color: Phone.phoneBattery <= 15 ? "#eb6f92"
+                     : Phone.phoneBattery <= 30 ? "#f6c177"
+                     : "#908caa"
+                font.pixelSize: 13
+            }
         }
     }
 

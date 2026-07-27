@@ -19,6 +19,14 @@ qt_add_executable(celestina
     src/devicesclient.cpp
 )
 
+# The panel's status icons come from the shared Lucide set. The shell imports
+# CelestinaStyle at runtime (source), so its qrc-bundled icons are not reachable
+# here — instead the two the panel needs are compiled straight into the shell
+# from the canonical files, with an explicit alias so the `..` path does not leak
+# into the resource name.
+set_source_files_properties(../celestina-style/icons/phone.svg PROPERTIES QT_RESOURCE_ALIAS phone.svg)
+set_source_files_properties(../celestina-style/icons/battery-charging.svg PROPERTIES QT_RESOURCE_ALIAS battery-charging.svg)
+
 qt_add_qml_module(celestina
     URI CelestinaDesktop
     VERSION 1.0
@@ -26,6 +34,9 @@ qt_add_qml_module(celestina
         qml/Panel.qml
         qml/Clock.qml
         qml/OutputChooser.qml
+    RESOURCES
+        ../celestina-style/icons/phone.svg
+        ../celestina-style/icons/battery-charging.svg
 )
 
 target_link_libraries(celestina PRIVATE

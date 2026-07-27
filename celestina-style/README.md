@@ -35,7 +35,7 @@ tree (see [ROADMAP.md](ROADMAP.md), STYLE-D).
 | `GlassContextMenu.qml`, `GlassMenuItem.qml` | glass `Menu` + styled item |
 | `CelestinaButton.qml` | the suite button, in its three roles: normal / primary / destructive |
 | `CelestinaTextField.qml` | the suite text field, themed fill and focus border |
-| `icons/`, `icons.qrc` | minimal freedesktop-name SVG fallbacks, the app launcher icons + the glass noise-dither texture |
+| `icons/`, `icons.qrc` | the Lucide (ISC) icon set behind freedesktop names, the app launcher icons + the glass noise-dither texture |
 | `fonts/`, `fonts.qrc` | Inter Variable (OFL) — the suite typeface, compiled into each app's binary |
 
 See [DESIGN.md](DESIGN.md) for the design contract (One UI 8.5,
