@@ -44,6 +44,8 @@ qt_add_qml_module(celestina-style
 
 target_link_libraries(celestina-style PRIVATE Qt6::Quick)
 
-# NOTE: A relocatable install to a clean prefix (module + plugin + type metadata,
-# with clean-prefix import fixtures) is CelestinaStyle Checkpoint 0. Within the
-# monorepo, Siderita compiles these files into its own binary via cxx-qt-build.
+# NOTE: In-tree consumers (siderita, magnetita) do not use this build — they
+# symlink the .qml sources into their own cxx-qt modules, which is the official
+# consumption contract (see ROADMAP.md). This CMake module exists for the
+# shell's output chooser, qmllint, and the deferred installable release
+# (STYLE-D: gated on a consumer outside this tree).

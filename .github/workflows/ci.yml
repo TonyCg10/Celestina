@@ -11,6 +11,28 @@ on:
     branches: [main]
 
 jobs:
+  # El contrato del estilo compartido: dentro de las apps, un archivo cuyo
+  # nombre exista en celestina-style/ debe ser un symlink (modo git 120000),
+  # nunca una copia — una copia diverge en silencio a la primera edición.
+  estilo-sin-copias:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Los archivos del estilo son symlinks, no copias
+        run: |
+          fallos=0
+          for f in $(git ls-files 'siderita/qml' 'magnetita/qml'); do
+            base=$(basename "$f")
+            if git ls-files --error-unmatch "celestina-style/$base" >/dev/null 2>&1; then
+              modo=$(git ls-files -s -- "$f" | cut -d' ' -f1)
+              if [ "$modo" != "120000" ]; then
+                echo "::error file=$f::copia del estilo (modo $modo) — debe ser symlink a ../../celestina-style/$base"
+                fallos=1
+              fi
+            fi
+          done
+          exit $fallos
+
   celestina-rs:
     runs-on: ubuntu-latest
     defaults:

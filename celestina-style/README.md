@@ -16,10 +16,13 @@ cmake -S . -B build -G Ninja
 cmake --build build
 ```
 
-Within the monorepo, Siderita and Magnetita symlink these files into their own
-CXX-Qt QML modules, and the `celestina` output chooser imports the module
-directly through a runtime import path. A relocatable install to a clean prefix
-(module + plugin + type metadata) is Checkpoint 0.
+**Consumption contract:** apps symlink these sources into their own CXX-Qt QML
+modules and compile them in — the canonical file is the interface, the binaries
+stay self-contained, and CI refuses any copy that would drift. The `celestina`
+output chooser still imports the built module through a runtime import path (its
+own outlier, gone once the shell compiles the style in like the apps do). A
+relocatable installed module is deferred until a consumer exists outside this
+tree (see [ROADMAP.md](ROADMAP.md), STYLE-D).
 
 ## Layout
 

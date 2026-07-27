@@ -110,10 +110,12 @@ as a suite rather than four unrelated apps:
 - `celestina-rs` — eight crates compile: the five pure cores plus Magnetita's
   protocol core, TLS transport and headless daemon; fmt, Clippy and the
   workspace tests pass.
-- `celestina-style` — now the canonical shared module (semantic tokens +
-  working glass + fallback icons), builds with CMake and is consumed by
-  siderita and magnetita (symlinked into their CXX-Qt modules) and by the
-  shell's output chooser; a clean-prefix installable release is still open.
+- `celestina-style` — the canonical shared source (semantic tokens + working
+  glass + fallback icons). Official consumption contract: apps symlink the
+  sources into their own CXX-Qt modules and compile them in, CI-guarded
+  against copies; the shell's output chooser still imports the CMake-built
+  module via a runtime path. An installable clean-prefix release is deferred
+  until an out-of-tree consumer exists.
 - `celestina` — host builds and QML-lints; geometry/zone/focus not yet verified
   on real Niri; no Rust yet.
 - `siderita` — **v1.0 (now 1.0.1): Iteration 1 concluded (2026-07-25)**, the full CP0 → CP5
@@ -148,7 +150,7 @@ truthful first slice; the shared contracts exist in a form apps can consume.
 
 - [x] Monorepo git baseline
 - [ ] **celestina-rs CP0** — freeze & version the read-only core API
-- [ ] **celestina-style CP0** — module installable/importable from a clean prefix, glass APIs made truthful
+- [ ] **celestina-style CP0** — one canonical source compiled into every consumer (symlinks, CI-guarded — done); public-type inventory and the qmllint warning still open. The installable clean-prefix module is deferred until an out-of-tree consumer exists
 - [ ] **celestina CP0** — panel geometry, exclusive zone and no-focus verified on real Niri
 - [x] **siderita CP0** — ship the read-only slice from a staged install with real-Wayland resource/frame numbers; ratify or reopen Qt/QML
 

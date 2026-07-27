@@ -22,7 +22,8 @@ qml_file=$project_root/qml/OutputChooser.qml
 # CelestinaStyle se importa por directorio: QML_IMPORT_PATH debe apuntar al
 # *padre* de una carpeta llamada CelestinaStyle, así que se prepara un enlace en
 # el directorio de runtime del usuario en lugar de exigir el módulo instalado.
-# Cuando celestina-style tenga su release instalable (su CP0), esto sobra.
+# Cuando el shell compile CelestinaStyle dentro de su propio módulo QML (el
+# patrón de las apps), esto sobra.
 import_root=${XDG_RUNTIME_DIR:-/tmp}/celestina-style-import
 mkdir -p "$import_root"
 if [ ! -e "$import_root/CelestinaStyle" ]; then

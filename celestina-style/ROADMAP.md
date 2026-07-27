@@ -9,41 +9,54 @@
 reusable semantic tokens and generic controls — not app state, Niri integration,
 dotfiles or workflows. Consumers keep independent roadmaps and release timing.
 
-**Current state.** CelestinaStyle is now the canonical shared module: a semantic
+**Current state.** CelestinaStyle is the canonical shared source: a semantic
 token singleton (promoted from Siderita), working backdrop-blur glass
-(`GlassSurface`/`GlassContextMenu`/`GlassMenuItem`, replacing the earlier
-`CelestinaGlassPanel` that blurred its own fill), `CelestinaButton` and bundled
-fallback icons. It builds with CMake and is consumed live by `siderita`. A
-clean-prefix installable release, a compatibility/deprecation policy and verified
-accessibility/motion behavior are still open.
+(`GlassSurface`/`GlassCard`/`GlassContextMenu`/`GlassMenuItem`, replacing the
+earlier `CelestinaGlassPanel` that blurred its own fill), `CelestinaButton`,
+`CelestinaTextField` and bundled fallback icons. Both apps consume it live by
+symlinking the sources into their own CXX-Qt modules — the official mechanism,
+guarded in CI so a copy can never silently reappear. A compatibility/deprecation
+policy and verified accessibility/motion behavior are still open; the installable
+module is deferred (see below).
 
-**Key decisions.** Style is an independent shared-library project; delivery is an
-installed/versioned QML module (source siblings and build symlinks are not a
-public interface); it owns reusable presentation only; backdrop blur is achieved
-in-scene by sampling injected content (`ShaderEffectSource`) — the module offers
-tint/glow/tokens, while compositor effects belong to the surface owner;
-accessibility is part of a public control's contract; the component set grows only
-from proven reuse (widget count is not progress).
+**Key decisions.** Style is an independent shared-library project. **In-tree
+delivery is source compilation via symlinks**: each app links the canonical
+`.qml` files into its own CXX-Qt QML module, so the canonical file *is* the
+interface, the dev loop has no install step, and app binaries stay
+self-contained — the property the suite's staged installs are built on. An
+installed/versioned QML module is the right tool only when a consumer lives
+*outside* this tree, and is deferred until one exists. It owns reusable
+presentation only; backdrop blur is achieved in-scene by sampling injected
+content (`ShaderEffectSource`) — the module offers tint/glow/tokens, while
+compositor effects belong to the surface owner; accessibility is part of a
+public control's contract; the component set grows only from proven reuse
+(widget count is not progress).
 
-## Checkpoint 0 — Relocatable, honest module (STYLE-0)
-**Goal:** a staged prefix contains a complete module that clean fixtures can
-import and operate without the source checkout, and the glass APIs mean what
-they say.
+## Checkpoint 0 — The canonical source, enforced (STYLE-0)
+**Goal:** one canonical source tree that every consumer compiles from, with
+drift made impossible, and glass APIs that mean what they say.
 
-- [x] Canonical module builds with CMake: semantic token singleton (`CelestinaTheme`, promoted from Siderita) + working glass (`GlassSurface`, `GlassContextMenu`, `GlassMenuItem`) + `CelestinaButton` + bundled fallback icons
+- [x] Canonical module builds with CMake: semantic token singleton (`CelestinaTheme`, promoted from Siderita) + working glass (`GlassSurface`, `GlassCard`, `GlassContextMenu`, `GlassMenuItem`) + `CelestinaButton` + `CelestinaTextField` + bundled fallback icons
 - [x] Working backdrop-blur glass — the broken `CelestinaGlassPanel` (blurred its own fill, not the backdrop) and `CelestinaContextMenu` were removed and replaced by Siderita's proven `ShaderEffectSource`-capture `GlassSurface`
 - [x] First real consumer proven: `siderita` renders entirely from this module (theme, glass, icons), verified by build + offscreen run
+- [x] Single source made real and enforced: both apps consume by symlink into their own CXX-Qt modules (Siderita's six committed copies were replaced by links, 2026-07-26), and CI refuses any style file in an app's `qml/` that is not a symlink
 - [ ] Inventory the public QML types, imports, properties, assets and generated files
+- [ ] Resolve the qmllint `OUTPUT_DIRECTORY` module-path warning
+
+**Done when:** every consumer builds from the one canonical tree with no copy
+anywhere, the guard proves it on every push, and the public surface is written
+down.
+
+## Deferred — the installable module (STYLE-D)
+**Gate:** a consumer *outside* this tree (a third-party app, a packaged
+release beyond the author's machine). Until one exists, an installed module
+would only add an install step and a runtime dependency that the staged
+self-contained apps deliberately avoid.
+
 - [ ] Choose the smallest complete install topology (module + plugin + type metadata) and make it importable from a clean prefix without the source checkout
 - [ ] Clean-prefix fixtures: one theme fixture + one interactive-control fixture that import only the staged prefix
 - [ ] Prove relocation (move the prefix, re-import) and missing/corrupt-module failures
-- [ ] Resolve the qmllint `OUTPUT_DIRECTORY` module-path warning
 - [ ] Record artifact/load baselines and consumer instructions with no sibling paths
-
-**Done when:** clean configure/build/install produce an accounted module tree;
-fixtures resolve only the staged module with the source hidden; moving the prefix
-works after declaring its new import root; missing artifacts fail visibly instead
-of falling back to a sibling/global copy.
 
 ## Checkpoint 1 — Stable, accessible design contract (STYLE-1)
 **Goal:** a versioned contract that Desktop and Siderita can both adopt
@@ -53,10 +66,10 @@ independently.
 - [ ] Truthful glass APIs — tint/glow/tokens vs. real in-scene blur vs. compositor blur kept clearly separate
 - [ ] Font + icon fallback contracts (Inter / JetBrains Mono / icon set)
 - [ ] Keyboard, focus, AT-SPI, reduced-motion and high-contrast behavior for the finite component set
-- [ ] Both apps consume the same installed release (see the suite convergence goal)
+- [x] Both apps consume the same canonical source (symlink-compiled; an installed release belongs to STYLE-D)
 
-**Done when:** Desktop and Siderita accept the same installed style release
-independently, and accessibility/motion behavior is verified, not assumed.
+**Done when:** every consumer renders from the same canonical source, and
+accessibility/motion behavior is verified, not assumed.
 
 ## Checkpoint 2 — Grow only by proven reuse
 **Goal:** the component set grows from demonstrated demand, not from widget
