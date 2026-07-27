@@ -16,4 +16,8 @@ GlassSurface {
     // A modal can be scrolled under, so track the backdrop live rather than
     // freezing a snapshot that visibly desyncs when the content moves.
     liveCapture: true
+
+    onVisibleChanged: if (visible) Qt.callLater(glassCard.refreshBackdrop)
+    onWidthChanged: if (visible) Qt.callLater(glassCard.refreshBackdrop)
+    onHeightChanged: if (visible) Qt.callLater(glassCard.refreshBackdrop)
 }

@@ -73,8 +73,18 @@ Menu {
         }
     }
 
-    // No refreshBackdrop() choreography: the background is a live GlassSurface,
-    // and glass v2 self-tracks its scene position (it re-samples every frame
-    // while live), so the menu no longer hand-wires aboutToShow / opened / x / y
-    // to chase a stale blur. Activation and size are handled inside the surface.
+    onAboutToShow: Qt.callLater(function() {
+        glassBackground.refreshBackdrop()
+    })
+    // Re-sample once the menu has its final position (aboutToShow fires before
+    // x/y are set), so the blur matches what is actually behind it — not a
+    // stale region captured at the origin.
+    onOpened: Qt.callLater(function() {
+        glassBackground.refreshBackdrop()
+    })
+    // …and again whenever the overlay moves the menu to keep it on screen. The
+    // surface itself re-samples on a size change; only its position is news
+    // that has to come from here.
+    onXChanged: glassBackground.refreshBackdrop()
+    onYChanged: glassBackground.refreshBackdrop()
 }

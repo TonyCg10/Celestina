@@ -66,15 +66,11 @@ Item {
     onWidthChanged: refreshBackdrop()
     onHeightChanged: refreshBackdrop()
 
-    // Self-tracking (DESIGN §6.5): a live surface can be *moved* by an ancestor —
-    // a popup being positioned on screen — with no property a binding can watch,
-    // so the sampled region would freeze at the open-time origin. Re-derive it
-    // each frame while live; consumers no longer wire refreshBackdrop() by hand.
-    // A one-shot surface (liveCapture false) does not move, so it runs nothing.
-    FrameAnimation {
-        running: root.active && root.liveCapture
-        onTriggered: root.refreshBackdrop()
-    }
+    // A moving surface (a popup being positioned) re-arms the sample from its
+    // consumer, on the event that moved it — NOT every frame. An earlier
+    // self-tracking FrameAnimation re-sampled on the GUI thread each frame while
+    // live, which starved input and pinned the CPU even at idle; the wiring below
+    // (GlassContextMenu / GlassCard) is cheaper and does the same job.
 
     // L2 drop shadow, behind the body and outside its clip. RectangularShadow is
     // an analytic SDF (Qt 6.9+) — far cheaper than a MultiEffect shadow and it
