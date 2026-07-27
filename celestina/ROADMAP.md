@@ -94,7 +94,8 @@ leaves only when something here can answer it truthfully.
       *single window* in a call is lost, and there are no restore tokens. Undo is
       two lines in `niri-portals.conf`
 - [x] **The output chooser is ours** — `celestina --pick-output`
-      (`qml/OutputChooser.qml`, reached through `scripts/output-chooser.sh`).
+      (`qml/OutputChooser.qml`, invoked directly; the binary self-provisions the
+      CelestinaStyle import path, so no wrapper script is needed).
       xdpw brings no dialog of its own: it runs a command and keeps whatever
       output name that command prints, which makes the chooser a replaceable
       part — so the session wears its own dialog long before the shell serves

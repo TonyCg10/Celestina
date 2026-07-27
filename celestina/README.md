@@ -12,18 +12,20 @@ notification daemon, lock screen, auth agent or wallpaper manager.
 ## Build / run
 
 ```sh
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
-cmake --build build --parallel
-cmake --build build --target all_qmllint
-QT_QPA_PLATFORM=wayland ./build/celestina
+scripts/run.sh                             # build (Release) + activate the panel
+cmake --build build --target all_qmllint   # QML lint (after a first build)
 ```
+
+`scripts/run.sh` is the one script the shell needs: it builds and *activates*
+the shell — maps the panel on every output — in the foreground (Ctrl-C to stop).
+Unlike the apps it is not a launcher entry, so running it is activating it.
 
 During development, keep Noctalia running and hide only its bar so launcher,
 notification, idle, lock, Polkit, theme and greeter services stay available:
 
 ```sh
 noctalia msg bar-hide
-QT_QPA_PLATFORM=wayland ./build/celestina
+scripts/run.sh
 noctalia msg bar-show
 ```
 
@@ -40,6 +42,6 @@ rules and diagnostics can tell both shells apart.
 | `qml/Panel.qml` | hidden-until-configured root window, clock + phone indicator |
 | `qml/Clock.qml` | minute-aligned local time |
 | `qml/OutputChooser.qml` | the screen-share chooser dialog (consumes CelestinaStyle) |
-| `scripts/output-chooser.sh` | wrapper `xdg-desktop-portal-wlr` runs to launch the chooser |
+| `scripts/run.sh` | build (Release) + activate the panel — the one script the shell needs |
 
 See [ROADMAP.md](ROADMAP.md) for status, checkpoints and the design decisions.

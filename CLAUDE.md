@@ -20,7 +20,7 @@ ellos — escribir el contrato no es empezar el proyecto.
   "en Magnetita" casi siempre toca estos crates, no `magnetita/`.
 - `magnetita/` — solo la app QML fina (cliente D-Bus del demonio) + packaging.
 - `siderita/` — la app CXX-Qt: `src/` puente e integración D-Bus/XDG, `qml/`
-  vistas, `cpp/` shims para huecos de cxx-qt, `scripts/` run/install/stage.
+  vistas, `cpp/` shims para huecos de cxx-qt, `scripts/run.sh` (build + install).
   **Es un package fuera del workspace**: no hereda sus lints; mantiene los suyos.
 - `celestina-style/` — el lenguaje visual: `CelestinaTheme.qml` (tokens) +
   componentes compartidos.
@@ -135,9 +135,11 @@ ellos — escribir el contrato no es empezar el proyecto.
   `grabToImage(...)` sobre un Item **declarado en QML** (no
   `window.contentItem`) y guarde un PNG. Los colores y el contraste sí se ven
   offscreen; solo el blur del cristal queda en blanco (necesita display real).
-- Siderita tiene `scripts/run.sh` (`--offscreen`, `--no-build`); la app
-  Magnetita se lanza con `cargo run`. Un cambio de color/contraste no se
-  declara correcto sin captura o ventana real.
+- Cada app tiene un único `scripts/run.sh` que compila en release y la
+  **instala** en `~/.local` (el shell: compila y **activa** el panel); para el
+  humo offscreen se corre el binario directamente (`target/release/<app>` o
+  `~/.local/bin/<app>`) con las variables de arriba. Un cambio de
+  color/contraste no se declara correcto sin captura o ventana real.
 
 ## README y ROADMAP (la deriva doc↔código es el defecto histórico del repo)
 
