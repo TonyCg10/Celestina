@@ -7,6 +7,10 @@ set(CMAKE_AUTOMOC ON)
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Quick DBus)
 find_package(LayerShellQt 6.6 REQUIRED)
+# KWindowEffects::enableBlurBehind asks the compositor (niri's
+# ext-background-effect) to blur the wallpaper behind the panel — the panel's
+# glass. KF ≥ 6.19 speaks the new protocol.
+find_package(KF6WindowSystem REQUIRED)
 qt_standard_project_setup(REQUIRES 6.5)
 
 if(Qt6_VERSION VERSION_GREATER_EQUAL 6.8)
@@ -39,8 +43,15 @@ qt_add_qml_module(celestina
         ../celestina-style/icons/battery-charging.svg
 )
 
+# The style tree lives beside the shell; the panel imports it from source
+# (self-provisioned at runtime — see main.cpp), so main() needs to know where.
+target_compile_definitions(celestina PRIVATE
+    CELESTINA_STYLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../celestina-style"
+)
+
 target_link_libraries(celestina PRIVATE
     Qt6::Quick
     Qt6::DBus
+    KF6::WindowSystem
     LayerShellQt::Interface
 )
