@@ -5,7 +5,7 @@ Qt, QML or Niri types — plus, as the one deliberate exception, Magnetita's
 network transport and headless daemon. Presentation lives in each app.
 
 - **Role:** shared domain cores + the phone-link backend (part of the [Celestina suite](../ROADMAP.md))
-- **Toolchain:** Rust 2021, pinned 1.85.1 · `unsafe_code = "forbid"` (workspace lint)
+- **Toolchain:** Rust 2021, pinned 1.97.1 (MSRV floor `rust-version = "1.85"`) · `unsafe_code = "forbid"` (workspace lint)
 - **Dependencies:** the pure cores carry no third-party crates; the magnetita
   crates earn theirs (serde/serde_json, rustls + ring, rcgen, zbus), each
   justified inline in its `Cargo.toml`

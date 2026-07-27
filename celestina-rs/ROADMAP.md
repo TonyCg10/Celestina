@@ -12,7 +12,7 @@ magnetita subsystem (`magnetita-net` + `magnetitad`) is the workspace's one
 deliberate, contained exception.
 
 **Current state.** Eight crates compile with `fmt`, Clippy and the workspace
-test suite green on Rust 1.85.1, `unsafe_code = "forbid"` throughout. The pure
+test suite green on Rust 1.97.1, `unsafe_code = "forbid"` throughout. The pure
 cores carry no third-party dependencies. The read side (`siderita-core`,
 `siderita-qt`) and the write side (`siderita-ops`, loss-free file operations)
 are consumed live by Siderita; `celestina-dotfiles-core` only produces plans;
