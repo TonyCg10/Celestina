@@ -33,10 +33,11 @@ The goal is a session that is dependable, coherent and light — not feature
 parity with any existing desktop environment, and not a product for anyone but
 its author.
 
-**Current focus:** the phone link (`magnetita`), just started — the suite's first
-cross-app integration and first networked app, built first because it hands the
-phone to Siderita, mounted and always there. `siderita` shipped **v1.0** and is in
-daily use; the Niri shell (`celestina`) awaits its Rust adapter.
+**Current focus:** consolidating the two shipped apps. `siderita` (**v1.0.1**)
+is the daily file manager; `magnetita` (**1.0.0**, CP0–CP4) pairs, mounts and
+mirrors the real phone, and proved the suite's first cross-app integration over
+`org.celestina.Devices1`. The Niri shell (`celestina`) remains a minimal stub,
+to be picked up when a daily gap calls for it.
 
 ## The pieces
 
@@ -73,8 +74,8 @@ gap proves the need and each reusing `celestina-rs` + `celestina-style`:
   edit-side companion to Siderita's read-only quick-look ("Abrir con Grafita").
 
 Fluorita and Grafita each have a directory holding a README and a roadmap and no
-code — **[Magnetita](magnetita/) has left this stage** (its protocol core has
-begun; see the status snapshot above). That is
+code — **[Magnetita](magnetita/) has left this stage** (shipped 1.0.0; see the
+status snapshot above). That is
 deliberate: two of Siderita's shipped decisions (consuming video thumbnails it
 will not generate; a quick-look that hands video, audio and PDF to an info card
 naming Fluorita) are already promises to these projects, and a promise is worth
@@ -103,17 +104,19 @@ as a suite rather than four unrelated apps:
   consumed by pinned version for any release; path deps are a development
   convenience only. The monorepo owns shared history and the contracts.
 
-## Status snapshot (2026-07-25)
+## Status snapshot (2026-07-26)
 
 - ✅ Monorepo git baseline established (this repository).
-- `celestina-rs` — five cores compile (Magnetita's protocol core is the newest);
-  fmt, Clippy and the workspace tests pass.
+- `celestina-rs` — eight crates compile: the five pure cores plus Magnetita's
+  protocol core, TLS transport and headless daemon; fmt, Clippy and the
+  workspace tests pass.
 - `celestina-style` — now the canonical shared module (semantic tokens +
   working glass + fallback icons), builds with CMake and is consumed by
-  siderita; a clean-prefix installable release is still open.
+  siderita and magnetita (symlinked into their CXX-Qt modules) and by the
+  shell's output chooser; a clean-prefix installable release is still open.
 - `celestina` — host builds and QML-lints; geometry/zone/focus not yet verified
   on real Niri; no Rust yet.
-- `siderita` — **v1.0: Iteration 1 concluded (2026-07-25)**, the full CP0 → CP5
+- `siderita` — **v1.0 (now 1.0.1): Iteration 1 concluded (2026-07-25)**, the full CP0 → CP5
   arc. CP0–CP3 are complete and ratified on real Wayland (staged self-contained
   install, loss-free operations, freedesktop interop, a native role model with a
   live hotplug/FS watcher, list/grid/details views, thumbnails, spacebar
@@ -126,16 +129,16 @@ as a suite rather than four unrelated apps:
   items are carried past 1.0, named not hidden: CP4's drag/menu-blur real-Wayland
   validation, CP5's `parent_window` (needs `xdg-foreign`), and CP5's opt-in
   portal routing until it has been lived with.
-- `magnetita` — **started (2026-07-25)**: the suite's phone link over KDE Connect,
-  its first cross-app integration and first networked app. `magnetita-core` has
-  well underway — the packet envelope, identity, the `kdeconnect.pair` state
-  machine and the device session (the pure brain the transport drives),
-  offline-tested (32 tests). Next is the transport underneath it
-  (`magnetita-net`: UDP discovery, TCP, TLS with TOFU pinning), a **standalone
-  app** (pair, a
-  connection log that says *why* a phone will not connect, and options), and the
-  phone mounted in Siderita via a real sshfs mount plus `org.celestina.Devices1`,
-  the suite's **first internal contract**.
+- `magnetita` — **1.0.0: CP0–CP4 complete (2026-07-26)**, verified live against
+  the real phone. UDP discovery, TLS with TOFU pinning, pairing with a shown
+  verification key, reconnect-as-trusted, a systemd user service; the phone
+  mounted over sshfs and served on `org.celestina.Devices1` — the suite's
+  **first internal contract** — consumed by Siderita's sidebar, by the
+  standalone app (pair/unpair, a connection log that says *why*, Settings with
+  per-plugin toggles) and by the `celestina` panel. Daily plugins live:
+  battery, notifications, file share both ways, find-my-phone, clipboard,
+  MPRIS media both ways. Known phone-side limit: clipboard phone → desktop is
+  manual (Android forbids background clipboard reads).
 
 ---
 
@@ -160,7 +163,7 @@ visibly share one design language.
 - [ ] **celestina CP1** — real Niri workspaces + focused window via a Rust adapter, with pending/failed/confirmed focus requests
 - [ ] **celestina CP2** — opt-in Niri startup contract composing external session tools with verified fallbacks, before Noctalia leaves autostart
 - [x] **siderita CP1** — loss-free file operations (create/rename/copy/move/trash) on disposable fixtures, source never removed before destination is verified
-- [ ] **celestina-rs CP1** — the write-side domain those operations stand on
+- [x] **celestina-rs CP1** — the write-side domain those operations stand on (`siderita-ops`: loss-free verbs, consumed live by Siderita; the dotfiles apply API remains open in its own roadmap)
 - [ ] **celestina-style CP1** — stable, accessible design contract (compat/deprecation, truthful glass, font/icon fallbacks, a11y)
 - [x] **Convergence (Siderita)** — `siderita` renders from the shared CelestinaStyle module (semantic tokens + working glass + icons); its private theme/glass were removed
 - [ ] **Convergence (desktop)** — migrate `celestina` off its inline palette onto CelestinaStyle

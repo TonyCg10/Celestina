@@ -6,14 +6,18 @@
 ## Overview
 
 **Purpose.** The suite's shared domain foundation: reusable, interface-neutral
-Rust logic consumed by every app. Presentation lives in each app; Qt, QML, Niri
-and network IO never enter here.
+Rust logic consumed by every app. Presentation lives in each app; Qt, QML and
+Niri types never enter here. Network IO never enters the *cores* — the
+magnetita subsystem (`magnetita-net` + `magnetitad`) is the workspace's one
+deliberate, contained exception.
 
-**Current state.** Four crates compile with `fmt`, Clippy and 30 tests green on
-Rust 1.85.1, with no third-party dependencies and `#![forbid(unsafe_code)]`.
-Everything is read-only — there is no write or apply API yet. `siderita-core` and
-`siderita-qt` are consumed live by Siderita; `celestina-dotfiles-core` only
-produces plans.
+**Current state.** Eight crates compile with `fmt`, Clippy and the workspace
+test suite green on Rust 1.85.1, `unsafe_code = "forbid"` throughout. The pure
+cores carry no third-party dependencies. The read side (`siderita-core`,
+`siderita-qt`) and the write side (`siderita-ops`, loss-free file operations)
+are consumed live by Siderita; `celestina-dotfiles-core` only produces plans;
+the magnetita trio (protocol core, TLS transport, headless daemon) backs the
+shipped phone link and is verified against the real phone.
 
 **Key decisions.** The core family lives in its own workspace so each domain is
 testable without a toolkit; apps use `path` deps in development but pin versions
@@ -32,7 +36,7 @@ read-only.
 - [x] `siderita-core` — bounded scan executor with cancellation + join; non-symlink-following scan; non-mutating view projection; pure navigation history; `WatchState` that separates health from freshness
 - [x] `siderita-qt` — stable opaque view tokens that survive filter/sort and never key on the display name
 - [x] `celestina-dotfiles-core` — plan-only dotfiles (records conflicts, never creates/replaces/removes)
-- [x] fmt, Clippy `-D warnings`, 30 tests green; `#![forbid(unsafe_code)]`
+- [x] fmt, Clippy `-D warnings`, workspace tests green; `unsafe_code = "forbid"`
 - [ ] Freeze the public API of all four crates and document the stability/compatibility promise
 - [ ] Decide the crate versioning + release policy (bump the family together when they share a contract)
 - [ ] Add the CXX-Qt QObject as an optional adapter feature of `siderita-qt` once Qt is in the declared environment (no domain moves to C++)
@@ -47,8 +51,8 @@ no core exposes Qt or Niri types or does network IO; all gates stay green and
 **Goal:** the write-side domain that Siderita CP1 stands on, with no silent data
 loss.
 
-- [ ] create / rename / copy / move / trash primitives with preflight, conflict detection, cancellation, and per-item results
-- [ ] never remove a source before its destination is verified; explicit cross-filesystem revalidation
+- [x] create / rename / copy / move / trash primitives with preflight, conflict detection, cancellation, and per-item results — shipped as `siderita-ops`, consumed live by Siderita v1.0 (its CP1 ratified the behavior on disposable fixtures)
+- [x] never remove a source before its destination is verified; explicit cross-filesystem revalidation — `relocate.rs` copies, verifies kind+length, and only then removes; cancel keeps the source and rolls back the partial destination
 - [ ] `celestina-dotfiles-core` — a transactional apply API (today it only produces plans), reversible where possible and separate from planning
 
 **Done when:** every operation reports per-item success/failure and no code path
@@ -64,6 +68,7 @@ app's internals into another.
 ## Non-goals
 
 No Qt/QML or Qt/Niri wire types in the pure cores; no IO in `siderita-qt`; no
-networking; no applying system changes from planning crates without an explicit,
-tested apply API; no cross-app internals; no third-party dependencies without a
-demonstrated, measured need.
+networking in the domain cores (the `magnetita-net`/`magnetitad` pair is the
+suite's deliberate, contained exception); no applying system changes from
+planning crates without an explicit, tested apply API; no cross-app internals;
+no third-party dependencies without a demonstrated, measured need.

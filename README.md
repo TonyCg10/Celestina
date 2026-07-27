@@ -5,9 +5,11 @@ plus first-party apps that share one Rust core, one QML visual language and one
 set of conventions — lean alternatives to heavyweight external apps, made
 possible because the session owns its own shell.
 
-**Current focus:** the phone link (`magnetita`), just started — the suite's first
-cross-app integration, built first because it hands the phone to Siderita mounted
-and always there. `siderita` shipped v1.0; the Niri shell (`celestina`) is next.
+**Current focus:** consolidating the two shipped apps — `siderita` (v1.0.1, the
+daily file manager) and `magnetita` (1.0.0, the phone link) — which together
+prove the suite's thesis: apps that integrate by sharing crates, one style and
+one D-Bus contract without rewriting each other. The Niri shell (`celestina`)
+remains a minimal stub.
 
 ## Projects
 
@@ -17,7 +19,7 @@ and always there. `siderita` shipped v1.0; the Niri shell (`celestina`) is next.
 | [celestina-style](celestina-style/) | shared QML visual language | QML |
 | [celestina](celestina/) | Niri shell / session | C++ · QML |
 | [siderita](siderita/) | file manager (first app) | Rust · QML (CXX-Qt) |
-| [magnetita](magnetita/) | phone link (KDE Connect) — started | Rust · QML (CXX-Qt) |
+| [magnetita](magnetita/) | phone link (KDE Connect) — 1.0.0 | Rust · QML (CXX-Qt) |
 
 Cores and style never depend on apps or the shell. Each project keeps its own
 README and ROADMAP; the monorepo holds shared history and the contracts between

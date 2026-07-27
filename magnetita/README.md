@@ -19,11 +19,15 @@ networked app**: everything before it stayed on one machine.
 - **Consumes:** [celestina-rs](../celestina-rs/) domain cores · [celestina-style](../celestina-style/) tokens + glass
 - **Speaks:** the KDE Connect protocol (interoperates with the KDE Connect Android app and other KDE Connect desktops)
 
-> **Status: started.** `magnetita-core` has begun — the packet envelope and the
-> identity packet, as pure Rust types that (de)serialize the wire format, unit-
-> tested without a socket (8 tests). The trusted channel and the Siderita mount
-> are next. Everything past the core is unverified until it runs against a real
-> phone; see [ROADMAP.md](ROADMAP.md).
+> **Status: 1.0.0 — CP0–CP4 done (2026-07-26).** The daemon pairs live and
+> stably with the real phone (protocol 8), reconnects as already-trusted, runs
+> as a systemd user service, mounts the phone over sshfs and serves
+> `org.celestina.Devices1` — consumed by Siderita's sidebar, the standalone app
+> and the `celestina` panel. The daily plugins are all live-verified: battery,
+> notifications, file share (both ways), find-my-phone, clipboard, MPRIS media
+> (both ways), plus a Settings surface with per-plugin toggles. See
+> [ROADMAP.md](ROADMAP.md) for the checkpoint detail and the known phone-side
+> limits.
 
 ## The phone in Siderita — the first cross-app experience
 
@@ -60,9 +64,9 @@ own its phone integration end-to-end (one closure, one settings source, one
 visual language, notifications through the session's own notification daemon)
 while staying a good desktop citizen on the wire.
 
-Per suite discipline, Valent stays composed in autostart until Magnetita's
-transport is **verified** against a real device — the same way `celestina` keeps
-Noctalia until its own pieces are proven.
+Per suite discipline, Valent stayed composed in autostart until Magnetita's
+transport was **verified** against the real device; with the daily set proven it
+is now stopped and disabled — the suite's first completed earned replacement.
 
 ## Shape
 
@@ -83,17 +87,20 @@ The service routes the rest into the desktop over freedesktop standards (phone
 notifications → `org.freedesktop.Notifications`, shared-in files → an XDG folder
 Siderita shows).
 
-## Layout (planned)
+## Layout
+
+The backend lives in the shared workspace — working "on Magnetita" almost
+always means `../celestina-rs/crates/`; this directory holds only the thin app
+and the packaging.
 
 | Path | Responsibility |
 |---|---|
-| `../celestina-rs/crates/magnetita-core` | protocol domain: `NetworkPacket`, identity, capabilities, pairing state machine, plugin bodies — pure, no I/O, no Qt (**started**) |
-| `../celestina-rs/crates/magnetita-net` | service engine: discovery, TCP+TLS transport (TOFU cert pinning), connection lifecycle, plugins |
-| `../celestina-rs/crates/magnetita-qt` | CXX-Qt view contract for the UI (device model, pairing, transfer progress) |
-| `src/` (`magnetitad`) | the headless daemon: device links, the sshfs mount, the `org.celestina.Devices1` service, and its systemd user unit |
-| `src/` (UI host), `qml/` | the optional Qt/QML client, consuming `celestina-style` |
-| `../celestina-style/` | shared theme, glass and icons (consumed) |
-| `scripts/` | run and measurement scripts |
+| `../celestina-rs/crates/magnetita-core` | protocol domain: `NetworkPacket`, identity, capabilities, pairing state machine, plugin bodies — pure, no I/O, no Qt |
+| `../celestina-rs/crates/magnetita-net` | transport: UDP discovery, TCP+TLS link (TOFU cert pinning), payload transfer, trust store |
+| `../celestina-rs/crates/magnetitad` | the headless daemon: device links, the sshfs mount, notifications, MPRIS, settings, and the `org.celestina.Devices1` service |
+| `src/`, `qml/` | the standalone Qt/QML app — a thin D-Bus client of the daemon; the CXX-Qt bridge lives in `src/controller.rs` |
+| `magnetitad.service`, `org.celestina.Magnetita.desktop` | the daemon's systemd user unit and the app's desktop entry |
+| `../celestina-style/` | shared theme and button, symlinked into `qml/` (consumed) |
 
 ## Standards & interop
 

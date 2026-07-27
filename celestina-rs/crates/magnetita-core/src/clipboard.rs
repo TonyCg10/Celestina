@@ -3,9 +3,10 @@
 //! When clipboard sync is on, the phone sends its clipboard text as it changes
 //! (`kdeconnect.clipboard`) and once on connect (`kdeconnect.clipboard.connect`,
 //! with a timestamp we ignore). Both carry the text under `content`; this decodes
-//! it and the daemon puts it on the desktop clipboard. Receiving is what CP3
-//! implements — copy on the phone, paste on the desktop; pushing the desktop's
-//! clipboard back is a follow-up (it needs a continuous clipboard watch).
+//! it and the daemon puts it on the desktop clipboard. Sync is bidirectional:
+//! the daemon also pushes the desktop's clipboard as it changes (a `wl-paste`
+//! watch) — the remaining ceiling is the phone's (Android forbids background
+//! clipboard reads, so phone → desktop only arrives on a manual send).
 
 use serde_json::{json, Value};
 

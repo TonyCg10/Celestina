@@ -7,7 +7,7 @@ notification daemon, lock screen, auth agent or wallpaper manager.
 
 - **Role:** Niri shell / session (part of the [Celestina suite](../ROADMAP.md))
 - **Stack:** C++20 · Qt 6 Quick · LayerShellQt · CMake + Ninja
-- **Consumes:** [celestina-style](../celestina-style/) (planned; currently a small inline palette)
+- **Consumes:** [celestina-style](../celestina-style/) (the output chooser consumes it live; the panel still uses a small inline palette — migrating it is a CP0 goal)
 
 ## Build / run
 
@@ -34,9 +34,12 @@ rules and diagnostics can tell both shells apart.
 
 | Path | Responsibility |
 |---|---|
-| `CMakeLists.txt` | Qt executable/module, LayerShellQt, Style path |
-| `src/main.cpp` | process bootstrap and per-output layer-shell lifecycle |
-| `qml/Panel.qml` | hidden-until-configured root window and panel layout |
+| `CMakeLists.txt` | Qt executable/module + LayerShellQt |
+| `src/main.cpp` | process bootstrap, per-output layer-shell lifecycle, `--pick-output` mode |
+| `src/devicesclient.cpp`, `.h` | QtDBus client of `org.celestina.Devices1` (the phone in the panel) |
+| `qml/Panel.qml` | hidden-until-configured root window, clock + phone indicator |
 | `qml/Clock.qml` | minute-aligned local time |
+| `qml/OutputChooser.qml` | the screen-share chooser dialog (consumes CelestinaStyle) |
+| `scripts/output-chooser.sh` | wrapper `xdg-desktop-portal-wlr` runs to launch the chooser |
 
 See [ROADMAP.md](ROADMAP.md) for status, checkpoints and the design decisions.

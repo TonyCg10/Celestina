@@ -6,13 +6,10 @@ set -eu
 #
 # `xdg-desktop-portal-wlr` no trae diálogo propio: ejecuta el comando que se le
 # indique en ~/.config/xdg-desktop-portal-wlr/config y se queda con el nombre de
-# salida que ese comando imprima por stdout. Este envoltorio lanza la ventana
-# QML (qml/OutputChooser.qml), que viste el lenguaje de CelestinaStyle, y
-# traduce su respuesta.
-#
-# La traducción existe porque QML sólo escribe por el canal de diagnóstico
-# (stderr): la ventana imprime `CELESTINA-OUTPUT:<nombre>` y aquí se extrae y se
-# manda a stdout, que es lo único que el backend mira.
+# salida que ese comando imprima por stdout. Este envoltorio lanza el selector
+# (`celestina --pick-output`, la ventana QML de qml/OutputChooser.qml vestida
+# con CelestinaStyle); es el propio shell quien escribe el nombre elegido por
+# stdout (main.cpp::runOutputChooser), que es lo único que el backend mira.
 #
 # Salidas: 0 con el nombre en stdout si se elige; 1 sin nada si se cancela.
 

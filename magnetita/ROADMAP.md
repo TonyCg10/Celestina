@@ -12,7 +12,8 @@
 > app** consumes to pair/unpair with the verification key and show the connection
 > log. The daily plugins — **battery, notifications, file share, find-my-phone,
 > clipboard** (both ways) — mirror through freedesktop standards, all verified
-> live. ~100 offline tests, **no async runtime**, no C toolchain, `unsafe`
+> live. ~100 offline tests, no tokio (the transport is blocking `std::net`;
+> zbus runs its own small executor for D-Bus), no cmake/aws-lc-rs, `unsafe`
 > forbidden. CP4 — one suite — is **done**: the phone and its battery surface in
 > the `celestina` panel, Siderita sends files to it, MPRIS media flows both ways,
 > and a Settings surface manages paired devices and per-plugin toggles.
@@ -91,10 +92,10 @@ forward here.
   self-signed certs (`rcgen`) are the heaviest closure the suite has taken on. It
   is inherent (you cannot speak TLS to a phone cheaply; Valent and KDE Connect pay
   it too), earned by a proven daily need, and amortized as shared session
-  infrastructure. Kept lean at CP0: **no async runtime** — blocking `std::net` on
-  a thread, not tokio (one phone does not need a reactor) — and **no C toolchain**
-  (`ring`/`rcgen` pinned to their pure-Rust builds, never aws-lc-rs/cmake), so a
-  full TLS stack is ~15 crates. It is measured, not smuggled: closure size **and
+  infrastructure. Kept lean at CP0: **no tokio** — the transport is blocking
+  `std::net` on a thread (one phone does not need a reactor; zbus brings its own
+  small executor for D-Bus in the daemon) — and **no cmake/aws-lc-rs** (`ring`
+  builds its C/asm with plain `cc`), so the TLS stack stays a lean closure. It is measured, not smuggled: closure size **and
   idle wakeups** (a long-lived service) are in the budget. `unsafe_code` stays
   forbidden (workspace lint) — `rustls`/`rcgen`/`ring` keep our code in safe Rust.
 - **Trust-on-first-use with a shown verification key.** Certs are pinned on
