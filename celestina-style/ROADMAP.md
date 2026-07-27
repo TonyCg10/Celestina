@@ -32,6 +32,12 @@ compositor effects belong to the surface owner; accessibility is part of a
 public control's contract; the component set grows only from proven reuse
 (widget count is not progress).
 
+**Design contract.** The visual direction — One UI 8.5 adapted to desktop:
+reference values, the Qt/niri platform ceiling, the audit of the current
+system, the target system and a phased build plan (S1–S5) — lives in
+[DESIGN.md](DESIGN.md) (v1.0, decisions sealed). This roadmap tracks
+execution; the design contract says what "done" looks like.
+
 ## Checkpoint 0 — The canonical source, enforced (STYLE-0)
 **Goal:** one canonical source tree that every consumer compiles from, with
 drift made impossible, and glass APIs that mean what they say.

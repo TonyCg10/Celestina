@@ -28,6 +28,7 @@ tree (see [ROADMAP.md](ROADMAP.md), STYLE-D).
 
 | Path | Responsibility |
 |---|---|
+| `DESIGN.md` | the design contract: One UI 8.5 desktop-adapted — reference values, platform ceiling, target system, build phases |
 | `CelestinaTheme.qml` | singleton design tokens: color, type, spacing, radius, motion, glass |
 | `GlassSurface.qml` | frosted surface that blurs injected backdrop content (bounded capture, one-shot or live) |
 | `GlassCard.qml` | `GlassSurface` specialization for modal dialog cards |
@@ -36,4 +37,5 @@ tree (see [ROADMAP.md](ROADMAP.md), STYLE-D).
 | `CelestinaTextField.qml` | the suite text field, themed fill and focus border |
 | `icons/`, `icons.qrc` | minimal freedesktop-name SVG fallbacks + the app launcher icons |
 
-See [ROADMAP.md](ROADMAP.md) for status, checkpoints and the design decisions.
+See [DESIGN.md](DESIGN.md) for the design contract (One UI 8.5,
+desktop-adapted) and [ROADMAP.md](ROADMAP.md) for status and checkpoints.
