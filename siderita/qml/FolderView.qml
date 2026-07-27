@@ -2647,7 +2647,7 @@ Item {
         // The same shape as the Trash header: a pill that says where you
         // are and how much is here, and the way back. Nothing else — this
         // list belongs to the desktop, and Siderita only reads it.
-        Item {
+        RecentHeader {
             id: recentHeader
             z: 10
             x: 12
@@ -2664,34 +2664,9 @@ Item {
                     easing.type: CelestinaTheme.easeStandard
                 }
             }
-
-            InfoPill {
-
-                textScale: root.hostWindow.interfaceTextScale
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                backdrop: topBar.activeView
-                iconName: "document-open-recent"
-                iconFallback: "file"
-                maxWidth: recentHeader.width - recentHeaderControls.width - 10
-                text: "Recientes" + (controller.recentCount > 0
-                                     ? "  ·  " + controller.recentCount
-                                     : "  ·  sin elementos")
-            }
-
-            Row {
-                id: recentHeaderControls
-                anchors.right: parent.right
-                anchors.rightMargin: 8
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 8
-
-                CelestinaButton {
-                    text: "Volver"
-                    primary: true
-                    onClicked: controller.closeRecent()
-                }
-            }
+            controller: controller
+            backdrop: topBar.activeView
+            textScale: root.hostWindow.interfaceTextScale
         }
 
         // ── Trash location header ──────────────────────────────────────
