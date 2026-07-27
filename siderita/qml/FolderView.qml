@@ -2615,33 +2615,10 @@ Item {
         }
     }
 
-    GlassContextMenu {
+    FolderSortMenu {
         id: sortMenu
         backdropSource: root
-
-        GlassMenuItem {
-            text: "Nombre"
-            current: controller.sortField === 0
-            onTriggered: controller.changeSortField(0)
-        }
-
-        GlassMenuItem {
-            text: "Tamaño"
-            current: controller.sortField === 1
-            onTriggered: controller.changeSortField(1)
-        }
-
-        GlassMenuItem {
-            text: "Fecha de modificación"
-            current: controller.sortField === 2
-            onTriggered: controller.changeSortField(2)
-        }
-
-        GlassMenuItem {
-            text: "Tipo"
-            current: controller.sortField === 3
-            onTriggered: controller.changeSortField(3)
-        }
+        controller: controller
     }
 
     GlassContextMenu {
