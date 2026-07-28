@@ -9,6 +9,7 @@ Rectangle {
     id: conflictDialog
     property var controller
     property var owner
+    property var backdrop   // mainPanel: el fondo que difumina el cristal
     anchors.fill: parent
     z: 62
     readonly property bool shown: controller.conflictPending
@@ -43,7 +44,7 @@ Rectangle {
         anchors.centerIn: parent
         width: Math.min(420, owner.width - 48)
         height: applyToAll.visible ? 214 : 176
-        backdropSource: mainPanel
+        backdropSource: conflictDialog.backdrop
         // (not transform-scaled — a scale transform desynced the glass backdrop)
         Accessible.role: Accessible.Dialog
         Accessible.name: "Conflicto al pegar"
@@ -119,7 +120,7 @@ Rectangle {
                     anchors.centerIn: parent
                     visible: applyToAll.checked
                     text: "✓"
-                    color: CelestinaTheme.canvas
+                    color: CelestinaTheme.accentInk
                     font.pixelSize: 12
                     font.weight: CelestinaTheme.weightDemiBold
                 }

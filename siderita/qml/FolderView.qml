@@ -36,6 +36,10 @@ Item {
     property var hostWindow
     property bool active: false
     property alias tabController: controller
+    // Alias con nombre distinto para inyectar en hijos: una propiedad inyectada
+    // no puede llamarse igual que el id que se le pasa (`x: x` se sombrea a sí
+    // misma y queda undefined — la clase de bug del fix de clics, 9e19b6d).
+    property alias viewTopBar: topBar
     signal requestNewTab(string path, bool foreground)
 
     SideritaController {
@@ -194,8 +198,8 @@ Item {
         onActivated: {
             const i = topBar.activeView.currentIndex
             if (i >= 0)
-                namePrompt.openRename(controller.entryPath(i),
-                                      controller.entryNames[i])
+                namePromptDialog.openRename(controller.entryPath(i),
+                                            controller.entryNames[i])
         }
     }
 
@@ -635,7 +639,7 @@ Item {
             bottomView: root.bottomView
             bottomFloating: root.bottomFloating
             overlayParent: root.overlayParent
-            sortMenu: sortMenu
+            sortMenu: folderSortMenu
             textScale: root.hostWindow.interfaceTextScale
         }
 
@@ -1391,7 +1395,7 @@ Item {
         activeView: mainPanel.viewMode === "grid" ? fileGrid : fileList
         hostWindow: root.hostWindow
         overlayParent: root.overlayParent
-        pathMenu: pathMenu
+        pathMenu: breadcrumbMenu
         onViewFocusRequested: fileList.forceActiveFocus()
     }
 
@@ -1410,12 +1414,12 @@ Item {
         visible: root.hostWindow !== undefined && root.hostWindow.tabsModel.count >= 2
         controller: tabController
         hostWindow: root.hostWindow
-        topBar: topBar
+        topBar: viewTopBar
         active: root.active
     }
 
     FolderSortMenu {
-        id: sortMenu
+        id: folderSortMenu
         backdropSource: root
         controller: tabController
     }
@@ -1425,15 +1429,15 @@ Item {
         backdropSource: root
         controller: tabController
         panel: mainPanel
-        namePrompt: namePrompt
-        batchRename: batchRename
-        iconPicker: iconPicker
+        namePrompt: namePromptDialog
+        batchRename: batchRenameDialog
+        iconPicker: iconPickerDialog
         onNewTabRequested: function(path, foreground) { root.requestNewTab(path, foreground) }
     }
 
     // Context menu for the breadcrumb / path bar: act on the current path.
     PathMenu {
-        id: pathMenu
+        id: breadcrumbMenu
         backdropSource: root
         controller: tabController
         onNewTabRequested: function(path, foreground) { root.requestNewTab(path, foreground) }
@@ -1444,43 +1448,48 @@ Item {
         backdropSource: root
         controller: tabController
         panel: mainPanel
-        namePrompt: namePrompt
+        namePrompt: namePromptDialog
         onNewTabRequested: function(path, foreground) { root.requestNewTab(path, foreground) }
     }
 
     // Los diálogos y overlays de esta vista, cada uno en su fichero.
     NamePromptDialog {
-        id: namePrompt
+        id: namePromptDialog
         controller: tabController
         owner: root
+        backdrop: mainPanel
     }
 
     BatchRenameDialog {
-        id: batchRename
+        id: batchRenameDialog
         controller: tabController
         owner: root
+        backdrop: mainPanel
     }
 
     ConflictDialog {
         id: conflictDialog
         controller: tabController
         owner: root
+        backdrop: mainPanel
     }
 
     OpenWithDialog {
         id: openWithView
         controller: tabController
         owner: root
+        backdrop: mainPanel
     }
 
     PropertiesDialog {
         id: propertiesView
         controller: tabController
         owner: root
+        backdrop: mainPanel
     }
 
     IconPickerDialog {
-        id: iconPicker
+        id: iconPickerDialog
         controller: tabController
         owner: root
         panel: mainPanel

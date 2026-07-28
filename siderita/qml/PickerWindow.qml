@@ -833,7 +833,7 @@ Window {
             text: control.text
             font: control.font
             color: control.primary
-                   ? (control.enabled ? CelestinaTheme.canvas : control.accentText)
+                   ? (control.enabled ? CelestinaTheme.accentInk : control.accentText)
                    : (control.enabled ? CelestinaTheme.text : CelestinaTheme.textMuted)
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter

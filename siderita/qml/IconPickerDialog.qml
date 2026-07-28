@@ -72,7 +72,7 @@ Rectangle {
         anchors.centerIn: parent
         width: Math.min(520, owner.width - 48)
         height: Math.min(440, owner.height - 64)
-        backdropSource: mainPanel
+        backdropSource: iconPicker.panel
         Accessible.role: Accessible.Dialog
         Accessible.name: "Cambiar icono"
 

@@ -79,7 +79,7 @@ Rectangle {
         anchors.centerIn: parent
         width: Math.min(720, owner.width - 64)
         height: Math.min(owner.height - 80, 640)
-        backdropSource: mainPanel
+        backdropSource: quickLookView.panel
         // (not transform-scaled — a scale transform desynced the glass backdrop)
         Accessible.role: Accessible.Dialog
         Accessible.name: "Vista previa"

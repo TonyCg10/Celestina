@@ -325,7 +325,7 @@ ApplicationWindow {
         // grabbed icon; see mainPanel.startEntryDrag), which correctly tracks the
         // cursor. `path` is read back by the drop handlers.
         Item {
-            id: dragGhost
+            id: entryDragGhost
             visible: false
             property string path: ""
             property string label: ""
@@ -340,13 +340,13 @@ ApplicationWindow {
             // so a file can't be dropped on the sidebar; every entry carries the
             // move key for folder-to-folder drops and a file:// URI for other apps.
             function beginEntryDrag(entryPath, entryLabel, entryIsDir) {
-                dragGhost.path = entryPath
-                dragGhost.label = entryLabel
-                dragGhost.isDir = entryIsDir
-                dragGhost.Drag.keys = entryIsDir
+                entryDragGhost.path = entryPath
+                entryDragGhost.label = entryLabel
+                entryDragGhost.isDir = entryIsDir
+                entryDragGhost.Drag.keys = entryIsDir
                     ? ["siderita-entry", "siderita-bookmark"]
                     : ["siderita-entry"]
-                dragGhost.Drag.mimeData = {
+                entryDragGhost.Drag.mimeData = {
                     "text/uri-list": "file://" + encodeURI(entryPath) + "\r\n"
                 }
             }
@@ -359,7 +359,7 @@ ApplicationWindow {
             hostWindow: window
             overlayParent: window.contentItem
             backdrop: contentLayer
-            dragGhost: dragGhost
+            dragGhost: entryDragGhost
         }
 
         // ── Documents: one per tab, only the active one visible ──────────
@@ -388,7 +388,7 @@ ApplicationWindow {
                         id: doc
                         anchors.fill: parent
                         active: tabHolder.visible
-                        ghost: dragGhost
+                        ghost: entryDragGhost
                         overlayParent: window.contentItem
                         hostWindow: window
 

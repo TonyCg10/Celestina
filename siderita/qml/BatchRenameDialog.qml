@@ -15,6 +15,7 @@ Rectangle {
     id: batchRename
     property var controller
     property var owner
+    property var backdrop   // mainPanel: el fondo que difumina el cristal
     anchors.fill: parent
     z: 61
     property bool shown: false
@@ -147,7 +148,7 @@ Rectangle {
         anchors.centerIn: parent
         width: Math.min(560, owner.width - 48)
         height: Math.min(460, owner.height - 64)
-        backdropSource: mainPanel
+        backdropSource: batchRename.backdrop
         Accessible.role: Accessible.Dialog
         Accessible.name: "Renombrar en lote"
 

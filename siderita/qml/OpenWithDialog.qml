@@ -9,6 +9,7 @@ Rectangle {
     id: openWithView
     property var controller
     property var owner
+    property var backdrop   // mainPanel: el fondo que difumina el cristal
     anchors.fill: parent
     z: 66
     readonly property bool shown: controller.openWithPending
@@ -65,7 +66,7 @@ Rectangle {
         anchors.centerIn: parent
         width: Math.min(480, owner.width - 48)
         height: Math.min(420, owner.height - 64)
-        backdropSource: mainPanel
+        backdropSource: openWithView.backdrop
         // (not transform-scaled — a scale transform desynced the glass backdrop)
         Accessible.role: Accessible.Dialog
         Accessible.name: "Abrir con"

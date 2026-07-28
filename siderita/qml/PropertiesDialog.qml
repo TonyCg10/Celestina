@@ -9,6 +9,7 @@ Rectangle {
     id: propertiesView
     property var controller
     property var owner
+    property var backdrop   // mainPanel: el fondo que difumina el cristal
     anchors.fill: parent
     z: 68
     readonly property bool shown: controller.propertiesPending
@@ -42,7 +43,7 @@ Rectangle {
         width: Math.min(500, owner.width - 48)
         height: Math.min(propertiesColumn.implicitHeight + propHeading.height + 90,
                          owner.height - 64)
-        backdropSource: mainPanel
+        backdropSource: propertiesView.backdrop
         // (not transform-scaled — a scale transform desynced the glass backdrop)
         Accessible.role: Accessible.Dialog
         Accessible.name: "Propiedades"

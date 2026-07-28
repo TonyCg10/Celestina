@@ -9,6 +9,7 @@ Rectangle {
     id: namePrompt
     property var controller
     property var owner
+    property var backdrop   // mainPanel: el fondo que difumina el cristal
     anchors.fill: parent
     z: 60
     property bool shown: false
@@ -76,7 +77,7 @@ Rectangle {
         anchors.centerIn: parent
         width: Math.min(380, owner.width - 48)
         height: 142
-        backdropSource: mainPanel
+        backdropSource: namePrompt.backdrop
         // (not transform-scaled — a scale transform desynced the glass backdrop)
 
         // Swallow clicks so they never reach the dismiss backdrop.
