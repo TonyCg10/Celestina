@@ -352,16 +352,13 @@ Window {
     Item {
         anchors.fill: parent
 
-        Rectangle {
+        CelestinaSurface {
             id: contentBox
             x: 12
             y: 12
             width: parent.width - 24
             height: parent.height - 24
-            radius: CelestinaTheme.radiusLg
-            color: CelestinaTheme.surface
-            border.width: 1
-            border.color: CelestinaTheme.divider
+            role: CelestinaSurface.Panel
             clip: true
 
             // La rejilla: la vista de un selector de archivos es de

@@ -30,11 +30,12 @@ remove it).
 | Path | Responsibility |
 |---|---|
 | `src/main.rs`, `src/controller.rs` | Rust host and the CXX-Qt QObject |
-| `qml/Main.qml` | the main window: session, tabs, size scales |
-| `qml/FolderView.qml` | one folder view per tab (the bulk of the UI) |
-| `qml/Sidebar.qml` | places/devices/favourites/bookmarks + their menus |
-| `qml/PickerWindow.qml` | the portal file chooser |
-| `qml/*.qml` (rest) | small shared types: pills, buttons, badges, rows |
+| `qml/Main.qml`, `qml/PickerWindow.qml` | application entry surfaces: main window and portal file chooser |
+| `qml/views/` | composed app views (`FolderView`, `Sidebar`) |
+| `qml/components/` | Siderita presentation pieces: headers, delegates, pills, rows and sidebar info |
+| `qml/dialogs/` | dialogs and overlays owned by the folder view |
+| `qml/menus/` | context menus and popups |
+| `qml/Celestina*.qml`, `qml/Glass*.qml` | canonical `celestina-style` sources consumed as symlinks, never copies |
 | `../celestina-style/` | shared theme, glass, icons and font (consumed) |
 | `../celestina-rs/crates/siderita-core` | read-only Rust domain |
 | `../celestina-rs/crates/siderita-qt` | stable view contract for QML |

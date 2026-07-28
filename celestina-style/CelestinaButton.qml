@@ -62,10 +62,8 @@ Button {
                  : control.hovered ? CelestinaTheme.surfaceHover
                  : CelestinaTheme.controlFill
         }
-        border.width: control.primary ? 0 : 1
-        border.color: control.activeFocus ? CelestinaTheme.focusRing
-                      : control.destructive ? CelestinaTheme.dangerBorder
-                      : CelestinaTheme.divider
+        border.width: control.activeFocus ? 2 : 0
+        border.color: CelestinaTheme.focusRing
 
         Behavior on color {
             ColorAnimation { duration: CelestinaTheme.motionFast }

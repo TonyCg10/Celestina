@@ -20,6 +20,11 @@ import QtQuick.Shapes
 Item {
     id: root
 
+    enum Density {
+        Regular,
+        Strong
+    }
+
     required property Item backdropSource
     property bool captureEnabled: true
     // One-shot snapshot on show (false) vs continuous re-capture while shown
@@ -34,7 +39,12 @@ Item {
     // grouping), 2 = floating (menu, tooltip, pill, toast) → L2 drop shadow.
     // Modals (L3) use a scrim behind, never a shadow, so they stay at 0.
     property int elevation: 0
+    property int density: GlassSurface.Regular
     default property alias contentData: foreground.data
+
+    readonly property color materialTint: density === GlassSurface.Strong
+                                                ? CelestinaTheme.glassTintStrong
+                                                : CelestinaTheme.glassTint
 
     readonly property bool active: captureEnabled
                                    && backdropSource !== null
@@ -156,7 +166,7 @@ Item {
         Rectangle {
             anchors.fill: parent
             radius: root.cornerRadius
-            color: root.active ? CelestinaTheme.glassTint : CelestinaTheme.surfaceStrong
+            color: root.active ? root.materialTint : CelestinaTheme.surfaceStrong
         }
 
         // Fine noise dither over the blur — breaks the banding the downsample
@@ -164,7 +174,9 @@ Item {
         Image {
             anchors.fill: parent
             visible: root.active
-            source: "qrc:/qt/qml/CelestinaStyle/icons/glass-noise.png"
+            source: Qt.resolvedUrl(".").toString().startsWith("file:")
+                    ? Qt.resolvedUrl("icons/glass-noise.png")
+                    : "qrc:/qt/qml/CelestinaStyle/icons/glass-noise.png"
             fillMode: Image.Tile
             opacity: CelestinaTheme.glassNoiseOpacity
             smooth: false
@@ -200,9 +212,9 @@ Item {
                     y1: 0
                     x2: 0
                     y2: root.height
-                    GradientStop { position: 0.0; color: Qt.rgba(CelestinaTheme.glassBorder.r, CelestinaTheme.glassBorder.g, CelestinaTheme.glassBorder.b, 0.5) }
-                    GradientStop { position: 0.35; color: Qt.rgba(CelestinaTheme.glassBorder.r, CelestinaTheme.glassBorder.g, CelestinaTheme.glassBorder.b, 0.16) }
-                    GradientStop { position: 0.7; color: Qt.rgba(CelestinaTheme.glassBorder.r, CelestinaTheme.glassBorder.g, CelestinaTheme.glassBorder.b, 0.05) }
+                    GradientStop { position: 0.0; color: Qt.rgba(CelestinaTheme.glassBorder.r, CelestinaTheme.glassBorder.g, CelestinaTheme.glassBorder.b, CelestinaTheme.glassBorder.a) }
+                    GradientStop { position: 0.35; color: Qt.rgba(CelestinaTheme.glassBorder.r, CelestinaTheme.glassBorder.g, CelestinaTheme.glassBorder.b, CelestinaTheme.glassBorder.a * 0.45) }
+                    GradientStop { position: 0.7; color: Qt.rgba(CelestinaTheme.glassBorder.r, CelestinaTheme.glassBorder.g, CelestinaTheme.glassBorder.b, CelestinaTheme.glassBorder.a * 0.15) }
                     GradientStop { position: 1.0; color: Qt.rgba(CelestinaTheme.glassBorder.r, CelestinaTheme.glassBorder.g, CelestinaTheme.glassBorder.b, 0.0) }
                 }
                 PathRectangle {

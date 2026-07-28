@@ -27,12 +27,11 @@ Column {
         leftPadding: CelestinaTheme.spaceMd
     }
 
-    Rectangle {
+    CelestinaSurface {
         width: section.width
         implicitHeight: rowHolder.implicitHeight + CelestinaTheme.spaceXs * 2
         height: implicitHeight
-        radius: CelestinaTheme.radiusLg
-        color: CelestinaTheme.card
+        role: CelestinaSurface.Grouped
 
         Column {
             id: rowHolder

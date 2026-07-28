@@ -78,8 +78,8 @@ ellos — escribir el contrato no es empezar el proyecto.
   clics (9e19b6d). Usa nombres distintos o un alias del host
   (`property alias viewTopBar: topBar`). `siderita/scripts/smoke.sh` y la CI
   cazan el patrón.
-- Deuda nombrada: `siderita/qml/FolderView.qml` (~1,6k) y
-  `siderita/qml/Sidebar.qml` (~1,3k) siguen sobre el techo (~800). Prohibido
+- Deuda nombrada: `siderita/qml/views/FolderView.qml` (~1,6k) y
+  `siderita/qml/views/Sidebar.qml` (~1,3k) siguen sobre el techo (~800). Prohibido
   crecerlos; al tocarlos, extrae primero la pieza que vas a tocar.
 
 ## Estilo y UI — cómo no volver a fabricar un botón ilegible

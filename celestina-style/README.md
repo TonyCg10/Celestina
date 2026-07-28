@@ -30,7 +30,8 @@ tree (see [ROADMAP.md](ROADMAP.md), STYLE-D).
 |---|---|
 | `DESIGN.md` | the design contract: One UI 8.5 desktop-adapted — reference values, platform ceiling, target system, build phases |
 | `CelestinaTheme.qml` | singleton design tokens, tiered `ref`→`scheme`→`sys`: the dark `ColorScheme` as data (surface→ink pairs), Inter Variable, type/radius/motion/glass scales |
-| `GlassSurface.qml` | frosted surface that blurs injected backdrop content (bounded capture, one-shot or live) |
+| `CelestinaSurface.qml` | semantic non-floating container (`Canvas`, `Panel`, `Grouped`, `Content`, `Tonal`, `Elevated`, `Selected`); consumers own geometry/content while the style owns fill, foreground and shape |
+| `GlassSurface.qml` | frosted surface that blurs injected backdrop content (bounded capture, one-shot or live; `Regular` floating and `Strong` modal densities) |
 | `GlassCard.qml` | `GlassSurface` specialization for modal dialog cards |
 | `GlassContextMenu.qml`, `GlassMenuItem.qml` | glass `Menu` + styled item |
 | `CelestinaButton.qml` | the suite button, in its three roles: normal / primary / destructive |

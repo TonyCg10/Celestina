@@ -13,6 +13,7 @@ GlassSurface {
     id: glassCard
 
     cornerRadius: CelestinaTheme.radiusMd
+    density: GlassSurface.Strong
     captureEnabled: visible
     // A modal can be scrolled under, so track the backdrop live rather than
     // freezing a snapshot that visibly desyncs when the content moves.

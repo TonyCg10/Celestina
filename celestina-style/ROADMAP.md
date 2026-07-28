@@ -13,7 +13,8 @@ dotfiles or workflows. Consumers keep independent roadmaps and release timing.
 token singleton (promoted from Siderita), working backdrop-blur glass
 (`GlassSurface`/`GlassCard`/`GlassContextMenu`/`GlassMenuItem`, replacing the
 earlier `CelestinaGlassPanel` that blurred its own fill), `CelestinaButton`,
-`CelestinaTextField` and bundled fallback icons. Both apps consume it live by
+`CelestinaTextField`, `CelestinaSurface`, `CelestinaSwitch`, `ListSection` and
+bundled fallback icons. Both apps consume it live by
 symlinking the sources into their own CXX-Qt modules — the official mechanism,
 guarded in CI so a copy can never silently reappear. A compatibility/deprecation
 policy and verified accessibility/motion behavior are still open; the installable
@@ -110,6 +111,17 @@ token errors, and the author confirming the panel renders on the session (a clea
 screenshot is obstructed by the session's own bars). The suite's phased restyle
 (S1–S5, DESIGN §8) is complete.
 
+**Semantic-surface follow-up — done** (2026-07-28): `CelestinaSurface` became
+the closed L0/L1 container contract after the same need was proven by Siderita's
+sidebar/content panels and Magnetita's cards/activity. Apps choose only a role
+and geometry; fill, ink, radius and outline stay in the style module. Magnetita's
+monolithic QML window was split into `pages/` and `components/`; Siderita's QML
+was grouped into `views/`, `components/`, `dialogs/` and `menus/`, with
+`SidebarInfo` extracted before the sidebar migration. `GlassSurface` gained
+regular/strong semantic densities and was retuned against the supplied dark
+capsule reference: slightly denser tint, restrained lit edge, softer shadow and
+more backdrop colour retained.
+
 ## Checkpoint 0 — The canonical source, enforced (STYLE-0)
 **Goal:** one canonical source tree that every consumer compiles from, with
 drift made impossible, and glass APIs that mean what they say.
@@ -153,7 +165,8 @@ accessibility/motion behavior is verified, not assumed.
 **Goal:** the component set grows from demonstrated demand, not from widget
 count.
 
-- [ ] Add a component or toolkit-neutral asset only after ≥2 real consumers demonstrate reusable demand
+- [x] Add `CelestinaSurface` after ≥2 real consumers demonstrated the shared container need; Siderita and Magnetita now consume the same role-based contract
+- [ ] Add any further component or toolkit-neutral asset only after ≥2 real consumers demonstrate reusable demand
 
 ## Non-goals
 

@@ -247,13 +247,27 @@ an app-icon pipeline ever needs it. Radius scales down with element size.
 | L3 | modal: dialogs, sheets | **glass strong** + `scrim` dim behind — *never* shadow + dim together |
 | Panel | layer-shell bar | **compositor glass** (ext-background-effect, x-ray) over wallpaper; in-scene fallback |
 
+`CelestinaSurface` is the shared L0/L1 container. Consumers select a semantic
+role (`Canvas`, `Panel`, `Grouped`, `Content`, `Tonal`, `Elevated`, `Selected`)
+and own only layout,
+size and content; the role owns its fill/ink pair and radius. Raw `Rectangle`
+stays an implementation primitive for masks, thumbnails, progress and tiny
+indicators, not the public styling API for application containers. L2/L3 keep
+their separate `GlassSurface`/`GlassCard` contract because they also require an
+explicit backdrop source.
+
+L1 separation comes from tonal contrast, grouping and whitespace. It does not
+wear a default hairline; focusable controls own their keyboard focus ring.
+
 ### 6.5 Glass v2
 
 One recipe, in order: bounded capture (`sourceRect`, ≤0.5× texture) →
 pyramid blur (`blurMax ≤ 32`) → **slight desaturation + scheme-tuned dim** →
-tint → **noise dither** (±1–2/255, kills banding) → 1px outline (dark
+tint (`Regular` for floating navigation, `Strong` for modal readability) →
+**noise dither** (±1–2/255, kills banding) → 1px outline (dark
 outside) → **top-edge inner glow** (the existing lit edge, kept — it *is*
-the 8.5 signature). Long-term the color/noise/stroke steps collapse into one
+the 8.5 signature, now restrained to match the supplied dark capsule reference).
+Long-term the color/noise/stroke steps collapse into one
 composite shader (QQEM/qsb); short-term they layer on the current pipeline.
 
 API v2's re-arm model is **event-driven**: the surface re-captures on its own

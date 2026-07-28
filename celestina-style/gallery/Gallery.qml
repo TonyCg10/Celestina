@@ -95,6 +95,35 @@ Window {
                 }
             }
 
+            Section {
+                heading: "SEMANTIC SURFACES"
+                Row {
+                    spacing: 12
+                    Repeater {
+                        model: [
+                            { role: CelestinaSurface.Panel, name: "Panel" },
+                            { role: CelestinaSurface.Grouped, name: "Grouped" },
+                            { role: CelestinaSurface.Content, name: "Content" },
+                            { role: CelestinaSurface.Tonal, name: "Tonal" },
+                            { role: CelestinaSurface.Selected, name: "Selected" }
+                        ]
+                        CelestinaSurface {
+                            id: surfaceSpec
+                            width: 158
+                            height: 72
+                            role: modelData.role
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.name
+                                color: surfaceSpec.ink
+                                font.family: win.sans
+                                font.pixelSize: CelestinaTheme.fontBody
+                            }
+                        }
+                    }
+                }
+            }
+
             // ── Typography ─────────────────────────────────────────────────
             Section {
                 heading: "TYPE ROLES"
@@ -194,14 +223,27 @@ Window {
                             GradientStop { position: 1; color: "#fc864c" }
                         }
                     }
-                    GlassSurface {
+                    Row {
                         anchors.centerIn: parent
-                        width: 320; height: 130
-                        backdropSource: glassBackdrop
-                        liveCapture: true
-                        elevation: 2
-                        cornerRadius: CelestinaTheme.radiusLg
-                        Text { anchors.centerIn: parent; text: "GlassSurface v2"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: 18; font.weight: 600 }
+                        spacing: 24
+
+                        GlassSurface {
+                            width: 300; height: 130
+                            backdropSource: glassBackdrop
+                            liveCapture: true
+                            elevation: 2
+                            cornerRadius: CelestinaTheme.radiusLg
+                            Text { anchors.centerIn: parent; text: "Regular"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: 18; font.weight: 600 }
+                        }
+
+                        GlassSurface {
+                            width: 300; height: 130
+                            backdropSource: glassBackdrop
+                            liveCapture: true
+                            density: GlassSurface.Strong
+                            cornerRadius: CelestinaTheme.radiusLg
+                            Text { anchors.centerIn: parent; text: "Strong"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: 18; font.weight: 600 }
+                        }
                     }
                 }
             }

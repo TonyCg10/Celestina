@@ -6,8 +6,19 @@ use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
 // its own.
 const QML_FILES: &[&str] = &[
     "qml/CelestinaButton.qml",
+    "qml/CelestinaSurface.qml",
     "qml/CelestinaSwitch.qml",
+    "qml/GlassSurface.qml",
     "qml/ListSection.qml",
+    // App composition: Main owns state/navigation; pages compose reusable pieces.
+    "qml/components/AppHeader.qml",
+    "qml/components/ConnectedDeviceCard.qml",
+    "qml/components/DeviceControls.qml",
+    "qml/components/ActivityLog.qml",
+    "qml/components/PairedDeviceRow.qml",
+    "qml/components/PluginRow.qml",
+    "qml/pages/DevicesPage.qml",
+    "qml/pages/SettingsPage.qml",
     "qml/Main.qml",
 ];
 
@@ -31,12 +42,15 @@ fn main() {
     for qml in QML_FILES
         .iter()
         .copied()
-        .chain(["qml/CelestinaTheme.qml", "qml/fonts.qrc"])
+        .chain(["qml/CelestinaTheme.qml", "qml/fonts.qrc", "qml/icons.qrc"])
     {
         println!("cargo::rerun-if-changed={qml}");
     }
 
     CxxQtBuilder::new_qml_module(module)
+        // Shared icon/noise resources used by GlassSurface and future icon-only
+        // controls; the qrc and directory are canonical style symlinks.
+        .qrc("qml/icons.qrc")
         // Inter Variable, compiled in so the app renders in the suite's typeface
         // (the canonical fonts.qrc lives in ../celestina-style, symlinked into qml/).
         .qrc("qml/fonts.qrc")

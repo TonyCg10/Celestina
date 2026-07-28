@@ -293,7 +293,7 @@ Item {
         }
     }
 
-    Rectangle {
+    CelestinaSurface {
         id: mainPanel
 
         property string viewMode: "list"   // "list" | "grid"
@@ -609,10 +609,7 @@ Item {
         }
 
         anchors.fill: parent
-        radius: CelestinaTheme.radiusLg
-        color: CelestinaTheme.surface
-        border.width: 1
-        border.color: CelestinaTheme.divider
+        role: CelestinaSurface.Panel
 
         // Bottom control bar: all controls and status render along the
         // bottom of the content box; the list/grid fill from the top.
@@ -1209,7 +1206,7 @@ Item {
         // Progress surface for a running copy / move: current entry, a
         // determinate bar over the top-level count, bytes copied and a
         // cancel button that trips the worker's cancellation token.
-        Rectangle {
+        CelestinaSurface {
             id: opProgressCard
             x: 16
             // Above the error banners, still stacking up from the bottom bar.
@@ -1219,11 +1216,8 @@ Item {
             anchors.bottomMargin: 8
             width: parent.width - 32
             height: 62
-            radius: CelestinaTheme.radiusSm
             visible: controller.opRunning
-            color: CelestinaTheme.surface
-            border.width: 1
-            border.color: CelestinaTheme.divider
+            role: CelestinaSurface.Tonal
             z: 5
 
             Text {
@@ -1283,39 +1277,15 @@ Item {
                 }
             }
 
-            Rectangle {
+            CelestinaButton {
                 id: cancelOpButton
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.right: parent.right
                 anchors.rightMargin: 12
-                width: cancelOpLabel.width + 22
                 height: 28
-                radius: CelestinaTheme.radiusSm
-                color: cancelOpMouse.containsMouse
-                       ? CelestinaTheme.surfaceHover
-                       : CelestinaTheme.controlFill
-                border.width: 1
-                border.color: CelestinaTheme.divider
-
-                Accessible.role: Accessible.Button
+                text: "Cancelar"
                 Accessible.name: "Cancelar la operación"
-
-                Text {
-                    id: cancelOpLabel
-                    anchors.centerIn: parent
-                    text: "Cancelar"
-                    color: CelestinaTheme.text
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontMini
-                    font.weight: CelestinaTheme.weightMedium
-                }
-
-                MouseArea {
-                    id: cancelOpMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: controller.cancelOp()
-                }
+                onClicked: controller.cancelOp()
             }
         }
 

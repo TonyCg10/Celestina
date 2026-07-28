@@ -31,7 +31,7 @@ Item {
     readonly property bool panelVisible: sidebar.visible
     readonly property real rightEdge: sidebar.x + sidebar.width
 
-    Rectangle {
+    CelestinaSurface {
         id: sidebar
         x: 20
         y: 18
@@ -39,11 +39,8 @@ Item {
         // Leave room below for the separate item-info box (its height scales
         // with the sidebar text) plus a gap.
         height: parent.height - y - 18 - sidebarInfo.height - 14
-        radius: CelestinaTheme.radiusLg
         visible: parent.width >= 820
-        color: CelestinaTheme.surface
-        border.width: 1
-        border.color: CelestinaTheme.divider
+        role: CelestinaSurface.Panel
 
         DropArea {
             anchors.fill: parent
@@ -1111,78 +1108,14 @@ Item {
     }
 
 
-    // A separate box below the sidebar (its own panel, not nested inside it)
-    // showing item info: the folder's count + total size when nothing is
-    // selected, the selected item's name + kind · size · date for one, or the
-    // count for a multi-selection.
-    Rectangle {
+    SidebarInfo {
         id: sidebarInfo
         x: sidebar.x
         width: sidebar.width
         height: Math.round(84 * root.hostWindow.sidebarTextScale)
         y: parent.height - height - 18
         visible: sidebar.visible
-        radius: CelestinaTheme.radiusLg
-        color: CelestinaTheme.surface
-        border.width: 1
-        border.color: CelestinaTheme.divider
-
-        readonly property var ac: root.hostWindow.activeController
-        readonly property int selCount: ac ? ac.selectionCount : 0
-        readonly property int count: ac ? ac.entryNames.length : 0
-        // Re-evaluated when the list changes (entryNames) so the index stays
-        // valid across sort/filter.
-        readonly property int selIdx: {
-            var _ = ac ? ac.entryNames.length : 0
-            return (ac && selCount === 1 && ac.selectedToken.length > 0)
-                   ? ac.indexForToken(ac.selectedToken) : -1
-        }
-
-        readonly property string header: selCount > 1 ? "SELECCIÓN"
-                                         : selIdx >= 0 ? "ELEMENTO" : "CARPETA"
-        readonly property string primary: selCount > 1
-                ? selCount + " seleccionados"
-                : selIdx >= 0 ? ac.entryNames[selIdx]
-                : count + (count === 1 ? " elemento" : " elementos")
-        readonly property string secondary: selCount > 1 ? ""
-                : selIdx >= 0 ? ac.entryDetail(selIdx)
-                : (ac && ac.folderSize.length > 0 ? "Total " + ac.folderSize : "")
-
-        Column {
-            x: 18
-            anchors.verticalCenter: parent.verticalCenter
-            width: parent.width - 34
-            spacing: 4
-
-            Text {
-                text: sidebarInfo.header
-                color: CelestinaTheme.textMuted
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: Math.round(CelestinaTheme.fontRowSecondary * root.hostWindow.sidebarTextScale)
-                font.letterSpacing: 1.4
-                font.weight: CelestinaTheme.weightDemiBold
-            }
-
-            Text {
-                width: parent.width
-                text: sidebarInfo.primary
-                color: CelestinaTheme.text
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: Math.round(CelestinaTheme.fontRowTitle * root.hostWindow.sidebarTextScale)
-                font.weight: CelestinaTheme.weightMedium
-                elide: Text.ElideMiddle
-            }
-
-            Text {
-                width: parent.width
-                visible: sidebarInfo.secondary.length > 0
-                text: sidebarInfo.secondary
-                color: CelestinaTheme.textMuted
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: Math.round(CelestinaTheme.fontRowSecondary * root.hostWindow.sidebarTextScale)
-                elide: Text.ElideRight
-            }
-        }
+        hostWindow: root.hostWindow
     }
 
     GlassContextMenu {

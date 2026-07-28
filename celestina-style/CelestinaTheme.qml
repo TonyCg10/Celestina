@@ -121,10 +121,10 @@ QtObject {
         required property color gradientStart
         required property color gradientMid
         required property color gradientEnd
-        // Glass (v2 recipe, S2): tint+dim, the lit-edge glow (glassBorder base),
-        // a thin dark outline for definition against a light backdrop, and the
-        // highlight. glassHighlight is reserved for the composite shader (S2+).
+        // Glass: regular floating tint, stronger modal tint, restrained lit edge
+        // and a dark outline. The stronger density keeps dialog content legible.
         required property color glassTint
+        required property color glassTintStrong
         required property color glassBorder
         required property color glassHighlight
         required property color glassOutline
@@ -183,11 +183,15 @@ QtObject {
         gradientStart: "#010102"
         gradientMid: "#08080b"
         gradientEnd: "#020204"
-        glassTint: "#a61c1c1f"
-        glassBorder: "#5cffffff"
+        // The reference reads near #303030 over a neutral backdrop. This tint is
+        // slightly more opaque by request while still allowing coloured content
+        // to bleed through the blur; modals use the denser companion value.
+        glassTint: "#b83a3a3d"
+        glassTintStrong: "#d1343438"
+        glassBorder: "#24ffffff"
         glassHighlight: "#2effffff"
-        glassOutline: "#66000000"
-        shadow: "#96000000"
+        glassOutline: "#4d000000"
+        shadow: "#78000000"
     }
 
     // The active scheme — the single switch point. Bindings re-evaluate once if
@@ -241,6 +245,7 @@ QtObject {
     readonly property color gradientMid: scheme.gradientMid
     readonly property color gradientEnd: scheme.gradientEnd
     readonly property color glassTint: scheme.glassTint
+    readonly property color glassTintStrong: scheme.glassTintStrong
     readonly property color glassBorder: scheme.glassBorder
     readonly property color glassHighlight: scheme.glassHighlight
     readonly property color glassOutline: scheme.glassOutline
@@ -254,7 +259,9 @@ QtObject {
     // an empty family and Qt picks the application default — the same honest
     // fallback posture as fallbackIcon().
     readonly property FontLoader interLoader: FontLoader {
-        source: "qrc:/qt/qml/CelestinaStyle/fonts/InterVariable.ttf"
+        source: Qt.resolvedUrl(".").toString().startsWith("file:")
+                ? Qt.resolvedUrl("fonts/InterVariable.ttf")
+                : "qrc:/qt/qml/CelestinaStyle/fonts/InterVariable.ttf"
     }
     readonly property string sansFamily: interLoader.status === FontLoader.Ready
                                          ? interLoader.name
@@ -343,14 +350,14 @@ QtObject {
     // recipe pairs blur with a *slight desaturation* of the backdrop (negative
     // saturation) — the earlier boost was half the recipe (audit §5.4). blurMax
     // stays ≤ 32 (the MultiEffect pyramid is 4 passes at 32).
-    readonly property real glassBlur: 0.60
+    readonly property real glassBlur: 0.66
     readonly property int glassBlurMax: 30
-    readonly property real glassSaturation: -0.18
+    readonly property real glassSaturation: -0.08
     readonly property real glassSampleScale: 0.66
     readonly property int glassSampleMargin: 20
     // Fine noise dither over the blur — kills the banding the downsample pyramid
     // leaves behind (DESIGN §4/§6.5). Tiled texture at a low opacity.
-    readonly property real glassNoiseOpacity: 0.04
+    readonly property real glassNoiseOpacity: 0.025
 
     // ── Elevation (scalars) ──────────────────────────────────────────────────
     // The L2 drop shadow (RectangularShadow) under floating layers. Soft, large

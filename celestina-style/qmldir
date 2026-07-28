@@ -9,6 +9,7 @@ module CelestinaStyle
 
 singleton CelestinaTheme 1.0 CelestinaTheme.qml
 
+CelestinaSurface 1.0 CelestinaSurface.qml
 CelestinaButton 1.0 CelestinaButton.qml
 CelestinaTextField 1.0 CelestinaTextField.qml
 CelestinaSwitch 1.0 CelestinaSwitch.qml
