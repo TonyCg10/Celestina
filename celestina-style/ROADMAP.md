@@ -65,7 +65,7 @@ smokes + clean `all_qmllint`. Deferred within the recipe: the composite
 QQEM/qsb shader (blur+desaturate+tint+noise+stroke in one pass) stays layered
 for now.
 
-**S3 (iconography) — icon set done, squircle pending** (2026-07-27): the ad-hoc
+**S3 (iconography) — done** (2026-07-27): the ad-hoc
 hand-drawn fallbacks were replaced by the **Lucide** set (ISC, license shipped
 in `icons/`) behind the existing freedesktop-name mapping, so consumers keep
 resolving by name; a `phone` icon was added (Siderita's sidebar referenced a
@@ -82,7 +82,9 @@ its hardcoded Rosé Pine palette (shell buildout, gated by CLAUDE.md).
 **S4 (gallery + first components) — done** (2026-07-27): the two One UI
 signature controls landed — **`CelestinaSwitch`** (the pill toggle, white thumb
 on an accent track) and **`ListSection`** (the grouped-card "focus block"), with
-**Magnetita's Settings surface** as their first real consumer (CP2 satisfied):
+**Magnetita's Settings surface** as their first real consumer (the
+first-consumer gate DESIGN §6.8 sets for pre-specced components; CP2's own
+≥2-consumer bar below stays open):
 its plugin toggles are now switches and its device/plugin lists are grouped
 cards, dropping the 🟢/⚪/🔑 emoji for a status dot and tabular fingerprints, and
 the toggle keeps truthful state (the switch re-binds to the daemon's answer, not
@@ -140,7 +142,7 @@ independently.
 
 - [ ] Compatibility + deprecation policy for the 1.0 surface
 - [ ] Truthful glass APIs — tint/glow/tokens vs. real in-scene blur vs. compositor blur kept clearly separate
-- [~] Font + icon fallback contracts — Inter Variable (OFL) now ships embedded in each app's qrc, with an honest fallback where it is not compiled in (the shell chooser → application default); the mono face, the Lucide icon adoption (S3) and the written fallback policy remain
+- [~] Font + icon fallback contracts — Inter Variable (OFL) ships embedded in each app's qrc, with an honest fallback where it is not compiled in (the shell → application default), and the Lucide set landed in S3; the mono face and the written fallback policy remain
 - [ ] Keyboard, focus, AT-SPI, reduced-motion and high-contrast behavior for the finite component set
 - [x] Both apps consume the same canonical source (symlink-compiled; an installed release belongs to STYLE-D)
 

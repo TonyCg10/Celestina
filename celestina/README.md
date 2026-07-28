@@ -6,8 +6,8 @@ composes mature external tools rather than reimplementing a launcher,
 notification daemon, lock screen, auth agent or wallpaper manager.
 
 - **Role:** Niri shell / session (part of the [Celestina suite](../ROADMAP.md))
-- **Stack:** C++20 · Qt 6 Quick · LayerShellQt · CMake + Ninja
-- **Consumes:** [celestina-style](../celestina-style/) (the output chooser consumes it live; the panel still uses a small inline palette — migrating it is a CP0 goal)
+- **Stack:** C++20 · Qt 6 Quick · LayerShellQt · KWindowSystem (KF6, compositor blur) · CMake + Ninja
+- **Consumes:** [celestina-style](../celestina-style/) — live for the panel *and* the chooser, imported from source via a self-provisioned import path (the style's font qrc is not bundled yet, so shell text falls back to the system face)
 
 ## Build / run
 
@@ -36,8 +36,8 @@ rules and diagnostics can tell both shells apart.
 
 | Path | Responsibility |
 |---|---|
-| `CMakeLists.txt` | Qt executable/module + LayerShellQt |
-| `src/main.cpp` | process bootstrap, per-output layer-shell lifecycle, `--pick-output` mode |
+| `CMakeLists.txt` | Qt executable/module + LayerShellQt + KWindowSystem |
+| `src/main.cpp` | process bootstrap, per-output layer-shell lifecycle (+ compositor blur request), style import self-provisioning, `--pick-output` mode |
 | `src/devicesclient.cpp`, `.h` | QtDBus client of `org.celestina.Devices1` (the phone in the panel) |
 | `qml/Panel.qml` | hidden-until-configured root window, clock + phone indicator |
 | `qml/Clock.qml` | minute-aligned local time |

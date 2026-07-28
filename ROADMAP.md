@@ -60,8 +60,10 @@ celestina-rs ─────┐                    celestina-style ────�
 
 > `siderita` now renders from the shared `celestina-style` module — its private
 > theme and glass were removed and the canonical copies live in
-> `celestina-style`. `celestina` still uses a small inline palette; finishing
-> that half of the convergence is a Checkpoint 1 goal.
+> `celestina-style`. `celestina` renders from it too since the restyle's S5
+> (panel + chooser, imported from source); the half that remains is consuming
+> an *installed* release, deferred with STYLE-D until an out-of-tree consumer
+> exists.
 
 **Planned apps** — design-stage, listed in the README's
 [Planned](README.md#planned) section, each started only when a recurring daily
@@ -113,11 +115,13 @@ as a suite rather than four unrelated apps:
 - `celestina-style` — the canonical shared source (semantic tokens + working
   glass + fallback icons). Official consumption contract: apps symlink the
   sources into their own CXX-Qt modules and compile them in, CI-guarded
-  against copies; the shell's output chooser still imports the CMake-built
-  module via a runtime path. An installable clean-prefix release is deferred
-  until an out-of-tree consumer exists.
-- `celestina` — host builds and QML-lints; geometry/zone/focus not yet verified
-  on real Niri; no Rust yet.
+  against copies; the shell (panel and chooser) imports the source tree via a
+  self-provisioned import path. An installable clean-prefix release is
+  deferred until an out-of-tree consumer exists.
+- `celestina` — host builds and QML-lints; the panel renders from
+  `CelestinaTheme` (restyle S5) and asks the compositor for wallpaper blur via
+  KWindowSystem (niri `ext-background-effect`, best-effort);
+  geometry/zone/focus still lack direct acceptance checks; no Rust yet.
 - `siderita` — **v1.0 (now 1.0.1): Iteration 1 concluded (2026-07-25)**, the full CP0 → CP5
   arc. CP0–CP3 are complete and ratified on real Wayland (staged self-contained
   install, loss-free operations, freedesktop interop, a native role model with a
@@ -168,7 +172,7 @@ visibly share one design language.
 - [x] **celestina-rs CP1** — the write-side domain those operations stand on (`siderita-ops`: loss-free verbs, consumed live by Siderita; the dotfiles apply API remains open in its own roadmap)
 - [ ] **celestina-style CP1** — stable, accessible design contract (compat/deprecation, truthful glass, font/icon fallbacks, a11y)
 - [x] **Convergence (Siderita)** — `siderita` renders from the shared CelestinaStyle module (semantic tokens + working glass + icons); its private theme/glass were removed
-- [ ] **Convergence (desktop)** — migrate `celestina` off its inline palette onto CelestinaStyle
+- [x] **Convergence (desktop)** — the panel and chooser render from CelestinaStyle (restyle S5, confirmed on the live session); the installed-release half of convergence stays deferred with STYLE-D
 
 **Done when:** the author can run a Niri session on Celestina's shell with
 Siderita as the file manager for daily use; both consume the same installed

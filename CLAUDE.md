@@ -72,9 +72,15 @@ ellos — escribir el contrato no es empezar el proyecto.
   `FileManager1Service` y `FileChooserPortal` son objetos aparte).
 - Todo componente QML nuevo se registra en el `build.rs` de su app
   (`QML_FILES`) — un QML sin listar compila "bien" sin llegar al binario.
-- Deuda nombrada: `siderita/qml/FolderView.qml` (~3,3k) y
-  `siderita/src/controller.rs` (~3k) son los dos monolitos heredados.
-  Prohibido crecerlos; al tocarlos, extrae primero la pieza que vas a tocar.
+- Al instanciar un componente, la propiedad inyectada **no puede llamarse
+  igual** que el id que le pasas: `sortMenu: sortMenu` resuelve a la propia
+  propiedad del componente (undefined), no al id — la clase de bug del fix de
+  clics (9e19b6d). Usa nombres distintos o un alias del host
+  (`property alias viewTopBar: topBar`). `siderita/scripts/smoke.sh` y la CI
+  cazan el patrón.
+- Deuda nombrada: `siderita/qml/FolderView.qml` (~1,6k) y
+  `siderita/qml/Sidebar.qml` (~1,3k) siguen sobre el techo (~800). Prohibido
+  crecerlos; al tocarlos, extrae primero la pieza que vas a tocar.
 
 ## Estilo y UI — cómo no volver a fabricar un botón ilegible
 
@@ -117,7 +123,9 @@ ellos — escribir el contrato no es empezar el proyecto.
 - `CelestinaTheme.fallbackIcon()` solo funciona si la app registra
   `qml/icons.qrc` en su `build.rs` (Siderita lo hace; Magnetita no — no usarlo
   allí sin registrarlo antes).
-- Componente nuevo en `celestina-style` solo cuando ≥2 apps lo necesitan;
+- Componente nuevo en `celestina-style`: los ya especificados en DESIGN §6.8
+  aterrizan con su **primer consumidor real** (precedente: `CelestinaSwitch` y
+  `ListSection` con los ajustes de Magnetita); cualquier otro exige ≥2 apps —
   mientras, vive en la app (precedente: `GlassPill` es local de Siderita).
 - Métricas y movimiento también salen de tokens: `space*`, `radius*`,
   `controlHeight*`, `motion*`, `ease*`. Nada de números mágicos de layout.
@@ -136,10 +144,12 @@ ellos — escribir el contrato no es empezar el proyecto.
   `window.contentItem`) y guarde un PNG. Los colores y el contraste sí se ven
   offscreen; solo el blur del cristal queda en blanco (necesita display real).
 - Cada app tiene un único `scripts/run.sh` que compila en release y la
-  **instala** en `~/.local` (el shell: compila y **activa** el panel); para el
-  humo offscreen se corre el binario directamente (`target/release/<app>` o
-  `~/.local/bin/<app>`) con las variables de arriba. Un cambio de
-  color/contraste no se declara correcto sin captura o ventana real.
+  **instala** en `~/.local` (el shell: compila y **activa** el panel). Para el
+  humo, Siderita tiene `scripts/smoke.sh`: chequeo estático del auto-binding
+  `x: x` + arranque offscreen de 8 s que **falla ante
+  TypeError/ReferenceError**. Ojo con su límite: solo caza errores de
+  *arranque* — un binding que se evalúa al hacer clic exige sesión real. Un
+  cambio de color/contraste no se declara correcto sin captura o ventana real.
 
 ## README y ROADMAP (la deriva doc↔código es el defecto histórico del repo)
 
@@ -161,7 +171,10 @@ ellos — escribir el contrato no es empezar el proyecto.
 
 - Antes de dar algo por terminado: `cargo fmt --check`, `cargo clippy` sin
   warnings y `cargo test` en `celestina-rs/` y `siderita/`; las apps compilan y
-  arrancan. No hay CI: el agente ES el CI.
+  arrancan (`smoke.sh` en Siderita). La CI (GitHub Actions) cubre el workspace
+  Rust y los guards de estilo/QML; todo lo que exige Qt o un display —
+  compilar las apps, capturas, sesión real — lo verifica el agente: **para la
+  UI, el agente sigue siendo el CI.**
 - Commits: asunto en inglés, imperativo, prefijado por proyecto
   (`Siderita: …`, `Magnetita: …`, `celestina-style: …`; `Docs:`/`Refactor:`/
   `Dedup:` para lo transversal). Commit/push solo cuando el autor lo pida.

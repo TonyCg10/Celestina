@@ -256,10 +256,14 @@ outside) → **top-edge inner glow** (the existing lit edge, kept — it *is*
 the 8.5 signature). Long-term the color/noise/stroke steps collapse into one
 composite shader (QQEM/qsb); short-term they layer on the current pipeline.
 
-API v2 fixes the amateur part: the surface **tracks its own scene position**
-(consumers stop wiring `refreshBackdrop()` by hand); `liveCapture` stays an
-explicit, documented decision; degradation (no capture → translucent tint)
-stays. The GPU `Shape` stroke replaces the `Canvas`.
+API v2's re-arm model is **event-driven**: the surface re-captures on its own
+size changes, and movable hosts re-arm on show/position (menus via their
+open/x/y signals, cards on show/resize/move). A per-frame self-tracking
+variant shipped in S2 and was deliberately reverted (`a8c0084`): resampling
+every frame on the GUI thread pinned a core even at idle, which an always-on
+surface cannot pay. `liveCapture` stays an explicit, documented decision;
+degradation (no capture → translucent tint) stays. The GPU `Shape` stroke
+replaces the `Canvas`.
 
 ### 6.6 Typography
 
@@ -291,7 +295,9 @@ one style per screen doctrine, recoil, focus ring), `CelestinaTextField`
 (radius 22, One UI search anatomy), `GlassSurface/Card/ContextMenu/MenuItem`
 (glass v2 + elevation). New specs, each waiting for its first real consumer:
 **`ListSection`** (the grouped-card list — the signature; first consumer:
-Magnetita Settings, later shell settings), **`CelestinaSwitch`** (35×~20 pill,
+Magnetita Settings, later shell settings), **`CelestinaSwitch`** (shipped
+44×26 as the desktop-tuned pill — the 35dp phone reference and the
+`comp.switch.*` tokens are an open refinement,
 white thumb, accent track), `CollapsingHeader` (34→21 pattern),
 `CelestinaDialog` (centered, 360×r26, scrim), `TabPills` (floating pill
 strip), `Toast`, `CelestinaSlider`, `Tooltip`. Every component documents its
