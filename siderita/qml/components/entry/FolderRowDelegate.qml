@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls.impl
 import QtQuick.Layouts
 import org.celestina.siderita 1.0
 
@@ -51,7 +50,8 @@ Item {
 
     width: root.view.width
     height: root.panel.listRowHeight
-    opacity: cut ? 0.4 : hidden ? 0.5 : 1.0
+    opacity: cut ? CelestinaTheme.unavailableContentOpacity
+                 : hidden ? CelestinaTheme.disabledOpacity : 1
     Accessible.role: Accessible.ListItem
     Accessible.name: name
     Accessible.selected: selected
@@ -65,8 +65,8 @@ Item {
                ? CelestinaTheme.surfaceSelected
                : pointer.containsMouse
                  ? CelestinaTheme.surfaceHover
-                 : "transparent"
-        border.width: root.selected ? 1 : 0
+                 : CelestinaTheme.clear
+        border.width: root.selected ? CelestinaTheme.borderHairline : 0
         border.color: CelestinaTheme.dividerStrong
 
         Behavior on color {
@@ -115,9 +115,9 @@ Item {
             anchors.leftMargin: 4
             anchors.rightMargin: 4
             visible: parent.containsDrag
-            color: "transparent"
+            color: CelestinaTheme.clear
             radius: CelestinaTheme.radiusSm
-            border.width: 2
+            border.width: CelestinaTheme.borderFocus
             border.color: CelestinaTheme.accent
         }
     }
@@ -139,7 +139,7 @@ Item {
         readonly property string media: root.kind === "directory"
                                         ? "" : root.panel.mediaKind(root.name)
 
-        IconImage {
+        CelestinaIcon {
             anchors.centerIn: parent
             visible: !thumb.ready
             width: Math.round(CelestinaTheme.iconMd * root.hostWindow.contentIconScale)
@@ -149,12 +149,11 @@ Item {
             // sólo se publican a 16 px: sin pedir el tamaño explícito se dibujan
             // diminutos dentro de una celda hecha para una carpeta de 54.
             sourceSize: Qt.size(width, height)
-            source: CelestinaTheme.fallbackIcon(
-                        root.kind === "directory"
-                        ? "folder"
-                        : root.kind === "symlink"
-                          ? "symlink"
-                          : "file")
+            fallbackName: root.kind === "directory"
+                          ? "folder"
+                          : root.kind === "symlink"
+                            ? "symlink"
+                            : "file"
             // No color tint: let the icon theme (Qogir) render folders and
             // mimetypes in their own colours. A tint would flatten them to a
             // solid silhouette.
@@ -201,12 +200,14 @@ Item {
             width: Math.round(parent.width * 0.42)
             height: width
             radius: width / 2
-            color: Qt.rgba(0, 0, 0, 0.45)
-            Text {
+            color: CelestinaTheme.mediaScrim
+            CelestinaIcon {
                 anchors.centerIn: parent
-                text: "▶"
-                color: "white"
-                font.pixelSize: Math.round(parent.width * 0.5)
+                width: Math.round(parent.width * 0.55)
+                height: width
+                name: "media-playback-start"
+                fallbackName: "media-play"
+                tone: CelestinaIcon.Overlay
             }
         }
     }

@@ -1,32 +1,19 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.impl
 import QtQuick.Layouts
 import org.celestina.siderita 1.0
 
     // ── Icon picker (Cambiar icono…) ─────────────────────────────────
     // Pick a custom icon for one entry from the theme's folder-type (or
     // file-type) variants; the choice persists per path via the controller.
-Rectangle {
+CelestinaModalLayer {
     id: iconPicker
     property var controller
     property var owner
     property var panel   // mainPanel: ayudas de selección y medios
     anchors.fill: parent
     z: 69
-    property bool shown: false
-    // Fades rather than pops. Opacity only: a scale transform on a
-    // glass surface desyncs its backdrop sampling (see a995619), so the
-    // motion here never touches geometry.
-    visible: opacity > 0.01
-    opacity: shown ? 1 : 0
-    Behavior on opacity {
-        NumberAnimation {
-            duration: CelestinaTheme.motionFast
-            easing.type: CelestinaTheme.easeStandard
-        }
-    }
-    color: CelestinaTheme.scrim
+    onDismissRequested: iconPicker.dismiss()
 
     property string targetPath: ""
     property bool forFolder: true
@@ -58,15 +45,6 @@ Rectangle {
         shown = false
     }
     function dismiss() { shown = false }
-
-    MouseArea { anchors.fill: parent; onClicked: iconPicker.dismiss() }
-    Keys.onPressed: function(event) {
-        if (event.key === Qt.Key_Escape) {
-            iconPicker.dismiss()
-            event.accepted = true
-        }
-    }
-    focus: iconPicker.shown
 
     GlassCard {
         anchors.centerIn: parent
@@ -115,11 +93,13 @@ Rectangle {
                     anchors.margins: 4
                     radius: CelestinaTheme.radiusSm
                     color: iconOptMouse.containsMouse
-                           ? CelestinaTheme.surfaceHover : "transparent"
-                    border.width: panel.customIcons[iconPicker.targetPath] === iconOpt.modelData ? 1 : 0
+                           ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
+                    border.width: panel.customIcons[iconPicker.targetPath]
+                                  === iconOpt.modelData
+                                  ? CelestinaTheme.borderHairline : 0
                     border.color: CelestinaTheme.dividerStrong
 
-                    IconImage {
+                    CelestinaIcon {
                         anchors.centerIn: parent
                         width: 42
                         height: 42
@@ -129,8 +109,7 @@ Rectangle {
                         // tamaño obliga a rasterizar el SVG a esa medida.
                         sourceSize: Qt.size(42, 42)
                         name: iconOpt.modelData
-                        source: CelestinaTheme.fallbackIcon(
-                                    iconPicker.forFolder ? "folder" : "file")
+                        fallbackName: iconPicker.forFolder ? "folder" : "file"
                     }
                 }
 
@@ -158,7 +137,7 @@ Rectangle {
             }
             CelestinaButton {
                 text: "Cerrar"
-                primary: true
+                role: CelestinaButton.Primary
                 onClicked: iconPicker.dismiss()
             }
         }

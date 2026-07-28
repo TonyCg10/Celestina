@@ -16,14 +16,9 @@ Column {
 
     spacing: CelestinaTheme.spaceSm
 
-    Text {
+    CelestinaSectionLabel {
         visible: section.title.length > 0
         text: section.title
-        color: CelestinaTheme.textMuted
-        font.family: CelestinaTheme.sansFamily
-        font.pixelSize: CelestinaTheme.fontMini
-        font.letterSpacing: 1.4
-        font.weight: CelestinaTheme.weightDemiBold
         leftPadding: CelestinaTheme.spaceMd
     }
 

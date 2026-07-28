@@ -36,7 +36,7 @@ Item {
 
         CelestinaButton {
             text: "Volver"
-            primary: true
+            role: CelestinaButton.Primary
             onClicked: root.controller.closeRecent()
         }
     }

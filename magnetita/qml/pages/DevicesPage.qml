@@ -18,7 +18,7 @@ Column {
         color: CelestinaTheme.textMuted
         font.family: CelestinaTheme.sansFamily
         font.pixelSize: CelestinaTheme.fontBody
-        bottomPadding: 12
+        bottomPadding: CelestinaTheme.spaceMd
     }
 
     Text {
@@ -30,7 +30,7 @@ Column {
         font.pixelSize: CelestinaTheme.fontRowTitle
         wrapMode: Text.WordWrap
         lineHeight: 1.3
-        bottomPadding: 8
+        bottomPadding: CelestinaTheme.spaceSm
     }
 
     Column {
@@ -70,15 +70,10 @@ Column {
         mediaControlIndex: root.mediaControlIndex
     }
 
-    Text {
+    CelestinaSectionLabel {
         text: "ACTIVIDAD"
-        color: CelestinaTheme.textMuted
-        font.family: CelestinaTheme.sansFamily
-        font.pixelSize: CelestinaTheme.fontMini
-        font.letterSpacing: 1.4
-        font.weight: CelestinaTheme.weightDemiBold
-        topPadding: 14
-        bottomPadding: 4
+        topPadding: CelestinaTheme.compButtonPaddingHorizontal
+        bottomPadding: CelestinaTheme.spaceXs
     }
 
     ActivityLog {

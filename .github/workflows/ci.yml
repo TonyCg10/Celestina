@@ -32,6 +32,8 @@ jobs:
             fi
           done
           exit $fallos
+      - name: Contrato visual sin valores locales
+        run: bash celestina-style/scripts/check-style-contract.sh
       # El auto-binding `x: x` (la propiedad inyectada sombrea al id homónimo
       # y queda undefined) es legal para el motor y para qmllint — se caza por
       # patrón. Los literales JS (`append({clave: clave})`) viven dentro de

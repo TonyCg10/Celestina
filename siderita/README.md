@@ -31,8 +31,13 @@ remove it).
 |---|---|
 | `src/main.rs`, `src/controller.rs` | Rust host and the CXX-Qt QObject |
 | `qml/Main.qml`, `qml/PickerWindow.qml` | application entry surfaces: main window and portal file chooser |
-| `qml/views/` | composed app views (`FolderView`, `Sidebar`) |
-| `qml/components/` | Siderita presentation pieces: headers, delegates, pills, rows and sidebar info |
+| `qml/views/FolderView.qml`, `qml/views/Sidebar.qml` | composed coordinators; both remain below the ~800-line ceiling |
+| `qml/components/chrome/` | app chrome: top/bottom controls, tabs, headers and Siderita's local floating-glass controls |
+| `qml/components/sidebar/` | sidebar rows, saved sections, context menus and info presentation |
+| `qml/components/entry/` | file/folder delegates, drag edges and entry badges |
+| `qml/components/folder/` | list/grid views, shortcuts, actions, operation status and floating content chrome |
+| `qml/components/picker/` | portal picker controls; `PickerWindow.qml` retains browsing and selection state |
+| `qml/components/` | small dialog/property rows that do not belong to a larger UI region |
 | `qml/dialogs/` | dialogs and overlays owned by the folder view |
 | `qml/menus/` | context menus and popups |
 | `qml/Celestina*.qml`, `qml/Glass*.qml` | canonical `celestina-style` sources consumed as symlinks, never copies |

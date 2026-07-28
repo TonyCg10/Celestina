@@ -37,7 +37,7 @@ CelestinaSurface {
             CelestinaButton {
                 width: 116
                 visible: root.mounted
-                primary: true
+                role: CelestinaButton.Primary
                 text: "Abrir"
                 onClicked: root.devices.openMount(root.primaryIndex)
             }
@@ -45,7 +45,7 @@ CelestinaSurface {
             CelestinaButton {
                 width: 116
                 visible: !root.paired
-                primary: true
+                role: CelestinaButton.Primary
                 text: "Emparejar"
                 onClicked: root.devices.pairDevice(root.primaryIndex)
             }
@@ -67,7 +67,7 @@ CelestinaSurface {
 
         Rectangle {
             width: parent.width
-            height: 1
+            height: CelestinaTheme.borderHairline
             color: CelestinaTheme.divider
         }
 
@@ -75,20 +75,34 @@ CelestinaSurface {
             width: parent.width
             height: 34
 
-            Text {
+            CelestinaIcon {
+                id: mediaIcon
                 anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                width: CelestinaTheme.iconSm
+                height: width
+                name: "audio-x-generic"
+                fallbackName: "music"
+                tone: root.mediaIndex >= 0
+                      ? CelestinaIcon.Primary : CelestinaIcon.Secondary
+            }
+
+            Text {
+                anchors.left: mediaIcon.right
+                anchors.leftMargin: CelestinaTheme.spaceSm
                 anchors.right: mediaRow.left
                 anchors.rightMargin: 10
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.mediaIndex >= 0
-                      ? "♪ " + root.devices.deviceMedia[root.mediaIndex]
-                      : "♪ Nada reproduciéndose"
+                      ? root.devices.deviceMedia[root.mediaIndex]
+                      : "Nada reproduciéndose"
                 color: root.mediaIndex >= 0
                        ? CelestinaTheme.text : CelestinaTheme.textMuted
                 font.family: CelestinaTheme.sansFamily
                 font.pixelSize: CelestinaTheme.fontRowTitle
                 font.weight: root.mediaIndex >= 0
-                             ? CelestinaTheme.weightDemiBold : Font.Normal
+                             ? CelestinaTheme.weightDemiBold
+                             : CelestinaTheme.weightRegular
                 elide: Text.ElideRight
             }
 
@@ -98,22 +112,30 @@ CelestinaSurface {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 6
 
-                CelestinaButton {
+                CelestinaIconButton {
                     width: 44
-                    text: "⏮"
+                    iconName: "media-skip-backward"
+                    fallbackIcon: "media-skip-back"
+                    helpText: "Anterior"
                     onClicked: root.devices.mediaPrevious(root.mediaControlIndex)
                 }
 
-                CelestinaButton {
+                CelestinaIconButton {
                     width: 44
-                    primary: root.playing
-                    text: root.playing ? "⏸" : "▶"
+                    role: root.playing ? CelestinaButton.Primary
+                                       : CelestinaButton.Tonal
+                    iconName: root.playing ? "media-playback-pause"
+                                           : "media-playback-start"
+                    fallbackIcon: root.playing ? "media-pause" : "media-play"
+                    helpText: root.playing ? "Pausar" : "Reproducir"
                     onClicked: root.devices.mediaPlayPause(root.mediaControlIndex)
                 }
 
-                CelestinaButton {
+                CelestinaIconButton {
                     width: 44
-                    text: "⏭"
+                    iconName: "media-skip-forward"
+                    fallbackIcon: "media-skip-forward"
+                    helpText: "Siguiente"
                     onClicked: root.devices.mediaNext(root.mediaControlIndex)
                 }
             }

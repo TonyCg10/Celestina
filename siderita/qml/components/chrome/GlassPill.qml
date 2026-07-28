@@ -15,7 +15,7 @@ Rectangle {
     property color fill: CelestinaTheme.controlFill
 
     radius: CelestinaTheme.radiusSm
-    color: "transparent"
+    color: CelestinaTheme.clear
 
     GlassSurface {
         anchors.fill: parent

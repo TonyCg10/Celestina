@@ -50,14 +50,27 @@ CelestinaSurface {
             font.pixelSize: CelestinaTheme.fontCaption
         }
 
-        Text {
+        Row {
             width: parent.width
             visible: root.fingerprint.length > 0
-            text: "🔑 " + root.fingerprint
-            color: CelestinaTheme.textMuted
-            font.family: CelestinaTheme.monoFamily
-            font.pixelSize: CelestinaTheme.fontMini
-            elide: Text.ElideRight
+            spacing: CelestinaTheme.spaceXs
+
+            CelestinaIcon {
+                width: CelestinaTheme.fontRowSecondary
+                height: width
+                name: "dialog-password"
+                fallbackName: "key"
+                tone: CelestinaIcon.Secondary
+            }
+
+            Text {
+                width: parent.width - x
+                text: root.fingerprint
+                color: CelestinaTheme.textMuted
+                font.family: CelestinaTheme.monoFamily
+                font.pixelSize: CelestinaTheme.fontMini
+                elide: Text.ElideRight
+            }
         }
     }
 }

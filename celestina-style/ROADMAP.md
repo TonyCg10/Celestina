@@ -12,9 +12,9 @@ dotfiles or workflows. Consumers keep independent roadmaps and release timing.
 **Current state.** CelestinaStyle is the canonical shared source: a semantic
 token singleton (promoted from Siderita), working backdrop-blur glass
 (`GlassSurface`/`GlassCard`/`GlassContextMenu`/`GlassMenuItem`, replacing the
-earlier `CelestinaGlassPanel` that blurred its own fill), `CelestinaButton`,
-`CelestinaTextField`, `CelestinaSurface`, `CelestinaSwitch`, `ListSection` and
-bundled fallback icons. Both apps consume it live by
+earlier `CelestinaGlassPanel` that blurred its own fill), semantic backdrop,
+surface, button, icon, section-label, text-field, switch, modal-layer and grouped
+list components, plus bundled fallback icons. Both apps consume it live by
 symlinking the sources into their own CXX-Qt modules — the official mechanism,
 guarded in CI so a copy can never silently reappear. A compatibility/deprecation
 policy and verified accessibility/motion behavior are still open; the installable
@@ -122,6 +122,32 @@ regular/strong semantic densities and was retuned against the supplied dark
 capsule reference: slightly denser tint, restrained lit edge, softer shadow and
 more backdrop colour retained.
 
+**Semantic-control follow-up — done** (2026-07-28): the remaining repeated
+presentation contracts became finite shared types: `CelestinaBackdrop`,
+`CelestinaIcon` / `CelestinaIconButton`, `CelestinaSectionLabel` and
+`CelestinaModalLayer`. `CelestinaButton` now exposes one closed role instead of
+contradictory booleans; Siderita's floating button remains deliberately local
+because no second app shares its backdrop-aware behavior. Siderita grouped its
+components into `chrome/`, `sidebar/` and `entry/` before the separately scoped
+Sidebar/FolderView decomposition. The public API inventory now lives in README.
+
+**Siderita composition follow-up — done** (2026-07-28): the three remaining
+large QML hosts were reduced without moving domain behavior. `Sidebar` delegates
+saved rows and context menus; `FolderView` delegates list/grid presentation,
+shortcuts, actions/dialogs, operation status and floating content chrome; the
+portal picker delegates its top/bottom controls to `PickerChrome`. All three
+coordinators are now below the approximate 800-line ceiling, and every extracted
+QML type is registered explicitly in `build.rs`.
+
+**Token-hardening follow-up — done** (2026-07-28): `ref.accent` is now the one
+suite-wide hue seed; link/hover/pressed/focus plus every accent wash derive from
+it. Shared control anatomy (borders, state opacity, button/text-field padding,
+switch, checkbox, linear track, slider handle and status indicator) moved into
+theme tokens, and Siderita/Magnetita no longer carry visual literals for those
+roles. `scripts/check-style-contract.sh`, wired into CI, rejects colours, local
+colour transforms and raw state/anatomy values outside the canonical theme.
+Responsive page geometry deliberately remains consumer-owned.
+
 ## Checkpoint 0 — The canonical source, enforced (STYLE-0)
 **Goal:** one canonical source tree that every consumer compiles from, with
 drift made impossible, and glass APIs that mean what they say.
@@ -130,7 +156,8 @@ drift made impossible, and glass APIs that mean what they say.
 - [x] Working backdrop-blur glass — the broken `CelestinaGlassPanel` (blurred its own fill, not the backdrop) and `CelestinaContextMenu` were removed and replaced by Siderita's proven `ShaderEffectSource`-capture `GlassSurface`
 - [x] First real consumer proven: `siderita` renders entirely from this module (theme, glass, icons), verified by build + offscreen run
 - [x] Single source made real and enforced: both apps consume by symlink into their own CXX-Qt modules (Siderita's six committed copies were replaced by links, 2026-07-26), and CI refuses any style file in an app's `qml/` that is not a symlink
-- [ ] Inventory the public QML types, imports, properties, assets and generated files
+- [x] Token boundary enforced: CI rejects visual literals and app-local colour/state recipes; `ref.accent` is the single seed for all accent roles
+- [x] Inventory the public QML types, semantic properties, assets and generated metadata contract in README; keep it aligned with `qmldir` / CMake
 - [x] Resolve the qmllint `OUTPUT_DIRECTORY` module-path warning — the module now sets `OUTPUT_DIRECTORY .../CelestinaStyle` to match its URI; verified by a clean `cmake` configure (no `Qt6QmlMacros` warning) and a clean `all_qmllint` (S1, 2026-07-27)
 
 **Done when:** every consumer builds from the one canonical tree with no copy
@@ -166,6 +193,7 @@ accessibility/motion behavior is verified, not assumed.
 count.
 
 - [x] Add `CelestinaSurface` after ≥2 real consumers demonstrated the shared container need; Siderita and Magnetita now consume the same role-based contract
+- [x] Add backdrop, icon/button and section-label contracts after both apps demonstrated the same repeated presentation; add the pre-specified modal layer with Siderita's seven dialog consumers
 - [ ] Add any further component or toolkit-neutral asset only after ≥2 real consumers demonstrate reusable demand
 
 ## Non-goals

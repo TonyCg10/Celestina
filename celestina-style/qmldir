@@ -10,10 +10,15 @@ module CelestinaStyle
 singleton CelestinaTheme 1.0 CelestinaTheme.qml
 
 CelestinaSurface 1.0 CelestinaSurface.qml
+CelestinaBackdrop 1.0 CelestinaBackdrop.qml
 CelestinaButton 1.0 CelestinaButton.qml
+CelestinaIconButton 1.0 CelestinaIconButton.qml
+CelestinaIcon 1.0 CelestinaIcon.qml
+CelestinaSectionLabel 1.0 CelestinaSectionLabel.qml
 CelestinaTextField 1.0 CelestinaTextField.qml
 CelestinaSwitch 1.0 CelestinaSwitch.qml
 ListSection 1.0 ListSection.qml
+CelestinaModalLayer 1.0 CelestinaModalLayer.qml
 GlassSurface 1.0 GlassSurface.qml
 GlassCard 1.0 GlassCard.qml
 GlassContextMenu 1.0 GlassContextMenu.qml

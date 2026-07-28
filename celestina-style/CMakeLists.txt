@@ -25,10 +25,15 @@ qt_add_qml_module(celestina-style
     QML_FILES
         CelestinaTheme.qml
         CelestinaSurface.qml
+        CelestinaBackdrop.qml
         CelestinaButton.qml
+        CelestinaIconButton.qml
+        CelestinaIcon.qml
+        CelestinaSectionLabel.qml
         CelestinaTextField.qml
         CelestinaSwitch.qml
         ListSection.qml
+        CelestinaModalLayer.qml
         GlassSurface.qml
         GlassCard.qml
         GlassContextMenu.qml
@@ -50,6 +55,13 @@ qt_add_qml_module(celestina-style
         icons/star-outline.svg
         icons/phone.svg
         icons/battery-charging.svg
+        icons/settings.svg
+        icons/music.svg
+        icons/key.svg
+        icons/media-skip-back.svg
+        icons/media-play.svg
+        icons/media-pause.svg
+        icons/media-skip-forward.svg
         icons/glass-noise.png
         fonts/InterVariable.ttf
 )

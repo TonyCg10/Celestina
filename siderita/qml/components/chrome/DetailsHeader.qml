@@ -27,8 +27,8 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: CelestinaTheme.radiusSm
-        color: "transparent"
-        border.width: 1
+        color: CelestinaTheme.clear
+        border.width: CelestinaTheme.borderHairline
         border.color: CelestinaTheme.dividerStrong
     }
 

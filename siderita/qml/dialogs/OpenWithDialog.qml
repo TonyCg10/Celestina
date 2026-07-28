@@ -1,30 +1,19 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.impl
 import QtQuick.Layouts
 import org.celestina.siderita 1.0
 
     // ── "Abrir con…" application chooser ─────────────────────────────
-Rectangle {
+CelestinaModalLayer {
     id: openWithView
     property var controller
     property var owner
     property var backdrop   // mainPanel: el fondo que difumina el cristal
     anchors.fill: parent
     z: 66
-    readonly property bool shown: controller.openWithPending
-    // Fades rather than pops. Opacity only: a scale transform on a
-    // glass surface desyncs its backdrop sampling (see a995619), so the
-    // motion here never touches geometry.
-    visible: opacity > 0.01
-    opacity: shown ? 1 : 0
-    Behavior on opacity {
-        NumberAnimation {
-            duration: CelestinaTheme.motionFast
-            easing.type: CelestinaTheme.easeStandard
-        }
-    }
-    color: CelestinaTheme.scrim
+    shown: controller.openWithPending
+    dismissOnEscape: false
+    onDismissRequested: controller.cancelOpenWith()
 
     property int selected: -1
     readonly property int appCount: controller.openWithApps.length
@@ -33,10 +22,6 @@ Rectangle {
                            openWithList.positionViewAtIndex(
                                selected, ListView.Contain)
 
-    MouseArea {
-        anchors.fill: parent
-        onClicked: controller.cancelOpenWith()
-    }
     // Fully keyboard-operable: arrows move the selection, Enter opens
     // it, Escape cancels.
     Keys.onPressed: function(event) {
@@ -60,8 +45,6 @@ Rectangle {
             event.accepted = true
         }
     }
-    focus: openWithView.shown
-
     GlassCard {
         anchors.centerIn: parent
         width: Math.min(480, owner.width - 48)
@@ -125,7 +108,7 @@ Rectangle {
                     color: openWithView.selected === appRow.index
                            ? CelestinaTheme.badgeAccentFill
                            : appRowMouse.containsMouse
-                             ? CelestinaTheme.surfaceHover : "transparent"
+                             ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
                 }
 
                 Text {
@@ -182,7 +165,7 @@ Rectangle {
             }
             CelestinaButton {
                 text: "Abrir"
-                primary: true
+                role: CelestinaButton.Primary
                 enabled: openWithView.selected >= 0
                 onClicked: controller.openWithApp(openWithView.selected, false)
             }

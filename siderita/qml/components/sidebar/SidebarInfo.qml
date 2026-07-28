@@ -39,14 +39,10 @@ CelestinaSurface {
         width: parent.width - 34
         spacing: 4
 
-        Text {
+        CelestinaSectionLabel {
             text: root.heading
-            color: CelestinaTheme.textMuted
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: Math.round(CelestinaTheme.fontRowSecondary
-                                       * root.hostWindow.sidebarTextScale)
-            font.letterSpacing: 1.4
-            font.weight: CelestinaTheme.weightDemiBold
+            size: CelestinaSectionLabel.Regular
+            textScale: root.hostWindow.sidebarTextScale
         }
 
         Text {

@@ -29,18 +29,59 @@ tree (see [ROADMAP.md](ROADMAP.md), STYLE-D).
 | Path | Responsibility |
 |---|---|
 | `DESIGN.md` | the design contract: One UI 8.5 desktop-adapted — reference values, platform ceiling, target system, build phases |
-| `CelestinaTheme.qml` | singleton design tokens, tiered `ref`→`scheme`→`sys`: the dark `ColorScheme` as data (surface→ink pairs), Inter Variable, type/radius/motion/glass scales |
+| `CelestinaTheme.qml` | singleton design tokens, tiered `ref`→`scheme`→`sys`: one accent seed and derived states, the dark `ColorScheme` as data (surface→ink pairs), Inter Variable, type/radius/motion/glass/component scales |
 | `CelestinaSurface.qml` | semantic non-floating container (`Canvas`, `Panel`, `Grouped`, `Content`, `Tonal`, `Elevated`, `Selected`); consumers own geometry/content while the style owns fill, foreground and shape |
+| `CelestinaBackdrop.qml` | canonical L0 window gradient; consumers may add decorative children without rebuilding the canvas |
 | `GlassSurface.qml` | frosted surface that blurs injected backdrop content (bounded capture, one-shot or live; `Regular` floating and `Strong` modal densities) |
 | `GlassCard.qml` | `GlassSurface` specialization for modal dialog cards |
 | `GlassContextMenu.qml`, `GlassMenuItem.qml` | glass `Menu` + styled item |
-| `CelestinaButton.qml` | the suite button, in its three roles: normal / primary / destructive |
-| `CelestinaTextField.qml` | the suite text field, themed fill and focus border |
+| `CelestinaButton.qml`, `CelestinaIconButton.qml` | text and icon-only buttons sharing closed role/density, focus, disabled and tooltip contracts |
+| `CelestinaIcon.qml` | freedesktop icon name + bundled fallback + semantic tone; apps do not import `QtQuick.Controls.impl` |
+| `CelestinaTextField.qml` | the suite text field, with closed standard/search shapes, themed fill and focus border |
+| `CelestinaSectionLabel.qml` | uppercase section eyebrow with compact/regular size and consumer-provided scale |
 | `CelestinaSwitch.qml` | the One UI pill toggle: white thumb, accent track when on |
 | `ListSection.qml` | the grouped-card list (One UI's "focus block" signature) with an optional header |
+| `CelestinaModalLayer.qml` | shared L3 scrim, fade, focus and outside/Escape dismissal; dialog content stays app-owned |
 | `gallery/` | dev-only review surface — every token, control and glass surface on one screen (`gallery/run.sh`) |
+| `scripts/check-style-contract.sh` | CI/local guard against visual literals or local colour/state derivations outside the theme |
 | `icons/`, `icons.qrc` | the Lucide (ISC) icon set behind freedesktop names, the app launcher icons + the glass noise-dither texture |
 | `fonts/`, `fonts.qrc` | Inter Variable (OFL) — the suite typeface, compiled into each app's binary |
+
+## Public QML API
+
+| Type | Semantic input |
+|---|---|
+| `CelestinaSurface` | `role`; geometry and children remain consumer-owned |
+| `CelestinaButton` | `role`, `density`, `helpText` |
+| `CelestinaIcon` | `name`, `fallbackName`, `tone`; geometry may be scaled by the consumer |
+| `CelestinaIconButton` | `iconName`, `fallbackIcon`, `helpText` plus the button role/density |
+| `CelestinaTextField` | `shape`; ordinary `TextField` value/validation properties remain available |
+| `CelestinaSectionLabel` | `size`, `textScale` |
+| `CelestinaModalLayer` | `shown`, dismissal switches and `dismissRequested` |
+| `GlassSurface` / `GlassCard` | `backdropSource`, `density`, capture mode and elevation |
+| `GlassContextMenu` / `GlassMenuItem` | injected backdrop plus ordinary menu action/current-state properties |
+| `ListSection` / `CelestinaSwitch` | section `title` + rows; switch `checked` state |
+
+`qmldir` is the plain-source contract. CMake generates the matching QML type
+metadata for the built module; in-tree apps compile the same canonical files
+through relative symlinks and register `icons.qrc` / `fonts.qrc` in `build.rs`.
+
+## Token boundary
+
+Changing `ref.accent` is the single suite-wide accent dial. The theme derives
+link, hover, pressed, focus, selection, badge and disabled variants from that
+seed; consumers use only the resulting semantic properties. Colours, type
+roles, radii, borders, state opacities, motion and stable control anatomy belong
+to the theme. Responsive placement and screen-specific geometry remain with the
+consumer.
+
+Run the static contract locally with:
+
+```sh
+bash scripts/check-style-contract.sh
+```
+
+It audits Siderita, Magnetita and the shared components and is also part of CI.
 
 See [DESIGN.md](DESIGN.md) for the design contract (One UI 8.5,
 desktop-adapted) and [ROADMAP.md](ROADMAP.md) for status and checkpoints.

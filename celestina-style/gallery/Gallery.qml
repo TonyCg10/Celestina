@@ -27,17 +27,17 @@ Window {
     }
     readonly property string sans: inter.status === FontLoader.Ready ? inter.name : CelestinaTheme.sansFamily
 
+    CelestinaBackdrop {
+        anchors.fill: parent
+    }
+
     component Section: Column {
         property string heading: ""
         width: sheet.width
         spacing: CelestinaTheme.spaceMd
-        Text {
+        CelestinaSectionLabel {
             text: parent.heading
-            color: CelestinaTheme.textMuted
             font.family: win.sans
-            font.pixelSize: CelestinaTheme.fontMini
-            font.letterSpacing: 1.4
-            font.weight: CelestinaTheme.weightDemiBold
         }
     }
 
@@ -84,11 +84,11 @@ Window {
                             width: 200; height: 66
                             radius: CelestinaTheme.radiusSm
                             color: modelData.s
-                            border.width: 1; border.color: CelestinaTheme.divider
+                            border.width: CelestinaTheme.borderHairline; border.color: CelestinaTheme.divider
                             Column {
                                 anchors.centerIn: parent; spacing: 1
-                                Text { text: "Aa 0123"; color: modelData.i; font.family: win.sans; font.pixelSize: 18; font.weight: 600; anchors.horizontalCenter: parent.horizontalCenter }
-                                Text { text: modelData.n; color: modelData.i; font.family: win.sans; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                                Text { text: "Aa 0123"; color: modelData.i; font.family: win.sans; font.pixelSize: CelestinaTheme.iconSm; font.weight: CelestinaTheme.weightDemiBold; anchors.horizontalCenter: parent.horizontalCenter }
+                                Text { text: modelData.n; color: modelData.i; font.family: win.sans; font.pixelSize: CelestinaTheme.fontMini; anchors.horizontalCenter: parent.horizontalCenter }
                             }
                         }
                     }
@@ -129,10 +129,10 @@ Window {
                 heading: "TYPE ROLES"
                 Column {
                     spacing: 6
-                    Text { text: "display 34"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: CelestinaTheme.fontDisplay; font.weight: 600 }
-                    Text { text: "headerExpanded 30"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: CelestinaTheme.fontHeaderExpanded; font.weight: 600 }
-                    Text { text: "headerCollapsed 20 · title 17"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: CelestinaTheme.fontHeaderCollapsed; font.weight: 600 }
-                    Text { text: "rowTitle 15 medium — Documentos"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: CelestinaTheme.fontRowTitle; font.weight: 500 }
+                    Text { text: "display 34"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: CelestinaTheme.fontDisplay; font.weight: CelestinaTheme.weightDemiBold }
+                    Text { text: "headerExpanded 30"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: CelestinaTheme.fontHeaderExpanded; font.weight: CelestinaTheme.weightDemiBold }
+                    Text { text: "headerCollapsed 20 · title 17"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: CelestinaTheme.fontHeaderCollapsed; font.weight: CelestinaTheme.weightDemiBold }
+                    Text { text: "rowTitle 15 medium — Documentos"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: CelestinaTheme.fontRowTitle; font.weight: CelestinaTheme.weightMedium }
                     Text { text: "body 13 — the quick brown fox jumps over the lazy dog"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: CelestinaTheme.fontBody }
                     Text { text: "rowSecondary 12 · caption 11 · mini 10 — 0123456789"; color: CelestinaTheme.textMuted; font.family: win.sans; font.pixelSize: CelestinaTheme.fontRowSecondary; font.features: CelestinaTheme.fontFeaturesTabular }
                 }
@@ -144,9 +144,19 @@ Window {
                 Row {
                     spacing: 14
                     CelestinaButton { text: "Cancelar" }
-                    CelestinaButton { text: "Guardar"; primary: true }
-                    CelestinaButton { text: "Vaciar papelera"; destructive: true }
+                    CelestinaButton { text: "Guardar"; role: CelestinaButton.Primary }
+                    CelestinaButton { text: "Vaciar papelera"; role: CelestinaButton.Destructive }
+                    CelestinaButton { text: "Sólo texto"; role: CelestinaButton.TextOnly }
                     CelestinaButton { text: "Desactivado"; enabled: false }
+                    CelestinaIconButton {
+                        iconName: "settings"
+                        fallbackIcon: "settings"
+                        helpText: "Ajustes"
+                    }
+                    CelestinaButton {
+                        text: "Abrir modal"
+                        onClicked: modalSpecimen.shown = true
+                    }
                 }
             }
 
@@ -193,13 +203,13 @@ Window {
                     columns: 8
                     spacing: 10
                     Repeater {
-                        model: ["go-previous","go-next","go-up","go-home","view-refresh","view-sort-ascending","view-sort-descending","folder","file","symlink","user-trash","media-eject","phone","battery-charging","star","star-outline"]
+                        model: ["go-previous","go-next","go-up","go-home","view-refresh","view-sort-ascending","view-sort-descending","folder","file","symlink","user-trash","media-eject","phone","battery-charging","star","star-outline","settings","music","key","media-skip-back","media-play","media-pause","media-skip-forward"]
                         Rectangle {
                             width: 64; height: 64; radius: CelestinaTheme.radiusSm; color: CelestinaTheme.card
-                            Image {
+                            CelestinaIcon {
                                 anchors.centerIn: parent; width: 28; height: 28
                                 source: Qt.resolvedUrl("../icons/" + modelData + ".svg")
-                                sourceSize: Qt.size(28, 28); smooth: true
+                                tone: CelestinaIcon.Primary
                             }
                         }
                     }
@@ -218,9 +228,9 @@ Window {
                         radius: CelestinaTheme.radiusLg
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
-                            GradientStop { position: 0; color: "#387aff" }
-                            GradientStop { position: 0.5; color: "#58db9c" }
-                            GradientStop { position: 1; color: "#fc864c" }
+                            GradientStop { position: 0; color: CelestinaTheme.accent }
+                            GradientStop { position: 0.5; color: CelestinaTheme.success }
+                            GradientStop { position: 1; color: CelestinaTheme.warning }
                         }
                     }
                     Row {
@@ -233,7 +243,7 @@ Window {
                             liveCapture: true
                             elevation: 2
                             cornerRadius: CelestinaTheme.radiusLg
-                            Text { anchors.centerIn: parent; text: "Regular"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: 18; font.weight: 600 }
+                            Text { anchors.centerIn: parent; text: "Regular"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: CelestinaTheme.iconSm; font.weight: CelestinaTheme.weightDemiBold }
                         }
 
                         GlassSurface {
@@ -242,10 +252,45 @@ Window {
                             liveCapture: true
                             density: GlassSurface.Strong
                             cornerRadius: CelestinaTheme.radiusLg
-                            Text { anchors.centerIn: parent; text: "Strong"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: 18; font.weight: 600 }
+                            Text { anchors.centerIn: parent; text: "Strong"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: CelestinaTheme.iconSm; font.weight: CelestinaTheme.weightDemiBold }
                         }
                     }
                 }
+            }
+        }
+    }
+
+    CelestinaModalLayer {
+        id: modalSpecimen
+        anchors.fill: parent
+        z: 100
+        onDismissRequested: shown = false
+
+        GlassCard {
+            anchors.centerIn: parent
+            width: 360
+            height: 180
+            backdropSource: flick
+
+            MouseArea { anchors.fill: parent }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 38
+                text: "Capa modal compartida"
+                color: CelestinaTheme.text
+                font.family: win.sans
+                font.pixelSize: CelestinaTheme.fontTitle
+                font.weight: CelestinaTheme.weightDemiBold
+            }
+
+            CelestinaButton {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 30
+                text: "Cerrar"
+                role: CelestinaButton.Primary
+                onClicked: modalSpecimen.shown = false
             }
         }
     }

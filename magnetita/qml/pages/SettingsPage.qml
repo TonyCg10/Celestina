@@ -14,10 +14,10 @@ Column {
 
         Text {
             width: parent.width
-            leftPadding: 16
-            rightPadding: 16
-            topPadding: 8
-            bottomPadding: 8
+            leftPadding: CelestinaTheme.spaceLg
+            rightPadding: CelestinaTheme.spaceLg
+            topPadding: CelestinaTheme.spaceSm
+            bottomPadding: CelestinaTheme.spaceSm
             visible: root.devices.pairedNames.length === 0
             text: "Ningún dispositivo emparejado todavía."
             color: CelestinaTheme.textMuted

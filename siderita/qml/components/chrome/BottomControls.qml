@@ -60,17 +60,19 @@ RowLayout {
         }
     }
 
-    Button {
+    FloatingButton {
         id: sortButton
 
         readonly property var labels: [
             "Nombre", "Tamaño", "Fecha", "Tipo"
         ]
 
-        Layout.preferredHeight: 34
-        leftPadding: 16
-        rightPadding: 16
-        text: labels[root.controller.sortField]
+        Layout.preferredHeight: CelestinaTheme.controlHeightSm
+        backdrop: root.bottomView
+        floating: root.bottomFloating
+        leftPadding: CelestinaTheme.spaceLg
+        rightPadding: CelestinaTheme.spaceLg
+        text: "Orden: " + labels[root.controller.sortField]
         Accessible.name: "Ordenar por " + text
         onClicked: {
             // Button is at the bottom now — open the menu upward.
@@ -82,29 +84,10 @@ RowLayout {
             root.sortMenu.popup(root.overlayParent, point)
         }
 
-        contentItem: Text {
-            text: "Orden: " + sortButton.text
-            color: CelestinaTheme.text
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: Math.round(CelestinaTheme.fontCaption * root.textScale)
-            font.weight: CelestinaTheme.weightMedium
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            elide: Text.ElideRight
-        }
-
-        background: GlassPill {
-            backdrop: root.bottomView
-            floating: root.bottomFloating
-            fill: sortButton.hovered
-                  ? CelestinaTheme.surfaceHover
-                  : CelestinaTheme.controlFill
-            border.width: sortButton.activeFocus ? 1 : 0
-            border.color: CelestinaTheme.focusRing
-        }
+        font.pixelSize: Math.round(CelestinaTheme.fontCaption * root.textScale)
     }
 
-    NavButton {
+    CelestinaIconButton {
         id: sortDirectionButton
         Layout.alignment: Qt.AlignVCenter
         iconName: root.controller.sortAscending

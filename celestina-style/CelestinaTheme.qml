@@ -17,7 +17,7 @@ import QtQuick
 //   sys.*    the flat properties apps consume (`CelestinaTheme.canvas`); each is
 //            just a read of the active scheme, so swapping schemes later is one
 //            property flip, not a migration.
-//   comp*    per-component knobs, kept minimal (menu geometry today).
+//   comp*    the few component anatomy metrics that every app must share.
 //
 // Sealed (DESIGN.md §9.4): dark only. One `schemeDark` ships; the light
 // reference values stay recorded in DESIGN.md §2 until a light scheme earns its
@@ -27,6 +27,37 @@ import QtQuick
 // ──────────────────────────────────────────────────────────────────────────────
 QtObject {
     id: theme
+
+    // Colour recipes live here rather than in consumers. `withAlpha` creates a
+    // semantic wash from a base colour; `multiplyAlpha` preserves the alpha of
+    // an existing colour (the lit glass edge uses it); `mixColors` derives a
+    // tint while keeping the base accent as the only hue dial.
+    function withAlpha(value, alpha) {
+        return Qt.rgba(value.r, value.g, value.b,
+                       Math.max(0, Math.min(1, alpha)))
+    }
+
+    function multiplyAlpha(value, factor) {
+        return withAlpha(value, value.a * factor)
+    }
+
+    function mixColors(sourceColor, targetColor, amount) {
+        const t = Math.max(0, Math.min(1, amount))
+        return Qt.rgba(sourceColor.r + (targetColor.r - sourceColor.r) * t,
+                       sourceColor.g + (targetColor.g - sourceColor.g) * t,
+                       sourceColor.b + (targetColor.b - sourceColor.b) * t,
+                       sourceColor.a + (targetColor.a - sourceColor.a) * t)
+    }
+
+    // Accent recipe. Change `ref.accent` once; links, interaction states and
+    // translucent selection/disabled roles all follow automatically.
+    readonly property real accentLinkMix: 0.165
+    readonly property real accentHoverFactor: 1.08
+    readonly property real accentPressedFactor: 1.18
+    readonly property real accentSelectedOpacity: 0.20
+    readonly property real accentMarqueeOpacity: 0.18
+    readonly property real accentBadgeOpacity: 0.15
+    readonly property real accentDisabledInkOpacity: 0.75
 
     // ══ ref.* — primitive colour ramps ═══════════════════════════════════════
     // Every neutral keeps a subtle cool cast (never pure grey); the accent is the
@@ -43,10 +74,9 @@ QtObject {
         readonly property color d4: "#55555a"         // derived — strong divider
         readonly property color textHi: "#fafaff"     // primary text
         readonly property color textLo: "#99999e"     // secondary text
-        // One UI accent ramp — interactive/active only.
+        // One UI accent seed. Every state is derived from this one value in the
+        // active scheme below; changing the suite accent is therefore one edit.
         readonly property color accent: "#387aff"
-        readonly property color accentLink: "#598fff"
-        readonly property color accentPressed: "#376fde"
         readonly property color accentInk: "#fcfcff"
         // Semantic ramp (SESL dark).
         readonly property color danger: "#fc6c65"
@@ -86,6 +116,7 @@ QtObject {
         required property color accent
         required property color accentInk
         required property color accentLink
+        required property color accentHover
         required property color accentPressed
         required property color focusRing
         required property color danger
@@ -100,12 +131,19 @@ QtObject {
         required property color surfaceStrong
         required property color surfaceHover
         required property color surfaceSelected
+        required property color selectionMarquee
         required property color inputFill
         required property color inputFillFocus
         required property color inputBorder
         required property color controlFill
         required property color badgeFill
         required property color badgeAccentFill
+        // A primary action that remains identifiable while disabled.
+        required property color accentDisabledFill
+        required property color accentDisabledInk
+        // Dark media affordances painted over thumbnails.
+        required property color mediaScrim
+        required property color mediaScrimInk
         // Entry-kind glyph tints.
         required property color glyphDirectory
         required property color glyphSymlink
@@ -146,10 +184,13 @@ QtObject {
         dividerStrong: theme.ref.d4
         accent: theme.ref.accent
         accentInk: theme.ref.accentInk
-        accentLink: theme.ref.accentLink
-        accentPressed: theme.ref.accentPressed
+        accentLink: theme.mixColors(theme.ref.accent, theme.ref.accentInk,
+                                    theme.accentLinkMix)
+        accentHover: Qt.darker(theme.ref.accent, theme.accentHoverFactor)
+        accentPressed: Qt.darker(theme.ref.accent, theme.accentPressedFactor)
         // Keyboard focus is an active state — the ring is the accent's lit tint.
-        focusRing: theme.ref.accentLink
+        focusRing: theme.mixColors(theme.ref.accent, theme.ref.accentInk,
+                                   theme.accentLinkMix)
         danger: theme.ref.danger
         dangerInk: theme.ref.night
         success: theme.ref.success
@@ -162,7 +203,10 @@ QtObject {
         surfaceStrong: "#f01d1d20"
         surfaceHover: "#2a2d2d30"
         // Selection reads as a soft accent wash — the One UI "selected" language.
-        surfaceSelected: "#33387aff"
+        surfaceSelected: theme.withAlpha(theme.ref.accent,
+                                         theme.accentSelectedOpacity)
+        selectionMarquee: theme.withAlpha(theme.ref.accent,
+                                          theme.accentMarqueeOpacity)
         inputFill: "#4d0d0d0f"
         inputFillFocus: "#661a1a1e"
         inputBorder: "#24505055"
@@ -170,7 +214,14 @@ QtObject {
         badgeFill: "#28292930"
         // Current/selected row wash: accent-tinted (alpha nudged up — blue reads
         // lighter than the old white at the same opacity).
-        badgeAccentFill: "#26387aff"
+        badgeAccentFill: theme.withAlpha(theme.ref.accent,
+                                         theme.accentBadgeOpacity)
+        accentDisabledFill: theme.withAlpha(theme.ref.accent,
+                                            theme.accentSelectedOpacity)
+        accentDisabledInk: theme.withAlpha(theme.ref.accent,
+                                           theme.accentDisabledInkOpacity)
+        mediaScrim: "#73000000"
+        mediaScrimInk: theme.ref.textHi
         glyphDirectory: "#33323237"
         glyphSymlink: "#2c3e3e43"
         glyphFile: "#2a2e2e33"
@@ -214,6 +265,7 @@ QtObject {
     readonly property color accent: scheme.accent
     readonly property color accentInk: scheme.accentInk
     readonly property color accentLink: scheme.accentLink
+    readonly property color accentHover: scheme.accentHover
     readonly property color accentPressed: scheme.accentPressed
     readonly property color focusRing: scheme.focusRing
     readonly property color danger: scheme.danger
@@ -227,12 +279,17 @@ QtObject {
     readonly property color surfaceStrong: scheme.surfaceStrong
     readonly property color surfaceHover: scheme.surfaceHover
     readonly property color surfaceSelected: scheme.surfaceSelected
+    readonly property color selectionMarquee: scheme.selectionMarquee
     readonly property color inputFill: scheme.inputFill
     readonly property color inputFillFocus: scheme.inputFillFocus
     readonly property color inputBorder: scheme.inputBorder
     readonly property color controlFill: scheme.controlFill
     readonly property color badgeFill: scheme.badgeFill
     readonly property color badgeAccentFill: scheme.badgeAccentFill
+    readonly property color accentDisabledFill: scheme.accentDisabledFill
+    readonly property color accentDisabledInk: scheme.accentDisabledInk
+    readonly property color mediaScrim: scheme.mediaScrim
+    readonly property color mediaScrimInk: scheme.mediaScrimInk
     readonly property color glyphDirectory: scheme.glyphDirectory
     readonly property color glyphSymlink: scheme.glyphSymlink
     readonly property color glyphFile: scheme.glyphFile
@@ -250,6 +307,10 @@ QtObject {
     readonly property color glassHighlight: scheme.glassHighlight
     readonly property color glassOutline: scheme.glassOutline
     readonly property color shadow: scheme.shadow
+    // Compositing constants are scheme invariant; keeping them here prevents
+    // visual implementations from spelling ad-hoc colour literals.
+    readonly property color clear: "#00000000"
+    readonly property color opaqueMask: "#ffffffff"
 
     // ── Typography ───────────────────────────────────────────────────────────
     // Inter Variable ships inside the module (celestina-style/fonts, OFL) so the
@@ -283,6 +344,7 @@ QtObject {
     readonly property int fontHeaderCollapsed: 20    // collapsed big header
     readonly property int fontHeaderExpanded: 30     // expanded big header (ready; CP4/S4)
     readonly property int fontDisplay: 34            // display (ready)
+    readonly property real sectionLetterSpacing: 1.4
 
     readonly property int weightRegular: Font.Normal    // 400 — body
     readonly property int weightMedium: Font.Medium     // 500 — kept until components settle to 400/600 (S4)
@@ -293,6 +355,7 @@ QtObject {
     // radiusButton/radiusInput are ready for CelestinaButton/TextField to adopt in
     // S4 (the button-emphasis + input-anatomy work); S1 leaves them defined.
     readonly property int radiusSm: 12       // controls, chips, glyph tiles, rows, banners
+    readonly property int radiusXs: 3        // selection marquee / tiny indicators
     readonly property int radiusMd: 20       // glass menus / floating surfaces
     readonly property int radiusButton: 18   // ready — filled/tonal buttons (S4)
     readonly property int radiusInput: 22    // ready — search/text field (S4)
@@ -309,12 +372,24 @@ QtObject {
     readonly property int space3xl: 32
 
     // ── Control metrics ──────────────────────────────────────────────────────
+    readonly property int controlHeightXs: 30
+    readonly property int controlHeightSm: 34
     readonly property int controlHeight: 38
     readonly property int controlHeightLg: 42
     readonly property int rowHeight: 54
     readonly property int glyphTile: 34
     readonly property int iconSm: 18
     readonly property int iconMd: 19
+    readonly property int borderHairline: 1
+    readonly property int borderFocus: 2
+    readonly property real disabledOpacity: 0.5
+    readonly property real disabledContentOpacity: 0.55
+    readonly property real unavailableContentOpacity: 0.4
+    readonly property real missingContentOpacity: 0.45
+    readonly property real draggedContentOpacity: 0.9
+    readonly property real mutedContentOpacity: 0.8
+    readonly property real decorationOpacitySoft: 0.7
+    readonly property real decorationOpacityStrong: 0.8
 
     // ── Motion ─────────────────────────────────────────────────────────────────
     // Duration ladder (DESIGN §6.7): dialogs/quick 100, normal 200, expressive
@@ -358,6 +433,11 @@ QtObject {
     // Fine noise dither over the blur — kills the banding the downsample pyramid
     // leaves behind (DESIGN §4/§6.5). Tiled texture at a low opacity.
     readonly property real glassNoiseOpacity: 0.025
+    readonly property real glassEdgeWidth: 1.3
+    readonly property real glassEdgeMidPosition: 0.35
+    readonly property real glassEdgeLowPosition: 0.70
+    readonly property real glassEdgeMidOpacity: 0.45
+    readonly property real glassEdgeLowOpacity: 0.15
 
     // ── Elevation (scalars) ──────────────────────────────────────────────────
     // The L2 drop shadow (RectangularShadow) under floating layers. Soft, large
@@ -368,14 +448,30 @@ QtObject {
     readonly property int shadowOffsetY: 4
 
     // ── Component knobs (comp.*) ───────────────────────────────────────────────
-    // Per-component geometry, kept minimal — only the glass menu needs it today.
+    // Stable component anatomy belongs here; page placement and responsive
+    // geometry stay with each screen. This is the QML equivalent of shared
+    // component variables, without turning every coordinate into a token.
+    readonly property int compButtonPaddingHorizontal: 14
+    readonly property int compTextFieldPaddingHorizontal: 12
+    readonly property int compSwitchTrackWidth: 44
+    readonly property int compSwitchTrackHeight: 26
+    readonly property int compSwitchThumbSize: 20
+    readonly property int compSwitchThumbInset: 3
+    readonly property int compCheckboxIndicatorSize: 18
+    readonly property int compLinearTrackHeight: 4
+    readonly property int compSliderHandleSize: 15
+    readonly property int compStatusIndicatorSize: 8
+    readonly property int compDragIndicatorHeight: 2
     readonly property int compMenuWidth: 232
     readonly property int compMenuPadding: 6
     readonly property int compMenuMargins: 24
 
     // ── Icons ──────────────────────────────────────────────────────────────────
     // Minimal monochrome freedesktop-name fallbacks bundled with the module.
-    readonly property string fallbackIconRoot: "qrc:/qt/qml/CelestinaStyle/icons/"
+    readonly property string fallbackIconRoot:
+            Qt.resolvedUrl(".").toString().startsWith("file:")
+            ? Qt.resolvedUrl("icons/").toString()
+            : "qrc:/qt/qml/CelestinaStyle/icons/"
 
     function fallbackIcon(name) {
         return fallbackIconRoot + name + ".svg"

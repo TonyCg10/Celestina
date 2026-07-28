@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.impl
 import QtQuick.Layouts
 import org.celestina.siderita 1.0
 
@@ -9,27 +8,16 @@ import org.celestina.siderita 1.0
     // images render full-size, text/code shows in a monospace pane, and
     // anything else (folders, video, audio, binaries) gets an info card.
     // ↑/↓ browse the folder live; Space / Esc / click-outside dismiss.
-Rectangle {
+CelestinaModalLayer {
     id: quickLookView
     property var controller
     property var owner
     property var panel   // mainPanel: ayudas de selección y medios
     anchors.fill: parent
     z: 70
-    readonly property bool shown: owner.quickLookOpen
-    // Fades rather than pops. Opacity only: a scale transform on a
-    // glass surface desyncs its backdrop sampling (see a995619), so the
-    // motion here never touches geometry.
-    visible: opacity > 0.01
-    opacity: shown ? 1 : 0
-    Behavior on opacity {
-        NumberAnimation {
-            duration: CelestinaTheme.motionFast
-            easing.type: CelestinaTheme.easeStandard
-        }
-    }
-    color: CelestinaTheme.scrim
-    focus: quickLookView.shown
+    shown: owner.quickLookOpen
+    dismissOnEscape: false
+    onDismissRequested: owner.quickLookOpen = false
 
     // Everything is derived from the current selection, so stepping the
     // selection (below) re-previews with no extra state to keep in sync.
@@ -54,10 +42,6 @@ Rectangle {
         return "file://" + p.split("/").map(encodeURIComponent).join("/")
     }
 
-    MouseArea {
-        anchors.fill: parent
-        onClicked: owner.quickLookOpen = false
-    }
     Keys.onPressed: function(event) {
         if (event.key === Qt.Key_Escape || event.key === Qt.Key_Space) {
             owner.quickLookOpen = false
@@ -86,17 +70,16 @@ Rectangle {
 
         MouseArea { anchors.fill: parent }   // clicks on the card don't dismiss
 
-        IconImage {
+        CelestinaIcon {
             id: qlIcon
             x: 18
             y: 16
             width: CelestinaTheme.iconSm
             height: CelestinaTheme.iconSm
             name: panel.mediaIconName(quickLookView.qlKind, quickLookView.qlMedia, quickLookView.qlPath)
-            source: CelestinaTheme.fallbackIcon(
-                        quickLookView.qlKind === "directory" ? "folder" : "file")
-            color: quickLookView.qlKind === "directory" ? CelestinaTheme.accent
-                                                        : CelestinaTheme.textMuted
+            fallbackName: quickLookView.qlKind === "directory" ? "folder" : "file"
+            tone: quickLookView.qlKind === "directory"
+                  ? CelestinaIcon.Accent : CelestinaIcon.Secondary
         }
         Text {
             anchors.left: qlIcon.right
@@ -162,17 +145,16 @@ Rectangle {
                 anchors.centerIn: parent
                 spacing: 12
                 visible: !quickLookView.qlIsImage && !quickLookView.qlHasText
-                IconImage {
+                CelestinaIcon {
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: 56
                     height: 56
                     name: panel.mediaIconName(quickLookView.qlKind,
                                                   quickLookView.qlMedia, quickLookView.qlPath)
                     sourceSize: Qt.size(width, height)
-                    source: CelestinaTheme.fallbackIcon(
-                                quickLookView.qlKind === "directory" ? "folder" : "file")
-                    color: quickLookView.qlKind === "directory"
-                           ? CelestinaTheme.accent : CelestinaTheme.textMuted
+                    fallbackName: quickLookView.qlKind === "directory" ? "folder" : "file"
+                    tone: quickLookView.qlKind === "directory"
+                          ? CelestinaIcon.Accent : CelestinaIcon.Secondary
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -201,7 +183,7 @@ Rectangle {
             color: CelestinaTheme.textMuted
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontCaption
-            opacity: 0.8
+            opacity: CelestinaTheme.mutedContentOpacity
         }
     }
 }

@@ -47,14 +47,14 @@ Item {
             x: sizeSlider.leftPadding
             y: sizeSlider.topPadding + sizeSlider.availableHeight / 2 - height / 2
             width: sizeSlider.availableWidth
-            height: 4
-            radius: 2
+            height: CelestinaTheme.compLinearTrackHeight
+            radius: height / 2
             color: CelestinaTheme.controlFill
 
             Rectangle {
                 width: sizeSlider.visualPosition * parent.width
                 height: parent.height
-                radius: 2
+                radius: height / 2
                 color: CelestinaTheme.accent
             }
         }
@@ -63,11 +63,11 @@ Item {
             x: sizeSlider.leftPadding
                + sizeSlider.visualPosition * (sizeSlider.availableWidth - width)
             y: sizeSlider.topPadding + sizeSlider.availableHeight / 2 - height / 2
-            width: 15
-            height: 15
-            radius: 7.5
+            width: CelestinaTheme.compSliderHandleSize
+            height: CelestinaTheme.compSliderHandleSize
+            radius: height / 2
             color: sizeSlider.pressed ? CelestinaTheme.accent : CelestinaTheme.text
-            border.width: 1
+            border.width: CelestinaTheme.borderHairline
             border.color: CelestinaTheme.dividerStrong
         }
     }

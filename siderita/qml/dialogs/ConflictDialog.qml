@@ -1,44 +1,18 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.impl
 import QtQuick.Layouts
 import org.celestina.siderita 1.0
 
     // ── Paste conflict dialog (skip / replace / keep both) ───────────
-Rectangle {
+CelestinaModalLayer {
     id: conflictDialog
     property var controller
     property var owner
     property var backdrop   // mainPanel: el fondo que difumina el cristal
     anchors.fill: parent
     z: 62
-    readonly property bool shown: controller.conflictPending
-    // Fades rather than pops. Opacity only: a scale transform on a
-    // glass surface desyncs its backdrop sampling (see a995619), so the
-    // motion here never touches geometry.
-    visible: opacity > 0.01
-    opacity: shown ? 1 : 0
-    Behavior on opacity {
-        NumberAnimation {
-            duration: CelestinaTheme.motionFast
-            easing.type: CelestinaTheme.easeStandard
-        }
-    }
-    color: CelestinaTheme.scrim
-
-    // Clicking the dimmed backdrop cancels the whole paste.
-    MouseArea {
-        anchors.fill: parent
-        onClicked: controller.cancelConflicts()
-    }
-
-    Keys.onPressed: function(event) {
-        if (event.key === Qt.Key_Escape) {
-            controller.cancelConflicts()
-            event.accepted = true
-        }
-    }
-    focus: conflictDialog.shown
+    shown: controller.conflictPending
+    onDismissRequested: controller.cancelConflicts()
 
     GlassCard {
         anchors.centerIn: parent
@@ -105,14 +79,14 @@ Rectangle {
             }
 
             indicator: Rectangle {
-                implicitWidth: 18
-                implicitHeight: 18
+                implicitWidth: CelestinaTheme.compCheckboxIndicatorSize
+                implicitHeight: CelestinaTheme.compCheckboxIndicatorSize
                 x: applyToAll.leftPadding
                 y: applyToAll.height / 2 - height / 2
                 radius: CelestinaTheme.radiusSm
                 color: applyToAll.checked ? CelestinaTheme.accent
                                           : CelestinaTheme.inputFill
-                border.width: 1
+                border.width: CelestinaTheme.borderHairline
                 border.color: applyToAll.checked ? CelestinaTheme.accent
                                                  : CelestinaTheme.inputBorder
 
@@ -121,7 +95,7 @@ Rectangle {
                     visible: applyToAll.checked
                     text: "✓"
                     color: CelestinaTheme.accentInk
-                    font.pixelSize: 12
+                    font.pixelSize: CelestinaTheme.fontRowSecondary
                     font.weight: CelestinaTheme.weightDemiBold
                 }
             }
@@ -160,7 +134,7 @@ Rectangle {
             }
             CelestinaButton {
                 text: "Reemplazar"
-                primary: true
+                role: CelestinaButton.Primary
                 onClicked: controller.resolveConflict("replace", applyToAll.checked)
             }
         }

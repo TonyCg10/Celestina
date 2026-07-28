@@ -1,0 +1,190 @@
+import QtQuick
+import QtQuick.Controls
+import org.celestina.siderita 1.0
+
+Item {
+    id: root
+
+    required property var hostWindow
+    required property Item overlayParent
+
+    signal favoriteMenuRequested(string path, real popupX, real popupY)
+    signal bookmarkMenuRequested(int index, real popupX, real popupY)
+
+    property bool favoritesCollapsed: false
+    property bool bookmarksCollapsed: false
+
+    readonly property int bookmarkCount: bookmarksList.count
+    readonly property var favoriteRows: {
+        const rows = []
+        const controller = hostWindow.activeController
+        const entries = controller ? controller.favoriteEntries : []
+        for (let index = 0; index < entries.length; index++) {
+            const cut = entries[index].indexOf("\t")
+            if (cut <= 0)
+                continue
+            const path = entries[index].substring(0, cut)
+            const slash = path.lastIndexOf("/")
+            rows.push({
+                path: path,
+                kind: entries[index].substring(cut + 1),
+                name: slash >= 0 && slash < path.length - 1
+                      ? path.substring(slash + 1) : path
+            })
+        }
+        return rows
+    }
+
+    implicitHeight: bookmarksList.y + bookmarksList.height + 14
+    height: implicitHeight
+
+    function editBookmark(index) {
+        bookmarksList.editIndex = index
+    }
+
+    CelestinaSectionLabel {
+        id: favoritesLabel
+        x: 16
+        y: 0
+        visible: root.favoriteRows.length > 0
+        text: "FAVORITOS"
+        textScale: root.hostWindow.sidebarTextScale
+
+        SidebarChevron {
+            textScale: root.hostWindow.sidebarTextScale
+            x: -12
+            anchors.verticalCenter: parent.verticalCenter
+            collapsed: root.favoritesCollapsed
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            anchors.margins: -6
+            anchors.leftMargin: -16
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.favoritesCollapsed = !root.favoritesCollapsed
+        }
+    }
+
+    ListView {
+        id: favoritesList
+        x: 8
+        y: favoritesLabel.y + (favoritesLabel.visible ? 20 : 0)
+        width: parent.width - 16
+        height: root.favoritesCollapsed
+                ? 0 : count * (root.hostWindow.sidebarRowHeight + spacing)
+        interactive: false
+        visible: count > 0 && !root.favoritesCollapsed
+        clip: true
+        model: root.favoriteRows
+        spacing: 2
+        boundsBehavior: Flickable.StopAtBounds
+
+        delegate: SidebarFavoriteRow {
+            required property var modelData
+            width: favoritesList.width
+            hostWindow: root.hostWindow
+            overlayParent: root.overlayParent
+            entry: modelData
+            onContextMenuRequested: function(path, popupX, popupY) {
+                root.favoriteMenuRequested(path, popupX, popupY)
+            }
+        }
+    }
+
+    CelestinaSectionLabel {
+        id: bookmarksLabel
+        x: 16
+        y: favoritesLabel.visible
+           ? favoritesList.y + favoritesList.height + 12
+           : favoritesLabel.y
+        text: "MARCADORES"
+        textScale: root.hostWindow.sidebarTextScale
+
+        SidebarChevron {
+            textScale: root.hostWindow.sidebarTextScale
+            x: -12
+            anchors.verticalCenter: parent.verticalCenter
+            collapsed: root.bookmarksCollapsed
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            anchors.margins: -6
+            anchors.leftMargin: -16
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.bookmarksCollapsed = !root.bookmarksCollapsed
+        }
+    }
+
+    ListView {
+        id: bookmarksList
+        x: 8
+        y: bookmarksLabel.y + 20
+        width: parent.width - 16
+        height: root.bookmarksCollapsed
+                ? 0 : count * (root.hostWindow.sidebarRowHeight + spacing)
+        visible: !root.bookmarksCollapsed
+        clip: true
+        interactive: false
+        model: root.hostWindow.activeController
+               ? root.hostWindow.activeController.bookmarkNames : []
+        spacing: 2
+        boundsBehavior: Flickable.StopAtBounds
+
+        property int editIndex: -1
+        property int dragIndex: -1
+        property int dropIndex: -1
+        readonly property int rowPitch: root.hostWindow.sidebarRowHeight + spacing
+
+        function finishMove(from, to) {
+            dragIndex = -1
+            dropIndex = -1
+            if (to >= 0 && to !== from && root.hostWindow.activeController)
+                root.hostWindow.activeController.moveBookmark(from, to)
+        }
+
+        delegate: SidebarBookmarkRow {
+            required property int index
+            required property string modelData
+
+            readonly property string rowPath:
+                (root.hostWindow.activeController
+                 && index >= 0
+                 && index < root.hostWindow.activeController.bookmarkPaths.length)
+                ? root.hostWindow.activeController.bookmarkPaths[index] : ""
+
+            width: bookmarksList.width
+            hostWindow: root.hostWindow
+            overlayParent: root.overlayParent
+            rowIndex: index
+            bookmarkName: modelData
+            bookmarkPath: rowPath
+            editing: bookmarksList.editIndex === index
+            listDragIndex: bookmarksList.dragIndex
+            listDropIndex: bookmarksList.dropIndex
+            rowPitch: bookmarksList.rowPitch
+            rowCount: bookmarksList.count
+
+            onEditRequested: function(row) { bookmarksList.editIndex = row }
+            onEditCancelled: bookmarksList.editIndex = -1
+            onRenameRequested: function(row, value) {
+                bookmarksList.editIndex = -1
+                if (root.hostWindow.activeController)
+                    root.hostWindow.activeController.renameBookmark(row, value)
+            }
+            onDragMoved: function(target) {
+                bookmarksList.dragIndex = index
+                bookmarksList.dropIndex = target
+            }
+            onDragFinished: function(from, to) { bookmarksList.finishMove(from, to) }
+            onDragCancelled: {
+                bookmarksList.dragIndex = -1
+                bookmarksList.dropIndex = -1
+            }
+            onContextMenuRequested: function(row, popupX, popupY) {
+                root.bookmarkMenuRequested(row, popupX, popupY)
+            }
+        }
+    }
+}

@@ -204,15 +204,16 @@ bounded.
 Three tiers, all in the typed `CelestinaTheme` singleton (compiled module,
 qmllint-checkable):
 
-- **ref.*** — primitive ramps (the SESL grays L1–L10/D1–D10, accent ramp,
-  radii, type sizes, durations). Never used directly by apps.
+- **ref.*** — primitive colour ramps (the SESL grays and one accent seed).
+  Never used directly by apps.
 - **sys.*** — semantic roles (what apps consume): `canvas`, `card`,
   `elevated`, `text`, `textMuted`, `accent`, `onAccent`, `danger`,
   `onDanger`, `divider`, `focusRing`, `scrim`, glass tokens, elevation
   tokens, motion tokens. **Every surface token ships its `on*` pair** — the
   contrast contract becomes explicit instead of tribal knowledge.
-- **comp.*** — per-component knobs only where a component genuinely needs
-  art direction (`comp.switch.trackWidth`), kept minimal.
+- **comp.*** — stable component anatomy (`compSwitchTrackWidth`, button/field
+  padding, checkbox, slider and indicator metrics), kept minimal. Responsive
+  screen geometry is not a token.
 
 **Schemes as data, not comments**: the palette lives in a scheme object the
 singleton exposes — never again in comment-toggled blocks. Sealed (§9):
@@ -227,8 +228,10 @@ verified cheap), not a migration.
 Adopt the SESL values from §2 as `ref.*`, with Celestina keeping its
 near-black doctrine (`#010102` window / `#17171a` cards in dark). Accent
 (sealed, §9): **One UI blue `#387aff`**, used exactly as Samsung uses it —
-interactive/active only — with `onAccent = #fcfcff` and the pressed/link
-variants from §2. `favorite` stays the one warm exception.
+interactive/active only — with `onAccent = #fcfcff`. It is the only hue seed:
+link/hover/pressed/focus and all translucent accent washes are derived from it
+inside `CelestinaTheme`, never calculated by a consumer. Its derivation factors
+live next to the seed. `favorite` stays the one warm exception.
 
 ### 6.3 Shape
 
@@ -241,7 +244,7 @@ an app-icon pipeline ever needs it. Radius scales down with element size.
 
 | Level | Surface | Treatment |
 |---|---|---|
-| L0 | window canvas | opaque `canvas`, optional subtle gradient |
+| L0 | window canvas | opaque `canvas`, canonical subtle `CelestinaBackdrop` gradient |
 | L1 | grouped card / content card | opaque `card`; separation by grouping, no shadow, no hairline |
 | L2 | floating: menu, tooltip, tab pills, toasts | **glass** + `RectangularShadow` (soft, large blur, low opacity, no offset drama) |
 | L3 | modal: dialogs, sheets | **glass strong** + `scrim` dim behind — *never* shadow + dim together |
@@ -304,14 +307,15 @@ animators for anything on the always-on panel.
 
 ### 6.8 Components v2 (specs now, built on demand — CP2 discipline holds)
 
-Upgraded: `CelestinaButton` (three emphases — text / tonal / filled-accent,
-one style per screen doctrine, recoil, focus ring), `CelestinaTextField`
+Upgraded: `CelestinaButton` (closed text / tonal / filled-accent / destructive
+roles, one style per screen doctrine, focus ring), `CelestinaIconButton` and
+`CelestinaIcon` (one freedesktop-name/fallback/tone contract), `CelestinaTextField`
 (radius 22, One UI search anatomy), `GlassSurface/Card/ContextMenu/MenuItem`
 (glass v2 + elevation). New specs, each waiting for its first real consumer:
-**`ListSection`** (the grouped-card list — the signature; first consumer:
+**`CelestinaSectionLabel`**, **`CelestinaModalLayer`**, **`ListSection`** (the grouped-card list — the signature; first consumer:
 Magnetita Settings, later shell settings), **`CelestinaSwitch`** (shipped
-44×26 as the desktop-tuned pill — the 35dp phone reference and the
-`comp.switch.*` tokens are an open refinement,
+44×26 as the desktop-tuned pill — the 35dp phone reference is retained and the
+track/thumb/inset now use shared `compSwitch*` tokens,
 white thumb, accent track), `CollapsingHeader` (34→21 pattern),
 `CelestinaDialog` (centered, 360×r26, scrim), `TabPills` (floating pill
 strip), `Toast`, `CelestinaSlider`, `Tooltip`. Every component documents its
@@ -332,7 +336,9 @@ normal text, 3:1 large — checked in the gallery against every shipped scheme.
   component × every state × both schemes on one screen. The review surface
   for every style change, and the screenshot-reference source.
 - **Gates**: `qmlformat --check` + `all_qmllint` join the local quality gate
-  (CI once Qt enters CI); the parked qmllint warning gets fixed in S1.
+  (CI once Qt enters CI); the parked qmllint warning was fixed in S1. The
+  Qt-free `scripts/check-style-contract.sh` runs in CI now and rejects visual
+  literals or local state recipes outside `CelestinaTheme`.
 - **Screenshot discipline**: reference PNGs per gallery section; glass
   verified on the real session (offscreen can't render it), tokens/layout
   offscreen.

@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls.impl
 import org.celestina.siderita 1.0
 
 // ─── InfoPill ─────────────────────────────────────────────────────────────────
@@ -38,7 +37,7 @@ Item {
         cornerRadius: CelestinaTheme.radiusSm
     }
 
-    IconImage {
+    CelestinaIcon {
         id: pillIcon
         visible: infoPill.iconName.length > 0
         anchors.left: parent.left
@@ -47,7 +46,7 @@ Item {
         width: CelestinaTheme.iconSm
         height: CelestinaTheme.iconSm
         name: infoPill.iconName
-        source: CelestinaTheme.fallbackIcon(infoPill.iconFallback)
+        fallbackName: infoPill.iconFallback
     }
 
     Text {

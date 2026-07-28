@@ -28,7 +28,7 @@ GlassSurface {
         anchors.rightMargin: 6
         anchors.verticalCenter: parent.verticalCenter
         width: 116
-        text: root.settingsOpen ? "‹ Volver" : "⚙ Ajustes"
+        text: root.settingsOpen ? "Volver" : "Ajustes"
         onClicked: root.toggleRequested()
     }
 }

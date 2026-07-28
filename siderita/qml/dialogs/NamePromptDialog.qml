@@ -1,30 +1,17 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.impl
 import QtQuick.Layouts
 import org.celestina.siderita 1.0
 
     // ── Name prompt (new folder / new file / rename) ─────────────────
-Rectangle {
+CelestinaModalLayer {
     id: namePrompt
     property var controller
     property var owner
     property var backdrop   // mainPanel: el fondo que difumina el cristal
     anchors.fill: parent
     z: 60
-    property bool shown: false
-    // Fades rather than pops. Opacity only: a scale transform on a
-    // glass surface desyncs its backdrop sampling (see a995619), so the
-    // motion here never touches geometry.
-    visible: opacity > 0.01
-    opacity: shown ? 1 : 0
-    Behavior on opacity {
-        NumberAnimation {
-            duration: CelestinaTheme.motionFast
-            easing.type: CelestinaTheme.easeStandard
-        }
-    }
-    color: CelestinaTheme.scrim
+    onDismissRequested: namePrompt.dismiss()
 
     property string mode: "folder"   // "folder" | "file" | "rename"
     property string targetPath: ""
@@ -65,12 +52,6 @@ Rectangle {
         else
             controller.renamePath(namePrompt.targetPath, value)
         namePrompt.dismiss()
-    }
-
-    // Click on the dimmed backdrop cancels.
-    MouseArea {
-        anchors.fill: parent
-        onClicked: namePrompt.dismiss()
     }
 
     GlassCard {
@@ -121,7 +102,7 @@ Rectangle {
             }
             CelestinaButton {
                 text: "Aceptar"
-                primary: true
+                role: CelestinaButton.Primary
                 onClicked: namePrompt.confirm()
             }
         }

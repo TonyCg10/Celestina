@@ -48,7 +48,7 @@ Item {
         }
         CelestinaButton {
             text: root.confirmingEmpty ? "Vaciar definitivamente" : "Vaciar"
-            destructive: true
+            role: CelestinaButton.Destructive
             visible: root.controller.trashNames.length > 0
             onClicked: {
                 if (root.confirmingEmpty) {
@@ -66,7 +66,7 @@ Item {
         }
         CelestinaButton {
             text: "Volver"
-            primary: true
+            role: CelestinaButton.Primary
             onClicked: root.controller.closeTrash()
         }
     }

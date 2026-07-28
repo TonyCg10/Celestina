@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.impl
 import QtQuick.Layouts
 import org.celestina.siderita 1.0
 import org.celestina.siderita.internal 1.0
@@ -307,16 +306,8 @@ ApplicationWindow {
         id: contentLayer
         anchors.fill: parent
 
-        Rectangle {
+        CelestinaBackdrop {
             anchors.fill: parent
-            color: CelestinaTheme.canvas
-
-            gradient: Gradient {
-                orientation: Gradient.Horizontal
-                GradientStop { position: 0; color: CelestinaTheme.gradientStart }
-                GradientStop { position: 0.55; color: CelestinaTheme.gradientMid }
-                GradientStop { position: 1; color: CelestinaTheme.gradientEnd }
-            }
         }
 
         // The drag carrier: it holds the Drag state (keys, mime, image) for an
@@ -452,4 +443,5 @@ ApplicationWindow {
         // main window, only the pickers it is asked for.
         window.visible = !portalService.portalMode()
     }
+
 }

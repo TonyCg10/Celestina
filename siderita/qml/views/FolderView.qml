@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.impl
 import QtQuick.Layouts
 import org.celestina.siderita 1.0
 import org.celestina.siderita.internal 1.0
@@ -147,150 +146,15 @@ Item {
             controller.goBack()
     }
 
-    // Per-tab shortcuts: only the active (visible) tab responds, so the
-    // same sequence across tabs is never ambiguous.
-    Shortcut {
-        sequence: "Alt+Left"
-        enabled: root.active && root.canGoBackOrLeave
-        onActivated: root.goBackOrLeave()
-    }
-
-    Shortcut {
-        sequence: "Alt+Right"
-        enabled: root.active && controller.canGoForward && !controller.loading
-        onActivated: controller.goForward()
-    }
-
-    Shortcut {
-        sequence: "Alt+Up"
-        enabled: root.active && controller.canGoUp && !controller.loading
-        onActivated: controller.goUp()
-    }
-
-    Shortcut {
-        sequence: "Ctrl+L"
-        enabled: root.active
-        onActivated: topBar.beginEditing()
-    }
-
-    Shortcut {
-        sequence: "Ctrl+F"
-        enabled: root.active
-        onActivated: topBar.focusSearch()
-    }
-
-    Shortcut {
-        sequence: "Ctrl+H"
-        enabled: root.active && !controller.loading
-        onActivated: controller.toggleHidden()
-    }
-
-    Shortcut {
-        sequence: "F5"
-        enabled: root.active && !controller.loading
-        onActivated: controller.refresh()
-    }
-
-    // Write verbs act on the focused entry (topBar.activeView.currentIndex).
-    Shortcut {
-        sequence: "F2"
-        enabled: root.active && !controller.loading && !controller.opRunning
-        onActivated: {
-            const i = topBar.activeView.currentIndex
-            if (i >= 0)
-                namePromptDialog.openRename(controller.entryPath(i),
-                                            controller.entryNames[i])
-        }
-    }
-
-    Shortcut {
-        sequence: "Delete"
-        enabled: root.active && !controller.loading && !controller.opRunning
-                 && !controller.trashActive
-        onActivated: {
-            // Act on the whole selection — whatever set it (marquee,
-            // Ctrl/Shift-click or a single click). The keyboard cursor
-            // (currentIndex) is only a fallback, because a marquee selection
-            // never moves it, which is why Delete used to miss it.
-            var p = mainPanel.selectedPaths()
-            if (p.length > 1)
-                controller.trashPaths(p)
-            else if (p.length === 1)
-                controller.trashPath(p[0])
-            else {
-                const i = topBar.activeView.currentIndex
-                if (i >= 0)
-                    controller.trashPath(controller.entryPath(i))
-            }
-        }
-    }
-
-    Shortcut {
-        sequences: [StandardKey.Copy]
-        enabled: root.active && !controller.trashActive
-        onActivated: {
-            // Selection first (marquee included), cursor only as fallback.
-            var p = mainPanel.selectedPaths()
-            if (p.length > 1)
-                controller.copyPathsToClipboard(p, false)
-            else if (p.length === 1)
-                controller.copyToClipboard(p[0], false)
-            else {
-                const i = topBar.activeView.currentIndex
-                if (i >= 0)
-                    controller.copyToClipboard(controller.entryPath(i), false)
-            }
-        }
-    }
-
-    Shortcut {
-        sequences: [StandardKey.Cut]
-        enabled: root.active && !controller.trashActive
-        onActivated: {
-            // Selection first (marquee included), cursor only as fallback.
-            var p = mainPanel.selectedPaths()
-            if (p.length > 1)
-                controller.copyPathsToClipboard(p, true)
-            else if (p.length === 1)
-                controller.copyToClipboard(p[0], true)
-            else {
-                const i = topBar.activeView.currentIndex
-                if (i >= 0)
-                    controller.copyToClipboard(controller.entryPath(i), true)
-            }
-        }
-    }
-
-    Shortcut {
-        sequences: [StandardKey.Paste]
-        enabled: root.active && controller.canPaste && !controller.opRunning
-        onActivated: controller.paste()
-    }
-
-    Shortcut {
-        sequences: [StandardKey.Undo]
-        enabled: root.active && controller.canUndo && !controller.loading && !controller.opRunning
-        onActivated: controller.undo()
-    }
-
-    TapHandler {
-        id: historyMouseButtons
-
-        enabled: root.active
-        acceptedButtons: Qt.BackButton | Qt.ForwardButton
-        gesturePolicy: TapHandler.ReleaseWithinBounds
-
-        onTapped: function(eventPoint, button) {
-            if (controller.loading)
-                return
-
-            if (button === Qt.BackButton) {
-                root.goBackOrLeave()
-            } else if (button === Qt.ForwardButton
-                       && controller.canGoForward) {
-                controller.goForward()
-            }
-        }
+    FolderShortcuts {
+        anchors.fill: parent
+        viewActive: root.active
+        canGoBackOrLeave: root.canGoBackOrLeave
+        controller: tabController
+        panel: mainPanel
+        topBar: viewTopBar
+        namePrompt: folderActions.namePrompt
+        onGoBackOrLeaveRequested: root.goBackOrLeave()
     }
 
     CelestinaSurface {
@@ -636,7 +500,7 @@ Item {
             bottomView: root.bottomView
             bottomFloating: root.bottomFloating
             overlayParent: root.overlayParent
-            sortMenu: folderSortMenu
+            sortMenu: folderActions.sortMenu
             textScale: root.hostWindow.interfaceTextScale
         }
 
@@ -652,7 +516,7 @@ Item {
             onClicked: function(mouse) {
                 const point = emptySpaceMouse.mapToItem(
                                 root.overlayParent, mouse.x, mouse.y)
-                folderMenu.popup(root.overlayParent, point)
+                folderActions.folderMenu.popup(root.overlayParent, point)
             }
         }
 
@@ -682,375 +546,77 @@ Item {
             Rectangle {
                 anchors.fill: parent
                 visible: viewDrop.containsDrag
-                color: "transparent"
-                border.width: 2
+                color: CelestinaTheme.clear
+                border.width: CelestinaTheme.borderFocus
                 border.color: CelestinaTheme.accent
                 radius: CelestinaTheme.radiusLg
                 z: 40
             }
         }
 
-        ListView {
+        FolderListView {
             id: fileList
-
-            // Mouse wheel scrolls ~2.5× faster than the platform default; the
-            // touchpad keeps its natural pixel-precise scroll (tune the 180).
-            WheelHandler {
-                acceptedDevices: PointerDevice.Mouse
-                onWheel: function(ev) {
-                    const max = Math.max(0, fileList.contentHeight - fileList.height)
-                    fileList.contentY = Math.max(0, Math.min(max,
-                        fileList.contentY - ev.angleDelta.y / 120 * 180))
-                    ev.accepted = true
-                }
-            }
-
             x: 8
             y: 14
             width: parent.width - 16
-            // Llega hasta el borde: el pie flota encima, no le recorta sitio.
             height: parent.height - 22
-            // …y un pie vacío devuelve el sitio por dentro, para que la
-            // última fila se pueda leer entera en vez de quedarse bajo las
-            // pastillas. Es un pie y no `bottomMargin` porque el margen entra
-            // en el cálculo de contentY y monta un bucle de enlace con el
-            // desplazamiento que vigila el cristal de la cabecera.
-            footer: Item { width: 1; height: 46 }
-            // The list backs three modes: plain "list", the "details"
-            // columns (same rows, a different delegate body), and search
-            // (which always uses the sectioned list — a grid can't carry
-            // section headers).
-            // Search results ride the same model as a folder, so they honour
-            // the chosen view like the Trash does — the one exception is the
-            // details columns, which a hit has no size or date for.
-            visible: mainPanel.viewMode !== "grid"
-            readonly property bool detailsMode: mainPanel.viewMode === "details"
-                                                && !controller.searchActive
-            // Column widths shared by the details rows and their header
-            // (name fills the rest); they track the content text scale.
-            readonly property int colSizeW: Math.round(92 * root.hostWindow.contentTextScale)
-            readonly property int colDateW: Math.round(150 * root.hostWindow.contentTextScale)
-            readonly property int colTypeW: Math.round(96 * root.hostWindow.contentTextScale)
-            // Where the name column starts — past the row's icon glyph — so
-            // the header lines up with the rows.
-            readonly property int detailsNameX: 14
-                    + Math.round(CelestinaTheme.glyphTile * root.hostWindow.contentIconScale) + 12
-            model: entryModel
-            clip: true
-            spacing: 2
-            reuseItems: true
-            cacheBuffer: 420
-            topMargin: 62 + (tabBar.visible ? tabBar.height + 8 : 0)
-                     + (searchBar.visible ? searchBar.height + 8 : 0)
-                     + (trashHeader.visible ? trashHeader.height + 8 : 0)
-                     + (recentHeader.visible ? recentHeader.height + 8 : 0)
-                     + (fileList.detailsMode ? detailsHeader.height + 8 : 0)
-            boundsBehavior: Flickable.StopAtBounds
-
-            // Empty for a plain folder listing (no headers); set to the group
-            // label for search results.
-            section.property: "section"
-            section.criteria: ViewSection.FullString
-            section.delegate: Item {
-                id: sectionHeader
-                required property string section
-                width: fileList.width
-                height: sectionHeader.section.length > 0
-                        ? Math.round(CelestinaTheme.fontMini * root.hostWindow.contentTextScale) + 22
-                        : 0
-                visible: sectionHeader.section.length > 0
-
-                Text {
-                    x: 14
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 6
-                    text: sectionHeader.section.toUpperCase()
-                    color: CelestinaTheme.textMuted
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: Math.round(CelestinaTheme.fontMini * root.hostWindow.contentTextScale)
-                    font.letterSpacing: 1.4
-                    font.weight: CelestinaTheme.weightDemiBold
-                }
+            controller: tabController
+            entryModel: entryModel
+            panel: mainPanel
+            hostWindow: root.hostWindow
+            ghost: root.ghost
+            overlayParent: root.overlayParent
+            contentTopMargin: 62 + (tabBar.visible ? tabBar.height + 8 : 0)
+                              + (folderChrome.searchBar.visible
+                                 ? folderChrome.searchBar.height + 8 : 0)
+                              + (folderChrome.trashHeader.visible
+                                 ? folderChrome.trashHeader.height + 8 : 0)
+                              + (folderChrome.recentHeader.visible
+                                 ? folderChrome.recentHeader.height + 8 : 0)
+                              + (fileList.detailsMode
+                                 ? folderChrome.detailsHeader.height + 8 : 0)
+            onQuickLookRequested: root.quickLookOpen = true
+            onNewTabRequested: function(path, foreground) {
+                root.requestNewTab(path, foreground)
             }
-            activeFocusOnTab: true
-            keyNavigationEnabled: false
-            currentIndex: -1
-
-            Connections {
-                target: entryModel
-                // The model reset clears currentIndex; restore it from the
-                // controller's selected token.
-                function onModelReset() {
-                    fileList.currentIndex = controller.indexForToken(
-                                controller.selectedToken)
-                }
-            }
-
-            function selectRow(i) {
-                if (i < 0 || i >= count)
-                    return
-                currentIndex = i
-                const t = controller.entryToken(i)
-                mainPanel.selectOnly(t)
-                controller.selectToken(t)
-                positionViewAtIndex(i, ListView.Contain)
-            }
-
-            function pageStep() {
-                return Math.max(
-                    1, Math.floor(height / (mainPanel.listRowHeight + spacing)))
-            }
-
-            Keys.onPressed: function(event) {
-                if (event.key === Qt.Key_Escape && controller.searchActive) {
-                    controller.closeSearch()
-                    event.accepted = true
-                    return
-                }
-                if (count === 0)
-                    return
-
-                const i = currentIndex
-
-                if (event.key === Qt.Key_Down) {
-                    selectRow(Math.min(count - 1, i + 1))
-                    event.accepted = true
-                } else if (event.key === Qt.Key_Up) {
-                    selectRow(i < 0 ? count - 1 : Math.max(0, i - 1))
-                    event.accepted = true
-                } else if (event.key === Qt.Key_Home) {
-                    selectRow(0)
-                    event.accepted = true
-                } else if (event.key === Qt.Key_End) {
-                    selectRow(count - 1)
-                    event.accepted = true
-                } else if (event.key === Qt.Key_PageDown) {
-                    selectRow(Math.min(count - 1, (i < 0 ? 0 : i) + pageStep()))
-                    event.accepted = true
-                } else if (event.key === Qt.Key_PageUp) {
-                    selectRow(Math.max(0, (i < 0 ? 0 : i) - pageStep()))
-                    event.accepted = true
-                } else if (event.key === Qt.Key_Backspace) {
-                    if (controller.canGoUp && !controller.loading)
-                        controller.goUp()
-                    event.accepted = true
-                } else if (i >= 0
-                           && (event.key === Qt.Key_Return
-                               || event.key === Qt.Key_Enter)) {
-                    controller.activateToken(controller.entryToken(i))
-                    event.accepted = true
-                } else if (event.key === Qt.Key_Space
-                           && controller.selectedToken.length > 0) {
-                    // Quick-look the selected entry (Space toggles it shut
-                    // again from inside the overlay's own key handler).
-                    root.quickLookOpen = true
-                    event.accepted = true
-                } else if (event.modifiers === Qt.NoModifier
-                           && event.text.length === 1
-                           && event.text !== " "
-                           && event.text >= " ") {
-                    // type-ahead: jump to the next entry starting with the char
-                    const ch = event.text.toLowerCase()
-                    const start = i < 0 ? -1 : i
-                    for (let k = 1; k <= count; k++) {
-                        const j = (start + k) % count
-                        const name = controller.entryNames[j]
-                        if (name && name.toLowerCase().indexOf(ch) === 0) {
-                            selectRow(j)
-                            break
-                        }
-                    }
-                    event.accepted = true
-                }
-            }
-
-            delegate: FolderRowDelegate {
-                panel: mainPanel
-                controller: tabController
-                view: fileList
-                hostWindow: root.hostWindow
-                ghost: root.ghost
-                overlayParent: root.overlayParent
-                onNewTabRequested: function(path, foreground) {
-                    root.requestNewTab(path, foreground)
-                }
-                onContextMenuRequested: function(token, name, isDir, path, x, y) {
-                    entryMenu.targetToken = token
-                    entryMenu.targetName = name
-                    entryMenu.targetDirectory = isDir
-                    entryMenu.targetPath = path
-                    entryMenu.popup(root.overlayParent, Qt.point(x, y))
-                }
-            }
-
-            ScrollBar.vertical: ScrollBar {
-                policy: ScrollBar.AsNeeded
+            onContextMenuRequested: function(token, name, isDir, path, x, y) {
+                folderActions.entryMenu.targetToken = token
+                folderActions.entryMenu.targetName = name
+                folderActions.entryMenu.targetDirectory = isDir
+                folderActions.entryMenu.targetPath = path
+                folderActions.entryMenu.popup(root.overlayParent, Qt.point(x, y))
             }
         }
 
-        GridView {
+        FolderGridView {
             id: fileGrid
-
-            // Mouse wheel scrolls ~2.5× faster than the platform default; the
-            // touchpad keeps its natural pixel-precise scroll (tune the 180).
-            WheelHandler {
-                acceptedDevices: PointerDevice.Mouse
-                onWheel: function(ev) {
-                    const max = Math.max(0, fileGrid.contentHeight - fileGrid.height)
-                    fileGrid.contentY = Math.max(0, Math.min(max,
-                        fileGrid.contentY - ev.angleDelta.y / 120 * 180))
-                    ev.accepted = true
-                }
-            }
-
             x: 8
             y: 14
             width: parent.width - 16
-            // Llega hasta el borde: el pie flota encima, no le recorta sitio.
             height: parent.height - 22
-            // …y un pie vacío devuelve el sitio por dentro, para que la
-            // última fila se pueda leer entera en vez de quedarse bajo las
-            // pastillas. Es un pie y no `bottomMargin` porque el margen entra
-            // en el cálculo de contentY y monta un bucle de enlace con el
-            // desplazamiento que vigila el cristal de la cabecera.
-            footer: Item { width: 1; height: 46 }
-            visible: mainPanel.viewMode === "grid"
-            model: entryModel
-            clip: true
-            // Stretch the columns to fill the width: fit as many natural-size
-            // cells as possible, then divide the width evenly among them, so
-            // the leftover never piles up as one gap on the right.
-            readonly property int cols: Math.max(1, Math.floor(width / mainPanel.gridCellWidth))
-            cellWidth: Math.floor(width / cols)
-            cellHeight: mainPanel.gridCellHeight
-            cacheBuffer: 480
-            topMargin: 62 + (tabBar.visible ? tabBar.height + 8 : 0)
-                     + (searchBar.visible ? searchBar.height + 8 : 0)
-                     + (trashHeader.visible ? trashHeader.height + 8 : 0)
-                     + (recentHeader.visible ? recentHeader.height + 8 : 0)
-            boundsBehavior: Flickable.StopAtBounds
-            activeFocusOnTab: true
-            keyNavigationEnabled: false
-            currentIndex: -1
-
-            Connections {
-                target: entryModel
-                function onModelReset() {
-                    fileGrid.currentIndex = controller.indexForToken(
-                                controller.selectedToken)
-                }
+            controller: tabController
+            entryModel: entryModel
+            panel: mainPanel
+            hostWindow: root.hostWindow
+            ghost: root.ghost
+            overlayParent: root.overlayParent
+            contentTopMargin: 62 + (tabBar.visible ? tabBar.height + 8 : 0)
+                              + (folderChrome.searchBar.visible
+                                 ? folderChrome.searchBar.height + 8 : 0)
+                              + (folderChrome.trashHeader.visible
+                                 ? folderChrome.trashHeader.height + 8 : 0)
+                              + (folderChrome.recentHeader.visible
+                                 ? folderChrome.recentHeader.height + 8 : 0)
+            onQuickLookRequested: root.quickLookOpen = true
+            onNewTabRequested: function(path, foreground) {
+                root.requestNewTab(path, foreground)
             }
-
-            function columns() {
-                return cols
-            }
-
-            function selectCell(i) {
-                if (i < 0 || i >= count)
-                    return
-                currentIndex = i
-                const t = controller.entryToken(i)
-                mainPanel.selectOnly(t)
-                controller.selectToken(t)
-                positionViewAtIndex(i, GridView.Contain)
-            }
-
-            function pageStep() {
-                const rows = Math.max(1, Math.floor(height / cellHeight))
-                return rows * columns()
-            }
-
-            Keys.onPressed: function(event) {
-                if (event.key === Qt.Key_Escape && controller.searchActive) {
-                    controller.closeSearch()
-                    event.accepted = true
-                    return
-                }
-                if (count === 0)
-                    return
-
-                const i = currentIndex
-                const cols = columns()
-
-                if (event.key === Qt.Key_Right) {
-                    selectCell(Math.min(count - 1, i + 1))
-                    event.accepted = true
-                } else if (event.key === Qt.Key_Left) {
-                    selectCell(i < 0 ? count - 1 : Math.max(0, i - 1))
-                    event.accepted = true
-                } else if (event.key === Qt.Key_Down) {
-                    selectCell(i < 0 ? 0 : Math.min(count - 1, i + cols))
-                    event.accepted = true
-                } else if (event.key === Qt.Key_Up) {
-                    selectCell(i < 0 ? count - 1 : Math.max(0, i - cols))
-                    event.accepted = true
-                } else if (event.key === Qt.Key_Home) {
-                    selectCell(0)
-                    event.accepted = true
-                } else if (event.key === Qt.Key_End) {
-                    selectCell(count - 1)
-                    event.accepted = true
-                } else if (event.key === Qt.Key_PageDown) {
-                    selectCell(Math.min(count - 1, (i < 0 ? 0 : i) + pageStep()))
-                    event.accepted = true
-                } else if (event.key === Qt.Key_PageUp) {
-                    selectCell(Math.max(0, (i < 0 ? 0 : i) - pageStep()))
-                    event.accepted = true
-                } else if (event.key === Qt.Key_Backspace) {
-                    if (controller.canGoUp && !controller.loading)
-                        controller.goUp()
-                    event.accepted = true
-                } else if (i >= 0
-                           && (event.key === Qt.Key_Return
-                               || event.key === Qt.Key_Enter)) {
-                    controller.activateToken(controller.entryToken(i))
-                    event.accepted = true
-                } else if (event.key === Qt.Key_Space
-                           && controller.selectedToken.length > 0) {
-                    // Quick-look the selected entry (Space toggles it shut
-                    // again from inside the overlay's own key handler).
-                    root.quickLookOpen = true
-                    event.accepted = true
-                } else if (event.modifiers === Qt.NoModifier
-                           && event.text.length === 1
-                           && event.text !== " "
-                           && event.text >= " ") {
-                    // type-ahead: jump to the next entry starting with the char
-                    const ch = event.text.toLowerCase()
-                    const start = i < 0 ? -1 : i
-                    for (let k = 1; k <= count; k++) {
-                        const j = (start + k) % count
-                        const name = controller.entryNames[j]
-                        if (name && name.toLowerCase().indexOf(ch) === 0) {
-                            selectCell(j)
-                            break
-                        }
-                    }
-                    event.accepted = true
-                }
-            }
-
-            delegate: FolderCellDelegate {
-                panel: mainPanel
-                controller: tabController
-                view: fileGrid
-                hostWindow: root.hostWindow
-                ghost: root.ghost
-                overlayParent: root.overlayParent
-                onNewTabRequested: function(path, foreground) {
-                    root.requestNewTab(path, foreground)
-                }
-                onContextMenuRequested: function(token, name, isDir, path, x, y) {
-                    entryMenu.targetToken = token
-                    entryMenu.targetName = name
-                    entryMenu.targetDirectory = isDir
-                    entryMenu.targetPath = path
-                    entryMenu.popup(root.overlayParent, Qt.point(x, y))
-                }
-            }
-
-            ScrollBar.vertical: ScrollBar {
-                policy: ScrollBar.AsNeeded
+            onContextMenuRequested: function(token, name, isDir, path, x, y) {
+                folderActions.entryMenu.targetToken = token
+                folderActions.entryMenu.targetName = name
+                folderActions.entryMenu.targetDirectory = isDir
+                folderActions.entryMenu.targetPath = path
+                folderActions.entryMenu.popup(root.overlayParent, Qt.point(x, y))
             }
         }
 
@@ -1108,10 +674,9 @@ Item {
                 y: Math.min(marquee.oy, marquee.cy)
                 width: Math.abs(marquee.cx - marquee.ox)
                 height: Math.abs(marquee.cy - marquee.oy)
-                radius: 3
-                color: Qt.rgba(CelestinaTheme.accent.r, CelestinaTheme.accent.g,
-                               CelestinaTheme.accent.b, 0.18)
-                border.width: 1
+                radius: CelestinaTheme.radiusXs
+                color: CelestinaTheme.selectionMarquee
+                border.width: CelestinaTheme.borderHairline
                 border.color: CelestinaTheme.accent
             }
         }
@@ -1147,210 +712,14 @@ Item {
             }
         }
 
-        Rectangle {
-            id: errorBanner
-            x: 16
-            // Float above the bottom control bar, not over the breadcrumb.
-            anchors.bottom: bottomBar.top
-            anchors.bottomMargin: 8
-            width: parent.width - 32
-            height: errorText.implicitHeight + 22
-            radius: CelestinaTheme.radiusSm
-            visible: controller.errorText.length > 0
-            color: CelestinaTheme.dangerFill
-            border.width: 1
-            border.color: CelestinaTheme.dangerBorder
-            z: 3
-
-            Text {
-                id: errorText
-                anchors.fill: parent
-                anchors.margins: 11
-                text: controller.errorText
-                color: CelestinaTheme.dangerFillInk
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontRowSecondary
-                wrapMode: Text.Wrap
-            }
-        }
-
-        // Feedback from a write operation (create / rename / trash / paste);
-        // cleared on the next operation or navigation.
-        Rectangle {
-            id: opErrorBanner
-            x: 16
-            // Stacks upward from the bottom bar, above any general error banner.
-            anchors.bottom: errorBanner.visible ? errorBanner.top : bottomBar.top
-            anchors.bottomMargin: 8
-            width: parent.width - 32
-            height: opErrorText.implicitHeight + 22
-            radius: CelestinaTheme.radiusSm
-            visible: controller.opError.length > 0
-            color: CelestinaTheme.dangerFill
-            border.width: 1
-            border.color: CelestinaTheme.dangerBorder
-            z: 4
-
-            Text {
-                id: opErrorText
-                anchors.fill: parent
-                anchors.margins: 11
-                text: controller.opError
-                color: CelestinaTheme.dangerFillInk
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontRowSecondary
-                wrapMode: Text.Wrap
-            }
-        }
-
-        // Progress surface for a running copy / move: current entry, a
-        // determinate bar over the top-level count, bytes copied and a
-        // cancel button that trips the worker's cancellation token.
-        CelestinaSurface {
-            id: opProgressCard
-            x: 16
-            // Above the error banners, still stacking up from the bottom bar.
-            anchors.bottom: opErrorBanner.visible
-                            ? opErrorBanner.top
-                            : (errorBanner.visible ? errorBanner.top : bottomBar.top)
-            anchors.bottomMargin: 8
-            width: parent.width - 32
-            height: 62
-            visible: controller.opRunning
-            role: CelestinaSurface.Tonal
-            z: 5
-
-            Text {
-                id: opProgressTitle
-                x: 12
-                y: 9
-                width: cancelOpButton.x - x - 12
-                text: {
-                    var label = controller.opCurrent.length > 0
-                                ? controller.opCurrent : "Preparando…"
-                    if (controller.opTotal > 1)
-                        label += "  ·  " + (controller.opDone + 1)
-                                 + " de " + controller.opTotal
-                    return label
-                }
-                color: CelestinaTheme.text
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontRowSecondary
-                elide: Text.ElideMiddle
-            }
-
-            Text {
-                id: opProgressDetail
-                x: 12
-                anchors.top: opProgressTitle.bottom
-                anchors.topMargin: 3
-                width: cancelOpButton.x - x - 12
-                text: controller.opDetail
-                visible: controller.opDetail.length > 0
-                color: CelestinaTheme.textMuted
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: Math.round(CelestinaTheme.fontCaption * root.hostWindow.interfaceTextScale)
-                elide: Text.ElideRight
-            }
-
-            // Determinate bar over the top-level entry count.
-            Rectangle {
-                id: opProgressTrack
-                x: 12
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: 10
-                width: cancelOpButton.x - x - 12
-                height: 4
-                radius: 2
-                color: CelestinaTheme.controlFill
-
-                Rectangle {
-                    height: parent.height
-                    radius: 2
-                    color: CelestinaTheme.accent
-                    width: controller.opTotal > 0
-                           ? parent.width * Math.min(1, controller.opDone / controller.opTotal)
-                           : 0
-                    Behavior on width {
-                        NumberAnimation { duration: CelestinaTheme.motionFast }
-                    }
-                }
-            }
-
-            CelestinaButton {
-                id: cancelOpButton
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.right: parent.right
-                anchors.rightMargin: 12
-                height: 28
-                text: "Cancelar"
-                Accessible.name: "Cancelar la operación"
-                onClicked: controller.cancelOp()
-            }
-        }
-
-        Text {
-            id: statusLine
-            x: bottomControls.x + bottomControls.width + 14
-            anchors.verticalCenter: bottomBar.verticalCenter
-            width: Math.max(0, sizeButton.x - x - 12)
-            // Only transient state here now (loading, a filtered count,
-            // operation status, errors); item counts and the selected item's
-            // details live in the sidebar info box. A lost watch is surfaced
-            // truthfully — the list is a snapshot that may lag.
-            text: controller.watchDegraded
-                  ? "⚠ Vigilancia perdida · instantánea"
-                  : controller.statusText
-            color: controller.watchDegraded
-                   ? CelestinaTheme.dangerFillInk : CelestinaTheme.textMuted
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: Math.round(CelestinaTheme.fontCaption * root.hostWindow.interfaceTextScale)
-            elide: Text.ElideRight
-        }
-
-        // Opens a submenu of independent size sliders (content vs sidebar,
-        // icons vs text) — granular zoom, replacing the single slider.
-        Button {
-            id: sizeButton
-            height: 34
-            leftPadding: 18
-            rightPadding: 18
-            anchors.right: parent.right
-            anchors.rightMargin: 16
-            anchors.verticalCenter: bottomBar.verticalCenter
-            text: "Tamaño"
-            Accessible.name: "Ajustar tamaños"
-            onClicked: sizePopup.opened ? sizePopup.close() : sizePopup.open()
-
-            contentItem: Text {
-                text: sizeButton.text
-                color: CelestinaTheme.text
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: Math.round(CelestinaTheme.fontCaption * root.hostWindow.interfaceTextScale)
-                font.weight: CelestinaTheme.weightMedium
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-                elide: Text.ElideRight
-            }
-
-            background: GlassPill {
-                backdrop: root.bottomView
-                floating: root.bottomFloating
-                fill: (sizeButton.hovered || sizePopup.opened)
-                      ? CelestinaTheme.surfaceHover
-                      : CelestinaTheme.controlFill
-                border.width: sizeButton.activeFocus ? 1 : 0
-                border.color: CelestinaTheme.focusRing
-            }
-
-            SizePopup {
-                id: sizePopup
-                // Float above the button, right-aligned to it.
-                y: -height - 10
-                x: sizeButton.width - width
-                backdrop: mainPanel
-                hostWindow: root.hostWindow
-            }
+        FolderBottomStatus {
+            anchors.fill: parent
+            controller: tabController
+            hostWindow: root.hostWindow
+            panel: mainPanel
+            bottomControls: bottomControls
+            bottomView: root.bottomView
+            bottomFloating: root.bottomFloating
         }
     }
 
@@ -1365,7 +734,7 @@ Item {
         activeView: mainPanel.viewMode === "grid" ? fileGrid : fileList
         hostWindow: root.hostWindow
         overlayParent: root.overlayParent
-        pathMenu: breadcrumbMenu
+        pathMenu: folderActions.pathMenu
         onViewFocusRequested: fileList.forceActiveFocus()
     }
 
@@ -1388,219 +757,25 @@ Item {
         active: root.active
     }
 
-    FolderSortMenu {
-        id: folderSortMenu
-        backdropSource: root
-        controller: tabController
-    }
-
-    EntryContextMenu {
-        id: entryMenu
-        backdropSource: root
-        controller: tabController
-        panel: mainPanel
-        namePrompt: namePromptDialog
-        batchRename: batchRenameDialog
-        iconPicker: iconPickerDialog
-        onNewTabRequested: function(path, foreground) { root.requestNewTab(path, foreground) }
-    }
-
-    // Context menu for the breadcrumb / path bar: act on the current path.
-    PathMenu {
-        id: breadcrumbMenu
-        backdropSource: root
-        controller: tabController
-        onNewTabRequested: function(path, foreground) { root.requestNewTab(path, foreground) }
-    }
-
-    FolderMenu {
-        id: folderMenu
-        backdropSource: root
-        controller: tabController
-        panel: mainPanel
-        namePrompt: namePromptDialog
-        onNewTabRequested: function(path, foreground) { root.requestNewTab(path, foreground) }
-    }
-
-    // Los diálogos y overlays de esta vista, cada uno en su fichero.
-    NamePromptDialog {
-        id: namePromptDialog
-        controller: tabController
-        owner: root
-        backdrop: mainPanel
-    }
-
-    BatchRenameDialog {
-        id: batchRenameDialog
-        controller: tabController
-        owner: root
-        backdrop: mainPanel
-    }
-
-    ConflictDialog {
-        id: conflictDialog
-        controller: tabController
-        owner: root
-        backdrop: mainPanel
-    }
-
-    OpenWithDialog {
-        id: openWithView
-        controller: tabController
-        owner: root
-        backdrop: mainPanel
-    }
-
-    PropertiesDialog {
-        id: propertiesView
-        controller: tabController
-        owner: root
-        backdrop: mainPanel
-    }
-
-    IconPickerDialog {
-        id: iconPickerDialog
+    FolderActions {
+        id: folderActions
+        anchors.fill: parent
         controller: tabController
         owner: root
         panel: mainPanel
+        onNewTabRequested: function(path, foreground) {
+            root.requestNewTab(path, foreground)
+        }
     }
 
-    QuickLookView {
-        id: quickLookView
+    FolderContentChrome {
+        id: folderChrome
+        anchors.fill: parent
         controller: tabController
-        owner: root
+        hostWindow: root.hostWindow
         panel: mainPanel
+        topBar: viewTopBar
+        tabBar: tabBar
+        fileList: fileList
     }
-
-
-
-
-
-
-
-
-        // ── Recursive-search status bar ───────────────────────────────────
-        // The hits themselves ride the same entryModel as the folder, so the
-        // list/grid render and act on them identically (single-click selects,
-        // double-click opens, keyboard, selection). This slim glass bar just
-        // floats below the breadcrumb/tabs to show the query and offer Stop /
-        // Close — the search results are the content view.
-        SearchBar {
-            id: searchBar
-            z: 10
-            x: 12
-            width: root.width - 24
-            height: 40
-            y: (tabBar.visible ? tabBar.y + tabBar.height : topBar.y + topBar.height) + 8
-            // Fades in place. Not a slide: these carry glass, and moving
-            // a glass surface mid-animation samples the wrong region.
-            visible: opacity > 0.01
-            opacity: (controller.searchActive || controller.searchRunning) ? 1 : 0
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: CelestinaTheme.motionFast
-                    easing.type: CelestinaTheme.easeStandard
-                }
-            }
-            controller: tabController
-            backdrop: topBar.activeView
-            textScale: root.hostWindow.interfaceTextScale
-        }
-
-        // ── Recientes location header ──────────────────────────────────
-        // The same shape as the Trash header: a pill that says where you
-        // are and how much is here, and the way back. Nothing else — this
-        // list belongs to the desktop, and Siderita only reads it.
-        RecentHeader {
-            id: recentHeader
-            z: 10
-            x: 12
-            width: root.width - 24
-            height: 40
-            y: (tabBar.visible ? tabBar.y + tabBar.height : topBar.y + topBar.height) + 8
-            // Fades in place. Not a slide: these carry glass, and moving
-            // a glass surface mid-animation samples the wrong region.
-            visible: opacity > 0.01
-            opacity: controller.recentActive ? 1 : 0
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: CelestinaTheme.motionFast
-                    easing.type: CelestinaTheme.easeStandard
-                }
-            }
-            controller: tabController
-            backdrop: topBar.activeView
-            textScale: root.hostWindow.interfaceTextScale
-        }
-
-        // ── Trash location header ──────────────────────────────────────
-        // Trashed items ride the same entryModel (like search), so the
-        // content view renders them as list / grid / details with
-        // thumbnails. This slim glass bar floats below the breadcrumb with
-        // the bulk actions and the way back.
-        TrashHeader {
-            id: trashHeader
-            z: 10
-            x: 12
-            width: root.width - 24
-            height: 40
-            y: (tabBar.visible ? tabBar.y + tabBar.height : topBar.y + topBar.height) + 8
-            visible: controller.trashActive
-            controller: tabController
-            backdrop: topBar.activeView
-            textScale: root.hostWindow.interfaceTextScale
-        }
-
-        // ── Drag auto-scroll edges ─────────────────────────────────────
-        // Two thin strips over the top and bottom of the view: while a drag
-        // rests on one, the view scrolls, so a destination below the fold
-        // does not mean dropping the entry somewhere else first. They sit
-        // above the rows (a row would otherwise swallow the drag), so a
-        // release on one lands in the *current* folder — the same thing an
-        // empty-space drop does — and an entry dragged within its own
-        // folder simply has nowhere to go.
-        DragScrollEdge {
-            id: topScrollEdge
-            x: 8
-            y: 14
-            width: parent.width - 16
-            view: topBar.activeView
-            step: -18
-            onExternalDrop: function(drop) {
-                controller.dropUris(mainPanel.urlsToPaths(drop.urls),
-                                    "", mainPanel.dropIsMove(drop))
-                drop.accept()
-            }
-        }
-
-        DragScrollEdge {
-            id: bottomScrollEdge
-            x: 8
-            y: parent.height - 68 + 14 - height
-            width: parent.width - 16
-            view: topBar.activeView
-            step: 18
-            onExternalDrop: function(drop) {
-                controller.dropUris(mainPanel.urlsToPaths(drop.urls),
-                                    "", mainPanel.dropIsMove(drop))
-                drop.accept()
-            }
-        }
-
-        // ── Details-view column header ─────────────────────────────────
-        // A floating glass strip aligned to the list's columns; each title
-        // sorts by that field (a second click on the active one flips the
-        // direction) and carries an ↑/↓ arrow.
-        DetailsHeader {
-            id: detailsHeader
-            z: 10
-            x: 8
-            width: parent.width - 16
-            height: Math.round(CelestinaTheme.fontCaption * root.hostWindow.contentTextScale) + 18
-            y: (tabBar.visible ? tabBar.y + tabBar.height : topBar.y + topBar.height) + 8
-            visible: fileList.detailsMode
-            controller: tabController
-            view: fileList
-            textScale: root.hostWindow.contentTextScale
-        }
 }

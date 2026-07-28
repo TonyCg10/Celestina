@@ -6,31 +6,38 @@ import QtQuick.Controls
 // (relleno que se aclara al foco + borde de foco) en un solo sitio, en vez de
 // repetir el mismo `background: Rectangle { inputFill … }` en cada diálogo.
 //
-// El tamaño se deja al consumidor —alto, tamaño de letra, `radius`, padding—
-// porque un renombrado en línea es compacto y un campo de diálogo no; lo que se
-// comparte es el vestido, no las medidas.
+// El tamaño se deja al consumidor porque un renombrado en línea es compacto y
+// un campo de diálogo no. La forma, en cambio, es parte del sistema visual y se
+// elige con un papel cerrado en vez de un radio arbitrario.
 // ──────────────────────────────────────────────────────────────────────────────
 TextField {
     id: field
 
-    // El consumidor lo baja para un campo compacto (radiusXs) sin tocar el resto.
-    property int radius: CelestinaTheme.radiusSm
+    enum Shape {
+        Standard,
+        Search
+    }
 
-    height: CelestinaTheme.controlHeight
+    property int shape: CelestinaTextField.Standard
+    readonly property real fieldRadius: shape === CelestinaTextField.Search
+                                        ? CelestinaTheme.radiusInput
+                                        : CelestinaTheme.radiusSm
+
+    implicitHeight: CelestinaTheme.controlHeight
     color: CelestinaTheme.text
     selectionColor: CelestinaTheme.accentPressed
     selectedTextColor: CelestinaTheme.text
     placeholderTextColor: CelestinaTheme.textMuted
     font.family: CelestinaTheme.sansFamily
     font.pixelSize: CelestinaTheme.fontBody
-    leftPadding: 12
-    rightPadding: 12
+    leftPadding: CelestinaTheme.compTextFieldPaddingHorizontal
+    rightPadding: CelestinaTheme.compTextFieldPaddingHorizontal
 
     background: Rectangle {
-        radius: field.radius
+        radius: field.fieldRadius
         color: field.activeFocus ? CelestinaTheme.inputFillFocus
                                  : CelestinaTheme.inputFill
-        border.width: 1
+        border.width: CelestinaTheme.borderHairline
         border.color: field.activeFocus ? CelestinaTheme.focusRing
                                         : CelestinaTheme.inputBorder
 

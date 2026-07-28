@@ -143,7 +143,7 @@ Item {
                     width: root.width
                     height: root.height
                     radius: root.cornerRadius
-                    color: "white"
+                    color: CelestinaTheme.opaqueMask
                 }
             }
 
@@ -188,8 +188,8 @@ Item {
         Rectangle {
             anchors.fill: parent
             radius: root.cornerRadius
-            color: "transparent"
-            border.width: 1
+            color: CelestinaTheme.clear
+            border.width: CelestinaTheme.borderHairline
             border.color: CelestinaTheme.glassOutline
         }
 
@@ -206,16 +206,32 @@ Item {
             ShapePath {
                 fillRule: ShapePath.OddEvenFill
                 strokeWidth: 0
-                fillColor: "transparent"
+                fillColor: CelestinaTheme.clear
                 fillGradient: LinearGradient {
                     x1: 0
                     y1: 0
                     x2: 0
                     y2: root.height
-                    GradientStop { position: 0.0; color: Qt.rgba(CelestinaTheme.glassBorder.r, CelestinaTheme.glassBorder.g, CelestinaTheme.glassBorder.b, CelestinaTheme.glassBorder.a) }
-                    GradientStop { position: 0.35; color: Qt.rgba(CelestinaTheme.glassBorder.r, CelestinaTheme.glassBorder.g, CelestinaTheme.glassBorder.b, CelestinaTheme.glassBorder.a * 0.45) }
-                    GradientStop { position: 0.7; color: Qt.rgba(CelestinaTheme.glassBorder.r, CelestinaTheme.glassBorder.g, CelestinaTheme.glassBorder.b, CelestinaTheme.glassBorder.a * 0.15) }
-                    GradientStop { position: 1.0; color: Qt.rgba(CelestinaTheme.glassBorder.r, CelestinaTheme.glassBorder.g, CelestinaTheme.glassBorder.b, 0.0) }
+                    GradientStop {
+                        position: 0
+                        color: CelestinaTheme.glassBorder
+                    }
+                    GradientStop {
+                        position: CelestinaTheme.glassEdgeMidPosition
+                        color: CelestinaTheme.multiplyAlpha(
+                                   CelestinaTheme.glassBorder,
+                                   CelestinaTheme.glassEdgeMidOpacity)
+                    }
+                    GradientStop {
+                        position: CelestinaTheme.glassEdgeLowPosition
+                        color: CelestinaTheme.multiplyAlpha(
+                                   CelestinaTheme.glassBorder,
+                                   CelestinaTheme.glassEdgeLowOpacity)
+                    }
+                    GradientStop {
+                        position: 1
+                        color: CelestinaTheme.clear
+                    }
                 }
                 PathRectangle {
                     x: 0
@@ -225,11 +241,12 @@ Item {
                     radius: root.cornerRadius
                 }
                 PathRectangle {
-                    x: 1.3
-                    y: 1.3
-                    width: root.width - 2.6
-                    height: root.height - 2.6
-                    radius: Math.max(0, root.cornerRadius - 1.3)
+                    x: CelestinaTheme.glassEdgeWidth
+                    y: CelestinaTheme.glassEdgeWidth
+                    width: root.width - CelestinaTheme.glassEdgeWidth * 2
+                    height: root.height - CelestinaTheme.glassEdgeWidth * 2
+                    radius: Math.max(0, root.cornerRadius
+                                        - CelestinaTheme.glassEdgeWidth)
                 }
             }
         }

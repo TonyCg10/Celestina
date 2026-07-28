@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls.impl
 import org.celestina.siderita 1.0
 
 // ─── FolderCellDelegate ─────────────────────────────────────────────────────
@@ -44,7 +43,8 @@ Item {
 
     width: root.view.cellWidth
     height: root.view.cellHeight
-    opacity: cut ? 0.4 : hidden ? 0.5 : 1.0
+    opacity: cut ? CelestinaTheme.unavailableContentOpacity
+                 : hidden ? CelestinaTheme.disabledOpacity : 1
     Accessible.role: Accessible.ListItem
     Accessible.name: name
     Accessible.selected: selected
@@ -60,8 +60,8 @@ Item {
                ? CelestinaTheme.surfaceSelected
                : cellMouse.containsMouse
                  ? CelestinaTheme.surfaceHover
-                 : "transparent"
-        border.width: root.selected ? 1 : 0
+                 : CelestinaTheme.clear
+        border.width: root.selected ? CelestinaTheme.borderHairline : 0
         border.color: CelestinaTheme.dividerStrong
 
         Behavior on color {
@@ -108,9 +108,9 @@ Item {
             width: root.panel.gridCellWidth - 10
             height: parent.height - 10
             visible: parent.containsDrag
-            color: "transparent"
+            color: CelestinaTheme.clear
             radius: CelestinaTheme.radiusSm
-            border.width: 2
+            border.width: CelestinaTheme.borderFocus
             border.color: CelestinaTheme.accent
         }
     }
@@ -135,19 +135,18 @@ Item {
             readonly property string media: root.kind === "directory"
                                             ? "" : root.panel.mediaKind(root.name)
 
-            IconImage {
+            CelestinaIcon {
                 anchors.centerIn: parent
                 visible: !cellThumb.ready
                 width: Math.round(54 * root.hostWindow.contentIconScale)
                 height: Math.round(54 * root.hostWindow.contentIconScale)
                 name: root.panel.mediaIconName(root.kind, cellGlyph.media, root.path)
                 sourceSize: Qt.size(width, height)
-                source: CelestinaTheme.fallbackIcon(
-                            root.kind === "directory"
-                            ? "folder"
-                            : root.kind === "symlink"
-                              ? "symlink"
-                              : "file")
+                fallbackName: root.kind === "directory"
+                              ? "folder"
+                              : root.kind === "symlink"
+                                ? "symlink"
+                                : "file"
                 // No color tint — see the list delegate above.
             }
 
@@ -187,12 +186,14 @@ Item {
                 width: Math.round(parent.width * 0.4)
                 height: width
                 radius: width / 2
-                color: Qt.rgba(0, 0, 0, 0.45)
-                Text {
+                color: CelestinaTheme.mediaScrim
+                CelestinaIcon {
                     anchors.centerIn: parent
-                    text: "▶"
-                    color: "white"
-                    font.pixelSize: Math.round(parent.width * 0.5)
+                    width: Math.round(parent.width * 0.55)
+                    height: width
+                    name: "media-playback-start"
+                    fallbackName: "media-play"
+                    tone: CelestinaIcon.Overlay
                 }
             }
         }

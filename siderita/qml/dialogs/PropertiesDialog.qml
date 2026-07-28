@@ -1,42 +1,18 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.impl
 import QtQuick.Layouts
 import org.celestina.siderita 1.0
 
     // ── Properties / Get-Info panel ──────────────────────────────────
-Rectangle {
+CelestinaModalLayer {
     id: propertiesView
     property var controller
     property var owner
     property var backdrop   // mainPanel: el fondo que difumina el cristal
     anchors.fill: parent
     z: 68
-    readonly property bool shown: controller.propertiesPending
-    // Fades rather than pops. Opacity only: a scale transform on a
-    // glass surface desyncs its backdrop sampling (see a995619), so the
-    // motion here never touches geometry.
-    visible: opacity > 0.01
-    opacity: shown ? 1 : 0
-    Behavior on opacity {
-        NumberAnimation {
-            duration: CelestinaTheme.motionFast
-            easing.type: CelestinaTheme.easeStandard
-        }
-    }
-    color: CelestinaTheme.scrim
-
-    MouseArea {
-        anchors.fill: parent
-        onClicked: controller.closeProperties()
-    }
-    Keys.onPressed: function(event) {
-        if (event.key === Qt.Key_Escape) {
-            controller.closeProperties()
-            event.accepted = true
-        }
-    }
-    focus: propertiesView.shown
+    shown: controller.propertiesPending
+    onDismissRequested: controller.closeProperties()
 
     GlassCard {
         anchors.centerIn: parent
@@ -50,17 +26,16 @@ Rectangle {
 
         MouseArea { anchors.fill: parent }
 
-        IconImage {
+        CelestinaIcon {
             id: propIcon
             x: 18
             y: 18
             width: CelestinaTheme.iconMd
             height: CelestinaTheme.iconMd
             name: controller.propIsDir ? "folder" : "text-x-generic"
-            source: CelestinaTheme.fallbackIcon(
-                        controller.propIsDir ? "folder" : "file")
-            color: controller.propIsDir ? CelestinaTheme.accent
-                                        : CelestinaTheme.textMuted
+            fallbackName: controller.propIsDir ? "folder" : "file"
+            tone: controller.propIsDir
+                  ? CelestinaIcon.Accent : CelestinaIcon.Secondary
         }
 
         Text {
@@ -137,7 +112,7 @@ Rectangle {
 
             CelestinaButton {
                 text: "Cerrar"
-                primary: true
+                role: CelestinaButton.Primary
                 onClicked: controller.closeProperties()
             }
         }

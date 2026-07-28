@@ -33,7 +33,7 @@ MenuItem {
             // flattened Qogir's folder, trash and star into white blobs. The
             // icon theme is trusted to fit a dark surface — the same call the
             // content views make — and "disabled" is carried by opacity alone.
-            opacity: control.enabled ? 1 : 0.55
+            opacity: control.enabled ? 1 : CelestinaTheme.disabledContentOpacity
         }
 
         Text {
@@ -52,7 +52,7 @@ MenuItem {
             font.pixelSize: CelestinaTheme.fontBody
             verticalAlignment: Text.AlignVCenter
             elide: Text.ElideRight
-            opacity: control.enabled ? 1 : 0.55
+            opacity: control.enabled ? 1 : CelestinaTheme.disabledContentOpacity
         }
     }
 
@@ -60,7 +60,7 @@ MenuItem {
         radius: CelestinaTheme.radiusSm
         color: control.highlighted || control.current
                ? CelestinaTheme.surfaceHover
-               : "transparent"
+               : CelestinaTheme.clear
 
         Behavior on color {
             ColorAnimation {

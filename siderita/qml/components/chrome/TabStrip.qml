@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.impl
 import org.celestina.siderita 1.0
 
 // ─── TabStrip ───────────────────────────────────────────────────────────────
@@ -70,7 +69,10 @@ Item {
                 color: chip.activeTab ? CelestinaTheme.surfaceSelected
                                       : chipMouse.containsMouse ? CelestinaTheme.surfaceHover
                                       : CelestinaTheme.inputFill
-                border.width: chip.activeTab ? 1 : (root.topBar.floating ? 0 : 1)
+                border.width: chip.activeTab
+                              ? CelestinaTheme.borderHairline
+                              : (root.topBar.floating
+                                 ? 0 : CelestinaTheme.borderHairline)
                 border.color: chip.activeTab ? CelestinaTheme.dividerStrong
                                              : CelestinaTheme.inputBorder
 
@@ -98,16 +100,16 @@ Item {
                                            Qt.callLater(chipGlass.refreshBackdrop)
             }
 
-            IconImage {
+            CelestinaIcon {
                 id: chipIcon
                 x: 12
                 anchors.verticalCenter: parent.verticalCenter
                 width: Math.round(CelestinaTheme.iconSm * root.hostWindow.interfaceIconScale)
                 height: CelestinaTheme.iconSm
                 name: "folder"
-                source: CelestinaTheme.fallbackIcon("folder")
-                color: chip.activeTab ? CelestinaTheme.accent
-                                      : CelestinaTheme.textMuted
+                fallbackName: "folder"
+                tone: chip.activeTab ? CelestinaIcon.Accent
+                                     : CelestinaIcon.Secondary
             }
 
             Text {
@@ -132,7 +134,7 @@ Item {
                 height: 20
                 radius: CelestinaTheme.radiusSm
                 color: closeMouse.containsMouse
-                       ? CelestinaTheme.surfaceHover : "transparent"
+                       ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
 
                 Text {
                     anchors.centerIn: parent
@@ -169,11 +171,11 @@ Item {
 
         ScrollBar.horizontal: ScrollBar {
             policy: ScrollBar.AsNeeded
-            height: 4
+            height: CelestinaTheme.compLinearTrackHeight
         }
     }
 
-    NavButton {
+    CelestinaIconButton {
         id: newTabButton
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter

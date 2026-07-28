@@ -101,8 +101,8 @@ Item {
         radius: CelestinaTheme.radiusSm
         clip: true
         color: CelestinaTheme.inputFill
-        border.width: 1
-        border.color: root.floating ? "transparent" : CelestinaTheme.inputBorder
+        border.width: CelestinaTheme.borderHairline
+        border.color: root.floating ? CelestinaTheme.clear : CelestinaTheme.inputBorder
 
         GlassSurface {
             id: pathGlass
@@ -171,7 +171,7 @@ Item {
                         radius: CelestinaTheme.radiusSm
                         color: crumbMouse.containsMouse
                                ? CelestinaTheme.surfaceHover
-                               : "transparent"
+                               : CelestinaTheme.clear
 
                         Text {
                             id: crumbText
@@ -197,13 +197,13 @@ Item {
             }
         }
 
-        TextField {
+        CelestinaTextField {
             id: locationField
 
             anchors.fill: parent
             visible: pathPill.editing
-            leftPadding: 13
-            rightPadding: 13
+            leftPadding: CelestinaTheme.compTextFieldPaddingHorizontal
+            rightPadding: CelestinaTheme.compTextFieldPaddingHorizontal
             color: CelestinaTheme.text
             selectionColor: CelestinaTheme.accentPressed
             selectedTextColor: CelestinaTheme.text
@@ -242,7 +242,7 @@ Item {
         }
     }
 
-    TextField {
+    CelestinaTextField {
         id: searchField
         // Flexes with the interface text scale — the field grows and the
         // breadcrumb (which fills the rest) yields space — so a larger
@@ -259,8 +259,8 @@ Item {
         selectedTextColor: CelestinaTheme.text
         font.family: CelestinaTheme.sansFamily
         font.pixelSize: Math.round(CelestinaTheme.fontBody * root.hostWindow.interfaceTextScale)
-        leftPadding: 13
-        rightPadding: 13
+        leftPadding: CelestinaTheme.compTextFieldPaddingHorizontal
+        rightPadding: CelestinaTheme.compTextFieldPaddingHorizontal
         // Typing always searches — a recursive walk grouped into "in this
         // folder" and "in subfolders"; clearing it exits search.
         onTextEdited: searchDebounce.restart()
@@ -274,9 +274,9 @@ Item {
                 color: searchField.activeFocus
                        ? CelestinaTheme.inputFillFocus
                        : CelestinaTheme.inputFill
-                border.width: 1
+                border.width: CelestinaTheme.borderHairline
                 border.color: root.floating
-                              ? "transparent"
+                              ? CelestinaTheme.clear
                               : searchField.activeFocus
                                 ? CelestinaTheme.focusRing
                                 : CelestinaTheme.inputBorder

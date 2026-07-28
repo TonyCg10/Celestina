@@ -7,6 +7,10 @@ use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
 const QML_FILES: &[&str] = &[
     "qml/CelestinaButton.qml",
     "qml/CelestinaSurface.qml",
+    "qml/CelestinaBackdrop.qml",
+    "qml/CelestinaIcon.qml",
+    "qml/CelestinaIconButton.qml",
+    "qml/CelestinaSectionLabel.qml",
     "qml/CelestinaSwitch.qml",
     "qml/GlassSurface.qml",
     "qml/ListSection.qml",
@@ -39,11 +43,11 @@ fn main() {
     // Naming any rerun-if-changed stops cargo watching the whole package, so
     // every watched QML must be listed explicitly or an edit compiles "fine"
     // without reaching the binary.
-    for qml in QML_FILES
-        .iter()
-        .copied()
-        .chain(["qml/CelestinaTheme.qml", "qml/fonts.qrc", "qml/icons.qrc"])
-    {
+    for qml in QML_FILES.iter().copied().chain([
+        "qml/CelestinaTheme.qml",
+        "qml/fonts.qrc",
+        "qml/icons.qrc",
+    ]) {
         println!("cargo::rerun-if-changed={qml}");
     }
 

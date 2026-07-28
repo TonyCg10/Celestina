@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Window
 import QtQuick.Controls
-import QtQuick.Controls.impl
 import org.celestina.siderita 1.0
 import org.celestina.siderita.internal 1.0
 
@@ -122,10 +121,10 @@ Window {
             controller.startAt(startFolder)
         else
             controller.start()
-        nameField.text = suggestedName
+        pickerChrome.nameText = suggestedName
         // The caller's first filter is the one it expects to be active.
         if (filterRows.length > 1) {
-            filterCombo.currentIndex = 1
+            pickerChrome.filterIndex = 1
             applyFilter(1)
         }
         entryGrid.forceActiveFocus()
@@ -136,7 +135,7 @@ Window {
     // the current folder; an open answers with the selection.
     function chosenPaths() {
         if (saving) {
-            const name = nameField.text.trim()
+            const name = pickerChrome.nameText.trim()
             if (name.length === 0 || name.indexOf("/") >= 0)
                 return []
             return [controller.currentPath + "/" + name]
@@ -297,7 +296,7 @@ Window {
         } else if (!directory && !saving) {
             picker.answer([path])
         } else if (saving) {
-            nameField.text = controller.entryNames[index]
+            pickerChrome.nameText = controller.entryNames[index]
         }
     }
 
@@ -463,7 +462,7 @@ Window {
                     height: picker.bandH
                     radius: CelestinaTheme.radiusSm
                     color: CelestinaTheme.surfaceSelected
-                    border.width: 1
+                    border.width: CelestinaTheme.borderHairline
                     border.color: CelestinaTheme.dividerStrong
                 }
 
@@ -494,8 +493,9 @@ Window {
                         radius: CelestinaTheme.radiusSm
                         color: cell.chosen ? CelestinaTheme.surfaceSelected
                                : cellMouse.containsMouse ? CelestinaTheme.surfaceHover
-                               : "transparent"
-                        border.width: cell.chosen ? 1 : 0
+                               : CelestinaTheme.clear
+                        border.width: cell.chosen
+                                      ? CelestinaTheme.borderHairline : 0
                         border.color: CelestinaTheme.dividerStrong
                         Behavior on color {
                             ColorAnimation { duration: CelestinaTheme.motionFast }
@@ -510,19 +510,19 @@ Window {
                         height: width
                         radius: CelestinaTheme.radiusSm
                         clip: true
-                        opacity: cell.selectable ? 1 : 0.4
+                        opacity: cell.selectable
+                                 ? 1 : CelestinaTheme.unavailableContentOpacity
                         color: cell.isDirectory ? CelestinaTheme.glyphDirectory
                                                 : CelestinaTheme.glyphFile
 
-                        IconImage {
+                        CelestinaIcon {
                             anchors.centerIn: parent
                             visible: !preview.ready
                             width: Math.round(54 * picker.iconScale)
                             height: width
                             sourceSize: Qt.size(width, width)
                             name: cell.isDirectory ? "folder" : "text-x-generic"
-                            source: CelestinaTheme.fallbackIcon(
-                                        cell.isDirectory ? "folder" : "file")
+                            fallbackName: cell.isDirectory ? "folder" : "file"
                         }
 
                         // La caché compartida de freedesktop, la misma que lee
@@ -628,7 +628,7 @@ Window {
                                 picker.anchorIndex = cell.index
                             }
                             if (picker.saving && !cell.isDirectory)
-                                nameField.text = cell.name
+                                pickerChrome.nameText = cell.name
                         }
                         onDoubleClicked: picker.activate(cell.index)
                     }
@@ -636,227 +636,23 @@ Window {
             }
         }
 
-        // ── Las pastillas de arriba ──────────────────────────────────────
-        // Quién pregunta y dónde estamos, en la misma pastilla: son la misma
-        // frase — "esta aplicación te está pidiendo algo de aquí".
-        Item {
-            id: topPills
-            x: contentBox.x + 12
-            y: contentBox.y + 12
-            width: contentBox.width - 24
-            height: picker.saving ? 100 : 54
-
-            GlassPill {
-                id: pathPill
-                backdrop: entryGrid
-                floating: picker.gridScrolls
-                width: parent.width - navRow.width - 12
-                height: 54
-                radius: CelestinaTheme.radiusSm
-
-                Text {
-                    id: askedBy
-                    x: 14
-                    y: 9
-                    width: parent.width - 28
-                    text: picker.appId.length > 0
-                          ? "Para " + picker.appId : "Solicitado por otra aplicación"
-                    color: CelestinaTheme.textMuted
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontMini
-                    elide: Text.ElideRight
-                }
-
-                Text {
-                    x: 14
-                    y: askedBy.y + askedBy.height + 2
-                    width: parent.width - 28
-                    text: controller.currentPath
-                    color: CelestinaTheme.text
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontBody
-                    elide: Text.ElideMiddle
-                }
-            }
-
-            Row {
-                id: navRow
-                anchors.right: parent.right
-                y: 10
-                spacing: 8
-
-                PickerButton {
-                    text: "↑"
-                    help: "Subir"
-                    enabled: controller.canGoUp && !controller.loading
-                    onClicked: controller.goUp()
-                }
-                PickerButton {
-                    text: "⌂"
-                    help: "Inicio"
-                    onClicked: controller.goHome()
-                }
-            }
-
-            // Guardar: el nombre va debajo, en su propia pastilla.
-            TextField {
-                id: nameField
-                visible: picker.saving
-                width: parent.width
-                height: 38
-                y: 62
-                placeholderText: "Nombre del archivo"
-                color: CelestinaTheme.text
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontBody
-                leftPadding: 14
-                rightPadding: 14
-                onAccepted: if (picker.canAccept) picker.answer(picker.chosenPaths())
-                background: GlassPill {
-                    radius: CelestinaTheme.radiusSm
-                    backdrop: entryGrid
-                    floating: picker.gridScrolls
-                    fill: CelestinaTheme.inputFill
-                    border.width: 1
-                    border.color: nameField.activeFocus ? CelestinaTheme.focusRing
-                                                        : "transparent"
-                }
-            }
-        }
-
-        // ── Las pastillas de abajo ───────────────────────────────────────
-        // Las dos únicas acciones que un diálogo ajeno puede ofrecer, y el
-        // filtro de tipos que el que pregunta pidió.
-        Item {
-            id: bottomPills
-            x: contentBox.x + 12
-            width: contentBox.width - 24
-            height: 38
-            y: contentBox.y + contentBox.height - height - 12
-
-            ComboBox {
-                id: filterCombo
-                visible: picker.filterRows.length > 1
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                width: Math.min(300, parent.width * 0.4)
-                height: 34
-                model: picker.filterRows
-                textRole: "label"
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontRowSecondary
-                onActivated: picker.applyFilter(currentIndex)
-
-                contentItem: Text {
-                    leftPadding: 12
-                    rightPadding: filterCombo.indicator.width + 6
-                    text: filterCombo.displayText
-                    color: CelestinaTheme.text
-                    font: filterCombo.font
-                    verticalAlignment: Text.AlignVCenter
-                    elide: Text.ElideRight
-                }
-
-                background: GlassPill {
-                    backdrop: entryGrid
-                    floating: picker.gridScrolls
-                    fill: filterCombo.hovered ? CelestinaTheme.surfaceHover
-                                              : CelestinaTheme.controlFill
-                }
-            }
-
-            Text {
-                anchors.left: filterCombo.visible ? filterCombo.right : parent.left
-                anchors.leftMargin: filterCombo.visible ? 14 : 4
-                anchors.verticalCenter: parent.verticalCenter
-                text: picker.multiple && picker.chosenCount > 1
-                      ? picker.chosenCount + " seleccionados" : ""
-                color: CelestinaTheme.textMuted
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontCaption
-            }
-
-            Row {
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 10
-
-                PickerButton {
-                    text: "Cancelar"
-                    onClicked: picker.cancel()
-                }
-                PickerButton {
-                    text: picker.acceptText
-                    primary: true
-                    enabled: picker.canAccept
-                    onClicked: picker.answer(picker.chosenPaths())
-                }
-            }
-        }
-    }
-
-    // Especialización de CelestinaButton para el picker, a propósito local: su
-    // fondo es de cristal (flota sobre la rejilla, no sobre una banda), y el
-    // deshabilitado conserva un acento tenue para que "Abrir" siga leyéndose
-    // como la acción principal aunque no se pueda pulsar todavía. Esos dos
-    // rasgos no los tiene el botón sólido compartido.
-    component PickerButton: Button {
-        id: control
-
-        property bool primary: false
-        property string help: ""
-
-        // El acento, rebajado: la acción principal sigue siendo reconocible
-        // cuando todavía no se puede pulsar. Un botón apagado no debería
-        // confundirse con el de al lado — "Abrir" y "Cancelar" no son lo mismo
-        // aunque los dos estén quietos.
-        readonly property color accentSoft: Qt.rgba(
-                CelestinaTheme.accent.r, CelestinaTheme.accent.g,
-                CelestinaTheme.accent.b, 0.20)
-        readonly property color accentText: Qt.rgba(
-                CelestinaTheme.accent.r, CelestinaTheme.accent.g,
-                CelestinaTheme.accent.b, 0.75)
-
-        hoverEnabled: true
-        implicitHeight: 34
-        leftPadding: 18
-        rightPadding: 18
-        font.family: CelestinaTheme.sansFamily
-        font.pixelSize: CelestinaTheme.fontRowSecondary
-        ToolTip.visible: help.length > 0 && hovered
-        ToolTip.text: help
-
-        contentItem: Text {
-            text: control.text
-            font: control.font
-            color: control.primary
-                   ? (control.enabled ? CelestinaTheme.accentInk : control.accentText)
-                   : (control.enabled ? CelestinaTheme.text : CelestinaTheme.textMuted)
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-        }
-
-        // Cristal también aquí: los botones flotan sobre la rejilla como los
-        // de la ventana principal, no sobre una banda que no existe.
-        background: GlassPill {
-            backdrop: entryGrid
-            floating: picker.gridScrolls
-            fill: control.primary
-                  ? (!control.enabled ? control.accentSoft
-                     : control.down ? Qt.darker(CelestinaTheme.accent, 1.18)
-                     : control.hovered ? Qt.darker(CelestinaTheme.accent, 1.08)
-                     : CelestinaTheme.accent)
-                  : (!control.enabled ? CelestinaTheme.controlFill
-                     : control.down ? CelestinaTheme.surfaceStrong
-                     : control.hovered ? CelestinaTheme.surfaceHover
-                     : CelestinaTheme.controlFill)
-            // El borde dice de quién es el turno: el acento marca la acción
-            // principal aunque esté esperando, y el foco de teclado se ve.
-            border.width: control.activeFocus ? 2
-                          : (control.primary && !control.enabled) || !control.primary ? 1 : 0
-            border.color: control.activeFocus ? CelestinaTheme.focusRing
-                          : control.primary ? control.accentText
-                          : CelestinaTheme.divider
+        PickerChrome {
+            id: pickerChrome
+            anchors.fill: parent
+            pickerController: controller
+            contentSurface: contentBox
+            backdropView: entryGrid
+            requesterId: picker.appId
+            saving: picker.saving
+            gridScrolls: picker.gridScrolls
+            filterRows: picker.filterRows
+            multiple: picker.multiple
+            chosenCount: picker.chosenCount
+            acceptText: picker.acceptText
+            canAccept: picker.canAccept
+            onFilterActivated: function(index) { picker.applyFilter(index) }
+            onAcceptRequested: picker.answer(picker.chosenPaths())
+            onCancelRequested: picker.cancel()
         }
     }
 }

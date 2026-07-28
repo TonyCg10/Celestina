@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls.impl
 import org.celestina.siderita 1.0
 
 // ─── FavoriteBadge ────────────────────────────────────────────────────────────
@@ -30,11 +29,11 @@ Item {
     // The bundled star, not the icon theme's: this is Siderita's own chrome
     // (like the play badge), so it should look the same under any theme —
     // the "don't tint" rule is about an entry's own icon, not about a badge.
-    IconImage {
+    CelestinaIcon {
         anchors.centerIn: parent
         width: Math.round(parent.width * 0.72)
         height: width
-        source: CelestinaTheme.fallbackIcon("star")
-        color: CelestinaTheme.favorite
+        fallbackName: "star"
+        tone: CelestinaIcon.Favorite
     }
 }

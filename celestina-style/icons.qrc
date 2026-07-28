@@ -16,6 +16,13 @@
     <file alias="star-outline.svg">icons/star-outline.svg</file>
     <file alias="phone.svg">icons/phone.svg</file>
     <file alias="battery-charging.svg">icons/battery-charging.svg</file>
+    <file alias="settings.svg">icons/settings.svg</file>
+    <file alias="music.svg">icons/music.svg</file>
+    <file alias="key.svg">icons/key.svg</file>
+    <file alias="media-skip-back.svg">icons/media-skip-back.svg</file>
+    <file alias="media-play.svg">icons/media-play.svg</file>
+    <file alias="media-pause.svg">icons/media-pause.svg</file>
+    <file alias="media-skip-forward.svg">icons/media-skip-forward.svg</file>
     <file alias="glass-noise.png">icons/glass-noise.png</file>
   </qresource>
 </RCC>

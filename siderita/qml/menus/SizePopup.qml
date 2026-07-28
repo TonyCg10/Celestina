@@ -15,7 +15,7 @@ Popup {
     property Item backdrop    // mainPanel: la vista tras el cristal
     property var hostWindow   // la ventana: las seis escalas + persistSizing
 
-    padding: 16
+    padding: CelestinaTheme.spaceLg
     // Non-modal so the content still scrolls (to watch items resize) while
     // sizes are adjusted; a click outside still closes it via
     // CloseOnPressOutside.
@@ -34,13 +34,8 @@ Popup {
     contentItem: Column {
         spacing: 6
 
-        Text {
+        CelestinaSectionLabel {
             text: "ICONOS"
-            color: CelestinaTheme.textMuted
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontMini
-            font.letterSpacing: 1.4
-            font.weight: CelestinaTheme.weightDemiBold
         }
         SizeRow {
             label: "Contenido"
@@ -70,13 +65,8 @@ Popup {
 
         Item { width: 1; height: 4 }
 
-        Text {
+        CelestinaSectionLabel {
             text: "TEXTO"
-            color: CelestinaTheme.textMuted
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontMini
-            font.letterSpacing: 1.4
-            font.weight: CelestinaTheme.weightDemiBold
         }
         SizeRow {
             label: "Contenido"

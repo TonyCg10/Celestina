@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.impl
 import QtQuick.Layouts
 import org.celestina.siderita 1.0
 
@@ -11,26 +10,14 @@ import org.celestina.siderita 1.0
     // batch or with a file already in the folder — is marked and the rename
     // refuses to run. The domain refuses to overwrite anyway; this just
     // means the user finds out before, not after.
-Rectangle {
+CelestinaModalLayer {
     id: batchRename
     property var controller
     property var owner
     property var backdrop   // mainPanel: el fondo que difumina el cristal
     anchors.fill: parent
     z: 61
-    property bool shown: false
-    // Fades rather than pops. Opacity only: a scale transform on a
-    // glass surface desyncs its backdrop sampling (see a995619), so the
-    // motion here never touches geometry.
-    visible: opacity > 0.01
-    opacity: shown ? 1 : 0
-    Behavior on opacity {
-        NumberAnimation {
-            duration: CelestinaTheme.motionFast
-            easing.type: CelestinaTheme.easeStandard
-        }
-    }
-    color: CelestinaTheme.scrim
+    onDismissRequested: batchRename.dismiss()
 
     property var targets: []          // [{path, name}]
 
@@ -131,18 +118,6 @@ Rectangle {
             controller.renamePaths(paths, names)
         batchRename.dismiss()
     }
-
-    MouseArea {
-        anchors.fill: parent
-        onClicked: batchRename.dismiss()
-    }
-    Keys.onPressed: function(event) {
-        if (event.key === Qt.Key_Escape) {
-            batchRename.dismiss()
-            event.accepted = true
-        }
-    }
-    focus: batchRename.shown
 
     GlassCard {
         anchors.centerIn: parent
@@ -286,7 +261,7 @@ Rectangle {
             }
             CelestinaButton {
                 text: "Renombrar"
-                primary: true
+                role: CelestinaButton.Primary
                 enabled: !batchRename.anyClash && batchRename.anyChange
                 onClicked: batchRename.confirm()
             }

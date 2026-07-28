@@ -78,15 +78,21 @@ ellos — escribir el contrato no es empezar el proyecto.
   clics (9e19b6d). Usa nombres distintos o un alias del host
   (`property alias viewTopBar: topBar`). `siderita/scripts/smoke.sh` y la CI
   cazan el patrón.
-- Deuda nombrada: `siderita/qml/views/FolderView.qml` (~1,6k) y
-  `siderita/qml/views/Sidebar.qml` (~1,3k) siguen sobre el techo (~800). Prohibido
-  crecerlos; al tocarlos, extrae primero la pieza que vas a tocar.
+- Las vistas compuestas de Siderita se mantienen bajo el techo aproximado de
+  800 líneas: `FolderView` coordina y delega lista, cuadrícula, atajos, estado,
+  acciones y chrome; `Sidebar` coordina navegación y delega filas guardadas y
+  menús; `PickerWindow` delega sus pastillas a `PickerChrome`. Una pieza nueva
+  entra en el componente de su responsabilidad, no vuelve a inflar el host.
 
 ## Estilo y UI — cómo no volver a fabricar un botón ilegible
 
-- **Prohibido escribir colores en QML de apps** (ni hex ni nombres). Todo color
-  sale de `CelestinaTheme`. Única excepción documentada: el relleno-máscara
+- **Prohibido escribir colores en QML de apps o componentes** (ni hex ni
+  nombres). Todo color sale de `CelestinaTheme`, incluido el relleno-máscara
   interno de `GlassSurface`.
+- El acento tiene **una sola semilla**, `ref.accent`. `accentLink`,
+  `accentHover`, `accentPressed`, foco, selecciones, badges y estados disabled
+  se derivan de ella dentro del tema. Nunca se usa `Qt.darker`/`Qt.rgba` en un
+  consumidor para inventar otra variante.
 - Los tokens funcionan **en pares superficie → tinta (foreground)**. El acento
   es **azul One UI `#387aff`**, solo para elementos interactivos/activos
   (seleccionado, checked, enlaces, botón primario); nunca como blanco decorativo.
@@ -95,15 +101,16 @@ ellos — escribir el contrato no es empezar el proyecto.
   - `canvas` / `card` / `elevated` → su tinta `canvasInk` / `cardInk` /
     `elevatedInk` (todas ≈ `text`); `surface*` / `controlFill` / `inputFill` /
     `badgeFill` / cristal (`glassTint`) → `text` (secundario: `textMuted`)
-  - `accent` → **`accentInk`** (así lo hace `CelestinaButton` primary; el viejo
+  - `accent` → **`accentInk`** (así lo hace `CelestinaButton.Primary`; el viejo
     par `accent → canvas` MURIÓ con el acento blanco)
   - `danger`/`success`/`warning` como fondo sólido → `dangerInk`/`successInk`/
     `warningInk`; banner `dangerFill` → `dangerFillInk`
   - Nomenclatura: el contrato (DESIGN §6.9) llama a estos pares `on*`
     (`onAccent`…), pero QML reserva el espacio `on<Mayúscula>` para manejadores
     de señal, así que viajan como `<superficie>Ink` (`accentInk` = `onAccent`).
-- **No reconstruir controles.** Un botón ES `CelestinaButton`
-  (`primary`/`destructive`), un campo ES `CelestinaTextField`, una superficie
+- **No reconstruir controles.** Un botón ES `CelestinaButton` con un `role`
+  cerrado; si sólo lleva icono es `CelestinaIconButton`, un icono es
+  `CelestinaIcon`, un campo es `CelestinaTextField`, una superficie
   flotante ES `GlassSurface`/`GlassCard`, un menú ES `GlassContextMenu` +
   `GlassMenuItem`. Si un control existente casi sirve, se extiende el
   compartido, no se clona en la app.
@@ -120,15 +127,21 @@ ellos — escribir el contrato no es empezar el proyecto.
   instancia `ColorScheme` nueva (un `flip` de `scheme:`), jamás un intercambio de
   comentarios. Los tres niveles: `ref.*` (primitivas, las apps nunca las tocan) →
   esquema (roles) → tokens `sys` planos que consumen las apps.
-- `CelestinaTheme.fallbackIcon()` solo funciona si la app registra
-  `qml/icons.qrc` en su `build.rs` (Siderita lo hace; Magnetita no — no usarlo
-  allí sin registrarlo antes).
+- `CelestinaTheme.fallbackIcon()` usa los SVG por ruta en el módulo fuente y
+  `qml/icons.qrc` en binarios; Siderita y Magnetita registran el qrc. Todo
+  consumidor compilado nuevo debe registrarlo también en su `build.rs`.
 - Componente nuevo en `celestina-style`: los ya especificados en DESIGN §6.8
   aterrizan con su **primer consumidor real** (precedente: `CelestinaSwitch` y
   `ListSection` con los ajustes de Magnetita); cualquier otro exige ≥2 apps —
   mientras, vive en la app (precedente: `GlassPill` es local de Siderita).
-- Métricas y movimiento también salen de tokens: `space*`, `radius*`,
-  `controlHeight*`, `motion*`, `ease*`. Nada de números mágicos de layout.
+- La anatomía visual también sale de tokens: `radius*`, `border*`, `font*`,
+  opacidades de estado, `motion*`, `ease*` y métricas `comp*` (padding de botón,
+  switch, checkbox, track, handle…). Las coordenadas, anchos responsivos y
+  composición propios de una pantalla permanecen locales; no se convierten en
+  tokens sin reutilización demostrada.
+- `bash celestina-style/scripts/check-style-contract.sh` protege esa frontera:
+  falla ante colores, transformaciones, radios, bordes, tipografía, opacidad o
+  movimiento visual hardcodeados fuera de `CelestinaTheme`. La CI lo ejecuta.
 - Idiomas: la UI visible en **español**; docs, commits e identificadores en
   inglés; los comentarios siguen el idioma del archivo donde están.
 

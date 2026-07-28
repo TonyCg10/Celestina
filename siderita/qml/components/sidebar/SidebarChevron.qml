@@ -25,7 +25,7 @@ Text {
     Behavior on rotation {
         NumberAnimation {
             duration: CelestinaTheme.motionFast
-            easing.type: Easing.OutCubic
+            easing.type: CelestinaTheme.easeStandard
         }
     }
 }

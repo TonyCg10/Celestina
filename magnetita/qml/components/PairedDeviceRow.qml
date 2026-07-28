@@ -13,9 +13,9 @@ Item {
 
     Rectangle {
         id: dot
-        width: 8
-        height: 8
-        radius: 4
+        width: CelestinaTheme.compStatusIndicatorSize
+        height: CelestinaTheme.compStatusIndicatorSize
+        radius: height / 2
         color: root.online ? CelestinaTheme.success : CelestinaTheme.textMuted
         anchors.left: parent.left
         anchors.leftMargin: 16
