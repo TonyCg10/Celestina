@@ -32,6 +32,29 @@ jobs:
             fi
           done
           exit $fallos
+      # El auto-binding `x: x` (la propiedad inyectada sombrea al id homónimo
+      # y queda undefined) es legal para el motor y para qmllint — se caza por
+      # patrón. Los literales JS (`append({clave: clave})`) viven dentro de
+      # paréntesis; un binding QML real está a profundidad 0.
+      - name: Sin auto-bindings 'x - x' en QML
+        run: |
+          hallazgos=$(find siderita/qml magnetita/qml celestina/qml celestina-style \
+            -name '*.qml' -exec gawk '
+              FNR == 1 { depth = 0 }
+              { linea = $0; sub(/\/\/.*/, "", linea) }
+              depth == 0 \
+                && match(linea, /^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*):[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*$/, m) \
+                && m[1] == m[2] && m[1] != "id" {
+                  printf "%s:%d: %s\n", FILENAME, FNR, $0
+              }
+              { depth += gsub(/\(/, "(", linea) - gsub(/\)/, ")", linea)
+                if (depth < 0) depth = 0 }
+            ' {} +)
+          if [ -n "$hallazgos" ]; then
+            echo "$hallazgos"
+            echo "::error::auto-binding 'x: x' — la propiedad sombrea al id; renombra o usa un alias"
+            exit 1
+          fi
 
   celestina-rs:
     runs-on: ubuntu-latest
