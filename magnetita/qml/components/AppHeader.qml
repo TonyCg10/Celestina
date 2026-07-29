@@ -47,7 +47,7 @@ Item {
         density: CelestinaButton.Regular
         iconName: root.settingsOpen ? "go-previous" : "preferences-system"
         fallbackIcon: root.settingsOpen ? "go-previous" : "settings"
-        helpText: root.settingsOpen ? "Volver" : "Ajustes"
+        Accessible.name: root.settingsOpen ? "Volver" : "Ajustes"
         onClicked: root.toggleRequested()
     }
 }

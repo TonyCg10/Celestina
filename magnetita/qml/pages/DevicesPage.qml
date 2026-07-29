@@ -47,6 +47,8 @@ Column {
                              ? root.devices.deviceFingerprints[index] : ""
                 batteryText: index < root.devices.deviceBattery.length
                              ? root.devices.deviceBattery[index] : ""
+                charging: index < root.devices.deviceCharging.length
+                          && root.devices.deviceCharging[index] === "true"
             }
         }
     }

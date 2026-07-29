@@ -35,10 +35,15 @@ pub struct Device {
     pub media_player: String,
     pub media_title: String,
     pub media_artist: String,
+    pub media_album: String,
     pub media_playing: bool,
     pub media_can_pause: bool,
     pub media_can_next: bool,
     pub media_can_previous: bool,
+    pub media_can_seek: bool,
+    pub media_length: i64,
+    pub media_position: i64,
+    pub media_artwork_url: String,
 }
 
 /// A paired device from the trust store, for the Settings surface — includes
@@ -225,10 +230,15 @@ fn parse_device(dict: &HashMap<String, OwnedValue>) -> Device {
         media_player: str_field(dict, "mediaPlayer"),
         media_title: str_field(dict, "mediaTitle"),
         media_artist: str_field(dict, "mediaArtist"),
+        media_album: str_field(dict, "mediaAlbum"),
         media_playing: bool_field(dict, "mediaPlaying"),
         media_can_pause: bool_field(dict, "mediaCanPause"),
         media_can_next: bool_field(dict, "mediaCanNext"),
         media_can_previous: bool_field(dict, "mediaCanPrevious"),
+        media_can_seek: bool_field(dict, "mediaCanSeek"),
+        media_length: i64_field_or(dict, "mediaLength", -1),
+        media_position: i64_field_or(dict, "mediaPosition", -1),
+        media_artwork_url: str_field(dict, "mediaArtworkUrl"),
     }
 }
 
@@ -263,9 +273,13 @@ fn bool_field(dict: &HashMap<String, OwnedValue>, key: &str) -> bool {
 }
 
 fn i64_field(dict: &HashMap<String, OwnedValue>, key: &str) -> i64 {
+    i64_field_or(dict, key, 0)
+}
+
+fn i64_field_or(dict: &HashMap<String, OwnedValue>, key: &str, default: i64) -> i64 {
     dict.get(key)
         .and_then(|value| i64::try_from(value.clone()).ok())
-        .unwrap_or(0)
+        .unwrap_or(default)
 }
 
 /// A D-Bus `i` (int32) field — the battery is sent as one, so `i64::try_from`
@@ -274,4 +288,69 @@ fn i32_field(dict: &HashMap<String, OwnedValue>, key: &str) -> i32 {
     dict.get(key)
         .and_then(|value| i32::try_from(value.clone()).ok())
         .unwrap_or(-1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_device;
+    use std::collections::HashMap;
+    use zbus::zvariant::{OwnedValue, Value};
+
+    #[test]
+    fn a_new_media_snapshot_parses_artwork_and_progress() {
+        let fields = [
+            ("mediaAlbum", Value::from("Lista")),
+            ("mediaCanSeek", Value::from(true)),
+            ("mediaLength", Value::from(120_000_i64)),
+            ("mediaPosition", Value::from(30_000_i64)),
+            (
+                "mediaArtworkUrl",
+                Value::from("file:///run/user/1000/cover.img"),
+            ),
+        ];
+        let dict: HashMap<String, OwnedValue> = fields
+            .into_iter()
+            .map(|(key, value)| {
+                (
+                    key.to_owned(),
+                    OwnedValue::try_from(value).expect("basic test value converts"),
+                )
+            })
+            .collect();
+        let device = parse_device(&dict);
+        assert_eq!(device.media_album, "Lista");
+        assert!(device.media_can_seek);
+        assert_eq!(device.media_length, 120_000);
+        assert_eq!(device.media_position, 30_000);
+        assert_eq!(device.media_artwork_url, "file:///run/user/1000/cover.img");
+    }
+
+    #[test]
+    fn an_older_daemon_without_progress_keys_stays_compatible() {
+        let device = parse_device(&HashMap::new());
+        assert_eq!(device.media_length, -1);
+        assert_eq!(device.media_position, -1);
+        assert!(device.media_artwork_url.is_empty());
+    }
+
+    #[test]
+    fn a_battery_snapshot_preserves_charging_state() {
+        let fields = [
+            ("battery", Value::from(47_i32)),
+            ("charging", Value::from(true)),
+        ];
+        let dict: HashMap<String, OwnedValue> = fields
+            .into_iter()
+            .map(|(key, value)| {
+                (
+                    key.to_owned(),
+                    OwnedValue::try_from(value).expect("basic test value converts"),
+                )
+            })
+            .collect();
+
+        let device = parse_device(&dict);
+        assert_eq!(device.battery, 47);
+        assert!(device.charging);
+    }
 }

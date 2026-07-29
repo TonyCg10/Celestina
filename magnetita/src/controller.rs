@@ -31,15 +31,24 @@ pub mod qobject {
         #[qproperty(QStringList, device_fingerprints)]
         // Formatted battery per device ("58 %", "58 % ⚡", or "" if unknown).
         #[qproperty(QStringList, device_battery)]
+        // Per-device charging flag ("true"/"false"), parallel to battery.
+        #[qproperty(QStringList, device_charging)]
         // Per-device pairing flag ("true"/"false"), parallel to the lists above.
         #[qproperty(QStringList, device_paired)]
         // The phone's now-playing line ("Artista — Título"), "" when nothing is
         // playing (which hides the media card), and parallel "true"/"false"
         // flags for the play/pause state and whether next/prev are available.
         #[qproperty(QStringList, device_media)]
+        #[qproperty(QStringList, device_media_titles)]
+        #[qproperty(QStringList, device_media_artists)]
+        #[qproperty(QStringList, device_media_albums)]
+        #[qproperty(QStringList, device_media_artwork)]
+        #[qproperty(QStringList, device_media_lengths)]
+        #[qproperty(QStringList, device_media_positions)]
         #[qproperty(QStringList, device_media_playing)]
         #[qproperty(QStringList, device_media_next)]
         #[qproperty(QStringList, device_media_previous)]
+        #[qproperty(QStringList, device_media_seek)]
         // The connection log — newest first — with a parallel failure flag
         // ("true"/"false") for red styling.
         #[qproperty(QStringList, log_lines)]
@@ -110,11 +119,19 @@ pub struct DevicesModelRust {
     device_states: QStringList,
     device_fingerprints: QStringList,
     device_battery: QStringList,
+    device_charging: QStringList,
     device_paired: QStringList,
     device_media: QStringList,
+    device_media_titles: QStringList,
+    device_media_artists: QStringList,
+    device_media_albums: QStringList,
+    device_media_artwork: QStringList,
+    device_media_lengths: QStringList,
+    device_media_positions: QStringList,
     device_media_playing: QStringList,
     device_media_next: QStringList,
     device_media_previous: QStringList,
+    device_media_seek: QStringList,
     log_lines: QStringList,
     log_failures: QStringList,
     paired_names: QStringList,
@@ -173,9 +190,37 @@ impl qobject::DevicesModel {
             .iter()
             .map(|device| QString::from(battery_label(device).as_str()))
             .collect();
+        let charging: QStringList = devices
+            .iter()
+            .map(|device| QString::from(flag(device.charging)))
+            .collect();
         let media: QStringList = devices
             .iter()
             .map(|device| QString::from(media_label(device).as_str()))
+            .collect();
+        let media_titles: QStringList = devices
+            .iter()
+            .map(|device| QString::from(device.media_title.as_str()))
+            .collect();
+        let media_artists: QStringList = devices
+            .iter()
+            .map(|device| QString::from(device.media_artist.as_str()))
+            .collect();
+        let media_albums: QStringList = devices
+            .iter()
+            .map(|device| QString::from(device.media_album.as_str()))
+            .collect();
+        let media_artwork: QStringList = devices
+            .iter()
+            .map(|device| QString::from(device.media_artwork_url.as_str()))
+            .collect();
+        let media_lengths: QStringList = devices
+            .iter()
+            .map(|device| QString::from(device.media_length.to_string().as_str()))
+            .collect();
+        let media_positions: QStringList = devices
+            .iter()
+            .map(|device| QString::from(device.media_position.to_string().as_str()))
             .collect();
         let media_playing: QStringList = devices
             .iter()
@@ -189,6 +234,10 @@ impl qobject::DevicesModel {
             .iter()
             .map(|device| QString::from(flag(device.media_can_previous)))
             .collect();
+        let media_seek: QStringList = devices
+            .iter()
+            .map(|device| QString::from(flag(device.media_can_seek)))
+            .collect();
 
         self.as_mut().rust_mut().get_mut().devices = devices;
         self.as_mut().set_device_names(names);
@@ -197,11 +246,19 @@ impl qobject::DevicesModel {
         self.as_mut().set_device_states(states);
         self.as_mut().set_device_fingerprints(fingerprints);
         self.as_mut().set_device_battery(battery);
+        self.as_mut().set_device_charging(charging);
         self.as_mut().set_device_paired(paired);
         self.as_mut().set_device_media(media);
+        self.as_mut().set_device_media_titles(media_titles);
+        self.as_mut().set_device_media_artists(media_artists);
+        self.as_mut().set_device_media_albums(media_albums);
+        self.as_mut().set_device_media_artwork(media_artwork);
+        self.as_mut().set_device_media_lengths(media_lengths);
+        self.as_mut().set_device_media_positions(media_positions);
         self.as_mut().set_device_media_playing(media_playing);
         self.as_mut().set_device_media_next(media_next);
         self.as_mut().set_device_media_previous(media_previous);
+        self.as_mut().set_device_media_seek(media_seek);
 
         self.as_mut().reload_log();
         self.as_mut().start_watch();

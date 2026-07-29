@@ -12,7 +12,7 @@
 > app** consumes to pair/unpair with the verification key and show the connection
 > log. The daily plugins — **battery, notifications, file share, find-my-phone,
 > clipboard** (both ways) — mirror through freedesktop standards, all verified
-> live. ~100 offline tests, no tokio (the transport is blocking `std::net`;
+> live. The offline workspace suite stays green, with no tokio (the transport is blocking `std::net`;
 > zbus runs its own small executor for D-Bus), no cmake/aws-lc-rs, `unsafe`
 > forbidden. CP4 — one suite — is **done**: the phone and its battery surface in
 > the `celestina` panel, Siderita sends files to it, MPRIS media flows both ways,
@@ -25,13 +25,18 @@
 > defeats the invisible-window trick). Magnetita already applies any clipboard the
 > phone pushes — the ceiling is the phone. Reliable auto needs root (Magisk).
 
-**Visual migration (2026-07-28).** The first One UI 8.5 desktop composition is
+**Visual migration (2026-07-29).** The first One UI 8.5 desktop composition is
 live: a large page header, opaque tonal device/activity groups and a tokenized
-expressive media card. The detached connection pill was removed after visual
-review so status remains in the device card. Settings keep the same grouped
-component language. Pairing, mount, ring, unpair, media and
-settings actions still route to the existing D-Bus client; both pages were
-verified in a real Wayland session.
+expressive media card. The card now receives the real phone artwork once and
+uses it as an uncased foreground crop plus a bounded, strongly blurred
+backdrop; live position/duration drive a simple linear progress bar, and the
+device battery badge exposes
+its real charging state with the suite's battery icon. The detached connection pill was removed after
+visual review so status remains in the device card. Settings keep the same
+grouped component language. Pairing, mount, ring, unpair, media and settings
+actions still route to the existing D-Bus client. Both pages and the artwork,
+progress and transport state were verified in a real Wayland session against
+the Galaxy S25 Ultra.
 
 ## Overview
 
@@ -273,9 +278,9 @@ language.
       the daemon's `SendFile` over D-Bus, complementing the browse-the-phone mount
       of CP2. Live-verified: right-click → the file lands on the phone.
 - [x] **Media control (MPRIS)** — playback both ways over `kdeconnect.mpris`.
-      Desktop → phone: `Devices1` consumers such as Siderita's MÓVIL media card
-      receive title, artist, album, artwork and timed progress with ⏮ ⏯ ⏭
-      transport, carried on additive dictionary keys (`mediaTitle`,
+      Desktop → phone: the app's "Ahora suena" card shows the phone's now-playing
+      title, artist, album, artwork and timed progress with ⏮ ⏯ ⏭ transport,
+      carried on the additive `Devices1` dictionary keys (`mediaTitle`,
       `mediaArtist`, `mediaAlbum`, `mediaArtworkUrl`, `mediaLength`,
       `mediaPosition`, `mediaPlaying`, `mediaCan*`) and driven by `MediaAction`.
       Artwork payloads are capped, signature-checked, written atomically and

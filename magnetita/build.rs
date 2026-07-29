@@ -17,6 +17,8 @@ const QML_FILES: &[&str] = &[
     // App composition: Main owns state/navigation; pages compose reusable pieces.
     "qml/components/AppHeader.qml",
     "qml/components/ConnectedDeviceCard.qml",
+    "qml/components/MediaProgress.qml",
+    "qml/components/MediaCard.qml",
     "qml/components/DeviceControls.qml",
     "qml/components/ActivityLog.qml",
     "qml/components/PairedDeviceRow.qml",

@@ -96,13 +96,14 @@ and the packaging.
 
 | Path | Responsibility |
 |---|---|
+| `AGENTS.md` | local agent contract for the thin UI, daemon boundary and verification |
 | `../celestina-rs/crates/magnetita-core` | protocol domain: `NetworkPacket`, identity, capabilities, pairing state machine, plugin bodies — pure, no I/O, no Qt |
 | `../celestina-rs/crates/magnetita-net` | transport: UDP discovery, TCP+TLS link (TOFU cert pinning), payload transfer, trust store |
 | `../celestina-rs/crates/magnetitad` | the headless daemon: device links, the sshfs mount, notifications, MPRIS metadata/artwork, settings, and the `org.celestina.Devices1` service |
 | `src/` | the standalone app's thin CXX-Qt/D-Bus bridge (`controller.rs`) |
 | `qml/Main.qml` | window state and navigation only |
 | `qml/pages/` | Devices and Settings page composition |
-| `qml/components/` | Magnetita-specific presentation pieces; device cards, activity, rows and header |
+| `qml/components/` | Magnetita-specific presentation pieces; device cards, activity, rows and header, plus `MediaCard` and its static `MediaProgress` |
 | `qml/Celestina*.qml`, `qml/Glass*.qml` | canonical `celestina-style` sources consumed as symlinks, never copies |
 | `magnetitad.service`, `org.celestina.Magnetita.desktop` | the daemon's systemd user unit and the app's desktop entry |
 | `scripts/run.sh` | build the app in release + install it to `~/.local` (binary, icon, entry) so the launcher runs the current tree; the daemon is separate |

@@ -12,12 +12,22 @@ launcher, notification daemon, lock screen, auth agent or wallpaper manager — 
 dependable personal shell that grows from demonstrated daily needs.
 
 **Current state.** A C++20/Qt Quick host maps one 40 px top layer-shell surface
-per output (scope `celestina-panel`), reserves each edge and rejects
-keyboard focus; the only visible information is a real minute-aligned clock, with
-no simulated workspaces or tray. Configure, build and QML lint pass; a live Niri
-check mapped exactly one namespaced, non-focus surface per output while Noctalia
-kept running. Geometry, exclusive zone and focus still need direct acceptance
-checks. There is no Rust yet.
+per output (scope `celestina-panel`), reserves each edge and rejects keyboard
+focus. The first read-only S1 slice is live: a separate Rust helper pinned to
+`niri-ipc 26.4.0` reduces Niri's event stream into output-local workspace and
+active-window snapshots; a bounded Qt adapter clears them if the provider is
+unavailable. The panel composes those real workspaces and the active window on
+the left, the minute-aligned clock in the geometric centre and the real phone
+state on the right, with no simulated tray. Configure, build and QML lint pass;
+a real-Niri protocol trace showed the blur request reaching the panel's layer
+surface, but visual comparison correctly rejected that as proof because the
+wallpaper remained sharp. Matching Noctalia's finite surface-local region and
+committing it after capability discovery produced visible blur in a subsequent
+normal `./scripts/run.sh` capture. Noctalia stayed the reversible fallback.
+Geometry,
+exclusive zone and focus still need their complete direct acceptance checks;
+IPC-loss/restart recovery is implemented but not yet accepted by restarting the
+real compositor.
 
 **Session dependency.** The current Niri config starts Noctalia, which still owns
 the launcher (`Mod+Space`), lock/idle/DPMS, its Polkit agent, greeter sync and
@@ -56,10 +66,24 @@ model mutation.
 **Goal:** keep the per-output lifecycle while showing real Niri state from a Rust
 adapter, surviving IPC loss and restart without stale state.
 
-- [ ] Rust adapter observing Niri's event stream (bounded queue, GUI-thread-only model mutation)
-- [ ] Show real workspaces and the focused window
+- [x] Rust adapter observing Niri's event stream (separate-process pipe provides
+      backpressure; bounded validation and model mutation stay on the GUI thread)
+- [x] Show real output-local workspaces and the active window title
 - [ ] Focus requests show pending / failed / confirmed (a click is a request, not proof of success)
 - [ ] Panel survives Niri IPC loss and restart without presenting stale state
+
+**First-slice evidence (2026-07-29).** Rust formatting, adapter tests and
+Clippy `-D warnings` passed; the exact 26.04 adapter produced a live snapshot
+from the current Niri socket; CMake, QML compilation and `all_qmllint` completed;
+the suite architecture guard passed. A real session inspection showed
+`celestina-panel` on the top layer with `keyboard_interactivity: None` and the
+three-region panel rendered against compositor blur. The host now waits for the
+asynchronous blur capability, submits a finite surface-local region and requests
+the frame that commits it. This was accepted only after an untraced normal
+`./scripts/run.sh` capture visibly removed wallpaper detail from the 40 px strip;
+the earlier protocol-only result was explicitly rejected. `qmllint` retains the
+known source-import/context warnings; no interaction, IPC restart, AT-SPI or
+exclusive-zone acceptance is claimed by this evidence.
 
 ## Checkpoint 2 — Dependable personal session (S2)
 **Goal:** an opt-in Niri startup contract that composes external session tools

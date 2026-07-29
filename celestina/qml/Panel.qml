@@ -1,78 +1,50 @@
+import CelestinaStyle
 import QtQuick
 import QtQuick.Window
-import CelestinaStyle
 
 Window {
     id: panel
 
+    required property string outputName
+
     width: Screen.width
     height: 40
     visible: false
-    // Translucent glass tint so the compositor's blur behind the panel
-    // (enableBlurBehind, main.cpp) reads through it. A compositor without the
-    // effect just shows this tint over the wallpaper.
-    color: CelestinaTheme.glassTint
+    // The compositor owns this backdrop blur (enableBlurBehind, main.cpp), so
+    // use its lighter, dedicated tint and keep the blurred wallpaper readable.
+    color: CelestinaTheme.compositorGlassTint
     title: qsTr("Celestina Panel")
     flags: Qt.FramelessWindowHint | Qt.WindowDoesNotAcceptFocus
 
+    WorkspaceStrip {
+        anchors.left: parent.left
+        anchors.leftMargin: CelestinaTheme.spaceMd
+        anchors.right: clock.left
+        anchors.rightMargin: CelestinaTheme.space2xl
+        anchors.verticalCenter: parent.verticalCenter
+        height: implicitHeight
+        clip: true
+        niriAvailable: Niri.available
+        outputName: panel.outputName
+        workspaces: Niri.workspaces
+    }
+
     Clock {
+        id: clock
+
         anchors.centerIn: parent
     }
 
-    // The phone, when Magnetita has one connected. Hidden otherwise — no daemon,
-    // no device, and the panel is just the clock.
-    Row {
-        id: phoneIndicator
-
+    PhoneStatus {
         anchors.right: parent.right
-        anchors.rightMargin: 14
+        anchors.rightMargin: CelestinaTheme.spaceMd
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 6
-        visible: Phone.phoneConnected
-
-        Image {
-            anchors.verticalCenter: parent.verticalCenter
-            source: "qrc:/qt/qml/CelestinaDesktop/phone.svg"
-            sourceSize: Qt.size(15, 15)
-            width: 15
-            height: 15
-            smooth: true
-        }
-
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: Phone.phoneName
-            color: CelestinaTheme.text
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: 13
-        }
-
-        Row {
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 3
-            visible: Phone.phoneBattery >= 0
-
-            Image {
-                anchors.verticalCenter: parent.verticalCenter
-                visible: Phone.phoneCharging
-                source: "qrc:/qt/qml/CelestinaDesktop/battery-charging.svg"
-                sourceSize: Qt.size(15, 15)
-                width: 15
-                height: 15
-                smooth: true
-            }
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: Phone.phoneBattery + " %"
-                color: Phone.phoneBattery <= 15 ? CelestinaTheme.danger
-                     : Phone.phoneBattery <= 30 ? CelestinaTheme.warning
-                     : CelestinaTheme.textMuted
-                font.family: CelestinaTheme.sansFamily
-                font.features: CelestinaTheme.fontFeaturesTabular
-                font.pixelSize: 13
-            }
-        }
+        width: Math.min(implicitWidth, Math.max(0, panel.width / 2 - clock.width / 2 - CelestinaTheme.space2xl))
+        clip: true
+        connected: Phone.phoneConnected
+        phoneName: Phone.phoneName
+        battery: Phone.phoneBattery
+        charging: Phone.phoneCharging
     }
 
     Rectangle {
@@ -82,4 +54,5 @@ Window {
         height: 1
         color: CelestinaTheme.divider
     }
+
 }

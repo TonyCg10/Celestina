@@ -10,12 +10,18 @@ CelestinaSurface {
     required property string mountPath
     required property string fingerprint
     required property string batteryText
+    required property bool charging
 
     readonly property bool mounted: mountPath.length > 0
     readonly property string batteryPercent: {
         const match = batteryText.match(/([0-9]+)/)
         return match ? match[1] : "—"
     }
+    readonly property string batteryDescription:
+            root.batteryPercent === "—"
+            ? "Batería sin datos"
+            : "Batería al " + root.batteryPercent + " por ciento"
+              + (root.charging ? ", cargando" : "")
 
     height: 116
     role: CelestinaSurface.Grouped
@@ -114,14 +120,36 @@ CelestinaSurface {
         color: CelestinaTheme.accentSoft
         border.width: CelestinaTheme.borderHairline
         border.color: CelestinaTheme.accentSoftBorder
+        Accessible.role: Accessible.StaticText
+        Accessible.name: root.batteryDescription
 
-        Text {
+        Row {
             anchors.centerIn: parent
-            text: root.batteryPercent + (root.batteryPercent === "—" ? "" : "%")
-            color: CelestinaTheme.text
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontBody
-            font.weight: CelestinaTheme.weightDemiBold
+            spacing: root.charging ? CelestinaTheme.spaceXs / 2 : 0
+            Accessible.ignored: true
+
+            CelestinaIcon {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.charging
+                width: CelestinaTheme.iconSm - CelestinaTheme.spaceXs
+                height: width
+                name: "battery-charging"
+                fallbackName: "battery-charging"
+                tone: CelestinaIcon.Primary
+                Accessible.ignored: true
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.batteryPercent
+                      + (root.batteryPercent === "—" ? "" : "%")
+                color: CelestinaTheme.text
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: root.charging ? CelestinaTheme.fontCaption
+                                              : CelestinaTheme.fontBody
+                font.weight: CelestinaTheme.weightDemiBold
+                Accessible.ignored: true
+            }
         }
     }
 }

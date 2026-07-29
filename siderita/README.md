@@ -29,9 +29,10 @@ remove it).
 
 | Path | Responsibility |
 |---|---|
+| `AGENTS.md` | local agent contract for the CXX-Qt/QML boundary, component APIs and verification |
 | `src/main.rs`, `src/controller.rs` | Rust host and the CXX-Qt QObject |
 | `qml/Main.qml`, `qml/PickerWindow.qml` | application entry surfaces: main window and portal file chooser |
-| `qml/views/FolderView.qml`, `qml/views/Sidebar.qml` | composed coordinators; both remain below the ~800-line ceiling |
+| `qml/views/FolderView.qml`, `qml/views/Sidebar.qml` | composed coordinators; Sidebar is below the ~800-line ceiling, while FolderView is a frozen baseline exception that may only shrink |
 | `qml/components/chrome/` | app chrome: top/bottom controls, tabs, headers and Siderita's local floating-glass controls |
 | `qml/components/sidebar/` | sidebar rows, saved sections, context menus and info presentation |
 | `qml/components/entry/` | file/folder delegates, drag edges and entry badges |

@@ -10,25 +10,35 @@ Item {
     required property int mediaIndex
     required property int mediaControlIndex
 
+    function valueAt(values, index, fallback) {
+        return index >= 0 && index < values.length ? values[index] : fallback
+    }
+
     readonly property bool paired: primaryIndex >= 0
                                    && primaryIndex < devices.devicePaired.length
                                    && devices.devicePaired[primaryIndex] === "true"
     readonly property bool mounted: primaryIndex >= 0
                                     && primaryIndex < devices.deviceMounts.length
                                     && devices.deviceMounts[primaryIndex].length > 0
-    readonly property bool playing: mediaIndex >= 0
-                                    && devices.deviceMediaPlaying[mediaIndex] === "true"
-    readonly property string mediaLine: mediaIndex >= 0
-                                        ? devices.deviceMedia[mediaIndex] : ""
-    readonly property int mediaSeparator: mediaLine.indexOf(" — ")
-    readonly property string mediaArtist: mediaSeparator >= 0
-                                          ? mediaLine.substring(0, mediaSeparator)
-                                          : "Magnetita"
-    readonly property string mediaTitle: mediaLine.length === 0
-                                         ? "Nada reproduciéndose"
-                                         : mediaSeparator >= 0
-                                           ? mediaLine.substring(mediaSeparator + 3)
-                                           : mediaLine
+    readonly property bool playing: valueAt(devices.deviceMediaPlaying,
+                                            mediaIndex, "false") === "true"
+    readonly property bool hasMedia: mediaIndex >= 0
+    readonly property string mediaTitle: valueAt(devices.deviceMediaTitles,
+                                                  mediaIndex, "")
+    readonly property string mediaArtist: valueAt(devices.deviceMediaArtists,
+                                                   mediaIndex, "")
+    readonly property string mediaAlbum: valueAt(devices.deviceMediaAlbums,
+                                                  mediaIndex, "")
+    readonly property string mediaArtwork: valueAt(devices.deviceMediaArtwork,
+                                                    mediaIndex, "")
+    readonly property real mediaLength: Number(valueAt(devices.deviceMediaLengths,
+                                                        mediaIndex, "-1"))
+    readonly property real mediaPosition: Number(valueAt(devices.deviceMediaPositions,
+                                                          mediaIndex, "-1"))
+    readonly property bool mediaNext: valueAt(devices.deviceMediaNext,
+                                              mediaIndex, "false") === "true"
+    readonly property bool mediaPrevious: valueAt(devices.deviceMediaPrevious,
+                                                  mediaIndex, "false") === "true"
 
     height: actionRow.height + 10 + mediaCard.height
 
@@ -73,116 +83,23 @@ Item {
         }
     }
 
-    CelestinaSurface {
+    MediaCard {
         id: mediaCard
         anchors.top: actionRow.bottom
         anchors.topMargin: 10
         width: parent.width
-        height: 146
-        role: CelestinaSurface.Elevated
-        clip: true
-
-        Rectangle {
-            anchors.fill: parent
-            radius: mediaCard.radius
-            gradient: Gradient {
-                orientation: Gradient.Horizontal
-                GradientStop { position: 0; color: CelestinaTheme.mediaSurfaceStart }
-                GradientStop { position: 0.48; color: CelestinaTheme.mediaSurfaceMid }
-                GradientStop { position: 1; color: CelestinaTheme.mediaSurfaceEnd }
-            }
-        }
-
-        Rectangle {
-            id: artwork
-            x: 15
-            anchors.verticalCenter: parent.verticalCenter
-            width: 92
-            height: 116
-            radius: CelestinaTheme.radiusButton
-            gradient: Gradient {
-                orientation: Gradient.Vertical
-                GradientStop { position: 0; color: CelestinaTheme.mediaArtworkStart }
-                GradientStop { position: 0.55; color: CelestinaTheme.mediaArtworkMid }
-                GradientStop { position: 1; color: CelestinaTheme.mediaArtworkEnd }
-            }
-
-            CelestinaIcon {
-                anchors.centerIn: parent
-                width: CelestinaTheme.glyphTile
-                height: width
-                name: "audio-x-generic"
-                fallbackName: "music"
-                tone: CelestinaIcon.Overlay
-            }
-        }
-
-        Column {
-            anchors.left: artwork.right
-            anchors.leftMargin: 15
-            anchors.right: parent.right
-            anchors.rightMargin: 15
-            anchors.top: parent.top
-            anchors.topMargin: 19
-            spacing: 4
-
-            CelestinaSectionLabel {
-                text: root.mediaLine.length > 0 ? "AHORA SUENA" : "CONTROL MULTIMEDIA"
-            }
-
-            Text {
-                width: parent.width
-                text: root.mediaTitle
-                color: CelestinaTheme.mediaSurfaceInk
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontRowTitle
-                font.weight: CelestinaTheme.weightDemiBold
-                elide: Text.ElideRight
-            }
-
-            Text {
-                width: parent.width
-                text: root.mediaLine.length > 0
-                      ? root.mediaArtist : "Controla el audio del dispositivo"
-                color: CelestinaTheme.textMuted
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontCaption
-                elide: Text.ElideRight
-            }
-        }
-
-        Row {
-            anchors.right: parent.right
-            anchors.rightMargin: 14
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 13
-            spacing: 5
-
-            CelestinaIconButton {
-                density: CelestinaButton.Regular
-                iconName: "media-skip-backward"
-                fallbackIcon: "media-skip-back"
-                helpText: "Anterior"
-                onClicked: root.devices.mediaPrevious(root.mediaControlIndex)
-            }
-
-            CelestinaIconButton {
-                density: CelestinaButton.Regular
-                role: CelestinaButton.Primary
-                iconName: root.playing ? "media-playback-pause"
-                                       : "media-playback-start"
-                fallbackIcon: root.playing ? "media-pause" : "media-play"
-                helpText: root.playing ? "Pausar" : "Reproducir"
-                onClicked: root.devices.mediaPlayPause(root.mediaControlIndex)
-            }
-
-            CelestinaIconButton {
-                density: CelestinaButton.Regular
-                iconName: "media-skip-forward"
-                fallbackIcon: "media-skip-forward"
-                helpText: "Siguiente"
-                onClicked: root.devices.mediaNext(root.mediaControlIndex)
-            }
-        }
+        hasMedia: root.hasMedia
+        title: root.mediaTitle
+        artist: root.mediaArtist
+        album: root.mediaAlbum
+        artworkUrl: root.mediaArtwork
+        positionMs: root.mediaPosition
+        lengthMs: root.mediaLength
+        playing: root.playing
+        canPrevious: root.mediaPrevious
+        canNext: root.mediaNext
+        onPreviousRequested: root.devices.mediaPrevious(root.mediaControlIndex)
+        onPlayPauseRequested: root.devices.mediaPlayPause(root.mediaControlIndex)
+        onNextRequested: root.devices.mediaNext(root.mediaControlIndex)
     }
 }

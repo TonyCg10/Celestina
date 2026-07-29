@@ -5,11 +5,11 @@ plus first-party apps that share one Rust core, one QML visual language and one
 set of conventions — lean alternatives to heavyweight external apps, made
 possible because the session owns its own shell.
 
-**Current focus:** consolidating the two shipped apps — `siderita` (v1.0.1, the
-daily file manager) and `magnetita` (1.0.0, the phone link) — which together
-prove the suite's thesis: apps that integrate by sharing crates, one style and
-one D-Bus contract without rewriting each other. The Niri shell (`celestina`)
-remains a minimal stub.
+**Current focus:** the Niri shell (`celestina`) has started its first real daily
+panel slice after Siderita and Magnetita proved the suite contracts. It now
+renders output-local Niri workspaces and the active window from a read-only Rust
+event-stream adapter, alongside the shared clock and phone state; focus actions
+and session takeover remain deliberately later.
 
 ## Projects
 
@@ -17,7 +17,7 @@ remains a minimal stub.
 |---|---|---|
 | [celestina-rs](celestina-rs/) | shared Rust domain cores | Rust |
 | [celestina-style](celestina-style/) | shared QML visual language | QML |
-| [celestina](celestina/) | Niri shell / session | C++ · QML |
+| [celestina](celestina/) | Niri shell / session | Rust · C++ · QML |
 | [siderita](siderita/) | file manager (first app) | Rust · QML (CXX-Qt) |
 | [magnetita](magnetita/) | phone link (KDE Connect) — 1.0.0 | Rust · QML (CXX-Qt) |
 
@@ -63,5 +63,19 @@ visual language, so editing a file feels like the same session as browsing it.
 - One visual language (`celestina-style`); apps art-direct within its tokens.
 - Interop via XDG/freedesktop, not private glue.
 - Measured lightweight; truthful state (a click is a request, never proof).
+
+## Development contract
+
+[`AGENTS.md`](AGENTS.md) is the canonical repository contract for code placement,
+component boundaries, reuse and verification; `CLAUDE.md` is a symlink to the
+same source so agent-specific copies cannot drift. Project directories add only
+their local deltas in their own `AGENTS.md`; a task started from the repository
+root must open the affected project's file explicitly.
+
+Run the same architecture/style gate used by CI before closing a change:
+
+```sh
+bash scripts/check-architecture-contract.sh
+```
 
 See the [suite roadmap](ROADMAP.md) for the vision, checkpoints and contracts.

@@ -15,19 +15,19 @@ ApplicationWindow {
     color: CelestinaTheme.canvas
 
     DevicesModel {
-        id: devices
+        id: devicesModel
         Component.onCompleted: reload()
     }
 
     readonly property int mediaIndex: {
-        for (var i = 0; i < devices.deviceMedia.length; i++) {
-            if (devices.deviceMedia[i].length > 0)
+        for (var i = 0; i < devicesModel.deviceMedia.length; i++) {
+            if (devicesModel.deviceMedia[i].length > 0)
                 return i
         }
         return -1
     }
 
-    readonly property int primaryIndex: devices.deviceNames.length > 0 ? 0 : -1
+    readonly property int primaryIndex: devicesModel.deviceNames.length > 0 ? 0 : -1
     readonly property int mediaControlIndex: mediaIndex >= 0 ? mediaIndex : primaryIndex
 
     property bool settingsOpen: false
@@ -50,11 +50,11 @@ ApplicationWindow {
                 id: appHeader
                 width: parent.width
                 settingsOpen: window.settingsOpen
-                deviceCount: devices.deviceNames.length
+                deviceCount: devicesModel.deviceNames.length
                 onToggleRequested: {
                     window.settingsOpen = !window.settingsOpen
                     if (window.settingsOpen)
-                        devices.reloadSettings()
+                        devicesModel.reloadSettings()
                 }
             }
 
@@ -62,7 +62,7 @@ ApplicationWindow {
                 visible: !window.settingsOpen
                 width: parent.width
                 height: parent.height - y
-                devices: devices
+                devices: devicesModel
                 mediaIndex: window.mediaIndex
                 primaryIndex: window.primaryIndex
                 mediaControlIndex: window.mediaControlIndex
@@ -72,7 +72,7 @@ ApplicationWindow {
                 visible: window.settingsOpen
                 width: parent.width
                 height: parent.height - y
-                devices: devices
+                devices: devicesModel
             }
         }
     }

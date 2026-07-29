@@ -28,8 +28,9 @@ tree (see [ROADMAP.md](ROADMAP.md), STYLE-D).
 
 | Path | Responsibility |
 |---|---|
+| `AGENTS.md` | local agent contract for the style boundary, public API, states and verification |
 | `DESIGN.md` | the design contract: One UI 8.5 desktop-adapted — reference values, platform ceiling, target system, build phases |
-| `CelestinaTheme.qml` | singleton design tokens, tiered `ref`→`scheme`→`sys`: one accent seed and derived states, the dark `ColorScheme` as data (surface→ink pairs), Inter Variable, type/radius/motion/glass/component scales |
+| `CelestinaTheme.qml` | singleton design tokens, tiered `ref`→`scheme`→`sys`: one accent seed and derived states, the dark `ColorScheme` as data (surface→ink pairs), Inter Variable, distinct in-scene/compositor glass tints, type/radius/motion/component scales, plus the host-controlled `reducedMotion` input |
 | `CelestinaSurface.qml` | semantic non-floating container (`Canvas`, `Panel`, `Grouped`, `Content`, `Tonal`, `Elevated`, `Selected`); consumers own geometry/content while the style owns fill, foreground and shape |
 | `CelestinaBackdrop.qml` | canonical L0 window gradient; consumers may add decorative children without rebuilding the canvas |
 | `GlassSurface.qml` | frosted surface that blurs injected backdrop content (bounded capture, one-shot or live; `Regular` floating and `Strong` modal densities) |

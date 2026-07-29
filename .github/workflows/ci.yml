@@ -1,7 +1,7 @@
-# CI mínima de la suite: la parte verificable sin Qt — el workspace celestina-rs
-# (los cores puros + todo el backend de Magnetita). Las apps CXX-Qt (siderita,
-# magnetita) y el shell necesitan Qt 6.8+ y quedan fuera hasta que ganarse el
-# coste de instalarlo aquí; localmente las cubre la puerta del CLAUDE.md.
+# CI mínima de la suite: contrato arquitectónico verificable sin Qt y workspace
+# celestina-rs (cores puros + backend de Magnetita). Las apps CXX-Qt y el shell
+# requieren el toolchain Qt y, para parte de la UI, una sesión gráfica; su matriz
+# local obligatoria vive en AGENTS.md.
 name: ci
 
 on:
@@ -11,52 +11,18 @@ on:
     branches: [main]
 
 jobs:
-  # El contrato del estilo compartido: dentro de las apps, un archivo cuyo
-  # nombre exista en celestina-style/ debe ser un symlink (modo git 120000),
-  # nunca una copia — una copia diverge en silencio a la primera edición.
-  estilo-sin-copias:
+  contrato-arquitectura:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Los archivos del estilo son symlinks, no copias
-        run: |
-          fallos=0
-          for f in $(git ls-files 'siderita/qml' 'magnetita/qml'); do
-            base=$(basename "$f")
-            if git ls-files --error-unmatch "celestina-style/$base" >/dev/null 2>&1; then
-              modo=$(git ls-files -s -- "$f" | cut -d' ' -f1)
-              if [ "$modo" != "120000" ]; then
-                echo "::error file=$f::copia del estilo (modo $modo) — debe ser symlink a ../../celestina-style/$base"
-                fallos=1
-              fi
-            fi
-          done
-          exit $fallos
-      - name: Contrato visual sin valores locales
-        run: bash celestina-style/scripts/check-style-contract.sh
-      # El auto-binding `x: x` (la propiedad inyectada sombrea al id homónimo
-      # y queda undefined) es legal para el motor y para qmllint — se caza por
-      # patrón. Los literales JS (`append({clave: clave})`) viven dentro de
-      # paréntesis; un binding QML real está a profundidad 0.
-      - name: Sin auto-bindings 'x - x' en QML
-        run: |
-          hallazgos=$(find siderita/qml magnetita/qml celestina/qml celestina-style \
-            -name '*.qml' -exec gawk '
-              FNR == 1 { depth = 0 }
-              { linea = $0; sub(/\/\/.*/, "", linea) }
-              depth == 0 \
-                && match(linea, /^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*):[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*$/, m) \
-                && m[1] == m[2] && m[1] != "id" {
-                  printf "%s:%d: %s\n", FILENAME, FNR, $0
-              }
-              { depth += gsub(/\(/, "(", linea) - gsub(/\)/, ")", linea)
-                if (depth < 0) depth = 0 }
-            ' {} +)
-          if [ -n "$hallazgos" ]; then
-            echo "$hallazgos"
-            echo "::error::auto-binding 'x: x' — la propiedad sombrea al id; renombra o usa un alias"
-            exit 1
-          fi
+        with:
+          # The baseline is compared with the state before the whole push or
+          # with the PR base, not merely with the previous commit.
+          fetch-depth: 0
+      - name: Contrato de arquitectura y estilo
+        env:
+          ARCHITECTURE_COMPARE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: bash scripts/check-architecture-contract.sh
 
   celestina-rs:
     runs-on: ubuntu-latest

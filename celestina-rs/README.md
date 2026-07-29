@@ -23,6 +23,9 @@ network transport and headless daemon. Presentation lives in each app.
 | `magnetita-net` | phone-link transport: UDP discovery, TCP+TLS link (TOFU pinning), payload transfer, trust store |
 | `magnetitad` | the headless phone-link daemon (binary): device links, sshfs mount, bounded runtime-only MPRIS artwork cache, `org.celestina.Devices1` |
 
+Workspace-specific dependency, safety and verification rules are recorded in
+[`AGENTS.md`](AGENTS.md), layered on the monorepo contract.
+
 ## Checks
 
 ```sh

@@ -11,19 +11,65 @@
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQmlContext>
+#include <QRegion>
 #include <QScreen>
 #include <QStandardPaths>
 #include <QTimer>
+#include <QVariantMap>
 #include <QWindow>
 
 #include <KWindowEffects>
 #include <LayerShellQt/Window>
 
 #include "devicesclient.h"
+#include "niriclient.h"
 
 namespace {
 constexpr int panelHeight = 40;
 constexpr auto panelScope = "celestina-panel";
+constexpr int blurCommitRetryDelayMs = 16;
+constexpr int blurCommitRetryCount = 60;
+
+void armPanelBlurWhenReady(
+    const QPointer<QWindow> &window,
+    int attemptsRemaining = blurCommitRetryCount
+)
+{
+    if (!window)
+        return;
+
+    if (window->isExposed()
+        && !window->size().isEmpty()
+        && KWindowEffects::isEffectAvailable(KWindowEffects::BlurBehind)) {
+        // ext-background-effect state is double-buffered. KWindowSystem 6.28
+        // does not expose the Wayland surface through CXX-Qt. Keep this thin
+        // C++ host path: submit the finite, surface-local region used by Niri
+        // and request the frame that commits the newly installed effect.
+        KWindowEffects::enableBlurBehind(
+            window,
+            true,
+            QRegion(QRect(QPoint(0, 0), window->size()))
+        );
+        window->requestUpdate();
+        qInfo() << "Celestina compositor blur armed on"
+                << window->objectName();
+        return;
+    }
+
+    if (attemptsRemaining <= 0) {
+        qInfo() << "Celestina compositor blur unavailable on"
+                << window->objectName() << "(using translucent fallback)";
+        return;
+    }
+
+    QTimer::singleShot(
+        blurCommitRetryDelayMs,
+        window.data(),
+        [window, attemptsRemaining] {
+            armPanelBlurWhenReady(window, attemptsRemaining - 1);
+        }
+    );
+}
 
 class PanelManager final : public QObject
 {
@@ -108,7 +154,12 @@ private:
 
         m_panels.remove(screen);
 
-        QObject *rootObject = m_component.create();
+        const QVariantMap initialProperties {
+            {QStringLiteral("outputName"), screen->name()},
+        };
+        QObject *rootObject = m_component.createWithInitialProperties(
+            initialProperties
+        );
         if (!rootObject) {
             qCritical().noquote()
                 << "Celestina could not create a panel for output"
@@ -182,7 +233,7 @@ private:
         // to blur the wallpaper behind the translucent panel. Best-effort — a
         // compositor that does not implement it simply leaves the panel a plain
         // translucent tint, no worse than before.
-        KWindowEffects::enableBlurBehind(window, true);
+        armPanelBlurWhenReady(window);
 
         qInfo() << "Celestina panel mapped on output" << screen->name()
                 << "geometry" << screen->geometry()
@@ -292,8 +343,12 @@ int main(int argc, char *argv[])
     if (app.arguments().contains(QStringLiteral("--pick-output")))
         return runOutputChooser(app, engine);
 
-    // The phone the panel draws. Parented to the app so it outlives the engine's
-    // teardown; exposed to every panel through the shared root context.
+    // Session providers outlive the engine and are exposed to every per-output
+    // panel. Niri state arrives from the Rust helper and is marshalled by the
+    // thin Qt adapter on this GUI thread.
+    auto *niri = new NiriClient(&app);
+    engine.rootContext()->setContextProperty(QStringLiteral("Niri"), niri);
+
     auto *phone = new DevicesClient(&app);
     engine.rootContext()->setContextProperty(QStringLiteral("Phone"), phone);
 

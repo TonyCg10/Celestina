@@ -187,10 +187,11 @@ QtObject {
         required property color gradientStart
         required property color gradientMid
         required property color gradientEnd
-        // Glass: regular floating tint, stronger modal tint, restrained lit edge
-        // and a dark outline. The stronger density keeps dialog content legible.
+        // Glass: regular floating tint, stronger modal tint, a lighter tint for
+        // compositor-owned blur, restrained lit edge and a dark outline.
         required property color glassTint
         required property color glassTintStrong
+        required property color compositorGlassTint
         required property color glassBorder
         required property color glassHighlight
         required property color glassOutline
@@ -302,6 +303,9 @@ QtObject {
         // blur. Strong is reserved for modal readability.
         glassTint: "#991a1e25"
         glassTintStrong: "#bd1a1e25"
+        // The compositor has already blurred the backdrop. Keeping this lighter
+        // than in-scene glass stops the dim layer from hiding that real effect.
+        compositorGlassTint: "#801a1e25"
         glassBorder: "#24ffffff"
         glassHighlight: "#2effffff"
         glassOutline: "#4d000000"
@@ -388,6 +392,7 @@ QtObject {
     readonly property color gradientEnd: scheme.gradientEnd
     readonly property color glassTint: scheme.glassTint
     readonly property color glassTintStrong: scheme.glassTintStrong
+    readonly property color compositorGlassTint: scheme.compositorGlassTint
     readonly property color glassBorder: scheme.glassBorder
     readonly property color glassHighlight: scheme.glassHighlight
     readonly property color glassOutline: scheme.glassOutline

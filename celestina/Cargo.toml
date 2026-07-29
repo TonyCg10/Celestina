@@ -1,0 +1,28 @@
+[package]
+name = "celestina-shell"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+
+[[bin]]
+name = "celestina-niri-adapter"
+path = "src/niri_adapter.rs"
+
+[dependencies]
+# Niri does not promise semver-stable Rust types. Pinning the compositor's exact
+# IPC version keeps the wire model aligned with the installed 26.04 session.
+niri-ipc = "=26.4.0"
+# The helper exposes a deliberately narrow, line-delimited snapshot protocol to
+# the Qt host. Derive keeps that boundary explicit instead of forwarding Niri's
+# entire event vocabulary into QML.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+

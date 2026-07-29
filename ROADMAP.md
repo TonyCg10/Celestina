@@ -33,11 +33,11 @@ The goal is a session that is dependable, coherent and light — not feature
 parity with any existing desktop environment, and not a product for anyone but
 its author.
 
-**Current focus:** consolidating the two shipped apps. `siderita` (**v1.0.1**)
-is the daily file manager; `magnetita` (**1.0.0**, CP0–CP4) pairs, mounts and
-mirrors the real phone, and proved the suite's first cross-app integration over
-`org.celestina.Devices1`. The Niri shell (`celestina`) remains a minimal stub,
-to be picked up when a daily gap calls for it.
+**Current focus:** the shell's first real daily panel slice is now active work.
+`celestina` reads Niri's event stream through a pinned Rust adapter and renders
+real output-local workspaces plus the active window beside its clock and phone
+state. It remains read-only until focus requests can expose pending, failed and
+provider-confirmed outcomes; Noctalia stays the reversible fallback.
 
 ## The pieces
 

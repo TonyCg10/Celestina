@@ -1,0 +1,21 @@
+# Excepciones temporales de check-architecture-contract.sh.
+#
+# Formato: clase<TAB>clave<TAB>maximo actual
+# La cifra debe coincidir con el checkout: si disminuye, el guard exige bajar el
+# baseline; al desaparecer la excepcion hay que retirar la entrada. Nunca se sube.
+# Daemon coordinador heredado: debe delegar mas responsabilidades antes de crecer.
+lines	celestina-rs/crates/magnetitad/src/main.rs	1099
+# Coordinador QML apenas sobre el techo: siguiente extraccion debe dejarlo <=800.
+lines	siderita/qml/views/FolderView.qml	834
+# Contrato CXX-Qt concentrado por la macro; la logica debe seguir en submodulos.
+lines	siderita/src/controller.rs	1223
+# Controles Qt locales heredados: pueden migrar al estilo compartido, no crecer.
+control	siderita/qml/components/SizeRow.qml:Slider	1
+control	siderita/qml/components/chrome/BottomControls.qml:BusyIndicator	1
+control	siderita/qml/components/chrome/FloatingButton.qml:Button	1
+control	siderita/qml/dialogs/ConflictDialog.qml:CheckBox	1
+control	siderita/qml/dialogs/QuickLookView.qml:ScrollView	1
+control	siderita/qml/dialogs/QuickLookView.qml:TextArea	1
+control	siderita/qml/menus/EntryContextMenu.qml:MenuSeparator	1
+control	siderita/qml/menus/FolderMenu.qml:MenuSeparator	1
+control	siderita/qml/menus/SizePopup.qml:Popup	1

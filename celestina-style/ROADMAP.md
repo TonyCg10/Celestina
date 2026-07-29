@@ -100,7 +100,7 @@ consumers.
 
 **S5 (panel compositor glass) — done** (2026-07-27): the shell panel was migrated
 off its hardcoded Rosé Pine palette onto `CelestinaTheme` (Panel + Clock), with a
-translucent `glassTint` background, and the shell now asks the compositor to blur
+translucent compositor-glass tint, and the shell now asks the compositor to blur
 the wallpaper behind it — `KWindowEffects::enableBlurBehind` on the layer-shell
 surface, driving niri's `ext-background-effect` (best-effort: a compositor
 without it just leaves the panel a translucent tint). `main.cpp` self-provisions
@@ -111,6 +111,17 @@ linked), a live run confirming both outputs map and the theme resolves with no
 token errors, and the author confirming the panel renders on the session (a clean
 screenshot is obstructed by the session's own bars). The suite's phased restyle
 (S1–S5, DESIGN §8) is complete.
+
+**S5 reliability follow-up — landed** (2026-07-29): paired real-session captures
+exposed that the protocol request alone was not evidence of rendered blur: the
+old panel still showed sharp wallpaper detail. Comparing the exact installed
+Noctalia implementation showed that it submits finite, surface-local blur
+rectangles. The shell now waits until blur is advertised and the window is
+exposed, submits the panel's real finite region and requests the commit-producing
+frame. A subsequent normal `./scripts/run.sh` capture shows the top strip blurred
+while the same wallpaper immediately below remains sharp. Compositor glass also
+has a dedicated 50% tint, keeping the dark fallback while letting the blurred
+wallpaper remain legible.
 
 **Semantic-surface follow-up — done** (2026-07-28): `CelestinaSurface` became
 the closed L0/L1 container contract after the same need was proven by Siderita's

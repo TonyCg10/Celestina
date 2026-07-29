@@ -261,6 +261,11 @@ an app-icon pipeline ever needs it. Radius scales down with element size.
 | L3 | modal: dialogs, sheets | **glass strong** + `scrim` dim behind — *never* shadow + dim together |
 | Panel | layer-shell bar | **compositor glass** (ext-background-effect, x-ray) over wallpaper; in-scene fallback |
 
+Compositor glass uses its own lighter semantic tint: the compositor has already
+blurred the wallpaper, so reusing the denser in-scene tint would hide that result
+instead of dimming it. The fallback remains a readable translucent surface when
+the protocol is unavailable.
+
 `CelestinaSurface` is the shared L0/L1 container. Consumers select a semantic
 role (`Canvas`, `Panel`, `Grouped`, `Content`, `Tonal`, `Elevated`, `Selected`)
 and own only layout,
