@@ -10,6 +10,28 @@ Item {
     required property var hostWindow
     property bool compact: false
     property real compactProgress: compact ? 1 : 0
+    signal phoneMediaRequested(int index)
+
+    readonly property int phoneIndex: {
+        if (controller.trashActive || controller.recentActive
+                || controller.searchActive || controller.searchRunning)
+            return -1
+        controller.phoneRevision
+        const current = controller.currentPath.replace(/\/+$/, "")
+        for (let index = 0; index < controller.phoneMounts.length; ++index) {
+            const mount = controller.phoneMounts[index].replace(/\/+$/, "")
+            if (mount.length > 0 && mount === current)
+                return index
+        }
+        return -1
+    }
+    readonly property bool phoneLocation: phoneIndex >= 0
+    readonly property var phoneInfo: {
+        controller.phoneRevision
+        return phoneLocation ? controller.phoneInfo(phoneIndex) : []
+    }
+    readonly property bool phoneConnected:
+            phoneInfo.length > 3 && phoneInfo[3] === "1"
 
     Behavior on compactProgress {
         NumberAnimation {
@@ -44,6 +66,7 @@ Item {
                                            : controller.searchActive
                                              || controller.searchRunning
                                                    ? "BÚSQUEDA"
+                                           : root.phoneLocation ? "MÓVIL"
                                                    : "UBICACIÓN"
 
     readonly property bool virtualLocation:
@@ -107,8 +130,11 @@ Item {
                        + (compactHeight - expandedHeight) * compactProgress)
 
     Column {
-        anchors.centerIn: parent
-        width: Math.max(0, parent.width - 12)
+        x: root.phoneLocation ? 12 : 6
+        y: (parent.height - implicitHeight) / 2
+        width: root.phoneLocation
+               ? Math.max(0, parent.width - mediaButton.width - 42)
+               : Math.max(0, parent.width - 12)
         spacing: Math.round(CelestinaTheme.spaceXs
                             * (1 - root.compactProgress))
 
@@ -119,7 +145,8 @@ Item {
             opacity: 1 - root.compactProgress
             text: root.contextLabel
             textScale: root.hostWindow.interfaceTextScale
-            horizontalAlignment: Text.AlignHCenter
+            horizontalAlignment: root.phoneLocation
+                                 ? Text.AlignLeft : Text.AlignHCenter
         }
 
         Text {
@@ -134,7 +161,8 @@ Item {
                                        * root.hostWindow.interfaceTextScale)
             font.weight: CelestinaTheme.weightDemiBold
             elide: Text.ElideMiddle
-            horizontalAlignment: Text.AlignHCenter
+            horizontalAlignment: root.phoneLocation
+                                 ? Text.AlignLeft : Text.AlignHCenter
         }
 
         Text {
@@ -148,7 +176,8 @@ Item {
             font.pixelSize: Math.round(CelestinaTheme.fontCaption
                                        * root.hostWindow.interfaceTextScale)
             elide: Text.ElideRight
-            horizontalAlignment: Text.AlignHCenter
+            horizontalAlignment: root.phoneLocation
+                                 ? Text.AlignLeft : Text.AlignHCenter
         }
 
         Text {
@@ -162,7 +191,30 @@ Item {
             font.pixelSize: Math.round(CelestinaTheme.fontMini
                                        * root.hostWindow.interfaceTextScale)
             elide: Text.ElideRight
-            horizontalAlignment: Text.AlignHCenter
+            horizontalAlignment: root.phoneLocation
+                                 ? Text.AlignLeft : Text.AlignHCenter
         }
+    }
+
+    CelestinaIconButton {
+        id: mediaButton
+
+        anchors.right: parent.right
+        anchors.rightMargin: 12
+        anchors.verticalCenter: parent.verticalCenter
+        visible: root.phoneLocation
+        enabled: root.phoneConnected
+        density: CelestinaButton.Regular
+        iconName: "music"
+        fallbackIcon: "audio-x-generic"
+        Accessible.name: root.phoneConnected
+                         ? "Multimedia del móvil" : "Móvil desconectado"
+        onClicked: root.phoneMediaRequested(root.phoneIndex)
+    }
+
+    Shortcut {
+        sequence: "Alt+M"
+        enabled: root.phoneLocation && root.phoneConnected
+        onActivated: root.phoneMediaRequested(root.phoneIndex)
     }
 }

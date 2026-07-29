@@ -1,5 +1,6 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
-import QtQuick.Controls
 import org.celestina.siderita 1.0
 
 // ─── TopBar ─────────────────────────────────────────────────────────────────
@@ -20,12 +21,6 @@ Item {
     property Item overlayParent
     property var pathMenu
 
-    // Scroll offset of the active view (0 at the very top).
-    readonly property real scrollY: root.activeView
-                                    ? Math.max(0, root.activeView.contentY
-                                               - root.activeView.originY
-                                               + root.activeView.topMargin)
-                                    : 0
     // Navigation is a floating contextual layer in the approved material map,
     // so it remains glass even at the top of a folder.
     readonly property bool floating: true
@@ -181,11 +176,13 @@ Item {
             id: pathMouse
             anchors.fill: parent
             visible: !pathPill.editing
-            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            acceptedButtons: root.pathMenu
+                             ? Qt.LeftButton | Qt.RightButton
+                             : Qt.LeftButton
             cursorShape: Qt.IBeamCursor
             Accessible.name: "Editar ubicación"
             onClicked: function(mouse) {
-                if (mouse.button === Qt.RightButton) {
+                if (mouse.button === Qt.RightButton && root.pathMenu) {
                     const point = pathMouse.mapToItem(
                                     root.overlayParent, mouse.x, mouse.y)
                     root.pathMenu.popup(root.overlayParent, point)
@@ -357,7 +354,7 @@ Item {
             // bitmap turns it into an opaque disc instead of a magnifier.
             iconName: ""
             fallbackIcon: "search"
-            helpText: root.searchExpanded ? "Enfocar búsqueda" : "Buscar"
+            Accessible.name: root.searchExpanded ? "Enfocar búsqueda" : "Buscar"
             onClicked: root.focusSearch()
         }
 
@@ -436,8 +433,8 @@ Item {
             density: CelestinaButton.Compact
             iconName: ""
             fallbackIcon: "x"
-            helpText: searchField.text.length > 0
-                      ? "Limpiar búsqueda" : "Cerrar búsqueda"
+            Accessible.name: searchField.text.length > 0
+                             ? "Limpiar búsqueda" : "Cerrar búsqueda"
             onClicked: {
                 if (searchField.text.length > 0
                     || root.controller.searchActive) {

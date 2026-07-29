@@ -21,6 +21,7 @@ const QML_FILES: &[&str] = &[
     "qml/components/chrome/GlassPill.qml",
     "qml/components/chrome/HistoryMouseArea.qml",
     "qml/components/chrome/FloatingButton.qml",
+    "qml/components/chrome/HiddenTogglePill.qml",
     "qml/components/chrome/InfoPill.qml",
     "qml/components/chrome/SearchBar.qml",
     "qml/components/chrome/RecentHeader.qml",
@@ -31,6 +32,7 @@ const QML_FILES: &[&str] = &[
     "qml/components/chrome/TopBar.qml",
     "qml/components/sidebar/SidebarChevron.qml",
     "qml/components/sidebar/SidebarSectionHeader.qml",
+    "qml/components/sidebar/SidebarPhoneSection.qml",
     "qml/components/sidebar/SidebarFavoriteRow.qml",
     "qml/components/sidebar/SidebarBookmarkRow.qml",
     "qml/components/sidebar/SidebarSavedSections.qml",
@@ -52,6 +54,8 @@ const QML_FILES: &[&str] = &[
     "qml/components/folder/FolderContentFrame.qml",
     "qml/components/folder/FolderEmptyState.qml",
     "qml/components/picker/PickerChrome.qml",
+    "qml/components/picker/PickerCellDelegate.qml",
+    "qml/components/picker/PickerFilterMenu.qml",
     "qml/components/SizeRow.qml",
     "qml/components/PropRow.qml",
     // Vistas compuestas.
@@ -65,6 +69,7 @@ const QML_FILES: &[&str] = &[
     "qml/dialogs/PropertiesDialog.qml",
     "qml/dialogs/IconPickerDialog.qml",
     "qml/dialogs/QuickLookView.qml",
+    "qml/dialogs/PhoneMediaDialog.qml",
     // Menús y popups.
     "qml/menus/FolderSortMenu.qml",
     "qml/menus/PathMenu.qml",

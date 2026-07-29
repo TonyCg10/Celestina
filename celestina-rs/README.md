@@ -21,7 +21,7 @@ network transport and headless daemon. Presentation lives in each app.
 | `celestina-dotfiles-core` | plan-only dotfiles change planning (records conflicts, never mutates) |
 | `magnetita-core` | KDE Connect protocol domain: packets, identity, pairing state machine, plugin bodies — pure, offline-tested |
 | `magnetita-net` | phone-link transport: UDP discovery, TCP+TLS link (TOFU pinning), payload transfer, trust store |
-| `magnetitad` | the headless phone-link daemon (binary): device links, sshfs mount, `org.celestina.Devices1` |
+| `magnetitad` | the headless phone-link daemon (binary): device links, sshfs mount, bounded runtime-only MPRIS artwork cache, `org.celestina.Devices1` |
 
 ## Checks
 

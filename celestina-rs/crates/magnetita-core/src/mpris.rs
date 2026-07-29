@@ -33,6 +33,9 @@ pub struct PlayerState {
     pub title: String,
     pub artist: String,
     pub album: String,
+    /// The peer-local identifier for the current cover. It is echoed back in an
+    /// album-art request; it is never treated as a local path.
+    pub album_art_url: String,
     pub is_playing: bool,
     pub can_pause: bool,
     pub can_play: bool,
@@ -54,7 +57,22 @@ pub struct PlayerState {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct MprisUpdate {
     pub players: Option<Vec<String>>,
+    /// Whether the peer can answer album-art requests with a bounded payload.
+    /// Only player-list packets normally carry this capability.
+    pub supports_album_art_payload: Option<bool>,
     pub state: Option<PlayerState>,
+}
+
+/// One album-art payload the peer is offering on its separate TLS socket.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IncomingAlbumArt {
+    pub player: String,
+    /// Opaque peer-local identifier from the preceding now-playing state.
+    pub source_url: String,
+    pub size: i64,
+    pub port: u16,
+    /// Packet id used only to give each cached image a distinct local URL.
+    pub transfer_id: i64,
 }
 
 /// What a `kdeconnect.mpris.request` asked of us (the phone driving the desktop).
@@ -89,6 +107,15 @@ pub fn request_now_playing(id: i64, player: &str) -> NetworkPacket {
     )
 }
 
+/// Ask the phone to transfer the cover identified by its own `albumArtUrl`.
+pub fn request_album_art(id: i64, player: &str, album_art_url: &str) -> NetworkPacket {
+    NetworkPacket::new(
+        id,
+        TYPE_MPRIS_REQUEST,
+        json!({ "player": player, "albumArtUrl": album_art_url }),
+    )
+}
+
 /// Send a transport action to one of the phone's players. `action` is a KDE
 /// Connect verb: "Play", "Pause", "PlayPause", "Stop", "Next", "Previous".
 pub fn action(id: i64, player: &str, action: &str) -> NetworkPacket {
@@ -116,6 +143,8 @@ pub fn read_mpris(packet: &NetworkPacket) -> Option<MprisUpdate> {
                 .collect()
         });
 
+    let supports_album_art_payload = body.get("supportAlbumArtPayload").and_then(Value::as_bool);
+
     // A state packet names a `player` and carries at least one now-playing
     // field; a bare list packet also has `player` on some peers, so require a
     // real field before treating it as a state.
@@ -132,6 +161,7 @@ pub fn read_mpris(packet: &NetworkPacket) -> Option<MprisUpdate> {
             title: string_field(body, "title"),
             artist: string_field(body, "artist"),
             album: string_field(body, "album"),
+            album_art_url: string_field(body, "albumArtUrl"),
             is_playing: bool_field(body, "isPlaying"),
             can_pause: bool_field(body, "canPause"),
             can_play: bool_field(body, "canPlay"),
@@ -144,10 +174,48 @@ pub fn read_mpris(packet: &NetworkPacket) -> Option<MprisUpdate> {
             now_playing: string_field(body, "nowPlaying"),
         });
 
-    if players.is_none() && state.is_none() {
+    if players.is_none() && supports_album_art_payload.is_none() && state.is_none() {
         return None;
     }
-    Some(MprisUpdate { players, state })
+    Some(MprisUpdate {
+        players,
+        supports_album_art_payload,
+        state,
+    })
+}
+
+/// Read an album-art payload announcement. The source URL remains opaque and
+/// the transfer port must stay inside KDE Connect's payload range.
+pub fn read_album_art(packet: &NetworkPacket) -> Option<IncomingAlbumArt> {
+    if !packet.is(TYPE_MPRIS) {
+        return None;
+    }
+    let body = packet.body.as_object()?;
+    if !bool_field(body, "transferringAlbumArt") {
+        return None;
+    }
+    let player = body.get("player")?.as_str()?.to_owned();
+    let source_url = body.get("albumArtUrl")?.as_str()?.to_owned();
+    if player.is_empty() || source_url.is_empty() {
+        return None;
+    }
+    let size = packet.payload_size?;
+    let port = packet
+        .payload_transfer_info
+        .as_ref()
+        .and_then(|info| info.get("port"))
+        .and_then(Value::as_u64)
+        .and_then(|port| u16::try_from(port).ok())?;
+    if !(1739..=1764).contains(&port) {
+        return None;
+    }
+    Some(IncomingAlbumArt {
+        player,
+        source_url,
+        size,
+        port,
+        transfer_id: packet.id,
+    })
 }
 
 // --- The phone drives the desktop: requests we read, reports we send. --------
@@ -206,6 +274,7 @@ pub fn state_packet(id: i64, state: &PlayerState) -> NetworkPacket {
             "title": state.title,
             "artist": state.artist,
             "album": state.album,
+            "albumArtUrl": state.album_art_url,
             "isPlaying": state.is_playing,
             "canPause": state.can_pause,
             "canPlay": state.can_play,
@@ -265,6 +334,7 @@ mod tests {
             update.players,
             Some(vec!["Spotify".to_owned(), "Firefox".to_owned()])
         );
+        assert_eq!(update.supports_album_art_payload, Some(true));
         assert!(update.state.is_none());
     }
 
@@ -279,6 +349,7 @@ mod tests {
         assert_eq!(state.player, "Spotify");
         assert_eq!(state.title, "Song");
         assert_eq!(state.artist, "Band");
+        assert_eq!(state.album_art_url, "");
         assert!(state.is_playing);
         assert!(state.can_go_next);
         assert!(!state.can_go_previous);
@@ -300,6 +371,39 @@ mod tests {
     fn an_empty_mpris_packet_is_none() {
         let raw = r#"{"id":1,"type":"kdeconnect.mpris","body":{}}"#;
         assert!(read_mpris(&NetworkPacket::parse(raw).unwrap()).is_none());
+    }
+
+    #[test]
+    fn an_album_art_request_echoes_the_peer_identifier() {
+        let packet = request_album_art(4, "Spotify", "file:///phone/cover.png");
+        assert_eq!(packet.body["player"], "Spotify");
+        assert_eq!(packet.body["albumArtUrl"], "file:///phone/cover.png");
+    }
+
+    #[test]
+    fn an_album_art_payload_keeps_only_fetchable_transfer_data() {
+        let raw = r#"{"id":9,"type":"kdeconnect.mpris","body":{
+            "player":"Spotify","albumArtUrl":"file:///phone/cover.png",
+            "transferringAlbumArt":true},"payloadSize":2048,
+            "payloadTransferInfo":{"port":1741}}"#;
+        assert_eq!(
+            read_album_art(&NetworkPacket::parse(raw).unwrap()),
+            Some(IncomingAlbumArt {
+                player: "Spotify".to_owned(),
+                source_url: "file:///phone/cover.png".to_owned(),
+                size: 2048,
+                port: 1741,
+                transfer_id: 9,
+            })
+        );
+    }
+
+    #[test]
+    fn album_art_outside_the_payload_port_range_is_refused() {
+        let raw = r#"{"id":9,"type":"kdeconnect.mpris","body":{
+            "player":"Spotify","albumArtUrl":"cover","transferringAlbumArt":true},
+            "payloadSize":2048,"payloadTransferInfo":{"port":8080}}"#;
+        assert!(read_album_art(&NetworkPacket::parse(raw).unwrap()).is_none());
     }
 
     #[test]

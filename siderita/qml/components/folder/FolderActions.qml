@@ -23,8 +23,13 @@ Item {
             || propertiesDialog.shown || propertiesDialog.visible
             || iconPickerDialog.shown || iconPickerDialog.visible
             || quickLookDialog.shown || quickLookDialog.visible
+            || phoneMediaDialog.shown || phoneMediaDialog.visible
 
     signal newTabRequested(string path, bool foreground)
+
+    function openPhoneMedia(index) {
+        phoneMediaDialog.openPhone(index)
+    }
 
     FolderSortMenu {
         id: folderSortMenu
@@ -113,5 +118,12 @@ Item {
         controller: root.controller
         owner: root.owner
         panel: root.panel
+    }
+
+    PhoneMediaDialog {
+        id: phoneMediaDialog
+        controller: root.controller
+        owner: root.owner
+        backdrop: root.panel
     }
 }

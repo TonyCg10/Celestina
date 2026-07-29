@@ -70,7 +70,7 @@ Item {
         readonly property real devicesHeaderTop:
                 placesColumn.y + devicesHeader.y
         readonly property real phoneHeaderTop:
-                placesColumn.y + phoneHeader.y
+                placesColumn.y + phoneSection.y
         readonly property real favoritesHeaderTop:
                 savedSections.y + savedSections.favoritesHeaderY
         readonly property real bookmarksHeaderTop:
@@ -544,98 +544,10 @@ Item {
                     }
                 }
 
-                // ── Phone (Magnetita / org.celestina.Devices1) ───────────
-                SidebarSectionHeader {
-                    id: phoneHeader
+                SidebarPhoneSection {
+                    id: phoneSection
                     width: placesColumn.width
-                    readonly property var ac: root.hostWindow.activeController
-                    readonly property bool anyPhones: ac && ac.phoneNames.length > 0
-                    visible: anyPhones
-                    height: visible ? implicitHeight : 0
-                    title: "MÓVIL"
-                    textScale: root.hostWindow.sidebarTextScale
-                    iconScale: root.hostWindow.sidebarIconScale
-                    collapsible: false
-                    interactive: false
-                }
-
-                Repeater {
-                    model: root.hostWindow.activeController
-                           ? root.hostWindow.activeController.phoneNames : []
-
-                    delegate: Item {
-                        id: phoneRow
-                        required property int index
-                        required property string modelData
-                        readonly property string mountPath:
-                            (root.hostWindow.activeController
-                             && index < root.hostWindow.activeController.phoneMounts.length)
-                            ? root.hostWindow.activeController.phoneMounts[index] : ""
-                        readonly property bool mounted: mountPath.length > 0
-                        readonly property bool current: mounted
-                            && mountPath === (root.hostWindow.activeController
-                                              ? root.hostWindow.activeController.currentPath : "")
-
-                        width: placesColumn.width
-                        height: root.hostWindow.sidebarRowHeight
-                        Accessible.role: Accessible.Button
-                        Accessible.name: phoneRow.modelData
-                                         + (phoneRow.mounted ? ", montado" : ", conectando")
-
-                        Rectangle {
-                            anchors.fill: parent
-                            anchors.leftMargin: 2
-                            anchors.rightMargin: 2
-                            radius: CelestinaTheme.radiusSm
-                            color: phoneRow.current
-                                   ? CelestinaTheme.badgeAccentFill
-                                   : (phoneRow.mounted && phoneMouse.containsMouse)
-                                     ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
-                        }
-
-                        CelestinaIcon {
-                            id: phoneIcon
-                            x: 12
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: Math.round(CelestinaTheme.iconSm * root.hostWindow.sidebarIconScale)
-                            height: Math.round(CelestinaTheme.iconSm * root.hostWindow.sidebarIconScale)
-                            name: "phone"
-                            fallbackName: "phone"
-                            tone: phoneRow.current
-                                  ? CelestinaIcon.Accent : CelestinaIcon.Device
-                            // Dim until the mount is ready.
-                            opacity: phoneRow.mounted
-                                     ? 1 : CelestinaTheme.disabledOpacity
-                        }
-
-                        Text {
-                            x: phoneIcon.x + phoneIcon.width + 10
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width - x - 10
-                            text: phoneRow.mounted ? phoneRow.modelData
-                                                   : phoneRow.modelData + " — conectando…"
-                            color: phoneRow.current ? CelestinaTheme.accent
-                                                    : phoneRow.mounted ? CelestinaTheme.text
-                                                                       : CelestinaTheme.textMuted
-                            font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: Math.round(CelestinaTheme.fontBody * root.hostWindow.sidebarTextScale)
-                            elide: Text.ElideRight
-                        }
-
-                        MouseArea {
-                            id: phoneMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            // Only openable once mounted; connecting is not a target.
-                            enabled: phoneRow.mounted
-                            cursorShape: phoneRow.mounted ? Qt.PointingHandCursor
-                                                          : Qt.ArrowCursor
-                            onClicked: {
-                                if (root.hostWindow.activeController && phoneRow.mounted)
-                                    root.hostWindow.activeController.openPhone(phoneRow.index)
-                            }
-                        }
-                    }
+                    hostWindow: root.hostWindow
                 }
             }
 
@@ -711,7 +623,7 @@ Item {
                     width: parent.width
                     y: stickyDevices.y
                        + (stickyDevices.visible ? stickyDevices.height : 0)
-                    visible: phoneHeader.visible
+                    visible: phoneSection.visible
                              && sidebarScroll.contentY + y > sidebar.phoneHeaderTop
                     title: "MÓVIL"
                     textScale: root.hostWindow.sidebarTextScale

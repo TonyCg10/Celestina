@@ -134,7 +134,7 @@ Item {
                 density: CelestinaButton.Compact
                 iconName: ""
                 fallbackIcon: "x"
-                helpText: "Cerrar " + chip.displayTitle
+                Accessible.name: "Cerrar " + chip.displayTitle
                 onClicked: root.hostWindow.closeTab(chip.index)
             }
 
@@ -188,7 +188,7 @@ Item {
             density: CelestinaButton.Compact
             iconName: ""
             fallbackIcon: "plus"
-            helpText: "Nueva pestaña (Ctrl+T)"
+            Accessible.name: "Nueva pestaña (Ctrl+T)"
             onClicked: root.hostWindow.openTab(root.controller.currentPath, true)
         }
     }

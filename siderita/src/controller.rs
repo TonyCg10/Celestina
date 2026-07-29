@@ -123,12 +123,11 @@ pub mod qobject {
         #[qproperty(QStringList, volume_mounts)]
         #[qproperty(bool, volume_busy)]
         #[qproperty(i32, hidden_device_count)]
-        // Connected phones from Magnetita (org.celestina.Devices1): parallel
-        // name / type / mount-path lists. An empty mount means connected but not
-        // yet mounted (so not openable).
+        // Phones from Magnetita; revision publishes one stable device snapshot.
         #[qproperty(QStringList, phone_names)]
         #[qproperty(QStringList, phone_types)]
         #[qproperty(QStringList, phone_mounts)]
+        #[qproperty(i32, phone_revision)]
         // The sidebar's places: the keys that exist on this machine, in the
         // user's order, minus the ones they hid.
         #[qproperty(QStringList, place_keys)]
@@ -450,22 +449,22 @@ pub mod qobject {
 
         #[qinvokable]
         fn open_phone(self: Pin<&mut SideritaController>, index: i32);
-
+        #[qinvokable]
+        fn phone_info(self: &SideritaController, index: i32) -> QStringList;
+        #[qinvokable]
+        fn ring_phone(self: &SideritaController, index: i32);
+        #[qinvokable]
+        fn control_phone_media(self: &SideritaController, index: i32, action: &QString);
         #[qinvokable]
         fn display_location_name(self: &SideritaController, path: &QString) -> QString;
-
         #[qinvokable]
         fn send_to_phone(self: Pin<&mut SideritaController>, path: &QString);
-
         #[qinvokable]
         fn open_properties(self: Pin<&mut SideritaController>, path: &QString);
-
         #[qinvokable]
         fn close_properties(self: Pin<&mut SideritaController>);
-
         #[qinvokable]
         fn search_recursive(self: Pin<&mut SideritaController>, query: &QString);
-
         #[qinvokable]
         fn cancel_search(self: Pin<&mut SideritaController>);
 
@@ -801,7 +800,7 @@ pub struct SideritaControllerRust {
     phone_names: QStringList,
     phone_types: QStringList,
     phone_mounts: QStringList,
-    // Set once the Magnetita Changed-signal watch thread is running.
+    phone_revision: i32,
     phone_watch_started: bool,
     phones: Vec<crate::devices::Device>,
     place_keys: QStringList,
@@ -940,6 +939,7 @@ impl Default for SideritaControllerRust {
             phone_names: QStringList::default(),
             phone_types: QStringList::default(),
             phone_mounts: QStringList::default(),
+            phone_revision: 0,
             phone_watch_started: false,
             phones: Vec::new(),
             place_keys: QStringList::default(),

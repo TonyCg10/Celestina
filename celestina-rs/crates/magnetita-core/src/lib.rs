@@ -38,8 +38,8 @@ pub use event::{ConnectionEvent, LostReason};
 pub use findmyphone::TYPE_FINDMYPHONE_REQUEST;
 pub use identity::{DeviceType, Identity, DEFAULT_PORT, PROTOCOL_VERSION, TYPE_IDENTITY};
 pub use mpris::{
-    read_mpris, read_mpris_request, MprisRequest, MprisUpdate, PlayerState, TYPE_MPRIS,
-    TYPE_MPRIS_REQUEST,
+    read_album_art, read_mpris, read_mpris_request, request_album_art, IncomingAlbumArt,
+    MprisRequest, MprisUpdate, PlayerState, TYPE_MPRIS, TYPE_MPRIS_REQUEST,
 };
 pub use notification::{read_notification, Notification, TYPE_NOTIFICATION};
 pub use packet::NetworkPacket;

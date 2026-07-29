@@ -122,6 +122,8 @@ impl qobject::SideritaController {
         self.as_mut().set_phone_names(names);
         self.as_mut().set_phone_types(types);
         self.as_mut().set_phone_mounts(mounts);
+        let next_revision = self.phone_revision().wrapping_add(1);
+        self.as_mut().set_phone_revision(next_revision);
 
         self.as_mut().start_phone_watch();
     }
@@ -162,6 +164,58 @@ impl qobject::SideritaController {
         }
     }
 
+    /// One atomic QML snapshot: id, name, type, connected, mounted, mount,
+    /// player, title, artist, album, artwork, playing, can-pause/next/previous,
+    /// length and position in milliseconds.
+    pub fn phone_info(&self, index: i32) -> QStringList {
+        let Some(phone) = usize::try_from(index)
+            .ok()
+            .and_then(|index| self.rust().phones.get(index))
+        else {
+            return QStringList::default();
+        };
+        let flag = |value| QString::from(if value { "1" } else { "0" });
+        [
+            QString::from(phone.id.as_str()),
+            QString::from(phone.name.as_str()),
+            QString::from(phone.device_type.as_str()),
+            flag(phone.connected),
+            flag(phone.mounted),
+            QString::from(phone.mount_path.as_str()),
+            QString::from(phone.media_player.as_str()),
+            QString::from(phone.media_title.as_str()),
+            QString::from(phone.media_artist.as_str()),
+            QString::from(phone.media_album.as_str()),
+            QString::from(phone.media_artwork_url.as_str()),
+            flag(phone.media_playing),
+            flag(phone.media_can_pause),
+            flag(phone.media_can_next),
+            flag(phone.media_can_previous),
+            QString::from(phone.media_length.to_string().as_str()),
+            QString::from(phone.media_position.to_string().as_str()),
+        ]
+        .into_iter()
+        .collect()
+    }
+
+    /// Ask a connected phone to ring through Magnetita's stable D-Bus API.
+    pub fn ring_phone(&self, index: i32) {
+        if let Some(phone) = self.connected_phone(index) {
+            crate::devices::ring(&phone.id);
+        }
+    }
+
+    /// Forward only the three media actions Devices1 publishes.
+    pub fn control_phone_media(&self, index: i32, action: &QString) {
+        let action = action.to_string();
+        if !matches!(action.as_str(), "PlayPause" | "Next" | "Previous") {
+            return;
+        }
+        if let Some(phone) = self.connected_phone(index) {
+            crate::devices::media_action(&phone.id, &action);
+        }
+    }
+
     /// Human-facing name for a location. Magnetita mounts by stable device id,
     /// but that transport detail must not leak into tabs, headings or crumbs.
     pub fn display_location_name(&self, path: &QString) -> QString {
@@ -174,7 +228,7 @@ impl qobject::SideritaController {
     /// Send a local file to the connected phone (the "Enviar al móvil" menu
     /// item). Sends to the first connected phone; a no-op if none is connected.
     pub fn send_to_phone(self: Pin<&mut Self>, path: &QString) {
-        if let Some(phone) = self.rust().phones.first() {
+        if let Some(phone) = self.rust().phones.iter().find(|phone| phone.connected) {
             crate::devices::send_file(&phone.id, &path.to_string());
         }
     }
@@ -288,6 +342,13 @@ impl qobject::SideritaController {
             .volumes
             .get(index)
             .map(|volume| volume.object_path.clone())
+    }
+
+    fn connected_phone(&self, index: i32) -> Option<&crate::devices::Device> {
+        usize::try_from(index)
+            .ok()
+            .and_then(|index| self.rust().phones.get(index))
+            .filter(|phone| phone.connected)
     }
 
     /// Hides a removable device (by its display name) from the sidebar and

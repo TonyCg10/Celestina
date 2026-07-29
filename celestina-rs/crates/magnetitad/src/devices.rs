@@ -16,6 +16,7 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use magnetita_core::PlayerState;
 use magnetita_net::TrustStore;
 use zbus::zvariant::{OwnedValue, Value};
 
@@ -62,13 +63,52 @@ pub struct DeviceEntry {
     pub media_player: String,
     pub media_title: String,
     pub media_artist: String,
+    pub media_album: String,
     pub media_playing: bool,
     pub media_can_pause: bool,
     pub media_can_next: bool,
     pub media_can_previous: bool,
+    pub media_can_seek: bool,
+    pub media_length: i64,
+    pub media_position: i64,
+    /// Percent-encoded local file URL exposed to QML, empty until a requested
+    /// cover has been received and verified.
+    pub media_artwork_url: String,
+    /// Peer-local art identifier and generated local path stay daemon-private.
+    pub(crate) media_artwork_source: String,
+    pub(crate) media_artwork_path: PathBuf,
 }
 
 impl DeviceEntry {
+    pub fn connected(id: String, name: String, device_type: String, fingerprint: String) -> Self {
+        Self {
+            id,
+            name,
+            device_type,
+            connected: true,
+            mounted: false,
+            paired: false,
+            mount_path: String::new(),
+            battery: -1,
+            charging: false,
+            fingerprint,
+            media_player: String::new(),
+            media_title: String::new(),
+            media_artist: String::new(),
+            media_album: String::new(),
+            media_playing: false,
+            media_can_pause: false,
+            media_can_next: false,
+            media_can_previous: false,
+            media_can_seek: false,
+            media_length: -1,
+            media_position: -1,
+            media_artwork_url: String::new(),
+            media_artwork_source: String::new(),
+            media_artwork_path: PathBuf::new(),
+        }
+    }
+
     /// The device as a `a{sv}` dict for the wire.
     fn to_dict(&self) -> HashMap<String, OwnedValue> {
         let fields = [
@@ -85,10 +125,18 @@ impl DeviceEntry {
             ("mediaPlayer", Value::from(self.media_player.clone())),
             ("mediaTitle", Value::from(self.media_title.clone())),
             ("mediaArtist", Value::from(self.media_artist.clone())),
+            ("mediaAlbum", Value::from(self.media_album.clone())),
             ("mediaPlaying", Value::from(self.media_playing)),
             ("mediaCanPause", Value::from(self.media_can_pause)),
             ("mediaCanNext", Value::from(self.media_can_next)),
             ("mediaCanPrevious", Value::from(self.media_can_previous)),
+            ("mediaCanSeek", Value::from(self.media_can_seek)),
+            ("mediaLength", Value::from(self.media_length)),
+            ("mediaPosition", Value::from(self.media_position)),
+            (
+                "mediaArtworkUrl",
+                Value::from(self.media_artwork_url.clone()),
+            ),
         ];
         fields
             .into_iter()
@@ -100,6 +148,80 @@ impl DeviceEntry {
             })
             .collect()
     }
+}
+
+/// Replace the confirmed media snapshot. A changed cover identifier clears the
+/// previous local URL immediately and returns its generated path for cleanup.
+pub fn set_media(
+    registry: &Registry,
+    device_id: &str,
+    state: Option<&PlayerState>,
+) -> Option<PathBuf> {
+    let mut registry = registry.lock_ok();
+    let entry = registry.get_mut(device_id)?;
+    let next_artwork_source = state
+        .map(|state| state.album_art_url.as_str())
+        .unwrap_or_default();
+    let stale_artwork = if entry.media_artwork_source != next_artwork_source {
+        entry.media_artwork_source = next_artwork_source.to_owned();
+        entry.media_artwork_url.clear();
+        (!entry.media_artwork_path.as_os_str().is_empty())
+            .then(|| std::mem::take(&mut entry.media_artwork_path))
+    } else {
+        None
+    };
+
+    match state {
+        Some(state) => {
+            entry.media_player = state.player.clone();
+            entry.media_title = state.title.clone();
+            entry.media_artist = state.artist.clone();
+            entry.media_album = state.album.clone();
+            entry.media_playing = state.is_playing;
+            entry.media_can_pause = state.can_pause;
+            entry.media_can_next = state.can_go_next;
+            entry.media_can_previous = state.can_go_previous;
+            entry.media_can_seek = state.can_seek;
+            entry.media_length = state.length;
+            entry.media_position = state.pos;
+        }
+        None => {
+            entry.media_player.clear();
+            entry.media_title.clear();
+            entry.media_artist.clear();
+            entry.media_album.clear();
+            entry.media_playing = false;
+            entry.media_can_pause = false;
+            entry.media_can_next = false;
+            entry.media_can_previous = false;
+            entry.media_can_seek = false;
+            entry.media_length = -1;
+            entry.media_position = -1;
+        }
+    }
+    stale_artwork
+}
+
+/// Publish a verified local cover only if the device is still showing the
+/// player/source pair that requested it. Returns `None` for a stale transfer;
+/// `Some(previous)` means the URL was installed and the old path may be deleted.
+pub fn install_artwork(
+    registry: &Registry,
+    device_id: &str,
+    player: &str,
+    source_url: &str,
+    local_path: PathBuf,
+    local_url: String,
+) -> Option<Option<PathBuf>> {
+    let mut registry = registry.lock_ok();
+    let entry = registry.get_mut(device_id)?;
+    if entry.media_player != player || entry.media_artwork_source != source_url {
+        return None;
+    }
+    let previous = std::mem::replace(&mut entry.media_artwork_path, local_path);
+    let previous = (!previous.as_os_str().is_empty()).then_some(previous);
+    entry.media_artwork_url = local_url;
+    Some(previous)
 }
 
 /// The connected devices, keyed by id and shared between the daemon (which
@@ -322,5 +444,95 @@ impl Devices {
         if settings.set(&plugin, enabled) {
             let _ = settings.save(&self.settings_path);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{install_artwork, set_media, DeviceEntry, Registry};
+    use crate::lock::LockOk;
+    use magnetita_core::PlayerState;
+    use std::collections::BTreeMap;
+    use std::path::PathBuf;
+    use std::sync::{Arc, Mutex};
+
+    fn registry() -> Registry {
+        let entry = DeviceEntry::connected(
+            "phone".to_owned(),
+            "Galaxy".to_owned(),
+            "phone".to_owned(),
+            "fingerprint".to_owned(),
+        );
+        Arc::new(Mutex::new(BTreeMap::from([("phone".to_owned(), entry)])))
+    }
+
+    fn state(artwork: &str) -> PlayerState {
+        PlayerState {
+            player: "YouTube".to_owned(),
+            title: "Video".to_owned(),
+            artist: "Canal".to_owned(),
+            album: "Lista".to_owned(),
+            album_art_url: artwork.to_owned(),
+            is_playing: true,
+            can_pause: true,
+            can_seek: true,
+            length: 120_000,
+            pos: 30_000,
+            ..PlayerState::default()
+        }
+    }
+
+    #[test]
+    fn media_snapshot_exposes_progress_and_backward_compatible_dict_keys() {
+        let registry = registry();
+        assert!(set_media(&registry, "phone", Some(&state("cover-a"))).is_none());
+        let guard = registry.lock_ok();
+        let entry = guard.get("phone").expect("fixture device exists");
+        assert_eq!(entry.media_album, "Lista");
+        assert_eq!(entry.media_length, 120_000);
+        assert_eq!(entry.media_position, 30_000);
+        assert!(entry.media_can_seek);
+        let dict = entry.to_dict();
+        for key in [
+            "mediaPlayer",
+            "mediaArtworkUrl",
+            "mediaLength",
+            "mediaPosition",
+            "mediaCanSeek",
+        ] {
+            assert!(dict.contains_key(key), "missing Devices1 key {key}");
+        }
+    }
+
+    #[test]
+    fn artwork_is_installed_only_for_the_current_player_and_source() {
+        let registry = registry();
+        set_media(&registry, "phone", Some(&state("cover-a")));
+        assert_eq!(
+            install_artwork(
+                &registry,
+                "phone",
+                "YouTube",
+                "cover-a",
+                PathBuf::from("/run/user/1000/a.img"),
+                "file:///run/user/1000/a.img".to_owned(),
+            ),
+            Some(None)
+        );
+        assert!(install_artwork(
+            &registry,
+            "phone",
+            "YouTube",
+            "old-cover",
+            PathBuf::from("/run/user/1000/old.img"),
+            "file:///run/user/1000/old.img".to_owned(),
+        )
+        .is_none());
+
+        let stale = set_media(&registry, "phone", Some(&state("cover-b")));
+        assert_eq!(stale, Some(PathBuf::from("/run/user/1000/a.img")));
+        let guard = registry.lock_ok();
+        let entry = guard.get("phone").expect("fixture device exists");
+        assert!(entry.media_artwork_url.is_empty());
     }
 }

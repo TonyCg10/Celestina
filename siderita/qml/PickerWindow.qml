@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Window
 import QtQuick.Controls
@@ -40,6 +42,8 @@ Window {
     // es un diálogo de otra aplicación. Se leen una vez, al abrir.
     property real iconScale: 1.0
     property real textScale: 1.0
+    property real interfaceIconScale: 1.0
+    property real interfaceTextScale: 1.0
 
     // La rejilla desborda ⇒ hay algo detrás de las pastillas que desenfocar.
     // Las pastillas del picker comparten este fondo, así que se decide una vez.
@@ -78,18 +82,21 @@ Window {
     Connections {
         target: controller
         function onRowsReady(names, tokens, kinds, subtitles, paths, sections, sizes, dates) {
+            picker.clearChosen()
+            picker.anchorIndex = -1
             entryModel.setRows(names, tokens, kinds, subtitles, paths, sections, sizes, dates)
             // Al margen superior hay que ir: una Flickable no recoloca su
             // contenido cuando el margen cambia o cuando llegan filas nuevas, y
             // la primera fila nacía debajo de la pastilla en vez de bajo ella.
             // Además una carpeta nueva se lee desde arriba.
             Qt.callLater(function() {
-                entryGrid.contentY = entryGrid.originY - entryGrid.topMargin
+                entryGrid.contentY = -entryGrid.topMargin
+                entryGrid.currentIndex = -1
             })
         }
     }
 
-    // The filters as the combo shows them, with an always-present "everything"
+    // The filters as the compact menu shows them, with an always-present "everything"
     // row: a chooser must never be able to hide a file with no way back.
     readonly property var filterRows: {
         var rows = [{ label: "Todos los archivos", patterns: [] }]
@@ -117,6 +124,8 @@ Window {
     Component.onCompleted: {
         iconScale = controller.savedContentIconScale()
         textScale = controller.savedContentTextScale()
+        interfaceIconScale = controller.savedInterfaceIconScale()
+        interfaceTextScale = controller.savedInterfaceTextScale()
         if (startFolder.length > 0)
             controller.startAt(startFolder)
         else
@@ -185,6 +194,21 @@ Window {
         chosenCount = Object.keys(s).length
     }
     function isChosen(token) { return chosen[token] === true }
+    function toggleHidden() {
+        clearChosen()
+        anchorIndex = -1
+        controller.toggleHidden()
+    }
+    function entryEligible(index) {
+        const isDirectory = controller.entryKind(index) === "directory"
+        return directory ? isDirectory : !isDirectory
+    }
+    function entryNavigable(index) {
+        return controller.entryKind(index) === "directory"
+    }
+    function entryInteractive(index) {
+        return entryEligible(index) || entryNavigable(index)
+    }
 
     // El ancla del rango: dónde empezó la selección con la que Mayúsculas
     // cuenta. Un clic normal la mueve; Mayúsculas la respeta.
@@ -199,7 +223,7 @@ Window {
         const lo = Math.min(from, to)
         const hi = Math.max(from, to)
         for (var i = lo; i <= hi && i < entryGrid.count; i++) {
-            if (picker.directory && controller.entryKind(i) !== "directory")
+            if (!entryEligible(i))
                 continue
             s[controller.entryToken(i)] = true
         }
@@ -274,7 +298,7 @@ Window {
                 const i = r * cols + c
                 if (i < 0 || i >= entryGrid.count)
                     continue
-                if (picker.directory && controller.entryKind(i) !== "directory")
+                if (!entryEligible(i))
                     continue
                 if (room === 0)
                     break
@@ -340,6 +364,30 @@ Window {
         onForwardRequested: controller.goForward()
     }
 
+    Shortcut {
+        sequence: "Escape"
+        enabled: !picker.answered
+        onActivated: picker.cancel()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+H"
+        enabled: !picker.answered
+        onActivated: picker.toggleHidden()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+L"
+        enabled: !picker.answered
+        onActivated: pickerChrome.beginEditing()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+F"
+        enabled: !picker.answered
+        onActivated: pickerChrome.focusSearch()
+    }
+
     // ── Chrome ───────────────────────────────────────────────────────────
     // La misma anatomía que la ventana principal: lienzo negro, una caja de
     // contenido que no lo es, y los controles como pastillas que flotan encima
@@ -370,6 +418,11 @@ Window {
                 cacheBuffer: 600
                 boundsBehavior: Flickable.StopAtBounds
                 focus: true
+                activeFocusOnTab: true
+                keyNavigationEnabled: false
+                property bool keyboardFocusVisible: true
+                onActiveFocusChanged: if (activeFocus)
+                                          keyboardFocusVisible = true
                 // El sitio de las pastillas se reserva por dentro, así el
                 // contenido pasa por detrás al desplazarse pero nunca se queda
                 // escondido al principio ni al final. Con márgenes y no con
@@ -394,14 +447,103 @@ Window {
 
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
+                function pageStep() {
+                    const rows = Math.max(1, Math.floor(height / cellHeight))
+                    return rows * columns
+                }
+
+                function nearestInteractive(start, direction) {
+                    let candidate = Math.max(0, Math.min(count - 1, start))
+                    while (candidate >= 0 && candidate < count) {
+                        if (picker.entryInteractive(candidate))
+                            return candidate
+                        candidate += direction
+                    }
+                    return -1
+                }
+
+                function moveCurrent(target, direction, modifiers) {
+                    const candidate = nearestInteractive(target, direction)
+                    if (candidate < 0)
+                        return
+                    currentIndex = candidate
+                    keyboardFocusVisible = true
+                    positionViewAtIndex(candidate, GridView.Contain)
+
+                    if (picker.multiple
+                            && (modifiers & Qt.ControlModifier)
+                            && !(modifiers & Qt.ShiftModifier))
+                        return
+
+                    if (!picker.entryEligible(candidate)) {
+                        picker.clearChosen()
+                        picker.anchorIndex = -1
+                        return
+                    }
+
+                    if (picker.multiple && (modifiers & Qt.ShiftModifier)
+                            && picker.anchorIndex >= 0) {
+                        picker.selectRange(picker.anchorIndex, candidate,
+                                           modifiers & Qt.ControlModifier)
+                    } else {
+                        picker.selectOnly(controller.entryToken(candidate))
+                        picker.anchorIndex = candidate
+                    }
+                    if (picker.saving)
+                        pickerChrome.nameText = controller.entryNames[candidate]
+                }
+
                 Keys.onPressed: function(event) {
-                    if (event.key === Qt.Key_Escape) {
-                        picker.cancel()
-                    } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                    if (entryGrid.count === 0)
+                        return
+                    const index = entryGrid.currentIndex
+                    if (event.key === Qt.Key_Right) {
+                        entryGrid.moveCurrent(index < 0 ? 0 : index + 1,
+                                              1, event.modifiers)
+                    } else if (event.key === Qt.Key_Left) {
+                        entryGrid.moveCurrent(index < 0 ? entryGrid.count - 1
+                                                       : index - 1,
+                                              -1, event.modifiers)
+                    } else if (event.key === Qt.Key_Down) {
+                        entryGrid.moveCurrent(index < 0 ? 0
+                                                       : index + entryGrid.columns,
+                                              1, event.modifiers)
+                    } else if (event.key === Qt.Key_Up) {
+                        entryGrid.moveCurrent(index < 0 ? entryGrid.count - 1
+                                                       : index - entryGrid.columns,
+                                              -1, event.modifiers)
+                    } else if (event.key === Qt.Key_Home) {
+                        entryGrid.moveCurrent(0, 1, event.modifiers)
+                    } else if (event.key === Qt.Key_End) {
+                        entryGrid.moveCurrent(entryGrid.count - 1,
+                                              -1, event.modifiers)
+                    } else if (event.key === Qt.Key_PageDown) {
+                        entryGrid.moveCurrent((index < 0 ? 0 : index)
+                                              + entryGrid.pageStep(),
+                                              1, event.modifiers)
+                    } else if (event.key === Qt.Key_PageUp) {
+                        entryGrid.moveCurrent((index < 0 ? 0 : index)
+                                              - entryGrid.pageStep(),
+                                              -1, event.modifiers)
+                    } else if (event.key === Qt.Key_Return
+                               || event.key === Qt.Key_Enter) {
                         if (currentIndex >= 0)
                             picker.activate(currentIndex)
+                    } else if (event.key === Qt.Key_Space
+                               && index >= 0 && picker.entryEligible(index)) {
+                        const token = controller.entryToken(index)
+                        if (picker.multiple)
+                            picker.toggleChosen(token)
+                        else
+                            picker.selectOnly(token)
+                        picker.anchorIndex = index
+                    } else if (event.key === Qt.Key_A
+                               && (event.modifiers & Qt.ControlModifier)
+                               && picker.multiple) {
+                        picker.selectRange(0, entryGrid.count - 1, false)
                     } else if (event.key === Qt.Key_Backspace) {
-                        controller.goUp()
+                        if (controller.canGoUp && !controller.loading)
+                            controller.goUp()
                     } else {
                         return
                     }
@@ -463,175 +605,118 @@ Window {
                     border.color: CelestinaTheme.dividerStrong
                 }
 
-                delegate: Item {
+                delegate: PickerCellDelegate {
                     id: cell
 
-                    required property int index
-                    required property string name
-                    required property string token
-                    required property string kind
-                    required property string path
+                    cellWidth: entryGrid.cellWidth
+                    cellHeight: entryGrid.cellHeight
+                    iconScale: picker.iconScale
+                    textScale: picker.textScale
+                    eligible: picker.entryEligible(cell.index)
+                    navigable: picker.entryNavigable(cell.index)
+                    chosen: picker.isChosen(cell.token)
+                    currentItem: entryGrid.currentIndex === cell.index
+                    focusVisible: cell.currentItem && entryGrid.activeFocus
+                                  && entryGrid.keyboardFocusVisible
+                    banding: picker.banding
+                    contentItem: entryGrid.contentItem
 
-                    readonly property bool isDirectory: kind === "directory"
-                    readonly property bool selectable: picker.directory ? isDirectory : true
-                    readonly property bool chosen: picker.isChosen(token)
-                    // Sólo lo que el proveedor de miniaturas sabe servir; el
-                    // resto se queda con su icono de tipo, que ya es
-                    // informativo.
-                    readonly property bool previewable: !isDirectory
-                            && /\.(png|jpe?g|gif|webp|bmp|svg|avif|tiff?|ico|heic)$/i.test(name)
-
-                    width: entryGrid.cellWidth
-                    height: entryGrid.cellHeight
-
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: 4
-                        radius: CelestinaTheme.radiusSm
-                        color: cell.chosen ? CelestinaTheme.surfaceSelected
-                               : cellMouse.containsMouse ? CelestinaTheme.surfaceHover
-                               : CelestinaTheme.clear
-                        border.width: cell.chosen
-                                      ? CelestinaTheme.borderHairline : 0
-                        border.color: CelestinaTheme.dividerStrong
-                        Behavior on color {
-                            ColorAnimation { duration: CelestinaTheme.motionFast }
-                        }
+                    onBandBeginRequested: function(x, y, modifiers) {
+                        picker.bandBegin(x, y,
+                                         modifiers & Qt.ControlModifier)
                     }
-
-                    Rectangle {
-                        id: tile
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        y: 10
-                        width: Math.round(72 * picker.iconScale)
-                        height: width
-                        radius: CelestinaTheme.radiusSm
-                        clip: true
-                        opacity: cell.selectable
-                                 ? 1 : CelestinaTheme.unavailableContentOpacity
-                        // La celda ya lleva la superficie elegida/hover. Una
-                        // segunda baldosa de color duplicaba ese estado.
-                        color: CelestinaTheme.clear
-
-                        CelestinaIcon {
-                            anchors.centerIn: parent
-                            visible: !preview.ready
-                            width: Math.round(54 * picker.iconScale)
-                            height: width
-                            sourceSize: Qt.size(width, width)
-                            name: cell.isDirectory ? "folder" : "text-x-generic"
-                            fallbackName: cell.isDirectory ? "folder" : "file"
-                            tone: cell.isDirectory
-                                  ? CelestinaIcon.Folder : CelestinaIcon.File
-                        }
-
-                        // La caché compartida de freedesktop, la misma que lee
-                        // la ventana principal: si hay miniatura, aparece; si
-                        // no, el icono se queda y nadie espera por nada.
-                        Image {
-                            id: preview
-                            anchors.fill: parent
-                            anchors.margins: 1
-                            readonly property bool ready: cell.previewable
-                                                          && status === Image.Ready
-                            visible: opacity > 0
-                            opacity: ready ? 1 : 0
-                            source: cell.previewable
-                                    ? "image://thumb/" + encodeURIComponent(cell.path) : ""
-                            sourceSize.width: 256
-                            sourceSize.height: 256
-                            fillMode: Image.PreserveAspectCrop
-                            asynchronous: true
-                            cache: true
-                            smooth: true
-                            Behavior on opacity {
-                                NumberAnimation { duration: CelestinaTheme.motionNormal }
-                            }
-                        }
+                    onBandUpdateRequested: function(x, y) {
+                        picker.bandUpdate(x, y)
                     }
-
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        y: tile.y + tile.height + 8
-                        width: parent.width - 14
-                        horizontalAlignment: Text.AlignHCenter
-                        text: cell.name
-                        color: cell.selectable ? CelestinaTheme.text
-                                               : CelestinaTheme.textMuted
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: Math.round(
-                                CelestinaTheme.fontCaption * picker.textScale)
-                        elide: Text.ElideRight
-                        maximumLineCount: 2
-                        wrapMode: Text.Wrap
+                    onBandFinishRequested: picker.bandFinish()
+                    onCellClicked: function(modifiers) {
+                        if (picker.bandConsumed) {
+                            picker.bandConsumed = false
+                            return
+                        }
+                        entryGrid.currentIndex = cell.index
+                        entryGrid.forceActiveFocus()
+                        entryGrid.keyboardFocusVisible = false
+                        if (!cell.eligible) {
+                            picker.clearChosen()
+                            picker.anchorIndex = -1
+                            return
+                        }
+                        if (picker.multiple && (modifiers & Qt.ShiftModifier)
+                                && picker.anchorIndex >= 0) {
+                            picker.selectRange(picker.anchorIndex, cell.index,
+                                               modifiers & Qt.ControlModifier)
+                        } else if (picker.multiple
+                                   && (modifiers & Qt.ControlModifier)) {
+                            picker.toggleChosen(cell.token)
+                            picker.anchorIndex = cell.index
+                        } else {
+                            picker.selectOnly(cell.token)
+                            picker.anchorIndex = cell.index
+                        }
+                        if (picker.saving)
+                            pickerChrome.nameText = cell.name
                     }
+                    onCellActivated: picker.activate(cell.index)
+                }
+            }
 
-                    MouseArea {
-                        id: cellMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        // El arrastre empieza aquí tantas veces como en el
-                        // hueco: las celdas se estiran hasta llenar el ancho, así
-                        // que "el hueco" casi no existe. La celda cede el gesto a
-                        // la ventana en cuanto pasa de un temblor.
-                        preventStealing: picker.banding
+            Column {
+                z: 2
+                anchors.centerIn: parent
+                width: Math.min(420, parent.width - 64)
+                spacing: CelestinaTheme.spaceSm
+                visible: entryGrid.count === 0
+                Accessible.role: Accessible.Pane
+                Accessible.name: emptyTitle.text
 
-                        property bool armed: false
-                        property real pressX: 0
-                        property real pressY: 0
+                CelestinaIcon {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: CelestinaTheme.glyphTileLg
+                    height: width
+                    name: controller.errorText.length > 0
+                          ? "dialog-warning" : "folder"
+                    fallbackName: controller.errorText.length > 0
+                                  ? "dialog-warning" : "folder"
+                    tone: controller.errorText.length > 0
+                          ? CelestinaIcon.Danger : CelestinaIcon.Secondary
+                }
 
-                        function toContent(mouse) {
-                            return cellMouse.mapToItem(entryGrid.contentItem,
-                                                       mouse.x, mouse.y)
-                        }
+                Text {
+                    id: emptyTitle
 
-                        onPressed: function(mouse) {
-                            const p = toContent(mouse)
-                            pressX = p.x
-                            pressY = p.y
-                            armed = true
-                        }
-                        onPositionChanged: function(mouse) {
-                            if (!armed)
-                                return
-                            const p = toContent(mouse)
-                            if (!picker.banding
-                                    && (Math.abs(p.x - pressX) > 5
-                                        || Math.abs(p.y - pressY) > 5))
-                                picker.bandBegin(pressX, pressY,
-                                                 mouse.modifiers & Qt.ControlModifier)
-                            picker.bandUpdate(p.x, p.y)
-                        }
-                        onReleased: { armed = false; picker.bandFinish() }
-                        onCanceled: { armed = false; picker.bandFinish() }
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    text: controller.errorText.length > 0
+                          ? "No se pudo abrir esta ubicación"
+                          : controller.loading ? "Cargando…"
+                          : !controller.showHidden
+                            && controller.folderHiddenCount > 0
+                            ? "Sólo hay elementos ocultos"
+                          : pickerChrome.filterIndex > 0
+                            ? "No hay archivos para este filtro"
+                          : "Esta carpeta está vacía"
+                    color: CelestinaTheme.text
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontRowTitle
+                    font.weight: CelestinaTheme.weightDemiBold
+                    wrapMode: Text.Wrap
+                }
 
-                        onClicked: function(mouse) {
-                            // Un arrastre acaba en un clic que no lo es.
-                            if (picker.bandConsumed) {
-                                picker.bandConsumed = false
-                                return
-                            }
-                            entryGrid.currentIndex = cell.index
-                            entryGrid.forceActiveFocus()
-                            if (!cell.selectable)
-                                return
-                            if (picker.multiple && (mouse.modifiers & Qt.ShiftModifier)
-                                    && picker.anchorIndex >= 0) {
-                                picker.selectRange(picker.anchorIndex, cell.index,
-                                                   mouse.modifiers & Qt.ControlModifier)
-                            } else if (picker.multiple
-                                       && (mouse.modifiers & Qt.ControlModifier)) {
-                                picker.toggleChosen(cell.token)
-                                picker.anchorIndex = cell.index
-                            } else {
-                                picker.selectOnly(cell.token)
-                                picker.anchorIndex = cell.index
-                            }
-                            if (picker.saving && !cell.isDirectory)
-                                pickerChrome.nameText = cell.name
-                        }
-                        onDoubleClicked: picker.activate(cell.index)
-                    }
+                Text {
+                    width: parent.width
+                    visible: text.length > 0
+                    horizontalAlignment: Text.AlignHCenter
+                    text: controller.errorText.length > 0
+                          ? controller.errorText
+                          : !controller.showHidden
+                            && controller.folderHiddenCount > 0
+                            ? "Activa Ocultos para mostrarlos."
+                          : ""
+                    color: CelestinaTheme.textMuted
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCaption
+                    wrapMode: Text.Wrap
                 }
             }
         }
@@ -640,9 +725,9 @@ Window {
             id: pickerChrome
             anchors.fill: parent
             pickerController: controller
+            hostWindow: picker
             contentSurface: contentBox
             backdropView: entryGrid
-            requesterId: picker.appId
             saving: picker.saving
             gridScrolls: picker.gridScrolls
             filterRows: picker.filterRows
@@ -650,9 +735,13 @@ Window {
             chosenCount: picker.chosenCount
             acceptText: picker.acceptText
             canAccept: picker.canAccept
+            showHidden: controller.showHidden
+            loading: controller.loading
             onFilterActivated: function(index) { picker.applyFilter(index) }
+            onToggleHiddenRequested: picker.toggleHidden()
             onAcceptRequested: picker.answer(picker.chosenPaths())
             onCancelRequested: picker.cancel()
+            onViewFocusRequested: entryGrid.forceActiveFocus()
         }
     }
 }

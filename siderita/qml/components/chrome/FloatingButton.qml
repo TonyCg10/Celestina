@@ -29,8 +29,6 @@ Button {
     font.pixelSize: CelestinaTheme.fontRowSecondary
     font.weight: CelestinaTheme.weightMedium
 
-    ToolTip.visible: helpText.length > 0 && hovered
-    ToolTip.text: helpText
     Accessible.name: helpText.length > 0 ? helpText : text
 
     // QQuickControl handles clicks, while this handler prevents hover from
@@ -53,7 +51,8 @@ Button {
         color: control.role === FloatingButton.Primary
                ? (control.enabled ? CelestinaTheme.accentInk
                                   : CelestinaTheme.accentDisabledInk)
-               : (control.enabled ? CelestinaTheme.text
+               : (control.enabled ? (control.active ? CelestinaTheme.accent
+                                                     : CelestinaTheme.text)
                                   : CelestinaTheme.textMuted)
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
@@ -73,12 +72,12 @@ Button {
                  : control.down ? CelestinaTheme.surfaceStrong
                  : control.hovered || control.active ? CelestinaTheme.surfaceHover
                  : CelestinaTheme.controlFill)
-        border.width: control.activeFocus ? CelestinaTheme.borderFocus
+        border.width: control.visualFocus ? CelestinaTheme.borderFocus
                       : control.role === FloatingButton.Primary && !control.enabled
                         ? CelestinaTheme.borderHairline
                       : control.role === FloatingButton.Tonal
                         ? CelestinaTheme.borderHairline : 0
-        border.color: control.activeFocus ? CelestinaTheme.focusRing
+        border.color: control.visualFocus ? CelestinaTheme.focusRing
                       : control.role === FloatingButton.Primary
                         ? CelestinaTheme.accentDisabledInk
                         : CelestinaTheme.divider

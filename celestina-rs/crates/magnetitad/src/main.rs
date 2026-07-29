@@ -32,9 +32,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use celestina_core::xdg;
 use magnetita_core::{
-    read_battery, read_clipboard, read_mpris, read_mpris_request, read_notification, read_sftp,
-    read_share, request_packet, ConnectionEvent, DeviceType, Identity, IncomingFile, LostReason,
-    Notification, Session, SftpReply,
+    read_album_art, read_battery, read_clipboard, read_mpris, read_mpris_request,
+    read_notification, read_sftp, read_share, request_packet, ConnectionEvent, DeviceType,
+    Identity, IncomingAlbumArt, IncomingFile, LostReason, Notification, Session, SftpReply,
 };
 use magnetita_net::discovery::ANNOUNCE_INTERVAL;
 use magnetita_net::{
@@ -42,15 +42,18 @@ use magnetita_net::{
     TrustedPeer,
 };
 
+mod artwork;
 mod devices;
 mod lock;
 mod media;
 mod mount;
 mod notify;
+mod remote_media;
 mod settings;
 use devices::{push_log, Command, Commands, DeviceEntry, Devices, Log, LogEntry, Registry};
 use lock::LockOk;
 use mount::Mount;
+use remote_media::{RemoteMedia, Report as MediaReport};
 use settings::Settings;
 
 /// The KDE Connect port: UDP announce/listen and TCP link.
@@ -61,13 +64,6 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// How often [`Device::pump`] wakes to check the pairing clock while idle.
 const TICK: Duration = Duration::from_secs(1);
-
-/// How often to (re)ask the phone for its media players. The connect-time
-/// request can land before the phone's mpris plugin is ready — and the phone
-/// does not push its player list unsolicited — so a periodic poll is what makes
-/// now-playing appear at all. One tiny packet; KDE Connect's own applet polls
-/// the same way.
-const MPRIS_POLL_MS: i64 = 5000;
 
 fn main() -> std::process::ExitCode {
     match run() {
@@ -109,6 +105,9 @@ fn run() -> Result<(), Box<dyn Error>> {
         .ok_or("no XDG config home to store the device identity")?
         .join("magnetita");
     fs::create_dir_all(&dir)?;
+    if let Err(error) = artwork::sweep() {
+        log("artwork", &format!("cache unavailable: {error}"));
+    }
 
     let device_id = ensure_device_id(&dir)?;
     let cert = DeviceCert::ensure(&dir, &device_id)?;
@@ -301,25 +300,7 @@ impl Daemon {
             }
             devices.insert(
                 peer_id.clone(),
-                DeviceEntry {
-                    id: peer_id.clone(),
-                    name: peer_name.clone(),
-                    device_type: peer_type,
-                    connected: true,
-                    mounted: false,
-                    paired: false,
-                    mount_path: String::new(),
-                    battery: -1,
-                    charging: false,
-                    fingerprint,
-                    media_player: String::new(),
-                    media_title: String::new(),
-                    media_artist: String::new(),
-                    media_playing: false,
-                    media_can_pause: false,
-                    media_can_next: false,
-                    media_can_previous: false,
-                },
+                DeviceEntry::connected(peer_id.clone(), peer_name.clone(), peer_type, fingerprint),
             );
         }
         self.notify_change();
@@ -347,6 +328,7 @@ impl Daemon {
         }
         self.devices.lock_ok().remove(&peer_id);
         self.commands.lock_ok().remove(&peer_id);
+        artwork::clear_device(&peer_id);
         self.notify_change();
         log("closed", &format!("{peer_name} disconnected"));
         ui_log(self, &peer_name, "desconectado", false);
@@ -405,11 +387,7 @@ impl Daemon {
         // unmounts, so a lost link never strands a dead mount.
         let mut mount: Option<Mount> = None;
         let mut asked_sftp = false;
-        // The phone player we drive from the app: the first the phone lists,
-        // then whichever it last reported state for.
-        let mut mpris_player: Option<String> = None;
-        // When we last polled for players (0 → poll on the first loop turn).
-        let mut last_mpris_poll = 0i64;
+        let mut remote_media = RemoteMedia::default();
 
         // A device we already trust: ask for its storage right away — and, for
         // each enabled plugin, prime it (battery, media, clipboard handshake).
@@ -436,15 +414,8 @@ impl Daemon {
             // one we neither drive nor react to.
             let settings = *self.settings.lock_ok();
 
-            // Poll the phone's players (and the current one's now-playing) — the
-            // connect-time request is often dropped before the phone is ready,
-            // and it never pushes the list on its own.
-            if settings.media && millis() - last_mpris_poll >= MPRIS_POLL_MS {
-                last_mpris_poll = millis();
-                device.send(magnetita_core::mpris::request_player_list)?;
-                if let Some(player) = mpris_player.clone() {
-                    device.send(|id| magnetita_core::mpris::request_now_playing(id, &player))?;
-                }
+            if settings.media {
+                remote_media.poll(&mut device, millis())?;
             }
 
             // Commands the app forwarded for this device (its "Emparejar" /
@@ -465,10 +436,7 @@ impl Daemon {
                     Command::Media(action) if settings.media => {
                         // Drive the phone's active player; a report comes back
                         // and refreshes the app's now-playing card.
-                        if let Some(player) = mpris_player.clone() {
-                            device
-                                .send(|id| magnetita_core::mpris::action(id, &player, &action))?;
-                        }
+                        remote_media.send_action(&mut device, &action)?;
                     }
                     Command::Media(_) => {}
                     Command::SendFile(_) if !settings.share => {}
@@ -615,25 +583,28 @@ impl Daemon {
                 }
                 // Media, both ways — only while the plugin is enabled.
                 if settings.media {
+                    if let Some(incoming) = read_album_art(packet) {
+                        let daemon = Arc::clone(self);
+                        let device_id = peer_id.to_owned();
+                        let host = link_host.clone();
+                        thread::spawn(move || daemon.receive_artwork(device_id, host, incoming));
+                    }
                     // The phone reporting its media (for the now-playing card).
                     if let Some(update) = read_mpris(packet) {
-                        if let Some(players) = update.players {
-                            if players.is_empty() {
-                                mpris_player = None;
-                                self.set_media(peer_id, None);
-                                self.notify_change();
-                            } else if mpris_player.is_none() {
-                                // Adopt the first player and ask for its state.
-                                let first = players[0].clone();
-                                mpris_player = Some(first.clone());
-                                device.send(|id| {
-                                    magnetita_core::mpris::request_now_playing(id, &first)
-                                })?;
+                        let report = remote_media.handle(update, &mut device, millis())?;
+                        let change = match report {
+                            MediaReport::NoChange => None,
+                            MediaReport::Cleared => {
+                                Some(devices::set_media(&self.devices, peer_id, None))
                             }
-                        }
-                        if let Some(state) = update.state {
-                            mpris_player = Some(state.player.clone());
-                            self.set_media(peer_id, Some(&state));
+                            MediaReport::State(state) => {
+                                Some(devices::set_media(&self.devices, peer_id, Some(&state)))
+                            }
+                        };
+                        if let Some(stale) = change {
+                            if let Some(path) = stale {
+                                artwork::discard(&path);
+                            }
                             self.notify_change();
                         }
                     }
@@ -743,30 +714,35 @@ impl Daemon {
         }
     }
 
-    /// Reflect the phone's reported now-playing into the registry, or clear it
-    /// (an empty player list, or nothing playing).
-    fn set_media(&self, device_id: &str, state: Option<&magnetita_core::PlayerState>) {
-        if let Some(entry) = self.devices.lock_ok().get_mut(device_id) {
-            match state {
-                Some(state) => {
-                    entry.media_player = state.player.clone();
-                    entry.media_title = state.title.clone();
-                    entry.media_artist = state.artist.clone();
-                    entry.media_playing = state.is_playing;
-                    entry.media_can_pause = state.can_pause;
-                    entry.media_can_next = state.can_go_next;
-                    entry.media_can_previous = state.can_go_previous;
-                }
-                None => {
-                    entry.media_player.clear();
-                    entry.media_title.clear();
-                    entry.media_artist.clear();
-                    entry.media_playing = false;
-                    entry.media_can_pause = false;
-                    entry.media_can_next = false;
-                    entry.media_can_previous = false;
+    /// Receive and publish a cover off the pump thread. A response for a track
+    /// that has already changed is discarded instead of replacing current art.
+    fn receive_artwork(
+        self: Arc<Self>,
+        device_id: String,
+        host: String,
+        incoming: IncomingAlbumArt,
+    ) {
+        match artwork::receive(&device_id, &host, &self.tls, &incoming) {
+            Ok(path) => {
+                let url = artwork::file_url(&path);
+                match devices::install_artwork(
+                    &self.devices,
+                    &device_id,
+                    &incoming.player,
+                    &incoming.source_url,
+                    path.clone(),
+                    url,
+                ) {
+                    Some(previous) => {
+                        if let Some(previous) = previous {
+                            artwork::discard(&previous);
+                        }
+                        self.notify_change();
+                    }
+                    None => artwork::discard(&path),
                 }
             }
+            Err(error) => log("artwork", &format!("{device_id}: {error}")),
         }
     }
 

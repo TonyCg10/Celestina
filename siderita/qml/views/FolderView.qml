@@ -3,7 +3,6 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import org.celestina.siderita 1.0
 import org.celestina.siderita.internal 1.0
-
 // ─── FolderView ───────────────────────────────────────────────────────────────
 // Una vista de carpeta independiente: migas de pan y búsqueda, la lista o la
 // rejilla, la selección múltiple, los menús contextuales de entrada, carpeta y
@@ -776,6 +775,7 @@ Item {
         compact: !root.headingExpanded
         controller: tabController
         hostWindow: root.hostWindow
+        onPhoneMediaRequested: index => folderActions.openPhoneMedia(index)
     }
 
     TopBar {

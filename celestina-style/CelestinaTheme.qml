@@ -160,6 +160,7 @@ QtObject {
         required property color mediaArtworkEnd
         required property color mediaArtworkInk
         required property color mediaProgress
+        required property color mediaProgressTrack
         // Entry-kind glyph tints.
         required property color glyphDirectory
         required property color glyphSymlink
@@ -270,6 +271,7 @@ QtObject {
         mediaArtworkEnd: "#d39a7f"
         mediaArtworkInk: theme.ref.textHi
         mediaProgress: "#e7edf6"
+        mediaProgressTrack: "#99e7edf6"
         // Icon ink stays within one cool family by default: vivid blue marks
         // content folders, silver-blue marks plain files, slate marks
         // navigation/sidebar chrome and cyan marks connected hardware.
@@ -364,6 +366,7 @@ QtObject {
     readonly property color mediaArtworkEnd: scheme.mediaArtworkEnd
     readonly property color mediaArtworkInk: scheme.mediaArtworkInk
     readonly property color mediaProgress: scheme.mediaProgress
+    readonly property color mediaProgressTrack: scheme.mediaProgressTrack
     readonly property color glyphDirectory: scheme.glyphDirectory
     readonly property color glyphSymlink: scheme.glyphSymlink
     readonly property color glyphFile: scheme.glyphFile
@@ -507,6 +510,10 @@ QtObject {
     readonly property real decorationOpacityStrong: 0.8
 
     // ── Motion ─────────────────────────────────────────────────────────────────
+    // Host-controlled accessibility input. Consumers must bind this once from
+    // their settings/platform adapter; every new animation provides a static
+    // or fade-only route when it is true.
+    property bool reducedMotion: false
     // Duration ladder (DESIGN §6.7): dialogs/quick 100, normal 200, expressive
     // 350, hard ceiling 500. The bezier tokens are the One UI curves, ready for
     // S2's motion retune (recoil, opacity→linear, bezier adoption); S1 keeps the

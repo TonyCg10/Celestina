@@ -273,13 +273,17 @@ language.
       the daemon's `SendFile` over D-Bus, complementing the browse-the-phone mount
       of CP2. Live-verified: right-click → the file lands on the phone.
 - [x] **Media control (MPRIS)** — playback both ways over `kdeconnect.mpris`.
-      Desktop → phone: the app's "Ahora suena" card shows the phone's now-playing
-      (title/artist) with ⏮ ⏯ ⏭ transport, carried on the `Devices1` contract
-      (`mediaTitle`, `mediaArtist`, `mediaPlaying`, `mediaCan*`) and driven by a
-      new `MediaAction` method. Phone → desktop: the daemon answers the phone's
+      Desktop → phone: `Devices1` consumers such as Siderita's MÓVIL media card
+      receive title, artist, album, artwork and timed progress with ⏮ ⏯ ⏭
+      transport, carried on additive dictionary keys (`mediaTitle`,
+      `mediaArtist`, `mediaAlbum`, `mediaArtworkUrl`, `mediaLength`,
+      `mediaPosition`, `mediaPlaying`, `mediaCan*`) and driven by `MediaAction`.
+      Artwork payloads are capped, signature-checked, written atomically and
+      kept only below `$XDG_RUNTIME_DIR/magnetita/artwork`; stale transfers
+      cannot replace a newer track's image. Phone → desktop: the daemon answers the phone's
       `mpris.request` from the desktop's own players via `playerctl` — lists them,
       reports now-playing, and runs play-pause/next/previous. The wire lives in a
-      pure `magnetita-core::mpris` (10 tests); the desktop side is `media.rs`,
+      pure, offline-tested `magnetita-core::mpris`; the desktop side is `media.rs`,
       unit-tested and validated live against playerctl + a real player.
 - [x] **One settings source** — a Settings surface in the app (a gear flips the
       window to it) manages the two things that outlive a session: **paired

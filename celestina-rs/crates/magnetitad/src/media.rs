@@ -104,6 +104,7 @@ fn parse_state(player: &str, line: &str) -> PlayerState {
         title,
         artist,
         album,
+        album_art_url: String::new(),
         is_playing: status.eq_ignore_ascii_case("Playing"),
         // playerctl controls generic players; report the transport as available
         // and let the player itself no-op what it cannot do.

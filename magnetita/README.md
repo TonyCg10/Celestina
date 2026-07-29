@@ -25,7 +25,8 @@ networked app**: everything before it stayed on one machine.
 > `org.celestina.Devices1` — consumed by Siderita's sidebar, the standalone app
 > and the `celestina` panel. The daily plugins are all live-verified: battery,
 > notifications, file share (both ways), find-my-phone, clipboard, MPRIS media
-> (both ways), plus a Settings surface with per-plugin toggles. See
+> (both ways, including the phone's artwork and playback progress), plus a
+> Settings surface with per-plugin toggles. See
 > [ROADMAP.md](ROADMAP.md) for the checkpoint detail and the known phone-side
 > limits.
 
@@ -97,7 +98,7 @@ and the packaging.
 |---|---|
 | `../celestina-rs/crates/magnetita-core` | protocol domain: `NetworkPacket`, identity, capabilities, pairing state machine, plugin bodies — pure, no I/O, no Qt |
 | `../celestina-rs/crates/magnetita-net` | transport: UDP discovery, TCP+TLS link (TOFU cert pinning), payload transfer, trust store |
-| `../celestina-rs/crates/magnetitad` | the headless daemon: device links, the sshfs mount, notifications, MPRIS, settings, and the `org.celestina.Devices1` service |
+| `../celestina-rs/crates/magnetitad` | the headless daemon: device links, the sshfs mount, notifications, MPRIS metadata/artwork, settings, and the `org.celestina.Devices1` service |
 | `src/` | the standalone app's thin CXX-Qt/D-Bus bridge (`controller.rs`) |
 | `qml/Main.qml` | window state and navigation only |
 | `qml/pages/` | Devices and Settings page composition |

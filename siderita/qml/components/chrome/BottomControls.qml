@@ -21,40 +21,13 @@ RowLayout {
 
     spacing: 8
 
-    GlassPill {
-        id: hiddenToggle
-        Layout.preferredWidth: hiddenLabel.implicitWidth + 22
+    HiddenTogglePill {
         Layout.preferredHeight: CelestinaTheme.controlHeightSm
+        toggleChecked: root.controller.showHidden
         backdrop: root.bottomView
         floating: root.bottomFloating
-        fill: root.controller.showHidden
-              ? CelestinaTheme.badgeAccentFill
-              : hiddenMouse.containsMouse
-                ? CelestinaTheme.surfaceHover
-                : CelestinaTheme.controlFill
-
-        Accessible.role: Accessible.Button
-        Accessible.name: "Mostrar u ocultar elementos ocultos"
-
-        Text {
-            id: hiddenLabel
-            anchors.centerIn: parent
-            text: "Ocultos"
-            color: root.controller.showHidden
-                   ? CelestinaTheme.accent
-                   : CelestinaTheme.textMuted
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: Math.round(CelestinaTheme.fontMini * root.textScale)
-            font.weight: CelestinaTheme.weightMedium
-        }
-
-        MouseArea {
-            id: hiddenMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.controller.toggleHidden()
-        }
+        textScale: root.textScale
+        onToggleRequested: root.controller.toggleHidden()
     }
 
     GlassPill {
@@ -81,7 +54,7 @@ RowLayout {
                 role: CelestinaButton.Ghost
                 density: CelestinaButton.Compact
                 text: labels[root.controller.sortField]
-                helpText: "Ordenar por " + text
+                Accessible.name: "Ordenar por " + text
                 font.pixelSize: Math.round(CelestinaTheme.fontCaption
                                            * root.textScale)
                 onClicked: {
@@ -106,9 +79,9 @@ RowLayout {
                 fallbackIcon: root.controller.sortAscending
                               ? "view-sort-ascending"
                               : "view-sort-descending"
-                helpText: root.controller.sortAscending
-                          ? "Orden ascendente"
-                          : "Orden descendente"
+                Accessible.name: root.controller.sortAscending
+                                 ? "Orden ascendente"
+                                 : "Orden descendente"
                 onClicked: root.controller.toggleSortDirection()
             }
         }
@@ -143,7 +116,7 @@ RowLayout {
                     density: CelestinaButton.Compact
                     iconName: ""
                     fallbackIcon: modelData.fallback
-                    helpText: "Vista " + modelData.label
+                    Accessible.name: "Vista " + modelData.label
                     onClicked: {
                         root.panel.viewMode = modelData.mode
                         root.panel.persist()

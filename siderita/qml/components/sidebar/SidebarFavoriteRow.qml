@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls
 import org.celestina.siderita 1.0
 
 Item {
@@ -68,10 +67,6 @@ Item {
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        ToolTip.visible: containsMouse
-        ToolTip.delay: 600
-        ToolTip.text: root.entry.path
-
         onClicked: function(mouse) {
             const controller = root.hostWindow.activeController
             if (!controller || root.missing)
