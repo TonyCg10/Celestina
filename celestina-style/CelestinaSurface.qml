@@ -39,7 +39,7 @@ Pane {
                                          ? CelestinaTheme.canvas
                                       : role === CelestinaSurface.Panel
                                          || role === CelestinaSurface.Tonal
-                                         ? CelestinaTheme.surface
+                                         ? CelestinaTheme.card
                                       : role === CelestinaSurface.Elevated
                                          ? CelestinaTheme.elevated
                                       : role === CelestinaSurface.Selected
@@ -51,5 +51,10 @@ Pane {
     background: Rectangle {
         radius: control.radius
         color: control.fill
+        border.width: control.role === CelestinaSurface.Canvas
+                      ? 0 : CelestinaTheme.borderHairline
+        border.color: control.role === CelestinaSurface.Selected
+                      ? CelestinaTheme.dividerStrong
+                      : CelestinaTheme.divider
     }
 }

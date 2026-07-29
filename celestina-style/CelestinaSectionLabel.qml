@@ -11,7 +11,7 @@ Text {
     property real textScale: 1.0
     property int size: CelestinaSectionLabel.Compact
 
-    color: CelestinaTheme.textMuted
+    color: CelestinaTheme.textFaint
     font.family: CelestinaTheme.sansFamily
     font.pixelSize: Math.round((size === CelestinaSectionLabel.Regular
                                 ? CelestinaTheme.fontRowSecondary

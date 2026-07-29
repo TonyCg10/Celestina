@@ -14,7 +14,7 @@ token singleton (promoted from Siderita), working backdrop-blur glass
 (`GlassSurface`/`GlassCard`/`GlassContextMenu`/`GlassMenuItem`, replacing the
 earlier `CelestinaGlassPanel` that blurred its own fill), semantic backdrop,
 surface, button, icon, section-label, text-field, switch, modal-layer and grouped
-list components, plus bundled fallback icons. Both apps consume it live by
+list components, plus a bundled Lucide catalogue. Both apps consume it live by
 symlinking the sources into their own CXX-Qt modules — the official mechanism,
 guarded in CI so a copy can never silently reappear. A compatibility/deprecation
 policy and verified accessibility/motion behavior are still open; the installable
@@ -36,7 +36,7 @@ public control's contract; the component set grows only from proven reuse
 **Design contract.** The visual direction — One UI 8.5 adapted to desktop:
 reference values, the Qt/niri platform ceiling, the audit of the current
 system, the target system and a phased build plan (S1–S5) — lives in
-[DESIGN.md](DESIGN.md) (v1.0, decisions sealed). This roadmap tracks
+[DESIGN.md](DESIGN.md) (v1.1, decisions sealed). This roadmap tracks
 execution; the design contract says what "done" looks like.
 
 **Phase status.** **S1 (tokens v2 + typography) — done** (2026-07-27): the
@@ -58,21 +58,22 @@ dither → a thin dark outline → the lit top-edge glow, now a GPU
 `Shape`/CurveRenderer gradient ring instead of the CPU `Canvas`. `elevation`
 adds the L2 `RectangularShadow` under floating layers (menus float instead of
 pasting); modals (L3) dim with the `scrim` token, never a shadow. The surface
-self-tracks its scene position (a `FrameAnimation` while live), so menus/cards
-dropped their hand-wired `refreshBackdrop()` choreography. Verified on the real
+refreshes its sample mapping from source-geometry signals, while moving popups
+refresh on their positioning events; there is no always-on frame loop. Verified
+on the real
 session (blur/shadow do not render under the offscreen QPA): grabbed glass /
 elevated-surface / real Siderita-window captures, plus app builds + offscreen
 smokes + clean `all_qmllint`. Deferred within the recipe: the composite
 QQEM/qsb shader (blur+desaturate+tint+noise+stroke in one pass) stays layered
 for now.
 
-**S3 (iconography) — done** (2026-07-27): the ad-hoc
-hand-drawn fallbacks were replaced by the **Lucide** set (ISC, license shipped
-in `icons/`) behind the existing freedesktop-name mapping, so consumers keep
-resolving by name; a `phone` icon was added (Siderita's sidebar referenced a
-`phone` fallback that did not exist). The shell panel's emoji glyphs (`📱`,`⚡`)
-became real icons, compiled into the shell from the canonical files. `eject`
-has no Lucide equivalent, so the existing (Lucide-consistent) mark is kept.
+**S3 (iconography) — done** (2026-07-27, closed 2026-07-28): the ad-hoc
+hand-drawn and desktop-theme paths were replaced by the **Lucide** set (ISC,
+license shipped in `icons/`). `CelestinaIcons` preserves existing semantic and
+freedesktop identifiers but resolves them exclusively to 76 vendored SVGs;
+`CelestinaIcon` never passes a name to QIcon. The pinned sync script reproduces
+the entire catalogue, and the former eject mark resolves to Lucide `unplug`.
+The shell panel's emoji glyphs (`📱`,`⚡`) became real canonical icons as well.
 The app-icon tiles became true **squircles** (a superellipse n=5 shared by both
 launcher marks, replacing the rounded-rect tile — One UI reserves the
 superellipse for app icons, §6.3); the amber-rhombohedron / steel-octahedron
@@ -148,11 +149,20 @@ roles. `scripts/check-style-contract.sh`, wired into CI, rejects colours, local
 colour transforms and raw state/anatomy values outside the canonical theme.
 Responsive page geometry deliberately remains consumer-owned.
 
+**Application-composition first slice — done** (2026-07-28): Siderita and
+Magnetita now apply the approved desktop prototype without moving domain logic.
+Opaque `CelestinaSurface` roles own the sidebar, tabs, content groups, device
+cards and activity regions; denser `GlassSurface` is reserved for floating path
+and footer chrome. Shared buttons gained selected/ghost roles and a
+prominent density, while the new media/artwork and large-row roles remain theme
+tokens. Verified with real-session captures of Siderita list/grid and Magnetita
+devices/settings, plus live navigation/action routing.
+
 ## Checkpoint 0 — The canonical source, enforced (STYLE-0)
 **Goal:** one canonical source tree that every consumer compiles from, with
 drift made impossible, and glass APIs that mean what they say.
 
-- [x] Canonical module builds with CMake: semantic token singleton (`CelestinaTheme`, promoted from Siderita) + working glass (`GlassSurface`, `GlassCard`, `GlassContextMenu`, `GlassMenuItem`) + `CelestinaButton` + `CelestinaTextField` + bundled fallback icons
+- [x] Canonical module builds with CMake: semantic token singletons (`CelestinaTheme`, `CelestinaIcons`) + working glass (`GlassSurface`, `GlassCard`, `GlassContextMenu`, `GlassMenuItem`) + `CelestinaButton` + `CelestinaTextField` + the closed Lucide catalogue
 - [x] Working backdrop-blur glass — the broken `CelestinaGlassPanel` (blurred its own fill, not the backdrop) and `CelestinaContextMenu` were removed and replaced by Siderita's proven `ShaderEffectSource`-capture `GlassSurface`
 - [x] First real consumer proven: `siderita` renders entirely from this module (theme, glass, icons), verified by build + offscreen run
 - [x] Single source made real and enforced: both apps consume by symlink into their own CXX-Qt modules (Siderita's six committed copies were replaced by links, 2026-07-26), and CI refuses any style file in an app's `qml/` that is not a symlink
@@ -181,7 +191,7 @@ independently.
 
 - [ ] Compatibility + deprecation policy for the 1.0 surface
 - [ ] Truthful glass APIs — tint/glow/tokens vs. real in-scene blur vs. compositor blur kept clearly separate
-- [~] Font + icon fallback contracts — Inter Variable (OFL) ships embedded in each app's qrc, with an honest fallback where it is not compiled in (the shell → application default), and the Lucide set landed in S3; the mono face and the written fallback policy remain
+- [~] Font + icon contracts — Inter Variable (OFL) ships embedded in each app's qrc, with an honest fallback where it is not compiled in (the shell → application default), and the closed Lucide set landed in S3; the mono face and written font fallback policy remain
 - [ ] Keyboard, focus, AT-SPI, reduced-motion and high-contrast behavior for the finite component set
 - [x] Both apps consume the same canonical source (symlink-compiled; an installed release belongs to STYLE-D)
 

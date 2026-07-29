@@ -40,6 +40,15 @@ pub(crate) fn system_time(time: std::time::SystemTime) -> String {
     }
 }
 
+/// A compact Spanish local timestamp for small summary surfaces:
+/// `28 jul 2026 · 19:51`.
+pub(crate) fn system_time_short(time: std::time::SystemTime) -> String {
+    match time.duration_since(std::time::UNIX_EPOCH) {
+        Ok(elapsed) => crate::properties::format_time_short(elapsed.as_secs() as i64),
+        Err(_) => String::new(),
+    }
+}
+
 /// Prettifies a spec `YYYY-MM-DDThh:mm:ss` stamp for display: `T` becomes a
 /// space and the seconds are dropped, but an already-short `hh:mm` is left
 /// intact and a non-conforming string is returned as-is.
@@ -58,6 +67,39 @@ pub(crate) fn trash_date(raw: &str) -> String {
     format!("{date} {hm}")
 }
 
+/// A freedesktop Trash timestamp as compact Spanish text. Invalid values retain
+/// the established lenient formatting instead of disappearing from the UI.
+pub(crate) fn trash_date_short(raw: &str) -> String {
+    if raw.is_empty() {
+        return String::new();
+    }
+    let normalized = trash_date(raw);
+    let Some((date, time)) = normalized.split_once(' ') else {
+        return normalized;
+    };
+    let mut parts = date.split('-');
+    let (Some(year), Some(month), Some(day), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return normalized;
+    };
+    const MONTHS: [&str; 12] = [
+        "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic",
+    ];
+    let Some(month_name) = month
+        .parse::<usize>()
+        .ok()
+        .and_then(|value| value.checked_sub(1))
+        .and_then(|index| MONTHS.get(index))
+    else {
+        return normalized;
+    };
+    let day = day
+        .parse::<u8>()
+        .map_or_else(|_| day.to_owned(), |value| value.to_string());
+    format!("{day} {month_name} {year} · {time}")
+}
+
 /// Just the date half of a `YYYY-MM-DDThh:mm:ss` stamp — everything before the
 /// `T`, or the whole string if there is none.
 pub(crate) fn date_only(raw: &str) -> &str {
@@ -66,7 +108,7 @@ pub(crate) fn date_only(raw: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::{date_only, size, size_full, trash_date};
+    use super::{date_only, size, size_full, trash_date, trash_date_short};
 
     #[test]
     fn size_steps_up_at_1024_with_one_decimal() {
@@ -87,6 +129,16 @@ mod tests {
         assert_eq!(trash_date("2026-07-21T18:04"), "2026-07-21 18:04");
         assert_eq!(trash_date(""), "");
         assert_eq!(trash_date("desconocido"), "desconocido");
+    }
+
+    #[test]
+    fn trash_date_short_uses_an_abbreviated_spanish_month() {
+        assert_eq!(
+            trash_date_short("2026-07-21T18:04:09"),
+            "21 jul 2026 · 18:04"
+        );
+        assert_eq!(trash_date_short("desconocido"), "desconocido");
+        assert_eq!(trash_date_short(""), "");
     }
 
     #[test]

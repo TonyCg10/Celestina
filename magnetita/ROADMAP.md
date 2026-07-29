@@ -25,6 +25,14 @@
 > defeats the invisible-window trick). Magnetita already applies any clipboard the
 > phone pushes — the ceiling is the phone. Reliable auto needs root (Magisk).
 
+**Visual migration (2026-07-28).** The first One UI 8.5 desktop composition is
+live: a large page header, opaque tonal device/activity groups and a tokenized
+expressive media card. The detached connection pill was removed after visual
+review so status remains in the device card. Settings keep the same grouped
+component language. Pairing, mount, ring, unpair, media and
+settings actions still route to the existing D-Bus client; both pages were
+verified in a real Wayland session.
+
 ## Overview
 
 **Purpose.** The suite's phone link — connect the desktop to a phone over the

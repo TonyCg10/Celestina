@@ -146,12 +146,19 @@ Window {
                     CelestinaButton { text: "Cancelar" }
                     CelestinaButton { text: "Guardar"; role: CelestinaButton.Primary }
                     CelestinaButton { text: "Vaciar papelera"; role: CelestinaButton.Destructive }
-                    CelestinaButton { text: "Sólo texto"; role: CelestinaButton.TextOnly }
+                    CelestinaButton { text: "Sólo texto"; role: CelestinaButton.Ghost }
                     CelestinaButton { text: "Desactivado"; enabled: false }
                     CelestinaIconButton {
                         iconName: "settings"
                         fallbackIcon: "settings"
                         helpText: "Ajustes"
+                    }
+                    CelestinaIconButton {
+                        density: CelestinaButton.Regular
+                        role: CelestinaButton.Primary
+                        iconName: ""
+                        fallbackIcon: "media-play"
+                        helpText: "Icono cuadrado"
                     }
                     CelestinaButton {
                         text: "Abrir modal"
@@ -208,7 +215,8 @@ Window {
                             width: 64; height: 64; radius: CelestinaTheme.radiusSm; color: CelestinaTheme.card
                             CelestinaIcon {
                                 anchors.centerIn: parent; width: 28; height: 28
-                                source: Qt.resolvedUrl("../icons/" + modelData + ".svg")
+                                name: modelData
+                                fallbackName: "file"
                                 tone: CelestinaIcon.Primary
                             }
                         }

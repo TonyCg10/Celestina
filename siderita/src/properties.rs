@@ -186,9 +186,40 @@ pub(crate) fn format_time(secs: i64) -> String {
     )
 }
 
+/// Formats a Unix timestamp as compact local Spanish text for small cards.
+pub(crate) fn format_time_short(secs: i64) -> String {
+    if secs == 0 {
+        return String::new();
+    }
+    // SAFETY: localtime_r writes into a fully-owned, zeroed `tm`; time is a
+    // valid `time_t` and the call has no other effects.
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    let time = secs as libc::time_t;
+    let result = unsafe { libc::localtime_r(&time, &mut tm) };
+    if result.is_null() {
+        return String::new();
+    }
+    const MONTHS: [&str; 12] = [
+        "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic",
+    ];
+    let Some(month) = usize::try_from(tm.tm_mon)
+        .ok()
+        .and_then(|index| MONTHS.get(index))
+    else {
+        return String::new();
+    };
+    format!(
+        "{} {month} {} · {:02}:{:02}",
+        tm.tm_mday,
+        tm.tm_year + 1900,
+        tm.tm_hour,
+        tm.tm_min,
+    )
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{format_owner, format_permissions, format_time, lookup_name};
+    use super::{format_owner, format_permissions, format_time, format_time_short, lookup_name};
 
     #[test]
     fn permissions_format_the_rwx_triplets() {
@@ -220,5 +251,21 @@ mod tests {
         assert_eq!(formatted.len(), 16, "got {formatted}");
         assert_eq!(&formatted[4..5], "-");
         assert_eq!(&formatted[10..11], " ");
+    }
+
+    #[test]
+    fn short_time_uses_an_abbreviated_spanish_month() {
+        assert_eq!(format_time_short(0), "");
+        let formatted = format_time_short(1_700_000_000);
+        assert!(
+            [
+                " ene ", " feb ", " mar ", " abr ", " may ", " jun ", " jul ", " ago ", " sep ",
+                " oct ", " nov ", " dic "
+            ]
+            .iter()
+            .any(|month| formatted.contains(month)),
+            "got {formatted}",
+        );
+        assert!(formatted.contains(" · "), "got {formatted}");
     }
 }

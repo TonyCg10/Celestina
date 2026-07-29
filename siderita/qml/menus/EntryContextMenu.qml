@@ -187,6 +187,19 @@ GlassContextMenu {
         onTriggered: root.iconPicker.openFor(root.targetPath, root.targetDirectory)
     }
 
+    IconAccentMenu {
+        title: "Color del icono"
+        icon.name: "paintbrush"
+        icon.source: CelestinaTheme.fallbackIcon("paintbrush")
+        backdropSource: root.backdropSource
+        enabled: !root.multi && !root.controller.trashActive
+        currentKey: root.panel.customIconAccent(root.targetPath)
+        onAccentSelected: function(accentKey) {
+            root.controller.setCustomIconAccent(root.targetPath, accentKey)
+            root.close()
+        }
+    }
+
     GlassMenuItem {
         text: "Propiedades"
         visible: !root.multi

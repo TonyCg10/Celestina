@@ -62,18 +62,39 @@ Item {
         anchors.rightMargin: 4
         radius: CelestinaTheme.radiusSm
         color: root.selected
-               ? CelestinaTheme.surfaceSelected
+               ? CelestinaTheme.badgeAccentFill
                : pointer.containsMouse
                  ? CelestinaTheme.surfaceHover
                  : CelestinaTheme.clear
-        border.width: root.selected ? CelestinaTheme.borderHairline : 0
-        border.color: CelestinaTheme.dividerStrong
+        border.width: 0
+        border.color: CelestinaTheme.divider
 
         Behavior on color {
             ColorAnimation {
                 duration: CelestinaTheme.motionFast
             }
         }
+    }
+
+    Rectangle {
+        visible: root.selected
+        x: 4
+        anchors.verticalCenter: parent.verticalCenter
+        width: CelestinaTheme.compSelectionIndicatorWidth
+        height: CelestinaTheme.compSelectionIndicatorHeight
+        radius: width / 2
+        color: CelestinaTheme.accent
+    }
+
+    Rectangle {
+        anchors.left: kindGlyph.right
+        anchors.leftMargin: 12
+        anchors.right: parent.right
+        anchors.rightMargin: 16
+        anchors.bottom: parent.bottom
+        height: CelestinaTheme.borderHairline
+        color: CelestinaTheme.divider
+        visible: root.index < root.view.count - 1
     }
 
     // Drop onto this row when it is a folder → the drop lands inside that
@@ -129,11 +150,9 @@ Item {
         width: Math.round(CelestinaTheme.glyphTile * root.hostWindow.contentIconScale)
         height: Math.round(CelestinaTheme.glyphTile * root.hostWindow.contentIconScale)
         radius: CelestinaTheme.radiusSm
-        color: root.kind === "directory"
-               ? CelestinaTheme.glyphDirectory
-               : root.kind === "symlink"
-                 ? CelestinaTheme.glyphSymlink
-                 : CelestinaTheme.glyphFile
+        // La fila ya posee el hover y la selección. El fondo del glifo queda
+        // transparente para no inventar un segundo contenedor de estado.
+        color: CelestinaTheme.clear
         clip: true
 
         readonly property string media: root.kind === "directory"
@@ -154,13 +173,12 @@ Item {
                           : root.kind === "symlink"
                             ? "symlink"
                             : "file"
-            // No color tint: let the icon theme (Qogir) render folders and
-            // mimetypes in their own colours. A tint would flatten them to a
-            // solid silhouette.
+            tone: root.panel.entryIconTone(root.kind)
+            tintOverride: root.panel.iconTint(root.path)
         }
 
         // The cached image / video-frame / cover the "thumb" provider
-        // returns, covering the tile once decoded; the themed glyph shows
+        // returns, covering the tile once decoded; the Lucide glyph shows
         // until then (or forever, for media the cache has no thumbnail of).
         Image {
             id: thumb

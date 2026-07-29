@@ -11,7 +11,9 @@ Item {
     id: sizeRow
     property string label: ""
     property alias value: sizeSlider.value
-    // Most scales cap at 2.0 (100 %); content icons may go to 3.0 (150 %).
+    // Scale is literal: 1.0 = 100%. Icon rows provide tighter bounds; text
+    // keeps the wider accessibility range.
+    property real minValue: 0.2
     property real maxValue: 2.0
     signal moved(real v)
 
@@ -36,9 +38,7 @@ Item {
         anchors.right: sizeRowValue.left
         anchors.rightMargin: 10
         anchors.verticalCenter: parent.verticalCenter
-        // The factor reads to the user as a fraction of 2.0 — 10 %–100 %
-        // (or up to 150 % where maxValue is raised).
-        from: 0.2
+        from: sizeRow.minValue
         to: sizeRow.maxValue
         stepSize: 0.1
         onMoved: sizeRow.moved(value)
@@ -78,7 +78,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         width: 38
         horizontalAlignment: Text.AlignRight
-        text: Math.round(sizeSlider.value / 2.0 * 100) + "%"
+        text: Math.round(sizeSlider.value * 100) + "%"
         color: CelestinaTheme.textMuted
         font.family: CelestinaTheme.sansFamily
         font.pixelSize: CelestinaTheme.fontCaption

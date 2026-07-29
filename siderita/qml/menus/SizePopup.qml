@@ -22,7 +22,10 @@ Popup {
     modal: false
     dim: false
     focus: true
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    // The popup is declared inside the size button.  Treating the parent as
+    // inside keeps a click on that button out of the auto-close path, leaving
+    // exactly one state transition to the button's toggle handler.
+    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
     // Frosted like the menus and dialogs — glass is the suite's surface
     // language. Samples the view behind it.
@@ -40,7 +43,8 @@ Popup {
         SizeRow {
             label: "Contenido"
             value: root.hostWindow.contentIconScale
-            maxValue: 3.0
+            minValue: 0.75
+            maxValue: 1.5
             onMoved: function(v) {
                 root.hostWindow.contentIconScale = v
                 root.hostWindow.persistSizing()
@@ -49,6 +53,8 @@ Popup {
         SizeRow {
             label: "Interfaz"
             value: root.hostWindow.interfaceIconScale
+            minValue: 0.75
+            maxValue: 1.25
             onMoved: function(v) {
                 root.hostWindow.interfaceIconScale = v
                 root.hostWindow.persistSizing()
@@ -57,6 +63,8 @@ Popup {
         SizeRow {
             label: "Barra lateral"
             value: root.hostWindow.sidebarIconScale
+            minValue: 0.75
+            maxValue: 1.25
             onMoved: function(v) {
                 root.hostWindow.sidebarIconScale = v
                 root.hostWindow.persistSizing()

@@ -15,24 +15,28 @@ GlassContextMenu {
 
     GlassMenuItem {
         text: "Nombre"
+        choice: true
         current: root.controller.sortField === 0
         onTriggered: root.controller.changeSortField(0)
     }
 
     GlassMenuItem {
         text: "Tamaño"
+        choice: true
         current: root.controller.sortField === 1
         onTriggered: root.controller.changeSortField(1)
     }
 
     GlassMenuItem {
         text: "Fecha de modificación"
+        choice: true
         current: root.controller.sortField === 2
         onTriggered: root.controller.changeSortField(2)
     }
 
     GlassMenuItem {
         text: "Tipo"
+        choice: true
         current: root.controller.sortField === 3
         onTriggered: root.controller.changeSortField(3)
     }

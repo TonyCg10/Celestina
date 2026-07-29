@@ -33,6 +33,20 @@ Button {
     ToolTip.text: helpText
     Accessible.name: helpText.length > 0 ? helpText : text
 
+    // QQuickControl handles clicks, while this handler prevents hover from
+    // leaking through the translucent background to a file delegate.
+    HoverHandler {
+        blocking: true
+    }
+
+    // A drag beginning on a button belongs to the floating chrome, never to
+    // the file row/cell beneath it.
+    DragHandler {
+        target: null
+        grabPermissions: PointerHandler.CanTakeOverFromAnything
+                         | PointerHandler.ApprovesTakeOverByAnything
+    }
+
     contentItem: Text {
         text: control.text
         font: control.font
@@ -47,6 +61,7 @@ Button {
     }
 
     background: GlassPill {
+        inputShield: false
         backdrop: control.backdrop
         floating: control.floating
         fill: control.role === FloatingButton.Primary

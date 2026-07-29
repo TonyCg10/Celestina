@@ -512,8 +512,9 @@ Window {
                         clip: true
                         opacity: cell.selectable
                                  ? 1 : CelestinaTheme.unavailableContentOpacity
-                        color: cell.isDirectory ? CelestinaTheme.glyphDirectory
-                                                : CelestinaTheme.glyphFile
+                        // La celda ya lleva la superficie elegida/hover. Una
+                        // segunda baldosa de color duplicaba ese estado.
+                        color: CelestinaTheme.clear
 
                         CelestinaIcon {
                             anchors.centerIn: parent
@@ -523,6 +524,8 @@ Window {
                             sourceSize: Qt.size(width, width)
                             name: cell.isDirectory ? "folder" : "text-x-generic"
                             fallbackName: cell.isDirectory ? "folder" : "file"
+                            tone: cell.isDirectory
+                                  ? CelestinaIcon.Folder : CelestinaIcon.File
                         }
 
                         // La caché compartida de freedesktop, la misma que lee

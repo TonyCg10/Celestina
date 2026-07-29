@@ -43,6 +43,7 @@ Item {
         opacity: root.missing ? CelestinaTheme.missingContentOpacity : 1
         name: root.entry.kind === "directory" ? "folder" : "text-x-generic"
         fallbackName: root.entry.kind === "directory" ? "folder" : "file"
+        tone: CelestinaIcon.Favorite
     }
 
     Text {

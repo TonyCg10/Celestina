@@ -9,6 +9,11 @@ CelestinaModalLayer {
     property var controller
     property var owner
     property var backdrop   // mainPanel: el fondo que difumina el cristal
+    property var panel      // mainPanel: apariencia semántica y por ruta
+    readonly property string iconKind: controller.propIsDir
+                                               ? "directory"
+                                               : controller.propSymlink.length > 0
+                                                 ? "symlink" : "file"
     anchors.fill: parent
     z: 68
     shown: controller.propertiesPending
@@ -32,10 +37,11 @@ CelestinaModalLayer {
             y: 18
             width: CelestinaTheme.iconMd
             height: CelestinaTheme.iconMd
-            name: controller.propIsDir ? "folder" : "text-x-generic"
+            name: panel.mediaIconName(propertiesView.iconKind, "",
+                                      controller.propPath)
             fallbackName: controller.propIsDir ? "folder" : "file"
-            tone: controller.propIsDir
-                  ? CelestinaIcon.Accent : CelestinaIcon.Secondary
+            tone: panel.entryIconTone(propertiesView.iconKind)
+            tintOverride: panel.iconTint(controller.propPath)
         }
 
         Text {

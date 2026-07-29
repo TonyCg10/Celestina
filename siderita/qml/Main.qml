@@ -90,9 +90,11 @@ ApplicationWindow {
                                         sidebarIconScale, sidebarTextScale)
     }
 
-    function tabTitle(p) {
+    function tabTitle(controller, p) {
         if (!p || p.length === 0)
             return "…"
+        if (controller)
+            return controller.displayLocationName(p)
         if (p === "/")
             return "/"
         const s = p.replace(/\/+$/, "")
@@ -102,7 +104,10 @@ ApplicationWindow {
 
     function openTab(path, foreground) {
         const initial = (path === undefined || path === null) ? "" : path
-        tabsModel.append({ initialPath: initial, title: window.tabTitle(initial) })
+        tabsModel.append({
+            initialPath: initial,
+            title: window.tabTitle(window.activeController, initial)
+        })
         if (foreground)
             window.currentTabIndex = tabsModel.count - 1
     }
@@ -356,10 +361,10 @@ ApplicationWindow {
         // ── Documents: one per tab, only the active one visible ──────────
         Item {
             id: documentRegion
-            x: sidebarPanel.panelVisible ? sidebarPanel.rightEdge + 14 : 20
-            y: 18
-            width: parent.width - x - 20
-            height: parent.height - y - 20
+            x: sidebarPanel.panelVisible ? sidebarPanel.rightEdge + 14 : 14
+            y: 14
+            width: parent.width - x - 14
+            height: parent.height - y - 14
 
             Repeater {
                 id: tabRepeater
@@ -409,11 +414,15 @@ ApplicationWindow {
 
                         Connections {
                             target: doc.tabController
-                            function onCurrentPathChanged() {
+                            function refreshTitle() {
                                 tabsModel.setProperty(
                                     tabHolder.index, "title",
-                                    window.tabTitle(doc.tabController.currentPath))
+                                    window.tabTitle(doc.tabController,
+                                                    doc.tabController.currentPath))
                             }
+                            function onCurrentPathChanged() { refreshTitle() }
+                            function onPhoneNamesChanged() { refreshTitle() }
+                            function onPhoneMountsChanged() { refreshTitle() }
                         }
                     }
                 }

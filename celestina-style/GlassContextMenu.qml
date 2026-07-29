@@ -20,6 +20,11 @@ Menu {
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     transformOrigin: Item.TopLeft
 
+    // A nested Menu is represented inside its parent by the parent's delegate.
+    // Styling the delegate here keeps cascaded menus in the same glass language
+    // instead of letting Qt inject a platform-looking proxy row.
+    delegate: GlassMenuItem { }
+
     background: GlassSurface {
         id: glassBackground
         backdropSource: root.backdropSource

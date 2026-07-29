@@ -26,6 +26,33 @@ Item {
     readonly property bool bottomFloating:
             bottomView && bottomView.contentHeight > bottomView.height
             && !bottomView.atYEnd
+    readonly property bool contextualHeaderVisible:
+            controller.searchActive || controller.searchRunning
+            || controller.trashActive || controller.recentActive
+    // One frame governs the group, clipped viewport, scrollbar and bottom chrome.
+    // Compact mode lifts that frame behind the complete route pill, so route,
+    // search/context and tabs visibly float over one surface. Expanded mode
+    // leaves the full heading and its chrome above the content.
+    readonly property real primaryChromeBottom:
+            tabBar.visible ? tabBar.y + tabBar.height
+                           : topBar.y + topBar.height
+    readonly property real chromeBottom:
+            primaryChromeBottom
+            + (contextualHeaderVisible
+               ? CelestinaTheme.compFloatingGap
+                 + folderChrome.searchBar.height : 0)
+    readonly property real expandedFrameY:
+            chromeBottom + CelestinaTheme.compFloatingGap
+    readonly property real compactFrameY:
+            topBar.y - CelestinaTheme.compFloatingInset
+    readonly property real contentFrameY:
+            expandedFrameY + (compactFrameY - expandedFrameY)
+            * folderHeading.compactProgress
+    readonly property real contentTopInset: Math.max(
+            0, expandedFrameY - contentFrameY)
+    readonly property real contentBottomInset:
+            CelestinaTheme.controlHeightSm
+            + 2 * CelestinaTheme.compFloatingInset
 
     property Item ghost
     property Item overlayParent
@@ -34,6 +61,7 @@ Item {
     // pestaña — el menú de tamaños vive aquí dentro pero ajusta a todas.
     property var hostWindow
     property bool active: false
+    property bool headingExpanded: false
     property alias tabController: controller
     // Alias con nombre distinto para inyectar en hijos: una propiedad inyectada
     // no puede llamarse igual que el id que se le pasa (`x: x` se sombrea a sí
@@ -41,18 +69,28 @@ Item {
     property alias viewTopBar: topBar
     signal requestNewTab(string path, bool foreground)
 
+    function collapseHeading() {
+        headingExpanded = false
+    }
+
+    function revealHeading() {
+        if (active && !controller.loading
+            && controller.errorText.length === 0
+            && bottomView && bottomView.atYBeginning)
+            headingExpanded = true
+    }
+
+    onActiveChanged: if (!active) collapseHeading()
+
     SideritaController {
         id: controller
     }
 
-    // Native role model fed by the controller's rowsReady signal; the
-    // list/grid bind to it instead of a QStringList of names.
+    // Native role model shared by list and grid.
     SideritaEntryModel {
         id: entryModel
     }
-    // La última ubicación dibujada, para distinguir un cambio de sitio de un
-    // refresco del mismo (ruta + los modos que cambian la lista sin cambiar la
-    // ruta: papelera, recientes, búsqueda).
+    // Distingue navegación de un refresco del mismo lugar o vista virtual.
     property string renderedKey: ""
 
     Connections {
@@ -157,10 +195,11 @@ Item {
         onGoBackOrLeaveRequested: root.goBackOrLeave()
     }
 
-    CelestinaSurface {
+    Item {
         id: mainPanel
 
         property string viewMode: "list"   // "list" | "grid"
+        onViewModeChanged: root.collapseHeading()
 
         // Restore the last-used view mode on open and persist a change
         // (list⇄grid). The size scales are window-level and independent
@@ -193,9 +232,12 @@ Item {
         // whichever is taller — the icon or the independently-scaled text —
         // so the two size sliders never clip one another.
         readonly property int listRowHeight: Math.max(
-            Math.round(CelestinaTheme.glyphTile * root.hostWindow.contentIconScale),
-            Math.round((CelestinaTheme.fontBody + CelestinaTheme.fontCaption)
-                       * 1.35 * root.hostWindow.contentTextScale)) + 16
+            CelestinaTheme.rowHeightLg,
+            Math.max(
+                Math.round(CelestinaTheme.glyphTile
+                           * root.hostWindow.contentIconScale),
+                Math.round((CelestinaTheme.fontBody + CelestinaTheme.fontCaption)
+                           * 1.35 * root.hostWindow.contentTextScale)) + 16)
         readonly property int gridCellWidth: Math.round(
             104 * Math.max(root.hostWindow.contentIconScale, root.hostWindow.contentTextScale))
         readonly property int gridCellHeight:
@@ -214,7 +256,7 @@ Item {
             return token.length > 0 && selectedTokens[token] === true
         }
         // The media class of a file by extension — "image", "video",
-        // "audio" or "" — driving its themed icon and whether it asks the
+        // "audio" or "" — driving its Lucide icon and whether it asks the
         // thumbnail provider (which reuses any cached thumbnail for any type,
         // but only generates images itself; video/audio come from a producer).
         function mediaKind(n) {
@@ -247,17 +289,24 @@ Item {
         function folderIcon(path) {
             return (path && folderTypeIcons[path]) ? folderTypeIcons[path] : "folder"
         }
-        // User-chosen per-path icon overrides (Cambiar icono…), folded from
-        // the controller's `path\ticon` list into a map. A binding, not a
-        // hand-rolled rebuild: it re-runs by itself whenever the list
-        // changes, so a new icon shows at once instead of at the next start.
-        readonly property var customIcons: {
+        // User-chosen per-path appearance (shape + optional colour), folded
+        // from one atomic `path\ticon\taccent` record. The two-column parser is
+        // deliberately retained for configurations written by older builds.
+        readonly property var customAppearances: {
             var m = {}
             var entries = controller.customIconEntries
             for (var i = 0; i < entries.length; i++) {
-                var cut = entries[i].indexOf("\t")
-                if (cut > 0)
-                    m[entries[i].substring(0, cut)] = entries[i].substring(cut + 1)
+                var first = entries[i].indexOf("\t")
+                if (first <= 0)
+                    continue
+                var second = entries[i].indexOf("\t", first + 1)
+                var path = entries[i].substring(0, first)
+                m[path] = {
+                    "icon": second < 0
+                            ? entries[i].substring(first + 1)
+                            : entries[i].substring(first + 1, second),
+                    "accent": second < 0 ? "" : entries[i].substring(second + 1)
+                }
             }
             return m
         }
@@ -276,13 +325,30 @@ Item {
         function isFavorite(path) {
             return path.length > 0 && favorites[path] === true
         }
+        function customIcon(path) {
+            var appearance = path ? customAppearances[path] : undefined
+            return appearance ? appearance.icon : ""
+        }
+        function customIconAccent(path) {
+            var appearance = path ? customAppearances[path] : undefined
+            return appearance ? appearance.accent : ""
+        }
+        function iconTint(path) {
+            return CelestinaTheme.iconAccentColor(customIconAccent(path))
+        }
+        function entryIconTone(kind) {
+            return kind === "directory" ? CelestinaIcon.Folder
+                 : kind === "symlink" ? CelestinaIcon.Symlink
+                 : CelestinaIcon.File
+        }
 
-        // The themed icon a non-thumbnailed entry shows — a user override if
+        // The Lucide icon a non-thumbnailed entry shows — a user override if
         // set, else a media-type icon (video/audio/image), a type-specific
         // folder, else generic.
         function mediaIconName(kind, media, path) {
-            if (path && customIcons[path])
-                return customIcons[path]
+            var custom = customIcon(path)
+            if (custom.length > 0)
+                return custom
             return kind === "directory" ? folderIcon(path)
                  : kind === "symlink" ? "emblem-symbolic-link"
                  : media === "image" ? "image-x-generic"
@@ -457,6 +523,7 @@ Item {
         Connections {
             target: controller
             function onCurrentPathChanged() {
+                root.collapseHeading()
                 mainPanel.clearSelection()
                 // Salir de la búsqueda sólo si había una. clearSearch reproyecta
                 // el snapshot actual, y en plena navegación ese snapshot es aún
@@ -469,49 +536,49 @@ Item {
             }
             // Entering or leaving search swaps the whole row set (folder ↔
             // hits, index-keyed vs token-keyed), so drop the old selection.
-            function onSearchActiveChanged() { mainPanel.clearSelection() }
+            function onSearchActiveChanged() {
+                root.collapseHeading()
+                mainPanel.clearSelection()
+            }
+            function onSearchQueryChanged() { root.collapseHeading() }
+            function onTrashActiveChanged() { root.collapseHeading() }
+            function onRecentActiveChanged() { root.collapseHeading() }
+            function onLoadingChanged() {
+                if (controller.loading)
+                    root.collapseHeading()
+            }
         }
 
         anchors.fill: parent
-        role: CelestinaSurface.Panel
 
-        // Bottom control bar: all controls and status render along the
-        // bottom of the content box; the list/grid fill from the top.
-        // Sin barra: igual que la cabecera, los controles del pie son
-        // pastillas sueltas sobre el contenido. La línea que los separaba
-        // dibujaba una barra que no existe — cada control ya se delimita
-        // solo, y el contenido pasa por debajo entre ellos.
-        Item {
-            id: bottomBar
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            height: 54
-        }
+        readonly property real contentFrameY: root.contentFrameY
+        readonly property real contentFrameX: contentFrame.frameX
+        readonly property real contentFrameWidth: contentFrame.frameWidth
+        readonly property real contentFrameBottom: contentFrame.frameBottom
+        readonly property real floatingChromeInset:
+                CelestinaTheme.compFloatingInset
+        readonly property real floatingChromeX:
+                contentFrameX + floatingChromeInset
+        readonly property real floatingChromeWidth: Math.max(
+                0, contentFrameWidth - 2 * floatingChromeInset)
+        readonly property real contentTopInset: root.contentTopInset
+        readonly property real contentRowsY: contentFrameY + contentTopInset
+        readonly property real contentBottomInset: root.contentBottomInset
 
-        // Bottom-bar controls flow left-to-right and size to their (scaled)
-        // content, so a larger interface text never clips or overlaps them.
-        BottomControls {
-            id: bottomControls
-            x: 16
-            anchors.verticalCenter: bottomBar.verticalCenter
-            controller: tabController
-            panel: mainPanel
-            bottomView: root.bottomView
-            bottomFloating: root.bottomFloating
-            overlayParent: root.overlayParent
-            sortMenu: folderActions.sortMenu
-            textScale: root.hostWindow.interfaceTextScale
+        FolderContentFrame {
+            id: contentFrame
+            anchors.fill: parent
+            frameY: root.contentFrameY
         }
 
         // Right-click on empty space (behind the views) opens the folder
         // menu; right-clicks that land on an item are handled by the item.
         MouseArea {
             id: emptySpaceMouse
-            x: 8
-            y: 14
-            width: parent.width - 16
-            height: parent.height - 68
+            x: contentFrame.surface.x
+            y: contentFrame.surface.y
+            width: contentFrame.surface.width
+            height: contentFrame.surface.height
             acceptedButtons: Qt.RightButton
             onClicked: function(mouse) {
                 const point = emptySpaceMouse.mapToItem(
@@ -525,8 +592,11 @@ Item {
         // instead; this one catches empty space and non-folder rows.
         DropArea {
             id: viewDrop
-            anchors.fill: parent
-            anchors.bottomMargin: 68
+            x: contentFrame.surface.x
+            y: contentFrame.surface.y
+            width: contentFrame.surface.width
+            height: Math.max(0, contentFrame.surface.height
+                             - mainPanel.contentBottomInset)
             // No z bump: the list/grid (declared after) and their per-folder
             // DropAreas must stack above this, so a drop on a folder lands in
             // that folder and only empty space falls through to here.
@@ -556,25 +626,22 @@ Item {
 
         FolderListView {
             id: fileList
-            x: 8
-            y: 14
-            width: parent.width - 16
-            height: parent.height - 22
+            x: contentFrame.surface.x
+            y: contentFrame.surface.y
+            width: contentFrame.surface.width
+            height: contentFrame.surface.height
             controller: tabController
             entryModel: entryModel
             panel: mainPanel
             hostWindow: root.hostWindow
             ghost: root.ghost
             overlayParent: root.overlayParent
-            contentTopMargin: 62 + (tabBar.visible ? tabBar.height + 8 : 0)
-                              + (folderChrome.searchBar.visible
-                                 ? folderChrome.searchBar.height + 8 : 0)
-                              + (folderChrome.trashHeader.visible
-                                 ? folderChrome.trashHeader.height + 8 : 0)
-                              + (folderChrome.recentHeader.visible
-                                 ? folderChrome.recentHeader.height + 8 : 0)
+            contentTopMargin: mainPanel.contentTopInset
                               + (fileList.detailsMode
-                                 ? folderChrome.detailsHeader.height + 8 : 0)
+                                 ? folderChrome.detailsHeader.height + 12 : 8)
+            contentBottomInset: mainPanel.contentBottomInset
+            onRevealHeadingRequested: root.revealHeading()
+            onCollapseHeadingRequested: root.collapseHeading()
             onQuickLookRequested: root.quickLookOpen = true
             onNewTabRequested: function(path, foreground) {
                 root.requestNewTab(path, foreground)
@@ -590,23 +657,20 @@ Item {
 
         FolderGridView {
             id: fileGrid
-            x: 8
-            y: 14
-            width: parent.width - 16
-            height: parent.height - 22
+            x: contentFrame.surface.x
+            y: contentFrame.surface.y
+            width: contentFrame.surface.width
+            height: contentFrame.surface.height
             controller: tabController
             entryModel: entryModel
             panel: mainPanel
             hostWindow: root.hostWindow
             ghost: root.ghost
             overlayParent: root.overlayParent
-            contentTopMargin: 62 + (tabBar.visible ? tabBar.height + 8 : 0)
-                              + (folderChrome.searchBar.visible
-                                 ? folderChrome.searchBar.height + 8 : 0)
-                              + (folderChrome.trashHeader.visible
-                                 ? folderChrome.trashHeader.height + 8 : 0)
-                              + (folderChrome.recentHeader.visible
-                                 ? folderChrome.recentHeader.height + 8 : 0)
+            contentTopMargin: mainPanel.contentTopInset + 8
+            contentBottomInset: mainPanel.contentBottomInset
+            onRevealHeadingRequested: root.revealHeading()
+            onCollapseHeadingRequested: root.collapseHeading()
             onQuickLookRequested: root.quickLookOpen = true
             onNewTabRequested: function(path, foreground) {
                 root.requestNewTab(path, foreground)
@@ -624,10 +688,10 @@ Item {
         // that land on an item are passed through to the item's handler.
         MouseArea {
             id: marquee
-            x: 8
-            y: 14
-            width: parent.width - 16
-            height: parent.height - 68
+            x: contentFrame.surface.x
+            y: contentFrame.surface.y
+            width: contentFrame.surface.width
+            height: contentFrame.surface.height
             acceptedButtons: Qt.LeftButton
             preventStealing: true
 
@@ -681,76 +745,65 @@ Item {
             }
         }
 
-        Column {
-            anchors.centerIn: fileList
-            spacing: 8
-            visible: !controller.loading
-                     && controller.errorText.length === 0
-                     && controller.entryNames.length === 0
-                     && !controller.searchRunning
-
-            readonly property bool searchEmpty: controller.searchActive
-                                                || controller.query.length > 0
-
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: parent.searchEmpty ? "Sin coincidencias" : "Carpeta vacía"
-                color: CelestinaTheme.text
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontHeaderCollapsed
-                font.weight: CelestinaTheme.weightMedium
-            }
-
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: parent.searchEmpty
-                      ? "Prueba con otra búsqueda."
-                      : "No hay elementos que mostrar."
-                color: CelestinaTheme.textMuted
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontRowSecondary
-            }
+        FolderEmptyState {
+            x: contentFrame.surface.x
+               + (contentFrame.surface.width - width) / 2
+            y: contentFrame.surface.y
+               + (contentFrame.surface.height - height) / 2
+            controller: tabController
         }
 
-        FolderBottomStatus {
+        FolderBottomChrome {
+            z: 20
             anchors.fill: parent
             controller: tabController
             hostWindow: root.hostWindow
             panel: mainPanel
-            bottomControls: bottomControls
+            contentSurface: contentFrame.surface
             bottomView: root.bottomView
             bottomFloating: root.bottomFloating
+            overlayParent: root.overlayParent
+            sortMenuItem: folderActions.sortMenu
         }
+    }
+
+    FolderHeading {
+        id: folderHeading
+        z: 9
+        x: CelestinaTheme.compFloatingInset
+        y: CelestinaTheme.compFloatingInset
+        width: root.width - 2 * CelestinaTheme.compFloatingInset
+        compact: !root.headingExpanded
+        controller: tabController
+        hostWindow: root.hostWindow
     }
 
     TopBar {
         id: topBar
         z: 10
-        x: 12
-        y: 12
-        width: root.width - 24
-        height: 52
+        x: mainPanel.floatingChromeX
+        y: folderHeading.y + folderHeading.height + CelestinaTheme.spaceLg
+        width: mainPanel.floatingChromeWidth
+        height: CelestinaTheme.controlHeightLg
         controller: tabController
         activeView: mainPanel.viewMode === "grid" ? fileGrid : fileList
         hostWindow: root.hostWindow
         overlayParent: root.overlayParent
         pathMenu: folderActions.pathMenu
-        onViewFocusRequested: fileList.forceActiveFocus()
+        onViewFocusRequested: root.focusView()
     }
 
-    // ── Tab pills ────────────────────────────────────────────────────
-    // A second floating row below the breadcrumb/search pills. Each tab is
-    // an isolated pill — solid at rest, fading to glass as content scrolls
-    // underneath, exactly like the pills above. Shown only with ≥2 tabs; the
-    // strip scrolls (wheel / drag / bar) when tabs overflow.
+    // A second contextual row appears only when there is somewhere to switch.
+    // Each tab paints its own pill; the strip itself has no enclosing box.
     TabStrip {
         id: tabBar
         z: 10
-        x: 12
-        y: topBar.y + topBar.height + 8
-        width: root.width - 24
-        height: 34
-        visible: root.hostWindow !== undefined && root.hostWindow.tabsModel.count >= 2
+        x: mainPanel.floatingChromeX
+        y: topBar.y + topBar.height + CelestinaTheme.compFloatingGap
+        width: mainPanel.floatingChromeWidth
+        height: 36
+        visible: root.hostWindow !== undefined
+                 && root.hostWindow.tabsModel.count >= 2
         controller: tabController
         hostWindow: root.hostWindow
         topBar: viewTopBar

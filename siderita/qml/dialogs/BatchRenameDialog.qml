@@ -225,12 +225,14 @@ CelestinaModalLayer {
                     font.pixelSize: CelestinaTheme.fontCaption
                     elide: Text.ElideMiddle
                 }
-                Text {
+                CelestinaIcon {
                     x: parent.width * 0.46
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "→"
-                    color: CelestinaTheme.textMuted
-                    font.pixelSize: CelestinaTheme.fontCaption
+                    width: CelestinaTheme.iconSm
+                    height: width
+                    name: "arrow-right"
+                    fallbackName: "arrow-right"
+                    tone: CelestinaIcon.Secondary
                 }
                 Text {
                     x: parent.width * 0.52

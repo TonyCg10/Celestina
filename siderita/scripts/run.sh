@@ -14,10 +14,19 @@ set -eu
 
 usage() {
     cat >&2 <<'EOF'
-uso: scripts/run.sh [--uninstall] [--prefix DIR]
+uso: scripts/run.sh [--uninstall] [--prefix DIR] [--quick] [--no-deploy]
 
 Compila Siderita en release y la instala en el prefijo XDG (por defecto ~/.local):
   bin/siderita, share/applications/, share/icons/hicolor/…, el portal de archivos
+
+--quick:
+  compila en modo debug (más rápido, incremental) y NO hace despliegue
+  al sistema (sin iconos/desktop/portal/bus updates).
+  Ideal para retoques rápidos de QML: ejecuta el binario desde target/debug/.
+
+--no-deploy:
+  compila en release y NO instala nada en ~/.local (solo deja el binario en
+  target/..). útil para iterar sin tocar escritorio.
 
 opciones:
   --uninstall   elimina lo instalado y sale (no compila)
@@ -26,12 +35,16 @@ EOF
 }
 
 uninstall=0
+quick=0
+no_deploy=0
 prefix=${HOME}/.local
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
         -h|--help) usage; exit 0 ;;
         --uninstall) uninstall=1 ;;
+        --quick) quick=1 ;;
+        --no-deploy) no_deploy=1 ;;
         --prefix) shift; prefix=${1:?--prefix necesita un directorio} ;;
         *) echo "error: opción desconocida: $1" >&2; usage; exit 2 ;;
     esac
@@ -64,10 +77,27 @@ if [ "$uninstall" -eq 1 ]; then
     exit 0
 fi
 
-# ── Build ────────────────────────────────────────────────────────────────────
-( cd "$repo_root" && cargo build --release --locked )
+if [ "$quick" -eq 1 ]; then
+    no_deploy=1
+fi
 
-binary=$repo_root/target/release/siderita
+if [ "$quick" -eq 1 ]; then
+    # Debug + incremental is much faster for tight UI loops.
+    ( cd "$repo_root" && CARGO_INCREMENTAL=1 cargo build --locked )
+    binary=$repo_root/target/debug/siderita
+else
+    # ── Build ────────────────────────────────────────────────────────────────
+    ( cd "$repo_root" && cargo build --release --locked )
+    binary=$repo_root/target/release/siderita
+fi
+
+if [ "$no_deploy" -eq 1 ]; then
+    echo ">> Siderita compilada en $binary"
+    echo "   ejecuta: $binary [args]"
+    echo "   (sin despliegue al sistema; ideal para ver cambios de UI)"
+    exit 0
+fi
+
 if [ ! -f "$style_icons/$app_id.svg" ]; then
     echo "error: falta el icono: $style_icons/$app_id.svg" >&2
     exit 1

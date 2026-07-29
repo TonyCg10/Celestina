@@ -8,18 +8,7 @@ Column {
     required property int mediaIndex
     required property int primaryIndex
     required property int mediaControlIndex
-    spacing: 6
-
-    Text {
-        text: root.devices.deviceNames.length > 0
-              ? root.devices.deviceNames.length + (root.devices.deviceNames.length === 1
-                    ? " dispositivo conectado" : " dispositivos conectados")
-              : "Ningún dispositivo conectado"
-        color: CelestinaTheme.textMuted
-        font.family: CelestinaTheme.sansFamily
-        font.pixelSize: CelestinaTheme.fontBody
-        bottomPadding: CelestinaTheme.spaceMd
-    }
+    spacing: 10
 
     Text {
         width: parent.width
@@ -30,14 +19,14 @@ Column {
         font.pixelSize: CelestinaTheme.fontRowTitle
         wrapMode: Text.WordWrap
         lineHeight: 1.3
-        bottomPadding: CelestinaTheme.spaceSm
+        bottomPadding: CelestinaTheme.spaceMd
     }
 
     Column {
         id: deviceBlock
         visible: root.devices.deviceNames.length > 0
         width: parent.width
-        spacing: 8
+        spacing: 10
 
         Repeater {
             model: root.devices.deviceNames
@@ -48,6 +37,8 @@ Column {
 
                 width: deviceBlock.width
                 deviceName: modelData
+                deviceType: index < root.devices.deviceTypes.length
+                            ? root.devices.deviceTypes[index] : ""
                 stateText: index < root.devices.deviceStates.length
                            ? root.devices.deviceStates[index] : ""
                 mountPath: index < root.devices.deviceMounts.length
@@ -70,17 +61,11 @@ Column {
         mediaControlIndex: root.mediaControlIndex
     }
 
-    CelestinaSectionLabel {
-        text: "ACTIVIDAD"
-        topPadding: CelestinaTheme.compButtonPaddingHorizontal
-        bottomPadding: CelestinaTheme.spaceXs
-    }
-
     ActivityLog {
         width: parent.width
         // Fill what remains below the preceding blocks. Basing this on the
         // actual laid-out y removes the old window-height magic constant.
-        height: Math.max(120, root.height - y)
+        height: Math.max(146, root.height - y)
         devices: root.devices
     }
 }

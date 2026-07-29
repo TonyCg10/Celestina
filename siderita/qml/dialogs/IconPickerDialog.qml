@@ -94,7 +94,7 @@ CelestinaModalLayer {
                     radius: CelestinaTheme.radiusSm
                     color: iconOptMouse.containsMouse
                            ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
-                    border.width: panel.customIcons[iconPicker.targetPath]
+                    border.width: panel.customIcon(iconPicker.targetPath)
                                   === iconOpt.modelData
                                   ? CelestinaTheme.borderHairline : 0
                     border.color: CelestinaTheme.dividerStrong
@@ -110,6 +110,9 @@ CelestinaModalLayer {
                         sourceSize: Qt.size(42, 42)
                         name: iconOpt.modelData
                         fallbackName: iconPicker.forFolder ? "folder" : "file"
+                        tone: iconPicker.forFolder
+                              ? CelestinaIcon.Folder : CelestinaIcon.File
+                        tintOverride: panel.iconTint(iconPicker.targetPath)
                     }
                 }
 

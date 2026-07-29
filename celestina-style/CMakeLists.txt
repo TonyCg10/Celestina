@@ -7,8 +7,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Qt6 6.5 REQUIRED COMPONENTS Quick QuickControls2)
 qt_standard_project_setup(REQUIRES 6.5)
 
-# CelestinaTheme is a singleton token store.
-set_source_files_properties(CelestinaTheme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+# Shared token and icon catalogues are singletons.
+set_source_files_properties(
+    CelestinaTheme.qml
+    CelestinaIcons.qml
+    PROPERTIES QT_QML_SINGLETON_TYPE TRUE
+)
 
 # ── QML Module ─────────────────────────────────────────────────────────────────
 # Pure-QML plugin — the singleton tokens and generic glass/controls of the suite.
@@ -24,6 +28,7 @@ qt_add_qml_module(celestina-style
     OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/CelestinaStyle
     QML_FILES
         CelestinaTheme.qml
+        CelestinaIcons.qml
         CelestinaSurface.qml
         CelestinaBackdrop.qml
         CelestinaButton.qml
@@ -45,12 +50,17 @@ qt_add_qml_module(celestina-style
         icons/view-refresh.svg
         icons/view-sort-ascending.svg
         icons/view-sort-descending.svg
+        icons/plus.svg
+        icons/view-grid.svg
+        icons/view-list.svg
+        icons/view-details.svg
+        icons/search.svg
+        icons/x.svg
         icons/go-home.svg
         icons/folder.svg
         icons/file.svg
         icons/symlink.svg
         icons/user-trash.svg
-        icons/media-eject.svg
         icons/star.svg
         icons/star-outline.svg
         icons/phone.svg
@@ -62,6 +72,54 @@ qt_add_qml_module(celestina-style
         icons/media-play.svg
         icons/media-pause.svg
         icons/media-skip-forward.svg
+        icons/app-window.svg
+        icons/arrow-down.svg
+        icons/arrow-right.svg
+        icons/binary.svg
+        icons/bookmark-plus.svg
+        icons/check.svg
+        icons/chevron-down.svg
+        icons/chevron-right.svg
+        icons/circle-alert.svg
+        icons/clipboard-paste.svg
+        icons/clock-arrow-up.svg
+        icons/cloud.svg
+        icons/copy.svg
+        icons/eraser.svg
+        icons/file-archive.svg
+        icons/file-braces.svg
+        icons/file-code.svg
+        icons/file-image.svg
+        icons/file-music.svg
+        icons/file-plus.svg
+        icons/file-text.svg
+        icons/file-video-camera.svg
+        icons/files.svg
+        icons/film.svg
+        icons/folder-code.svg
+        icons/folder-down.svg
+        icons/folder-git-2.svg
+        icons/folder-heart.svg
+        icons/folder-open.svg
+        icons/folder-plus.svg
+        icons/folder-sync.svg
+        icons/gamepad-2.svg
+        icons/hard-drive.svg
+        icons/image.svg
+        icons/info.svg
+        icons/layout-template.svg
+        icons/list-x.svg
+        icons/mail.svg
+        icons/monitor.svg
+        icons/paintbrush.svg
+        icons/pencil.svg
+        icons/printer.svg
+        icons/rotate-ccw.svg
+        icons/scissors.svg
+        icons/share-2.svg
+        icons/terminal.svg
+        icons/type.svg
+        icons/unplug.svg
         icons/glass-noise.png
         fonts/InterVariable.ttf
 )

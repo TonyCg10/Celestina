@@ -4,7 +4,7 @@ import org.celestina.siderita 1.0
 
 // ─── TopBar ─────────────────────────────────────────────────────────────────
 // Migas de pan (editable como campo de ruta) + campo de búsqueda, cada uno una
-// pastilla que se vela a cristal cuando el contenido pasa por debajo. Es un hub:
+// pastilla de cristal que flota sobre el contenido. Es un hub:
 // expone `activeView` / `floating` / `glassTick` que consumen la tira de
 // pestañas, las cabeceras y los bordes de scroll, y `searchText` / `beginEditing`
 // / `focusSearch` para los atajos de la vista. El controlador, la vista activa,
@@ -22,22 +22,40 @@ Item {
 
     // Scroll offset of the active view (0 at the very top).
     readonly property real scrollY: root.activeView
-                                    ? root.activeView.contentY + root.activeView.topMargin : 0
-    // Once scrolled, each independent pill fades to glass in place.
-    readonly property bool floating: root.scrollY > 6
+                                    ? Math.max(0, root.activeView.contentY
+                                               - root.activeView.originY
+                                               + root.activeView.topMargin)
+                                    : 0
+    // Navigation is a floating contextual layer in the approved material map,
+    // so it remains glass even at the top of a folder.
+    readonly property bool floating: true
 
     // Pulsed each time the pills refresh their capture, so the floating tab
     // pills below refresh their glass in the same beat.
     signal glassTick()
     // The search field lives here; the folder view reads / clears it.
     property alias searchText: searchField.text
+    property bool searchExpanded: false
+    readonly property real searchCollapsedWidth: CelestinaTheme.controlHeightLg
+    readonly property real searchExpandedWidth: Math.round(Math.max(
+            searchCollapsedWidth,
+            Math.min(360, root.width * 0.42, root.width - 188)))
     // Returning focus to the list is the folder view's call (it owns fileList).
     signal viewFocusRequested()
 
     function beginEditing() { pathPill.beginEditing() }
     function focusSearch() {
-        searchField.forceActiveFocus()
-        searchField.selectAll()
+        root.searchExpanded = true
+        Qt.callLater(function() {
+            searchField.forceActiveFocus()
+            searchField.selectAll()
+        })
+    }
+    function clearSearch() {
+        searchDebounce.stop()
+        searchField.text = ""
+        root.controller.applyQuery("")
+        root.controller.closeSearch()
     }
 
     function refreshGlass() {
@@ -47,6 +65,8 @@ Item {
     }
 
     onFloatingChanged: if (floating) Qt.callLater(root.refreshGlass)
+    onYChanged: if (floating) Qt.callLater(root.refreshGlass)
+    onSearchExpandedChanged: if (floating) Qt.callLater(root.refreshGlass)
 
     // Refresh the blur as content scrolls under the pills; work stops when
     // scrolling stops (no continuous work at rest).
@@ -78,7 +98,44 @@ Item {
         function pathSegments(p) {
             if (!p || p.length === 0)
                 return []
-            const parts = p.split("/")
+
+            const normalized = p.length > 1 ? p.replace(/\/+$/, "") : p
+            // A Magnetita mount is an implementation path, not useful
+            // navigation context. Collapse `/run/user/.../magnetita/<id>` into
+            // one device crumb, then keep only real folders beneath it.
+            for (let phoneIndex = 0;
+                 phoneIndex < root.controller.phoneMounts.length;
+                 phoneIndex++) {
+                const rawMount = root.controller.phoneMounts[phoneIndex]
+                const mount = rawMount.length > 1
+                              ? rawMount.replace(/\/+$/, "") : rawMount
+                if (mount.length === 0
+                    || (normalized !== mount
+                        && !normalized.startsWith(mount + "/")))
+                    continue
+
+                const phoneSegments = [{
+                    name: root.controller.phoneNames[phoneIndex]
+                          || root.controller.displayLocationName(mount),
+                    path: mount
+                }]
+                const relativeParts = normalized.substring(mount.length)
+                                                .split("/")
+                                                .filter(function(part) {
+                                                    return part.length > 0
+                                                })
+                let phonePath = mount
+                for (const relativePart of relativeParts) {
+                    phonePath += "/" + relativePart
+                    phoneSegments.push({
+                        name: relativePart,
+                        path: phonePath
+                    })
+                }
+                return phoneSegments
+            }
+
+            const parts = normalized.split("/")
             const segs = []
             let acc = ""
             for (let idx = 0; idx < parts.length; idx++) {
@@ -89,16 +146,19 @@ Item {
                     continue
                 }
                 acc = acc + "/" + part
-                segs.push({ name: part, path: acc })
+                segs.push({
+                    name: root.controller.displayLocationName(acc),
+                    path: acc
+                })
             }
             return segs
         }
 
-        x: 14
+        x: 0
         anchors.verticalCenter: parent.verticalCenter
-        width: Math.max(180, searchField.x - x - 12)
-        height: CelestinaTheme.controlHeight
-        radius: CelestinaTheme.radiusSm
+        width: Math.max(180, searchPill.x - x - 8)
+        height: CelestinaTheme.controlHeightLg
+        radius: CelestinaTheme.radiusPill
         clip: true
         color: CelestinaTheme.inputFill
         border.width: CelestinaTheme.borderHairline
@@ -110,6 +170,7 @@ Item {
             backdropSource: root.activeView
             captureEnabled: root.floating
             cornerRadius: parent.radius
+            elevation: 2
             opacity: root.floating ? 1 : 0
             Behavior on opacity {
                 NumberAnimation { duration: CelestinaTheme.motionNormal }
@@ -144,7 +205,11 @@ Item {
 
             Repeater {
                 id: crumbRepeater
-                model: pathPill.pathSegments(root.controller.currentPath)
+                model: {
+                    root.controller.phoneNames.length
+                    root.controller.phoneMounts.length
+                    return pathPill.pathSegments(root.controller.currentPath)
+                }
 
                 delegate: Row {
                     id: crumb
@@ -155,13 +220,15 @@ Item {
                     spacing: 3
                     anchors.verticalCenter: parent.verticalCenter
 
-                    Text {
+                    CelestinaIcon {
                         visible: crumb.index > 0
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "›"
-                        color: CelestinaTheme.textMuted
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: Math.round(CelestinaTheme.fontRowSecondary * root.hostWindow.interfaceTextScale)
+                        width: Math.round(CelestinaTheme.iconSm
+                                          * root.hostWindow.interfaceIconScale)
+                        height: width
+                        name: "chevron-right"
+                        fallbackName: "chevron-right"
+                        tone: CelestinaIcon.Secondary
                     }
 
                     Rectangle {
@@ -242,55 +309,148 @@ Item {
         }
     }
 
-    CelestinaTextField {
-        id: searchField
-        // Flexes with the interface text scale — the field grows and the
-        // breadcrumb (which fills the rest) yields space — so a larger
-        // search text is never clipped.
-        width: Math.round(Math.min(root.width * 0.42,
-                                   Math.max(190, 180 * root.hostWindow.interfaceTextScale)))
-        height: CelestinaTheme.controlHeight
-        x: root.width - width - 14
+    Rectangle {
+        id: searchPill
+        width: root.searchExpanded ? root.searchExpandedWidth
+                                   : root.searchCollapsedWidth
+        height: CelestinaTheme.controlHeightLg
+        x: root.width - width
         anchors.verticalCenter: parent.verticalCenter
-        placeholderText: "Buscar aquí y en subcarpetas"
-        color: CelestinaTheme.text
-        placeholderTextColor: CelestinaTheme.textMuted
-        selectionColor: CelestinaTheme.accentPressed
-        selectedTextColor: CelestinaTheme.text
-        font.family: CelestinaTheme.sansFamily
-        font.pixelSize: Math.round(CelestinaTheme.fontBody * root.hostWindow.interfaceTextScale)
-        leftPadding: CelestinaTheme.compTextFieldPaddingHorizontal
-        rightPadding: CelestinaTheme.compTextFieldPaddingHorizontal
-        // Typing always searches — a recursive walk grouped into "in this
-        // folder" and "in subfolders"; clearing it exits search.
-        onTextEdited: searchDebounce.restart()
-        onAccepted: if (text.trim().length > 0)
-                        root.controller.searchRecursive(text)
+        radius: CelestinaTheme.radiusPill
+        clip: true
+        color: searchField.activeFocus
+               ? CelestinaTheme.inputFillFocus : CelestinaTheme.inputFill
+        border.width: CelestinaTheme.borderHairline
+        border.color: root.floating ? CelestinaTheme.clear
+                                    : CelestinaTheme.inputBorder
 
-        background: Item {
-            Rectangle {
-                anchors.fill: parent
-                radius: CelestinaTheme.radiusSm
-                color: searchField.activeFocus
-                       ? CelestinaTheme.inputFillFocus
-                       : CelestinaTheme.inputFill
-                border.width: CelestinaTheme.borderHairline
-                border.color: root.floating
-                              ? CelestinaTheme.clear
-                              : searchField.activeFocus
-                                ? CelestinaTheme.focusRing
-                                : CelestinaTheme.inputBorder
+        Behavior on width {
+            NumberAnimation {
+                duration: CelestinaTheme.motionNormal
+                easing.type: CelestinaTheme.easeStandard
             }
-            GlassSurface {
-                id: searchGlass
-                anchors.fill: parent
-                backdropSource: root.activeView
-                captureEnabled: root.floating
-                cornerRadius: CelestinaTheme.radiusSm
-                opacity: root.floating ? 1 : 0
-                Behavior on opacity {
-                    NumberAnimation { duration: CelestinaTheme.motionNormal }
+        }
+
+        GlassSurface {
+            id: searchGlass
+            anchors.fill: parent
+            backdropSource: root.activeView
+            captureEnabled: root.floating
+            cornerRadius: parent.radius
+            elevation: 2
+            opacity: root.floating ? 1 : 0
+            Behavior on opacity {
+                NumberAnimation { duration: CelestinaTheme.motionNormal }
+            }
+        }
+
+        CelestinaIconButton {
+            id: searchButton
+            x: 5
+            anchors.verticalCenter: parent.verticalCenter
+            width: 32
+            height: 32
+            role: CelestinaButton.Ghost
+            density: CelestinaButton.Compact
+            // This is a simple UI glyph, so use the bundled monochrome shape.
+            // Several native themes ship a coloured search badge; tinting that
+            // bitmap turns it into an opaque disc instead of a magnifier.
+            iconName: ""
+            fallbackIcon: "search"
+            helpText: root.searchExpanded ? "Enfocar búsqueda" : "Buscar"
+            onClicked: root.focusSearch()
+        }
+
+        CelestinaTextField {
+            id: searchField
+            x: searchButton.x + searchButton.width + 2
+            width: Math.max(0, clearSearchButton.x - x - 2)
+            height: parent.height
+            anchors.verticalCenter: parent.verticalCenter
+            visible: opacity > 0.01
+            enabled: root.searchExpanded
+            opacity: root.searchExpanded ? 1 : 0
+            placeholderText: "Buscar aquí y en subcarpetas"
+            color: CelestinaTheme.text
+            placeholderTextColor: CelestinaTheme.textMuted
+            selectionColor: CelestinaTheme.accentPressed
+            selectedTextColor: CelestinaTheme.text
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: Math.round(CelestinaTheme.fontBody
+                                       * root.hostWindow.interfaceTextScale)
+            leftPadding: CelestinaTheme.spaceXs
+            rightPadding: CelestinaTheme.spaceXs
+            background: null
+
+            Behavior on opacity {
+                NumberAnimation { duration: CelestinaTheme.motionFast }
+            }
+
+            // Typing always searches — a recursive walk grouped into "in this
+            // folder" and "in subfolders"; clearing it exits search.
+            onTextEdited: searchDebounce.restart()
+            onTextChanged: {
+                if (text.length === 0 && !activeFocus
+                    && !root.controller.searchActive
+                    && !root.controller.searchRunning)
+                    root.searchExpanded = false
+            }
+            onActiveFocusChanged: {
+                if (activeFocus)
+                    return
+                // Defer until a click on the clear button has had a chance to
+                // run; clicking anywhere else collapses an unused search pill.
+                Qt.callLater(function() {
+                    if (!searchField.activeFocus && searchField.text.length === 0
+                        && !root.controller.searchActive
+                        && !root.controller.searchRunning)
+                        root.searchExpanded = false
+                })
+            }
+            onAccepted: if (text.trim().length > 0)
+                            root.controller.searchRecursive(text)
+
+            Keys.onPressed: function(event) {
+                if (event.key !== Qt.Key_Escape)
+                    return
+                if (text.length > 0 || root.controller.searchActive) {
+                    root.clearSearch()
+                    searchField.forceActiveFocus()
+                } else {
+                    root.searchExpanded = false
+                    root.viewFocusRequested()
                 }
+                event.accepted = true
+            }
+        }
+
+        CelestinaIconButton {
+            id: clearSearchButton
+            x: parent.width - width - 5
+            anchors.verticalCenter: parent.verticalCenter
+            width: 32
+            height: 32
+            visible: opacity > 0.01
+            opacity: root.searchExpanded ? 1 : 0
+            role: CelestinaButton.Ghost
+            density: CelestinaButton.Compact
+            iconName: ""
+            fallbackIcon: "x"
+            helpText: searchField.text.length > 0
+                      ? "Limpiar búsqueda" : "Cerrar búsqueda"
+            onClicked: {
+                if (searchField.text.length > 0
+                    || root.controller.searchActive) {
+                    root.clearSearch()
+                    searchField.forceActiveFocus()
+                } else {
+                    root.searchExpanded = false
+                    root.viewFocusRequested()
+                }
+            }
+
+            Behavior on opacity {
+                NumberAnimation { duration: CelestinaTheme.motionFast }
             }
         }
     }

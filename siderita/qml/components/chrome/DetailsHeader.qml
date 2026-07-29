@@ -3,9 +3,9 @@ import QtQuick.Layouts
 import org.celestina.siderita 1.0
 
 // ─── DetailsHeader ──────────────────────────────────────────────────────────
-// La cabecera de columnas de la vista de detalles: una tira de cristal alineada
+// La cabecera de columnas de la vista de detalles: una tira tonal alineada
 // a las columnas de la lista; cada título ordena por su campo (un segundo clic
-// en el activo invierte el sentido) y lleva una flecha ↑/↓. La geometría de las
+// en el activo invierte el sentido) y lleva un indicador Lucide. La geometría de las
 // columnas viene de la lista (`view`), el orden del controlador y la escala del
 // texto por propiedad. La vista de carpeta la posiciona y la muestra.
 // ──────────────────────────────────────────────────────────────────────────────
@@ -13,23 +13,15 @@ Item {
     id: root
 
     property var controller
-    property var view          // fileList: geometría de columnas + cristal
+    property var view          // fileList: geometría de columnas
     property real textScale: 1.0
-
-    GlassSurface {
-        anchors.fill: parent
-        backdropSource: root.view
-        captureEnabled: root.visible
-        liveCapture: true
-        cornerRadius: CelestinaTheme.radiusSm
-    }
 
     Rectangle {
         anchors.fill: parent
         radius: CelestinaTheme.radiusSm
-        color: CelestinaTheme.clear
+        color: CelestinaTheme.controlFill
         border.width: CelestinaTheme.borderHairline
-        border.color: CelestinaTheme.dividerStrong
+        border.color: CelestinaTheme.divider
     }
 
     RowLayout {
@@ -54,19 +46,35 @@ Item {
                 Layout.preferredWidth: modelData.w < 0 ? 60 : modelData.w
                 Layout.fillHeight: true
 
-                Text {
-                    anchors.fill: parent
-                    verticalAlignment: Text.AlignVCenter
-                    horizontalAlignment: hcell.modelData.align
-                    text: hcell.modelData.label
-                          + (hcell.activeSort
-                             ? (root.controller.sortAscending ? "  ↑" : "  ↓") : "")
-                    color: hcell.activeSort ? CelestinaTheme.text
-                                            : CelestinaTheme.textMuted
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: Math.round(CelestinaTheme.fontCaption * root.textScale)
-                    font.weight: CelestinaTheme.weightDemiBold
-                    elide: Text.ElideRight
+                Row {
+                    anchors.left: hcell.modelData.align === Text.AlignLeft
+                                  ? parent.left : undefined
+                    anchors.right: hcell.modelData.align === Text.AlignRight
+                                   ? parent.right : undefined
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: CelestinaTheme.spaceXs
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: hcell.modelData.label
+                        color: hcell.activeSort ? CelestinaTheme.text
+                                                : CelestinaTheme.textMuted
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: Math.round(CelestinaTheme.fontCaption
+                                                   * root.textScale)
+                        font.weight: CelestinaTheme.weightDemiBold
+                    }
+
+                    CelestinaIcon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.round(CelestinaTheme.iconSm * root.textScale)
+                        height: width
+                        visible: hcell.activeSort
+                        name: root.controller.sortAscending
+                              ? "view-sort-ascending" : "view-sort-descending"
+                        fallbackName: "arrow-down"
+                        tone: CelestinaIcon.Primary
+                    }
                 }
 
                 MouseArea {

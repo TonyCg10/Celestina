@@ -126,11 +126,9 @@ Item {
             height: Math.round(72 * root.hostWindow.contentIconScale)
             radius: CelestinaTheme.radiusSm
             clip: true
-            color: root.kind === "directory"
-                   ? CelestinaTheme.glyphDirectory
-                   : root.kind === "symlink"
-                     ? CelestinaTheme.glyphSymlink
-                     : CelestinaTheme.glyphFile
+            // La selección pertenece a la celda. Una segunda baldosa de color
+            // detrás del icono producía dos cajas de selección enfrentadas.
+            color: CelestinaTheme.clear
 
             readonly property string media: root.kind === "directory"
                                             ? "" : root.panel.mediaKind(root.name)
@@ -147,7 +145,8 @@ Item {
                               : root.kind === "symlink"
                                 ? "symlink"
                                 : "file"
-                // No color tint — see the list delegate above.
+                tone: root.panel.entryIconTone(root.kind)
+                tintOverride: root.panel.iconTint(root.path)
             }
 
             Image {

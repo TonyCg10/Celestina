@@ -5,11 +5,61 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
 use notify_debouncer_full::notify::{EventKind, RecursiveMode};
 use notify_debouncer_full::{new_debouncer, DebounceEventResult};
-use siderita_core::{PublishOutcome, ScanResult, WatchState};
+use siderita_core::{DirectorySnapshot, EntryKind, PublishOutcome, ScanResult, WatchState};
 use siderita_qt::RowKind;
 
 use super::qobject;
 use super::{kind_key, row_subtitle, PendingNav};
+
+struct FolderMetadata {
+    total: usize,
+    directories: usize,
+    files: usize,
+    hidden: usize,
+    size: u64,
+    modified: String,
+    accessed: String,
+    created: String,
+}
+
+impl FolderMetadata {
+    fn from_snapshot(snapshot: &DirectorySnapshot) -> Self {
+        let entries = snapshot.entries();
+        Self {
+            total: entries.len(),
+            directories: entries
+                .iter()
+                .filter(|entry| entry.kind() == EntryKind::Directory)
+                .count(),
+            files: entries
+                .iter()
+                .filter(|entry| entry.kind() != EntryKind::Directory)
+                .count(),
+            hidden: entries.iter().filter(|entry| entry.is_hidden()).count(),
+            size: entries
+                .iter()
+                .filter(|entry| entry.kind() != EntryKind::Directory)
+                .map(|entry| entry.size())
+                .sum(),
+            modified: snapshot
+                .modified()
+                .map(crate::format::system_time)
+                .unwrap_or_default(),
+            accessed: snapshot
+                .accessed()
+                .map(crate::format::system_time)
+                .unwrap_or_default(),
+            created: snapshot
+                .created()
+                .map(crate::format::system_time)
+                .unwrap_or_default(),
+        }
+    }
+}
+
+fn qml_count(value: usize) -> i32 {
+    value.min(i32::MAX as usize) as i32
+}
 
 impl qobject::SideritaController {
     /// Rescans the current location without a history change (refresh, initial).
@@ -184,14 +234,14 @@ impl qobject::SideritaController {
             let Some(snapshot) = state.snapshot.as_ref() else {
                 return;
             };
-            let total = snapshot.entries().len();
+            let metadata = FolderMetadata::from_snapshot(snapshot);
             state
                 .adapter
                 .adapt_projected(snapshot, &state.options)
-                .map(|view| (view, total))
+                .map(|view| (view, metadata))
         };
 
-        let (view, total) = match projected {
+        let (view, metadata) = match projected {
             Ok(projected) => projected,
             Err(error) => {
                 self.as_mut()
@@ -293,34 +343,35 @@ impl qobject::SideritaController {
         // The item count and per-item detail live in the sidebar info box now;
         // the bottom status line only carries transient state. Keep a filtered
         // "N de M" hint there, but stay blank when nothing is filtered out.
-        let status = if visible == total {
+        let status = if visible == metadata.total {
             String::new()
         } else {
-            format!("{visible} de {total}")
+            format!("{visible} de {}", metadata.total)
         };
         self.as_mut()
             .set_status_text(QString::from(status.as_str()));
 
-        // Total size of the folder's files, for the info box's default line.
-        let total_size: u64 = self
-            .rust()
-            .view
-            .as_ref()
-            .map(|view| {
-                view.rows()
-                    .iter()
-                    .filter(|row| row.kind() != RowKind::Directory)
-                    .map(|row| row.size())
-                    .sum()
-            })
-            .unwrap_or(0);
-        let folder_size = if total_size > 0 {
-            crate::format::size(total_size)
-        } else {
-            String::new()
-        };
+        // Stable folder metadata comes from the unfiltered snapshot, while the
+        // visible count follows the current projection. This keeps the heading
+        // truthful when hidden entries or a local filter are active.
+        self.as_mut().set_folder_visible_count(qml_count(visible));
+        self.as_mut()
+            .set_folder_total_count(qml_count(metadata.total));
+        self.as_mut()
+            .set_folder_directory_count(qml_count(metadata.directories));
+        self.as_mut()
+            .set_folder_file_count(qml_count(metadata.files));
+        self.as_mut()
+            .set_folder_hidden_count(qml_count(metadata.hidden));
+        let folder_size = crate::format::size(metadata.size);
         self.as_mut()
             .set_folder_size(QString::from(folder_size.as_str()));
+        self.as_mut()
+            .set_folder_modified(QString::from(metadata.modified.as_str()));
+        self.as_mut()
+            .set_folder_accessed(QString::from(metadata.accessed.as_str()));
+        self.as_mut()
+            .set_folder_created(QString::from(metadata.created.as_str()));
 
         // Hand the projected rows to the native model.
         self.as_mut().rows_ready(

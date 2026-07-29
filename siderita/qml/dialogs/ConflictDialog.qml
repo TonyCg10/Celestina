@@ -90,13 +90,14 @@ CelestinaModalLayer {
                 border.color: applyToAll.checked ? CelestinaTheme.accent
                                                  : CelestinaTheme.inputBorder
 
-                Text {
+                CelestinaIcon {
                     anchors.centerIn: parent
+                    width: parent.width - CelestinaTheme.spaceXs
+                    height: width
                     visible: applyToAll.checked
-                    text: "✓"
-                    color: CelestinaTheme.accentInk
-                    font.pixelSize: CelestinaTheme.fontRowSecondary
-                    font.weight: CelestinaTheme.weightDemiBold
+                    name: "check"
+                    fallbackName: "check"
+                    tone: CelestinaIcon.OnAccent
                 }
             }
         }

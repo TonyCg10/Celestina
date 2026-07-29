@@ -1,12 +1,13 @@
 # CelestinaStyle — Design Contract (One UI 8.5, desktop-adapted)
 
-> **Status: v1.0 (2026-07-27) — the four author decisions are sealed (§9).
+> **Status: v1.1 (2026-07-28) — the author decisions are sealed (§9).
 > S1 (tokens v2 + typography), S2 (glass v2 + elevation), S3 (iconography —
 > the Lucide set, the panel de-emoji and the app-icon squircle template) and
 > S4's first cut (the gallery + `CelestinaSwitch`/`ListSection` with Magnetita
 > Settings as consumer) and S5 (the panel migrated to the theme + compositor
-> glass, §8) shipped 2026-07-27; further on-demand components grow with their
-> consumers.** Grounded in Samsung's real shipped
+> glass, §8) shipped 2026-07-27. The first application-composition slice for
+> Siderita and Magnetita shipped 2026-07-28; further on-demand components grow
+> with their consumers.** Grounded in Samsung's real shipped
 > values (the SESL/One UI support library and the official One UI design
 > guide), not in screenshots-by-eye, and in verified Qt 6.11 / niri 26.04
 > capabilities.
@@ -125,7 +126,7 @@ What the stack can actually do today:
 - **In-scene glass ceiling** = our current architecture (capture with
   `sourceRect` + MultiEffect), which is the officially documented pattern.
   MultiEffect's blur is a downsample **pyramid** (not gaussian): keep
-  `blurMax ≤ 32` (4 internal passes), prefer `blurMultiplier` for reach, and
+  `blurMax ≤ 32` (4 internal passes), use `blurMultiplier` for reach, and
   **dither its banding with noise**. Live capture only when content moves
   beneath; one-shot + `scheduleUpdate()` is near-free at steady state.
 - **Shadows:** `RectangularShadow` (Qt 6.9+, per-corner radii in 6.11) —
@@ -225,13 +226,23 @@ verified cheap), not a migration.
 
 ### 6.2 Color mapping
 
-Adopt the SESL values from §2 as `ref.*`, with Celestina keeping its
-near-black doctrine (`#010102` window / `#17171a` cards in dark). Accent
-(sealed, §9): **One UI blue `#387aff`**, used exactly as Samsung uses it —
-interactive/active only — with `onAccent = #fcfcff`. It is the only hue seed:
+Use the SESL values from §2 as the reference, adapted to the approved desktop
+prototype: `#050608` canvas, `#14171c` grouped card, `#1a1e25` strong tonal,
+`#222831` elevated, `#f7f8fc` primary text and `#9ba3af` secondary text.
+Accent (sealed, §9) is **One UI-adapted blue `#3e91ff`**, used exactly as
+Samsung uses blue — interactive/active only — with `onAccent = #fcfcff`.
+It is the only hue seed:
 link/hover/pressed/focus and all translucent accent washes are derived from it
 inside `CelestinaTheme`, never calculated by a consumer. Its derivation factors
 live next to the seed. `favorite` stays the one warm exception.
+
+The single-accent rule governs interaction. Informational Lucide glyphs have a
+small semantic ink palette so a file view remains scannable without reviving
+the old multicolour icon theme: accent-derived blue for folders, cool silver
+for files, violet-blue for links, slate for navigation and cyan for hardware.
+A closed six-key palette may override one entry's glyph; it never colours a
+surface, thumbnail, text label or selection state, and raw colour literals are
+still forbidden in consumers.
 
 ### 6.3 Shape
 
@@ -245,7 +256,7 @@ an app-icon pipeline ever needs it. Radius scales down with element size.
 | Level | Surface | Treatment |
 |---|---|---|
 | L0 | window canvas | opaque `canvas`, canonical subtle `CelestinaBackdrop` gradient |
-| L1 | grouped card / content card | opaque `card`; separation by grouping, no shadow, no hairline |
+| L1 | grouped card / content card | opaque `card`; grouping, whitespace and one quiet semantic hairline, no shadow |
 | L2 | floating: menu, tooltip, tab pills, toasts | **glass** + `RectangularShadow` (soft, large blur, low opacity, no offset drama) |
 | L3 | modal: dialogs, sheets | **glass strong** + `scrim` dim behind — *never* shadow + dim together |
 | Panel | layer-shell bar | **compositor glass** (ext-background-effect, x-ray) over wallpaper; in-scene fallback |
@@ -259,13 +270,15 @@ indicators, not the public styling API for application containers. L2/L3 keep
 their separate `GlassSurface`/`GlassCard` contract because they also require an
 explicit backdrop source.
 
-L1 separation comes from tonal contrast, grouping and whitespace. It does not
-wear a default hairline; focusable controls own their keyboard focus ring.
+L1 separation comes from tonal contrast, grouping, whitespace and the shared
+quiet outline. Consumers never rebuild that outline; focusable controls own
+their keyboard focus ring.
 
 ### 6.5 Glass v2
 
-One recipe, in order: bounded capture (`sourceRect`, ≤0.5× texture) →
-pyramid blur (`blurMax ≤ 32`) → **slight desaturation + scheme-tuned dim** →
+One recipe, in order: bounded capture (`sourceRect`, ≈0.5× texture) →
+pyramid blur (`blur = 1`, `blurMax = 32`, `blurMultiplier = 3`) →
+**slight desaturation + scheme-tuned dim** →
 tint (`Regular` for floating navigation, `Strong` for modal readability) →
 **noise dither** (±1–2/255, kills banding) → 1px outline (dark
 outside) → **top-edge inner glow** (the existing lit edge, kept — it *is*
@@ -307,8 +320,9 @@ animators for anything on the always-on panel.
 
 ### 6.8 Components v2 (specs now, built on demand — CP2 discipline holds)
 
-Upgraded: `CelestinaButton` (closed text / tonal / filled-accent / destructive
-roles, one style per screen doctrine, focus ring), `CelestinaIconButton` and
+Upgraded: `CelestinaButton` (closed tonal / filled-accent / destructive /
+selected / ghost roles; compact / regular / prominent densities; one-style-per-
+screen doctrine and focus ring), `CelestinaIconButton` and
 `CelestinaIcon` (one freedesktop-name/fallback/tone contract), `CelestinaTextField`
 (radius 22, One UI search anatomy), `GlassSurface/Card/ContextMenu/MenuItem`
 (glass v2 + elevation). New specs, each waiting for its first real consumer:
@@ -363,10 +377,14 @@ normal text, 3:1 large — checked in the gallery against every shipped scheme.
 - **S5 — Panel compositor glass.** `celestina` requests ext-background-effect
   blur (KWindowSystem or ~100-line extension), x-ray mode, in-scene fallback;
   the panel finally *is* glass over the desktop.
+- **S6 — Application composition, first slice.** Siderita and Magnetita adopt
+  the approved desktop prototype: opaque tonal work regions, denser glass only
+  for floating/contextual chrome, large page hierarchy and shared button/surface
+  roles. Domain actions and navigation remain unchanged.
 
-## 9. Decisions (sealed by the author, 2026-07-27)
+## 9. Decisions (sealed by the author, 2026-07-27; accent tuned 2026-07-28)
 
-1. **Accent — One UI blue `#387aff`.** Interactive/active elements only,
+1. **Accent — One UI-adapted blue `#3e91ff`.** Interactive/active elements only,
    `onAccent #fcfcff`. The white-accent era (and its contrast trap) ends.
 2. **Typeface — Inter Variable** (OFL), shipped inside the module.
 3. **Icon set — Lucide** (ISC), adopted behind the freedesktop-name mapping

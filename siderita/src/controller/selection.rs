@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use celestina_core::CancellationToken;
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::QString;
+use cxx_qt_lib::{QString, QStringList};
 use siderita_qt::RowKind;
 
 use super::qobject;
@@ -152,6 +152,49 @@ impl qobject::SideritaController {
             }
         };
         QString::from(detail.as_str())
+    }
+
+    pub fn entry_info(&self, index: i32) -> QStringList {
+        let Some(index) = usize::try_from(index).ok() else {
+            return QStringList::default();
+        };
+
+        // Virtual locations do not carry an EntryRow, but their selected path is
+        // still enough for the same compact type/size/date summary. Trash uses
+        // its deletion timestamp because that is the meaningful date there.
+        if self.rust().trash_active {
+            let Some(entry) = self.rust().trash_entries.get(index) else {
+                return QStringList::default();
+            };
+            return path_info_lines(
+                &entry.trashed,
+                entry.trashed.is_dir(),
+                Some(crate::format::trash_date_short(&entry.deletion_date)),
+            );
+        }
+        if self.rust().search_active || self.rust().recent_active {
+            let Some(hit) = self.rust().search_hits.get(index) else {
+                return QStringList::default();
+            };
+            return path_info_lines(Path::new(&hit.path), hit.is_dir, None);
+        }
+
+        let Some(row) = i32::try_from(index)
+            .ok()
+            .and_then(|row_index| self.rust().row(row_index))
+        else {
+            return QStringList::default();
+        };
+        let mut lines = vec![QString::from(kind_label(row.kind()))];
+        if row.kind() != RowKind::Directory {
+            lines.push(QString::from(crate::format::size(row.size()).as_str()));
+        }
+        if let Some(date) = row.modified().map(crate::format::system_time_short) {
+            if !date.is_empty() {
+                lines.push(QString::from(date.as_str()));
+            }
+        }
+        lines.into_iter().collect()
     }
 
     pub fn index_for_token(&self, token: &QString) -> i32 {
@@ -321,4 +364,24 @@ impl qobject::SideritaController {
         }
         self.as_mut().set_properties_pending(false);
     }
+}
+
+fn path_info_lines(path: &Path, is_dir: bool, date: Option<String>) -> QStringList {
+    let mut lines = vec![QString::from(if is_dir { "Carpeta" } else { "Archivo" })];
+    let metadata = std::fs::metadata(path).ok();
+    if !is_dir {
+        if let Some(size) = metadata.as_ref().map(std::fs::Metadata::len) {
+            lines.push(QString::from(crate::format::size(size).as_str()));
+        }
+    }
+    let date = date.unwrap_or_else(|| {
+        metadata
+            .and_then(|value| value.modified().ok())
+            .map(crate::format::system_time_short)
+            .unwrap_or_default()
+    });
+    if !date.is_empty() {
+        lines.push(QString::from(date.as_str()));
+    }
+    lines.into_iter().collect()
 }

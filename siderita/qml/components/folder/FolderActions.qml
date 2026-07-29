@@ -85,6 +85,7 @@ Item {
         controller: root.controller
         owner: root.owner
         backdrop: root.panel
+        panel: root.panel
     }
 
     IconPickerDialog {

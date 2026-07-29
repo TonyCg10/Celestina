@@ -34,7 +34,7 @@ Item {
         backdropSource: infoPill.backdrop
         captureEnabled: infoPill.visible
         liveCapture: true
-        cornerRadius: CelestinaTheme.radiusSm
+        cornerRadius: CelestinaTheme.radiusPill
     }
 
     CelestinaIcon {

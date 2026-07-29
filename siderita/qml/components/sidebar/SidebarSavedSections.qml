@@ -15,6 +15,10 @@ Item {
     property bool bookmarksCollapsed: false
 
     readonly property int bookmarkCount: bookmarksList.count
+    readonly property Item favoritesHeaderItem: favoritesHeader
+    readonly property Item bookmarksHeaderItem: bookmarksHeader
+    readonly property real favoritesHeaderY: favoritesHeader.y
+    readonly property real bookmarksHeaderY: bookmarksHeader.y
     readonly property var favoriteRows: {
         const rows = []
         const controller = hostWindow.activeController
@@ -42,34 +46,24 @@ Item {
         bookmarksList.editIndex = index
     }
 
-    CelestinaSectionLabel {
-        id: favoritesLabel
-        x: 16
+    SidebarSectionHeader {
+        id: favoritesHeader
+        x: CelestinaTheme.spaceSm
         y: 0
+        width: parent.width - CelestinaTheme.spaceSm * 2
         visible: root.favoriteRows.length > 0
-        text: "FAVORITOS"
+        height: visible ? implicitHeight : 0
+        title: "FAVORITOS"
         textScale: root.hostWindow.sidebarTextScale
-
-        SidebarChevron {
-            textScale: root.hostWindow.sidebarTextScale
-            x: -12
-            anchors.verticalCenter: parent.verticalCenter
-            collapsed: root.favoritesCollapsed
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            anchors.margins: -6
-            anchors.leftMargin: -16
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.favoritesCollapsed = !root.favoritesCollapsed
-        }
+        iconScale: root.hostWindow.sidebarIconScale
+        collapsed: root.favoritesCollapsed
+        onActivated: root.favoritesCollapsed = !root.favoritesCollapsed
     }
 
     ListView {
         id: favoritesList
         x: 8
-        y: favoritesLabel.y + (favoritesLabel.visible ? 20 : 0)
+        y: favoritesHeader.y + favoritesHeader.height
         width: parent.width - 16
         height: root.favoritesCollapsed
                 ? 0 : count * (root.hostWindow.sidebarRowHeight + spacing)
@@ -92,35 +86,24 @@ Item {
         }
     }
 
-    CelestinaSectionLabel {
-        id: bookmarksLabel
-        x: 16
-        y: favoritesLabel.visible
+    SidebarSectionHeader {
+        id: bookmarksHeader
+        x: CelestinaTheme.spaceSm
+        width: parent.width - CelestinaTheme.spaceSm * 2
+        y: favoritesHeader.visible
            ? favoritesList.y + favoritesList.height + 12
-           : favoritesLabel.y
-        text: "MARCADORES"
+           : favoritesHeader.y
+        title: "MARCADORES"
         textScale: root.hostWindow.sidebarTextScale
-
-        SidebarChevron {
-            textScale: root.hostWindow.sidebarTextScale
-            x: -12
-            anchors.verticalCenter: parent.verticalCenter
-            collapsed: root.bookmarksCollapsed
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            anchors.margins: -6
-            anchors.leftMargin: -16
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.bookmarksCollapsed = !root.bookmarksCollapsed
-        }
+        iconScale: root.hostWindow.sidebarIconScale
+        collapsed: root.bookmarksCollapsed
+        onActivated: root.bookmarksCollapsed = !root.bookmarksCollapsed
     }
 
     ListView {
         id: bookmarksList
         x: 8
-        y: bookmarksLabel.y + 20
+        y: bookmarksHeader.y + bookmarksHeader.height
         width: parent.width - 16
         height: root.bookmarksCollapsed
                 ? 0 : count * (root.hostWindow.sidebarRowHeight + spacing)

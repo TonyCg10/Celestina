@@ -67,6 +67,7 @@ Item {
         else
             capture.sourceRect = Qt.rect(0, 0, 0, 0)
     }
+    onBackdropSourceChanged: refreshBackdrop()
 
     // The sampled region has to follow the surface. Its size can still change
     // after it is shown — a menu grows as its items decide to be visible — and
@@ -76,11 +77,24 @@ Item {
     onWidthChanged: refreshBackdrop()
     onHeightChanged: refreshBackdrop()
 
-    // A moving surface (a popup being positioned) re-arms the sample from its
-    // consumer, on the event that moved it — NOT every frame. An earlier
-    // self-tracking FrameAnimation re-sampled on the GUI thread each frame while
-    // live, which starved input and pinned the CPU even at idle; the wiring below
-    // (GlassContextMenu / GlassCard) is cheaper and does the same job.
+    // Live capture updates the sampled pixels, but not the coordinate mapping.
+    // When the injected source itself moves or resizes (for example, Siderita's
+    // viewport while its heading expands), refresh only for that short geometry
+    // transition. This is event-driven and leaves the GUI thread idle at rest.
+    Connections {
+        target: root.backdropSource
+        enabled: root.backdropSource !== null
+
+        function onXChanged() { root.refreshBackdrop() }
+        function onYChanged() { root.refreshBackdrop() }
+        function onWidthChanged() { root.refreshBackdrop() }
+        function onHeightChanged() { root.refreshBackdrop() }
+    }
+
+    // A moving surface (a popup being positioned) still re-arms the sample from
+    // its consumer, on the event that moved it. An earlier always-on
+    // FrameAnimation re-sampled on the GUI thread even at idle; geometry signals
+    // and the existing popup hooks cover both directions without frame polling.
 
     // L2 drop shadow, behind the body and outside its clip. RectangularShadow is
     // an analytic SDF (Qt 6.9+) — far cheaper than a MultiEffect shadow and it
@@ -154,6 +168,7 @@ Item {
                 blurEnabled: true
                 blur: CelestinaTheme.glassBlur
                 blurMax: CelestinaTheme.glassBlurMax
+                blurMultiplier: CelestinaTheme.glassBlurMultiplier
                 // Slight desaturation of the backdrop — the 8.5 recipe, not the
                 // earlier saturation boost (a negative value here desaturates).
                 saturation: CelestinaTheme.glassSaturation

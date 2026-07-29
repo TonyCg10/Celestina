@@ -18,16 +18,55 @@ impl qobject::SideritaController {
         if path.is_empty() {
             return;
         }
+        self.as_mut().set_op_error(QString::default());
+        let previous = self.rust().custom_icons.clone();
         let icon = icon.to_string();
         {
             let map = &mut self.as_mut().rust_mut().get_mut().custom_icons;
-            if icon.is_empty() {
+            let empty = {
+                let appearance = map.entry(path.clone()).or_default();
+                appearance.icon = icon;
+                appearance.icon.is_empty() && appearance.accent.is_empty()
+            };
+            if empty {
                 map.remove(&path);
-            } else {
-                map.insert(path, icon);
             }
         }
-        let _ = crate::icons::save(&self.rust().custom_icons);
+        self.as_mut().persist_custom_icons(previous);
+    }
+
+    pub fn set_custom_icon_accent(mut self: Pin<&mut Self>, path: &QString, accent: &QString) {
+        let path = path.to_string();
+        let accent = accent.to_string();
+        if path.is_empty() || !crate::icons::valid_accent(&accent) {
+            return;
+        }
+        self.as_mut().set_op_error(QString::default());
+        let previous = self.rust().custom_icons.clone();
+        {
+            let map = &mut self.as_mut().rust_mut().get_mut().custom_icons;
+            let empty = {
+                let appearance = map.entry(path.clone()).or_default();
+                appearance.accent = accent;
+                appearance.icon.is_empty() && appearance.accent.is_empty()
+            };
+            if empty {
+                map.remove(&path);
+            }
+        }
+        self.as_mut().persist_custom_icons(previous);
+    }
+
+    fn persist_custom_icons(
+        mut self: Pin<&mut Self>,
+        previous: std::collections::HashMap<String, crate::icons::IconAppearance>,
+    ) {
+        if let Err(error) = crate::icons::save(&self.rust().custom_icons) {
+            self.as_mut().rust_mut().get_mut().custom_icons = previous;
+            let message = format!("No se pudo guardar la apariencia del icono: {error}");
+            self.as_mut().set_op_error(QString::from(message.as_str()));
+            return;
+        }
         self.as_mut().refresh_custom_icon_props();
     }
 

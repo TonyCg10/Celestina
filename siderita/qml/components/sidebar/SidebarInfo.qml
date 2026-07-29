@@ -13,29 +13,49 @@ CelestinaSurface {
                                                   ? activeController.selectionCount : 0
     readonly property int entryCount: activeController
                                               ? activeController.entryNames.length : 0
+    readonly property bool virtualLocation: activeController
+            && (activeController.searchActive || activeController.searchRunning
+                || activeController.trashActive || activeController.recentActive)
     readonly property int selectedIndex: {
         var _ = activeController ? activeController.entryNames.length : 0
         return activeController && selectionCount === 1
                && activeController.selectedToken.length > 0
                ? activeController.indexForToken(activeController.selectedToken) : -1
     }
+    readonly property bool hasSelectedEntry:
+            selectedIndex >= 0 && selectedIndex < entryCount
 
     readonly property string heading: selectionCount > 1 ? "SELECCIÓN"
-                                          : selectedIndex >= 0 ? "ELEMENTO" : "CARPETA"
+            : hasSelectedEntry ? "ELEMENTO"
+            : activeController && activeController.trashActive ? "PAPELERA"
+            : activeController && activeController.recentActive ? "RECIENTES"
+            : activeController
+              && (activeController.searchActive || activeController.searchRunning)
+                    ? "BÚSQUEDA" : "CARPETA"
     readonly property string primaryText: selectionCount > 1
             ? selectionCount + " seleccionados"
-            : selectedIndex >= 0 ? activeController.entryNames[selectedIndex]
+            : hasSelectedEntry ? activeController.entryNames[selectedIndex]
             : entryCount + (entryCount === 1 ? " elemento" : " elementos")
-    readonly property string secondaryText: selectionCount > 1 ? ""
-            : selectedIndex >= 0 ? activeController.entryDetail(selectedIndex)
-            : (activeController && activeController.folderSize.length > 0
-               ? "Total " + activeController.folderSize : "")
+    readonly property var detailLines: {
+        if (selectionCount > 1)
+            return []
+        if (hasSelectedEntry)
+            return activeController.entryInfo(selectedIndex)
+        if (!virtualLocation && activeController
+            && activeController.folderSize.length > 0)
+            return ["Directo " + activeController.folderSize]
+        return []
+    }
+
+    implicitHeight: Math.round(contentColumn.implicitHeight
+                               + 28 * hostWindow.sidebarTextScale)
 
     role: CelestinaSurface.Panel
 
     Column {
+        id: contentColumn
         x: 18
-        anchors.verticalCenter: parent.verticalCenter
+        y: Math.round(14 * root.hostWindow.sidebarTextScale)
         width: parent.width - 34
         spacing: 4
 
@@ -56,15 +76,20 @@ CelestinaSurface {
             elide: Text.ElideMiddle
         }
 
-        Text {
-            width: parent.width
-            visible: root.secondaryText.length > 0
-            text: root.secondaryText
-            color: CelestinaTheme.textMuted
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: Math.round(CelestinaTheme.fontRowSecondary
-                                       * root.hostWindow.sidebarTextScale)
-            elide: Text.ElideRight
+        Repeater {
+            model: root.detailLines
+
+            Text {
+                required property string modelData
+
+                width: contentColumn.width
+                text: modelData
+                color: CelestinaTheme.textMuted
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: Math.round(CelestinaTheme.fontRowSecondary
+                                           * root.hostWindow.sidebarTextScale)
+                elide: Text.ElideRight
+            }
         }
     }
 }

@@ -58,12 +58,6 @@ pub mod qobject {
         #[rust_name = "register_thumbnail_provider"]
         fn register_siderita_thumbnail_provider(engine: Pin<&mut QQmlApplicationEngine>);
 
-        // Pins the freedesktop icon theme named icons resolve against
-        // (see cpp/icontheme.cpp), set once before the QML loads.
-        include!("siderita/icontheme.h");
-
-        #[rust_name = "apply_icon_theme"]
-        fn siderita_apply_icon_theme(theme: &QString);
     }
 
     #[auto_cxx_name]
@@ -110,11 +104,10 @@ pub mod qobject {
         // and shown as another content-view location.
         #[qproperty(bool, recent_active)]
         #[qproperty(i32, recent_count)]
-        // Per-path custom icon overrides, exposed as ONE list of `path\ticon`
-        // entries the QML folds into a path→icon map. Deliberately not two
-        // parallel lists: those are set in sequence, so a QML handler woken by
-        // the first sees the second still stale — the override then only
-        // appeared on the next start.
+        // Per-path custom icon appearances, exposed as ONE list of
+        // `path\ticon\taccent` entries the QML folds into a path→appearance map.
+        // Deliberately not parallel properties: those are set in sequence, so a
+        // QML handler woken by the first can observe the second while still stale.
         #[qproperty(QStringList, custom_icon_entries)]
         // Starred entries — one `path\tkind` line each, where kind is
         // `directory`, `file` or `missing` (a favourite outlives what it points
@@ -146,7 +139,15 @@ pub mod qobject {
         #[qproperty(QString, folder_view_mode)]
         #[qproperty(bool, folder_view_pinned)]
         #[qproperty(bool, watch_degraded)]
+        #[qproperty(i32, folder_visible_count)]
+        #[qproperty(i32, folder_total_count)]
+        #[qproperty(i32, folder_directory_count)]
+        #[qproperty(i32, folder_file_count)]
+        #[qproperty(i32, folder_hidden_count)]
         #[qproperty(QString, folder_size)]
+        #[qproperty(QString, folder_modified)]
+        #[qproperty(QString, folder_accessed)]
+        #[qproperty(QString, folder_created)]
         // Mirrors the QML multi-selection count so the window-scope info box can
         // read it from the active tab's controller.
         #[qproperty(i32, selection_count)]
@@ -228,10 +229,14 @@ pub mod qobject {
         #[qinvokable]
         fn index_for_token(self: &SideritaController, token: &QString) -> i32;
 
-        /// "Kind · size · date" for the entry at `index` — the info panel's line
-        /// for a single selected item.
+        /// Legacy one-line detail used by contextual/virtual locations.
         #[qinvokable]
         fn entry_detail(self: &SideritaController, index: i32) -> QString;
+
+        /// Compact, presentation-ready lines for the selected entry info card:
+        /// kind, optional size and abbreviated local modification date.
+        #[qinvokable]
+        fn entry_info(self: &SideritaController, index: i32) -> QStringList;
 
         #[qinvokable]
         fn entry_path(self: &SideritaController, index: i32) -> QString;
@@ -245,6 +250,15 @@ pub mod qobject {
         /// persisting it. Refreshes `custom_icon_entries`.
         #[qinvokable]
         fn set_custom_icon(self: Pin<&mut SideritaController>, path: &QString, icon: &QString);
+
+        /// Sets (or, with an empty key, restores automatic) the custom Lucide
+        /// accent for `path`, independently of its custom icon shape.
+        #[qinvokable]
+        fn set_custom_icon_accent(
+            self: Pin<&mut SideritaController>,
+            path: &QString,
+            accent: &QString,
+        );
 
         /// Re-reads the saved overrides — how a tab picks up an icon another
         /// tab just changed.
@@ -436,6 +450,9 @@ pub mod qobject {
 
         #[qinvokable]
         fn open_phone(self: Pin<&mut SideritaController>, index: i32);
+
+        #[qinvokable]
+        fn display_location_name(self: &SideritaController, path: &QString) -> QString;
 
         #[qinvokable]
         fn send_to_phone(self: Pin<&mut SideritaController>, path: &QString);
@@ -706,7 +723,15 @@ pub struct SideritaControllerRust {
     watched: Option<PathBuf>,
     debouncer: Option<FsDebouncer>,
     watch_degraded: bool,
+    folder_visible_count: i32,
+    folder_total_count: i32,
+    folder_directory_count: i32,
+    folder_file_count: i32,
+    folder_hidden_count: i32,
     folder_size: QString,
+    folder_modified: QString,
+    folder_accessed: QString,
+    folder_created: QString,
     selection_count: i32,
     properties_pending: bool,
     prop_name: QString,
@@ -726,7 +751,7 @@ pub struct SideritaControllerRust {
     recent_active: bool,
     recent_count: i32,
     custom_icon_entries: QStringList,
-    custom_icons: std::collections::HashMap<String, String>,
+    custom_icons: std::collections::HashMap<String, crate::icons::IconAppearance>,
     favorite_entries: QStringList,
     favorites: std::collections::BTreeSet<String>,
     search_running: bool,
@@ -842,7 +867,15 @@ impl Default for SideritaControllerRust {
             watched: None,
             debouncer: None,
             watch_degraded: false,
+            folder_visible_count: 0,
+            folder_total_count: 0,
+            folder_directory_count: 0,
+            folder_file_count: 0,
+            folder_hidden_count: 0,
             folder_size: QString::default(),
+            folder_modified: QString::default(),
+            folder_accessed: QString::default(),
+            folder_created: QString::default(),
             selection_count: 0,
             properties_pending: false,
             prop_name: QString::default(),
@@ -1086,16 +1119,18 @@ const fn sort_field_from_index(index: i32) -> Option<SortField> {
     }
 }
 
-/// Builds the parallel (paths, icons) QStringLists the QML folds into its
-/// custom-icon map, in a stable sorted order.
-/// The overrides as one `path\ticon` line per entry — a single property, so the
-/// QML sees a whole map or none of it, never half of one.
-fn icon_override_entries(map: &std::collections::HashMap<String, String>) -> QStringList {
-    let mut entries: Vec<(&String, &String)> = map.iter().collect();
-    entries.sort();
+/// One stable, atomic `path\ticon\taccent` line per appearance. QML therefore
+/// sees a complete record at once and never mixes fields from different edits.
+fn icon_override_entries(
+    map: &std::collections::HashMap<String, crate::icons::IconAppearance>,
+) -> QStringList {
+    let mut entries: Vec<(&String, &crate::icons::IconAppearance)> = map.iter().collect();
+    entries.sort_by(|(left, _), (right, _)| left.cmp(right));
     entries
         .iter()
-        .map(|(path, icon)| QString::from(format!("{path}\t{icon}").as_str()))
+        .map(|(path, appearance)| {
+            QString::from(format!("{path}\t{}\t{}", appearance.icon, appearance.accent).as_str())
+        })
         .collect()
 }
 

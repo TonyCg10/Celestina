@@ -13,8 +13,12 @@ Rectangle {
     property Item backdrop
     property bool floating: false
     property color fill: CelestinaTheme.controlFill
+    // Standalone pills float above the file delegates, so they must also be
+    // input surfaces.  A visual-only Rectangle lets hover and passive drag
+    // handlers below it react through the glass.
+    property bool inputShield: true
 
-    radius: CelestinaTheme.radiusSm
+    radius: CelestinaTheme.radiusPill
     color: CelestinaTheme.clear
 
     GlassSurface {
@@ -25,6 +29,7 @@ Rectangle {
         captureEnabled: glassPill.floating
         liveCapture: true
         cornerRadius: glassPill.radius
+        elevation: glassPill.floating ? 2 : 0
         opacity: glassPill.floating ? 1 : 0
         Behavior on opacity {
             NumberAnimation { duration: CelestinaTheme.motionNormal }
@@ -38,5 +43,32 @@ Rectangle {
         Behavior on color {
             ColorAnimation { duration: CelestinaTheme.motionFast }
         }
+    }
+
+    // Keep hover state on the chrome itself instead of also lighting the file
+    // row/cell behind it.  Child controls are delivered first and remain fully
+    // interactive.
+    HoverHandler {
+        enabled: glassPill.inputShield
+        blocking: true
+    }
+
+    // Claim drags that begin on non-interactive space inside a pill.  Without
+    // this, the delegate's passive DragHandler can start a file drag through
+    // the floating chrome.
+    DragHandler {
+        enabled: glassPill.inputShield
+        target: null
+        grabPermissions: PointerHandler.CanTakeOverFromAnything
+                         | PointerHandler.ApprovesTakeOverByAnything
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        z: -1
+        enabled: glassPill.inputShield
+        acceptedButtons: Qt.AllButtons
+        hoverEnabled: true
+        preventStealing: true
     }
 }

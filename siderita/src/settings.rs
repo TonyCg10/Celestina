@@ -9,13 +9,16 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-/// The inclusive range every size scale is clamped to on load and save. The UI
-/// shows this as 10 %–100 % (a fraction of the 2.0 maximum); 1.0 is the
-/// historical default and reads as 50 %.
-const SCALE_MIN: f64 = 0.2;
-const SCALE_MAX: f64 = 2.0;
-/// Content icons alone may go larger — up to 150 % (factor 3.0).
-const CONTENT_ICON_SCALE_MAX: f64 = 3.0;
+/// Scale 1.0 means exactly 100%. Icon ranges are deliberately tighter than
+/// text: chrome has a fixed control anatomy, while content glyphs have a little
+/// more room to grow. Before v2 the UI labelled 2.0 as 100% while QML applied it
+/// as 2x, which is why icon themes were rendered far beyond their useful size.
+const TEXT_SCALE_MIN: f64 = 0.2;
+const TEXT_SCALE_MAX: f64 = 2.0;
+const ICON_SCALE_MIN: f64 = 0.75;
+const CONTENT_ICON_SCALE_MAX: f64 = 1.5;
+const CHROME_ICON_SCALE_MAX: f64 = 1.25;
+const ICON_SCALE_VERSION: u8 = 2;
 
 /// The window size a first run opens at, and the bounds a remembered one is
 /// clamped to — a stale config must never reopen a window too small to use or
@@ -37,7 +40,7 @@ pub struct Settings {
     pub content_icon_scale: f64,
     /// Content-view text scale (name + subtitle), clamped on load.
     pub content_text_scale: f64,
-    /// Chrome icon scale (top bar + tabs + bottom bar controls), clamped on load.
+    /// Tab-strip folder icon scale, clamped on load.
     pub interface_icon_scale: f64,
     /// Chrome text scale (breadcrumb, search, tabs, bottom bar), clamped on load.
     pub interface_text_scale: f64,
@@ -115,11 +118,12 @@ pub fn save(settings: &Settings) -> io::Result<()> {
     }
 }
 
+fn parse_finite_scale(value: &str) -> Option<f64> {
+    value.parse::<f64>().ok().filter(|scale| scale.is_finite())
+}
+
 fn parse_scale(value: &str) -> Option<f64> {
-    value
-        .parse::<f64>()
-        .ok()
-        .map(|s| s.clamp(SCALE_MIN, SCALE_MAX))
+    parse_finite_scale(value).map(|scale| scale.clamp(TEXT_SCALE_MIN, TEXT_SCALE_MAX))
 }
 
 fn load_from(path: &Path) -> Settings {
@@ -130,8 +134,11 @@ fn load_from(path: &Path) -> Settings {
     // A pre-granular config held one `scale` for the whole content view; adopt
     // it for both content scales unless the granular keys override.
     let mut legacy_scale: Option<f64> = None;
+    let mut icon_scale_version = 1;
     let mut content_icon_seen = false;
     let mut content_text_seen = false;
+    let mut interface_icon_seen = false;
+    let mut sidebar_icon_seen = false;
     for line in content.lines() {
         let Some((key, value)) = line.split_once('=') else {
             continue;
@@ -141,10 +148,18 @@ fn load_from(path: &Path) -> Settings {
             "view_mode" if value == "list" || value == "grid" || value == "details" => {
                 settings.view_mode = value.to_owned();
             }
-            "scale" => legacy_scale = parse_scale(value),
+            "icon_scale_version" => {
+                if let Ok(version) = value.parse::<u8>() {
+                    icon_scale_version = version;
+                }
+            }
+            "scale" => {
+                legacy_scale = parse_finite_scale(value)
+                    .map(|scale| scale.clamp(TEXT_SCALE_MIN, TEXT_SCALE_MAX));
+            }
             "content_icon_scale" => {
-                if let Ok(scale) = value.parse::<f64>() {
-                    settings.content_icon_scale = scale.clamp(SCALE_MIN, CONTENT_ICON_SCALE_MAX);
+                if let Some(scale) = parse_finite_scale(value) {
+                    settings.content_icon_scale = scale;
                     content_icon_seen = true;
                 }
             }
@@ -155,8 +170,9 @@ fn load_from(path: &Path) -> Settings {
                 }
             }
             "interface_icon_scale" => {
-                if let Some(scale) = parse_scale(value) {
+                if let Some(scale) = parse_finite_scale(value) {
                     settings.interface_icon_scale = scale;
+                    interface_icon_seen = true;
                 }
             }
             "interface_text_scale" => {
@@ -165,8 +181,9 @@ fn load_from(path: &Path) -> Settings {
                 }
             }
             "sidebar_icon_scale" => {
-                if let Some(scale) = parse_scale(value) {
+                if let Some(scale) = parse_finite_scale(value) {
                     settings.sidebar_icon_scale = scale;
+                    sidebar_icon_seen = true;
                 }
             }
             "sidebar_text_scale" => {
@@ -221,11 +238,35 @@ fn load_from(path: &Path) -> Settings {
     if let Some(scale) = legacy_scale {
         if !content_icon_seen {
             settings.content_icon_scale = scale;
+            content_icon_seen = true;
         }
         if !content_text_seen {
-            settings.content_text_scale = scale;
+            settings.content_text_scale = scale.clamp(TEXT_SCALE_MIN, TEXT_SCALE_MAX);
         }
     }
+    // Icon scales written before v2 were displayed as value / 2 but applied as
+    // value, so a visible 110% became a physical 2.2x. Convert only keys that
+    // actually existed; absent keys keep the correct 1.0 default.
+    if icon_scale_version < ICON_SCALE_VERSION {
+        if content_icon_seen {
+            settings.content_icon_scale /= 2.0;
+        }
+        if interface_icon_seen {
+            settings.interface_icon_scale /= 2.0;
+        }
+        if sidebar_icon_seen {
+            settings.sidebar_icon_scale /= 2.0;
+        }
+    }
+    settings.content_icon_scale = settings
+        .content_icon_scale
+        .clamp(ICON_SCALE_MIN, CONTENT_ICON_SCALE_MAX);
+    settings.interface_icon_scale = settings
+        .interface_icon_scale
+        .clamp(ICON_SCALE_MIN, CHROME_ICON_SCALE_MAX);
+    settings.sidebar_icon_scale = settings
+        .sidebar_icon_scale
+        .clamp(ICON_SCALE_MIN, CHROME_ICON_SCALE_MAX);
     settings
 }
 
@@ -234,10 +275,11 @@ fn save_to(path: &Path, settings: &Settings) -> io::Result<()> {
         fs::create_dir_all(parent)?;
     }
     let mut text = format!(
-        "view_mode={}\ncontent_icon_scale={:.2}\ncontent_text_scale={:.2}\n\
+        "icon_scale_version={}\nview_mode={}\ncontent_icon_scale={:.2}\ncontent_text_scale={:.2}\n\
          interface_icon_scale={:.2}\ninterface_text_scale={:.2}\n\
          sidebar_icon_scale={:.2}\nsidebar_text_scale={:.2}\n\
          sort_field={}\nsort_ascending={}\nshow_hidden={}\n",
+        ICON_SCALE_VERSION,
         match settings.view_mode.as_str() {
             "grid" => "grid",
             "details" => "details",
@@ -245,12 +287,22 @@ fn save_to(path: &Path, settings: &Settings) -> io::Result<()> {
         },
         settings
             .content_icon_scale
-            .clamp(SCALE_MIN, CONTENT_ICON_SCALE_MAX),
-        settings.content_text_scale.clamp(SCALE_MIN, SCALE_MAX),
-        settings.interface_icon_scale.clamp(SCALE_MIN, SCALE_MAX),
-        settings.interface_text_scale.clamp(SCALE_MIN, SCALE_MAX),
-        settings.sidebar_icon_scale.clamp(SCALE_MIN, SCALE_MAX),
-        settings.sidebar_text_scale.clamp(SCALE_MIN, SCALE_MAX),
+            .clamp(ICON_SCALE_MIN, CONTENT_ICON_SCALE_MAX),
+        settings
+            .content_text_scale
+            .clamp(TEXT_SCALE_MIN, TEXT_SCALE_MAX),
+        settings
+            .interface_icon_scale
+            .clamp(ICON_SCALE_MIN, CHROME_ICON_SCALE_MAX),
+        settings
+            .interface_text_scale
+            .clamp(TEXT_SCALE_MIN, TEXT_SCALE_MAX),
+        settings
+            .sidebar_icon_scale
+            .clamp(ICON_SCALE_MIN, CHROME_ICON_SCALE_MAX),
+        settings
+            .sidebar_text_scale
+            .clamp(TEXT_SCALE_MIN, TEXT_SCALE_MAX),
         settings.sort_field.clamp(0, 3),
         settings.sort_ascending,
         settings.show_hidden,
@@ -330,7 +382,7 @@ mod tests {
             content_text_scale: 0.9,
             interface_icon_scale: 1.2,
             interface_text_scale: 0.8,
-            sidebar_icon_scale: 1.5,
+            sidebar_icon_scale: 1.2,
             sidebar_text_scale: 1.1,
             sort_field: 2,
             sort_ascending: false,
@@ -382,7 +434,7 @@ mod tests {
         fs::write(&file, "view_mode=weird\ncontent_icon_scale=99\n").unwrap();
         let loaded = load_from(&file);
         assert_eq!(loaded.view_mode, "list"); // invalid → default
-        assert_eq!(loaded.content_icon_scale, 3.0); // clamped to the 150% max
+        assert_eq!(loaded.content_icon_scale, 1.5); // legacy 99/2, then clamped
         assert_eq!(loaded.content_text_scale, 1.0); // untouched default
         let _ = fs::remove_dir_all(file.parent().unwrap());
     }
@@ -395,9 +447,30 @@ mod tests {
         // granular key still wins.
         fs::write(&file, "scale=1.4\ncontent_text_scale=1.1\n").unwrap();
         let loaded = load_from(&file);
-        assert_eq!(loaded.content_icon_scale, 1.4); // from legacy scale
+        assert_eq!(loaded.content_icon_scale, 0.75); // old 70%, clamped to usable range
         assert_eq!(loaded.content_text_scale, 1.1); // explicit override
         assert_eq!(loaded.sidebar_icon_scale, 1.0); // legacy never touched sidebar
+        let _ = fs::remove_dir_all(file.parent().unwrap());
+    }
+
+    #[test]
+    fn old_icon_percentages_migrate_to_real_multipliers_once() {
+        let file = temp_file("icon-v2");
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        fs::write(
+            &file,
+            "content_icon_scale=2.20\ninterface_icon_scale=1.60\n\
+             sidebar_icon_scale=2.00\ncontent_text_scale=1.40\n",
+        )
+        .unwrap();
+        let loaded = load_from(&file);
+        assert_eq!(loaded.content_icon_scale, 1.1);
+        assert_eq!(loaded.interface_icon_scale, 0.8);
+        assert_eq!(loaded.sidebar_icon_scale, 1.0);
+        assert_eq!(loaded.content_text_scale, 1.4);
+
+        save_to(&file, &loaded).unwrap();
+        assert_eq!(load_from(&file), loaded); // v2 is not divided a second time
         let _ = fs::remove_dir_all(file.parent().unwrap());
     }
 

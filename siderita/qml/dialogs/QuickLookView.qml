@@ -78,8 +78,8 @@ CelestinaModalLayer {
             height: CelestinaTheme.iconSm
             name: panel.mediaIconName(quickLookView.qlKind, quickLookView.qlMedia, quickLookView.qlPath)
             fallbackName: quickLookView.qlKind === "directory" ? "folder" : "file"
-            tone: quickLookView.qlKind === "directory"
-                  ? CelestinaIcon.Accent : CelestinaIcon.Secondary
+            tone: panel.entryIconTone(quickLookView.qlKind)
+            tintOverride: panel.iconTint(quickLookView.qlPath)
         }
         Text {
             anchors.left: qlIcon.right
@@ -153,8 +153,8 @@ CelestinaModalLayer {
                                                   quickLookView.qlMedia, quickLookView.qlPath)
                     sourceSize: Qt.size(width, height)
                     fallbackName: quickLookView.qlKind === "directory" ? "folder" : "file"
-                    tone: quickLookView.qlKind === "directory"
-                          ? CelestinaIcon.Accent : CelestinaIcon.Secondary
+                    tone: panel.entryIconTone(quickLookView.qlKind)
+                    tintOverride: panel.iconTint(quickLookView.qlPath)
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter

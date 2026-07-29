@@ -12,25 +12,24 @@ GridView {
     required property Item ghost
     required property Item overlayParent
     required property real contentTopMargin
+    required property real contentBottomInset
 
     signal quickLookRequested
+    signal revealHeadingRequested
+    signal collapseHeadingRequested
     signal newTabRequested(string path, bool foreground)
     signal contextMenuRequested(string token, string name, bool isDirectory,
                                 string path, real popupX, real popupY)
 
     readonly property int columns: Math.max(1, Math.floor(width / panel.gridCellWidth))
 
-    WheelHandler {
-        acceptedDevices: PointerDevice.Mouse
-        onWheel: function(event) {
-            const maximum = Math.max(0, root.contentHeight - root.height)
-            root.contentY = Math.max(0, Math.min(maximum,
-                root.contentY - event.angleDelta.y / 120 * 180))
-            event.accepted = true
-        }
+    FolderWheelHandler {
+        view: root
+        onRevealRequested: root.revealHeadingRequested()
+        onCollapseRequested: root.collapseHeadingRequested()
     }
 
-    footer: Item { width: 1; height: 46 }
+    footer: Item { width: 1; height: root.contentBottomInset }
     visible: panel.viewMode === "grid"
     model: entryModel
     clip: true
@@ -144,5 +143,4 @@ GridView {
         }
     }
 
-    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 }

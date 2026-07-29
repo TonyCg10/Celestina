@@ -8,17 +8,17 @@ Item {
     required property var hostWindow
     required property Item panel
     required property Item bottomControls
+    required property Item contentFrame
+    required property Item bottomBar
     required property Item bottomView
     required property bool bottomFloating
-    property int bottomBarHeight: 54
-
-    readonly property real bottomBarY: height - bottomBarHeight
 
     Rectangle {
         id: errorBanner
-        x: 16
-        y: root.bottomBarY - 8 - height
-        width: parent.width - 32
+        x: root.contentFrame.x + root.panel.floatingChromeInset
+        y: root.bottomBar.y - CelestinaTheme.compFloatingGap - height
+        width: root.contentFrame.width
+               - 2 * root.panel.floatingChromeInset
         height: errorText.implicitHeight + 22
         radius: CelestinaTheme.radiusSm
         visible: root.controller.errorText.length > 0
@@ -41,9 +41,11 @@ Item {
 
     Rectangle {
         id: operationErrorBanner
-        x: 16
-        y: (errorBanner.visible ? errorBanner.y : root.bottomBarY) - 8 - height
-        width: parent.width - 32
+        x: root.contentFrame.x + root.panel.floatingChromeInset
+        y: (errorBanner.visible ? errorBanner.y : root.bottomBar.y)
+           - CelestinaTheme.compFloatingGap - height
+        width: root.contentFrame.width
+               - 2 * root.panel.floatingChromeInset
         height: operationErrorText.implicitHeight + 22
         radius: CelestinaTheme.radiusSm
         visible: root.controller.opError.length > 0
@@ -66,11 +68,13 @@ Item {
 
     CelestinaSurface {
         id: operationProgress
-        x: 16
+        x: root.contentFrame.x + root.panel.floatingChromeInset
         y: (operationErrorBanner.visible
             ? operationErrorBanner.y
-            : (errorBanner.visible ? errorBanner.y : root.bottomBarY)) - 8 - height
-        width: parent.width - 32
+            : (errorBanner.visible ? errorBanner.y : root.bottomBar.y))
+           - CelestinaTheme.compFloatingGap - height
+        width: root.contentFrame.width
+               - 2 * root.panel.floatingChromeInset
         height: 62
         visible: root.controller.opRunning
         role: CelestinaSurface.Tonal
@@ -144,28 +148,59 @@ Item {
         }
     }
 
-    Text {
-        id: statusLine
-        x: root.bottomControls.x + root.bottomControls.width + 14
-        y: root.bottomBarY + (root.bottomBarHeight - height) / 2
+    GlassPill {
+        id: statusPill
+        x: root.bottomControls.x + root.bottomControls.implicitWidth
+           + CelestinaTheme.spaceMd
+        height: CelestinaTheme.controlHeightSm
+        y: root.bottomBar.y + (root.bottomBar.height - height) / 2
         width: Math.max(0, sizeButton.x - x - 12)
-        text: root.controller.watchDegraded
-              ? "⚠ Vigilancia perdida · instantánea"
-              : root.controller.statusText
-        color: root.controller.watchDegraded
-               ? CelestinaTheme.dangerFillInk : CelestinaTheme.textMuted
-        font.family: CelestinaTheme.sansFamily
-        font.pixelSize: Math.round(CelestinaTheme.fontCaption
-                                   * root.hostWindow.interfaceTextScale)
-        elide: Text.ElideRight
+        visible: width > 80 && statusLine.text.length > 0
+        backdrop: root.bottomView
+        floating: root.bottomFloating
+        fill: CelestinaTheme.controlFill
+
+        CelestinaIcon {
+            id: statusWarning
+            anchors.left: parent.left
+            anchors.leftMargin: CelestinaTheme.spaceMd
+            anchors.verticalCenter: parent.verticalCenter
+            width: Math.round(CelestinaTheme.iconSm
+                              * root.hostWindow.interfaceIconScale)
+            height: width
+            visible: root.controller.watchDegraded
+            name: "circle-alert"
+            fallbackName: "circle-alert"
+            tone: CelestinaIcon.Danger
+        }
+
+        Text {
+            id: statusLine
+            anchors.fill: parent
+            anchors.leftMargin: statusWarning.visible
+                                ? statusWarning.x + statusWarning.width
+                                  + CelestinaTheme.spaceSm
+                                : CelestinaTheme.spaceMd
+            anchors.rightMargin: CelestinaTheme.spaceMd
+            text: root.controller.watchDegraded
+                  ? "Vigilancia perdida · instantánea"
+                  : root.controller.statusText
+            color: root.controller.watchDegraded
+                   ? CelestinaTheme.dangerFillInk : CelestinaTheme.textMuted
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: Math.round(CelestinaTheme.fontCaption
+                                       * root.hostWindow.interfaceTextScale)
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
     }
 
     FloatingButton {
         id: sizeButton
         height: CelestinaTheme.controlHeightSm
-        anchors.right: parent.right
-        anchors.rightMargin: 16
-        y: root.bottomBarY + (root.bottomBarHeight - height) / 2
+        x: root.contentFrame.x + root.contentFrame.width
+           - width - root.panel.floatingChromeInset
+        y: root.bottomBar.y + (root.bottomBar.height - height) / 2
         text: "Tamaño"
         backdrop: root.bottomView
         floating: root.bottomFloating

@@ -235,8 +235,8 @@ int runOutputChooser(QGuiApplication &app, QQmlEngine &engine)
     }
 
     int status = EXIT_FAILURE;
-    // The window answers by setting `chosen` (or `cancelled`); the name goes to
-    // stdout, which is the only channel the portal backend reads.
+    // The window answers by setting `chosen` (or `cancelled`); xdpw's simple
+    // chooser protocol expects `Monitor: <output name>` on stdout.
     QObject::connect(chooser.data(), SIGNAL(chosenChanged()), &app, SLOT(quit()));
     QObject::connect(chooser.data(), SIGNAL(cancelledChanged()), &app, SLOT(quit()));
     app.setQuitOnLastWindowClosed(true);
@@ -244,6 +244,7 @@ int runOutputChooser(QGuiApplication &app, QQmlEngine &engine)
 
     const QString chosen = chooser->property("chosen").toString();
     if (!chosen.isEmpty()) {
+        std::fputs("Monitor: ", stdout);
         std::fputs(qPrintable(chosen), stdout);
         std::fputc('\n', stdout);
         std::fflush(stdout);

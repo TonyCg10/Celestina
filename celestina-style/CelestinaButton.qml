@@ -2,10 +2,10 @@ import QtQuick
 import QtQuick.Controls
 
 // ─── CelestinaButton ──────────────────────────────────────────────────────────
-// El botón del suite, con un papel cerrado: tonal, principal, destructivo o de
-// texto. Un enum impide combinaciones contradictorias como principal + peligro.
-// El
-// destructivo no es rojo por decoración — es lo único que distingue "Vaciar
+// El botón del suite, con un papel cerrado: tonal, principal, destructivo,
+// seleccionado o transparente. Un enum impide combinaciones contradictorias
+// como principal + peligro. El destructivo no es rojo por decoración — es lo
+// único que distingue "Vaciar
 // papelera" de "Cancelar" cuando se lee deprisa. `helpText` cuelga una ayuda
 // emergente para los botones sin texto suficiente.
 //
@@ -21,12 +21,14 @@ Button {
         Tonal,
         Primary,
         Destructive,
-        TextOnly
+        Selected,
+        Ghost
     }
 
     enum Density {
         Compact,
-        Regular
+        Regular,
+        Prominent
     }
 
     property int role: CelestinaButton.Tonal
@@ -34,9 +36,11 @@ Button {
     property string helpText: ""
 
     hoverEnabled: true
-    implicitHeight: density === CelestinaButton.Regular
-                    ? CelestinaTheme.controlHeight
-                    : CelestinaTheme.controlHeightXs
+    implicitHeight: density === CelestinaButton.Prominent
+                    ? CelestinaTheme.controlHeightXl
+                    : density === CelestinaButton.Regular
+                      ? CelestinaTheme.controlHeight
+                      : CelestinaTheme.controlHeightXs
     leftPadding: CelestinaTheme.compButtonPaddingHorizontal
     rightPadding: CelestinaTheme.compButtonPaddingHorizontal
     font.family: CelestinaTheme.sansFamily
@@ -53,6 +57,7 @@ Button {
                ? CelestinaTheme.textMuted
                : control.role === CelestinaButton.Primary ? CelestinaTheme.accentInk
                : control.role === CelestinaButton.Destructive ? CelestinaTheme.dangerFillInk
+               : control.role === CelestinaButton.Selected ? CelestinaTheme.accentLink
                : CelestinaTheme.text
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
@@ -60,7 +65,8 @@ Button {
     }
 
     background: Rectangle {
-        radius: control.density === CelestinaButton.Regular
+        radius: control.density === CelestinaButton.Prominent
+                || control.density === CelestinaButton.Regular
                 ? CelestinaTheme.radiusButton
                 : CelestinaTheme.radiusSm
         opacity: control.enabled ? 1 : CelestinaTheme.disabledOpacity
@@ -75,7 +81,11 @@ Button {
                 return control.down ? CelestinaTheme.danger
                      : control.hovered ? CelestinaTheme.dangerBorder
                      : CelestinaTheme.dangerFill
-            if (control.role === CelestinaButton.TextOnly)
+            if (control.role === CelestinaButton.Selected)
+                return control.down ? CelestinaTheme.surfaceSelected
+                     : control.hovered ? CelestinaTheme.accentSoft
+                     : CelestinaTheme.badgeAccentFill
+            if (control.role === CelestinaButton.Ghost)
                 return control.down ? CelestinaTheme.surfaceStrong
                      : control.hovered ? CelestinaTheme.controlFill
                      : CelestinaTheme.clear

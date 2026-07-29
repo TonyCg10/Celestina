@@ -29,6 +29,7 @@ Item {
                                                          ? hostWindow.activeController.currentPath : "")
     readonly property bool dragging: listDragIndex === rowIndex
     property bool justDragged: false
+    property bool dragConsumed: false
 
     height: hostWindow.sidebarRowHeight
     z: dragging ? 2 : 0
@@ -86,6 +87,7 @@ Item {
             height: width
             name: "folder"
             fallbackName: "folder"
+            tone: CelestinaIcon.Danger
         }
 
         Text {
@@ -136,14 +138,20 @@ Item {
             drag.target: root.editing ? null : rowContent
             drag.axis: Drag.YAxis
             drag.smoothed: false
-            drag.threshold: 6
+            drag.threshold: 10
             drag.minimumY: -root.rowIndex * root.rowPitch
             drag.maximumY: (root.rowCount - 1 - root.rowIndex) * root.rowPitch
             preventStealing: true
 
+            onPressed: function() {
+                root.dragConsumed = false
+                root.justDragged = false
+            }
+
             onPositionChanged: {
                 if (!drag.active)
                     return
+                root.dragConsumed = true
                 const target = Math.max(0, Math.min(root.rowCount - 1,
                                                     root.rowIndex + Math.round(
                                                         rowContent.y / root.rowPitch)))
@@ -151,8 +159,11 @@ Item {
             }
 
             onReleased: {
-                if (root.listDragIndex !== root.rowIndex)
+                if (!drag.active || !root.dragConsumed || root.listDragIndex !== root.rowIndex) {
+                    rowContent.y = 0
+                    root.dragConsumed = false
                     return
+                }
                 root.justDragged = true
                 rowContent.y = 0
                 root.dragFinished(root.rowIndex, root.listDropIndex)
@@ -160,6 +171,7 @@ Item {
 
             onCanceled: {
                 rowContent.y = 0
+                root.dragConsumed = false
                 if (root.listDragIndex === root.rowIndex)
                     root.dragCancelled()
             }

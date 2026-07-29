@@ -103,6 +103,7 @@ Item {
             rightPadding: CelestinaTheme.compButtonPaddingHorizontal
             onAccepted: if (root.canAccept) root.acceptRequested()
             background: GlassPill {
+                inputShield: false
                 radius: CelestinaTheme.radiusSm
                 backdrop: root.backdropView
                 floating: root.gridScrolls
@@ -145,6 +146,7 @@ Item {
             }
 
             background: GlassPill {
+                inputShield: false
                 backdrop: root.backdropView
                 floating: root.gridScrolls
                 fill: filterCombo.hovered

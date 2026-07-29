@@ -3,8 +3,8 @@ import QtQuick.Controls
 import org.celestina.siderita 1.0
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
-// La columna de la izquierda: lugares, dispositivos, favoritos y marcadores, la
-// caja de información de abajo y los cuatro menús contextuales de sus filas. Va
+    // La columna de la izquierda: lugares, dispositivos, favoritos y marcadores, la
+    // caja de información de abajo y los cuatro menús contextuales de sus filas. Va
 // todo junto porque está todo enlazado — un menú escribe en la lista de
 // marcadores para meterla en modo edición, y las filas abren los menús.
 //
@@ -32,12 +32,12 @@ Item {
 
     CelestinaSurface {
         id: sidebar
-        x: 20
-        y: 18
-        width: 184
+        x: 14
+        y: 14
+        width: 220
         // Leave room below for the separate item-info box (its height scales
         // with the sidebar text) plus a gap.
-        height: parent.height - y - 18 - sidebarInfo.height - 14
+        height: parent.height - y - 14 - sidebarInfo.height - 12
         visible: parent.width >= 820
         role: CelestinaSurface.Panel
 
@@ -59,22 +59,48 @@ Item {
             }
         }
 
-        Text {
-            x: 16
-            y: 16
-            text: "SIDERITA"
-            color: CelestinaTheme.textMuted
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontCaption
-            font.letterSpacing: CelestinaTheme.sectionLetterSpacing
-            font.weight: CelestinaTheme.weightDemiBold
-        }
-
         // Cada zona se pliega por su cabecera. Vive en la sesión y no en
         // disco a propósito: plegar es un gesto de "ahora estorba", no una
         // preferencia — al abrir Siderita el panel enseña lo que hay.
         property bool placesCollapsed: false
         property bool devicesCollapsed: false
+
+        readonly property real placesHeaderTop:
+                placesColumn.y + placesHeader.y
+        readonly property real devicesHeaderTop:
+                placesColumn.y + devicesHeader.y
+        readonly property real phoneHeaderTop:
+                placesColumn.y + phoneHeader.y
+        readonly property real favoritesHeaderTop:
+                savedSections.y + savedSections.favoritesHeaderY
+        readonly property real bookmarksHeaderTop:
+                savedSections.y + savedSections.bookmarksHeaderY
+
+        function scrollToSection(sectionTop, stickyOffset) {
+            sidebarReturnAnimation.stop()
+            sidebarScroll.cancelFlick()
+
+            const minimum = sidebarScroll.originY
+            const maximum = Math.max(
+                minimum,
+                sidebarScroll.originY + sidebarScroll.contentHeight
+                    - sidebarScroll.height)
+            const destination = Math.max(
+                minimum,
+                Math.min(maximum, sectionTop - stickyOffset))
+
+            sidebarReturnAnimation.from = sidebarScroll.contentY
+            sidebarReturnAnimation.to = destination
+            sidebarReturnAnimation.start()
+        }
+
+        NumberAnimation {
+            id: sidebarReturnAnimation
+            target: sidebarScroll
+            property: "contentY"
+            duration: CelestinaTheme.motionNormal
+            easing.type: CelestinaTheme.easeStandard
+        }
 
         // Todo el sidebar se desplaza: las secciones crecen con lo que el
         // usuario guarda (marcadores, favoritos, dispositivos) y antes la
@@ -83,14 +109,14 @@ Item {
         Flickable {
             id: sidebarScroll
             x: 0
-            y: 42
+            y: CelestinaTheme.spaceSm
             width: parent.width
             height: parent.height - y - 10
             clip: true
             contentWidth: width
             contentHeight: savedSections.y + savedSections.height
             boundsBehavior: Flickable.StopAtBounds
-            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+            onMovementStarted: sidebarReturnAnimation.stop()
 
             Column {
                 id: placesColumn
@@ -99,32 +125,14 @@ Item {
                 width: parent.width - 16
                 spacing: 2
 
-                // La cabecera que faltaba: sin ella los lugares eran la única
-                // zona sin nombre y la única que no se podía plegar.
-                Item {
+                SidebarSectionHeader {
+                    id: placesHeader
                     width: placesColumn.width
-                    height: 22
-
-                    SidebarChevron {
-
-                        textScale: root.hostWindow.sidebarTextScale
-                        x: -4
-                        y: 9
-                        collapsed: sidebar.placesCollapsed
-                    }
-
-                    CelestinaSectionLabel {
-                        x: 8
-                        y: 8
-                        text: "LUGARES"
-                        textScale: root.hostWindow.sidebarTextScale
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: sidebar.placesCollapsed = !sidebar.placesCollapsed
-                    }
+                    title: "LUGARES"
+                    textScale: root.hostWindow.sidebarTextScale
+                    iconScale: root.hostWindow.sidebarIconScale
+                    collapsed: sidebar.placesCollapsed
+                    onActivated: sidebar.placesCollapsed = !sidebar.placesCollapsed
                 }
 
                 // ── Places ───────────────────────────────────────────────
@@ -257,6 +265,16 @@ Item {
                                 }
                             }
 
+                            Rectangle {
+                                visible: placeRow.current
+                                x: 2
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: CelestinaTheme.compSelectionIndicatorWidth
+                                height: CelestinaTheme.compSelectionIndicatorHeight
+                                radius: width / 2
+                                color: CelestinaTheme.accent
+                            }
+
                             CelestinaIcon {
                                 id: placeIcon
                                 x: 12
@@ -265,7 +283,9 @@ Item {
                                 height: Math.round(CelestinaTheme.iconSm * root.hostWindow.sidebarIconScale)
                                 name: placeRow.def.icon
                                 fallbackName: placeRow.def.fallback
-                                // Native theme colours (no tint).
+                                tone: placeRow.current
+                                      ? CelestinaIcon.Accent
+                                      : CelestinaIcon.Navigation
                             }
 
                             Text {
@@ -273,7 +293,7 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: parent.width - x - 12
                                 text: placeRow.def.name
-                                color: placeRow.current ? CelestinaTheme.accent
+                                color: placeRow.current ? CelestinaTheme.accentLink
                                                         : CelestinaTheme.text
                                 font.family: CelestinaTheme.sansFamily
                                 font.pixelSize: Math.round(CelestinaTheme.fontBody * root.hostWindow.sidebarTextScale)
@@ -379,65 +399,23 @@ Item {
                 }
 
                 // ── Removable volumes (UDisks2) ──────────────────────────
-                Item {
+                SidebarSectionHeader {
+                    id: devicesHeader
                     width: placesColumn.width
                     readonly property var ac: root.hostWindow.activeController
                     readonly property int hiddenCount: ac ? ac.hiddenDeviceCount : 0
                     readonly property bool anyDevices:
                         ac && (ac.volumeNames.length > 0 || hiddenCount > 0)
-                    height: anyDevices ? volumesHeaderRow.implicitHeight + 16 : 0
                     visible: anyDevices
-
-                    SidebarChevron {
-
-                        textScale: root.hostWindow.sidebarTextScale
-                        x: -4
-                        y: 13
-                        collapsed: sidebar.devicesCollapsed
-                        visible: parent.anyDevices
-                    }
-
-                    MouseArea {
-                        width: parent.width
-                        height: volumesHeaderRow.height + 12
-                        y: 6
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: sidebar.devicesCollapsed = !sidebar.devicesCollapsed
-                    }
-
-                    CelestinaSectionLabel {
-                        id: volumesHeaderRow
-                        // placesColumn.x is 8, so x:8 here → the same absolute
-                        // left edge as MARCADORES (x:16), aligning the headers.
-                        x: 8
-                        y: 12
-                        text: "DISPOSITIVOS"
-                        textScale: root.hostWindow.sidebarTextScale
-                    }
-
-                    // Un-hide affordance — reachable even when every device is
-                    // hidden (the header still shows).
-                    Text {
-                        anchors.verticalCenter: volumesHeaderRow.verticalCenter
-                        anchors.right: parent.right
-                        anchors.rightMargin: 12
-                        visible: parent.hiddenCount > 0
-                        text: parent.hiddenCount + " ocultos"
-                        color: unhideMouse.containsMouse ? CelestinaTheme.accent
-                                                         : CelestinaTheme.textMuted
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: Math.round(CelestinaTheme.fontMini * root.hostWindow.sidebarTextScale)
-
-                        MouseArea {
-                            id: unhideMouse
-                            anchors.fill: parent
-                            anchors.margins: -6
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: if (root.hostWindow.activeController)
-                                           root.hostWindow.activeController.unhideAllDevices()
-                        }
-                    }
+                    height: visible ? implicitHeight : 0
+                    title: "DISPOSITIVOS"
+                    textScale: root.hostWindow.sidebarTextScale
+                    iconScale: root.hostWindow.sidebarIconScale
+                    collapsed: sidebar.devicesCollapsed
+                    trailingText: hiddenCount > 0 ? hiddenCount + " ocultos" : ""
+                    onActivated: sidebar.devicesCollapsed = !sidebar.devicesCollapsed
+                    onTrailingActivated: if (root.hostWindow.activeController)
+                                             root.hostWindow.activeController.unhideAllDevices()
                 }
 
                 Repeater {
@@ -476,6 +454,16 @@ Item {
                                      ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
                         }
 
+                        Rectangle {
+                            visible: volumeRow.current
+                            x: 2
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: CelestinaTheme.compSelectionIndicatorWidth
+                            height: CelestinaTheme.compSelectionIndicatorHeight
+                            radius: width / 2
+                            color: CelestinaTheme.accent
+                        }
+
                         CelestinaIcon {
                             id: volumeIcon
                             x: 12
@@ -484,7 +472,8 @@ Item {
                             height: Math.round(CelestinaTheme.iconSm * root.hostWindow.sidebarIconScale)
                             name: "drive-removable-media"
                             fallbackName: "folder"
-                            // Native theme colours (no tint).
+                            tone: volumeRow.current
+                                  ? CelestinaIcon.Accent : CelestinaIcon.Device
                         }
 
                         Text {
@@ -492,7 +481,7 @@ Item {
                             anchors.verticalCenter: parent.verticalCenter
                             width: ejectButton.x - x - 6
                             text: volumeRow.modelData
-                            color: volumeRow.current ? CelestinaTheme.accent
+                            color: volumeRow.current ? CelestinaTheme.accentLink
                                                      : CelestinaTheme.text
                             font.family: CelestinaTheme.sansFamily
                             font.pixelSize: Math.round(CelestinaTheme.fontBody * root.hostWindow.sidebarTextScale)
@@ -556,20 +545,18 @@ Item {
                 }
 
                 // ── Phone (Magnetita / org.celestina.Devices1) ───────────
-                Item {
+                SidebarSectionHeader {
+                    id: phoneHeader
                     width: placesColumn.width
                     readonly property var ac: root.hostWindow.activeController
                     readonly property bool anyPhones: ac && ac.phoneNames.length > 0
-                    height: anyPhones ? phoneHeader.implicitHeight + 16 : 0
                     visible: anyPhones
-
-                    CelestinaSectionLabel {
-                        id: phoneHeader
-                        x: 8
-                        y: 12
-                        text: "MÓVIL"
-                        textScale: root.hostWindow.sidebarTextScale
-                    }
+                    height: visible ? implicitHeight : 0
+                    title: "MÓVIL"
+                    textScale: root.hostWindow.sidebarTextScale
+                    iconScale: root.hostWindow.sidebarIconScale
+                    collapsible: false
+                    interactive: false
                 }
 
                 Repeater {
@@ -614,6 +601,8 @@ Item {
                             height: Math.round(CelestinaTheme.iconSm * root.hostWindow.sidebarIconScale)
                             name: "phone"
                             fallbackName: "phone"
+                            tone: phoneRow.current
+                                  ? CelestinaIcon.Accent : CelestinaIcon.Device
                             // Dim until the mount is ready.
                             opacity: phoneRow.mounted
                                      ? 1 : CelestinaTheme.disabledOpacity
@@ -669,6 +658,99 @@ Item {
             }
         }
 
+        // Each section that has crossed the viewport edge keeps a compact
+        // clone in this stack. Activating a clone returns to the natural
+        // header; only that natural header changes the collapsed state.
+        Item {
+            id: stickyViewport
+            x: CelestinaTheme.spaceSm
+            y: sidebarScroll.y
+            width: sidebarScroll.width - CelestinaTheme.spaceSm * 2
+            height: sidebarScroll.height
+            clip: true
+            z: 30
+
+            Item {
+                id: stickyStack
+                width: parent.width
+                height: stickyBookmarks.y
+                        + (stickyBookmarks.visible ? stickyBookmarks.height : 0)
+
+                SidebarSectionHeader {
+                    id: stickyPlaces
+                    width: parent.width
+                    y: 0
+                    visible: sidebarScroll.contentY > sidebar.placesHeaderTop
+                    title: "LUGARES"
+                    textScale: root.hostWindow.sidebarTextScale
+                    iconScale: root.hostWindow.sidebarIconScale
+                    collapsed: sidebar.placesCollapsed
+                    sticky: true
+                    onActivated: sidebar.scrollToSection(sidebar.placesHeaderTop, y)
+                }
+
+                SidebarSectionHeader {
+                    id: stickyDevices
+                    width: parent.width
+                    y: stickyPlaces.visible ? stickyPlaces.height : 0
+                    visible: devicesHeader.visible
+                             && sidebarScroll.contentY + y > sidebar.devicesHeaderTop
+                    title: "DISPOSITIVOS"
+                    textScale: root.hostWindow.sidebarTextScale
+                    iconScale: root.hostWindow.sidebarIconScale
+                    collapsed: sidebar.devicesCollapsed
+                    sticky: true
+                    trailingText: devicesHeader.trailingText
+                    onActivated: sidebar.scrollToSection(sidebar.devicesHeaderTop, y)
+                    onTrailingActivated: if (root.hostWindow.activeController)
+                                             root.hostWindow.activeController.unhideAllDevices()
+                }
+
+                SidebarSectionHeader {
+                    id: stickyPhone
+                    width: parent.width
+                    y: stickyDevices.y
+                       + (stickyDevices.visible ? stickyDevices.height : 0)
+                    visible: phoneHeader.visible
+                             && sidebarScroll.contentY + y > sidebar.phoneHeaderTop
+                    title: "MÓVIL"
+                    textScale: root.hostWindow.sidebarTextScale
+                    iconScale: root.hostWindow.sidebarIconScale
+                    collapsible: false
+                    sticky: true
+                    onActivated: sidebar.scrollToSection(sidebar.phoneHeaderTop, y)
+                }
+
+                SidebarSectionHeader {
+                    id: stickyFavorites
+                    width: parent.width
+                    y: stickyPhone.y + (stickyPhone.visible ? stickyPhone.height : 0)
+                    visible: savedSections.favoritesHeaderItem.visible
+                             && sidebarScroll.contentY + y > sidebar.favoritesHeaderTop
+                    title: "FAVORITOS"
+                    textScale: root.hostWindow.sidebarTextScale
+                    iconScale: root.hostWindow.sidebarIconScale
+                    collapsed: savedSections.favoritesCollapsed
+                    sticky: true
+                    onActivated: sidebar.scrollToSection(sidebar.favoritesHeaderTop, y)
+                }
+
+                SidebarSectionHeader {
+                    id: stickyBookmarks
+                    width: parent.width
+                    y: stickyFavorites.y
+                       + (stickyFavorites.visible ? stickyFavorites.height : 0)
+                    visible: sidebarScroll.contentY + y > sidebar.bookmarksHeaderTop
+                    title: "MARCADORES"
+                    textScale: root.hostWindow.sidebarTextScale
+                    iconScale: root.hostWindow.sidebarIconScale
+                    collapsed: savedSections.bookmarksCollapsed
+                    sticky: true
+                    onActivated: sidebar.scrollToSection(sidebar.bookmarksHeaderTop, y)
+                }
+            }
+        }
+
     }
 
 
@@ -676,8 +758,8 @@ Item {
         id: sidebarInfo
         x: sidebar.x
         width: sidebar.width
-        height: Math.round(84 * root.hostWindow.sidebarTextScale)
-        y: parent.height - height - 18
+        height: implicitHeight
+        y: parent.height - height - 14
         visible: sidebar.visible
         hostWindow: root.hostWindow
     }

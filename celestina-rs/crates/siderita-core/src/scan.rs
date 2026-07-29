@@ -3,6 +3,7 @@ use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use celestina_core::{CancellationToken, Generation};
 
@@ -50,6 +51,9 @@ pub struct DirectorySnapshot {
     generation: Generation,
     location: PathBuf,
     entries: Vec<DirectoryEntry>,
+    modified: Option<SystemTime>,
+    accessed: Option<SystemTime>,
+    created: Option<SystemTime>,
 }
 
 impl DirectorySnapshot {
@@ -68,6 +72,23 @@ impl DirectorySnapshot {
         &self.entries
     }
 
+    /// Timestamps of the directory itself, captured by the worker alongside
+    /// the entries so UI consumers never need a second metadata read.
+    #[must_use]
+    pub const fn modified(&self) -> Option<SystemTime> {
+        self.modified
+    }
+
+    #[must_use]
+    pub const fn accessed(&self) -> Option<SystemTime> {
+        self.accessed
+    }
+
+    #[must_use]
+    pub const fn created(&self) -> Option<SystemTime> {
+        self.created
+    }
+
     #[must_use]
     pub fn visible_entries(&self, show_hidden: bool) -> impl Iterator<Item = &DirectoryEntry> {
         self.entries
@@ -81,6 +102,9 @@ impl DirectorySnapshot {
             generation,
             location,
             entries: Vec::new(),
+            modified: None,
+            accessed: None,
+            created: None,
         }
     }
 }
@@ -186,6 +210,9 @@ pub fn scan_directory(request: &ScanRequest) -> Result<DirectorySnapshot, ScanEr
         generation: request.generation,
         location: request.location.clone(),
         entries,
+        modified: parent_metadata.modified().ok(),
+        accessed: parent_metadata.accessed().ok(),
+        created: parent_metadata.created().ok(),
     })
 }
 
@@ -281,6 +308,20 @@ mod tests {
 
         assert_eq!(snapshot.entries().len(), 2);
         assert_ne!(snapshot.entries()[0].id(), snapshot.entries()[1].id());
+    }
+
+    #[test]
+    fn scan_captures_parent_timestamps_with_the_snapshot() {
+        let fixture = TestDirectory::new("parent-metadata");
+        let mut coordinator = ScanCoordinator::new();
+        let request = coordinator
+            .begin(fixture.path())
+            .expect("issue scan request");
+
+        let snapshot = scan_directory(&request).expect("scan fixture");
+
+        assert!(snapshot.modified().is_some());
+        assert!(snapshot.accessed().is_some());
     }
 
     #[cfg(unix)]

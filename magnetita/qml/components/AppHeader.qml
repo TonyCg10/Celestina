@@ -1,34 +1,53 @@
 import QtQuick
 import org.celestina.magnetita 1.0
 
-GlassSurface {
+Item {
     id: root
 
     required property bool settingsOpen
+    required property int deviceCount
     signal toggleRequested
 
-    height: 46
-    cornerRadius: CelestinaTheme.radiusPill
-    elevation: 2
-    liveCapture: false
+    height: 92
 
-    Text {
+    Column {
         anchors.left: parent.left
-        anchors.leftMargin: 16
         anchors.verticalCenter: parent.verticalCenter
-        text: root.settingsOpen ? "Ajustes" : "Magnetita"
-        color: CelestinaTheme.text
-        font.family: CelestinaTheme.sansFamily
-        font.pixelSize: CelestinaTheme.fontHeaderCollapsed
-        font.weight: CelestinaTheme.weightDemiBold
+        spacing: 2
+
+        CelestinaSectionLabel {
+            text: root.settingsOpen ? "PREFERENCIAS" : "CELESTINA LINK"
+        }
+
+        Text {
+            text: root.settingsOpen ? "Ajustes" : "Magnetita"
+            color: CelestinaTheme.text
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: CelestinaTheme.fontHeaderExpanded
+            font.weight: CelestinaTheme.weightDemiBold
+        }
+
+        Text {
+            text: root.settingsOpen
+                  ? "Dispositivos y plugins"
+                  : root.deviceCount > 0
+                    ? root.deviceCount + (root.deviceCount === 1
+                        ? " dispositivo conectado"
+                        : " dispositivos conectados")
+                    : "Ningún dispositivo conectado"
+            color: CelestinaTheme.textMuted
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: CelestinaTheme.fontCaption
+        }
     }
 
-    CelestinaButton {
+    CelestinaIconButton {
         anchors.right: parent.right
-        anchors.rightMargin: 6
         anchors.verticalCenter: parent.verticalCenter
-        width: 116
-        text: root.settingsOpen ? "Volver" : "Ajustes"
+        density: CelestinaButton.Regular
+        iconName: root.settingsOpen ? "go-previous" : "preferences-system"
+        fallbackIcon: root.settingsOpen ? "go-previous" : "settings"
+        helpText: root.settingsOpen ? "Volver" : "Ajustes"
         onClicked: root.toggleRequested()
     }
 }

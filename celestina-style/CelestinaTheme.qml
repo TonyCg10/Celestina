@@ -51,12 +51,14 @@ QtObject {
 
     // Accent recipe. Change `ref.accent` once; links, interaction states and
     // translucent selection/disabled roles all follow automatically.
-    readonly property real accentLinkMix: 0.165
-    readonly property real accentHoverFactor: 1.08
-    readonly property real accentPressedFactor: 1.18
+    readonly property real accentLinkMix: 0.24
+    readonly property real accentHoverMix: 0.08
+    readonly property real accentPressedMix: 0.14
     readonly property real accentSelectedOpacity: 0.20
     readonly property real accentMarqueeOpacity: 0.18
     readonly property real accentBadgeOpacity: 0.15
+    readonly property real accentSoftOpacity: 0.14
+    readonly property real accentSoftBorderOpacity: 0.18
     readonly property real accentDisabledInkOpacity: 0.75
 
     // ══ ref.* — primitive colour ramps ═══════════════════════════════════════
@@ -65,22 +67,23 @@ QtObject {
     component RefPalette: QtObject {
         // Near-black neutral ramp (dark scheme). `dN` are derived intermediate
         // steps the SESL table does not name but the surfaces need.
-        readonly property color night: "#010102"     // window / canvas
-        readonly property color d1: "#0d0d0f"         // derived — badge/input floors
-        readonly property color card: "#17171a"       // content card
-        readonly property color d2: "#1d1d20"         // derived — strong surface
-        readonly property color elevated: "#2d2d30"   // elevated surface
-        readonly property color divider: "#3a3a3d"    // hairline (used sparingly)
-        readonly property color d4: "#55555a"         // derived — strong divider
-        readonly property color textHi: "#fafaff"     // primary text
-        readonly property color textLo: "#99999e"     // secondary text
+        readonly property color night: "#050608"      // window / canvas
+        readonly property color d1: "#090b0f"         // input / backdrop floor
+        readonly property color card: "#14171c"       // grouped tonal block
+        readonly property color d2: "#1a1e25"         // strong tonal surface
+        readonly property color elevated: "#222831"   // elevated surface
+        readonly property color divider: "#16ffffff"  // quiet hairline
+        readonly property color d4: "#24ffffff"        // strong hairline
+        readonly property color textHi: "#f7f8fc"     // primary text
+        readonly property color textLo: "#9ba3af"     // secondary text
+        readonly property color textFaint: "#6f7783"  // labels / metadata
         // One UI accent seed. Every state is derived from this one value in the
         // active scheme below; changing the suite accent is therefore one edit.
-        readonly property color accent: "#387aff"
+        readonly property color accent: "#3e91ff"
         readonly property color accentInk: "#fcfcff"
         // Semantic ramp (SESL dark).
-        readonly property color danger: "#fc6c65"
-        readonly property color success: "#58db9c"
+        readonly property color danger: "#ff746d"
+        readonly property color success: "#59dc9e"
         readonly property color warning: "#fc864c"
         // The one warm exception, spent on the star a favourite wears.
         readonly property color favorite: "#f2c55c"
@@ -111,6 +114,7 @@ QtObject {
         required property color elevatedInk
         required property color text
         required property color textMuted
+        required property color textFaint
         required property color divider
         required property color dividerStrong
         required property color accent
@@ -138,16 +142,39 @@ QtObject {
         required property color controlFill
         required property color badgeFill
         required property color badgeAccentFill
+        required property color accentSoft
+        required property color accentSoftBorder
+        required property color successSoft
         // A primary action that remains identifiable while disabled.
         required property color accentDisabledFill
         required property color accentDisabledInk
         // Dark media affordances painted over thumbnails.
         required property color mediaScrim
         required property color mediaScrimInk
+        required property color mediaSurfaceStart
+        required property color mediaSurfaceMid
+        required property color mediaSurfaceEnd
+        required property color mediaSurfaceInk
+        required property color mediaArtworkStart
+        required property color mediaArtworkMid
+        required property color mediaArtworkEnd
+        required property color mediaArtworkInk
+        required property color mediaProgress
         // Entry-kind glyph tints.
         required property color glyphDirectory
         required property color glyphSymlink
         required property color glyphFile
+        required property color glyphNavigation
+        required property color glyphDevice
+        // Closed user-selectable icon accents. They share luminance and
+        // saturation so a custom mark stays in the suite even when its hue is
+        // intentionally distinctive.
+        required property color glyphAccentBlue
+        required property color glyphAccentCyan
+        required property color glyphAccentGreen
+        required property color glyphAccentViolet
+        required property color glyphAccentCoral
+        required property color glyphAccentAmber
         // Favourite (the warm exception) + its badge floor.
         required property color favorite
         required property color favoriteBadgeFill
@@ -180,14 +207,17 @@ QtObject {
         elevatedInk: theme.ref.textHi
         text: theme.ref.textHi
         textMuted: theme.ref.textLo
+        textFaint: theme.ref.textFaint
         divider: theme.ref.divider
         dividerStrong: theme.ref.d4
         accent: theme.ref.accent
         accentInk: theme.ref.accentInk
         accentLink: theme.mixColors(theme.ref.accent, theme.ref.accentInk,
                                     theme.accentLinkMix)
-        accentHover: Qt.darker(theme.ref.accent, theme.accentHoverFactor)
-        accentPressed: Qt.darker(theme.ref.accent, theme.accentPressedFactor)
+        accentHover: theme.mixColors(theme.ref.accent, theme.ref.accentInk,
+                                     theme.accentHoverMix)
+        accentPressed: theme.mixColors(theme.ref.accent, theme.ref.night,
+                                       theme.accentPressedMix)
         // Keyboard focus is an active state — the ring is the accent's lit tint.
         focusRing: theme.mixColors(theme.ref.accent, theme.ref.accentInk,
                                    theme.accentLinkMix)
@@ -198,47 +228,78 @@ QtObject {
         warning: theme.ref.warning
         warningInk: theme.ref.night
         scrim: "#73000000"
-        // Washes re-based off the neutral ramp (were a blue-grey cast).
-        surface: "#d917171a"
-        surfaceStrong: "#f01d1d20"
-        surfaceHover: "#2a2d2d30"
+        // State layers are translucent; actual work/group surfaces use the
+        // opaque card/elevated roles through CelestinaSurface.
+        surface: "#d914171c"
+        surfaceStrong: "#f01a1e25"
+        surfaceHover: "#0dffffff"
         // Selection reads as a soft accent wash — the One UI "selected" language.
         surfaceSelected: theme.withAlpha(theme.ref.accent,
                                          theme.accentSelectedOpacity)
         selectionMarquee: theme.withAlpha(theme.ref.accent,
                                           theme.accentMarqueeOpacity)
-        inputFill: "#4d0d0d0f"
-        inputFillFocus: "#661a1a1e"
-        inputBorder: "#24505055"
-        controlFill: "#2b2d2d30"
-        badgeFill: "#28292930"
+        inputFill: "#8c14171c"
+        inputFillFocus: "#b31a1e25"
+        inputBorder: "#16ffffff"
+        controlFill: "#0effffff"
+        badgeFill: "#0effffff"
         // Current/selected row wash: accent-tinted (alpha nudged up — blue reads
         // lighter than the old white at the same opacity).
         badgeAccentFill: theme.withAlpha(theme.ref.accent,
                                          theme.accentBadgeOpacity)
+        accentSoft: theme.withAlpha(theme.ref.accent,
+                                    theme.accentSoftOpacity)
+        accentSoftBorder: theme.withAlpha(
+                              theme.mixColors(theme.ref.accent,
+                                              theme.ref.accentInk,
+                                              theme.accentLinkMix),
+                              theme.accentSoftBorderOpacity)
+        successSoft: "#1c59dc9e"
         accentDisabledFill: theme.withAlpha(theme.ref.accent,
                                             theme.accentSelectedOpacity)
         accentDisabledInk: theme.withAlpha(theme.ref.accent,
                                            theme.accentDisabledInkOpacity)
         mediaScrim: "#73000000"
         mediaScrimInk: theme.ref.textHi
-        glyphDirectory: "#33323237"
-        glyphSymlink: "#2c3e3e43"
-        glyphFile: "#2a2e2e33"
+        mediaSurfaceStart: "#242d3c"
+        mediaSurfaceMid: "#222634"
+        mediaSurfaceEnd: "#29232d"
+        mediaSurfaceInk: theme.ref.textHi
+        mediaArtworkStart: "#9eb9d3"
+        mediaArtworkMid: "#536d8e"
+        mediaArtworkEnd: "#d39a7f"
+        mediaArtworkInk: theme.ref.textHi
+        mediaProgress: "#e7edf6"
+        // Icon ink stays within one cool family by default: vivid blue marks
+        // content folders, silver-blue marks plain files, slate marks
+        // navigation/sidebar chrome and cyan marks connected hardware.
+        glyphDirectory: theme.mixColors(theme.ref.accent,
+                                        theme.ref.accentInk,
+                                        theme.accentLinkMix)
+        glyphFile: "#a9b5c5"
+        glyphSymlink: "#a391e2"
+        glyphNavigation: "#8fa3bb"
+        glyphDevice: "#68c3d4"
+        glyphAccentBlue: "#6ea8ff"
+        glyphAccentCyan: "#68c3d4"
+        glyphAccentGreen: "#72cfa3"
+        glyphAccentViolet: "#a391e2"
+        glyphAccentCoral: "#e88d82"
+        glyphAccentAmber: "#dcb36a"
         favorite: theme.ref.favorite
-        favoriteBadgeFill: "#b30d0d0f"
+        favoriteBadgeFill: "#b3090b0f"
         // Danger banner re-tinted around the new danger red.
         dangerFill: "#4d571f1c"
         dangerBorder: "#8ad4736c"
         dangerFillInk: "#ffdad6"
-        gradientStart: "#010102"
-        gradientMid: "#08080b"
-        gradientEnd: "#020204"
-        // The reference reads near #303030 over a neutral backdrop. This tint is
-        // slightly more opaque by request while still allowing coloured content
-        // to bleed through the blur; modals use the denser companion value.
-        glassTint: "#b83a3a3d"
-        glassTintStrong: "#d1343438"
+        gradientStart: "#080a0f"
+        gradientMid: "#0b0e14"
+        gradientEnd: "#08090d"
+        // Dense enough for desktop text, but translucent enough for the
+        // reference's pink/green backdrop colour to remain visible through the
+        // blur. Strong is reserved for modal readability.
+        glassTint: "#991a1e25"
+        glassTintStrong: "#bd1a1e25"
         glassBorder: "#24ffffff"
         glassHighlight: "#2effffff"
         glassOutline: "#4d000000"
@@ -260,6 +321,7 @@ QtObject {
     readonly property color elevatedInk: scheme.elevatedInk
     readonly property color text: scheme.text
     readonly property color textMuted: scheme.textMuted
+    readonly property color textFaint: scheme.textFaint
     readonly property color divider: scheme.divider
     readonly property color dividerStrong: scheme.dividerStrong
     readonly property color accent: scheme.accent
@@ -286,13 +348,33 @@ QtObject {
     readonly property color controlFill: scheme.controlFill
     readonly property color badgeFill: scheme.badgeFill
     readonly property color badgeAccentFill: scheme.badgeAccentFill
+    readonly property color accentSoft: scheme.accentSoft
+    readonly property color accentSoftBorder: scheme.accentSoftBorder
+    readonly property color successSoft: scheme.successSoft
     readonly property color accentDisabledFill: scheme.accentDisabledFill
     readonly property color accentDisabledInk: scheme.accentDisabledInk
     readonly property color mediaScrim: scheme.mediaScrim
     readonly property color mediaScrimInk: scheme.mediaScrimInk
+    readonly property color mediaSurfaceStart: scheme.mediaSurfaceStart
+    readonly property color mediaSurfaceMid: scheme.mediaSurfaceMid
+    readonly property color mediaSurfaceEnd: scheme.mediaSurfaceEnd
+    readonly property color mediaSurfaceInk: scheme.mediaSurfaceInk
+    readonly property color mediaArtworkStart: scheme.mediaArtworkStart
+    readonly property color mediaArtworkMid: scheme.mediaArtworkMid
+    readonly property color mediaArtworkEnd: scheme.mediaArtworkEnd
+    readonly property color mediaArtworkInk: scheme.mediaArtworkInk
+    readonly property color mediaProgress: scheme.mediaProgress
     readonly property color glyphDirectory: scheme.glyphDirectory
     readonly property color glyphSymlink: scheme.glyphSymlink
     readonly property color glyphFile: scheme.glyphFile
+    readonly property color glyphNavigation: scheme.glyphNavigation
+    readonly property color glyphDevice: scheme.glyphDevice
+    readonly property color glyphAccentBlue: scheme.glyphAccentBlue
+    readonly property color glyphAccentCyan: scheme.glyphAccentCyan
+    readonly property color glyphAccentGreen: scheme.glyphAccentGreen
+    readonly property color glyphAccentViolet: scheme.glyphAccentViolet
+    readonly property color glyphAccentCoral: scheme.glyphAccentCoral
+    readonly property color glyphAccentAmber: scheme.glyphAccentAmber
     readonly property color favorite: scheme.favorite
     readonly property color favoriteBadgeFill: scheme.favoriteBadgeFill
     readonly property color dangerFill: scheme.dangerFill
@@ -311,6 +393,36 @@ QtObject {
     // visual implementations from spelling ad-hoc colour literals.
     readonly property color clear: "#00000000"
     readonly property color opaqueMask: "#ffffffff"
+
+    // Stable keys are persisted by Siderita; colours remain tokens so a later
+    // palette retune updates every customized item without rewriting config.
+    readonly property var iconAccentKeys: [
+        "blue", "cyan", "green", "violet", "coral", "amber"
+    ]
+
+    function iconAccentColor(key) {
+        switch (key) {
+        case "blue": return glyphAccentBlue
+        case "cyan": return glyphAccentCyan
+        case "green": return glyphAccentGreen
+        case "violet": return glyphAccentViolet
+        case "coral": return glyphAccentCoral
+        case "amber": return glyphAccentAmber
+        default: return clear
+        }
+    }
+
+    function iconAccentLabel(key) {
+        switch (key) {
+        case "blue": return "Azul"
+        case "cyan": return "Cian"
+        case "green": return "Verde"
+        case "violet": return "Violeta"
+        case "coral": return "Coral"
+        case "amber": return "Ámbar"
+        default: return "Automático"
+        }
+    }
 
     // ── Typography ───────────────────────────────────────────────────────────
     // Inter Variable ships inside the module (celestina-style/fonts, OFL) so the
@@ -376,8 +488,11 @@ QtObject {
     readonly property int controlHeightSm: 34
     readonly property int controlHeight: 38
     readonly property int controlHeightLg: 42
+    readonly property int controlHeightXl: 52
     readonly property int rowHeight: 54
+    readonly property int rowHeightLg: 66
     readonly property int glyphTile: 34
+    readonly property int glyphTileLg: 56
     readonly property int iconSm: 18
     readonly property int iconMd: 19
     readonly property int borderHairline: 1
@@ -423,13 +538,16 @@ QtObject {
     // ── Glass parameters (scalars) ─────────────────────────────────────────────
     // Backdrop-blur knobs for GlassSurface (colours live in the scheme). The 8.5
     // recipe pairs blur with a *slight desaturation* of the backdrop (negative
-    // saturation) — the earlier boost was half the recipe (audit §5.4). blurMax
-    // stays ≤ 32 (the MultiEffect pyramid is 4 passes at 32).
-    readonly property real glassBlur: 0.66
-    readonly property int glassBlurMax: 30
-    readonly property real glassSaturation: -0.08
-    readonly property real glassSampleScale: 0.66
-    readonly property int glassSampleMargin: 20
+    // saturation) — the earlier boost was half the recipe (audit §5.4). Keep
+    // the four-pass pyramid at 32 and increase its reach with blurMultiplier;
+    // this disperses text without stacking another effect pass.
+    readonly property real glassBlur: 1.0
+    readonly property int glassBlurMax: 32
+    readonly property real glassBlurMultiplier: 3.0
+    readonly property real glassSaturation: -0.03
+    readonly property real glassSampleScale: 0.55
+    readonly property int glassSampleMargin:
+            Math.ceil(glassBlurMax * (1 + glassBlurMultiplier))
     // Fine noise dither over the blur — kills the banding the downsample pyramid
     // leaves behind (DESIGN §4/§6.5). Tiled texture at a low opacity.
     readonly property real glassNoiseOpacity: 0.025
@@ -462,18 +580,22 @@ QtObject {
     readonly property int compSliderHandleSize: 15
     readonly property int compStatusIndicatorSize: 8
     readonly property int compDragIndicatorHeight: 2
+    readonly property int compSelectionIndicatorWidth: 3
+    readonly property int compSelectionIndicatorHeight: 18
     readonly property int compMenuWidth: 232
     readonly property int compMenuPadding: 6
     readonly property int compMenuMargins: 24
+    // Shared inset/gap for chrome floating inside a rounded content surface.
+    // Keeping these semantic avoids each screen rebuilding the same 12/8 map.
+    readonly property int compFloatingInset: spaceMd
+    readonly property int compFloatingGap: spaceSm
+    // A discrete mouse-wheel notch advances two standard rows. Touchpads keep
+    // their native pixel delta and do not consume this metric.
+    readonly property int compWheelStep: rowHeight * 2
 
-    // ── Icons ──────────────────────────────────────────────────────────────────
-    // Minimal monochrome freedesktop-name fallbacks bundled with the module.
-    readonly property string fallbackIconRoot:
-            Qt.resolvedUrl(".").toString().startsWith("file:")
-            ? Qt.resolvedUrl("icons/").toString()
-            : "qrc:/qt/qml/CelestinaStyle/icons/"
-
+    // Compatibility entry point for controls that expose `icon.source`.
+    // Resolution itself belongs to the closed Lucide catalogue.
     function fallbackIcon(name) {
-        return fallbackIconRoot + name + ".svg"
+        return CelestinaIcons.source(name, "file")
     }
 }

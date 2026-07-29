@@ -5,11 +5,33 @@
 //! can hide devices they never want to see.
 
 use core::pin::Pin;
+use std::path::Path;
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
 
 use super::qobject;
+
+fn visible_location_name(path: &str, phones: &[crate::devices::Device]) -> String {
+    let normalized = path.trim_end_matches('/');
+    if normalized.is_empty() {
+        return "/".to_owned();
+    }
+
+    if let Some(phone) = phones.iter().find(|phone| {
+        !phone.mount_path.is_empty()
+            && phone.mount_path.trim_end_matches('/') == normalized
+            && !phone.name.is_empty()
+    }) {
+        return phone.name.clone();
+    }
+
+    Path::new(normalized)
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| normalized.to_owned())
+}
 
 impl qobject::SideritaController {
     /// Reads the removable volumes UDisks2 reports and publishes them to the
@@ -138,6 +160,15 @@ impl qobject::SideritaController {
         if !mount.is_empty() {
             self.as_mut().open_location(&QString::from(mount.as_str()));
         }
+    }
+
+    /// Human-facing name for a location. Magnetita mounts by stable device id,
+    /// but that transport detail must not leak into tabs, headings or crumbs.
+    pub fn display_location_name(&self, path: &QString) -> QString {
+        QString::from(visible_location_name(
+            &path.to_string(),
+            &self.rust().phones,
+        ))
     }
 
     /// Send a local file to the connected phone (the "Enviar al móvil" menu
@@ -282,5 +313,34 @@ impl qobject::SideritaController {
         let _ = crate::settings::save(&settings);
         self.as_mut().rust_mut().get_mut().settings = settings;
         self.as_mut().load_volumes();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::visible_location_name;
+    use crate::devices::Device;
+
+    #[test]
+    fn a_phone_mount_uses_the_device_name_not_its_stable_id() {
+        let phones = vec![Device {
+            name: "Galaxy S25 Ultra".to_owned(),
+            mount_path: "/run/user/1000/magnetita/689da02afffe4b12".to_owned(),
+            ..Device::default()
+        }];
+
+        assert_eq!(
+            visible_location_name("/run/user/1000/magnetita/689da02afffe4b12/", &phones,),
+            "Galaxy S25 Ultra"
+        );
+    }
+
+    #[test]
+    fn ordinary_locations_keep_their_basename() {
+        assert_eq!(
+            visible_location_name("/home/toni/Documentos", &[]),
+            "Documentos"
+        );
+        assert_eq!(visible_location_name("/", &[]), "/");
     }
 }

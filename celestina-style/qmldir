@@ -8,6 +8,7 @@
 module CelestinaStyle
 
 singleton CelestinaTheme 1.0 CelestinaTheme.qml
+singleton CelestinaIcons 1.0 CelestinaIcons.qml
 
 CelestinaSurface 1.0 CelestinaSurface.qml
 CelestinaBackdrop 1.0 CelestinaBackdrop.qml

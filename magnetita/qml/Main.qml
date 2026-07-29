@@ -7,9 +7,9 @@ ApplicationWindow {
     id: window
 
     visible: true
-    width: 460
-    height: 680
-    minimumWidth: 380
+    width: 520
+    height: 740
+    minimumWidth: 420
     minimumHeight: 480
     title: "Magnetita"
     color: CelestinaTheme.canvas
@@ -39,37 +39,18 @@ ApplicationWindow {
         CelestinaBackdrop {
             id: backdropLayer
             anchors.fill: parent
-
-            Rectangle {
-                x: -70
-                y: 8
-                width: 260
-                height: 82
-                radius: CelestinaTheme.radiusPill
-                color: CelestinaTheme.dangerFill
-                opacity: CelestinaTheme.decorationOpacitySoft
-            }
-
-            Rectangle {
-                x: parent.width - width + 70
-                y: -18
-                width: 290
-                height: 120
-                radius: CelestinaTheme.radiusPill
-                color: CelestinaTheme.surfaceSelected
-                opacity: CelestinaTheme.decorationOpacityStrong
-            }
         }
 
         Column {
             anchors.fill: parent
-            anchors.margins: 22
-            spacing: 6
+            anchors.margins: 25
+            spacing: 0
 
             AppHeader {
+                id: appHeader
                 width: parent.width
                 settingsOpen: window.settingsOpen
-                backdropSource: backdropLayer
+                deviceCount: devices.deviceNames.length
                 onToggleRequested: {
                     window.settingsOpen = !window.settingsOpen
                     if (window.settingsOpen)
@@ -90,6 +71,7 @@ ApplicationWindow {
             SettingsPage {
                 visible: window.settingsOpen
                 width: parent.width
+                height: parent.height - y
                 devices: devices
             }
         }

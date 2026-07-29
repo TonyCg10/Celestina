@@ -19,12 +19,13 @@ Item {
     SearchBar {
         id: searchStatus
         z: 10
-        x: 12
-        width: root.width - 24
+        x: root.panel.floatingChromeX
+        width: root.panel.floatingChromeWidth
         height: 40
         y: (root.tabBar.visible
             ? root.tabBar.y + root.tabBar.height
-            : root.topBar.y + root.topBar.height) + 8
+            : root.topBar.y + root.topBar.height)
+           + CelestinaTheme.compFloatingGap
         visible: opacity > 0.01
         opacity: (root.controller.searchActive || root.controller.searchRunning) ? 1 : 0
         Behavior on opacity {
@@ -41,12 +42,13 @@ Item {
     RecentHeader {
         id: recentStatus
         z: 10
-        x: 12
-        width: root.width - 24
+        x: root.panel.floatingChromeX
+        width: root.panel.floatingChromeWidth
         height: 40
         y: (root.tabBar.visible
             ? root.tabBar.y + root.tabBar.height
-            : root.topBar.y + root.topBar.height) + 8
+            : root.topBar.y + root.topBar.height)
+           + CelestinaTheme.compFloatingGap
         visible: opacity > 0.01
         opacity: root.controller.recentActive ? 1 : 0
         Behavior on opacity {
@@ -63,12 +65,13 @@ Item {
     TrashHeader {
         id: trashStatus
         z: 10
-        x: 12
-        width: root.width - 24
+        x: root.panel.floatingChromeX
+        width: root.panel.floatingChromeWidth
         height: 40
         y: (root.tabBar.visible
             ? root.tabBar.y + root.tabBar.height
-            : root.topBar.y + root.topBar.height) + 8
+            : root.topBar.y + root.topBar.height)
+           + CelestinaTheme.compFloatingGap
         visible: root.controller.trashActive
         controller: root.controller
         backdrop: root.topBar.activeView
@@ -76,9 +79,9 @@ Item {
     }
 
     DragScrollEdge {
-        x: 8
-        y: 14
-        width: parent.width - 16
+        x: root.panel.contentFrameX
+        y: root.panel.contentRowsY
+        width: root.panel.contentFrameWidth
         view: root.topBar.activeView
         step: -18
         onExternalDrop: function(drop) {
@@ -89,9 +92,9 @@ Item {
     }
 
     DragScrollEdge {
-        x: 8
-        y: parent.height - 68 + 14 - height
-        width: parent.width - 16
+        x: root.panel.contentFrameX
+        y: root.panel.contentFrameBottom - height
+        width: root.panel.contentFrameWidth
         view: root.topBar.activeView
         step: 18
         onExternalDrop: function(drop) {
@@ -104,13 +107,11 @@ Item {
     DetailsHeader {
         id: detailsStatus
         z: 10
-        x: 8
-        width: parent.width - 16
+        x: root.panel.floatingChromeX
+        width: root.panel.floatingChromeWidth
         height: Math.round(CelestinaTheme.fontCaption
                            * root.hostWindow.contentTextScale) + 18
-        y: (root.tabBar.visible
-            ? root.tabBar.y + root.tabBar.height
-            : root.topBar.y + root.topBar.height) + 8
+        y: root.panel.contentRowsY
         visible: root.fileList.detailsMode
         controller: root.controller
         view: root.fileList

@@ -29,6 +29,7 @@ const QML_FILES: &[&str] = &[
     "qml/components/chrome/BottomControls.qml",
     "qml/components/chrome/TopBar.qml",
     "qml/components/sidebar/SidebarChevron.qml",
+    "qml/components/sidebar/SidebarSectionHeader.qml",
     "qml/components/sidebar/SidebarFavoriteRow.qml",
     "qml/components/sidebar/SidebarBookmarkRow.qml",
     "qml/components/sidebar/SidebarSavedSections.qml",
@@ -40,10 +41,15 @@ const QML_FILES: &[&str] = &[
     "qml/components/entry/FolderCellDelegate.qml",
     "qml/components/folder/FolderListView.qml",
     "qml/components/folder/FolderGridView.qml",
+    "qml/components/folder/FolderWheelHandler.qml",
     "qml/components/folder/FolderShortcuts.qml",
     "qml/components/folder/FolderBottomStatus.qml",
+    "qml/components/folder/FolderBottomChrome.qml",
     "qml/components/folder/FolderActions.qml",
+    "qml/components/folder/FolderHeading.qml",
     "qml/components/folder/FolderContentChrome.qml",
+    "qml/components/folder/FolderContentFrame.qml",
+    "qml/components/folder/FolderEmptyState.qml",
     "qml/components/picker/PickerChrome.qml",
     "qml/components/SizeRow.qml",
     "qml/components/PropRow.qml",
@@ -63,6 +69,7 @@ const QML_FILES: &[&str] = &[
     "qml/menus/PathMenu.qml",
     "qml/menus/FolderMenu.qml",
     "qml/menus/EntryContextMenu.qml",
+    "qml/menus/IconAccentMenu.qml",
     "qml/menus/SizePopup.qml",
     // Puntos de entrada.
     "qml/Main.qml",
@@ -84,6 +91,11 @@ fn main() {
                 .version(1, 0)
                 .singleton(true),
         )
+        .qml_file(
+            QmlFile::from("qml/CelestinaIcons.qml")
+                .version(1, 0)
+                .singleton(true),
+        )
         .qml_files(QML_FILES);
 
     // Los QML también, y explícitamente: en cuanto este script imprime un solo
@@ -93,6 +105,7 @@ fn main() {
     // estaba en el fichero y no en la aplicación.
     for qml in QML_FILES.iter().copied().chain([
         "qml/CelestinaTheme.qml",
+        "qml/CelestinaIcons.qml",
         "qml/icons.qrc",
         "qml/fonts.qrc",
     ]) {
@@ -111,8 +124,6 @@ fn main() {
     println!("cargo::rerun-if-changed=cpp/siderita/entrymodel.h");
     println!("cargo::rerun-if-changed=cpp/thumbnailprovider.cpp");
     println!("cargo::rerun-if-changed=cpp/siderita/thumbnailprovider.h");
-    println!("cargo::rerun-if-changed=cpp/icontheme.cpp");
-    println!("cargo::rerun-if-changed=cpp/siderita/icontheme.h");
     let builder = CxxQtBuilder::new_qml_module(module)
         .qrc("qml/icons.qrc")
         // Inter Variable, compiled in so the suite's typeface travels with the
@@ -125,8 +136,6 @@ fn main() {
         // The freedesktop-thumbnail image provider (no Q_OBJECT of its own — it
         // only emits QQuickImageResponse's inherited signal — so just compiled).
         .cpp_file("cpp/thumbnailprovider.cpp")
-        // Pins the freedesktop icon theme before any QML loads (no Q_OBJECT).
-        .cpp_file("cpp/icontheme.cpp")
         .files(["src/controller.rs", "src/dbus.rs", "src/portal.rs"]);
     // SAFETY: only adds an include directory for our own headers.
     let builder = unsafe {

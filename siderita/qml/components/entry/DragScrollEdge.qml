@@ -22,9 +22,12 @@ DropArea {
         interval: 16
         repeat: true
         onTriggered: {
-            const limit = Math.max(0, edge.view.contentHeight - edge.view.height)
+            const minimum = edge.view.originY - edge.view.topMargin
+            const maximum = Math.max(
+                minimum, edge.view.originY + edge.view.contentHeight
+                         - edge.view.height)
             edge.view.contentY = Math.max(
-                0, Math.min(limit, edge.view.contentY + edge.step))
+                minimum, Math.min(maximum, edge.view.contentY + edge.step))
         }
     }
 

@@ -94,7 +94,7 @@ ellos — escribir el contrato no es empezar el proyecto.
   se derivan de ella dentro del tema. Nunca se usa `Qt.darker`/`Qt.rgba` en un
   consumidor para inventar otra variante.
 - Los tokens funcionan **en pares superficie → tinta (foreground)**. El acento
-  es **azul One UI `#387aff`**, solo para elementos interactivos/activos
+  es **azul One UI adaptado `#3e91ff`**, solo para elementos interactivos/activos
   (seleccionado, checked, enlaces, botón primario); nunca como blanco decorativo.
   Cada superficie opaca lleva su token de tinta explícito; los lavados
   translúcidos comparten `text`/`textMuted`. Pares correctos:
