@@ -51,6 +51,11 @@ ApplicationWindow {
         const holder = tabRepeater.itemAt(currentTabIndex)
         return holder ? holder.docController : null
     }
+    readonly property var activeDocument: {
+        tabsRevision // re-evaluate when tabs are created or destroyed
+        const holder = tabRepeater.itemAt(currentTabIndex)
+        return holder ? holder.docView : null
+    }
 
     // ── Granular size scales (window-level so every tab and the sidebar share
     // one persisted set) ─────────────────────────────────────────────────────
@@ -379,6 +384,7 @@ ApplicationWindow {
                     anchors.fill: parent
                     visible: index === window.currentTabIndex
                     readonly property var docController: doc.tabController
+                    readonly property var docView: doc
 
                     FolderView {
                         id: doc
@@ -434,6 +440,24 @@ ApplicationWindow {
             function onItemAdded() { window.tabsRevision++ }
             function onItemRemoved() { window.tabsRevision++ }
         }
+    }
+
+    // Back/Forward are window actions: they work over the sidebar, the file
+    // view and floating chrome alike. Popup.Item overlays remain above this
+    // content layer, and local modal state disables it explicitly.
+    HistoryMouseArea {
+        anchors.fill: parent
+        z: 1000
+        blocked: !window.activeDocument
+                 || window.activeDocument.navigationBlocked
+        canGoBack: window.activeDocument
+                   ? window.activeDocument.canGoBackOrLeave : false
+        canGoForward: window.activeController
+                      ? window.activeController.canGoForward
+                        && !window.activeController.loading
+                      : false
+        onBackRequested: window.activeDocument.goBackOrLeave()
+        onForwardRequested: window.activeController.goForward()
     }
 
 

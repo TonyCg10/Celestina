@@ -13,6 +13,16 @@ Item {
     property alias pathMenu: breadcrumbMenu
     property alias folderMenu: folderContextMenu
     property alias namePrompt: namePromptDialog
+    readonly property bool navigationBlocked:
+            folderSortMenu.visible || entryContextMenu.visible
+            || breadcrumbMenu.visible || folderContextMenu.visible
+            || namePromptDialog.shown || namePromptDialog.visible
+            || batchRenameDialog.shown || batchRenameDialog.visible
+            || conflictDialog.shown || conflictDialog.visible
+            || openWithDialog.shown || openWithDialog.visible
+            || propertiesDialog.shown || propertiesDialog.visible
+            || iconPickerDialog.shown || iconPickerDialog.visible
+            || quickLookDialog.shown || quickLookDialog.visible
 
     signal newTabRequested(string path, bool foreground)
 
@@ -70,18 +80,21 @@ Item {
     }
 
     ConflictDialog {
+        id: conflictDialog
         controller: root.controller
         owner: root.owner
         backdrop: root.panel
     }
 
     OpenWithDialog {
+        id: openWithDialog
         controller: root.controller
         owner: root.owner
         backdrop: root.panel
     }
 
     PropertiesDialog {
+        id: propertiesDialog
         controller: root.controller
         owner: root.owner
         backdrop: root.panel
@@ -96,6 +109,7 @@ Item {
     }
 
     QuickLookView {
+        id: quickLookDialog
         controller: root.controller
         owner: root.owner
         panel: root.panel

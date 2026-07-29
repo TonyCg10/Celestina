@@ -330,17 +330,14 @@ Window {
     // Los botones laterales del ratón navegan, igual que en la ventana
     // principal: un diálogo de archivos se recorre con la mano en el ratón, y
     // el gesto ya existe en el resto de la aplicación.
-    TapHandler {
-        acceptedButtons: Qt.BackButton | Qt.ForwardButton
-        gesturePolicy: TapHandler.ReleaseWithinBounds
-        onTapped: function(eventPoint, button) {
-            if (controller.loading)
-                return
-            if (button === Qt.BackButton && controller.canGoBack)
-                controller.goBack()
-            else if (button === Qt.ForwardButton && controller.canGoForward)
-                controller.goForward()
-        }
+    HistoryMouseArea {
+        anchors.fill: parent
+        z: 9999
+        blocked: controller.loading
+        canGoBack: controller.canGoBack
+        canGoForward: controller.canGoForward
+        onBackRequested: controller.goBack()
+        onForwardRequested: controller.goForward()
     }
 
     // ── Chrome ───────────────────────────────────────────────────────────

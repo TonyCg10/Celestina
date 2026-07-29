@@ -67,7 +67,9 @@ Rectangle {
         anchors.fill: parent
         z: -1
         enabled: glassPill.inputShield
-        acceptedButtons: Qt.AllButtons
+        // History buttons belong to the window. This shield only blocks the
+        // ordinary buttons that could otherwise act on a file through chrome.
+        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
         hoverEnabled: true
         preventStealing: true
     }

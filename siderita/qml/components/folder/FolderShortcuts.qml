@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls
 
 Item {
     id: root
@@ -122,18 +121,4 @@ Item {
         }
     }
 
-    TapHandler {
-        enabled: root.viewActive
-        acceptedButtons: Qt.BackButton | Qt.ForwardButton
-        gesturePolicy: TapHandler.ReleaseWithinBounds
-
-        onTapped: function(eventPoint, button) {
-            if (root.controller.loading)
-                return
-            if (button === Qt.BackButton)
-                root.goBackOrLeaveRequested()
-            else if (button === Qt.ForwardButton && root.controller.canGoForward)
-                root.controller.goForward()
-        }
-    }
 }

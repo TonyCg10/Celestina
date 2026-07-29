@@ -62,13 +62,13 @@ Item {
     property var hostWindow
     property bool active: false
     property bool headingExpanded: false
+    readonly property bool navigationBlocked: folderActions.navigationBlocked
     property alias tabController: controller
     // Alias con nombre distinto para inyectar en hijos: una propiedad inyectada
     // no puede llamarse igual que el id que se le pasa (`x: x` se sombrea a sí
     // misma y queda undefined — la clase de bug del fix de clics, 9e19b6d).
     property alias viewTopBar: topBar
     signal requestNewTab(string path, bool foreground)
-
     function collapseHeading() {
         headingExpanded = false
     }
