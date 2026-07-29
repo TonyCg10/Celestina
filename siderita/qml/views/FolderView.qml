@@ -4,22 +4,13 @@ import QtQuick.Layouts
 import org.celestina.siderita 1.0
 import org.celestina.siderita.internal 1.0
 // ─── FolderView ───────────────────────────────────────────────────────────────
-// Una vista de carpeta independiente: migas de pan y búsqueda, la lista o la
-// rejilla, la selección múltiple, los menús contextuales de entrada, carpeta y
-// orden, y los atajos de navegación de la pestaña. Tiene su propio controlador,
-// así que dos pestañas no comparten ni la ubicación ni el historial.
-//
-// Era un `component` dentro de la ventana principal, que así llegaba a 6.500
-// líneas. Lo único que necesitaba de fuera son cuatro cosas, y ahora las pide
-// por su nombre: el fantasma de arrastre, dónde poner los emergentes, la
-// ventana anfitriona y a quién avisar cuando quiere una pestaña nueva.
+// Vista de carpeta independiente: ruta, contenido, selección, menús y atajos.
+// Cada pestaña conserva su controlador, ubicación e historial; el host sólo
+// inyecta arrastre, overlays, estado de ventana y apertura de pestañas.
 // ──────────────────────────────────────────────────────────────────────────────
 Item {
     id: root
-
-    // El pie flota sobre el contenido: hay cristal que enseñar mientras
-    // quede lista por debajo. Al llegar al final no queda nada detrás y las
-    // pastillas vuelven a su relleno liso.
+    // El pie usa cristal mientras haya contenido desplazándose detrás.
     readonly property Item bottomView: mainPanel.viewMode === "grid"
                                        ? fileGrid : fileList
     readonly property bool bottomFloating:
@@ -28,10 +19,7 @@ Item {
     readonly property bool contextualHeaderVisible:
             controller.searchActive || controller.searchRunning
             || controller.trashActive || controller.recentActive
-    // One frame governs the group, clipped viewport, scrollbar and bottom chrome.
-    // Compact mode lifts that frame behind the complete route pill, so route,
-    // search/context and tabs visibly float over one surface. Expanded mode
-    // leaves the full heading and its chrome above the content.
+    // El marco sube tras la ruta compacta y baja bajo el encabezado expandido.
     readonly property real primaryChromeBottom:
             tabBar.visible ? tabBar.y + tabBar.height
                            : topBar.y + topBar.height
@@ -52,7 +40,6 @@ Item {
     readonly property real contentBottomInset:
             CelestinaTheme.controlHeightSm
             + 2 * CelestinaTheme.compFloatingInset
-
     property Item ghost
     property Item overlayParent
     // La ventana que hospeda este documento: de ella vienen el modelo de
@@ -63,28 +50,24 @@ Item {
     property bool headingExpanded: false
     readonly property bool navigationBlocked: folderActions.navigationBlocked
     property alias tabController: controller
-    // Alias con nombre distinto para inyectar en hijos: una propiedad inyectada
-    // no puede llamarse igual que el id que se le pasa (`x: x` se sombrea a sí
-    // misma y queda undefined — la clase de bug del fix de clics, 9e19b6d).
+    // Nombre distinto evita el auto-binding sombreado `x: x`.
     property alias viewTopBar: topBar
     signal requestNewTab(string path, bool foreground)
     function collapseHeading() {
         headingExpanded = false
     }
-
     function revealHeading() {
         if (active && !controller.loading
             && controller.errorText.length === 0
             && bottomView && bottomView.atYBeginning)
             headingExpanded = true
     }
-
     onActiveChanged: if (!active) collapseHeading()
-
     SideritaController {
         id: controller
     }
 
+    // RouteReveal se arma antes de que este modelo publique la ruta nueva.
     // Native role model shared by list and grid.
     SideritaEntryModel {
         id: entryModel
@@ -92,6 +75,11 @@ Item {
     // Distingue navegación de un refresco del mismo lugar o vista virtual.
     property string renderedKey: ""
 
+    RouteReveal {
+        id: routeReveal
+        navigationController: root.tabController
+        ready: root.renderedKey.length > 0
+    }
     Connections {
         target: controller
         function onRowsReady(names, tokens, kinds, subtitles, paths, sections, sizes, dates) {
@@ -112,6 +100,8 @@ Item {
             // navegar no se toca: ir al top es lo correcto para una carpeta nueva.
             if (samePlace)
                 view.contentY = savedY
+
+            routeReveal.revealPreparedRoute()
         }
     }
 
@@ -629,6 +619,8 @@ Item {
             y: contentFrame.surface.y
             width: contentFrame.surface.width
             height: contentFrame.surface.height
+            opacity: routeReveal.progress
+            transform: Translate { y: routeReveal.offset }
             controller: tabController
             entryModel: entryModel
             panel: mainPanel
@@ -660,6 +652,8 @@ Item {
             y: contentFrame.surface.y
             width: contentFrame.surface.width
             height: contentFrame.surface.height
+            opacity: routeReveal.progress
+            transform: Translate { y: routeReveal.offset }
             controller: tabController
             entryModel: entryModel
             panel: mainPanel
@@ -749,6 +743,8 @@ Item {
                + (contentFrame.surface.width - width) / 2
             y: contentFrame.surface.y
                + (contentFrame.surface.height - height) / 2
+            opacity: routeReveal.progress
+            transform: Translate { y: routeReveal.offset }
             controller: tabController
         }
 
@@ -772,6 +768,8 @@ Item {
         x: CelestinaTheme.compFloatingInset
         y: CelestinaTheme.compFloatingInset
         width: root.width - 2 * CelestinaTheme.compFloatingInset
+        opacity: routeReveal.progress
+        transform: Translate { y: routeReveal.offset }
         compact: !root.headingExpanded
         controller: tabController
         hostWindow: root.hostWindow
@@ -785,6 +783,8 @@ Item {
         y: folderHeading.y + folderHeading.height + CelestinaTheme.spaceLg
         width: mainPanel.floatingChromeWidth
         height: CelestinaTheme.controlHeightLg
+        opacity: routeReveal.progress
+        transform: Translate { y: routeReveal.offset }
         controller: tabController
         activeView: mainPanel.viewMode === "grid" ? fileGrid : fileList
         hostWindow: root.hostWindow

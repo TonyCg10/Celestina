@@ -20,6 +20,7 @@ const QML_FILES: &[&str] = &[
     // Componentes de presentación de Siderita.
     "qml/components/chrome/GlassPill.qml",
     "qml/components/chrome/HistoryMouseArea.qml",
+    "qml/components/chrome/RouteReveal.qml",
     "qml/components/chrome/FloatingButton.qml",
     "qml/components/chrome/HiddenTogglePill.qml",
     "qml/components/chrome/InfoPill.qml",

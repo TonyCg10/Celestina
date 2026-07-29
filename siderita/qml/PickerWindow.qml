@@ -79,12 +79,21 @@ Window {
         id: entryModel
     }
 
+    property bool renderedRoute: false
+
+    RouteReveal {
+        id: routeReveal
+        navigationController: controller
+        ready: picker.renderedRoute
+    }
+
     Connections {
         target: controller
         function onRowsReady(names, tokens, kinds, subtitles, paths, sections, sizes, dates) {
             picker.clearChosen()
             picker.anchorIndex = -1
             entryModel.setRows(names, tokens, kinds, subtitles, paths, sections, sizes, dates)
+            picker.renderedRoute = true
             // Al margen superior hay que ir: una Flickable no recoloca su
             // contenido cuando el margen cambia o cuando llegan filas nuevas, y
             // la primera fila nacía debajo de la pastilla en vez de bajo ella.
@@ -92,6 +101,7 @@ Window {
             Qt.callLater(function() {
                 entryGrid.contentY = -entryGrid.topMargin
                 entryGrid.currentIndex = -1
+                routeReveal.revealPreparedRoute()
             })
         }
     }
@@ -412,6 +422,8 @@ Window {
                 id: entryGrid
                 anchors.fill: parent
                 anchors.margins: 10
+                opacity: routeReveal.progress
+                transform: Translate { y: routeReveal.offset }
                 clip: true
                 model: entryModel
                 currentIndex: -1
@@ -666,6 +678,8 @@ Window {
                 anchors.centerIn: parent
                 width: Math.min(420, parent.width - 64)
                 spacing: CelestinaTheme.spaceSm
+                opacity: routeReveal.progress
+                transform: Translate { y: routeReveal.offset }
                 visible: entryGrid.count === 0
                 Accessible.role: Accessible.Pane
                 Accessible.name: emptyTitle.text

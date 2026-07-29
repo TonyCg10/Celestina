@@ -36,8 +36,10 @@ live: the sidebar, tab strip and file region are opaque tonal work surfaces;
 the path/search bar and consolidated footer are the denser floating glass layer;
 and page hierarchy now starts with a large location heading. List/grid switching,
 tabs, navigation, sorting, filtering and file operations retain their existing
-controllers and signals. Verified in a real Wayland session in both list and
-grid modes.
+controllers and signals. Successful route changes reveal the new heading, path
+and entries with the shared motion curve; watcher refreshes stay still and the
+transition becomes instantaneous under `reducedMotion`. Verified in a real
+Wayland session in both list and grid modes.
 
 ## Overview
 
