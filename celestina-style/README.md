@@ -6,23 +6,28 @@ not app state, Niri integration, dotfiles or workflows — and is the single sou
 of truth for how the suite looks.
 
 - **Role:** shared visual language (part of the [Celestina suite](../ROADMAP.md))
-- **Stack:** pure QML · Qt 6 Quick + `QtQuick.Effects` · CMake
-- **Consumed by:** [siderita](../siderita/) (live) · [magnetita](../magnetita/) (live) · [celestina](../celestina/) (output chooser live; panel still on an inline palette)
+- **Stack:** pure QML · Qt 6.9+ Quick + `QtQuick.Effects` · CMake
+- **Consumed by:** [siderita](../siderita/) (live) · [magnetita](../magnetita/)
+  (live) · [celestina](../celestina/) (panel and output chooser live from the
+  canonical source tree)
 
 ## Build
 
 ```sh
-cmake -S . -B build -G Ninja
+cmake -S . -B build
 cmake --build build
+ctest --test-dir build --output-on-failure
 ```
 
-**Consumption contract:** apps symlink these sources into their own CXX-Qt QML
+**Consumption contract:** CXX-Qt apps symlink these sources into their own QML
 modules and compile them in — the canonical file is the interface, the binaries
-stay self-contained, and CI refuses any copy that would drift. The `celestina`
-output chooser still imports the built module through a runtime import path (its
-own outlier, gone once the shell compiles the style in like the apps do). A
-relocatable installed module is deferred until a consumer exists outside this
-tree (see [ROADMAP.md](ROADMAP.md), STYLE-D).
+stay self-contained, and CI refuses any copy that would drift. The shell has a
+different in-tree delivery shape: panel and chooser import this same plain-source
+module directly, through a `CelestinaStyle` alias created by CMake for `qmllint`
+and recreated by the host at runtime. It has no inline palette and does not use a
+separately built or installed style module. A relocatable installed module is
+deferred until a consumer exists outside this tree (see
+[ROADMAP.md](ROADMAP.md), STYLE-D).
 
 ## Layout
 
@@ -37,14 +42,17 @@ tree (see [ROADMAP.md](ROADMAP.md), STYLE-D).
 | `GlassCard.qml` | `GlassSurface` specialization for modal dialog cards |
 | `GlassContextMenu.qml`, `GlassMenuItem.qml` | glass `Menu` + styled item |
 | `CelestinaButton.qml`, `CelestinaIconButton.qml` | text and icon-only buttons sharing closed role/density, focus, disabled and tooltip contracts |
+| `CelestinaFocusRing.qml` | canonical exterior focus-visible outline; keeps the focus indicator independent from control fill and anatomy |
 | `CelestinaIcons.qml`, `CelestinaIcon.qml` | closed semantic-name resolver + vendored Lucide renderer and tone; no desktop icon theme participates |
-| `CelestinaTextField.qml` | the suite text field, with closed standard/search shapes, themed fill and focus border |
+| `CelestinaTextField.qml` | the suite text field, with closed standard/search shapes, themed fill and exterior focus ring |
 | `CelestinaSectionLabel.qml` | uppercase section eyebrow with compact/regular size and consumer-provided scale |
 | `CelestinaSwitch.qml` | the One UI pill toggle: white thumb, accent track when on |
 | `ListSection.qml` | the grouped-card list (One UI's "focus block" signature) with an optional header |
-| `CelestinaModalLayer.qml` | shared L3 scrim, fade, focus and outside/Escape dismissal; dialog content stays app-owned |
+| `CelestinaModalLayer.qml` | shared L3 scrim, fade, focus containment/restoration and outside/Escape dismissal; dialog content stays app-owned |
 | `gallery/` | dev-only review surface — every token, control and glass surface on one screen (`gallery/run.sh`) |
-| `scripts/check-style-contract.sh` | CI/local guard against visual literals or local colour/state derivations outside the theme |
+| `tests/` | Qt Quick Test coverage for modal focus entry, Tab/Backtab containment, exact restoration, Escape and pointer blocking through the exit fade |
+| `scripts/check-style-contract.sh` | CI/local guard across Siderita, Magnetita, the shell and the shared module; rejects visual literals/local derivations and invokes the contrast contract |
+| `scripts/check-contrast-contract.py` | derives current theme values and verifies hostile black/white backdrop contrast floors for compositor glass, artwork, primary/destructive controls and metadata |
 | `scripts/sync-lucide-icons.sh` | reproducible sync of all 76 glyphs from the pinned Lucide release while retaining compatibility filenames |
 | `icons/`, `icons.qrc` | the vendored Lucide (ISC) catalogue, its licence and the glass noise-dither texture |
 | `fonts/`, `fonts.qrc` | Inter Variable (OFL) — the suite typeface, compiled into each app's binary |
@@ -53,8 +61,10 @@ tree (see [ROADMAP.md](ROADMAP.md), STYLE-D).
 
 | Type | Semantic input |
 |---|---|
+| `CelestinaTheme` | singleton semantic tokens plus host-controlled `reducedMotion`; each host maps the presence of `CELESTINA_REDUCED_MOTION` into this property |
 | `CelestinaSurface` | `role`; geometry and children remain consumer-owned |
 | `CelestinaButton` | closed `role` (`Tonal`, `Primary`, `Destructive`, `Selected`, `Ghost`), `density` (`Compact`, `Regular`, `Prominent`), `helpText` |
+| `CelestinaFocusRing` | `target`, `cornerRadius`, `shown`; colour and thickness remain token-owned |
 | `CelestinaIcon` | semantic `name`, `fallbackName`, `tone`, optional token-backed `tintOverride`; names resolve locally through `CelestinaIcons` and geometry may be scaled by the consumer |
 | `CelestinaIconButton` | `iconName`, `fallbackIcon`, `iconSize`, `helpText` plus the button role/density; its glyph always renders through a square viewport |
 | `CelestinaTextField` | `shape`; ordinary `TextField` value/validation properties remain available |
@@ -91,7 +101,13 @@ Run the static contract locally with:
 bash scripts/check-style-contract.sh
 ```
 
-It audits Siderita, Magnetita and the shared components and is also part of CI.
+It audits Siderita, Magnetita, the shell and the shared components, then checks
+the contrast floors derived from the current theme values. It is also part of CI.
+CTest separately proves the modal's keyboard-focus and pointer-blocking contract,
+including the animated exit interval,
+offscreen. These checks remain static/headless evidence: they do not validate
+blur, real-session focus rendering, assistive technology or reduced motion on a
+compositor session.
 
 See [DESIGN.md](DESIGN.md) for the design contract (One UI 8.5,
 desktop-adapted) and [ROADMAP.md](ROADMAP.md) for status and checkpoints.

@@ -10,50 +10,60 @@
 //!   stick rather than flicker;
 //! - **dial** a phone we hear announce, so a fresh device links without waiting.
 //!
-//! Whichever path forms the link, it runs the same KDE Connect v8 handshake and
-//! the same session: for a phone we have not met we wait for it to ask and
-//! accept (letting the phone drive avoids a double-request that pairs then
-//! unpairs); then we pin its certificate and can ping. One link per device — the
-//! second path to arrive is dropped. Every step prints a line, because *"why
-//! won't it connect"* is the feature.
+//! Every path runs the same KDE Connect v8 handshake and session. Unknown
+//! phones stay pending until the local UI accepts the request; trusted peers
+//! reconnect with their pinned certificate. Only one link survives per device.
 //!
-//! CP1 wraps this in a window; CP2 hangs the sftp mount and
-//! `org.celestina.Devices1` off the same trusted link.
+//! The UI and `org.celestina.Devices1` use this same trusted link.
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::error::Error;
 use std::fs;
-use std::io::{BufRead, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
-use celestina_core::xdg;
+use celestina_core::{xdg, Generation, GenerationClock};
 use magnetita_core::{
     read_album_art, read_battery, read_clipboard, read_mpris, read_mpris_request,
-    read_notification, read_sftp, read_share, request_packet, ConnectionEvent, DeviceType,
-    Identity, IncomingAlbumArt, IncomingFile, LostReason, Notification, Session, SftpReply,
+    read_notification, read_sftp, read_share, request_packet, ConnectionEvent, Identity,
+    LostReason, Notification, Session, SftpReply,
 };
 use magnetita_net::discovery::ANNOUNCE_INTERVAL;
 use magnetita_net::{
-    Announcement, Device, DeviceCert, Discovery, Link, TlsConfigs, TrustCheck, TrustStore,
-    TrustedPeer,
+    Announcement, Device, DeviceCert, Discovery, Link, PayloadLimiter, TlsConfigs, TrustCheck,
+    TrustStore, TrustedPeer,
 };
 
+mod admission;
 mod artwork;
+mod clipboard;
+mod device_identity;
 mod devices;
+mod incoming_file;
+mod link_commands;
 mod lock;
 mod media;
 mod mount;
 mod notify;
+mod payload_handlers;
 mod remote_media;
+mod revocation;
+mod runtime;
+mod session_registration;
 mod settings;
-use devices::{push_log, Command, Commands, DeviceEntry, Devices, Log, LogEntry, Registry};
+use admission::{Admission, Permit};
+use devices::{
+    command_channel, push_log, set_verification_key, Command, Commands, DeviceEntry, Devices, Log,
+    LogEntry, Registry,
+};
 use lock::LockOk;
 use mount::Mount;
 use remote_media::{RemoteMedia, Report as MediaReport};
+use revocation::Revocations;
+use runtime::{event_line, id_source, is_disconnect, log, log_event, millis, type_label};
 use settings::Settings;
 
 /// The KDE Connect port: UDP announce/listen and TCP link.
@@ -64,6 +74,9 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// How often [`Device::pump`] wakes to check the pairing clock while idle.
 const TICK: Duration = Duration::from_secs(1);
+
+/// An unknown peer must pair or leave; idle LAN clients cannot live forever.
+const UNTRUSTED_LINK_TIMEOUT: Duration = Duration::from_secs(60);
 
 fn main() -> std::process::ExitCode {
     match run() {
@@ -91,6 +104,12 @@ struct Daemon {
     devices: Registry,
     log: Log,
     commands: Commands,
+    pending_clipboards: link_commands::PendingClipboards,
+    artwork_completions: link_commands::PendingArtworkCompletions,
+    revocations: Arc<Revocations>,
+    generation_clock: Mutex<GenerationClock>,
+    admission: Arc<Admission>,
+    payloads: PayloadLimiter,
     dbus: Option<zbus::blocking::Connection>,
     /// phone-notification-id → freedesktop-server-id, so an update replaces and a
     /// cancel withdraws the right desktop notification.
@@ -109,7 +128,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         log("artwork", &format!("cache unavailable: {error}"));
     }
 
-    let device_id = ensure_device_id(&dir)?;
+    let device_id = device_identity::ensure(&dir)?;
     let cert = DeviceCert::ensure(&dir, &device_id)?;
 
     // The trust store and plugin settings are shared with the served interface,
@@ -124,11 +143,13 @@ fn run() -> Result<(), Box<dyn Error>> {
     let registry: Registry = Arc::new(Mutex::new(BTreeMap::new()));
     let event_log: Log = Arc::new(Mutex::new(VecDeque::new()));
     let commands: Commands = Arc::new(Mutex::new(HashMap::new()));
+    let revocations = Arc::new(Revocations::new());
     let dbus = match serve_devices(
         Arc::clone(&registry),
         Arc::clone(&event_log),
         Arc::clone(&commands),
         Arc::clone(&trust),
+        Arc::clone(&revocations),
         Arc::clone(&settings),
         settings_path,
     ) {
@@ -150,13 +171,20 @@ fn run() -> Result<(), Box<dyn Error>> {
         devices: registry,
         log: event_log,
         commands,
+        pending_clipboards: link_commands::PendingClipboards::default(),
+        artwork_completions: link_commands::PendingArtworkCompletions::default(),
+        revocations,
+        generation_clock: Mutex::new(GenerationClock::default()),
+        admission: Arc::new(Admission::new()),
+        payloads: PayloadLimiter::new(),
         dbus,
         notifications: Mutex::new(HashMap::new()),
         last_clipboard: Mutex::new(String::new()),
     });
 
     // Watch the desktop clipboard and push changes to connected phones.
-    spawn_clipboard_watch(Arc::clone(&daemon));
+    let clipboard_daemon = Arc::clone(&daemon);
+    clipboard::spawn_watch(move |text| clipboard_daemon.push_clipboard(text));
 
     log("id", &device_id);
     log("cert", &cert.fingerprint()?);
@@ -198,7 +226,17 @@ fn run() -> Result<(), Box<dyn Error>> {
         {
             continue; // already linked by one path or the other
         }
-        spawn_dialer(Arc::clone(&daemon), announcement);
+        let device_id = &announcement.identity.device_id;
+        if !daemon.admission.allow_dial(device_id, Instant::now()) {
+            continue;
+        }
+        let Some(address) = announcement.link_addr() else {
+            continue;
+        };
+        let Some(permit) = daemon.admission.try_acquire(address.ip()) else {
+            continue;
+        };
+        spawn_dialer(Arc::clone(&daemon), announcement, permit);
     }
 }
 
@@ -211,7 +249,12 @@ fn run() -> Result<(), Box<dyn Error>> {
 fn spawn_announcer(discovery: &Discovery, daemon: Arc<Daemon>) {
     if let Ok(announcer) = discovery.try_clone() {
         thread::spawn(move || loop {
-            if daemon.devices.lock_ok().is_empty() {
+            if !daemon
+                .devices
+                .lock_ok()
+                .values()
+                .any(|device| device.paired)
+            {
                 let _ = announcer.announce(&daemon.identity, millis());
             }
             thread::sleep(ANNOUNCE_INTERVAL);
@@ -224,9 +267,15 @@ fn spawn_accepter(listener: TcpListener, daemon: Arc<Daemon>) {
     thread::spawn(move || {
         for stream in listener.incoming() {
             let Ok(tcp) = stream else { continue };
+            let Ok(address) = tcp.peer_addr() else {
+                continue;
+            };
+            let Some(permit) = daemon.admission.try_acquire(address.ip()) else {
+                continue;
+            };
             let daemon = Arc::clone(&daemon);
             thread::spawn(move || match accept_link(&daemon, tcp) {
-                Ok(link) => daemon.serve(link, "accepted"),
+                Ok(link) => daemon.serve(link, "accepted", permit),
                 Err(e) => {
                     log("accept", &format!("handshake failed: {e}"));
                     ui_log(
@@ -242,7 +291,7 @@ fn spawn_accepter(listener: TcpListener, daemon: Arc<Daemon>) {
 }
 
 /// Dial a heard phone and serve the link, off the discovery thread.
-fn spawn_dialer(daemon: Arc<Daemon>, announcement: Announcement) {
+fn spawn_dialer(daemon: Arc<Daemon>, announcement: Announcement, permit: Permit) {
     thread::spawn(move || {
         let mut next_id = id_source();
         match Link::connect(
@@ -252,7 +301,7 @@ fn spawn_dialer(daemon: Arc<Daemon>, announcement: Announcement) {
             &mut next_id,
             HANDSHAKE_TIMEOUT,
         ) {
-            Ok(link) => daemon.serve(link, "dialed"),
+            Ok(link) => daemon.serve(link, "dialed", permit),
             Err(e) => {
                 let name = &announcement.identity.device_name;
                 log("dial", &format!("{name}: {e}"));
@@ -285,12 +334,13 @@ fn accept_link(daemon: &Daemon, tcp: TcpStream) -> Result<Link, magnetita_net::L
 impl Daemon {
     /// Take ownership of a freshly-formed link: keep only one per device, then
     /// run its session until it closes.
-    fn serve(self: &Arc<Self>, link: Link, how: &'static str) {
+    fn serve(self: &Arc<Self>, link: Link, how: &'static str, permit: Permit) {
         let peer_id = link.peer().device_id.clone();
         let peer_name = link.peer().device_name.clone();
         let peer_type = type_label(link.peer().device_type);
         let fingerprint = link.peer_fingerprint().to_owned();
 
+        let (sender, commands) = command_channel();
         {
             // Hold the lock across check-and-insert so two paths cannot both
             // pass; one link per device, the loser dropped here.
@@ -298,11 +348,19 @@ impl Daemon {
             if devices.contains_key(&peer_id) {
                 return;
             }
+            // Install command delivery before publishing `connected`; Forget
+            // can never observe a live entry whose Unpair command would vanish.
+            self.commands.lock_ok().insert(peer_id.clone(), sender);
             devices.insert(
                 peer_id.clone(),
                 DeviceEntry::connected(peer_id.clone(), peer_name.clone(), peer_type, fingerprint),
             );
         }
+        let _registration = session_registration::SessionRegistration::new(
+            Arc::clone(self),
+            peer_id.clone(),
+            peer_name.clone(),
+        );
         self.notify_change();
         log(how, &format!("{peer_name} at {}", link.peer_addr()));
         log(
@@ -311,7 +369,7 @@ impl Daemon {
         );
         ui_log(self, &peer_name, "conectado y cifrado", false);
 
-        if let Err(e) = self.run_link(link, &peer_id, &peer_name) {
+        if let Err(e) = self.run_link(link, &peer_id, &peer_name, commands, permit) {
             let message = e.to_string();
             log("link", &format!("{peer_name}: {message}"));
             // A reset / broken pipe / EOF is the phone dropping the link — a
@@ -326,27 +384,28 @@ impl Daemon {
                 );
             }
         }
-        self.devices.lock_ok().remove(&peer_id);
-        self.commands.lock_ok().remove(&peer_id);
-        artwork::clear_device(&peer_id);
-        self.notify_change();
-        log("closed", &format!("{peer_name} disconnected"));
-        ui_log(self, &peer_name, "desconectado", false);
     }
 
-    /// Drive one link's session: trust-check it, let the phone drive pairing,
-    /// keep the trust store honest, and — once trusted — mount its storage.
+    /// Trust-check one link, expose its pairing request for explicit local
+    /// acceptance, persist trust and — once trusted — mount its storage.
     fn run_link(
         self: &Arc<Self>,
         link: Link,
         peer_id: &str,
         peer_name: &str,
+        commands: mpsc::Receiver<Command>,
+        mut admission: Permit,
     ) -> Result<(), Box<dyn Error>> {
         let peer_fp = link.peer_fingerprint().to_owned();
         let link_host = link.peer_addr().ip().to_string();
+        let protocol_version = link.peer().protocol_version;
 
         let mut trusted = false;
-        let session = match self.trust.lock_ok().check(peer_id, &peer_fp) {
+        let trust_check = self
+            .revocations
+            .if_pairing_allowed(peer_id, || self.trust.lock_ok().check(peer_id, &peer_fp))
+            .unwrap_or(TrustCheck::Unknown);
+        let session = match trust_check {
             TrustCheck::Changed => {
                 log(
                     "REFUSED",
@@ -363,24 +422,29 @@ impl Daemon {
             TrustCheck::Trusted => {
                 log("trust", &format!("{peer_name} is already paired"));
                 trusted = true;
-                Session::restored()
+                Session::restored(protocol_version)
             }
             TrustCheck::Unknown => {
                 log(
                     "pair",
                     &format!("link up — tap \"Vincular\"/Pair on {peer_name} to trust it"),
                 );
-                Session::new()
+                Session::new(protocol_version)
             }
         };
 
+        if trusted {
+            admission.release();
+        }
+        let mut untrusted_deadline = (!trusted).then(|| Instant::now() + UNTRUSTED_LINK_TIMEOUT);
+        let peer_address = link.peer_addr().ip();
         let mut device = Device::new(link, session, millis(), TICK)?;
-
-        // Register a command channel so the app can drive pair/unpair on this
-        // live link. serve() removes it when the link ends.
-        let (tx, commands) = mpsc::channel::<Command>();
-        self.commands.lock_ok().insert(peer_id.to_owned(), tx);
-        self.set_paired(peer_id, trusted);
+        let mut pair_generation = if trusted {
+            self.next_generation()?
+        } else {
+            Generation::INITIAL
+        };
+        self.set_paired(peer_id, trusted, pair_generation);
         self.notify_change();
 
         // The mount lives as long as this link: dropping it (here or on unpair)
@@ -388,147 +452,111 @@ impl Daemon {
         let mut mount: Option<Mount> = None;
         let mut asked_sftp = false;
         let mut remote_media = RemoteMedia::default();
-
-        // A device we already trust: ask for its storage right away — and, for
-        // each enabled plugin, prime it (battery, media, clipboard handshake).
-        if trusted {
-            let settings = *self.settings.lock_ok();
-            device.send(request_packet)?;
-            if settings.battery {
-                device.send(magnetita_core::battery::request)?;
-            }
-            if settings.media {
-                device.send(magnetita_core::mpris::request_player_list)?;
-            }
-            if settings.clipboard {
-                self.send_clipboard_connect(&mut device)?;
-            }
-            asked_sftp = true;
-            log("sftp", &format!("requesting {peer_name}'s storage"));
-        }
+        let mut desktop_media: Option<media::Worker> = None;
+        let mut payload_scope = payload_handlers::PayloadScope::new();
 
         loop {
-            let pumped = device.pump()?;
-            let mut events = pumped.events;
+            if untrusted_deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+                ui_log(self, peer_name, "enlace no emparejado expirado", true);
+                return Ok(());
+            }
             // A snapshot of the toggles for this turn; a plugin switched off is
             // one we neither drive nor react to.
             let settings = *self.settings.lock_ok();
-
-            if settings.media {
-                remote_media.poll(&mut device, millis())?;
+            let mut events = Vec::new();
+            let revocation_pending = self.revocations.pending(peer_id).is_some();
+            let mut notify_revocation = false;
+            if revocation_pending {
+                let (revoked, notify) = device.revoke_pairing_local();
+                events.extend(revoked);
+                notify_revocation |= notify;
             }
 
-            // Commands the app forwarded for this device (its "Emparejar" /
-            // "Desvincular" buttons).
-            while let Ok(command) = commands.try_recv() {
-                match command {
-                    Command::RequestPair => events.extend(device.request_pairing()?),
-                    Command::Unpair => events.extend(device.unpair()?),
-                    Command::Ring if settings.findmyphone => {
-                        device.send(magnetita_core::findmyphone::request)?;
-                        ui_log(self, peer_name, "sonando el móvil", false);
-                    }
-                    Command::Ring => {}
-                    Command::SendClipboard(text) if settings.clipboard => {
-                        device.send(|id| magnetita_core::clipboard::clipboard_packet(id, &text))?;
-                    }
-                    Command::SendClipboard(_) => {}
-                    Command::Media(action) if settings.media => {
-                        // Drive the phone's active player; a report comes back
-                        // and refreshes the app's now-playing card.
-                        remote_media.send_action(&mut device, &action)?;
-                    }
-                    Command::Media(_) => {}
-                    Command::SendFile(_) if !settings.share => {}
-                    Command::SendFile(path) => {
-                        let path = PathBuf::from(&path);
-                        match std::fs::metadata(&path) {
-                            Ok(meta) if meta.is_file() => {
-                                let name = path
-                                    .file_name()
-                                    .and_then(|n| n.to_str())
-                                    .unwrap_or("archivo")
-                                    .to_owned();
-                                let size = meta.len() as i64;
-                                match magnetita_net::serve_file(&self.tls, &path) {
-                                    Ok(port) => {
-                                        device.send(|id| {
-                                            magnetita_core::share_request_packet(
-                                                id, &name, size, port,
-                                            )
-                                        })?;
-                                        ui_log(
-                                            self,
-                                            peer_name,
-                                            &format!("enviando {name}…"),
-                                            false,
-                                        );
-                                    }
-                                    Err(e) => ui_log(
-                                        self,
-                                        peer_name,
-                                        &format!("no se pudo enviar {name}: {e}"),
-                                        true,
-                                    ),
-                                }
-                            }
-                            _ => ui_log(
-                                self,
-                                peer_name,
-                                &format!("no se pudo leer {}", path.display()),
-                                true,
-                            ),
-                        }
-                    }
-                }
-            }
+            // Local controls take priority over the next peer packet.
+            events.extend(self.drain_link_commands(
+                &commands,
+                &mut device,
+                &mut remote_media,
+                settings,
+                link_commands::PeerContext::new(
+                    peer_id,
+                    peer_name,
+                    &peer_fp,
+                    pair_generation,
+                    payload_scope.token(),
+                ),
+            )?);
 
-            // The phone asked and awaits us — accept (one clean exchange).
-            if device.peer_wants_to_pair() {
-                log("pair", &format!("{peer_name} asked to pair — accepting"));
-                events.extend(device.accept_pairing()?);
+            let pumped = if !revocation_pending {
+                let pumped = device.pump()?;
+                events.extend(pumped.events.clone());
+                Some(pumped)
+            } else {
+                None
+            };
+            // Forget may have crossed the blocking read. Revoke again before a
+            // Paired event or plugin packet from that read can be applied.
+            if self.revocations.current(peer_id).is_some() && device.is_paired() {
+                let (revoked, notify) = device.revoke_pairing_local();
+                events.extend(revoked);
+                notify_revocation |= notify;
             }
 
             for event in &events {
+                if self.revocations.suppresses(peer_id, event) {
+                    continue;
+                }
+                let verification_key = match event {
+                    ConnectionEvent::Pairing => device.verification_key()?,
+                    ConnectionEvent::Paired
+                    | ConnectionEvent::Unpaired
+                    | ConnectionEvent::Lost(LostReason::PairRejected)
+                    | ConnectionEvent::Lost(LostReason::PairTimedOut)
+                    | ConnectionEvent::Lost(LostReason::PairInvalid) => Some(String::new()),
+                    _ => None,
+                };
+                if let Some(key) = verification_key {
+                    if set_verification_key(&self.devices, peer_id, &key) {
+                        self.notify_change();
+                    }
+                }
                 log_event(event);
                 if let Some((message, failure)) = event_line(event) {
                     ui_log(self, peer_name, message, failure);
                 }
                 match event {
                     ConnectionEvent::Paired => {
-                        self.trust.lock_ok().pin(TrustedPeer {
-                            device_id: peer_id.to_owned(),
-                            device_name: peer_name.to_owned(),
-                            fingerprint: peer_fp.clone(),
-                        })?;
-                        log("pinned", &format!("{peer_name} trusted; fingerprint saved"));
-                        self.set_paired(peer_id, true);
-                        self.notify_change();
-                        device.send_ping()?;
-                        if !asked_sftp {
-                            device.send(request_packet)?;
-                            if settings.battery {
-                                device.send(magnetita_core::battery::request)?;
-                            }
-                            if settings.media {
-                                device.send(magnetita_core::mpris::request_player_list)?;
-                            }
-                            if settings.clipboard {
-                                self.send_clipboard_connect(&mut device)?;
-                            }
-                            asked_sftp = true;
-                            log("sftp", &format!("requesting {peer_name}'s storage"));
+                        let pin = self.revocations.if_pairing_allowed(peer_id, || {
+                            self.trust.lock_ok().pin(TrustedPeer {
+                                device_id: peer_id.to_owned(),
+                                device_name: peer_name.to_owned(),
+                                fingerprint: peer_fp.clone(),
+                            })
+                        });
+                        if let Some(pin) = pin {
+                            pin?;
+                            log("pinned", &format!("{peer_name} trusted; fingerprint saved"));
+                            payload_scope.renew();
+                            pair_generation = self.next_generation()?;
+                            self.set_paired(peer_id, true, pair_generation);
+                            self.notify_change();
+                            device.send_ping()?;
                         }
                     }
                     ConnectionEvent::Unpaired => {
-                        self.trust.lock_ok().forget(peer_id)?;
+                        if self.revocations.current(peer_id).is_none() {
+                            self.trust.lock_ok().forget(peer_id)?;
+                        }
                         log(
                             "unpaired",
                             &format!("{peer_name} dropped the pairing; forgot it"),
                         );
                         mount = None; // drop → unmount
+                        asked_sftp = false;
                         self.set_mount(peer_id, None);
-                        self.set_paired(peer_id, false);
+                        payload_scope.cancel();
+                        pair_generation = Generation::INITIAL;
+                        self.set_paired(peer_id, false, pair_generation);
                         self.notify_change();
                     }
                     ConnectionEvent::Pinged => {
@@ -548,9 +576,82 @@ impl Daemon {
                 }
             }
 
+            if let Some(generation) = self.revocations.pending(peer_id) {
+                let (_, notify) = device.revoke_pairing_local();
+                notify_revocation |= notify;
+                mount = None;
+                asked_sftp = false;
+                desktop_media = None;
+                payload_scope.cancel();
+                self.set_mount(peer_id, None);
+                pair_generation = Generation::INITIAL;
+                self.set_paired(peer_id, false, pair_generation);
+                let _ = set_verification_key(&self.devices, peer_id, "");
+                self.notify_change();
+                self.revocations.acknowledge(peer_id, generation);
+            }
+            if notify_revocation && self.revocations.current(peer_id).is_some() {
+                // Durable local state and the D-Bus barrier are already complete;
+                // a broken peer notification may close this link but cannot undo
+                // Forget or make its caller wait on the socket write.
+                if let Err(error) = device.notify_revocation() {
+                    return Err(Box::new(error));
+                }
+            }
+
+            let media_active =
+                settings.media && device.is_paired() && self.revocations.current(peer_id).is_none();
+            media::set_active(&mut desktop_media, media_active)?;
+            if media_active {
+                remote_media.poll(&mut device, millis())?;
+            }
+            while let Some(reply) = desktop_media.as_ref().and_then(media::Worker::try_reply) {
+                match reply {
+                    media::Reply::Players(players) => {
+                        device.send(|id| magnetita_core::mpris::player_list_packet(id, &players))?
+                    }
+                    media::Reply::State(state) => {
+                        device.send(|id| magnetita_core::mpris::state_packet(id, &state))?
+                    }
+                }
+            }
+
+            // Prime a restored or newly-paired link only after local commands;
+            // a concurrent Forget therefore cannot leak one last plugin request.
+            if device.is_paired() && !asked_sftp {
+                device.send(request_packet)?;
+                if settings.battery {
+                    device.send(magnetita_core::battery::request)?;
+                }
+                if settings.media {
+                    device.send(magnetita_core::mpris::request_player_list)?;
+                }
+                if settings.clipboard {
+                    self.send_clipboard_connect(&mut device)?;
+                }
+                asked_sftp = true;
+                log("sftp", &format!("requesting {peer_name}'s storage"));
+            }
+
+            if device.is_paired() {
+                admission.release();
+                untrusted_deadline = None;
+            } else if untrusted_deadline.is_none() {
+                let Some(next_permit) = self.admission.try_acquire(peer_address) else {
+                    ui_log(self, peer_name, "demasiados enlaces sin emparejar", true);
+                    return Ok(());
+                };
+                admission = next_permit;
+                untrusted_deadline = Some(Instant::now() + UNTRUSTED_LINK_TIMEOUT);
+            }
+
             // Plugin packets the session leaves for us: the phone's battery and
             // its sftp reply.
-            if let Some(packet) = &pumped.packet {
+            if let Some(packet) = pumped
+                .as_ref()
+                .filter(|_| device.is_paired() && self.revocations.current(peer_id).is_none())
+                .and_then(|pumped| pumped.packet.as_ref())
+            {
                 if settings.battery {
                     if let Some(battery) = read_battery(packet) {
                         self.set_battery(peer_id, battery.charge, battery.charging);
@@ -566,28 +667,42 @@ impl Daemon {
                     if let Some(text) = read_clipboard(packet) {
                         // Record before wl-copy so the watcher does not echo it back.
                         *self.last_clipboard.lock_ok() = text.clone();
-                        if set_clipboard(&text) {
+                        if clipboard::write(&text) {
                             ui_log(self, peer_name, "portapapeles recibido", false);
                         }
                     }
                 }
                 if settings.share {
                     if let Some(file) = read_share(packet) {
-                        // A file streams over a second socket; receive it off the
-                        // pump thread so a big transfer never freezes the link.
-                        let daemon = Arc::clone(self);
-                        let host = link_host.clone();
-                        let name = peer_name.to_owned();
-                        thread::spawn(move || daemon.receive_file(name, host, file));
+                        self.spawn_file_receive(
+                            payload_handlers::PayloadPeer {
+                                device_id: peer_id,
+                                device_name: peer_name,
+                                host: &link_host,
+                                fingerprint: &peer_fp,
+                                pair_generation,
+                                cancellation: payload_scope.token(),
+                            },
+                            file,
+                        );
                     }
                 }
                 // Media, both ways — only while the plugin is enabled.
                 if settings.media {
                     if let Some(incoming) = read_album_art(packet) {
-                        let daemon = Arc::clone(self);
-                        let device_id = peer_id.to_owned();
-                        let host = link_host.clone();
-                        thread::spawn(move || daemon.receive_artwork(device_id, host, incoming));
+                        if let Some((player, source)) = self.spawn_artwork_receive(
+                            payload_handlers::PayloadPeer {
+                                device_id: peer_id,
+                                device_name: peer_name,
+                                host: &link_host,
+                                fingerprint: &peer_fp,
+                                pair_generation,
+                                cancellation: payload_scope.token(),
+                            },
+                            incoming,
+                        ) {
+                            remote_media.artwork_failed(&player, &source, millis());
+                        }
                     }
                     // The phone reporting its media (for the now-playing card).
                     if let Some(update) = read_mpris(packet) {
@@ -610,26 +725,8 @@ impl Daemon {
                     }
                     // The phone driving *our* players (its media remote).
                     if let Some(request) = read_mpris_request(packet) {
-                        if request.request_player_list {
-                            let players = media::players();
-                            device.send(|id| {
-                                magnetita_core::mpris::player_list_packet(id, &players)
-                            })?;
-                        }
-                        if let Some(player) = request.player.as_deref() {
-                            if let Some(action) = request.action.as_deref() {
-                                media::control(player, action);
-                            }
-                            if let Some(volume) = request.set_volume {
-                                media::set_volume(player, volume);
-                            }
-                            if request.action.is_some() || request.request_now_playing {
-                                if let Some(state) = media::state(player) {
-                                    device.send(|id| {
-                                        magnetita_core::mpris::state_packet(id, &state)
-                                    })?;
-                                }
-                            }
+                        if let Some(worker) = &desktop_media {
+                            worker.submit(request);
                         }
                     }
                 }
@@ -663,17 +760,22 @@ impl Daemon {
                 }
             }
 
-            if !pumped.open {
+            if pumped.as_ref().is_some_and(|pumped| !pumped.open) {
                 return Ok(()); // mount drops here → unmount
             }
         }
     }
 
     /// Reflect a device's pairing state into the registry.
-    fn set_paired(&self, device_id: &str, paired: bool) {
+    fn set_paired(&self, device_id: &str, paired: bool, generation: Generation) {
         if let Some(entry) = self.devices.lock_ok().get_mut(device_id) {
             entry.paired = paired;
+            entry.pair_generation = generation;
         }
+    }
+
+    fn next_generation(&self) -> Result<Generation, celestina_core::GenerationExhausted> {
+        self.generation_clock.lock_ok().issue()
     }
 
     /// Send our current clipboard as a `clipboard.connect` on connect — the
@@ -681,7 +783,7 @@ impl Daemon {
     /// clipboard to us too. Recorded as last-synced so the watcher does not
     /// immediately re-send it.
     fn send_clipboard_connect(&self, device: &mut Device) -> Result<(), magnetita_net::LinkError> {
-        let clip = get_clipboard();
+        let clip = clipboard::read();
         *self.last_clipboard.lock_ok() = clip.clone();
         device.send(|id| magnetita_core::clipboard::clipboard_connect_packet(id, &clip, millis()))
     }
@@ -700,10 +802,8 @@ impl Daemon {
             }
             *last = text.clone();
         }
-        let senders: Vec<_> = self.commands.lock_ok().values().cloned().collect();
-        for sender in senders {
-            let _ = sender.send(Command::SendClipboard(text.clone()));
-        }
+        let device_ids: Vec<_> = self.commands.lock_ok().keys().cloned().collect();
+        self.pending_clipboards.replace_for(device_ids, text);
     }
 
     /// Reflect a device's battery report into the registry.
@@ -711,68 +811,6 @@ impl Daemon {
         if let Some(entry) = self.devices.lock_ok().get_mut(device_id) {
             entry.battery = charge;
             entry.charging = charging;
-        }
-    }
-
-    /// Receive and publish a cover off the pump thread. A response for a track
-    /// that has already changed is discarded instead of replacing current art.
-    fn receive_artwork(
-        self: Arc<Self>,
-        device_id: String,
-        host: String,
-        incoming: IncomingAlbumArt,
-    ) {
-        match artwork::receive(&device_id, &host, &self.tls, &incoming) {
-            Ok(path) => {
-                let url = artwork::file_url(&path);
-                match devices::install_artwork(
-                    &self.devices,
-                    &device_id,
-                    &incoming.player,
-                    &incoming.source_url,
-                    path.clone(),
-                    url,
-                ) {
-                    Some(previous) => {
-                        if let Some(previous) = previous {
-                            artwork::discard(&previous);
-                        }
-                        self.notify_change();
-                    }
-                    None => artwork::discard(&path),
-                }
-            }
-            Err(error) => log("artwork", &format!("{device_id}: {error}")),
-        }
-    }
-
-    /// Receive a shared file into the downloads dir, then notify and log. Runs on
-    /// its own thread. The name is reduced to its base component so the phone
-    /// cannot write outside the target dir, and a half-received file is removed.
-    fn receive_file(self: Arc<Self>, device_name: String, host: String, file: IncomingFile) {
-        let name = safe_filename(&file.filename);
-        let dir = download_dir();
-        if std::fs::create_dir_all(&dir).is_err() {
-            return;
-        }
-        let dest = unique_path(&dir, &name);
-        ui_log(&self, &device_name, &format!("recibiendo {name}…"), false);
-        match magnetita_net::receive_to_file(&host, file.port, file.size, &self.tls, &dest) {
-            Ok(_) => {
-                ui_log(&self, &device_name, &format!("recibido: {name}"), false);
-                if let Some(connection) = &self.dbus {
-                    notify::post(connection, &device_name, 0, "Archivo recibido", &name);
-                }
-            }
-            Err(e) => {
-                ui_log(
-                    &self,
-                    &device_name,
-                    &format!("fallo al recibir {name}: {e}"),
-                    true,
-                );
-                let _ = std::fs::remove_file(&dest);
-            }
         }
     }
 
@@ -843,6 +881,7 @@ fn serve_devices(
     log: Log,
     commands: Commands,
     trust: Arc<Mutex<TrustStore>>,
+    revocations: Arc<Revocations>,
     settings: Arc<Mutex<Settings>>,
     settings_path: PathBuf,
 ) -> zbus::Result<zbus::blocking::Connection> {
@@ -850,7 +889,15 @@ fn serve_devices(
         .name(devices::BUS_NAME)?
         .serve_at(
             devices::OBJECT_PATH,
-            Devices::new(registry, log, commands, trust, settings, settings_path),
+            Devices::new(
+                registry,
+                log,
+                commands,
+                trust,
+                revocations,
+                settings,
+                settings_path,
+            ),
         )?
         .build()
 }
@@ -877,223 +924,4 @@ fn ui_log(daemon: &Daemon, device: &str, message: &str, failure: bool) {
             &(),
         );
     }
-}
-
-/// A connection event as a log line for the app, or `None` for the noisy or
-/// purely-internal ones. The `bool` marks a failure worth showing in red.
-fn event_line(event: &ConnectionEvent) -> Option<(&'static str, bool)> {
-    use ConnectionEvent::*;
-    Some(match event {
-        Pairing => ("emparejamiento en curso", false),
-        Paired => ("emparejado", false),
-        Unpaired => ("desemparejado", false),
-        Lost(LostReason::NoReply) => ("sin respuesta", true),
-        Lost(LostReason::Unreachable) => ("inalcanzable (¿otra red?)", true),
-        Lost(LostReason::TlsFailed) => ("falló el cifrado TLS", true),
-        Lost(LostReason::CertChanged) => ("el certificado cambió — posible impostor", true),
-        Lost(LostReason::PairRejected) => ("emparejamiento rechazado", true),
-        Lost(LostReason::PairTimedOut) => ("el emparejamiento expiró", true),
-        Lost(LostReason::PeerClosed) => ("el dispositivo cerró el enlace", true),
-        // Discovered / Linking / Secured / Identified / Pinged: too low-level or
-        // too noisy for the log; the daemon logs its own milestones instead.
-        _ => return None,
-    })
-}
-
-/// Whether a link-error message is just the phone dropping the connection — a
-/// reset, a broken pipe or an unexpected EOF — rather than a fault to surface.
-/// These are the ordinary shape of a Wi-Fi phone going away; the "desconectado"
-/// line already tells the user, so the red error banner would only be noise.
-fn is_disconnect(message: &str) -> bool {
-    let m = message.to_lowercase();
-    m.contains("reset by peer")
-        || m.contains("broken pipe")
-        || m.contains("os error 104") // ECONNRESET
-        || m.contains("os error 32") // EPIPE
-        || m.contains("unexpected end")
-        || m.contains("unexpectedeof")
-}
-
-/// The contract's device-type label for a peer's declared type.
-fn type_label(device_type: DeviceType) -> String {
-    match device_type {
-        DeviceType::Phone => "phone",
-        DeviceType::Tablet => "tablet",
-        DeviceType::Laptop => "laptop",
-        DeviceType::Desktop => "desktop",
-        DeviceType::Tv => "tv",
-        DeviceType::Unknown => "unknown",
-    }
-    .to_owned()
-}
-
-/// Our stable 32-hex device id (a UUID with the dashes removed, the shape KDE
-/// Connect expects), generated once and reused.
-fn ensure_device_id(dir: &Path) -> Result<String, Box<dyn Error>> {
-    let path = dir.join("device_id");
-    if let Ok(existing) = fs::read_to_string(&path) {
-        let existing = existing.trim().to_owned();
-        if !existing.is_empty() {
-            return Ok(existing);
-        }
-    }
-    let uuid = fs::read_to_string("/proc/sys/kernel/random/uuid")?;
-    let id: String = uuid.trim().chars().filter(|c| *c != '-').collect();
-    fs::write(&path, &id)?;
-    Ok(id)
-}
-
-/// Watches the Wayland clipboard and pushes each change to connected phones
-/// (desktop → phone). `wl-paste --watch` runs a helper on every change that
-/// prints the clipboard followed by a NUL, so a multi-line value splits off the
-/// stream cleanly. Best-effort: no wl-paste just means no desktop → phone sync.
-fn spawn_clipboard_watch(daemon: Arc<Daemon>) {
-    use std::process::{Command, Stdio};
-    thread::spawn(move || {
-        let mut child = match Command::new("wl-paste")
-            .args(["--watch", "sh", "-c", "cat; printf '\\0'"])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-        {
-            Ok(child) => child,
-            Err(e) => {
-                log("clipboard", &format!("watch no disponible: {e}"));
-                return;
-            }
-        };
-        let Some(stdout) = child.stdout.take() else {
-            return;
-        };
-        let mut reader = std::io::BufReader::new(stdout);
-        let mut buf = Vec::new();
-        loop {
-            buf.clear();
-            match reader.read_until(0, &mut buf) {
-                Ok(0) => break, // wl-paste exited
-                Ok(_) => {
-                    if buf.last() == Some(&0) {
-                        buf.pop();
-                    }
-                    daemon.push_clipboard(String::from_utf8_lossy(&buf).into_owned());
-                }
-                Err(_) => break,
-            }
-        }
-    });
-}
-
-/// Reads the current desktop clipboard text via wl-paste, or empty on failure.
-fn get_clipboard() -> String {
-    std::process::Command::new("wl-paste")
-        .arg("--no-newline")
-        .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
-        .unwrap_or_default()
-}
-
-/// Puts text on the desktop (Wayland) clipboard via wl-copy. Returns whether it
-/// ran. wl-copy reads stdin, forks a background server to hold the selection, and
-/// its foreground process exits — so we write the text, close stdin, and reap it.
-fn set_clipboard(text: &str) -> bool {
-    use std::process::{Command, Stdio};
-    let Ok(mut child) = Command::new("wl-copy")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-    else {
-        return false;
-    };
-    if let Some(mut stdin) = child.stdin.take() {
-        let _ = stdin.write_all(text.as_bytes());
-    }
-    let _ = child.wait();
-    true
-}
-
-/// The XDG downloads dir for received files: `$XDG_DOWNLOAD_DIR`, else what
-/// `xdg-user-dir` reports, else `~/Downloads`.
-fn download_dir() -> PathBuf {
-    if let Some(dir) = std::env::var_os("XDG_DOWNLOAD_DIR") {
-        return PathBuf::from(dir);
-    }
-    if let Ok(output) = std::process::Command::new("xdg-user-dir")
-        .arg("DOWNLOAD")
-        .output()
-    {
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-            if !path.is_empty() {
-                return PathBuf::from(path);
-            }
-        }
-    }
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/tmp"));
-    home.join("Downloads")
-}
-
-/// Only the file-name component of a shared name, so a crafted path cannot
-/// escape the downloads dir.
-fn safe_filename(name: &str) -> String {
-    Path::new(name)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .unwrap_or("archivo")
-        .to_owned()
-}
-
-/// A path in `dir` that does not clobber an existing file: `a.jpg`, then
-/// `a (1).jpg`, and so on.
-fn unique_path(dir: &Path, name: &str) -> PathBuf {
-    let candidate = dir.join(name);
-    if !candidate.exists() {
-        return candidate;
-    }
-    let path = Path::new(name);
-    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or(name);
-    let ext = path.extension().and_then(|e| e.to_str());
-    for n in 1..10_000 {
-        let alt = match ext {
-            Some(ext) => format!("{stem} ({n}).{ext}"),
-            None => format!("{stem} ({n})"),
-        };
-        let candidate = dir.join(alt);
-        if !candidate.exists() {
-            return candidate;
-        }
-    }
-    dir.join(name)
-}
-
-/// Millisecond wall clock for packet ids.
-fn millis() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
-
-/// A strictly-increasing id source seeded by the clock, so packets within one
-/// connection never collide even inside the same millisecond.
-fn id_source() -> impl FnMut() -> i64 {
-    let mut last = millis();
-    move || {
-        last += 1;
-        last
-    }
-}
-
-fn log(tag: &str, message: &str) {
-    println!("[{tag}] {message}");
-    let _ = std::io::stdout().flush();
-}
-
-fn log_event(event: &ConnectionEvent) {
-    log("event", &format!("{event:?}"));
 }

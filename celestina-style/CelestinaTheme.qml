@@ -76,11 +76,15 @@ QtObject {
         readonly property color d4: "#24ffffff"        // strong hairline
         readonly property color textHi: "#f7f8fc"     // primary text
         readonly property color textLo: "#9ba3af"     // secondary text
-        readonly property color textFaint: "#6f7783"  // labels / metadata
+        readonly property color textFaint: "#78818e"  // labels / metadata
         // One UI accent seed. Every state is derived from this one value in the
         // active scheme below; changing the suite accent is therefore one edit.
         readonly property color accent: "#3e91ff"
-        readonly property color accentInk: "#fcfcff"
+        // Ink painted on the bright accent must be dark enough for body-sized
+        // labels and icons. `accentLift` remains the cool white used to derive
+        // lighter accent states; it is not an on-accent foreground.
+        readonly property color accentInk: "#050608"
+        readonly property color accentLift: "#fcfcff"
         // Semantic ramp (SESL dark).
         readonly property color danger: "#ff746d"
         readonly property color success: "#59dc9e"
@@ -192,6 +196,7 @@ QtObject {
         required property color glassTint
         required property color glassTintStrong
         required property color compositorGlassTint
+        required property color compositorGlassFallback
         required property color glassBorder
         required property color glassHighlight
         required property color glassOutline
@@ -214,14 +219,14 @@ QtObject {
         dividerStrong: theme.ref.d4
         accent: theme.ref.accent
         accentInk: theme.ref.accentInk
-        accentLink: theme.mixColors(theme.ref.accent, theme.ref.accentInk,
+        accentLink: theme.mixColors(theme.ref.accent, theme.ref.accentLift,
                                     theme.accentLinkMix)
-        accentHover: theme.mixColors(theme.ref.accent, theme.ref.accentInk,
+        accentHover: theme.mixColors(theme.ref.accent, theme.ref.accentLift,
                                      theme.accentHoverMix)
         accentPressed: theme.mixColors(theme.ref.accent, theme.ref.night,
                                        theme.accentPressedMix)
         // Keyboard focus is an active state — the ring is the accent's lit tint.
-        focusRing: theme.mixColors(theme.ref.accent, theme.ref.accentInk,
+        focusRing: theme.mixColors(theme.ref.accent, theme.ref.accentLift,
                                    theme.accentLinkMix)
         danger: theme.ref.danger
         dangerInk: theme.ref.night
@@ -253,7 +258,7 @@ QtObject {
                                     theme.accentSoftOpacity)
         accentSoftBorder: theme.withAlpha(
                               theme.mixColors(theme.ref.accent,
-                                              theme.ref.accentInk,
+                                              theme.ref.accentLift,
                                               theme.accentLinkMix),
                               theme.accentSoftBorderOpacity)
         successSoft: "#1c59dc9e"
@@ -261,7 +266,9 @@ QtObject {
                                             theme.accentSelectedOpacity)
         accentDisabledInk: theme.withAlpha(theme.ref.accent,
                                            theme.accentDisabledInkOpacity)
-        mediaScrim: "#73000000"
+        // Artwork is untrusted visual input. This floor keeps foreground text
+        // readable even when a cover is almost white.
+        mediaScrim: "#cc000000"
         mediaScrimInk: theme.ref.textHi
         mediaSurfaceStart: "#242d3c"
         mediaSurfaceMid: "#222634"
@@ -272,12 +279,12 @@ QtObject {
         mediaArtworkEnd: "#d39a7f"
         mediaArtworkInk: theme.ref.textHi
         mediaProgress: "#e7edf6"
-        mediaProgressTrack: "#99e7edf6"
+        mediaProgressTrack: "#4de7edf6"
         // Icon ink stays within one cool family by default: vivid blue marks
         // content folders, silver-blue marks plain files, slate marks
         // navigation/sidebar chrome and cyan marks connected hardware.
         glyphDirectory: theme.mixColors(theme.ref.accent,
-                                        theme.ref.accentInk,
+                                        theme.ref.accentLift,
                                         theme.accentLinkMix)
         glyphFile: "#a9b5c5"
         glyphSymlink: "#a391e2"
@@ -303,9 +310,11 @@ QtObject {
         // blur. Strong is reserved for modal readability.
         glassTint: "#991a1e25"
         glassTintStrong: "#bd1a1e25"
-        // The compositor has already blurred the backdrop. Keeping this lighter
-        // than in-scene glass stops the dim layer from hiding that real effect.
-        compositorGlassTint: "#801a1e25"
+        // Wallpaper is untrusted visual input. Even with compositor blur the
+        // tint must provide a contrast floor; the fallback is denser when the
+        // host cannot arm blur at all.
+        compositorGlassTint: "#e61a1e25"
+        compositorGlassFallback: "#f51a1e25"
         glassBorder: "#24ffffff"
         glassHighlight: "#2effffff"
         glassOutline: "#4d000000"
@@ -393,6 +402,7 @@ QtObject {
     readonly property color glassTint: scheme.glassTint
     readonly property color glassTintStrong: scheme.glassTintStrong
     readonly property color compositorGlassTint: scheme.compositorGlassTint
+    readonly property color compositorGlassFallback: scheme.compositorGlassFallback
     readonly property color glassBorder: scheme.glassBorder
     readonly property color glassHighlight: scheme.glassHighlight
     readonly property color glassOutline: scheme.glassOutline

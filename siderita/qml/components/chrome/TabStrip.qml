@@ -154,10 +154,8 @@ Item {
             }
         }
 
-        ScrollBar.horizontal: ScrollBar {
-            policy: ScrollBar.AsNeeded
-            height: CelestinaTheme.compLinearTrackHeight
-        }
+        ScrollBar.horizontal.policy: ScrollBar.AsNeeded
+        ScrollBar.horizontal.height: CelestinaTheme.compLinearTrackHeight
     }
 
     Item {

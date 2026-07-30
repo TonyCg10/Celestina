@@ -25,21 +25,23 @@ Cores and style never depend on apps or the shell. Each project keeps its own
 README and ROADMAP; the monorepo holds shared history and the contracts between
 projects.
 
-### Planned
+### Planned / ready to start
 
-Design-stage — not built; each is started only when a recurring daily gap proves
-the need, and reuses the shared core and style.
+Neither app is built yet. Fluorita's recurring gap has opened its build gate and
+its F1–F4 start contract is ready; Grafita remains design-stage until the author
+ratifies its working name and explicitly opens its separate gate. Both reuse the
+shared core and style.
 
 | Project | Role | Stack |
 |---|---|---|
-| [fluorita](fluorita/) *(working name)* | media player — audio · video · image; later a shell widget | Rust · QML |
+| [fluorita](fluorita/) | media player — audio · video · image; later a shell widget | Rust · QML |
 | [grafita](grafita/) *(working name)* | text / code editor | Rust · QML |
 
-Each planned directory holds a README and a roadmap and nothing else: the design
-and the contracts are written down so the apps they point at can be *consumed* by
-name before they exist — Siderita already defers video thumbnails to Fluorita and
-its quick-look hand-off to Grafita. Writing the contract is not starting the
-project.
+Each directory still holds a README and a roadmap and nothing else. The contracts
+let the suite consume future capabilities by name before implementation —
+Siderita already defers video thumbnails to Fluorita and its edit hand-off to
+Grafita. Fluorita is authorized to start at F1; writing and improving Grafita's
+contract still does not authorize its code.
 
 **Fluorita** is the suite's media app. It opens and plays whatever media it is
 handed — a song, a clip, an image — a *player/viewer*, not a library (Siderita
@@ -54,8 +56,9 @@ leaks into the file manager.
 **Grafita** is the suite's text editor — graphite is what a pencil writes with.
 A light editor for text and code, not an IDE; it is where Siderita's read-only
 quick-look hands off when you want to *change* a file rather than just peek at it
-("Abrir con Grafita"). It shares the core's file and MIME handling and the one
-visual language, so editing a file feels like the same session as browsing it.
+("Abrir con Grafita"). It uses XDG handlers and the suite's raw-byte conventions
+without pretending a shared MIME crate already exists, and consumes the same
+visual language so editing feels like the same session as browsing.
 
 ## Principles
 

@@ -56,7 +56,9 @@ Button {
         color: !control.enabled
                ? CelestinaTheme.textMuted
                : control.role === CelestinaButton.Primary ? CelestinaTheme.accentInk
-               : control.role === CelestinaButton.Destructive ? CelestinaTheme.dangerFillInk
+               : control.role === CelestinaButton.Destructive
+                 ? (control.down ? CelestinaTheme.dangerInk
+                                 : CelestinaTheme.dangerFillInk)
                : control.role === CelestinaButton.Selected ? CelestinaTheme.accentLink
                : CelestinaTheme.text
         horizontalAlignment: Text.AlignHCenter
@@ -93,11 +95,19 @@ Button {
                  : control.hovered ? CelestinaTheme.surfaceHover
                  : CelestinaTheme.controlFill
         }
-        border.width: control.activeFocus ? CelestinaTheme.borderFocus : 0
-        border.color: CelestinaTheme.focusRing
+        border.width: 0
+
+        CelestinaFocusRing {
+            target: parent
+            cornerRadius: parent.radius
+            shown: control.visualFocus
+        }
 
         Behavior on color {
-            ColorAnimation { duration: CelestinaTheme.motionFast }
+            ColorAnimation {
+                duration: CelestinaTheme.reducedMotion
+                          ? 0 : CelestinaTheme.motionFast
+            }
         }
     }
 }

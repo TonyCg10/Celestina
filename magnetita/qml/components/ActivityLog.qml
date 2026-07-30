@@ -4,7 +4,7 @@ import org.celestina.magnetita 1.0
 CelestinaSurface {
     id: root
 
-    required property var devices
+    required property DevicesModel devices
 
     role: CelestinaSurface.Grouped
 
@@ -50,6 +50,7 @@ CelestinaSurface {
         anchors.leftMargin: 13
         anchors.rightMargin: 13
         clip: true
+        visible: root.devices.logAvailable
         model: root.devices.logLines
 
         delegate: Item {
@@ -107,8 +108,10 @@ CelestinaSurface {
 
     Text {
         anchors.centerIn: logList
-        visible: root.devices.logLines.length === 0
-        text: "Sin actividad todavía"
+        visible: !root.devices.logAvailable
+                 || root.devices.logLines.length === 0
+        text: root.devices.logAvailable
+              ? "Sin actividad todavía" : "Actividad no disponible"
         color: CelestinaTheme.textMuted
         font.family: CelestinaTheme.sansFamily
         font.pixelSize: CelestinaTheme.fontCaption

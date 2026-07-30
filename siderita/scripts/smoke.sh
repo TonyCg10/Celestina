@@ -3,7 +3,7 @@ set -u
 
 # Humo de Siderita: la puerta rápida sin ventana.
 #
-#  1) Chequeo estático del auto-binding `x: x`: al instanciar un componente,
+#  1) Chequeo estático compartido del auto-binding `x: x`: al instanciar un componente,
 #     una propiedad inyectada con el mismo nombre que el id sombreado se
 #     resuelve a sí misma y queda undefined (la clase de bug del fix de
 #     clics, 9e19b6d). Es legal para el motor y para qmllint, así que se caza
@@ -15,21 +15,14 @@ set -u
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 bin=$root/target/release/siderita
+scanner=$root/../scripts/architecture_scanners.py
 
-# gawk y no grep: hay que comparar los dos nombres capturados y saltarse los
-# literales de objeto JS (`append({clave: clave})`), que viven dentro de
-# paréntesis — un binding QML real siempre está a profundidad 0.
-autos=$(find "$root/qml" -name '*.qml' -exec gawk '
-    FNR == 1 { depth = 0 }
-    { linea = $0; sub(/\/\/.*/, "", linea) }
-    depth == 0 \
-      && match(linea, /^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*):[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*$/, m) \
-      && m[1] == m[2] && m[1] != "id" {
-        printf "%s:%d: %s\n", FILENAME, FNR, $0
-    }
-    { depth += gsub(/\(/, "(", linea) - gsub(/\)/, ")", linea)
-      if (depth < 0) depth = 0 }
-' {} + || true)
+# El guard y este humo usan el mismo scanner y sus fixtures; así no divergen dos
+# aproximaciones de gawk al distinguir bindings de literales de objeto JS.
+if ! autos=$(python3 "$scanner" qml-auto-bindings "$root/qml"); then
+    echo "smoke: el scanner de auto-bindings no pudo completar la inspección" >&2
+    exit 1
+fi
 if [ -n "$autos" ]; then
     echo "smoke: auto-binding 'x: x' (la propiedad sombrea al id):" >&2
     echo "$autos" >&2

@@ -42,7 +42,9 @@ Item {
 
         Text {
             width: parent.width
-            text: root.fingerprint
+            text: root.fingerprint.length > 0
+                  ? "Huella del certificado · " + root.fingerprint
+                  : "Huella del certificado no disponible"
             color: CelestinaTheme.textMuted
             font.family: CelestinaTheme.monoFamily
             font.pixelSize: CelestinaTheme.fontMini

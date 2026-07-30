@@ -68,7 +68,7 @@ impl Settings {
         }
         let text = serde_json::to_string_pretty(self)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        fs::write(path, text)
+        celestina_core::atomic_file::replace(path, text.as_bytes())
     }
 
     /// Set the flag named `plugin`; returns whether the name was a known plugin.
@@ -83,6 +83,19 @@ impl Settings {
             _ => return false,
         }
         true
+    }
+
+    /// Persist a known flag before publishing it to live readers. A failed
+    /// write leaves the in-memory settings unchanged so restart cannot silently
+    /// undo a UI-confirmed toggle.
+    pub fn update(&mut self, path: &Path, plugin: &str, enabled: bool) -> io::Result<bool> {
+        let mut next = *self;
+        if !next.set(plugin, enabled) {
+            return Ok(false);
+        }
+        next.save(path)?;
+        *self = next;
+        Ok(true)
     }
 
     /// The flags as `(name, enabled)` pairs, in a stable order for the UI.
@@ -155,5 +168,19 @@ mod tests {
 
         assert_eq!(Settings::load(&path), settings);
         std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn failed_persistence_does_not_publish_a_toggle_in_memory() {
+        let blocker =
+            std::env::temp_dir().join(format!("mag-settings-blocker-{}", std::process::id()));
+        std::fs::write(&blocker, b"not a directory").unwrap();
+        let mut settings = Settings::default();
+
+        assert!(settings
+            .update(&blocker.join("settings.json"), "clipboard", false)
+            .is_err());
+        assert!(settings.clipboard);
+        let _ = std::fs::remove_file(blocker);
     }
 }

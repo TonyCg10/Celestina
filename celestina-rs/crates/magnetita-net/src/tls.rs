@@ -40,6 +40,7 @@ use crate::cert::{fingerprint_der, DeviceCert};
 pub struct TlsConfigs {
     server: Arc<ServerConfig>,
     client: Arc<ClientConfig>,
+    certificate: CertificateDer<'static>,
 }
 
 impl TlsConfigs {
@@ -48,6 +49,10 @@ impl TlsConfigs {
         let provider = Arc::new(ring::default_provider());
         let algs = provider.signature_verification_algorithms;
         let chain = cert.chain()?;
+        let certificate = chain
+            .first()
+            .cloned()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "empty certificate chain"))?;
         let key = cert.private_key()?;
 
         let server = ServerConfig::builder_with_provider(provider.clone())
@@ -68,6 +73,7 @@ impl TlsConfigs {
         Ok(TlsConfigs {
             server: Arc::new(server),
             client: Arc::new(client),
+            certificate,
         })
     }
 
@@ -79,6 +85,10 @@ impl TlsConfigs {
     /// The config to use as the TLS client (the peer dialed us).
     pub fn client_config(&self) -> Arc<ClientConfig> {
         self.client.clone()
+    }
+
+    pub(crate) fn certificate(&self) -> &CertificateDer<'static> {
+        &self.certificate
     }
 }
 

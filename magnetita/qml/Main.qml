@@ -6,6 +6,8 @@ import org.celestina.magnetita 1.0
 ApplicationWindow {
     id: window
 
+    required property bool reducedMotion
+
     visible: true
     width: 520
     height: 740
@@ -14,20 +16,25 @@ ApplicationWindow {
     title: "Magnetita"
     color: CelestinaTheme.canvas
 
+    Component.onCompleted: CelestinaTheme.reducedMotion = reducedMotion
+
     DevicesModel {
         id: devicesModel
         Component.onCompleted: reload()
     }
 
     readonly property int mediaIndex: {
-        for (var i = 0; i < devicesModel.deviceMedia.length; i++) {
-            if (devicesModel.deviceMedia[i].length > 0)
+        if (!devicesModel.devicesAvailable)
+            return -1
+        for (var i = 0; i < devicesModel.deviceMediaPlayers.length; i++) {
+            if (devicesModel.deviceMediaPlayers[i].length > 0)
                 return i
         }
         return -1
     }
 
-    readonly property int primaryIndex: devicesModel.deviceNames.length > 0 ? 0 : -1
+    readonly property int primaryIndex:
+            devicesModel.devicesAvailable && devicesModel.deviceNames.length > 0 ? 0 : -1
     readonly property int mediaControlIndex: mediaIndex >= 0 ? mediaIndex : primaryIndex
 
     property bool settingsOpen: false
@@ -50,7 +57,10 @@ ApplicationWindow {
                 id: appHeader
                 width: parent.width
                 settingsOpen: window.settingsOpen
-                deviceCount: devicesModel.deviceNames.length
+                deviceCount: devicesModel.devicesAvailable
+                             ? devicesModel.deviceNames.length : 0
+                devicesAvailable: devicesModel.devicesAvailable
+                settingsAvailable: devicesModel.settingsAvailable
                 onToggleRequested: {
                     window.settingsOpen = !window.settingsOpen
                     if (window.settingsOpen)

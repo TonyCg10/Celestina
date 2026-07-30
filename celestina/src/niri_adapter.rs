@@ -23,7 +23,7 @@ const RECONNECT_DELAY: Duration = Duration::from_secs(1);
 struct WorkspaceSnapshot {
     index: u8,
     label: String,
-    output: Option<String>,
+    output: String,
     active: bool,
     focused: bool,
     urgent: bool,
@@ -87,23 +87,29 @@ fn shell_snapshot(state: &EventStreamState) -> ShellSnapshot {
         .workspaces
         .workspaces
         .values()
-        .map(|workspace| {
+        // The shell renders one strip per physical output. Niri can briefly
+        // retain an unassigned workspace while outputs change; that state is
+        // valid compositor data but has no panel consumer, so keep it out of
+        // the inter-process contract instead of serializing a nullable output.
+        .filter_map(|workspace| {
+            let output = workspace.output.clone()?;
             let active_window = workspace
                 .active_window_id
                 .and_then(|id| state.windows.windows.get(&id));
 
-            WorkspaceSnapshot {
+            Some(WorkspaceSnapshot {
                 index: workspace.idx,
                 label: workspace
                     .name
                     .clone()
+                    .filter(|name| !name.is_empty())
                     .unwrap_or_else(|| workspace.idx.to_string()),
-                output: workspace.output.clone(),
+                output,
                 active: workspace.is_active,
                 focused: workspace.is_focused,
                 urgent: workspace.is_urgent,
                 active_window_title: active_window.and_then(|window| window.title.clone()),
-            }
+            })
         })
         .collect::<Vec<_>>();
 
@@ -263,5 +269,16 @@ mod tests {
             after.workspaces[0].active_window_title.as_deref(),
             Some("Editor")
         );
+    }
+
+    #[test]
+    fn snapshot_omits_workspaces_without_an_output() {
+        let mut state = EventStreamState::default();
+        apply_json(
+            &mut state,
+            r#"{"WorkspacesChanged":{"workspaces":[{"id":3,"idx":1,"name":"detached","output":null,"is_urgent":false,"is_active":true,"is_focused":true,"active_window_id":null}]}}"#,
+        );
+
+        assert!(shell_snapshot(&state).workspaces.is_empty());
     }
 }

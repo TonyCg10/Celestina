@@ -3,6 +3,8 @@
 #include <QObject>
 #include <QString>
 
+class QDBusServiceWatcher;
+
 // The phone, as Magnetita reports it, for the panel to draw.
 //
 // Reads `org.celestina.Devices1` — the same small session-bus contract Siderita
@@ -10,7 +12,10 @@
 // properties. Best-effort by design: no daemon on the bus is simply "no phone",
 // never an error the panel has to show. The daemon's `Changed` signal drives the
 // live refresh, and the match is registered even before Magnetita is up, so the
-// indicator lights the moment the daemon appears.
+// indicator lights the moment the daemon appears. Reads are asynchronous and
+// burst-coalesced so a missing or slow session bus never stalls the panel.
+// This remains manual C++ because cxx-qt-lib does not wrap QtDBus's
+// QDBusPendingCallWatcher/QDBusArgument boundary for the existing CMake host.
 class DevicesClient final : public QObject
 {
     Q_OBJECT
@@ -39,4 +44,7 @@ private:
     QString m_name;
     int m_battery = -1;
     bool m_charging = false;
+    bool m_reloadInFlight = false;
+    bool m_reloadPending = false;
+    QDBusServiceWatcher *m_serviceWatcher = nullptr;
 };

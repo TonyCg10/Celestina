@@ -29,6 +29,7 @@ Item {
         anchors.rightMargin: 14
         anchors.verticalCenter: parent.verticalCenter
         checked: root.enabledFlag
+        Accessible.name: root.label
 
         // A click is only a request. Re-bind immediately so the switch keeps
         // showing the daemon's confirmed state instead of an optimistic one.

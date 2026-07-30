@@ -1,7 +1,6 @@
-# CI mínima de la suite: contrato arquitectónico verificable sin Qt y workspace
-# celestina-rs (cores puros + backend de Magnetita). Las apps CXX-Qt y el shell
-# requieren el toolchain Qt y, para parte de la UI, una sesión gráfica; su matriz
-# local obligatoria vive en AGENTS.md.
+# CI mínima de la suite: contratos verificables sin Qt, workspace celestina-rs
+# (cores puros + backend de Magnetita) y el adaptador Rust del shell. CXX/Qt y
+# las superficies gráficas requieren la matriz local descrita en AGENTS.md.
 name: ci
 
 on:
@@ -22,7 +21,9 @@ jobs:
       - name: Contrato de arquitectura y estilo
         env:
           ARCHITECTURE_COMPARE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-        run: bash scripts/check-architecture-contract.sh
+        run: |
+          bash scripts/test-architecture-scanners.sh
+          bash scripts/check-architecture-contract.sh
 
   celestina-rs:
     runs-on: ubuntu-latest
@@ -49,7 +50,38 @@ jobs:
         run: cargo fmt --all --check
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
       - name: Tests
-        run: cargo test --workspace
+        run: cargo test --workspace --locked
+
+  celestina-rust:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: celestina
+    env:
+      RUSTUP_TOOLCHAIN: stable
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Rust estable
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+
+      - name: Cache de cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            celestina/target
+          key: cargo-celestina-${{ runner.os }}-${{ hashFiles('celestina/Cargo.lock', 'celestina/Cargo.toml') }}
+
+      - name: Formato
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Tests
+        run: cargo test --all-targets --locked

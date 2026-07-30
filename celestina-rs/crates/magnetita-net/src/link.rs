@@ -35,8 +35,9 @@ use serde_json::Value;
 
 use magnetita_core::{Identity, NetworkPacket};
 
+use crate::cert::{fingerprint_der, verification_key};
 use crate::discovery::Announcement;
-use crate::tls::{peer_leaf_fingerprint, TlsConfigs};
+use crate::tls::TlsConfigs;
 
 /// A blocking TLS transport — either role's connection, boxed so a [`Link`] is
 /// one type regardless of whether we dialed or accepted.
@@ -60,6 +61,8 @@ pub struct Link {
     sock: TcpStream,
     peer: Identity,
     peer_fingerprint: String,
+    local_certificate: rustls::pki_types::CertificateDer<'static>,
+    peer_certificate: rustls::pki_types::CertificateDer<'static>,
     peer_addr: SocketAddr,
 }
 
@@ -101,8 +104,12 @@ impl Link {
         }
 
         // 3. Pin the certificate the peer just proved it owns.
-        let fingerprint =
-            peer_leaf_fingerprint(conn.peer_certificates()).ok_or(LinkError::NoPeerCertificate)?;
+        let peer_certificate = conn
+            .peer_certificates()
+            .and_then(|certificates| certificates.first())
+            .cloned()
+            .ok_or(LinkError::NoPeerCertificate)?;
+        let fingerprint = fingerprint_der(&peer_certificate);
 
         // 4. v8: re-exchange identities encrypted; else keep the announce's.
         let peer = {
@@ -124,6 +131,8 @@ impl Link {
             sock,
             peer,
             peer_fingerprint: fingerprint,
+            local_certificate: tls.certificate().clone(),
+            peer_certificate,
             peer_addr: addr,
         })
     }
@@ -147,12 +156,14 @@ impl Link {
         //    so we do not swallow the TLS ClientHello we are about to send.
         let line = read_delimited_line(&mut tcp)?;
         let packet = NetworkPacket::parse(&line).map_err(LinkError::Parse)?;
+        validate_target(&packet, ours)?;
         let pre = Identity::from_packet(&packet).ok_or(LinkError::PeerIdentityMissing)?;
         let peer_proto = pre.protocol_version;
 
         // 2. They dialed, so we are the TLS client.
         let server_name = ServerName::try_from(pre.device_id.clone())
-            .unwrap_or_else(|_| ServerName::try_from("kdeconnect").unwrap());
+            .or_else(|_| ServerName::try_from("kdeconnect"))
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid TLS server name"))?;
         let mut conn =
             ClientConnection::new(tls.client_config(), server_name).map_err(LinkError::Tls)?;
         conn.complete_io(&mut tcp)?;
@@ -161,8 +172,12 @@ impl Link {
         }
 
         // 3. Pin the peer certificate.
-        let fingerprint =
-            peer_leaf_fingerprint(conn.peer_certificates()).ok_or(LinkError::NoPeerCertificate)?;
+        let peer_certificate = conn
+            .peer_certificates()
+            .and_then(|certificates| certificates.first())
+            .cloned()
+            .ok_or(LinkError::NoPeerCertificate)?;
+        let fingerprint = fingerprint_der(&peer_certificate);
 
         // 4. v8 encrypted exchange (or keep the plaintext identity for < 8).
         let peer = {
@@ -178,6 +193,8 @@ impl Link {
             sock,
             peer,
             peer_fingerprint: fingerprint,
+            local_certificate: tls.certificate().clone(),
+            peer_certificate,
             peer_addr,
         })
     }
@@ -192,9 +209,24 @@ impl Link {
         &self.peer_fingerprint
     }
 
+    /// The short code both peers compute for the active pairing exchange.
+    pub fn verification_key(&self, timestamp: Option<i64>) -> io::Result<Option<String>> {
+        verification_key(
+            &self.local_certificate,
+            &self.peer_certificate,
+            timestamp,
+            self.peer.protocol_version,
+        )
+    }
+
     /// The address the link is to.
     pub fn peer_addr(&self) -> SocketAddr {
         self.peer_addr
+    }
+
+    #[cfg(test)]
+    pub(crate) fn shutdown_for_test(&self) {
+        let _ = self.sock.shutdown(std::net::Shutdown::Both);
     }
 
     /// Bound how long [`read_packet`](Link::read_packet) blocks, so a caller's
@@ -303,7 +335,42 @@ fn exchange_identity(
 
     let reply = read_delimited_line(stream)?;
     let packet = NetworkPacket::parse(&reply).map_err(LinkError::Parse)?;
-    Identity::from_packet(&packet).ok_or(LinkError::PeerIdentityMissing)
+    let post_tls_peer = Identity::from_packet(&packet).ok_or(LinkError::PeerIdentityMissing)?;
+    validate_secure_identity(&pre_tls_peer, post_tls_peer)
+}
+
+fn validate_secure_identity(
+    pre_tls_peer: &Identity,
+    post_tls_peer: Identity,
+) -> Result<Identity, LinkError> {
+    if post_tls_peer.device_id == pre_tls_peer.device_id
+        && post_tls_peer.protocol_version == pre_tls_peer.protocol_version
+    {
+        Ok(post_tls_peer)
+    } else {
+        Err(LinkError::PeerIdentityChanged)
+    }
+}
+
+fn validate_target(packet: &NetworkPacket, ours: &Identity) -> Result<(), LinkError> {
+    let Some(body) = packet.body.as_object() else {
+        return Err(LinkError::PeerIdentityMissing);
+    };
+    if body
+        .get("targetDeviceId")
+        .and_then(Value::as_str)
+        .is_some_and(|target| !target.is_empty() && target != ours.device_id)
+    {
+        return Err(LinkError::WrongTarget);
+    }
+    if body
+        .get("targetProtocolVersion")
+        .and_then(Value::as_i64)
+        .is_some_and(|target| target != i64::from(ours.protocol_version))
+    {
+        return Err(LinkError::WrongTarget);
+    }
+    Ok(())
 }
 
 /// Reads one `\n`-terminated line one byte at a time, so nothing past the line
@@ -350,9 +417,16 @@ pub enum LinkError {
     NoPeerCertificate,
     /// The peer sent no usable identity where one was required.
     PeerIdentityMissing,
+    /// The encrypted v8 identity changed the pre-TLS id or protocol version.
+    PeerIdentityChanged,
+    /// A connector explicitly targeted a different device or protocol version.
+    WrongTarget,
     /// A single packet line exceeded [`MAX_PACKET_LINE`] — reading on would
     /// grow memory without bound, so the link is dropped instead.
     LineTooLong,
+    /// Plugin traffic is never sent before the pairing state machine has
+    /// established trust on this link.
+    UnpairedPlugin,
 }
 
 impl From<io::Error> for LinkError {
@@ -371,8 +445,17 @@ impl fmt::Display for LinkError {
             LinkError::HandshakeIncomplete => write!(f, "the peer closed during the handshake"),
             LinkError::NoPeerCertificate => write!(f, "the peer presented no certificate"),
             LinkError::PeerIdentityMissing => write!(f, "the peer sent no usable identity"),
+            LinkError::PeerIdentityChanged => {
+                write!(f, "the peer changed identity during the v8 handshake")
+            }
+            LinkError::WrongTarget => {
+                write!(f, "the connection request targeted a different device")
+            }
             LinkError::LineTooLong => {
                 write!(f, "a packet line exceeded {MAX_PACKET_LINE} bytes")
+            }
+            LinkError::UnpairedPlugin => {
+                write!(f, "plugin traffic is blocked until the device is paired")
             }
         }
     }
@@ -391,7 +474,7 @@ impl std::error::Error for LinkError {
 
 #[cfg(test)]
 mod tests {
-    use super::Link;
+    use super::{validate_secure_identity, validate_target, Link, LinkError};
     use crate::cert::DeviceCert;
     use crate::discovery::Announcement;
     use crate::tls::TlsConfigs;
@@ -406,6 +489,54 @@ mod tests {
             n += 1;
             n
         }
+    }
+
+    #[test]
+    fn the_encrypted_identity_cannot_change_id_or_protocol() {
+        let pre = Identity::desktop("phone", "Phone");
+        assert!(validate_secure_identity(&pre, pre.clone()).is_ok());
+
+        let mut changed_id = pre.clone();
+        changed_id.device_id = "other".to_owned();
+        assert!(matches!(
+            validate_secure_identity(&pre, changed_id),
+            Err(LinkError::PeerIdentityChanged)
+        ));
+
+        let mut downgraded = pre.clone();
+        downgraded.protocol_version -= 1;
+        assert!(matches!(
+            validate_secure_identity(&pre, downgraded),
+            Err(LinkError::PeerIdentityChanged)
+        ));
+    }
+
+    #[test]
+    fn an_explicit_target_must_name_this_device_and_protocol() {
+        let ours = Identity::desktop("desktop", "Desktop");
+        let peer = Identity::desktop("phone", "Phone");
+        let mut packet = peer.to_packet(1);
+        packet.body.as_object_mut().unwrap().insert(
+            "targetDeviceId".to_owned(),
+            serde_json::Value::String("someone-else".to_owned()),
+        );
+        assert!(matches!(
+            validate_target(&packet, &ours),
+            Err(LinkError::WrongTarget)
+        ));
+
+        packet.body.as_object_mut().unwrap().insert(
+            "targetDeviceId".to_owned(),
+            serde_json::Value::String(ours.device_id.clone()),
+        );
+        packet.body.as_object_mut().unwrap().insert(
+            "targetProtocolVersion".to_owned(),
+            serde_json::Value::from(ours.protocol_version - 1),
+        );
+        assert!(matches!(
+            validate_target(&packet, &ours),
+            Err(LinkError::WrongTarget)
+        ));
     }
 
     #[test]

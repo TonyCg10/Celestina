@@ -7,6 +7,8 @@ import org.celestina.siderita.internal 1.0
 ApplicationWindow {
     id: window
 
+    required property bool reducedMotion
+
     width: 1120
     height: 720
     minimumWidth: 680
@@ -56,6 +58,8 @@ ApplicationWindow {
         const holder = tabRepeater.itemAt(currentTabIndex)
         return holder ? holder.docView : null
     }
+    readonly property bool lowerSurfaceBlocked:
+            activeDocument && activeDocument.navigationBlocked
 
     // ── Granular size scales (window-level so every tab and the sidebar share
     // one persisted set) ─────────────────────────────────────────────────────
@@ -278,37 +282,38 @@ ApplicationWindow {
     // ── Window-level tab management shortcuts ────────────────────────────
     Shortcut {
         sequence: "Ctrl+T"
+        enabled: !window.lowerSurfaceBlocked
         onActivated: window.openTab(window.activeController
                                     ? window.activeController.currentPath : "", true)
     }
 
     Shortcut {
         sequence: "Ctrl+W"
-        enabled: tabsModel.count > 1
+        enabled: tabsModel.count > 1 && !window.lowerSurfaceBlocked
         onActivated: window.closeTab(window.currentTabIndex)
     }
 
     Shortcut {
         sequence: "Ctrl+Tab"
-        enabled: tabsModel.count > 1
+        enabled: tabsModel.count > 1 && !window.lowerSurfaceBlocked
         onActivated: window.cycleTab(1)
     }
 
     Shortcut {
         sequence: "Ctrl+Shift+Tab"
-        enabled: tabsModel.count > 1
+        enabled: tabsModel.count > 1 && !window.lowerSurfaceBlocked
         onActivated: window.cycleTab(-1)
     }
 
     Shortcut {
         sequence: "Ctrl+PgDown"
-        enabled: tabsModel.count > 1
+        enabled: tabsModel.count > 1 && !window.lowerSurfaceBlocked
         onActivated: window.cycleTab(1)
     }
 
     Shortcut {
         sequence: "Ctrl+PgUp"
-        enabled: tabsModel.count > 1
+        enabled: tabsModel.count > 1 && !window.lowerSurfaceBlocked
         onActivated: window.cycleTab(-1)
     }
 
@@ -361,6 +366,30 @@ ApplicationWindow {
             overlayParent: window.contentItem
             backdrop: contentLayer
             dragGhost: entryDragGhost
+        }
+
+        // FolderView owns its dialogs, so their shared modal layer only spans
+        // the document region. Complete that same modal boundary over the
+        // window-owned sidebar: dim it and consume every pointer button while
+        // the active document is opening, showing or fading out a dialog.
+        Rectangle {
+            id: sidebarModalShield
+            x: 0
+            y: 0
+            width: documentRegion.x
+            height: parent.height
+            visible: window.activeDocument
+                     && window.activeDocument.modalBlocked
+            color: CelestinaTheme.scrim
+            Accessible.ignored: true
+
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.AllButtons
+                hoverEnabled: true
+                preventStealing: true
+                onWheel: function(wheel) { wheel.accepted = true }
+            }
         }
 
         // ── Documents: one per tab, only the active one visible ──────────
@@ -462,6 +491,7 @@ ApplicationWindow {
 
 
     Component.onCompleted: {
+        CelestinaTheme.reducedMotion = reducedMotion
         window.width = sessionStore.savedWindowWidth()
         window.height = sessionStore.savedWindowHeight()
 

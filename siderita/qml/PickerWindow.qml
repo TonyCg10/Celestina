@@ -457,7 +457,7 @@ Window {
                             + Math.round(CelestinaTheme.fontCaption * 2.9 * picker.textScale)
                             + 20
 
-                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
                 function pageStep() {
                     const rows = Math.max(1, Math.floor(height / cellHeight))

@@ -84,7 +84,7 @@ fn serialize(overrides: &HashMap<String, IconAppearance>) -> String {
         .iter()
         .filter(|(_, appearance)| !appearance.is_empty())
         .collect();
-    entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+    entries.sort_by_key(|(path, _)| *path);
 
     let mut body = String::new();
     for (path, appearance) in entries {

@@ -640,7 +640,16 @@ dependencies = [
  "cxx-qt",
  "cxx-qt-build",
  "cxx-qt-lib",
+ "magnetita-core",
  "zbus",
+]
+
+[[package]]
+name = "magnetita-core"
+version = "1.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

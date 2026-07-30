@@ -5,13 +5,16 @@
 //! directory with a generated name, never a peer-provided path.
 
 use std::collections::hash_map::DefaultHasher;
-use std::fs;
+use std::fs::{self, OpenOptions};
 use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
+use celestina_core::CancellationToken;
 use magnetita_core::IncomingAlbumArt;
-use magnetita_net::TlsConfigs;
+use magnetita_net::{PayloadPermit, TlsConfigs};
+
+use crate::devices::{install_artwork_entry, DeviceEntry};
 
 /// Covers normal embedded covers while refusing file-sized declarations before
 /// opening a payload socket.
@@ -33,7 +36,10 @@ pub fn receive(
     device_id: &str,
     host: &str,
     tls: &TlsConfigs,
+    expected_peer_fingerprint: &str,
+    permit: PayloadPermit,
     incoming: &IncomingAlbumArt,
+    cancellation: CancellationToken,
 ) -> io::Result<PathBuf> {
     validate_size(incoming.size)?;
     let directory = device_dir(device_id)?;
@@ -41,7 +47,22 @@ pub fn receive(
 
     let destination = directory.join(cache_name(incoming));
     let partial = destination.with_extension("part");
-    let result = magnetita_net::receive_to_file(host, incoming.port, incoming.size, tls, &partial);
+    let partial_file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&partial)?;
+    let result = magnetita_net::receive_to_file(
+        magnetita_net::PayloadSource {
+            host,
+            port: incoming.port,
+            size: incoming.size,
+            expected_peer_fingerprint,
+        },
+        tls,
+        &cancellation,
+        permit,
+        partial_file,
+    );
     let written = match result {
         Ok(written) => written,
         Err(error) => {
@@ -59,15 +80,50 @@ pub fn receive(
             ),
         ));
     }
-    if !has_supported_signature(&partial)? {
+    let supported = match has_supported_signature(&partial) {
+        Ok(supported) => supported,
+        Err(error) => {
+            let _ = fs::remove_file(&partial);
+            return Err(error);
+        }
+    };
+    if !supported {
         let _ = fs::remove_file(&partial);
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "album art payload is not PNG, JPEG, or WebP",
         ));
     }
-    fs::rename(&partial, &destination)?;
+    if let Err(error) = fs::rename(&partial, &destination) {
+        let _ = fs::remove_file(&partial);
+        return Err(error);
+    }
     Ok(destination)
+}
+
+/// Atomically publish one already-received cover. `false` means the
+/// player/source changed while the transfer was in flight; the generated file
+/// is discarded and the current snapshot remains untouched.
+pub fn publish_received(entry: &mut DeviceEntry, path: &Path, incoming: &IncomingAlbumArt) -> bool {
+    let url = file_url(path);
+    match install_artwork_entry(
+        entry,
+        &incoming.player,
+        &incoming.source_url,
+        path.to_path_buf(),
+        url,
+    ) {
+        Some(previous) => {
+            if let Some(previous) = previous {
+                discard(&previous);
+            }
+            true
+        }
+        None => {
+            discard(path);
+            false
+        }
+    }
 }
 
 /// Delete one generated cache file, but only when it still belongs to our

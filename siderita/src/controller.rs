@@ -1125,7 +1125,7 @@ fn icon_override_entries(
     map: &std::collections::HashMap<String, crate::icons::IconAppearance>,
 ) -> QStringList {
     let mut entries: Vec<(&String, &crate::icons::IconAppearance)> = map.iter().collect();
-    entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+    entries.sort_by_key(|(path, _)| *path);
     entries
         .iter()
         .map(|(path, appearance)| {

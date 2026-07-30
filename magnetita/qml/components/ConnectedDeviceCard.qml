@@ -8,7 +8,7 @@ CelestinaSurface {
     required property string deviceType
     required property string stateText
     required property string mountPath
-    required property string fingerprint
+    required property string verificationKey
     required property string batteryText
     required property bool charging
 
@@ -99,13 +99,15 @@ CelestinaSurface {
         }
 
         Text {
-            visible: root.fingerprint.length > 0
+            visible: root.verificationKey.length > 0
             width: parent.width
-            text: root.fingerprint
-            color: CelestinaTheme.textFaint
+            text: "Verifica en ambos dispositivos · " + root.verificationKey
+            color: CelestinaTheme.accent
             font.family: CelestinaTheme.monoFamily
             font.pixelSize: CelestinaTheme.fontMini
             elide: Text.ElideRight
+            Accessible.role: Accessible.StaticText
+            Accessible.name: "Código de verificación " + root.verificationKey
         }
     }
 

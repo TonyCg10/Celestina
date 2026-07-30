@@ -13,10 +13,8 @@ Item {
     property alias pathMenu: breadcrumbMenu
     property alias folderMenu: folderContextMenu
     property alias namePrompt: namePromptDialog
-    readonly property bool navigationBlocked:
-            folderSortMenu.visible || entryContextMenu.visible
-            || breadcrumbMenu.visible || folderContextMenu.visible
-            || namePromptDialog.shown || namePromptDialog.visible
+    readonly property bool modalBlocked:
+            namePromptDialog.shown || namePromptDialog.visible
             || batchRenameDialog.shown || batchRenameDialog.visible
             || conflictDialog.shown || conflictDialog.visible
             || openWithDialog.shown || openWithDialog.visible
@@ -24,6 +22,10 @@ Item {
             || iconPickerDialog.shown || iconPickerDialog.visible
             || quickLookDialog.shown || quickLookDialog.visible
             || phoneMediaDialog.shown || phoneMediaDialog.visible
+    readonly property bool navigationBlocked:
+            folderSortMenu.visible || entryContextMenu.visible
+            || breadcrumbMenu.visible || folderContextMenu.visible
+            || modalBlocked
 
     signal newTabRequested(string path, bool foreground)
 

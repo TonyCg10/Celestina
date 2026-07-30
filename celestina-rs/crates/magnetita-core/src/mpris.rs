@@ -18,6 +18,7 @@
 use serde_json::{json, Value};
 
 use crate::packet::NetworkPacket;
+use crate::payload::is_payload_port;
 
 /// A media report: player list and/or now-playing state.
 pub const TYPE_MPRIS: &str = "kdeconnect.mpris";
@@ -26,7 +27,7 @@ pub const TYPE_MPRIS: &str = "kdeconnect.mpris";
 pub const TYPE_MPRIS_REQUEST: &str = "kdeconnect.mpris.request";
 
 /// One player's now-playing state, the shape both ends exchange.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PlayerState {
     /// The player this state is for (e.g. "Spotify").
     pub player: String,
@@ -50,6 +51,95 @@ pub struct PlayerState {
     pub volume: i32,
     /// The peer's own "artist - title" line, when it sends one.
     pub now_playing: String,
+}
+
+impl Default for PlayerState {
+    fn default() -> Self {
+        Self {
+            player: String::new(),
+            title: String::new(),
+            artist: String::new(),
+            album: String::new(),
+            album_art_url: String::new(),
+            is_playing: false,
+            can_pause: false,
+            can_play: false,
+            can_go_next: false,
+            can_go_previous: false,
+            can_seek: false,
+            length: -1,
+            pos: -1,
+            volume: -1,
+            now_playing: String::new(),
+        }
+    }
+}
+
+/// A transport verb accepted by the KDE Connect MPRIS boundary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MediaAction {
+    Play,
+    Pause,
+    PlayPause,
+    Stop,
+    Next,
+    Previous,
+}
+
+impl MediaAction {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "Play" => Some(Self::Play),
+            "Pause" => Some(Self::Pause),
+            "PlayPause" => Some(Self::PlayPause),
+            "Stop" => Some(Self::Stop),
+            "Next" => Some(Self::Next),
+            "Previous" => Some(Self::Previous),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Play => "Play",
+            Self::Pause => "Pause",
+            Self::PlayPause => "PlayPause",
+            Self::Stop => "Stop",
+            Self::Next => "Next",
+            Self::Previous => "Previous",
+        }
+    }
+}
+
+/// Presentation-independent classification of a reported playback position.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlaybackProgress {
+    Unavailable,
+    Finite { position_ms: i64, length_ms: i64 },
+    Live,
+}
+
+/// Some Android players represent a live stream as a long rolling counter whose
+/// reported position tracks its equally long "length". Keep that peer quirk out
+/// of QML while requiring both a 24-hour floor and proximity to the live edge,
+/// so ordinary long-form media remains finite.
+pub fn playback_progress(position_ms: i64, length_ms: i64) -> PlaybackProgress {
+    const LIVE_COUNTER_FLOOR_MS: i64 = 24 * 60 * 60 * 1000;
+    const LIVE_EDGE_TOLERANCE_MS: i64 = 60 * 1000;
+
+    if position_ms < 0 || length_ms <= 0 {
+        return PlaybackProgress::Unavailable;
+    }
+    if length_ms >= LIVE_COUNTER_FLOOR_MS
+        && position_ms >= length_ms.saturating_sub(LIVE_EDGE_TOLERANCE_MS)
+        && position_ms <= length_ms.saturating_add(LIVE_EDGE_TOLERANCE_MS)
+    {
+        return PlaybackProgress::Live;
+    }
+    PlaybackProgress::Finite {
+        position_ms: position_ms.clamp(0, length_ms),
+        length_ms,
+    }
 }
 
 /// What a `kdeconnect.mpris` packet carried: a refreshed player list, a
@@ -86,7 +176,7 @@ pub struct MprisRequest {
     pub request_now_playing: bool,
     /// A transport action: "Play", "Pause", "PlayPause", "Stop", "Next",
     /// "Previous". Left as the peer's string; the daemon maps it to a command.
-    pub action: Option<String>,
+    pub action: Option<MediaAction>,
     /// Set that player's volume, 0–100.
     pub set_volume: Option<i32>,
 }
@@ -118,11 +208,11 @@ pub fn request_album_art(id: i64, player: &str, album_art_url: &str) -> NetworkP
 
 /// Send a transport action to one of the phone's players. `action` is a KDE
 /// Connect verb: "Play", "Pause", "PlayPause", "Stop", "Next", "Previous".
-pub fn action(id: i64, player: &str, action: &str) -> NetworkPacket {
+pub fn action(id: i64, player: &str, action: MediaAction) -> NetworkPacket {
     NetworkPacket::new(
         id,
         TYPE_MPRIS_REQUEST,
-        json!({ "player": player, "action": action }),
+        json!({ "player": player, "action": action.as_str() }),
     )
 }
 
@@ -170,7 +260,7 @@ pub fn read_mpris(packet: &NetworkPacket) -> Option<MprisUpdate> {
             can_seek: bool_field(body, "canSeek"),
             length: int_field(body, "length", -1),
             pos: int_field(body, "pos", -1),
-            volume: int_field(body, "volume", -1) as i32,
+            volume: int_field(body, "volume", -1).try_into().unwrap_or(-1),
             now_playing: string_field(body, "nowPlaying"),
         });
 
@@ -206,7 +296,7 @@ pub fn read_album_art(packet: &NetworkPacket) -> Option<IncomingAlbumArt> {
         .and_then(|info| info.get("port"))
         .and_then(Value::as_u64)
         .and_then(|port| u16::try_from(port).ok())?;
-    if !(1739..=1764).contains(&port) {
+    if !is_payload_port(port) {
         return None;
     }
     Some(IncomingAlbumArt {
@@ -237,11 +327,11 @@ pub fn read_mpris_request(packet: &NetworkPacket) -> Option<MprisRequest> {
         action: body
             .get("action")
             .and_then(Value::as_str)
-            .map(str::to_owned),
+            .and_then(MediaAction::parse),
         set_volume: body
             .get("setVolume")
             .and_then(Value::as_i64)
-            .map(|v| v as i32),
+            .and_then(|value| i32::try_from(value.clamp(0, 100)).ok()),
     };
     // Ignore a request that carries nothing actionable.
     if !request.request_player_list
@@ -319,7 +409,7 @@ mod tests {
 
     #[test]
     fn an_action_names_its_player_and_verb() {
-        let packet = action(1, "Spotify", "PlayPause");
+        let packet = action(1, "Spotify", MediaAction::PlayPause);
         assert!(packet.is(TYPE_MPRIS_REQUEST));
         assert_eq!(packet.body["player"], "Spotify");
         assert_eq!(packet.body["action"], "PlayPause");
@@ -365,6 +455,19 @@ mod tests {
         let update = read_mpris(&NetworkPacket::parse(raw).unwrap()).unwrap();
         assert!(update.players.is_some());
         assert!(update.state.is_none());
+    }
+
+    #[test]
+    fn a_now_playing_only_report_is_valid_state() {
+        let raw = r#"{"id":1,"type":"kdeconnect.mpris","body":{
+            "player":"Radio","nowPlaying":"Station live"}}"#;
+        let state = read_mpris(&NetworkPacket::parse(raw).unwrap())
+            .unwrap()
+            .state
+            .unwrap();
+        assert_eq!(state.player, "Radio");
+        assert_eq!(state.now_playing, "Station live");
+        assert_eq!(state.length, -1);
     }
 
     #[test]
@@ -421,13 +524,71 @@ mod tests {
             "player":"Firefox","action":"Next"}}"#;
         let request = read_mpris_request(&NetworkPacket::parse(raw).unwrap()).unwrap();
         assert_eq!(request.player.as_deref(), Some("Firefox"));
-        assert_eq!(request.action.as_deref(), Some("Next"));
+        assert_eq!(request.action, Some(MediaAction::Next));
     }
 
     #[test]
     fn an_empty_request_is_none() {
         let raw = r#"{"id":1,"type":"kdeconnect.mpris.request","body":{"player":"X"}}"#;
         assert!(read_mpris_request(&NetworkPacket::parse(raw).unwrap()).is_none());
+    }
+
+    #[test]
+    fn an_unknown_action_is_not_forwarded() {
+        let raw = r#"{"id":1,"type":"kdeconnect.mpris.request","body":{
+            "player":"Firefox","action":"LaunchShell"}}"#;
+        assert!(read_mpris_request(&NetworkPacket::parse(raw).unwrap()).is_none());
+    }
+
+    #[test]
+    fn hostile_volume_is_clamped_before_narrowing() {
+        let high = r#"{"id":1,"type":"kdeconnect.mpris.request","body":{
+            "player":"Firefox","setVolume":9223372036854775807}}"#;
+        let low = r#"{"id":1,"type":"kdeconnect.mpris.request","body":{
+            "player":"Firefox","setVolume":-9223372036854775808}}"#;
+        assert_eq!(
+            read_mpris_request(&NetworkPacket::parse(high).unwrap())
+                .unwrap()
+                .set_volume,
+            Some(100)
+        );
+        assert_eq!(
+            read_mpris_request(&NetworkPacket::parse(low).unwrap())
+                .unwrap()
+                .set_volume,
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn defaults_preserve_unknown_media_values() {
+        let state = PlayerState::default();
+        assert_eq!(state.length, -1);
+        assert_eq!(state.pos, -1);
+        assert_eq!(state.volume, -1);
+    }
+
+    #[test]
+    fn playback_progress_distinguishes_finite_live_and_unknown() {
+        assert_eq!(playback_progress(-1, -1), PlaybackProgress::Unavailable);
+        assert_eq!(
+            playback_progress(150_000, 120_000),
+            PlaybackProgress::Finite {
+                position_ms: 120_000,
+                length_ms: 120_000,
+            }
+        );
+        assert_eq!(
+            playback_progress(4_796_000_000, 4_796_000_000),
+            PlaybackProgress::Live
+        );
+        assert_eq!(
+            playback_progress(60_000, 172_800_000),
+            PlaybackProgress::Finite {
+                position_ms: 60_000,
+                length_ms: 172_800_000,
+            }
+        );
     }
 
     #[test]

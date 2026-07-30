@@ -1,13 +1,15 @@
 # CelestinaStyle — Design Contract (One UI 8.5, desktop-adapted)
 
-> **Status: v1.1 (2026-07-28) — the author decisions are sealed (§9).
+> **Status: v1.2 (2026-07-29) — the author decisions are sealed (§9).
 > S1 (tokens v2 + typography), S2 (glass v2 + elevation), S3 (iconography —
 > the Lucide set, the panel de-emoji and the app-icon squircle template) and
 > S4's first cut (the gallery + `CelestinaSwitch`/`ListSection` with Magnetita
 > Settings as consumer) and S5 (the panel migrated to the theme + compositor
 > glass, §8) shipped 2026-07-27. The first application-composition slice for
-> Siderita and Magnetita shipped 2026-07-28; further on-demand components grow
-> with their consumers.** Grounded in Samsung's real shipped
+> Siderita and Magnetita shipped 2026-07-28; the source-tree shell contract,
+> contrast floors and host-controlled reduced-motion input were reconciled on
+> 2026-07-29. Further on-demand components grow with their consumers.** Grounded
+> in Samsung's real shipped
 > values (the SESL/One UI support library and the official One UI design
 > guide), not in screenshots-by-eye, and in verified Qt 6.11 / niri 26.04
 > capabilities.
@@ -15,7 +17,9 @@
 > One implementation note where the platform overrode the contract: the `on*`
 > foreground pairs (§6.9/§9.1) ship as `<surface>Ink` (`accentInk` = `onAccent`)
 > because QML reserves the `on<Capital>` identifier namespace for signal
-> handlers — same pairs, a spelling the engine accepts.
+> handlers — same pairs, a spelling the engine accepts. The bright accent's
+> foreground is now dark `#050608`; cool-white `accentLift` is derivation input,
+> not ink painted on the accent.
 
 ## 1. Direction
 
@@ -158,7 +162,10 @@ What the stack can actually do today:
   Visual proof of glass needs the real session; token/layout changes remain
   verifiable offscreen.
 
-## 5. Audit — what "made on the fly" concretely means today
+## 5. Historical baseline audit — before S1–S5 (2026-07-27)
+
+The following list records the migration's starting point; it is evidence for
+why S1–S5 existed, not a description of the current tree.
 
 1. **Palettes swapped by comment blocks** in `CelestinaTheme.qml` (A active,
    B commented) — not selectable, not testable, drift-prone. No light scheme.
@@ -194,9 +201,9 @@ What the stack can actually do today:
 12. **No QML gates**: the known qmllint warning is parked; qmlformat is not
     enforced.
 
-Current usage at stake: **21 glass instances across 11 Siderita files**, plus
-Magnetita's window and the shell chooser — the migration surface is real but
-bounded.
+At that baseline, the migration surface was **21 glass instances across 11
+Siderita files**, plus Magnetita's window and the shell chooser. Those counts are
+historical and are not maintained as a current inventory.
 
 ## 6. Target system
 
@@ -230,8 +237,9 @@ Use the SESL values from §2 as the reference, adapted to the approved desktop
 prototype: `#050608` canvas, `#14171c` grouped card, `#1a1e25` strong tonal,
 `#222831` elevated, `#f7f8fc` primary text and `#9ba3af` secondary text.
 Accent (sealed, §9) is **One UI-adapted blue `#3e91ff`**, used exactly as
-Samsung uses blue — interactive/active only — with `onAccent = #fcfcff`.
-It is the only hue seed:
+Samsung uses blue — interactive/active only — with `onAccent = #050608` for
+body-sized ink. `accentLift = #fcfcff` derives lighter interaction roles but is
+never the foreground on the bright accent. Accent is the only hue seed:
 link/hover/pressed/focus and all translucent accent washes are derived from it
 inside `CelestinaTheme`, never calculated by a consumer. Its derivation factors
 live next to the seed. `favorite` stays the one warm exception.
@@ -261,10 +269,11 @@ an app-icon pipeline ever needs it. Radius scales down with element size.
 | L3 | modal: dialogs, sheets | **glass strong** + `scrim` dim behind — *never* shadow + dim together |
 | Panel | layer-shell bar | **compositor glass** (ext-background-effect, x-ray) over wallpaper; in-scene fallback |
 
-Compositor glass uses its own lighter semantic tint: the compositor has already
-blurred the wallpaper, so reusing the denser in-scene tint would hide that result
-instead of dimming it. The fallback remains a readable translucent surface when
-the protocol is unavailable.
+Compositor glass has two explicit contrast-floor roles because wallpaper is
+untrusted input: `compositorGlassTint` when blur is armed and the denser
+`compositorGlassFallback` when the effect is unavailable. They remain separate
+from in-scene glass and are checked after compositing over black and white; blur
+visibility still requires a real-session visual pass.
 
 `CelestinaSurface` is the shared L0/L1 container. Consumers select a semantic
 role (`Canvas`, `Panel`, `Grouped`, `Content`, `Tonal`, `Elevated`, `Selected`)
@@ -320,8 +329,10 @@ opacity-only. Duration ladder: `motionFast 100` · `motionNormal 200` ·
 `motionSlow 350` · ceiling 500. **Press recoil** becomes a shared behavior:
 scale ≈0.96 in 100 ms, release 350 ms on `easeOneUi` — buttons, cards, rows.
 Panel/popup reveals may overshoot slightly (existing `easeEmphasized` slot,
-retuned). `reducedMotion` token collapses transitions to fades. Render-thread
-animators for anything on the always-on panel.
+retuned). The host-controlled `reducedMotion` input collapses spatial/scale
+motion to an instant state; an opacity-only fade may remain only when the
+component specifies it deliberately. Render-thread animators for anything on
+the always-on panel.
 
 ### 6.8 Components v2 (specs now, built on demand — CP2 discipline holds)
 
@@ -330,7 +341,8 @@ selected / ghost roles; compact / regular / prominent densities; one-style-per-
 screen doctrine and focus ring), `CelestinaIconButton` and
 `CelestinaIcon` (one freedesktop-name/fallback/tone contract), `CelestinaTextField`
 (radius 22, One UI search anatomy), `GlassSurface/Card/ContextMenu/MenuItem`
-(glass v2 + elevation). New specs, each waiting for its first real consumer:
+(glass v2 + elevation), and `CelestinaFocusRing` (the reusable 2px exterior
+keyboard-focus outline). New specs, each waiting for its first real consumer:
 **`CelestinaSectionLabel`**, **`CelestinaModalLayer`**, **`ListSection`** (the grouped-card list — the signature; first consumer:
 Magnetita Settings, later shell settings), **`CelestinaSwitch`** (shipped
 44×26 as the desktop-tuned pill — the 35dp phone reference is retained and the
@@ -346,8 +358,10 @@ Interactive states, uniformly: `hover` (surfaceHover), `pressed` (recoil +
 surfaceStrong), `selected` (accent-tinted per 8.5's gradient language),
 `disabled` (dedicated token, not ad-hoc opacity), `focusVisible` (2px
 `focusRing` outside the shape — keyboard only). Contrast floors: 4.5:1
-normal text, 3:1 large — checked in the gallery against every shipped scheme.
-`reducedMotion` honored by every Transition.
+normal text, 3:1 large. The static contrast gate covers the high-risk composed
+surfaces; gallery and real-AT review remain separate evidence. Every new or
+modified Transition honors `reducedMotion`; the remaining legacy-motion audit is
+tracked by STYLE-1.
 
 ## 7. Engineering practice upgrades
 
@@ -356,8 +370,9 @@ normal text, 3:1 large — checked in the gallery against every shipped scheme.
   for every style change, and the screenshot-reference source.
 - **Gates**: `qmlformat --check` + `all_qmllint` join the local quality gate
   (CI once Qt enters CI); the parked qmllint warning was fixed in S1. The
-  Qt-free `scripts/check-style-contract.sh` runs in CI now and rejects visual
-  literals or local state recipes outside `CelestinaTheme`.
+  Qt-free `scripts/check-style-contract.sh` runs in CI across apps, shell and
+  shared components, rejects visual literals/local recipes outside
+  `CelestinaTheme` and invokes the derived contrast-floor check.
 - **Screenshot discipline**: reference PNGs per gallery section; glass
   verified on the real session (offscreen can't render it), tokens/layout
   offscreen.
@@ -368,7 +383,7 @@ normal text, 3:1 large — checked in the gallery against every shipped scheme.
 
 - **S1 — Tokens v2 + typography.** New tiered singleton, scheme-as-data
   machinery (dark only, per §9), shipped Inter Variable, `on*` pairs, motion
-  tokens, accent flipped to `#387aff`. Mechanical migration of all consumers
+  tokens, accent flipped from white and finally tuned to `#3e91ff`. Mechanical migration of all consumers
   (rename-only where possible). The visual delta is deliberately small; the
   structure changes completely.
 - **S2 — Glass v2 + elevation.** New recipe + self-tracking API + GPU
@@ -390,7 +405,8 @@ normal text, 3:1 large — checked in the gallery against every shipped scheme.
 ## 9. Decisions (sealed by the author, 2026-07-27; accent tuned 2026-07-28)
 
 1. **Accent — One UI-adapted blue `#3e91ff`.** Interactive/active elements only,
-   `onAccent #fcfcff`. The white-accent era (and its contrast trap) ends.
+   `onAccent #050608`; `#fcfcff` is `accentLift`, used only to derive lighter
+   roles. The white-accent era (and its contrast trap) ends.
 2. **Typeface — Inter Variable** (OFL), shipped inside the module.
 3. **Icon set — Lucide** (ISC), adopted behind the freedesktop-name mapping
    layer so consumers keep resolving by name.

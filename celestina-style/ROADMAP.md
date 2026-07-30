@@ -13,12 +13,15 @@ dotfiles or workflows. Consumers keep independent roadmaps and release timing.
 token singleton (promoted from Siderita), working backdrop-blur glass
 (`GlassSurface`/`GlassCard`/`GlassContextMenu`/`GlassMenuItem`, replacing the
 earlier `CelestinaGlassPanel` that blurred its own fill), semantic backdrop,
-surface, button, icon, section-label, text-field, switch, modal-layer and grouped
-list components, plus a bundled Lucide catalogue. Both apps consume it live by
-symlinking the sources into their own CXX-Qt modules — the official mechanism,
-guarded in CI so a copy can never silently reappear. A compatibility/deprecation
-policy and verified accessibility/motion behavior are still open; the installable
-module is deferred (see below).
+surface, button, icon, section-label, exterior focus-ring, text-field, switch,
+modal-layer and grouped list components, plus a bundled Lucide catalogue. Both apps consume it live by
+symlinking the sources into their own CXX-Qt modules; the shell imports the same
+plain source tree through an explicit URI alias for both lint and runtime. The
+guard covers all three consumers and prevents a copied/app-local visual contract
+from silently reappearing. `reducedMotion` now exists and all hosts inject it,
+but a complete legacy-animation audit, real AT/motion acceptance and the
+compatibility/deprecation policy remain open. The installable module is deferred
+(see below).
 
 **Key decisions.** Style is an independent shared-library project. **In-tree
 delivery is source compilation via symlinks**: each app links the canonical
@@ -36,20 +39,23 @@ public control's contract; the component set grows only from proven reuse
 **Design contract.** The visual direction — One UI 8.5 adapted to desktop:
 reference values, the Qt/niri platform ceiling, the audit of the current
 system, the target system and a phased build plan (S1–S5) — lives in
-[DESIGN.md](DESIGN.md) (v1.1, decisions sealed). This roadmap tracks
+[DESIGN.md](DESIGN.md) (v1.2, decisions sealed). This roadmap tracks
 execution; the design contract says what "done" looks like.
 
 **Phase status.** **S1 (tokens v2 + typography) — done** (2026-07-27): the
 singleton was rebuilt into `ref`→`scheme`→`sys` tiers with the dark `ColorScheme`
 as data (Rosé Pine and the comment-toggled palette retired); every opaque surface
 carries its foreground pair (`<surface>Ink`, the contract's `on*` — QML reserves
-`on<Capital>`); the accent moved from white to One UI blue `#387aff` with
-`accentInk` (`CelestinaButton` primary adopts it, killing `accent → canvas`);
+`on<Capital>`); the accent moved from white to One UI blue and was finally tuned
+to `#3e91ff`. `accentInk` is the dark `#050608` foreground that meets the
+body-text floor, while cool-white `accentLift` derives lighter interaction roles;
+`CelestinaButton` primary consumes that pair instead of assuming white;
 Inter Variable (OFL) ships embedded in each app's qrc; radius/type/motion scales
 match DESIGN §6.3/§6.6/§6.7 (the One UI bezier tokens are defined, ready for S2's
-motion retune); all consumers (siderita, magnetita, the shell chooser, the six
-shared components) were migrated. Verified by app builds + offscreen smokes +
-grabbed swatch/button/window captures, and a clean module `all_qmllint`.
+motion retune); the S1 consumers (siderita, magnetita, the shell chooser and
+shared components) were migrated, and the panel joined the same contract in S5.
+Verified by app builds + offscreen smokes + grabbed swatch/button/window
+captures, and a clean module `all_qmllint`.
 
 **S2 (glass v2 + elevation) — done** (2026-07-27): `GlassSurface` was rebuilt to
 the 8.5 recipe (DESIGN §6.5) — bounded capture → pyramid blur → *slight
@@ -78,8 +84,8 @@ The app-icon tiles became true **squircles** (a superellipse n=5 shared by both
 launcher marks, replacing the rounded-rect tile — One UI reserves the
 superellipse for app icons, §6.3); the amber-rhombohedron / steel-octahedron
 marks are unchanged. Verified by offscreen icon + app-icon specimens + app/shell
-builds + smokes. **Still open (out of S3):** the panel's broader migration off
-its hardcoded Rosé Pine palette (shell buildout, gated by CLAUDE.md).
+builds + smokes. The panel's broader palette migration landed later in S5; there
+is no remaining inline Rosé Pine contract.
 
 **S4 (gallery + first components) — done** (2026-07-27): the two One UI
 signature controls landed — **`CelestinaSwitch`** (the pill toggle, white thumb
@@ -118,10 +124,12 @@ old panel still showed sharp wallpaper detail. Comparing the exact installed
 Noctalia implementation showed that it submits finite, surface-local blur
 rectangles. The shell now waits until blur is advertised and the window is
 exposed, submits the panel's real finite region and requests the commit-producing
-frame. A subsequent normal `./scripts/run.sh` capture shows the top strip blurred
-while the same wallpaper immediately below remains sharp. Compositor glass also
-has a dedicated 50% tint, keeping the dark fallback while letting the blurred
-wallpaper remain legible.
+frame. A subsequent normal `./scripts/run.sh` capture showed the top strip blurred
+while the same wallpaper immediately below remained sharp. The current
+compositor-glass roles are denser contrast floors (`compositorGlassTint` for an
+armed effect and `compositorGlassFallback` when unavailable), verified
+statically over hostile black/white backdrops. That earlier capture proves the
+blur mechanism, not the later tint values; those still need a fresh visual pass.
 
 **Semantic-surface follow-up — done** (2026-07-28): `CelestinaSurface` became
 the closed L0/L1 container contract after the same need was proven by Siderita's
@@ -160,6 +168,20 @@ roles. `scripts/check-style-contract.sh`, wired into CI, rejects colours, local
 colour transforms and raw state/anatomy values outside the canonical theme.
 Responsive page geometry deliberately remains consumer-owned.
 
+**Accessibility/contrast hardening — implemented, acceptance open**
+(2026-07-29): `CelestinaTheme.reducedMotion` is now a host-controlled input;
+Siderita, Magnetita and the shell inject it from `CELESTINA_REDUCED_MOTION`.
+Shared buttons, switches, text fields and menus plus the touched consumer
+transitions use it, and a canonical exterior focus ring now follows
+`visualFocus` without competing with a control's fill. The visual guard includes
+`celestina/qml` and invokes a contrast check that derives current theme values
+for hostile wallpaper/artwork extremes, including destructive controls. A Qt
+Quick Test proves modal focus entry, Tab/Backtab containment, exact restoration,
+Escape and pointer blocking through the exit fade offscreen. These are implemented/static/headless
+contracts, not proof that every legacy animation has been converted or that
+focus rendering, AT-SPI, blur and reduced motion passed a new real-session
+review.
+
 **Application-composition first slice — done** (2026-07-28): Siderita and
 Magnetita now apply the approved desktop prototype without moving domain logic.
 Opaque `CelestinaSurface` roles own the sidebar, tabs, content groups, device
@@ -170,20 +192,21 @@ tokens. Verified with real-session captures of Siderita list/grid and Magnetita
 devices/settings, plus live navigation/action routing.
 
 ## Checkpoint 0 — The canonical source, enforced (STYLE-0)
-**Goal:** one canonical source tree that every consumer compiles from, with
-drift made impossible, and glass APIs that mean what they say.
+**Goal:** one canonical source tree that every in-tree consumer compiles or
+imports directly, with drift made impossible and glass APIs that mean what they
+say.
 
 - [x] Canonical module builds with CMake: semantic token singletons (`CelestinaTheme`, `CelestinaIcons`) + working glass (`GlassSurface`, `GlassCard`, `GlassContextMenu`, `GlassMenuItem`) + `CelestinaButton` + `CelestinaTextField` + the closed Lucide catalogue
 - [x] Working backdrop-blur glass — the broken `CelestinaGlassPanel` (blurred its own fill, not the backdrop) and `CelestinaContextMenu` were removed and replaced by Siderita's proven `ShaderEffectSource`-capture `GlassSurface`
 - [x] First real consumer proven: `siderita` renders entirely from this module (theme, glass, icons), verified by build + offscreen run
-- [x] Single source made real and enforced: both apps consume by symlink into their own CXX-Qt modules (Siderita's six committed copies were replaced by links, 2026-07-26), and CI refuses any style file in an app's `qml/` that is not a symlink
-- [x] Token boundary enforced: CI rejects visual literals and app-local colour/state recipes; `ref.accent` is the single seed for all accent roles
+- [x] Single source made real and enforced: both apps consume by symlink into their own CXX-Qt modules (Siderita's six committed copies were replaced by links, 2026-07-26); shell panel/chooser import the same source under an explicit URI alias; CI refuses drift and audits all three consumers
+- [x] Token boundary enforced: CI rejects visual literals and app-local colour/state recipes across apps, shell and shared components; `ref.accent` is the single seed for all accent roles and the contrast guard checks composed extremes
 - [x] Inventory the public QML types, semantic properties, assets and generated metadata contract in README; keep it aligned with `qmldir` / CMake
 - [x] Resolve the qmllint `OUTPUT_DIRECTORY` module-path warning — the module now sets `OUTPUT_DIRECTORY .../CelestinaStyle` to match its URI; verified by a clean `cmake` configure (no `Qt6QmlMacros` warning) and a clean `all_qmllint` (S1, 2026-07-27)
 
-**Done when:** every consumer builds from the one canonical tree with no copy
-anywhere, the guard proves it on every push, and the public surface is written
-down.
+**Done when:** every in-tree consumer builds from or imports the one canonical
+tree with no copy anywhere, the guard proves it on every push, and the public
+surface is written down.
 
 ## Deferred — the installable module (STYLE-D)
 **Gate:** a consumer *outside* this tree (a third-party app, a packaged
@@ -203,8 +226,10 @@ independently.
 - [ ] Compatibility + deprecation policy for the 1.0 surface
 - [ ] Truthful glass APIs — tint/glow/tokens vs. real in-scene blur vs. compositor blur kept clearly separate
 - [~] Font + icon contracts — Inter Variable (OFL) ships embedded in each app's qrc, with an honest fallback where it is not compiled in (the shell → application default), and the closed Lucide set landed in S3; the mono face and written font fallback policy remain
-- [ ] Keyboard, focus, AT-SPI, reduced-motion and high-contrast behavior for the finite component set
-- [x] Both apps consume the same canonical source (symlink-compiled; an installed release belongs to STYLE-D)
+- [x] Shared `reducedMotion` input plus host propagation; touched shared controls and consumer transitions consume it
+- [x] Automate the shared modal contract offscreen: preserve consumer focus, contain Tab/Backtab, restore the exact previous item, handle Escape and block lower-surface pointer input through the exit fade
+- [ ] Finish the legacy-motion audit and validate keyboard, `visualFocus`, modal focus, AT-SPI, reduced motion and high contrast for the finite component set on a real session
+- [x] Both apps and the shell consume the same canonical source (apps symlink-compile; shell source-imports; an installed release belongs to STYLE-D)
 
 **Done when:** every consumer renders from the same canonical source, and
 accessibility/motion behavior is verified, not assumed.

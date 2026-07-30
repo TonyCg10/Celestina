@@ -4,12 +4,23 @@ import org.celestina.magnetita 1.0
 Column {
     id: root
 
-    required property var devices
+    required property DevicesModel devices
 
     spacing: 16
 
+    Text {
+        width: parent.width
+        visible: !root.devices.settingsAvailable
+        text: "El servicio Magnetita no está disponible."
+        color: CelestinaTheme.textMuted
+        font.family: CelestinaTheme.sansFamily
+        font.pixelSize: CelestinaTheme.fontCaption
+        wrapMode: Text.Wrap
+    }
+
     ListSection {
         width: parent.width
+        visible: root.devices.settingsAvailable
         title: "DISPOSITIVOS EMPAREJADOS"
 
         Text {
@@ -46,6 +57,7 @@ Column {
 
     ListSection {
         width: parent.width
+        visible: root.devices.settingsAvailable
         title: "PLUGINS"
 
         Repeater {

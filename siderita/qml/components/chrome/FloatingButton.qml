@@ -72,14 +72,18 @@ Button {
                  : control.down ? CelestinaTheme.surfaceStrong
                  : control.hovered || control.active ? CelestinaTheme.surfaceHover
                  : CelestinaTheme.controlFill)
-        border.width: control.visualFocus ? CelestinaTheme.borderFocus
-                      : control.role === FloatingButton.Primary && !control.enabled
+        border.width: control.role === FloatingButton.Primary && !control.enabled
                         ? CelestinaTheme.borderHairline
                       : control.role === FloatingButton.Tonal
                         ? CelestinaTheme.borderHairline : 0
-        border.color: control.visualFocus ? CelestinaTheme.focusRing
-                      : control.role === FloatingButton.Primary
+        border.color: control.role === FloatingButton.Primary
                         ? CelestinaTheme.accentDisabledInk
                         : CelestinaTheme.divider
+
+        CelestinaFocusRing {
+            target: parent
+            cornerRadius: parent.radius
+            shown: control.visualFocus
+        }
     }
 }

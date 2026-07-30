@@ -1,11 +1,13 @@
 cmake_minimum_required(VERSION 3.20)
 project(celestina-style VERSION 1.0 LANGUAGES CXX)
 
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Quick QuickControls2)
-qt_standard_project_setup(REQUIRES 6.5)
+find_package(Qt6 6.9 REQUIRED COMPONENTS Quick QuickControls2)
+qt_standard_project_setup(REQUIRES 6.9)
 
 # Shared token and icon catalogues are singletons.
 set_source_files_properties(
@@ -35,6 +37,7 @@ qt_add_qml_module(celestina-style
         CelestinaIconButton.qml
         CelestinaIcon.qml
         CelestinaSectionLabel.qml
+        CelestinaFocusRing.qml
         CelestinaTextField.qml
         CelestinaSwitch.qml
         ListSection.qml
@@ -125,6 +128,24 @@ qt_add_qml_module(celestina-style
 )
 
 target_link_libraries(celestina-style PRIVATE Qt6::Quick)
+
+if(BUILD_TESTING)
+    find_package(Qt6 6.9 REQUIRED COMPONENTS QuickTest)
+    qt_add_executable(celestina-style-modal-test
+        tests/quicktest_main.cpp
+    )
+    target_compile_definitions(celestina-style-modal-test PRIVATE
+        QUICK_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests"
+    )
+    target_link_libraries(celestina-style-modal-test PRIVATE Qt6::QuickTest)
+    add_dependencies(celestina-style-modal-test celestina-style-plugin)
+    add_test(NAME celestina-style-modal-focus
+             COMMAND celestina-style-modal-test)
+    set_tests_properties(celestina-style-modal-focus PROPERTIES
+        ENVIRONMENT
+            "QML2_IMPORT_PATH=${CMAKE_CURRENT_BINARY_DIR};QT_QPA_PLATFORM=offscreen"
+    )
+endif()
 
 # NOTE: In-tree consumers (siderita, magnetita) do not use this build — they
 # symlink the .qml sources into their own cxx-qt modules, which is the official

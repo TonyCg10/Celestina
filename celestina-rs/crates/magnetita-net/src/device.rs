@@ -17,13 +17,13 @@
 //! [`NetworkPacket`]: magnetita_core::NetworkPacket
 
 use std::io;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use std::net::SocketAddr;
 
 use magnetita_core::{
-    pair_packet, ping_packet, ConnectionEvent, Identity, NetworkPacket, Outgoing, Reaction,
-    Session, TIMEOUT_SECS,
+    pair_message_packet, ping_packet, ConnectionEvent, Identity, NetworkPacket, Outgoing,
+    PairMessage, Reaction, Session, TIMEOUT_SECS,
 };
 
 use crate::link::{Link, LinkError};
@@ -34,9 +34,9 @@ use crate::link::{Link, LinkError};
 pub struct Pump {
     pub events: Vec<ConnectionEvent>,
     pub open: bool,
-    /// The packet read this turn, if any. Pairing and ping are already handled
-    /// into `events`; this is here so the daemon can act on plugin packets the
-    /// pure session leaves untouched (sftp, battery, …).
+    /// A plugin packet read while the session is paired, if any. Pairing and
+    /// ping are already handled into `events`; packets received before trust or
+    /// after unpairing are deliberately not exposed to the daemon.
     pub packet: Option<NetworkPacket>,
 }
 
@@ -74,6 +74,17 @@ impl Device {
         self.link.peer_fingerprint()
     }
 
+    /// Human-comparable code for the active pairing exchange. Reconnected v8
+    /// sessions have no fresh timestamp and therefore return `None`.
+    pub fn verification_key(&self) -> Result<Option<String>, LinkError> {
+        let Some(verification) = self.session.verification() else {
+            return Ok(None);
+        };
+        self.link
+            .verification_key(verification.timestamp)
+            .map_err(LinkError::Io)
+    }
+
     /// The address of the peer — its IP is where the phone's sftp server (and
     /// every other plugin service) lives.
     pub fn peer_addr(&self) -> SocketAddr {
@@ -104,12 +115,13 @@ impl Device {
 
         match self.link.read_packet() {
             Ok(Some(packet)) => {
-                let reaction = self.session.handle(&packet);
+                let reaction = self.session.handle(&packet, unix_seconds());
                 events.extend(self.dispatch(reaction)?);
+                let packet = self.session.is_paired().then_some(packet);
                 Ok(Pump {
                     events,
                     open: true,
-                    packet: Some(packet),
+                    packet,
                 })
             }
             Ok(None) => Ok(Pump {
@@ -130,13 +142,16 @@ impl Device {
     /// (e.g. an sftp request) and we stamp it with the next id and put it on the
     /// wire. Pairing and ping have their own methods; this is for everything else.
     pub fn send(&mut self, make: impl FnOnce(i64) -> NetworkPacket) -> Result<(), LinkError> {
+        if !self.session.is_paired() {
+            return Err(LinkError::UnpairedPlugin);
+        }
         let id = self.next_id();
         self.link.send_packet(&make(id))
     }
 
     /// Ask the peer to pair (the user pressed "pair" on our side).
     pub fn request_pairing(&mut self) -> Result<Vec<ConnectionEvent>, LinkError> {
-        let reaction = self.session.request_pairing();
+        let reaction = self.session.request_pairing(unix_seconds());
         self.dispatch(reaction)
     }
 
@@ -158,6 +173,22 @@ impl Device {
         self.dispatch(reaction)
     }
 
+    /// Revoke local pairing synchronously, before any best-effort wire notice.
+    /// The bool says whether the previous state warrants sending `pair:false`.
+    pub fn revoke_pairing_local(&mut self) -> (Vec<ConnectionEvent>, bool) {
+        let reaction = self.session.unpair();
+        let should_notify = !reaction.send.is_empty();
+        self.note_events(&reaction.events);
+        (reaction.events, should_notify)
+    }
+
+    /// Best-effort peer notification for an already-applied local revocation.
+    pub fn notify_revocation(&mut self) -> Result<(), LinkError> {
+        let id = self.next_id();
+        self.link
+            .send_packet(&pair_message_packet(id, PairMessage::response(false)))
+    }
+
     /// Send a ping — the CP0 liveness poke.
     pub fn send_ping(&mut self) -> Result<Vec<ConnectionEvent>, LinkError> {
         let reaction = self.session.send_ping();
@@ -170,7 +201,7 @@ impl Device {
         for out in &reaction.send {
             let id = self.next_id();
             let packet = match out {
-                Outgoing::Pair(pair) => pair_packet(id, *pair),
+                Outgoing::Pair(message) => pair_message_packet(id, *message),
                 Outgoing::Ping => ping_packet(id),
             };
             self.link.send_packet(&packet)?;
@@ -212,12 +243,19 @@ fn is_idle_timeout(e: &io::Error) -> bool {
     )
 }
 
+fn unix_seconds() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::Device;
     use crate::cert::DeviceCert;
     use crate::discovery::Announcement;
-    use crate::link::Link;
+    use crate::link::{Link, LinkError};
     use crate::tls::TlsConfigs;
     use magnetita_core::{ConnectionEvent, Identity, Session};
     use std::net::TcpListener;
@@ -280,14 +318,25 @@ mod tests {
         let phone_link = phone_accept.join().unwrap();
 
         let tick = Duration::from_secs(2);
-        let desk = Device::new(desk_link, Session::new(), 0, tick).unwrap();
-        let phone = Device::new(phone_link, Session::new(), 1000, tick).unwrap();
+        let desk = Device::new(desk_link, Session::new(8), 0, tick).unwrap();
+        let phone = Device::new(phone_link, Session::new(8), 1000, tick).unwrap();
         (desk, phone)
+    }
+
+    fn pair(desk: &mut Device, phone: &mut Device) {
+        desk.request_pairing().unwrap();
+        phone.pump().unwrap();
+        phone.accept_pairing().unwrap();
+        desk.pump().unwrap();
+        assert!(desk.is_paired());
+        assert!(phone.is_paired());
     }
 
     #[test]
     fn a_full_pairing_and_ping_run_over_two_devices() {
         let (mut desk, mut phone) = linked_pair();
+        assert_eq!(desk.verification_key().unwrap(), None);
+        assert_eq!(phone.verification_key().unwrap(), None);
 
         // The desktop user asks to pair.
         let ev = desk.request_pairing().unwrap();
@@ -301,6 +350,9 @@ mod tests {
         assert_eq!(pumped.events, vec![ConnectionEvent::Pairing]);
         assert!(!phone.is_paired());
         assert!(phone.peer_wants_to_pair());
+        let desk_code = desk.verification_key().unwrap().unwrap();
+        let phone_code = phone.verification_key().unwrap().unwrap();
+        assert_eq!(desk_code, phone_code);
 
         // The phone user accepts; the phone is paired and answers.
         let ev = phone.accept_pairing().unwrap();
@@ -312,6 +364,10 @@ mod tests {
         let pumped = desk.pump().unwrap();
         assert_eq!(pumped.events, vec![ConnectionEvent::Paired]);
         assert!(desk.is_paired());
+        assert_eq!(
+            desk.verification_key().unwrap().as_deref(),
+            Some(&*desk_code)
+        );
 
         // A ping crosses and is noted.
         desk.send_ping().unwrap();
@@ -332,6 +388,7 @@ mod tests {
     #[test]
     fn a_plugin_packet_sends_and_arrives_raw_for_the_daemon() {
         let (mut desk, mut phone) = linked_pair();
+        pair(&mut desk, &mut phone);
         // The desktop sends an sftp request — a plugin packet the session does
         // not own.
         desk.send(magnetita_core::request_packet).unwrap();
@@ -342,5 +399,37 @@ mod tests {
         // ...but the raw packet is surfaced for the daemon to act on.
         let packet = pumped.packet.expect("the raw packet is surfaced");
         assert!(packet.is(magnetita_core::TYPE_SFTP_REQUEST));
+    }
+
+    #[test]
+    fn plugin_traffic_is_blocked_until_the_session_is_paired() {
+        let (mut desk, mut phone) = linked_pair();
+        assert!(matches!(
+            desk.send(magnetita_core::request_packet),
+            Err(LinkError::UnpairedPlugin)
+        ));
+
+        // Even a peer that writes a plugin packet directly cannot surface it to
+        // the daemon before the pairing state machine establishes trust.
+        phone
+            .link
+            .send_packet(&magnetita_core::request_packet(1))
+            .unwrap();
+        let pumped = desk.pump().unwrap();
+        assert!(pumped.packet.is_none());
+        assert!(!desk.is_paired());
+    }
+
+    #[test]
+    fn local_revocation_survives_a_broken_wire_notification() {
+        let (mut desk, mut phone) = linked_pair();
+        pair(&mut desk, &mut phone);
+        desk.link.shutdown_for_test();
+
+        let (events, should_notify) = desk.revoke_pairing_local();
+        assert_eq!(events, vec![ConnectionEvent::Unpaired]);
+        assert!(should_notify);
+        assert!(desk.notify_revocation().is_err());
+        assert!(!desk.is_paired());
     }
 }

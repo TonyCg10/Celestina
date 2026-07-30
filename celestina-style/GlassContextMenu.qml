@@ -50,9 +50,10 @@ Menu {
             }
             NumberAnimation {
                 property: "scale"
-                from: 0.96
+                from: CelestinaTheme.reducedMotion ? 1 : 0.96
                 to: 1
-                duration: CelestinaTheme.motionNormal
+                duration: CelestinaTheme.reducedMotion
+                          ? 0 : CelestinaTheme.motionNormal
                 easing.type: CelestinaTheme.easeEmphasized
                 easing.overshoot: CelestinaTheme.overshoot
             }
@@ -71,8 +72,9 @@ Menu {
             NumberAnimation {
                 property: "scale"
                 from: 1
-                to: 0.98
-                duration: CelestinaTheme.motionFast
+                to: CelestinaTheme.reducedMotion ? 1 : 0.98
+                duration: CelestinaTheme.reducedMotion
+                          ? 0 : CelestinaTheme.motionFast
                 easing.type: CelestinaTheme.easeExit
             }
         }

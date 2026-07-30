@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod atomic_file;
 pub mod percent;
 pub mod xdg;
 

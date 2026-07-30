@@ -42,7 +42,8 @@ pub fn read_battery(packet: &NetworkPacket) -> Option<Battery> {
     let charge = body
         .get("currentCharge")
         .and_then(Value::as_i64)
-        .map(|charge| charge as i32)
+        .and_then(|charge| i32::try_from(charge).ok())
+        .filter(|charge| (0..=100).contains(charge))
         .unwrap_or(-1);
     let charging = body
         .get("isCharging")
@@ -86,6 +87,21 @@ mod tests {
                 charging: false
             })
         );
+    }
+
+    #[test]
+    fn hostile_or_out_of_range_charge_is_unknown() {
+        for charge in ["-1", "101", "9223372036854775807", "-9223372036854775808"] {
+            let raw = format!(
+                r#"{{"id":1,"type":"kdeconnect.battery","body":{{"currentCharge":{charge}}}}}"#
+            );
+            assert_eq!(
+                read_battery(&NetworkPacket::parse(&raw).unwrap())
+                    .unwrap()
+                    .charge,
+                -1
+            );
+        }
     }
 
     #[test]

@@ -21,15 +21,22 @@ Switch {
         radius: height / 2
         // Off: a neutral control wash; on: the accent. Focus lifts a ring.
         color: control.checked ? CelestinaTheme.accent : CelestinaTheme.controlFill
-        border.width: control.activeFocus ? CelestinaTheme.borderFocus
-                                          : CelestinaTheme.borderHairline
-        border.color: control.activeFocus ? CelestinaTheme.focusRing
-                      : control.checked ? CelestinaTheme.accent
+        border.width: CelestinaTheme.borderHairline
+        border.color: control.checked ? CelestinaTheme.accent
                       : CelestinaTheme.divider
         opacity: control.enabled ? 1 : CelestinaTheme.disabledOpacity
 
+        CelestinaFocusRing {
+            target: parent
+            cornerRadius: parent.radius
+            shown: control.visualFocus
+        }
+
         Behavior on color {
-            ColorAnimation { duration: CelestinaTheme.motionFast }
+            ColorAnimation {
+                duration: CelestinaTheme.reducedMotion
+                          ? 0 : CelestinaTheme.motionFast
+            }
         }
 
         Rectangle {
@@ -47,7 +54,8 @@ Switch {
 
             Behavior on x {
                 NumberAnimation {
-                    duration: CelestinaTheme.motionNormal
+                    duration: CelestinaTheme.reducedMotion
+                              ? 0 : CelestinaTheme.motionNormal
                     easing.type: CelestinaTheme.easeStandard
                 }
             }

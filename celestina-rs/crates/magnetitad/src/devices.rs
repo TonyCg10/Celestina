@@ -15,12 +15,15 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
-use magnetita_core::PlayerState;
+use celestina_core::Generation;
+use magnetita_core::{MediaAction, PlayerState};
 use magnetita_net::TrustStore;
 use zbus::zvariant::{OwnedValue, Value};
 
 use crate::lock::LockOk;
+use crate::revocation::{RequestError, Revocations};
 use crate::settings::Settings;
 
 /// The bus name Magnetita owns.
@@ -35,6 +38,12 @@ pub const CHANGED_SIGNAL: &str = "Changed";
 pub const EVENT_SIGNAL: &str = "Event";
 /// How many recent log entries to keep for the app to read on open.
 const LOG_CAPACITY: usize = 200;
+/// Local action bursts are bounded per live device; revocation has its own
+/// tombstone path and can never be trapped behind this queue.
+const COMMAND_QUEUE_CAPACITY: usize = 32;
+/// `Device::pump` wakes once per second, so two seconds covers one in-flight
+/// read plus command processing without letting a D-Bus call hang forever.
+const FORGET_ACK_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// One connected device, as the contract exposes it.
 #[derive(Clone, Debug)]
@@ -48,15 +57,20 @@ pub struct DeviceEntry {
     /// Whether we trust this device (paired). A connected-but-unpaired device is
     /// waiting on a pairing.
     pub paired: bool,
+    /// Daemon-private authorization epoch. Payloads may publish only into the
+    /// exact pairing generation which started them.
+    pub(crate) pair_generation: Generation,
     /// The local path the device is mounted at, or empty when not mounted.
     pub mount_path: String,
     /// Battery percent, or -1 when unknown.
     pub battery: i32,
     /// Whether the phone is charging.
     pub charging: bool,
-    /// The peer certificate's SHA-256 fingerprint — the verification key a human
-    /// compares to be sure of no impostor.
+    /// Stable SHA-256 certificate fingerprint pinned by the trust store.
     pub fingerprint: String,
+    /// Short symmetric code for the pairing completed on this live link. Empty
+    /// on a restored session because there is no fresh pairing timestamp.
+    pub verification_key: String,
     /// The phone's currently-reported media, for the app's now-playing card.
     /// `media_player` is empty when nothing is playing; the rest is that
     /// player's state, and the `can_*` flags gate the transport buttons.
@@ -64,8 +78,10 @@ pub struct DeviceEntry {
     pub media_title: String,
     pub media_artist: String,
     pub media_album: String,
+    pub media_now_playing: String,
     pub media_playing: bool,
     pub media_can_pause: bool,
+    pub media_can_play: bool,
     pub media_can_next: bool,
     pub media_can_previous: bool,
     pub media_can_seek: bool,
@@ -88,16 +104,20 @@ impl DeviceEntry {
             connected: true,
             mounted: false,
             paired: false,
+            pair_generation: Generation::INITIAL,
             mount_path: String::new(),
             battery: -1,
             charging: false,
             fingerprint,
+            verification_key: String::new(),
             media_player: String::new(),
             media_title: String::new(),
             media_artist: String::new(),
             media_album: String::new(),
+            media_now_playing: String::new(),
             media_playing: false,
             media_can_pause: false,
+            media_can_play: false,
             media_can_next: false,
             media_can_previous: false,
             media_can_seek: false,
@@ -122,12 +142,21 @@ impl DeviceEntry {
             ("battery", Value::from(self.battery)),
             ("charging", Value::from(self.charging)),
             ("fingerprint", Value::from(self.fingerprint.clone())),
+            (
+                "verificationKey",
+                Value::from(self.verification_key.clone()),
+            ),
             ("mediaPlayer", Value::from(self.media_player.clone())),
             ("mediaTitle", Value::from(self.media_title.clone())),
             ("mediaArtist", Value::from(self.media_artist.clone())),
             ("mediaAlbum", Value::from(self.media_album.clone())),
+            (
+                "mediaNowPlaying",
+                Value::from(self.media_now_playing.clone()),
+            ),
             ("mediaPlaying", Value::from(self.media_playing)),
             ("mediaCanPause", Value::from(self.media_can_pause)),
+            ("mediaCanPlay", Value::from(self.media_can_play)),
             ("mediaCanNext", Value::from(self.media_can_next)),
             ("mediaCanPrevious", Value::from(self.media_can_previous)),
             ("mediaCanSeek", Value::from(self.media_can_seek)),
@@ -159,17 +188,18 @@ pub fn set_media(
 ) -> Option<PathBuf> {
     let mut registry = registry.lock_ok();
     let entry = registry.get_mut(device_id)?;
-    let next_artwork_source = state
-        .map(|state| state.album_art_url.as_str())
+    let (next_player, next_artwork_source) = state
+        .map(|state| (state.player.as_str(), state.album_art_url.as_str()))
         .unwrap_or_default();
-    let stale_artwork = if entry.media_artwork_source != next_artwork_source {
-        entry.media_artwork_source = next_artwork_source.to_owned();
-        entry.media_artwork_url.clear();
-        (!entry.media_artwork_path.as_os_str().is_empty())
-            .then(|| std::mem::take(&mut entry.media_artwork_path))
-    } else {
-        None
-    };
+    let stale_artwork =
+        if entry.media_player != next_player || entry.media_artwork_source != next_artwork_source {
+            entry.media_artwork_source = next_artwork_source.to_owned();
+            entry.media_artwork_url.clear();
+            (!entry.media_artwork_path.as_os_str().is_empty())
+                .then(|| std::mem::take(&mut entry.media_artwork_path))
+        } else {
+            None
+        };
 
     match state {
         Some(state) => {
@@ -177,8 +207,10 @@ pub fn set_media(
             entry.media_title = state.title.clone();
             entry.media_artist = state.artist.clone();
             entry.media_album = state.album.clone();
+            entry.media_now_playing = state.now_playing.clone();
             entry.media_playing = state.is_playing;
             entry.media_can_pause = state.can_pause;
+            entry.media_can_play = state.can_play;
             entry.media_can_next = state.can_go_next;
             entry.media_can_previous = state.can_go_previous;
             entry.media_can_seek = state.can_seek;
@@ -190,8 +222,10 @@ pub fn set_media(
             entry.media_title.clear();
             entry.media_artist.clear();
             entry.media_album.clear();
+            entry.media_now_playing.clear();
             entry.media_playing = false;
             entry.media_can_pause = false;
+            entry.media_can_play = false;
             entry.media_can_next = false;
             entry.media_can_previous = false;
             entry.media_can_seek = false;
@@ -205,7 +239,8 @@ pub fn set_media(
 /// Publish a verified local cover only if the device is still showing the
 /// player/source pair that requested it. Returns `None` for a stale transfer;
 /// `Some(previous)` means the URL was installed and the old path may be deleted.
-pub fn install_artwork(
+#[cfg(test)]
+fn install_artwork(
     registry: &Registry,
     device_id: &str,
     player: &str,
@@ -215,6 +250,18 @@ pub fn install_artwork(
 ) -> Option<Option<PathBuf>> {
     let mut registry = registry.lock_ok();
     let entry = registry.get_mut(device_id)?;
+    install_artwork_entry(entry, player, source_url, local_path, local_url)
+}
+
+/// Variant used while a caller already owns the registry entry, so publication
+/// can be serialized with another state boundary without locking recursively.
+pub(crate) fn install_artwork_entry(
+    entry: &mut DeviceEntry,
+    player: &str,
+    source_url: &str,
+    local_path: PathBuf,
+    local_url: String,
+) -> Option<Option<PathBuf>> {
     if entry.media_player != player || entry.media_artwork_source != source_url {
         return None;
     }
@@ -272,28 +319,45 @@ pub fn push_log(log: &Log, entry: LogEntry) {
     }
 }
 
+/// Publish or clear the short code for the current live pairing exchange.
+pub fn set_verification_key(registry: &Registry, device_id: &str, key: &str) -> bool {
+    let mut registry = registry.lock_ok();
+    let Some(entry) = registry.get_mut(device_id) else {
+        return false;
+    };
+    if entry.verification_key == key {
+        return false;
+    }
+    entry.verification_key = key.to_owned();
+    true
+}
+
 /// A control action the app asks of a live link — delivered to that link's own
 /// thread, which owns the [`Device`](magnetita_core::Session) and can act on it.
 #[derive(Clone, Debug)]
 pub enum Command {
-    /// Ask the device to pair.
-    RequestPair,
-    /// Drop the pairing.
-    Unpair,
+    /// Ask the device to pair, carrying the revocation ordering point observed
+    /// before this command entered the bounded queue.
+    RequestPair { observed: Generation },
     /// Ring the device (find-my-phone).
     Ring,
-    /// Push this text to the device as a clipboard change.
-    SendClipboard(String),
     /// Send this local file to the device.
     SendFile(String),
     /// Send a media transport verb ("PlayPause", "Next", "Previous") to the
     /// phone's active player.
-    Media(String),
+    Media(MediaAction),
 }
 
 /// The per-device command channels, keyed by device id. A link registers its
 /// sender while it runs; the served interface looks one up to forward a request.
-pub type Commands = Arc<Mutex<HashMap<String, std::sync::mpsc::Sender<Command>>>>;
+pub type Commands = Arc<Mutex<HashMap<String, std::sync::mpsc::SyncSender<Command>>>>;
+
+pub fn command_channel() -> (
+    std::sync::mpsc::SyncSender<Command>,
+    std::sync::mpsc::Receiver<Command>,
+) {
+    std::sync::mpsc::sync_channel(COMMAND_QUEUE_CAPACITY)
+}
 
 /// The object served at [`OBJECT_PATH`].
 pub struct Devices {
@@ -303,6 +367,9 @@ pub struct Devices {
     /// The pinned peers — for listing and forgetting from the Settings surface,
     /// including devices that are not currently connected.
     trust: Arc<Mutex<TrustStore>>,
+    /// Pairing revocations are tombstones, not ordinary queued commands: they
+    /// must win over an already-read `Paired` event.
+    revocations: Arc<Revocations>,
     /// The per-plugin toggles the app reads and writes.
     settings: Arc<Mutex<Settings>>,
     /// Where those toggles persist.
@@ -315,6 +382,7 @@ impl Devices {
         log: Log,
         commands: Commands,
         trust: Arc<Mutex<TrustStore>>,
+        revocations: Arc<Revocations>,
         settings: Arc<Mutex<Settings>>,
         settings_path: PathBuf,
     ) -> Devices {
@@ -323,16 +391,30 @@ impl Devices {
             log,
             commands,
             trust,
+            revocations,
             settings,
             settings_path,
         }
     }
 
     /// Forwards a command to the device's link thread, if it is connected.
-    fn forward(&self, device_id: &str, command: Command) {
-        if let Some(sender) = self.commands.lock_ok().get(device_id) {
-            let _ = sender.send(command);
-        }
+    fn forward(&self, device_id: &str, command: Command) -> zbus::fdo::Result<()> {
+        let sender = self
+            .commands
+            .lock_ok()
+            .get(device_id)
+            .cloned()
+            .ok_or_else(|| zbus::fdo::Error::Failed("el dispositivo no está conectado".into()))?;
+        sender.try_send(command).map_err(|error| {
+            zbus::fdo::Error::Failed(match error {
+                std::sync::mpsc::TrySendError::Full(_) => {
+                    "la cola del dispositivo está ocupada; inténtalo de nuevo".to_owned()
+                }
+                std::sync::mpsc::TrySendError::Disconnected(_) => {
+                    "el enlace se cerró antes de recibir la acción".to_owned()
+                }
+            })
+        })
     }
 
     /// Whether a device id is currently connected (has a live entry).
@@ -343,12 +425,54 @@ impl Devices {
             .map(|entry| entry.connected)
             .unwrap_or(false)
     }
+
+    /// Persist a local trust revocation, then wait until any live session has
+    /// applied the same generation. The peer notification is best-effort; the
+    /// durable local boundary does not depend on a healthy socket.
+    fn revoke(&self, device_id: &str) -> zbus::fdo::Result<()> {
+        let generation = self
+            .revocations
+            .request_if_and_apply(
+                device_id,
+                || self.is_connected(device_id) || self.trust.lock_ok().is_trusted(device_id),
+                || self.trust.lock_ok().forget(device_id),
+            )
+            .map_err(|error| match error {
+                RequestError::Generation(error) => {
+                    zbus::fdo::Error::Failed(format!("no se pudo registrar la revocación: {error}"))
+                }
+                RequestError::Apply(error) => zbus::fdo::Error::IOError(error.to_string()),
+            })?;
+        let Some(generation) = generation else {
+            return Ok(());
+        };
+        if !self.is_connected(device_id) {
+            self.revocations
+                .clear_if(device_id, || !self.is_connected(device_id));
+            return Ok(());
+        }
+        if self
+            .revocations
+            .wait_applied(device_id, generation, FORGET_ACK_TIMEOUT)
+        {
+            return Ok(());
+        }
+        if !self.is_connected(device_id) {
+            self.revocations
+                .clear_if(device_id, || !self.is_connected(device_id));
+            return Ok(());
+        }
+        Err(zbus::fdo::Error::Failed(
+            "el enlace no aplicó Desvincular dentro del límite".to_owned(),
+        ))
+    }
 }
 
 #[zbus::interface(name = "org.celestina.Devices1")]
 impl Devices {
     /// The connected devices, each a dict with keys `id`, `name`, `type`,
-    /// `connected`, `mounted`, `paired`, `mountPath`, `battery`, `fingerprint`.
+    /// `connected`, `mounted`, `paired`, `mountPath`, `battery`, `fingerprint`,
+    /// `verificationKey`.
     fn list_devices(&self) -> Vec<HashMap<String, OwnedValue>> {
         self.registry
             .lock_ok()
@@ -364,29 +488,32 @@ impl Devices {
     }
 
     /// Ask the connected device to pair (the app's "Emparejar").
-    fn request_pair(&self, device_id: String) {
-        self.forward(&device_id, Command::RequestPair);
+    fn request_pair(&self, device_id: String) -> zbus::fdo::Result<()> {
+        let observed = self.revocations.observe_pair();
+        self.forward(&device_id, Command::RequestPair { observed })
     }
 
     /// Drop the pairing with the connected device (the app's "Desvincular").
-    fn unpair(&self, device_id: String) {
-        self.forward(&device_id, Command::Unpair);
+    fn unpair(&self, device_id: String) -> zbus::fdo::Result<()> {
+        self.revoke(&device_id)
     }
 
     /// Ring the connected device (the app's "Sonar" — find-my-phone).
-    fn ring(&self, device_id: String) {
-        self.forward(&device_id, Command::Ring);
+    fn ring(&self, device_id: String) -> zbus::fdo::Result<()> {
+        self.forward(&device_id, Command::Ring)
     }
 
     /// Send a local file to the connected device (Siderita's "Enviar al móvil").
-    fn send_file(&self, device_id: String, path: String) {
-        self.forward(&device_id, Command::SendFile(path));
+    fn send_file(&self, device_id: String, path: String) -> zbus::fdo::Result<()> {
+        self.forward(&device_id, Command::SendFile(path))
     }
 
     /// Drive the phone's media: `action` is "PlayPause", "Next" or "Previous"
     /// (the app's transport buttons on its now-playing card).
-    fn media_action(&self, device_id: String, action: String) {
-        self.forward(&device_id, Command::Media(action));
+    fn media_action(&self, device_id: String, action: String) -> zbus::fdo::Result<()> {
+        let action = MediaAction::parse(&action)
+            .ok_or_else(|| zbus::fdo::Error::InvalidArgs("acción multimedia desconocida".into()))?;
+        self.forward(&device_id, Command::Media(action))
     }
 
     /// The paired devices, each a dict `id`, `name`, `fingerprint`, `connected`
@@ -417,15 +544,9 @@ impl Devices {
             .collect()
     }
 
-    /// Forget a pairing. A connected device is unpaired over its live link (so
-    /// the phone learns too, and the link thread drops the pin); an offline one
-    /// simply has its pin removed here.
-    fn forget(&self, device_id: String) {
-        if self.is_connected(&device_id) {
-            self.forward(&device_id, Command::Unpair);
-        } else {
-            let _ = self.trust.lock_ok().forget(&device_id);
-        }
+    /// Forget durably and wait for any live session to cross the same barrier.
+    fn forget(&self, device_id: String) -> zbus::fdo::Result<()> {
+        self.revoke(&device_id)
     }
 
     /// The per-plugin toggles, as a `name → enabled` dict (the app's switches).
@@ -439,17 +560,24 @@ impl Devices {
     }
 
     /// Enable or disable a plugin and persist. An unknown name is ignored.
-    fn set_plugin(&self, plugin: String, enabled: bool) {
+    fn set_plugin(&self, plugin: String, enabled: bool) -> zbus::fdo::Result<()> {
         let mut settings = self.settings.lock_ok();
-        if settings.set(&plugin, enabled) {
-            let _ = settings.save(&self.settings_path);
+        match settings.update(&self.settings_path, &plugin, enabled) {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(zbus::fdo::Error::InvalidArgs(format!(
+                "unknown plugin {plugin}"
+            ))),
+            Err(error) => Err(zbus::fdo::Error::IOError(error.to_string())),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{install_artwork, set_media, DeviceEntry, Registry};
+    use super::{
+        command_channel, install_artwork, set_media, set_verification_key, Command, DeviceEntry,
+        Registry, COMMAND_QUEUE_CAPACITY,
+    };
     use crate::lock::LockOk;
     use magnetita_core::PlayerState;
     use std::collections::BTreeMap;
@@ -475,6 +603,7 @@ mod tests {
             album_art_url: artwork.to_owned(),
             is_playing: true,
             can_pause: true,
+            can_play: true,
             can_seek: true,
             length: 120_000,
             pos: 30_000,
@@ -492,6 +621,7 @@ mod tests {
         assert_eq!(entry.media_length, 120_000);
         assert_eq!(entry.media_position, 30_000);
         assert!(entry.media_can_seek);
+        assert!(entry.media_can_play);
         let dict = entry.to_dict();
         for key in [
             "mediaPlayer",
@@ -499,9 +629,38 @@ mod tests {
             "mediaLength",
             "mediaPosition",
             "mediaCanSeek",
+            "mediaCanPlay",
+            "mediaNowPlaying",
+            "verificationKey",
         ] {
             assert!(dict.contains_key(key), "missing Devices1 key {key}");
         }
+    }
+
+    #[test]
+    fn pairing_code_is_published_and_cleared_without_touching_the_fingerprint() {
+        let registry = registry();
+        assert!(set_verification_key(&registry, "phone", "7C6FA008"));
+        {
+            let guard = registry.lock_ok();
+            let entry = guard.get("phone").unwrap();
+            assert_eq!(entry.verification_key, "7C6FA008");
+            assert_eq!(entry.fingerprint, "fingerprint");
+        }
+        assert!(set_verification_key(&registry, "phone", ""));
+        assert!(!set_verification_key(&registry, "phone", ""));
+    }
+
+    #[test]
+    fn a_device_command_burst_has_a_hard_queue_bound() {
+        let (commands, _receiver) = command_channel();
+        for _ in 0..COMMAND_QUEUE_CAPACITY {
+            commands.try_send(Command::Ring).unwrap();
+        }
+        assert!(matches!(
+            commands.try_send(Command::Ring),
+            Err(std::sync::mpsc::TrySendError::Full(_))
+        ));
     }
 
     #[test]
@@ -534,5 +693,33 @@ mod tests {
         let guard = registry.lock_ok();
         let entry = guard.get("phone").expect("fixture device exists");
         assert!(entry.media_artwork_url.is_empty());
+    }
+
+    #[test]
+    fn changing_player_clears_artwork_even_when_the_source_string_is_reused() {
+        let registry = registry();
+        set_media(&registry, "phone", Some(&state("shared-cover")));
+        install_artwork(
+            &registry,
+            "phone",
+            "YouTube",
+            "shared-cover",
+            PathBuf::from("/run/user/1000/shared.img"),
+            "file:///run/user/1000/shared.img".to_owned(),
+        )
+        .expect("current artwork installs");
+
+        let mut next = state("shared-cover");
+        next.player = "Spotify".to_owned();
+        assert_eq!(
+            set_media(&registry, "phone", Some(&next)),
+            Some(PathBuf::from("/run/user/1000/shared.img"))
+        );
+        let guard = registry.lock_ok();
+        assert!(guard
+            .get("phone")
+            .expect("fixture device exists")
+            .media_artwork_url
+            .is_empty());
     }
 }

@@ -437,6 +437,7 @@ dependencies = [
 name = "magnetita-net"
 version = "1.0.0"
 dependencies = [
+ "celestina-core",
  "magnetita-core",
  "rcgen",
  "ring",
@@ -453,6 +454,7 @@ dependencies = [
  "celestina-core",
  "magnetita-core",
  "magnetita-net",
+ "rustix",
  "serde",
  "serde_json",
  "zbus",

@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Window
 import CelestinaStyle 1.0
@@ -23,12 +25,17 @@ import CelestinaStyle 1.0
 Window {
     id: chooser
 
+    required property bool reducedMotion
+    // Live flattened list supplied by the C++ host. Each row has exactly `name`, `width`,
+    // `height` and `devicePixelRatio`; QScreen objects do not expose standalone
+    // width/height properties to QML, so the boundary is flattened explicitly.
+    required property list<var> screens
+
     // `chosen` es el contrato con el host en C++: al fijarlo, el host imprime y
     // termina. Vacío + `cancelled` significa "el usuario no quiere compartir".
     property string chosen: ""
     property bool cancelled: false
 
-    readonly property var screens: Qt.application.screens
     // La tarjeta más alta manda: las demás se alinean a su base.
     readonly property int tileHeight: 148
     readonly property int tileWidth: 236
@@ -54,16 +61,56 @@ Window {
     width: cardWidth + 24
     height: cardHeight + 24
     visible: true
-    color: "transparent"
+    color: CelestinaTheme.clear
     flags: Qt.Dialog | Qt.FramelessWindowHint
     title: "Compartir pantalla"
 
     property int selected: 0
+    // Preserve the selected output across a live QScreen snapshot. An index is
+    // only a presentation detail: removing an earlier output must not silently
+    // move the user's selection to a different monitor.
+    property string selectedOutputName: ""
+
+    Component.onCompleted: {
+        CelestinaTheme.reducedMotion = reducedMotion
+        reconcileScreens()
+    }
+
+    onScreensChanged: reconcileScreens()
+
+    function reconcileScreens() {
+        if (screens.length === 0) {
+            selected = 0
+            selectedOutputName = ""
+            return
+        }
+
+        let nextIndex = -1
+        for (let i = 0; i < screens.length; ++i) {
+            if (screens[i].name === selectedOutputName) {
+                nextIndex = i
+                break
+            }
+        }
+        if (nextIndex < 0)
+            nextIndex = Math.max(0, Math.min(selected, screens.length - 1))
+
+        selectOutput(nextIndex)
+    }
+
+    function selectOutput(index) {
+        if (index < 0 || index >= screens.length)
+            return
+        selected = index
+        selectedOutputName = screens[index].name
+        row.positionViewAtIndex(selected, ListView.Contain)
+    }
 
     function choose(index) {
         if (index < 0 || index >= screens.length)
             return
-        chosen = screens[index].name
+        selectOutput(index)
+        chosen = selectedOutputName
     }
     function cancel() {
         cancelled = true
@@ -78,7 +125,7 @@ Window {
         height: Math.min(chooser.cardHeight, chooser.height - 20)
         radius: CelestinaTheme.radiusLg
         color: CelestinaTheme.surfaceStrong
-        border.width: 1
+        border.width: CelestinaTheme.borderHairline
         border.color: CelestinaTheme.divider
 
         Text {
@@ -128,14 +175,20 @@ Window {
             currentIndex: chooser.selected
             boundsBehavior: Flickable.StopAtBounds
             focus: true
+            activeFocusOnTab: true
+            KeyNavigation.tab: cancelButton
+            KeyNavigation.backtab: shareButton
+            Accessible.role: Accessible.List
+            Accessible.name: "Pantallas disponibles"
 
             Keys.onPressed: function(event) {
                 if (event.key === Qt.Key_Escape) {
                     chooser.cancel()
                 } else if (event.key === Qt.Key_Right) {
-                    chooser.selected = Math.min(count - 1, chooser.selected + 1)
+                    chooser.selectOutput(Math.min(count - 1,
+                                                  chooser.selected + 1))
                 } else if (event.key === Qt.Key_Left) {
-                    chooser.selected = Math.max(0, chooser.selected - 1)
+                    chooser.selectOutput(Math.max(0, chooser.selected - 1))
                 } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                     chooser.choose(chooser.selected)
                 } else {
@@ -158,11 +211,14 @@ Window {
                 color: tile.current ? CelestinaTheme.surfaceSelected
                        : tileMouse.containsMouse ? CelestinaTheme.surfaceHover
                        : CelestinaTheme.controlFill
-                border.width: tile.current ? 1 : 0
+                border.width: tile.current ? CelestinaTheme.borderHairline : 0
                 border.color: CelestinaTheme.dividerStrong
 
                 Behavior on color {
-                    ColorAnimation { duration: CelestinaTheme.motionFast }
+                    ColorAnimation {
+                        duration: CelestinaTheme.reducedMotion
+                                  ? 0 : CelestinaTheme.motionFast
+                    }
                 }
 
                 // La pantalla, a escala: 16:9 se ve ancha, una vertical se ve
@@ -177,7 +233,7 @@ Window {
                     width: Math.min(170, Math.round(height * ratio))
                     radius: CelestinaTheme.radiusSm
                     color: CelestinaTheme.canvas
-                    border.width: 1
+                    border.width: CelestinaTheme.borderHairline
                     border.color: tile.current ? CelestinaTheme.accent
                                                : CelestinaTheme.divider
 
@@ -188,7 +244,7 @@ Window {
                         anchors.top: parent.bottom
                         width: Math.round(parent.width * 0.22)
                         height: 4
-                        radius: 2
+                        radius: height / 2
                         color: tile.current ? CelestinaTheme.accent
                                             : CelestinaTheme.divider
                     }
@@ -228,9 +284,14 @@ Window {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: chooser.selected = tile.index
+                    onClicked: chooser.selectOutput(tile.index)
                     onDoubleClicked: chooser.choose(tile.index)
                 }
+
+                Accessible.role: Accessible.ListItem
+                Accessible.name: tile.modelData.name
+                Accessible.selected: tile.current
+                Accessible.onPressAction: chooser.choose(tile.index)
             }
         }
 
@@ -242,12 +303,21 @@ Window {
             spacing: 12
 
             CelestinaButton {
+                id: cancelButton
+
                 text: "Cancelar"
+                KeyNavigation.tab: shareButton
+                KeyNavigation.backtab: row
                 onClicked: chooser.cancel()
             }
             CelestinaButton {
+                id: shareButton
+
                 text: "Compartir"
-                primary: true
+                role: CelestinaButton.Primary
+                enabled: chooser.screens.length > 0
+                KeyNavigation.tab: row
+                KeyNavigation.backtab: cancelButton
                 onClicked: chooser.choose(chooser.selected)
             }
         }

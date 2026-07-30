@@ -126,8 +126,8 @@ Reglas Rust/CXX-Qt:
 
 - No escribir colores QML fuera de `CelestinaTheme`: ni hex, nombres, `Qt.rgba`,
   `Qt.darker`, `Qt.lighter` ni mezclas locales. La regla es obligatoria para
-  todo QML nuevo o modificado; el shell congelado conserva deuda previa fuera
-  del guard visual hasta que el autor autorice trabajo en él.
+  todo QML nuevo o modificado; el guard visual cubre Siderita, Magnetita, el
+  shell y el propio módulo compartido.
 - No hardcodear anatomía compartida: tipografía, radios, bordes, paddings de
   control, opacidades de estado, duraciones y easing salen de tokens semánticos.
 - Coordenadas, anchos responsivos y geometría propia de una pantalla permanecen
@@ -155,10 +155,12 @@ Un control no está terminado sólo porque responda al ratón.
   y restauran el foco al cerrar.
 - Listas, pestañas, selección, progreso, errores y toggles exponen estado
   accesible, no sólo apariencia.
-- La ausencia actual de `CelestinaTheme.reducedMotion` es deuda registrada en
-  STYLE-1, no una convención. Antes de añadir o modificar movimiento, aterriza
-  el contrato compartido o deja el cambio sin declarar terminado; un nuevo
-  `Behavior` o `Transition` sin ruta reducida está incompleto.
+- `CelestinaTheme.reducedMotion` es la entrada compartida y cada host la inyecta
+  desde `CELESTINA_REDUCED_MOTION`. Todo movimiento nuevo o modificado la honra:
+  las transformaciones espaciales/escala quedan instantáneas o desactivadas y
+  ningún `Behavior` o `Transition` nuevo queda sin ruta reducida. Su existencia
+  no demuestra que toda animación heredada haya sido auditada ni validada en una
+  sesión real.
 - Texto normal cumple al menos 4.5:1 y texto grande 3:1 en cada estado y esquema.
 
 ## Rust, IO y contratos externos
@@ -170,6 +172,9 @@ Un control no está terminado sólo porque responda al ratón.
   de mutex ya documentado o una invariancia demostrada junto al `expect`.
 - Errores tipados con contexto y fuente. D-Bus best-effort: su caída degrada el
   servicio, no tumba ni bloquea la app.
+- Una API D-Bus/IO bloqueante nunca corre en el hilo Qt. Ejecuta el trabajo fuera
+  del GUI thread, limita/coalesce ráfagas, aplica sólo snapshots confirmados al
+  volver y conserva un ciclo de vida que pueda cerrarse de forma determinista.
 - Escrituras con pérdida cero: no borrar origen antes de verificar destino;
   limpiar destinos parciales tras fallo o cancelación.
 - Entrada de red es hostil: límites de bytes, timeouts y saneado de nombres/rutas.
@@ -196,6 +201,7 @@ Después aplica la matriz mínima según el área tocada:
 | QML de Siderita | registro, `qmllint`, build y `siderita/scripts/smoke.sh` |
 | QML de Magnetita | registro, build y arranque offscreen de la superficie afectada |
 | `celestina-style` | guard, `all_qmllint`, galería y consumidores afectados |
+| Guards/CI de arquitectura | `bash scripts/test-architecture-scanners.sh`, guard normal y fixture negativa relevante |
 | D-Bus/protocolo | tests del productor y compatibilidad de consumidores |
 | UI visual | captura/inspección de la superficie; Wayland real para blur/compositor |
 | Accesibilidad | teclado/foco automatizado cuando sea posible y AT-SPI real antes de declararla validada |

@@ -27,6 +27,7 @@ pub mod mpris;
 pub mod notification;
 pub mod packet;
 pub mod pair;
+pub mod payload;
 pub mod ping;
 pub mod session;
 pub mod sftp;
@@ -38,12 +39,18 @@ pub use event::{ConnectionEvent, LostReason};
 pub use findmyphone::TYPE_FINDMYPHONE_REQUEST;
 pub use identity::{DeviceType, Identity, DEFAULT_PORT, PROTOCOL_VERSION, TYPE_IDENTITY};
 pub use mpris::{
-    read_album_art, read_mpris, read_mpris_request, request_album_art, IncomingAlbumArt,
-    MprisRequest, MprisUpdate, PlayerState, TYPE_MPRIS, TYPE_MPRIS_REQUEST,
+    playback_progress, read_album_art, read_mpris, read_mpris_request, request_album_art,
+    IncomingAlbumArt, MediaAction, MprisRequest, MprisUpdate, PlaybackProgress, PlayerState,
+    TYPE_MPRIS, TYPE_MPRIS_REQUEST,
 };
 pub use notification::{read_notification, Notification, TYPE_NOTIFICATION};
 pub use packet::NetworkPacket;
-pub use pair::{pair_packet, PairAction, PairState, Pairing, TIMEOUT_SECS, TYPE_PAIR};
+pub use pair::{
+    pair_message_packet, pair_request_packet, pair_response_packet, PairAction, PairError,
+    PairMessage, PairState, PairVerification, Pairing, MAX_CLOCK_SKEW_SECS, TIMEOUT_SECS,
+    TYPE_PAIR,
+};
+pub use payload::{is_payload_port, PAYLOAD_PORT_MAX, PAYLOAD_PORT_MIN};
 pub use ping::{ping_packet, TYPE_PING};
 pub use session::{Outgoing, Reaction, Session};
 pub use sftp::{read_sftp, request_packet, SftpMount, SftpReply, TYPE_SFTP, TYPE_SFTP_REQUEST};

@@ -6,14 +6,26 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "$script_dir/../.." && pwd)
 cd "$repo_root"
 
-contract_files=()
-while IFS= read -r -d '' file; do
-    contract_files+=("$file")
-done < <(find siderita/qml magnetita/qml celestina-style \
+contract_manifest=''
+if ! contract_manifest=$(mktemp); then
+    echo "No se pudo crear el manifiesto temporal del contrato QML." >&2
+    exit 1
+fi
+trap 'rm -f -- "$contract_manifest"' EXIT
+
+if ! find siderita/qml magnetita/qml celestina/qml celestina-style \
     -path '*/build' -prune -o \
     -type f -name '*.qml' \
     ! -path 'celestina-style/CelestinaTheme.qml' \
-    -print0)
+    -print0 > "$contract_manifest"; then
+    echo "No se pudo enumerar el árbol QML completo." >&2
+    exit 1
+fi
+
+contract_files=()
+while IFS= read -r -d '' file; do
+    contract_files+=("$file")
+done < "$contract_manifest"
 
 if ((${#contract_files[@]} == 0)); then
     echo "No se encontraron archivos QML para auditar." >&2
@@ -22,12 +34,47 @@ fi
 
 failures=0
 
+if structural_hits=$(python3 scripts/architecture_scanners.py qml-style-contract \
+    celestina-style/CelestinaTheme.qml \
+    siderita/qml magnetita/qml celestina/qml celestina-style); then
+    if [[ -n $structural_hits ]]; then
+        printf '%s\n' "$structural_hits"
+        printf 'ERROR: el scanner estructural encontro valores visuales directos.\n\n' >&2
+        failures=1
+    fi
+else
+    printf 'ERROR: el scanner estructural no pudo completar el contrato visual.\n\n' >&2
+    failures=1
+fi
+
+if copy_hits=$(python3 scripts/architecture_scanners.py style-copies \
+    celestina-style siderita/qml magnetita/qml celestina/qml); then
+    if [[ -n $copy_hits ]]; then
+        printf '%s\n' "$copy_hits"
+        printf 'ERROR: una copia renombrada evade los enlaces de celestina-style.\n\n' >&2
+        failures=1
+    fi
+else
+    printf 'ERROR: no se pudo comparar el estilo compartido con sus consumidores.\n\n' >&2
+    failures=1
+fi
+
 check_pattern() {
     local message=$1
     local pattern=$2
-    local hits
+    local hits status
 
-    hits=$(grep -nEH -- "$pattern" "${contract_files[@]}" || true)
+    if hits=$(grep -nEH -- "$pattern" "${contract_files[@]}"); then
+        :
+    else
+        status=$?
+        if ((status != 1)); then
+            printf 'ERROR: grep no pudo completar el contrato visual (%s).\n\n' \
+                "$message" >&2
+            failures=1
+            return
+        fi
+    fi
     if [[ -n $hits ]]; then
         printf '%s\n' "$hits"
         printf 'ERROR: %s\n\n' "$message" >&2
@@ -43,7 +90,7 @@ check_pattern \
     '#[[:xdigit:]]{3,8}'
 check_pattern \
     'color nominal fuera de CelestinaTheme.qml; usa un token semántico' \
-    '(color|border\.color|selectionColor|selectedTextColor|placeholderTextColor|fillColor)[[:space:]]*:[[:space:]]*"(white|black|transparent|red|blue|green|yellow)"'
+    "(color|border\\.color|selectionColor|selectedTextColor|placeholderTextColor|fillColor)[[:space:]]*:[[:space:]]*['\"][[:alpha:]][[:alnum:]_-]*['\"]"
 check_pattern \
     'transformación de color local; deriva el estado en CelestinaTheme.qml' \
     'Qt\.(rgba|darker|lighter|tint)[[:space:]]*\('
@@ -80,6 +127,10 @@ check_pattern \
 check_pattern \
     'opacidad visual directa; usa un token de estado/énfasis' \
     'opacity[[:space:]]*:[^;]*[[:space:]?:]0\.[0-9]+'
+
+if ! python3 celestina-style/scripts/check-contrast-contract.py; then
+    failures=1
+fi
 
 if ((failures)); then
     exit 1

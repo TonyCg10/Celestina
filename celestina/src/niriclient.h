@@ -3,7 +3,10 @@
 #include <QByteArray>
 #include <QObject>
 #include <QProcess>
+#include <QTimer>
 #include <QVariantList>
+
+#include "niriprotocoldecoder.h"
 
 // Thin GUI-thread adapter for the Rust Niri helper.
 //
@@ -19,6 +22,7 @@ class NiriClient final : public QObject
 
 public:
     explicit NiriClient(QObject *parent = nullptr);
+    ~NiriClient() override;
 
     bool available() const { return m_available; }
     QVariantList workspaces() const { return m_workspaces; }
@@ -29,15 +33,20 @@ signals:
 private slots:
     void readStandardOutput();
     void readStandardError();
-    void adapterStopped();
+    void adapterStopped(int exitCode, QProcess::ExitStatus exitStatus);
+    void adapterError(QProcess::ProcessError error);
 
 private:
+    void startAdapter();
+    void scheduleRestart();
     void applyMessage(const QByteArray &line);
     void setUnavailable();
 
     QProcess m_process;
-    QByteArray m_outputBuffer;
+    QTimer m_restartTimer;
+    NiriProtocolDecoder m_decoder;
     QVariantList m_workspaces;
     bool m_available = false;
+    bool m_stopping = false;
+    int m_restartDelayMs = 0;
 };
-

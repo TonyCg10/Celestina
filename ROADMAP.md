@@ -8,7 +8,9 @@
 > [celestina-style](celestina-style/ROADMAP.md) ·
 > [celestina](celestina/ROADMAP.md) ·
 > [siderita](siderita/ROADMAP.md) ·
-> [magnetita](magnetita/ROADMAP.md)
+> [magnetita](magnetita/ROADMAP.md) ·
+> [fluorita](fluorita/ROADMAP.md) ·
+> [grafita](grafita/ROADMAP.md)
 >
 > Checklist legend: `[x]` done · `[ ]` planned. Source presence is not runtime
 > evidence — a goal stays unchecked until it is verified, not merely written.
@@ -37,25 +39,29 @@ its author.
 `celestina` reads Niri's event stream through a pinned Rust adapter and renders
 real output-local workspaces plus the active window beside its clock and phone
 state. It remains read-only until focus requests can expose pending, failed and
-provider-confirmed outcomes; Noctalia stays the reversible fallback.
+provider-confirmed outcomes; Noctalia stays the reversible fallback. Since
+2026-07-29 the shell's destination is explicit: replace Noctalia entirely in
+staged phases (R0–R9 in the [shell roadmap](celestina/ROADMAP.md)), each phase
+retiring one responsibility behind a real-session gate.
 
 ## The pieces
 
 | Project | Role | Stack | Consumes | Consumed by |
 |---|---|---|---|---|
-| [celestina-rs](celestina-rs/) | Shared domain cores | Rust | — | siderita, future apps |
-| [celestina-style](celestina-style/) | Shared visual language | QML | — | celestina, siderita, future apps |
+| [celestina-rs](celestina-rs/) | Shared domain cores | Rust | — | siderita, magnetita, future apps |
+| [celestina-style](celestina-style/) | Shared visual language | QML | — | celestina, siderita, magnetita, future apps |
 | [celestina](celestina/) | Niri shell / session | C++ · QML (+ Rust bridge) | celestina-style | the session |
-| [siderita](siderita/) | File manager (first app) | Rust · QML (CXX-Qt) | celestina-rs | the user |
+| [siderita](siderita/) | File manager (first app) | Rust · QML (CXX-Qt) | celestina-rs, celestina-style | the user |
 | [magnetita](magnetita/) | Phone link (KDE Connect) | Rust · QML (CXX-Qt) | celestina-rs, celestina-style | the user, siderita (via `org.celestina.Devices1`) |
 
 Dependencies flow one way — cores and style never depend on apps or the shell:
 
 ```
-celestina-rs ─────┐                    celestina-style ─────┐
-  (domain cores)  ├──► siderita            (tokens +        ├──► celestina
-                  │      (file mgr)         components)     │      (Niri shell)
-                  └──► future apps ◄──────────────────────── ┘──► future apps
+celestina-rs ───────► siderita, magnetita, future apps
+  (domain/IO)
+
+celestina-style ────► celestina, siderita, magnetita, future apps
+  (tokens/components)
 ```
 
 > `siderita` now renders from the shared `celestina-style` module — its private
@@ -65,24 +71,26 @@ celestina-rs ─────┐                    celestina-style ────�
 > an *installed* release, deferred with STYLE-D until an out-of-tree consumer
 > exists.
 
-**Planned apps** — design-stage, listed in the README's
-[Planned](README.md#planned) section, each started only when a recurring daily
-gap proves the need and each reusing `celestina-rs` + `celestina-style`:
+**Planned apps** — not built, listed in the README's
+[Planned / ready to start](README.md#planned--ready-to-start) section and each
+reusing `celestina-rs` + `celestina-style`:
 
-- **[Fluorita](fluorita/)** *(working name)* — the media player (audio · video ·
-  image) that produces the video/audio thumbnails Siderita consumes, and later
-  runs as a shell widget.
+- **[Fluorita](fluorita/)** — the media player (audio · video · image) that
+  produces the video/audio thumbnails Siderita consumes, and later runs as a
+  shell widget. Its recurring gap opened the build gate; its first executable
+  order is F1 → F4.
 - **[Grafita](grafita/)** *(working name)* — a light text/code editor, the
   edit-side companion to Siderita's read-only quick-look ("Abrir con Grafita").
+  Its G0–G6 start contract is ready, but name ratification and explicit build
+  authorization remain separate gates.
 
-Fluorita and Grafita each have a directory holding a README and a roadmap and no
-code — **[Magnetita](magnetita/) has left this stage** (shipped 1.0.0; see the
+Fluorita and Grafita each still have a directory holding a README and a roadmap
+and no code — **[Magnetita](magnetita/) has left this stage** (shipped 1.0.0; see the
 status snapshot above). That is
 deliberate: two of Siderita's shipped decisions (consuming video thumbnails it
-will not generate; a quick-look that hands video, audio and PDF to an info card
-naming Fluorita) are already promises to these projects, and a promise is worth
-writing down as a contract. The build gate is unchanged — each starts only when a
-recurring daily gap proves the need.
+will not generate; a quick-look that hands video and audio to an info card naming
+Fluorita) are already promises to these projects, and a promise is worth writing
+down as a contract. Fluorita's build gate is open; Grafita's remains closed.
 
 ## Shared foundations (the stack contract)
 
@@ -91,8 +99,9 @@ as a suite rather than four unrelated apps:
 
 - **Rust core, QML frontend, thin bridge.** Domain, IO, state and coordination
   in Rust; presentation in QML; the C++/CXX-Qt layer kept to the generated
-  bridge. Qt models mutate only on the GUI thread; background work is bounded
-  and joins on shutdown.
+  bridge. Qt models mutate only on the GUI thread. Owned workers are bounded and
+  join on shutdown; any best-effort watcher without a deterministic lifecycle is
+  named as debt rather than treated as the pattern.
 - **One visual language.** `celestina-style` owns semantic tokens and generic
   controls. Apps art-direct within the tokens; they do not fork the look.
 - **Standards over glue.** Interop via XDG/freedesktop (URIs, MIME, Trash, icon
@@ -102,26 +111,36 @@ as a suite rather than four unrelated apps:
   amortized across the suite, not used to excuse any single app's waste.
 - **Truthful state.** A click is a request, never proof of success. The UI never
   presents a location or result it has not verified.
-- **Versioned contracts, independent releases.** Crates and the style module are
-  consumed by pinned version for any release; path deps are a development
-  convenience only. The monorepo owns shared history and the contracts.
+- **Versioned contracts, independent releases.** Rust crates are pinned for a
+  release. In-tree visual consumers build from or import the canonical style
+  source directly; a relocatable installed style module is deferred to STYLE-D
+  until an out-of-tree consumer exists. The monorepo owns shared history and the
+  contracts.
 
-## Status snapshot (2026-07-26)
+## Status snapshot (2026-07-29)
 
 - ✅ Monorepo git baseline established (this repository).
 - `celestina-rs` — eight crates compile: the five pure cores plus Magnetita's
   protocol core, TLS transport and headless daemon; fmt, Clippy and the
   workspace tests pass.
-- `celestina-style` — the canonical shared source (semantic tokens + working
-  glass + fallback icons). Official consumption contract: apps symlink the
+- `celestina-style` — the canonical shared source (semantic tokens, working
+  glass, Lucide controls and a host-controlled reduced-motion input). Official
+  consumption contract: apps symlink the
   sources into their own CXX-Qt modules and compile them in, CI-guarded
   against copies; the shell (panel and chooser) imports the source tree via a
-  self-provisioned import path. An installable clean-prefix release is
-  deferred until an out-of-tree consumer exists.
-- `celestina` — host builds and QML-lints; the panel renders from
+  self-provisioned import path, with the same URI alias supplied to `qmllint`.
+  The visual/contrast guard covers all three consumers, and an offscreen Qt
+  Quick Test proves modal focus containment/restoration, Escape and pointer
+  blocking. Full legacy-motion, real-session focus rendering and AT acceptance
+  remain STYLE-1 work; an installable clean-prefix release is deferred until an
+  out-of-tree consumer exists.
+- `celestina` — a pinned Rust Niri event adapter feeds a bounded C++/Qt decoder
+  and host; framing recovery has a focused QtTest target. The panel renders from
   `CelestinaTheme` (restyle S5) and asks the compositor for wallpaper blur via
-  KWindowSystem (niri `ext-background-effect`, best-effort);
-  geometry/zone/focus still lack direct acceptance checks; no Rust yet.
+  a per-surface KWindowEffects controller (niri `ext-background-effect`,
+  best-effort) with an explicit readable fallback. Geometry/zone/focus and real
+  IPC-restart acceptance remain open; the earlier blur capture does not validate
+  the current controller/tint by itself.
 - `siderita` — **v1.0 (now 1.0.1): Iteration 1 concluded (2026-07-25)**, the full CP0 → CP5
   arc. CP0–CP3 are complete and ratified on real Wayland (staged self-contained
   install, loss-free operations, freedesktop interop, a native role model with a
@@ -135,16 +154,22 @@ as a suite rather than four unrelated apps:
   items are carried past 1.0, named not hidden: CP4's drag/menu-blur real-Wayland
   validation, CP5's `parent_window` (needs `xdg-foreign`), and CP5's opt-in
   portal routing until it has been lived with.
-- `magnetita` — **1.0.0: CP0–CP4 complete (2026-07-26)**, verified live against
-  the real phone. UDP discovery, TLS with TOFU pinning, pairing with a shown
-  verification key, reconnect-as-trusted, a systemd user service; the phone
+- `magnetita` — **1.0.0: CP0–CP4 complete (2026-07-26)** was verified live against
+  the real phone. UDP discovery, TLS with TOFU pinning, pairing with a temporary
+  comparison code, reconnect-as-trusted, a systemd user service; the phone
   mounted over sshfs and served on `org.celestina.Devices1` — the suite's
   **first internal contract** — consumed by Siderita's sidebar, by the
   standalone app (pair/unpair, a connection log that says *why*, Settings with
   per-plugin toggles) and by the `celestina` panel. Daily plugins live:
   battery, notifications, file share both ways, find-my-phone, clipboard,
-  MPRIS media both ways. Known phone-side limit: clipboard phone → desktop is
-  manual (Android forbids background clipboard reads).
+  MPRIS media both ways. The UI now keeps blocking zbus work off the Qt thread
+  and coalesces refreshes. Pairing v8/identity/admission, durable revocation,
+  post-transfer publication barriers and typed MPRIS/progress/artwork corrections
+  have unit or loopback coverage but await a fresh phone/Wayland acceptance pass.
+  The UI action worker and daemon MPRIS worker
+  are bounded and joined; the best-effort D-Bus read/signal watchers still lack
+  deterministic shutdown. Known phone-side limit: clipboard phone → desktop is manual
+  (Android forbids background clipboard reads).
 
 ---
 
@@ -154,13 +179,14 @@ truthful first slice; the shared contracts exist in a form apps can consume.
 
 - [x] Monorepo git baseline
 - [ ] **celestina-rs CP0** — freeze & version the read-only core API
-- [ ] **celestina-style CP0** — one canonical source compiled into every consumer (symlinks, CI-guarded — done); the qmllint `OUTPUT_DIRECTORY` warning is fixed (S1); the public-type inventory is still open. The installable clean-prefix module is deferred until an out-of-tree consumer exists
+- [x] **celestina-style CP0** — one canonical source consumed directly by every in-tree surface: symlink-compiled by both apps and source-imported by the shell, CI-guarded; the public API/qmldir/CMake inventory and qmllint path are aligned. The installable clean-prefix module is deferred until an out-of-tree consumer exists
 - [ ] **celestina CP0** — panel geometry, exclusive zone and no-focus verified on real Niri
 - [x] **siderita CP0** — ship the read-only slice from a staged install with real-Wayland resource/frame numbers; ratify or reopen Qt/QML
 
-**Done when:** no project needs a sibling source checkout to build; the shell
-maps correctly on every output without stealing focus; the file manager runs
-from an install and its budget is met or the frontend is explicitly reopened.
+**Done when:** every in-tree project consumes the canonical sibling sources with
+no copies or forks; the shell maps correctly on every output without stealing
+focus; the file manager runs from an install and its budget is met or the
+frontend is explicitly reopened. A source-free style package is STYLE-D work.
 
 ## Checkpoint 1 — Daily driver
 **Goal:** the shell and file manager are usable as the primary session and
@@ -175,8 +201,9 @@ visibly share one design language.
 - [x] **Convergence (desktop)** — the panel and chooser render from CelestinaStyle (restyle S5, confirmed on the live session); the installed-release half of convergence stays deferred with STYLE-D
 
 **Done when:** the author can run a Niri session on Celestina's shell with
-Siderita as the file manager for daily use; both consume the same installed
-style release; no data-loss path exists in file operations.
+Siderita as the file manager for daily use; both consume the same canonical
+style source without drift; no data-loss path exists in file operations. An
+installed style release is not a prerequisite before STYLE-D's external gate.
 
 ## Checkpoint 2 — One suite
 **Goal:** the apps behave as one suite, not a folder of separate programs.
@@ -194,9 +221,18 @@ style release; no data-loss path exists in file operations.
       [shell's roadmap](celestina/ROADMAP.md). *Removing the GTK library is not a
       goal — Firefox and Electron link it regardless; removing GTK's and GNOME's
       say over this session's dialogs is*
+- [ ] **Retire Noctalia (celestina R0–R9)** — the shell replaces Noctalia one
+      responsibility at a time (bar → launcher → session verbs/OSD →
+      notifications → control center → lock → wallpaper/Settings portal →
+      Polkit/dock), each phase gated on real-session evidence with a named
+      fallback; the phases live in the [shell's roadmap](celestina/ROADMAP.md)
+      and the per-phase work orders in
+      [NOCTALIA-REPLACEMENT.md](celestina/NOCTALIA-REPLACEMENT.md)
 - [ ] Suite conventions: single-instance behavior, a small IPC/activation convention, `open-with`/handler wiring, drag-and-drop between first-party apps — all over freedesktop standards
 - [ ] One settings + theming source shared by the shell and every app
-- [ ] Additional first-party apps — **Grafita** (text/code editor), **Fluorita** (media player: audio · video · image) — added **one at a time**, each only after recurring friction with the tool it replaces proves the need; each reuses `celestina-rs` + `celestina-style` and adds its own domain crate
+- [ ] Additional first-party apps — **Fluorita** first (its gate is open), then
+      **Grafita** only after its own name/need gate — added **one at a time**;
+      each reuses `celestina-rs` + `celestina-style` and adds its own domain crate
 
 ## Later / someday
 - [ ] Packaging and distribution beyond the author's machine (reproducible install, dependency diagnostics), once the suite is worth shipping

@@ -32,10 +32,11 @@ genérico de la suite, no una extensión de ninguna app.
 - Una capa modal implementa el contrato completo de foco y bloqueo, no solo un
   scrim que capture clics. Los consumidores no deben poder disparar atajos de la
   superficie cubierta.
-- `CelestinaTheme.reducedMotion` aún es deuda de STYLE-1. Todo `Behavior`,
-  `Transition` o animación nuevo/modificado debe aterrizar o consumir ese
-  contrato y respetarlo; el modo reducido forma parte de la API compartida, no
-  es una excepción que cada app resuelve por su cuenta.
+- `CelestinaTheme.reducedMotion` es la única entrada de movimiento reducido.
+  Todo `Behavior`, `Transition` o animación nuevo/modificado la consume; no
+  inventes flags locales por app. El token y su inyección desde los hosts ya
+  existen, pero eso no sustituye la auditoría de animaciones heredadas ni la
+  comprobación interactiva con el modo encendido y apagado.
 
 ## Matriz mínima de verificación
 

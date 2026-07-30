@@ -48,6 +48,8 @@ pub enum LostReason {
     PairRejected,
     /// The pairing request went unanswered past the ~30 s window.
     PairTimedOut,
+    /// A fresh pairing request was malformed or carried an implausible v8 clock.
+    PairInvalid,
     /// The device closed the link.
     PeerClosed,
 }

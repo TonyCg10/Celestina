@@ -11,6 +11,7 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaIcon.qml",
     "qml/CelestinaIconButton.qml",
     "qml/CelestinaSectionLabel.qml",
+    "qml/CelestinaFocusRing.qml",
     "qml/CelestinaSwitch.qml",
     "qml/GlassSurface.qml",
     "qml/ListSection.qml",

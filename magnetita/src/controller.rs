@@ -6,9 +6,16 @@
 //! its own beyond the last snapshot.
 
 use core::pin::Pin;
+use std::sync::mpsc::{sync_channel, SyncSender, TrySendError};
+use std::thread::JoinHandle;
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
+use magnetita_core::MediaAction;
+
+use crate::projection::{
+    battery_label, flag, media_label, next_toggle_value, progress_fields, state_label,
+};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -28,7 +35,7 @@ pub mod qobject {
         #[qproperty(QStringList, device_types)]
         #[qproperty(QStringList, device_mounts)]
         #[qproperty(QStringList, device_states)]
-        #[qproperty(QStringList, device_fingerprints)]
+        #[qproperty(QStringList, device_verification_keys)]
         // Formatted battery per device ("58 %", "58 % ⚡", or "" if unknown).
         #[qproperty(QStringList, device_battery)]
         // Per-device charging flag ("true"/"false"), parallel to battery.
@@ -39,20 +46,27 @@ pub mod qobject {
         // playing (which hides the media card), and parallel "true"/"false"
         // flags for the play/pause state and whether next/prev are available.
         #[qproperty(QStringList, device_media)]
+        #[qproperty(QStringList, device_media_players)]
         #[qproperty(QStringList, device_media_titles)]
         #[qproperty(QStringList, device_media_artists)]
         #[qproperty(QStringList, device_media_albums)]
+        #[qproperty(QStringList, device_media_now_playing)]
         #[qproperty(QStringList, device_media_artwork)]
         #[qproperty(QStringList, device_media_lengths)]
         #[qproperty(QStringList, device_media_positions)]
         #[qproperty(QStringList, device_media_playing)]
+        #[qproperty(QStringList, device_media_play)]
+        #[qproperty(QStringList, device_media_pause)]
         #[qproperty(QStringList, device_media_next)]
         #[qproperty(QStringList, device_media_previous)]
         #[qproperty(QStringList, device_media_seek)]
+        #[qproperty(QStringList, device_media_progress)]
+        #[qproperty(bool, devices_available)]
         // The connection log — newest first — with a parallel failure flag
         // ("true"/"false") for red styling.
         #[qproperty(QStringList, log_lines)]
         #[qproperty(QStringList, log_failures)]
+        #[qproperty(bool, log_available)]
         // The Settings surface: paired devices (name + fingerprint + a
         // "true"/"false" connected flag) and the per-plugin toggles (label +
         // "true"/"false" enabled flag), all parallel lists.
@@ -61,6 +75,7 @@ pub mod qobject {
         #[qproperty(QStringList, paired_connected)]
         #[qproperty(QStringList, plugin_labels)]
         #[qproperty(QStringList, plugin_enabled)]
+        #[qproperty(bool, settings_available)]
         type DevicesModel = super::DevicesModelRust;
 
         /// Re-read the devices Magnetita reports.
@@ -117,33 +132,59 @@ pub struct DevicesModelRust {
     device_types: QStringList,
     device_mounts: QStringList,
     device_states: QStringList,
-    device_fingerprints: QStringList,
+    device_verification_keys: QStringList,
     device_battery: QStringList,
     device_charging: QStringList,
     device_paired: QStringList,
     device_media: QStringList,
+    device_media_players: QStringList,
     device_media_titles: QStringList,
     device_media_artists: QStringList,
     device_media_albums: QStringList,
+    device_media_now_playing: QStringList,
     device_media_artwork: QStringList,
     device_media_lengths: QStringList,
     device_media_positions: QStringList,
     device_media_playing: QStringList,
+    device_media_play: QStringList,
+    device_media_pause: QStringList,
     device_media_next: QStringList,
     device_media_previous: QStringList,
     device_media_seek: QStringList,
+    device_media_progress: QStringList,
+    devices_available: bool,
     log_lines: QStringList,
     log_failures: QStringList,
+    log_available: bool,
     paired_names: QStringList,
     paired_fingerprints: QStringList,
     paired_connected: QStringList,
     plugin_labels: QStringList,
     plugin_enabled: QStringList,
+    settings_available: bool,
     watch_started: bool,
     event_watch_started: bool,
+    device_reload_in_flight: bool,
+    device_reload_pending: bool,
+    log_reload_in_flight: bool,
+    log_reload_pending: bool,
+    settings_reload_in_flight: bool,
+    settings_reload_pending: bool,
     devices: Vec<crate::devices::Device>,
     paired: Vec<crate::devices::Paired>,
     plugin_states: Vec<bool>,
+    plugin_intents: Vec<Option<bool>>,
+    command_sender: Option<SyncSender<ClientCommand>>,
+    command_worker: Option<JoinHandle<()>>,
+}
+
+impl Drop for DevicesModelRust {
+    fn drop(&mut self) {
+        self.command_sender.take();
+        if let Some(worker) = self.command_worker.take() {
+            let _ = worker.join();
+        }
+    }
 }
 
 /// The plugins the Settings surface shows, in order: (D-Bus key, Spanish label).
@@ -156,12 +197,117 @@ const PLUGINS: [(&str, &str); 6] = [
     ("media", "Control de medios"),
 ];
 
-impl qobject::DevicesModel {
-    /// Reads the reported devices into the parallel lists, then arms the watch so
-    /// later connect / mount / leave events refresh on their own.
-    pub fn reload(mut self: Pin<&mut Self>) {
-        let devices = crate::devices::list_devices().unwrap_or_default();
+enum ClientCommand {
+    Pair(String),
+    Unpair(String),
+    Ring(String),
+    Media(String, MediaAction),
+    Forget(String),
+    SetPlugin(&'static str, bool),
+}
 
+impl ClientCommand {
+    fn run(self) -> bool {
+        let refresh_settings = matches!(&self, Self::Forget(_) | Self::SetPlugin(_, _));
+        let result = match self {
+            Self::Pair(id) => crate::devices::request_pair(&id),
+            Self::Unpair(id) => crate::devices::unpair(&id),
+            Self::Ring(id) => crate::devices::ring(&id),
+            Self::Media(id, action) => crate::devices::media_action(&id, action),
+            Self::Forget(id) => crate::devices::forget(&id),
+            Self::SetPlugin(plugin, enabled) => crate::devices::set_plugin(plugin, enabled),
+        };
+        if let Err(error) = result {
+            eprintln!("magnetita: D-Bus action failed: {error}");
+        }
+        refresh_settings
+    }
+}
+
+impl qobject::DevicesModel {
+    /// Arms the signal watches and schedules D-Bus reads away from the GUI
+    /// thread. Bursts coalesce to at most one follow-up snapshot.
+    pub fn reload(mut self: Pin<&mut Self>) {
+        self.as_mut().start_watch();
+        self.as_mut().start_event_watch();
+        self.as_mut().request_device_reload();
+        self.as_mut().request_log_reload();
+    }
+
+    /// Serialize bounded UI actions through one worker. This preserves click
+    /// order, avoids one detached thread per click, and lets destruction close
+    /// the channel and join the worker deterministically.
+    fn enqueue_command(mut self: Pin<&mut Self>, command: ClientCommand) -> bool {
+        if self.rust().command_sender.is_none() {
+            let (sender, receiver) = sync_channel::<ClientCommand>(32);
+            let qt = self.qt_thread();
+            let worker = std::thread::spawn(move || {
+                while let Ok(command) = receiver.recv() {
+                    if command.run() {
+                        let _ = qt.queue(|model: Pin<&mut qobject::DevicesModel>| {
+                            model.reload_settings();
+                        });
+                    }
+                }
+            });
+            let state = self.as_mut().rust_mut().get_mut();
+            state.command_sender = Some(sender);
+            state.command_worker = Some(worker);
+        }
+
+        if let Some(sender) = self.rust().command_sender.as_ref() {
+            match sender.try_send(command) {
+                Ok(()) => return true,
+                Err(TrySendError::Full(_)) => {
+                    eprintln!("magnetita: UI action queue is full; action dropped");
+                }
+                Err(TrySendError::Disconnected(_)) => {
+                    eprintln!("magnetita: UI action worker is unavailable");
+                }
+            }
+        }
+        false
+    }
+
+    fn request_device_reload(mut self: Pin<&mut Self>) {
+        if self.rust().device_reload_in_flight {
+            self.as_mut().rust_mut().get_mut().device_reload_pending = true;
+            return;
+        }
+        self.as_mut().rust_mut().get_mut().device_reload_in_flight = true;
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let result = crate::devices::list_devices();
+            let _ = qt.queue(move |model: Pin<&mut qobject::DevicesModel>| {
+                model.finish_device_reload(result);
+            });
+        });
+    }
+
+    fn finish_device_reload(
+        mut self: Pin<&mut Self>,
+        result: Result<Vec<crate::devices::Device>, String>,
+    ) {
+        match result {
+            Ok(devices) => {
+                self.as_mut().apply_devices(devices);
+                self.as_mut().set_devices_available(true);
+            }
+            Err(error) => {
+                eprintln!("magnetita: device snapshot unavailable: {error}");
+                self.as_mut().set_devices_available(false);
+            }
+        }
+        let pending = self.rust().device_reload_pending;
+        let state = self.as_mut().rust_mut().get_mut();
+        state.device_reload_in_flight = false;
+        state.device_reload_pending = false;
+        if pending {
+            self.as_mut().request_device_reload();
+        }
+    }
+
+    fn apply_devices(mut self: Pin<&mut Self>, devices: Vec<crate::devices::Device>) {
         let names: QStringList = devices
             .iter()
             .map(|device| QString::from(device.name.as_str()))
@@ -178,9 +324,9 @@ impl qobject::DevicesModel {
             .iter()
             .map(|device| QString::from(state_label(device)))
             .collect();
-        let fingerprints: QStringList = devices
+        let verification_keys: QStringList = devices
             .iter()
-            .map(|device| QString::from(device.fingerprint.as_str()))
+            .map(|device| QString::from(device.verification_key.as_str()))
             .collect();
         let paired: QStringList = devices
             .iter()
@@ -198,6 +344,10 @@ impl qobject::DevicesModel {
             .iter()
             .map(|device| QString::from(media_label(device).as_str()))
             .collect();
+        let media_players: QStringList = devices
+            .iter()
+            .map(|device| QString::from(device.media_player.as_str()))
+            .collect();
         let media_titles: QStringList = devices
             .iter()
             .map(|device| QString::from(device.media_title.as_str()))
@@ -210,21 +360,34 @@ impl qobject::DevicesModel {
             .iter()
             .map(|device| QString::from(device.media_album.as_str()))
             .collect();
+        let media_now_playing: QStringList = devices
+            .iter()
+            .map(|device| QString::from(device.media_now_playing.as_str()))
+            .collect();
         let media_artwork: QStringList = devices
             .iter()
             .map(|device| QString::from(device.media_artwork_url.as_str()))
             .collect();
-        let media_lengths: QStringList = devices
+        let playback: Vec<_> = devices.iter().map(progress_fields).collect();
+        let media_lengths: QStringList = playback
             .iter()
-            .map(|device| QString::from(device.media_length.to_string().as_str()))
+            .map(|(_, length, _)| QString::from(length.to_string().as_str()))
             .collect();
-        let media_positions: QStringList = devices
+        let media_positions: QStringList = playback
             .iter()
-            .map(|device| QString::from(device.media_position.to_string().as_str()))
+            .map(|(position, _, _)| QString::from(position.to_string().as_str()))
             .collect();
         let media_playing: QStringList = devices
             .iter()
             .map(|device| QString::from(flag(device.media_playing)))
+            .collect();
+        let media_play: QStringList = devices
+            .iter()
+            .map(|device| QString::from(flag(device.media_can_play)))
+            .collect();
+        let media_pause: QStringList = devices
+            .iter()
+            .map(|device| QString::from(flag(device.media_can_pause)))
             .collect();
         let media_next: QStringList = devices
             .iter()
@@ -238,93 +401,141 @@ impl qobject::DevicesModel {
             .iter()
             .map(|device| QString::from(flag(device.media_can_seek)))
             .collect();
+        let media_progress: QStringList = playback
+            .iter()
+            .map(|(_, _, kind)| QString::from(*kind))
+            .collect();
 
         self.as_mut().rust_mut().get_mut().devices = devices;
         self.as_mut().set_device_names(names);
         self.as_mut().set_device_types(types);
         self.as_mut().set_device_mounts(mounts);
         self.as_mut().set_device_states(states);
-        self.as_mut().set_device_fingerprints(fingerprints);
+        self.as_mut()
+            .set_device_verification_keys(verification_keys);
         self.as_mut().set_device_battery(battery);
         self.as_mut().set_device_charging(charging);
         self.as_mut().set_device_paired(paired);
         self.as_mut().set_device_media(media);
+        self.as_mut().set_device_media_players(media_players);
         self.as_mut().set_device_media_titles(media_titles);
         self.as_mut().set_device_media_artists(media_artists);
         self.as_mut().set_device_media_albums(media_albums);
+        self.as_mut()
+            .set_device_media_now_playing(media_now_playing);
         self.as_mut().set_device_media_artwork(media_artwork);
         self.as_mut().set_device_media_lengths(media_lengths);
         self.as_mut().set_device_media_positions(media_positions);
         self.as_mut().set_device_media_playing(media_playing);
+        self.as_mut().set_device_media_play(media_play);
+        self.as_mut().set_device_media_pause(media_pause);
         self.as_mut().set_device_media_next(media_next);
         self.as_mut().set_device_media_previous(media_previous);
         self.as_mut().set_device_media_seek(media_seek);
-
-        self.as_mut().reload_log();
-        self.as_mut().start_watch();
-        self.as_mut().start_event_watch();
+        self.as_mut().set_device_media_progress(media_progress);
     }
 
     /// Ask device `index` to pair (its "Emparejar" button).
     pub fn pair_device(self: Pin<&mut Self>, index: i32) {
-        if let Some(device) = usize::try_from(index)
+        if let Some(device_id) = usize::try_from(index)
             .ok()
             .and_then(|i| self.rust().devices.get(i))
+            .map(|device| device.id.clone())
         {
-            crate::devices::request_pair(&device.id);
+            self.enqueue_command(ClientCommand::Pair(device_id));
         }
     }
 
     /// Drop the pairing with device `index` (its "Desvincular" button).
     pub fn unpair_device(self: Pin<&mut Self>, index: i32) {
-        if let Some(device) = usize::try_from(index)
+        if let Some(device_id) = usize::try_from(index)
             .ok()
             .and_then(|i| self.rust().devices.get(i))
+            .map(|device| device.id.clone())
         {
-            crate::devices::unpair(&device.id);
+            self.enqueue_command(ClientCommand::Unpair(device_id));
         }
     }
 
     /// Ring device `index` (its "Sonar" button — find-my-phone).
     pub fn ring_device(self: Pin<&mut Self>, index: i32) {
-        if let Some(device) = usize::try_from(index)
+        if let Some(device_id) = usize::try_from(index)
             .ok()
             .and_then(|i| self.rust().devices.get(i))
+            .map(|device| device.id.clone())
         {
-            crate::devices::ring(&device.id);
+            self.enqueue_command(ClientCommand::Ring(device_id));
         }
     }
 
     /// Toggle play/pause on device `index`'s current player.
     pub fn media_play_pause(self: Pin<&mut Self>, index: i32) {
-        self.media(index, "PlayPause");
+        self.media(index, MediaAction::PlayPause);
     }
 
     /// Skip to the next track on device `index`.
     pub fn media_next(self: Pin<&mut Self>, index: i32) {
-        self.media(index, "Next");
+        self.media(index, MediaAction::Next);
     }
 
     /// Skip to the previous track on device `index`.
     pub fn media_previous(self: Pin<&mut Self>, index: i32) {
-        self.media(index, "Previous");
+        self.media(index, MediaAction::Previous);
     }
 
     /// Forward a transport verb to device `index`'s active player.
-    fn media(self: Pin<&mut Self>, index: i32, action: &str) {
-        if let Some(device) = usize::try_from(index)
+    fn media(self: Pin<&mut Self>, index: i32, action: MediaAction) {
+        if let Some(device_id) = usize::try_from(index)
             .ok()
             .and_then(|i| self.rust().devices.get(i))
+            .map(|device| device.id.clone())
         {
-            crate::devices::media_action(&device.id, action);
+            self.enqueue_command(ClientCommand::Media(device_id, action));
         }
     }
 
     /// Load the Settings surface — the paired devices and the plugin toggles.
     pub fn reload_settings(mut self: Pin<&mut Self>) {
-        let paired = crate::devices::list_paired();
-        let flags = crate::devices::plugin_settings();
+        if self.rust().settings_reload_in_flight {
+            self.as_mut().rust_mut().get_mut().settings_reload_pending = true;
+            return;
+        }
+        self.as_mut().rust_mut().get_mut().settings_reload_in_flight = true;
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let result = crate::devices::settings_snapshot();
+            let _ = qt.queue(move |model: Pin<&mut qobject::DevicesModel>| {
+                model.finish_settings_reload(result);
+            });
+        });
+    }
 
+    fn finish_settings_reload(
+        mut self: Pin<&mut Self>,
+        result: Result<crate::devices::SettingsSnapshot, String>,
+    ) {
+        match result {
+            Ok(snapshot) => {
+                self.as_mut().apply_settings(snapshot);
+                self.as_mut().set_settings_available(true);
+            }
+            Err(error) => {
+                eprintln!("magnetita: settings snapshot unavailable: {error}");
+                self.as_mut().set_settings_available(false);
+            }
+        }
+        let pending = self.rust().settings_reload_pending;
+        let state = self.as_mut().rust_mut().get_mut();
+        state.settings_reload_in_flight = false;
+        state.settings_reload_pending = false;
+        if pending {
+            self.as_mut().reload_settings();
+        }
+    }
+
+    fn apply_settings(mut self: Pin<&mut Self>, snapshot: crate::devices::SettingsSnapshot) {
+        let paired = snapshot.paired;
+        let flags = snapshot.plugins;
         let paired_names: QStringList = paired
             .iter()
             .map(|device| QString::from(device.name.as_str()))
@@ -338,7 +549,8 @@ impl qobject::DevicesModel {
             .map(|device| QString::from(flag(device.connected)))
             .collect();
 
-        // A key missing from the map means Magnetita is down; default to on.
+        // A missing key from an older daemon keeps that plugin's default-on
+        // contract; transport failures never reach this confirmed snapshot.
         let states: Vec<bool> = PLUGINS
             .iter()
             .map(|(key, _)| flags.get(*key).copied().unwrap_or(true))
@@ -352,6 +564,7 @@ impl qobject::DevicesModel {
 
         self.as_mut().rust_mut().get_mut().paired = paired;
         self.as_mut().rust_mut().get_mut().plugin_states = states;
+        self.as_mut().rust_mut().get_mut().plugin_intents.clear();
         self.as_mut().set_paired_names(paired_names);
         self.as_mut().set_paired_fingerprints(paired_fingerprints);
         self.as_mut().set_paired_connected(paired_connected);
@@ -360,15 +573,15 @@ impl qobject::DevicesModel {
     }
 
     /// Forget (unpair) paired device `index`, then refresh the surface.
-    pub fn forget_paired(mut self: Pin<&mut Self>, index: i32) {
+    pub fn forget_paired(self: Pin<&mut Self>, index: i32) {
         let id = usize::try_from(index)
             .ok()
             .and_then(|i| self.rust().paired.get(i))
             .map(|device| device.id.clone());
-        if let Some(id) = id {
-            crate::devices::forget(&id);
-        }
-        self.as_mut().reload_settings();
+        let Some(id) = id else {
+            return;
+        };
+        self.enqueue_command(ClientCommand::Forget(id));
     }
 
     /// Flip plugin `index`'s enabled state, persist it, and refresh.
@@ -379,15 +592,63 @@ impl qobject::DevicesModel {
         let Some((key, _)) = PLUGINS.get(i) else {
             return;
         };
-        let current = self.rust().plugin_states.get(i).copied().unwrap_or(true);
-        crate::devices::set_plugin(key, !current);
-        self.as_mut().reload_settings();
+        let confirmed = self.rust().plugin_states.get(i).copied().unwrap_or(true);
+        let pending = self.rust().plugin_intents.get(i).copied().flatten();
+        let next = next_toggle_value(confirmed, pending);
+        let state = self.as_mut().rust_mut().get_mut();
+        state.plugin_intents.resize(PLUGINS.len(), None);
+        state.plugin_intents[i] = Some(next);
+        // The switch immediately re-binds to this confirmed snapshot in QML.
+        // Publish the new value only after the worker has persisted it and a
+        // fresh daemon read arrives; a click is a request, not state.
+        if !self
+            .as_mut()
+            .enqueue_command(ClientCommand::SetPlugin(key, next))
+        {
+            self.as_mut().rust_mut().get_mut().plugin_intents[i] = None;
+        }
     }
 
-    /// Re-read the connection log, newest first, into the parallel lists.
-    pub fn reload_log(mut self: Pin<&mut Self>) {
-        let entries = crate::devices::recent_log().unwrap_or_default();
+    fn request_log_reload(mut self: Pin<&mut Self>) {
+        if self.rust().log_reload_in_flight {
+            self.as_mut().rust_mut().get_mut().log_reload_pending = true;
+            return;
+        }
+        self.as_mut().rust_mut().get_mut().log_reload_in_flight = true;
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let result = crate::devices::recent_log();
+            let _ = qt.queue(move |model: Pin<&mut qobject::DevicesModel>| {
+                model.finish_log_reload(result);
+            });
+        });
+    }
 
+    fn finish_log_reload(
+        mut self: Pin<&mut Self>,
+        result: Result<Vec<crate::devices::LogEntry>, String>,
+    ) {
+        match result {
+            Ok(entries) => {
+                self.as_mut().apply_log(entries);
+                self.as_mut().set_log_available(true);
+            }
+            Err(error) => {
+                eprintln!("magnetita: log snapshot unavailable: {error}");
+                self.as_mut().set_log_available(false);
+            }
+        }
+        let pending = self.rust().log_reload_pending;
+        let state = self.as_mut().rust_mut().get_mut();
+        state.log_reload_in_flight = false;
+        state.log_reload_pending = false;
+        if pending {
+            self.as_mut().request_log_reload();
+        }
+    }
+
+    /// Apply a connection-log snapshot, newest first.
+    fn apply_log(mut self: Pin<&mut Self>, entries: Vec<crate::devices::LogEntry>) {
         // Newest at the top.
         let lines: QStringList = entries
             .iter()
@@ -414,7 +675,7 @@ impl qobject::DevicesModel {
         std::thread::spawn(move || {
             let result = crate::devices::watch_events(move || {
                 let _ = qt.queue(|model: Pin<&mut qobject::DevicesModel>| {
-                    model.reload_log();
+                    model.request_log_reload();
                 });
             });
             if let Err(error) = result {
@@ -424,7 +685,9 @@ impl qobject::DevicesModel {
     }
 
     /// Starts, once, a thread that watches Magnetita's `Changed` signal and
-    /// reloads on the Qt thread. Best-effort.
+    /// refreshes only the device snapshot. The independent `Event` watcher owns
+    /// log refreshes, avoiding a second D-Bus round-trip on every 1 Hz media
+    /// position update.
     fn start_watch(mut self: Pin<&mut Self>) {
         if self.rust().watch_started {
             return;
@@ -434,7 +697,7 @@ impl qobject::DevicesModel {
         std::thread::spawn(move || {
             let result = crate::devices::watch_changes(move || {
                 let _ = qt.queue(|model: Pin<&mut qobject::DevicesModel>| {
-                    model.reload();
+                    model.request_device_reload();
                 });
             });
             if let Err(error) = result {
@@ -454,50 +717,5 @@ impl qobject::DevicesModel {
         if !mount.is_empty() {
             let _ = std::process::Command::new("xdg-open").arg(mount).spawn();
         }
-    }
-}
-
-/// A device's battery as text: "🔋 58 %", "🔋 58 % ⚡" charging, "" when unknown.
-fn battery_label(device: &crate::devices::Device) -> String {
-    if device.battery < 0 {
-        String::new()
-    } else if device.charging {
-        format!("🔋 {} % ⚡", device.battery)
-    } else {
-        format!("🔋 {} %", device.battery)
-    }
-}
-
-/// The phone's now-playing as one line — "Artista — Título", or whichever half
-/// it sent — or "" when nothing is playing (which hides the media card).
-fn media_label(device: &crate::devices::Device) -> String {
-    if device.media_player.is_empty() {
-        return String::new();
-    }
-    match (device.media_artist.as_str(), device.media_title.as_str()) {
-        ("", "") => String::new(),
-        ("", title) => title.to_owned(),
-        (artist, "") => artist.to_owned(),
-        (artist, title) => format!("{artist} — {title}"),
-    }
-}
-
-/// A boolean as the "true"/"false" string the parallel flag lists carry.
-fn flag(value: bool) -> &'static str {
-    if value {
-        "true"
-    } else {
-        "false"
-    }
-}
-
-/// A device's state, in the app's words.
-fn state_label(device: &crate::devices::Device) -> &'static str {
-    if device.mounted {
-        "montado"
-    } else if device.connected {
-        "conectando…"
-    } else {
-        "desconectado"
     }
 }

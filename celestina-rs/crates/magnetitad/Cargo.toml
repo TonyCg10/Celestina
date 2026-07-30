@@ -20,6 +20,9 @@ zbus = "5"
 # Plugin settings persist as JSON in the config dir (settings.rs).
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+# Safe nonblocking pipes and process-group signals bound every playerctl
+# subprocess tree without adding unsafe code to the daemon.
+rustix = { version = "1.1.4", features = ["fs", "pipe", "process"] }
 
 [lints]
 workspace = true

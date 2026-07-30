@@ -8,6 +8,7 @@ Item {
 
     required property var controller
     required property var hostWindow
+    required property bool shortcutActive
     property bool compact: false
     property real compactProgress: compact ? 1 : 0
     signal phoneMediaRequested(int index)
@@ -214,7 +215,7 @@ Item {
 
     Shortcut {
         sequence: "Alt+M"
-        enabled: root.phoneLocation && root.phoneConnected
+        enabled: root.shortcutActive && root.phoneLocation && root.phoneConnected
         onActivated: root.phoneMediaRequested(root.phoneIndex)
     }
 }

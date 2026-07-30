@@ -15,7 +15,10 @@ mod search;
 mod settings;
 mod volumes;
 
-use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQuickStyle, QString, QUrl};
+use cxx_qt_lib::{
+    QGuiApplication, QMap, QMapPair_QString_QVariant, QQmlApplicationEngine, QQuickStyle, QString,
+    QUrl, QVariant,
+};
 
 /// The freedesktop application ID: the basename of the installed `.desktop`
 /// entry, the name of the installed icon, and — because Qt reports it as the
@@ -51,6 +54,13 @@ fn main() {
         // The thumbnail image provider must be on the engine before the QML that
         // references image://thumb/… is loaded.
         controller::qobject::register_thumbnail_provider(engine.as_mut());
+        let reduced_motion = std::env::var_os("CELESTINA_REDUCED_MOTION").is_some();
+        let mut initial_properties = QMap::<QMapPair_QString_QVariant>::default();
+        initial_properties.insert(
+            QString::from("reducedMotion"),
+            QVariant::from(&reduced_motion),
+        );
+        engine.as_mut().set_initial_properties(&initial_properties);
         engine.load(&QUrl::from(
             "qrc:/qt/qml/org/celestina/siderita/qml/Main.qml",
         ));

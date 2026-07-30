@@ -8,6 +8,7 @@ readonly line_limit=800
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "$script_dir/.." && pwd)
 readonly baseline_file="$script_dir/architecture-baseline.tsv"
+readonly architecture_scanner="$script_dir/architecture_scanners.py"
 
 cd "$repo_root"
 
@@ -322,6 +323,11 @@ check_qml_registration() {
             fi
         done <<< "$registry"
     done
+
+    if ! python3 "$architecture_scanner" cmake-qml-registration \
+        celestina/CMakeLists.txt celestina/qml celestina; then
+        fail "celestina/CMakeLists.txt: registro QML incompleto o invalido"
+    fi
 }
 
 check_style_public_api() {
@@ -452,26 +458,11 @@ check_top_level_auto_bindings() {
     # Keep this in lock-step with the existing CI/smoke rule. Object literals
     # such as append({key: key}) are inside parentheses; a real top-level QML
     # binding has parenthesis depth zero.
-    hits=$(python3 - <<'PY'
-import pathlib
-import re
-
-roots = ["siderita/qml", "magnetita/qml", "celestina/qml", "celestina-style"]
-binding = re.compile(r"^\s*([A-Za-z_]\w*)\s*:\s*([A-Za-z_]\w*)\s*$")
-
-for root in roots:
-    for path in sorted(pathlib.Path(root).rglob("*.qml")):
-        if "build" in path.parts or "target" in path.parts:
-            continue
-        depth = 0
-        for number, original in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            line = original.split("//", 1)[0]
-            match = binding.match(line)
-            if depth == 0 and match and match.group(1) == match.group(2) and match.group(1) != "id":
-                print(f"{path}:{number}: {original}")
-            depth = max(0, depth + line.count("(") - line.count(")"))
-PY
-)
+    if ! hits=$(python3 "$architecture_scanner" qml-auto-bindings \
+        siderita/qml magnetita/qml celestina/qml celestina-style); then
+        fail "el scanner de auto-bindings QML no pudo completar la inspeccion"
+        return
+    fi
 
     if [[ -n $hits ]]; then
         printf '%s\n' "$hits"
@@ -487,6 +478,11 @@ check_visual_contract() {
 
 check_shared_style_links() {
     local app file base canonical resolved_file resolved_canonical
+
+    if ! python3 "$architecture_scanner" shared-style-links \
+        celestina-style siderita/qml magnetita/qml celestina/qml; then
+        fail "los symlinks QML compartidos no respetan el destino canonico relativo"
+    fi
 
     for app in siderita magnetita; do
         # Check only assets that the style explicitly exposes for source-tree
@@ -518,7 +514,7 @@ check_local_control_ratchet() {
     # file/type pair and no additional instance may be added silently.
     declare -A baseline=()
     declare -A actual=()
-    local raw kind key maximum extra file control count
+    local raw kind key maximum extra file control count control_rows
 
     while IFS= read -r raw || [[ -n $raw ]]; do
         [[ -z $raw || $raw == \#* ]] && continue
@@ -528,39 +524,19 @@ check_local_control_ratchet() {
         baseline["$key"]=$maximum
     done < "$baseline_file"
 
+    if ! control_rows=$(python3 "$architecture_scanner" local-controls \
+        --style-root celestina-style \
+        siderita/qml magnetita/qml celestina/qml); then
+        fail "el scanner de controles Qt locales no pudo completar la inspeccion"
+        return
+    fi
+
     while IFS=$'\t' read -r file control; do
         [[ -n $file && -n $control ]] || continue
         key="$file:$control"
         count=${actual[$key]:-0}
         actual["$key"]=$((count + 1))
-    done < <(python3 - <<'PY'
-import pathlib
-import re
-
-control = re.compile(
-    r"^[ \t]*(?:[A-Za-z_]\w*\.)?"
-    r"(BusyIndicator|Button|CheckBox|CheckDelegate|ComboBox|Container|Control|"
-    r"DelayButton|Dial|Dialog|DialogButtonBox|Drawer|Frame|GroupBox|"
-    r"HorizontalHeaderView|ItemDelegate|Label|Menu|MenuBar|MenuBarItem|MenuItem|"
-    r"MenuSeparator|Page|PageIndicator|Pane|Popup|ProgressBar|RadioButton|"
-    r"RadioDelegate|RangeSlider|RoundButton|ScrollBar|ScrollIndicator|ScrollView|"
-    r"SelectionRectangle|Slider|SpinBox|SplitView|StackView|SwipeDelegate|"
-    r"SwipeView|Switch|SwitchDelegate|TabBar|TabButton|TextArea|TextField|ToolBar|"
-    r"ToolButton|ToolSeparator|ToolTip|TreeViewDelegate|Tumbler|VerticalHeaderView)"
-    r"[ \t\r\n]*\{",
-    re.M,
-)
-for root in ("siderita/qml", "magnetita/qml", "celestina/qml"):
-    for path in sorted(pathlib.Path(root).rglob("*.qml")):
-        if path.is_symlink() or "build" in path.parts or "target" in path.parts:
-            continue
-        text = path.read_text(encoding="utf-8")
-        text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
-        text = re.sub(r"//.*", "", text)
-        for match in control.finditer(text):
-            print(f"{path}\t{match.group(1)}")
-PY
-)
+    done <<< "$control_rows"
 
     for key in "${!actual[@]}"; do
         if [[ ! ${baseline[$key]+present} ]]; then
@@ -582,46 +558,34 @@ PY
 }
 
 check_dependency_direction() {
-    local hits metadata
+    local hits metadata grep_status
 
     # The celestina-rs workspace is the Qt-free domain boundary. Dependency
     # declarations for UI/compositor stacks belong in an app adapter instead.
     # cargo metadata resolves renamed and workspace-inherited dependencies, so
     # aliases cannot evade this boundary.
     if ! metadata=$(cargo metadata --manifest-path celestina-rs/Cargo.toml \
-        --format-version 1 --no-deps 2>/dev/null); then
+        --format-version 1 --no-deps --locked 2>/dev/null); then
         fail "cargo metadata no pudo validar las dependencias de celestina-rs"
-        metadata=''
-    fi
-    hits=$(python3 -c '
-import json
-import re
-import sys
-
-if not sys.stdin.readable():
-    raise SystemExit(0)
-raw = sys.stdin.read()
-if not raw:
-    raise SystemExit(0)
-data = json.loads(raw)
-banned = re.compile(r"^(?:cxx[-_]qt.*|qmetaobject.*|qml.*|qt(?:6)?(?:[-_].*|types)?|niri(?:[-_].*)?)$")
-for package in data.get("packages", []):
-    package_name = package.get("name", "<unknown>")
-    for dependency in package.get("dependencies", []):
-        name = dependency.get("name", "")
-        if banned.match(name):
-            alias = dependency.get("rename")
-            suffix = f" (alias {alias})" if alias else ""
-            print(f"{package_name}: {name}{suffix}")
-' <<< "$metadata")
-    if [[ -n $hits ]]; then
+    elif ! hits=$(python3 "$architecture_scanner" dependency-metadata \
+        <<< "$metadata"); then
+        fail "el scanner de dependencias no pudo interpretar cargo metadata"
+    elif [[ -n $hits ]]; then
         printf '%s\n' "$hits"
         fail "un crate de celestina-rs declara una dependencia de UI/compositor"
     fi
 
-    hits=$(grep -RInEH --include='*.qml' \
+    if hits=$(grep -RInEH --include='*.qml' \
         '^[[:space:]]*import[[:space:]]+org\.celestina\.(siderita|magnetita)([[:space:]]|$)' \
-        celestina-style 2>/dev/null || true)
+        celestina-style 2>/dev/null); then
+        :
+    else
+        grep_status=$?
+        if ((grep_status != 1)); then
+            fail "grep no pudo inspeccionar las dependencias QML de celestina-style"
+            return
+        fi
+    fi
     if [[ -n $hits ]]; then
         printf '%s\n' "$hits"
         fail "celestina-style importa un modulo de aplicacion"

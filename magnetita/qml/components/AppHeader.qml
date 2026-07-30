@@ -6,6 +6,8 @@ Item {
 
     required property bool settingsOpen
     required property int deviceCount
+    required property bool devicesAvailable
+    required property bool settingsAvailable
     signal toggleRequested
 
     height: 92
@@ -29,8 +31,12 @@ Item {
 
         Text {
             text: root.settingsOpen
-                  ? "Dispositivos y plugins"
-                  : root.deviceCount > 0
+                  ? root.settingsAvailable
+                    ? "Dispositivos y plugins"
+                    : "Servicio no disponible"
+                  : !root.devicesAvailable
+                    ? "Servicio no disponible"
+                    : root.deviceCount > 0
                     ? root.deviceCount + (root.deviceCount === 1
                         ? " dispositivo conectado"
                         : " dispositivos conectados")
@@ -47,7 +53,7 @@ Item {
         density: CelestinaButton.Regular
         iconName: root.settingsOpen ? "go-previous" : "preferences-system"
         fallbackIcon: root.settingsOpen ? "go-previous" : "settings"
-        Accessible.name: root.settingsOpen ? "Volver" : "Ajustes"
+        helpText: root.settingsOpen ? "Volver" : "Ajustes"
         onClicked: root.toggleRequested()
     }
 }

@@ -155,9 +155,11 @@ Item {
         height: CelestinaTheme.controlHeightLg
         radius: CelestinaTheme.radiusPill
         clip: true
-        color: CelestinaTheme.inputFill
+        color: locationField.visualFocus ? CelestinaTheme.inputFillFocus
+                                         : CelestinaTheme.inputFill
         border.width: CelestinaTheme.borderHairline
-        border.color: root.floating ? CelestinaTheme.clear : CelestinaTheme.inputBorder
+        border.color: root.floating ? CelestinaTheme.clear
+                                    : CelestinaTheme.inputBorder
 
         GlassSurface {
             id: pathGlass
@@ -168,7 +170,10 @@ Item {
             elevation: 2
             opacity: root.floating ? 1 : 0
             Behavior on opacity {
-                NumberAnimation { duration: CelestinaTheme.motionNormal }
+                NumberAnimation {
+                    duration: CelestinaTheme.reducedMotion
+                              ? 0 : CelestinaTheme.motionNormal
+                }
             }
         }
 
@@ -270,7 +275,7 @@ Item {
             rightPadding: CelestinaTheme.compTextFieldPaddingHorizontal
             color: CelestinaTheme.text
             selectionColor: CelestinaTheme.accentPressed
-            selectedTextColor: CelestinaTheme.text
+            selectedTextColor: CelestinaTheme.accentInk
             font.family: CelestinaTheme.monoFamily
             font.pixelSize: Math.round(CelestinaTheme.fontRowSecondary * root.hostWindow.interfaceTextScale)
             background: null
@@ -306,6 +311,12 @@ Item {
         }
     }
 
+    CelestinaFocusRing {
+        target: pathPill
+        cornerRadius: pathPill.radius
+        shown: locationField.visualFocus
+    }
+
     Rectangle {
         id: searchPill
         width: root.searchExpanded ? root.searchExpandedWidth
@@ -315,7 +326,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         radius: CelestinaTheme.radiusPill
         clip: true
-        color: searchField.activeFocus
+        color: searchField.visualFocus
                ? CelestinaTheme.inputFillFocus : CelestinaTheme.inputFill
         border.width: CelestinaTheme.borderHairline
         border.color: root.floating ? CelestinaTheme.clear
@@ -323,7 +334,8 @@ Item {
 
         Behavior on width {
             NumberAnimation {
-                duration: CelestinaTheme.motionNormal
+                duration: CelestinaTheme.reducedMotion
+                          ? 0 : CelestinaTheme.motionNormal
                 easing.type: CelestinaTheme.easeStandard
             }
         }
@@ -337,7 +349,10 @@ Item {
             elevation: 2
             opacity: root.floating ? 1 : 0
             Behavior on opacity {
-                NumberAnimation { duration: CelestinaTheme.motionNormal }
+                NumberAnimation {
+                    duration: CelestinaTheme.reducedMotion
+                              ? 0 : CelestinaTheme.motionNormal
+                }
             }
         }
 
@@ -371,7 +386,7 @@ Item {
             color: CelestinaTheme.text
             placeholderTextColor: CelestinaTheme.textMuted
             selectionColor: CelestinaTheme.accentPressed
-            selectedTextColor: CelestinaTheme.text
+            selectedTextColor: CelestinaTheme.accentInk
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: Math.round(CelestinaTheme.fontBody
                                        * root.hostWindow.interfaceTextScale)
@@ -380,7 +395,10 @@ Item {
             background: null
 
             Behavior on opacity {
-                NumberAnimation { duration: CelestinaTheme.motionFast }
+                NumberAnimation {
+                    duration: CelestinaTheme.reducedMotion
+                              ? 0 : CelestinaTheme.motionFast
+                }
             }
 
             // Typing always searches — a recursive walk grouped into "in this
@@ -447,9 +465,18 @@ Item {
             }
 
             Behavior on opacity {
-                NumberAnimation { duration: CelestinaTheme.motionFast }
+                NumberAnimation {
+                    duration: CelestinaTheme.reducedMotion
+                              ? 0 : CelestinaTheme.motionFast
+                }
             }
         }
+    }
+
+    CelestinaFocusRing {
+        target: searchPill
+        cornerRadius: searchPill.radius
+        shown: searchField.visualFocus
     }
 
     Timer {

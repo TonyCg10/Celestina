@@ -19,6 +19,10 @@ compile_commands.json
 qmldir.qmltypes
 .qmlls.ini
 
+# Python scanner caches
+**/__pycache__/
+*.py[cod]
+
 # Editor / OS cruft
 .DS_Store
 *.swp

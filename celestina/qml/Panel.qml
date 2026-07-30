@@ -6,15 +6,25 @@ Window {
     id: panel
 
     required property string outputName
+    required property bool reducedMotion
+    // C++ adapters are not QML-creatable types. These two narrow providers
+    // expose only the documented Niri and DevicesClient read interfaces.
+    required property var niriProvider
+    required property var phoneProvider
+    property bool compositorBlurAvailable: false
 
     width: Screen.width
     height: 40
     visible: false
-    // The compositor owns this backdrop blur (enableBlurBehind, main.cpp), so
-    // use its lighter, dedicated tint and keep the blurred wallpaper readable.
-    color: CelestinaTheme.compositorGlassTint
+    // Wallpaper is untrusted visual input. The host reports whether it could
+    // arm compositor blur; an opaque fallback keeps every ink pair legible.
+    color: compositorBlurAvailable
+           ? CelestinaTheme.compositorGlassTint
+           : CelestinaTheme.compositorGlassFallback
     title: qsTr("Celestina Panel")
     flags: Qt.FramelessWindowHint | Qt.WindowDoesNotAcceptFocus
+
+    Component.onCompleted: CelestinaTheme.reducedMotion = reducedMotion
 
     WorkspaceStrip {
         anchors.left: parent.left
@@ -24,9 +34,9 @@ Window {
         anchors.verticalCenter: parent.verticalCenter
         height: implicitHeight
         clip: true
-        niriAvailable: Niri.available
+        niriAvailable: panel.niriProvider.available
         outputName: panel.outputName
-        workspaces: Niri.workspaces
+        workspaces: panel.niriProvider.workspaces
     }
 
     Clock {
@@ -41,10 +51,10 @@ Window {
         anchors.verticalCenter: parent.verticalCenter
         width: Math.min(implicitWidth, Math.max(0, panel.width / 2 - clock.width / 2 - CelestinaTheme.space2xl))
         clip: true
-        connected: Phone.phoneConnected
-        phoneName: Phone.phoneName
-        battery: Phone.phoneBattery
-        charging: Phone.phoneCharging
+        connected: panel.phoneProvider.phoneConnected
+        phoneName: panel.phoneProvider.phoneName
+        battery: panel.phoneProvider.phoneBattery
+        charging: panel.phoneProvider.phoneCharging
     }
 
     Rectangle {

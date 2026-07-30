@@ -16,7 +16,7 @@ Needs Rust and a development Qt visible to CXX-Qt.
 
 ```sh
 scripts/run.sh                                       # build (release) + install to ~/.local
-cargo build --release --locked                       # just the binary (shared Qt for cxx-qt)
+cargo build --release --locked                       # just the binary (Qt 6.9+ shared for cxx-qt)
 cargo build --release --locked --features qt-minimal # Qt bootstrap (CI / no system Qt)
 ```
 

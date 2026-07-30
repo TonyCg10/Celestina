@@ -15,12 +15,12 @@ Magnetita is the suite's **first cross-app integration** and its **first
 networked app**: everything before it stayed on one machine.
 
 - **Role:** phone link / device sync (part of the [Celestina suite](../ROADMAP.md))
-- **Stack:** Rust daemon · `rustls` (TLS 1.2+) · Qt Quick/QML via CXX-Qt (UI) · GPL-3.0-or-later
+- **Stack:** Rust daemon · `rustls` (TLS 1.2+) · Qt 6.9+ Quick/QML via CXX-Qt (UI) · GPL-3.0-or-later
 - **Consumes:** [celestina-rs](../celestina-rs/) domain cores · [celestina-style](../celestina-style/) tokens + glass
 - **Speaks:** the KDE Connect protocol (interoperates with the KDE Connect Android app and other KDE Connect desktops)
 
-> **Status: 1.0.0 — CP0–CP4 done (2026-07-26).** The daemon pairs live and
-> stably with the real phone (protocol 8), reconnects as already-trusted, runs
+> **Status: 1.0.0 — CP0–CP4 done (2026-07-26).** That release was paired and
+> exercised live with the real phone (protocol 8), reconnects as already-trusted, runs
 > as a systemd user service, mounts the phone over sshfs and serves
 > `org.celestina.Devices1` — consumed by Siderita's sidebar, the standalone app
 > and the `celestina` panel. The daily plugins are all live-verified: battery,
@@ -29,6 +29,21 @@ networked app**: everything before it stayed on one machine.
 > Settings surface with per-plugin toggles. See
 > [ROADMAP.md](ROADMAP.md) for the checkpoint detail and the known phone-side
 > limits.
+
+The current client keeps zbus's blocking API off the Qt GUI thread: UI actions
+run in order through one owned bounded worker, while device, settings and log
+reads run on best-effort background workers. Confirmed snapshots return through
+`qt_thread().queue(...)`, and refresh bursts coalesce to at most one follow-up
+read. The detached read/watch side still lacks deterministic shutdown. The
+MPRIS boundary now parses a closed action enum,
+preserves `nowPlaying`/play capability, distinguishes finite, unavailable and
+live progress before QML, rearms failed artwork, and answers desktop-player
+requests through one bounded, joined worker. Pairing now implements the v8
+timestamp/code rules, binds the encrypted identity to the cleartext handshake,
+and limits untrusted links. Completed payload transfers are published only while
+the originating device remains paired and not forgotten. Unit and loopback tests
+cover those contracts. These hardening changes have not yet had a fresh
+real-phone/Wayland acceptance pass; the live evidence below predates them.
 
 ## The phone in Siderita — the first cross-app experience
 
@@ -77,12 +92,13 @@ true whether or not a window is open — Siderita sees the phone even with
 Magnetita's UI closed. And a **standalone app**, like Valent's window and a
 first-class surface, not an afterthought: it is where you
 
-- pair and unpair a device (with a shown verification key),
+- pair and unpair a device (showing the temporary comparison code during a
+  fresh pairing),
 - read a **connection log** that says *why* a device will not pair or connect —
   discovery, the TLS handshake, a pairing timeout, an unpaired or unreachable
   peer — a deliberate answer to KDE Connect's and Valent's worst day: a phone
   that silently will not connect, with nowhere to look,
-- and set the options that are not Siderita's — per device, per plugin.
+- forget remembered devices and set the global on/off option for each plugin.
 
 The service routes the rest into the desktop over freedesktop standards (phone
 notifications → `org.freedesktop.Notifications`, shared-in files → an XDG folder
@@ -97,10 +113,12 @@ and the packaging.
 | Path | Responsibility |
 |---|---|
 | `AGENTS.md` | local agent contract for the thin UI, daemon boundary and verification |
-| `../celestina-rs/crates/magnetita-core` | protocol domain: `NetworkPacket`, identity, capabilities, pairing state machine, plugin bodies — pure, no I/O, no Qt |
-| `../celestina-rs/crates/magnetita-net` | transport: UDP discovery, TCP+TLS link (TOFU cert pinning), payload transfer, trust store |
-| `../celestina-rs/crates/magnetitad` | the headless daemon: device links, the sshfs mount, notifications, MPRIS metadata/artwork, settings, and the `org.celestina.Devices1` service |
-| `src/` | the standalone app's thin CXX-Qt/D-Bus bridge (`controller.rs`) |
+| `../celestina-rs/crates/magnetita-core` | protocol domain: `NetworkPacket`, identity, capabilities, v8 pairing state machine and typed MPRIS action/progress contracts — pure, no I/O, no Qt |
+| `../celestina-rs/crates/magnetita-net` | transport: UDP discovery, identity-bound TCP+TLS handshake, stable TOFU certificate pin, temporary SPKI+timestamp comparison code, bounded payload transfer and trust store |
+| `../celestina-rs/crates/magnetitad` | the headless daemon: admitted/expiring device links, sshfs mount, notifications, bounded desktop-MPRIS worker, artwork, settings, and `org.celestina.Devices1`; `admission.rs`, `revocation.rs`, `link_commands.rs`, `media.rs`, `payload_handlers.rs` and `runtime.rs` keep those responsibilities separate, including serializing final payload publication against `Forget` |
+| `src/controller.rs` | thin CXX-Qt coordinator: off-GUI D-Bus work, coalesced refreshes and GUI-thread snapshot application |
+| `src/projection.rs` | pure, tested conversion of confirmed snapshots into QML labels, progress and toggle intent |
+| `src/devices.rs` | blocking zbus client and additive `a{sv}` decoding, called outside the GUI thread |
 | `qml/Main.qml` | window state and navigation only |
 | `qml/pages/` | Devices and Settings page composition |
 | `qml/components/` | Magnetita-specific presentation pieces; device cards, activity, rows and header, plus `MediaCard` and its static `MediaProgress` |
@@ -117,7 +135,9 @@ and the packaging.
   not a nicety.
 - **To Siderita:** the phone's storage as a real sshfs mount, and
   `org.celestina.Devices1` — the suite's first internal contract — for the device
-  and its state.
+  and its state. `ListDevices.verificationKey` is the temporary comparison code
+  for a fresh pairing; `ListPaired.fingerprint` is the stable certificate pin
+  shown in Settings.
 - **To the rest of the desktop:** freedesktop only — notifications, XDG dirs,
   MIME/`open-with`, `.desktop` entries. No private glue.
 
@@ -125,9 +145,11 @@ and the packaging.
 
 The suite's "no network" was about the cloud and internet indexing, not about
 talking to your own phone on the Wi-Fi. Magnetita is LAN-only and peer-to-peer:
-TLS on every link, trust only by **explicit pairing** with a shown verification
-key, never on a guess, and the identity that travels in the clear carries no
-secret.
+TLS on every link, trust only by **explicit pairing** with an eight-hex-digit
+comparison code shown on both devices, never on a guess. That code is ephemeral;
+the durable trust decision pins the peer certificate fingerprint. The identity
+that travels in the clear carries no secret and must match the identity repeated
+inside TLS.
 
 See [ROADMAP.md](ROADMAP.md) for status, the checkpoint ladder, the dependency
 budget and the design decisions.

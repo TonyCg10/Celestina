@@ -150,7 +150,8 @@ MenuItem {
 
         Behavior on color {
             ColorAnimation {
-                duration: CelestinaTheme.motionFast
+                duration: CelestinaTheme.reducedMotion
+                          ? 0 : CelestinaTheme.motionFast
             }
         }
     }

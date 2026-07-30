@@ -13,11 +13,14 @@ deliberate, contained exception.
 
 **Current state.** Eight crates compile with `fmt`, Clippy and the workspace
 test suite green on Rust 1.97.1, `unsafe_code = "forbid"` throughout. The pure
-cores carry no third-party dependencies. The read side (`siderita-core`,
+non-Magnetita cores carry no third-party dependencies; `magnetita-core` is pure
+with respect to UI/IO but uses serde for the wire model. The read side (`siderita-core`,
 `siderita-qt`) and the write side (`siderita-ops`, loss-free file operations)
 are consumed live by Siderita; `celestina-dotfiles-core` only produces plans;
-the magnetita trio (protocol core, TLS transport, headless daemon) backs the
-shipped phone link and is verified against the real phone.
+the Magnetita trio backs the shipped phone link. Its earlier release was
+verified against the real phone; the current pairing-v8, admission, revocation,
+post-transfer publication and MPRIS hardening is offline/loopback-verified and
+still awaits a fresh real phone/Wayland acceptance pass.
 
 **Key decisions.** The core family lives in its own workspace so each domain is
 testable without a toolkit; apps use `path` deps in development but pin versions

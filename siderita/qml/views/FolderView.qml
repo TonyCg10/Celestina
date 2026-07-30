@@ -12,7 +12,7 @@ Item {
     id: root
     // El pie usa cristal mientras haya contenido desplazándose detrás.
     readonly property Item bottomView: mainPanel.viewMode === "grid"
-                                       ? fileGrid : fileList
+                                       ? fileGrid : folderListView
     readonly property bool bottomFloating:
             bottomView && bottomView.contentHeight > bottomView.height
             && !bottomView.atYEnd
@@ -21,8 +21,8 @@ Item {
             || controller.trashActive || controller.recentActive
     // El marco sube tras la ruta compacta y baja bajo el encabezado expandido.
     readonly property real primaryChromeBottom:
-            tabBar.visible ? tabBar.y + tabBar.height
-                           : topBar.y + topBar.height
+            folderTabBar.visible ? folderTabBar.y + folderTabBar.height
+                                 : topBar.y + topBar.height
     readonly property real chromeBottom:
             primaryChromeBottom
             + (contextualHeaderVisible
@@ -48,6 +48,7 @@ Item {
     property var hostWindow
     property bool active: false
     property bool headingExpanded: false
+    readonly property bool modalBlocked: folderActions.modalBlocked
     readonly property bool navigationBlocked: folderActions.navigationBlocked
     property alias tabController: controller
     // Nombre distinto evita el auto-binding sombreado `x: x`.
@@ -66,11 +67,10 @@ Item {
     SideritaController {
         id: controller
     }
-
     // RouteReveal se arma antes de que este modelo publique la ruta nueva.
     // Native role model shared by list and grid.
     SideritaEntryModel {
-        id: entryModel
+        id: folderEntryModel
     }
     // Distingue navegación de un refresco del mismo lugar o vista virtual.
     property string renderedKey: ""
@@ -83,14 +83,14 @@ Item {
     Connections {
         target: controller
         function onRowsReady(names, tokens, kinds, subtitles, paths, sections, sizes, dates) {
-            var view = mainPanel.viewMode === "grid" ? fileGrid : fileList
+            var view = mainPanel.viewMode === "grid" ? fileGrid : folderListView
             var key = controller.currentPath + "|" + controller.trashActive + "|"
                     + controller.recentActive + "|" + controller.searchActive + "|"
                     + controller.searchQuery
             var samePlace = key === root.renderedKey
             var savedY = view.contentY
 
-            entryModel.setRows(names, tokens, kinds, subtitles, paths, sections, sizes, dates)
+            folderEntryModel.setRows(names, tokens, kinds, subtitles, paths, sections, sizes, dates)
             root.renderedKey = key
 
             // setRows reinicia el modelo, y un reset manda la vista al top (que
@@ -105,7 +105,6 @@ Item {
         }
     }
 
-    // ── Quick-look preview state (spacebar) ──────────────────────────
     // The overlay (below) previews whatever entry is selected; ↑/↓ while it
     // is open step the selection so the preview browses the folder without
     // closing. On close, focus returns to the active view so the keyboard
@@ -115,7 +114,7 @@ Item {
         if (mainPanel.viewMode === "grid")
             fileGrid.forceActiveFocus()
         else
-            fileList.forceActiveFocus()
+            folderListView.forceActiveFocus()
     }
     // Devuelve el foco a la vista activa. Lo usan los diálogos al cerrarse
     // (viven en sus propios ficheros y ya no alcanzan `fileList`); antes fijaban
@@ -125,7 +124,7 @@ Item {
         if (mainPanel.viewMode === "grid")
             fileGrid.forceActiveFocus()
         else
-            fileList.forceActiveFocus()
+            folderListView.forceActiveFocus()
     }
 
     function quickLookStep(delta) {
@@ -137,7 +136,7 @@ Item {
         if (mainPanel.viewMode === "grid")
             fileGrid.selectCell(j)
         else
-            fileList.selectRow(j)
+            folderListView.selectRow(j)
     }
 
     // Drop any active search — the live filter and the recursive results —
@@ -175,7 +174,7 @@ Item {
 
     FolderShortcuts {
         anchors.fill: parent
-        viewActive: root.active
+        viewActive: root.active && !root.navigationBlocked
         canGoBackOrLeave: root.canGoBackOrLeave
         controller: tabController
         panel: mainPanel
@@ -614,7 +613,7 @@ Item {
         }
 
         FolderListView {
-            id: fileList
+            id: folderListView
             x: contentFrame.surface.x
             y: contentFrame.surface.y
             width: contentFrame.surface.width
@@ -622,13 +621,13 @@ Item {
             opacity: routeReveal.progress
             transform: Translate { y: routeReveal.offset }
             controller: tabController
-            entryModel: entryModel
+            entryModel: folderEntryModel
             panel: mainPanel
             hostWindow: root.hostWindow
             ghost: root.ghost
             overlayParent: root.overlayParent
             contentTopMargin: mainPanel.contentTopInset
-                              + (fileList.detailsMode
+                              + (folderListView.detailsMode
                                  ? folderChrome.detailsHeader.height + 12 : 8)
             contentBottomInset: mainPanel.contentBottomInset
             onRevealHeadingRequested: root.revealHeading()
@@ -655,7 +654,7 @@ Item {
             opacity: routeReveal.progress
             transform: Translate { y: routeReveal.offset }
             controller: tabController
-            entryModel: entryModel
+            entryModel: folderEntryModel
             panel: mainPanel
             hostWindow: root.hostWindow
             ghost: root.ghost
@@ -703,7 +702,7 @@ Item {
                     mouse.accepted = false   // over an item → item handles it
                     return
                 }
-                fileList.forceActiveFocus()
+                folderListView.forceActiveFocus()
                 base = (mouse.modifiers & Qt.ControlModifier)
                        ? Object.assign({}, mainPanel.selectedTokens)
                        : {}
@@ -773,6 +772,7 @@ Item {
         compact: !root.headingExpanded
         controller: tabController
         hostWindow: root.hostWindow
+        shortcutActive: root.active && !root.navigationBlocked
         onPhoneMediaRequested: index => folderActions.openPhoneMedia(index)
     }
 
@@ -786,7 +786,7 @@ Item {
         opacity: routeReveal.progress
         transform: Translate { y: routeReveal.offset }
         controller: tabController
-        activeView: mainPanel.viewMode === "grid" ? fileGrid : fileList
+        activeView: mainPanel.viewMode === "grid" ? fileGrid : folderListView
         hostWindow: root.hostWindow
         overlayParent: root.overlayParent
         pathMenu: folderActions.pathMenu
@@ -796,7 +796,7 @@ Item {
     // A second contextual row appears only when there is somewhere to switch.
     // Each tab paints its own pill; the strip itself has no enclosing box.
     TabStrip {
-        id: tabBar
+        id: folderTabBar
         z: 10
         x: mainPanel.floatingChromeX
         y: topBar.y + topBar.height + CelestinaTheme.compFloatingGap
@@ -828,7 +828,7 @@ Item {
         hostWindow: root.hostWindow
         panel: mainPanel
         topBar: viewTopBar
-        tabBar: tabBar
-        fileList: fileList
+        tabBar: folderTabBar
+        fileList: folderListView
     }
 }

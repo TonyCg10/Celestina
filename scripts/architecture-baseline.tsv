@@ -4,7 +4,7 @@
 # La cifra debe coincidir con el checkout: si disminuye, el guard exige bajar el
 # baseline; al desaparecer la excepcion hay que retirar la entrada. Nunca se sube.
 # Daemon coordinador heredado: debe delegar mas responsabilidades antes de crecer.
-lines	celestina-rs/crates/magnetitad/src/main.rs	1099
+lines	celestina-rs/crates/magnetitad/src/main.rs	927
 # Coordinador QML apenas sobre el techo: siguiente extraccion debe dejarlo <=800.
 lines	siderita/qml/views/FolderView.qml	834
 # Contrato CXX-Qt concentrado por la macro; la logica debe seguir en submodulos.

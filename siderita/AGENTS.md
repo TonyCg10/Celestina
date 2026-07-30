@@ -27,9 +27,11 @@ reglas propias de la app CXX-Qt/QML.
   inequívoco cuando el foco procede del teclado.
 - Un modal bloquea puntero y atajos de la vista subyacente, mueve y contiene el
   foco, ofrece cancelar/Escape cuando corresponda y restaura el foco al cerrar.
-- `CelestinaTheme.reducedMotion` aún es deuda de STYLE-1. Antes de añadir o
-  modificar una animación, aterriza ese contrato compartido y haz que quede
-  instantánea o desactivada en modo reducido; no finjas que el token ya existe.
+- `Main.qml` recibe `reducedMotion` del host y lo publica en
+  `CelestinaTheme.reducedMotion`. Toda animación nueva o modificada queda
+  instantánea o desactivada en ese modo; no añadas un segundo flag local. No
+  confundas esta ruta implementada con una auditoría completa de movimiento
+  heredado o con validación interactiva real.
 
 ## Matriz mínima de verificación
 

@@ -6,6 +6,7 @@ CelestinaSurface {
     id: root
 
     required property bool hasMedia
+    required property string player
     required property string title
     required property string artist
     required property string album
@@ -13,14 +14,18 @@ CelestinaSurface {
     required property real positionMs
     required property real lengthMs
     required property bool playing
+    required property bool canPlay
+    required property bool canPause
     required property bool canPrevious
     required property bool canNext
+    required property string progressKind
 
     signal previousRequested
     signal playPauseRequested
     signal nextRequested
 
-    readonly property bool progressAvailable: lengthMs > 0 && positionMs >= 0
+    readonly property bool progressAvailable: progressKind === "finite"
+    readonly property bool live: progressKind === "live"
     readonly property real progressValue: progressAvailable ? positionMs / lengthMs : 0
     readonly property bool artworkReady: backdropImage.status === Image.Ready
     readonly property color foregroundInk: artworkReady
@@ -30,6 +35,7 @@ CelestinaSurface {
                                                     ? artist + " · " + album
                                                   : artist.length > 0 ? artist
                                                   : album.length > 0 ? album
+                                                  : player.length > 0 ? player
                                                   : "Magnetita"
 
     function formatTime(milliseconds) {
@@ -53,7 +59,10 @@ CelestinaSurface {
     clip: true
     Accessible.role: Accessible.Pane
     Accessible.name: root.hasMedia ? root.title : "Control multimedia"
-    Accessible.description: root.hasMedia ? root.secondaryLine
+    Accessible.description: root.hasMedia
+                              ? (root.live
+                                 ? root.secondaryLine + ", emisión en directo"
+                                 : root.secondaryLine)
                                           : "No hay contenido reproduciéndose"
 
     Rectangle {
@@ -182,6 +191,16 @@ CelestinaSurface {
                                + " de " + root.formatTime(root.lengthMs)
     }
 
+    CelestinaSectionLabel {
+        anchors.left: metadata.left
+        y: 84
+        text: "EN DIRECTO"
+        color: root.foregroundInk
+        visible: root.live
+        Accessible.role: Accessible.StaticText
+        Accessible.name: "Emisión en directo"
+    }
+
     Text {
         anchors.left: progress.left
         anchors.top: progress.bottom
@@ -213,7 +232,7 @@ CelestinaSurface {
             density: CelestinaButton.Regular
             iconName: "media-skip-backward"
             fallbackIcon: "media-skip-back"
-            Accessible.name: "Anterior"
+            helpText: "Anterior"
             enabled: root.hasMedia && root.canPrevious
             onClicked: root.previousRequested()
         }
@@ -224,8 +243,9 @@ CelestinaSurface {
             iconName: root.playing ? "media-playback-pause"
                                    : "media-playback-start"
             fallbackIcon: root.playing ? "media-pause" : "media-play"
-            Accessible.name: root.playing ? "Pausar" : "Reproducir"
+            helpText: root.playing ? "Pausar" : "Reproducir"
             enabled: root.hasMedia
+                     && (root.playing ? root.canPause : root.canPlay)
             onClicked: root.playPauseRequested()
         }
 
@@ -233,7 +253,7 @@ CelestinaSurface {
             density: CelestinaButton.Regular
             iconName: "media-skip-forward"
             fallbackIcon: "media-skip-forward"
-            Accessible.name: "Siguiente"
+            helpText: "Siguiente"
             enabled: root.hasMedia && root.canNext
             onClicked: root.nextRequested()
         }

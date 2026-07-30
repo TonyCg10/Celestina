@@ -10,74 +10,56 @@
 #include <QPointer>
 #include <QQmlComponent>
 #include <QQmlEngine>
-#include <QQmlContext>
-#include <QRegion>
 #include <QScreen>
 #include <QStandardPaths>
 #include <QTimer>
 #include <QVariantMap>
 #include <QWindow>
 
-#include <KWindowEffects>
 #include <LayerShellQt/Window>
 
 #include "devicesclient.h"
 #include "niriclient.h"
+#include "panelblurcontroller.h"
 
 namespace {
 constexpr int panelHeight = 40;
 constexpr auto panelScope = "celestina-panel";
-constexpr int blurCommitRetryDelayMs = 16;
-constexpr int blurCommitRetryCount = 60;
 
-void armPanelBlurWhenReady(
-    const QPointer<QWindow> &window,
-    int attemptsRemaining = blurCommitRetryCount
-)
+bool reducedMotionRequested()
 {
-    if (!window)
-        return;
+    return qEnvironmentVariableIsSet("CELESTINA_REDUCED_MOTION");
+}
 
-    if (window->isExposed()
-        && !window->size().isEmpty()
-        && KWindowEffects::isEffectAvailable(KWindowEffects::BlurBehind)) {
-        // ext-background-effect state is double-buffered. KWindowSystem 6.28
-        // does not expose the Wayland surface through CXX-Qt. Keep this thin
-        // C++ host path: submit the finite, surface-local region used by Niri
-        // and request the frame that commits the newly installed effect.
-        KWindowEffects::enableBlurBehind(
-            window,
-            true,
-            QRegion(QRect(QPoint(0, 0), window->size()))
-        );
-        window->requestUpdate();
-        qInfo() << "Celestina compositor blur armed on"
-                << window->objectName();
-        return;
+QVariantList outputScreenSnapshot()
+{
+    QVariantList screens;
+    for (QScreen *screen : QGuiApplication::screens()) {
+        const QRect geometry = screen->geometry();
+        screens.append(QVariantMap {
+            {QStringLiteral("name"), screen->name()},
+            {QStringLiteral("width"), geometry.width()},
+            {QStringLiteral("height"), geometry.height()},
+            {QStringLiteral("devicePixelRatio"), screen->devicePixelRatio()},
+        });
     }
-
-    if (attemptsRemaining <= 0) {
-        qInfo() << "Celestina compositor blur unavailable on"
-                << window->objectName() << "(using translucent fallback)";
-        return;
-    }
-
-    QTimer::singleShot(
-        blurCommitRetryDelayMs,
-        window.data(),
-        [window, attemptsRemaining] {
-            armPanelBlurWhenReady(window, attemptsRemaining - 1);
-        }
-    );
+    return screens;
 }
 
 class PanelManager final : public QObject
 {
 public:
-    PanelManager(QGuiApplication *application, QQmlEngine *engine)
+    PanelManager(
+        QGuiApplication *application,
+        QQmlEngine *engine,
+        NiriClient *niri,
+        DevicesClient *phone
+    )
         : QObject(application)
         , m_application(application)
         , m_component(engine)
+        , m_niri(niri)
+        , m_phone(phone)
     {
         m_component.loadFromModule("CelestinaDesktop", "Panel");
     }
@@ -156,6 +138,9 @@ private:
 
         const QVariantMap initialProperties {
             {QStringLiteral("outputName"), screen->name()},
+            {QStringLiteral("reducedMotion"), reducedMotionRequested()},
+            {QStringLiteral("niriProvider"), QVariant::fromValue(m_niri.data())},
+            {QStringLiteral("phoneProvider"), QVariant::fromValue(m_phone.data())},
         };
         QObject *rootObject = m_component.createWithInitialProperties(
             initialProperties
@@ -229,11 +214,10 @@ private:
         // fixed before the compositor creates the surface.
         window->show();
 
-        // The panel's glass: ask the compositor (niri's ext-background-effect)
-        // to blur the wallpaper behind the translucent panel. Best-effort — a
-        // compositor that does not implement it simply leaves the panel a plain
-        // translucent tint, no worse than before.
-        armPanelBlurWhenReady(window);
+        // The controller owns retries, geometry changes and the QML fallback
+        // state. It is parented to the window, so no callback survives removal.
+        auto *blurController = new PanelBlurController(window, window);
+        blurController->start();
 
         qInfo() << "Celestina panel mapped on output" << screen->name()
                 << "geometry" << screen->geometry()
@@ -254,6 +238,8 @@ private:
 
     QGuiApplication *m_application;
     QQmlComponent m_component;
+    QPointer<NiriClient> m_niri;
+    QPointer<DevicesClient> m_phone;
     QHash<QScreen *, QPointer<QWindow>> m_panels;
 };
 }
@@ -279,11 +265,57 @@ int runOutputChooser(QGuiApplication &app, QQmlEngine &engine)
         return EXIT_FAILURE;
     }
 
-    QScopedPointer<QObject> chooser(component.create());
+    const QVariantMap initialProperties {
+        {QStringLiteral("reducedMotion"), reducedMotionRequested()},
+        {QStringLiteral("screens"), outputScreenSnapshot()},
+    };
+    QScopedPointer<QObject> chooser(
+        component.createWithInitialProperties(initialProperties)
+    );
     if (chooser.isNull()) {
         qWarning() << "celestina --pick-output: the chooser did not load";
         return EXIT_FAILURE;
     }
+
+    const QPointer<QObject> liveChooser(chooser.data());
+    const auto updateScreens = [liveChooser] {
+        if (liveChooser)
+            liveChooser->setProperty("screens", outputScreenSnapshot());
+    };
+    const auto watchScreen = [liveChooser, updateScreens](QScreen *screen) {
+        QObject::connect(
+            screen,
+            &QScreen::geometryChanged,
+            liveChooser.data(),
+            [updateScreens](const QRect &) { updateScreens(); }
+        );
+        QObject::connect(
+            screen,
+            &QScreen::physicalDotsPerInchChanged,
+            liveChooser.data(),
+            [updateScreens](qreal) { updateScreens(); }
+        );
+    };
+    for (QScreen *screen : QGuiApplication::screens())
+        watchScreen(screen);
+    QObject::connect(
+        &app,
+        &QGuiApplication::screenAdded,
+        chooser.data(),
+        [watchScreen, updateScreens](QScreen *screen) {
+            watchScreen(screen);
+            updateScreens();
+        }
+    );
+    QObject::connect(
+        &app,
+        &QGuiApplication::screenRemoved,
+        chooser.data(),
+        [liveChooser, updateScreens](QScreen *) {
+            if (liveChooser)
+                QTimer::singleShot(0, liveChooser.data(), updateScreens);
+        }
+    );
 
     int status = EXIT_FAILURE;
     // The window answers by setting `chosen` (or `cancelled`); xdpw's simple
@@ -347,12 +379,9 @@ int main(int argc, char *argv[])
     // panel. Niri state arrives from the Rust helper and is marshalled by the
     // thin Qt adapter on this GUI thread.
     auto *niri = new NiriClient(&app);
-    engine.rootContext()->setContextProperty(QStringLiteral("Niri"), niri);
-
     auto *phone = new DevicesClient(&app);
-    engine.rootContext()->setContextProperty(QStringLiteral("Phone"), phone);
 
-    PanelManager panels(&app, &engine);
+    PanelManager panels(&app, &engine, niri, phone);
     if (!panels.start())
         return EXIT_FAILURE;
 

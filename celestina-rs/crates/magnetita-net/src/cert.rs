@@ -5,8 +5,9 @@
 //! self-signed certificate, keeps it forever, and the *first* time two devices
 //! pair they remember each other's certificate — trust-on-first-use. From then
 //! on a link is trusted only if the certificate matches the pinned one, so the
-//! certificate *is* the device's identity; its SHA-256 [`fingerprint`] is the
-//! number a human compares to be sure there is no impostor in the middle.
+//! certificate *is* the device's identity; its SHA-256 [`fingerprint`] is what
+//! the trust store pins. The short code humans compare is a separate symmetric
+//! hash of both public keys and the active pairing timestamp.
 //!
 //! So this is generated once and never casually regenerated — throwing it away
 //! is unpairing from every device at once. [`DeviceCert::ensure`] makes it on
@@ -95,8 +96,7 @@ impl DeviceCert {
     }
 
     /// The certificate's SHA-256 fingerprint, lowercase hex with colon-separated
-    /// bytes — the human-comparable "verification key" the pairing screen shows,
-    /// and the value the trust store pins a peer by.
+    /// bytes — the stable value the trust store pins a peer by.
     pub fn fingerprint(&self) -> io::Result<String> {
         let chain = self.chain()?;
         let leaf = chain
@@ -122,6 +122,59 @@ pub fn fingerprint_der(der: &CertificateDer<'_>) -> String {
     out
 }
 
+/// KDE Connect's human-comparable code for one active pairing exchange.
+///
+/// Both peers sort the two RFC 5280 SubjectPublicKeyInfo encodings in the same
+/// descending byte order, hash them, and for protocol v8 append the request's
+/// decimal Unix timestamp. A restored v8 session has no active timestamp, so it
+/// truthfully has no new code to display.
+pub fn verification_key(
+    ours: &CertificateDer<'_>,
+    peer: &CertificateDer<'_>,
+    timestamp: Option<i64>,
+    protocol_version: i32,
+) -> io::Result<Option<String>> {
+    let mut a = public_key_der(ours)?;
+    let mut b = public_key_der(peer)?;
+    Ok(verification_key_from_spki(
+        &mut a,
+        &mut b,
+        timestamp,
+        protocol_version,
+    ))
+}
+
+fn verification_key_from_spki(
+    a: &mut Vec<u8>,
+    b: &mut Vec<u8>,
+    timestamp: Option<i64>,
+    protocol_version: i32,
+) -> Option<String> {
+    if a < b {
+        std::mem::swap(a, b);
+    }
+
+    let mut hash = ring::digest::Context::new(&ring::digest::SHA256);
+    hash.update(a);
+    hash.update(b);
+    if protocol_version >= 8 {
+        let timestamp = timestamp?;
+        hash.update(timestamp.to_string().as_bytes());
+    }
+    let digest = hash.finish();
+    let code = digest.as_ref()[..4]
+        .iter()
+        .map(|byte| format!("{byte:02X}"))
+        .collect();
+    Some(code)
+}
+
+fn public_key_der(certificate: &CertificateDer<'_>) -> io::Result<Vec<u8>> {
+    let parsed = rustls::server::ParsedCertificate::try_from(certificate)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    Ok(parsed.subject_public_key_info().as_ref().to_vec())
+}
+
 /// Writes a private key owner-readable-only where the platform allows it.
 fn write_private(path: &PathBuf, pem: &str) -> io::Result<()> {
     fs::write(path, pem)?;
@@ -135,7 +188,8 @@ fn write_private(path: &PathBuf, pem: &str) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::DeviceCert;
+    use super::{verification_key, verification_key_from_spki, DeviceCert};
+    use rustls::pki_types::CertificateDer;
 
     #[test]
     fn a_generated_cert_parses_to_a_chain_and_key() {
@@ -175,5 +229,54 @@ mod tests {
         );
 
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_pairing_code_is_symmetric_and_timestamp_bound() {
+        let a = DeviceCert::generate("a").chain().unwrap().remove(0);
+        let b = DeviceCert::generate("b").chain().unwrap().remove(0);
+        let ab = verification_key(&a, &b, Some(1_700_000_000), 8)
+            .unwrap()
+            .unwrap();
+        let ba = verification_key(&b, &a, Some(1_700_000_000), 8)
+            .unwrap()
+            .unwrap();
+        let later = verification_key(&a, &b, Some(1_700_000_001), 8)
+            .unwrap()
+            .unwrap();
+        assert_eq!(ab, ba);
+        assert_ne!(ab, later);
+        assert_eq!(ab.len(), 8);
+        assert!(ab.chars().all(|character| character.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn a_restored_v8_link_does_not_invent_a_pairing_code() {
+        let a = DeviceCert::generate("a").chain().unwrap().remove(0);
+        let b = DeviceCert::generate("b").chain().unwrap().remove(0);
+        assert_eq!(verification_key(&a, &b, None, 8).unwrap(), None);
+        assert!(verification_key(&a, &b, None, 7).unwrap().is_some());
+    }
+
+    #[test]
+    fn the_pairing_hash_matches_a_fixed_protocol_vector() {
+        let mut a = b"key-a".to_vec();
+        let mut b = b"key-b".to_vec();
+        assert_eq!(
+            verification_key_from_spki(&mut a, &mut b, Some(1_700_000_000), 8).as_deref(),
+            Some("7C6FA008")
+        );
+    }
+
+    #[test]
+    fn malformed_certificate_der_is_rejected() {
+        let malformed = CertificateDer::from(vec![0x30, 0x01, 0xff]);
+        let valid = DeviceCert::generate("valid").chain().unwrap().remove(0);
+        assert_eq!(
+            verification_key(&malformed, &valid, Some(1_700_000_000), 8)
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::InvalidData
+        );
     }
 }

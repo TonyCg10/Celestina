@@ -33,7 +33,9 @@ pub use cert::{fingerprint_der, DeviceCert};
 pub use device::{Device, Pump};
 pub use discovery::{parse_announcement, Announcement, Discovery};
 pub use link::{Link, LinkError};
-pub use payload::{receive_to_file, serve_file};
+pub use payload::{
+    receive_to_file, serve_file, PayloadLimiter, PayloadPermit, PayloadSource, ServedPayload,
+};
 pub use tls::{peer_leaf_fingerprint, TlsConfigs};
 pub use trust::{TrustCheck, TrustStore, TrustedPeer};
 

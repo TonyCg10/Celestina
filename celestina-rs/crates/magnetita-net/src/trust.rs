@@ -107,21 +107,39 @@ impl TrustStore {
     /// Pin (or re-pin) a peer and persist. Re-pinning overwrites — the way a
     /// deliberate re-pair after a reinstall replaces the old certificate.
     pub fn pin(&mut self, peer: TrustedPeer) -> io::Result<()> {
-        self.peers.insert(
-            peer.device_id,
+        let device_id = peer.device_id;
+        let previous = self.peers.insert(
+            device_id.clone(),
             PeerRecord {
                 device_name: peer.device_name,
                 fingerprint: peer.fingerprint,
             },
         );
-        self.persist()
+        if let Err(error) = self.persist() {
+            match previous {
+                Some(previous) => {
+                    self.peers.insert(device_id, previous);
+                }
+                None => {
+                    self.peers.remove(&device_id);
+                }
+            }
+            return Err(error);
+        }
+        Ok(())
     }
 
     /// Forget a peer (unpair) and persist. Forgetting an unknown id is a no-op,
     /// still persisted so the file reflects the intent.
     pub fn forget(&mut self, device_id: &str) -> io::Result<()> {
-        self.peers.remove(device_id);
-        self.persist()
+        let previous = self.peers.remove(device_id);
+        if let Err(error) = self.persist() {
+            if let Some(previous) = previous {
+                self.peers.insert(device_id.to_owned(), previous);
+            }
+            return Err(error);
+        }
+        Ok(())
     }
 
     /// The pinned peers, in device-id order.
@@ -147,12 +165,14 @@ impl TrustStore {
         };
         let text = serde_json::to_string_pretty(&file)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        fs::write(path, text)
+        celestina_core::atomic_file::replace(path, text.as_bytes())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::{TrustCheck, TrustStore, TrustedPeer};
 
     fn peer(id: &str, fp: &str) -> TrustedPeer {
@@ -193,6 +213,26 @@ mod tests {
         s.forget("phone").unwrap();
         assert_eq!(s.check("phone", "aa:bb"), TrustCheck::Unknown);
         assert!(!s.is_trusted("phone"));
+    }
+
+    #[test]
+    fn failed_persistence_rolls_back_pin_and_forget_in_memory() {
+        let blocker =
+            std::env::temp_dir().join(format!("magnetita-trust-blocker-{}", std::process::id()));
+        fs::write(&blocker, b"not a directory").unwrap();
+        let impossible = blocker.join("trust.json");
+
+        let mut fresh = TrustStore::in_memory();
+        fresh.path = Some(impossible.clone());
+        assert!(fresh.pin(peer("phone", "aa:bb")).is_err());
+        assert_eq!(fresh.check("phone", "aa:bb"), TrustCheck::Unknown);
+
+        let mut paired = TrustStore::in_memory();
+        paired.pin(peer("phone", "aa:bb")).unwrap();
+        paired.path = Some(impossible);
+        assert!(paired.forget("phone").is_err());
+        assert_eq!(paired.check("phone", "aa:bb"), TrustCheck::Trusted);
+        let _ = fs::remove_file(blocker);
     }
 
     #[test]

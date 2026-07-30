@@ -13,6 +13,7 @@
 use serde_json::{json, Value};
 
 use crate::packet::NetworkPacket;
+use crate::payload::is_payload_port;
 
 /// The share packet type (file, text, or URL).
 pub const TYPE_SHARE_REQUEST: &str = "kdeconnect.share.request";
@@ -32,8 +33,7 @@ pub fn share_request_packet(id: i64, filename: &str, size: i64, port: u16) -> Ne
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IncomingFile {
     pub filename: String,
-    /// Bytes to read from the payload socket, or -1 for a stream of unknown
-    /// length (read until the peer closes).
+    /// Exact bytes to read from the payload socket.
     pub size: i64,
     /// The TCP port of the phone's payload socket.
     pub port: u16,
@@ -52,12 +52,18 @@ pub fn read_share(packet: &NetworkPacket) -> Option<IncomingFile> {
         .and_then(Value::as_str)?
         .to_owned();
     let size = packet.payload_size?;
+    if size < 0 {
+        return None;
+    }
     let port = packet
         .payload_transfer_info
         .as_ref()
         .and_then(|info| info.get("port"))
         .and_then(Value::as_u64)
         .and_then(|port| u16::try_from(port).ok())?;
+    if !is_payload_port(port) {
+        return None;
+    }
     Some(IncomingFile {
         filename,
         size,
@@ -96,6 +102,22 @@ mod tests {
     fn a_file_without_a_transfer_port_is_not_fetchable() {
         let raw = r#"{"id":1,"type":"kdeconnect.share.request",
             "body":{"filename":"foto.jpg"},"payloadSize":1024}"#;
+        assert!(read_share(&NetworkPacket::parse(raw).unwrap()).is_none());
+    }
+
+    #[test]
+    fn a_file_with_a_negative_size_is_not_fetchable() {
+        let raw = r#"{"id":1,"type":"kdeconnect.share.request",
+            "body":{"filename":"foto.jpg"},"payloadSize":-1,
+            "payloadTransferInfo":{"port":1740}}"#;
+        assert!(read_share(&NetworkPacket::parse(raw).unwrap()).is_none());
+    }
+
+    #[test]
+    fn a_file_outside_the_payload_port_range_is_not_fetchable() {
+        let raw = r#"{"id":1,"type":"kdeconnect.share.request",
+            "body":{"filename":"foto.jpg"},"payloadSize":1024,
+            "payloadTransferInfo":{"port":8080}}"#;
         assert!(read_share(&NetworkPacket::parse(raw).unwrap()).is_none());
     }
 

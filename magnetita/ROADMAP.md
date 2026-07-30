@@ -3,13 +3,13 @@
 > Part of the [Celestina suite](../ROADMAP.md). This roadmap covers the phone
 > link only. Checklist legend: `[x]` done · `[ ]` planned. "Implemented" is not
 > "verified": pairing and every plugin must be proven against a real device on a
-> real network, tracked as its own goal. **Magnetita 1.0.0 — CP0–CP4 done.** The from-scratch
-> Rust transport (`magnetita-net`) and the `magnetitad` daemon pair live and
-> stably with the real phone (a Galaxy S25 Ultra, protocol 8), reconnect as
+> real network, tracked as its own goal. **Magnetita 1.0.0 — CP0–CP4 done.** That
+> release's from-scratch Rust transport (`magnetita-net`) and `magnetitad` daemon
+> paired live and stably with the real phone (a Galaxy S25 Ultra, protocol 8), reconnect as
 > already-trusted, run as a systemd user service, mount the phone's storage over
 > sshfs, and serve `org.celestina.Devices1` — which **Siderita** consumes to draw
 > the phone in its sidebar (click to browse it) and the standalone **Magnetita
-> app** consumes to pair/unpair with the verification key and show the connection
+> app** consumes to pair/unpair with a temporary comparison code and show the connection
 > log. The daily plugins — **battery, notifications, file share, find-my-phone,
 > clipboard** (both ways) — mirror through freedesktop standards, all verified
 > live. The offline workspace suite stays green, with no tokio (the transport is blocking `std::net`;
@@ -36,7 +36,32 @@ visual review so status remains in the device card. Settings keep the same
 grouped component language. Pairing, mount, ring, unpair, media and settings
 actions still route to the existing D-Bus client. Both pages and the artwork,
 progress and transport state were verified in a real Wayland session against
-the Galaxy S25 Ultra.
+the Galaxy S25 Ultra before the reliability changes below; that evidence is not
+reused as acceptance of the corrected paths.
+
+**Protocol/D-Bus/MPRIS/payload hardening — implemented, live recheck open**
+(2026-07-29). The standalone client's blocking zbus reads/actions moved off the
+Qt GUI thread; device, settings and log refreshes coalesce bursts and apply only
+confirmed snapshots through `qt_thread().queue(...)`. UI actions are serialized
+through one owned bounded worker and joined at shutdown; the detached read/watch
+side still lacks deterministic shutdown and remains architectural debt. The
+pure MPRIS boundary now
+rejects unknown actions, clamps hostile volume, preserves unknown media values,
+classifies unavailable/finite/live progress, carries additive `mediaNowPlaying`
+and `mediaCanPlay`, switches cleanly when a player disappears and rearms a failed
+artwork request. Pairing now enforces the v8 timestamp window and symmetric
+SPKI-based comparison code, rejects an encrypted identity that changes id or
+protocol, and keeps the stable certificate pin separate from the temporary
+`verificationKey`. Untrusted links are admission-limited and expire; Forget is
+a durable revocation barrier, not a best-effort queued action. Desktop
+`playerctl` work runs through one lazy, bounded, cancelable worker per paired
+link, with a two-second request deadline and owned shutdown. Completed file and
+artwork transfers publish only while the originating session remains paired and
+unrevoked. Unit and loopback tests cover these contracts. A fresh phone/Wayland
+pass is still required for a pair initiated from each side, identical code
+display and disappearance, restored reconnect, responsiveness, live-stream
+rendering, capability buttons, artwork retry and Forget during both payload
+types.
 
 ## Overview
 
@@ -65,9 +90,12 @@ hard contract — Magnetita never forks the protocol into private glue.
 (range 1716–1764); a peer connects back over TCP. (2) **packets** —
 line-delimited JSON `NetworkPacket`s `{ id, type: "kdeconnect.<name>", body }`,
 one `type` per plugin, sent only for types the peer declared it accepts. (3)
-**trust** — the TCP socket upgrades to TLS 1.2+ with self-signed certs; pairing
-is a `kdeconnect.pair` exchange (`{"pair": true}`, ~30 s timeout) after which
-both ends **pin** the peer certificate (trust-on-first-use, like SSH). (4)
+**trust** — the TCP socket upgrades to TLS 1.2+ with self-signed certs. A fresh
+v8 `kdeconnect.pair` request is `{"pair": true, "timestamp": <unix-seconds>}`;
+accept/reject/unpair responses omit the timestamp, and an absent or more than
+±30-minute-skewed request is invalid. The exchange has a ~30 s response timeout;
+only an explicit successful acceptance pins the peer certificate
+(trust-on-first-use, like SSH), while rejection or timeout leaves it untrusted. (4)
 **payloads** — bulk data (files) is streamed over a *separate* TLS connection
 named by `payloadSize` + `payloadTransferInfo`.
 
@@ -111,9 +139,11 @@ forward here.
   builds its C/asm with plain `cc`), so the TLS stack stays a lean closure. It is measured, not smuggled: closure size **and
   idle wakeups** (a long-lived service) are in the budget. `unsafe_code` stays
   forbidden (workspace lint) — `rustls`/`rcgen`/`ring` keep our code in safe Rust.
-- **Trust-on-first-use with a shown verification key.** Certs are pinned on
-  pairing and verified on every reconnect; the pairing surface shows a key
-  derived from both certificates so a human can confirm no MITM.
+- **Trust-on-first-use with a shown comparison code.** Certificates are pinned
+  on pairing and verified on every reconnect. During a fresh v8 exchange both
+  peers show the same eight uppercase hex digits derived from the ordered SPKI
+  public keys plus the request timestamp. The code disappears when the exchange
+  resolves; the certificate fingerprint remains the durable pin.
 - **Standards to the desktop.** Phone notifications emit through
   `org.freedesktop.Notifications`; shared-in files land in an XDG dir Siderita
   shows; "send to phone" is an `open-with` handler. No private desktop glue.
@@ -130,32 +160,42 @@ client) before anything is built on top of it.
 
 - [x] `magnetita-core` — `NetworkPacket` (de)serialization, the identity packet,
       capability sets and the `deviceId`/type model: pure Rust, unit-tested
-      without I/O (8 tests)
+      without I/O
 - [x] `magnetita-core` — the `kdeconnect.pair` state machine (request / accept /
-      reject / ~30 s timeout) and the pair packet body: pure, returning a
-      `PairAction` the transport runs, with no clock; 13 unit tests over every
-      flow (mutual request, rejection, both timeouts, unpair, restore)
+      reject / invalid timestamp / ~30 s timeout) and pair packet body: pure,
+      returning a `PairAction`; the transport injects `now`, so the state machine
+      never reads a clock or performs I/O
 - [x] `magnetita-core` — the device session (peer identity + pairing → a
       `Reaction` of packets to send and events to log), the connection-event
-      vocabulary the log reads, and our desktop identity/capabilities: pure, no
-      clock, 11 more tests. The brain decides; the transport does the I/O
+      vocabulary the log reads, and our desktop identity/capabilities. The brain
+      decides; the transport supplies time and performs the I/O
 - [x] `magnetita-net` — UDP identity broadcast + listen (`discovery`); TCP
       connect (`link::connect`, the connector/TLS-server role) and accept
       (`link::accept`); the exact KDE Connect **v8** handshake — plaintext identity
-      with `targetDeviceId`, then encrypted re-exchange for protocol ≥ 8
+      with `targetDeviceId`/version, then encrypted re-exchange for protocol ≥ 8;
+      id and protocol must remain identical across that boundary
 - [x] `magnetita-net` — TLS upgrade with a self-signed cert (`rcgen`) and custom
       `rustls` verifiers doing real handshake-signature checks but authority-free
       TOFU pinning (`tls`, `cert`); per-device trust store persisted on disk
       (`trust`, three verdicts: trusted / unknown / changed-and-refused)
 - [x] `magnetita-net` — structured connection events (`ConnectionEvent`) and a
       typed *reason* on every failure (`LostReason`: no reply, cert changed,
-      pairing rejected/timed out), so CP1's log has something truthful to show
-- [x] `magnetitad` — headless service: discover, dial, pair (phone-driven,
-      auto-accepted), ping send; blocking-thread runtime, no async to join
+      pairing rejected/timed out/invalid), so CP1's log has something truthful to show
+- [x] `magnetitad` — headless service: discover, dial and surface a remote
+      pairing request as pending until the local Magnetita UI explicitly accepts
+      it; ping send; blocking-thread runtime, no async runtime to join. Unknown
+      handshakes and links share an admission cap of 42 globally and 4 per source
+      IP, dials are throttled to one attempt per device every 500 ms, and an
+      unpaired live link expires after 60 seconds
 - [x] **Verified (pairing + reconnect)** — pairs with the stock Android app on a
       real network (Galaxy S25 Ultra) and holds a stable link; a restart reconnects
       and **re-verifies the pinned cert** as already-trusted with no re-pair; a
       changed cert would be refused; unpair is forgotten from the trust store
+- [ ] **Revalidated after the 2026-07-29 hardening** — pair fresh from each side,
+      confirm the same temporary code on phone and desktop, confirm it clears on
+      accept/reject, confirm a restored reconnect invents no new code, then run
+      `Forget` during both file and artwork transfers and confirm neither result
+      is published after revocation
 - [ ] **Verified (ping both ways)** — confirm `kdeconnect.ping` is seen on the
       phone and one sent *from* the phone is logged (send path is live; the
       round-trip is the last CP0 check)
@@ -168,7 +208,7 @@ client — and the transport's cost is a number, not a hope.
 
 ## Checkpoint 1 — The app: pair, diagnose, configure
 **Goal:** the standalone window — like Valent's, and a first-class surface — on
-top of CP0's channel: pair a device with the shown verification key, read a
+top of CP0's channel: pair a device with the shown comparison code, read a
 **connection log** that says *why* one will not connect, and set the options that
 are not the file integration. The service stays headless underneath; this is the
 human surface, and the first use of the suite's daemon↔UI convention.
@@ -179,7 +219,7 @@ human surface, and the first use of the suite's daemon↔UI convention.
       state. The suite's reference for daemon↔UI.
 - [x] **The app** — a `magnetita` Qt/QML window over `celestina-style` (lean: zbus
       client, no C++ shims): the device list, pair / unpair with the shown
-      verification key, "Abrir" to browse. Per-plugin options wait for plugins
+      temporary comparison code, "Abrir" to browse. Per-plugin options wait for plugins
       (CP3) — there is nothing to configure yet, honestly, so nothing is shown.
 - [x] **The connection log** — an ACTIVIDAD panel: the live event stream (off the
       `Event` signal) and every failure in red in plain language ("sin respuesta",
@@ -281,19 +321,28 @@ language.
       Desktop → phone: the app's "Ahora suena" card shows the phone's now-playing
       title, artist, album, artwork and timed progress with ⏮ ⏯ ⏭ transport,
       carried on the additive `Devices1` dictionary keys (`mediaTitle`,
-      `mediaArtist`, `mediaAlbum`, `mediaArtworkUrl`, `mediaLength`,
-      `mediaPosition`, `mediaPlaying`, `mediaCan*`) and driven by `MediaAction`.
+      `mediaArtist`, `mediaAlbum`, `mediaNowPlaying`, `mediaArtworkUrl`,
+      `mediaLength`, `mediaPosition`, `mediaPlaying`, `mediaCan*`) and driven by
+      a closed `MediaAction` enum. Unknown/finite/live progress is classified in
+      `magnetita-core`, before QML.
       Artwork payloads are capped, signature-checked, written atomically and
       kept only below `$XDG_RUNTIME_DIR/magnetita/artwork`; stale transfers
-      cannot replace a newer track's image. Phone → desktop: the daemon answers the phone's
+      cannot replace a newer track's image and a failed current transfer may be
+      requested again. Final file/artwork publication is serialized against
+      `Forget`, still requires a live paired origin, and discards verified bytes
+      if revocation won. Phone → desktop: the daemon answers the phone's
       `mpris.request` from the desktop's own players via `playerctl` — lists them,
       reports now-playing, and runs play-pause/next/previous. The wire lives in a
       pure, offline-tested `magnetita-core::mpris`; the desktop side is `media.rs`,
-      unit-tested and validated live against playerctl + a real player.
+      a lazy bounded worker with a two-second deadline for the whole request,
+      cancellation on disable/unpair and an owned join. It is unit-tested and
+      was validated live against playerctl + a real player. That
+      earlier live pass does not cover the 2026-07-29 action/progress/artwork
+      corrections.
 - [x] **One settings source** — a Settings surface in the app (a gear flips the
       window to it) manages the two things that outlive a session: **paired
       devices** (listed from the trust store even when offline, each with its
-      verification key and an "Olvidar" to unpair) and **per-plugin toggles**
+      stable certificate fingerprint and an "Olvidar" to unpair) and **per-plugin toggles**
       (battery, notifications, clipboard, share, find-my-phone, media). Both ride
       the same `org.celestina.Devices1` contract — `ListPaired`/`Forget`,
       `PluginSettings`/`SetPlugin` — sharing the trust store the daemon already
