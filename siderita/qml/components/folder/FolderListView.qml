@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import QtQuick.Controls
 import org.celestina.siderita 1.0
 
@@ -124,7 +125,7 @@ ListView {
             event.accepted = true
         } else if (index >= 0
                    && (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)) {
-            root.controller.activateToken(root.controller.entryToken(index))
+            root.Window.window.activateEntry(root.controller, root.controller.entryToken(index))
             event.accepted = true
         } else if (event.key === Qt.Key_Space
                    && root.controller.selectedToken.length > 0) {

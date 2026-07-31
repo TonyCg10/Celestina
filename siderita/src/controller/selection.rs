@@ -262,6 +262,13 @@ impl qobject::SideritaController {
         self.as_mut().request_nav_scan(PendingNav::To(parent));
     }
 
+    /// A lossy, capped sample for the read-only quick-look pane.
+    ///
+    /// This does not decide whether anything is editable and must never be
+    /// asked to: `grafita-core` classifies content by bytes and encoding on a
+    /// worker, and its answer is what routes `Space` to the editor. What
+    /// reaches quick-look has already been refused as editable, so this only
+    /// has to render something legible from it.
     pub fn preview_text(&self, path: &QString) -> QString {
         // Cap the read: a preview only needs the first screenful or two, and this
         // runs on the GUI thread (the user pressed space), so it must stay cheap.

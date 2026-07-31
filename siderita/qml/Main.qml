@@ -194,6 +194,56 @@ ApplicationWindow {
         }
     }
 
+    // ── Activation: which application opens a file ───────────────────────
+    // Double-click and Enter route through here. Whether a file is text is
+    // decided by its *bytes*, so a `notas.mp3` that is really text opens in
+    // Grafita and a binary named `.txt` does not — which is the whole reason
+    // this is not left to the desktop's MIME lookup.
+    //
+    // One activator per window rather than per tab: the question is about a
+    // file, not about a folder view, and a single owner means a single bounded
+    // worker. Delegates reach it through `Window.window`, which is what lets
+    // this land without the folder view having to hand anything down.
+    GrafitaEditor {
+        id: textActivator
+
+        property var pendingController: null
+        property string pendingToken: ""
+
+        onLaunchDecided: function(path, editable) {
+            const controller = textActivator.pendingController
+            const token = textActivator.pendingToken
+            textActivator.pendingController = null
+            textActivator.pendingToken = ""
+            // Text goes to Grafita; anything else — and a Grafita that is not
+            // installed — falls back to the desktop's own handler, so a failed
+            // launch still opens the file.
+            if (editable && textActivator.launchStandalone(path))
+                return
+            if (controller)
+                controller.activateToken(token)
+        }
+    }
+
+    // Called by every activation site instead of `controller.activateToken`.
+    // Directories and unknown entries never take the detour: a folder has no
+    // bytes to classify, and asking would be a wasted read.
+    function activateEntry(controller, token) {
+        const index = controller.indexForToken(token)
+        if (index < 0 || controller.entryKind(index) === "directory") {
+            controller.activateToken(token)
+            return
+        }
+        const path = controller.entryPath(index)
+        if (path.length === 0) {
+            controller.activateToken(token)
+            return
+        }
+        textActivator.pendingController = controller
+        textActivator.pendingToken = token
+        textActivator.requestLaunch(path)
+    }
+
     // ── The desktop's file chooser ───────────────────────────────────────
     // `org.freedesktop.impl.portal.FileChooser`: when the session routes that
     // interface here, every "open a file" and "save as" dialog in every portal-

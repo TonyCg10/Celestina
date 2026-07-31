@@ -3,6 +3,7 @@ mod bookmarks;
 mod controller;
 mod dbus;
 mod devices;
+mod editor;
 mod favorites;
 mod folder_views;
 mod format;

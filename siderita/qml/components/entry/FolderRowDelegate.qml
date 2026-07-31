@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import QtQuick.Layouts
 import org.celestina.siderita 1.0
 
@@ -345,7 +346,7 @@ Item {
 
         onDoubleClicked: function(mouse) {
             if (mouse.button === Qt.LeftButton)
-                root.controller.activateToken(root.token)
+                root.Window.window.activateEntry(root.controller, root.token)
         }
     }
 

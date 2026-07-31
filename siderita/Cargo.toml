@@ -26,6 +26,9 @@ celestina-core = { path = "../celestina-rs/crates/celestina-core" }
 siderita-core = { path = "../celestina-rs/crates/siderita-core" }
 siderita-ops = { path = "../celestina-rs/crates/siderita-ops" }
 siderita-qt = { path = "../celestina-rs/crates/siderita-qt" }
+# The embedded Grafita editor: document, encoding, edit and loss-free save
+# rules live there, so this app only marshals them to Qt.
+grafita-core = { path = "../celestina-rs/crates/grafita-core" }
 # System-bus integration: org.freedesktop.FileManager1 and udisks2 volumes.
 zbus = "5"
 # Already in the closure (zbus pulls it in); declared here so the portal backend

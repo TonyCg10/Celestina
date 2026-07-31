@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import QtQuick.Controls
 import org.celestina.siderita 1.0
 
@@ -67,7 +68,7 @@ GlassContextMenu {
         icon.name: root.targetDirectory ? "folder-open" : "text-x-generic"
         icon.source: CelestinaTheme.fallbackIcon(
                          root.targetDirectory ? "folder" : "file")
-        onTriggered: root.controller.activateToken(root.targetToken)
+        onTriggered: root.Window.window.activateEntry(root.controller, root.targetToken)
     }
 
     GlassMenuItem {

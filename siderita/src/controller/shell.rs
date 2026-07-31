@@ -138,6 +138,13 @@ fn open_with_default(path: &Path) -> Result<(), String> {
 /// Spawns `program PATH` detached from Siderita's stdio and reaps the launcher on
 /// a throwaway thread. Split out from [`open_with_default`] so the spawn/error
 /// contract is testable without depending on `xdg-open` being installed.
+///
+/// Public to the crate because activation may route a text file straight to
+/// Grafita instead of through the desktop's handler resolution.
+pub(crate) fn spawn_detached(program: &str, path: &Path) -> Result<(), String> {
+    spawn_opener(program, path)
+}
+
 fn spawn_opener(program: &str, path: &Path) -> Result<(), String> {
     use std::process::{Command, Stdio};
 

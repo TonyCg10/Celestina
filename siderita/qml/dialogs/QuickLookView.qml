@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import QtQuick.Controls
 import QtQuick.Layouts
 import org.celestina.siderita 1.0
@@ -31,6 +32,11 @@ CelestinaModalLayer {
     // Read text lazily and only when it could be text — the controller
     // returns "" for a directory, an image or a binary, which the body
     // reads as "show the info card instead".
+    //
+    // This is a renderer, not a decision. Whether an entry is *editable* text
+    // is settled before this view ever opens, by Grafita's content probe on its
+    // worker; anything that lands here was already refused as editable and is
+    // shown read-only.
     readonly property string qlText: (owner.quickLookOpen && qlKind !== "directory"
                                       && !qlIsImage && qlPath.length > 0)
                                      ? controller.previewText(qlPath) : ""
@@ -54,7 +60,7 @@ CelestinaModalLayer {
             event.accepted = true
         } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
             owner.quickLookOpen = false
-            controller.activateToken(controller.selectedToken)
+            quickLookView.Window.window.activateEntry(controller, controller.selectedToken)
             event.accepted = true
         }
     }

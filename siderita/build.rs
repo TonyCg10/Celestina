@@ -72,6 +72,7 @@ const QML_FILES: &[&str] = &[
     "qml/dialogs/PropertiesDialog.qml",
     "qml/dialogs/IconPickerDialog.qml",
     "qml/dialogs/QuickLookView.qml",
+    "qml/dialogs/GrafitaEditorDialog.qml",
     "qml/dialogs/PhoneMediaDialog.qml",
     // Menús y popups.
     "qml/menus/FolderSortMenu.qml",
@@ -145,7 +146,12 @@ fn main() {
         // The freedesktop-thumbnail image provider (no Q_OBJECT of its own — it
         // only emits QQuickImageResponse's inherited signal — so just compiled).
         .cpp_file("cpp/thumbnailprovider.cpp")
-        .files(["src/controller.rs", "src/dbus.rs", "src/portal.rs"]);
+        .files([
+            "src/controller.rs",
+            "src/dbus.rs",
+            "src/editor.rs",
+            "src/portal.rs",
+        ]);
     // SAFETY: only adds an include directory for our own headers.
     let builder = unsafe {
         builder.cc_builder(|cc| {

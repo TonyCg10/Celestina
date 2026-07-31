@@ -891,6 +891,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "grafita-core"
+version = "0.1.0"
+dependencies = [
+ "celestina-core",
+ "xattr",
+]
+
+[[package]]
 name = "h2"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1949,6 +1957,7 @@ dependencies = [
  "cxx-qt",
  "cxx-qt-build",
  "cxx-qt-lib",
+ "grafita-core",
  "libc",
  "notify-debouncer-full",
  "qt-build-utils",

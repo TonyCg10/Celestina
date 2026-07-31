@@ -595,7 +595,7 @@ mod navigation;
 mod scan;
 mod selection;
 mod session;
-mod shell;
+pub(crate) mod shell;
 mod trash;
 mod view_options;
 
