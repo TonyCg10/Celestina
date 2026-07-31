@@ -5,12 +5,15 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 6.9 REQUIRED COMPONENTS Quick DBus)
+# QuickControls2: the shared GlassContextMenu is a real QtQuick.Controls Menu,
+# so the shell links the module that provides its style plugin.
+find_package(Qt6 6.9 REQUIRED COMPONENTS Quick QuickControls2 DBus)
 find_package(LayerShellQt 6.6 REQUIRED)
 # KWindowEffects::enableBlurBehind asks the compositor (niri's
 # ext-background-effect) to blur the wallpaper behind the panel — the panel's
-# glass. KF ≥ 6.19 speaks the new protocol.
-find_package(KF6WindowSystem REQUIRED)
+# glass. KF ≥ 6.19 speaks the new protocol, so that is the declared minimum:
+# an older KF6 builds and silently never reports the effect as available.
+find_package(KF6WindowSystem 6.19 REQUIRED)
 qt_standard_project_setup(REQUIRES 6.9)
 
 find_program(CARGO_EXECUTABLE cargo REQUIRED)
@@ -18,22 +21,33 @@ set(NIRI_ADAPTER_TARGET_DIR "${CMAKE_CURRENT_BINARY_DIR}/rust-target")
 set(NIRI_ADAPTER_BINARY
     "${NIRI_ADAPTER_TARGET_DIR}/release/celestina-niri-adapter"
 )
+set(PROVIDER_ADAPTER_BINARY
+    "${NIRI_ADAPTER_TARGET_DIR}/release/celestina-provider-adapter"
+)
 
-add_custom_target(celestina-niri-adapter ALL
+# One cargo invocation builds every helper the shell spawns; they share a
+# package, a lockfile and the shared core crate.
+add_custom_target(celestina-helpers ALL
     COMMAND ${CMAKE_COMMAND} -E env
         CARGO_TARGET_DIR=${NIRI_ADAPTER_TARGET_DIR}
         ${CARGO_EXECUTABLE} build
         --release
         --locked
         --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml
-        --bin celestina-niri-adapter
-    BYPRODUCTS ${NIRI_ADAPTER_BINARY}
+        --bins
+    BYPRODUCTS ${NIRI_ADAPTER_BINARY} ${PROVIDER_ADAPTER_BINARY}
     DEPENDS
         Cargo.toml
         Cargo.lock
         src/niri_adapter.rs
+        src/provider_adapter/main.rs
+        src/provider_adapter/tools.rs
+        src/provider_adapter/sysmon.rs
+        src/provider_adapter/media.rs
+        src/provider_adapter/audio.rs
+        src/provider_adapter/session.rs
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    COMMENT "Building the Rust Niri event-stream adapter"
+    COMMENT "Building the Rust helpers (Niri event stream, aggregate providers)"
     VERBATIM
 )
 
@@ -51,8 +65,28 @@ qt_add_executable(celestina
     src/niriclient.cpp
     src/panelblurcontroller.h
     src/panelblurcontroller.cpp
+    src/panelmanager.h
+    src/panelmanager.cpp
+    src/workspacefocusrequests.h
+    src/workspacefocusrequests.cpp
+    src/shellcommandline.h
+    src/shellcommandline.cpp
+    src/shellservice.h
+    src/shellservice.cpp
+    src/shellclient.h
+    src/shellclient.cpp
+    src/providerstates.h
+    src/providerstates.cpp
+    src/shellprovidersclient.h
+    src/shellprovidersclient.cpp
+    src/surfacemanager.h
+    src/surfacemanager.cpp
+    src/panelmenusurface.h
+    src/panelmenusurface.cpp
+    src/panelmenucontroller.h
+    src/panelmenucontroller.cpp
 )
-add_dependencies(celestina celestina-niri-adapter)
+add_dependencies(celestina celestina-helpers)
 
 # The panel's status icons come from the shared Lucide set. The shell imports
 # CelestinaStyle at runtime (source), so its qrc-bundled icons are not reachable
@@ -61,6 +95,7 @@ add_dependencies(celestina celestina-niri-adapter)
 # into the resource name.
 set_source_files_properties(../celestina-style/icons/phone.svg PROPERTIES QT_RESOURCE_ALIAS phone.svg)
 set_source_files_properties(../celestina-style/icons/battery-charging.svg PROPERTIES QT_RESOURCE_ALIAS battery-charging.svg)
+set_source_files_properties(../celestina-style/icons/scissors.svg PROPERTIES QT_RESOURCE_ALIAS scissors.svg)
 
 # The source directory is named for the repository while its QML URI is
 # CelestinaStyle. Give qmllint the same URI-shaped symlink main.cpp provisions
@@ -84,6 +119,13 @@ qt_add_qml_module(celestina
         qml/OutputChooser.qml
         qml/WorkspaceStrip.qml
         qml/PhoneStatus.qml
+        qml/PanelFlank.qml
+        qml/SysMon.qml
+        qml/MediaMini.qml
+        qml/AudioLevel.qml
+        qml/SessionStatus.qml
+        qml/CaptureButton.qml
+        qml/PanelMenu.qml
     RESOURCES
         ../celestina-style/icons/phone.svg
         ../celestina-style/icons/battery-charging.svg
@@ -94,10 +136,12 @@ qt_add_qml_module(celestina
 target_compile_definitions(celestina PRIVATE
     CELESTINA_STYLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../celestina-style"
     CELESTINA_NIRI_ADAPTER="${NIRI_ADAPTER_BINARY}"
+    CELESTINA_PROVIDER_ADAPTER="${PROVIDER_ADAPTER_BINARY}"
 )
 
 target_link_libraries(celestina PRIVATE
     Qt6::Quick
+    Qt6::QuickControls2
     Qt6::DBus
     KF6::WindowSystem
     LayerShellQt::Interface
@@ -106,14 +150,98 @@ target_link_libraries(celestina PRIVATE
 include(CTest)
 if(BUILD_TESTING)
     find_package(Qt6 6.9 REQUIRED COMPONENTS Test QuickTest)
-    qt_add_executable(celestina-niri-decoder-test
+    qt_add_executable(celestina-protocol-decoder-test
         tests/protocoldecoder_test.cpp
         src/protocoldecoder.h
         src/protocoldecoder.cpp
     )
-    target_include_directories(celestina-niri-decoder-test PRIVATE src)
-    target_link_libraries(celestina-niri-decoder-test PRIVATE Qt6::Test)
-    add_test(NAME celestina-niri-decoder COMMAND celestina-niri-decoder-test)
+    target_include_directories(celestina-protocol-decoder-test PRIVATE src)
+    target_link_libraries(celestina-protocol-decoder-test PRIVATE Qt6::Test)
+    add_test(NAME celestina-protocol-decoder COMMAND celestina-protocol-decoder-test)
+
+    qt_add_executable(celestina-workspace-focus-test
+        tests/workspacefocusrequests_test.cpp
+        src/workspacefocusrequests.h
+        src/workspacefocusrequests.cpp
+    )
+    target_include_directories(celestina-workspace-focus-test PRIVATE src)
+    target_link_libraries(celestina-workspace-focus-test PRIVATE Qt6::Test)
+    add_test(NAME celestina-workspace-focus COMMAND celestina-workspace-focus-test)
+
+    qt_add_executable(celestina-provider-states-test
+        tests/providerstates_test.cpp
+        src/providerstates.h
+        src/providerstates.cpp
+    )
+    target_include_directories(celestina-provider-states-test PRIVATE src)
+    target_link_libraries(celestina-provider-states-test PRIVATE Qt6::Test)
+    add_test(NAME celestina-provider-states COMMAND celestina-provider-states-test)
+
+    qt_add_executable(celestina-shell-commandline-test
+        tests/shellcommandline_test.cpp
+        src/shellcommandline.h
+        src/shellcommandline.cpp
+    )
+    target_include_directories(celestina-shell-commandline-test PRIVATE src)
+    target_link_libraries(celestina-shell-commandline-test PRIVATE Qt6::Test)
+    add_test(NAME celestina-shell-commandline COMMAND celestina-shell-commandline-test)
+
+    # Exercises the exported interface over a real session bus when one exists;
+    # it claims a test-only name and skips where no bus is available.
+    qt_add_executable(celestina-shell-service-test
+        tests/shellservice_test.cpp
+        src/shellservice.h
+        src/shellservice.cpp
+        src/niriclient.h
+        src/niriclient.cpp
+        src/protocoldecoder.h
+        src/protocoldecoder.cpp
+        src/workspacefocusrequests.h
+        src/workspacefocusrequests.cpp
+    )
+    target_include_directories(celestina-shell-service-test PRIVATE src)
+    target_compile_definitions(celestina-shell-service-test PRIVATE
+        CELESTINA_NIRI_ADAPTER="${NIRI_ADAPTER_BINARY}"
+    )
+    target_link_libraries(celestina-shell-service-test PRIVATE Qt6::Test Qt6::DBus)
+    add_test(NAME celestina-shell-service COMMAND celestina-shell-service-test)
+    set_tests_properties(celestina-shell-service PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    )
+
+    # The shared layer-surface recipe and the menu surface that shares it; it
+    # runs offscreen and proves construction and lifetime, never compositor
+    # placement or focus.
+    qt_add_executable(celestina-surface-manager-test
+        tests/surfacemanager_test.cpp
+        src/surfacemanager.h
+        src/surfacemanager.cpp
+        src/panelmenusurface.h
+        src/panelmenusurface.cpp
+        src/panelmenucontroller.h
+        src/panelmenucontroller.cpp
+        src/niriclient.h
+        src/niriclient.cpp
+        src/protocoldecoder.h
+        src/protocoldecoder.cpp
+        src/workspacefocusrequests.h
+        src/workspacefocusrequests.cpp
+    )
+    target_include_directories(celestina-surface-manager-test PRIVATE src)
+    target_compile_definitions(celestina-surface-manager-test PRIVATE
+        CELESTINA_NIRI_ADAPTER="${NIRI_ADAPTER_BINARY}"
+        CELESTINA_STYLE_IMPORT_ROOT="${CELESTINA_STYLE_IMPORT_ROOT}"
+        CELESTINA_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml"
+    )
+    target_link_libraries(celestina-surface-manager-test PRIVATE
+        Qt6::Test
+        Qt6::Quick
+        LayerShellQt::Interface
+    )
+    add_test(NAME celestina-surface-manager COMMAND celestina-surface-manager-test)
+    set_tests_properties(celestina-surface-manager PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    )
 
     qt_add_executable(celestina-output-chooser-test
         tests/quicktest_main.cpp

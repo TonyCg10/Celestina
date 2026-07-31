@@ -43,8 +43,12 @@ Window {
     // La fila se lleva algo más de alto que las tarjetas: el fondo del elemento
     // marcado se dibuja hasta su borde, y pegado al recorte se veía cortado.
     readonly property int rowHeight: tileHeight + 12
+    // El respiro entre la fila y los botones: es lo que la tarjeta reserva al
+    // pedir su alto, y también lo que la fila respeta si el compositor le da
+    // menos del que pidió.
+    readonly property int rowActionsGap: 26
     // Cabecera + fila + un respiro real antes de los botones + el pie.
-    readonly property int cardHeight: 84 + rowHeight + 26 + 64
+    readonly property int cardHeight: 84 + rowHeight + rowActionsGap + 64
     // Justo lo que ocupan las tarjetas más sus márgenes: sin hueco sobrante a la
     // derecha de la última pantalla. Los 12 de más son el aire que la fila se
     // reserva por dentro para que el borde de la tarjeta marcada no muera
@@ -156,13 +160,19 @@ Window {
         // Las salidas, en fila y con su proporción real.
         ListView {
             id: row
+            objectName: "outputRow"
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: subheading.bottom
             anchors.topMargin: 16
             anchors.leftMargin: 28
             anchors.rightMargin: 28
-            height: chooser.rowHeight
+            // El alto que la fila pide, pero nunca más del que dejan los
+            // botones. La ventana la decide el compositor y la tarjeta se
+            // recorta a ella (arriba), así que con un alto impuesto la fila
+            // seguía midiendo lo suyo y se montaba sobre el pie.
+            height: Math.max(0, Math.min(chooser.rowHeight,
+                                         actions.y - y - chooser.rowActionsGap))
             orientation: ListView.Horizontal
             spacing: chooser.tileSpacing
             // El recorte se lleva lo que toque su borde: estos márgenes son los
@@ -296,6 +306,8 @@ Window {
         }
 
         Row {
+            id: actions
+            objectName: "chooserActions"
             anchors.right: parent.right
             anchors.rightMargin: 28
             anchors.bottom: parent.bottom

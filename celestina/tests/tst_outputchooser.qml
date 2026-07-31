@@ -24,6 +24,19 @@ TestCase {
         screens: []
     }
 
+    // El mismo diálogo con el alto que un compositor de mosaico puede imponer,
+    // muy por debajo del que la tarjeta pide. La fila de pantallas tiene alto
+    // propio y los botones van anclados al pie, así que sin acotarla se montaban
+    // uno encima del otro.
+    Desktop.OutputChooser {
+        id: squeezed
+
+        visible: false
+        reducedMotion: true
+        screens: [testCase.screen("DP-1", 1920), testCase.screen("DP-2", 2560)]
+        height: 220
+    }
+
     function init() {
         chooser.chosen = ""
         chooser.cancelled = false
@@ -49,6 +62,28 @@ TestCase {
 
         compare(chooser.selected, 0)
         compare(chooser.selectedOutputName, "DP-2")
+    }
+
+    // Geometría, no lógica: la fila cede alto ante los botones en vez de
+    // solaparlos, y no se queda en nada cuando hay sitio de sobra.
+    function test_row_yields_to_the_actions_when_the_window_is_short() {
+        const row = findChild(squeezed.contentItem, "outputRow")
+        const actions = findChild(squeezed.contentItem, "chooserActions")
+        verify(row !== null && actions !== null)
+
+        const rowBottom = row.mapToItem(null, 0, row.height).y
+        const actionsTop = actions.mapToItem(null, 0, 0).y
+        verify(rowBottom <= actionsTop,
+               "la fila de pantallas invade los botones: " + rowBottom
+               + " > " + actionsTop)
+        verify(row.height > 0, "la fila se quedó sin alto")
+    }
+
+    function test_row_keeps_its_full_height_when_it_fits() {
+        const row = findChild(chooser.contentItem, "outputRow")
+        verify(row !== null)
+        compare(row.height, chooser.rowHeight,
+                "la fila perdió alto en una ventana que sí da de sí")
     }
 
     function test_removing_selected_output_uses_bounded_fallback() {

@@ -9,7 +9,20 @@ publish = false
 name = "celestina-niri-adapter"
 path = "src/niri_adapter.rs"
 
+# One helper carries every bar provider that needs long-lived, non-Qt IO —
+# never one process per widget. Later shell-owned non-Qt services extend this
+# binary rather than adding a third runtime.
+[[bin]]
+name = "celestina-provider-adapter"
+path = "src/provider_adapter/main.rs"
+
 [dependencies]
+# What every Celestina helper shares with its Qt host: bounded line framing, the
+# one serialized writer a multi-threaded helper emits through, the provider
+# envelope and the command vocabulary. Extracted from this adapter rather than
+# invented for it — the framing and writer below were its own until a second
+# helper needed exactly them.
+celestina-shell-core = { path = "../celestina-rs/crates/celestina-shell-core" }
 # Niri does not promise semver-stable Rust types. Pinning the compositor's exact
 # IPC version keeps the wire model aligned with the installed 26.04 session.
 niri-ipc = "=26.4.0"
@@ -18,6 +31,16 @@ niri-ipc = "=26.4.0"
 # entire event vocabulary into QML.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# The suite already has one MPRIS vocabulary — `PlayerState`, `MediaAction`,
+# `playback_progress()` — and one parser for playerctl's metadata format. The
+# panel's media widget reads the same players the phone bridge does, so it
+# reuses them rather than growing a second dialect of the same thing.
+magnetita-core = { path = "../celestina-rs/crates/magnetita-core" }
+# Cover art from a media player is bytes this shell did not write. The suite
+# already decides what counts as one — a bounded size and a known image
+# signature — and the panel answers to the same two questions the phone bridge
+# does.
+celestina-core = { path = "../celestina-rs/crates/celestina-core" }
 
 [lints.rust]
 unsafe_code = "forbid"
