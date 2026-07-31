@@ -1,0 +1,24 @@
+[package]
+name = "fluorita-engine"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+celestina-core.workspace = true
+fluorita-core = { path = "../fluorita-core" }
+# The decode backend, chosen by the author on 2026-07-30 from the measured F2
+# spike (`fluorita/spikes/`): libmpv arrives as a complete engine — demux,
+# decode, audio output, A/V sync, seek, hardware — driven by properties that map
+# onto the playback model `fluorita-core` already froze, and it is the only
+# candidate whose Qt Quick render path exists on this machine. `libmpv2` is the
+# maintained binding: its whole runtime closure is itself plus `libmpv2-sys`,
+# its bindings are pregenerated (no bindgen, no clang in the build), and it
+# links the system `libmpv.so` rather than vendoring a media stack. The `render`
+# feature is kept because the future Qt Quick surface needs that API; nothing
+# here initializes it.
+libmpv2 = "=6.0.0"
+
+[lints]
+workspace = true
