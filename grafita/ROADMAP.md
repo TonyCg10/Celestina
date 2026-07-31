@@ -1,491 +1,608 @@
 # Grafita roadmap
 
-> Part of the [Celestina suite](../ROADMAP.md). This roadmap covers the text
-> editor only. Checklist legend: `[x]` done · `[ ]` planned. "Implemented" is not
-> "verified": the save path in particular is proven against real files —
-> including read-only, symlinked, non-UTF-8 and interrupted cases — and tracked
-> as its own goal. Nothing here is built yet — this is a design-stage roadmap.
-
-## Overview
-
-**Purpose.** A light editor for text and code: open a file, change it, save it
-without ever risking it. It is the edit-side companion to Siderita's read-only
-quick-look — the answer to "I want to change this character" that does not mean
-starting an IDE or leaving the session's visual language.
-
-**What it replaces, and what it doesn't.** It replaces the heavy editor started
-for a three-line change, and only once that proves a recurring daily cost. It
-does **not** replace the IDE for real work, and it does not try to: the moment
-this project grows a project tree, a build runner or a debugger it has become the
-thing it was meant to avoid.
-
-**Shape.** A windowed app opened with a path (argv or `xdg-open`). One file at a
-time — or a small set of tabs if a daily need proves it — with no workspace
-concept. Finding another file is Siderita's job.
-
-**Key decisions.**
-- **The save path is the whole product.** Temp file in the same directory,
-  flushed and `fsync`ed, permissions and ownership preserved, then `rename` over
-  the original: an interrupted save leaves the old file or the new one, never a
-  truncated mix. This is the suite's loss-free rule (`siderita-ops`' "never
-  remove a source before its destination is verified") in editor shape, and it is
-  CP0, not a later hardening pass.
-- **Bytes are the user's, not ours.** Encoding and newline style are *detected
-  and preserved*, never normalized. Content that is not valid UTF-8 round-trips
-  untouched — the core already preserves non-UTF-8 identity for names, and an
-  editor that silently "fixes" a byte sequence has corrupted data.
-- **Highlighting is an open decision behind a narrow trait.** The candidates are
-  **tree-sitter** (accurate, incremental, but a grammar closure per language) and
-  **syntect**/a regex grammar set (lighter, less accurate). It is settled at CP1
-  by measuring closure size and open time, and it lives behind one trait so the
-  decision stays reversible. Highlighting is never a reason to miss a budget.
-- **No language server.** LSP is the line between an editor and an IDE. If it is
-  ever crossed it is a separate, explicitly-argued checkpoint, not a quiet
-  addition.
-- **Truthful state.** "Saved" means the rename returned; a failed write says so
-  and leaves the buffer dirty. A file changed underneath is reported rather than
-  silently overwritten.
-
-## Design decisions settled (2026-07-30)
-
-A planning session with the author settled the questions the contract above
-left open. They are recorded here so the next session starts from decisions
-rather than re-deriving them. **No code exists yet**: a throwaway prototype was
-built during that session to test these decisions against the real checkout and
-was reverted in full; only the conclusions survive, and every claim below about
-behaviour is a *design intent*, not a verified result.
-
-### Name and authorization are separate decisions
-
-`Grafita` remains the working name until the author ratifies it; that choice
-freezes the future application id, desktop entry and QML module stem. Name
-ratification still does not open the build gate: this planning change
-authorizes improving the work order, not adding product code. G0 starts only
-after the author explicitly asks to begin Grafita implementation.
-
-### The editing surface: an own viewport over the core
-
-The document of record lives in Rust and QML paints it. Concretely: a
-virtualized line viewport (a list of visible lines rendered from the model,
-with a number gutter), not a Qt `TextEdit` that would own the text.
-
-*Why.* The contract already says `grafita-core` owns the buffer and the undo
-model. `TextEdit`/`QQuickTextDocument` would contradict that on three counts:
-two sources of truth for the same bytes, undo belonging to Qt rather than the
-core, and `QString` being unable to carry invalid UTF-8 without a mapping
-scheme. The 50 MB open budget below is also unreachable through a QML text
-document.
-
-*What it costs.* Cursor, selection, input-method handling and the full
-accessible-text interface are built by hand. The AT-SPI text interface is
-explicitly **named debt** until validated against a real assistive client — the
-suite's evidence matrix does not accept an offscreen run as accessibility
-proof. Keyboard operability of the read-only surface (line steps, page, both
-ends) is not debt: it is required from the first slice.
-
-### Internal representation: lines of bytes
-
-Each line holds its exact content bytes plus the terminator that followed it
-(`\n`, `\r\n`, a lone `\r`, or none for a final line without a newline).
-Open → save of an untouched document is then byte identity *by construction*,
-not by bookkeeping. Anything shown on screen is a lossy projection computed per
-line at the edge (undecodable bytes surface as the replacement character while
-the stored bytes stay untouched).
-
-The alternative — a rope of decoded text plus a bijective escape for invalid
-bytes — was rejected: it makes the common case fast and the awkward case
-fragile, which is backwards for a project whose whole promise is the awkward
-case.
-
-Newly inserted lines adopt the file's *dominant* newline style; existing lines
-keep whatever they arrived with. Mixed-terminator files stay mixed.
-
-### Encoding scope for CP0
-
-- UTF-8 without a mark: the default.
-- UTF-8 with a BOM: detected, stripped internally, re-applied on save.
-- UTF-16 LE/BE: detected **by byte-order mark only**, held internally as the
-  UTF-8 bytes they decode to, re-encoded on save.
-- Everything else, including invalid UTF-8 and malformed UTF-16 (odd length,
-  unpaired surrogate): kept as raw bytes, displayed lossily, saved verbatim,
-  and labelled honestly in the UI. It is **read-only in CP0**: the replacement
-  glyph is not a reversible byte-to-caret mapping, so pretending it can be
-  edited would risk changing bytes the user never selected.
-
-**No chardet-style heuristics.** A wrong guess corrupts silently on save; an
-honest "bytes" label never does. Widening this (legacy single-byte encodings
-with an explicit user choice) is a later decision, not a CP0 gap.
-
-### Soft wrap belongs in CP0
-
-Author input (2026-07-30): the small-edit friction that justifies Grafita
-includes **loose prose and notes**, not only code and config. Soft wrap is
-therefore part of the first surface rather than a later comfort, and the
-viewport is designed for variable-height lines from the start — retrofitting
-wrap onto a fixed-line-height viewport is the expensive order.
-
-### The save path: why it is not `celestina-core::atomic_file`
-
-`celestina-core::atomic_file::replace` already carries the same core recipe —
-unique sibling temporary → `fsync` → `rename` → directory `fsync` — for the
-suite's own small state files. Reusing it as-is would be wrong for a user's
-file, on three counts:
-
-1. It renames over the path as given, so **a symlink would be replaced by a
-   regular file** instead of the link being followed. Grafita must resolve the
-   target first.
-2. It does not preserve the original's **mode and group**; a save that silently
-   changes permissions is metadata loss.
-3. It has no notion of the file having **changed underneath** the buffer.
-
-So `grafita-core` owns its own save sequence, and this comparison is the
-documented answer to the suite's reuse rule ("when a recipe appears a second
-time, compare and decide explicitly"). Folding both back into one primitive is
-deferred until the shapes actually converge; if `atomic_file` ever grows these
-three capabilities, revisit.
-
-Design points that fall out of the same decision, to be honoured by the
-implementation:
-
-- Opening captures the logical path's symlink chain and a target stat signature
-  (length, mtime and ctime including nanoseconds, inode, device) both *before and
-  after* reading. If either the chain or signature changes, discard the unstable
-  snapshot and retry or report a conflict; never publish a torn document.
-- Opening also pins the resolved target's parent directory and basename through
-  a safe directory-handle-relative API. Saving re-resolves the logical chain and
-  compares it with the opened snapshot, but creates and publishes the temporary
-  relative to that captured directory handle. A late symlink retarget therefore
-  cannot redirect the rename to the new target: a detected retarget is refused,
-  and one after the final check can affect only the old captured destination.
-- A file whose owner is another user cannot survive a rename (only root may
-  give files away), so that case is refused with a specific error instead of
-  quietly changing ownership.
-- A dangling symlink is refused: both honest options (follow to nowhere,
-  replace the link) lie about what the user asked for.
-- Every failure names the step it failed at, and in every failure the original
-  file is intact.
-
-### Named consequences, not silently absorbed
-
-- **Hard links.** A rename rebinds the directory entry, not the inode, so
-  another hard link to the same file keeps the *old* content. This is the
-  standard trade-off of atomic replacement; it is named here rather than
-  discovered later.
-- **Extended attributes and POSIX ACLs are part of CP0 metadata preservation.**
-  The save path snapshots them before writing and reapplies them to the sibling
-  temporary before rename. If metadata that exists on the source cannot be
-  enumerated or reproduced, the save is refused and the original stays intact;
-  Grafita never silently trades metadata for new contents. The implementation
-  may support namespaces incrementally, but an unsupported present namespace is
-  a visible refusal, not silent loss.
-- **Directory `fsync` is best-effort.** "Saved" means the rename returned; if
-  the directory sync then fails, the save is real but the new directory entry
-  is not yet power-loss-proof, and the outcome says so rather than failing.
-- **Uncooperative concurrent writers.** Portable path replacement has no atomic
-  compare-and-swap. The before/after read signature and final handle-relative
-  check refuse every conflict they observe, while the captured directory handle
-  closes symlink redirection; a target replaced in the final check-to-rename gap
-  remains a named residual race. CP0 does not claim an impossible lock against a
-  process that ignores coordination.
-
-## What the checkout already provides
-
-Read from the checkout on 2026-07-30. Documents can go stale — re-verify before
-relying on any of it.
-
-- **Templates.** Magnetita is the thin-app template (one `build.rs` with a
-  single `QML_FILES` list that is both registered and watched, a `src/` bridge,
-  relative symlinks into `celestina-style`, a `.desktop` entry, `run.sh` +
-  `smoke.sh`). Siderita is the same shape at a larger scale. Neither needs to
-  be invented for Grafita.
-- **Style.** `CelestinaTheme` already exposes `monoFamily` (resolving to the
-  system monospace — enough for CP0; shipping a suite mono is a separate
-  `celestina-style` decision), tabular figure features, the type scale and the
-  `reducedMotion` input every host injects from `CELESTINA_REDUCED_MOTION`.
-- **No shared MIME crate exists.** MIME detection currently lives inside
-  Siderita, not in a `celestina-rs` crate. The README now says so. For CP0 this
-  does not matter: Grafita needs only the MIME list in its `.desktop` entry and
-  must not extract a speculative shared crate.
-- **The architecture guard hardcodes the app list.** `scripts/check-architecture-contract.sh`
-  and `celestina-style/scripts/check-style-contract.sh` enumerate
-  `siderita`/`magnetita`/`celestina` by name in several places (app loops, QML
-  directory lists, the `org.celestina.*` import regex). Adding Grafita to both,
-  with `scripts/test-architecture-scanners.sh` and the relevant negative
-  fixture, is part of G2's atomic scaffold change — not a follow-up.
-- **The control ratchet is a real constraint on the viewport.** Raw Qt Controls
-  are frozen by `scripts/architecture-baseline.tsv`; a plain `ScrollBar` in a
-  new file would be a new baseline entry, which the contract forbids without
-  the author's approval. The viewport therefore ships with wheel/flick and
-  keyboard scrolling, and a shared scrollbar treatment stays future
-  `celestina-style` work.
-- **No application icon.** `celestina-style/icons/apps/` holds Siderita's and
-  Magnetita's SVG only. Until an `org.celestina.Grafita.svg` exists the
-  launcher shows a generic icon; the install script should warn and continue
-  rather than fail.
-- **qmllint needs the built module's import path** (`-I target/cxxqt/qml_modules`
-  after a first build); record the exact command used as evidence.
-
-### CP0 desktop handler contract
-
-Siderita matches a desktop entry's `MimeType=` values exactly, so CP0 freezes the
-current session's useful text/code set instead of promising an unspecified
-"text" handler:
-
-```
-text/plain;text/markdown;text/rust;text/x-python;text/x-python2;text/x-python3;text/x-shellscript;text/x-csrc;text/x-chdr;text/x-c++src;text/x-c++hdr;text/html;text/css;text/javascript;application/json;application/xml;application/yaml;application/toml;
-```
-
-The entry uses one `%f`: Grafita is a one-document app at CP0. A direct launch
-with zero or multiple path arguments fails truthfully instead of silently
-choosing one. G4 tests one representative real fixture for every listed MIME
-against the live `shared-mime-info` database in an isolated XDG environment; a
-database disagreement reopens this recorded list before packaging.
-
-## Implementation plan — where to resume
-
-Seven reviewable slices, **G0 → G6**. Each has one named exit and may land on its
-own; none of the intermediate exits marks CP0 complete. G2 deliberately retires
-the custom viewport risk before the full editing stack is built on top of it.
-
-### G0 — settle the start contract
-
-This is the only slice that cannot begin from this document alone. Before any
-product source lands, the author must ratify the name and explicitly open the
-build gate. Then:
-
-- record that authorization in the suite roadmap and explicitly extend the root
-  `AGENTS.md` implementation boundary to both `grafita/` and
-  `celestina-rs/crates/grafita-*`;
-- re-verify the README's MIME boundary and update the root inventory from
-  no-code to active work;
-- add the local `AGENTS.md`; and
-- let a missing app icon warn and fall back to a generic icon, never block CP0.
-
-**Exit:** the name, authorization and metadata-preservation contract are
-recorded canonically; the root documents agree; no product source exists yet.
-
-### G1 — `grafita-core` read model
-
-Create the initially dependency-free crate with the lines-of-bytes document,
-encoding/newline detection, display projection and the before/after-read stat
-and symlink-chain snapshot. An unstable read is retried within a bounded policy
-or returned as a conflict; it is never published. No editing, undo or save yet.
-File IO is invoked by an owned worker from the app; there is no synchronous-read
-exception on the Qt GUI thread.
-
-**Evidence:** the common architecture guard first, then
-`cargo fmt --all --check`, Clippy for `grafita-core` with all targets and
-`-D warnings`, `cargo test -p grafita-core`, plus the workspace run. Tests cover
-byte-identical untouched round-trips for UTF-8, UTF-8 BOM,
-UTF-16 LE/BE (including a surrogate pair), invalid UTF-8, every terminator and a
-missing trailing newline, plus a file changed during the read whose unstable
-snapshot is never returned.
-
-### G2 — guarded skeleton and bounded viewport risk probe
-
-Build the smallest Magnetita-shaped host that can paint the G1 model through a
-virtualized, wrapped monospace line viewport with a gutter. Prove variable-height
-line layout, wheel/flick scrolling, line/page/document keyboard navigation,
-caret geometry and the Qt input-method seam before implementing editing. The
-bridge lives in the app; a separate `grafita-qt` crate is not earned by one host.
-Opening, reading and `stat` already run through one bounded, owned and
-deterministically joined worker with generation-stamped results; the 50 MB probe
-never creates a synchronous GUI-thread exception.
-Any throwaway probe code is removed; only a reusable narrow viewport contract
-may remain. In this **same atomic change**, add `grafita` to every
-architecture/style scanner and add persistent negative fixtures under
-`scripts/fixtures`; the guards cannot enumerate `grafita/qml` safely before the
-skeleton directory exists, and they must never learn about it afterward.
-
-**Exit:** scanner tests and the normal guard pass, each deliberate Grafita
-fixture fails for the right reason, and a real Wayland session can navigate a
-typical source file and a file of at least 50 MB without a `TextEdit` owning the
-document. Freeze the measurement protocol and numeric budget before
-the first run; then record open time, PSS, scroll/wrap behaviour and whether the
-input-method/accessibility probes worked. If the budget or either seam fails,
-reopen the viewport decision before G3 rather than working around it later.
-
-### G3 — loss-free save
-
-Add the resolved-target save sequence to `grafita-core`: use the captured parent
-directory handle, re-resolve and validate the complete symlink chain and target
-identity, create a handle-relative sibling temporary, and write the bytes.
-Reapply ownership/group before any final mode operation; order mode, xattrs and
-ACLs according to the platform's interaction rules, then re-snapshot and verify
-the complete metadata contract before file `fsync` and atomic handle-relative
-rename. Directory `fsync` remains best-effort and returns a distinct
-`saved_with_durability_warning` outcome after a successful rename. If the
-standard library is insufficient, this slice may add one narrow safe platform
-dependency with an inline `Cargo.toml` justification; it does not earn a general
-IO framework. Every pre-rename error names its failed step and removes a partial
-temporary where possible.
-
-**Evidence:** tests cover a symlink followed rather than replaced and a symlink
-retargeted underneath either being refused when observed or leaving the new
-target untouched through the captured directory handle; mode, group and UID
-preserved for an owned file; a foreign-owned file refused; readable xattrs and
-ACLs reproduced and verified on the temporary before rename; an unpreservable
-present metadata item refused; changed/deleted-underneath; unwritable directory;
-directory target; dangling symlink; injected failure before rename; directory
-`fsync` failure returning the post-save warning; and no original truncation or
-orphaned temporary.
-
-### G4 — complete the read-only application
-
-Complete G2's worker projection: Qt publishes pending/confirmed/failed state and
-applies only the current generation. Add strict one-path argv, `xdg-open`,
-truthful header/badges, image-free generic icon fallback, `.desktop`, `run.sh`,
-`smoke.sh` and an idempotent `scripts/install.sh` with `--dry-run`, `--install`
-and `--uninstall`. The installer stages the binary/desktop entry and warns rather
-than fails when the dedicated icon is absent; G4 creates and tests it but does
-not run it against the live home. Valid UTF-8/UTF-16 documents are marked
-editable-soon; raw/malformed documents are visibly read-only.
-
-**Evidence:** guard, scanner tests, locked build, `qmllint`, smoke, worker
-shutdown tests and a real Wayland inspection. An isolated test with temporary
-XDG data/config directories runs the installer and proves every frozen MIME,
-the one-file `%f` argv contract and uninstall rollback without touching the live
-session. Installation and real handler changes remain explicit author actions
-for G6.
-
-### G5 — edit, undo and accessible text
-
-Add byte/line splices, caret and selection positions, dirty/conflict state,
-savepoint and undo/redo to `grafita-core`, then wire them into the viewport with
-keyboard editing, pointer selection and input methods. Extend the bounded owned
-IO worker with generation- and document-revision-stamped save requests and join
-it deterministically on shutdown. Saving does not destroy undo history; a result
-marks only the revision it wrote as the savepoint, so an edit made while the
-write is in flight remains dirty. The UI shows read-only, no-space,
-changed-underneath and metadata-preservation failures without clearing dirty
-state. A `saved_with_durability_warning` result does advance the written
-revision's savepoint but remains visibly warned, because the rename succeeded
-and only directory durability is uncertain. The custom document exposes text,
-caret and selection through the accessible text interface; it is not deferred
-to CP1.
-
-**Evidence:** table-driven core tests cover insertion/deletion across every
-newline shape, selection replacement, undo/redo and savepoint transitions;
-automated keyboard/focus tests cover the view. A real Wayland pass covers
-pointer selection, keyboard, IME, focus and AT-SPI with a real client. Worker
-tests cover shutdown during a pending save, a stale save reply after a newer
-edit, and the distinct post-rename durability warning.
-
-### G6 — CP0 acceptance and budgets
-
-Walk the complete CP0 checklist against disposable real files and remeasure a
-typical source file and a file of at least 50 MB against the numeric budget
-frozen in G2. A miss reopens that decision with a recorded rationale; it never
-moves the threshold after seeing the result. With explicit author authorization,
-capture the current handlers, run the idempotent installer, activate the desktop
-entry in the real session and prove Siderita/`xdg-open` hands a real text file to
-Grafita. Prove `--uninstall` and restore the prior handler afterward unless the
-author explicitly chooses to keep Grafita active. Only then tick CP0.
-
-**Exit:** the integrated user action — open, edit, undo/redo, save, reopen — is
-byte- and metadata-correct for the supported cases; every refused case leaves
-the original intact. Record separately what was automated and what was accepted
-on the real session.
-
-## Checkpoint 0 — Open, edit, save — without ever losing a byte
-**Goal:** the smallest honest editor: it opens a text file, lets it be changed,
-and saves it in a way that cannot leave the file worse than it found it.
-
-- [ ] `grafita-core` — buffer + undo model, encoding and newline detection, and
-      the loss-free save sequence; pure decisions stay separate from testable
-      filesystem IO, and none depends on Qt
-- [ ] Qt/QML host over `celestina-style` — one document surface, cursor,
-      selection and accessible text, dirty indicator, truthful error state
-- [ ] Soft wrap and a line-number gutter in the viewport (prose is part of the
-      gap this app exists for)
-- [ ] Open by argv and by `xdg-open`, so Siderita's "Abrir con…" reaches it
-- [ ] Read-only, missing-permission and every detected
-      file-changed-underneath case handled visibly rather than silently; the
-      documented final concurrent-writer race is not presented as solved
-- [ ] Every file read and save runs off the Qt GUI thread through an owned,
-      deterministically-joined worker
-- [ ] Keyboard operability of the document surface (line, page, both ends, and
-      the caret once editing lands)
-- [ ] Undo/redo and a savepoint that survive a successful save without lying
-      about dirty state
-- [ ] **Verified** — the save path proven against real files: read-only,
-      symlinked (the link is followed, not replaced), valid UTF-8/UTF-16 edits,
-      raw/malformed content opened read-only without byte changes,
-      permissions, ownership, readable extended attributes and POSIX ACLs
-      preserved (or the save visibly refused before rename), and a save
-      interrupted mid-write leaving the original intact; a post-rename directory
-      sync failure is reported as saved with reduced durability, not as unsaved
-- [ ] **Measured** — open time and memory for a large file (≥ 50 MB) and for a
-      typical source file, inside a declared budget
-
-**Done when:** a valid UTF-8/UTF-16 file edited here and saved is byte-identical
-to expectation; raw/malformed files remain visibly read-only and byte-identical;
-no interruption can produce a truncated file.
-
-## Checkpoint 1 — Comfortable for code
-**Goal:** the comforts that make it usable for the edits it exists for, each
-earned, none of them turning it into an IDE.
-
-- [ ] Syntax highlighting — backend chosen by measurement, behind the trait
-- [ ] Find and replace within the file, with a truthful match count
-- [ ] Current-line highlight and go-to-line (the numbered gutter is already CP0)
-- [ ] Indentation that respects the file (tabs vs spaces detected, not imposed)
-- [ ] **Measured** — the highlighting closure and its cost on open, recorded with
-      the decision it settled
-
-**Done when:** editing a config file or a source file here is pleasant enough
-that the heavy editor stays closed for small changes.
-
-## Checkpoint 2 — One suite
-**Goal:** the editor and the file manager behave as one session rather than two
-programs that happen to share colours.
-
-- [ ] Siderita hand-off — the quick-look's "Abrir con Grafita" opens the file at
-      the previewed position, over `xdg-open` and no private glue
-- [ ] One settings source shared with the suite (font, tab width, theme), not a
-      private store
-- [ ] Session restore — the open file and cursor position return, matching the
-      discipline Siderita's own session restore set
-- [ ] Suite activation convention — reuse the running instance rather than
-      spawning one per file, once that convention is ratified (Magnetita's
-      daemon↔UI work forces it first)
-
-**Done when:** browsing, previewing and editing feel like one continuous session.
-
-## Later / someday
-- [ ] Multiple tabs or a split view, if editing two files at once proves a daily
-      need
-- [ ] A minimal diff view, if reviewing changes outside the IDE proves one
-- [ ] Encodings beyond the CP0 set, by explicit user choice and never by
-      guessing
-- [ ] Language servers — only as an explicitly-argued checkpoint, never as a
-      quiet addition
-
-## Start gates for the next session
-
-1. **Ratify or replace the working name.** Do this before G0 records crate,
-   application id, desktop entry, icon and QML module names.
-2. **The build gate itself.** The suite rule is that no app starts until a
-   recurring daily cost is proven. The author has stated the friction includes
-   prose and notes as well as code and config; whether that counts as the gate
-   being *passed* is the author's call to record here before G0 lands. This
-   documentation change does not pass it.
-
-`CelestinaTheme.monoFamily` is the settled CP0 font. A packaged suite monospace
-is revisited only when a second consumer proves shared demand. A generic icon is
-acceptable through CP0; a dedicated Grafita icon is polish outside CP0, not an
-architectural decision or a start blocker.
+> Part of the [Celestina suite](../ROADMAP.md). Checklist legend: `[x]` done ·
+> `[ ]` planned. Source presence is not runtime evidence. The author ratified
+> the name, opened the implementation gate and fixed the two-surface interaction
+> on 2026-07-30. The shared document core is implemented and its exit checks are
+> verified. Both surfaces now exist — the embedded Siderita modal and the
+> standalone application — and both have been driven headlessly; neither has
+> been seen in a real session.
+
+## Settled product decisions
+
+- **Grafita edits any textual file type.** Acceptance is based on content and
+  encoding, never a filename extension or closed MIME allowlist. MIME remains
+  useful only for desktop discovery and optional syntax selection.
+- **`Space` means edit in place.** In Siderita, `Space` on editable text opens a
+  Grafita-owned editing modal that occupies nearly the whole folder surface.
+  `Space` on non-text keeps the existing quick-look behaviour.
+- **Double-click and `Enter` mean the full app.** Activating textual content in
+  Siderita opens standalone Grafita in its own window. Other file types keep
+  their normal desktop handler.
+- **One core, two thin hosts.** `grafita-core` owns the document and file
+  semantics. Grafita and Siderita expose separate CXX-Qt adapters and QML
+  compositions; neither copies domain logic or imports the other's QML.
+- **The embedded surface is a real editor.** It has editing, selection,
+  undo/redo, dirty/conflict state, save and guarded close. It is simpler only in
+  chrome: no tabs, project UI or standalone settings surface.
+- **No IDE.** No project tree, build runner, debugger, LSP, terminal or plugin
+  system.
+
+## Technical contract
+
+### Text classification and representation
+
+The core opens regular files by bytes. UTF-8, UTF-8 with BOM and UTF-16 LE/BE
+with BOM are editable in the first milestone. Extensionless files, dotfiles,
+JSON, KDL and source code follow exactly the same path. Unknown or malformed
+encodings are reported honestly and stay byte-preserving/read-only until an
+explicit encoding choice exists; binaries are not offered as text.
+
+Each line retains its content bytes and original terminator (`\n`, `\r\n`,
+`\r`, or none). Untouched open → save is byte-identical by construction, mixed
+newlines remain mixed, and inserted lines use the document's dominant newline.
+No chardet-style guess may silently reinterpret the user's bytes.
+
+### Loss-free save
+
+Opening snapshots the resolved symlink chain and target identity before and
+after the read. Saving revalidates that identity, writes a unique sibling
+temporary through the captured parent directory, reproduces permissions,
+ownership/group, readable extended attributes and POSIX ACLs, syncs the file,
+then atomically renames it over the resolved target. A detected external change,
+unreproducible metadata or any pre-rename failure refuses the save and leaves
+the original intact. A directory-sync failure after rename is reported as
+saved with reduced durability, not as unsaved.
+
+### Host lifecycle
+
+Both hosts perform open/save IO on a bounded, owned and deterministically joined
+worker. Open results carry a generation; save results carry the document
+revision they wrote. A stale reply never replaces a newer document or clears a
+newer edit's dirty state.
+
+In Siderita, closing an embedded dirty document offers **Guardar**,
+**Descartar** and **Cancelar**. The modal traps focus, blocks folder actions and
+restores focus to the selected entry. Launching the full app is a separate
+activation path; the two surfaces do not pretend to share live in-memory state.
+
+## Completed — G0: start contract
+
+- [x] Ratify `Grafita`, the standalone application and the embedded Siderita
+      surface.
+- [x] Open the implementation boundary for `grafita/`,
+      `celestina-rs/crates/grafita-*` and the bounded Siderita consumer work.
+- [x] Define content-based text acceptance and the `Space` versus
+      double-click/`Enter` interaction.
+- [x] Record that the core is shared while both UI compositions remain local to
+      their hosts.
+
+**Exit:** product, ownership and activation contracts are canonical; no product
+source is claimed as implemented.
+
+## Completed — G1: shared document core
+
+**Observable outcome.** A tested Rust API can open, edit, undo, redo and safely
+save representative text files without knowing whether Grafita or Siderita is
+the caller.
+
+**In scope:** content probing, supported encodings, byte/newline-preserving
+document model, caret/selection edit commands, undo/redo/savepoint,
+dirty/conflict state, loss-free save and typed outcomes.
+
+**Out of scope:** Qt/QML, syntax highlighting, desktop handlers, tabs and live
+installation.
+
+**Work order:**
+
+1. [x] Add `grafita-core` to the shared workspace with no Qt dependency and
+      document every filesystem dependency inline.
+2. [x] Implement bounded content probing and the byte/newline-preserving read
+      model; file type, extension and MIME never gate the result.
+3. [x] Add position, selection and splice commands plus undo/redo and a
+      savepoint; invalid positions return typed errors rather than panicking.
+4. [x] Implement the resolved-target, metadata-preserving atomic save path and
+      external-change detection.
+5. [x] Define generation/revision values and typed open/save outcomes for both
+      host adapters without embedding a runtime in the core.
+6. [x] Add table-driven tests and update the `celestina-rs` inventory and
+      roadmap.
+
+**Exit checks:**
+
+- [x] `.txt`, Rust, JSON, KDL, dotfile and extensionless UTF-8 fixtures all open
+      as editable through the same API; a binary fixture does not.
+- [x] UTF-8 BOM and UTF-16 BOM fixtures edit and re-encode correctly;
+      malformed/raw bytes remain unchanged and are never advertised as safely
+      editable.
+- [x] Insert/delete/selection replacement, mixed newlines, undo/redo and
+      savepoint transitions pass table-driven tests.
+- [x] Symlink, changed-underneath, permission/metadata and injected
+      interrupted-save tests prove that every refusal leaves the original
+      intact.
+- [x] Architecture guard, format, Clippy with `-D warnings` and the
+      `celestina-rs` workspace tests pass.
+
+**Evidence.** `bash scripts/check-architecture-contract.sh`, `cargo fmt --all
+--check`, `cargo clippy --workspace --all-targets -- -D warnings` and
+`cargo test --workspace`, all green, with 42 of those tests belonging to
+`grafita-core` (27 unit, 15 integration over real files in scratch
+directories).
+
+**Decisions this milestone settled**, beyond the contract above:
+
+- A caret column is a byte offset inside its line's UTF-8 content. It is exact,
+  cheap, and validated on every entry point; a split character is a typed
+  refusal, never a panic.
+- The dominant newline is decided when the buffer is parsed and then stays
+  fixed. Recomputing it mid-session would make the same keystroke insert
+  different bytes from one moment to the next.
+- Undo is bounded (512 changes). The savepoint is pinned to a change's identity,
+  not to a stack depth, and a savepoint that falls off the bottom of the stack
+  makes the document permanently dirty rather than falsely clean.
+- A document ceiling of 64 MiB is refused up front; an editor is the wrong tool
+  past it and exhausting the session is worse than saying no.
+- The save adopts the identity of the file it just wrote even when the document
+  moved on, so a document's own write is never mistaken for an external change.
+- Reproducing extended attributes — POSIX ACLs among them, since Linux stores
+  them as one — needs syscalls `std` does not expose, so `grafita-core` carries
+  `xattr`. It is the first third-party dependency in a non-Magnetita core and is
+  justified inline in its `Cargo.toml`.
+
+**Not proven.** Ownership reproduction across users needs a file owned by
+another user and was not exercised; only the same-owner path is covered.
+Extended-attribute reproduction was verified on the temporary filesystem the
+tests run on, which is not evidence for every filesystem.
+
+## Completed — G2: embedded Grafita in Siderita
+
+Double-click/`Enter` first performs the same asynchronous text probe and launches
+standalone Grafita for text; non-text retains `xdg-open`. `Space` performs the
+probe and routes editable text to a nearly full-window `GrafitaEditorDialog`,
+while images, folders, media and binary files keep `QuickLookView`.
+
+The Siderita adapter exposes only `grafita-core` state/actions. The modal adds
+editing, save, undo/redo, error/conflict state and guarded close, blocks the
+folder underneath and restores focus. The existing synchronous
+`preview_text` path is no longer used to decide editable text. A real Wayland
+pass must cover mouse, keyboard, focus trapping, reduced motion and close with a
+dirty document before G2 is complete.
+
+**Built so far.**
+
+- [x] `grafita-core::worker` — one owned thread over probe/open/save. A newer
+      probe or open cancels and replaces a queued one; a save is never dropped
+      to make room, and only shutdown cancels one. Dropping it cancels and joins
+      deterministically, so a closing tab cannot leave a read or write behind.
+- [x] `grafita-core::display` — the line-feed projection a text widget shows,
+      the UTF-16 caret mapping Qt cursors need, and the reconciliation that
+      turns "here is my whole text now" into the single splice it represents.
+- [x] `siderita/src/editor.rs` — a `GrafitaEditor` QObject of its own, holding
+      only document state and running every read and write on the worker.
+- [x] `siderita/qml/dialogs/GrafitaEditorDialog.qml` — the modal: editing,
+      save, undo/redo, error and conflict lines, and a guarded close offering
+      **Guardar** / **Descartar** / **Cancelar** that disables the document
+      surface beneath it.
+- [x] `Space` routes through the content probe; folders and everything the core
+      refuses as editable fall back to `QuickLookView`.
+
+**Decisions this milestone settled.**
+
+- **The text widget never owns the text.** Qt stores line breaks its own way, so
+  letting a `TextEdit` own the document would rewrite every CRLF file the moment
+  it was touched — the exact loss G1 exists to prevent. The widget is shown the
+  core's line-feed projection and reports its whole content back; the core
+  derives the one splice that explains the difference. Untouched lines never
+  enter that difference, so their terminators are never rewritten, and a typed
+  newline adopts the document's dominant terminator like any other insertion.
+  Pushing the projection back after an undo is recognised as unchanged and
+  recorded as nothing, so the design needs no re-entrancy flag.
+- **Undo, redo and save are intercepted before Qt's own text history**, which
+  knows nothing about savepoints, terminators or what is on disk.
+- **The editor is its own QObject.** An open document has its own lifetime and
+  shares no state with folder scanning, and `SideritaController` is at its
+  frozen size baseline besides.
+- **The embedded surface caps documents at 8 MiB**, below the core's own
+  ceiling: a modal inside a file manager is not where a large file belongs.
+- **A save report carries the document generation as well as its revision**, so
+  a report that arrives after the user closed one file and opened another is
+  recognised as belonging to neither.
+
+**Evidence so far.** Architecture guard, `cargo fmt --all --check`,
+`cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`
+(386 passing), `qmllint` against the current build's module for the changed QML,
+`cargo build --release --locked` and `siderita/scripts/smoke.sh`. The exact lint
+command was `qmllint -I <import-path> qml/dialogs/GrafitaEditorDialog.qml
+qml/components/folder/FolderActions.qml`, where the import path is the build's
+`qt-build-utils/qml_modules` tree with `qml/` linked in beside its `qmldir`.
+
+A core-level test drives the widget's exact path — read the projection, edit
+that string the way a widget would, hand the whole thing back, save — and proves
+a CRLF file keeps its terminators while the typed line adopts CRLF too.
+
+**The modal was driven end to end offscreen.** Reaching it first required
+fixing Siderita: a dead `ScrollBar.horizontal` binding in `TabStrip.qml` aborted
+that component, and because `TabStrip` lives inside `FolderView`, the failure
+cascaded to the whole tab delegate — no folder view was constructed at all. It
+reproduced at `9ecc457` with the editor removed, so it predates this milestone,
+and `scripts/smoke.sh` missed it by grepping only for `TypeError`/
+`ReferenceError`. Both are fixed under Siderita's S6.
+
+With that gone, a temporary probe drove the real surface offscreen and observed:
+
+| Step | Observed |
+|---|---|
+| Binary file | editor stays closed, quick look opens |
+| Text file | opens as UTF-8, projection `"primera\nsegunda\ntercera\n"` |
+| Focus | the text body holds active focus, modal shown |
+| Layout | an 802×575 editing page inside an 858×692 folder view |
+| Typing through Qt's own `TextEdit` | dirty, undo available |
+| Save | clean, "Guardado", no error |
+| **Bytes on disk** | **`primera\r\nsegunda EDITADA\r\ntercera\r\n`** |
+| Close while dirty | guarded question raised, document stays open |
+| Undo / redo | back to the savepoint and clean, then forward again |
+| Discard | closes, question cleared |
+
+The bytes are the point: the edit went through a real Qt text widget and the
+file kept its CRLF terminators.
+
+**Accessibility and focus follow the suite contract.** Dirty state, the encoding,
+a refusal and a conflict all carry an accessible role and a worded name, so none
+of them is signalled only by a bullet or by red-versus-amber. The editing page
+paints no focus ring on purpose: the ring is reserved for keyboard focus, and a
+bare `TextEdit` is a TextInput template with no `focusReason`, the signal
+`CelestinaTextField` uses to tell Tab from a click — so a ring here could only
+be one that also fires on every click. On an editing surface the caret is the
+focus affordance.
+
+**The real session found two things the offscreen run could not.** The author
+ran the surface on the live Niri session on 2026-07-31:
+
+- The modal was a child of the folder view, so it stopped at that view's edge
+  and left the sidebar lit, clickable and outside the scrim. It is now
+  reparented to the window's content item.
+- Sweeping to select text inside the modal started a **file drag in the view
+  underneath**. `CelestinaModalLayer`'s scrim was a `MouseArea` accepting only
+  the left button, which leaks the other buttons, hover, the wheel and — the one
+  that bit — the *pointer handlers* below: a `DragHandler` keeps a passive grab
+  and goes on reacting while an item above holds the exclusive one. The layer
+  now carries the same input shield `GlassPill` already used for floating
+  chrome, and `GlassContextMenu` became `modal: true` (`dim: false`, so the look
+  is unchanged) because a non-modal menu let its dismissing click land on the
+  file behind it.
+
+**Double-click and `Enter` now open Grafita**, closing the last gap in the
+two-surface contract. A file's *bytes* decide, not its name: a `mentira.mp3`
+holding text opens in Grafita, a `binario.txt` holding ELF goes to the desktop's
+handler, and a folder never takes the detour at all. A Grafita that fails to
+launch falls back to `xdg-open`, so a failed launch still opens the file.
+
+The interception point was the obstacle — `SideritaController` and
+`FolderView.qml` both sit exactly on frozen baselines. It landed without
+touching either: one activator lives in `Main.qml` (not frozen) and the six
+activation sites reach it through `Window.window`, so nothing had to be handed
+down through the folder view. Exposing `spawn_detached` needed
+`mod shell` to become `pub(crate) mod shell` — the same line, so
+`controller.rs` still measures exactly 1223.
+
+**The test caught a real defect on the way.** Activating two files in quick
+succession lost one: `Job::Probe` is superseded by a newer probe, which is right
+for "may I offer to edit what the user is looking at" and wrong for "who opens
+this file" — each activation is a separate thing the user did. Classification is
+now `Job::Classify`, never superseded, tracked as a list of in-flight
+generations, and deliberately does not move `latest`, which would have made an
+open already in flight look stale and be dropped.
+
+**Still not proven.** Key events were never synthesised, so `Escape`, `Ctrl+S`
+and `Ctrl+Z`/`Ctrl+Y` through `Keys.onPressed` remain untested by anything but
+use. Tab focus trapping, focus restoration, reduced motion, IME and AT-SPI have
+had no dedicated pass.
+
+## Completed — G3: standalone Grafita
+
+Build the complete one-document application over the same core: its own window,
+full editor chrome, strict path activation, desktop entry, isolated installer
+test and an explicit launch path from Siderita. The first release does not need
+tabs or a project concept. Direct launch must accept textual content regardless
+of extension even when the desktop MIME database does not recognize it.
+
+**Built so far.**
+
+- [x] `grafita-core::session` — the whole open/edit/save/close state machine,
+      staleness rules included, as a pure type that owns no thread and performs
+      no IO: a method returns the job its host should run and the event its host
+      should act on. Testable synchronously, without a worker or a toolkit.
+- [x] `grafita/` — the application: its own crate, its own QML module, the
+      shared `celestina-style` sources as symlinks, a window that owns
+      activation and the shortcuts, and one component per region.
+- [x] Path activation by content. `grafita RUTA` and `file://` URLs both land in
+      the same place, and what is editable is decided from bytes.
+- [x] Desktop entry, the `org.celestina.Grafita` icon and `scripts/run.sh`,
+      proven by installing into a throwaway prefix.
+- [x] `scripts/smoke.sh` — the same headless gate Siderita has, including the
+      construction errors a `TypeError`-only grep would miss, plus a CRLF
+      document so a regression that rewrites terminators fails here rather than
+      in someone's file.
+- [ ] An explicit launch path from Siderita. **Deferred, see below.**
+
+**Decisions this milestone settled.**
+
+- **The state machine is shared; the wording is not.** Both hosts need the same
+  worker lifecycle, generation and revision staleness rules, guarded close and
+  save application — writing that twice would have meant writing the staleness
+  rules twice, so it moved into `grafita-core::session`. User-facing text stayed
+  out of the core: the same refusal is worded differently by a modal inside a
+  file manager ("el editor integrado") and by an editor that names itself. Each
+  host maps typed outcomes to its own sentences, and Siderita's adapter lost a
+  fifth of its size in the move.
+- **Quitting goes through the same guarded close as any other close.** The
+  window refuses its own close event and answers it only once the document says
+  it may go, so no path out of the application can discard an edit.
+- **The editing surface is still local to each host.** Two applications now
+  demonstrate the same text-editing recipe, which is the bar for it to enter
+  `celestina-style` — but `DESIGN.md` is the author's visual contract and every
+  style consumer would need revalidating, so extracting it is left as an
+  explicit decision rather than taken unilaterally.
+- **The `.desktop` MIME list is discovery, never a decision.** It is what makes
+  Grafita appear in "Abrir con"; the file's bytes are what decide whether it
+  opens.
+
+**Evidence.** Architecture guard (extended, below), `cargo fmt --check`,
+`cargo clippy --all-targets -- -D warnings`, `cargo build --release --locked`
+and `scripts/smoke.sh` for the application; `grafita-core` keeps its own gates
+with 62 tests. The installer was run against a throwaway prefix: the binary,
+desktop entry and nine icon sizes land, `desktop-file-validate` passes, the
+installed binary runs, and `--uninstall` removes everything it placed.
+
+Activation was checked against names chosen to disagree with their content —
+`LEEME` with no extension, `.perfil`, `datos.xyz`, `programa.rs`, a UTF-8 BOM
+file, text named `mentira.mp3` and `foto.png`, and an ELF binary named
+`binario.mp3`. Every textual one opened; only the binary was refused, and it was
+refused for its bytes while its name said audio.
+
+**The guard did not cover a new application, and now does.** `grafita/qml` was
+outside QML registration, auto-bindings, the visual contract, local Qt controls
+and the shared-style link checks — a new app silently escaped every visual rule.
+Both guards now include it, and it immediately earned its keep: it caught
+`session: session` in `Main.qml`, the self-shadowing auto-binding, which had left
+every binding inside the document view undefined. The offscreen probe had missed
+it because the probe drove the window's own object rather than the view's.
+
+**The launch path from Siderita landed under G2** rather than waiting on a
+refactor: one activator in `Main.qml` reached through `Window.window` needed no
+room in either frozen file. Note that once Grafita is installed the desktop's
+own handler resolution would already route text files to it through `xdg-open`;
+what this adds is Siderita *overriding* that by content, which is what makes a
+misnamed file open in the right editor.
+
+**The real session found the window could not be closed.** Launched without a
+path on 2026-07-31, the window refused every close request and only `kill` ended
+it. The guard fought its own exit: `Qt.quit()` closes the window, the closing
+handler refused that close too, and the two spun forever — 564 MB of log in
+seconds. A close is now accepted once the document has authorised the quit. The
+same run showed the empty state was a dead end, with nothing to open a document
+with; it now offers **Abrir archivo…**, which goes through the XDG portal and so
+lands on Siderita's own picker.
+
+**Not proven.** Real typing, the shortcuts, reduced motion, IME, AT-SPI and the
+glass rendering have had no dedicated pass, and the icon has not been checked at
+small sizes on a real panel.
+
+## Mostly done — G4: comfortable text editing
+
+**Observable outcome.** Editing a real file stops needing another editor: the
+text can be searched and replaced, a line can be reached by number, and the
+document's own indentation is respected rather than guessed at.
+
+**In scope:** find/replace with an honest match model, go-to-line, current-line
+highlight, detected indentation, and the standalone application's chrome for
+all of it.
+
+**Out of scope for now:** syntax highlighting, which has to earn its startup and
+memory cost with a measurement before it is chosen; legacy encodings, which wait
+for a real file that needs one; and tabs, which wait for a demonstrated daily
+need. The embedded modal keeps its deliberately small chrome — this is the
+standalone application's surface.
+
+**Work order:**
+
+1. [x] Search in `grafita-core`: literal and case-insensitive matching over the
+   buffer, ordered hits, next/previous from a caret, and replace/replace-all
+   expressed as ordinary splices so undo covers them like any other edit.
+2. [x] Go-to-line and detected indentation in the core, both pure and
+   table-tested.
+3. [x] The standalone application's find bar and go-to-line, over those APIs.
+4. [x] Current-line highlight in the editing surface.
+5. [x] Update the documents with what was measured and what was left out.
+
+**Decisions the core half settled.**
+
+- **Search is literal, never a pattern language.** A find box should find what
+  is in the box; a stray `.` or `*` turning into a wildcard is a surprise the
+  user did not ask for. Case-insensitive and whole-word are the only modifiers.
+- **A match never crosses a line.** Each line owns its terminator, so a pattern
+  spanning lines would have to decide what `\n` means — and in a mixed file the
+  answer differs per line. Searching within lines needs no such decision.
+- **Case folding that changes byte length reports nothing for that line.**
+  `ẞ → ss` makes offsets in the folded text meaningless; comparing the raw text
+  instead would silently turn the search case-sensitive, so the honest answer is
+  no match rather than a wrong one.
+- **Replace-all is one action, not one action per hit.** Its splices run
+  backwards through the document so earlier ones cannot move later ones, and
+  they share an undo group, which needed grouping in `History`. Whole lines are
+  never rewritten, so terminators survive.
+- **Indentation is measured and allowed to say "mixed" or "none".** A style
+  holding four fifths of the indented lines wins, so one stray line does not
+  overturn a consistent file; the width is the greatest common divisor of the
+  observed depths, which is the step the file climbs by rather than its most
+  common depth.
+- **Go-to-line counts from 1 and clamps.** Line 900 of a 40-line file means the
+  end; refusing to move would be less useful than going as far as there is.
+
+**Decisions the surface half settled.**
+
+- **The search is state, not a query the host repeats.** `LiveSearch` holds the
+  pattern, the hits and which one is selected, and rescans after every edit —
+  a match list computed before an edit describes a document that no longer
+  exists, and splicing at those offsets would hit the wrong bytes.
+- **Replacing one match keeps the index rather than advancing it.** Removing a
+  match shifts the following ones down by one, so staying put *is* moving on.
+- **The count is stated, not implied.** "3 de 12" and "Sin coincidencias" are
+  results the user can read; a search that silently does nothing is a search
+  that might be broken.
+- **Selecting a hit does not steal the keyboard.** The find bar is where the
+  user is typing, so a match is selected and revealed in the document without
+  focus leaving the pattern field.
+- **The current-line highlight hides behind a selection**, where it would
+  otherwise fight the selection colour for the same pixels.
+
+**Evidence.** `cargo clippy --workspace --all-targets -- -D warnings`,
+`cargo test --workspace` (506 passing, 89 of them `grafita-core`'s), the
+architecture guard, `cargo fmt`, `cargo build --release --locked` and
+`scripts/smoke.sh`. The decisive core test writes a file with deliberately mixed
+`\r\n`, `\r` and `\n` terminators, replaces across all three, and asserts that a
+single undo restores the original bytes exactly.
+
+The find bar was then driven offscreen against a real CRLF file: four hits
+found, next/previous stepping and wrapping, case-insensitive agreeing at four,
+whole-word correctly refusing a prefix, replace-all rewriting the document, one
+undo restoring it, go-to-line landing on the right offset, and the indentation
+reported as `Tabuladores` from the file itself.
+
+**The size guard did its job mid-milestone.** Adding search pushed
+`session.rs` to 989 lines, and the guard refused it — correctly: the live search
+is an independent reason to change that file. `LiveSearch` moved to `search.rs`
+and the session's tests became an integration suite, leaving 616 lines and a
+clearer split.
+
+**Not proven.** The bar has never been used with a keyboard on a real session:
+`Ctrl+F`, `Ctrl+H`, `F3`, Escape and the focus dance between the pattern field
+and the document are all untested by anything but their bindings.
+
+**Exit checks:**
+
+- Replace and replace-all are single undo steps, and undoing one restores the
+  exact bytes — mixed newlines included.
+- A search that matches nothing, matches everything, or matches across a
+  multi-byte character behaves and never panics.
+- Indentation detection reports what a file actually uses and says so honestly
+  when a file is mixed or has none.
+- Architecture guard, format, Clippy with `-D warnings` and the complete
+  `celestina-rs` workspace tests pass.
+
+## Later — G5
+
+- **Syntax highlighting — measured, awaiting the author's choice.** The contract
+  says the approach is picked by measured startup and memory cost, so it was
+  measured before anything was chosen. Numbers below.
+- Explicit legacy-encoding choices when real files require them.
+- Multiple tabs only if simultaneous small edits prove a daily need.
+
+### Highlighting spike (2026-07-31)
+
+Four candidates, same release profile as Grafita (`lto = "thin"`,
+`codegen-units = 1`, `strip = "symbols"`), same corpus: this repository's own
+`controller.rs` (44 KB), `FolderView.qml` (36 KB) and a generated 414 KB JSON.
+Deltas are against an empty binary doing the same file walk (381 KB, 2.8 MB RSS).
+
+| Candidate | Binary Δ | RSS Δ | Whole process | 44 KB Rust | 414 KB JSON |
+|---|---|---|---|---|---|
+| hand-written lexer | **+4 KiB** | **+0 MB** | **1 ms** | **123 µs** | **538 µs** |
+| tree-sitter, 2 grammars | +1 205 KiB | +7.3 MB | 14 ms | 1.9 ms | 11.5 ms |
+| tree-sitter, 6 grammars | +3 944 KiB | — | — | — | — |
+| syntect (`regex-fancy`) | +2 151 KiB | +16.0 MB | 123 ms | 69.7 ms | 50.0 ms |
+
+For scale: Grafita's binary is 3.07 MB and its RSS peak about 100 MB, so syntect
+adds ~70% to the binary and tree-sitter with six grammars would more than double
+it. tree-sitter costs about **684 KiB per additional language**, measured by
+going from two grammars to six.
+
+`syntect`'s reported init is misleading — it loads lazily, so its cost lands on
+the *first* highlight instead: 70 ms for a 44 KB file is a visible pause when
+opening a document.
+
+**Neither library covers QML**, which is the language most edited in this
+repository: syntect's default set is the Sublime package, and there is no
+official `tree-sitter-qml` on crates.io. Both would need a third-party or
+hand-written grammar for the case that matters most here, which removes much of
+the reason to take on their cost.
+
+**Not measured:** incremental re-highlighting while typing, where tree-sitter's
+incremental parsing is its real advantage and this comparison — which
+re-highlights whole files — does not show it. If highlighting must stay correct
+under fast typing in large files, that changes the picture and deserves its own
+measurement.
+
+**The author chose the hand-written lexer** on 2026-07-31, on those numbers.
+
+### The lexer, as built
+
+`grafita-core::highlight` recognises four things — comments, strings, numbers
+and keywords — for Rust, QML/JavaScript, JSON, TOML, C/C++, Python, shell and
+Markdown. It is a lexer, not a parser, and will never colour a type differently
+from a variable. That is the limit the measurement bought.
+
+Three rules keep it honest:
+
+- **An unknown language stays plain text**, never a refusal and never a guess: a
+  file Grafita cannot colour is still a file Grafita edits. This is also the one
+  place a *name* decides anything, and it decides only colour — whether a file
+  opens at all is still settled by its bytes.
+- **Spans land on character boundaries**, so a host can slice the line it was
+  handed without splitting a character.
+- **Multi-line string literals are deliberately not tracked.** Rust's `r#"…"#`
+  and Python's `"""` would need state that, got half right, colours the rest of
+  a file as a string — worse than not colouring it. Block comments *are*
+  tracked, because they are simple enough to get right.
+
+Colouring runs per line and carries a `LineState` across, so a host can
+re-colour only the lines that changed rather than the whole document.
+
+Verified by 12 unit tests plus a session test: the four token kinds, strings
+swallowing what looks like code, escaped quotes, unterminated strings ending
+with their line rather than running away, block comments opening and closing
+across lines, multi-byte boundaries, keywords refused inside longer words,
+language selection by extension and by well-known name, JSON having no comments,
+and a ragged-input sweep that must not panic.
+
+**It paints.** `QSyntaxHighlighter` applies *formats* to the document's blocks
+and never touches its characters, so what the widget reports back is still
+byte-for-byte the core's projection and the reconciliation is untouched —
+anything that rewrote the text as markup would have broken it. Qt also
+re-highlights only the blocks that changed, which is the incremental behaviour
+the spike could not measure.
+
+Overriding `highlightBlock` needs a C++ subclass, which CXX-Qt 0.9 cannot
+express, so `grafita/cpp/highlighter.{h,cpp}` holds it — the limitation is named
+in the file, as the contract requires. **No colouring rule lives in C++:** the
+shim asks `src/syntax.rs` what the runs are and paints them, and the four colours
+are injected from `CelestinaTheme` rather than hardcoded. The bridge carries
+byte offsets and the shim converts them to the UTF-16 units Qt formats in, so
+neither side has to adopt the other's way of counting.
+
+`celestina-style` gained four semantic colours — `codeComment`, `codeString`,
+`codeNumber`, `codeKeyword` — deliberately muted, because four saturated hues
+fighting each other is what makes syntax highlighting tiring to read. All four
+clear 4.5:1 on the input fill; the contrast guard checks it.
+
+**Verified by picture.** A Rust fixture opened offscreen and grabbed: line and
+block comments grey (the block one spanning two lines, which is the `LineState`
+crossing the bridge), `use`/`fn`/`let` violet, `"hola mundo"` green, `42` peach,
+everything else plain. Plus 7 bridge tests covering the language round trip, an
+unknown language number degrading to plain text rather than erroring, the runs
+agreeing with the lexer, and block-comment state crossing in both directions.
+
+**Not proven.** Nobody has typed in a coloured document on a real session, so
+the cost of re-highlighting while typing is still unmeasured — the reason for
+choosing `QSyntaxHighlighter` was partly that Qt does that incrementally, and
+that claim is inherited, not tested here.
 
 ## Non-goals
-- **No IDE.** No project tree, no build runner, no debugger, no plugin system.
-  These are the things that make the heavy editor heavy.
-- **No file browsing.** Opening another file is Siderita's job, one keystroke
-  away.
-- **No format policing.** Encodings, newlines and indentation are detected and
-  preserved, never normalized on the user's behalf.
-- **No encoding guesswork.** Detection is by explicit marks and validity, never
-  by statistical inference.
-- **No feature parity** with VS Code, Kate or vim. A feature list is not
-  progress.
-- **Not a general product.** Like the rest of Celestina, this is for its author's
-  session.
+
+- No IDE features: projects, builds, debugging, LSP, terminal or plugins.
+- No file browser inside Grafita.
+- No extension/MIME allowlist as the definition of text.
+- No silent encoding, newline, indentation or metadata normalization.
+- No shared app-specific QML between Grafita and Siderita; shared visual
+  primitives remain in `celestina-style`, shared editor semantics in
+  `grafita-core`.

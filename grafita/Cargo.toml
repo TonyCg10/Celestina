@@ -1,0 +1,34 @@
+[package]
+name = "grafita"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "GPL-3.0-or-later"
+build = "build.rs"
+
+[[bin]]
+name = "grafita"
+path = "src/main.rs"
+
+[dependencies]
+cxx = "=1.0.176"
+cxx-qt = "=0.9.1"
+cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
+    "qt_gui",
+    "qt_qml",
+    "qt_quickcontrols",
+] }
+# The whole document: what text is, how it is edited, the open/save state
+# machine and the bounded worker. This app adds a window and nothing else, so it
+# shares the crate with Siderita's embedded surface rather than restating it.
+grafita-core = { path = "../celestina-rs/crates/grafita-core" }
+
+[build-dependencies]
+cxx-qt-build = "=0.9.1"
+cxx-gen = "=0.7.176"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+panic = "abort"
+strip = "symbols"

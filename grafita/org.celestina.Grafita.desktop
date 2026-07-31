@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Name=Grafita
+GenericName=Editor de texto
+Comment=Edita cualquier contenido textual sin perder sus bytes
+Exec=grafita %u
+Icon=org.celestina.Grafita
+Terminal=false
+Categories=Utility;TextEditor;
+Keywords=texto;editor;grafita;celestina;text;
+StartupNotify=true
+StartupWMClass=org.celestina.Grafita
+# Discovery only. This list is what makes Grafita appear in "Abrir con"; it is
+# never what decides whether a file can be edited. That decision is made from
+# the file's bytes by grafita-core, so a document with no extension, an unknown
+# one, or one that lies is opened exactly the same way.
+MimeType=text/plain;text/markdown;text/csv;text/x-log;text/x-readme;text/x-makefile;text/x-shellscript;text/x-python;text/x-csrc;text/x-chdr;text/x-c++src;text/x-c++hdr;text/rust;text/x-diff;text/x-patch;text/troff;application/json;application/xml;text/xml;application/x-yaml;application/toml;application/x-desktop;
