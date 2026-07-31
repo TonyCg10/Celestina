@@ -13,7 +13,7 @@ if ! contract_manifest=$(mktemp); then
 fi
 trap 'rm -f -- "$contract_manifest"' EXIT
 
-if ! find siderita/qml magnetita/qml celestina/qml celestina-style \
+if ! find siderita/qml magnetita/qml grafita/qml fluorita/qml celestina/qml celestina-style \
     -path '*/build' -prune -o \
     -type f -name '*.qml' \
     ! -path 'celestina-style/CelestinaTheme.qml' \
@@ -36,7 +36,7 @@ failures=0
 
 if structural_hits=$(python3 scripts/architecture_scanners.py qml-style-contract \
     celestina-style/CelestinaTheme.qml \
-    siderita/qml magnetita/qml celestina/qml celestina-style); then
+    siderita/qml magnetita/qml grafita/qml fluorita/qml celestina/qml celestina-style); then
     if [[ -n $structural_hits ]]; then
         printf '%s\n' "$structural_hits"
         printf 'ERROR: el scanner estructural encontro valores visuales directos.\n\n' >&2
@@ -48,7 +48,7 @@ else
 fi
 
 if copy_hits=$(python3 scripts/architecture_scanners.py style-copies \
-    celestina-style siderita/qml magnetita/qml celestina/qml); then
+    celestina-style siderita/qml magnetita/qml grafita/qml fluorita/qml celestina/qml); then
     if [[ -n $copy_hits ]]; then
         printf '%s\n' "$copy_hits"
         printf 'ERROR: una copia renombrada evade los enlaces de celestina-style.\n\n' >&2

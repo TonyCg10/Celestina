@@ -278,7 +278,7 @@ check_qml_registration() {
     local app build_file file relative base canonical registered registry
     local resolved_file resolved_canonical
 
-    for app in siderita magnetita; do
+    for app in siderita magnetita grafita fluorita; do
         build_file="$app/build.rs"
         if [[ ! -f $build_file ]]; then
             fail "falta $build_file"
@@ -459,7 +459,7 @@ check_top_level_auto_bindings() {
     # such as append({key: key}) are inside parentheses; a real top-level QML
     # binding has parenthesis depth zero.
     if ! hits=$(python3 "$architecture_scanner" qml-auto-bindings \
-        siderita/qml magnetita/qml celestina/qml celestina-style); then
+        siderita/qml magnetita/qml grafita/qml fluorita/qml celestina/qml celestina-style); then
         fail "el scanner de auto-bindings QML no pudo completar la inspeccion"
         return
     fi
@@ -480,11 +480,11 @@ check_shared_style_links() {
     local app file base canonical resolved_file resolved_canonical
 
     if ! python3 "$architecture_scanner" shared-style-links \
-        celestina-style siderita/qml magnetita/qml celestina/qml; then
+        celestina-style siderita/qml magnetita/qml grafita/qml fluorita/qml celestina/qml; then
         fail "los symlinks QML compartidos no respetan el destino canonico relativo"
     fi
 
-    for app in siderita magnetita; do
+    for app in siderita magnetita grafita fluorita; do
         # Check only assets that the style explicitly exposes for source-tree
         # consumption. This covers QML plus the icon/font manifests and trees,
         # without confusing unrelated same-named application directories.
@@ -526,7 +526,7 @@ check_local_control_ratchet() {
 
     if ! control_rows=$(python3 "$architecture_scanner" local-controls \
         --style-root celestina-style \
-        siderita/qml magnetita/qml celestina/qml); then
+        siderita/qml magnetita/qml grafita/qml fluorita/qml celestina/qml); then
         fail "el scanner de controles Qt locales no pudo completar la inspeccion"
         return
     fi
@@ -576,7 +576,7 @@ check_dependency_direction() {
     fi
 
     if hits=$(grep -RInEH --include='*.qml' \
-        '^[[:space:]]*import[[:space:]]+org\.celestina\.(siderita|magnetita)([[:space:]]|$)' \
+        '^[[:space:]]*import[[:space:]]+org\.celestina\.(siderita|magnetita|grafita|fluorita)([[:space:]]|$)' \
         celestina-style 2>/dev/null); then
         :
     else

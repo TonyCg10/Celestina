@@ -184,6 +184,46 @@ elif [[ $output != *"gtk4"* || $output != *"iced"* || $output != *"slint"* \
     fail "una familia UI/compositor no fue detectada"
 fi
 
+# Cobertura de los guards: ambos enumeran proyectos por nombre, así que un
+# proyecto nuevo con QML puede quedar fuera de una lista y "pasar" sin ser
+# inspeccionado nunca. Esto no prueba un scanner: prueba que los scanners
+# reciben todo lo que existe.
+repo_root=$(cd -- "$script_dir/.." && pwd)
+architecture_guard="$script_dir/check-architecture-contract.sh"
+style_guard="$repo_root/celestina-style/scripts/check-style-contract.sh"
+
+for guard in "$architecture_guard" "$style_guard"; do
+    [[ -f $guard ]] || fail "falta el guard $guard"
+done
+
+for candidate in "$repo_root"/*/; do
+    project=$(basename -- "$candidate")
+    [[ $project == celestina-style ]] && continue
+    [[ -d $candidate/qml ]] || continue
+
+    # Por línea, no por archivo: cada invocación de scanner enumera sus
+    # entradas en una sola línea, y estar en tres de las cuatro listas deja un
+    # scanner ciego. `siderita/qml` es el miembro que aparece en todas, así que
+    # sirve de plantilla de lo que cada lista debe contener.
+    for guard in "$architecture_guard" "$style_guard"; do
+        while IFS= read -r line; do
+            if [[ $line != *"$project/qml"* ]]; then
+                fail "$(basename -- "$guard"): una lista de entradas omite $project/qml -> $line"
+            fi
+        done < <(grep -F 'siderita/qml' "$guard")
+    done
+
+    # Los proyectos con build.rs además pasan por el bucle de registro QML y
+    # por el de symlinks de estilo, que enumeran por nombre desnudo.
+    if [[ -f $candidate/build.rs ]]; then
+        while IFS= read -r line; do
+            if [[ $line != *" $project"* ]]; then
+                fail "guard de arquitectura: un bucle 'for app in' omite $project -> $line"
+            fi
+        done < <(grep -E 'for app in .*siderita' "$architecture_guard")
+    fi
+done
+
 if ((failures)); then
     exit 1
 fi
