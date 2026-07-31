@@ -6,6 +6,7 @@ members = [
     "crates/siderita-ops",
     "crates/siderita-qt",
     "crates/dotfiles-core",
+    "crates/grafita-core",
     "crates/magnetita-core",
     "crates/magnetita-net",
     "crates/magnetitad",

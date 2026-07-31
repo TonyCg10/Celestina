@@ -1,0 +1,19 @@
+[package]
+name = "grafita-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+celestina-core.workspace = true
+# Reproducing a file's extended attributes is part of Grafita's loss-free save
+# contract, and POSIX ACLs are stored as the `system.posix_acl_access`
+# attribute, so both requirements are served by the same syscalls. `std` exposes
+# no xattr API and the workspace forbids `unsafe_code`, so a safe wrapper is the
+# only way to read and reproduce them. `xattr` is a single-purpose crate over
+# `getxattr`/`setxattr` with no runtime, no macros and no transitive framework.
+xattr = "1.6"
+
+[lints]
+workspace = true
