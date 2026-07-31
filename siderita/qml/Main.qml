@@ -254,6 +254,18 @@ ApplicationWindow {
         id: portalService
         Component.onCompleted: portalService.start()
 
+        // Activated to be the file chooser, but another process already is one.
+        // There is nothing for this one to do and no window to do it in, so it
+        // leaves instead of parking a few hundred megabytes until logout. A
+        // Siderita the user opened stays open: it simply does not own the
+        // backend this time.
+        onBackendUnavailable: function(reason) {
+            if (portalService.portalMode()) {
+                console.warn("Siderita: sin backend de portal (" + reason + "); saliendo")
+                Qt.quit()
+            }
+        }
+
         onPickRequested: function(token, mode, appId, title, acceptLabel,
                                   multiple, directory, currentFolder,
                                   currentName, filters) {

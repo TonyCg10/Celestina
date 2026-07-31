@@ -29,6 +29,7 @@ use std::sync::{Arc, Mutex};
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
+use zbus::fdo::RequestNameFlags;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
 
 /// Portal response codes (xdg-desktop-portal's `XdpResponse`).
@@ -79,6 +80,15 @@ pub mod qobject {
         #[qsignal]
         fn pick_answered(self: Pin<&mut FileChooserPortal>, token: QString);
 
+        /// This process cannot serve the file-chooser backend — almost always
+        /// because another one already holds the bus name.
+        ///
+        /// It matters most when the process was *activated* to be that backend:
+        /// it then has no window and nothing to answer, and staying alive means
+        /// a few hundred megabytes parked for the rest of the session.
+        #[qsignal]
+        fn backend_unavailable(self: Pin<&mut FileChooserPortal>, reason: QString);
+
         #[qinvokable]
         fn start(self: Pin<&mut FileChooserPortal>);
 
@@ -112,16 +122,26 @@ impl qobject::FileChooserPortal {
     /// Starts serving the backend, once. Best-effort, exactly like
     /// `FileManager1`: without a session bus, or with the name already taken by
     /// another backend, it logs and gives up rather than failing the app.
+    ///
+    /// Giving up is reported rather than only logged. A browsing Siderita can
+    /// happily carry on without owning the backend, but a process the bus
+    /// *activated* to be the backend has no other reason to exist, and one that
+    /// lingers is a few hundred megabytes that never come back.
     pub fn start(mut self: Pin<&mut Self>) {
         if self.rust().started {
             return;
         }
         self.as_mut().rust_mut().started = true;
         let qt = self.qt_thread();
+        let notifier = qt.clone();
         let pending = Arc::clone(&self.rust().pending);
         std::thread::spawn(move || {
             if let Err(error) = serve(qt, pending) {
                 eprintln!("Siderita: portal FileChooser no disponible: {error}");
+                let reason = error.to_string();
+                let _ = notifier.queue(move |portal: Pin<&mut qobject::FileChooserPortal>| {
+                    portal.backend_unavailable(QString::from(reason.as_str()));
+                });
             }
         });
     }
@@ -320,10 +340,25 @@ fn serve(
     // The blocking builder, like FileManager1: it owns an async connection and
     // its executor internally, so the async interface methods below still get to
     // await without a runtime of our own.
-    let _connection = zbus::blocking::connection::Builder::session()?
-        .name("org.freedesktop.impl.portal.desktop.celestina")?
+    //
+    // The name is requested *after* building rather than through
+    // `Builder::name`, so `DoNotQueue` can be set. Its documentation claims the
+    // flag is always enabled; the code passes the flags through untouched, and
+    // they default to empty. Without it the bus answers `InQueue` instead of
+    // `Exists`, zbus does not treat that as an error, and a second backend sits
+    // in the name's queue for the rest of the session — a few hundred megabytes
+    // that serve nothing and, worse, silently inherit the name the moment the
+    // real backend dies, leaving in-flight picker requests unanswered. Serving
+    // the object before asking still comes first, so no call arrives before the
+    // interface exists.
+    let connection = zbus::blocking::connection::Builder::session()?
         .serve_at("/org/freedesktop/portal/desktop", chooser)?
         .build()?;
+    connection.request_name_with_flags(
+        "org.freedesktop.impl.portal.desktop.celestina",
+        RequestNameFlags::DoNotQueue.into(),
+    )?;
+    let _connection = connection;
     // Keep the connection — and thus the backend — alive for the process.
     loop {
         std::thread::park();
