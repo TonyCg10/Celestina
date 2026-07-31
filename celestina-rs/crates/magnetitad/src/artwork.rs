@@ -16,10 +16,6 @@ use magnetita_net::{PayloadPermit, TlsConfigs};
 
 use crate::devices::{install_artwork_entry, DeviceEntry};
 
-/// Covers normal embedded covers while refusing file-sized declarations before
-/// opening a payload socket.
-pub const MAX_ARTWORK_BYTES: i64 = 8 * 1024 * 1024;
-
 /// Remove artwork left by a killed previous run. The cache is disposable and
 /// rebuilt from the phone's current player state.
 pub fn sweep() -> io::Result<()> {
@@ -181,7 +177,7 @@ fn hash(value: impl Hash) -> u64 {
 }
 
 fn validate_size(size: i64) -> io::Result<()> {
-    if (1..=MAX_ARTWORK_BYTES).contains(&size) {
+    if celestina_core::image::is_artwork_size(size) {
         Ok(())
     } else {
         Err(io::Error::new(
@@ -192,20 +188,20 @@ fn validate_size(size: i64) -> io::Result<()> {
 }
 
 fn has_supported_signature(path: &Path) -> io::Result<bool> {
-    let mut header = [0_u8; 12];
+    let mut header = [0_u8; celestina_core::image::IMAGE_HEADER_BYTES];
     let read = fs::File::open(path)?.read(&mut header)?;
-    Ok(is_supported_header(&header[..read]))
-}
-
-fn is_supported_header(bytes: &[u8]) -> bool {
-    bytes.starts_with(b"\x89PNG\r\n\x1a\n")
-        || bytes.starts_with(&[0xff, 0xd8, 0xff])
-        || (bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP"))
+    Ok(celestina_core::image::is_supported_image_header(
+        &header[..read],
+    ))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{cache_name, is_supported_header, validate_size, MAX_ARTWORK_BYTES};
+    use super::{cache_name, validate_size};
+    // The bound and the signatures are the suite's now, so the panel's own
+    // cover art answers exactly the same two questions.
+    use celestina_core::image::is_supported_image_header as is_supported_header;
+    use celestina_core::image::MAX_ARTWORK_BYTES;
     use magnetita_core::IncomingAlbumArt;
 
     fn artwork(transfer_id: i64) -> IncomingAlbumArt {

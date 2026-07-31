@@ -780,10 +780,10 @@ impl Daemon {
 
     /// Send our current clipboard as a `clipboard.connect` on connect — the
     /// handshake that tells the phone we are a clipboard peer, so it syncs its
-    /// clipboard to us too. Recorded as last-synced so the watcher does not
-    /// immediately re-send it.
+    /// clipboard to us too, with empty content when we hold nothing syncable.
+    /// Recorded as last-synced so the watcher does not immediately re-send it.
     fn send_clipboard_connect(&self, device: &mut Device) -> Result<(), magnetita_net::LinkError> {
-        let clip = clipboard::read();
+        let clip = clipboard::read().unwrap_or_default();
         *self.last_clipboard.lock_ok() = clip.clone();
         device.send(|id| magnetita_core::clipboard::clipboard_connect_packet(id, &clip, millis()))
     }
@@ -792,7 +792,7 @@ impl Daemon {
     /// is the value we just received from a phone (our own wl-copy echo), which
     /// would otherwise loop back and forth forever.
     fn push_clipboard(&self, text: String) {
-        if text.is_empty() || !self.settings.lock_ok().clipboard {
+        if !magnetita_core::clipboard::is_syncable(&text) || !self.settings.lock_ok().clipboard {
             return;
         }
         {

@@ -1,16 +1,38 @@
 //! Wayland clipboard process adaptation for the daemon.
 
-use std::io::{BufRead, Write};
+use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 use std::thread;
 
+/// Every clipboard read is restricted to text. `wl-paste` otherwise hands back
+/// whatever the selection offers — the raw bytes of a copied image, which no
+/// later layer can tell apart from text a person copied.
+const TEXT_TYPE: &str = "text";
+
 /// Watch desktop clipboard changes without tying this adapter to daemon state.
-/// `wl-paste --watch` prints each value followed by NUL so multiline text stays
-/// one event. Missing tools are a best-effort degradation.
+///
+/// The watched command is a *notification*, not a transport: it drains the
+/// value `wl-paste` hands it and emits one marker byte, and the value itself
+/// always comes from [`read`]. Nothing is framed between the two processes, so
+/// no clipboard payload can be mistaken for several changes — a separator
+/// scheme has to assume some byte never appears in the content, and clipboard
+/// content is exactly where that assumption does not hold. Reading the current
+/// value on each marker also coalesces a burst by construction.
+///
+/// Missing tools are a best-effort degradation.
 pub(crate) fn spawn_watch(on_change: impl Fn(String) + Send + 'static) {
     thread::spawn(move || {
         let mut child = match Command::new("wl-paste")
-            .args(["--watch", "sh", "-c", "cat; printf '\\0'"])
+            // `--watch` must come last: wl-paste takes everything after it as
+            // the command to run.
+            .args([
+                "--type",
+                TEXT_TYPE,
+                "--watch",
+                "sh",
+                "-c",
+                "cat >/dev/null; printf .",
+            ])
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
@@ -21,20 +43,17 @@ pub(crate) fn spawn_watch(on_change: impl Fn(String) + Send + 'static) {
                 return;
             }
         };
-        let Some(stdout) = child.stdout.take() else {
+        let Some(mut stdout) = child.stdout.take() else {
             return;
         };
-        let mut reader = std::io::BufReader::new(stdout);
-        let mut buffer = Vec::new();
+        let mut markers = [0u8; 64];
         loop {
-            buffer.clear();
-            match reader.read_until(0, &mut buffer) {
+            match stdout.read(&mut markers) {
                 Ok(0) => break,
                 Ok(_) => {
-                    if buffer.last() == Some(&0) {
-                        buffer.pop();
+                    if let Some(text) = read() {
+                        on_change(text);
                     }
-                    on_change(String::from_utf8_lossy(&buffer).into_owned());
                 }
                 Err(_) => break,
             }
@@ -42,15 +61,27 @@ pub(crate) fn spawn_watch(on_change: impl Fn(String) + Send + 'static) {
     });
 }
 
-/// Read current desktop clipboard text, or empty when unavailable.
-pub(crate) fn read() -> String {
-    Command::new("wl-paste")
-        .arg("--no-newline")
+/// Read the current desktop clipboard text, or `None` when it holds nothing
+/// this daemon may sync. Invalid bytes are refused rather than replaced: a
+/// lossy decode of a binary selection yields a string of replacement characters
+/// that still carries the original NULs and control bytes, which is a worse
+/// input to every layer above than having no value at all. What remains still
+/// has to satisfy the domain's own rule, so a caller never has to re-check it.
+pub(crate) fn read() -> Option<String> {
+    let output = Command::new("wl-paste")
+        .args(["--no-newline", "--type", TEXT_TYPE])
         .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
-        .unwrap_or_default()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    decode(output.stdout).filter(|text| magnetita_core::clipboard::is_syncable(text))
+}
+
+/// The decode half of [`read`], separated so the rule can be tested without a
+/// compositor.
+fn decode(bytes: Vec<u8>) -> Option<String> {
+    String::from_utf8(bytes).ok()
 }
 
 /// Put text on the desktop and reap wl-copy's foreground process.
@@ -70,4 +101,30 @@ pub(crate) fn write(text: &str) -> bool {
         }
     }
     child.wait().is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode;
+
+    #[test]
+    fn valid_utf8_decodes_to_itself() {
+        assert_eq!(
+            decode("hola\nmundo ñ €".as_bytes().to_vec()).as_deref(),
+            Some("hola\nmundo ñ €")
+        );
+    }
+
+    #[test]
+    fn an_empty_read_decodes_to_empty_text() {
+        assert_eq!(decode(Vec::new()).as_deref(), Some(""));
+    }
+
+    #[test]
+    fn binary_is_refused_instead_of_decoded_lossily() {
+        // The head of a PNG: an invalid sequence followed by the NUL bytes a
+        // lossy decode would have carried through into a "text" clipboard.
+        let png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00@";
+        assert!(decode(png.to_vec()).is_none());
+    }
 }

@@ -288,6 +288,18 @@ app's options.
       confirmed live: 0 packets on an ordinary copy, 1 on the manual send —
       because Android blocks background clipboard reads. That last gap is a
       phone/Android limit, not our side.
+      Text only, in both directions: every read passes `--type text` (a copied
+      image used to come back as raw bytes), decodes strictly — never lossily,
+      which used to launder binary into a "string" that kept its NULs — and then
+      has to satisfy `magnetita_core::clipboard::is_syncable` (non-empty, no NUL,
+      at most `MAX_CLIPBOARD_BYTES`). The watch command is a notification that
+      emits one marker byte per change, never the value: the previous
+      NUL-separated framing split a single NUL-carrying payload into one apparent
+      change per NUL, which is how one copied image became thousands of clipboard
+      entries on the phone. Verified live against the compositor: a text copy
+      yields one event, an image yields none and does not kill the watcher, and a
+      24 KB binary-as-`text/plain` selection yields one event that the guard then
+      drops (it produced 277 events before the fix).
 - [x] **Battery** — `currentCharge` + `isCharging` on connect and on change, into
       `org.celestina.Devices1` (the battery field, plus charging), shown as
       "🔋 71 % ⚡" in the app. Live-verified. (Cell/connectivity: later.)

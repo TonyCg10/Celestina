@@ -142,6 +142,74 @@ pub fn playback_progress(position_ms: i64, length_ms: i64) -> PlaybackProgress {
     }
 }
 
+/// The one `playerctl` metadata format this suite asks for: every field the
+/// vocabulary above needs, tab-separated, in a single spawn.
+///
+/// Two consumers read it — the daemon answering a phone's now-playing request
+/// and the shell's own media provider — so the format and the parser that
+/// matches it live together here rather than being written twice.
+pub const PLAYERCTL_FORMAT: &str =
+    "{{title}}\t{{artist}}\t{{album}}\t{{mpris:length}}\t{{status}}\t{{volume}}";
+
+/// Reads one line of [`PLAYERCTL_FORMAT`] output into a [`PlayerState`].
+///
+/// Pure, so the unit conversions (µs → ms, 0–1 → 0–100) are testable without
+/// playerctl. Missing fields are normal — a browser tab has no album, a stream
+/// no length — and anything unreadable becomes the vocabulary's "unknown"
+/// (`-1`) rather than a zero that would read as a real value. `pos` is not
+/// reported here: it moves every tick, so a caller that needs it asks for it
+/// separately and knows when it was measured.
+#[must_use]
+pub fn parse_playerctl_state(player: &str, line: &str) -> PlayerState {
+    let mut fields = line.trim_end_matches(['\r', '\n']).split('\t');
+    let title = fields.next().unwrap_or_default().to_owned();
+    let artist = fields.next().unwrap_or_default().to_owned();
+    let album = fields.next().unwrap_or_default().to_owned();
+    let length_us = fields
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .parse()
+        .unwrap_or(-1);
+    let status = fields.next().unwrap_or_default().trim();
+    let volume_unit: f64 = fields
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .parse()
+        .unwrap_or(-1.0);
+
+    let now_playing = match (artist.is_empty(), title.is_empty()) {
+        (_, true) => String::new(),
+        (true, false) => title.clone(),
+        (false, false) => format!("{artist} - {title}"),
+    };
+
+    PlayerState {
+        player: player.to_owned(),
+        title,
+        artist,
+        album,
+        album_art_url: String::new(),
+        is_playing: status.eq_ignore_ascii_case("Playing"),
+        // playerctl controls generic players; report the transport as available
+        // and let the player itself no-op what it cannot do.
+        can_pause: true,
+        can_play: true,
+        can_go_next: true,
+        can_go_previous: true,
+        can_seek: false,
+        length: if length_us >= 0 { length_us / 1000 } else { -1 },
+        pos: -1,
+        volume: if volume_unit >= 0.0 {
+            (volume_unit.clamp(0.0, 1.0) * 100.0).round() as i32
+        } else {
+            -1
+        },
+        now_playing,
+    }
+}
+
 /// What a `kdeconnect.mpris` packet carried: a refreshed player list, a
 /// player's state, or both (a peer may restate the list alongside a state).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use magnetita_core::{MprisRequest, PlayerState};
+use magnetita_core::{mpris, MprisRequest, PlayerState};
 use rustix::fs::{fcntl_getfl, fcntl_setfl, OFlags};
 use rustix::pipe::{pipe_with, PipeFlags};
 use rustix::process::{kill_process_group, Pid, Signal};
@@ -142,13 +142,21 @@ fn players(deadline: Instant, stopping: &AtomicBool) -> Vec<String> {
 /// One player's now-playing state, or `None` if playerctl cannot read it.
 fn state(player: &str, deadline: Instant, stopping: &AtomicBool) -> Option<PlayerState> {
     // One metadata call yields every field, tab-separated, in a single spawn.
-    let format = "{{title}}\t{{artist}}\t{{album}}\t{{mpris:length}}\t{{status}}\t{{volume}}";
     let output = command_output(
-        &["--player", player, "metadata", "--format", format],
+        &[
+            "--player",
+            player,
+            "metadata",
+            "--format",
+            mpris::PLAYERCTL_FORMAT,
+        ],
         deadline,
         stopping,
     )?;
-    Some(parse_state(player, &String::from_utf8_lossy(&output)))
+    Some(mpris::parse_playerctl_state(
+        player,
+        &String::from_utf8_lossy(&output),
+    ))
 }
 
 /// Run a KDE Connect transport verb on a desktop player. Best-effort; an unknown
@@ -328,60 +336,6 @@ fn cancelled(stopping: &AtomicBool, deadline: Instant) -> bool {
     stopping.load(Ordering::Acquire) || Instant::now() >= deadline
 }
 
-/// Turn one playerctl metadata line into a [`PlayerState`]. Pure, so the field
-/// unit conversions (µs → ms, 0–1 → 0–100) are testable without playerctl. We
-/// do not report `pos`: it moves every tick and the phone's widget only needs it
-/// for a seek bar we do not drive, so it stays unknown.
-fn parse_state(player: &str, line: &str) -> PlayerState {
-    let mut fields = line.trim_end_matches(['\r', '\n']).split('\t');
-    let title = fields.next().unwrap_or_default().to_owned();
-    let artist = fields.next().unwrap_or_default().to_owned();
-    let album = fields.next().unwrap_or_default().to_owned();
-    let length_us = fields
-        .next()
-        .unwrap_or_default()
-        .trim()
-        .parse()
-        .unwrap_or(-1);
-    let status = fields.next().unwrap_or_default().trim();
-    let volume_unit: f64 = fields
-        .next()
-        .unwrap_or_default()
-        .trim()
-        .parse()
-        .unwrap_or(-1.0);
-
-    let now_playing = match (artist.is_empty(), title.is_empty()) {
-        (_, true) => String::new(),
-        (true, false) => title.clone(),
-        (false, false) => format!("{artist} - {title}"),
-    };
-
-    PlayerState {
-        player: player.to_owned(),
-        title,
-        artist,
-        album,
-        album_art_url: String::new(),
-        is_playing: status.eq_ignore_ascii_case("Playing"),
-        // playerctl controls generic players; report the transport as available
-        // and let the player itself no-op what it cannot do.
-        can_pause: true,
-        can_play: true,
-        can_go_next: true,
-        can_go_previous: true,
-        can_seek: false,
-        length: if length_us >= 0 { length_us / 1000 } else { -1 },
-        pos: -1,
-        volume: if volume_unit >= 0.0 {
-            (volume_unit.clamp(0.0, 1.0) * 100.0).round() as i32
-        } else {
-            -1
-        },
-        now_playing,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -389,7 +343,8 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::time::{Duration, Instant};
 
-    use super::{command_output_from, parse_state, spawn_grouped, wait_bounded, Worker};
+    use super::{command_output_from, spawn_grouped, wait_bounded, Worker};
+    use magnetita_core::mpris::parse_playerctl_state as parse_state;
 
     static TEST_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
