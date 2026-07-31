@@ -91,6 +91,13 @@ QtObject {
         readonly property color warning: "#fc864c"
         // The one warm exception, spent on the star a favourite wears.
         readonly property color favorite: "#f2c55c"
+        // Code colours. Muted on purpose: an editor is read for minutes at a
+        // time, and four saturated hues fighting each other is what makes
+        // syntax highlighting tiring. Each clears 4.5:1 on the input fill.
+        readonly property color codeComment: "#8d9bab"
+        readonly property color codeString: "#8fd3ac"
+        readonly property color codeNumber: "#f0b083"
+        readonly property color codeKeyword: "#b9a6f0"
     }
     readonly property RefPalette ref: RefPalette {}
 
@@ -133,6 +140,10 @@ QtObject {
         required property color successInk
         required property color warning
         required property color warningInk
+        required property color codeComment
+        required property color codeString
+        required property color codeNumber
+        required property color codeKeyword
         required property color scrim
         // Translucent state washes (foreground = text/textMuted by contract).
         required property color surface
@@ -234,6 +245,10 @@ QtObject {
         successInk: theme.ref.night
         warning: theme.ref.warning
         warningInk: theme.ref.night
+        codeComment: theme.ref.codeComment
+        codeString: theme.ref.codeString
+        codeNumber: theme.ref.codeNumber
+        codeKeyword: theme.ref.codeKeyword
         scrim: "#73000000"
         // State layers are translucent; actual work/group surfaces use the
         // opaque card/elevated roles through CelestinaSurface.
@@ -351,6 +366,11 @@ QtObject {
     readonly property color successInk: scheme.successInk
     readonly property color warning: scheme.warning
     readonly property color warningInk: scheme.warningInk
+    // Syntax colours, consumed by an editor surface over `inputFill`.
+    readonly property color codeComment: scheme.codeComment
+    readonly property color codeString: scheme.codeString
+    readonly property color codeNumber: scheme.codeNumber
+    readonly property color codeKeyword: scheme.codeKeyword
     readonly property color scrim: scheme.scrim
     readonly property color surface: scheme.surface
     readonly property color surfaceStrong: scheme.surfaceStrong

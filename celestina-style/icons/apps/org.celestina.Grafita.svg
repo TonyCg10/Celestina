@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Grafita</title>
+  <!--
+    Graphite's habit is a stack of hexagonal sheets, and the sheets are the
+    whole point: they shear apart under a fingernail, which is why a pencil
+    writes. So the mark is three plates seen from slightly above, their front
+    rims visible as separate layers rather than one solid block.
+
+    Geometry is a flattened hexagon repeated down the stack, so the shape stays
+    true if the numbers are ever tuned:
+      centre x = 256, top face cy = 150, rx = 118, ry = 62
+      slab thickness = 30, step between sheets = 38
+    The group transform only centres and scales that stack inside the tile.
+
+    Colour is the mineral's: a cool metallic grey, the neutral counterpart to
+    Siderita's warm amber. The document-page glyph is left to every other text
+    editor on the system.
+  -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22252C"/>
+      <stop offset="1" stop-color="#0E1014"/>
+    </linearGradient>
+    <linearGradient id="face" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#DDE2EA"/>
+      <stop offset="1" stop-color="#98A1AE"/>
+    </linearGradient>
+    <linearGradient id="sheet-0" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9AA3B0"/>
+      <stop offset="1" stop-color="#6B7380"/>
+    </linearGradient>
+    <linearGradient id="sheet-1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7E8794"/>
+      <stop offset="1" stop-color="#565E6A"/>
+    </linearGradient>
+    <linearGradient id="sheet-2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#666E7A"/>
+      <stop offset="1" stop-color="#434A55"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.32"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- The squircle tile every app icon on this desktop wears (One UI reserves
+       the superellipse for app icons; §6.3). Shared template: a superellipse
+       n=5, inset 16, with a lit-edge rim — copied verbatim from the suite's
+       existing icons so the family stays one shape. -->
+  <path d="M496.0 256.0L495.9 327.9L495.5 350.8L495.0 367.4L494.1 380.8L493.1 392.3L491.8 402.3L490.3 411.3L488.5 419.4L486.5 426.8L484.2 433.7L481.7 439.9L478.9 445.7L475.9 451.1L472.5 456.1L468.9 460.7L464.9 464.9L460.7 468.9L456.1 472.5L451.1 475.9L445.7 478.9L439.9 481.7L433.7 484.2L426.8 486.5L419.4 488.5L411.3 490.3L402.3 491.8L392.3 493.1L380.8 494.1L367.4 495.0L350.8 495.5L327.9 495.9L256.0 496.0L184.1 495.9L161.2 495.5L144.6 495.0L131.2 494.1L119.7 493.1L109.7 491.8L100.7 490.3L92.6 488.5L85.2 486.5L78.3 484.2L72.1 481.7L66.3 478.9L60.9 475.9L55.9 472.5L51.3 468.9L47.1 464.9L43.1 460.7L39.5 456.1L36.1 451.1L33.1 445.7L30.3 439.9L27.8 433.7L25.5 426.8L23.5 419.4L21.7 411.3L20.2 402.3L18.9 392.3L17.9 380.8L17.0 367.4L16.5 350.8L16.1 327.9L16.0 256.0L16.1 184.1L16.5 161.2L17.0 144.6L17.9 131.2L18.9 119.7L20.2 109.7L21.7 100.7L23.5 92.6L25.5 85.2L27.8 78.3L30.3 72.1L33.1 66.3L36.1 60.9L39.5 55.9L43.1 51.3L47.1 47.1L51.3 43.1L55.9 39.5L60.9 36.1L66.3 33.1L72.1 30.3L78.3 27.8L85.2 25.5L92.6 23.5L100.7 21.7L109.7 20.2L119.7 18.9L131.2 17.9L144.6 17.0L161.2 16.5L184.1 16.1L256.0 16.0L327.9 16.1L350.8 16.5L367.4 17.0L380.8 17.9L392.3 18.9L402.3 20.2L411.3 21.7L419.4 23.5L426.8 25.5L433.7 27.8L439.9 30.3L445.7 33.1L451.1 36.1L456.1 39.5L460.7 43.1L464.9 47.1L468.9 51.3L472.5 55.9L475.9 60.9L478.9 66.3L481.7 72.1L484.2 78.3L486.5 85.2L488.5 92.6L490.3 100.7L491.8 109.7L493.1 119.7L494.1 131.2L495.0 144.6L495.5 161.2L495.9 184.1Z" fill="url(#tile)"/>
+  <path d="M495.2 256.0L495.1 327.6L494.8 350.5L494.2 367.0L493.4 380.4L492.4 391.9L491.1 401.9L489.6 410.8L487.8 418.9L485.8 426.3L483.5 433.1L481.0 439.3L478.2 445.1L475.2 450.5L471.8 455.4L468.2 460.0L464.3 464.3L460.0 468.2L455.4 471.8L450.5 475.2L445.1 478.2L439.3 481.0L433.1 483.5L426.3 485.8L418.9 487.8L410.8 489.6L401.9 491.1L391.9 492.4L380.4 493.4L367.0 494.2L350.5 494.8L327.6 495.1L256.0 495.2L184.4 495.1L161.5 494.8L145.0 494.2L131.6 493.4L120.1 492.4L110.1 491.1L101.2 489.6L93.1 487.8L85.7 485.8L78.9 483.5L72.7 481.0L66.9 478.2L61.5 475.2L56.6 471.8L52.0 468.2L47.7 464.3L43.8 460.0L40.2 455.4L36.8 450.5L33.8 445.1L31.0 439.3L28.5 433.1L26.2 426.3L24.2 418.9L22.4 410.8L20.9 401.9L19.6 391.9L18.6 380.4L17.8 367.0L17.2 350.5L16.9 327.6L16.8 256.0L16.9 184.4L17.2 161.5L17.8 145.0L18.6 131.6L19.6 120.1L20.9 110.1L22.4 101.2L24.2 93.1L26.2 85.7L28.5 78.9L31.0 72.7L33.8 66.9L36.8 61.5L40.2 56.6L43.8 52.0L47.7 47.7L52.0 43.8L56.6 40.2L61.5 36.8L66.9 33.8L72.7 31.0L78.9 28.5L85.7 26.2L93.1 24.2L101.2 22.4L110.1 20.9L120.1 19.6L131.6 18.6L145.0 17.8L161.5 17.2L184.4 16.9L256.0 16.8L327.6 16.9L350.5 17.2L367.0 17.8L380.4 18.6L391.9 19.6L401.9 20.9L410.8 22.4L418.9 24.2L426.3 26.2L433.1 28.5L439.3 31.0L445.1 33.8L450.5 36.8L455.4 40.2L460.0 43.8L464.3 47.7L468.2 52.0L471.8 56.6L475.2 61.5L478.2 66.9L481.0 72.7L483.5 78.9L485.8 85.7L487.8 93.1L489.6 101.2L491.1 110.1L492.4 120.1L493.4 131.6L494.2 145.0L494.8 161.5L495.1 184.4Z" fill="none" stroke="url(#rim)" stroke-width="1.5"/>
+
+  <!-- Centre the stack (its box spans 138..374 x 88..318) and fill ~72%. -->
+  <g transform="translate(256 256) scale(1.24) translate(-256 -203)">
+    <path d="M374 226 315 288 197 288 138 226 138 256 197 318 315 318 374 256Z" fill="url(#sheet-2)"/>
+    <path d="M374 188 315 250 197 250 138 188 138 218 197 280 315 280 374 218Z" fill="url(#sheet-1)"/>
+    <path d="M374 150 315 212 197 212 138 150 138 180 197 242 315 242 374 180Z" fill="url(#sheet-0)"/>
+    <path d="M374 150 315 212 197 212 138 150 197 88 315 88Z" fill="url(#face)"/>
+    <path d="M138 150 L197 88 L315 88 L374 150" fill="none" stroke="#F2F5F9" stroke-opacity="0.5" stroke-width="3" stroke-linejoin="round"/>
+  </g>
+</svg>
