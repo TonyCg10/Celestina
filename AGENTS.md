@@ -25,10 +25,11 @@ requisitos locales y nunca relajan las invariantes de esta raíz.
 ## Límites de autorización de la suite
 
 - El trabajo de implementación ordinario está autorizado en `siderita/` y
-  `magnetita/` dentro del alcance pedido.
+  `magnetita/`. Dentro del hito activo de cada ROADMAP también está autorizado
+  en `grafita/` + `celestina-rs/crates/grafita-*` y en `fluorita/` +
+  `celestina-rs/crates/fluorita-*`. Sus superficies integradas autorizan sólo
+  consumidores acotados dentro de Siderita, no una reescritura vecina.
 - No ampliar `celestina/` salvo petición explícita del autor.
-- No añadir código a `fluorita/` ni `grafita/` salvo petición explícita; sus
-  contratos escritos no autorizan comenzar esos proyectos.
 - El estado y los hitos viven en los ROADMAP, no en este archivo. No copies aquí
   versiones, contadores de tests o afirmaciones temporales.
 

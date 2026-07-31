@@ -5,11 +5,10 @@ plus first-party apps that share one Rust core, one QML visual language and one
 set of conventions — lean alternatives to heavyweight external apps, made
 possible because the session owns its own shell.
 
-**Current focus:** the Niri shell (`celestina`) has started its first real daily
-panel slice after Siderita and Magnetita proved the suite contracts. It now
-renders output-local Niri workspaces and the active window from a read-only Rust
-event-stream adapter, alongside the shared clock and phone state; focus actions
-and session takeover remain deliberately later.
+**Current focus:** the Niri shell continues its first real daily panel slice.
+Grafita is now a working app on both its surfaces, and Fluorita has its core, its
+libmpv engine and a guarded scaffold. Siderita and Magnetita already proved the
+suite contracts both new apps reuse.
 
 ## Projects
 
@@ -25,46 +24,60 @@ Cores and style never depend on apps or the shell. Each project keeps its own
 README and ROADMAP; the monorepo holds shared history and the contracts between
 projects.
 
-### Planned / ready to start
+### Authorized / ready to implement
 
-Neither app is built yet. Fluorita's recurring gap has opened its build gate and
-its F1–F4 start contract is ready; Grafita remains design-stage until the author
-ratifies its working name and explicitly opens its separate gate. Both reuse the
-shared core and style.
+Both were ratified on 2026-07-30 and both build gates are open. Grafita is no
+longer only planned: its shared document core, its embedded Siderita modal and
+its standalone application all exist, verified headlessly. Fluorita's F1 media
+and library contract is done and tested, its decode-backend spike measured on
+this machine, its engine built over the chosen backend, and its application is a
+guarded scaffold that does not play yet.
 
 | Project | Role | Stack |
 |---|---|---|
-| [fluorita](fluorita/) | media player — audio · video · image; later a shell widget | Rust · QML |
-| [grafita](grafita/) *(working name)* | text / code editor | Rust · QML |
+| [fluorita](fluorita/) | local media library + player — Gallery · Music | Rust · QML |
+| [grafita](grafita/) | general text editor | Rust · QML |
 
-Each directory still holds a README and a roadmap and nothing else. The contracts
-let the suite consume future capabilities by name before implementation —
-Siderita already defers video thumbnails to Fluorita and its edit hand-off to
-Grafita. Fluorita is authorized to start at F1; writing and improving Grafita's
-contract still does not authorize its code.
+Fluorita has finished F1: `fluorita-core` classifies media, projects the
+Gallery/Music library and freezes the thumbnail key Siderita already reads. Its F2 spike measured closure, decode cost, derived
+resources and real-session presentation for every installed candidate, and the
+author chose libmpv on that evidence. `fluorita-engine` now probes metadata,
+publishes video posters and embedded covers into the shared thumbnail cache and
+runs truthful playback sessions over that backend, verified against real libmpv.
+Its application plays: a Qt Quick surface libmpv renders into, a session owned
+off the GUI thread and a transport that only moves when the engine confirms,
+verified with real video and audio in the author's Wayland session.
 
-**Fluorita** is the suite's media app. It opens and plays whatever media it is
-handed — a song, a clip, an image — a *player/viewer*, not a library (Siderita
-is the browser). It owns the media decode stack that Siderita deliberately does
-not carry, and produces video first-frames and audio covers into the shared
-freedesktop thumbnail cache, which Siderita simply consumes. Later it runs as an
-embeddable **shell widget** — a playing movie or now-playing music, live in the
-panel — and that same widget backs a live-preview quick-look in Siderita. So the
-media weight lives in one place, behind a standards-based hand-off, and never
-leaks into the file manager.
+Grafita has finished G1, G2 and G3: `grafita-core` opens, edits and safely saves
+real files; `Space` in Siderita opens its editing modal; and the standalone
+application opens a document named on the command line, guards its own quit, and
+installs with a desktop entry and icon. Both surfaces have been driven
+headlessly — including proof that editing a CRLF file through Qt's own text
+widget leaves its line endings alone — but neither has been seen in a real
+session. Siderita's `Space` activation has explicit shared contracts for both
+apps: Grafita edits text and Fluorita views/plays local media.
 
-**Grafita** is the suite's text editor — graphite is what a pencil writes with.
-A light editor for text and code, not an IDE; it is where Siderita's read-only
-quick-look hands off when you want to *change* a file rather than just peek at it
-("Abrir con Grafita"). It uses XDG handlers and the suite's raw-byte conventions
-without pretending a shared MIME crate already exists, and consumes the same
-visual language so editing feels like the same session as browsing.
+**Fluorita** is the suite's local media library and player. Its full app has a
+**Gallery** for images/video and **Music** for albums, artists and tracks. Its
+shared core/engine produces image thumbnails, video posters, audio covers and
+bounded on-demand video trailers. `Space` on media opens a minimal Fluorita
+player inside Siderita; double-click or Enter starts that item in the complete
+app. Static artwork remains freedesktop-compatible, while the decode engine is
+loaded lazily only for explicit playback or preview.
+
+**Grafita** is the suite's general text editor — graphite is what a pencil
+writes with. A light editor, not an IDE, it accepts textual content by bytes
+rather than by extension or a closed MIME list. `Space` on text in Siderita
+opens a simple, nearly full-window Grafita editing modal; double-click or Enter
+opens the complete standalone app. Both surfaces consume the same pure
+`grafita-core` but keep their own thin adapter and QML composition.
 
 ## Principles
 
 - Rust core, QML frontend, thin bridge.
 - One visual language (`celestina-style`); apps art-direct within its tokens.
-- Interop via XDG/freedesktop, not private glue.
+- Interop between processes via XDG/freedesktop; in-process suite reuse through
+  narrow Rust core APIs, not copied domain logic.
 - Measured lightweight; truthful state (a click is a request, never proof).
 
 ## Development contract

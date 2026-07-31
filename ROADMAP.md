@@ -53,6 +53,7 @@ retiring one responsibility behind a real-session gate.
 | [celestina](celestina/) | Niri shell / session | C++ · QML (+ Rust bridge) | celestina-style | the session |
 | [siderita](siderita/) | File manager (first app) | Rust · QML (CXX-Qt) | celestina-rs, celestina-style | the user |
 | [magnetita](magnetita/) | Phone link (KDE Connect) | Rust · QML (CXX-Qt) | celestina-rs, celestina-style | the user, siderita (via `org.celestina.Devices1`) |
+| [grafita](grafita/) | Text editor | Rust · QML (CXX-Qt) | celestina-rs, celestina-style | the user, siderita (embedded editing surface) |
 
 Dependencies flow one way — cores and style never depend on apps or the shell:
 
@@ -72,25 +73,29 @@ celestina-style ────► celestina, siderita, magnetita, future apps
 > exists.
 
 **Planned apps** — not built, listed in the README's
-[Planned / ready to start](README.md#planned--ready-to-start) section and each
+[Authorized / ready to implement](README.md#authorized--ready-to-implement) section and each
 reusing `celestina-rs` + `celestina-style`:
 
-- **[Fluorita](fluorita/)** — the media player (audio · video · image) that
-  produces the video/audio thumbnails Siderita consumes, and later runs as a
-  shell widget. Its recurring gap opened the build gate; its first executable
-  order is F1 → F4.
-- **[Grafita](grafita/)** *(working name)* — a light text/code editor, the
-  edit-side companion to Siderita's read-only quick-look ("Abrir con Grafita").
-  Its G0–G6 start contract is ready, but name ratification and explicit build
-  authorization remain separate gates.
+- **[Fluorita](fluorita/)** — the local media library/player: Gallery for
+  images/video, Music for albums/artists/tracks, plus shared static artwork and
+  bounded live-preview contracts. `Space` in Siderita opens its minimal player;
+  double-click/Enter opens the full app. F1 builds the shared media/library core.
+- **[Grafita](grafita/)** — the general text editor, no longer only planned:
+  G1 delivered the content-based shared document core, G2 the embedded Siderita
+  modal that `Space` opens, and G3 the standalone application with its own
+  window, desktop entry and installer. Both surfaces are verified headlessly and
+  neither has been seen in a real session.
 
-Fluorita and Grafita each still have a directory holding a README and a roadmap
-and no code — **[Magnetita](magnetita/) has left this stage** (shipped 1.0.0; see the
+Fluorita has a tested core crate and no UI surface yet; Grafita has both of its
+surfaces built and headlessly verified, still awaiting a real-session pass.
+**[Magnetita](magnetita/) has left the planning stage** (shipped 1.0.0; see the
 status snapshot above). That is
-deliberate: two of Siderita's shipped decisions (consuming video thumbnails it
-will not generate; a quick-look that hands video and audio to an info card naming
-Fluorita) are already promises to these projects, and a promise is worth writing
-down as a contract. Fluorita's build gate is open; Grafita's remains closed.
+deliberate: Siderita already consumes the freedesktop artwork cache and has
+separate Quick Look branches ready to be replaced by bounded consumers. Grafita
+owns text document truth. Fluorita owns local catalogue, playback and derived
+media truth, including static image/video/audio artwork and on-demand trailers.
+Each standalone app and Siderita keep distinct UI surfaces over those shared
+contracts. Both build gates are open at their first core milestone.
 
 ## Shared foundations (the stack contract)
 
@@ -104,8 +109,10 @@ as a suite rather than four unrelated apps:
   named as debt rather than treated as the pattern.
 - **One visual language.** `celestina-style` owns semantic tokens and generic
   controls. Apps art-direct within the tokens; they do not fork the look.
-- **Standards over glue.** Interop via XDG/freedesktop (URIs, MIME, Trash, icon
-  themes, portals, notifications, `.desktop` entries), never private APIs.
+- **Standards over glue.** Inter-process integration uses XDG/freedesktop (URIs,
+  MIME, Trash, icon themes, portals, notifications, `.desktop` entries).
+  In-process consumers reuse narrow Rust core APIs rather than copying domain
+  rules or reaching into another app's UI.
 - **Measured lightweight.** "Light" is a number: installed closure, start time,
   PSS/RSS, wakeups and GPU cost are tracked per app; the shared Qt runtime is
   amortized across the suite, not used to excuse any single app's waste.
@@ -230,9 +237,10 @@ installed style release is not a prerequisite before STYLE-D's external gate.
       [NOCTALIA-REPLACEMENT.md](celestina/NOCTALIA-REPLACEMENT.md)
 - [ ] Suite conventions: single-instance behavior, a small IPC/activation convention, `open-with`/handler wiring, drag-and-drop between first-party apps — all over freedesktop standards
 - [ ] One settings + theming source shared by the shell and every app
-- [ ] Additional first-party apps — **Fluorita** first (its gate is open), then
-      **Grafita** only after its own name/need gate — added **one at a time**;
-      each reuses `celestina-rs` + `celestina-style` and adds its own domain crate
+- [ ] Additional first-party apps — **Grafita** has landed its G1 document core
+      and **Fluorita** its F1 media core. Each reuses `celestina-rs`
+      + `celestina-style`, adds its own bounded domain/engine crates and advances
+      through reviewable milestones rather than a feature batch
 
 ## Later / someday
 - [ ] Packaging and distribution beyond the author's machine (reproducible install, dependency diagnostics), once the suite is worth shipping
