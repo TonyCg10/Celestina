@@ -14,7 +14,11 @@ Menu {
     width: CelestinaTheme.compMenuWidth
     padding: CelestinaTheme.compMenuPadding
     margins: CelestinaTheme.compMenuMargins
-    modal: false
+    // Modal without dimming: an open menu must own the pointer, or the click
+    // that dismisses it also lands on whatever was underneath — a file gets
+    // opened, a drag starts, a row lights up. `dim: false` keeps the look as it
+    // was; only the input barrier is new.
+    modal: true
     dim: false
     popupType: Popup.Item
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside

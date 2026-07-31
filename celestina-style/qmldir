@@ -20,6 +20,7 @@ CelestinaFocusRing 1.0 CelestinaFocusRing.qml
 CelestinaTextField 1.0 CelestinaTextField.qml
 CelestinaSwitch 1.0 CelestinaSwitch.qml
 ListSection 1.0 ListSection.qml
+CelestinaInputShield 1.0 CelestinaInputShield.qml
 CelestinaModalLayer 1.0 CelestinaModalLayer.qml
 GlassSurface 1.0 GlassSurface.qml
 GlassCard 1.0 GlassCard.qml
