@@ -34,6 +34,17 @@ if [ ! -x "$bin" ]; then
     exit 1
 fi
 
+# El binario tiene que ser posterior a lo que dice probar. Sin esto, un build
+# que falla deja el ejecutable anterior en su sitio y el humo pasa alegremente
+# sobre código que ya no existe: pasó en esta misma sesión, y el fallo real
+# —una app que no compilaba— quedó tapado por un OK.
+newer=$(find "$root/src" "$root/qml" "$root/cpp" "$root/build.rs" "$root/Cargo.toml" \
+    -type f -newer "$bin" -print -quit 2>/dev/null)
+if [ -n "$newer" ]; then
+    echo "smoke: $bin es anterior a $newer — recompila antes de fiarte de esto" >&2
+    exit 1
+fi
+
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 log=$scratch/salida.log
@@ -47,7 +58,13 @@ if [ "$rc" -ne 124 ]; then
     exit 1
 fi
 
-errores=$(grep -E 'TypeError|ReferenceError' "$log" || true)
+# Buscar sólo TypeError/ReferenceError dejaba pasar lo más grave: un fallo de
+# *construcción*. Qt lo anuncia con otras palabras ("Cannot create delegate",
+# "Cannot set properties on X as it is null", "Type X unavailable") y sigue
+# corriendo, así que el binario seguía vivo 8 s y el humo daba OK mientras la
+# vista principal no llegaba a existir. Un objeto que no se crea no es un aviso
+# de estilo: es la pantalla entera ausente.
+errores=$(grep -E 'TypeError|ReferenceError|SyntaxError|Cannot create delegate|Cannot set properties on|Cannot assign|Unable to assign|Type [A-Za-z_][A-Za-z0-9_]* unavailable|is not a type|Binding loop detected' "$log" || true)
 if [ -n "$errores" ]; then
     echo "smoke: errores QML en el arranque:" >&2
     echo "$errores" | sort | uniq -c | sort -rn >&2
