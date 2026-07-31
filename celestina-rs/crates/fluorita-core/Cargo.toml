@@ -1,0 +1,20 @@
+[package]
+name = "fluorita-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+celestina-core.workspace = true
+# The freedesktop thumbnail cache mandates MD5 of the file URI as the entry
+# name, so the digest is an interoperability contract with Siderita and other
+# desktops, not a security choice — and re-implementing a hash the workspace
+# would then have to maintain is worse than depending on one. This release is a
+# single-purpose crate with no transitive dependencies, no runtime and no
+# macros; the larger RustCrypto digest abstraction buys nothing for one fixed
+# key. Pinned exactly because the key must never move under Siderita.
+md5 = "=0.8.1"
+
+[lints]
+workspace = true
