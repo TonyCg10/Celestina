@@ -49,8 +49,9 @@ deferred until a consumer exists outside this tree (see
 | `CelestinaSwitch.qml` | the One UI pill toggle: white thumb, accent track when on |
 | `ListSection.qml` | the grouped-card list (One UI's "focus block" signature) with an optional header |
 | `CelestinaModalLayer.qml` | shared L3 scrim, fade, focus containment/restoration and outside/Escape dismissal; dialog content stays app-owned |
+| `CelestinaInputShield.qml` | the input floor a surface floating over live content declares: blocking hover and a drag claim on the press, plus an optional three-button swallow; the wheel still passes through |
 | `gallery/` | dev-only review surface — every token, control and glass surface on one screen (`gallery/run.sh`) |
-| `tests/` | Qt Quick Test coverage for modal focus entry, Tab/Backtab containment, exact restoration, Escape and pointer blocking through the exit fade |
+| `tests/` | Qt Quick Test coverage for modal focus entry, Tab/Backtab containment, exact restoration, Escape, pointer blocking through the exit fade, and that a sweep over a dialog never reaches a drag handler underneath |
 | `scripts/check-style-contract.sh` | CI/local guard across Siderita, Magnetita, the shell and the shared module; rejects visual literals/local derivations and invokes the contrast contract |
 | `scripts/check-contrast-contract.py` | derives current theme values and verifies hostile black/white backdrop contrast floors for compositor glass, artwork, primary/destructive controls and metadata |
 | `scripts/sync-lucide-icons.sh` | reproducible sync of all 76 glyphs from the pinned Lucide release while retaining compatibility filenames |
@@ -70,6 +71,7 @@ deferred until a consumer exists outside this tree (see
 | `CelestinaTextField` | `shape`; ordinary `TextField` value/validation properties remain available |
 | `CelestinaSectionLabel` | `size`, `textScale` |
 | `CelestinaModalLayer` | `shown`, dismissal switches and `dismissRequested` |
+| `CelestinaInputShield` | `active`, `swallowClicks`; it anchors to its parent and sits at `z: -1`, so the surface's own controls keep being delivered first |
 | `GlassSurface` / `GlassCard` | `backdropSource`, `density`, capture mode and elevation |
 | `GlassContextMenu` / `GlassMenuItem` | injected backdrop plus ordinary menu action/current-state properties, nested-menu chevrons and optional token-backed colour swatches |
 | `ListSection` / `CelestinaSwitch` | section `title` + rows; switch `checked` state |

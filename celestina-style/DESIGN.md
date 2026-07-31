@@ -343,7 +343,11 @@ screen doctrine and focus ring), `CelestinaIconButton` and
 (radius 22, One UI search anatomy), `GlassSurface/Card/ContextMenu/MenuItem`
 (glass v2 + elevation), and `CelestinaFocusRing` (the reusable 2px exterior
 keyboard-focus outline). New specs, each waiting for its first real consumer:
-**`CelestinaSectionLabel`**, **`CelestinaModalLayer`**, **`ListSection`** (the grouped-card list — the signature; first consumer:
+**`CelestinaSectionLabel`**, **`CelestinaModalLayer`** (whose input floor is
+**`CelestinaInputShield`**: a surface that floats over live content owns the
+pointer over its own box — hover, the three buttons and, the one that is easy to
+miss, the *drag*, which a handler underneath will otherwise claim a few pixels
+into a sweep; the wheel is deliberately left to the content), **`ListSection`** (the grouped-card list — the signature; first consumer:
 Magnetita Settings, later shell settings), **`CelestinaSwitch`** (shipped
 44×26 as the desktop-tuned pill — the 35dp phone reference is retained and the
 track/thumb/inset now use shared `compSwitch*` tokens,

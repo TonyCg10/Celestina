@@ -151,6 +151,21 @@ because no second app shares its backdrop-aware behavior. Siderita grouped its
 components into `chrome/`, `sidebar/` and `entry/` before the separately scoped
 Sidebar/FolderView decomposition. The public API inventory now lives in README.
 
+**Input floor extracted — done** (2026-07-31): `CelestinaInputShield` is now the
+one definition of what a surface floating over live content owes the content it
+covers. The recipe already existed twice — inline in `CelestinaModalLayer` and
+again in Siderita's floating chrome — and both were incomplete in the same way:
+they swallowed clicks and hover but not the *drag*. A `DragHandler` underneath
+keeps its passive grab, so a sweep starting on a dialog card or a chrome pill
+took the grab a few pixels in and dragged the file the box was hiding. The
+shield claims the drag on the press (`dragThreshold: 0`), which is what closes
+it; controls inside keep what is theirs, a text field still selects, and the
+wheel still scrolls the content. The modal layer keeps its own click side,
+because for it an outside click is dismissal rather than something to absorb.
+Consumers: Siderita (chrome, headers, banners, popup) and, through the modal
+layer, Grafita. `tests/tst_modal.qml` grew the drag case that was missing, and it
+fails against the unfixed tree.
+
 **Siderita composition follow-up — done** (2026-07-28): the three remaining
 large QML hosts were reduced without moving domain behavior. `Sidebar` delegates
 saved rows and context menus; `FolderView` delegates list/grid presentation,
