@@ -109,10 +109,16 @@ noctalia msg bar-hide
 
 Keybinds that **already bypass Noctalia** and must keep working unchanged:
 volume via `wpctl`, media via `playerctl`, brightness via `brightnessctl`,
-screenshots via niri's native `screenshot-path`, `Mod+Shift+C` =
+`Mod+Shift+C` =
 `niri msg pick-color | wl-copy`, `Mod+Shift+T` = grim+slurp+tesseract OCR.
 
-### Two corrections to earlier assumptions
+### Three corrections to earlier assumptions
+
+- **There is no screenshot keybind** (verified 2026-07-31). `config.kdl` sets
+  `screenshot-path`, which only says where a capture is saved; no bind and no
+  include invokes any screenshot action. The lived flow was Noctalia's bar
+  button, so R1-C's button replaces it by asking Niri for its own screenshot UI
+  rather than duplicating a bind that does not exist.
 
 - **Clipboard history is not composed from `cliphist`.** The
   `clipboardWatch*Command` keys in `settings.json` are v4 residue; the binary is
@@ -130,41 +136,79 @@ screenshots via niri's native `screenshot-path`, `Mod+Shift+C` =
 
 | File | Lines | Responsibility |
 |---|---|---|
-| `src/main.cpp` | 389 | process bootstrap · `PanelManager` (per-output layer-shell lifecycle) · style import self-provisioning · `--pick-output` mode — **three responsibilities in one file; extracting `PanelManager` is R0 work before any second surface** |
-| `src/niri_adapter.rs` | 284 | pinned Niri event stream → narrow workspace snapshots; 1 s socket reconnect; read-only, `Request::EventStream` only |
-| `src/niriclient.{h,cpp}` | 52 / 268 | `QProcess` lifecycle, strict JSON validation, confirmed snapshots on the GUI thread, 250 ms→10 s restart backoff |
-| `src/niriprotocoldecoder.{h,cpp}` | 25 / 49 | bounded line framing; discards a >1 MiB frame through its newline and recovers |
+| `src/main.cpp` | 221 | process bootstrap · style import self-provisioning · `--pick-output` and `msg` modes · claims the bus name before any surface is mapped; owns the `CELESTINA_REDUCED_MOTION` read and injects it |
+| `src/surfacemanager.{h,cpp}` | 64 / 47 | the shared layer-surface recipe extracted in R0-F: a `LayerSurfaceSpec` plus `mapLayerSurface`, holding only what the panel and the menu both set with different values, and `layerShellSupport()`, which refuses a platform that cannot carry a layer surface instead of mapping ordinary windows. Later surfaces describe themselves here instead of copying `ensurePanel` |
+| `src/panelmenusurface.{h,cpp}` | 43 / 97 | the surface R0-E chose, and its lifetime: adopts a content window, maps it through the shared recipe, reports and cleans up a compositor dismissal |
+| `src/panelmenucontroller.{h,cpp}` | 52 / 110 | builds the menu window and routes an item back to the same focus request a click makes; on by default, `CELESTINA_PANEL_MENU=0` turns it off |
+| `src/panelmanager.{h,cpp}` | 52 / 231 | per-output layer-shell panel lifecycle: create, hotplug, teardown (extracted from `main.cpp` in R0-A, behaviour unchanged) |
+| `src/provider_adapter.rs` | 691 | the aggregate provider helper: threads, stdin, worker and publish loop around `celestina-shell-core`'s `ProviderRuntime`. Carries `sysmon` (CPU/RAM from `/proc` on a two-second poll) and serves `open-monitor` by launching the installed `missioncenter` |
+| `src/providerstates.{h,cpp}` | 59 / 182 | host-side validation of provider frames (version, bounds, flat payloads) and the state QML reads; a frame is the complete set, so a withdrawn provider cannot linger |
+| `src/shellprovidersclient.{h,cpp}` | 77 / 209 | the one Qt bridge to that helper: process lifecycle, framing, restart backoff, confirmed marshaling, bounded commands |
+| `src/niri_adapter.rs` | 670 | pinned Niri event stream → narrow workspace snapshots (ids as decimal strings); 1 s socket reconnect; plus the R0-B request path: bounded stdin reader, 32-slot queue, one action worker on its own short-lived `Request::Action` socket, one serialized writer |
+| `src/niriclient.{h,cpp}` | 83 / 447 | `QProcess` lifecycle, strict JSON validation, confirmed snapshots on the GUI thread, 250 ms→10 s restart backoff, and the `requestWorkspaceFocus` invocable with one generation per helper process |
+| `src/shellservice.{h,cpp}` | 87 / 175 | the session command channel: `org.celestina.Shell` + `org.celestina.Shell1` (`GetState`, `Command`, `Changed`, `CommandResult`), the `focus-workspace` verb, coalesced state publishing, and the name ownership that makes panel mode single-instance |
+| `src/shellcommandline.{h,cpp}` | 25 / 111 | pure bounded parsing of `msg <verb> [key=value ...]`; decides nothing about which verbs exist |
+| `src/shellclient.{h,cpp}` | 11 / 254 | the transient `celestina msg` client: listens before it asks, reports each transition, exits non-zero on rejection, bus loss or an unresolved request |
+| `src/workspacefocusrequests.{h,cpp}` | 86 / 174 | pure request policy: bounded table, ack ≠ arrival, snapshot-matched confirmation, timeout → failed, terminal holds. Time arrives as a millisecond stamp, so it is testable without an event loop |
+| `src/protocoldecoder.{h,cpp}` | 25 / 49 | bounded line framing; discards a >1 MiB frame through its newline and recovers |
 | `src/panelblurcontroller.{h,cpp}` | 39 / 119 | per-surface KWindowEffects capability/retry/geometry + the explicit `compositorBlurAvailable` fallback property |
 | `src/devicesclient.{h,cpp}` | 50 / 107 | async, burst-coalesced QtDBus client of `org.celestina.Devices1` |
-| `qml/Panel.qml` | 68 | hidden-until-configured three-region root window |
-| `qml/WorkspaceStrip.qml` | 123 | per-output workspace pills + active window title |
-| `qml/Clock.qml` | 39 | minute-aligned local time |
+| `qml/Panel.qml` | 100 | hidden-until-configured three-region root window: two ordered flanks around the geometrically centred clock |
+| `qml/PanelFlank.qml` | 34 | one side of the panel as an ordered, clipped row — where a later widget is added |
+| `qml/CaptureButton.qml` | 40 | asks Niri to open its own screenshot UI; paints a refusal briefly and nothing else |
+| `qml/SessionStatus.qml` | 107 | network link, connected-Bluetooth count and power profile, the last one cycling on click |
+| `qml/AudioLevel.qml` | 104 | volume as text with the microphone shown only when muted; scroll, click and middle-click map to the `audio` verbs |
+| `qml/MediaMini.qml` | 115 | the desktop's media: checked cover, title, play state and a progress line only for media with a real length |
+| `qml/SysMon.qml` | 72 | CPU and memory coloured by load state; disappears rather than freezing when its provider withdraws |
+| `qml/WorkspaceStrip.qml` | 262 | per-output workspace pills (click and wheel emit `focusRequested`, paint `requestState`) + active window title; a secondary click asks the host for the menu |
+| `qml/Clock.qml` | 49 | the lived `HH:mm:ss - MMMM - dddd dd`, realigned each second, in the panel's own language |
 | `qml/PhoneStatus.qml` | 72 | phone identity, charge state, battery |
+| `qml/PanelMenu.qml` | 72 | the menu *content* — a real `GlassContextMenu` in its own surface, one item per workspace |
 | `qml/OutputChooser.qml` | 326 | the screen-share chooser (a regular `Qt.Dialog` window, app_id `celestina`, prints `Monitor: <name>` on stdout) |
 
-Surface configuration today (hard-coded inline in `PanelManager::ensurePanel`):
+Surface configuration today (hard-coded inline in
+`PanelManager::ensurePanel`, `src/panelmanager.cpp`):
 namespace `celestina-panel`, anchors Top|Left|Right, desired size `0×40`,
 exclusive zone 40, `LayerTop`, `KeyboardInteractivityNone`,
 `setActivateOnShow(false)`, `setCloseOnDismissed(false)`, `show()` last.
 
 How data reaches QML today: `main()` builds one provider QObject per source
-(`NiriClient`, `DevicesClient`) and injects the raw pointers into each panel via
+(`NiriClient`, `DevicesClient`) and hands them to `PanelManager`, which injects
+the raw pointers into each panel via
 `initialProperties` (`required property var`); `Panel.qml` binds typed scalars
 down to child components, which never touch providers. A `changed()` signal per
-provider re-evaluates the bindings. This is baseline, not the scalable R1
+provider re-evaluates the bindings; the strip reports a click as a signal the
+panel routes back to the provider, and reads the resulting `requestState` from
+the same list. This is baseline, not the scalable R1
 contract: R1-A fixes one aggregate Rust provider runtime and bounded Qt bridge
 before another provider is added, so `PanelManager` does not accumulate one
 process/client/member per widget.
 
-Known gaps that shape the phases: there is exactly one surface kind (the
-panel), the adapter socket is used for one request and its pipe is one-way, the
-shell has **no command or activation channel at all**, and no popup has ever
-been mapped from the panel.
+Known gaps that shape the phases: two surface kinds are now proven on the real
+compositor — the panel and the menu — and both are described through
+`LayerSurfaceSpec`, so an OSD or launcher surface adds a description rather than
+another copy of `ensurePanel`. The menu is on by default since the author
+accepted it (2026-07-30); R1/R5 decide what the panel's *other* mouse gestures
+open, and inherit this menu rather than replacing the surface it proved. The command channel exists
+since R0-C — `org.celestina.Shell1`, with `celestina msg` as its transient
+client — so later phases route their keybinds there and add verbs to
+`ShellService::Command` instead of inventing a channel. The adapter's stdin
+pipe is internal to the Niri client and is not that channel.
 
-Existing automated coverage: three Rust reducer tests (`niri_adapter.rs`), the
-`NiriProtocolDecoder` QtTest, and the `OutputChooser` Qt Quick Test. Not
-covered: `NiriClient` lifecycle, `PanelBlurController`, `DevicesClient`,
-hotplug, panel rendering, real-compositor IPC restart.
+The shell package now depends on `celestina-rs/crates/celestina-shell-core`
+(`celestina/Cargo.toml`, lockfile updated deliberately with the dependency, not
+as a build side effect): bounded framing, the serialized writer, the provider
+envelope and the command vocabulary live there, and the Niri adapter consumes
+them instead of its own copies.
+
+Existing automated coverage: nine Rust tests (`niri_adapter.rs`: reduction, id
+serialization, command parsing and bounded line framing), the
+`ProtocolDecoder`, `WorkspaceFocusRequests`, `ShellCommandLine` and
+`ShellService` QtTests (the last one over a real session bus, skipped without
+one), and the `OutputChooser` Qt Quick Test. Not covered: `NiriClient`
+lifecycle, `PanelBlurController`, `DevicesClient`, hotplug, panel rendering,
+real-compositor IPC restart, and any real-session focus request that reaches
+the compositor.
 
 ---
 
@@ -204,7 +248,7 @@ real acceptance before ending the block.
    bookkeeping and timeout → failed. An ack means accepted/pending;
    **confirmation requires a later snapshot matching the requested output and
    workspace**, never merely the next snapshot. Threads/queues close and join
-   deterministically. `NiriProtocolDecoder` remains a semantic-free framer;
+   deterministically. `ProtocolDecoder` remains a semantic-free framer;
    message validation tests belong to Rust and `NiriClient`, not the decoder.
 3. *R0-C — command channel and process roles.* The panel-mode Qt host owns the
    stable session-bus name `org.celestina.Shell`, object path
@@ -599,6 +643,7 @@ preference alone.
 | Phase | Default | Reopen only if |
 |---|---|---|
 | R0 bus identity | stable owner `org.celestina.Shell`; object/interface versioned as `Shell1` | an existing owner collision or the cross-version single-instance test fails |
+| R0 popup surface | a separate anchored layer surface (`PanelMenuSurface`), described through the shared `LayerSurfaceSpec` | keyboard operation of a menu is proven to work while carried by an `xdg_popup` of a `KeyboardInteractivityNone` panel |
 | R1 provider runtime | `celestina-shell-core` + one aggregate app-local Rust helper + one bounded Qt client | R1-A demonstrates provider isolation, latency or deterministic shutdown cannot meet its budget |
 | R1 media | installed `playerctl` subprocess/follower | measured correctness, latency, shutdown or wakeup budget fails |
 | R1 volume | installed `wpctl` composition | bounded observation cannot report truthful state inside its budget |
@@ -615,7 +660,6 @@ dated evidence that justified closing it.
 
 | # | Decision | Phase | Notes |
 |---|---|---|---|
-| 1 | `xdg_popup` on the layer surface vs. a separate anchored layer surface for menus | R0 | R0-E's real-session probe decides; no preference-only choice |
 | 2 | Clipboard history: install `cliphist` vs. own it over `wlr-data-control` | R2 | `cliphist` is not installed; either path changes the trust/dependency boundary |
 | 3 | Which external locker to install and verify | R3 | None installed; author/package approval blocks the R3 gate |
 | 4 | Which Polkit agent to adopt; whether a first-party one is ever wanted | R8 | External package and any first-party agent need author gates |
