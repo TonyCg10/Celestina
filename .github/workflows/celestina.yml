@@ -1,0 +1,55 @@
+# El adaptador Rust del shell: fmt, clippy y tests de su package.
+#
+# El filtro incluye `celestina-rs/` además de `celestina/` porque este package
+# consume los cores por ruta relativa (`celestina-core`, `celestina-shell-core`,
+# `magnetita-core`). Se filtra por el árbol entero y no por los tres crates
+# concretos a propósito: una lista de crates caduca en silencio en cuanto una
+# dependencia nueva entra en el Cargo.toml, y el modo de fallo sería dejar de
+# probar sin avisar. Correr de más es recuperable; no correr, no.
+name: celestina
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'celestina/**'
+      - 'celestina-rs/**'
+      - '.github/workflows/celestina.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'celestina/**'
+      - 'celestina-rs/**'
+      - '.github/workflows/celestina.yml'
+
+jobs:
+  celestina-rust:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: celestina
+    env:
+      RUSTUP_TOOLCHAIN: stable
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Rust estable
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+
+      - name: Cache de cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            celestina/target
+          key: cargo-celestina-${{ runner.os }}-${{ hashFiles('celestina/Cargo.lock', 'celestina/Cargo.toml') }}
+
+      - name: Formato
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Tests
+        run: cargo test --all-targets --locked

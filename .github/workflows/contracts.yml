@@ -1,0 +1,30 @@
+# Contratos transversales de la suite: los guards de arquitectura y estilo.
+#
+# Sin filtro de rutas a propósito. Todo lo demás en `.github/workflows/` se
+# ejecuta sólo cuando cambia su proyecto; esto no puede, porque justamente
+# comprueba las relaciones *entre* proyectos — enlaces de estilo compartido,
+# dirección de dependencias, registro QML, el techo de líneas — y un cambio en
+# un proyecto puede romper la invariante de otro.
+name: contratos
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  contrato-arquitectura:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The baseline is compared with the state before the whole push or
+          # with the PR base, not merely with the previous commit.
+          fetch-depth: 0
+      - name: Contrato de arquitectura y estilo
+        env:
+          ARCHITECTURE_COMPARE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          bash scripts/test-architecture-scanners.sh
+          bash scripts/check-architecture-contract.sh

@@ -1,0 +1,58 @@
+# Los cores compartidos: fmt, clippy y la suite de tests del workspace.
+#
+# Corre sólo cuando cambia `celestina-rs/`. Ningún otro proyecto puede alterar
+# este resultado: el workspace no depende de ninguno de ellos, y esa dirección
+# de dependencias es precisamente lo que el guard de arquitectura vigila.
+name: celestina-rs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'celestina-rs/**'
+      - '.github/workflows/celestina-rs.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'celestina-rs/**'
+      - '.github/workflows/celestina-rs.yml'
+
+jobs:
+  celestina-rs:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: celestina-rs
+    steps:
+      - uses: actions/checkout@v4
+
+      # `fluorita-engine` enlaza contra la libmpv del sistema
+      # (`cargo:rustc-link-lib=mpv`), así que sin esto el workspace compila
+      # hasta que toca enlazar y falla con `cannot find -lmpv`. Los bindings van
+      # pregenerados en el crate, de modo que no hacen falta bindgen ni clang.
+      - name: Instalar libmpv
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libmpv-dev
+
+      # rustup lee celestina-rs/rust-toolchain.toml (1.97.1, clippy + rustfmt).
+      - name: Instalar el toolchain pinneado
+        run: rustup toolchain install
+
+      - name: Cache de cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            celestina-rs/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('celestina-rs/Cargo.lock', 'celestina-rs/rust-toolchain.toml') }}
+
+      - name: Formato
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace --locked
