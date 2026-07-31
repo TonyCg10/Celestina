@@ -44,6 +44,47 @@ touched picker transitions instant, but that correction has automated/static
 evidence only: remaining legacy motion and the full enabled/disabled interaction
 pass are still open.
 
+**A floating surface owns its pointer (2026-07-31).** Everything painted over
+the scrolling listing was passing input through to the rows it hides: hover lit
+a row nobody could see, the three mouse buttons acted on it (a right click
+opened *that file's* menu, middle click opened it in a tab) and a sweep started
+its file drag. Only `GlassPill`, `FloatingButton` and the modal layer had ever
+declared an input floor, and all three were incomplete in the same way — see the
+drag note below. That recipe is now one shared type,
+`CelestinaStyle`'s `CelestinaInputShield`, consumed here through the usual
+symlink. Adopted by the pills (`GlassPill`, `FloatingButton`, `InfoPill`), the
+buttons of the search / Recientes / Papelera strips — which floated bare over
+the listing, inside no box at all — the details column header, both `TopBar`
+pills, the tab chips and the new-tab pill, the footer's error banners and
+operation-progress panel, and the size popup (a non-modal `Popup` keeps hover
+and clicks but not the drag). Verified by simulated input rather than by
+reading: `scripts/qml-tests.sh` drives `qmltestrunner` over the real components
+(31 cases), and the surface cases fail against the unshielded tree. Still
+unverified in a compositor: touch, tablet and any pointer path a synthetic mouse
+does not reproduce.
+
+**The drag was the half that survived (2026-07-31).** Swallowing clicks is not
+blocking a surface. Reported from real use: with the properties dialog open, a
+click-drag on an empty part of the card moved the file underneath, and the same
+happened from the floating pills. The reason is that a `DragHandler` below takes
+a passive grab on the press and asks for the exclusive one a few pixels into the
+sweep — before a shield with an ordinary drag threshold asks for anything — and
+an item that merely accepts clicks (a dialog card's `MouseArea`, the path pill's)
+does not refuse that takeover. The shield now claims the drag on the press
+itself, so the handler underneath never gets it, while a text field inside the
+surface still selects and a button still clicks. Two shapes reproduce it and are
+now covered: pressing on empty card space, and any sweep that leaves the box on
+its way to the listing.
+
+Two defects fell out of that work. The details view's **column headers were
+never clickable** — the header row had no height of its own, so its sort hit
+areas were zero-tall and clicking `Nombre` / `Tamaño` / `Fecha` / `Tipo` did
+nothing; the labels looked right because they are centred by anchors. Sorting by
+clicking a column now works and is covered by a test. And a `blocking`
+`HoverHandler` next to a `hoverEnabled` `MouseArea` is **not disarmed by
+`enabled: false` on the parent item**: hover is still delivered to a disabled
+item, so each condition rides the property that governs it.
+
 ## Overview
 
 **Purpose.** The suite's independent file manager — navigate, organize and
@@ -217,6 +258,9 @@ time, never as a batch for parity.
 - [x] Details / columns view with sortable size / date / type columns, beyond today's single subtitle line — a third view mode (a segmented Lista / Cuadrícula / **Detalles** switch, persisted) renders each entry as aligned columns — **Nombre** (fills) · **Tamaño** · **Fecha** · **Tipo** — reusing the list rows' own selection / activate / drag / context-menu behaviour (only the row body swaps). A sticky glass header lines up with the columns; clicking a title sorts by that field and a second click flips the direction (a Lucide sort indicator marks the active one), driving the existing `sort_field` / `sort_direction`. Size (a dash for folders) and modified date ride two new `sizeText` / `dateText` model roles. Search results honour the chosen view like any other location (CP4) — only the details *columns* stay out of a search, since a hit carries no size or date
 - [x] Recursive filename search — a bounded, cancellable, non-indexed directory walk that is truthful about the scope it covered — typing filters the current folder live; a **Subcarpetas** button (or ⏎) walks it (case-insensitive name match) on a worker thread, capped at 500 hits and never following symlinks (no loops/escape). The hits ride the **same entryModel and delegates** as the folder (and, since CP4, the same *view mode*), so the list/grid render and act on them identically — single-click selects, double-click opens (a folder navigates in, a file opens), keyboard, selection — the search results *are* the content view (a slim glass bar carries the query, summary and Stop/Close; Escape/Back close it). The subtitle is the hit's containing folder. Its summary states exactly what happened — "N carpetas exploradas", "detenida en el límite", or "búsqueda detenida" when cancelled. Domain `search.rs` with 3 unit tests (recursive match, cap→truncated, empty query)
 - [x] Thumbnails + a spacebar quick-look preview — **image thumbnails + an image/text quick-look done**: an async `QQuickAsyncImageProvider` ("thumb", hand-written C++ like the entrymodel — registered onto the engine before the QML loads) backs `image://thumb/<path>` in the list / details / grid / search glyph tiles for raster image files, revealing the picture once decoded and keeping the generic glyph until then. It follows the freedesktop shared cache — 256 px "large" PNGs at `~/.cache/thumbnails/large/<md5(file-uri)>.png` — so it reuses (and contributes to) the cache other managers populate; validity keys off the filesystem mtime (a thumbnail is always newer than its source), which sidesteps Qt mangling the embedded `Thumb::MTime` key on write and also accepts other managers' thumbnails. Decoding is off the UI thread (QThreadPool, EXIF-aware, scaled-read), atomically cached. Verified: browsing an image folder generates and then **reuses** the cache across loads. **Video and audio are consumed, not generated**: those file types ask the same provider (so a first-frame or embedded-cover thumbnail that the system — or a future Celestina media app — has cached shows automatically, a video frame carrying a small play badge), but Siderita never decodes them itself — it shows a themed `video-x-generic` / `audio-x-generic` icon until the cache has one. Generating video/audio thumbnails belongs to a **separate media project** (it would pull ffmpeg / cover-art readers into the closure) — Siderita stays the lean consumer. The **spacebar quick-look** is in: pressing space previews the selected entry without opening an app — images render full-size (a capped, EXIF-aware decode straight from the file), plain text and code show in a monospace pane (a bounded, binary-safe 128 KiB read via the controller's `preview_text`), folders and binaries get an info card, and ↑/↓ browse the folder live while the overlay stays open (Space / Esc / click-outside dismiss; focus returns to the view on close). Video and audio previews are deliberately left to **Fluorita**, the media app (they need the media decode stack Siderita won't carry) — the info card names those two kinds, and a live "trailer" preview will later embed Fluorita's widget. PDF remains a generic unsupported preview and is not part of Fluorita's current contract
+      This records the shipped CP3 behaviour. S6 replaces the text branch with
+      Grafita; S7 separately replaces image/video/audio with Fluorita. Folder,
+      binary and unsupported branches stay Quick Look.
 - [x] Per-item appearance — an entry's context menu offers "Cambiar icono…" plus a closed, named accent palette; shape and colour can be restored independently and follow the entry through the file view, quick look and properties. Both persist atomically in the backward-compatible `path\ticon\taccent-key` records of `~/.config/siderita/icons.conf` and ride one QML appearance property, so readers never observe fields from different updates
 - [x] "Open terminal here" — launching the desktop's terminal, not an embedded one — the folder menu's "Abrir terminal aquí" spawns an external terminal with its working directory set to the current folder, honouring `$TERMINAL` then a list of common emulators (foot/alacritty/kitty/wezterm/gnome-terminal/konsole/xfce4-terminal/xterm), the first installed one winning; detached and reaped, with a truthful `op_error` if none is found. No embedded terminal — the CP3 boundary holds
 
@@ -289,6 +333,33 @@ applications knowing or changing.
       "Todos los archivos" row, so a filter can never trap the user. Verified
       through a real portal call: `image/jpeg` became `*.jpg|*.jpeg`, `scan.JPG`
       matched case-insensitively, and the folder survived the filter
+- [x] The picker opens at all — `ScrollBar.vertical.policy` was set on the
+      entry `GridView`. That attached property only exists once a scroll bar is
+      *assigned*, so reading it gave null, assigning `.policy` to null threw,
+      and the throw aborted construction of the whole delegate: the window was
+      never built and no file dialog ever appeared in any application. Exactly
+      the fault `TabStrip` had, in the one window no smoke test covers, because
+      the picker is only instantiated by a real portal request. The grid scrolls
+      by wheel and keyboard as the manager's does. Verified on the real session
+      with a requester that waits for `Response` (`niri msg windows` showing
+      `App ID: org.celestina.Siderita`); `transientParent` was tried and proved
+      unnecessary, so it was not kept
+- [x] One backend, not a queue of ghosts — the name was requested through
+      `Builder::name`, whose documentation says `DoNotQueue` is always set while
+      its code passes the flags through untouched, and they default to empty. So
+      a second activation was answered `InQueue` rather than `Exists`, zbus did
+      not treat that as an error, and the process sat in the name's queue
+      forever: never serving, never exiting, and inheriting the name the moment
+      the real backend died. Found live with 16 stranded `--portal` processes
+      holding 3.5 GiB, the oldest two days old — a leak, and a second backend
+      able to silently take over, though the dialog never appearing was the
+      `GridView` fault above rather than this one. The name is now requested
+      after `build()` with an explicit `DoNotQueue`, and a process that cannot
+      serve reports it (`backendUnavailable`) and quits — but only when it was
+      activated to be the backend, so a Siderita the user opened stays open and
+      merely goes without it. Verified on a private bus with no service
+      directory: the second process exits, the first keeps the name, and a
+      normal launch survives
 - [ ] Window parenting — `parent_window` arrives as a `wayland:` handle and is
       currently ignored, so the picker is a free-floating dialog rather than a
       transient child of the asking window. Fixing it needs the `xdg-foreign`
@@ -297,11 +368,105 @@ applications knowing or changing.
       (`portals.conf`); the failure mode of a bad file chooser is every
       application's upload button, so it earns the switch rather than assuming it
 
+## Checkpoint 6 — Edit text with Grafita (S6)
+
+**Goal:** browsing and small text edits form one continuous interaction without
+moving Grafita's document domain into the file manager.
+
+- [x] Add `grafita-core` as the only text classification, document, undo,
+      conflict and save implementation; Siderita owns only its adapter and modal
+      — `src/editor.rs` is a `GrafitaEditor` QObject of its own that marshals Qt
+      types over the shared `grafita-core::session` and copies no domain rule,
+      not even the staleness bookkeeping
+- [x] Repair the offscreen UI gate that made all of this unverifiable: a dead
+      `ScrollBar.horizontal` binding in `TabStrip.qml` (no horizontal scroll bar
+      is ever attached to that `ListView`, so both assignments errored and did
+      nothing) aborted the component, and since `TabStrip` sits inside
+      `FolderView` the failure cascaded to `Main.qml`'s tab delegate — the whole
+      folder view never constructed. `scripts/smoke.sh` reported OK throughout
+      because it only grepped for `TypeError`/`ReferenceError`; it now also
+      fails on construction errors, proven against the unfixed tree
+- [x] Route `Space` asynchronously: editable text opens a nearly full-window
+      `GrafitaEditorDialog`; S6 itself does not change the image/media/folder/
+      binary branches — `FolderActions.requestPreview()` asks Grafita's worker
+      and only a decline reaches `QuickLookView`
+- [ ] Route double-click and `Enter` on textual content to the standalone
+      Grafita application; non-text files keep their existing default handler —
+      still `xdg-open`. Grafita now exists, so with it installed the desktop's
+      own handler resolution already reaches it; what is missing is Siderita
+      *overriding* that with a content probe, so a misnamed file opens in the
+      right editor. Both interception points sit exactly on frozen size
+      baselines — `src/controller.rs` (1223) owns the bridge and the Rust
+      struct, `qml/views/FolderView.qml` (834) owns the only place a signal
+      could be handled — so making room means extracting from one of them
+      first, a mechanical refactor that should not ride along with a behaviour
+      change
+- [x] Make the embedded surface a real simple editor — caret, selection,
+      undo/redo, save, dirty/conflict/error state and Guardar/Descartar/Cancelar
+      on close — without tabs, settings or project chrome. Undo, redo and save
+      are intercepted before the widget's own text history, which knows nothing
+      about savepoints or terminators. **Built, not yet tried in a session.**
+- [x] Remove the synchronous `preview_text` decision from the editable-text
+      path; bounded owned workers apply only generation/revision-current results.
+      `preview_text` survives only as the read-only quick-look renderer for
+      content the core already refused as editable
+- [x] Verify content rather than suffix: `.txt`, source, JSON, KDL, dotfile and
+      extensionless fixtures take the text routes, while a binary fixture does
+      not — covered by `grafita-core`'s integration fixtures, which are the same
+      classification this adapter calls
+- [ ] Validate build, smoke, keyboard/focus, reduced motion and the modal on a
+      real Wayland session; an offscreen start is not interaction evidence.
+      Guard, fmt, Clippy, the workspace tests, `qmllint` against the current
+      build's module, a release build and `scripts/smoke.sh` all pass; typing,
+      selection, focus trapping, focus restoration, reduced motion, IME and
+      closing with a dirty document remain unverified in a compositor. A
+      temporary offscreen probe did drive the real modal end to end — binary
+      declines to quick look, text opens, focus lands in the editor body, typing
+      through Qt's own `TextEdit` marks it dirty, saving writes
+      `primera\r\nsegunda EDITADA\r\ntercera\r\n` with its CRLF intact,
+      closing while dirty raises the guarded question, and undo/redo walk the
+      savepoint correctly — so what remains is specifically the compositor and
+      input stack: synthesised key events for Escape/Ctrl+S/Ctrl+Z, Tab focus
+      trapping, focus restoration, reduced motion, IME, AT-SPI and glass
+
+**Done when:** `Space` edits and saves a textual file inside Siderita, while
+double-click/Enter opens the same file in standalone Grafita, and both paths
+derive their document truth from `grafita-core`.
+
+## Checkpoint 7 — Play media with Fluorita (S7)
+
+**Goal:** images, video and music can be viewed or played from Siderita without
+duplicating Fluorita's library/playback domain or paying decode cost while
+ordinary folders are merely visible.
+
+- [ ] Consume `fluorita-core` and the lazily loaded `fluorita-engine`; Siderita
+      owns only its adapter and minimal-player composition
+- [ ] Route `Space` on image/video/audio to a minimal Fluorita modal; text stays
+      Grafita's branch and folders/binaries/unsupported content stay Quick Look
+- [ ] Route double-click and `Enter` on media to standalone Fluorita and begin
+      that item in the full Gallery/Music application
+- [ ] Keep list/grid artwork cache-only: image thumbnail, video poster and audio
+      cover are static PNGs; short video trailers run only on explicit demand,
+      one per host, and cancel on selection change
+- [ ] Expose only supported controls — view for images; play/pause, seek and
+      volume for video/audio — with truthful pending/confirmed/error state
+- [ ] Verify the engine is not loaded during normal browsing, worker/session
+      shutdown is deterministic, and stale artwork/trailer/playback events never
+      publish after a newer selection
+- [ ] Validate real image/video/audio, keyboard/focus, reduced motion, frame
+      pacing and resource budgets on Wayland; offscreen startup is not playback
+      evidence
+
+**Done when:** `Space` uses the minimal player for real local media and
+double-click/Enter starts the same item in full Fluorita, while ordinary folder
+browsing still consumes only cached static artwork.
+
 ## Non-goals
 
 No cloud/network, global indexer, archive VFS, plugins, IDE, terminal or suite
-daemon, and no features of other applications, before the declared local manager
-is complete.
+daemon. S6 and S7 are bounded consumer surfaces over the Grafita and Fluorita
+contracts, not independent editor/player domains or an exception that permits
+other applications to accumulate in Siderita.
 
 The boundary, not a loophole: CP3's bounded non-indexed filename search is not the
 global indexer ruled out here, and "open terminal here" launches an external

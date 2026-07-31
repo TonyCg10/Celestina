@@ -33,6 +33,37 @@ reglas propias de la app CXX-Qt/QML.
   confundas esta ruta implementada con una auditoría completa de movimiento
   heredado o con validación interactiva real.
 
+## Superficie integrada de Grafita
+
+- Siderita consume `grafita-core`; no duplica buffer, undo, clasificación de
+  texto, conflicto ni guardado, y no importa QML de la aplicación Grafita.
+- `Espacio` prueba el contenido fuera del hilo GUI: texto editable abre el modal
+  simple de Grafita; los demás tipos conservan Quick Look. Doble clic/Enter en
+  texto lanza la aplicación Grafita completa; no reutiliza el modal.
+- El modal integrado sólo adapta estado/acciones del core. Bloquea la carpeta,
+  contiene y restaura foco, y no puede cerrarse sucio sin Guardar, Descartar o
+  Cancelar.
+- Ningún sondeo, lectura o guardado de documento corre en el hilo Qt. Respuestas
+  de worker llevan generación/revisión y una respuesta obsoleta no publica
+  estado ni limpia cambios nuevos.
+
+## Superficie integrada de Fluorita
+
+- Siderita consume `fluorita-core`/`fluorita-engine`; no duplica catálogo,
+  playback, extracción de artwork ni reglas de trailer, y no importa QML de la
+  aplicación Fluorita.
+- `Espacio` sobre imagen/vídeo/audio abre el player mínimo; doble clic/Enter
+  abre la aplicación completa y comienza ese item. Los demás tipos conservan el
+  flujo de Grafita o Quick Look que les corresponda.
+- Navegar sólo lee thumbnails/covers estáticos. El engine pesado se carga de
+  forma perezosa para una petición explícita y mantiene como máximo una preview
+  viva por host; cambiar selección o cerrar cancela y libera su sesión.
+- Un thumbnail es PNG freedesktop estático. Un tráiler es reproducción corta y
+  cancelable, nunca un fichero publicado fingiendo cumplir ese estándar.
+- El modal bloquea la carpeta, contiene/restaura foco y publica sólo estado
+  confirmado por el engine; Play/Pause/Seek solicitados siguen pendientes hasta
+  confirmación.
+
 ## Matriz mínima de verificación
 
 | Cambio | Evidencia obligatoria |
@@ -40,5 +71,6 @@ reglas propias de la app CXX-Qt/QML.
 | Rust de dominio | Tests en el crate de `celestina-rs`; `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings` y `cargo test --workspace` allí. |
 | Puente Rust/C++ o `build.rs` | Formato, clippy y tests de Siderita; `cargo build --release --locked`; comprobar registro/QRC. |
 | QML no visual | `bash ../scripts/check-architecture-contract.sh`, `qmllint` con los import paths del build actual, `cargo build --release --locked` y `scripts/smoke.sh`; registra el comando exacto de lint usado. |
+| Puntero de una superficie que flota sobre el contenido | Lo anterior más `scripts/qml-tests.sh`: un caso en `tests/qml` que pulse los tres botones, pase el cursor y barra sobre la caja y compruebe que nada llega al contenido de debajo. Leer el árbol no prueba entrega de eventos. |
 | Apariencia, foco, modal o movimiento | Lo anterior más inspección de la superficie real; teclado completo, modal abierto y `reducedMotion` encendido/apagado. Una captura offscreen no valida blur ni interacción. |
 | API compartida | Cumplir además la matriz de `../celestina-style/AGENTS.md` y reconstruir/probar Siderita como consumidor. |
