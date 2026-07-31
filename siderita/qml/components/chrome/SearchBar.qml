@@ -29,21 +29,32 @@ Item {
               : "«" + root.controller.searchQuery + "» · " + root.controller.searchSummary
     }
 
-    Row {
+    // Los botones flotan directamente sobre la lista y no viven dentro de
+    // ninguna caja: sin este envoltorio, pulsar uno y arrastrar hacia el
+    // contenido arrancaba el arrastre del archivo que tapan.
+    Item {
         id: searchBarControls
         anchors.right: parent.right
         anchors.rightMargin: 8
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 8
+        width: searchBarControlsRow.width
+        height: searchBarControlsRow.height
 
-        CelestinaButton {
-            text: "Detener"
-            visible: root.controller.searchRunning
-            onClicked: root.controller.cancelSearch()
-        }
-        CelestinaButton {
-            text: "Cerrar"
-            onClicked: root.controller.closeSearch()
+        CelestinaInputShield { }
+
+        Row {
+            id: searchBarControlsRow
+            spacing: 8
+
+            CelestinaButton {
+                text: "Detener"
+                visible: root.controller.searchRunning
+                onClicked: root.controller.cancelSearch()
+            }
+            CelestinaButton {
+                text: "Cerrar"
+                onClicked: root.controller.closeSearch()
+            }
         }
     }
 }

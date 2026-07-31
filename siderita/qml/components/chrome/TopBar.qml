@@ -161,6 +161,11 @@ Item {
         border.color: root.floating ? CelestinaTheme.clear
                                     : CelestinaTheme.inputBorder
 
+        // La pastilla flota sobre la lista: su MouseArea sólo cubría izquierdo y
+        // derecho, así que el hover, el botón central y el arrastre seguían
+        // llegando a la fila de detrás.
+        CelestinaInputShield { }
+
         GlassSurface {
             id: pathGlass
             anchors.fill: parent
@@ -339,6 +344,10 @@ Item {
                 easing.type: CelestinaTheme.easeStandard
             }
         }
+
+        // Igual que la de ruta: el campo y los dos botones no llenan la pastilla,
+        // y lo que sobra es contenido que no debe recibir puntero.
+        CelestinaInputShield { }
 
         GlassSurface {
             id: searchGlass

@@ -45,32 +45,10 @@ Rectangle {
         }
     }
 
-    // Keep hover state on the chrome itself instead of also lighting the file
-    // row/cell behind it.  Child controls are delivered first and remain fully
-    // interactive.
-    HoverHandler {
-        enabled: glassPill.inputShield
-        blocking: true
-    }
-
-    // Claim drags that begin on non-interactive space inside a pill.  Without
-    // this, the delegate's passive DragHandler can start a file drag through
-    // the floating chrome.
-    DragHandler {
-        enabled: glassPill.inputShield
-        target: null
-        grabPermissions: PointerHandler.CanTakeOverFromAnything
-                         | PointerHandler.ApprovesTakeOverByAnything
-    }
-
-    MouseArea {
-        anchors.fill: parent
-        z: -1
-        enabled: glassPill.inputShield
-        // History buttons belong to the window. This shield only blocks the
-        // ordinary buttons that could otherwise act on a file through chrome.
-        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-        hoverEnabled: true
-        preventStealing: true
+    // El suelo de entrada compartido: hover, clics y arrastre se quedan en el
+    // cromo en vez de encender o arrastrar la fila que hay detrás. Los controles
+    // hijos se entregan antes y siguen siendo plenamente interactivos.
+    CelestinaInputShield {
+        active: glassPill.inputShield
     }
 }

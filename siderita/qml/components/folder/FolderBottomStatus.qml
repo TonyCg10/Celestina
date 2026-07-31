@@ -27,6 +27,11 @@ Item {
         border.color: CelestinaTheme.dangerBorder
         z: 3
 
+        // The banner covers several rows for as long as it lasts. With no input
+        // floor, clicking its text selected, opened the menu of, or dragged the
+        // file hidden behind it.
+        CelestinaInputShield { }
+
         Text {
             id: errorText
             anchors.fill: parent
@@ -54,6 +59,8 @@ Item {
         border.color: CelestinaTheme.dangerBorder
         z: 4
 
+        CelestinaInputShield { }
+
         Text {
             id: operationErrorText
             anchors.fill: parent
@@ -79,6 +86,10 @@ Item {
         visible: root.controller.opRunning
         role: CelestinaSurface.Tonal
         z: 5
+
+        // The progress panel is the largest floating box and the one that stays
+        // longest: nothing that happens over it belongs to the listing.
+        CelestinaInputShield { }
 
         Text {
             id: progressTitle

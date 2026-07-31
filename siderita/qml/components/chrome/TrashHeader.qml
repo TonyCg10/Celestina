@@ -30,44 +30,55 @@ Item {
                             ? "  ·  " + root.controller.trashNames.length : "  ·  vacía")
     }
 
-    Row {
+    // Los botones flotan directamente sobre la lista y no viven dentro de
+    // ninguna caja: sin este envoltorio, pulsar uno y arrastrar hacia el
+    // contenido arrancaba el arrastre del archivo que tapan.
+    Item {
         id: trashHeaderControls
         anchors.right: parent.right
         anchors.rightMargin: 8
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 8
+        width: trashHeaderControlsRow.width
+        height: trashHeaderControlsRow.height
 
-        // Its own pill too: the warning floats over the trash listing, so
-        // it needs a surface to be readable on.
-        InfoPill {
-            textScale: root.textScale
-            visible: root.confirmingEmpty
-            anchors.verticalCenter: parent.verticalCenter
-            backdrop: root.backdrop
-            text: "¿Vaciar? No se puede deshacer"
-        }
-        CelestinaButton {
-            text: root.confirmingEmpty ? "Vaciar definitivamente" : "Vaciar"
-            role: CelestinaButton.Destructive
-            visible: root.controller.trashNames.length > 0
-            onClicked: {
-                if (root.confirmingEmpty) {
-                    root.controller.emptyTrash()
-                    root.confirmingEmpty = false
-                } else {
-                    root.confirmingEmpty = true
+        CelestinaInputShield { }
+
+        Row {
+            id: trashHeaderControlsRow
+            spacing: 8
+
+            // Its own pill too: the warning floats over the trash listing, so
+            // it needs a surface to be readable on.
+            InfoPill {
+                textScale: root.textScale
+                visible: root.confirmingEmpty
+                anchors.verticalCenter: parent.verticalCenter
+                backdrop: root.backdrop
+                text: "¿Vaciar? No se puede deshacer"
+            }
+            CelestinaButton {
+                text: root.confirmingEmpty ? "Vaciar definitivamente" : "Vaciar"
+                role: CelestinaButton.Destructive
+                visible: root.controller.trashNames.length > 0
+                onClicked: {
+                    if (root.confirmingEmpty) {
+                        root.controller.emptyTrash()
+                        root.confirmingEmpty = false
+                    } else {
+                        root.confirmingEmpty = true
+                    }
                 }
             }
-        }
-        CelestinaButton {
-            text: "Restaurar todo"
-            visible: root.controller.trashNames.length > 0 && !root.confirmingEmpty
-            onClicked: root.controller.restoreAllTrash()
-        }
-        CelestinaButton {
-            text: "Volver"
-            role: CelestinaButton.Primary
-            onClicked: root.controller.closeTrash()
+            CelestinaButton {
+                text: "Restaurar todo"
+                visible: root.controller.trashNames.length > 0 && !root.confirmingEmpty
+                onClicked: root.controller.restoreAllTrash()
+            }
+            CelestinaButton {
+                text: "Volver"
+                role: CelestinaButton.Primary
+                onClicked: root.controller.closeTrash()
+            }
         }
     }
 }

@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Window
-import QtQuick.Controls
 import org.celestina.siderita 1.0
 import org.celestina.siderita.internal 1.0
 
@@ -457,7 +456,12 @@ Window {
                             + Math.round(CelestinaTheme.fontCaption * 2.9 * picker.textScale)
                             + 20
 
-                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                // Sin `ScrollBar.vertical.policy`: en un GridView esa propiedad
+                // adjunta sólo existe si se le asigna una barra, así que leerla
+                // daba null y asignarle `.policy` abortaba la construcción de
+                // toda la ventana — el selector no llegaba a abrirse nunca. La
+                // rejilla se recorre con rueda y teclado, igual que la del
+                // gestor. Mismo fallo que tenía TabStrip.
 
                 function pageStep() {
                     const rows = Math.max(1, Math.floor(height / cellHeight))

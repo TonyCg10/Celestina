@@ -16,6 +16,11 @@ Item {
     property var view          // fileList: geometría de columnas
     property real textScale: 1.0
 
+    // La tira se pinta sobre la lista: los títulos tienen su propio MouseArea,
+    // pero el canal de la izquierda y el margen derecho no, y por ahí seguía
+    // pasando el puntero a la primera fila.
+    CelestinaInputShield { }
+
     Rectangle {
         anchors.fill: parent
         radius: CelestinaTheme.radiusSm
@@ -28,6 +33,11 @@ Item {
         x: root.view.detailsNameX - 4
         anchors.verticalCenter: parent.verticalCenter
         width: parent.width - x - 16
+        // Sin altura propia la fila medía 0 —sus celdas sólo llevan `Layout`, y
+        // el `Row` de dentro va anclado, que no aporta tamaño implícito—, así
+        // que las áreas de clic de los títulos eran de altura cero y ordenar
+        // pinchando una columna nunca llegó a funcionar.
+        height: parent.height
         spacing: 12
 
         Repeater {

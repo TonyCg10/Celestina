@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls
 import org.celestina.siderita 1.0
 
 // Contextual tab row. It only exists when the window has more than one tab;
@@ -63,6 +62,11 @@ Item {
                     (tabList.width - (chip.tabCount - 1) * tabList.spacing)
                     / chip.tabCount))
             height: tabList.height
+
+            // Every tab is an opaque box over the listing. `chipMouse` only
+            // takes left and middle: without this floor a right click opened
+            // the menu of the file behind it and a sweep dragged that file.
+            CelestinaInputShield { }
 
             GlassSurface {
                 id: chipGlass
@@ -154,8 +158,6 @@ Item {
             }
         }
 
-        ScrollBar.horizontal.policy: ScrollBar.AsNeeded
-        ScrollBar.horizontal.height: CelestinaTheme.compLinearTrackHeight
     }
 
     Item {
@@ -165,6 +167,8 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         width: parent.height
         height: width
+
+        CelestinaInputShield { }
 
         GlassSurface {
             id: newTabGlass

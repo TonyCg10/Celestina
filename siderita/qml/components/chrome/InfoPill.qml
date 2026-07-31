@@ -29,6 +29,10 @@ Item {
     height: implicitHeight
     width: maxWidth > 0 ? Math.min(naturalWidth, maxWidth) : naturalWidth
 
+    // Una pastilla es opaca sobre la lista: sin esto el puntero seguía llegando
+    // a la fila que tapa (hover, los tres clics y el arrastre de archivo).
+    CelestinaInputShield { }
+
     GlassSurface {
         anchors.fill: parent
         backdropSource: infoPill.backdrop

@@ -632,7 +632,7 @@ Item {
             contentBottomInset: mainPanel.contentBottomInset
             onRevealHeadingRequested: root.revealHeading()
             onCollapseHeadingRequested: root.collapseHeading()
-            onQuickLookRequested: root.quickLookOpen = true
+            onQuickLookRequested: folderActions.requestPreview()
             onNewTabRequested: function(path, foreground) {
                 root.requestNewTab(path, foreground)
             }
@@ -663,7 +663,7 @@ Item {
             contentBottomInset: mainPanel.contentBottomInset
             onRevealHeadingRequested: root.revealHeading()
             onCollapseHeadingRequested: root.collapseHeading()
-            onQuickLookRequested: root.quickLookOpen = true
+            onQuickLookRequested: folderActions.requestPreview()
             onNewTabRequested: function(path, foreground) {
                 root.requestNewTab(path, foreground)
             }

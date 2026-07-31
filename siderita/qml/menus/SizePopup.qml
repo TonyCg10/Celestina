@@ -32,6 +32,11 @@ Popup {
     background: GlassCard {
         backdropSource: root.backdrop
         cornerRadius: CelestinaTheme.radiusLg
+
+        // Un popup no modal se queda el hover y el clic, pero no el arrastre:
+        // barrer sobre este panel seguía arrancando el arrastre del archivo que
+        // hay debajo. El contenido del popup se entrega antes que su fondo.
+        CelestinaInputShield { }
     }
 
     contentItem: Column {

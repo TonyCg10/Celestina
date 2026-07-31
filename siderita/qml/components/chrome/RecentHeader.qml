@@ -27,17 +27,28 @@ Item {
                              : "  ·  sin elementos")
     }
 
-    Row {
+    // Los botones flotan directamente sobre la lista y no viven dentro de
+    // ninguna caja: sin este envoltorio, pulsar uno y arrastrar hacia el
+    // contenido arrancaba el arrastre del archivo que tapan.
+    Item {
         id: recentHeaderControls
         anchors.right: parent.right
         anchors.rightMargin: 8
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 8
+        width: recentHeaderControlsRow.width
+        height: recentHeaderControlsRow.height
 
-        CelestinaButton {
-            text: "Volver"
-            role: CelestinaButton.Primary
-            onClicked: root.controller.closeRecent()
+        CelestinaInputShield { }
+
+        Row {
+            id: recentHeaderControlsRow
+            spacing: 8
+
+            CelestinaButton {
+                text: "Volver"
+                role: CelestinaButton.Primary
+                onClicked: root.controller.closeRecent()
+            }
         }
     }
 }

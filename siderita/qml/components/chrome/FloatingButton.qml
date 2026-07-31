@@ -31,18 +31,11 @@ Button {
 
     Accessible.name: helpText.length > 0 ? helpText : text
 
-    // QQuickControl handles clicks, while this handler prevents hover from
-    // leaking through the translucent background to a file delegate.
-    HoverHandler {
-        blocking: true
-    }
-
-    // A drag beginning on a button belongs to the floating chrome, never to
-    // the file row/cell beneath it.
-    DragHandler {
-        target: null
-        grabPermissions: PointerHandler.CanTakeOverFromAnything
-                         | PointerHandler.ApprovesTakeOverByAnything
+    // The button already owns its click — a swallowing MouseArea would be
+    // delivered before it — but hover and drag still leak through to the
+    // delegate underneath unless something claims them.
+    CelestinaInputShield {
+        swallowClicks: false
     }
 
     contentItem: Text {
