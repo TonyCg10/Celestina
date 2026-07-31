@@ -1,0 +1,16 @@
+[package]
+name = "celestina-shell-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+# The shell's helper protocol is line-delimited JSON in both directions, and
+# provider payloads are open maps that each provider owns. Serde is the one
+# parser for that envelope; nothing here needs a second format.
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+
+[lints]
+workspace = true
