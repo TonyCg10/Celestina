@@ -31,6 +31,53 @@ pub fn encode(bytes: &[u8]) -> String {
     out
 }
 
+/// Percent-encodes absolute path bytes the way `QUrl::fromLocalFile().toEncoded()`
+/// does: RFC 3986's `pchar` set (`alnum`, `-._~`, `!$&'()*+,;=`, `:@`) plus the
+/// path separator `/` stay raw, and every other byte becomes an uppercase `%XX`
+/// escape.
+///
+/// This is a genuinely different preserved set from [`encode`], not a duplicated
+/// recipe: [`encode`] escapes `!$&'()*+,;=:@`, which is right for the Trash spec
+/// and wrong for a key another Qt consumer already computes. The freedesktop
+/// thumbnail cache keys on this exact spelling, so Fluorita and Siderita must
+/// agree byte for byte; the rule was recovered from a Qt 6 probe rather than
+/// from documentation. Known interop limit: GLib escapes `;` where Qt keeps it
+/// raw, so a filename containing `;` lands on two different cache keys.
+pub fn encode_qt_path(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len());
+    for &byte in bytes {
+        if byte.is_ascii_alphanumeric()
+            || matches!(
+                byte,
+                b'-' | b'.'
+                    | b'_'
+                    | b'~'
+                    | b'!'
+                    | b'$'
+                    | b'&'
+                    | b'\''
+                    | b'('
+                    | b')'
+                    | b'*'
+                    | b'+'
+                    | b','
+                    | b';'
+                    | b'='
+                    | b':'
+                    | b'@'
+                    | b'/'
+            )
+        {
+            out.push(byte as char);
+        } else {
+            out.push('%');
+            out.push(HEX[(byte >> 4) as usize] as char);
+            out.push(HEX[(byte & 0x0f) as usize] as char);
+        }
+    }
+    out
+}
+
 /// Decodes `%XX` escapes to bytes, keeping a malformed escape verbatim so a
 /// stray `%` never drops the rest of the input. For URIs off the bus/clipboard,
 /// where salvaging the readable part beats discarding the whole path.
@@ -113,7 +160,7 @@ pub fn path_from_bytes(bytes: &[u8]) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{decode, decode_strict, encode};
+    use super::{decode, decode_strict, encode, encode_qt_path};
 
     #[test]
     fn encode_keeps_the_unreserved_set_and_escapes_the_rest() {
@@ -122,6 +169,32 @@ mod tests {
         assert_eq!(encode(b"a-_.~/z"), "a-_.~/z");
         // Uppercase hex, like every copy this replaces.
         assert_eq!(encode(b"#"), "%23");
+    }
+
+    #[test]
+    fn qt_path_encoding_keeps_pchar_and_escapes_the_rest() {
+        // The sub-delims and `:@` that `encode` escapes stay raw here.
+        assert_eq!(
+            encode_qt_path(b"/home/u/plus+amp&eq=semi;.flac"),
+            "/home/u/plus+amp&eq=semi;.flac"
+        );
+        assert_eq!(
+            encode_qt_path(b"/home/u/at@colon:comma,.opus"),
+            "/home/u/at@colon:comma,.opus"
+        );
+        assert_eq!(encode_qt_path(b"/home/u/a b.mp4"), "/home/u/a%20b.mp4");
+        assert_eq!(
+            encode_qt_path(b"/home/u/weird#hash?q.png"),
+            "/home/u/weird%23hash%3Fq.png"
+        );
+        // Uppercase escapes, including for a byte that is not valid UTF-8.
+        assert_eq!(encode_qt_path(&[b'/', 0xff]), "/%FF");
+    }
+
+    #[test]
+    fn qt_path_encoding_differs_from_the_trash_codec() {
+        assert_eq!(encode(b"a;b"), "a%3Bb");
+        assert_eq!(encode_qt_path(b"a;b"), "a;b");
     }
 
     #[test]
