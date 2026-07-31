@@ -1,6 +1,6 @@
-#include "niriprotocoldecoder.h"
+#include "protocoldecoder.h"
 
-NiriProtocolDecoder::Result NiriProtocolDecoder::append(const QByteArray &chunk)
+ProtocolDecoder::Result ProtocolDecoder::append(const QByteArray &chunk)
 {
     Result result;
     qsizetype offset = 0;
@@ -42,7 +42,7 @@ NiriProtocolDecoder::Result NiriProtocolDecoder::append(const QByteArray &chunk)
     return result;
 }
 
-void NiriProtocolDecoder::reset()
+void ProtocolDecoder::reset()
 {
     m_buffer.clear();
     m_discardingOversizedLine = false;

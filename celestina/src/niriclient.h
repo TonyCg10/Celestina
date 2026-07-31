@@ -6,7 +6,7 @@
 #include <QTimer>
 #include <QVariantList>
 
-#include "niriprotocoldecoder.h"
+#include "protocoldecoder.h"
 
 // Thin GUI-thread adapter for the Rust Niri helper.
 //

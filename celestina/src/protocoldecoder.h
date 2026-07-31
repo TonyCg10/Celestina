@@ -6,7 +6,7 @@
 // Bounded line framing for the Rust helper's line-delimited JSON protocol.
 // An oversized frame is discarded through its next newline, so the following
 // valid message can never be interpreted from the middle of hostile input.
-class NiriProtocolDecoder final
+class ProtocolDecoder final
 {
 public:
     struct Result {

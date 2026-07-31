@@ -45,8 +45,8 @@ qt_add_executable(celestina
     src/main.cpp
     src/devicesclient.h
     src/devicesclient.cpp
-    src/niriprotocoldecoder.h
-    src/niriprotocoldecoder.cpp
+    src/protocoldecoder.h
+    src/protocoldecoder.cpp
     src/niriclient.h
     src/niriclient.cpp
     src/panelblurcontroller.h
@@ -107,9 +107,9 @@ include(CTest)
 if(BUILD_TESTING)
     find_package(Qt6 6.9 REQUIRED COMPONENTS Test QuickTest)
     qt_add_executable(celestina-niri-decoder-test
-        tests/niriprotocoldecoder_test.cpp
-        src/niriprotocoldecoder.h
-        src/niriprotocoldecoder.cpp
+        tests/protocoldecoder_test.cpp
+        src/protocoldecoder.h
+        src/protocoldecoder.cpp
     )
     target_include_directories(celestina-niri-decoder-test PRIVATE src)
     target_link_libraries(celestina-niri-decoder-test PRIVATE Qt6::Test)

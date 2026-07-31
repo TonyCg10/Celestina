@@ -1,8 +1,8 @@
 #include <QtTest>
 
-#include "niriprotocoldecoder.h"
+#include "protocoldecoder.h"
 
-class NiriProtocolDecoderTest final : public QObject
+class ProtocolDecoderTest final : public QObject
 {
     Q_OBJECT
 
@@ -12,25 +12,25 @@ private slots:
     void discardsThroughNewlineAndRecovers();
 };
 
-void NiriProtocolDecoderTest::assemblesFragmentedLines()
+void ProtocolDecoderTest::assemblesFragmentedLines()
 {
-    NiriProtocolDecoder decoder;
+    ProtocolDecoder decoder;
     QCOMPARE(decoder.append(QByteArrayLiteral("{\"kind\":" )).lines.size(), 0);
     const auto result = decoder.append(QByteArrayLiteral("\"unavailable\"}\n"));
     QCOMPARE(result.lines, QList<QByteArray> {QByteArrayLiteral("{\"kind\":\"unavailable\"}")});
     QVERIFY(!result.discardedOversizedLine);
 }
 
-void NiriProtocolDecoderTest::emitsSeveralLinesFromOneChunk()
+void ProtocolDecoderTest::emitsSeveralLinesFromOneChunk()
 {
-    NiriProtocolDecoder decoder;
+    ProtocolDecoder decoder;
     const auto result = decoder.append(QByteArrayLiteral("one\n\ntwo\n"));
     QCOMPARE(result.lines, QList<QByteArray>({"one", "two"}));
 }
 
-void NiriProtocolDecoderTest::discardsThroughNewlineAndRecovers()
+void ProtocolDecoderTest::discardsThroughNewlineAndRecovers()
 {
-    NiriProtocolDecoder decoder;
+    ProtocolDecoder decoder;
     QByteArray hostile(1024 * 1024 + 1, 'x');
     auto result = decoder.append(hostile);
     QVERIFY(result.discardedOversizedLine);
@@ -41,6 +41,6 @@ void NiriProtocolDecoderTest::discardsThroughNewlineAndRecovers()
     QCOMPARE(result.lines, QList<QByteArray> {QByteArrayLiteral("valid")});
 }
 
-QTEST_GUILESS_MAIN(NiriProtocolDecoderTest)
+QTEST_GUILESS_MAIN(ProtocolDecoderTest)
 
-#include "niriprotocoldecoder_test.moc"
+#include "protocoldecoder_test.moc"
