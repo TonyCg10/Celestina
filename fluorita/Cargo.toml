@@ -1,0 +1,40 @@
+[package]
+name = "fluorita"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "GPL-3.0-or-later"
+build = "build.rs"
+
+[[bin]]
+name = "fluorita"
+path = "src/main.rs"
+
+[dependencies]
+cxx = "=1.0.176"
+cxx-qt = "=0.9.1"
+cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
+    "qt_gui",
+    "qt_qml",
+    "qt_quickcontrols",
+] }
+# The suite's canonical percent codec, so a `file://` argument from the desktop
+# is decoded the same way every other project decodes one.
+celestina-core = { path = "../celestina-rs/crates/celestina-core" }
+# What media *is*: kind classification, the library projections and the
+# playback model. Classifying a path costs no decoder, which is why the
+# scaffold can be honest about what it was handed without starting one.
+fluorita-core = { path = "../celestina-rs/crates/fluorita-core" }
+# The decoder itself. The app never talks to libmpv: it opens sessions through
+# the engine's narrow contract and hands the surface one opaque handle.
+fluorita-engine = { path = "../celestina-rs/crates/fluorita-engine" }
+
+[build-dependencies]
+cxx-qt-build = "=0.9.1"
+cxx-gen = "=0.7.176"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+panic = "abort"
+strip = "symbols"
