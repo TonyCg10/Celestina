@@ -540,7 +540,27 @@ already lists as unproven and a screen reader would settle.
 
 ### Still open
 
-
+- [ ] **The engine's minimum libmpv is undeclared, and it is not the distro's**
+      (found 2026-07-31 by CI, not by a person). `Instance::new` applies a
+      baseline that includes `load-console`, `load-context-menu`,
+      `load-stats-overlay`, `load-auto-profiles`, `load-select`,
+      `load-positioning` and `load-commands` — the per-script switches for
+      mpv's built-in Lua. They do not exist in mpv 0.37, which is what Ubuntu
+      24.04 ships, so `set_property` answers `-8` and **no instance is created
+      at all**. It is not a headless problem: the failing test already asks for
+      `vo=null` and `ao=null`. On the author's machine (mpv 0.41 / libmpv 2.5)
+      every option is accepted and nothing complains.
+      This is exactly the case the root contract names — a newer API used
+      without updating the toolchain contract — so it needs an author decision
+      between two options, and they are not equivalent:
+      **(a) declare the minimum** (pin the version in the README and the build
+      docs, and accept that Fluorita does not run on a 24.04-era mpv), or
+      **(b) apply the `load-*` hardening best-effort** and tolerate their
+      absence, which keeps older mpv working but means that on those versions
+      the built-in scripts *do* load and draw over Fluorita's own chrome — a
+      quiet weakening of a guarantee the baseline exists to make.
+      Until it is settled, `.github/workflows/celestina-rs.yml` skips the two
+      backend-starting tests and says why; they belong to the local matrix.
 - [ ] **A real-session pass**: picture, frame pacing, seeking under load,
       keyboard and focus, and closing while playing.
 - [ ] The **desktop entry, the icon and installation**. No `.desktop` and no

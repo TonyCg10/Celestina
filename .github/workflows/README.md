@@ -34,7 +34,19 @@ matriz es local y está descrita en `AGENTS.md`; cada proyecto trae sus propios
 `scripts/smoke.sh` y, en Siderita, `scripts/qml-tests.sh`. Un verde aquí no dice
 nada sobre ellas.
 
-`fluorita-engine` sí se compila y enlaza en CI (`celestina-rs.yml` instala
-`libmpv-dev`), pero sus tests contra medios reales dependen de los ficheros de
-`tests/fixtures/`; reproducir decodificación real en un runner sin salida de
-audio no es lo mismo que la sesión del autor.
+`fluorita-engine` se compila, enlaza y pasa sus 60 pruebas puras en CI
+(`celestina-rs.yml` instala `libmpv-dev`), pero las dos que *arrancan* libmpv
+—`an_instance_starts_and_answers_properties` y todo `tests/real_media.rs`— se
+quedan fuera.
+
+El motivo no es la falta de pantalla ni de salida de audio: el test ya pide
+`vo=null` y `ao=null`. Es la versión. El runner de Ubuntu 24.04 trae mpv 0.37 y
+el baseline del motor fija opciones que esa versión no conoce (`load-console`,
+`load-select`, `load-positioning` y las demás `load-*` de los scripts Lua
+internos), de modo que `set_property` devuelve -8 y no llega a existir ninguna
+instancia. En la máquina del autor, con mpv 0.41, arrancan sin queja.
+
+Eso significa que el motor tiene un **mínimo de libmpv sin declarar**, que es
+justo lo que el contrato de la raíz prohíbe dejar implícito. Está anotado como
+decisión abierta en `fluorita/ROADMAP.md`; hasta que se resuelva, esas dos
+pruebas son de la matriz local y un verde aquí no dice nada sobre ellas.
