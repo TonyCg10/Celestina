@@ -28,3 +28,10 @@ jobs:
         run: |
           bash scripts/test-architecture-scanners.sh
           bash scripts/check-architecture-contract.sh
+
+      # El hook de alcance es local por definición (`core.hooksPath` no viaja en
+      # el repo), así que un commit puede llegar aquí sin haber pasado por él —
+      # con `--no-verify`, desde un clon sin configurar, o por la web. Esto lo
+      # contrasta contra el historial ya empujado.
+      - name: Alcance de commits
+        run: bash scripts/test-commit-scope.sh

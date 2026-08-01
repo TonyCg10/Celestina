@@ -1,0 +1,122 @@
+#!/bin/sh
+set -eu
+
+# El prefijo del commit tiene que decir la verdad sobre lo que toca.
+#
+# `AGENTS.md` pide commits "prefijados por proyecto". Esto lo comprueba: cada
+# prefijo declara un alcance, y un fichero preparado fuera de ese alcance para
+# el commit. Lo que caza no es tocar dos proyectos —eso es legítimo y se declara
+# con `suite:`— sino un commit que dice `siderita:` mientras además edita
+# `celestina/`, que es como un árbol entero acaba en un solo "chore".
+#
+# Es `commit-msg` y no `pre-commit` porque necesita las dos mitades a la vez: el
+# asunto (que sólo existe aquí) y el índice.
+#
+# Modo prueba: `sh .githooks/commit-msg --check "<asunto>" < lista-de-ficheros`.
+
+if [ "${1:-}" = "--check" ]; then
+    asunto=${2:-}
+    ficheros=$(cat)
+else
+    [ -n "${1:-}" ] || exit 0
+    asunto=$(sed -n '1p' "$1")
+
+    # Una fusión no es trabajo de nadie sobre un proyecto: su contenido ya pasó
+    # por aquí en las ramas que une.
+    if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+        exit 0
+    fi
+    # `fixup!`/`squash!` heredan el asunto del commit que corrigen, y `revert`
+    # el del que deshace; en ambos casos el prefijo no es del autor.
+    case $asunto in
+        fixup!*|squash!*|amend!*|Revert\ *) exit 0 ;;
+    esac
+
+    ficheros=$(git diff --cached --name-only)
+fi
+
+# Sin ficheros no hay nada que contrastar (por ejemplo `--allow-empty`).
+[ -n "$ficheros" ] || exit 0
+
+# En minúsculas: el historial antiguo lleva `Siderita:` y `Docs:`, y un guard
+# que se salta el alcance por una mayúscula no sirve. Esto no impone el estilo
+# del mensaje, sólo evita que la caja cambie lo que se comprueba.
+prefijo=$(printf '%s' "${asunto%%:*}" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
+# Un asunto sin `:` no declara alcance. No es trabajo de este guard imponer un
+# formato de mensaje, así que se deja pasar en silencio.
+case $asunto in
+    *:*) ;;
+    *) exit 0 ;;
+esac
+
+# El alcance de cada prefijo, como rutas. Una ruta preparada vale si empieza por
+# alguno de estos prefijos.
+#
+# Los prefijos de crate y los de app que tienen core propio incluyen el
+# manifiesto del workspace: dar de alta un crate edita `celestina-rs/Cargo.toml`
+# y su lock, y ese cambio pertenece al mismo commit que el crate.
+alcance_de() {
+    manifiesto="celestina-rs/Cargo.toml celestina-rs/Cargo.lock"
+    case $1 in
+        suite)
+            echo '' ;;  # vacío = todo permitido
+        celestina)
+            echo "celestina/ celestina-rs/crates/celestina-shell-core/ $manifiesto" ;;
+        celestina-style)
+            echo 'celestina-style/' ;;
+        celestina-rs)
+            echo 'celestina-rs/' ;;
+        siderita)
+            echo "siderita/ celestina-rs/crates/siderita- $manifiesto" ;;
+        magnetita)
+            echo "magnetita/ celestina-rs/crates/magnetita $manifiesto" ;;
+        grafita)
+            echo "grafita/ celestina-rs/crates/grafita- $manifiesto" ;;
+        fluorita)
+            echo "fluorita/ celestina-rs/crates/fluorita- $manifiesto" ;;
+        celestina-core|celestina-shell-core|dotfiles-core \
+        |siderita-core|siderita-ops|siderita-qt \
+        |magnetita-core|magnetita-net|magnetitad \
+        |grafita-core|fluorita-core|fluorita-engine)
+            echo "celestina-rs/crates/$1/ $manifiesto" ;;
+        *)
+            return 1 ;;
+    esac
+}
+
+if ! alcance=$(alcance_de "$prefijo"); then
+    # Un prefijo desconocido no se rechaza: puede ser una convención nueva o un
+    # asunto que sólo lleva dos puntos por casualidad. Se avisa y se sigue.
+    printf 'aviso: prefijo "%s" no reconocido; no se comprueba el alcance.\n' \
+        "$prefijo" >&2
+    exit 0
+fi
+
+# `suite:` declara explícitamente que el cambio cruza proyectos.
+[ -n "$alcance" ] || exit 0
+
+fuera=''
+for fichero in $ficheros; do
+    permitido=0
+    for raiz in $alcance; do
+        case $fichero in
+            "$raiz"*) permitido=1; break ;;
+        esac
+    done
+    [ "$permitido" -eq 1 ] || fuera="$fuera$fichero
+"
+done
+
+if [ -n "$fuera" ]; then
+    printf 'commit-msg: el prefijo "%s:" no cubre lo que este commit toca.\n\n' \
+        "$prefijo" >&2
+    printf 'Fuera de alcance:\n' >&2
+    printf '%s' "$fuera" | sed 's/^/  /' >&2
+    printf '\nAlcance de "%s:":\n' "$prefijo" >&2
+    for raiz in $alcance; do printf '  %s\n' "$raiz" >&2; done
+    printf '\nParte el commit por proyecto, o usa "suite:" si el cambio\n' >&2
+    printf 'es de verdad transversal.\n' >&2
+    exit 1
+fi
+
+exit 0

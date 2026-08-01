@@ -236,7 +236,11 @@ Describe exactamente qué evidencia obtuviste y qué quedó sin prueba real.
   pasar una entrega.
 - No marques validación real si sólo ejecutaste una simulación/offscreen.
 - Commits en inglés, imperativos y prefijados por proyecto. Commit/push sólo a
-  petición del autor.
+  petición del autor. El prefijo declara el alcance y `.githooks/commit-msg` lo
+  comprueba: un commit prefijado `siderita:` que además toca `celestina/` se
+  rechaza. Un cambio realmente transversal se declara con `suite:`. Activa el
+  hook en cada clon con `git config core.hooksPath .githooks` — la configuración
+  no viaja en el repositorio.
 - Para reinstalar `magnetitad`, detener primero el servicio de usuario y
   arrancarlo después de copiar; no reiniciarlo repetidamente.
 - Invariantes KDE Connect: el teléfono conduce el pairing; quien inicia TCP es
