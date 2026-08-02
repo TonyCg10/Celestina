@@ -52,6 +52,16 @@ fn pump(session: &mut DocumentSession, job: Job) -> Option<Event> {
             generation,
             result: Box::new(open(&path, generation, limits, &cancellation)),
         },
+        Job::SaveAs {
+            path,
+            bytes,
+            generation,
+            revision,
+        } => Completion::Created {
+            generation,
+            revision,
+            result: Box::new(grafita_core::save::create(&path, &bytes)),
+        },
         Job::Save {
             request,
             generation,
@@ -442,6 +452,108 @@ fn the_open_document_reports_its_language_and_colours_its_lines() {
     let (spans, _) = session.highlight_line(0, grafita_core::LineState::Normal);
     assert!(spans.is_empty(), "plain text is coloured as nothing");
     assert!(session.state().active, "and is still perfectly editable");
+
+    let _ = fs::remove_dir_all(root);
+}
+
+/// A brand-new document has nowhere to go until it is told, and saying so is an
+/// event rather than a refusal: a document without a name is still a document.
+#[test]
+fn a_new_document_asks_where_it_goes_and_then_belongs_there() {
+    let root = scratch("new-document");
+    let destination = root.join("recien.txt");
+
+    let mut session = DocumentSession::new(Limits::default());
+    let outcome = session.new_document();
+
+    assert_eq!(
+        outcome.event,
+        Some(Event::PushText {
+            text: String::new(),
+            caret: 0
+        })
+    );
+    assert!(session.state().active, "a new document is open");
+    assert!(!session.has_destination());
+
+    let _ = session.apply_display_text("primera\nsegunda\n");
+    assert!(session.state().dirty);
+
+    // Saving without a file asks, and asking writes nothing.
+    let outcome = session.save();
+    assert_eq!(outcome.event, Some(Event::DestinationNeeded));
+    assert!(outcome.job.is_none(), "nothing may be written yet");
+    assert!(!destination.exists());
+
+    // Told where it goes, it writes and binds itself there.
+    let outcome = session.save_as(&destination);
+    let _ = pump(&mut session, outcome.job.expect("a save-as job"));
+
+    assert_eq!(
+        fs::read(&destination).expect("read back"),
+        b"primera\nsegunda\n"
+    );
+    assert!(session.has_destination());
+    assert!(!session.state().dirty, "saving cleaned it");
+    assert_eq!(session.state().name, "recien.txt");
+
+    // And from here it is an ordinary saved document: a plain save works.
+    let _ = session.apply_display_text("primera\nsegunda\ntercera\n");
+    let outcome = session.save();
+    assert!(outcome.job.is_some(), "it knows where it lives now");
+    let _ = pump(&mut session, outcome.job.expect("a save job"));
+    assert_eq!(
+        fs::read(&destination).expect("read back"),
+        b"primera\nsegunda\ntercera\n"
+    );
+
+    let _ = fs::remove_dir_all(root);
+}
+
+/// Saving over a file the user picked must not quietly widen how it is
+/// protected.
+#[test]
+fn save_as_over_an_existing_file_keeps_its_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = scratch("save-as-existing");
+    let destination = root.join("privado.txt");
+    fs::write(&destination, b"antes\n").expect("write");
+    fs::set_permissions(&destination, fs::Permissions::from_mode(0o600)).expect("chmod");
+
+    let mut session = DocumentSession::new(Limits::default());
+    let _ = session.new_document();
+    let _ = session.apply_display_text("despues\n");
+    let outcome = session.save_as(&destination);
+    let _ = pump(&mut session, outcome.job.expect("a save-as job"));
+
+    assert_eq!(fs::read(&destination).expect("read back"), b"despues\n");
+    let mode = fs::metadata(&destination)
+        .expect("stat")
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o600, "the file kept its own permissions");
+
+    let _ = fs::remove_dir_all(root);
+}
+
+/// A destination that cannot be written leaves the document dirty and unbound,
+/// with the refusal visible — never a document that thinks it was saved.
+#[test]
+fn a_refused_save_as_leaves_the_document_unbound() {
+    let root = scratch("save-as-refused");
+    let impossible = root.join("no-existe").join("archivo.txt");
+
+    let mut session = DocumentSession::new(Limits::default());
+    let _ = session.new_document();
+    let _ = session.apply_display_text("contenido\n");
+
+    let outcome = session.save_as(&impossible);
+    let _ = pump(&mut session, outcome.job.expect("a save-as job"));
+
+    assert!(!session.has_destination(), "it is still nameless");
+    assert!(session.state().dirty, "and still unsaved");
+    assert!(session.state().failure.is_some(), "and says so");
 
     let _ = fs::remove_dir_all(root);
 }

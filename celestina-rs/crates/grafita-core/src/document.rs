@@ -65,7 +65,10 @@ pub enum Freshness {
 pub struct Document {
     buffer: TextBuffer,
     history: History,
-    target: Target,
+    /// The file this document is bound to. `None` until a new document has
+    /// been saved somewhere: an unsaved scratch buffer has no identity to
+    /// re-verify and nothing on disk to protect.
+    target: Option<Target>,
     encoding: Encoding,
     generation: Generation,
     revision: Revision,
@@ -92,7 +95,7 @@ impl Document {
             projection: display::project(&buffer),
             buffer,
             history: History::default(),
-            target: opened.target,
+            target: Some(opened.target),
             encoding: opened.encoding,
             generation: opened.generation,
             revision: Revision::INITIAL,
@@ -105,9 +108,44 @@ impl Document {
         &self.buffer
     }
 
+    /// A brand-new document that belongs to no file yet.
+    ///
+    /// UTF-8 with line feeds, because that is what a new file on this desktop
+    /// should be; an *opened* document still keeps whatever it came with.
     #[must_use]
-    pub const fn target(&self) -> &Target {
-        &self.target
+    pub fn empty(generation: Generation) -> Self {
+        let buffer = TextBuffer::from_text("");
+        Self {
+            projection: display::project(&buffer),
+            buffer,
+            history: History::default(),
+            target: None,
+            encoding: Encoding::Utf8,
+            generation,
+            revision: Revision::INITIAL,
+            conflict: None,
+            undone_group: None,
+            redone_group: None,
+        }
+    }
+
+    #[must_use]
+    pub const fn target(&self) -> Option<&Target> {
+        self.target.as_ref()
+    }
+
+    /// Whether this document has somewhere to save to without being asked.
+    #[must_use]
+    pub const fn has_target(&self) -> bool {
+        self.target.is_some()
+    }
+
+    /// Adopts the file a "save as" just wrote, after which every ordinary save
+    /// rule applies to it.
+    pub fn adopt_target(&mut self, target: Target) {
+        self.target = Some(target);
+        self.conflict = None;
+        self.history.mark_saved();
     }
 
     #[must_use]
@@ -235,7 +273,9 @@ impl Document {
     /// at all was settled by its bytes.
     #[must_use]
     pub fn language(&self) -> Language {
-        Language::for_path(self.target.resolved())
+        self.target.as_ref().map_or(Language::Plain, |target| {
+            Language::for_path(target.resolved())
+        })
     }
 
     /// Colours one line of the projection, given what the previous line left.
@@ -433,11 +473,16 @@ impl Document {
         }
     }
 
-    /// Builds the request a worker performs. The bytes are snapshotted here, so
-    /// later keystrokes cannot change what the worker writes.
+    /// The write this document would perform, or `None` when it has no file yet
+    /// and the host must ask where to put it.
+    ///
+    /// The bytes are snapshotted here, so later keystrokes cannot change what
+    /// the worker writes.
     #[must_use]
-    pub fn save_request(&self) -> SaveRequest {
-        SaveRequest::new(self.target.clone(), self.to_bytes(), self.revision)
+    pub fn save_request(&self) -> Option<SaveRequest> {
+        self.target
+            .as_ref()
+            .map(|target| SaveRequest::new(target.clone(), self.to_bytes(), self.revision))
     }
 
     /// Applies a completed save.
@@ -447,7 +492,9 @@ impl Document {
     /// after the first report a false conflict. Only the dirty state depends on
     /// whether the document moved on in the meantime.
     pub fn apply_save(&mut self, report: &SaveReport) -> SaveApplication {
-        self.target.adopt(report.identity);
+        if let Some(target) = self.target.as_mut() {
+            target.adopt(report.identity);
+        }
         self.conflict = None;
         if report.revision == self.revision {
             self.history.mark_saved();
@@ -488,7 +535,7 @@ impl Document {
         self.buffer = TextBuffer::from_text(&opened.text);
         self.projection = display::project(&self.buffer);
         self.history = History::default();
-        self.target = opened.target;
+        self.target = Some(opened.target);
         self.encoding = opened.encoding;
         self.generation = opened.generation;
         self.revision = self.revision.next();

@@ -289,3 +289,58 @@ fn create_temporary(resolved: &Path, parent: &Path) -> Result<(PathBuf, File), S
         message: "could not reserve a temporary next to the document".to_owned(),
     })
 }
+
+/// Writes `bytes` to a path the document does not yet own, and returns the
+/// target it may now adopt.
+///
+/// This is "guardar como", and it is deliberately *not* [`perform`]: there is no
+/// prior identity to re-verify and no original metadata to reproduce, because
+/// the document was never bound to this file. What it keeps is the part that
+/// matters — a unique sibling temporary, written and synced in full, published
+/// by an atomic rename — so a failure leaves whatever was there untouched and
+/// never a half-written file.
+///
+/// An existing destination is overwritten, because the caller reached here
+/// through a file chooser that already asked. Its metadata is reproduced, so
+/// saving over a file does not quietly widen its permissions.
+pub fn create(path: &Path, bytes: &[u8]) -> Result<Target, SaveRefusal> {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map_or_else(|| PathBuf::from("."), Path::to_path_buf)
+        .canonicalize()
+        .map_err(|error| SaveRefusal::io(path, &error))?;
+    let name = path.file_name().ok_or_else(|| {
+        SaveRefusal::io(
+            path,
+            &io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "the destination has no file name",
+            ),
+        )
+    })?;
+    let destination = parent.join(name);
+
+    // An existing destination keeps its own permissions and ownership: the user
+    // asked to write *this* file, not to reset how it is protected.
+    let existing = destination.metadata().ok().filter(fs::Metadata::is_file);
+
+    let (temporary, mut file) = create_temporary(&destination, &parent)?;
+    let outcome = (|| {
+        file.write_all(bytes)
+            .map_err(|error| SaveRefusal::io(&temporary, &error))?;
+        file.sync_all()
+            .map_err(|error| SaveRefusal::io(&temporary, &error))?;
+        if let Some(metadata) = existing.as_ref() {
+            crate::metadata::reproduce(&destination, metadata, &temporary)?;
+        }
+        drop(file);
+        fs::rename(&temporary, &destination)
+            .map_err(|error| SaveRefusal::io(&destination, &error))?;
+        Target::resolve(&destination).map_err(|error| SaveRefusal::io(&destination, &error))
+    })();
+    if outcome.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    outcome
+}

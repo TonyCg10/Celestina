@@ -41,8 +41,13 @@ fn document_at(path: &Path) -> Document {
 }
 
 fn save_now(document: &mut Document) -> Durability {
-    let report = perform(&document.save_request(), &live())
-        .unwrap_or_else(|refusal| panic!("the save must succeed: {refusal}"));
+    let report = perform(
+        &document
+            .save_request()
+            .expect("an opened document has a target"),
+        &live(),
+    )
+    .unwrap_or_else(|refusal| panic!("the save must succeed: {refusal}"));
     assert_eq!(document.apply_save(&report), SaveApplication::Clean);
     report.durability
 }
@@ -398,7 +403,13 @@ fn a_file_changed_underneath_refuses_and_keeps_the_other_version() {
 
     fs::write(&path, b"otro proceso escribio esto\n").expect("external write");
 
-    let refusal = perform(&document.save_request(), &live()).expect_err("must refuse");
+    let refusal = perform(
+        &document
+            .save_request()
+            .expect("an opened document has a target"),
+        &live(),
+    )
+    .expect_err("must refuse");
     assert!(matches!(refusal, SaveRefusal::ChangedUnderneath { .. }));
     assert_eq!(
         fs::read(&path).expect("read back"),
@@ -434,7 +445,13 @@ fn a_repointed_symlink_refuses_instead_of_writing_the_new_target() {
     fs::remove_file(&link).expect("remove the link");
     std::os::unix::fs::symlink(&second, &link).expect("repoint the link");
 
-    let refusal = perform(&document.save_request(), &live()).expect_err("must refuse");
+    let refusal = perform(
+        &document
+            .save_request()
+            .expect("an opened document has a target"),
+        &live(),
+    )
+    .expect_err("must refuse");
     assert!(matches!(refusal, SaveRefusal::Retargeted { .. }));
     assert_eq!(fs::read(&first).expect("read").as_slice(), b"primero\n");
     assert_eq!(fs::read(&second).expect("read").as_slice(), b"segundo\n");
@@ -459,7 +476,13 @@ fn a_deleted_target_refuses_rather_than_recreating_the_file() {
         .expect("insert");
     fs::remove_file(&path).expect("delete it externally");
 
-    let refusal = perform(&document.save_request(), &live()).expect_err("must refuse");
+    let refusal = perform(
+        &document
+            .save_request()
+            .expect("an opened document has a target"),
+        &live(),
+    )
+    .expect_err("must refuse");
     assert!(matches!(refusal, SaveRefusal::TargetMissing { .. }));
     assert!(entries(&root).is_empty(), "no file and no temporary");
 
@@ -486,7 +509,8 @@ fn an_interrupted_save_leaves_the_original_and_no_temporary() {
     // reproduced, which is the last moment before the rename publishes it.
     let cancellation = CancellationToken::new();
     cancellation.cancel();
-    let refusal = perform(&document.save_request(), &cancellation).expect_err("must refuse");
+    let refusal = perform(&document.save_request().expect("a target"), &cancellation)
+        .expect_err("must refuse");
 
     assert_eq!(refusal, SaveRefusal::Cancelled);
     assert_eq!(fs::read(&path).expect("read back"), b"contenido original\n");
@@ -516,7 +540,13 @@ fn a_save_that_cannot_create_its_temporary_leaves_the_original_intact() {
         .expect("insert");
 
     fs::set_permissions(&root, Permissions::from_mode(0o500)).expect("seal the directory");
-    let refusal = perform(&document.save_request(), &live()).expect_err("must refuse");
+    let refusal = perform(
+        &document
+            .save_request()
+            .expect("an opened document has a target"),
+        &live(),
+    )
+    .expect_err("must refuse");
     fs::set_permissions(&root, Permissions::from_mode(0o700)).expect("unseal the directory");
 
     assert!(matches!(refusal, SaveRefusal::Io { .. }), "{refusal:?}");
@@ -537,7 +567,7 @@ fn a_save_report_older_than_the_document_does_not_clear_the_newer_edit() {
     document
         .insert(document.buffer().end_position(), "primera\n")
         .expect("insert");
-    let request = document.save_request();
+    let request = document.save_request().expect("a target");
 
     // The user keeps typing while the worker is still writing.
     document

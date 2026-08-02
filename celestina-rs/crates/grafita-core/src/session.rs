@@ -27,6 +27,7 @@ use crate::history::Revision;
 use crate::open::{Limits, OpenRefusal, OpenedFile, ProbeOutcome};
 use crate::position::PositionError;
 use crate::probe::Classification;
+use crate::recent::Recent;
 use crate::save::{Durability, SaveRefusal, SaveReport};
 use crate::search::{LiveSearch, Query};
 use crate::worker::{Completion, Job};
@@ -93,6 +94,10 @@ pub enum Event {
     /// The answer to [`DocumentSession::classify`]: whether this path holds
     /// editable text. Nothing was opened — the caller asked a question.
     Classified { path: PathBuf, editable: bool },
+    /// A save was asked for on a document that has no file yet. The host asks
+    /// the user where it goes and comes back through
+    /// [`DocumentSession::save_as`].
+    DestinationNeeded,
 }
 
 /// Why a path was not opened for editing.
@@ -229,6 +234,66 @@ impl DocumentSession {
         self.search.deselect();
         self.refresh_search();
         self.push_projection()
+    }
+
+    /// Starts a document that belongs to no file yet.
+    ///
+    /// Saving it will ask where it goes; until then it is a perfectly ordinary
+    /// document that simply has no name.
+    pub fn new_document(&mut self) -> Outcome {
+        let generation = self.clock.issue().unwrap_or_default();
+        let document = Document::empty(generation);
+        let text = document.display_text().to_owned();
+        self.latest = generation;
+        self.state = SessionState {
+            active: true,
+            name: String::new(),
+            encoding: Some(document.encoding()),
+            ..SessionState::default()
+        };
+        self.document = Some(document);
+        self.close_after_save = false;
+        self.search = LiveSearch::default();
+        self.refresh();
+        Outcome::event(Event::PushText { text, caret: 0 })
+    }
+
+    /// The documents opened most recently that still exist, newest first.
+    ///
+    /// Read on demand rather than held: another Grafita window may have opened
+    /// something since, and a stale list is the one thing a history must not be.
+    #[must_use]
+    pub fn recent_documents() -> Vec<PathBuf> {
+        Recent::load().existing()
+    }
+
+    /// Whether the open document already knows where it is saved.
+    #[must_use]
+    pub fn has_destination(&self) -> bool {
+        self.document.as_ref().is_some_and(Document::has_target)
+    }
+
+    /// Writes the document to `path` and binds it there.
+    ///
+    /// The write happens on the host's worker like any other, but it is a
+    /// different job: there is no prior identity to re-verify, because the
+    /// document was never bound to this file.
+    pub fn save_as(&mut self, path: &Path) -> Outcome {
+        let Some(document) = self.document.as_ref() else {
+            return Outcome::nothing();
+        };
+        if path.as_os_str().is_empty() {
+            return Outcome::nothing();
+        }
+        self.state.busy = true;
+        self.state.failure = None;
+        self.state.saved = None;
+        Outcome::job(Job::SaveAs {
+            path: path.to_path_buf(),
+            bytes: document.to_bytes(),
+            generation: document.generation(),
+            revision: document.revision(),
+        })
     }
 
     /// Moves the caret to the start of a line, counting from 1.
@@ -432,8 +497,14 @@ impl DocumentSession {
         let Some(document) = self.document.as_ref() else {
             return Outcome::nothing();
         };
+        // No file yet: the host has to ask where this document goes. That is
+        // an event, not a refusal — a new document is a perfectly good document
+        // that simply has not been given a name.
+        let Some(request) = document.save_request() else {
+            return Outcome::event(Event::DestinationNeeded);
+        };
         let job = Job::Save {
-            request: Box::new(document.save_request()),
+            request: Box::new(request),
             generation: document.generation(),
         };
         self.state.busy = true;
@@ -486,6 +557,15 @@ impl DocumentSession {
                 }
                 self.state.busy = false;
                 self.receive_open(*result)
+            }
+            Completion::Created {
+                generation, result, ..
+            } => {
+                if self.document.as_ref().map(Document::generation) != Some(generation) {
+                    return Outcome::nothing();
+                }
+                self.state.busy = false;
+                self.receive_created(*result)
             }
             Completion::Saved {
                 generation, result, ..
@@ -580,11 +660,24 @@ impl DocumentSession {
                 self.document = Some(document);
                 self.close_after_save = false;
                 self.refresh();
+                // Remembered only once it actually opened: a file that refused
+                // has no business in a list of things you can reopen.
+                let mut recent = Recent::load();
+                recent.record(&self.state.path);
+                recent.store();
                 Outcome::event(Event::PushText { text, caret: 0 })
             }
             Err(refusal) => {
                 let path = refusal_path(&refusal);
                 let reason = decline_reason(&refusal);
+                // A remembered document that no longer opens stops being
+                // offered: a recent list that leads nowhere is worse than a
+                // short one.
+                if !path.as_os_str().is_empty() {
+                    let mut recent = Recent::load();
+                    recent.forget(&path);
+                    recent.store();
+                }
                 self.state.failure = Some(Failure::Open(refusal));
                 Outcome::event(Event::Declined { path, reason })
             }
@@ -616,6 +709,37 @@ impl DocumentSession {
             return self.close();
         }
         Outcome::nothing()
+    }
+
+    /// Takes the answer to a "save as": the document adopts the file that was
+    /// just written and becomes an ordinary saved document.
+    fn receive_created(&mut self, result: Result<crate::target::Target, SaveRefusal>) -> Outcome {
+        let Some(document) = self.document.as_mut() else {
+            return Outcome::nothing();
+        };
+        match result {
+            Ok(target) => {
+                let name = file_name(target.resolved());
+                let path = target.resolved().to_path_buf();
+                document.adopt_target(target);
+                self.state.name = name;
+                self.state.path = path;
+                self.state.saved = Some(Durability::Durable);
+                self.state.failure = None;
+                self.refresh();
+                let closing = self.close_after_save;
+                self.close_after_save = false;
+                if closing {
+                    return self.close();
+                }
+                Outcome::nothing()
+            }
+            Err(refusal) => {
+                self.state.failure = Some(Failure::Save(refusal));
+                self.close_after_save = false;
+                Outcome::nothing()
+            }
+        }
     }
 
     fn close(&mut self) -> Outcome {

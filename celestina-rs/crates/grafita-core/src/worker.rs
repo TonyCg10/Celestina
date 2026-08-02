@@ -52,6 +52,14 @@ pub enum Job {
         generation: Generation,
         limits: Limits,
     },
+    /// Write a document to a file it does not own yet, and report the target it
+    /// may adopt. Never superseded: it is work the user asked for.
+    SaveAs {
+        path: PathBuf,
+        bytes: Vec<u8>,
+        generation: Generation,
+        revision: Revision,
+    },
     /// Write a document, or refuse without touching the original.
     ///
     /// `generation` names the open document this write belongs to. Without it a
@@ -90,6 +98,12 @@ pub enum Completion {
         generation: Generation,
         revision: Revision,
         result: Box<Result<SaveReport, SaveRefusal>>,
+    },
+    /// The answer to [`Job::SaveAs`]: the file that now exists.
+    Created {
+        generation: Generation,
+        revision: Revision,
+        result: Box<Result<crate::target::Target, SaveRefusal>>,
     },
 }
 
@@ -300,6 +314,16 @@ fn run(queued: &Queued) -> Completion {
             generation: *generation,
             result: Box::new(open(path, *generation, *limits, cancellation)),
         },
+        Job::SaveAs {
+            path,
+            bytes,
+            generation,
+            revision,
+        } => Completion::Created {
+            generation: *generation,
+            revision: *revision,
+            result: Box::new(crate::save::create(path, bytes)),
+        },
         Job::Save {
             request,
             generation,
@@ -455,7 +479,7 @@ mod tests {
 
         worker
             .submit(Job::Save {
-                request: Box::new(document.save_request()),
+                request: Box::new(document.save_request().expect("a target")),
                 generation: document.generation(),
             })
             .expect("submit");
