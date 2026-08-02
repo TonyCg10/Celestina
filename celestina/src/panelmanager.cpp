@@ -16,6 +16,7 @@
 #include "panelblurcontroller.h"
 #include "panelmenucontroller.h"
 #include "shellprovidersclient.h"
+#include "traywatcher.h"
 #include "surfacemanager.h"
 
 namespace {
@@ -52,6 +53,7 @@ PanelManager::PanelManager(
     NiriClient *niri,
     DevicesClient *phone,
     ShellProvidersClient *providers,
+    TrayWatcher *tray,
     PanelMenuController *menu,
     bool reducedMotion
 )
@@ -61,6 +63,7 @@ PanelManager::PanelManager(
     , m_niri(niri)
     , m_phone(phone)
     , m_providers(providers)
+    , m_tray(tray)
     , m_menu(menu)
     , m_reducedMotion(reducedMotion)
 {
@@ -144,6 +147,7 @@ bool PanelManager::ensurePanel(QScreen *screen)
         {QStringLiteral("niriProvider"), QVariant::fromValue(m_niri.data())},
         {QStringLiteral("phoneProvider"), QVariant::fromValue(m_phone.data())},
         {QStringLiteral("providerSource"), QVariant::fromValue(m_providers.data())},
+        {QStringLiteral("traySource"), QVariant::fromValue(m_tray.data())},
     };
     QObject *rootObject = m_component.createWithInitialProperties(
         initialProperties
@@ -174,6 +178,12 @@ bool PanelManager::ensurePanel(QScreen *screen)
             SIGNAL(contextMenuRequested(int, int, QVariant)),
             this,
             SLOT(panelMenuRequested(int, int, QVariant))
+        );
+        connect(
+            window,
+            SIGNAL(trayMenuRequested(QString, QString, int, int)),
+            this,
+            SLOT(trayMenuRequested(QString, QString, int, int))
         );
     }
 
@@ -221,6 +231,20 @@ void PanelManager::panelMenuRequested(
         return;
 
     m_menu->open(panel, QPoint(globalX, globalY), workspaces);
+}
+
+void PanelManager::trayMenuRequested(
+    const QString &service,
+    const QString &path,
+    int globalX,
+    int globalY
+)
+{
+    auto *panel = qobject_cast<QWindow *>(sender());
+    if (!panel || !m_menu)
+        return;
+
+    m_menu->requestTrayMenu(panel, QPoint(globalX, globalY), service, path);
 }
 
 void PanelManager::removePanel(QScreen *screen)

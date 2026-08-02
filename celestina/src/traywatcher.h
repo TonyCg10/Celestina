@@ -1,0 +1,106 @@
+#pragma once
+
+#include <QDBusContext>
+#include <QHash>
+#include <QObject>
+#include <QVariantList>
+
+#include <QSharedPointer>
+
+#include "trayicons.h"
+#include "trayitems.h"
+#include "traymenu.h"
+
+class QDBusServiceWatcher;
+
+// The panel's StatusNotifierItem host.
+//
+// It registers as a host with whatever watcher owns the session, reads each
+// item's properties and publishes what QML can show. Everything is
+// asynchronous: these are other applications' processes, and one of them being
+// slow to answer must never be something the panel waits for.
+//
+// It is a *host*, not the watcher. Noctalia owns `org.kde.StatusNotifierWatcher`
+// on this session today; owning it is what R8 needs before Noctalia leaves,
+// because with no watcher at all no application publishes a tray item to
+// anyone.
+//
+// This is manual C++ for the same reason `DevicesClient` is: the conversation
+// is QtDBus, the icons and menus at the other end of it are Qt's to render, and
+// no part of it is domain logic. What an item *means* lives in `trayitems.h`.
+class TrayWatcher final : public QObject, protected QDBusContext
+{
+    Q_OBJECT
+    Q_PROPERTY(bool available READ available NOTIFY changed)
+    Q_PROPERTY(QVariantList items READ items NOTIFY changed)
+
+public:
+    TrayWatcher(QSharedPointer<TrayIconCache> icons, QObject *parent = nullptr);
+
+    bool available() const { return m_available; }
+    // Each item as QML reads it, with the source of whatever icon could be
+    // resolved for it — empty when neither a theme nor the item's own pixels
+    // gave one, which the drawer answers with the item's name.
+    QVariantList items() const;
+
+    // Asks an item to do what a left click means to it. A click is a request
+    // here too: the application decides what happens, and the panel learns
+    // nothing back except through the item's own properties.
+    Q_INVOKABLE void activate(const QString &service, const QString &path, int x, int y);
+    Q_INVOKABLE void secondaryActivate(
+        const QString &service,
+        const QString &path,
+        int x,
+        int y
+    );
+    // Asks an item for its menu. The answer arrives as `menuReady`, because
+    // reading another application's menu is a conversation with it — the item
+    // is told the menu is about to show, and may rebuild it before answering.
+    Q_INVOKABLE void requestMenu(const QString &service, const QString &path);
+    // Tells an item one of its entries was chosen. What that does is the
+    // application's business; the panel learns nothing back.
+    Q_INVOKABLE void triggerMenuEntry(
+        const QString &service,
+        const QString &path,
+        int entryId
+    );
+
+signals:
+    void menuReady(const QString &service, const QString &path, const QVariantList &entries);
+
+    void changed();
+
+private slots:
+    void watcherOwnerChanged(const QString &service, const QString &was, const QString &now);
+    void itemRegistered(const QString &entry);
+    void itemUnregistered(const QString &entry);
+    void itemPropertiesChanged();
+
+private:
+    void attach();
+    void refreshRegistrations();
+    void readItem(const QString &service, const QString &path);
+    void watchItem(const QString &service, const QString &path);
+    void publish();
+    void setUnavailable();
+    void readMenuLayout(const QString &service, const QString &menuPath, const QString &itemPath);
+    // Resolves the item's icon into the shared cache and returns the source
+    // QML should ask for, or an empty string when there is none to draw.
+    QString resolveIcon(const TrayItem &item, const QVariantMap &properties);
+
+    // Registration order is the order the drawer shows, so the list is kept
+    // rather than sorted: an application that has been there all session should
+    // not move because another one restarted.
+    QList<QPair<QString, QString>> m_registrations;
+    QHash<QString, TrayItem> m_read;
+    // The icon source per item key, and how many times it has changed: an
+    // application that swaps its icon keeps the same key, so the number is what
+    // makes QML ask again.
+    QHash<QString, QString> m_iconSources;
+    QHash<QString, int> m_iconRevisions;
+    QSharedPointer<TrayIconCache> m_icons;
+    TrayItems m_items;
+    QDBusServiceWatcher *m_watcherPresence;
+    bool m_available = false;
+    bool m_hostRegistered = false;
+};

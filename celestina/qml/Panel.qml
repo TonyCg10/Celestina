@@ -13,9 +13,12 @@ Window {
     required property var phoneProvider
     // The aggregate provider helper's client: one bridge, many providers.
     required property var providerSource
+    // The system tray host: other applications' own controls.
+    required property var traySource
     property bool compositorBlurAvailable: false
     // Forwarded to the host, which owns every surface this window does not.
     signal contextMenuRequested(int globalX, int globalY, var workspaces)
+    signal trayMenuRequested(string service, string path, int globalX, int globalY)
 
     width: Screen.width
     height: 40
@@ -83,6 +86,14 @@ Window {
         anchors.leftMargin: CelestinaTheme.space2xl
         anchors.verticalCenter: parent.verticalCenter
         trailing: true
+
+        TrayDrawer {
+            anchors.verticalCenter: parent.verticalCenter
+            items: panel.traySource.items
+            onActivated: (service, path, globalX, globalY) => panel.traySource.activate(service, path, globalX, globalY)
+            onSecondaryActivated: (service, path, globalX, globalY) => panel.traySource.secondaryActivate(service, path, globalX, globalY)
+            onMenuRequested: (service, path, globalX, globalY) => panel.trayMenuRequested(service, path, globalX, globalY)
+        }
 
         SessionStatus {
             anchors.verticalCenter: parent.verticalCenter

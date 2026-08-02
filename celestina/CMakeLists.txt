@@ -85,6 +85,16 @@ qt_add_executable(celestina
     src/panelmenusurface.cpp
     src/panelmenucontroller.h
     src/panelmenucontroller.cpp
+    src/trayitems.h
+    src/trayitems.cpp
+    src/traywatcher.h
+    src/traywatcher.cpp
+    src/trayicons.h
+    src/trayicons.cpp
+    src/trayiconprovider.h
+    src/trayiconprovider.cpp
+    src/traymenu.h
+    src/traymenu.cpp
 )
 add_dependencies(celestina celestina-helpers)
 
@@ -96,6 +106,8 @@ add_dependencies(celestina celestina-helpers)
 set_source_files_properties(../celestina-style/icons/phone.svg PROPERTIES QT_RESOURCE_ALIAS phone.svg)
 set_source_files_properties(../celestina-style/icons/battery-charging.svg PROPERTIES QT_RESOURCE_ALIAS battery-charging.svg)
 set_source_files_properties(../celestina-style/icons/scissors.svg PROPERTIES QT_RESOURCE_ALIAS scissors.svg)
+set_source_files_properties(../celestina-style/icons/chevron-down.svg PROPERTIES QT_RESOURCE_ALIAS chevron-down.svg)
+set_source_files_properties(../celestina-style/icons/chevron-right.svg PROPERTIES QT_RESOURCE_ALIAS chevron-right.svg)
 
 # The source directory is named for the repository while its QML URI is
 # CelestinaStyle. Give qmllint the same URI-shaped symlink main.cpp provisions
@@ -124,6 +136,8 @@ qt_add_qml_module(celestina
         qml/MediaMini.qml
         qml/AudioLevel.qml
         qml/SessionStatus.qml
+        qml/TrayDrawer.qml
+        qml/TrayMenu.qml
         qml/CaptureButton.qml
         qml/PanelMenu.qml
     RESOURCES
@@ -176,6 +190,33 @@ if(BUILD_TESTING)
     target_include_directories(celestina-provider-states-test PRIVATE src)
     target_link_libraries(celestina-provider-states-test PRIVATE Qt6::Test)
     add_test(NAME celestina-provider-states COMMAND celestina-provider-states-test)
+
+    qt_add_executable(celestina-tray-items-test
+        tests/trayitems_test.cpp
+        src/trayitems.h
+        src/trayitems.cpp
+    )
+    target_include_directories(celestina-tray-items-test PRIVATE src)
+    target_link_libraries(celestina-tray-items-test PRIVATE Qt6::Test Qt6::DBus)
+    add_test(NAME celestina-tray-items COMMAND celestina-tray-items-test)
+
+    qt_add_executable(celestina-tray-icons-test
+        tests/trayicons_test.cpp
+        src/trayicons.h
+        src/trayicons.cpp
+    )
+    target_include_directories(celestina-tray-icons-test PRIVATE src)
+    target_link_libraries(celestina-tray-icons-test PRIVATE Qt6::Test Qt6::Gui)
+    add_test(NAME celestina-tray-icons COMMAND celestina-tray-icons-test)
+
+    qt_add_executable(celestina-tray-menu-test
+        tests/traymenu_test.cpp
+        src/traymenu.h
+        src/traymenu.cpp
+    )
+    target_include_directories(celestina-tray-menu-test PRIVATE src)
+    target_link_libraries(celestina-tray-menu-test PRIVATE Qt6::Test)
+    add_test(NAME celestina-tray-menu COMMAND celestina-tray-menu-test)
 
     qt_add_executable(celestina-shell-commandline-test
         tests/shellcommandline_test.cpp

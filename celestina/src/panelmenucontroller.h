@@ -36,9 +36,31 @@ public slots:
         const QPoint &globalAnchor,
         const QVariant &workspaces
     );
+    // A tray menu is a conversation with the application that owns it. The
+    // controller asks and draws; who holds that conversation is the host's
+    // wiring, so nothing here knows the tray host exists.
+    void requestTrayMenu(
+        QWindow *panel,
+        const QPoint &globalAnchor,
+        const QString &service,
+        const QString &path
+    );
     void close();
 
+signals:
+    // "Ask this item for its menu", and "this entry was chosen".
+    void trayMenuNeeded(const QString &service, const QString &path);
+    void trayEntryTriggered(const QString &service, const QString &path, int entryId);
+
+public slots:
+    void trayMenuReady(
+        const QString &service,
+        const QString &path,
+        const QVariantList &entries
+    );
+
 private slots:
+    void trayEntryChosen(int entryId);
     // A menu item is the same request a click on the strip makes.
     void activate(const QString &output, int index);
 
@@ -46,7 +68,14 @@ private:
     QWindow *createMenuWindow(const QVariant &workspaces);
 
     QQmlComponent m_component;
+    QQmlComponent m_trayComponent;
     QPointer<NiriClient> m_niri;
+    // The menu that was asked for and has not answered yet: where to put it,
+    // and whose it is.
+    QPointer<QWindow> m_pendingPanel;
+    QPoint m_pendingAnchor;
+    QString m_pendingService;
+    QString m_pendingPath;
     PanelMenuSurface *m_surface;
     bool m_enabled;
 };

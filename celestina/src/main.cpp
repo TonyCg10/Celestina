@@ -24,6 +24,8 @@
 #include "shellprovidersclient.h"
 #include "shellservice.h"
 #include "surfacemanager.h"
+#include "trayiconprovider.h"
+#include "traywatcher.h"
 
 namespace {
 bool reducedMotionRequested()
@@ -217,6 +219,12 @@ int main(int argc, char *argv[])
     // to it, shared by every output rather than created per widget.
     auto *providers = new ShellProvidersClient(&app);
 
+    // The tray host and the provider that draws what it resolved share one
+    // cache; the engine owns the provider, so neither of them owns the cache.
+    auto trayIcons = QSharedPointer<TrayIconCache>::create();
+    engine.addImageProvider(QStringLiteral("tray"), new TrayIconProvider(trayIcons));
+    auto *tray = new TrayWatcher(trayIcons, &app);
+
     // The command channel is claimed before a single surface is mapped: a
     // second panel-mode process must defer to the owner, not flash a duplicate
     // panel first. A session without a bus keeps its panels and loses only the
@@ -242,6 +250,28 @@ int main(int argc, char *argv[])
     if (!menu->isEnabled())
         qInfo() << "Celestina is running without the panel context menu.";
 
+    // The menu controller draws menus; the tray host holds the conversation
+    // with the application that owns one. Wiring them here keeps the controller
+    // from knowing that a tray exists at all.
+    QObject::connect(
+        menu,
+        &PanelMenuController::trayMenuNeeded,
+        tray,
+        &TrayWatcher::requestMenu
+    );
+    QObject::connect(
+        menu,
+        &PanelMenuController::trayEntryTriggered,
+        tray,
+        &TrayWatcher::triggerMenuEntry
+    );
+    QObject::connect(
+        tray,
+        &TrayWatcher::menuReady,
+        menu,
+        &PanelMenuController::trayMenuReady
+    );
+
     // The manager receives the session's motion preference rather than reading
     // the environment itself: bootstrap owns the process environment, and the
     // chooser above reads the same value from the same place.
@@ -251,6 +281,7 @@ int main(int argc, char *argv[])
         niri,
         phone,
         providers,
+        tray,
         menu,
         reducedMotionRequested()
     );

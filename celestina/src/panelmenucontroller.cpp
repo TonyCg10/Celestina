@@ -15,6 +15,7 @@ PanelMenuController::PanelMenuController(
 )
     : QObject(parent)
     , m_component(engine)
+    , m_trayComponent(engine)
     , m_niri(niri)
     , m_surface(new PanelMenuSurface(this))
     , m_enabled(enabledByEnvironment())
@@ -22,6 +23,7 @@ PanelMenuController::PanelMenuController(
     if (!m_enabled)
         return;
 
+    m_trayComponent.loadFromModule("CelestinaDesktop", "TrayMenu");
     m_component.loadFromModule("CelestinaDesktop", "PanelMenu");
     if (!m_component.isReady()) {
         qCritical().noquote()
@@ -111,6 +113,68 @@ void PanelMenuController::open(
 
     if (!m_surface->open(menu, panel, anchor))
         delete menu;
+}
+
+void PanelMenuController::requestTrayMenu(
+    QWindow *panel,
+    const QPoint &globalAnchor,
+    const QString &service,
+    const QString &path
+)
+{
+    if (!m_enabled || !panel)
+        return;
+
+    close();
+    m_pendingPanel = panel;
+    m_pendingAnchor = globalAnchor;
+    m_pendingService = service;
+    m_pendingPath = path;
+    emit trayMenuNeeded(service, path);
+}
+
+void PanelMenuController::trayMenuReady(
+    const QString &service,
+    const QString &path,
+    const QVariantList &entries
+)
+{
+    // An answer to a menu nobody is waiting for — a second right-click, or one
+    // that arrived after the panel moved on — is not a menu to open.
+    if (service != m_pendingService || path != m_pendingPath || !m_pendingPanel)
+        return;
+    if (entries.isEmpty())
+        return;
+
+    QObject *rootObject = m_trayComponent.createWithInitialProperties(QVariantMap {
+        {QStringLiteral("entries"), entries},
+        {QStringLiteral("reducedMotion"),
+         qEnvironmentVariableIsSet("CELESTINA_REDUCED_MOTION")},
+    });
+    auto *window = qobject_cast<QWindow *>(rootObject);
+    if (!window) {
+        qCritical().noquote()
+            << "Celestina could not create a tray menu:" << m_trayComponent.errorString();
+        delete rootObject;
+        return;
+    }
+
+    connect(window, SIGNAL(chosen(int)), this, SLOT(trayEntryChosen(int)));
+    connect(window, SIGNAL(dismissed()), this, SLOT(close()));
+
+    const int inset = window->property("shadowMargin").toInt();
+    const QPoint anchor(
+        m_pendingAnchor.x() - inset,
+        m_pendingPanel->geometry().bottom() + 1 - inset
+    );
+    if (!m_surface->open(window, m_pendingPanel, anchor))
+        delete window;
+}
+
+void PanelMenuController::trayEntryChosen(int entryId)
+{
+    emit trayEntryTriggered(m_pendingService, m_pendingPath, entryId);
+    close();
 }
 
 void PanelMenuController::close()

@@ -11,6 +11,7 @@ class DevicesClient;
 class NiriClient;
 class PanelMenuController;
 class ShellProvidersClient;
+class TrayWatcher;
 class QGuiApplication;
 class QQmlEngine;
 class QScreen;
@@ -33,6 +34,7 @@ public:
         NiriClient *niri,
         DevicesClient *phone,
         ShellProvidersClient *providers,
+        TrayWatcher *tray,
         PanelMenuController *menu,
         bool reducedMotion
     );
@@ -45,6 +47,13 @@ private slots:
     // The panel's QML root asks for a context menu at a screen point; the
     // manager knows which window asked and hands both to the menu controller.
     void panelMenuRequested(int globalX, int globalY, const QVariant &workspaces);
+    // A tray item's own menu, asked for from the panel that shows it.
+    void trayMenuRequested(
+        const QString &service,
+        const QString &path,
+        int globalX,
+        int globalY
+    );
 
 private:
     bool ensurePanel(QScreen *screen);
@@ -55,6 +64,7 @@ private:
     QPointer<NiriClient> m_niri;
     QPointer<DevicesClient> m_phone;
     QPointer<ShellProvidersClient> m_providers;
+    QPointer<TrayWatcher> m_tray;
     // Disposable until R0-E picks a popup surface: the manager only forwards
     // the panel's request to it and owns no menu state of its own.
     QPointer<PanelMenuController> m_menu;

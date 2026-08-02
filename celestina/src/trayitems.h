@@ -1,0 +1,81 @@
+#pragma once
+
+#include <QList>
+#include <QString>
+#include <QVariantMap>
+
+// What a StatusNotifierItem is, once the panel has finished distrusting it.
+//
+// Tray items are other applications' controls, published by whatever toolkit
+// they happen to use, and the ones on this session already disagree with each
+// other: one omits `ItemIsMenu` entirely, another's `IconName` fails to read at
+// all and offers only raw pixels, a third has an empty title. So nothing here
+// requires a field to exist — it decides what the panel can show given what
+// arrived, and says plainly when that is nothing.
+//
+// Pure on purpose: the D-Bus conversation lives in `TrayWatcher`, and every
+// rule about what an item *means* is testable against a plain map.
+struct TrayItem {
+    // The bus name and object path that answer for this item, together its
+    // identity: an application may publish more than one.
+    QString service;
+    QString path;
+
+    QString id;
+    // `Title` when the item gave one, its `Id` otherwise — never empty, because
+    // an item with no name is one the user cannot tell from another.
+    QString title;
+    // "active", "passive" or "attention". A drawer shows all three; where each
+    // belongs is the panel's business, not this file's.
+    QString status;
+    // A themed icon name from the application's own icon theme, empty when it
+    // named none.
+    QString iconName;
+    // An icon theme directory the application ships with itself. Absolute or
+    // ignored: a relative path from another process names nothing this panel
+    // can resolve.
+    QString iconThemePath;
+    // Whether the item published raw pixels. The panel needs this because an
+    // item may have those and no name at all.
+    bool hasPixmap = false;
+    // The DBusMenu object path, empty when the item published none.
+    QString menuPath;
+
+    bool operator==(const TrayItem &other) const;
+};
+
+// Splits a watcher's registration string, which is a bus name with the object
+// path appended — `:1.19/org/ayatana/NotificationItem/nm_applet`. An entry with
+// no path names the specification's default one.
+//
+// Returns false for anything that is not a usable registration.
+bool parseTrayRegistration(const QString &entry, QString *service, QString *path);
+
+// Reads what `org.freedesktop.DBus.Properties.GetAll` answered for one item.
+// Absent keys are normal — `GetAll` omits a property whose getter failed — so
+// this fills in what it can and never fails for a missing field.
+TrayItem readTrayItem(
+    const QString &service,
+    const QString &path,
+    const QVariantMap &properties
+);
+
+// The items the panel is showing, in the order the watcher reported them.
+//
+// It is a value, not a live object: the watcher hands over a whole list and
+// this says whether what QML reads has changed.
+class TrayItems
+{
+public:
+    // Returns whether the published list changed.
+    bool replace(const QList<TrayItem> &items);
+    bool clear();
+
+    QList<TrayItem> items() const { return m_items; }
+    // One map per item, ready for QML.
+    QVariantList toVariantList() const;
+    bool isEmpty() const { return m_items.isEmpty(); }
+
+private:
+    QList<TrayItem> m_items;
+};
