@@ -112,6 +112,17 @@ Window {
                 "audio", direction > 0 ? "louder" : "quieter")
         }
 
+        BrightnessLevel {
+            anchors.verticalCenter: parent.verticalCenter
+            reading: panel.providerSource.providers.brightness
+            outputName: panel.outputName
+            // The step names its own monitor: one helper serves every panel,
+            // and each panel speaks only for the output it is mapped on.
+            onStepRequested: (direction) => panel.providerSource.sendCommand(
+                "brightness", direction > 0 ? "brighter" : "dimmer",
+                {"output": panel.outputName})
+        }
+
         CaptureButton {
             id: captureButton
 

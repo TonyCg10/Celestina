@@ -66,6 +66,20 @@ archivo mandan sobre cualquier detalle de aquellos.
 - Sin bus de sesión el panel sigue funcionando y sólo se pierde el canal: D-Bus
   degrada el servicio, nunca la shell.
 
+## Bandeja del sistema
+
+- `TrayWatcher` es *host*, no watcher: se registra con el que posea la sesión.
+  Poseer `org.kde.StatusNotifierWatcher` es requisito de R8; sin watcher ninguna
+  aplicación publica su item a nadie.
+- Un item es el proceso de otra aplicación y su protocolo se incumple en la
+  práctica: propiedades ausentes, `Get` que falla, títulos vacíos. Nada se da
+  por presente, `GetAll` es la lectura y toda llamada es asíncrona.
+- Excepción explícita al catálogo cerrado de `celestina-style`: los iconos de
+  items de bandeja llegan como nombre de tema o píxeles crudos de otra
+  aplicación y se pintan como tales. La regla protege el aspecto *de la suite*;
+  el icono de un item ajeno es identidad de esa app, no de Celestina. No amplíes
+  esta excepción a iconografía propia.
+
 ## Superficies y efectos
 
 - Hay una superficie layer-shell por `QScreen`: borde superior, zona exclusiva

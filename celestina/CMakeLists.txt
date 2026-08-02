@@ -136,6 +136,7 @@ qt_add_qml_module(celestina
         qml/MediaMini.qml
         qml/AudioLevel.qml
         qml/SessionStatus.qml
+        qml/BrightnessLevel.qml
         qml/TrayDrawer.qml
         qml/TrayMenu.qml
         qml/CaptureButton.qml

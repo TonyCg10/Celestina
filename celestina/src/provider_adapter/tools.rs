@@ -30,6 +30,13 @@ pub fn lock_runtime(runtime: &Mutex<ProviderRuntime>) -> MutexGuard<'_, Provider
 /// Runs a short-lived tool and returns its output, killing it if it outstays
 /// its deadline: a hung tool must not take its provider down with it.
 pub fn run_bounded(program: &str, args: &[&str]) -> Option<String> {
+    run_bounded_with(program, args, TOOL_TIMEOUT)
+}
+
+/// The same, for a tool whose own pace is the reason it is slow. DDC is a
+/// physical conversation with a monitor and takes about a second; giving it the
+/// panel's timeout would mean never reading a brightness at all.
+pub fn run_bounded_with(program: &str, args: &[&str], timeout: Duration) -> Option<String> {
     let mut child = Command::new(program)
         .args(args)
         .stdin(Stdio::null())
@@ -38,7 +45,7 @@ pub fn run_bounded(program: &str, args: &[&str]) -> Option<String> {
         .spawn()
         .ok()?;
 
-    let deadline = Instant::now() + TOOL_TIMEOUT;
+    let deadline = Instant::now() + timeout;
     loop {
         match child.try_wait() {
             Ok(Some(_)) => break,

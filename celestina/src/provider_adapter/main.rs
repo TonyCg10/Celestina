@@ -28,6 +28,7 @@ use celestina_shell_core::lines::{read_bounded_line, HostLine, SharedWriter};
 use celestina_shell_core::runtime::ProviderRuntime;
 
 mod audio;
+mod brightness;
 mod media;
 mod session;
 mod sysmon;
@@ -70,6 +71,7 @@ fn perform(command: &Command, runtime: &Mutex<ProviderRuntime>) -> Result<(), St
         sysmon::NAME => sysmon::action(&command.verb),
         audio::NAME => audio::action(&command.verb, runtime, &command.provider),
         media::NAME => media::action(&command.verb),
+        brightness::NAME => brightness::action(&command.verb, &command.options),
         session::POWER if command.verb == "cycle" => session::cycle_power_profile(),
         provider => Err(format!(
             "'{provider}' does not serve the verb '{}'",
@@ -176,6 +178,7 @@ fn run() -> io::Result<()> {
     sysmon::spawn(&runtime)?;
     media::spawn(&runtime)?;
     audio::spawn(&runtime)?;
+    brightness::spawn(&runtime)?;
     session::spawn(&runtime)?;
 
     let worker_runtime = Arc::clone(&runtime);

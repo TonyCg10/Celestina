@@ -479,10 +479,12 @@ slice's implementation details; this file owns their status.
       middle-click still opens the external mixer
 - [x] R1-F — read-only NetworkManager/BlueZ indicators plus confirmed
       power-profile indicator/cycle
-- [ ] R1-G — per-output DDC brightness, with coalesced scroll steps and unknown
+- [x] R1-G — per-output DDC brightness, with coalesced scroll steps and unknown
       state instead of GUI blocking or stale values
 - [ ] R1-H — StatusNotifierItem host + DBusMenu drawer, including passive items,
-      landed as the phase's separate final provider slice
+      landed as the phase's separate final provider slice. **Landed 2026-07-31 (below):
+      host, icons, drawer and the DBusMenu bridge. What remains is owning the
+      watcher, which R8 needs, and the live acceptance**
 - [ ] R1-I — integrated bar exit accepted on the real session and exact
       persistent hide/rollback evidence recorded here
 
@@ -692,6 +694,154 @@ a profile, cycling that wraps and refuses what it cannot place), 52 crate tests
 in total, the helper publishing all five providers from this machine, 7/7 CTest
 and the guard green. **Not exercised:** the click and the wheel on a real panel,
 and how any of it looks while the network changes.
+
+**R1-G evidence (2026-07-31).** DDC is a physical conversation with a monitor,
+and measuring it first is what decided the design: one read took **9.1 s cold**
+and about **1 s warm** on this hardware — twelve times the timeout every other
+tool in the helper runs under. So brightness got its own thread, its own
+20-second bound, and no polling at all: it reads once, re-reads after a change
+it made, and otherwise looks again only every five minutes, because nothing but
+this panel and the monitor's own buttons moves it.
+
+A wheel notch is answered instantly and applied later. The step is recorded
+against a target and the thread applies the newest one per monitor, so a burst
+of ten notches is one write, not ten, and the panel then shows what the monitor
+**settled on** rather than what it was asked for.
+
+Three states are kept apart, and this machine produced all three on its own: a
+monitor that does not answer DDC has no brightness to offer and no widget; one
+that answers but has not said a value yet is *unknown*, drawn empty — never
+zero, which would read as dark; and a number is a value read back. Worth
+recording for later phases: **DDC here is intermittent.** The same `detect`
+answered `Invalid display` for all three monitors one minute and listed all
+three the next, so finding none is not a verdict — the search retries on its own
+short interval instead of waiting out the full refresh.
+
+The widget draws a gauge, not a percentage, with the number on hover: the panel
+already shows a bare `60 %` for volume a few pixels away, and two bare
+percentages side by side say nothing about which is which.
+
+Evidence: six new crate tests (an `Invalid display` block refused as a display,
+`card1-DP-1` read as the compositor's `DP-1`, percent of a monitor's own
+non-100 range, an error where a reading should be, steps clamped instead of
+wrapped at both ends and against `i32::MAX`), the helper publishing
+`{"DP-1": 50, "DP-2": 50, "HDMI-A-1": 50}` from these three monitors, 7/7 CTest,
+`all_qmllint` and the guard green. **Not exercised:** the wheel on a real panel,
+and therefore the coalescing under a real burst.
+
+**R1-H — the host (2026-07-31).** Two decisions came before any code.
+
+*Where it lives:* **C++ with QtDBus**, on the author's decision, against the
+work order's own placement in the Rust helper. The reason is dependency weight:
+a real SNI host must own a bus name, receive signals and read properties, which
+in the helper would mean `zbus` and an async runtime inside a process whose
+entire design is spawning small tools — and the suite contract requires the
+author's approval for a heavy dependency. Qt is already linked, `DevicesClient`
+is the precedent, and the icons and menus at the other end are Qt's to render
+anyway.
+
+*Foreign icons:* `celestina-style`'s catalogue is closed and vendored, and
+states that no desktop icon theme participates in rendering. A tray host must
+paint **other applications'** icons, which arrive as theme names
+(`nm-signal-100`) or raw pixels. The rule exists so the host theme cannot
+restyle *this suite's* look; a tray item's icon is the foreign application's
+identity, not Celestina's. Foreign tray icons are therefore an explicit,
+scoped exception — recorded here and in `celestina/AGENTS.md` rather than left
+as a silent contradiction.
+
+What landed: the pure item rules (`trayitems`) and the host (`traywatcher`),
+which registers as `org.kde.StatusNotifierHost-<pid>` with whatever watcher owns
+the session, reads each item with one `GetAll`, watches its change signals, and
+publishes in registration order — every call asynchronous, because a tray item
+is another application's process and one being slow must never be something the
+panel waits for.
+
+The four items on this session wrote the tests, and two of them disagree with
+the specification: `nm-applet` omits `ItemIsMenu` entirely, and Slack's
+`IconName` **fails to read at all** — `GetAll` omits it rather than failing, so
+the item still arrives, with raw pixels and an empty title that falls back to
+its id. Run against the live session, the host read all four correctly,
+including `nm-applet`'s icon changing from `nm-signal-75` to `nm-signal-100`
+between two probes.
+
+**Named for R8:** this is a host, not the watcher. Noctalia owns
+`org.kde.StatusNotifierWatcher` today, and **owning it is a prerequisite for
+R8** — with no watcher at all, no application publishes a tray item to anyone.
+
+**The icons, and what a session really offers (2026-07-31).** Qt resolved
+*nothing* to begin with: a shell with no platform theme has an empty icon theme
+name and one search path into its own resources. The shell now teaches it where
+the session's themes are and which one it uses — read from the session's own GTK
+settings, with `hicolor` as the floor because that is where the specification
+requires every application to install.
+
+Then the session answered honestly. Of its five items, `nm-signal-100`,
+`battery-good` and `blueman-active` resolve through the theme; Slack has no
+readable name and its raw pixels are used instead; and Steam's `steam_tray_mono`
+resolves in **no installed theme** and it publishes no pixels either. That last
+one is not an edge case to code around — it is the reason the drawer shows an
+item's name when its icon resolves to nothing, rather than an empty slot.
+
+Raw pixels are treated as what they are: `a(iiay)` in network byte order, which
+is not this machine's, so it is byte-swapped; a size that disagrees with its own
+byte count is refused rather than read past; and the size closest to what is
+drawn is chosen rather than the first. The host resolves once and caches; the
+image provider only hands over what is already decoded, which is what makes it
+safe for Qt to call from its render thread.
+
+One bug worth naming, found by looking at the output rather than by a test:
+composing the image URL with `arg()` ate the `%2F` of an encoded slash, because
+`arg()` read it as its own placeholder. It is concatenated now.
+
+**The drawer** is collapsed by default, as the lived bar's is — a handful of
+icons that are almost never acted on should not spend the day occupying the
+panel. An item asking for attention is always visible, which is the point of
+that status.
+
+Evidence: nine QtTest cases over the item rules and six over the icons (a
+commented-out theme setting ignored, a theme name that is a path refused, byte
+counts that disagree with their size refused, the size closest to what is drawn,
+and the byte-order conversion), 9/9 CTest, `all_qmllint` clean, the five live
+items read and resolved, and an offscreen render of the drawer with an
+attention item visible while a normal one stays folded away. **The menu (2026-07-31).** A right-click on a tray item opens that
+application's own menu, read over `com.canonical.dbusmenu` and drawn in the
+surface R0-F proved — the first time a later phase reused that recipe instead of
+inventing a second one.
+
+Reading it is a conversation, not a fetch: the item is told the menu is about to
+show and may rebuild it before answering, so what opens is never last time's
+menu. An answer for a menu nobody is waiting for — a second right-click, or one
+that arrived after the panel moved on — is dropped rather than opened.
+
+blueman's real menu is what the rules were written against: mnemonics stripped
+(`_Desactivar` shows as `Desactivar`), separators drawn as rules, a nested
+submenu flattened and indented, and entries the application deliberately
+disabled **kept** — nm-applet uses those as headings, and dropping them would
+hide what the rest of the menu is about. Depth and breadth are capped, because a
+tree from another process is not something to walk as far as it claims: read
+live, blueman's 21 entries came back with its submenu's two children in place.
+
+Submenus are drawn indented rather than as menus that open sideways. That is a
+deliberate deferral: a sideways menu is a second surface to place, dismiss and
+return focus from, and it deserves its own decision rather than one made in
+passing.
+
+Evidence: seven more QtTest cases over the menu rules (mnemonics including the
+doubled underscore, a real menu, disabled entries kept, hidden entries dropped,
+a tree that nests twelve deep and one 200 entries wide both refused), 10/10
+CTest, `all_qmllint` clean, and blueman's live menu read through the bridge.
+Two things the guards caught, worth recording because neither was visible in a
+passing build. The QML file for the menu was **never written** — a failed `cd`
+silently swallowed the heredoc that should have created it — and CMake happily
+registered a file that did not exist; the architecture scanner named it. And
+wiring the controller straight to the tray host coupled the panel's menus to
+D-Bus, which surfaced as an unrelated test target failing to compile. The
+controller now says *"ask this item for its menu"* and *"this entry was
+chosen"* as signals, and the host wires those to the tray: the menu code no
+longer knows a tray exists.
+
+**Not exercised:** clicking an entry, which acts on the application — that is
+for the live run, deliberately not triggered here.
 
 **Gate:** Noctalia's bar hidden permanently on all three outputs; Noctalia
 keeps running headless for everything else. Named at the gate: the cat is an

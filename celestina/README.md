@@ -116,8 +116,16 @@ real session is still owned by the R0 exit test.
 | `src/panelmenusurface.cpp`, `.h` | the menu's surface and lifetime: adopts a content window, maps it through the shared recipe, cleans up a compositor dismissal |
 | `src/panelmenucontroller.cpp`, `.h` | builds the menu window and routes an item back to the same focus request a click makes |
 | `src/panelblurcontroller.cpp`, `.h` | per-surface KWindowEffects capability/retry/geometry lifecycle and the explicit readable fallback state |
+| `src/trayitems.cpp`, `.h` | what a StatusNotifierItem is once distrusted: registrations, absent properties, title fallback, bounded lists |
+| `src/traywatcher.cpp`, `.h` | the panel's SNI host: registers with the session's watcher, reads items asynchronously, resolves their icons and publishes them |
+| `src/trayicons.cpp`, `.h` | foreign icons: where the session's themes are, and how another application's raw pixels become an image |
+| `src/trayiconprovider.cpp`, `.h` | serves `image://tray/…` from what the host already decoded |
+| `src/traymenu.cpp`, `.h` | what another application's DBusMenu means: mnemonics, separators, headings, and the bounds on a tree from another process |
 | `src/devicesclient.cpp`, `.h` | asynchronous, burst-coalesced QtDBus client of `org.celestina.Devices1` (the phone in the panel) |
 | `tests/protocoldecoder_test.cpp` | QtTest coverage for fragmented/multiple frames and recovery after the 1 MiB limit |
+| `tests/trayitems_test.cpp` | QtTest coverage for the tray rules, written against the items this session actually publishes |
+| `tests/traymenu_test.cpp` | QtTest coverage for reading another application's menu, written against blueman's and nm-applet's real ones |
+| `tests/trayicons_test.cpp` | QtTest coverage for reading the session's icon theme and converting another application's pixels |
 | `tests/providerstates_test.cpp` | QtTest coverage for every provider frame the host refuses, set replacement, generations and clearing |
 | `tests/shellcommandline_test.cpp` | QtTest coverage for verb/option parsing, typing and every refusal |
 | `tests/shellservice_test.cpp` | QtTest coverage over a real session bus (skipped without one): the exported interface, the state version and each rejected command |
@@ -128,6 +136,9 @@ real session is still owned by the R0 exit test.
 | `qml/Panel.qml` | hidden-until-configured three-region root window: two ordered flanks around a geometrically centred clock |
 | `qml/SessionStatus.qml` | how the session is online, what is connected over Bluetooth and which power profile it runs; the profile cycles on click |
 | `qml/AudioLevel.qml` | the session's volume and, when it is muted, its microphone; scroll steps, click mutes, middle-click opens the mixer |
+| `qml/BrightnessLevel.qml` | this output's DDC brightness as a gauge, with the value on hover and three distinct states: absent, unknown, read back |
+| `qml/TrayMenu.qml` | a tray item's own menu, drawn in the panel's surface |
+| `qml/TrayDrawer.qml` | the system tray, collapsed by default; an item asking for attention is always visible, and one with no resolvable icon shows its name |
 | `qml/CaptureButton.qml` | asks Niri to open its own screenshot UI; reports only a request it could not make |
 | `qml/MediaMini.qml` | what the desktop is playing: checked cover art, title, play state and a progress line for media that has a real length; a click asks the player to toggle |
 | `qml/SysMon.qml` | CPU and memory from the `sysmon` provider, coloured by load state; a click asks the host to open the system monitor |

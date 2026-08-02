@@ -155,6 +155,7 @@ volume via `wpctl`, media via `playerctl`, brightness via `brightnessctl`,
 | `src/devicesclient.{h,cpp}` | 50 / 107 | async, burst-coalesced QtDBus client of `org.celestina.Devices1` |
 | `qml/Panel.qml` | 100 | hidden-until-configured three-region root window: two ordered flanks around the geometrically centred clock |
 | `qml/PanelFlank.qml` | 34 | one side of the panel as an ordered, clipped row — where a later widget is added |
+| `qml/BrightnessLevel.qml` | 92 | per-output DDC brightness: a gauge, the value on hover, and no number where the monitor gave none |
 | `qml/CaptureButton.qml` | 40 | asks Niri to open its own screenshot UI; paints a refusal briefly and nothing else |
 | `qml/SessionStatus.qml` | 107 | network link, connected-Bluetooth count and power profile, the last one cycling on click |
 | `qml/AudioLevel.qml` | 104 | volume as text with the microphone shown only when muted; scroll, click and middle-click map to the `audio` verbs |
