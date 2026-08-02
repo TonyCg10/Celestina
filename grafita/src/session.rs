@@ -29,6 +29,8 @@ pub mod qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qstringlist.h");
+        type QStringList = cxx_qt_lib::QStringList;
     }
 
     #[auto_cxx_name]
@@ -107,10 +109,37 @@ pub mod qobject {
         #[qinvokable]
         fn go_to_line(self: Pin<&mut GrafitaSession>, line_number: i32);
 
+        /// The document closed. A host with tabs drops the tab; a host with one
+        /// window shows its empty state.
+        ///
+        /// Separate from [`quit_permitted`]: closing a document and quitting the
+        /// application are different things, and reporting only the second left
+        /// a closed tab sitting there with nothing in it.
+        #[qsignal]
+        fn closed(self: Pin<&mut GrafitaSession>);
+
         /// The window may now close. Emitted only once no unsaved work is left,
         /// so quitting can never discard an edit silently.
         #[qsignal]
         fn quit_permitted(self: Pin<&mut GrafitaSession>);
+
+        /// A save was asked for on a document with no file yet. The window
+        /// asks where it goes and answers with [`save_as`].
+        #[qsignal]
+        fn destination_needed(self: Pin<&mut GrafitaSession>);
+
+        /// The documents opened most recently that still exist, newest first.
+        /// Read on demand: another window may have opened something since.
+        #[qinvokable]
+        fn recent_documents(self: &GrafitaSession) -> QStringList;
+
+        /// Starts a document that belongs to no file yet.
+        #[qinvokable]
+        fn new_document(self: Pin<&mut GrafitaSession>);
+
+        /// Writes the document to `path` and binds it there.
+        #[qinvokable]
+        fn save_as(self: Pin<&mut GrafitaSession>, path: &QString);
 
         /// Opens a document by path. Whether it can be edited is decided by its
         /// bytes, never by its name or its MIME entry.
@@ -234,6 +263,24 @@ impl qobject::GrafitaSession {
                     .set_error_text(QString::from("Grafita solo abre archivos locales"));
             }
         }
+    }
+
+    pub fn recent_documents(&self) -> cxx_qt_lib::QStringList {
+        DocumentSession::recent_documents()
+            .iter()
+            .map(|path| QString::from(path.to_string_lossy().as_ref()))
+            .collect()
+    }
+
+    pub fn new_document(mut self: Pin<&mut Self>) {
+        let outcome = self.as_mut().rust_mut().get_mut().session.new_document();
+        self.dispatch(outcome);
+    }
+
+    pub fn save_as(mut self: Pin<&mut Self>, path: &QString) {
+        let path = PathBuf::from(path.to_string());
+        let outcome = self.as_mut().rust_mut().get_mut().session.save_as(&path);
+        self.dispatch(outcome);
     }
 
     pub fn apply_text(mut self: Pin<&mut Self>, text: &QString) {
@@ -388,10 +435,12 @@ impl qobject::GrafitaSession {
             // The standalone application never asks a classify-only question:
             // it opens what it is given. Named rather than caught by a
             // wildcard, so a new event has to be considered here too.
+            Some(Event::DestinationNeeded) => self.as_mut().destination_needed(),
             Some(Event::Classified { .. }) => {}
             Some(Event::Closed) => {
                 let quitting = self.rust().quitting;
                 self.as_mut().rust_mut().get_mut().quitting = false;
+                self.as_mut().closed();
                 if quitting {
                     self.as_mut().quit_permitted();
                 }
@@ -465,7 +514,12 @@ impl qobject::GrafitaSession {
 
         let title = if state.active {
             let marker = if state.dirty { "• " } else { "" };
-            format!("{marker}{} — Grafita", state.name)
+            let name = if state.name.is_empty() {
+                "Sin título"
+            } else {
+                state.name.as_str()
+            };
+            format!("{marker}{name} — Grafita")
         } else {
             "Grafita".to_owned()
         };

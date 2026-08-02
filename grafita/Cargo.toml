@@ -22,6 +22,11 @@ cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
 # machine and the bounded worker. This app adds a window and nothing else, so it
 # shares the crate with Siderita's embedded surface rather than restating it.
 grafita-core = { path = "../celestina-rs/crates/grafita-core" }
+# Single-instance activation: a second `grafita RUTA` hands its document to the
+# running window instead of mapping another one. The session bus is how the rest
+# of the suite talks between processes, so this earns zbus rather than inventing
+# a socket protocol of its own.
+zbus = "5"
 
 [build-dependencies]
 cxx-qt-build = "=0.9.1"

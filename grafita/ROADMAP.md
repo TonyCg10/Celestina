@@ -490,13 +490,92 @@ and the document are all untested by anything but their bindings.
 - Architecture guard, format, Clippy with `-D warnings` and the complete
   `celestina-rs` workspace tests pass.
 
+## Mostly done — G6: tabs, because a second file meant a second window
+
+**The need was demonstrated** on 2026-07-31: opening a file from Siderita mapped
+another Grafita window, and that is not what a text editor should do to a
+desktop. G4 had left tabs waiting for exactly this.
+
+**One session per tab.** Each tab owns its own `GrafitaSession` — the same shape
+Siderita gives each of its tabs a controller — so a document's history, dirty
+state and worker belong to that tab and nothing is shared but the window. No
+change to `grafita-core` was needed: the session was already one document's
+worth of state.
+
+**One instance, many documents.** The first Grafita takes `org.celestina.Grafita`
+and serves `OpenDocument`; a later launch finds the name owned, hands its path
+over and exits *before building a window*. The name is requested with an explicit
+`DoNotQueue` — the same flag whose absence stranded 3.5 GiB of Siderita portal
+backends earlier the same day. Failing to reach the bus is never fatal: the
+launch just opens its own window, which is where Grafita started.
+
+Decisions worth keeping:
+
+- **Asking twice for the same document focuses its tab** instead of opening it
+  twice.
+- **Quitting walks every tab, not just the visible one.** A dirty document in a
+  background tab must get its question asked, or closing the window would
+  discard work the user never saw. One "Cancelar" cancels the whole sweep.
+- **The last tab closing leaves an empty tab**, not an empty window: the empty
+  state is where the "Abrir archivo…" button lives, so an editor with no
+  documents still has a way back in.
+- **The strip hides itself at one tab.** A single document needs no chrome
+  telling it that it is the only one.
+
+**Evidence.** Guards, contrast, `cargo fmt`, Clippy `-D warnings`, the crate's
+tests, `cargo build --release --locked` and `scripts/smoke.sh`. Driven on a
+private bus: the first launch showed one tab, a second launch of a different
+file exited with rc=0 leaving exactly one process, and the running window went
+to two tabs — `[uno.rs, dos.txt]` — with the new one active and the window title
+following it.
+
+The visual guard earned its keep twice here: it caught a literal `"transparent"`
+and the auto-binding scanner caught `session: session`, the self-shadowing that
+had already cost a whole view's bindings once this session.
+
+**Two fixes after the author used it.** Closing a tab did nothing: Grafita's
+adapter only reported a closed document when the close came from *quitting*, so
+an ordinary tab close told nobody and the tab sat there. Closing a document and
+quitting the application are different things, and the adapter now says so with
+its own `closed` signal — the tab drops on that, and only outside a quit sweep,
+since removing one mid-sweep would shift the indices it is walking.
+
+And the strip no longer hides itself at one tab. That was my call, not the
+author's, and it was wrong twice over: the strip appeared and shoved the whole
+editor down the moment a second file arrived, and the "new tab" button was
+nowhere to be found until you already had two.
+
+Verified offscreen across five states: three tabs open with the strip visible, a
+clean tab closing, a dirty one raising its question instead of vanishing,
+discarding it, and closing the last one leaving an empty tab behind.
+
+**An empty tab is a real document now.** `Target` became optional on
+`Document`, so a document can exist before it has a file: `Sin título` is a
+scratch buffer that types, undoes and searches like any other. Saving one is not
+a refusal but a question — the session answers `DestinationNeeded`, the window
+asks through the portal, and `save_as` writes it.
+
+The write is deliberately *not* the ordinary save. There is no prior identity to
+re-verify and no original metadata to reproduce, because the document was never
+bound to that file; what it keeps is the part that protects bytes — a unique
+sibling temporary, written and synced in full, published by an atomic rename, so
+a failure leaves whatever was there untouched. An existing destination keeps its
+own permissions, because saving over a file must not quietly widen how it is
+protected. Once written, the document adopts the target and every ordinary rule
+applies to it from then on.
+
+Three tests cover it: the whole cycle (new → type → save asks → save-as writes →
+a plain save then works), permissions surviving a save over an existing file, and
+a destination that cannot be written leaving the document dirty, unbound and
+saying so. Driven offscreen end to end, the title walked
+`Sin título` → `• Sin título` → `creado.txt` with the right bytes on disk.
+
 ## Later — G5
 
 - **Syntax highlighting — measured, awaiting the author's choice.** The contract
   says the approach is picked by measured startup and memory cost, so it was
   measured before anything was chosen. Numbers below.
 - Explicit legacy-encoding choices when real files require them.
-- Multiple tabs only if simultaneous small edits prove a daily need.
 
 ### Highlighting spike (2026-07-31)
 

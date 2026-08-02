@@ -22,6 +22,7 @@ const QML_FILES: &[&str] = &[
     // Grafita's own composition: Main owns the window, the components own one
     // region each.
     "qml/components/DocumentView.qml",
+    "qml/components/TabStrip.qml",
     "qml/components/FindBar.qml",
     "qml/components/DocumentHeader.qml",
     "qml/components/DocumentFooter.qml",
@@ -75,7 +76,7 @@ fn main() {
         // header is moc'd (Q_OBJECT); the .cpp is compiled.
         .cpp_file("cpp/highlighter.cpp")
         .cpp_file("cpp/highlighter.h")
-        .files(["src/session.rs", "src/syntax.rs"]);
+        .files(["src/activation.rs", "src/session.rs", "src/syntax.rs"]);
 
     // SAFETY: only adds an include directory for our own headers.
     let builder = unsafe {

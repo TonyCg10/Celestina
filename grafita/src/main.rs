@@ -1,3 +1,4 @@
+mod activation;
 mod session;
 mod syntax;
 mod url;
@@ -13,6 +14,15 @@ use cxx_qt_lib::{
 const APP_ID: &str = "org.celestina.Grafita";
 
 fn main() {
+    // A Grafita already running takes this document into a tab; this launch
+    // then has nothing to show and leaves without building a window. Opening a
+    // second file should not open a second editor.
+    if let Some(path) = initial_path_buf() {
+        if activation::hand_off(&path) {
+            return;
+        }
+    }
+
     let mut app = QGuiApplication::new();
 
     if let Some(mut app) = app.as_mut() {
@@ -67,10 +77,19 @@ fn main() {
 /// document is taken: Grafita opens one document, so silently ignoring the
 /// rest would be worse than a window the user can see is showing one file.
 fn initial_path() -> String {
+    initial_path_buf()
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// The first argument that names a local file.
+///
+/// Options are skipped rather than treated as filenames, and only the first
+/// document is taken: Grafita opens one document per launch, and silently
+/// ignoring the rest would be worse than a window the user can see.
+fn initial_path_buf() -> Option<std::path::PathBuf> {
     std::env::args()
         .skip(1)
         .find(|argument| !argument.starts_with('-'))
         .and_then(|argument| url::local_path(&argument))
-        .map(|path| path.to_string_lossy().into_owned())
-        .unwrap_or_default()
 }

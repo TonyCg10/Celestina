@@ -10,13 +10,18 @@ CelestinaModalLayer {
     required property var session
     required property Item backdrop
 
+    /// The user chose to stay. Whoever asked for the close — a tab, or a quit
+    /// walking every tab — has to hear that, or one "Cancelar" would leave the
+    /// window closing anyway.
+    signal cancelled
+
     z: 90
     shown: session.closePrompt
     // Escape and a click outside both mean "cancel" here — an explicit answer,
     // never a way to dodge the question.
     dismissOnEscape: true
     dismissOnOutsideClick: true
-    onDismissRequested: layer.session.cancelClose()
+    onDismissRequested: { layer.session.cancelClose(); layer.cancelled() }
 
     onShownChanged: if (shown) keepButton.forceActiveFocus()
 
@@ -59,7 +64,7 @@ CelestinaModalLayer {
 
             CelestinaButton {
                 text: "Cancelar"
-                onClicked: layer.session.cancelClose()
+                onClicked: { layer.session.cancelClose(); layer.cancelled() }
             }
             CelestinaButton {
                 text: "Descartar"

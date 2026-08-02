@@ -159,6 +159,44 @@ Item {
         onAccepted: root.session.openUrl(openDialog.selectedFile.toString())
     }
 
+    // Where a document with no file yet goes. Reached by saving one, so the
+    // question is asked at the moment the user actually wants an answer.
+    FileDialog {
+        id: saveDialog
+        title: "Guardar como"
+        fileMode: FileDialog.SaveFile
+        onAccepted: root.saveTo(saveDialog.selectedFile)
+    }
+
+    /// Called by the window when the document says it has nowhere to go.
+    function askDestination() {
+        saveDialog.open()
+    }
+
+    function saveTo(url) {
+        const text = url.toString()
+        root.session.saveAs(text.startsWith("file://") ? text.substring(7) : text)
+    }
+
+    // The documents this window could pick up again. Re-read whenever the empty
+    // state appears rather than held: another window may have opened something
+    // since, and a stale history is the one thing a history must not be.
+    property var recentPaths: []
+    function refreshRecent() {
+        root.recentPaths = root.session.recentDocuments()
+    }
+    onVisibleChanged: if (visible) root.refreshRecent()
+    Connections {
+        target: root.session
+        function onActiveChanged() { if (!root.session.active) root.refreshRecent() }
+    }
+    Component.onCompleted: root.refreshRecent()
+
+    function baseName(path) {
+        const cut = path.lastIndexOf("/")
+        return cut >= 0 ? path.substring(cut + 1) : path
+    }
+
     // Nothing open: say so, offer the way in, and say what went wrong if
     // something did. An editor with no document and no button is a dead end.
     Column {
@@ -184,13 +222,76 @@ Item {
             width: parent.width
             height: openButton.height
 
-            CelestinaButton {
-                id: openButton
+            Row {
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: "Abrir archivo…"
-                role: CelestinaButton.Primary
-                enabled: !root.session.busy
-                onClicked: openDialog.open()
+                spacing: CelestinaTheme.spaceSm
+
+                CelestinaButton {
+                    id: openButton
+                    text: "Abrir archivo…"
+                    role: CelestinaButton.Primary
+                    enabled: !root.session.busy
+                    onClicked: openDialog.open()
+                }
+
+                CelestinaButton {
+                    text: "Documento nuevo"
+                    enabled: !root.session.busy
+                    onClicked: root.session.newDocument()
+                }
+            }
+        }
+
+        // Recent documents, if there are any. A new tab that remembers what you
+        // were working on beats a new tab that makes you go find it again.
+        Column {
+            width: parent.width
+            spacing: CelestinaTheme.spaceXs
+            visible: root.recentPaths.length > 0
+
+            Item { width: 1; height: CelestinaTheme.spaceMd }
+
+            CelestinaSectionLabel {
+                text: "Recientes"
+            }
+
+            Repeater {
+                model: root.recentPaths
+
+                delegate: Rectangle {
+                    id: entry
+                    required property string modelData
+
+                    width: parent.width
+                    height: CelestinaTheme.controlHeight
+                    radius: CelestinaTheme.radiusSm
+                    color: hover.hovered ? CelestinaTheme.surfaceHover
+                                         : CelestinaTheme.withAlpha(CelestinaTheme.surface, 0)
+
+                    Accessible.role: Accessible.Button
+                    Accessible.name: "Abrir " + root.baseName(entry.modelData)
+                    Accessible.description: entry.modelData
+
+                    HoverHandler { id: hover }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: root.session.openPath(entry.modelData)
+                    }
+
+                    Text {
+                        anchors.left: parent.left
+                        anchors.leftMargin: CelestinaTheme.spaceSm
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - CelestinaTheme.space2xl
+                        elide: Text.ElideMiddle
+                        // The name reads first; the folder is there to tell two
+                        // files of the same name apart.
+                        text: root.baseName(entry.modelData)
+                        color: CelestinaTheme.text
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: CelestinaTheme.fontCaption
+                    }
+                }
             }
         }
 
