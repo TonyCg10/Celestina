@@ -151,6 +151,10 @@ struct Snapshot {
     state: PlaybackState,
     position: Option<Duration>,
     duration: Option<Duration>,
+    /// The confirmed output level. Carried because the bus publishes it, and a
+    /// panel that showed a volume the engine never confirmed would be lying in
+    /// the same way a transport would.
+    volume: Option<f64>,
     pending: bool,
     error: Option<String>,
 }
@@ -173,6 +177,18 @@ pub struct PlayerRust {
     worker: Option<JoinHandle<()>>,
     /// Set while a close is waiting for the surface to release its context.
     closing: bool,
+
+    /// What the rest of the desktop reads. Created with the first session and
+    /// kept for the process: a panel that saw the player once should not lose
+    /// it because a track ended.
+    mpris: Option<crate::mpris::Mpris>,
+    /// The inbox a bus request is delivered into. Shared because the D-Bus
+    /// thread reaches it while the GUI thread swaps it per session.
+    remote: std::sync::Arc<std::sync::Mutex<Option<Sender<Command>>>>,
+    /// What is playing, as MPRIS describes it. Kept beside the QObject's own
+    /// properties because the bus wants the path and the title, which the
+    /// interface does not show.
+    now_playing: crate::mpris::NowPlaying,
 }
 
 impl cxx_qt::Initialize for qobject::FluoritaPlayer {
@@ -217,11 +233,20 @@ impl qobject::FluoritaPlayer {
 
         let worker = std::thread::Builder::new()
             .name("fluorita-player".to_owned())
-            .spawn(move || run_session(&path, kind, &receiver, &qt_thread));
+            .spawn({
+                // The publisher needs the path too, and the worker takes it by
+                // value; one clone is cheaper than making the session borrow.
+                let path = path.clone();
+                move || run_session(&path, kind, &receiver, &qt_thread)
+            });
 
         match worker {
             Ok(handle) => {
-                self.as_mut().rust_mut().commands = Some(sender);
+                self.as_mut().rust_mut().commands = Some(sender.clone());
+                if let Ok(mut remote) = self.as_mut().rust_mut().remote.lock() {
+                    *remote = Some(sender);
+                }
+                self.as_mut().start_publishing(&path, kind);
                 self.as_mut().rust_mut().worker = Some(handle);
             }
             Err(error) => {
@@ -378,7 +403,66 @@ impl qobject::FluoritaPlayer {
     }
 
     /// Applies one worker snapshot. Runs on the Qt thread, by construction.
+    /// Starts publishing on the bus, and says what is playing now.
+    fn start_publishing(
+        mut self: core::pin::Pin<&mut Self>,
+        path: &std::path::Path,
+        kind: MediaKind,
+    ) {
+        if self.rust().mpris.is_none() {
+            let remote = std::sync::Arc::clone(&self.rust().remote);
+            // The closure runs on the D-Bus thread: it does nothing but hand
+            // the request to whatever session is open, exactly as a click does.
+            let published = crate::mpris::Mpris::start(std::sync::Arc::new(
+                move |request: fluorita_core::PlaybackRequest| {
+                    if let Ok(remote) = remote.lock() {
+                        if let Some(sender) = remote.as_ref() {
+                            let _ = sender.send(Command::Transport(request));
+                        }
+                    }
+                },
+            ));
+            self.as_mut().rust_mut().mpris = published;
+        }
+
+        let now = crate::mpris::NowPlaying {
+            state: PlaybackState::Opening,
+            path: Some(path.to_path_buf()),
+            title: path
+                .file_stem()
+                .map(|stem| stem.to_string_lossy().into_owned()),
+            position: Duration::ZERO,
+            duration: None,
+            volume: 1.0,
+            seekable: kind.capabilities().seekable,
+        };
+        self.as_mut().rust_mut().now_playing = now.clone();
+        if let Some(mpris) = self.rust().mpris.as_ref() {
+            mpris.publish(now);
+        }
+    }
+
+    /// Mirrors one confirmed report onto the bus.
+    fn publish_now_playing(mut self: core::pin::Pin<&mut Self>, snapshot: &Snapshot) {
+        let mut now = self.rust().now_playing.clone();
+        now.state = snapshot.state;
+        if let Some(position) = snapshot.position {
+            now.position = position;
+        }
+        if let Some(duration) = snapshot.duration {
+            now.duration = Some(duration);
+        }
+        if let Some(volume) = snapshot.volume {
+            now.volume = volume;
+        }
+        self.as_mut().rust_mut().now_playing = now.clone();
+        if let Some(mpris) = self.rust().mpris.as_ref() {
+            mpris.publish(now);
+        }
+    }
+
     fn apply(mut self: core::pin::Pin<&mut Self>, snapshot: &Snapshot) {
+        self.as_mut().publish_now_playing(snapshot);
         self.as_mut()
             .set_state(QString::from(state_label(snapshot.state)));
         self.as_mut().set_pending(snapshot.pending);
@@ -475,6 +559,7 @@ fn run_session(
                     state: truth.state(),
                     position: truth.position(),
                     duration: truth.duration(),
+                    volume: truth.volume(),
                     pending: truth.pending_transport().is_some() || truth.is_seeking(),
                     error: truth.error().map(str::to_owned),
                 };

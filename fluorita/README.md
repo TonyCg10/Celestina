@@ -23,9 +23,13 @@ opening and playing an individual file handed to it by Siderita or the desktop.
 > are decoded by the toolkit under a measured budget, never by the media
 > backend. A bare launch opens the library — Gallery and Music over the
 > configured XDG roots — and activating an item is the same path as being handed
-> it on the command line, and the catalogue survives between launches so tags
-> already read are not read again. The thumbnails the shared cache is missing
-> are produced only when asked for (`Ctrl+G`), bounded and cancellable.
+> it on the command line. The catalogue survives between launches, so tags
+> already read are not read again; the thumbnails the shared cache is missing are
+> produced only when asked for (`Ctrl+G`), bounded and cancellable; and playback
+> is published over MPRIS2, so the shell, the media keys and the phone link read
+> one source of truth. `scripts/run.sh` installs it into `~/.local` — binary,
+> desktop entry and icon — with `--prefix` and `--uninstall` for exercising the
+> layout somewhere disposable first.
 > [ROADMAP.md](ROADMAP.md) records the numbers, the reasoning and what is still
 > missing.
 
@@ -65,7 +69,8 @@ is a normal result, not a broken file.
 | `../celestina-rs/crates/fluorita-core` | media identity/kind, library and playback state, thumbnail/preview requests and cache contracts; no Qt or decoding |
 | `../celestina-rs/crates/fluorita-engine` | bounded library scanning, the persisted catalogue file, metadata probing, freedesktop poster/cover publication and playback sessions over libmpv, behind a narrow replaceable contract (backend chosen by measurement, 2026-07-30), plus bounded live trailers in Fluorita's own pruned cache |
 | `src/`, `qml/` | standalone library + player adapter and UI: activation, a scan and a session both owned off the GUI thread, the Gallery and Music surfaces, and a Qt Quick surface libmpv renders into |
-| `cpp/` | the one hand-written C++ piece: a `QQuickFramebufferObject` driving libmpv's render API on Qt's render thread, which CXX-Qt cannot express |
+| `cpp/` | the app's own hand-written C++: the header-only image probe (`QImageReader`), which cxx-qt-lib does not expose |
+| `../celestina-rs/crates/fluorita-qt` | the shared render seam: the `QQuickFramebufferObject` that drives libmpv's render API, compiled by both this app and Siderita's embedded modal |
 | `../siderita/src/`, `../siderita/qml/` | separate thin adapter and minimal embedded player consuming the same contracts |
 
 The engine is loaded lazily: browsing normal files in Siderita continues to read

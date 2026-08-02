@@ -1,0 +1,27 @@
+[Desktop Entry]
+Type=Application
+Name=Fluorita
+GenericName=Reproductor multimedia
+Comment=Reproduce y organiza tu música, tus vídeos y tus imágenes
+Exec=fluorita %f
+Icon=org.celestina.Fluorita
+Terminal=false
+Categories=AudioVideo;Player;Video;Audio;
+Keywords=música;vídeo;imagen;reproductor;fluorita;celestina;music;video;player;
+StartupNotify=true
+StartupWMClass=org.celestina.Fluorita
+# `%f`, not `%F`: this player opens one item, and a launcher that handed it a
+# whole selection would silently drop everything after the first.
+#
+# This list puts Fluorita in "Abrir con" — and, where the user has expressed no
+# preference of their own, it also makes Fluorita what the desktop opens: with
+# nothing pinned in `mimeapps.list`, being registered is what decides. Measured
+# rather than assumed: installing moved video/mp4, mkv, webm, quicktime,
+# audio/flac, ogg, wav and image/webp from VLC and other viewers to this entry.
+# The author accepted that on 2026-07-31; anyone who wants it otherwise pins the
+# application they prefer, which always wins over this list.
+#
+# What a file *is* stays decided elsewhere: by `fluorita-core` from the name and
+# by the engine from the bytes. This list never decides whether something can be
+# played.
+MimeType=audio/mpeg;audio/flac;audio/ogg;audio/opus;audio/x-vorbis+ogg;audio/wav;audio/x-wav;audio/mp4;audio/aac;audio/x-ms-wma;audio/x-aiff;audio/x-ape;audio/x-wavpack;audio/x-matroska;video/mp4;video/x-matroska;video/webm;video/quicktime;video/x-msvideo;video/x-ms-wmv;video/x-flv;video/mpeg;video/mp2t;video/ogg;video/3gpp;image/png;image/jpeg;image/gif;image/webp;image/bmp;image/tiff;image/avif;image/jxl;image/heif;

@@ -1,6 +1,7 @@
 mod activation;
 mod image;
 mod library;
+mod mpris;
 mod player;
 
 use cxx_qt_lib::{

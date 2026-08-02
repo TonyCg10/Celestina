@@ -6,6 +6,7 @@ use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
 const QML_FILES: &[&str] = &[
     // The suite's shared visual language, symlinked from ../celestina-style.
     "qml/CelestinaSurface.qml",
+    "qml/CelestinaSlider.qml",
     "qml/CelestinaBackdrop.qml",
     "qml/CelestinaSectionLabel.qml",
     "qml/CelestinaIcon.qml",
@@ -62,8 +63,9 @@ fn main() {
     // the shim resolve "fluorita/mpvvideoitem.h".
     println!("cargo::rerun-if-changed=cpp/imageprobe.cpp");
     println!("cargo::rerun-if-changed=cpp/fluorita/imageprobe.h");
-    println!("cargo::rerun-if-changed=cpp/mpvvideoitem.cpp");
-    println!("cargo::rerun-if-changed=cpp/fluorita/mpvvideoitem.h");
+    for source in fluorita_qt::rerun_paths() {
+        println!("cargo::rerun-if-changed={source}");
+    }
 
     let builder = CxxQtBuilder::new_qml_module(module)
         // The video surface renders into a QOpenGLFramebufferObject, which
@@ -78,14 +80,16 @@ fn main() {
         // No Q_OBJECT: a free function over QImageReader, so it is only
         // compiled, not moc'd.
         .cpp_file("cpp/imageprobe.cpp")
-        .cpp_file("cpp/mpvvideoitem.cpp")
-        .cpp_file("cpp/fluorita/mpvvideoitem.h")
+        // The shared render seam, compiled from the crate that owns it.
+        .cpp_file(fluorita_qt::VIDEO_ITEM_SOURCE)
+        .cpp_file(fluorita_qt::VIDEO_ITEM_HEADER)
         .files(["src/library.rs", "src/player.rs"]);
 
     // SAFETY: only adds an include directory for our own headers.
     let builder = unsafe {
         builder.cc_builder(|cc| {
             cc.include("cpp");
+            cc.include(fluorita_qt::include_dir());
         })
     };
 

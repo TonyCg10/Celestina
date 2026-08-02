@@ -563,15 +563,114 @@ already lists as unproven and a screen reader would settle.
       backend-starting tests and says why; they belong to the local matrix.
 - [ ] **A real-session pass**: picture, frame pacing, seeking under load,
       keyboard and focus, and closing while playing.
-- [ ] The **desktop entry, the icon and installation**. No `.desktop` and no
-      `org.celestina.Fluorita.svg` exist yet, and installing a handler for an
-      app that plays nothing would be worse than not having one. Installation
-      and MIME wiring still need explicit author authorization.
+- [x] **Desktop entry, icon and installation** (authorized by the author,
+      2026-07-31). `scripts/run.sh` mirrors Grafita's: build, binary into
+      `~/.local/bin`, the entry into `share/applications`, the icon as SVG plus
+      the nine hicolor PNG sizes, caches refreshed — and `--uninstall` and
+      `--prefix` so the layout can be exercised against a throwaway directory
+      before touching the user's own. The icon is a fluorite octahedron, the
+      shape the mineral's perfect cleavage makes of itself, violet with the
+      green growth band fluorite is commonly zoned with; it wears the same
+      squircle tile as its siblings.
+- [x] Verified against a throwaway prefix (install, `desktop-file-validate`,
+      uninstall leaves nothing), then installed for real: `fluorita` is on
+      `PATH`, which is what makes Siderita's `Enter` reach it, and launching by
+      name opens the window with the right `app_id`.
+- [x] **Fluorita is now the desktop's default for its media types**, decided by
+      the author on 2026-07-31 once the effect was measured rather than assumed.
+      Registering the entry moved `video/mp4`, `video/x-matroska`, `video/webm`,
+      `video/quicktime`, `audio/flac`, `audio/ogg`, `audio/x-wav` and
+      `image/webp` from VLC and other viewers to Fluorita — not because
+      installing pins anything, but because with nothing pinned in
+      `mimeapps.list` the registration is what decides. The entry's comment says
+      exactly that now; it previously claimed the opposite, which the
+      measurement disproved. A user who wants otherwise pins their own
+      preference, which always wins.
 - [ ] Not measured, and worth knowing before the engine is called done: 60 fps
       pacing, tearing, long sessions, aggressive seeking and malformed files.
       Cancelling an encode *mid-flight* is only proven by the cleanup path a
       failed encode shares: the two-second fixture finishes too fast to lose
       the race reliably.
+
+## Now — F4: the second host
+
+### Built — the embedded player in Siderita (2026-07-31)
+
+The bounded consumer the suite authorized at F0, following the shape Grafita's
+embedded editor already proved: an adapter in `siderita/src/media.rs` that
+marshals `fluorita-core`'s playback model to Qt and nothing else.
+
+- [x] **Browsing still costs nothing.** Nothing is constructed until `Space`
+      asks for a preview: opening a folder of media starts **no engine thread**,
+      observed in a real session.
+- [x] **One session at a time.** Every selection step and every dismissal closes
+      the previous session and joins its thread before opening anything, so two
+      files can never decode at once.
+- [x] **Confirmed state only**, through the same `PlaybackSession` the standalone
+      app uses: a click is a request and the transport moves when the backend
+      reports it.
+- [x] **Audio plays in the modal**; a still keeps Siderita's own toolkit
+      rendering (no decoder), and video says plainly that `Enter` opens Fluorita
+      rather than decoding into a surface that does not exist yet.
+- [x] **`CelestinaSlider` promoted to the shared style**, which is what the
+      contract asks for when a second application demonstrates the same
+      semantics — and it was already a written spec waiting for its first real
+      consumer. Fluorita's `SeekBar` now wraps it and keeps only the media
+      wording; `DESIGN.md`, the style `qmldir` and its CMake list record it.
+
+**Verified:** Siderita builds, `fmt`, Clippy `-D warnings`, its 69 tests, its
+smoke and its 31 QML interaction tests pass; the style and architecture
+contracts pass; opening a folder of media starts no decoder.
+
+**Not verified, and it needs you:** that pressing `Space` on an audio or video
+file actually plays it in the modal. Driving Siderita's folder selection from outside needs a
+pointer, and this session has no pointer automation — the keyboard alone never
+reached the grid. The check is one minute by hand: open a folder with an audio
+file, click it, press `Space`.
+
+### Still to build
+
+- [x] **The render seam became a crate.** `celestina-rs/crates/fluorita-qt` now
+      owns the `QQuickFramebufferObject`, and both hosts compile it from there:
+      no copy, and neither application depends on the other's tree. Fluorita's
+      window was rebuilt on it and still plays video; Siderita registers the
+      same type and its embedded modal now hosts video as well as audio, with
+      the same lifecycle Fluorita learned — the backend does not load until the
+      surface reports a render context, and the session is not dropped until it
+      reports the context is gone. Stepping the selection while that teardown is
+      in flight queues the next item rather than racing it, which is what keeps
+      "one session at a time" true.
+- [x] **Double-click and `Enter` on media route to standalone Fluorita**, through
+      the funnel Grafita already uses. Media is asked about *first* because the
+      question is free — a kind decided by name costs nothing, while the text
+      probe reads bytes on a worker, and a `.mp4` is never editable text. A
+      Fluorita that is not on `PATH` falls back to the desktop's own handler, so
+      a failed launch still opens the file. That fallback is what happens today:
+      nothing has been installed, which is the next item below.
+- [x] **MPRIS2**, so a shell panel, the media keys and Magnetita's phone link
+      read one source of truth instead of three. `org.mpris.MediaPlayer2.fluorita`
+      publishes what the engine confirmed — never what was requested — and a
+      control arriving over the bus becomes the same `PlaybackRequest` a click
+      would. `Opening` is reported as `Stopped` on purpose: nothing is playing
+      yet, and a lock screen that said otherwise would show a state the engine
+      never gave. Metadata leaves out what it does not know rather than guessing,
+      and `mpris:artUrl` is only the cover the shared cache already holds —
+      asking what is playing must not start a decoder. Best effort throughout: no
+      session bus, or a name already taken, degrades to silence and never touches
+      playback.
+
+**Verified over the real bus** (2026-07-31), which is the one F4 piece that
+needs no pointer: the name appears, `Identity`/`DesktopEntry` answer, and while a
+60-second track plays `PlaybackStatus` is `Playing`, `Position` advances,
+`CanSeek` is true and `mpris:length` is present. `PlayPause` over the bus paused
+it and played it again; `SetPosition` moved the playhead from 48 s to 5 s;
+`Volume` set to 0.4 read back 0.4. The name disappears from the bus when the
+process exits.
+
+**A gap that check found:** the volume was publishing as 1.0 whatever the engine
+confirmed, because Fluorita's session snapshot never carried it — the transport
+does not show one, so nothing had asked. The snapshot carries it now, which is
+also what a panel's slider needs.
 
 ## Next — F3/F4: both player hosts
 

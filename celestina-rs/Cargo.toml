@@ -8,6 +8,7 @@ members = [
     "crates/dotfiles-core",
     "crates/fluorita-core",
     "crates/fluorita-engine",
+    "crates/fluorita-qt",
     "crates/grafita-core",
     "crates/magnetita-core",
     "crates/magnetita-net",

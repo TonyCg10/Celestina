@@ -29,7 +29,18 @@ fluorita-core = { path = "../celestina-rs/crates/fluorita-core" }
 # the engine's narrow contract and hands the surface one opaque handle.
 fluorita-engine = { path = "../celestina-rs/crates/fluorita-engine" }
 
+# MPRIS2: how a shell panel, the media keys and Magnetita's phone link read one
+# source of truth instead of three. Already the suite's D-Bus crate (Siderita's
+# portal backend and the Magnetita daemon use it); its blocking API keeps the
+# publisher on its own thread instead of dragging an async runtime into a Qt app.
+zbus = "5"
+
 [build-dependencies]
+# The render seam: the hand-written `QQuickFramebufferObject` that drives
+# libmpv's render API lives in a crate now that a second host — Siderita's
+# embedded modal — needs the same one. A build dependency because what it hands
+# over is source paths, not behaviour.
+fluorita-qt = { path = "../celestina-rs/crates/fluorita-qt" }
 cxx-qt-build = "=0.9.1"
 cxx-gen = "=0.7.176"
 
