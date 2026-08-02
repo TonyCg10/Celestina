@@ -1,0 +1,181 @@
+//! Monitor brightness, as `ddcutil` reports it over DDC/CI.
+//!
+//! DDC is a slow, physical conversation with a monitor: a single read on this
+//! author's machine takes about a second warm and nine cold, and not every
+//! monitor answers at all. That shapes everything here — the panel never polls
+//! it, never guesses a value it has not read, and distinguishes three states a
+//! caller must keep apart:
+//!
+//! - a monitor that does not speak DDC at all, which has no brightness to show;
+//! - one that does but has not answered yet, which is *unknown*, not zero;
+//! - a value that was actually read back.
+
+/// One monitor `ddcutil detect` found, tying its display number to the
+/// connector the compositor calls the output.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DdcDisplay {
+    pub number: u8,
+    pub connector: String,
+}
+
+/// Reads `ddcutil detect --brief`.
+///
+/// Blocks headed `Invalid display` are monitors that do not answer DDC; they
+/// are left out entirely rather than reported as unknown, because there is
+/// nothing there to know.
+#[must_use]
+pub fn parse_detect(listing: &str) -> Vec<DdcDisplay> {
+    let mut displays = Vec::new();
+    let mut number: Option<u8> = None;
+
+    for line in listing.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("Display ") {
+            number = rest.trim().parse().ok();
+            continue;
+        }
+        // Any other unindented heading — `Invalid display`, `Display detection`
+        // — ends the block a connector could have belonged to.
+        if !line.starts_with(char::is_whitespace) && !trimmed.is_empty() {
+            number = None;
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix("DRM connector:") {
+            let Some(number) = number.take() else {
+                continue;
+            };
+            // `card1-DP-1` is the compositor's `DP-1` with its card prefix.
+            let connector = rest.trim();
+            let connector = connector
+                .split_once('-')
+                .filter(|(card, _)| card.starts_with("card"))
+                .map_or(connector, |(_, name)| name);
+            if !connector.is_empty() {
+                displays.push(DdcDisplay {
+                    number,
+                    connector: connector.to_owned(),
+                });
+            }
+        }
+    }
+
+    displays
+}
+
+/// Reads `ddcutil getvcp 10 --brief`, whose line is
+/// `VCP <feature> <type> <current> <max>`.
+///
+/// Returns whole percent of the monitor's own maximum, since monitors do not
+/// agree on what that maximum is.
+#[must_use]
+pub fn parse_brightness(reading: &str) -> Option<u8> {
+    let fields: Vec<&str> = reading
+        .lines()
+        .find(|line| line.trim_start().starts_with("VCP "))?
+        .split_whitespace()
+        .collect();
+
+    // VCP, feature, type, current, max
+    if fields.len() < 5 || fields[1] != "10" {
+        return None;
+    }
+    let current: u32 = fields[3].parse().ok()?;
+    let max: u32 = fields[4].parse().ok()?;
+    if max == 0 {
+        return None;
+    }
+
+    u8::try_from(current.min(max) * 100 / max).ok()
+}
+
+/// The value to ask for after a step, in whole percent of the monitor's range.
+///
+/// Steps are clamped rather than wrapped: a brightness that jumped from dark to
+/// full because a wheel went one notch too far would be a surprise, not a
+/// control.
+#[must_use]
+pub fn stepped(current: u8, steps: i32, step_percent: u8) -> u8 {
+    let delta = steps.saturating_mul(i32::from(step_percent));
+    i32::from(current)
+        .saturating_add(delta)
+        .clamp(0, 100)
+        .try_into()
+        .unwrap_or(100)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const DETECT: &str = "Invalid display\n   I2C bus:          /dev/i2c-7\n\
+                          \x20  DRM connector:    card1-HDMI-A-1\n\
+                          \x20  Monitor:          HPN:HP M27h:3CM3020XDF\n\
+                          \nDisplay 1\n   I2C bus:          /dev/i2c-8\n\
+                          \x20  DRM connector:    card1-DP-1\n\
+                          \nDisplay 2\n   I2C bus:          /dev/i2c-9\n\
+                          \x20  DRM connector:    card1-DP-2\n";
+
+    #[test]
+    fn a_monitor_that_does_not_answer_ddc_is_not_a_display() {
+        let displays = parse_detect(DETECT);
+
+        // HDMI-A-1 is there, and invalid: it has no brightness to show at all.
+        assert_eq!(
+            displays,
+            [
+                DdcDisplay {
+                    number: 1,
+                    connector: "DP-1".to_owned()
+                },
+                DdcDisplay {
+                    number: 2,
+                    connector: "DP-2".to_owned()
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn a_connector_is_named_the_way_the_compositor_names_its_output() {
+        let displays = parse_detect("Display 3\n   DRM connector:    card0-DP-3\n");
+
+        assert_eq!(displays[0].connector, "DP-3");
+    }
+
+    #[test]
+    fn nothing_detected_is_an_empty_list() {
+        assert!(parse_detect("").is_empty());
+        assert!(parse_detect("ddcutil: no displays found\n").is_empty());
+    }
+
+    #[test]
+    fn brightness_is_percent_of_the_monitors_own_maximum() {
+        assert_eq!(parse_brightness("VCP 10 C 50 100\n"), Some(50));
+        // A monitor whose range is not 0-100 still reports a percentage.
+        assert_eq!(parse_brightness("VCP 10 C 40 80\n"), Some(50));
+        assert_eq!(parse_brightness("VCP 10 C 0 100\n"), Some(0));
+    }
+
+    #[test]
+    fn an_answer_that_is_not_a_brightness_reading_is_no_reading() {
+        // Another feature, a short line, a monitor reporting a zero range, and
+        // an error where a reading should be.
+        assert_eq!(parse_brightness("VCP 12 C 50 100\n"), None);
+        assert_eq!(parse_brightness("VCP 10 C 50\n"), None);
+        assert_eq!(parse_brightness("VCP 10 C 50 0\n"), None);
+        assert_eq!(parse_brightness("DDC communication failed\n"), None);
+        assert_eq!(parse_brightness(""), None);
+    }
+
+    #[test]
+    fn a_step_clamps_instead_of_wrapping() {
+        assert_eq!(stepped(50, 1, 5), 55);
+        assert_eq!(stepped(50, -1, 5), 45);
+        assert_eq!(stepped(50, 3, 5), 65);
+        // A wheel that runs past either end stops there.
+        assert_eq!(stepped(98, 1, 5), 100);
+        assert_eq!(stepped(2, -1, 5), 0);
+        assert_eq!(stepped(50, i32::MAX, 5), 100);
+        assert_eq!(stepped(50, i32::MIN, 5), 0);
+    }
+}

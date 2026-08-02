@@ -16,6 +16,8 @@
 //!   thread.
 //! - [`audio`] — what the session's audio device is set to, and whether it is
 //!   silenced.
+//! - [`brightness`] — what a monitor says about itself over DDC, and the three
+//!   states a slow, optional conversation leaves a panel in.
 //! - [`network`], [`bluetooth`], [`power`] — how the session is online, what is
 //!   connected to it, and which power profile it is running.
 //! - [`sysmon`] — what `/proc` says about CPU and memory, and what counts as a
@@ -29,6 +31,7 @@
 
 pub mod audio;
 pub mod bluetooth;
+pub mod brightness;
 pub mod coalesce;
 pub mod command;
 pub mod lines;
