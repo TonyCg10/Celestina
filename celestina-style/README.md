@@ -49,11 +49,15 @@ deferred until a consumer exists outside this tree (see
 | `CelestinaSwitch.qml` | the One UI pill toggle: white thumb, accent track when on |
 | `ListSection.qml` | the grouped-card list (One UI's "focus block" signature) with an optional header |
 | `CelestinaModalLayer.qml` | shared L3 scrim, fade, focus containment/restoration and outside/Escape dismissal; dialog content stays app-owned |
+| `CelestinaFolderIcon.qml` | la carpeta de la suite: forma vectorial con fondo, hoja y bolsillo con lavado de color, más el emblema del lugar. Un `tone` y de ahí sale todo |
+| `CelestinaFileIcon.qml` | el tipo de contenido que no es carpeta, dibujado igual: forma rellena con el lavado del tono. Dice `known` cuando no sabe un nombre, y el consumidor se queda con el trazo |
+| `CelestinaIconShapes.qml` | tabla generada nombre → caminos vectoriales (Phosphor fill, MIT). Se regenera con `scripts/sync-phosphor-shapes.sh` |
 | `CelestinaInputShield.qml` | the input floor a surface floating over live content declares: blocking hover and a drag claim on the press, plus an optional three-button swallow; the wheel still passes through |
 | `gallery/` | dev-only review surface — every token, control and glass surface on one screen (`gallery/run.sh`) |
 | `tests/` | Qt Quick Test coverage for modal focus entry, Tab/Backtab containment, exact restoration, Escape, pointer blocking through the exit fade, and that a sweep over a dialog never reaches a drag handler underneath |
 | `scripts/check-style-contract.sh` | CI/local guard across Siderita, Magnetita, the shell and the shared module; rejects visual literals/local derivations and invokes the contrast contract |
 | `scripts/check-contrast-contract.py` | derives current theme values and verifies hostile black/white backdrop contrast floors for compositor glass, artwork, primary/destructive controls and metadata |
+| `scripts/sync-phosphor-shapes.sh` | regenera `CelestinaIconShapes.qml` desde una release fijada de Phosphor: descarga los SVG rellenos, los convierte con `svgtoqml` y extrae sólo los caminos |
 | `scripts/sync-lucide-icons.sh` | reproducible sync of all 76 glyphs from the pinned Lucide release while retaining compatibility filenames |
 | `icons/`, `icons.qrc` | the vendored Lucide (ISC) catalogue, its licence and the glass noise-dither texture |
 | `fonts/`, `fonts.qrc` | Inter Variable (OFL) — the suite typeface, compiled into each app's binary |
@@ -71,6 +75,9 @@ deferred until a consumer exists outside this tree (see
 | `CelestinaTextField` | `shape`; ordinary `TextField` value/validation properties remain available |
 | `CelestinaSectionLabel` | `size`, `textScale` |
 | `CelestinaModalLayer` | `shown`, dismissal switches and `dismissRequested` |
+| `CelestinaFolderIcon` | `tone` (lo único obligatorio), `emblem` (una fuente ya resuelta), `sheetVisible`; los tres colores del dibujo y la tinta del emblema salen de la receta OKLCH del tema |
+| `CelestinaTheme` (iconos) | `iconGradientTop/Bottom`, `iconBackdropTone`, `iconEmblemInk`, `iconSheetTone` — la receta de color de los iconos de contenido, en OKLCH y con mapeo de gamut |
+| `CelestinaFileIcon` | `name` (el mismo espacio de nombres que los glifos), `tone`, y `known` para que el consumidor sepa si hay forma o toca trazo |
 | `CelestinaInputShield` | `active`, `swallowClicks`; it anchors to its parent and sits at `z: -1`, so the surface's own controls keep being delivered first |
 | `GlassSurface` / `GlassCard` | `backdropSource`, `density`, capture mode and elevation |
 | `GlassContextMenu` / `GlassMenuItem` | injected backdrop plus ordinary menu action/current-state properties, nested-menu chevrons and optional token-backed colour swatches |

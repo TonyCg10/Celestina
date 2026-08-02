@@ -13,6 +13,7 @@ qt_standard_project_setup(REQUIRES 6.9)
 set_source_files_properties(
     CelestinaTheme.qml
     CelestinaIcons.qml
+    CelestinaIconShapes.qml
     PROPERTIES QT_QML_SINGLETON_TYPE TRUE
 )
 
@@ -42,6 +43,9 @@ qt_add_qml_module(celestina-style
         CelestinaSwitch.qml
         ListSection.qml
         CelestinaInputShield.qml
+        CelestinaFolderIcon.qml
+        CelestinaFileIcon.qml
+        CelestinaIconShapes.qml
         CelestinaModalLayer.qml
         GlassSurface.qml
         GlassCard.qml

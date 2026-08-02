@@ -104,6 +104,73 @@ def contrast(first: RGBA, second: RGBA) -> float:
     return (high + 0.05) / (low + 0.05)
 
 
+def to_oklch(color: RGBA) -> tuple[float, float, float]:
+    red, green, blue, _ = color
+    r, g, b = (srgb_to_linear(c) for c in (red, green, blue))
+    l = (0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b) ** (1 / 3)
+    m = (0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b) ** (1 / 3)
+    s = (0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b) ** (1 / 3)
+    lightness = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s
+    green_red = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s
+    blue_yellow = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+    return (
+        lightness,
+        math.hypot(green_red, blue_yellow),
+        math.degrees(math.atan2(blue_yellow, green_red)) % 360,
+    )
+
+
+def oklch_channels(lightness: float, chroma: float, hue: float) -> list[float]:
+    radians = math.radians(hue)
+    green_red = chroma * math.cos(radians)
+    blue_yellow = chroma * math.sin(radians)
+    l = (lightness + 0.3963377774 * green_red + 0.2158037573 * blue_yellow) ** 3
+    m = (lightness - 0.1055613458 * green_red - 0.0638541728 * blue_yellow) ** 3
+    s = (lightness - 0.0894841775 * green_red - 1.2914855480 * blue_yellow) ** 3
+    return [
+        linear_to_srgb(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+        linear_to_srgb(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+        linear_to_srgb(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s),
+    ]
+
+
+def from_oklch(lightness: float, chroma: float, hue: float, alpha: float) -> RGBA:
+    """El mismo mapeo de gamut que el tema: bajar croma, nunca recortar canales.
+
+    Recortar gira el tono, y esta receta existe justamente para que un ámbar no
+    se vuelva oliva al oscurecerlo.
+    """
+    channels = oklch_channels(lightness, chroma, hue)
+    if not all(-0.002 <= c <= 1.002 for c in channels):
+        low, high = 0.0, chroma
+        for _ in range(12):
+            middle = (low + high) / 2
+            if all(-0.002 <= c <= 1.002 for c in oklch_channels(lightness, middle, hue)):
+                low = middle
+            else:
+                high = middle
+        channels = oklch_channels(lightness, low, hue)
+    red, green, blue = (min(1.0, max(0.0, c)) for c in channels)
+    return red, green, blue, alpha
+
+
+def icon_wash(color: RGBA, lift: float, drop: float, turn: float, chroma: float):
+    lightness, saturation, hue = to_oklch(color)
+    top = from_oklch(min(1.0, lightness + lift), saturation * (1 - chroma / 2),
+                     (hue - turn) % 360, color[3])
+    bottom = from_oklch(max(0.0, lightness - drop), saturation * (1 + chroma),
+                        (hue + turn) % 360, color[3])
+    return top, bottom
+
+
+def srgb_to_linear(channel: float) -> float:
+    return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+
+
+def linear_to_srgb(channel: float) -> float:
+    return channel * 12.92 if channel <= 0.0031308 else 1.055 * (channel ** (1 / 2.4)) - 0.055
+
+
 failures: list[str] = []
 
 
@@ -199,6 +266,80 @@ try:
         primary_states["pulsado"],
         4.5,
     )
+
+    # Los tonos de glifo sobre sus superficies: un icono no es texto, así que su
+    # suelo es el 3:1 de gráficos no textuales.
+    glyph_tones = {
+        "carpeta": mixed_role(
+            "glyphDirectory", "accent", "accentLift", accent, accent_lift,
+            "accentLinkMix", link_mix,
+        ),
+        "archivo": literal("glyphFile"),
+        "enlace": literal("glyphSymlink"),
+        "navegación": literal("glyphNavigation"),
+        "dispositivo": literal("glyphDevice"),
+        "favorito": literal("favorite"),
+    }
+    for tone_name, tone in glyph_tones.items():
+        for surface_name, surface in {
+            "canvas": night,
+            "tarjeta": card,
+            "elevada": elevated,
+        }.items():
+            require(f"glifo {tone_name}/{surface_name}", tone, surface, 3.0)
+
+    # El lavado de los iconos de contenido: lo que se pinta son los dos extremos
+    # y el fondo de la carpeta, no el token, así que es a ellos a quienes se les
+    # exige el 3:1 de gráficos no textuales sobre las superficies reales.
+    wash_lift = scalar("iconGradientLift")
+    wash_drop = scalar("iconGradientDrop")
+    wash_turn = scalar("iconGradientTurn")
+    wash_chroma = scalar("iconGradientChroma")
+    backdrop_drop = scalar("iconBackdropDrop")
+    for tone_name, tone in glyph_tones.items():
+        top, bottom = icon_wash(tone, wash_lift, wash_drop, wash_turn, wash_chroma)
+        lightness, saturation, hue = to_oklch(tone)
+        backdrop = from_oklch(max(0.0, lightness - backdrop_drop),
+                              saturation * (1 + wash_chroma / 2), hue, tone[3])
+        for surface_name, surface in {
+            "canvas": night,
+            "tarjeta": card,
+            "elevada": elevated,
+        }.items():
+            require(f"icono {tone_name}/{surface_name}/lavado alto",
+                    top, surface, 3.0)
+            require(f"icono {tone_name}/{surface_name}/lavado bajo",
+                    bottom, surface, 3.0)
+            require(f"icono {tone_name}/{surface_name}/fondo carpeta",
+                    backdrop, surface, 3.0)
+
+    # La hoja y el emblema no se pintan sobre la ventana sino sobre el propio
+    # icono, así que su par es el bolsillo y el fondo de la carpeta. La tinta del
+    # emblema no es fija: sobre un tono claro se cambia por una profunda, y aquí
+    # se reproduce esa misma decisión.
+    sheet = literal("iconSheet")
+    ink_threshold = scalar("iconEmblemInkThreshold")
+    ink_lightness = scalar("iconEmblemInkLightness")
+    for tone_name, tone in glyph_tones.items():
+        _, bottom = icon_wash(tone, wash_lift, wash_drop, wash_turn, wash_chroma)
+        pocket_l, pocket_c, pocket_h = to_oklch(bottom)
+        ink = (
+            sheet
+            if pocket_l <= ink_threshold
+            else from_oklch(ink_lightness, pocket_c * 0.85, pocket_h, 1.0)
+        )
+        require(f"emblema/{tone_name}", ink, bottom, 3.0)
+
+        lightness, saturation, hue = to_oklch(tone)
+        backdrop = from_oklch(max(0.0, lightness - backdrop_drop),
+                              saturation * (1 + wash_chroma / 2), hue, tone[3])
+        backdrop_l, backdrop_c, backdrop_h = to_oklch(backdrop)
+        paper = (
+            sheet
+            if backdrop_l <= ink_threshold
+            else from_oklch(ink_lightness, backdrop_c * 0.85, backdrop_h, 1.0)
+        )
+        require(f"hoja/{tone_name}", paper, backdrop, 3.0)
 
     require("botón destructivo/pulsado", night, danger, 4.5)
     require("metadata tenue/tarjeta", text_faint, card, 4.5)

@@ -353,8 +353,46 @@ Magnetita Settings, later shell settings), **`CelestinaSwitch`** (shipped
 track/thumb/inset now use shared `compSwitch*` tokens,
 white thumb, accent track), `CollapsingHeader` (34→21 pattern),
 `CelestinaDialog` (centered, 360×r26, scrim), `TabPills` (floating pill
-strip), `Toast`, `CelestinaSlider`, `Tooltip`. Every component documents its
+strip), `Toast`, `Tooltip`. **`CelestinaSlider`** shipped with its second
+consumer, as the rule asks: Fluorita's transport and Siderita's embedded player
+needed the same anatomy — pista de `spaceXs` con `radiusPill`, relleno en
+`accent`, anillo de foco por teclado y flechas/Inicio/Fin — so the shared
+control owns that and each consumer owns the words. It carries one thing a Qt
+`Slider` cannot: a separate mark for a value *requested but not yet confirmed*,
+which is what keeps a player from claiming the playhead already moved. Every component documents its
 token dependencies and its states.
+
+### 6.8b Content icons — the shape is the icon
+
+Two icon families, and the split is the point. **UI glyphs** (search, sort,
+chevrons) stay Lucide: one flat stroke colour, because a control's icon is a
+label, not an object. **Content icons** — folders, and later file types — are
+*drawn*: a filled vector shape carrying its own soft wash of colour, because a
+folder is a thing the user reaches for and a hairline outline gives it no body.
+
+The wash is derived in **OKLCH**, never in HSL, and never by lightening and
+darkening in sRGB. Two reasons, both learned the hard way: darkening a warm tone
+in HSL walks it into olive (an amber folder finished yellow-green), and clipping
+an out-of-gamut result channel by channel turns the hue by several degrees. The
+recipe therefore moves lightness, adds a touch of chroma, turns a few degrees,
+and **maps into gamut by lowering chroma** so the hue survives.
+
+Anything painted *on* an icon pairs with what it sits on, like every other
+surface/ink pair in this document: the peeking sheet answers to the folder's
+backdrop and the emblem to its pocket, and on a light tone both swap from cream
+to a deep tint of the same hue. The contrast guard checks those pairs, and the
+icon's own ends against canvas/card/elevated at the 3:1 non-text floor.
+
+Folders are drawn in-tree because their anatomy is ours; the other content types
+come from Phosphor's filled set, converted once into path data
+(`CelestinaIconShapes`, MIT) and filled here with the same recipe. Two catalogues
+would drift, so both answer to the same semantic names that `CelestinaIcons`
+already resolves, and a name with no shape falls back to its stroke glyph rather
+than disappearing.
+
+Never paint a gradient *inside* a stroked glyph. It needs a mask, the mask
+resamples the stroke, and the icon comes out fatter and jagged — measured, and
+reverted.
 
 ### 6.9 States & accessibility contract
 

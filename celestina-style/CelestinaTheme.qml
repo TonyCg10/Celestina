@@ -49,6 +49,163 @@ QtObject {
                        sourceColor.a + (targetColor.a - sourceColor.a) * t)
     }
 
+    // ── Icon gradient recipe (OKLCH) ───────────────────────────────────────
+    // A content icon is painted as a soft two-stop wash of its own tone. The
+    // arithmetic runs in OKLCH and not in HSL, and that is the whole reason this
+    // block exists: darkening a warm tone in HSL walks it into olive — an amber
+    // folder ended up yellow-green at the bottom — because HSL's "lightness"
+    // ignores how the eye reads a hue. OKLCH keeps perceived hue while lightness
+    // moves, so every tone deepens into itself.
+    //
+    // The wash is deliberately small: a little lift at the top, a little drop
+    // and chroma at the bottom, and a few degrees of turn so it reads as colour
+    // rather than as shading. Bigger numbers than these stop looking like a
+    // material and start looking like a poster.
+    readonly property real iconGradientLift: 0.05     // L, hacia arriba
+    readonly property real iconGradientDrop: 0.05     // L, hacia abajo
+    readonly property real iconGradientTurn: 5        // grados de giro, ±
+    readonly property real iconGradientChroma: 0.05   // croma que gana el bajo
+
+    function srgbToLinear(channel) {
+        return channel <= 0.04045 ? channel / 12.92
+                                  : Math.pow((channel + 0.055) / 1.055, 2.4)
+    }
+
+    function linearToSrgb(channel) {
+        return channel <= 0.0031308 ? channel * 12.92
+                                    : 1.055 * Math.pow(channel, 1 / 2.4) - 0.055
+    }
+
+    // Devuelve [L, C, H] — H en grados.
+    function toOklch(value) {
+        const r = srgbToLinear(value.r)
+        const g = srgbToLinear(value.g)
+        const b = srgbToLinear(value.b)
+        const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+        const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+        const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+        const lightness = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s
+        const greenRed = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s
+        const blueYellow = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+        return [lightness, Math.hypot(greenRed, blueYellow),
+                (Math.atan2(blueYellow, greenRed) * 180 / Math.PI + 360) % 360]
+    }
+
+    // Los tres canales sRGB de un OKLCH, sin acotar: hace falta verlos crudos
+    // para saber si el color cabe en la pantalla.
+    function oklchChannels(lightness, chroma, hue) {
+        const radians = hue * Math.PI / 180
+        const greenRed = chroma * Math.cos(radians)
+        const blueYellow = chroma * Math.sin(radians)
+        const l = Math.pow(lightness + 0.3963377774 * greenRed
+                           + 0.2158037573 * blueYellow, 3)
+        const m = Math.pow(lightness - 0.1055613458 * greenRed
+                           - 0.0638541728 * blueYellow, 3)
+        const s = Math.pow(lightness - 0.0894841775 * greenRed
+                           - 1.2914855480 * blueYellow, 3)
+        return [linearToSrgb(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+                linearToSrgb(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+                linearToSrgb(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s)]
+    }
+
+    function channelsFitSrgb(channels) {
+        for (let index = 0; index < 3; ++index)
+            if (channels[index] < -0.002 || channels[index] > 1.002)
+                return false
+        return true
+    }
+
+    function fromOklch(lightness, chroma, hue, alpha) {
+        // Un color que no cabe en sRGB no se puede pintar, y recortarlo canal a
+        // canal **gira el tono** — el azul de carpeta se iba 9° al iluminarlo,
+        // que es la misma clase de fallo que esta receta vino a arreglar. Así
+        // que en vez de recortar se baja el croma hasta que entra: se pierde
+        // algo de viveza, nunca la identidad del color.
+        let channels = oklchChannels(lightness, chroma, hue)
+        if (!channelsFitSrgb(channels)) {
+            let low = 0
+            let high = chroma
+            for (let step = 0; step < 12; ++step) {
+                const middle = (low + high) / 2
+                if (channelsFitSrgb(oklchChannels(lightness, middle, hue)))
+                    low = middle
+                else
+                    high = middle
+            }
+            channels = oklchChannels(lightness, low, hue)
+        }
+        const clamp = function(channel) {
+            return Math.max(0, Math.min(1, channel))
+        }
+        return Qt.rgba(clamp(channels[0]), clamp(channels[1]), clamp(channels[2]),
+                       alpha)
+    }
+
+    function iconGradientTop(value) {
+        const lch = toOklch(value)
+        return fromOklch(Math.min(1, lch[0] + iconGradientLift),
+                         lch[1] * (1 - iconGradientChroma * 0.5),
+                         (lch[2] - iconGradientTurn + 360) % 360,
+                         value.a)
+    }
+
+    function iconGradientBottom(value) {
+        const lch = toOklch(value)
+        return fromOklch(Math.max(0, lch[0] - iconGradientDrop),
+                         lch[1] * (1 + iconGradientChroma),
+                         (lch[2] + iconGradientTurn) % 360,
+                         value.a)
+    }
+
+    // Anatomía de la carpeta, compartida por cualquier consumidor que la pinte:
+    // el redondeo, cuánto ocupa la pestaña y cuánto dura su hombro. Son del
+    // tema porque definen la silueta de la suite, no una pantalla concreta.
+    readonly property real iconFolderCorner: 0.10
+    readonly property real iconFolderTab: 0.52
+    readonly property real iconFolderShoulder: 0.12
+    // La hoja que asoma y la tinta del emblema: casi blanca y cálida, para que
+    // no compita con el tono de la carpeta ni se confunda con el texto.
+    readonly property color iconSheet: "#fbf7ee"
+
+    // La tinta del emblema forma par con el bolsillo sobre el que se pinta, no
+    // con la ventana: sobre un tono claro —un ámbar de favoritos, el plata de
+    // los archivos— una tinta casi blanca se borra, y el guard de contraste lo
+    // caza. Así que por encima de cierta claridad se cambia por una tinta
+    // profunda del mismo tono, que es la misma regla de pares que el resto del
+    // sistema.
+    readonly property real iconEmblemInkThreshold: 0.62
+    readonly property real iconEmblemInkLightness: 0.26
+
+    function iconEmblemInk(value) {
+        const pocket = toOklch(iconGradientBottom(value))
+        if (pocket[0] <= iconEmblemInkThreshold)
+            return withAlpha(iconSheet, value.a)
+        return fromOklch(iconEmblemInkLightness, pocket[1] * 0.85, pocket[2],
+                         value.a)
+    }
+
+    // La hoja sigue la misma regla contra el fondo de la carpeta: en un tono
+    // claro, un papel casi blanco sobre un fondo casi blanco no es papel, es
+    // nada. Ahí se vuelve una lámina profunda del mismo tono.
+    function iconSheetTone(value) {
+        const backdrop = toOklch(iconBackdropTone(value))
+        if (backdrop[0] <= iconEmblemInkThreshold)
+            return withAlpha(iconSheet, value.a)
+        return fromOklch(iconEmblemInkLightness, backdrop[1] * 0.85, backdrop[2],
+                         value.a)
+    }
+
+    // El fondo de la carpeta: el mismo tono, asentado. También en OKLCH, para
+    // que no se vaya de familia respecto al bolsillo que lleva delante.
+    readonly property real iconBackdropDrop: 0.13
+
+    function iconBackdropTone(value) {
+        const lch = toOklch(value)
+        return fromOklch(Math.max(0, lch[0] - iconBackdropDrop),
+                         lch[1] * (1 + iconGradientChroma * 0.5),
+                         lch[2], value.a)
+    }
+
     // Accent recipe. Change `ref.accent` once; links, interaction states and
     // translucent selection/disabled roles all follow automatically.
     readonly property real accentLinkMix: 0.24

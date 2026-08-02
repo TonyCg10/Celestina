@@ -203,9 +203,74 @@ Window {
                 }
             }
 
+            // ── Content icons ──────────────────────────────────────────────
+            Section {
+                heading: "CONTENT ICONS — LA CARPETA DE LA SUITE"
+                Row {
+                    spacing: 22
+                    Repeater {
+                        model: [
+                            { t: CelestinaTheme.glyphDirectory,    e: "" },
+                            { t: CelestinaTheme.glyphAccentCyan,   e: "arrow-down" },
+                            { t: CelestinaTheme.glyphAccentGreen,  e: "file-text" },
+                            { t: CelestinaTheme.glyphAccentCoral,  e: "image" },
+                            { t: CelestinaTheme.glyphAccentViolet, e: "music" },
+                            { t: CelestinaTheme.favorite,          e: "star" }
+                        ]
+                        CelestinaFolderIcon {
+                            width: 64
+                            height: 64
+                            tone: modelData.t
+                            emblem: modelData.e.length > 0
+                                    ? CelestinaIcons.source(modelData.e, "file") : ""
+                        }
+                    }
+                }
+                Row {
+                    spacing: 22
+                    Repeater {
+                        model: [
+                            { n: "text-x-generic",  t: CelestinaTheme.glyphFile },
+                            { n: "image-x-generic", t: CelestinaTheme.glyphAccentCoral },
+                            { n: "file-code",       t: CelestinaTheme.glyphAccentGreen },
+                            { n: "audio-x-generic", t: CelestinaTheme.glyphAccentViolet },
+                            { n: "video-x-generic", t: CelestinaTheme.glyphAccentBlue },
+                            { n: "file-archive",    t: CelestinaTheme.glyphAccentAmber },
+                            { n: "hard-drive",      t: CelestinaTheme.glyphDevice }
+                        ]
+                        CelestinaFileIcon {
+                            width: 64
+                            height: 64
+                            name: modelData.n
+                            tone: modelData.t
+                        }
+                    }
+                }
+                Row {
+                    spacing: 18
+                    Repeater {
+                        model: [48, 32, 24, 20, 16]
+                        Item {
+                            required property int modelData
+                            width: 48
+                            height: 48
+                            CelestinaFolderIcon {
+                                anchors.centerIn: parent
+                                width: modelData
+                                height: modelData
+                                tone: CelestinaTheme.glyphAccentCyan
+                                emblem: CelestinaIcons.source("arrow-down", "file")
+                                // Por debajo de 24 la hoja es una mancha.
+                                sheetVisible: modelData >= 24
+                            }
+                        }
+                    }
+                }
+            }
+
             // ── Icons ──────────────────────────────────────────────────────
             Section {
-                heading: "ICONS (Lucide)"
+                heading: "UI GLYPHS (Lucide)"
                 Grid {
                     columns: 8
                     spacing: 10
