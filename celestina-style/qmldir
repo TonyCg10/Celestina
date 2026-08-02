@@ -18,6 +18,7 @@ CelestinaIcon 1.0 CelestinaIcon.qml
 CelestinaSectionLabel 1.0 CelestinaSectionLabel.qml
 CelestinaFocusRing 1.0 CelestinaFocusRing.qml
 CelestinaTextField 1.0 CelestinaTextField.qml
+CelestinaSlider 1.0 CelestinaSlider.qml
 CelestinaSwitch 1.0 CelestinaSwitch.qml
 ListSection 1.0 ListSection.qml
 CelestinaInputShield 1.0 CelestinaInputShield.qml

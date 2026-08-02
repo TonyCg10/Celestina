@@ -40,6 +40,7 @@ qt_add_qml_module(celestina-style
         CelestinaSectionLabel.qml
         CelestinaFocusRing.qml
         CelestinaTextField.qml
+        CelestinaSlider.qml
         CelestinaSwitch.qml
         ListSection.qml
         CelestinaInputShield.qml
