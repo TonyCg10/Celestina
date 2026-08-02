@@ -22,8 +22,9 @@ is pure with respect to UI/IO but uses serde for the wire model. The read side
 (`siderita-core`, `siderita-qt`) and the write side (`siderita-ops`, loss-free
 file operations) are consumed live by Siderita; `grafita-core` backs two host
 adapters — Grafita's own window and Siderita's embedded modal — while
-`fluorita-core` backs `fluorita-engine`, which decodes real media but has no
-host adapter yet;
+`fluorita-core` backs `fluorita-engine`, which decodes real media for two hosts
+— Fluorita's window and Siderita's embedded modal — over the render seam
+`fluorita-qt` owns;
 `celestina-dotfiles-core` only produces plans;
 the Magnetita trio backs the shipped phone link. Its earlier release was
 verified against the real phone; the current pairing-v8, admission, revocation,
@@ -134,6 +135,15 @@ app's internals into another.
       scan costs `stat` calls rather than decodes. Verified against real libmpv
       on tiny synthetic fixtures; the Qt Quick render path
       is not built yet
+- [x] `fluorita-qt` — the render seam, extracted when a second host needed it
+      and not before: Fluorita's window and Siderita's embedded modal both need
+      the same `QQuickFramebufferObject` over libmpv's render API, CXX-Qt 0.9
+      cannot express it, and hand-written C++ had always lived in the app that
+      needed it. Copying it would be duplication and symlinking Fluorita's
+      `cpp/` would make one application depend on another's tree, so the seam
+      became a crate beside `siderita-qt`. It carries no behaviour and no
+      dependencies — it names the sources and the include directory a consuming
+      `build.rs` compiles — and its tests assert that those names are true
 - [ ] shared crates for config, an IPC/activation convention, XDG/MIME, and handler helpers
 - [ ] each app's own domain stays in its own crate; `siderita-qt` remains the pattern for per-app view adapters
 
