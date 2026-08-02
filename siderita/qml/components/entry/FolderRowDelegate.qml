@@ -159,21 +159,19 @@ Item {
         readonly property string media: root.kind === "directory"
                                         ? "" : root.panel.mediaKind(root.name)
 
-        CelestinaIcon {
+        EntryGlyph {
             anchors.centerIn: parent
             visible: !thumb.ready
-            width: Math.round(CelestinaTheme.iconMd * root.hostWindow.contentIconScale)
-            height: Math.round(CelestinaTheme.iconMd * root.hostWindow.contentIconScale)
-            name: root.panel.mediaIconName(root.kind, kindGlyph.media, root.path)
-            // El icono elegido a mano suele ser simbólico, y los simbólicos
-            // sólo se publican a 16 px: sin pedir el tamaño explícito se dibujan
-            // diminutos dentro de una celda hecha para una carpeta de 54.
-            sourceSize: Qt.size(width, height)
-            fallbackName: root.kind === "directory"
-                          ? "folder"
-                          : root.kind === "symlink"
-                            ? "symlink"
-                            : "file"
+            // La carpeta dibujada llena su celda; el glifo de Lucide se queda en
+            // su tamaño de icono, así que la caja es la mayor de las dos.
+            width: Math.round((root.kind === "directory"
+                               ? CelestinaTheme.glyphTile : CelestinaTheme.iconMd)
+                              * root.hostWindow.contentIconScale)
+            height: width
+            kind: root.kind
+            path: root.path
+            iconName: root.panel.mediaIconName(root.kind, kindGlyph.media, root.path)
+            fallbackName: root.kind === "symlink" ? "symlink" : "file"
             tone: root.panel.entryIconTone(root.kind)
             tintOverride: root.panel.iconTint(root.path)
         }

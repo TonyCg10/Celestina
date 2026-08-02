@@ -8,6 +8,7 @@ mod favorites;
 mod folder_views;
 mod format;
 mod icons;
+mod media;
 mod places;
 mod portal;
 mod properties;
@@ -55,6 +56,10 @@ fn main() {
         // The thumbnail image provider must be on the engine before the QML that
         // references image://thumb/… is loaded.
         controller::qobject::register_thumbnail_provider(engine.as_mut());
+        // The media surface registers its own QML type and pins the scene
+        // graph to OpenGL, which libmpv's render API needs; both must happen
+        // before any window exists.
+        media::qobject::register_video_item(engine.as_mut());
         let reduced_motion = std::env::var_os("CELESTINA_REDUCED_MOTION").is_some();
         let mut initial_properties = QMap::<QMapPair_QString_QVariant>::default();
         initial_properties.insert(

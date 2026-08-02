@@ -29,6 +29,12 @@ siderita-qt = { path = "../celestina-rs/crates/siderita-qt" }
 # The embedded Grafita editor: document, encoding, edit and loss-free save
 # rules live there, so this app only marshals them to Qt.
 grafita-core = { path = "../celestina-rs/crates/grafita-core" }
+# The embedded Fluorita player, authorized as a bounded consumer: what media is
+# and what a session may claim live in the core, and the decoding lives in the
+# engine. Linking the engine is not loading it — nothing constructs a session
+# until `Space` asks for one, which is what keeps browsing free of a decoder.
+fluorita-core = { path = "../celestina-rs/crates/fluorita-core" }
+fluorita-engine = { path = "../celestina-rs/crates/fluorita-engine" }
 # System-bus integration: org.freedesktop.FileManager1 and udisks2 volumes.
 zbus = "5"
 # Already in the closure (zbus pulls it in); declared here so the portal backend
@@ -40,6 +46,9 @@ notify-debouncer-full = "0.5"
 libc = "0.2"
 
 [build-dependencies]
+# The shared render seam: the same hand-written video surface Fluorita's window
+# uses, owned by a crate so neither application depends on the other's tree.
+fluorita-qt = { path = "../celestina-rs/crates/fluorita-qt" }
 cxx-qt-build = "=0.9.1"
 cxx-gen = "=0.7.176"
 qt-build-utils = { version = "=0.9.1", features = ["qt_minimal"], optional = true }

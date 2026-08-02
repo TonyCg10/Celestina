@@ -14,6 +14,7 @@ CelestinaModalLayer {
     property var controller
     property var owner
     property var panel   // mainPanel: ayudas de selección y medios
+    property var player  // SideritaPlayer: el reproductor incrustado
     anchors.fill: parent
     z: 70
     shown: owner.quickLookOpen
@@ -29,6 +30,11 @@ CelestinaModalLayer {
     readonly property string qlKind: qlIndex >= 0 ? controller.entryKind(qlIndex) : ""
     readonly property string qlMedia: panel.mediaKind(qlName)
     readonly property bool qlIsImage: qlMedia === "image"
+    // El audio se reproduce aquí mismo; el vídeo todavía no tiene superficie en
+    // este modal, así que se dice y se ofrece Intro para abrir Fluorita.
+    readonly property bool qlIsAudio: qlMedia === "audio"
+    readonly property bool qlIsVideo: qlMedia === "video"
+    readonly property bool qlIsPlayable: qlIsAudio || qlIsVideo
     // Read text lazily and only when it could be text — the controller
     // returns "" for a directory, an image or a binary, which the body
     // reads as "show the info card instead".
@@ -37,6 +43,21 @@ CelestinaModalLayer {
     // is settled before this view ever opens, by Grafita's content probe on its
     // worker; anything that lands here was already refused as editable and is
     // shown read-only.
+    // Una sesión a la vez: cada paso de selección cierra la anterior antes de
+    // abrir nada, y cerrar el modal no deja ningún decodificador vivo.
+    onQlPathChanged: quickLookView.syncPlayer()
+    onShownChanged: quickLookView.syncPlayer()
+
+    function syncPlayer() {
+        if (!quickLookView.player)
+            return
+        if (quickLookView.shown && quickLookView.qlIsPlayable
+                && quickLookView.qlPath.length > 0)
+            quickLookView.player.requestPreview(quickLookView.qlPath)
+        else
+            quickLookView.player.close()
+    }
+
     readonly property string qlText: (owner.quickLookOpen && qlKind !== "directory"
                                       && !qlIsImage && qlPath.length > 0)
                                      ? controller.previewText(qlPath) : ""
@@ -129,7 +150,16 @@ CelestinaModalLayer {
                 mipmap: true
             }
 
-            // (2) Text / code
+            // (2) Media — el reproductor incrustado. Sólo audio por ahora, y
+            // sólo cuando alguien lo pidió: abrir la carpeta no construye nada.
+            MediaPreview {
+                anchors.fill: parent
+                visible: quickLookView.qlIsPlayable
+                player: quickLookView.player
+                path: quickLookView.qlPath
+            }
+
+            // (3) Text / code
             ScrollView {
                 anchors.fill: parent
                 visible: !quickLookView.qlIsImage && quickLookView.qlHasText
@@ -146,11 +176,12 @@ CelestinaModalLayer {
                 }
             }
 
-            // (3) No renderable preview — a centred glyph + reason.
+            // (4) No renderable preview — a centred glyph + reason.
             Column {
                 anchors.centerIn: parent
                 spacing: 12
-                visible: !quickLookView.qlIsImage && !quickLookView.qlHasText
+                visible: !quickLookView.qlIsImage && !quickLookView.qlIsPlayable
+                         && !quickLookView.qlHasText
                 CelestinaIcon {
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: 56
@@ -166,10 +197,6 @@ CelestinaModalLayer {
                     anchors.horizontalCenter: parent.horizontalCenter
                     horizontalAlignment: Text.AlignHCenter
                     text: quickLookView.qlKind === "directory" ? "Carpeta"
-                        : quickLookView.qlMedia === "video"
-                          ? "Vídeo — vista previa en Fluorita (próximamente)"
-                        : quickLookView.qlMedia === "audio"
-                          ? "Audio — vista previa en Fluorita (próximamente)"
                         : "Sin vista previa"
                     color: CelestinaTheme.textMuted
                     font.family: CelestinaTheme.sansFamily

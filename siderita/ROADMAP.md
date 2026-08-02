@@ -44,6 +44,21 @@ touched picker transitions instant, but that correction has automated/static
 evidence only: remaining legacy motion and the full enabled/disabled interaction
 pass are still open.
 
+**Las carpetas se dibujan (2026-08-01).** A folder is no longer a Lucide outline
+tinted blue: it is `CelestinaStyle`'s drawn shape, with its own soft wash of
+colour and, where the place has one, an emblem — a down arrow for Descargas, a
+note for Música. The decision lives in one new `EntryGlyph`, used by the list and
+the grid, because taking it twice is how two views drift apart; a file or a
+symlink still gets the flat glyph it always had. The typed-folder names Lucide
+ships are folders themselves, so `EntryGlyph` translates them into the symbol
+that actually says something, and the peeking sheet stands down below 24 px where
+it is a two-pixel smudge. Covered by `tests/qml/tst_entry_glyph.qml`. Not yet
+done, and named rather than hidden: **file-type icons are still flat glyphs**, so
+a folder now has body and a document does not — that asymmetry is deliberate for
+one change, not a finished state. And the pixels want a real session: `Shape`
+renders offscreen, so construction and geometry are proven here, but how the wash
+reads at 20 px in a full folder is not.
+
 **A floating surface owns its pointer (2026-07-31).** Everything painted over
 the scrolling listing was passing input through to the rows it hides: hover lit
 a row nobody could see, the three mouse buttons acted on it (a right click

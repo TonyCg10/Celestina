@@ -225,6 +225,14 @@ ApplicationWindow {
         }
     }
 
+    // Clasifica y lanza; nunca abre una sesión. Es el mismo patrón que
+    // `textActivator`: un objeto por ventana, para una pregunta sobre un
+    // archivo. La reproducción incrustada tiene el suyo, en la vista de
+    // carpeta.
+    SideritaPlayer {
+        id: mediaActivator
+    }
+
     // Called by every activation site instead of `controller.activateToken`.
     // Directories and unknown entries never take the detour: a folder has no
     // bytes to classify, and asking would be a wasted read.
@@ -236,6 +244,17 @@ ApplicationWindow {
         }
         const path = controller.entryPath(index)
         if (path.length === 0) {
+            controller.activateToken(token)
+            return
+        }
+        // Media goes to Fluorita, and it is asked first because the question
+        // is free: a kind decided by name costs nothing, while the text probe
+        // reads bytes on a worker — and a `.mp4` is never editable text.
+        // A Fluorita that is not installed falls back to the desktop's own
+        // handler, so a failed launch still opens the file.
+        if (mediaActivator.isMedia(path)) {
+            if (mediaActivator.launchStandalone(path))
+                return
             controller.activateToken(token)
             return
         }

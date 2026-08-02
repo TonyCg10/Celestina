@@ -134,18 +134,15 @@ Item {
             readonly property string media: root.kind === "directory"
                                             ? "" : root.panel.mediaKind(root.name)
 
-            CelestinaIcon {
+            EntryGlyph {
                 anchors.centerIn: parent
                 visible: !cellThumb.ready
                 width: Math.round(54 * root.hostWindow.contentIconScale)
-                height: Math.round(54 * root.hostWindow.contentIconScale)
-                name: root.panel.mediaIconName(root.kind, cellGlyph.media, root.path)
-                sourceSize: Qt.size(width, height)
-                fallbackName: root.kind === "directory"
-                              ? "folder"
-                              : root.kind === "symlink"
-                                ? "symlink"
-                                : "file"
+                height: width
+                kind: root.kind
+                path: root.path
+                iconName: root.panel.mediaIconName(root.kind, cellGlyph.media, root.path)
+                fallbackName: root.kind === "symlink" ? "symlink" : "file"
                 tone: root.panel.entryIconTone(root.kind)
                 tintOverride: root.panel.iconTint(root.path)
             }

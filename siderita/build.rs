@@ -13,8 +13,11 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaIconButton.qml",
     "qml/CelestinaSectionLabel.qml",
     "qml/CelestinaFocusRing.qml",
+    "qml/CelestinaSlider.qml",
     "qml/CelestinaTextField.qml",
     "qml/CelestinaInputShield.qml",
+    "qml/CelestinaFolderIcon.qml",
+    "qml/CelestinaFileIcon.qml",
     "qml/CelestinaModalLayer.qml",
     "qml/GlassCard.qml",
     "qml/GlassContextMenu.qml",
@@ -41,6 +44,7 @@ const QML_FILES: &[&str] = &[
     "qml/components/sidebar/SidebarSavedSections.qml",
     "qml/components/sidebar/SidebarContextMenus.qml",
     "qml/components/sidebar/SidebarInfo.qml",
+    "qml/components/entry/EntryGlyph.qml",
     "qml/components/entry/FavoriteBadge.qml",
     "qml/components/entry/DragScrollEdge.qml",
     "qml/components/entry/FolderRowDelegate.qml",
@@ -71,6 +75,7 @@ const QML_FILES: &[&str] = &[
     "qml/dialogs/OpenWithDialog.qml",
     "qml/dialogs/PropertiesDialog.qml",
     "qml/dialogs/IconPickerDialog.qml",
+    "qml/dialogs/MediaPreview.qml",
     "qml/dialogs/QuickLookView.qml",
     "qml/dialogs/GrafitaEditorDialog.qml",
     "qml/dialogs/PhoneMediaDialog.qml",
@@ -106,6 +111,11 @@ fn main() {
                 .version(1, 0)
                 .singleton(true),
         )
+        .qml_file(
+            QmlFile::from("qml/CelestinaIconShapes.qml")
+                .version(1, 0)
+                .singleton(true),
+        )
         .qml_files(QML_FILES);
 
     // Los QML también, y explícitamente: en cuanto este script imprime un solo
@@ -116,6 +126,7 @@ fn main() {
     for qml in QML_FILES.iter().copied().chain([
         "qml/CelestinaTheme.qml",
         "qml/CelestinaIcons.qml",
+        "qml/CelestinaIconShapes.qml",
         "qml/icons.qrc",
         "qml/fonts.qrc",
     ]) {
@@ -132,6 +143,9 @@ fn main() {
     println!("cargo::rerun-if-changed=cpp/siderita/clipboard.h");
     println!("cargo::rerun-if-changed=cpp/entrymodel.cpp");
     println!("cargo::rerun-if-changed=cpp/siderita/entrymodel.h");
+    for source in fluorita_qt::rerun_paths() {
+        println!("cargo::rerun-if-changed={source}");
+    }
     println!("cargo::rerun-if-changed=cpp/thumbnailprovider.cpp");
     println!("cargo::rerun-if-changed=cpp/siderita/thumbnailprovider.h");
     let builder = CxxQtBuilder::new_qml_module(module)
@@ -146,16 +160,21 @@ fn main() {
         // The freedesktop-thumbnail image provider (no Q_OBJECT of its own — it
         // only emits QQuickImageResponse's inherited signal — so just compiled).
         .cpp_file("cpp/thumbnailprovider.cpp")
+        // The shared media surface, compiled from the crate that owns it.
+        .cpp_file(fluorita_qt::VIDEO_ITEM_SOURCE)
+        .cpp_file(fluorita_qt::VIDEO_ITEM_HEADER)
         .files([
             "src/controller.rs",
             "src/dbus.rs",
             "src/editor.rs",
+            "src/media.rs",
             "src/portal.rs",
         ]);
     // SAFETY: only adds an include directory for our own headers.
     let builder = unsafe {
         builder.cc_builder(|cc| {
             cc.include("cpp");
+            cc.include(fluorita_qt::include_dir());
         })
     };
 

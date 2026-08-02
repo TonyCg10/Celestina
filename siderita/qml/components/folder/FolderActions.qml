@@ -139,6 +139,14 @@ Item {
         controller: root.controller
         owner: root.owner
         panel: root.panel
+        player: mediaPlayerState
+    }
+
+    // El reproductor incrustado detrás del modal de `Espacio`. Como el editor,
+    // no sabe nada de carpetas: recibe una ruta y responde con una sesión o con
+    // un rechazo, y no construye nada hasta que se lo piden.
+    SideritaPlayer {
+        id: mediaPlayerState
     }
 
     // The document state behind the embedded editor. It holds no folder

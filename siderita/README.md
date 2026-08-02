@@ -37,7 +37,7 @@ remove it).
 | `qml/views/FolderView.qml`, `qml/views/Sidebar.qml` | composed coordinators; Sidebar is below the ~800-line ceiling, while FolderView is a frozen baseline exception that may only shrink |
 | `qml/components/chrome/` | app chrome: top/bottom controls, tabs, headers and Siderita's local floating-glass controls |
 | `qml/components/sidebar/` | sidebar rows, saved sections, context menus and info presentation |
-| `qml/components/entry/` | file/folder delegates, drag edges and entry badges |
+| `qml/components/entry/` | file/folder delegates, drag edges, entry badges and `EntryGlyph` (drawn folder vs tinted glyph, and the emblem each place gets) |
 | `qml/components/folder/` | list/grid views, shortcuts, actions, operation status and floating content chrome |
 | `qml/components/picker/` | portal picker controls; `PickerWindow.qml` retains browsing and selection state |
 | `qml/components/` | small dialog/property rows that do not belong to a larger UI region |

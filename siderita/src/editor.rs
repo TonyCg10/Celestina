@@ -284,7 +284,11 @@ impl qobject::GrafitaEditor {
                 let path = QString::from(path.to_string_lossy().as_ref());
                 self.as_mut().launch_decided(path, editable);
             }
-            Some(Event::Select { .. }) => {}
+            // The embedded surface only ever edits a file that already
+            // exists — it is reached by pressing Space on one — so it can never
+            // be the thing that needs somewhere to go. Named rather than caught
+            // by a wildcard, so a new event has to be considered here too.
+            Some(Event::DestinationNeeded | Event::Select { .. }) => {}
             Some(Event::Closed) => self.as_mut().closed(),
             None => {}
         }
