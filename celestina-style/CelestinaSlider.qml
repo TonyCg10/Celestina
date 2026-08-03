@@ -36,6 +36,33 @@ Item {
         ? Math.max(0, Math.min(1, (control.pendingValue - control.from) / control.span))
         : -1
 
+    // While the mouse is down, the thumb follows the cursor on the spot —
+    // `value` only moves once whatever owns it (a confirmed engine report,
+    // for a seek bar) comes back, which would otherwise make a drag lag
+    // behind the cursor or not visibly track it at all. This is purely a
+    // local, ephemeral display: it never substitutes for `value`, and it
+    // snaps back to whatever `value` says the moment the button is let go.
+    property bool dragging: false
+    property real dragFraction: 0
+    readonly property real displayFraction: control.dragging ? control.dragFraction : control.fraction
+
+    // A fast drag moves the cursor across many pixels before the next paint,
+    // and asking the consumer to act on every one of them queued far more
+    // seeks than a video's decoder could keep up with — so after letting go,
+    // the picture kept catching up through that backlog on its own, looking
+    // exactly like inertia. The visual thumb above still tracks every move;
+    // only how often `moved` actually fires is capped, well under what a
+    // person can perceive as a delay.
+    property real dragTarget: 0
+    property bool dragTargetPending: false
+
+    Timer {
+        interval: 80
+        repeat: true
+        running: control.dragging
+        onTriggered: control.flushDrag()
+    }
+
     // Qt dice por qué llegó el foco; un clic no debe levantar el anillo.
     property int focusReason: Qt.OtherFocusReason
 
@@ -55,7 +82,7 @@ Item {
         color: CelestinaTheme.divider
 
         Rectangle {
-            width: track.width * control.fraction
+            width: track.width * control.displayFraction
             height: track.height
             radius: track.radius
             color: control.enabled ? CelestinaTheme.accent : CelestinaTheme.textFaint
@@ -82,10 +109,33 @@ Item {
     MouseArea {
         anchors.fill: parent
         enabled: control.enabled
-        onClicked: function(mouse) {
+        // A click alone only jumped once; nothing followed the cursor while
+        // the button stayed down. `onPositionChanged` on a `MouseArea` with
+        // `hoverEnabled` false (the default, unset here) only fires while a
+        // button is held, which is exactly a drag — so the same math runs on
+        // press and on every move, both driving the local drag position and
+        // asking the consumer to move there for real.
+        onPressed: function(mouse) {
             control.focusReason = Qt.MouseFocusReason
             control.forceActiveFocus(Qt.MouseFocusReason)
-            control.moveTo(control.from + mouse.x / Math.max(1, control.width) * control.span)
+            control.dragging = true
+            control.dragTo(mouse.x)
+            // The initial press jumps immediately — only the *following*
+            // stream of moves is throttled, so a plain click never waits.
+            control.flushDrag()
+        }
+        onPositionChanged: function(mouse) {
+            control.dragTo(mouse.x)
+        }
+        onReleased: {
+            control.dragging = false
+            // Whatever pixel the button came up on is the one that must
+            // land, even if it fell between two throttled ticks.
+            control.flushDrag()
+        }
+        onCanceled: {
+            control.dragging = false
+            control.flushDrag()
         }
     }
 
@@ -107,5 +157,20 @@ Item {
         if (!control.enabled || control.span <= 0)
             return
         control.moved(Math.max(control.from, Math.min(control.to, target)))
+    }
+
+    function dragTo(x) {
+        if (!control.enabled || control.span <= 0)
+            return
+        control.dragFraction = Math.max(0, Math.min(1, x / Math.max(1, control.width)))
+        control.dragTarget = control.from + control.dragFraction * control.span
+        control.dragTargetPending = true
+    }
+
+    function flushDrag() {
+        if (!control.dragTargetPending)
+            return
+        control.dragTargetPending = false
+        control.moveTo(control.dragTarget)
     }
 }

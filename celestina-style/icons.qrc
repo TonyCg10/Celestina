@@ -28,6 +28,8 @@
     <file alias="media-play.svg">icons/media-play.svg</file>
     <file alias="media-pause.svg">icons/media-pause.svg</file>
     <file alias="media-skip-forward.svg">icons/media-skip-forward.svg</file>
+    <file alias="media-volume.svg">icons/media-volume.svg</file>
+    <file alias="media-volume-muted.svg">icons/media-volume-muted.svg</file>
     <file alias="app-window.svg">icons/app-window.svg</file>
     <file alias="arrow-down.svg">icons/arrow-down.svg</file>
     <file alias="arrow-right.svg">icons/arrow-right.svg</file>

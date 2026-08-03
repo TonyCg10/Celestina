@@ -81,6 +81,8 @@ qt_add_qml_module(celestina-style
         icons/media-play.svg
         icons/media-pause.svg
         icons/media-skip-forward.svg
+        icons/media-volume.svg
+        icons/media-volume-muted.svg
         icons/app-window.svg
         icons/arrow-down.svg
         icons/arrow-right.svg

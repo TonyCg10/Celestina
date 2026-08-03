@@ -65,6 +65,8 @@ QtObject {
         "media-play": true,
         "media-skip-back": true,
         "media-skip-forward": true,
+        "media-volume": true,
+        "media-volume-muted": true,
         "monitor": true,
         "music": true,
         "paintbrush": true,

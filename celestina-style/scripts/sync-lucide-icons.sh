@@ -29,7 +29,8 @@ icons=(
     hard-drive:hard-drive image:image info:info key:key
     layout-template:layout-template list-x:list-x mail:mail
     media-pause:pause media-play:play media-skip-back:skip-back
-    media-skip-forward:skip-forward monitor:monitor music:music
+    media-skip-forward:skip-forward media-volume:volume-2
+    media-volume-muted:volume-x monitor:monitor music:music
     paintbrush:paintbrush pencil:pencil phone:smartphone plus:plus printer:printer
     rotate-ccw:rotate-ccw scissors:scissors search:search settings:sliders-horizontal
     share-2:share-2 star:star star-outline:star symlink:link-2 terminal:terminal
