@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use celestina_core::{percent, CancellationToken};
 
+use crate::copy::Progress;
 use crate::error::OpError;
 use crate::relocate::{is_cross_device, relocate_by_copy};
 
@@ -31,7 +32,15 @@ pub struct Trashed {
 ///
 /// Cross-filesystem entries land in the home Trash rather than a per-mount
 /// `.Trash-$uid`; using the mount-local trash is a later refinement.
-pub fn trash(source: &Path, cancellation: &CancellationToken) -> Result<Trashed, OpError> {
+///
+/// That cross-filesystem case is a real copy (see [`trash_into`]), so a caller
+/// trashing something large from another mount must run this off its UI thread
+/// and use `progress` to keep showing life, exactly like a copy or move would.
+pub fn trash(
+    source: &Path,
+    cancellation: &CancellationToken,
+    progress: &mut dyn FnMut(Progress),
+) -> Result<Trashed, OpError> {
     if cancellation.is_cancelled() {
         return Err(OpError::Cancelled);
     }
@@ -47,7 +56,7 @@ pub fn trash(source: &Path, cancellation: &CancellationToken) -> Result<Trashed,
     }
 
     let trash_root = home_trash()?;
-    trash_into(source, &trash_root, cancellation)
+    trash_into(source, &trash_root, cancellation, progress)
 }
 
 /// Sends `source` into the Trash directory rooted at `trash_root` (which will
@@ -57,6 +66,7 @@ pub(crate) fn trash_into(
     source: &Path,
     trash_root: &Path,
     cancellation: &CancellationToken,
+    progress: &mut dyn FnMut(Progress),
 ) -> Result<Trashed, OpError> {
     if cancellation.is_cancelled() {
         return Err(OpError::Cancelled);
@@ -88,7 +98,7 @@ pub(crate) fn trash_into(
     match fs::rename(source, &destination) {
         Ok(()) => {}
         Err(error) if is_cross_device(&error) => {
-            if let Err(moved) = relocate_by_copy(source, &destination, cancellation, &mut |_| {}) {
+            if let Err(moved) = relocate_by_copy(source, &destination, cancellation, progress) {
                 let _ = fs::remove_file(&info_path);
                 return Err(moved);
             }
@@ -249,7 +259,7 @@ mod tests {
         fs::write(&source, b"bin me").expect("seed");
         let trash_root = dir.path().join("Trash");
 
-        let trashed = trash_into(&source, &trash_root, &live()).expect("trash");
+        let trashed = trash_into(&source, &trash_root, &live(), &mut |_| {}).expect("trash");
 
         assert!(!source.exists(), "source is gone");
         assert_eq!(fs::read(&trashed.trashed).expect("read trashed"), b"bin me");
@@ -268,14 +278,14 @@ mod tests {
 
         let first = dir.path().join("dup.txt");
         fs::write(&first, b"first").expect("seed first");
-        let a = trash_into(&first, &trash_root, &live()).expect("trash first");
+        let a = trash_into(&first, &trash_root, &live(), &mut |_| {}).expect("trash first");
 
         // A second, unrelated file with the same name.
         let nested = dir.path().join("nested");
         fs::create_dir(&nested).expect("mk nested");
         let second = nested.join("dup.txt");
         fs::write(&second, b"second").expect("seed second");
-        let b = trash_into(&second, &trash_root, &live()).expect("trash second");
+        let b = trash_into(&second, &trash_root, &live(), &mut |_| {}).expect("trash second");
 
         assert_ne!(
             a.trashed, b.trashed,
@@ -291,7 +301,7 @@ mod tests {
         let trash_root = dir.path().join("Trash");
         let ghost = dir.path().join("ghost");
 
-        let error = trash_into(&ghost, &trash_root, &live()).expect_err("must fail");
+        let error = trash_into(&ghost, &trash_root, &live(), &mut |_| {}).expect_err("must fail");
         assert!(matches!(error, OpError::SourceMissing { .. }));
 
         let info_dir = trash_root.join("info");
@@ -310,7 +320,7 @@ mod tests {
 
         let token = CancellationToken::new();
         token.cancel();
-        let error = trash_into(&source, &trash_root, &token).expect_err("cancelled");
+        let error = trash_into(&source, &trash_root, &token, &mut |_| {}).expect_err("cancelled");
         assert!(matches!(error, OpError::Cancelled));
         assert!(source.exists());
     }

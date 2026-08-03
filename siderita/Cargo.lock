@@ -770,6 +770,7 @@ dependencies = [
  "celestina-core",
  "fluorita-core",
  "libmpv2",
+ "notify-debouncer-full",
 ]
 
 [[package]]
@@ -913,7 +914,7 @@ dependencies = [
 
 [[package]]
 name = "grafita-core"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "celestina-core",
  "xattr",

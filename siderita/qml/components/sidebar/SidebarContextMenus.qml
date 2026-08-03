@@ -11,8 +11,30 @@ Item {
 
     signal editBookmarkRequested(int index)
 
-    function openBookmark(index, point) {
+    // El estado que gobierna "Abrir en pestaña nueva" de un dispositivo, visible
+    // para quien lo prueba: sin montar no hay ruta y la acción no se ofrece.
+    readonly property string deviceMountPoint: deviceMenu.mountPoint
+    readonly property bool deviceCanOpenTab: deviceMenu.mountPoint.length > 0
+    readonly property string phoneMountPath: phoneMenu.mountPath
+
+    // Qué ruta llevará "Propiedades" en cada menú, y por tanto si se ofrece. Un
+    // lugar virtual —Recientes, Papelera— y un volumen sin montar no tienen
+    // ruta en disco, así que ahí no hay propiedades que enseñar.
+    readonly property string placeTargetPath: placeMenu.targetPath
+    readonly property string favoriteTargetPath: favoriteMenu.targetPath
+    readonly property string bookmarkTargetPath: bookmarkMenu.targetPath
+
+    function closeAll() {
+        bookmarkMenu.close()
+        placeMenu.close()
+        favoriteMenu.close()
+        deviceMenu.close()
+        phoneMenu.close()
+    }
+
+    function openBookmark(index, path, point) {
         bookmarkMenu.targetIndex = index
+        bookmarkMenu.targetPath = path
         bookmarkMenu.popup(overlayParent, point)
     }
 
@@ -28,15 +50,24 @@ Item {
         favoriteMenu.popup(overlayParent, point)
     }
 
-    function openDevice(name, point) {
+    function openDevice(name, mountPoint, point) {
         deviceMenu.deviceName = name
+        deviceMenu.mountPoint = mountPoint
         deviceMenu.popup(overlayParent, point)
+    }
+
+    // El móvil no tenía menú: no se podía abrir en otra pestaña ni con el botón
+    // central ni por menú, que es justo lo que faltaba.
+    function openPhone(mountPath, point) {
+        phoneMenu.mountPath = mountPath
+        phoneMenu.popup(overlayParent, point)
     }
 
     GlassContextMenu {
         id: bookmarkMenu
         backdropSource: root.backdropSource
         property int targetIndex: -1
+        property string targetPath: ""
 
         GlassMenuItem {
             text: "Renombrar"
@@ -65,6 +96,18 @@ Item {
                 if (root.hostWindow.activeController)
                     root.hostWindow.activeController.moveBookmark(
                                 bookmarkMenu.targetIndex, bookmarkMenu.targetIndex + 1)
+            }
+        }
+
+        GlassMenuItem {
+            text: "Propiedades"
+            visible: bookmarkMenu.targetPath.length > 0
+            height: visible ? implicitHeight : 0
+            icon.name: "document-properties"
+            icon.source: CelestinaTheme.fallbackIcon("info")
+            onTriggered: {
+                if (root.hostWindow.activeController)
+                    root.hostWindow.activeController.openProperties(bookmarkMenu.targetPath)
             }
         }
 
@@ -103,6 +146,19 @@ Item {
             }
         }
 
+
+        GlassMenuItem {
+            text: "Propiedades"
+            visible: placeMenu.targetPath.length > 0
+            height: visible ? implicitHeight : 0
+            icon.name: "document-properties"
+            icon.source: CelestinaTheme.fallbackIcon("info")
+            onTriggered: {
+                if (root.hostWindow.activeController)
+                    root.hostWindow.activeController.openProperties(placeMenu.targetPath)
+            }
+        }
+
         GlassMenuItem {
             text: "Mostrar lugares ocultos"
             visible: root.hostWindow.activeController
@@ -138,6 +194,16 @@ Item {
         }
 
         GlassMenuItem {
+            text: "Propiedades"
+            icon.name: "document-properties"
+            icon.source: CelestinaTheme.fallbackIcon("info")
+            onTriggered: {
+                if (root.hostWindow.activeController)
+                    root.hostWindow.activeController.openProperties(favoriteMenu.targetPath)
+            }
+        }
+
+        GlassMenuItem {
             text: "Quitar de favoritos"
             icon.source: CelestinaTheme.fallbackIcon("star")
             onTriggered: {
@@ -151,6 +217,17 @@ Item {
         id: deviceMenu
         backdropSource: root.backdropSource
         property string deviceName: ""
+        property string mountPoint: ""
+
+        GlassMenuItem {
+            text: "Abrir en pestaña nueva"
+            // Un volumen sin montar todavía no tiene ruta, y montarlo es un
+            // trabajo asíncrono: se ofrece cuando de verdad se puede cumplir.
+            enabled: deviceMenu.mountPoint.length > 0
+            icon.name: "tab-new"
+            icon.source: CelestinaTheme.fallbackIcon("plus")
+            onTriggered: root.hostWindow.openTab(deviceMenu.mountPoint, true)
+        }
 
         GlassMenuItem {
             text: "Ocultar dispositivo"
@@ -159,6 +236,19 @@ Item {
             onTriggered: {
                 if (root.hostWindow.activeController)
                     root.hostWindow.activeController.hideDevice(deviceMenu.deviceName)
+            }
+        }
+
+
+        GlassMenuItem {
+            text: "Propiedades"
+            visible: deviceMenu.mountPoint.length > 0
+            height: visible ? implicitHeight : 0
+            icon.name: "document-properties"
+            icon.source: CelestinaTheme.fallbackIcon("info")
+            onTriggered: {
+                if (root.hostWindow.activeController)
+                    root.hostWindow.activeController.openProperties(deviceMenu.mountPoint)
             }
         }
 
@@ -171,6 +261,20 @@ Item {
                 if (root.hostWindow.activeController)
                     root.hostWindow.activeController.unhideAllDevices()
             }
+        }
+    }
+
+    GlassContextMenu {
+        id: phoneMenu
+        backdropSource: root.backdropSource
+        property string mountPath: ""
+
+        GlassMenuItem {
+            text: "Abrir en pestaña nueva"
+            enabled: phoneMenu.mountPath.length > 0
+            icon.name: "tab-new"
+            icon.source: CelestinaTheme.fallbackIcon("plus")
+            onTriggered: root.hostWindow.openTab(phoneMenu.mountPath, true)
         }
     }
 }

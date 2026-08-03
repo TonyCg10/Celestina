@@ -262,10 +262,7 @@ Item {
         // paths are user-level and stable.
         property var folderTypeIcons: ({})
         function rebuildFolderTypeIcons() {
-            var defs = { DESKTOP: "folder-desktop", DOCUMENTS: "folder-documents",
-                         DOWNLOAD: "folder-download", MUSIC: "folder-music",
-                         PICTURES: "folder-pictures", VIDEOS: "folder-videos",
-                         PUBLICSHARE: "folder-publicshare", TEMPLATES: "folder-templates" }
+            var defs = CelestinaFolderTypeIcons.defs
             var m = {}
             for (var k in defs) {
                 var p = controller.placePath(k)

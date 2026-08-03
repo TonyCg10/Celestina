@@ -20,6 +20,9 @@ Item {
     required property bool focusVisible
     required property bool banding
     required property Item contentItem
+    // Folder-type/tone rules shared with the main folder view
+    // (PickerIconRules.qml), so a folder here looks like the one already known.
+    required property var iconRules
 
     readonly property bool isDirectory: kind === "directory"
     readonly property bool hidden: name.charAt(0) === "."
@@ -33,7 +36,7 @@ Item {
             ? "audio" : ""
     readonly property bool previewable: !isDirectory && mediaKind === "image"
     readonly property string iconName:
-            isDirectory ? "folder"
+            isDirectory ? root.iconRules.folderIcon(root.path)
           : kind === "symlink" ? "emblem-symbolic-link"
           : mediaKind === "image" ? "image-x-generic"
           : mediaKind === "video" ? "video-x-generic"
@@ -92,18 +95,17 @@ Item {
         clip: true
         color: CelestinaTheme.clear
 
-        CelestinaIcon {
+        EntryGlyph {
             anchors.centerIn: parent
             visible: !preview.ready
             width: Math.round(54 * root.iconScale)
             height: width
-            sourceSize: Qt.size(width, width)
-            name: root.iconName
+            kind: root.kind
+            path: root.path
+            iconName: root.iconName
             fallbackName: root.isDirectory ? "folder"
                           : root.kind === "symlink" ? "symlink" : "file"
-            tone: root.isDirectory ? CelestinaIcon.Folder
-                  : root.kind === "symlink" ? CelestinaIcon.Symlink
-                  : CelestinaIcon.File
+            tone: root.iconRules.entryIconTone(root.kind)
         }
 
         Image {

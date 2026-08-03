@@ -9,7 +9,7 @@ Item {
     required property Item overlayParent
 
     signal favoriteMenuRequested(string path, real popupX, real popupY)
-    signal bookmarkMenuRequested(int index, real popupX, real popupY)
+    signal bookmarkMenuRequested(int index, string path, real popupX, real popupY)
 
     property bool favoritesCollapsed: false
     property bool bookmarksCollapsed: false
@@ -165,8 +165,8 @@ Item {
                 bookmarksList.dragIndex = -1
                 bookmarksList.dropIndex = -1
             }
-            onContextMenuRequested: function(row, popupX, popupY) {
-                root.bookmarkMenuRequested(row, popupX, popupY)
+            onContextMenuRequested: function(row, path, popupX, popupY) {
+                root.bookmarkMenuRequested(row, path, popupX, popupY)
             }
         }
     }

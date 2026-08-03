@@ -63,6 +63,8 @@ const QML_FILES: &[&str] = &[
     "qml/components/picker/PickerChrome.qml",
     "qml/components/picker/PickerCellDelegate.qml",
     "qml/components/picker/PickerFilterMenu.qml",
+    "qml/components/picker/PickerSidebar.qml",
+    "qml/components/picker/PickerIconRules.qml",
     "qml/components/SizeRow.qml",
     "qml/components/PropRow.qml",
     // Vistas compuestas.
@@ -116,6 +118,16 @@ fn main() {
                 .version(1, 0)
                 .singleton(true),
         )
+        .qml_file(
+            QmlFile::from("qml/CelestinaPlaceDefs.qml")
+                .version(1, 0)
+                .singleton(true),
+        )
+        .qml_file(
+            QmlFile::from("qml/CelestinaFolderTypeIcons.qml")
+                .version(1, 0)
+                .singleton(true),
+        )
         .qml_files(QML_FILES);
 
     // Los QML también, y explícitamente: en cuanto este script imprime un solo
@@ -127,6 +139,8 @@ fn main() {
         "qml/CelestinaTheme.qml",
         "qml/CelestinaIcons.qml",
         "qml/CelestinaIconShapes.qml",
+        "qml/CelestinaPlaceDefs.qml",
+        "qml/CelestinaFolderTypeIcons.qml",
         "qml/icons.qrc",
         "qml/fonts.qrc",
     ]) {

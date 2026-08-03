@@ -525,17 +525,27 @@ Item {
                             id: volumeMouse
                             anchors.fill: parent
                             acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                             | Qt.MiddleButton
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             // Left: open (mounting first if needed) — eject has its
-                            // own zone. Right: hide this device.
+                            // own zone. Middle: a background tab, like every other
+                            // place in this sidebar. Right: the device menu.
                             onClicked: function(mouse) {
                                 if (!root.hostWindow.activeController)
                                     return
                                 if (mouse.button === Qt.RightButton) {
                                     const point = volumeRow.mapToItem(
                                                     root.overlayParent, mouse.x, mouse.y)
-                                    sidebarMenus.openDevice(volumeRow.modelData, point)
+                                    sidebarMenus.openDevice(volumeRow.modelData,
+                                                            volumeRow.mountPoint, point)
+                                } else if (mouse.button === Qt.MiddleButton) {
+                                    // Sin montar no hay ruta que abrir, y montarlo
+                                    // es asíncrono: ahí se deja el clic sin efecto
+                                    // en vez de abrir una pestaña a ninguna parte.
+                                    if (volumeRow.mounted)
+                                        root.hostWindow.openTab(volumeRow.mountPoint,
+                                                                false)
                                 } else {
                                     root.hostWindow.activeController.openVolume(volumeRow.index)
                                 }
@@ -548,6 +558,9 @@ Item {
                     id: phoneSection
                     width: placesColumn.width
                     hostWindow: root.hostWindow
+                    onContextMenuRequested: function(mountPath, point) {
+                        sidebarMenus.openPhone(mountPath, point)
+                    }
                 }
             }
 
@@ -564,8 +577,8 @@ Item {
                     sidebarMenus.openFavorite(path, Qt.point(popupX, popupY))
                 }
 
-                onBookmarkMenuRequested: function(index, popupX, popupY) {
-                    sidebarMenus.openBookmark(index, Qt.point(popupX, popupY))
+                onBookmarkMenuRequested: function(index, path, popupX, popupY) {
+                    sidebarMenus.openBookmark(index, path, Qt.point(popupX, popupY))
                 }
             }
         }

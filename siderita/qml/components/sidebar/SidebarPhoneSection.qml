@@ -7,6 +7,10 @@ Column {
     id: root
 
     required property var hostWindow
+
+    // El menú vive en la barra lateral, no aquí: este componente sólo dice
+    // dónde y para qué ruta hay que abrirlo.
+    signal contextMenuRequested(string mountPath, point where)
     readonly property var controller: hostWindow.activeController
     readonly property bool hasPhones:
             controller && controller.phoneNames.length > 0
@@ -139,11 +143,24 @@ Column {
                 id: phoneMouse
 
                 anchors.fill: parent
+                // Los tres botones, como cualquier otro lugar de la barra: el
+                // central abre en pestaña de fondo y el derecho trae el menú.
+                // Faltaban los dos, así que del móvil no se podía sacar pestaña.
+                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
                 hoverEnabled: true
                 enabled: phoneRow.mounted
                 cursorShape: phoneRow.mounted ? Qt.PointingHandCursor
                                               : Qt.ArrowCursor
-                onClicked: phoneRow.activate()
+                onClicked: function(mouse) {
+                    if (mouse.button === Qt.MiddleButton)
+                        root.hostWindow.openTab(phoneRow.mountPath, false)
+                    else if (mouse.button === Qt.RightButton)
+                        root.contextMenuRequested(
+                                phoneRow.mountPath,
+                                phoneMouse.mapToItem(null, mouse.x, mouse.y))
+                    else
+                        phoneRow.activate()
+                }
             }
         }
     }

@@ -44,6 +44,27 @@ touched picker transitions instant, but that correction has automated/static
 evidence only: remaining legacy motion and the full enabled/disabled interaction
 pass are still open.
 
+**Dispositivos y móvil también dan pestaña (2026-08-01).** Reported from real
+use: no tab could be opened from the sidebar's Dispositivos or Móvil sections.
+Two separate causes, both of omission — the volume row accepted only left and
+right, the phone row only left, and neither offered "Abrir en pestaña nueva" in
+a menu (the phone had no menu at all). Places, favourites and bookmarks had all
+of it, so the sidebar disagreed with itself. Middle click now opens a background
+tab in both, the device menu gained the entry — enabled only when the volume is
+mounted, because an unmounted one has no path yet and mounting is asynchronous —
+and the phone gained a menu, requested through a signal rather than by reaching
+into the sidebar's ids. Covered by `tests/qml/tst_sidebar_menus.qml`, which fails against the unfixed
+tree.
+
+**Propiedades desde la barra lateral (2026-08-02).** The entry menu had it and
+the sidebar did not, so a place, a favourite, a bookmark or a device could only
+be inspected by navigating into it first. All four now offer it, and the rule is
+the same one that governs the new tab: it needs a path on disk, so a virtual
+place — Recientes, Papelera — and an unmounted volume do not show it. The
+bookmark menu only carried its row index, so its path now travels with the
+request. The phone is deliberately left out: its mount is a device traversal
+rather than a local stat, and the properties panel walks a directory to size it.
+
 **Las carpetas se dibujan (2026-08-01).** A folder is no longer a Lucide outline
 tinted blue: it is `CelestinaStyle`'s drawn shape, with its own soft wash of
 colour and, where the place has one, an emblem — a down arrow for Descargas, a

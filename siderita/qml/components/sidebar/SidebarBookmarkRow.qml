@@ -22,7 +22,7 @@ Item {
     signal dragMoved(int dropIndex)
     signal dragFinished(int from, int to)
     signal dragCancelled
-    signal contextMenuRequested(int index, real popupX, real popupY)
+    signal contextMenuRequested(int index, string path, real popupX, real popupY)
 
     readonly property bool current: bookmarkPath.length > 0
                                     && bookmarkPath === (hostWindow.activeController
@@ -185,7 +185,8 @@ Item {
                     root.hostWindow.openTab(root.bookmarkPath, false)
                 } else if (mouse.button === Qt.RightButton) {
                     const point = root.mapToItem(root.overlayParent, mouse.x, mouse.y)
-                    root.contextMenuRequested(root.rowIndex, point.x, point.y)
+                    root.contextMenuRequested(root.rowIndex, root.bookmarkPath,
+                                              point.x, point.y)
                 } else if (root.hostWindow.activeController) {
                     root.hostWindow.activeController.openLocation(root.bookmarkPath)
                 }

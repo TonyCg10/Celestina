@@ -156,18 +156,9 @@ ApplicationWindow {
     }
 
     // How to draw each sidebar place key. The controller owns which of these
-    // exist and in what order; this is only the label and the glyph.
-    readonly property var placeDefs: ({
-        "HOME":      { name: "Inicio",     icon: "user-home",        fallback: "go-home" },
-        "DESKTOP":   { name: "Escritorio", icon: "user-desktop",     fallback: "folder" },
-        "DOCUMENTS": { name: "Documentos", icon: "folder-documents", fallback: "folder" },
-        "DOWNLOAD":  { name: "Descargas",  icon: "folder-download",  fallback: "folder" },
-        "MUSIC":     { name: "Música",     icon: "folder-music",     fallback: "folder" },
-        "PICTURES":  { name: "Imágenes",   icon: "folder-pictures",  fallback: "folder" },
-        "VIDEOS":    { name: "Vídeos",     icon: "folder-videos",    fallback: "folder" },
-        "RECENT":    { name: "Recientes",  icon: "document-open-recent", fallback: "file" },
-        "TRASH":     { name: "Papelera",   icon: "user-trash",       fallback: "user-trash" }
-    })
+    // exist and in what order; this is only the label and the glyph — shared
+    // with PickerSidebar via the CelestinaPlaceDefs singleton.
+    readonly property var placeDefs: CelestinaPlaceDefs.defs
 
     // Exposed as a property (not merely an id) so each per-tab FolderView can
     // reach it through `tabHost`; a plain child id is invisible as

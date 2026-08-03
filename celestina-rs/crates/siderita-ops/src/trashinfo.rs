@@ -178,7 +178,7 @@ mod tests {
         let trash_root = dir.path().join("Trash");
         let source = dir.path().join("nota.txt");
         fs::write(&source, b"hi").expect("seed");
-        let trashed = trash_into(&source, &trash_root, &live()).expect("trash");
+        let trashed = trash_into(&source, &trash_root, &live(), &mut |_| {}).expect("trash");
 
         let entries = list_trash_at(&trash_root).expect("list");
         assert_eq!(entries.len(), 1);
@@ -197,7 +197,7 @@ mod tests {
         let trash_root = dir.path().join("Trash");
         let source = dir.path().join("ghost.txt");
         fs::write(&source, b"x").expect("seed");
-        let trashed = trash_into(&source, &trash_root, &live()).expect("trash");
+        let trashed = trash_into(&source, &trash_root, &live(), &mut |_| {}).expect("trash");
         fs::remove_file(&trashed.trashed).expect("delete the body");
 
         let entries = list_trash_at(&trash_root).expect("list");

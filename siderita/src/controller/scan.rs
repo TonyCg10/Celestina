@@ -498,6 +498,15 @@ impl qobject::SideritaController {
         let Some(watched) = self.rust().watched.clone() else {
             return;
         };
+        // A running paste/move is itself the source of these writes, and it
+        // already does its own refresh() when it finishes (finish_batch). Quiet
+        // rescans in the meantime reset the entry model (beginResetModel), which
+        // tears down every delegate — killing the in-flight right-click gesture
+        // and starving the progress panel's own queued Qt-thread updates for
+        // nothing, since the batch's own refresh will show the final state.
+        if !degraded && *self.op_running() {
+            return;
+        }
         let became_stale = {
             let state = self.as_mut().rust_mut();
             let state = state.get_mut();

@@ -147,7 +147,7 @@ mod tests {
         fs::write(&source, b"bring me back").expect("seed");
         let trash_root = dir.path().join("Trash");
 
-        let trashed = trash_into(&source, &trash_root, &live()).expect("trash");
+        let trashed = trash_into(&source, &trash_root, &live(), &mut |_| {}).expect("trash");
         assert!(!source.exists(), "trashed file left its origin");
 
         let restored = restore_from_trash(&trashed.info, &live()).expect("restore");
@@ -165,7 +165,7 @@ mod tests {
         fs::write(&source, b"old").expect("seed");
         let trash_root = dir.path().join("Trash");
 
-        let trashed = trash_into(&source, &trash_root, &live()).expect("trash");
+        let trashed = trash_into(&source, &trash_root, &live(), &mut |_| {}).expect("trash");
         // Something new takes the original name before we restore.
         fs::write(&source, b"new tenant").expect("reoccupy");
 
@@ -184,7 +184,7 @@ mod tests {
         fs::write(&source, b"x").expect("seed");
         let trash_root = dir.path().join("Trash");
 
-        let trashed = trash_into(&source, &trash_root, &live()).expect("trash");
+        let trashed = trash_into(&source, &trash_root, &live(), &mut |_| {}).expect("trash");
         fs::remove_file(&trashed.trashed).expect("delete the trashed copy");
 
         let error = restore_from_trash(&trashed.info, &live()).expect_err("must fail");
@@ -198,7 +198,7 @@ mod tests {
         fs::write(&source, b"spaced").expect("seed");
         let trash_root = dir.path().join("Trash");
 
-        let trashed = trash_into(&source, &trash_root, &live()).expect("trash");
+        let trashed = trash_into(&source, &trash_root, &live(), &mut |_| {}).expect("trash");
         let restored = restore_from_trash(&trashed.info, &live()).expect("restore");
 
         assert_eq!(restored.to, source);

@@ -94,7 +94,7 @@ mod tests {
         fs::write(&source, b"gone for good").expect("seed");
         let trash_root = dir.path().join("Trash");
 
-        let trashed = trash_into(&source, &trash_root, &live()).expect("trash");
+        let trashed = trash_into(&source, &trash_root, &live(), &mut |_| {}).expect("trash");
         assert!(trashed.trashed.exists() && trashed.info.exists());
 
         purge_from_trash(&trashed.info).expect("purge");
@@ -111,7 +111,7 @@ mod tests {
         fs::write(source.join("child.txt"), b"x").expect("seed child");
         let trash_root = dir.path().join("Trash");
 
-        let trashed = trash_into(&source, &trash_root, &live()).expect("trash");
+        let trashed = trash_into(&source, &trash_root, &live(), &mut |_| {}).expect("trash");
         assert!(trashed.trashed.is_dir());
 
         purge_from_trash(&trashed.info).expect("purge");
@@ -127,7 +127,7 @@ mod tests {
         fs::write(&source, b"x").expect("seed");
         let trash_root = dir.path().join("Trash");
 
-        let trashed = trash_into(&source, &trash_root, &live()).expect("trash");
+        let trashed = trash_into(&source, &trash_root, &live(), &mut |_| {}).expect("trash");
         fs::remove_file(&trashed.trashed).expect("delete the body first");
 
         purge_from_trash(&trashed.info).expect("purge tolerates a missing body");

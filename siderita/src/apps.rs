@@ -8,6 +8,8 @@
 //! doing here, and the part that is unit-testable without a session.
 
 use std::path::Path;
+
+use celestina_core::desktop_entry;
 use std::process::{Command, Stdio};
 
 /// A launchable desktop application: its `.desktop` id and display name.
@@ -21,99 +23,13 @@ pub struct DesktopApp {
 }
 
 /// The fields of a `[Desktop Entry]` group this module cares about.
-struct ParsedEntry {
-    name: Option<String>,
-    is_application: bool,
-    hidden: bool,
-    no_display: bool,
-    mimetypes: Vec<String>,
-}
-
-/// Parses the `[Desktop Entry]` group of a `.desktop` file body. Only that first
-/// group is read; later action groups are ignored. Returns `None` if there is no
-/// `[Desktop Entry]` group at all.
-fn parse_desktop_entry(content: &str) -> Option<ParsedEntry> {
-    let mut in_group = false;
-    let mut entry = ParsedEntry {
-        name: None,
-        is_application: false,
-        hidden: false,
-        no_display: false,
-        mimetypes: Vec::new(),
-    };
-    let mut seen_group = false;
-
-    for line in content.lines() {
-        let line = line.trim();
-        if line.starts_with('[') && line.ends_with(']') {
-            in_group = line == "[Desktop Entry]";
-            if in_group {
-                seen_group = true;
-            }
-            continue;
-        }
-        if !in_group || line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        let Some((key, value)) = line.split_once('=') else {
-            continue;
-        };
-        let (key, value) = (key.trim(), value.trim());
-        match key {
-            // Prefer the unlocalized Name; ignore Name[xx] variants.
-            "Name" => entry.name = Some(value.to_owned()),
-            "Type" => entry.is_application = value == "Application",
-            "Hidden" => entry.hidden = value.eq_ignore_ascii_case("true"),
-            "NoDisplay" => entry.no_display = value.eq_ignore_ascii_case("true"),
-            "MimeType" => {
-                entry.mimetypes = value
-                    .split(';')
-                    .filter(|mime| !mime.is_empty())
-                    .map(str::to_owned)
-                    .collect();
-            }
-            _ => {}
-        }
-    }
-
-    seen_group.then_some(entry)
-}
-
-/// Whether a parsed entry is a visible application that declares `mime`.
-fn entry_handles(entry: &ParsedEntry, mime: &str) -> bool {
-    entry.is_application
-        && !entry.hidden
-        && !entry.no_display
-        && entry.mimetypes.iter().any(|declared| declared == mime)
-}
-
-/// The XDG application directories, most-specific (user) first, so a user
-/// override of a system `.desktop` id wins.
-fn application_dirs() -> Vec<std::path::PathBuf> {
-    let mut dirs = Vec::new();
-
-    let data_home = celestina_core::xdg::data_home();
-    if let Some(data_home) = data_home {
-        dirs.push(data_home.join("applications"));
-    }
-
-    let data_dirs = std::env::var_os("XDG_DATA_DIRS")
-        .map(|raw| raw.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "/usr/local/share:/usr/share".to_owned());
-    for dir in data_dirs.split(':').filter(|part| !part.is_empty()) {
-        dirs.push(std::path::Path::new(dir).join("applications"));
-    }
-
-    dirs
-}
-
 /// The visible applications that declare support for `mime`, de-duplicated by id
 /// (a user `.desktop` shadows a system one of the same name) and sorted by name.
 pub fn apps_for_mime(mime: &str) -> Vec<DesktopApp> {
     let mut seen = std::collections::HashSet::new();
     let mut apps = Vec::new();
 
-    for dir in application_dirs() {
+    for dir in desktop_entry::application_dirs() {
         let Ok(entries) = std::fs::read_dir(&dir) else {
             continue;
         };
@@ -131,14 +47,23 @@ pub fn apps_for_mime(mime: &str) -> Vec<DesktopApp> {
             let Ok(content) = std::fs::read_to_string(&path) else {
                 continue;
             };
-            let Some(parsed) = parse_desktop_entry(&content) else {
+            let Some(parsed) = desktop_entry::parse(id, &content) else {
                 continue;
             };
+            // The id is claimed whether or not this entry handles the type: a
+            // user override shadows the system one either way.
             seen.insert(id.to_owned());
-            if entry_handles(&parsed, mime) {
+            if parsed.is_application && !parsed.hidden && !parsed.no_display && parsed.handles(mime)
+            {
                 apps.push(DesktopApp {
                     id: id.to_owned(),
-                    name: parsed.name.unwrap_or_else(|| id.to_owned()),
+                    // An entry with no name is still a launchable application;
+                    // its id is what to call it.
+                    name: if parsed.name.is_empty() {
+                        id.to_owned()
+                    } else {
+                        parsed.name
+                    },
                 });
             }
         }
@@ -218,7 +143,16 @@ pub fn launch_with(id: &str, path: &Path) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{entry_handles, parse_desktop_entry};
+    use celestina_core::desktop_entry::{self, DesktopEntry};
+
+    // The suite reads the file; this asks the question this module asks.
+    fn parse(content: &str) -> Option<DesktopEntry> {
+        desktop_entry::parse("test.desktop", content)
+    }
+
+    fn handles(entry: &DesktopEntry, mime: &str) -> bool {
+        entry.is_application && !entry.hidden && !entry.no_display && entry.handles(mime)
+    }
 
     const FIREFOX: &str = "\
 [Desktop Entry]
@@ -230,26 +164,26 @@ MimeType=text/html;text/xml;x-scheme-handler/http;
 
     #[test]
     fn parses_name_type_and_mimetypes() {
-        let entry = parse_desktop_entry(FIREFOX).expect("entry");
-        assert_eq!(entry.name.as_deref(), Some("Firefox"));
+        let entry = parse(FIREFOX).expect("entry");
+        assert_eq!(entry.name, "Firefox");
         assert!(entry.is_application);
         assert!(entry.mimetypes.iter().any(|mime| mime == "text/html"));
     }
 
     #[test]
     fn handles_only_a_declared_mime() {
-        let entry = parse_desktop_entry(FIREFOX).expect("entry");
-        assert!(entry_handles(&entry, "text/html"));
-        assert!(!entry_handles(&entry, "image/png"));
+        let entry = parse(FIREFOX).expect("entry");
+        assert!(handles(&entry, "text/html"));
+        assert!(!handles(&entry, "image/png"));
     }
 
     #[test]
     fn a_hidden_or_nodisplay_entry_never_handles() {
-        let hidden = parse_desktop_entry(
+        let hidden = parse(
             "[Desktop Entry]\nType=Application\nName=X\nNoDisplay=true\nMimeType=text/html;\n",
         )
         .expect("entry");
-        assert!(!entry_handles(&hidden, "text/html"));
+        assert!(!handles(&hidden, "text/html"));
     }
 
     #[test]
@@ -264,12 +198,12 @@ MimeType=text/plain;
 [Desktop Action new]
 Name=Ventana nueva
 ";
-        let entry = parse_desktop_entry(content).expect("entry");
-        assert_eq!(entry.name.as_deref(), Some("Real"));
+        let entry = parse(content).expect("entry");
+        assert_eq!(entry.name, "Real");
     }
 
     #[test]
     fn a_body_without_the_group_is_none() {
-        assert!(parse_desktop_entry("just some text\n").is_none());
+        assert!(parse("just some text\n").is_none());
     }
 }

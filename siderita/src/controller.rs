@@ -1032,7 +1032,7 @@ fn paste_one(
         ConflictStrategy::Replace => {
             // Trash the existing entry (recoverable) before placing the source,
             // so nothing is hard-deleted to make room.
-            if let Err(error) = siderita_ops::trash(&target, token) {
+            if let Err(error) = siderita_ops::trash(&target, token, on_progress) {
                 outcome
                     .failures
                     .push(format!("{}: {error}", display_name(source)));

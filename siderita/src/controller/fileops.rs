@@ -94,13 +94,10 @@ impl qobject::SideritaController {
     pub fn trash_path(mut self: Pin<&mut Self>, path: &QString) {
         self.as_mut().set_op_error(QString::default());
         let path = PathBuf::from(path.to_string());
-        let outcome = siderita_ops::trash(&path, &CancellationToken::new());
-        if let Ok(trashed) = &outcome {
-            self.as_mut().set_undo(Some(UndoAction::Trash {
-                infos: vec![trashed.info.clone()],
-            }));
+        if path.as_os_str().is_empty() {
+            return;
         }
-        self.finish_op(outcome.map(|_| ()));
+        self.as_mut().spawn_trash(vec![path]);
     }
 
     /// Sends every path in a multi-selection to Trash. Each entry is attempted
@@ -112,19 +109,100 @@ impl qobject::SideritaController {
         if paths.is_empty() {
             return;
         }
-        let cancellation = CancellationToken::new();
-        let mut failures = Vec::new();
-        let mut infos = Vec::new();
-        for path in &paths {
-            match siderita_ops::trash(path, &cancellation) {
-                Ok(trashed) => infos.push(trashed.info),
-                Err(error) => failures.push(format!("{}: {error}", display_name(path))),
+        self.as_mut().spawn_trash(paths);
+    }
+
+    /// Trashes `paths` on a worker thread. Same filesystem is a cheap rename, but
+    /// an entry on another mount (an external drive without its own Trash yet)
+    /// falls back to a full copy → verify → remove — that can take a while for a
+    /// large file, and running it on the Qt thread would freeze all of Siderita
+    /// for as long as it lasts. Reuses the paste operation's progress surface and
+    /// cancellation, since it is the same shape of long write.
+    fn spawn_trash(mut self: Pin<&mut Self>, paths: Vec<PathBuf>) {
+        let token = CancellationToken::new();
+        self.as_mut().rust_mut().get_mut().op_cancel = Some(token.clone());
+        self.as_mut().set_op_running(true);
+        self.as_mut()
+            .set_op_total(paths.len().min(i32::MAX as usize) as i32);
+        self.as_mut().set_op_done(0);
+        self.as_mut().set_op_current(QString::default());
+        self.as_mut().set_op_detail(QString::default());
+        self.as_mut()
+            .set_status_text(QString::from("Enviando a la papelera…"));
+
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let total = paths.len();
+            let mut failures = Vec::new();
+            let mut infos = Vec::new();
+
+            for (index, path) in paths.iter().enumerate() {
+                if token.is_cancelled() {
+                    break;
+                }
+
+                let done = index as i32;
+                let announced = display_name(path);
+                let _ = qt.queue(move |mut controller| {
+                    controller.as_mut().set_op_done(done);
+                    controller
+                        .as_mut()
+                        .set_op_current(QString::from(announced.as_str()));
+                    controller.as_mut().set_op_detail(QString::default());
+                });
+
+                // Throttled byte progress, same cadence as a paste (fileops::spawn_paste).
+                let qt_progress = qt.clone();
+                let mut last = std::time::Instant::now();
+                let mut on_progress = move |progress: Progress| {
+                    if last.elapsed().as_millis() < 60 {
+                        return;
+                    }
+                    last = std::time::Instant::now();
+                    let detail = format!("{} copiados", crate::format::size(progress.bytes));
+                    let _ = qt_progress.queue(move |mut controller| {
+                        controller
+                            .as_mut()
+                            .set_op_detail(QString::from(detail.as_str()));
+                    });
+                };
+
+                match siderita_ops::trash(path, &token, &mut on_progress) {
+                    Ok(trashed) => infos.push(trashed.info),
+                    Err(error) => failures.push(format!("{}: {error}", display_name(path))),
+                }
             }
-        }
+
+            let cancelled = token.is_cancelled();
+            let _ = qt.queue(move |controller| {
+                controller.finish_trash(total, infos, failures, cancelled);
+            });
+        });
+    }
+
+    /// Finalises a trashed batch back on the Qt thread, mirroring `finish_paste`.
+    fn finish_trash(
+        mut self: Pin<&mut Self>,
+        total: usize,
+        infos: Vec<PathBuf>,
+        failures: Vec<String>,
+        cancelled: bool,
+    ) {
+        self.as_mut().set_op_running(false);
+        self.as_mut().rust_mut().get_mut().op_cancel = None;
+        self.as_mut().set_op_current(QString::default());
+        self.as_mut().set_op_detail(QString::default());
+        self.as_mut().set_op_done(0);
+        self.as_mut().set_op_total(0);
+
         if !infos.is_empty() {
             self.as_mut().set_undo(Some(UndoAction::Trash { infos }));
         }
-        self.as_mut().finish_batch(paths.len(), &failures);
+        self.as_mut().finish_batch(total, &failures);
+        if failures.is_empty() && cancelled {
+            self.as_mut()
+                .set_status_text(QString::from("Operación cancelada"));
+        }
     }
 
     pub fn copy_to_clipboard(mut self: Pin<&mut Self>, path: &QString, cut: bool) {

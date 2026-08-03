@@ -43,6 +43,8 @@ Window {
     property real textScale: 1.0
     property real interfaceIconScale: 1.0
     property real interfaceTextScale: 1.0
+    property real sidebarIconScale: 1.0
+    property real sidebarTextScale: 1.0
 
     // La rejilla desborda ⇒ hay algo detrás de las pastillas que desenfocar.
     // Las pastillas del picker comparten este fondo, así que se decide una vez.
@@ -130,11 +132,25 @@ Window {
         clearChosen()
     }
 
+    // Same glyph rules as the main folder view — a typed XDG folder
+    // (Documentos, Descargas…) gets its own icon instead of the generic one.
+    PickerIconRules {
+        id: pickerIconRules
+        pickerController: controller
+    }
+
     Component.onCompleted: {
         iconScale = controller.savedContentIconScale()
         textScale = controller.savedContentTextScale()
         interfaceIconScale = controller.savedInterfaceIconScale()
         interfaceTextScale = controller.savedInterfaceTextScale()
+        sidebarIconScale = controller.savedSidebarIconScale()
+        sidebarTextScale = controller.savedSidebarTextScale()
+        // The main window loads this per active tab (Main.qml's
+        // onActiveControllerChanged); the picker has no tabs and its own
+        // controller, so it has to ask for its "Dispositivos" list itself.
+        controller.loadVolumes()
+        pickerIconRules.rebuild()
         if (startFolder.length > 0)
             controller.startAt(startFolder)
         else
@@ -405,11 +421,21 @@ Window {
     Item {
         anchors.fill: parent
 
+        // Read-only navigation, not the full write-capable Sidebar — see
+        // PickerSidebar.qml's header for why.
+        PickerSidebar {
+            id: pickerSidebar
+            anchors.fill: parent
+            pickerController: controller
+            sidebarIconScale: picker.sidebarIconScale
+            sidebarTextScale: picker.sidebarTextScale
+        }
+
         CelestinaSurface {
             id: contentBox
-            x: 12
+            x: pickerSidebar.panelVisible ? pickerSidebar.rightEdge + 12 : 12
             y: 12
-            width: parent.width - 24
+            width: parent.width - x - 12
             height: parent.height - 24
             role: CelestinaSurface.Panel
             clip: true
@@ -624,6 +650,7 @@ Window {
                 delegate: PickerCellDelegate {
                     id: cell
 
+                    iconRules: pickerIconRules
                     cellWidth: entryGrid.cellWidth
                     cellHeight: entryGrid.cellHeight
                     iconScale: picker.iconScale
