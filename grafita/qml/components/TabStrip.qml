@@ -7,6 +7,15 @@ import org.celestina.grafita 1.0
 // appeared and shifted the whole editor down the moment a second file arrived,
 // and it left the "new tab" button nowhere to be found until you already had
 // two. A steady row is worth the few pixels.
+//
+// Tabs are positioned by hand rather than with a Row, because dragging one to
+// reorder means one delegate's `x` must escape the layout while it is held and
+// every other delegate must still know where it belongs. Each delegate
+// measures its own label (a private `TextMetrics`, so nothing mutates a
+// property another tab's layout depends on) and exposes the resulting width as
+// an ordinary property; `xFor(index)` only ever *reads* those already-settled
+// widths, never recomputes one — the read/write split is what keeps this from
+// becoming a binding loop.
 Item {
     id: root
 
@@ -16,9 +25,14 @@ Item {
     required property var titleFor      // function(index) -> string
     required property var dirtyFor      // function(index) -> bool
 
+    // Emitted when a drag has settled on a new position. The model mutation
+    // lives in the window, not here, because moving the *current* tab also
+    // means re-finding which index now holds it — state this component does
+    // not own.
     signal selected(int index)
     signal closeRequested(int index)
     signal newRequested
+    signal reorderRequested(int from, int to)
 
     // A revision the window bumps so the delegates re-read titles that live
     // outside the model — a document's name arrives after its file opens.
@@ -33,14 +47,57 @@ Item {
         border.color: CelestinaTheme.divider
     }
 
-    Row {
+    readonly property real closeButtonWidth: CelestinaTheme.controlHeight
+
+    // The already-settled width of tab `index`, or 0 while it has not been
+    // created yet. Never computes anything itself — only reads what that
+    // delegate already measured for itself.
+    function widthFor(index) {
+        const item = tabRepeater.itemAt(index)
+        return item ? item.width : 0
+    }
+
+    // The x position tab `index` sits at when nothing is being dragged: the
+    // sum of every earlier tab's width plus the spacing between them.
+    function xFor(index) {
+        let x = 0
+        for (let i = 0; i < index; ++i)
+            x += root.widthFor(i) + CelestinaTheme.spaceXs
+        return x
+    }
+
+    function totalWidth() {
+        return root.xFor(root.tabs.count)
+    }
+
+    // Where a tab centred at `centerX` belongs among every *other* tab, laid
+    // out in their own model order. The count of others whose slot starts
+    // before that centre is exactly the destination `ListModel.move()` wants:
+    // removing the dragged tab and reinserting it there reproduces this order.
+    function targetIndexFor(draggedIndex, centerX) {
+        let x = 0
+        let target = 0
+        for (let i = 0; i < root.tabs.count; ++i) {
+            if (i === draggedIndex)
+                continue
+            const width = root.widthFor(i)
+            if (centerX >= x + width / 2)
+                target += 1
+            x += width + CelestinaTheme.spaceXs
+        }
+        return target
+    }
+
+    Item {
         id: strip
         anchors.left: parent.left
         anchors.leftMargin: CelestinaTheme.spaceSm
         anchors.verticalCenter: parent.verticalCenter
-        spacing: CelestinaTheme.spaceXs
+        width: root.totalWidth() + CelestinaTheme.spaceXs + newTabButton.width
+        height: CelestinaTheme.controlHeight
 
         Repeater {
+            id: tabRepeater
             model: root.tabs
 
             delegate: Rectangle {
@@ -48,8 +105,9 @@ Item {
                 required property int index
 
                 readonly property bool active: index === root.current
-                // `revision` is read so the binding re-evaluates when a
-                // document finishes opening and finally has a name.
+                readonly property bool dragging: dragArea.drag.active
+                // `revision` is read so this re-evaluates when a document
+                // finishes opening and finally has a name.
                 readonly property string label: {
                     root.revision
                     return root.titleFor(index)
@@ -58,8 +116,15 @@ Item {
                     root.revision
                     return root.dirtyFor(index)
                 }
+                readonly property string displayText: tab.dirty ? tab.label + " •" : tab.label
 
-                width: title.implicitWidth + closeButton.width + CelestinaTheme.space2xl
+                y: 0
+                z: tab.dragging ? 10 : 0
+                x: root.xFor(tab.index)
+                // Own measurement, own width: nothing here reads or writes a
+                // property shared with any other tab, which is what keeps
+                // dragging one from disturbing how the rest lay themselves out.
+                width: labelMetrics.width + root.closeButtonWidth + CelestinaTheme.space2xl
                 height: CelestinaTheme.controlHeight
                 radius: CelestinaTheme.radiusSm
                 // An idle tab shows the strip behind it rather than a colour of
@@ -70,6 +135,24 @@ Item {
                                      ? CelestinaTheme.surfaceHover
                                      : CelestinaTheme.withAlpha(CelestinaTheme.surface, 0))
 
+                TextMetrics {
+                    id: labelMetrics
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontCaption
+                    text: tab.displayText
+                }
+
+                // Sliding into a slot a drag vacated or filled — never while
+                // being dragged, where the pointer decides `x` directly, and
+                // never with reduced motion, honouring the shared preference.
+                Behavior on x {
+                    enabled: !tab.dragging && !CelestinaTheme.reducedMotion
+                    NumberAnimation {
+                        duration: CelestinaTheme.motionFast
+                        easing.type: CelestinaTheme.easeStandard
+                    }
+                }
+
                 Accessible.role: Accessible.PageTab
                 Accessible.name: tab.dirty ? tab.label + ", sin guardar" : tab.label
                 Accessible.selected: tab.active
@@ -77,23 +160,45 @@ Item {
                 HoverHandler { id: hover }
 
                 MouseArea {
+                    id: dragArea
                     anchors.fill: parent
-                    // Middle click closes, the way every tabbed thing does.
+                    // Middle click closes, the way every tabbed thing does. A
+                    // drag that never crossed the threshold still reaches
+                    // onClicked — that disambiguation is what `drag.target`
+                    // already does, so no separate click/drag bookkeeping here.
                     acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+                    drag.target: tab
+                    drag.axis: Drag.XAxis
+                    drag.minimumX: 0
+                    drag.maximumX: Math.max(0, root.totalWidth() - tab.width)
+
                     onClicked: function(mouse) {
                         if (mouse.button === Qt.MiddleButton)
                             root.closeRequested(tab.index)
                         else
                             root.selected(tab.index)
                     }
+
+                    onPositionChanged: {
+                        if (!drag.active)
+                            return
+                        const target = root.targetIndexFor(tab.index, tab.x + tab.width / 2)
+                        if (target !== tab.index)
+                            root.reorderRequested(tab.index, target)
+                    }
+
+                    onReleased: {
+                        // The drag broke the binding by assigning `x` directly;
+                        // put it back so the tab returns to laid-out behaviour.
+                        tab.x = Qt.binding(function() { return root.xFor(tab.index) })
+                    }
                 }
 
                 Text {
-                    id: title
                     anchors.left: parent.left
                     anchors.leftMargin: CelestinaTheme.spaceSm
                     anchors.verticalCenter: parent.verticalCenter
-                    text: tab.dirty ? tab.label + " •" : tab.label
+                    text: tab.displayText
                     elide: Text.ElideMiddle
                     color: tab.active ? CelestinaTheme.text : CelestinaTheme.textMuted
                     font.family: CelestinaTheme.sansFamily
@@ -114,6 +219,8 @@ Item {
         }
 
         CelestinaIconButton {
+            id: newTabButton
+            x: root.totalWidth() + CelestinaTheme.spaceXs
             anchors.verticalCenter: parent.verticalCenter
             iconName: "plus"
             Accessible.role: Accessible.Button

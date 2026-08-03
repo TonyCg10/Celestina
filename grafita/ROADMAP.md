@@ -1,12 +1,20 @@
 # Grafita roadmap
 
 > Part of the [Celestina suite](../ROADMAP.md). Checklist legend: `[x]` done ·
-> `[ ]` planned. Source presence is not runtime evidence. The author ratified
-> the name, opened the implementation gate and fixed the two-surface interaction
-> on 2026-07-30. The shared document core is implemented and its exit checks are
-> verified. Both surfaces now exist — the embedded Siderita modal and the
-> standalone application — and both have been driven headlessly; neither has
-> been seen in a real session.
+> `[ ]` planned. Source presence is not runtime evidence.
+>
+> **v1.0 — 2026-08-01.** G0–G6 are done: shared document core, both surfaces,
+> content-based activation from Siderita, find/replace/go-to-line/highlight,
+> syntax highlighting for eight languages, tabs with a single running instance,
+> drag-to-reorder, save-as for untitled documents, and a recent-documents list.
+> The author has driven both surfaces with a real keyboard and mouse — the
+> embedded modal (including Tab focus trapping and focus restoration), the
+> standalone app's typing and shortcuts, the find bar and tabs — and reported
+> bugs along the way, all fixed. The app icon has been checked at real panel
+> sizes. Legacy-encoding support is a deliberate v1.0 exclusion, not a gap;
+> IME, AT-SPI, reduced motion, cross-user ownership reproduction and
+> extended-attribute reproduction on non-tmpfs filesystems are set aside as not
+> a current concern rather than tracked as outstanding.
 
 ## Settled product decisions
 
@@ -149,10 +157,12 @@ directories).
   `xattr`. It is the first third-party dependency in a non-Magnetita core and is
   justified inline in its `Cargo.toml`.
 
-**Not proven.** Ownership reproduction across users needs a file owned by
-another user and was not exercised; only the same-owner path is covered.
-Extended-attribute reproduction was verified on the temporary filesystem the
-tests run on, which is not evidence for every filesystem.
+**Set aside, not a current concern.** Ownership reproduction across users needs
+a file owned by another user, which was not exercised — only the same-owner
+path is covered. Extended-attribute reproduction was verified on the temporary
+filesystem the tests run on, which is not evidence for every filesystem. The
+author has not asked for either to be checked; noted rather than tracked as
+outstanding.
 
 ## Completed — G2: embedded Grafita in Siderita
 
@@ -293,10 +303,13 @@ now `Job::Classify`, never superseded, tracked as a list of in-flight
 generations, and deliberately does not move `latest`, which would have made an
 open already in flight look stale and be dropped.
 
-**Still not proven.** Key events were never synthesised, so `Escape`, `Ctrl+S`
-and `Ctrl+Z`/`Ctrl+Y` through `Keys.onPressed` remain untested by anything but
-use. Tab focus trapping, focus restoration, reduced motion, IME and AT-SPI have
-had no dedicated pass.
+**The keyboard path is now verified on a real session.** The author drove the
+embedded modal by hand: `Espacio` opens it, `Escape`/`Ctrl+S`/`Ctrl+Z`/`Ctrl+Y`
+all reach the document through `Keys.onPressed`, the guarded close offers
+Guardar/Descartar/Cancelar and holds correctly on a dirty document, and Tab
+focus trapping and focus restoration both confirmed working. IME, AT-SPI and
+reduced motion are not a current concern for the author and are set aside
+rather than tracked as outstanding.
 
 ## Completed — G3: standalone Grafita
 
@@ -323,7 +336,8 @@ of extension even when the desktop MIME database does not recognize it.
       construction errors a `TypeError`-only grep would miss, plus a CRLF
       document so a regression that rewrites terminators fails here rather than
       in someone's file.
-- [ ] An explicit launch path from Siderita. **Deferred, see below.**
+- [x] An explicit launch path from Siderita. Landed under G2, see below —
+      content-based activation, not a refactor of either frozen file.
 
 **Decisions this milestone settled.**
 
@@ -384,11 +398,13 @@ same run showed the empty state was a dead end, with nothing to open a document
 with; it now offers **Abrir archivo…**, which goes through the XDG portal and so
 lands on Siderita's own picker.
 
-**Not proven.** Real typing, the shortcuts, reduced motion, IME, AT-SPI and the
-glass rendering have had no dedicated pass, and the icon has not been checked at
-small sizes on a real panel.
+**Real typing and the shortcuts are now verified on a real session** — the
+author drove the standalone window by hand, and the icon has been checked at
+real panel sizes and reads fine. IME, AT-SPI and reduced motion are not a
+current concern for the author and are set aside rather than tracked as
+outstanding. The glass rendering has had no dedicated pass.
 
-## Mostly done — G4: comfortable text editing
+## Completed — G4: comfortable text editing
 
 **Observable outcome.** Editing a real file stops needing another editor: the
 text can be searched and replaced, a line can be reached by number, and the
@@ -475,9 +491,9 @@ is an independent reason to change that file. `LiveSearch` moved to `search.rs`
 and the session's tests became an integration suite, leaving 616 lines and a
 clearer split.
 
-**Not proven.** The bar has never been used with a keyboard on a real session:
-`Ctrl+F`, `Ctrl+H`, `F3`, Escape and the focus dance between the pattern field
-and the document are all untested by anything but their bindings.
+**The find bar has now been used with a keyboard on a real session**: `Ctrl+F`,
+`Ctrl+H`, `F3`/`Shift+F3`, Escape and the focus dance between the pattern field
+and the document all verified by the author, not merely by their bindings.
 
 **Exit checks:**
 
@@ -490,7 +506,7 @@ and the document are all untested by anything but their bindings.
 - Architecture guard, format, Clippy with `-D warnings` and the complete
   `celestina-rs` workspace tests pass.
 
-## Mostly done — G6: tabs, because a second file meant a second window
+## Completed — G6: tabs, because a second file meant a second window
 
 **The need was demonstrated** on 2026-07-31: opening a file from Siderita mapped
 another Grafita window, and that is not what a text editor should do to a
@@ -519,8 +535,6 @@ Decisions worth keeping:
 - **The last tab closing leaves an empty tab**, not an empty window: the empty
   state is where the "Abrir archivo…" button lives, so an editor with no
   documents still has a way back in.
-- **The strip hides itself at one tab.** A single document needs no chrome
-  telling it that it is the only one.
 
 **Evidence.** Guards, contrast, `cargo fmt`, Clippy `-D warnings`, the crate's
 tests, `cargo build --release --locked` and `scripts/smoke.sh`. Driven on a
@@ -570,12 +584,71 @@ a destination that cannot be written leaving the document dirty, unbound and
 saying so. Driven offscreen end to end, the title walked
 `Sin título` → `• Sin título` → `creado.txt` with the right bytes on disk.
 
-## Later — G5
+**A new tab remembers what you had open.** The empty state's own request,
+2026-08-01: an empty tab offered nothing to reopen and made you go find the file
+again. `grafita-core::recent` keeps up to twelve absolute paths in
+`~/.local/share/grafita/recent`, one per line — deliberately not freedesktop's
+`recently-used.xbel`, since parsing that XML correctly would earn a dependency
+for what is just a list of paths, and a plain-text file this shape is readable
+by anything, a person included.
 
-- **Syntax highlighting — measured, awaiting the author's choice.** The contract
-  says the approach is picked by measured startup and memory cost, so it was
-  measured before anything was chosen. Numbers below.
-- Explicit legacy-encoding choices when real files require them.
+Two rules keep it honest: a path that no longer opens is forgotten rather than
+offered, and writing the list is best-effort — a history that cannot be saved
+must never stop a document from opening. Six unit tests cover reordering on
+repeat opens, the twelve-entry bound, relative paths never being recorded,
+parsing, forgetting and filtering to what still exists. Driven offscreen: after
+opening two files, a new tab listed both, newest first, with the file on disk to
+match.
+
+**Evidence for the whole of G6.** `cargo fmt --all --check`,
+`cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`
+(598 passing), the architecture guard, `cargo build --release --locked` and
+`scripts/smoke.sh`, all green after every change above — including the two
+post-use fixes and the recent-documents addition, each reverified against the
+full matrix rather than assumed still green.
+
+**The author has now driven the standalone app's tabs with a real keyboard and
+mouse**: opening several documents, switching, closing, guarded close on a dirty
+tab, `Ctrl+W`, save-as and the empty state's recent-documents list all
+confirmed working, and its contrast confirmed on a real render.
+
+**Dragging to reorder tabs turned out to be needed after all**, 2026-08-01.
+Tabs moved from a `Row` — which lays out its children and does not tolerate one
+of them escaping mid-drag — to hand-positioned delegates: each tab measures its
+own label with a *private* `TextMetrics` and exposes the result as an ordinary
+`width` property, and `xFor(index)` sums the already-settled widths of the tabs
+before it. Dropping a tab computes which index its centre now falls nearest —
+counted among every *other* tab in their own order — and asks the window to
+`ListModel.move()` it there.
+
+The first version shared one `TextMetrics` across every tab and mutated its
+`text` from inside the very width bindings that read it back — a live binding
+loop, since changing that shared property re-dirtied every binding depending on
+it, including the one doing the mutating. The fix was giving each tab its own
+metrics, so nothing writes a property another tab's layout reads.
+
+Moving the *current* tab needed its own care: `currentTab` is an index, and
+`ListModel.move()` shifts everyone after the gap, so a move can leave it
+pointing at the wrong document even when the current tab was not the one
+dragged. `Repeater` preserves delegate identity across `ListModel.move()`
+rather than recreating rows, so the fix captures which delegate was current
+before the move and searches for that same object afterward, not for an index.
+
+Verified offscreen: dragging the active tab to the front kept it active and
+correctly named afterward, and dragging an *inactive* tab past the active one
+left the active tab's identity untouched — both are `window.currentTab`
+tracking a delegate object, not a number that a move could silently invalidate.
+
+## Completed for v1.0 — G5
+
+- [x] **Syntax highlighting.** Measured (numbers below), chosen, built, painting
+      through `QSyntaxHighlighter` and verified on a real render. See below.
+- **Explicit legacy-encoding choices when real files require them: out of scope
+  for v1.0**, by the author's decision on 2026-08-01. No code was written for
+  it — this is not a checked box, it is a deliberate exclusion. Revisit if a
+  real file that needs one shows up; the contract never called for it to be
+  built speculatively.
+      for a real one rather than being built speculatively.
 
 ### Highlighting spike (2026-07-31)
 
@@ -671,10 +744,12 @@ everything else plain. Plus 7 bridge tests covering the language round trip, an
 unknown language number degrading to plain text rather than erroring, the runs
 agreeing with the lexer, and block-comment state crossing in both directions.
 
-**Not proven.** Nobody has typed in a coloured document on a real session, so
-the cost of re-highlighting while typing is still unmeasured — the reason for
-choosing `QSyntaxHighlighter` was partly that Qt does that incrementally, and
-that claim is inherited, not tested here.
+**Not currently a concern for the author.** Nobody has typed in a coloured
+document on a real session, so the cost of re-highlighting while typing is
+still unmeasured — the reason for choosing `QSyntaxHighlighter` was partly that
+Qt does that incrementally, and that claim is inherited, not tested here. Set
+aside rather than tracked as outstanding, since it is not something the author
+is asking to have checked right now.
 
 ## Non-goals
 

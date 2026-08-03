@@ -98,6 +98,27 @@ ApplicationWindow {
         return holder ? holder.tabSession : null
     }
 
+    /// Moves a dragged tab from `from` to `to`, keeping the *active* tab
+    /// pointed at correctly even when some other tab is the one that moved.
+    ///
+    /// `currentTab` is an index, but ListModel.move() reuses delegate
+    /// instances rather than recreating them, so the fix is to remember which
+    /// delegate object was current, move, and then find where that same
+    /// object ended up.
+    function reorderTab(from, to) {
+        if (from === to || from < 0 || to < 0
+                || from >= tabsModel.count || to >= tabsModel.count)
+            return
+        const currentHolder = tabRepeater.itemAt(window.currentTab)
+        tabsModel.move(from, to, 1)
+        for (let index = 0; index < tabsModel.count; ++index) {
+            if (tabRepeater.itemAt(index) === currentHolder) {
+                window.currentTab = index
+                break
+            }
+        }
+    }
+
     // ── Quitting ─────────────────────────────────────────────────────────
     // Once every document has said the window may go, the next close is the one
     // `Qt.quit()` itself asks for and must be accepted. Refusing it too would
@@ -209,6 +230,7 @@ ApplicationWindow {
         onSelected: function(index) { window.currentTab = index }
         onCloseRequested: function(index) { window.requestCloseTab(index) }
         onNewRequested: window.openTab("")
+        onReorderRequested: function(from, to) { window.reorderTab(from, to) }
     }
 
     Item {
@@ -308,6 +330,7 @@ ApplicationWindow {
         window.openTab(window.initialPath)
         activation.start()
     }
+
 
 
 
