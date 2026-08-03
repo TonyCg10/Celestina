@@ -59,20 +59,17 @@ jobs:
       - name: Tests
         run: cargo test --workspace --locked --exclude fluorita-engine
 
-      # `fluorita-engine` sí se compila, enlaza y pasa sus 60 pruebas puras.
-      # Quedan fuera las dos que *arrancan* libmpv:
-      #
-      #   - `an_instance_starts_and_answers_properties` (lib)
-      #   - todo `tests/real_media.rs`
-      #
-      # No es cosa de la salida de audio ni de la falta de pantalla: el runner
-      # de Ubuntu 24.04 trae mpv 0.37, y el baseline del motor fija opciones
+      # `fluorita-engine` se compila, enlaza y pasa sus pruebas, incluida
+      # `an_instance_starts_and_answers_properties`. Esta corría aparte hasta
+      # 2026-08-02: el runner de Ubuntu 24.04 trae mpv 0.37, y el baseline del
+      # motor fijaba en modo obligatorio unas opciones de hardening
       # (`load-console`, `load-select`, `load-positioning`, …) que esa versión
-      # no conoce, así que `set_property` responde -8 y no hay instancia.
-      # Es un mínimo de libmpv sin declarar, no un fallo del código; está
-      # levantado como decisión abierta en `fluorita/ROADMAP.md`. Mientras siga
-      # abierta, esas dos pruebas pertenecen a la matriz local del autor.
+      # no conoce, así que `set_property` respondía -8 y abortaba la instancia
+      # entera. `instance.rs` ahora aplica ese hardening en modo mejor
+      # esfuerzo — una opción desconocida degrada, no bloquea — así que la
+      # ausencia de esas siete propiedades en mpv viejo ya no es una decisión
+      # pendiente del autor: la instancia se crea igual.
+      # `tests/real_media.rs` sigue aparte porque decodifica de verdad y eso sí
+      # exige duración/resultados medidos, no sólo que la instancia exista.
       - name: Tests de fluorita-engine (sin backend real)
-        run: |
-          cargo test -p fluorita-engine --lib --locked -- \
-            --skip an_instance_starts_and_answers_properties
+        run: cargo test -p fluorita-engine --lib --locked
