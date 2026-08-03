@@ -1,0 +1,229 @@
+schema_version = 1
+
+[suite]
+id = "suite"
+name = "Celestina"
+root = "."
+commit_prefix = "suite"
+agents = "AGENTS.md"
+readme = "README.md"
+status = "STATUS.md"
+roadmap = "ROADMAP.md"
+validation = "VALIDATION.md"
+active_plans = "docs/plans/active"
+allow_all_commit_paths = true
+
+[commit_policy]
+subject_format = "<prefix>: <English imperative>"
+workspace_manifests = ["celestina-rs/Cargo.toml", "celestina-rs/Cargo.lock"]
+
+[[projects]]
+id = "celestina"
+name = "Celestina shell"
+path = "celestina"
+kind = "qt-shell"
+commit_prefix = "celestina"
+agents = "celestina/AGENTS.md"
+readme = "celestina/README.md"
+status = "celestina/STATUS.md"
+roadmap = "celestina/ROADMAP.md"
+validation = "celestina/VALIDATION.md"
+active_plans = "celestina/docs/plans/active"
+source_roots = ["celestina/src", "celestina/qml", "celestina-rs/crates/celestina-shell-core"]
+commit_roots = ["celestina/", "celestina-rs/crates/celestina-shell-core/"]
+include_workspace_manifests = true
+production_role = "activatable-shell"
+deployable = true
+build_script = "celestina/scripts/build-production.sh"
+complete_script = "celestina/scripts/complete-production.sh"
+verify_script = "celestina/scripts/verify-production.sh"
+deploy_script = "celestina/scripts/deploy-production.sh"
+activate_script = "celestina/scripts/activate-production.sh"
+status_script = "celestina/scripts/status-production.sh"
+artifact_manifest = "celestina/build/production-artifact.toml"
+artifact_paths = ["celestina/build/celestina", "celestina/build/rust-target/release/celestina-niri-adapter", "celestina/build/rust-target/release/celestina-provider-adapter", "celestina-style/build/libcelestina-style.so", "celestina-style/build/CelestinaStyle", "celestina/scripts/celestina-launcher.sh"]
+production_inputs = ["celestina/CMakeLists.txt", "celestina/Cargo.toml", "celestina/Cargo.lock", "celestina/src", "celestina/qml", "celestina-style/CMakeLists.txt", "celestina-style/*.qml", "celestina-style/qmldir", "celestina-style/fonts", "celestina-style/icons", "celestina-style/scripts/build-production.sh", "celestina-rs/crates/celestina-shell-core", "celestina-rs/crates/celestina-core", "celestina-rs/crates/magnetita-core"]
+verification_inputs = ["celestina/tests", "celestina/scripts/qmllint-production.sh", "celestina/scripts/smoke-production.sh", "celestina-style/tests", "celestina-style/gallery", "celestina-style/scripts/verify-production.sh", "celestina-style/scripts/smoke-production.sh", "celestina-rs/rust-toolchain.toml"]
+component_commit_scopes = [
+  { prefix = "celestina-shell-core", roots = ["celestina-rs/crates/celestina-shell-core/"], include_workspace_manifests = true },
+]
+
+[[projects]]
+id = "celestina-style"
+name = "CelestinaStyle"
+path = "celestina-style"
+kind = "qml-module"
+commit_prefix = "celestina-style"
+agents = "celestina-style/AGENTS.md"
+readme = "celestina-style/README.md"
+status = "celestina-style/STATUS.md"
+roadmap = "celestina-style/ROADMAP.md"
+validation = "celestina-style/VALIDATION.md"
+active_plans = "celestina-style/docs/plans/active"
+source_roots = ["celestina-style"]
+commit_roots = ["celestina-style/"]
+include_workspace_manifests = false
+production_role = "shared-module"
+deployable = false
+build_script = "celestina-style/scripts/build-production.sh"
+verify_script = "celestina-style/scripts/verify-production.sh"
+status_script = "celestina-style/scripts/status-production.sh"
+artifact_manifest = "celestina-style/build/production-artifact.toml"
+artifact_paths = ["celestina-style/build/libcelestina-style.so", "celestina-style/build/CelestinaStyle"]
+production_inputs = ["celestina-style/CMakeLists.txt", "celestina-style/*.qml", "celestina-style/qmldir", "celestina-style/fonts", "celestina-style/icons", "celestina-style/fonts.qrc", "celestina-style/icons.qrc"]
+verification_inputs = ["celestina-style/tests", "celestina-style/gallery", "celestina-style/scripts/check-style-contract.sh", "celestina-style/scripts/check-contrast-contract.py", "celestina-style/scripts/smoke-production.sh"]
+
+[[projects]]
+id = "celestina-rs"
+name = "Celestina Rust workspace"
+path = "celestina-rs"
+kind = "rust-workspace"
+commit_prefix = "celestina-rs"
+agents = "celestina-rs/AGENTS.md"
+readme = "celestina-rs/README.md"
+status = "celestina-rs/STATUS.md"
+roadmap = "celestina-rs/ROADMAP.md"
+validation = "celestina-rs/VALIDATION.md"
+active_plans = "celestina-rs/docs/plans/active"
+source_roots = ["celestina-rs/crates"]
+commit_roots = ["celestina-rs/"]
+include_workspace_manifests = false
+production_role = "rust-workspace"
+deployable = false
+build_script = "celestina-rs/scripts/build-production.sh"
+verify_script = "celestina-rs/scripts/verify-production.sh"
+status_script = "celestina-rs/scripts/status-production.sh"
+artifact_manifest = "celestina-rs/target/production-artifact.toml"
+artifact_paths = ["celestina-rs/target/release/magnetitad"]
+production_inputs = ["celestina-rs/Cargo.toml", "celestina-rs/Cargo.lock", "celestina-rs/rust-toolchain.toml", "celestina-rs/crates/*/Cargo.toml", "celestina-rs/crates/*/src"]
+verification_inputs = ["celestina-rs/crates/*/tests"]
+component_commit_scopes = [
+  { prefix = "celestina-core", roots = ["celestina-rs/crates/celestina-core/"], include_workspace_manifests = true },
+  { prefix = "dotfiles-core", roots = ["celestina-rs/crates/dotfiles-core/"], include_workspace_manifests = true },
+]
+
+[[projects]]
+id = "siderita"
+name = "Siderita"
+path = "siderita"
+kind = "cxx-qt-application"
+commit_prefix = "siderita"
+agents = "siderita/AGENTS.md"
+readme = "siderita/README.md"
+status = "siderita/STATUS.md"
+roadmap = "siderita/ROADMAP.md"
+validation = "siderita/VALIDATION.md"
+active_plans = "siderita/docs/plans/active"
+source_roots = ["siderita/src", "siderita/cpp", "siderita/qml", "siderita/portal", "celestina-rs/crates/siderita-core", "celestina-rs/crates/siderita-ops", "celestina-rs/crates/siderita-qt"]
+commit_roots = ["siderita/", "celestina-rs/crates/siderita-core/", "celestina-rs/crates/siderita-ops/", "celestina-rs/crates/siderita-qt/"]
+include_workspace_manifests = true
+production_role = "desktop-application"
+deployable = true
+build_script = "siderita/scripts/build-production.sh"
+complete_script = "siderita/scripts/complete-production.sh"
+verify_script = "siderita/scripts/verify-production.sh"
+deploy_script = "siderita/scripts/deploy-production.sh"
+status_script = "siderita/scripts/status-production.sh"
+artifact_manifest = "siderita/target/production-artifact.toml"
+artifact_paths = ["siderita/target/release/siderita"]
+production_inputs = ["siderita/Cargo.toml", "siderita/Cargo.lock", "siderita/rust-toolchain.toml", "siderita/build.rs", "siderita/src", "siderita/cpp", "siderita/qml", "siderita/portal", "siderita/org.celestina.Siderita.desktop", "celestina-style/icons/apps/org.celestina.Siderita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/siderita-core", "celestina-rs/crates/siderita-ops", "celestina-rs/crates/siderita-qt", "celestina-rs/crates/grafita-core", "celestina-rs/crates/fluorita-core", "celestina-rs/crates/fluorita-engine", "celestina-rs/crates/fluorita-qt"]
+verification_inputs = ["siderita/tests", "siderita/scripts/qml-tests.sh", "siderita/scripts/smoke.sh", "celestina-rs/rust-toolchain.toml"]
+component_commit_scopes = [
+  { prefix = "siderita-core", roots = ["celestina-rs/crates/siderita-core/"], include_workspace_manifests = true },
+  { prefix = "siderita-ops", roots = ["celestina-rs/crates/siderita-ops/"], include_workspace_manifests = true },
+  { prefix = "siderita-qt", roots = ["celestina-rs/crates/siderita-qt/"], include_workspace_manifests = true },
+]
+
+[[projects]]
+id = "magnetita"
+name = "Magnetita"
+path = "magnetita"
+kind = "cxx-qt-application-and-daemon"
+commit_prefix = "magnetita"
+agents = "magnetita/AGENTS.md"
+readme = "magnetita/README.md"
+status = "magnetita/STATUS.md"
+roadmap = "magnetita/ROADMAP.md"
+validation = "magnetita/VALIDATION.md"
+active_plans = "magnetita/docs/plans/active"
+source_roots = ["magnetita/src", "magnetita/qml", "celestina-rs/crates/magnetita-core", "celestina-rs/crates/magnetita-net", "celestina-rs/crates/magnetitad"]
+commit_roots = ["magnetita/", "celestina-rs/crates/magnetita-core/", "celestina-rs/crates/magnetita-net/", "celestina-rs/crates/magnetitad/"]
+include_workspace_manifests = true
+production_role = "desktop-application-and-user-daemon"
+deployable = true
+build_script = "magnetita/scripts/build-production.sh"
+complete_script = "magnetita/scripts/complete-production.sh"
+verify_script = "magnetita/scripts/verify-production.sh"
+deploy_script = "magnetita/scripts/deploy-production.sh"
+status_script = "magnetita/scripts/status-production.sh"
+artifact_manifest = "magnetita/target/production-artifact.toml"
+artifact_paths = ["magnetita/target/release/magnetita", "celestina-rs/target/release/magnetitad"]
+production_inputs = ["magnetita/Cargo.toml", "magnetita/Cargo.lock", "magnetita/build.rs", "magnetita/src", "magnetita/qml", "magnetita/org.celestina.Magnetita.desktop", "magnetita/magnetitad.service", "celestina-style/icons/apps/org.celestina.Magnetita.svg", "celestina-rs/Cargo.toml", "celestina-rs/Cargo.lock", "celestina-rs/rust-toolchain.toml", "celestina-rs/crates/celestina-core", "celestina-rs/crates/magnetita-core", "celestina-rs/crates/magnetita-net", "celestina-rs/crates/magnetitad"]
+verification_inputs = ["magnetita/scripts/smoke.sh", "celestina-rs/rust-toolchain.toml"]
+component_commit_scopes = [
+  { prefix = "magnetita-core", roots = ["celestina-rs/crates/magnetita-core/"], include_workspace_manifests = true },
+  { prefix = "magnetita-net", roots = ["celestina-rs/crates/magnetita-net/"], include_workspace_manifests = true },
+  { prefix = "magnetitad", roots = ["celestina-rs/crates/magnetitad/"], include_workspace_manifests = true },
+]
+
+[[projects]]
+id = "grafita"
+name = "Grafita"
+path = "grafita"
+kind = "cxx-qt-application"
+commit_prefix = "grafita"
+agents = "grafita/AGENTS.md"
+readme = "grafita/README.md"
+status = "grafita/STATUS.md"
+roadmap = "grafita/ROADMAP.md"
+validation = "grafita/VALIDATION.md"
+active_plans = "grafita/docs/plans/active"
+source_roots = ["grafita/src", "grafita/cpp", "grafita/qml", "celestina-rs/crates/grafita-core"]
+commit_roots = ["grafita/", "celestina-rs/crates/grafita-core/"]
+include_workspace_manifests = true
+production_role = "desktop-application"
+deployable = true
+build_script = "grafita/scripts/build-production.sh"
+complete_script = "grafita/scripts/complete-production.sh"
+verify_script = "grafita/scripts/verify-production.sh"
+deploy_script = "grafita/scripts/deploy-production.sh"
+status_script = "grafita/scripts/status-production.sh"
+artifact_manifest = "grafita/target/production-artifact.toml"
+artifact_paths = ["grafita/target/release/grafita"]
+production_inputs = ["grafita/Cargo.toml", "grafita/Cargo.lock", "grafita/build.rs", "grafita/src", "grafita/cpp", "grafita/qml", "grafita/org.celestina.Grafita.desktop", "celestina-style/icons/apps/org.celestina.Grafita.svg", "celestina-rs/crates/grafita-core"]
+verification_inputs = ["grafita/scripts/smoke.sh", "celestina-rs/crates/grafita-core/tests", "celestina-rs/rust-toolchain.toml"]
+component_commit_scopes = [
+  { prefix = "grafita-core", roots = ["celestina-rs/crates/grafita-core/"], include_workspace_manifests = true },
+]
+
+[[projects]]
+id = "fluorita"
+name = "Fluorita"
+path = "fluorita"
+kind = "cxx-qt-media-application"
+commit_prefix = "fluorita"
+agents = "fluorita/AGENTS.md"
+readme = "fluorita/README.md"
+status = "fluorita/STATUS.md"
+roadmap = "fluorita/ROADMAP.md"
+validation = "fluorita/VALIDATION.md"
+active_plans = "fluorita/docs/plans/active"
+source_roots = ["fluorita/src", "fluorita/cpp", "fluorita/qml", "celestina-rs/crates/fluorita-core", "celestina-rs/crates/fluorita-engine", "celestina-rs/crates/fluorita-qt"]
+commit_roots = ["fluorita/", "celestina-rs/crates/fluorita-core/", "celestina-rs/crates/fluorita-engine/", "celestina-rs/crates/fluorita-qt/"]
+include_workspace_manifests = true
+production_role = "desktop-media-application"
+deployable = true
+build_script = "fluorita/scripts/build-production.sh"
+complete_script = "fluorita/scripts/complete-production.sh"
+verify_script = "fluorita/scripts/verify-production.sh"
+deploy_script = "fluorita/scripts/deploy-production.sh"
+status_script = "fluorita/scripts/status-production.sh"
+artifact_manifest = "fluorita/target/production-artifact.toml"
+artifact_paths = ["fluorita/target/release/fluorita"]
+production_inputs = ["fluorita/Cargo.toml", "fluorita/Cargo.lock", "fluorita/build.rs", "fluorita/src", "fluorita/cpp", "fluorita/qml", "fluorita/org.celestina.Fluorita.desktop", "celestina-style/icons/apps/org.celestina.Fluorita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/fluorita-core", "celestina-rs/crates/fluorita-engine", "celestina-rs/crates/fluorita-qt"]
+verification_inputs = ["fluorita/scripts/smoke.sh", "celestina-rs/crates/fluorita-engine/tests", "celestina-rs/rust-toolchain.toml"]
+component_commit_scopes = [
+  { prefix = "fluorita-core", roots = ["celestina-rs/crates/fluorita-core/"], include_workspace_manifests = true },
+  { prefix = "fluorita-engine", roots = ["celestina-rs/crates/fluorita-engine/"], include_workspace_manifests = true },
+  { prefix = "fluorita-qt", roots = ["celestina-rs/crates/fluorita-qt/"], include_workspace_manifests = true },
+]

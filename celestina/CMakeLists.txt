@@ -154,8 +154,8 @@ qt_add_qml_module(celestina
         ../celestina-style/icons/battery-charging.svg
 )
 
-# The style tree lives beside the shell; the panel imports it from source
-# (self-provisioned at runtime — see main.cpp), so main() needs to know where.
+# The source tree is the fallback used by the legacy launcher. Production
+# launchers override it with the compiled module through CELESTINA_STYLE_PATH.
 target_compile_definitions(celestina PRIVATE
     CELESTINA_STYLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../celestina-style"
     CELESTINA_NIRI_ADAPTER="${NIRI_ADAPTER_BINARY}"

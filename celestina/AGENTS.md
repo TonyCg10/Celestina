@@ -1,121 +1,87 @@
-# celestina — delta local del shell Niri
+# celestina — Niri shell local contract
 
-El `AGENTS.md` de la raíz sigue siendo obligatorio. Este archivo concreta la
-frontera híbrida Rust/C++/QML del shell y no relaja ninguna regla de la suite.
+This file inherits the root [`AGENTS.md`](../AGENTS.md) in full. It defines the
+shell's Rust/C++/Qt/QML boundary; it does not authorize activating surfaces,
+editing Niri, hiding Noctalia, or installing tools.
 
-Para trabajo del plan de reemplazo de Noctalia, lee además `ROADMAP.md` (estado
-y fases R0–R9) y `NOCTALIA-REPLACEMENT.md` (órdenes de trabajo por fase, hechos
-de la sesión, puertas de salida y decisiones abiertas). Las reglas de este
-archivo mandan sobre cualquier detalle de aquellos.
+## Required context
 
-## Fronteras del shell
+- [README.md](README.md), [STATUS.md](STATUS.md), [ROADMAP.md](ROADMAP.md), and
+  [VALIDATION.md](VALIDATION.md)
+- Run `python3 ../scripts/agent-context.py celestina` to discover the registered
+  active plan.
+- [Open discussions](docs/discussions/README.md) and
+  [accepted decisions](docs/decisions/README.md)
 
-- Hay dos helpers Rust y un solo runtime compartido: `celestina-shell-core`
-  posee framing acotado, el escritor serializado, el sobre de proveedores, el
-  vocabulario de comandos y la política de coalescencia. Un helper nuevo extiende
-  `src/provider_adapter.rs`; no crees un proceso por widget ni un tercer runtime.
-- `src/niri_adapter.rs` es el único lugar que conoce tipos de `niri-ipc`.
-  Reduce el stream del compositor a snapshots estrechos y reconecta el socket
-  sin filtrar el vocabulario completo de Niri hacia Qt.
-- El protocolo helper→host es JSON delimitado por saltos de línea. Conserva
-  `kind: "snapshot"`, `kind: "unavailable"` y `kind: "request"`, es compatible
-  hacia atrás y se valida antes de publicar estado. El host limita cada mensaje
-  a 1 MiB y vacía estado previo ante caída, salida inválida o indisponibilidad.
-  Los identificadores (workspace, petición) viajan como cadenas decimales: son
-  `u64` y un número JSON llegaría redondeado al host.
-- El canal host→helper es el mismo formato en sentido inverso y está acotado en
-  longitud de línea, en profundidad de cola y en tiempo. Una petición es una
-  petición: el `accepted` del helper significa que el compositor la aceptó, y
-  sólo un snapshot posterior que muestre el workspace pedido activo en la
-  salida pedida la confirma. Sin respuesta a tiempo el host la marca fallida.
-  Este canal no es el canal de comandos de la sesión (R0-C); no lo conviertas
-  en uno.
-- C++ manual queda restringido al ciclo de vida de `QProcess`, marshaling Qt,
-  LayerShellQt y KWindowEffects. Cada ampliación nombra la limitación concreta
-  de CXX-Qt que la exige; dominio, reducción de eventos y política testeable no
-  se desplazan a C++.
-- `ProtocolDecoder` posee únicamente el framing acotado del pipe y su
-  recuperación tras una línea hostil; `NiriClient` valida JSON y publica el
-  snapshot. `PanelBlurController` posee únicamente capacidad, reintentos,
-  geometría y fallback del efecto KWindowEffects. No devuelvas esas
-  responsabilidades a `main.cpp` ni mezcles ambos ciclos de vida.
-- El helper reconecta el IPC de Niri dentro del proceso. Si el proceso muere, el
-  host puede relanzarlo sólo con espera acotada y backoff; nunca en un bucle
-  inmediato sobre el hilo gráfico.
-- `qml/` presenta estado ya adaptado. No abre sockets, no lanza procesos y no
-  decide protocolo o recuperación. El panel no alcanza ids internos de otros
-  componentes: inyecta propiedades estrechas y recibe señales.
-- Cada raíz o componente QML nuevo se añade a `QML_FILES` en
-  `CMakeLists.txt`; el guard raíz exige paridad exacta con `qml/`.
-- Panel y chooser importan el árbol canónico `../celestina-style` directamente:
-  CMake crea el alias URI para `qmllint` y el host crea el alias equivalente en
-  runtime. No vuelvas a una paleta inline, a una copia local ni afirmes que el
-  módulo instalado es el contrato actual.
+Apply expert Rust, C++20, Qt 6/QML, and CXX-Qt judgment at every boundary,
+ownership edge, thread, signal, and build registration point.
 
-## Canal de sesión
+## Shell boundaries
 
-- El modo panel posee `org.celestina.Shell` en el bus de sesión y exporta
-  `org.celestina.Shell1` en `/org/celestina/Shell1`. Ese nombre es lo que hace
-  único al modo panel: un segundo host cede y sale, nunca mapea superficies.
-  `msg` y `--pick-output` son clientes transitorios y no reclaman el nombre.
-- `GetState`, `Command`, `Changed` y `CommandResult` se conservan. Añade claves
-  nuevas a los `a{sv}` y verbos nuevos a `Command`; no cambies lo que un
-  consumidor existente ya lee. Toda carga lleva `version`.
-- Cada keybind o integración posterior entra por aquí. No inventes un segundo
-  canal ni reutilices el pipe del adaptador, que es interno del cliente Niri.
-- Sin bus de sesión el panel sigue funcionando y sólo se pierde el canal: D-Bus
-  degrada el servicio, nunca la shell.
+- `celestina-shell-core` owns framing, vocabulary, reduction, and pure policy.
+  It does not depend on Qt or know surfaces.
+- `src/niri_adapter.rs` is the only owner of `niri-ipc` types. It publishes
+  narrow snapshots and confirmations; it never leaks the full Niri model to Qt.
+- `src/provider_adapter/` is the aggregated long-lived non-Qt IO helper. A
+  feature adds a module to that runtime, not one process per widget or a second
+  parallel channel.
+- The helper/host protocol is bounded, line-delimited, backward-compatible JSON.
+  The host revalidates, clears state when a generation is lost, and transports
+  `u64` IDs as decimal strings. `accepted` is not confirmation; a later snapshot
+  containing the requested state confirms it.
+- Manual C++ owns only LayerShellQt/KWindowEffects, QtDBus, `QProcess`,
+  marshaling, and lifecycle gaps CXX-Qt cannot cover. Every new seam names that
+  limitation; domain and policy do not move to C++.
+- QML receives adapted state. It does not open sockets, execute processes, or
+  decide recovery/protocol behavior. Register every QML file in CMake.
 
-## Bandeja del sistema
+## Session channel
 
-- `TrayWatcher` es *host*, no watcher: se registra con el que posea la sesión.
-  Poseer `org.kde.StatusNotifierWatcher` es requisito de R8; sin watcher ninguna
-  aplicación publica su item a nadie.
-- Un item es el proceso de otra aplicación y su protocolo se incumple en la
-  práctica: propiedades ausentes, `Get` que falla, títulos vacíos. Nada se da
-  por presente, `GetAll` es la lectura y toda llamada es asíncrona.
-- Excepción explícita al catálogo cerrado de `celestina-style`: los iconos de
-  items de bandeja llegan como nombre de tema o píxeles crudos de otra
-  aplicación y se pintan como tales. La regla protege el aspecto *de la suite*;
-  el icono de un item ajeno es identidad de esa app, no de Celestina. No amplíes
-  esta excepción a iconografía propia.
+- The panel host owns `org.celestina.Shell` and exports
+  `org.celestina.Shell1` at `/org/celestina/Shell1`. Only panel mode owns that
+  name.
+- `msg` and `--pick-output` are transient clients; they never claim the name or
+  start a shell.
+- Preserve `GetState`, `Command`, `Changed`, and `CommandResult`. Extend `a{sv}`
+  additively and version every payload.
+- Every session key binding enters through this channel. A helper's internal
+  pipe is not a second public API.
+- Bus loss degrades the channel instead of blocking or terminating the panel.
 
-## Superficies y efectos
+## Surfaces, tray, and style
 
-- Hay una superficie layer-shell por `QScreen`: borde superior, zona exclusiva
-  coherente con su altura y `KeyboardInteractivityNone`. Hotplug crea o retira
-  únicamente la superficie del monitor afectado.
-- El blur del compositor es best-effort. La región enviada a KWindowEffects se
-  mantiene finita y se rearma tras cambios de geometría; QML consume un estado
-  explícito y usa una superficie de fallback legible cuando no está disponible.
-- `scripts/run.sh` construye y activa el panel real. No lo ejecutes, no ocultes
-  otra barra y no cambies la sesión Niri salvo petición explícita del autor.
-- `--pick-output` es un contrato con `xdg-desktop-portal-wlr`: al aceptar
-  imprime exactamente `Monitor: <output>` en stdout. Logs y diagnósticos van a
-  stderr; cancelar no inventa una selección.
+- Create one layer-shell surface per `QScreen`, with explicit namespace,
+  anchors, exclusive zone, and keyboard policy. Hotplug changes only the
+  affected surface.
+- Blur is best-effort: use a finite region, reapply on geometry changes, and
+  publish a readable fallback. Offscreen tests prove no compositor decision.
+- Panel, menus, and overlays describe their intersection through
+  `LayerSurfaceSpec`; new surfaces do not copy setup code.
+- `TrayWatcher` hosts items and `TrayWatcherService` claims
+  `org.kde.StatusNotifierWatcher` only when no owner exists. Calls to foreign
+  applications are asynchronous and every property may be absent.
+- Foreign tray icons are the only local exception to the closed icon catalogue;
+  their names/pixels retain another app's identity. This does not extend to
+  first-party icons.
+- Import canonical `../celestina-style` through equivalent CMake/runtime URI
+  aliases. Never copy it or assume an installed module.
+- `--pick-output` prints exactly `Monitor: <output>` to stdout on acceptance;
+  logs use stderr and cancellation invents no selection.
 
-## Build reproducible y evidencia
+## Production and verification
 
-- Cargo se invoca con `--locked`; `Cargo.lock` forma parte de las dependencias
-  del target CMake. No actualices el lockfile como efecto lateral de un build.
-- Desde la raíz, la matriz mínima para cambios del shell es:
+- `scripts/build-production.sh`: CMake Release host and both Rust helpers,
+  without mapping surfaces.
+- `scripts/verify-production.sh`: guards, Rust checks, QML lint, CTest, and smoke
+  against the same built bundle, without activation.
+- `scripts/status-production.sh`: host/helper/style currency and digests.
+- `scripts/complete-production.sh`: build once, verify, and update the normal
+  on-disk bundle without replacing the live session.
+- `scripts/activate-production.sh`: the only entry that starts the real surface;
+  never run it during verification.
 
-```sh
-bash scripts/check-architecture-contract.sh
-cargo fmt --manifest-path celestina/Cargo.toml --all --check
-cargo clippy --manifest-path celestina/Cargo.toml --all-targets --locked -- -D warnings
-cargo test --manifest-path celestina/Cargo.toml --all-targets --locked
-cmake -S celestina -B celestina/build -DBUILD_TESTING=ON
-cmake --build celestina/build
-cmake --build celestina/build --target all_qmllint
-ctest --test-dir celestina/build --output-on-failure
-```
-
-- Tests Rust prueban reducción y serialización; el test C++ de
-  `ProtocolDecoder` prueba fragmentación, varios frames y descarte/recuperación
-  tras exceder 1 MiB. Amplía CTest cuando cambie otra política C++ aislable.
-  Build, CTest y `qmllint` no prueban layer-shell, hotplug, blur, foco ni el
-  formato real del portal.
-- Blur, geometría, foco y selección de monitor sólo se declaran validados tras
-  una comprobación en una sesión Wayland/Niri real. Distingue esa evidencia de
-  un arranque offscreen o de una compilación correcta.
+`scripts/run.sh` is human compatibility, not canonical evidence. Do not run it,
+hide another bar, or mutate the live session without an explicit request.
+Build/CTest/qmllint prove compilation or isolated behavior. Geometry, hotplug,
+blur, focus, tray takeover, physical monitors, lock, and AT-SPI belong only in
+`VALIDATION.md` when the author requests that pass.

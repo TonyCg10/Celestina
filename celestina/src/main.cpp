@@ -165,11 +165,10 @@ int main(int argc, char *argv[])
 
     QQmlEngine engine;
 
-    // Make CelestinaStyle importable from source. The style tree's directory is
-    // named `celestina-style`, but its module URI is `CelestinaStyle`, so expose
-    // it under that name via a runtime symlink and add the import path. Self-
-    // provisioning here means the panel and the chooser both resolve the style
-    // without a wrapper pre-setting QML_IMPORT_PATH.
+    // Make CelestinaStyle importable from the explicit production module, or
+    // from the source-tree fallback used by the legacy developer launcher. Its
+    // physical directory need not match the URI, so expose it under that name
+    // through a runtime symlink and add the parent import path.
     {
         QString runtime =
             QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
@@ -184,7 +183,11 @@ int main(int argc, char *argv[])
         // silently feed the shell the wrong CelestinaStyle. QFile::remove clears
         // the symlink itself, not its target, and is a no-op when absent.
         QFile::remove(styleLink);
-        QFile::link(QStringLiteral(CELESTINA_STYLE_DIR), styleLink);
+        const QString styleDirectory = qEnvironmentVariable(
+            "CELESTINA_STYLE_PATH",
+            QStringLiteral(CELESTINA_STYLE_DIR)
+        );
+        QFile::link(styleDirectory, styleLink);
         engine.addImportPath(importRoot);
     }
 

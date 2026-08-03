@@ -43,17 +43,16 @@ comprobar() {
 # historia anterior a la convención, debe delatar los commits que no la cumplen.
 desde=${COMMIT_SCOPE_DESDE:-9ecc457}
 if git -C "$root" rev-parse -q --verify "$desde^{commit}" >/dev/null 2>&1; then
-    revisados=0
-    git -C "$root" log --format='%H' "$desde..HEAD" | while read -r commit; do
+    if ! git -C "$root" rev-parse -q --verify "$desde^" >/dev/null 2>&1; then
+        fail "el ancla histórica $desde no tiene padre verificable"
+    else
+        git -C "$root" log --format='%H' "$desde^..HEAD" | while read -r commit; do
         asunto=$(git -C "$root" log -1 --format='%s' "$commit")
-        case $asunto in
-            fixup!*|squash!*|amend!*|Revert\ *) continue ;;
-        esac
         # Una fusión no declara alcance propio.
         if [ "$(git -C "$root" rev-list --parents -n1 "$commit" | wc -w)" -gt 2 ]; then
             continue
         fi
-        ficheros=$(git -C "$root" show --name-only --format='' "$commit" | grep -v '^$' || true)
+        ficheros=$(git -C "$root" show --no-renames --name-only --format='' "$commit" | grep -v '^$' || true)
         [ -n "$ficheros" ] || continue
         if ! printf '%s\n' "$ficheros" | sh "$hook" --check "$asunto" >/dev/null 2>&1; then
             printf 'FALLO: el historial no pasa su propio guard: %s %s\n' \
@@ -61,10 +60,10 @@ if git -C "$root" rev-parse -q --verify "$desde^{commit}" >/dev/null 2>&1; then
             printf '%s\n' "$ficheros" | sh "$hook" --check "$asunto" >&2 || true
             exit 1
         fi
-        revisados=$((revisados + 1))
-    done || fail "un commit del historial no pasa el guard"
+        done || fail "un commit del historial no pasa el guard"
+    fi
 else
-    printf 'aviso: %s no existe; se omite el contraste con el historial.\n' "$desde" >&2
+    fail "el ancla histórica $desde no existe; actualízala explícitamente"
 fi
 
 # ── 2. Fixtures ───────────────────────────────────────────────────────────
@@ -90,14 +89,50 @@ comprobar ok 'grafita: algo' 'grafita/src/main.rs' 'celestina-rs/crates/grafita-
 # Dar de alta un crate edita el manifiesto del workspace en el mismo commit.
 comprobar ok 'fluorita-core: algo' \
     'celestina-rs/crates/fluorita-core/src/lib.rs' 'celestina-rs/Cargo.toml' 'celestina-rs/Cargo.lock'
+comprobar ko 'fluorita-core: no confundas un backup' \
+    'celestina-rs/crates/fluorita-core/src/lib.rs' 'celestina-rs/Cargo.toml.backup'
+# El prefijo principal cierra la unidad con sus registros locales.
+comprobar ok 'siderita: close one ledger unit' \
+    'celestina-rs/crates/siderita-core/src/lib.rs' \
+    'siderita/ROADMAP.md' 'siderita/STATUS.md' \
+    'siderita/docs/plans/active/2026-08-03-unit.md' \
+    'siderita/docs/evidence/2026-08-03-unit.md'
+# Un prefijo de componente no posee los registros persistentes del owner.
+comprobar ko 'siderita-core: close one ledger unit' \
+    'celestina-rs/crates/siderita-core/src/lib.rs' \
+    'siderita/docs/plans/active/2026-08-03-unit.md'
+comprobar ko 'siderita: cross into another owner records' \
+    'siderita/src/main.rs' 'magnetita/docs/plans/active/2026-08-03-unit.md'
+# Los roots son fronteras, no prefijos léxicos aproximados.
+comprobar ko 'grafita: reject a lookalike crate' \
+    'celestina-rs/crates/grafita-evil/src/lib.rs'
+# --no-renames entrega al guard origen y destino de un movimiento.
+comprobar ko 'siderita: move a foreign file into scope' \
+    'celestina/src/foreign.cpp' 'siderita/src/foreign.cpp'
 # El shell y su core comparten prefijo.
 comprobar ok 'celestina: algo' \
     'celestina/src/main.cpp' 'celestina-rs/crates/celestina-shell-core/src/lib.rs'
 
-# Lo que el guard deliberadamente no juzga.
-comprobar ok 'un asunto sin prefijo' 'siderita/src/main.rs' 'celestina/src/main.cpp'
-comprobar ok 'wip: lo que sea' 'siderita/src/main.rs' 'celestina/src/main.cpp'
-comprobar ok 'Revert "siderita: algo"' 'siderita/src/main.rs' 'celestina/src/main.cpp'
+# El formato y el vocabulario también son contrato: no hay bypass silencioso.
+comprobar ko 'un asunto sin prefijo' 'siderita/src/main.rs'
+comprobar ko 'wip: lo que sea' 'siderita/src/main.rs'
+comprobar ko 'Siderita: cambia algo' 'siderita/src/main.rs'
+comprobar ko 'siderita: ' 'siderita/src/main.rs'
+comprobar ok 'Revert "siderita: update one surface"' 'siderita/src/main.rs'
+comprobar ko 'Revert "siderita: update one surface"' \
+    'siderita/src/main.rs' 'celestina/src/main.cpp'
+comprobar ok 'fixup! siderita: update one surface' 'siderita/src/main.rs'
+comprobar ko 'fixup! siderita: update one surface' 'celestina/src/main.cpp'
+
+# El registro, no una tabla copiada en el test, conoce nuevos seams.
+comprobar ok 'fluorita-qt: keep the render seam narrow' \
+    'celestina-rs/crates/fluorita-qt/src/renderitem.cpp' \
+    'celestina-rs/Cargo.toml' 'celestina-rs/Cargo.lock'
+comprobar ko 'fluorita-qt: cross a project boundary' \
+    'celestina-rs/crates/fluorita-qt/src/renderitem.cpp' 'fluorita/qml/Main.qml'
+comprobar ok 'celestina-shell-core: extend the command vocabulary' \
+    'celestina-rs/crates/celestina-shell-core/src/lib.rs' \
+    'celestina-rs/Cargo.toml' 'celestina-rs/Cargo.lock'
 
 if [ "$fallos" -ne 0 ]; then
     printf '\n%d prueba(s) del guard de alcance fallaron.\n' "$fallos" >&2

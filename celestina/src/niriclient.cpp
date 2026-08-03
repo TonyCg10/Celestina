@@ -52,7 +52,10 @@ bool isDecimalIdentifier(const QJsonValue &value)
 NiriClient::NiriClient(QObject *parent)
     : QObject(parent)
 {
-    m_process.setProgram(QStringLiteral(CELESTINA_NIRI_ADAPTER));
+    m_process.setProgram(qEnvironmentVariable(
+        "CELESTINA_NIRI_ADAPTER_PATH",
+        QStringLiteral(CELESTINA_NIRI_ADAPTER)
+    ));
     m_process.setProcessChannelMode(QProcess::SeparateChannels);
 
     connect(

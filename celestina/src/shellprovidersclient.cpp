@@ -13,7 +13,10 @@ constexpr int maximumRestartDelayMs = 10 * 1000;
 ShellProvidersClient::ShellProvidersClient(QObject *parent)
     : QObject(parent)
 {
-    m_process.setProgram(QStringLiteral(CELESTINA_PROVIDER_ADAPTER));
+    m_process.setProgram(qEnvironmentVariable(
+        "CELESTINA_PROVIDER_ADAPTER_PATH",
+        QStringLiteral(CELESTINA_PROVIDER_ADAPTER)
+    ));
     m_process.setProcessChannelMode(QProcess::SeparateChannels);
 
     connect(

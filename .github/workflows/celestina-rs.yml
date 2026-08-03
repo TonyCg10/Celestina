@@ -1,8 +1,7 @@
-# Los cores compartidos: fmt, clippy y la suite de tests del workspace.
+# Shared cores: fmt, clippy, and the workspace test suite.
 #
-# Corre sólo cuando cambia `celestina-rs/`. Ningún otro proyecto puede alterar
-# este resultado: el workspace no depende de ninguno de ellos, y esa dirección
-# de dependencias es precisamente lo que el guard de arquitectura vigila.
+# Run only for `celestina-rs/`. The workspace depends on no application; the
+# architecture guard enforces that direction.
 name: celestina-rs
 
 on:
@@ -26,20 +25,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # `fluorita-engine` enlaza contra la libmpv del sistema
-      # (`cargo:rustc-link-lib=mpv`), así que sin esto el workspace compila
-      # hasta que toca enlazar y falla con `cannot find -lmpv`. Los bindings van
-      # pregenerados en el crate, de modo que no hacen falta bindgen ni clang.
-      - name: Instalar libmpv
+      # `fluorita-engine` links system libmpv. Bindings are pregenerated, so
+      # bindgen and clang are not required.
+      - name: Install libmpv
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libmpv-dev
 
-      # rustup lee celestina-rs/rust-toolchain.toml (1.97.1, clippy + rustfmt).
-      - name: Instalar el toolchain pinneado
+      # rustup reads celestina-rs/rust-toolchain.toml.
+      - name: Install pinned toolchain
         run: rustup toolchain install
 
-      - name: Cache de cargo
+      - name: Cargo cache
         uses: actions/cache@v4
         with:
           path: |
@@ -48,28 +45,19 @@ jobs:
             celestina-rs/target
           key: cargo-${{ runner.os }}-${{ hashFiles('celestina-rs/Cargo.lock', 'celestina-rs/rust-toolchain.toml') }}
 
-      - name: Formato
+      - name: Format
         run: cargo fmt --all --check
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
-      # El resto del workspace entero. `fluorita-engine` va aparte porque sus
-      # pruebas contra el backend real no caben aquí — ver el paso siguiente.
+      # The rest of the workspace. Fluorita engine runs separately below.
       - name: Tests
         run: cargo test --workspace --locked --exclude fluorita-engine
 
-      # `fluorita-engine` se compila, enlaza y pasa sus pruebas, incluida
-      # `an_instance_starts_and_answers_properties`. Esta corría aparte hasta
-      # 2026-08-02: el runner de Ubuntu 24.04 trae mpv 0.37, y el baseline del
-      # motor fijaba en modo obligatorio unas opciones de hardening
-      # (`load-console`, `load-select`, `load-positioning`, …) que esa versión
-      # no conoce, así que `set_property` respondía -8 y abortaba la instancia
-      # entera. `instance.rs` ahora aplica ese hardening en modo mejor
-      # esfuerzo — una opción desconocida degrada, no bloquea — así que la
-      # ausencia de esas siete propiedades en mpv viejo ya no es una decisión
-      # pendiente del autor: la instancia se crea igual.
-      # `tests/real_media.rs` sigue aparte porque decodifica de verdad y eso sí
-      # exige duración/resultados medidos, no sólo que la instancia exista.
-      - name: Tests de fluorita-engine (sin backend real)
+      # Ubuntu 24.04 ships mpv 0.37, which lacks several optional hardening
+      # properties. Unknown properties degrade best-effort instead of aborting
+      # the instance. `tests/real_media.rs` remains separate because it performs
+      # real decoding and requires measured duration/results.
+      - name: Fluorita engine tests (without real backend)
         run: cargo test -p fluorita-engine --lib --locked

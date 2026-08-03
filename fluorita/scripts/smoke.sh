@@ -1,5 +1,5 @@
 #!/bin/sh
-set -u
+set -eu
 
 # Humo de Fluorita: la puerta rápida sin ventana.
 #
@@ -30,6 +30,15 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 bin=$root/target/release/fluorita
 scanner=$root/../scripts/architecture_scanners.py
 media=$root/../celestina-rs/crates/fluorita-engine/tests/fixtures/clip.mp4
+if [ "${1:-}" = "--binary" ]; then
+    shift
+    bin=${1:?--binary necesita una ruta}
+    shift
+fi
+if [ "$#" -ne 0 ]; then
+    echo "uso: scripts/smoke.sh [--binary RUTA]" >&2
+    exit 2
+fi
 
 fail() {
     echo "smoke: $1" >&2
@@ -46,27 +55,54 @@ if [ -n "$autos" ]; then
     exit 1
 fi
 
-[ -x "$bin" ] || fail "falta $bin — compila antes (cargo build --release)"
+[ -x "$bin" ] || fail "falta el binario indicado: $bin"
 [ -f "$media" ] || fail "falta el fixture de media: $media"
 
 scratch=$(mktemp -d)
-trap 'rm -rf "$scratch"' EXIT
+trap 'rm -rf "$scratch"' EXIT HUP INT TERM
+mkdir -p "$scratch/config" "$scratch/data" "$scratch/cache" \
+    "$scratch/state" "$scratch/run" "$scratch/Pictures" "$scratch/Videos" \
+    "$scratch/Music"
+chmod 0700 "$scratch/run"
+printf 'XDG_PICTURES_DIR="%s"\nXDG_VIDEOS_DIR="%s"\nXDG_MUSIC_DIR="%s"\n' \
+    "$scratch/Pictures" "$scratch/Videos" "$scratch/Music" \
+    > "$scratch/config/user-dirs.dirs"
 
 # Arranca el binario, espera, y devuelve por eco los hilos del proceso *real*
 # (no los del envoltorio, que fue el error original de esta puerta).
 threads_for() {
-    argument=$1
+    argument_mode=$1
     log=$2
-    XDG_CONFIG_HOME=$scratch QT_QPA_PLATFORM=offscreen QT_ASSUME_STDERR_HAS_CONSOLE=1 \
-        "$bin" "$argument" >"$log" 2>&1 &
+    argument=${3:-}
+    if [ "$argument_mode" = "with-argument" ]; then
+        XDG_CONFIG_HOME=$scratch/config \
+        XDG_DATA_HOME=$scratch/data \
+        XDG_CACHE_HOME=$scratch/cache \
+        XDG_STATE_HOME=$scratch/state \
+        XDG_RUNTIME_DIR=$scratch/run \
+        DBUS_SESSION_BUS_ADDRESS=unix:path=$scratch/run/no-session-bus \
+        QT_QPA_PLATFORM=offscreen \
+        QT_ASSUME_STDERR_HAS_CONSOLE=1 \
+            "$bin" "$argument" >"$log" 2>&1 &
+    else
+        XDG_CONFIG_HOME=$scratch/config \
+        XDG_DATA_HOME=$scratch/data \
+        XDG_CACHE_HOME=$scratch/cache \
+        XDG_STATE_HOME=$scratch/state \
+        XDG_RUNTIME_DIR=$scratch/run \
+        DBUS_SESSION_BUS_ADDRESS=unix:path=$scratch/run/no-session-bus \
+        QT_QPA_PLATFORM=offscreen \
+        QT_ASSUME_STDERR_HAS_CONSOLE=1 \
+            "$bin" >"$log" 2>&1 &
+    fi
     pid=$!
     sleep 5
     if ! kill -0 "$pid" 2>/dev/null; then
-        fail "el binario terminó solo con $argument" "$log"
+        fail "el binario terminó solo ($argument_mode $argument)" "$log"
     fi
     cat /proc/"$pid"/task/*/comm 2>/dev/null | sort -u | tr '\n' ' '
-    kill "$pid" 2>/dev/null
-    wait "$pid" 2>/dev/null
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
 }
 
 qml_errors() {
@@ -74,7 +110,7 @@ qml_errors() {
 }
 
 # ── 2) Un vídeo real: carga, vive y abre sesión ──────────────────────────────
-playing=$(threads_for "$media" "$scratch/media.log")
+playing=$(threads_for with-argument "$scratch/media.log" "$media")
 errores=$(qml_errors "$scratch/media.log")
 if [ -n "$errores" ]; then
     echo "smoke: errores QML al abrir media:" >&2
@@ -92,7 +128,7 @@ esac
 
 # ── 3) Algo que no es media: ni un hilo del backend ──────────────────────────
 printf 'no soy media\n' > "$scratch/nota.txt"
-idle=$(threads_for "$scratch/nota.txt" "$scratch/texto.log")
+idle=$(threads_for with-argument "$scratch/texto.log" "$scratch/nota.txt")
 errores=$(qml_errors "$scratch/texto.log")
 if [ -n "$errores" ]; then
     echo "smoke: errores QML con un archivo no reconocido:" >&2
@@ -105,7 +141,7 @@ case "$idle" in
 esac
 
 # ── 4) Sin argumento: la biblioteca explora sin decodificar ─────────────────
-browsing=$(threads_for "" "$scratch/biblioteca.log")
+browsing=$(threads_for no-argument "$scratch/biblioteca.log")
 errores=$(qml_errors "$scratch/biblioteca.log")
 if [ -n "$errores" ]; then
     echo "smoke: errores QML en la biblioteca:" >&2
@@ -140,7 +176,7 @@ png = (
 open(sys.argv[1], "wb").write(png)
 PNG
 
-still=$(threads_for "$scratch/foto.png" "$scratch/imagen.log")
+still=$(threads_for with-argument "$scratch/imagen.log" "$scratch/foto.png")
 errores=$(qml_errors "$scratch/imagen.log")
 if [ -n "$errores" ]; then
     echo "smoke: errores QML con una imagen:" >&2

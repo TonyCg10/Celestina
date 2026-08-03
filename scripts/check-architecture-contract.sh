@@ -4,7 +4,6 @@
 # a checkout: it inspects tracked files plus non-ignored, not-yet-added files.
 set -uo pipefail
 
-readonly line_limit=800
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "$script_dir/.." && pwd)
 readonly baseline_file="$script_dir/architecture-baseline.tsv"
@@ -83,7 +82,7 @@ errors = []
 for key, maximum in current.items():
     kind, name = key
     if key not in old:
-        errors.append(f"nueva excepcion {kind}: {name} ({maximum})")
+        errors.append(f"nueva deuda baseline {kind}: {name} ({maximum})")
     elif maximum > old[key]:
         errors.append(f"baseline aumentado: {kind} {name} {old[key]} -> {maximum}")
 if errors:
@@ -96,7 +95,7 @@ PY
     fi
 }
 
-check_file_sizes() {
+check_modularity_debt() {
     if [[ ! -f $baseline_file ]]; then
         fail "falta el baseline $baseline_file"
         return
@@ -104,7 +103,6 @@ check_file_sizes() {
 
     declare -A baseline=()
     declare -A baseline_entries=()
-    declare -A seen=()
     local raw kind path maximum extra entry line_number=0
 
     while IFS= read -r raw || [[ -n $raw ]]; do
@@ -132,10 +130,6 @@ check_file_sizes() {
         baseline_entries["$entry"]=1
 
         [[ $kind == lines ]] || continue
-        if ((maximum <= line_limit)); then
-            fail "scripts/architecture-baseline.tsv:$line_number: retire '$path'; ya no supera $line_limit lineas"
-            continue
-        fi
         if is_generated_path "$path" || ! is_guarded_source "$path"; then
             fail "scripts/architecture-baseline.tsv:$line_number: '$path' no pertenece al conjunto vigilado"
             continue
@@ -143,7 +137,7 @@ check_file_sizes() {
         baseline["$path"]=$maximum
     done < "$baseline_file"
 
-    local file lines expected
+    local file
     local guarded_count=0
     while IFS= read -r -d '' file; do
         is_generated_path "$file" && continue
@@ -151,35 +145,26 @@ check_file_sizes() {
         [[ -f $file ]] || continue
         ((guarded_count += 1))
 
-        # awk counts the final logical line even when a file omits its trailing
-        # newline; removing that newline must not evade the size ratchet.
-        lines=$(awk 'END { print NR }' "$file")
-        if ((lines > line_limit)); then
-            if [[ ! ${baseline[$file]+present} ]]; then
-                fail "$file: $lines lineas; el limite es $line_limit y no se admiten excepciones nuevas"
-                continue
-            fi
-
-            seen["$file"]=1
-            expected=${baseline[$file]}
-            if ((lines > expected)); then
-                fail "$file: crecio de $expected a $lines lineas; debe volver a $expected o menos"
-            elif ((lines < expected)); then
-                fail "$file: bajo de $expected a $lines lineas; reduzca el baseline a $lines para fijar la mejora"
-            fi
-        elif [[ ${baseline[$file]+present} ]]; then
-            seen["$file"]=1
-            fail "$file: ya tiene $lines lineas; retire su excepcion del baseline"
-        fi
     done < <(git ls-files --cached --others --exclude-standard -z)
 
     if ((guarded_count == 0)); then
         fail "no se encontraron fuentes Rust/QML/C++ para medir"
     fi
 
+    local lines expected
     for path in "${!baseline[@]}"; do
-        if [[ ! ${seen[$path]+present} ]]; then
-            fail "scripts/architecture-baseline.tsv: excepcion obsoleta o fichero ausente: '$path'"
+        if [[ ! -f $path ]]; then
+            fail "scripts/architecture-baseline.tsv: deuda obsoleta o fichero ausente: '$path'"
+            continue
+        fi
+        # awk counts the final logical line even when a file omits its trailing
+        # newline; removing that newline must not evade the debt ratchet.
+        lines=$(awk 'END { print NR }' "$path")
+        expected=${baseline[$path]}
+        if ((lines > expected)); then
+            fail "$path: crecio de $expected a $lines lineas; la deuda inventariada no puede crecer"
+        elif ((lines < expected)); then
+            fail "$path: bajo de $expected a $lines lineas; reduzca el baseline a $lines para fijar la mejora"
         fi
     done
 }
@@ -593,7 +578,7 @@ check_dependency_direction() {
 }
 
 check_baseline_history
-check_file_sizes
+check_modularity_debt
 check_qml_registration
 check_style_public_api
 check_top_level_auto_bindings

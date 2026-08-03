@@ -1,49 +1,53 @@
-# Magnetita — instrucciones de la app
+# Magnetita — local contract
 
-Este directorio contiene sólo el cliente QML/CXX-Qt fino y su packaging.
+This file inherits the root [`AGENTS.md`](../AGENTS.md) in full. It adds
+constraints for `magnetita/` and its registered crates; it cannot relax the root
+or grant authority.
 
-## Frontera de responsabilidad
+## Required context
 
-- No añadas dominio, protocolo, transporte ni lógica del demonio aquí. Eso vive
-  en `../celestina-rs/crates/magnetita-core`, `magnetita-net` y `magnetitad`.
-- La UI solicita acciones y refleja únicamente el estado confirmado por el
-  demonio; no mantiene una segunda verdad optimista.
-- Ninguna lectura, escritura ni acción D-Bus bloqueante se ejecuta en el hilo
-  Qt. `controller.rs` lanza el trabajo fuera del GUI thread, vuelve mediante
-  `qt_thread().queue(...)` y agrupa ráfagas de refresh en una sola lectura más
-  como máximo; QML sólo consume el snapshot confirmado.
-- Las acciones UI pasan por un único worker poseído, acotado y unido al cerrar;
-  conserva el orden y no vuelvas a crear un hilo por clic. Las lecturas y los
-  watchers D-Bus siguen siendo best-effort desacoplados: no multipliques hilos
-  por evento ni declares shutdown determinista para esa parte.
-- Conserva `org.celestina.Devices1` compatible. Extiende los diccionarios
-  `a{sv}` con claves nuevas; no elimines ni cambies métodos, claves o semánticas
-  existentes que consumen Siderita y el panel.
-- Los componentes compartidos de `celestina-style` se consumen mediante los
-  symlinks existentes y se registran en `build.rs`; nunca los copies localmente.
+- [README.md](README.md), [STATUS.md](STATUS.md), [ROADMAP.md](ROADMAP.md), and
+  [VALIDATION.md](VALIDATION.md)
+- [Production artifacts](../docs/contracts/production-artifacts.md)
+- [Architecture](../docs/standards/architecture.md)
+- [Rust, C++, Qt, and QML](../docs/standards/rust-cpp-qt-qml.md)
+- [Verification](../docs/standards/verification.md)
+- [Visual design](../celestina-style/DESIGN.md) for visual changes
 
-## Servicio delicado
+## Local boundary
 
-- Para reinstalar `magnetitad`, ejecuta primero
-  `systemctl --user stop magnetitad`; sustituye el binario y después usa
-  `systemctl --user start magnetitad`. Copiar sobre un proceso vivo puede dejar
-  ejecutándose la versión anterior.
-- No reinicies el servicio en ráfagas: puede dejar colgada la conexión KDE
-  Connect del teléfono.
-- No borres `~/.config/magnetita/trust.json`, fuerces un reemparejado ni cambies
-  el estado persistente salvo petición explícita del autor.
+- `magnetita/` is a thin Qt/QML client plus packaging. Domain, protocol,
+  transport, and service belong to `magnetita-core`, `magnetita-net`, and
+  `magnetitad` in `celestina-rs`.
+- The UI requests actions and reflects only snapshots confirmed by
+  `org.celestina.Devices1`; it does not maintain optimistic parallel truth.
+- Blocking D-Bus never runs on the Qt thread. An owned bounded worker orders
+  actions; reads/watchers coalesce bursts and apply the latest snapshot. Every
+  touched lifecycle gains deterministic shutdown.
+- Evolve `org.celestina.Devices1` compatibly: preserve methods and extend
+  `a{sv}` additively.
+- Preserve measured KDE Connect invariants: the phone drives pairing; the side
+  initiating the payload connection is the TLS server; payloads use 1739–1764;
+  phone-to-PC clipboard is manual because of the observed Android restriction.
+- Treat network input, names, certificates, sizes, and payloads as hostile.
+  Pairing needs explicit acceptance; `Forget` is a durable barrier and later
+  results from the revoked source cannot publish.
 
-## Verificación mínima
+## Service and deployment
 
-- Ejecuta primero `bash ../scripts/check-architecture-contract.sh`.
-- Para Rust/build: `cargo fmt --check`, clippy con `-D warnings`,
-  `cargo test --locked` y `cargo build --release --locked`; los tests locales
-  cubren decodificación/proyección del bridge. Ejecuta además los tests del crate
-  afectado en `../celestina-rs` cuando cambie dominio o contrato.
-- Para QML: confirma registro en `build.rs`, build release y arranque offscreen
-  sin `TypeError`/`ReferenceError`. Un timeout vivo prueba arranque, no acciones.
-- Cambios de D-Bus o plugins requieren tests del productor y comprobación de los
-  consumidores. Para el cliente, cubre también que el trabajo D-Bus no bloquee
-  el hilo Qt y que las ráfagas no pierdan el último refresh; hardware, pairing y
-  transferencia sólo se declaran verificados después de una prueba real con el
-  teléfono.
+Build and verify never stop `magnetitad`. `scripts/complete-production.sh` is
+mandatory when closing a bug or milestone; it may stop an already-active service
+once, copy the verified daemon, and restart it. It never enables an inactive
+service. Do not delete trust/configuration or force re-pairing for verification.
+
+## Local verification
+
+- `magnetita/scripts/build-production.sh`
+- `magnetita/scripts/verify-production.sh`
+- `magnetita/scripts/status-production.sh`
+- Producer/consumer tests when D-Bus or protocol changes
+
+Phone, pairing, mount, transfer, hardware, and Wayland tests belong in
+`VALIDATION.md`; loopback does not replace them or keep implementation open.
+Review network security, worker ownership, QObject affinity, and consumer
+compatibility.

@@ -1,0 +1,10 @@
+AGENTS.md
+app/AGENTS.md
+app/README.md
+app/STATUS.md
+app/ROADMAP.md
+app/VALIDATION.md
+docs/contracts/app-only.md
+docs/contracts/global.md
+docs/plans/active/2026-08-03-fixture.md
+app/docs/plans/active/2026-08-03-app.md

@@ -1,0 +1,38 @@
+schema_version = 1
+
+[suite]
+id = "suite"
+name = "Fixture suite"
+root = "."
+commit_prefix = "suite"
+agents = "AGENTS.md"
+readme = "README.md"
+status = "STATUS.md"
+roadmap = "ROADMAP.md"
+validation = "VALIDATION.md"
+active_plans = "docs/plans/active"
+allow_all_commit_paths = true
+
+[[projects]]
+id = "app"
+name = "App"
+path = "app"
+kind = "fixture"
+commit_prefix = "app"
+agents = "app/AGENTS.md"
+readme = "app/README.md"
+status = "app/STATUS.md"
+roadmap = "app/ROADMAP.md"
+validation = "app/VALIDATION.md"
+active_plans = "app/docs/plans/active"
+source_roots = ["app/src", "core/crates/app-core"]
+commit_roots = ["app/", "core/crates/app-core/"]
+production_role = "desktop-application"
+deployable = true
+build_script = "app/scripts/build-production.sh"
+verify_script = "app/scripts/not-created.sh"
+status_script = "app/scripts/status-production.sh"
+deploy_script = "app/scripts/deploy-production.sh"
+complete_script = "app/scripts/complete-production.sh"
+artifact_manifest = "app/target/production-artifact.toml"
+artifact_paths = ["app/target/release/app"]

@@ -1,0 +1,4 @@
+# Ignored worktree rules
+
+The test copies this file under `.claude/worktrees`; the repository guard must
+not traverse that registered client worktree.

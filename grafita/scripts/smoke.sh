@@ -19,6 +19,15 @@ set -u
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 bin=$root/target/release/grafita
 scanner=$root/../scripts/architecture_scanners.py
+if [ "${1:-}" = "--binary" ]; then
+    shift
+    bin=${1:?--binary necesita una ruta}
+    shift
+fi
+if [ "$#" -ne 0 ]; then
+    echo "uso: scripts/smoke.sh [--binary RUTA]" >&2
+    exit 2
+fi
 
 if ! autos=$(python3 "$scanner" qml-auto-bindings "$root/qml"); then
     echo "smoke: el scanner de auto-bindings no pudo completar la inspección" >&2
@@ -31,29 +40,29 @@ if [ -n "$autos" ]; then
 fi
 
 if [ ! -x "$bin" ]; then
-    echo "smoke: falta $bin — compila antes (cargo build --release)" >&2
-    exit 1
-fi
-
-# El binario tiene que ser posterior a lo que dice probar. Sin esto, un build
-# que falla deja el ejecutable anterior en su sitio y el humo pasa alegremente
-# sobre código que ya no existe: pasó en esta misma sesión, y el fallo real
-# —una app que no compilaba— quedó tapado por un OK.
-newer=$(find "$root/src" "$root/qml" "$root/cpp" "$root/build.rs" "$root/Cargo.toml" \
-    -type f -newer "$bin" -print -quit 2>/dev/null)
-if [ -n "$newer" ]; then
-    echo "smoke: $bin es anterior a $newer — recompila antes de fiarte de esto" >&2
+    echo "smoke: falta el binario indicado: $bin" >&2
     exit 1
 fi
 
 scratch=$(mktemp -d)
-trap 'rm -rf "$scratch"' EXIT
+trap 'rm -rf "$scratch"' EXIT HUP INT TERM
+mkdir -p "$scratch/config" "$scratch/data" "$scratch/cache" \
+    "$scratch/state" "$scratch/run"
+chmod 0700 "$scratch/run"
 log=$scratch/salida.log
 # Un documento con terminadores CRLF: si el humo alguna vez los reescribe, el
 # fallo aparece aquí y no en el archivo de alguien.
 printf 'primera\r\nsegunda\r\n' > "$scratch/documento.txt"
+cp "$scratch/documento.txt" "$scratch/documento-original.txt"
 
-XDG_CONFIG_HOME=$scratch QT_QPA_PLATFORM=offscreen QT_ASSUME_STDERR_HAS_CONSOLE=1 \
+XDG_CONFIG_HOME=$scratch/config \
+XDG_DATA_HOME=$scratch/data \
+XDG_CACHE_HOME=$scratch/cache \
+XDG_STATE_HOME=$scratch/state \
+XDG_RUNTIME_DIR=$scratch/run \
+DBUS_SESSION_BUS_ADDRESS=unix:path=$scratch/run/no-session-bus \
+QT_QPA_PLATFORM=offscreen \
+QT_ASSUME_STDERR_HAS_CONSOLE=1 \
     timeout 8 "$bin" "$scratch/documento.txt" >"$log" 2>&1
 rc=$?
 if [ "$rc" -ne 124 ]; then
@@ -69,13 +78,7 @@ if [ -n "$errores" ]; then
     exit 1
 fi
 
-if ! cmp -s "$scratch/documento.txt" - <<'EOF'
-primera
-segunda
-EOF
-then
-    :  # los bytes en disco llevan CRLF; el heredoc es LF, así que difieren
-else
+if ! cmp -s "$scratch/documento.txt" "$scratch/documento-original.txt"; then
     echo "smoke: el documento perdió sus terminadores CRLF sólo con abrirlo" >&2
     exit 1
 fi

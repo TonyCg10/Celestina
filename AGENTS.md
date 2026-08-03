@@ -1,248 +1,267 @@
-# AGENTS.md — contrato de trabajo para agentes en Celestina
+# AGENTS.md — canonical agent contract for Celestina
 
-Este archivo es la fuente canónica de instrucciones del monorepo. Sus reglas
-son obligatorias para cualquier agente que analice, modifique o revise el
-checkout. Codex da precedencia técnica al `AGENTS.md` más cercano al directorio
-de trabajo; como política del proyecto, los archivos anidados sólo añaden
-requisitos locales y nunca relajan las invariantes de esta raíz.
+This file is the vendor-neutral, mandatory entry point for every agent that
+analyzes, changes, or reviews this monorepo. The closest `AGENTS.md` may add
+local constraints; it never relaxes this root contract. Do not maintain
+provider-specific copies.
 
-## Antes de actuar
+## Repository language
 
-1. Lee este archivo completo y el `AGENTS.md`, `README.md`, `ROADMAP.md` o
-   `DESIGN.md` más cercano al código que vayas a tocar. Si la sesión comenzó en
-   la raíz, abre manualmente el `AGENTS.md` del subproyecto afectado: Codex sólo
-   autodetecta instrucciones entre la raíz Git y el directorio de inicio.
-2. Inspecciona el checkout real (`git status`, archivos, consumidores y guards)
-   antes de proponer o implementar. Un documento puede estar atrasado.
-3. Busca antes de crear (`rg` / `rg --files`): reutiliza contratos existentes y
-   no introduzcas una segunda forma de resolver el mismo problema.
-4. Conserva cambios ajenos del worktree. No hagas commit, push, instalación,
-   activación de servicios ni cambios fuera del repositorio sin petición del
-   autor.
-5. Mantén el alcance: una auditoría no autoriza una corrección; una corrección
-   concreta no autoriza una reescritura vecina.
+English is the only repository working language. Write rules, documentation,
+roadmaps, decisions, plans, evidence, identifiers, code comments, diagnostics,
+test names, fixtures, commit subjects, and canonical UI copy in English. Do not
+mix languages inside a file. Non-English text is allowed only in explicit
+localization resources or fixtures that test international input, and must be
+labelled as such. Historical material keeps its original bytes until a
+dedicated migration translates it without changing meaning. Agents speak to
+the author in Spanish unless the author requests another language. See
+[docs/standards/language.md](docs/standards/language.md).
 
-## Límites de autorización de la suite
+## Mandatory preflight
 
-- El trabajo de implementación ordinario está autorizado en `siderita/` y
-  `magnetita/`. Dentro del hito activo de cada ROADMAP también está autorizado
-  en `grafita/` + `celestina-rs/crates/grafita-*` y en `fluorita/` +
-  `celestina-rs/crates/fluorita-*`. Sus superficies integradas autorizan sólo
-  consumidores acotados dentro de Siderita, no una reescritura vecina.
-- No ampliar `celestina/` salvo petición explícita del autor.
-- El estado y los hitos viven en los ROADMAP, no en este archivo. No copies aquí
-  versiones, contadores de tests o afirmaciones temporales.
+Before acting:
 
-## Mapa arquitectónico y dirección de dependencias
+1. Read this file and the affected project's `AGENTS.md` completely.
+2. Read its `README.md`, `STATUS.md`, `ROADMAP.md`, and `VALIDATION.md`; read the
+   active plan ledger when one exists.
+3. Inspect `git status`, the real checkout, consumers, manifests, and guards.
+   Documentation may be stale.
+4. Search first with `rg` or `rg --files`; reuse existing contracts instead of
+   creating a parallel recipe.
+5. Declare or update the ledger unit before editing planned milestone work.
 
-| Responsabilidad | Destino | No debe contener |
-|---|---|---|
-| Dominio puro, operaciones, protocolo, IO testeable | `celestina-rs/` | Qt, QML o composición visual |
-| Estado de UI, adaptación y marshaling Qt/D-Bus/XDG | `src/` de la app | Reglas de dominio que puedan probarse sin UI |
-| Presentación y composición de una pantalla | `qml/` de la app | IO, protocolo o decisiones de dominio |
-| Tokens y controles visuales reutilizables | `celestina-style/` | Estado de una app, D-Bus, Niri o workflows |
-| Hueco que CXX-Qt no cubre | `cpp/` de la app | Lógica que Rust/CXX-Qt sí pueda expresar |
-| Contrato entre procesos | D-Bus compatible hacia atrás | Acoplamiento a ids o tipos internos de QML |
+Canonical sources are mapped in [docs/README.md](docs/README.md), the workflow
+is in [CONTRIBUTING.md](CONTRIBUTING.md), and executable project metadata is in
+[docs/projects.toml](docs/projects.toml).
 
-Reglas de dirección:
+## Authority and scope
 
-- Los crates puros pueden ser usados por adaptadores de UI; nunca dependen de
-  estos.
-- `magnetita/` es un cliente QML fino. Protocolo, red y daemon de Magnetita
-  pertenecen a los crates correspondientes de `celestina-rs/`.
-- Siderita puede tener dominio propio en `celestina-rs` aunque aún tenga un solo
-  consumidor, si es puro y testeable.
-- `celestina-style` puede depender de Qt Quick, pero nunca de módulos de una
-  aplicación.
-- C++ manual requiere un comentario que nombre la limitación concreta de
-  CXX-Qt que lo hace necesario.
+- The author's request defines the objective and mutation level. An audit does
+  not authorize a fix; a fix does not authorize an adjacent refactor.
+- A README, roadmap, plan, discussion, decision, or evidence record never grants
+  authority. It records state or intent.
+- Preserve unrelated worktree changes. Do not revert, delete, reformat, or
+  include them for convenience.
+- Do not commit, push, activate a live surface, enable a service, or change
+  anything outside the repository without an explicit request.
+- Completing an authorized bug fix or milestone does authorize the registered
+  deployment of verified bytes to the author's normal test prefix. It does not
+  authorize replacing the live shell session.
+- If scope must grow, update the ledger first and compare it with the request
+  again. The complete policy is in
+  [docs/governance/change-policy.md](docs/governance/change-policy.md).
 
-Si una pieza no encaja claramente en una fila, detente y documenta la decisión
-antes de implementarla. No la coloques por conveniencia en el archivo que ya
-está abierto.
+## Required technical level
 
-## Reutilización sin duplicación
+Act as an expert in Rust, modern C++, Qt 6, QML, and CXX-Qt. Before deciding,
+verify ownership, lifetimes, thread affinity, signals/models, FFI, QML
+registration, toolchain compatibility, errors, and consumers. If an API or
+version is uncertain, inspect the code and primary documentation; do not guess.
+See [docs/standards/rust-cpp-qt-qml.md](docs/standards/rust-cpp-qt-qml.md).
 
-Antes de crear una función, control, token o componente, busca nombres y
-recetas equivalentes en todo el monorepo.
+## Architecture direction
 
-- Comportamiento puro y testeable: módulo/crate de `celestina-rs`, incluso con
-  un solo consumidor inicial.
-- Presentación repetida dentro de una app: componente/helper local con API
-  estrecha.
-- Componente ya especificado en `celestina-style/DESIGN.md`: puede entrar en el
-  estilo con su primer consumidor real.
-- Componente visual no especificado: sólo entra en `celestina-style` cuando al
-  menos dos aplicaciones demuestran la misma semántica. Hasta entonces es
-  local.
-- Compartir QML de estilo significa symlink relativo y registro explícito;
-  nunca una copia.
-- Una abstracción compartida conserva sólo la intersección real. No recibe
-  flags de aplicación para fingir reutilización.
+| Responsibility | Canonical destination |
+|---|---|
+| Pure domain, protocol, operations, and testable IO | `celestina-rs/` |
+| Reusable Qt/C++ seam that CXX-Qt cannot cover | `fluorita-qt` or a future approved exception in `celestina-rs/` |
+| Qt/D-Bus/XDG state and adaptation | application `src/` |
+| Surface presentation | application `qml/` |
+| Reusable tokens and controls | `celestina-style/` |
+| Concrete CXX-Qt gap | application `cpp/` |
+| Inter-process contract | stable, backward-compatible API |
 
-Cuando una receta aparece por segunda vez, el agente debe comparar ambas y
-decidir explícitamente entre extraer o documentar por qué sus semánticas son
-distintas.
+Pure crates never depend on adapters or UI. One application never imports
+another application's UI. Siderita may consume narrow Grafita and Fluorita
+domain/seams while retaining its own Qt state and composition. Accepted details
+and exceptions, including the bounded `fluorita-qt` bridge, live in
+[docs/standards/architecture.md](docs/standards/architecture.md).
 
-## Modularidad: coordinadores, no monolitos
+If a piece has no clear destination, stop and record the decision before
+implementing it. Proximity to the open file does not determine ownership.
 
-El techo general para archivos fuente nuevos Rust/QML/C++ es 800 líneas. Los
-archivos heredados por encima del techo están congelados por
-`scripts/architecture-baseline.tsv`: pueden reducirse, nunca crecer. Elevar un
-límite o añadir una excepción requiere aprobación explícita del autor y una
-justificación arquitectónica; no se actualiza el baseline para silenciar CI.
+## Reuse and modularity
 
-El número de líneas es una alarma, no la definición completa. Extrae antes si
-aparece cualquiera de estas señales:
+- Before adding logic, search the whole monorepo for the rule, operation,
+  component, and contract. Every invariant has one owner; equivalent
+  implementations are not synchronized by convention.
+- Compare every second appearance of a recipe. Extract only the real semantic
+  intersection or record why the concepts differ. Syntactic similarity alone
+  does not justify abstraction, and small differences do not justify copying a
+  domain rule.
+- A refactor removes or delegates the old path in the same unit. Do not leave
+  two active paths, boundary-free pass-through wrappers, domainless `utils`
+  modules, or application flags that hide multiple behaviors in one API.
+- Extract a component when it gains a named responsibility, an independent
+  reason to change, its own state/lifecycle, distinct dependencies, or an
+  independently testable boundary. Keep its API minimal, typed, domain-oriented,
+  free of internal caller IDs, and acyclic.
+- Do not fragment for appearance. Every extraction must improve ownership,
+  dependency direction, or testability. A short file does not rescue a confused
+  API, and a long file does not by itself prove a monolith.
+- Pure domain may be extracted with one consumer when it already has a stable,
+  tested boundary. An unspecified visual control stays local until two
+  consumers prove the same semantics.
+- Shared style QML uses the canonical path and explicit host registration;
+  never copy it.
+- A host coordinates; a coherent region owns a component, state, and lifecycle.
+  A QObject or bridge does not accumulate independent domains. Run
+  characterization tests before and boundary tests after a refactor.
+- Line count is only a review signal. There is no boundary where 799 lines are
+  correct and 801 are wrong. The baseline only prevents known legacy
+  coordinators from growing until their debt is resolved; never raise it to
+  silence CI or replace architectural judgment.
 
-- el archivo mezcla coordinación, presentación detallada y dominio;
-- una región posee estado, acciones y ciclo de vida propios;
-- la API necesita pasar objetos genéricos para alcanzar ids externos;
-- una segunda feature añade otra razón independiente para cambiar el archivo;
-- tests o verificación sólo pueden ejecutarse cargando una superficie enorme.
+## Implementation invariants
 
-Reglas QML:
+### Rust, IO, and external contracts
 
-- Un host coordina; cada región coherente vive en un componente.
-- Componentes se comunican mediante propiedades tipadas, `required property`,
-  señales y funciones pequeñas. Evita `property var` cuando existe un tipo o
-  un contrato más estrecho; si es inevitable, comenta qué interfaz espera.
-- Un componente no alcanza ids del archivo padre. El padre inyecta datos y
-  recibe señales.
-- Delegates no contienen IO ni decisiones de dominio.
-- Todo QML nuevo se registra en `build.rs`, CMake o `qmldir`, según el proyecto.
-- No uses `x: x` al inyectar propiedades: renombra la propiedad o expón un
-  alias inequívoco.
+- `unsafe` is forbidden unless a prior, isolated, documented exception exists.
+- Do not add production `unwrap`, `expect`, or `panic!` unless the invariant is
+  demonstrated at the use site. Do not hide debt with `#[allow]`, TODO, FIXME,
+  or HACK.
+- Typed errors retain context and source. Treat network, filesystem, D-Bus, and
+  process input as hostile and bounded.
+- Blocking IO never runs on the Qt thread. Bound or coalesce bursts; workers
+  shut down deterministically and publish only current results.
+- A write never removes the source before confirming the destination. A
+  best-effort D-Bus failure degrades a feature instead of blocking or crashing
+  the application.
+- Published APIs and persisted data evolve compatibly. Every domain feature
+  includes tests in the same unit.
+- Justify each dependency in its manifest. Heavy runtimes or frameworks require
+  approval.
 
-Reglas Rust/CXX-Qt:
+### Qt, QML, and accessibility
 
-- Un módulo tiene una responsabilidad nombrable y testeable.
-- Un QObject no acumula dominios independientes; crea otro objeto cuando el
-  estado y ciclo de vida no sean compartidos.
-- El bloque `#[cxx_qt::bridge]` puede concentrar el contrato exigido por la
-  herramienta, pero sus invocables delegan; la lógica no vive en el bridge.
-- Preferir composición y funciones libres pequeñas a controladores universales.
+- QML presents state; it does not open sockets, launch processes, or decide
+  domain policy.
+- Use typed properties, `required property`, signals, and narrow APIs. A
+  component never reaches parent IDs, and `x: x` injection is forbidden.
+- Register every new QML file through the project's build mechanism.
+- Colors, typography, radii, control anatomy, opacity, and motion come from
+  semantic `CelestinaTheme` tokens; do not hard-code QML colors.
+- Every action works with keyboard and assistive technology. Custom controls
+  expose role, name, state, and action; visible focus uses `visualFocus`.
+- Dialogs contain and restore focus. New or changed motion honors
+  `CelestinaTheme.reducedMotion`. Normal text reaches 4.5:1 contrast and large
+  text 3:1.
+- Manual C++ names the concrete CXX-Qt limitation that requires it, respects
+  RAII and QObject affinity, and delegates pure testable logic to Rust.
 
-## Estilo QML y componentes
+## Documents and two delivery lanes
 
-- No escribir colores QML fuera de `CelestinaTheme`: ni hex, nombres, `Qt.rgba`,
-  `Qt.darker`, `Qt.lighter` ni mezclas locales. La regla es obligatoria para
-  todo QML nuevo o modificado; el guard visual cubre Siderita, Magnetita, el
-  shell y el propio módulo compartido.
-- No hardcodear anatomía compartida: tipografía, radios, bordes, paddings de
-  control, opacidades de estado, duraciones y easing salen de tokens semánticos.
-- Coordenadas, anchos responsivos y geometría propia de una pantalla permanecen
-  locales; no crear tokens sin semántica reutilizable.
-- Los colores se consumen en pares superficie/tinta. No declares un par válido
-  por nombre: verifica contraste en los estados reales donde se pinta.
-- Usa el control compartido existente antes de reconstruir uno Qt. Las
-  excepciones locales existentes son un baseline descendente, no precedentes
-  para crear más.
-- Antes de modificar tema o componente compartido, busca todos sus consumidores
-  y valida el conjunto, no sólo la app que motivó el cambio.
-- El mínimo de Qt declarado debe cubrir la API más nueva usada. Introducir una
-  API posterior obliga a actualizar el contrato de toolchain o aportar fallback.
+- `README.md`: current product, use, and structure.
+- `STATUS.md`: volatile truth, focus, and blockers.
+- `ROADMAP.md`: implementation and agent-executable evidence only.
+- `VALIDATION.md`: author-only real-session, hardware, or perceptual tests.
+- `docs/plans/active/`: execution order and durable change ledger.
+- `docs/inventories/`: exact immutable inventories for closed units.
+- `docs/decisions/`, `discussions/`, `evidence/`, and `history/`: decisions,
+  debate, proof, and history respectively.
 
-### Accesibilidad forma parte del componente
+An implementation checkpoint closes when code, documentation, and automated
+evidence are complete. Pending manual validation does not keep it open. A
+manual failure is recorded and creates a new corrective unit; never rewrite the
+milestone's history. See
+[docs/governance/documentation.md](docs/governance/documentation.md).
 
-Un control no está terminado sólo porque responda al ratón.
+Every plan has a ledger with ID, prefix, status, stable paths or symbols,
+intent, diffstat, evidence, and related validation. Line numbers are secondary
+because they drift; the ledger is the cross-session hand-off and commit source.
 
-- Toda acción debe ser operable por teclado y tecnología asistiva.
-- Usa controles Qt cuando aporten semántica; si construyes sobre `Item` o
-  `MouseArea`, declara rol, nombre, estado y acción `Accessible` equivalentes.
-- El foco visible de controles nuevos o modificados se basa en `visualFocus`;
-  no muestres el anillo por clic salvo que el patrón lo requiera expresamente.
-- Diálogos contienen el foco, desactivan las acciones de la superficie inferior
-  y restauran el foco al cerrar.
-- Listas, pestañas, selección, progreso, errores y toggles exponen estado
-  accesible, no sólo apariencia.
-- `CelestinaTheme.reducedMotion` es la entrada compartida y cada host la inyecta
-  desde `CELESTINA_REDUCED_MOTION`. Todo movimiento nuevo o modificado la honra:
-  las transformaciones espaciales/escala quedan instantáneas o desactivadas y
-  ningún `Behavior` o `Transition` nuevo queda sin ruta reducida. Su existencia
-  no demuestra que toda animación heredada haya sido auditada ni validada en una
-  sesión real.
-- Texto normal cumple al menos 4.5:1 y texto grande 3:1 en cada estado y esquema.
+The roadmap-to-plan link is strict. An `active` or `blocked` `ROADMAP.md` names
+one `Active implementation checkpoint` and has exactly one active plan owned by
+the same project with that ID. For `planned`, `idle`, or `done`, the field is
+`none`. Every plan declares a unique immutable `Plan ID` before its first
+inventory commit; prefer the basename without its date prefix. Archiving never
+changes it.
 
-## Rust, IO y contratos externos
+A local plan ledger accepts only its owner's primary prefix; `suite:` is for a
+cross-suite plan. Component prefixes are for atomic code or manifest commits
+that do not close a ledger unit. A `done` unit records exact `N files, +X/-Y`,
+links one `.numstat.tsv` inventory from `Files / areas`, and links its real
+record from `Automated evidence`.
 
-- `unsafe` está prohibido salvo una excepción previamente aprobada y aislada.
-- No añadir `#[allow]` para ocultar deuda. No introducir TODO/FIXME/HACK como
-  sustituto de terminar o registrar trabajo.
-- Cero `unwrap`, `expect` o `panic!` en rutas de producción, excepto el patrón
-  de mutex ya documentado o una invariancia demostrada junto al `expect`.
-- Errores tipados con contexto y fuente. D-Bus best-effort: su caída degrada el
-  servicio, no tumba ni bloquea la app.
-- Una API D-Bus/IO bloqueante nunca corre en el hilo Qt. Ejecuta el trabajo fuera
-  del GUI thread, limita/coalesce ráfagas, aplica sólo snapshots confirmados al
-  volver y conserva un ciclo de vida que pueda cerrarse de forma determinista.
-- Escrituras con pérdida cero: no borrar origen antes de verificar destino;
-  limpiar destinos parciales tras fallo o cancelación.
-- Entrada de red es hostil: límites de bytes, timeouts y saneado de nombres/rutas.
-- Métodos D-Bus publicados se conservan. Extiende `a{sv}` con claves nuevas en
-  vez de romper consumidores existentes.
-- Toda feature de dominio aterriza con tests en el mismo cambio.
-- Cada dependencia nueva lleva justificación en `Cargo.toml`; no añadir runtimes
-  o frameworks pesados sin necesidad medida y aprobación del autor.
+Inventories live at
+`<owner>/docs/inventories/<plan-slug>/<unit>.numstat.tsv`, or under root `docs/`
+for suite work. They contain the base revision, every path, added/deleted lines,
+one or more narrow `Pathspec` boundaries, the plan, evidence, and their own
+`self` row. Only `suite:` may use `Pathspec<TAB>.`. Before commit, the guard
+compares exhaustive paths, numstat, and SHA-256 inside those boundaries while
+leaving external changes untouched. The base is the `HEAD` immediately before
+the unit and later must be the direct parent of the single commit containing
+change, plan, evidence, and inventory. Binary rows use `-/-`; mode-only rows use
+`0/0`.
 
-## Evidencia y definición de terminado
+The main project prefix covers its tree, associated crates, and exact registered
+manifests. A component prefix covers only component code and those manifests,
+never plans, ledgers, status, or evidence. Local evidence lives under the
+project's `docs/evidence/`; suite evidence lives under root `docs/evidence/`.
 
-Ejecuta primero el guard común:
+A tracked inventory is immutable: never edit, move, rename, or reuse it. Later
+work gets a new unit and inventory. Archiving moves only the plan from
+`plans/active/` to `plans/archive/` with the same basename, checkpoint, Plan ID,
+units, and links. Evidence and inventories stay at stable roots. If the move
+needs a separate traceable commit, first add an administrative unit with a new
+inventory.
+
+All uncommitted `done` units in one plan form one atomic batch under the owner's
+primary prefix. Do not commit the shared plan while leaving another inventory
+pending. `.githooks/pre-commit` discovers inventories and requires their union
+to match staged paths, numstat, and SHA-256 through
+`scripts/check-staged-units.py`.
+
+## Production artifacts
+
+Every project uses entries registered in `docs/projects.toml`:
+
+1. `build-production.sh` builds the canonical release artifact once.
+2. `verify-production.sh` verifies those same bytes while reusing caches.
+3. `deploy-production.sh` copies only a current verified artifact to the
+   author's normal test destination and never compiles.
+4. `complete-production.sh` runs build, verify, deploy, and status. It is the
+   exit condition for every bug fix or milestone that changes a deployable app,
+   unless the author explicitly opts out.
+5. The shell additionally has `activate-production.sh`; completion updates the
+   on-disk bundle but never replaces a live session.
+
+Do not use a parallel Cargo/CMake build as final evidence when it leaves a
+different deployable binary. Do not run `clean`; production targets and caches
+are reusable monorepo resources. See
+[docs/contracts/production-artifacts.md](docs/contracts/production-artifacts.md).
+
+## Minimum evidence
+
+Run the common guard first:
 
 ```sh
 bash scripts/check-architecture-contract.sh
 ```
 
-Después aplica la matriz mínima según el área tocada:
+Then use the affected project's registered `verify_script` and every guard for
+a changed cross-cutting contract. A build proves compilation; a smoke proves
+startup. Neither alone proves Wayland, compositor, portals, hardware,
+interaction, appearance, or AT-SPI. Record exactly what ran and what remains in
+`VALIDATION.md`.
 
-| Área | Evidencia mínima |
-|---|---|
-| `celestina-rs` | `cargo fmt --all --check`, clippy con `-D warnings`, tests del workspace |
-| Rust de una app | fmt, clippy y tests de su package |
-| QML de Siderita | registro, `qmllint`, build y `siderita/scripts/smoke.sh` |
-| QML de Magnetita | registro, build y arranque offscreen de la superficie afectada |
-| `celestina-style` | guard, `all_qmllint`, galería y consumidores afectados |
-| Guards/CI de arquitectura | `bash scripts/test-architecture-scanners.sh`, guard normal y fixture negativa relevante |
-| D-Bus/protocolo | tests del productor y compatibilidad de consumidores |
-| UI visual | captura/inspección de la superficie; Wayland real para blur/compositor |
-| Accesibilidad | teclado/foco automatizado cuando sea posible y AT-SPI real antes de declararla validada |
+## Git and commits
 
-Un build prueba que compila. Un smoke prueba que arranca. Ninguno prueba por sí
-solo interacción, apariencia, portal, hardware, compositor o accesibilidad.
-Describe exactamente qué evidencia obtuviste y qué quedó sin prueba real.
+Celestina is one repository. Do not commit or push without a request. When the
+author requests a commit:
 
-## README, ROADMAP y DESIGN
+1. select one coherent unit or the full batch of uncommitted `done` units in
+   the same plan;
+2. compare its paths with the index and exclude unrelated work;
+3. separate projects unless the change is genuinely cross-suite;
+4. use the `docs/projects.toml` prefix and an imperative English subject:
+   `<prefix>: <action>`;
+5. run `python3 scripts/check-staged-units.py INVENTORY...`, then include code,
+   plan, inventories, and evidence in the same commit.
 
-- README describe rol, stack, estructura y uso actuales.
-- ROADMAP registra estado, decisiones abiertas y evidencia de checkpoints.
-- `celestina-style/DESIGN.md` es el contrato visual; no se reinterpreta desde
-  comentarios locales.
-- Añadir/quitar crate, feature, dependencia, consumidor o archivo inventariado
-  actualiza los documentos afectados en el mismo cambio.
-- `[x]` requiere evidencia de ejecución: presencia de código no es prueba de
-  comportamiento.
-- Evita contadores y snapshots que caducan. Si tocas uno, reverifícalo o bórralo.
-- UI visible en español; identificadores, documentación de producto y commits
-  en inglés. Estas instrucciones operativas y los comentarios siguen el idioma
-  del archivo existente.
-
-## Flujo del agente y cambios delicados
-
-- Haz cambios pequeños y revisables. No combines refactor mecánico con cambio de
-  comportamiento si pueden verificarse por separado.
-- No borres ni reviertas trabajo ajeno. Si una regla nueva descubre deuda
-  previa, congélala con un baseline explícito y propón su reducción.
-- No eleves un baseline, amplíes una allowlist ni desactives un guard para hacer
-  pasar una entrega.
-- No marques validación real si sólo ejecutaste una simulación/offscreen.
-- Commits en inglés, imperativos y prefijados por proyecto. Commit/push sólo a
-  petición del autor. El prefijo declara el alcance y `.githooks/commit-msg` lo
-  comprueba: un commit prefijado `siderita:` que además toca `celestina/` se
-  rechaza. Un cambio realmente transversal se declara con `suite:`. Activa el
-  hook en cada clon con `git config core.hooksPath .githooks` — la configuración
-  no viaja en el repositorio.
-- Para reinstalar `magnetitad`, detener primero el servicio de usuario y
-  arrancarlo después de copiar; no reiniciarlo repetidamente.
-- Invariantes KDE Connect: el teléfono conduce el pairing; quien inicia TCP es
-  servidor TLS; payloads usan 1739–1764; clipboard teléfono→PC es manual por
-  Android. No “arreglar” estos límites sin nueva evidencia de protocolo.
+`.githooks/pre-commit` and `.githooks/commit-msg` verify the staged batch,
+format, scope, and the single ledger-declared prefix. `suite:` never wraps
+incompatible local batches. Enable hooks in each clone with
+`git config core.hooksPath .githooks`; Git does not transport that setting.
+Merges cannot close inventoried delivery units: finish the merge, then deliver
+the unit in an ordinary prefixed commit.

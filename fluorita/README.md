@@ -1,78 +1,74 @@
 # Fluorita
 
-The Celestina suite's local media library and player. The standalone application
-organizes the author's media into two first-class sections — **Gallery** for
-images and video, and **Music** for albums, artists and tracks — while still
-opening and playing an individual file handed to it by Siderita or the desktop.
+Celestina's local media library and player: Gallery and Music in a standalone
+application, plus a bounded image/video/audio surface embedded in Siderita.
 
-- **Role:** local media library + player/viewer for image, video and audio
-- **Stack:** Rust · Qt Quick/QML via CXX-Qt · libmpv behind a narrow engine contract
-- **Consumes:** [celestina-rs](../celestina-rs/) domain cores ·
-  [celestina-style](../celestina-style/) tokens and controls
-- **Consumed by:** standalone Fluorita and Siderita's minimal media player
-- **Speaks:** freedesktop thumbnail cache · MPRIS2 · XDG MIME/desktop activation
+## User contract
 
-`scripts/run.sh` installs it into `~/.local` — binary, desktop entry and icon —
-with `--prefix` and `--uninstall` for exercising the layout somewhere disposable
-first. See [ROADMAP.md](ROADMAP.md) for the version-1.0 arc, the numbers behind
-the decode-backend choice and what stays open past it.
+- Index only configured local roots, initially seeded from existing XDG
+  Pictures, Videos and Music directories; never crawl the whole filesystem or
+  delete a source when it leaves the catalogue.
+- Gallery projects images and video; Music projects artists, albums and tracks.
+  Direct activation opens and starts an individual item without hiding the
+  library.
+- In Siderita, `Space` views/plays media in place and double-click/`Enter`
+  launches standalone Fluorita. The canonical mapping is the
+  [content-activation contract](../docs/contracts/content-activation.md).
+- Fluorita is not a streaming service, tag editor, social catalogue, general
+  file manager or codec implementation.
 
-## Product contract
+Static image thumbnails, video posters and embedded covers use the freedesktop
+PNG cache. Live video trailers are separate, bounded and cancelable; normal
+navigation never starts the decoder merely to show a row.
 
-| User action | Surface | Contract |
-|---|---|---|
-| `Space` on image, video or audio in Siderita | Embedded Fluorita player | A minimal modal for viewing or playback without leaving Siderita |
-| Double-click or `Enter` on media in Siderita | Standalone Fluorita | Open the complete app, start that item and keep Gallery/Music available |
-| Direct app launch | Standalone Fluorita | Browse the persistent local library and play a selected item |
+## Architecture
 
-The standalone app is not a file manager. Its library indexes only configured
-local media roots, initially seeded from the user's XDG Pictures, Videos and
-Music directories when they exist. Gallery groups images and video; Music uses
-media tags for albums, artists and tracks. Siderita remains the general browser.
-
-## Shared media resources
-
-Fluorita exposes one shared contract with two different output classes:
-
-- **Static interoperable artwork:** image thumbnails, video poster frames and
-  embedded audio covers are written as PNGs into the freedesktop thumbnail
-  cache. Siderita and other desktop applications can reuse them without loading
-  the decoder.
-- **Live previews:** a video may expose a short, bounded trailer loop generated
-  on demand. This is not a freedesktop thumbnail — that standard stores one
-  static PNG — and it is never generated for every visible row. Selection,
-  hover or `Space` may request one; moving away cancels it.
-
-Music without embedded artwork uses a generic themed cover. A failed extraction
-is a normal result, not a broken file.
-
-## Shared architecture
-
-| Path | Responsibility |
+| Area | Responsibility |
 |---|---|
-| `../celestina-rs/crates/fluorita-core` | media identity/kind, library and playback state, thumbnail/preview requests and cache contracts; no Qt or decoding |
-| `../celestina-rs/crates/fluorita-engine` | bounded library scanning, the persisted catalogue file, metadata probing, freedesktop poster/cover publication and playback sessions over libmpv, behind a narrow replaceable contract (backend chosen by measurement, 2026-07-30), plus bounded live trailers in Fluorita's own pruned cache |
-| `src/`, `qml/` | standalone library + player adapter and UI: activation, a scan and a session both owned off the GUI thread, the Gallery and Music surfaces, and a Qt Quick surface libmpv renders into |
-| `cpp/` | the app's own hand-written C++: the header-only image probe (`QImageReader`), which cxx-qt-lib does not expose |
-| `../celestina-rs/crates/fluorita-qt` | the shared render seam: the `QQuickFramebufferObject` that drives libmpv's render API, compiled by both this app and Siderita's embedded modal |
-| `../siderita/src/`, `../siderita/qml/` | separate thin adapter and minimal embedded player consuming the same contracts |
+| `../celestina-rs/crates/fluorita-core` | Media identity/kind, catalogue projections, capabilities, playback truth and generation-stamped resource contracts; no Qt/decode |
+| `../celestina-rs/crates/fluorita-engine` | Bounded scan/watch, persisted catalogue, metadata, artwork, trailers and libmpv playback |
+| `../celestina-rs/crates/fluorita-qt` | Shared C++/Qt Quick framebuffer/render seam for libmpv |
+| `src/` | Standalone CXX-Qt adapters, owned workers, activation and MPRIS2 |
+| `qml/` | Gallery, Music and complete player composition |
+| `cpp/` | The narrow toolkit image-probe seam unavailable through CXX-Qt |
+| `../siderita/src/media.rs`, `../siderita/qml/dialogs/` | Separate thin adapter and minimal embedded player |
+| `../celestina-style` | Canonical visual tokens, controls and assets |
 
-The engine is loaded lazily: browsing normal files in Siderita continues to read
-only cached PNGs. Media decoding starts only when a preview/player requests it.
-Like Magnetita, shared domain/engine contracts support distinct UIs; Fluorita and
-Siderita do not import each other's QML or duplicate playback rules.
+Requests remain pending until the engine confirms them. Scan, extraction,
+decode and playback are off the GUI thread; generations prevent stale work from
+replacing a new selection and every host owns deterministic shutdown.
 
-## Library boundaries
+## Build and use
 
-The library is local and source-based. It may persist paths, stable media
-identity, metadata and cache state, then update incrementally as configured
-roots change. It does not crawl the whole filesystem, manage arbitrary files,
-edit tags or fetch streaming catalogues. Removing an item from the library never
-deletes the source file.
+Fluorita needs Rust, a compatible Qt 6 development environment and libmpv
+development/runtime support. The canonical production workflow is:
 
-## Non-goals
+```sh
+scripts/build-production.sh
+scripts/verify-production.sh
+scripts/status-production.sh
+scripts/complete-production.sh # canonical agent completion; updates ~/.local
+```
 
-No streaming service, social catalogue, tag editor, general file browser or
-codec reimplementation. Subtitle, track-selection and playback-speed features
-remain later comforts; the initial product must first prove library truth,
-playback and bounded resource use.
+Build creates the release artifact once; verify exercises that exact artifact
+without replacing the installed binary or registering desktop handlers; status
+reports whether the verification seal still matches the current inputs; deploy
+installs the already verified binary, desktop entry and icons without
+recompiling. `scripts/run.sh` remains a human convenience, not the canonical
+agent verification entry.
+
+Desktop-entry registration can become the effective default for an unpinned
+MIME type on this desktop. Completion is authorised to register it, but the
+agent must report the observed handler change. A preference pinned by the user
+in `mimeapps.list` remains authoritative.
+
+After completion, launch `fluorita [PATH]`, use the desktop entry
+or control the active session through MPRIS2.
+
+## Project documents
+
+- [Current status](STATUS.md)
+- [Implementation roadmap](ROADMAP.md)
+- [Author validation](VALIDATION.md)
+- [Local agent delta](AGENTS.md)
+- [Roadmap history through 2026-08-03](docs/history/roadmap-through-2026-08-03.md)

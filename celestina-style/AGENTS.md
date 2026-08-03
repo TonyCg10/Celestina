@@ -1,49 +1,46 @@
-# celestina-style — delta local
+# celestina-style — local contract
 
-El `AGENTS.md` de la raíz sigue aplicando. Este directorio es el lenguaje visual
-genérico de la suite, no una extensión de ninguna app.
+This file inherits the root [`AGENTS.md`](../AGENTS.md) in full. It only adds
+constraints for `celestina-style/`; it cannot relax the root or grant authority.
 
-## Frontera, tokens y API pública
+## Required context
 
-- El módulo contiene solo QML, fuentes, iconos y recursos genéricos. No importa
-  módulos de Siderita/Magnetita, no conoce controladores de app ni codifica rutas
-  o vocabulario de una pantalla concreta.
-- `CelestinaTheme.qml` es el único origen de primitivas y derivaciones visuales.
-  Un rol nuevo es semántico, incluye su pareja superficie/tinta cuando proceda y
-  lo define cada esquema. Los consumidores no derivan colores, opacidades,
-  anatomía o movimiento localmente; la geometría propia de una pantalla sí queda
-  en la app.
-- La API de un componente es cerrada y estrecha: roles/enums, propiedades
-  requeridas y señales orientadas a intención. No se expone un controlador de
-  app para ahorrar diseño de API.
-- Un tipo público aparece de forma coherente en `qmldir` y `CMakeLists.txt`, con
-  los singletons marcados igual. Todo recurso referenciado existe y figura tanto
-  en el QRC correspondiente como en `CMakeLists.txt`.
-- Un componente compartido aterriza con consumidor real conforme al contrato
-  raíz. Ese consumidor añade el symlink canónico y su registro en `build.rs`;
-  nunca se publica una copia. Antes de cambiar semántica o defaults, busca y
-  revisa todos los consumidores.
+- [README.md](README.md), [STATUS.md](STATUS.md), [ROADMAP.md](ROADMAP.md),
+  [VALIDATION.md](VALIDATION.md), and [DESIGN.md](DESIGN.md)
+- [Architecture](../docs/standards/architecture.md)
+- [Rust, C++, Qt, and QML](../docs/standards/rust-cpp-qt-qml.md)
+- [Verification](../docs/standards/verification.md)
+- [Production artifacts](../docs/contracts/production-artifacts.md)
 
-## Estados e interacción
+## Local boundary
 
-- Todo control interactivo compartido cubre los estados pertinentes: enabled,
-  hover, pressed, selected/checked y `visualFocus`; ofrece teclado equivalente y
-  rol, nombre y acción `Accessible`.
-- Una capa modal implementa el contrato completo de foco y bloqueo, no solo un
-  scrim que capture clics. Los consumidores no deben poder disparar atajos de la
-  superficie cubierta.
-- `CelestinaTheme.reducedMotion` es la única entrada de movimiento reducido.
-  Todo `Behavior`, `Transition` o animación nuevo/modificado la consume; no
-  inventes flags locales por app. El token y su inyección desde los hosts ya
-  existen, pero eso no sustituye la auditoría de animaciones heredadas ni la
-  comprobación interactiva con el modo encendido y apagado.
+- The module owns reusable presentation: tokens, fonts, icons, assets, and
+  generic controls. It knows no application controllers, paths, D-Bus, Niri, or
+  workflows.
+- `CelestinaTheme.qml` is the only source of visual primitives and derivations.
+  New roles are semantic, define surface/ink pairs where relevant, and never
+  force consumers to derive color, opacity, anatomy, or motion.
+- Every public type stays in parity across `qmldir`, `CMakeLists.txt`, QRC, and
+  real resources. Search and verify every consumer before changing semantics or
+  defaults.
+- CXX-Qt applications consume canonical sources through relative links and
+  explicit registration. The shell imports the same tree through a build- and
+  runtime-supported URI alias. Neither path permits copies.
+- An unspecified component stays local until two consumers demonstrate the same
+  semantics. Public APIs are narrow, typed, intent-oriented, and never receive
+  an application controller.
+- Every interactive control covers keyboard, `visualFocus`, Accessible roles
+  and actions, enabled/hover/pressed/selected states, and reduced motion. Modal
+  layers contain/restore focus and block drag handlers below them.
 
-## Matriz mínima de verificación
+## Local verification
 
-| Cambio | Evidencia obligatoria |
-| --- | --- |
-| Token o implementación interna | `scripts/check-style-contract.sh`, `qmllint` del módulo y galería sin errores. |
-| Tipo, singleton o recurso público | Paridad `qmldir`/CMake/QRC, symlink y registro del primer consumidor, build del módulo y del consumidor. |
-| Color, superficie o tipografía | Galería/captura de todos los roles afectados y contraste sobre su superficie real. |
-| Control, foco, modal o movimiento | Ratón y teclado, `visualFocus`, árbol/acciones accesibles, apertura/cierre modal y `reducedMotion` encendido/apagado. |
-| Cambio semántico compartido | Buscar todos los consumidores y ejecutar el build/smoke relevante de cada uno; documentar cualquier incompatibilidad deliberada. |
+- `celestina-style/scripts/build-production.sh`
+- `celestina-style/scripts/verify-production.sh`
+- `celestina-style/scripts/status-production.sh`
+- Verification of every affected consumer
+
+The gallery and automatable tests are part of verification. Blur, compositor,
+real focus, and AT-SPI belong in `VALIDATION.md`. This module is nondeployable
+and has no `deploy-production.sh`. Review its API from the build, QML engine,
+and every host, not only from the edited visual file.

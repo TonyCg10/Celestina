@@ -1,65 +1,65 @@
-# Fluorita — delta local
+# Fluorita — local contract
 
-El `AGENTS.md` de la raíz sigue aplicando. Este archivo añade las reglas de la
-biblioteca/reproductor y de su superficie mínima dentro de Siderita.
+This file inherits the root [`AGENTS.md`](../AGENTS.md) in full. It only adds
+Fluorita constraints; it cannot relax the root or grant authority.
 
-## Fronteras
+## Required context
 
-- `../celestina-rs/crates/fluorita-core` posee identidad y tipo de media,
-  catálogo/proyecciones, capacidades, estado de reproducción confirmado,
-  generaciones y contratos de artwork/preview. No contiene Qt ni decodificación.
-- `../celestina-rs/crates/fluorita-engine` posee metadata/índice IO, decode,
-  reproducción y recursos derivados detrás de una interfaz estrecha y medida.
-- `fluorita/src/` adapta los crates a CXX-Qt; `fluorita/qml/` compone Galería,
-  Música y reproducción completa. Siderita mantiene otro adaptador y un modal
-  mínimo: ninguno importa QML del otro ni duplica reglas del core/engine.
-- Galería y Música son proyecciones de raíces locales configuradas, no un gestor
-  de archivos ni permiso para rastrear todo el sistema.
+- [README.md](README.md), [STATUS.md](STATUS.md), [ROADMAP.md](ROADMAP.md), and
+  [VALIDATION.md](VALIDATION.md)
+- [Content activation](../docs/contracts/content-activation.md)
+- [Production artifacts](../docs/contracts/production-artifacts.md)
+- [Architecture](../docs/standards/architecture.md)
+- [Rust, C++, Qt, and QML](../docs/standards/rust-cpp-qt-qml.md)
+- [Verification](../docs/standards/verification.md)
+- [Visual design](../celestina-style/DESIGN.md) for visual changes
 
-## Recursos derivados
+## Local boundary
 
-- Un thumbnail freedesktop siempre es PNG estático: imagen reducida, frame de
-  vídeo o cover embebido. Se publica atómicamente con la clave/metadata que ya
-  consume Siderita.
-- Un tráiler de vídeo es una preview viva, corta, bajo demanda y cancelable; no
-  se escribe fingiendo ser un thumbnail estándar. Sólo uno por host puede estar
-  activo salvo evidencia y autorización posteriores.
-- Navegar listas no inicializa el backend pesado. Decode/playback arranca sólo
-  al solicitar player, trailer o extracción pendiente y se cierra de forma
-  determinista.
-- Ningún frame, cover o trailer obsoleto puede publicarse tras cambiar fuente,
-  selección o identidad del archivo; cada trabajo lleva generación y valida
-  source identity/mtime.
+- `fluorita-core` owns media identity/type, catalogue/projections,
+  capabilities, generations, and confirmed state; it contains no Qt or decode.
+- `fluorita-engine` owns scan, watch, metadata, persistence, artwork, trailers,
+  and playback behind bounded contracts.
+- `fluorita-qt` is the shared C++/Qt Quick video-rendering seam. Manual C++
+  exists only for concrete CXX-Qt limitations.
+- `src/` adapts to CXX-Qt; `qml/` composes Gallery, Music, and player. Siderita
+  owns another adapter/modal; neither imports the other's QML or duplicates
+  core/engine rules.
+- Gallery and Music project configured local roots; they are not file managers
+  and do not authorize scanning the whole system.
 
-## Dos superficies
+## Resources, lifecycle, and security
 
-- En Siderita, `Espacio` sobre imagen/vídeo/audio abre Fluorita mínima; doble
-  clic/Enter abre la aplicación completa y comienza ese item.
-- La superficie mínima muestra sólo contenido, estado honesto, transporte
-  soportado, seek/volumen cuando apliquen y cierre. Galería, Música, fuentes y
-  configuración pertenecen a la aplicación independiente.
-- El modal bloquea la carpeta, contiene/restaura foco y cancela/cierra su sesión
-  al salir. Un click de Play/Pause/Seek es pendiente hasta confirmación del
-  engine.
+- A freedesktop thumbnail is static PNG. A trailer is live, bounded,
+  cancellable, and never published as a standard thumbnail.
+- Navigation does not initialize the heavy backend. Decode/playback begins only
+  on explicit request and its session closes deterministically.
+- Scan, metadata, extraction, and playback never block the GUI thread. Every job
+  validates generation and identity before publishing; discard stale responses.
+- Treat names, tags, dimensions, duration, and content as hostile. Byte, pixel,
+  time, depth, and count limits precede allocation or decode.
+- Removing a catalogue item never deletes its source file. Requested state is
+  not presented as confirmed until the engine reports it.
 
-## Seguridad y rendimiento
+## Two surfaces
 
-- Metadata, nombres, dimensiones, duración y contenido son entrada hostil:
-  aplica límites de bytes, pixels, tiempo, profundidad y cantidad antes de
-  reservar o decodificar.
-- Scans son acotados, cancelables, incrementales y fuera del hilo GUI. Quitar un
-  item del catálogo nunca borra su archivo fuente.
-- Una dependencia multimedia pesada entra sólo tras el spike medido y aprobación
-  del autor, con justificación inline en `Cargo.toml`.
-- `unsafe` sigue prohibido; un hueco de render/FFI exige la excepción previa y
-  aislada que manda el contrato raíz, no un `allow` local.
+- In Siderita, Space on image/video/audio opens minimal Fluorita; double-click
+  or Enter opens the full app on that item.
+- The embedded surface exposes only content, honest state, and supported
+  transport. Gallery, Music, sources, and settings belong to standalone.
+- The modal blocks the folder, contains/restores focus, and closes/cancels its
+  session on exit. Normal navigation consumes static artwork only.
 
-## Verificación mínima
+## Local verification
 
-- Ejecuta primero `bash ../scripts/check-architecture-contract.sh`.
-- Core/engine: fmt, Clippy del workspace con `-D warnings`, tests completos y
-  fixtures límite/cancelación/staleness.
-- Host Fluorita: registro QML, `qmllint`, build, smoke y offscreen; playback,
-  frame pacing, teclado, foco y apariencia requieren Wayland real.
-- Consumidor Siderita: su matriz completa y una prueba real que distinga
-  `Espacio` de doble clic/Enter sin cargar el engine durante navegación normal.
+- `fluorita/scripts/build-production.sh`
+- `fluorita/scripts/verify-production.sh`
+- `fluorita/scripts/status-production.sh`
+
+Verification uses the canonical release artifact without replacing the
+installed binary or registering MIME. Closing a bug or milestone runs
+`complete-production.sh` to update the normal binary and registration. A docs-
+only change or audit does not deploy. Report any effective handler change.
+Playback, frame pacing, tearing, focus, and real visual perception belong in
+`VALIDATION.md`. Review ownership, thread affinity, libmpv/render lifecycle,
+QML registration, and both engine consumers.

@@ -1,62 +1,64 @@
-# Grafita — delta local
+# Grafita — local contract
 
-El `AGENTS.md` de la raíz sigue aplicando. Este archivo añade las reglas del
-editor independiente y de su contrato compartido con Siderita.
+This file inherits the root [`AGENTS.md`](../AGENTS.md) in full. It only adds
+Grafita constraints; it cannot relax the root or grant authority.
 
-## Fronteras
+## Required context
 
-- `../celestina-rs/crates/grafita-core` es la única fuente de verdad para
-  clasificación de texto, documento, posiciones, selección, edición, undo/redo,
-  savepoint, conflicto y guardado. No contiene Qt, QML ni decisiones de una UI.
-- `grafita/src/` adapta el core a CXX-Qt y coordina workers; `grafita/qml/`
-  compone la aplicación completa. Siderita mantiene otro adaptador y una UI
-  simple propios: ninguno importa QML del otro ni copia reglas del core.
-- La máquina de estados abrir/editar/guardar/cerrar —incluida la caducidad por
-  generación y revisión— vive en `grafita-core::session`. Un host no la
-  reimplementa: pide un `Outcome`, ejecuta su `Job` en el worker y actúa sobre
-  su `Event`. Lo único que cada host añade es el marshaling Qt y el texto que
-  ve la persona: los mismos resultados tipados se redactan distinto en un modal
-  dentro del gestor de archivos y en un editor que se llama a sí mismo.
-- Extensión y MIME pueden elegir icono o resaltado, nunca decidir si el archivo
-  es texto. La prueba canónica es por contenido y encoding en `grafita-core`.
-- Grafita abre documentos, no proyectos. No introducir árbol de archivos,
-  builds, debugger, LSP, terminal ni sistema de plugins.
+- [README.md](README.md), [STATUS.md](STATUS.md), [ROADMAP.md](ROADMAP.md), and
+  [VALIDATION.md](VALIDATION.md)
+- [Content activation](../docs/contracts/content-activation.md)
+- [Production artifacts](../docs/contracts/production-artifacts.md)
+- [Architecture](../docs/standards/architecture.md)
+- [Rust, C++, Qt, and QML](../docs/standards/rust-cpp-qt-qml.md)
+- [Verification](../docs/standards/verification.md)
+- [Visual design](../celestina-style/DESIGN.md) for visual changes
 
-## Datos y guardado
+## Local boundary
 
-- Los bytes, terminadores de línea y encoding detectado pertenecen al documento.
-  No normalizar silenciosamente al abrir o guardar.
-- Un flujo de bytes que no pueda mapearse reversiblemente no se presenta como
-  editable. Ampliar encodings exige selección explícita, nunca heurística
-  estadística.
-- Guardar sigue el contrato del ROADMAP: temporal hermano, metadata
-  reproducible, `fsync`, revalidación de identidad y rename atómico sobre el
-  objetivo resuelto. Toda negativa previa al rename conserva el original.
-- Sondeo, lectura, `stat` y guardado nunca bloquean el hilo GUI. Workers son
-  acotados, propios, cancelables cuando corresponda y unidos al cerrar.
-- Resultados de apertura llevan generación y resultados de guardado llevan la
-  revisión escrita. Una respuesta obsoleta no sustituye el documento actual ni
-  limpia una edición posterior.
+- `celestina-rs/crates/grafita-core` is the only owner of text classification,
+  document state, positions, selection, edits, undo/redo, savepoint, conflict,
+  safe IO, and open/edit/save/close session behavior.
+- `src/` adapts that session to CXX-Qt and owns workers; `qml/` composes the
+  standalone app. Siderita owns a separate adapter/composition; neither imports
+  the other's QML or reimplements core rules.
+- Extension and MIME assist discovery/highlighting but never decide whether a
+  file is text. Canonical classification uses bytes and encoding.
+- Grafita opens documents, not projects. Project trees, build runners,
+  debuggers, LSP, terminals, and plugin platforms are out of scope.
 
-## Dos superficies
+## Documents, concurrency, and save
 
-- En Siderita, `Espacio` sobre texto editable abre el editor modal integrado;
-  doble clic/Enter abre la aplicación Grafita completa. No intercambiar estas
-  acciones ni convertir Quick Look entero en Grafita.
-- La UI integrada sí edita y guarda, pero limita su chrome a documento, estado,
-  undo/redo, guardar y cierre protegido. Tabs y configuración pertenecen a la
-  aplicación independiente cuando el roadmap los autorice.
-- Un modal sucio no desaparece: ofrece Guardar, Descartar y Cancelar, contiene
-  el foco, bloquea la superficie inferior y restaura el foco al cerrar.
+- Bytes, encoding, and line endings belong to the document. Never normalize
+  silently or offer a non-reversible flow as editable.
+- Probe, read, `stat`, and save never block the GUI thread. Open results carry a
+  generation and save results a revision; stale responses neither replace nor
+  clear current state.
+- Preserve the core's zero-loss save contract: sibling temporary, reproducible
+  metadata, synchronization, identity revalidation, and atomic rename. A
+  refusal before rename preserves the original.
+- Workers/callbacks respect ownership and Qt affinity, remain bounded, and join
+  deterministically on close.
 
-## Verificación mínima
+## Two surfaces
 
-- Ejecuta primero `bash ../scripts/check-architecture-contract.sh`.
-- Core: `cargo fmt --all --check`, Clippy del workspace con `-D warnings` y
-  tests completos de `celestina-rs`, además de fixtures textuales sin depender
-  de extensión.
-- Host Grafita: registro QML, `qmllint`, build, smoke y prueba offscreen; teclado,
-  foco, IME, apariencia y accesibilidad requieren una sesión Wayland real.
-- Consumidor Siderita: su matriz local completa, incluyendo build/smoke y prueba
-  real de `Espacio` frente a doble clic/Enter.
+- In Siderita, Space on editable text opens embedded Grafita; double-click or
+  Enter opens standalone Grafita. Never swap them.
+- The embedded modal edits and saves but does not adopt app tabs/chrome. Dirty
+  close offers Save, Discard, and Cancel; it blocks below, contains focus, and
+  restores it on close.
+- A visual recipe enters `celestina-style` only under the root sharing contract;
+  never copy it between surfaces.
 
+## Local verification
+
+- `grafita/scripts/build-production.sh`
+- `grafita/scripts/verify-production.sh`
+- `grafita/scripts/status-production.sh`
+
+Verification exercises the canonical release artifact without touching the
+installed binary. Closing a bug or milestone runs `complete-production.sh` to
+deploy those same bytes without recompilation. Perceptual, physical keyboard,
+IME, AT-SPI, and compositor checks belong in `VALIDATION.md`. Review byte
+preservation, ownership, thread affinity, Qt models, QML registration, and both
+core consumers.

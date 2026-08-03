@@ -1,76 +1,55 @@
-# Siderita — delta local
+# Siderita — local contract
 
-El `AGENTS.md` de la raíz sigue aplicando. Este archivo añade únicamente las
-reglas propias de la app CXX-Qt/QML.
+This file inherits the root [`AGENTS.md`](../AGENTS.md) in full. It only adds
+Siderita constraints; it cannot relax the root or grant authority.
 
-## Fronteras y composición
+## Required context
 
-- `src/` contiene estado de UI, puentes CXX-Qt e integración del escritorio. La
-  lógica de dominio que pueda probarse sin Qt vive en `../celestina-rs`; QML no
-  decide operaciones de archivos ni duplica reglas del dominio.
-- `cpp/` solo cubre huecos concretos de cxx-qt y cada shim explica por qué es
-  necesario.
-- `Main.qml`, `PickerWindow.qml` y `qml/views/` coordinan. Una región, delegate,
-  diálogo o menú con responsabilidad propia se extrae a un componente nombrado
-  con API estrecha: propiedades requeridas y señales; no alcanza ids ajenos ni
-  recibe la ventana/controlador completos si bastan datos o acciones puntuales.
-- Todo QML añadido, renombrado o eliminado se refleja en la única lista
-  `QML_FILES` de `build.rs`. `CelestinaTheme` y `CelestinaIcons` conservan su
-  registro singleton; QML y QRC deben quedar también bajo `rerun-if-changed`.
-- Un componente de `celestina-style` se consume mediante symlink relativo al
-  archivo canónico, nunca mediante copia, y se registra junto con sus QRC.
+- [README.md](README.md), [STATUS.md](STATUS.md), [ROADMAP.md](ROADMAP.md), and
+  [VALIDATION.md](VALIDATION.md)
+- [Content activation](../docs/contracts/content-activation.md)
+- [Production artifacts](../docs/contracts/production-artifacts.md)
+- [Architecture](../docs/standards/architecture.md)
+- [Rust, C++, Qt, and QML](../docs/standards/rust-cpp-qt-qml.md)
+- [Verification](../docs/standards/verification.md)
+- [Visual design](../celestina-style/DESIGN.md) for visual changes
 
-## Interacción verificable
+## Local boundary
 
-- Usa primero los controles compartidos. Un control local interactivo debe tener
-  paridad ratón/teclado, rol/nombre/acción `Accessible` y un `visualFocus`
-  inequívoco cuando el foco procede del teclado.
-- Un modal bloquea puntero y atajos de la vista subyacente, mueve y contiene el
-  foco, ofrece cancelar/Escape cuando corresponda y restaura el foco al cerrar.
-- `Main.qml` recibe `reducedMotion` del host y lo publica en
-  `CelestinaTheme.reducedMotion`. Toda animación nueva o modificada queda
-  instantánea o desactivada en ese modo; no añadas un segundo flag local. No
-  confundas esta ruta implementada con una auditoría completa de movimiento
-  heredado o con validación interactiva real.
+- `src/` adapts domain to Qt/CXX-Qt and the desktop; `qml/` presents; `cpp/`
+  covers only a named CXX-Qt limitation. Pure file domain belongs in
+  `celestina-rs/crates/siderita-*`.
+- `Main.qml`, `PickerWindow.qml`, and `qml/views/` coordinate. Extract a region
+  with its own state/lifecycle behind typed properties and signals; it never
+  reaches parent IDs.
+- Added, moved, or removed QML stays in parity across the single `QML_FILES`
+  list, QRC, and `rerun-if-changed`. Consume shared style through canonical
+  relative links and explicit registration, never a copy.
+- IO, processes, and D-Bus never block the Qt thread. Workers publish only
+  current snapshots and cancel/join deterministically.
 
-## Superficie integrada de Grafita
+## Content activation
 
-- Siderita consume `grafita-core`; no duplica buffer, undo, clasificación de
-  texto, conflicto ni guardado, y no importa QML de la aplicación Grafita.
-- `Espacio` prueba el contenido fuera del hilo GUI: texto editable abre el modal
-  simple de Grafita; los demás tipos conservan Quick Look. Doble clic/Enter en
-  texto lanza la aplicación Grafita completa; no reutiliza el modal.
-- El modal integrado sólo adapta estado/acciones del core. Bloquea la carpeta,
-  contiene y restaura foco, y no puede cerrarse sucio sin Guardar, Descartar o
-  Cancelar.
-- Ningún sondeo, lectura o guardado de documento corre en el hilo Qt. Respuestas
-  de worker llevan generación/revisión y una respuesta obsoleta no publica
-  estado ni limpia cambios nuevos.
+- Space on editable text opens embedded Grafita; double-click or Enter opens
+  standalone Grafita. `grafita-core` decides by bytes and encoding, never file
+  extension.
+- Space on image/video/audio opens minimal Fluorita; double-click or Enter opens
+  standalone Fluorita on that item. Navigation consumes static artwork and does
+  not construct the engine.
+- Directories retain navigation; unsupported types retain Quick Look or the
+  desktop handler. Never swap the two actions.
+- Embedded modals own local Qt/QML state, block the folder and lower shortcuts,
+  contain/restore focus, and publish only core/engine-confirmed state.
 
-## Superficie integrada de Fluorita
+## Local verification
 
-- Siderita consume `fluorita-core`/`fluorita-engine`; no duplica catálogo,
-  playback, extracción de artwork ni reglas de trailer, y no importa QML de la
-  aplicación Fluorita.
-- `Espacio` sobre imagen/vídeo/audio abre el player mínimo; doble clic/Enter
-  abre la aplicación completa y comienza ese item. Los demás tipos conservan el
-  flujo de Grafita o Quick Look que les corresponda.
-- Navegar sólo lee thumbnails/covers estáticos. El engine pesado se carga de
-  forma perezosa para una petición explícita y mantiene como máximo una preview
-  viva por host; cambiar selección o cerrar cancela y libera su sesión.
-- Un thumbnail es PNG freedesktop estático. Un tráiler es reproducción corta y
-  cancelable, nunca un fichero publicado fingiendo cumplir ese estándar.
-- El modal bloquea la carpeta, contiene/restaura foco y publica sólo estado
-  confirmado por el engine; Play/Pause/Seek solicitados siguen pendientes hasta
-  confirmación.
+- `siderita/scripts/build-production.sh`
+- `siderita/scripts/verify-production.sh`
+- `siderita/scripts/status-production.sh`
+- `siderita/scripts/qml-tests.sh` when floating-surface event delivery changes
 
-## Matriz mínima de verificación
-
-| Cambio | Evidencia obligatoria |
-| --- | --- |
-| Rust de dominio | Tests en el crate de `celestina-rs`; `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings` y `cargo test --workspace` allí. |
-| Puente Rust/C++ o `build.rs` | Formato, clippy y tests de Siderita; `cargo build --release --locked`; comprobar registro/QRC. |
-| QML no visual | `bash ../scripts/check-architecture-contract.sh`, `qmllint` con los import paths del build actual, `cargo build --release --locked` y `scripts/smoke.sh`; registra el comando exacto de lint usado. |
-| Puntero de una superficie que flota sobre el contenido | Lo anterior más `scripts/qml-tests.sh`: un caso en `tests/qml` que pulse los tres botones, pase el cursor y barra sobre la caja y compruebe que nada llega al contenido de debajo. Leer el árbol no prueba entrega de eventos. |
-| Apariencia, foco, modal o movimiento | Lo anterior más inspección de la superficie real; teclado completo, modal abierto y `reducedMotion` encendido/apagado. Una captura offscreen no valida blur ni interacción. |
-| API compartida | Cumplir además la matriz de `../celestina-style/AGENTS.md` y reconstruir/probar Siderita como consumidor. |
+Isolated verification does not install the portal or alter `portals.conf`.
+Closing a bug or milestone runs `complete-production.sh`, updating the author's
+normal binary without recompilation. Wayland, blur, live portal routing,
+physical keyboard, and AT-SPI belong in `VALIDATION.md`. Review ownership,
+thread affinity, Qt models, QML registration, and both integrated consumers.

@@ -1,101 +1,88 @@
 # Celestina
 
-A personal computing suite for a Niri/Wayland session: a small, truthful shell
-plus first-party apps that share one Rust core, one QML visual language and one
-set of conventions — lean alternatives to heavyweight external apps, made
-possible because the session owns its own shell.
+Celestina is a personal native desktop suite for a Niri/Wayland session: a
+small shell and focused first-party applications that share Rust domain
+contracts, one Qt/QML visual language and explicit desktop integration.
 
-**Current focus:** the Niri shell continues its first real daily panel slice.
-Grafita is a working app on both its surfaces — used on a real session, tabs and
-all — and Fluorita has its core, its libmpv engine and a guarded scaffold.
-Siderita and Magnetita already proved the suite contracts both new apps reuse.
+The suite optimizes for truthful state, loss-free local work, bounded background
+activity and coherent keyboard-accessible surfaces. It is not a general desktop
+environment or a framework for unrelated applications. The durable product
+direction is [docs/VISION.md](docs/VISION.md); current work is
+[STATUS.md](STATUS.md).
 
 ## Projects
 
-| Project | Role | Stack |
+| Project | Current role | Primary stack |
 |---|---|---|
-| [celestina-rs](celestina-rs/) | shared Rust domain cores | Rust |
-| [celestina-style](celestina-style/) | shared QML visual language | QML |
-| [celestina](celestina/) | Niri shell / session | Rust · C++ · QML |
-| [siderita](siderita/) | file manager (first app) | Rust · QML (CXX-Qt) |
-| [magnetita](magnetita/) | phone link (KDE Connect) — 1.0.0 | Rust · QML (CXX-Qt) |
+| [celestina-rs](celestina-rs/) | Pure shared domain, protocol, IO and engine crates | Rust |
+| [celestina-style](celestina-style/) | Shared semantic tokens, assets and QML controls | Qt Quick/QML |
+| [celestina](celestina/) | Niri shell, panel, overlays and session command service | Rust · C++20 · Qt/QML |
+| [siderita](siderita/) | File manager and desktop file chooser | Rust · CXX-Qt · QML |
+| [magnetita](magnetita/) | KDE Connect phone link, daemon and client | Rust · CXX-Qt · QML |
+| [grafita](grafita/) | Text editor, standalone and embedded in Siderita | Rust · CXX-Qt · QML |
+| [fluorita](fluorita/) | Local media library/player, standalone and embedded in Siderita | Rust · C++ · CXX-Qt · QML |
 
-Cores and style never depend on apps or the shell. Each project keeps its own
-README and ROADMAP; the monorepo holds shared history and the contracts between
-projects.
+Each project owns a concise README, current STATUS, implementation-only ROADMAP,
+author VALIDATION queue and local AGENTS delta. The machine-readable inventory
+of paths, commit scopes and production artifact commands is
+[docs/projects.toml](docs/projects.toml).
 
-### Authorized / ready to implement
+## Architecture
 
-Both were ratified on 2026-07-30 and both build gates are open. Grafita is no
-longer only planned: its shared document core, both surfaces, find/replace and
-tabs all exist and the standalone app has been used on a real session. Fluorita's
-F1 media and library contract is done and tested, its decode-backend spike
-measured on this machine, its engine built over the chosen backend, and its
-application is a guarded scaffold that does not play yet.
+Dependencies point toward pure contracts:
 
-| Project | Role | Stack |
-|---|---|---|
-| [fluorita](fluorita/) | local media library + player — Gallery · Music | Rust · QML |
-| [grafita](grafita/) | general text editor | Rust · QML |
+```text
+QML presentation
+      |
+Qt/CXX-Qt application state and adapters
+      |
+celestina-rs domain, protocol and testable IO
 
-Fluorita has finished F1: `fluorita-core` classifies media, projects the
-Gallery/Music library and freezes the thumbnail key Siderita already reads. Its F2 spike measured closure, decode cost, derived
-resources and real-session presentation for every installed candidate, and the
-author chose libmpv on that evidence. `fluorita-engine` now probes metadata,
-publishes video posters and embedded covers into the shared thumbnail cache and
-runs truthful playback sessions over that backend, verified against real libmpv.
-Its application plays: a Qt Quick surface libmpv renders into, a session owned
-off the GUI thread and a transport that only moves when the engine confirms,
-verified with real video and audio in the author's Wayland session.
+celestina-style ---> every visual host
+```
 
-Grafita has finished G0–G4 and G6: `grafita-core` opens, edits and safely saves
-real files, with literal find/replace, go-to-line and measured indentation;
-`Space` in Siderita opens its editing modal, and double-click/Enter now route to
-the standalone app by content, not by name; the standalone application has tabs
-— one running instance, one document session per tab, save-as for an untitled
-document and a recent-documents list. Editing a CRLF file through Qt's own text
-widget leaves its line endings alone, proven both headlessly and on the
-author's real session across both surfaces — typing, shortcuts, the find bar and
-tabs all driven by hand, with bugs found along the way (a tab-close that told
-nobody, a tab strip that hid itself at one tab, drag-to-reorder needed
-building) and fixed. Siderita's activation has explicit shared contracts for
-both apps: Grafita edits text and Fluorita views/plays local media.
+Applications reuse domain contracts and narrow native seams; they do not import
+one another's UI. Cross-process integration is backward-compatible D-Bus or an
+XDG/freedesktop contract. The binding rules are documented in
+[the architecture standard](docs/standards/architecture.md) and the current
+content gesture mapping in
+[the activation contract](docs/contracts/content-activation.md).
 
-**Fluorita** is the suite's local media library and player. Its full app has a
-**Gallery** for images/video and **Music** for albums, artists and tracks. Its
-shared core/engine produces image thumbnails, video posters, audio covers and
-bounded on-demand video trailers. `Space` on media opens a minimal Fluorita
-player inside Siderita; double-click or Enter starts that item in the complete
-app. Static artwork remains freedesktop-compatible, while the decode engine is
-loaded lazily only for explicit playback or preview.
+## Build and verification
 
-**Grafita** is the suite's general text editor — graphite is what a pencil
-writes with. A light editor, not an IDE, it accepts textual content by bytes
-rather than by extension or a closed MIME list. `Space` on text in Siderita
-opens a simple, nearly full-window Grafita editing modal; double-click or Enter
-opens the complete standalone app. Both surfaces consume the same pure
-`grafita-core` but keep their own thin adapter and QML composition.
+Do not use `run.sh` as an ambiguous proof step. Every registered project exposes
+separate production entries:
 
-## Principles
+```sh
+PROJECT/scripts/build-production.sh
+PROJECT/scripts/verify-production.sh
+PROJECT/scripts/status-production.sh
+```
 
-- Rust core, QML frontend, thin bridge.
-- One visual language (`celestina-style`); apps art-direct within its tokens.
-- Interop between processes via XDG/freedesktop; in-process suite reuse through
-  narrow Rust core APIs, not copied domain logic.
-- Measured lightweight; truthful state (a click is a request, never proof).
+The first command creates the canonical release artifact; the second verifies
+that exact artifact without installing or activating it; the third reports
+whether it remains current. When explicitly requested,
+`deploy-production.sh` copies the already verified artifact without rebuilding.
+The shell additionally has `activate-production.sh`, kept separate because
+starting it mutates the live session.
 
-## Development contract
-
-[`AGENTS.md`](AGENTS.md) is the canonical repository contract for code placement,
-component boundaries, reuse and verification; `CLAUDE.md` is a symlink to the
-same source so agent-specific copies cannot drift. Project directories add only
-their local deltas in their own `AGENTS.md`; a task started from the repository
-root must open the affected project's file explicitly.
-
-Run the same architecture/style gate used by CI before closing a change:
+The full contract, including artifact fingerprints and stale-input refusal, is
+[docs/contracts/production-artifacts.md](docs/contracts/production-artifacts.md).
+Run the repository architecture gate for every change:
 
 ```sh
 bash scripts/check-architecture-contract.sh
 ```
 
-See the [suite roadmap](ROADMAP.md) for the vision, checkpoints and contracts.
+## Documentation and agent entry points
+
+- [AGENTS.md](AGENTS.md) is the vendor-neutral mandatory agent contract.
+- [CONTRIBUTING.md](CONTRIBUTING.md) defines the human and agent workflow.
+- [docs/README.md](docs/README.md) maps each kind of truth to one canonical
+  document.
+- [ROADMAP.md](ROADMAP.md) contains suite-level implementation only.
+- [VALIDATION.md](VALIDATION.md) contains author-only checks and never blocks an
+  implementation milestone.
+
+Historical roadmaps and evidence are preserved under `docs/history/` and
+project-local `docs/history/`; they are context, not current instructions.

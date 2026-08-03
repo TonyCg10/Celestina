@@ -265,7 +265,7 @@ QtObject {
     // elevated, accent, the semantics, the danger banner) carry an explicit
     // foreground token; translucent state washes (surface*/hover/selected/fills)
     // do not mint six identical whites — their foreground is `text`/`textMuted`
-    // by contract (documented in CLAUDE.md).
+    // by contract (documented in DESIGN.md).
     //
     // NAMING: the sealed contract (DESIGN §6.9/§9.1) calls these pairs `on*`
     // (`onAccent`, `onCanvas`, …, the Material convention). QML reserves the

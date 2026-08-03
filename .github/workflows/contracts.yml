@@ -1,11 +1,7 @@
-# Contratos transversales de la suite: los guards de arquitectura y estilo.
-#
-# Sin filtro de rutas a propósito. Todo lo demás en `.github/workflows/` se
-# ejecuta sólo cuando cambia su proyecto; esto no puede, porque justamente
-# comprueba las relaciones *entre* proyectos — enlaces de estilo compartido,
-# dirección de dependencias, registro QML, el techo de líneas — y un cambio en
-# un proyecto puede romper la invariante de otro.
-name: contratos
+# Cross-suite contracts: architecture, style, documentation, language, and Git.
+# This workflow intentionally has no path filter because it verifies relations
+# between projects.
+name: contracts
 
 on:
   push:
@@ -14,24 +10,33 @@ on:
     branches: [main]
 
 jobs:
-  contrato-arquitectura:
+  suite-contracts:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          # The baseline is compared with the state before the whole push or
-          # with the PR base, not merely with the previous commit.
+          # Compare baseline debt with the state before the push or the PR base.
           fetch-depth: 0
-      - name: Contrato de arquitectura y estilo
+
+      - name: Architecture and style contracts
         env:
           ARCHITECTURE_COMPARE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: |
           bash scripts/test-architecture-scanners.sh
           bash scripts/check-architecture-contract.sh
 
-      # El hook de alcance es local por definición (`core.hooksPath` no viaja en
-      # el repo), así que un commit puede llegar aquí sin haber pasado por él —
-      # con `--no-verify`, desde un clon sin configurar, o por la web. Esto lo
-      # contrasta contra el historial ya empujado.
-      - name: Alcance de commits
-        run: bash scripts/test-commit-scope.sh
+      - name: Documentation, language, and agent context
+        env:
+          LANGUAGE_COMPARE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          bash scripts/test-documentation-contract.sh
+          bash scripts/check-documentation-contract.sh
+          python3 scripts/check-language-contract.py
+
+      # Hooks are local by definition (`core.hooksPath` is not transported), so
+      # verify pushed history even when a commit came from an unconfigured clone,
+      # `--no-verify`, or the web UI.
+      - name: Commit scope
+        run: |
+          bash scripts/test-commit-scope.sh
+          bash scripts/test-staged-units.sh
