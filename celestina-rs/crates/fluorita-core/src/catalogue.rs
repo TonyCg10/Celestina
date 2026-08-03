@@ -241,6 +241,32 @@ impl Catalogue {
         self.records.get(id)
     }
 
+    /// The record whose file lives at `path`, if any.
+    ///
+    /// A linear walk on purpose: the catalogue is keyed by identity, which is
+    /// what survives a rename, and a second index by path would be a second
+    /// truth to keep in step. An incremental update asks this once per changed
+    /// file, not once per file in the library.
+    #[must_use]
+    pub fn find_by_path(&self, path: &Path) -> Option<&MediaRecord> {
+        self.records.values().find(|record| record.path() == path)
+    }
+
+    /// Marks one record unavailable — its file went away, and nothing else was
+    /// looked at. This is what an incremental update uses instead of
+    /// [`Catalogue::reconcile`], which needs a complete pass to be truthful.
+    ///
+    /// Returns whether anything changed. The source file is never touched.
+    pub fn mark_missing(&mut self, id: &MediaId) -> bool {
+        match self.records.get_mut(id) {
+            Some(record) if record.availability == Availability::Available => {
+                record.availability = Availability::Missing;
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Drops a record from the library. This is the user forgetting an entry —
     /// it never touches the file the record described.
     pub fn forget(&mut self, id: &MediaId) -> Option<MediaRecord> {
@@ -633,5 +659,71 @@ mod absorb_tests {
 
         assert_eq!(summary.added, 1);
         assert_eq!(catalogue.len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod incremental_tests {
+    use super::{Availability, Catalogue, MediaRecord, SourceIdentity};
+    use crate::media::{MediaId, MediaKind};
+    use crate::source::SourceId;
+    use std::path::{Path, PathBuf};
+    use std::time::{Duration, SystemTime};
+
+    fn record(inode: u64, path: &str) -> MediaRecord {
+        MediaRecord::new(
+            MediaId::filesystem(66, inode),
+            SourceId::from_value(0),
+            PathBuf::from(path),
+            MediaKind::Image,
+            SourceIdentity::new(1, SystemTime::UNIX_EPOCH + Duration::from_secs(10)),
+        )
+    }
+
+    #[test]
+    fn a_record_is_found_by_the_path_its_file_lives_at() {
+        let mut catalogue = Catalogue::new();
+        catalogue.upsert(record(1, "/m/a.png"));
+        catalogue.upsert(record(2, "/m/b.png"));
+
+        assert_eq!(
+            catalogue
+                .find_by_path(Path::new("/m/b.png"))
+                .map(MediaRecord::id),
+            Some(&MediaId::filesystem(66, 2))
+        );
+        assert!(catalogue
+            .find_by_path(Path::new("/m/no-existe.png"))
+            .is_none());
+    }
+
+    #[test]
+    fn marking_one_missing_leaves_every_other_record_alone() {
+        let mut catalogue = Catalogue::new();
+        catalogue.upsert(record(1, "/m/a.png"));
+        catalogue.upsert(record(2, "/m/b.png"));
+
+        assert!(catalogue.mark_missing(&MediaId::filesystem(66, 1)));
+
+        assert_eq!(
+            catalogue
+                .get(&MediaId::filesystem(66, 1))
+                .map(MediaRecord::availability),
+            Some(Availability::Missing)
+        );
+        assert!(catalogue
+            .get(&MediaId::filesystem(66, 2))
+            .is_some_and(MediaRecord::is_available));
+        assert_eq!(catalogue.len(), 2, "desaparecer no es borrar");
+    }
+
+    #[test]
+    fn marking_twice_reports_that_nothing_changed() {
+        let mut catalogue = Catalogue::new();
+        catalogue.upsert(record(1, "/m/a.png"));
+
+        assert!(catalogue.mark_missing(&MediaId::filesystem(66, 1)));
+        assert!(!catalogue.mark_missing(&MediaId::filesystem(66, 1)));
+        assert!(!catalogue.mark_missing(&MediaId::filesystem(66, 9)));
     }
 }

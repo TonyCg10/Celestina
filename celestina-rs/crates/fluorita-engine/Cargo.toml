@@ -20,5 +20,11 @@ fluorita-core = { path = "../fluorita-core" }
 # here initializes it.
 libmpv2 = "=6.0.0"
 
+# Noticing that the library changed while it is open. Already the suite's
+# watcher (Siderita's folder view uses the same crate, and learned the same
+# lesson about coalescing and `Access` events), so this adds a dependency the
+# closure already carries rather than a second way to watch a directory.
+notify-debouncer-full = "0.5"
+
 [lints]
 workspace = true

@@ -29,6 +29,8 @@ RowLayout {
     }
 
     SeekBar {
+        id: seekBar
+
         Layout.fillWidth: true
         position: transport.player.positionSeconds
         duration: transport.player.durationSeconds
@@ -44,6 +46,18 @@ RowLayout {
         font.pixelSize: CelestinaTheme.fontCaption
         Accessible.role: Accessible.StaticText
         Accessible.name: text
+    }
+
+    VolumeBar {
+        level: transport.player.volumeLevel
+        onVolumeRequested: function(level) { transport.player.setVolume(level) }
+    }
+
+    // Lets a host give keyboard seeking focus the moment a session starts,
+    // instead of leaving arrow keys aimed at whatever the library last
+    // focused until someone clicks the bar by hand.
+    function focusSeek() {
+        seekBar.forceActiveFocus(Qt.OtherFocusReason)
     }
 
     // `m:ss`, or `h:mm:ss` once there are hours. An unknown duration shows

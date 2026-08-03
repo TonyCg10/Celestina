@@ -22,6 +22,7 @@ const QML_FILES: &[&str] = &[
     "qml/components/PlayerSurface.qml",
     "qml/components/PlayerTransport.qml",
     "qml/components/SeekBar.qml",
+    "qml/components/VolumeBar.qml",
     "qml/Main.qml",
 ];
 

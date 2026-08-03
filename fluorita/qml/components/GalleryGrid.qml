@@ -32,16 +32,19 @@ GridView {
         var names = grid.library.galleryNames;
         var kinds = grid.library.galleryKinds;
         var thumbs = grid.library.galleryThumbnails;
+        var live = grid.library.galleryAvailable;
         // Defensivo: una columna corta significaría un error de publicación, y
         // es mejor mostrar menos filas que filas con campos indefinidos.
-        var count = Math.min(paths.length, names.length, kinds.length, thumbs.length);
+        var count = Math.min(paths.length, names.length, kinds.length,
+                             thumbs.length, live.length);
         var woven = [];
         for (var index = 0; index < count; ++index) {
             woven.push({
                 path: paths[index],
                 name: names[index],
                 kind: kinds[index],
-                thumbnail: thumbs[index]
+                thumbnail: thumbs[index],
+                available: live[index] === "1"
             });
         }
         return woven;
@@ -71,9 +74,15 @@ GridView {
         width: grid.cellWidth
         height: grid.cellHeight
 
+        // Atenuado, no escondido: el archivo no está donde el catálogo lo vio,
+        // y desaparecerlo de la vista se leería como pérdida de datos.
+        opacity: cell.modelData.available ? 1 : CelestinaTheme.disabledContentOpacity
+
         Accessible.role: Accessible.Cell
         Accessible.name: cell.modelData.name
-        Accessible.description: cell.modelData.kind
+        Accessible.description: cell.modelData.available
+            ? cell.modelData.kind
+            : qsTr("%1 — sin encontrar").arg(cell.modelData.kind)
         Accessible.focusable: true
         Accessible.onPressAction: grid.activated(cell.modelData.path)
 

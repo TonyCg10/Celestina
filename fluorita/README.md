@@ -12,26 +12,10 @@ opening and playing an individual file handed to it by Siderita or the desktop.
 - **Consumed by:** standalone Fluorita and Siderita's minimal media player
 - **Speaks:** freedesktop thumbnail cache · MPRIS2 · XDG MIME/desktop activation
 
-> **Status: it plays and it has a library.** The
-> library and two-surface direction were settled by the author on 2026-07-30, and
-> so was the decode backend: [`spikes/`](spikes/) measured the candidates and the author
-> chose **libmpv**. `fluorita-core` and `fluorita-engine` exist and are tested
-> against real media — probing, artwork publication, bounded trailers and
-> truthful playback sessions. The application builds, is covered by both suite
-> guards, and hosts a libmpv render surface with a truthful transport: video and
-> audio were played end to end in a real Wayland session on 2026-07-31. Stills
-> are decoded by the toolkit under a measured budget, never by the media
-> backend. A bare launch opens the library — Gallery and Music over the
-> configured XDG roots — and activating an item is the same path as being handed
-> it on the command line. The catalogue survives between launches, so tags
-> already read are not read again; the thumbnails the shared cache is missing are
-> produced only when asked for (`Ctrl+G`), bounded and cancellable; and playback
-> is published over MPRIS2, so the shell, the media keys and the phone link read
-> one source of truth. `scripts/run.sh` installs it into `~/.local` — binary,
-> desktop entry and icon — with `--prefix` and `--uninstall` for exercising the
-> layout somewhere disposable first.
-> [ROADMAP.md](ROADMAP.md) records the numbers, the reasoning and what is still
-> missing.
+`scripts/run.sh` installs it into `~/.local` — binary, desktop entry and icon —
+with `--prefix` and `--uninstall` for exercising the layout somewhere disposable
+first. See [ROADMAP.md](ROADMAP.md) for the version-1.0 arc, the numbers behind
+the decode-backend choice and what stays open past it.
 
 ## Product contract
 

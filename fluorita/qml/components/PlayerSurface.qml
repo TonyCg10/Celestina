@@ -17,8 +17,21 @@ Item {
     required property string label
 
     // Three surfaces, one at a time: moving picture, still, or a plain label.
+    //
+    // `renderHandle` turns nonzero as soon as the backend creates an mpv
+    // instance — which always succeeds, whatever the file contains — well
+    // before it has tried to open or decode anything. Gating on the handle
+    // alone showed a black surface forever for a file mpv can never open: the
+    // state/error label underneath was hidden by an "active" video item that
+    // was never going to render a frame. The picture only shows once the
+    // engine has confirmed real playback, so a bad file falls through to the
+    // label below instead of a silent black screen.
+    readonly property bool confirmedPlaying: surface.player.state === "reproduciendo"
+        || surface.player.state === "pausado"
+        || surface.player.state === "terminado"
     readonly property bool showsVideo: surface.player.hasVideo
         && surface.player.renderHandle !== 0
+        && surface.confirmedPlaying
     readonly property bool showsImage: surface.player.imageSource.length > 0
     readonly property bool showsPicture: surface.showsVideo || surface.showsImage
 
@@ -84,10 +97,19 @@ Item {
     }
 
     PlayerTransport {
+        id: playerTransport
+
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.margins: CelestinaTheme.spaceLg
         player: surface.player
     }
+
+    // Without this, arrow-key seeking silently went nowhere until the seek
+    // bar was clicked once: nothing ever gives it focus on its own, so
+    // whatever the library last focused (a grid or list cell, `focus: true`
+    // there) kept it even after the surface it belongs to was hidden.
+    onVisibleChanged: if (surface.visible) playerTransport.focusSeek()
+    Component.onCompleted: if (surface.visible) playerTransport.focusSeek()
 }

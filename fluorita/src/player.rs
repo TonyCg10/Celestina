@@ -95,6 +95,10 @@ pub mod qobject {
         /// True while a transport would be meaningful. An image has none, so
         /// the interface must not draw one.
         #[qproperty(bool, timed)]
+        /// The confirmed output level, `0.0..=1.0`. Only ever set from what the
+        /// backend reports, the same way `position_seconds` is — call
+        /// `set_volume` to request a change, never this.
+        #[qproperty(f64, volume_level)]
         type FluoritaPlayer = super::PlayerRust;
 
         /// Opens `path` and starts it. A second call replaces the first.
@@ -172,6 +176,7 @@ pub struct PlayerRust {
     error_message: QString,
     image_source: QString,
     timed: bool,
+    volume_level: f64,
 
     commands: Option<Sender<Command>>,
     worker: Option<JoinHandle<()>>,
@@ -393,6 +398,11 @@ impl qobject::FluoritaPlayer {
         self.as_mut().set_position_seconds(0.0);
         self.as_mut().set_duration_seconds(0.0);
         self.as_mut().set_pending(false);
+        // Every new session starts a fresh mpv instance, and nothing in this
+        // codebase carries a chosen level across it (`SessionRequest` never
+        // sets `initial_volume` here) — so mpv's own default, 100%, is what
+        // actually starts playing next, and the display should say so.
+        self.as_mut().set_volume_level(1.0);
         self.as_mut()
             .set_seekable(capabilities.is_some_and(|caps| caps.seekable));
         // "Has video" here means a moving picture the render surface must
@@ -472,6 +482,9 @@ impl qobject::FluoritaPlayer {
         if let Some(duration) = snapshot.duration {
             self.as_mut().set_duration_seconds(duration.as_secs_f64());
         }
+        if let Some(volume) = snapshot.volume {
+            self.as_mut().set_volume_level(volume);
+        }
         if let Some(message) = snapshot.error.as_deref() {
             self.as_mut().set_error_message(QString::from(message));
         }
@@ -536,6 +549,9 @@ fn run_session(
         });
     }
 
+    let pacing_on = std::env::var_os("FLUORITA_PACING").is_some();
+    let mut last_pacing = std::time::Instant::now();
+
     loop {
         match commands.try_recv() {
             Ok(Command::Start) => {
@@ -551,6 +567,11 @@ fn run_session(
             }
             Ok(Command::Stop) | Err(mpsc::TryRecvError::Disconnected) => break,
             Err(mpsc::TryRecvError::Empty) => {}
+        }
+
+        if pacing_on && last_pacing.elapsed() >= PACING_INTERVAL {
+            report_pacing(session.as_ref());
+            last_pacing = std::time::Instant::now();
         }
 
         if let Some(report) = session.poll(POLL_TIMEOUT) {
@@ -569,6 +590,36 @@ fn run_session(
     }
 
     session.close();
+}
+
+/// How often the pacing sampler prints, when it is on.
+const PACING_INTERVAL: Duration = Duration::from_secs(1);
+
+/// Prints what the backend measured about presentation, when asked to.
+///
+/// Behind an environment variable because it is a measurement, not a feature:
+/// a player that printed frame statistics constantly would be noise, and one
+/// that hid them would leave "does it pace?" unanswerable outside a profiler.
+/// `FLUORITA_PACING=1` is what the roadmap's evidence runs with.
+///
+/// Sampled *while playing*, not at the end: pacing is a distribution over time,
+/// and a session that has already stopped has no properties left to answer with
+/// — which is how the first attempt at this measured nothing at all.
+fn report_pacing(session: &dyn fluorita_engine::backend::EngineSession) {
+    let stats = session.frame_stats();
+    let show = |value: Option<f64>| {
+        value.map_or_else(|| "desconocido".to_owned(), |number| format!("{number:.2}"))
+    };
+    let count = |value: Option<i64>| {
+        value.map_or_else(|| "desconocido".to_owned(), |number| number.to_string())
+    };
+    eprintln!(
+        "fluorita: pacing — descartados={} tardíos={} display_fps={} jitter={}",
+        count(stats.dropped),
+        count(stats.delayed),
+        show(stats.display_fps),
+        show(stats.vsync_jitter),
+    );
 }
 
 fn publish_failure(qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaPlayer>, message: &str) {

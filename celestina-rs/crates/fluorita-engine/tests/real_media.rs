@@ -446,7 +446,15 @@ fn cancelling_a_trailer_mid_flight_leaves_no_partial_file_behind() {
     use fluorita_engine::worker::{EngineWorker, Job, JobOutcome};
 
     let cache_root = scratch("trailer-cancel");
-    let source = fixture("clip.mp4");
+    // `clip.mp4` re-encodes in tens of milliseconds at the production bounding
+    // box — too fast to reliably lose the race against `cancel_current()`
+    // called right after submit. `heavy_clip.mp4` is a busier synthetic scene
+    // (mandelbrot, so every frame is unique) that keeps the real encoder
+    // occupied for ~200ms at that same bounding box, measured with the exact
+    // mpv options `trailer::encode` uses. A short deterministic sleep below,
+    // well under that, makes landing the cancellation mid-encode reliable
+    // instead of a coin flip.
+    let source = fixture("heavy_clip.mp4");
     let worker = EngineWorker::start().expect("the worker starts");
     worker
         .submit(Job::Trailer {
@@ -461,6 +469,10 @@ fn cancelling_a_trailer_mid_flight_leaves_no_partial_file_behind() {
             }),
         })
         .expect("queued");
+    // Give the worker thread time to start mpv, load the source and begin
+    // encoding before asking it to stop — otherwise this would only measure
+    // thread-scheduling latency, not a genuine mid-encode cancellation.
+    std::thread::sleep(Duration::from_millis(60));
     worker.cancel_current();
 
     let outcome = worker.poll(Duration::from_secs(60)).expect("an outcome");
@@ -468,19 +480,11 @@ fn cancelling_a_trailer_mid_flight_leaves_no_partial_file_behind() {
         panic!("wrong outcome kind");
     };
 
-    // The encode of a two-second fixture may well finish before the
-    // cancellation lands, so the outcome itself is a race. What must hold
-    // either way is that no partial encode is left in the cache: a cancelled
-    // job publishes nothing, and a completed one publishes only the final name.
     let destination =
         fluorita_engine::trailer::destination_for(&cache_root, &source).expect("destination");
-    match result {
-        Ok(produced) => assert_eq!(produced.path, destination),
-        Err(error) => {
-            assert!(error.is_retryable(), "{error}");
-            assert!(!destination.exists());
-        }
-    }
+    let error = result.expect_err("cancelling mid-encode must not still produce a trailer");
+    assert!(error.is_retryable(), "{error}");
+    assert!(!destination.exists());
 
     let partial: Vec<_> = std::fs::read_dir(cache_root.join("trailers"))
         .map(|entries| {
@@ -492,4 +496,112 @@ fn cancelling_a_trailer_mid_flight_leaves_no_partial_file_behind() {
         })
         .unwrap_or_default();
     assert!(partial.is_empty(), "left behind: {partial:?}");
+}
+
+/// What actually makes a long session degrade is not wall-clock time by
+/// itself but repeated open/close/seek — the same operations a person does
+/// hundreds of times across hours of use. This drives many cycles back to
+/// back and watches two leak signals that must stay flat once the allocator
+/// and any connection pooling have warmed up: file descriptors (deterministic
+/// — a leaked one never comes back on its own) and resident memory (noisier,
+/// so its bound is generous; it only needs to catch growth that compounds
+/// every cycle, not chase allocator bookkeeping).
+#[test]
+fn many_open_close_seek_cycles_leave_no_growing_leak() {
+    let engine = MpvEngine::new();
+    let sources = [fixture("clip.mp4"), fixture("tone.mp3")];
+    const CYCLES: usize = 150;
+    const WARMUP: usize = 15;
+
+    let mut baseline_fds = 0usize;
+    let mut baseline_rss = 0u64;
+    let mut max_fd_delta: i64 = 0;
+    let mut final_rss = 0u64;
+
+    for cycle in 0..CYCLES {
+        let source = &sources[cycle % sources.len()];
+        let mut session = engine
+            .open_session(
+                SessionRequest::new(source.clone(), generation())
+                    .silent()
+                    .without_hardware_decoding(),
+            )
+            .expect("the session opens");
+        session.start().expect("the session starts");
+
+        // A `Position` report, not just the `Playing` state, is what the
+        // other seek test in this file waits for before seeking — the
+        // backend can flip `pause` to false slightly before the demuxer is
+        // actually far enough along for a seek to land.
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let mut under_way = false;
+        while std::time::Instant::now() < deadline && !under_way {
+            if let Some(report) = session.poll(Duration::from_millis(200)) {
+                if matches!(report.kind, ReportKind::Position(_)) {
+                    under_way = true;
+                }
+            }
+        }
+        assert!(
+            under_way,
+            "cycle {cycle}: backend never reported a position"
+        );
+
+        // Real decode work each cycle, not just an idle open: a seek forces
+        // the backend to flush and restart decoding at a new position.
+        session
+            .request(PlaybackRequest::Seek(Duration::from_millis(500)))
+            .expect("the backend accepts a seek");
+        for _ in 0..5 {
+            if session.poll(Duration::from_millis(50)).is_none() {
+                break;
+            }
+        }
+
+        session.close();
+        drop(session);
+
+        if cycle == WARMUP {
+            baseline_fds = open_fd_count();
+            baseline_rss = resident_memory_bytes();
+        }
+        if cycle >= WARMUP {
+            let delta = open_fd_count() as i64 - baseline_fds as i64;
+            max_fd_delta = max_fd_delta.max(delta.abs());
+        }
+        if cycle == CYCLES - 1 {
+            final_rss = resident_memory_bytes();
+        }
+    }
+
+    assert!(
+        max_fd_delta <= 8,
+        "file descriptor count drifted by {max_fd_delta} across {CYCLES} cycles \
+         (baseline {baseline_fds}) — looks like a leak, not noise"
+    );
+
+    let growth = final_rss.saturating_sub(baseline_rss);
+    assert!(
+        growth < 64 * 1024 * 1024,
+        "resident memory grew by {growth} bytes over {} cycles after warm-up \
+         (baseline {baseline_rss}, final {final_rss}) — looks like a leak, not noise",
+        CYCLES - WARMUP,
+    );
+}
+
+fn open_fd_count() -> usize {
+    std::fs::read_dir("/proc/self/fd")
+        .map(std::iter::Iterator::count)
+        .unwrap_or(0)
+}
+
+fn resident_memory_bytes() -> u64 {
+    std::fs::read_to_string("/proc/self/status")
+        .unwrap_or_default()
+        .lines()
+        .find_map(|line| line.strip_prefix("VmRSS:"))
+        .and_then(|rest| rest.split_whitespace().next())
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(|kib| kib * 1024)
+        .unwrap_or(0)
 }

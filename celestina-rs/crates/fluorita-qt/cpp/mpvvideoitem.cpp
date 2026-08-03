@@ -81,8 +81,15 @@ public:
 
         mpv_opengl_fbo fbo{static_cast<int>(target->handle()), target->width(), target->height(),
                            0};
-        // Qt's framebuffer has its origin at the bottom left; mpv's does not.
-        int flip = 1;
+        // Measured, not assumed: with FLIP_Y=1 every video played upside down
+        // (confirmed with a directional test clip — top/bottom text swapped and
+        // mirrored). `QQuickFramebufferObject`'s FBO already matches the
+        // orientation mpv expects by default, so mpv must not flip a second
+        // time. The comment this replaced ("Qt's FBO origin is at the bottom
+        // left; mpv's is not") had it backwards: both use the standard GL
+        // bottom-left-origin convention here, and passing 1 was the bug, not
+        // the fix.
+        int flip = 0;
         mpv_render_param params[]{
             {MPV_RENDER_PARAM_OPENGL_FBO, &fbo},
             {MPV_RENDER_PARAM_FLIP_Y, &flip},
@@ -98,6 +105,19 @@ public:
         if (m_window) {
             m_window->endExternalCommands();
         }
+
+        // Deliberately *not* calling `mpv_render_context_report_swap()` here.
+        // It looks like the missing piece — the backend cannot estimate the
+        // display's rate or its jitter without it — but this is the end of a
+        // framebuffer render, not the moment the frame reaches the screen, and
+        // it was measured: feeding the backend that timestamp took a session
+        // that dropped **nothing** to one that dropped 18 frames in 14
+        // seconds, because a timing model fed wrong times starts discarding
+        // frames it believes are late. Reporting a swap that has not happened
+        // is worse than reporting none. Doing it right means hooking
+        // `QQuickWindow::frameSwapped`, which is the item's to own, not the
+        // renderer's — and until something actually judders, the numbers say
+        // there is nothing to fix.
     }
 
 private:
@@ -109,6 +129,11 @@ private:
         auto *mpv = reinterpret_cast<mpv_handle *>(m_handle);
 
         mpv_opengl_init_params gl{getProcAddress, nullptr};
+        // Advanced control hands the *timing* to the backend: it says when a
+        // new frame is due instead of the host redrawing whatever is current
+        // whenever Qt feels like it. On a 165 Hz display showing 60 fps
+        // content — every frame living for about 2.75 refreshes — that
+        // difference is the whole of judder.
         mpv_render_param params[]{
             {MPV_RENDER_PARAM_API_TYPE, const_cast<char *>(MPV_RENDER_API_TYPE_OPENGL)},
             {MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, &gl},
@@ -153,7 +178,9 @@ private:
 MpvVideoItem::MpvVideoItem(QQuickItem *parent)
     : QQuickFramebufferObject(parent)
 {
-    // Frames arrive from the backend, not from Qt's animation clock.
+    // Qt's default: the FBO is composited as-is. Correct orientation is
+    // achieved by not asking mpv to flip either (see FLIP_Y below) — mirroring
+    // here as well would cancel that out and be flipped again.
     setMirrorVertically(false);
 }
 

@@ -85,6 +85,20 @@ ApplicationWindow {
         enabled: window.playing
         onActivated: mediaPlayer.toggle()
     }
+    // Volume everywhere in the window, not only while the volume slider
+    // happens to have focus — the seek bar takes focus first when playback
+    // starts, and Up/Down reaching it as a second Left/Right would step the
+    // playhead instead of the level a person actually meant to change.
+    Shortcut {
+        sequence: "Up"
+        enabled: window.playing
+        onActivated: mediaPlayer.setVolume(Math.min(1, mediaPlayer.volumeLevel + 0.05))
+    }
+    Shortcut {
+        sequence: "Down"
+        enabled: window.playing
+        onActivated: mediaPlayer.setVolume(Math.max(0, mediaPlayer.volumeLevel - 0.05))
+    }
     // Generar las miniaturas que faltan, sin depender del ratón ni del orden
     // de tabulación.
     Shortcut {

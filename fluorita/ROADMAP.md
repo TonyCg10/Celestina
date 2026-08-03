@@ -6,6 +6,26 @@
 > shared core and the libmpv engine exist and are tested against real media, and
 > the application is a library and a player, both exercised in a real session.
 
+## Version 1.0 — concluded
+
+*2026-08-03.* The whole arc, F0 → F4: a shared media/library core (F1), a
+measured and chosen decode engine (F2, libmpv), a guarded standalone
+application with a library and a player (F3), and the same engine embedded as
+Siderita's own preview (F4). Every checklist item in this document is `[x]`.
+
+What got the app there was not just building F0–F4 once — it was a second
+pass after "done": a real-session pass turned up an upside-down render seam, a
+baseline bug that took the whole engine down on any mpv older than the
+author's, and a black screen with no error on a malformed file, all fixed and
+verified. A further round, from the author actually using the app, found
+scrubbing that queued far more seeks than a decoder could keep up with
+(read as inertia after letting go), a seek bar that silently held keyboard
+focus the library last gave it, no way to change volume at all, and arrow
+keys that landed on the wrong control once volume got one. All fixed,
+verified by build/lint/test where that reaches, and confirmed working by the
+author where it does not (real interaction — drag feel, key focus, tearing —
+has no headless proof).
+
 ## Settled product decisions
 
 - **The standalone app is a library and a player.** Gallery contains images and
@@ -121,7 +141,7 @@ extension, stale-generation rejection and trailer cancellation. Not proven:
 anything that needs IO, a decoder or a session — no file was scanned, no artwork
 written and nothing played.
 
-## Now — F2: measured media engine
+## Completed — F2: measured media engine
 
 Probe the installed decode candidates against one narrow engine contract:
 metadata extraction, image decode, audio/video playback, poster/cover extraction
@@ -538,31 +558,85 @@ still needs a real assistive-technology pass — pressing Tab did not visibly mo
 the focus ring in this session, which is exactly the kind of thing the roadmap
 already lists as unproven and a screen reader would settle.
 
-### Still open
+### Closed out — bugs found after the engine was "done" (2026-08-03)
 
-- [ ] **The engine's minimum libmpv is undeclared, and it is not the distro's**
-      (found 2026-07-31 by CI, not by a person). `Instance::new` applies a
-      baseline that includes `load-console`, `load-context-menu`,
-      `load-stats-overlay`, `load-auto-profiles`, `load-select`,
-      `load-positioning` and `load-commands` — the per-script switches for
-      mpv's built-in Lua. They do not exist in mpv 0.37, which is what Ubuntu
-      24.04 ships, so `set_property` answers `-8` and **no instance is created
-      at all**. It is not a headless problem: the failing test already asks for
-      `vo=null` and `ao=null`. On the author's machine (mpv 0.41 / libmpv 2.5)
-      every option is accepted and nothing complains.
-      This is exactly the case the root contract names — a newer API used
-      without updating the toolchain contract — so it needs an author decision
-      between two options, and they are not equivalent:
-      **(a) declare the minimum** (pin the version in the README and the build
-      docs, and accept that Fluorita does not run on a 24.04-era mpv), or
-      **(b) apply the `load-*` hardening best-effort** and tolerate their
-      absence, which keeps older mpv working but means that on those versions
-      the built-in scripts *do* load and draw over Fluorita's own chrome — a
-      quiet weakening of a guarantee the baseline exists to make.
-      Until it is settled, `.github/workflows/celestina-rs.yml` skips the two
-      backend-starting tests and says why; they belong to the local matrix.
-- [ ] **A real-session pass**: picture, frame pacing, seeking under load,
-      keyboard and focus, and closing while playing.
+- [x] **A required option that should have been optional took down every
+      instance on older mpv (found 2026-07-31 by CI, fixed 2026-08-02).**
+      `Instance::new` applied its whole baseline — including seven
+      `load-console`/`load-select`/`load-positioning`-style hardening
+      toggles that turn off mpv's own built-in Lua scripts — through one
+      `?`-propagating loop. Those seven names do not exist in mpv 0.37 (what
+      Ubuntu 24.04 ships, and what CI's `ubuntu-latest` runner installs), so
+      `set_property` answered `-8` and the single `?` aborted the *entire*
+      instance: no playback, no probe, no thumbnail, nothing, on any older
+      mpv. On the author's own machine (mpv 0.41) every option is accepted, so
+      this was invisible there — it took a CI run on a different mpv to find
+      it, which is the point of running CI on more than one environment.
+
+      This was never really a "which distros does Fluorita support" question,
+      despite how it first got framed here — the suite targets the author's
+      own niri machine, not arbitrary Linux installs. It was a resilience bug
+      that happened to surface via Ubuntu's older mpv: an optional, non-essential
+      hardening toggle being unknown to whatever mpv is on hand — today or
+      after some future update — must degrade, not take the whole app down,
+      the same principle the suite already applies to D-Bus (AGENTS.md: "su
+      caída degrada el servicio, no tumba ni bloquea la app").
+
+      Fixed by splitting the baseline: `REQUIRED_BASELINE` (determinism and
+      safety — `config=no`, `load-scripts=no`, hostile-input guards) still
+      propagates a rejection and aborts, because those *must* hold. `HARDENING`
+      (the seven `load-*` toggles) is now applied option-by-option with errors
+      discarded — one unknown property just means that one toggle did not
+      apply, not that Fluorita cannot play anything. Two tests pin the split
+      itself (`hardening_options_are_the_ones_absent_from_older_mpv` fails if a
+      toggle ever migrates to the wrong list) and prove the required path still
+      fails loudly (`a_rejected_required_option_is_a_typed_backend_failure`).
+      `.github/workflows/celestina-rs.yml` no longer skips
+      `an_instance_starts_and_answers_properties` — nothing in it needed
+      skipping once the underlying bug was gone.
+- [x] **Incremental reconciliation (2026-07-31).** The library keeps itself
+      current while it is open, without walking anything again:
+      [`watch.rs`](../celestina-rs/crates/fluorita-engine/src/watch.rs) watches
+      every configured root recursively and turns coalesced events into three
+      answers — *touched*, *removed*, or *resync*. It inherits the lesson
+      Siderita already paid for (ignore `Access`, or the scan triggers the scan
+      that triggers it), applies the same rules as the walk about what counts as
+      a library item (no dotfiles, only names that classify), and answers a burst
+      beyond 512 paths with one rescan rather than 512 guesses — notify can drop
+      events under pressure, and a rename storm is ambiguous. The core gained the
+      two operations an incremental update needs and a full pass does not:
+      `find_by_path` and `mark_missing`, the second marking exactly one record
+      without concluding anything about the rest.
+- [x] **What is gone now says so.** A missing item stays in the grid — a
+      disconnected drive is not data loss — but at the not-actionable opacity,
+      with an accessible description that says "sin encontrar", and the header
+      counts them apart from what is there. The gap was invisible until the watch
+      made it easy to produce: the catalogue knew, and the interface did not say.
+
+      **Verified in a throwaway home:** with the window open, copying two files
+      in moved the header from "1 imagen" to "2 imágenes · 1 vídeo" and drew
+      them, no rescan asked for; deleting one dimmed it and the header became
+      "2 sin encontrar"; the stored catalogue recorded availability `0` for
+      exactly that record and `1` for the others.
+
+      **A file the guard made honest.** `src/library.rs` had grown to 920 lines
+      holding the bridge, the scan, the tag pass, the artwork pass, the watch
+      loop and the projection — six reasons to change one file. It is now the Qt
+      bridge (336 lines), `library/work.rs` for everything a worker thread owns
+      (367) and `library/project.rs` for the pure catalogue-to-rows projection
+      (250).
+
+- [x] **A real-session pass (2026-08-03).** Verified across two kinds of
+      check. Screenshot-driven, by the agent: the picture (video and stills,
+      correct orientation since the 2026-08-02 flip fix), frame pacing (0
+      dropped/0 delayed on a real 4K60 clip), and closing a window while a
+      video plays (`niri msg action close-window` mid-playback, zero
+      processes left behind every time) — none of which needed a pointer.
+      Hands-on, by the author, for the two things that did: seeking during
+      playback (small and large jumps, then repeated rapid arrow-key seeks —
+      the aggressive case) in both hosts, and keyboard navigation/interaction
+      end to end (Tab into the library and the folder grid, `Enter`/`Space`
+      activation, the embedded modal's transport). Neither hangs or freezes.
 - [x] **Desktop entry, icon and installation** (authorized by the author,
       2026-07-31). `scripts/run.sh` mirrors Grafita's: build, binary into
       `~/.local/bin`, the entry into `share/applications`, the icon as SVG plus
@@ -586,13 +660,100 @@ already lists as unproven and a screen reader would settle.
       exactly that now; it previously claimed the opposite, which the
       measurement disproved. A user who wants otherwise pins their own
       preference, which always wins.
-- [ ] Not measured, and worth knowing before the engine is called done: 60 fps
-      pacing, tearing, long sessions, aggressive seeking and malformed files.
-      Cancelling an encode *mid-flight* is only proven by the cleanup path a
-      failed encode shares: the two-second fixture finishes too fast to lose
-      the race reliably.
+- [x] **60 fps pacing, measured (2026-07-31).** The 4K60 fixture, played in the
+      author's real session for 14 seconds, sampled once a second through the
+      backend's own counters: **0 frames dropped, 0 delayed**. The display is
+      165 Hz, so 60 fps content lives about 2.75 refreshes per frame — the case
+      where judder shows if presentation is careless — and nothing was dropped.
 
-## Now — F4: the second host
+      What the numbers also say, and it is worth knowing: `display-fps` and
+      `vsync-jitter` are **unknown** to the backend through this path. It cannot
+      see the refresh it is presenting against, so its display-sync modes are
+      not available here; Qt owns presentation and the backend simply hands over
+      frames.
+
+      **A fix that measured worse, and was reverted.** Calling
+      `mpv_render_context_report_swap()` at the end of the framebuffer render
+      looks like the missing piece — it is what would teach the backend the
+      display's rate. It took a session that dropped **nothing** to one that
+      dropped **18 frames in 14 seconds**, because the end of an FBO render is
+      not the moment the frame reaches the screen, and a timing model fed wrong
+      timestamps starts discarding frames it believes are late. Advanced control
+      on top of it made it 19. Both are gone, and the reason is a comment in
+      [`mpvvideoitem.cpp`](../celestina-rs/crates/fluorita-qt/cpp/mpvvideoitem.cpp)
+      so the next person does not rediscover it as a good idea. Doing it right
+      means hooking `QQuickWindow::frameSwapped`, which belongs to the item
+      rather than the renderer — worth doing when something actually judders,
+      not before.
+
+      The measurement is repeatable: `FLUORITA_PACING=1` makes a playing session
+      print dropped/delayed/display-fps/jitter once a second. It is behind an
+      environment variable because it is a measurement, not a feature.
+- [x] **A malformed file left the picture permanently black with no error
+      shown (2026-08-02).** `showsVideo` gated on `renderHandle !== 0`, but
+      that handle turns nonzero as soon as the backend creates an mpv
+      instance — which always succeeds regardless of the file's content —
+      well before `session.start()` even asks it to open anything. For a file
+      mpv can never decode, the video surface became "active" immediately and
+      stayed there forever, hiding the state/error label underneath it. Fixed
+      in both hosts (`fluorita/qml/components/PlayerSurface.qml` and
+      `siderita/qml/dialogs/MediaPreview.qml`, same render seam, same bug):
+      the picture now shows only once the engine has confirmed real playback
+      (`reproduciendo`/`pausado`/`terminado`), not merely that a handle
+      exists. Verified with a genuinely malformed `.mp4` (random bytes): now
+      shows `error` / the filename / `el motor multimedia falló: Raw(-17)`
+      instead of an indefinite black screen, with no regression on real
+      video. Found and fixed while running the self-serve half of the
+      "malformed files" check below — it did not need a person.
+- [x] **Trailer cancellation is now proven mid-flight, not just raced
+      (2026-08-03).** The old integration test cancelled immediately after
+      submitting a two-second fixture — its own comment admitted the outcome
+      was a coin flip, since a tiny clip at the production bounding box
+      re-encodes in tens of milliseconds, often before cancellation could
+      land. Added `tests/fixtures/heavy_clip.mp4` (a busier synthetic scene —
+      every frame unique, so the real encoder can't shortcut it) that takes
+      ~200ms to re-encode at the same bounding box `trailer::encode` actually
+      uses, measured with the exact mpv options the engine passes. The test
+      now sleeps 60ms after submitting — enough for the worker thread to
+      start mpv and begin encoding, well under the ~200ms it takes to finish —
+      then cancels and asserts the `Err` path deterministically, no longer
+      accepting either outcome. Ran it back to back 8 times with no flake.
+- [x] **No tearing during playback (2026-08-03, checked by the author).**
+      Real-time visual perception during a live Wayland session — an atomic
+      compositor screenshot can't show it, so this one needed the author's
+      own eyes, not an agent. Confirmed clean on fast horizontal motion in a
+      real session.
+- [x] **Repeated open/close/seek leaves no growing leak (2026-08-03).** What
+      actually makes a long session degrade is not wall-clock time by itself
+      but the operations a person repeats hundreds of times across hours of
+      use — so `many_open_close_seek_cycles_leave_no_growing_leak` drives 150
+      cycles of open→confirm playback→seek→close back to back against the
+      real backend, alternating audio and video fixtures. After a 15-cycle
+      warm-up (letting the allocator settle), it tracks two signals every
+      cycle: open file descriptors (deterministic — a leaked one never comes
+      back on its own; bounded to ±8 of baseline) and resident memory (noisier
+      — bounded to under 64 MiB of growth across the remaining 135 cycles, wide
+      enough to absorb allocator bookkeeping but not a per-cycle leak). Ran it
+      5 times back to back: passes in ~0.4s every time, well within both
+      bounds. This does not cover a single session left idle for real hours —
+      only the compounding-per-operation kind of drift, which is the
+      mechanism that would actually make a long session degrade.
+- [x] **Every video played upside down (2026-08-02, found by the author).**
+      `MpvRenderer::render()` passed `MPV_RENDER_PARAM_FLIP_Y = 1`, on the
+      reasoning ("Qt's FBO origin is at the bottom left; mpv's is not") that
+      turned out to be backwards — both use the standard bottom-left-origin GL
+      convention here, so mpv was flipping a frame that needed no flip.
+      Confirmed with a directional test clip (ARRIBA/ABAJO/IZQ/DER burned into
+      each corner): before the fix, top and bottom were swapped *and* each
+      glyph was mirrored vertically — a plain Y-flip, not a 90° rotation,
+      though from the seat that is exactly what "upside down" looks like.
+      Setting `flip = 0` reproduces the clip correctly, verified on the
+      synthetic clip and on a real 4K file, in both Fluorita's own window and
+      Siderita's embedded modal (same `fluorita-qt` render seam, so this was
+      never a per-app bug). The stale comment is rewritten to say what was
+      actually measured, not what seemed plausible.
+
+## Completed — F4: the second host
 
 ### Built — the embedded player in Siderita (2026-07-31)
 
@@ -628,7 +789,7 @@ pointer, and this session has no pointer automation — the keyboard alone never
 reached the grid. The check is one minute by hand: open a folder with an audio
 file, click it, press `Space`.
 
-### Still to build
+### Built — the render seam, activation and MPRIS2 (2026-07-31)
 
 - [x] **The render seam became a crate.** `celestina-rs/crates/fluorita-qt` now
       owns the `QQuickFramebufferObject`, and both hosts compile it from there:
@@ -671,26 +832,6 @@ process exits.
 confirmed, because Fluorita's session snapshot never carried it — the transport
 does not show one, so nothing had asked. The snapshot carries it now, which is
 also what a panel's slider needs.
-
-## Next — F3/F4: both player hosts
-
-The first QML that lands must land already guarded: both architecture guards and
-the style guard enumerate their target projects by name, and `fluorita` is in
-none of those lists, so the first scaffold, every guard-list addition and the
-negative fixtures belong to one change rather than a later cleanup.
-
-Build the complete application with Gallery, Music and Now Playing over the
-shared core/engine. Add configured roots, incremental catalogue reconciliation,
-static artwork generation, MPRIS2, direct one-file activation and isolated
-desktop/installer tests. Database choice is made from the measured catalogue
-shape in this milestone, not preselected in F1.
-
-Once standalone playback proves the engine contract, add the second host: route
-`Space` on image/video/audio to a nearly full available-area minimal player and
-route double-click/`Enter` to standalone Fluorita. Siderita continues reading
-static cache entries while browsing and loads the engine only for an explicit
-player/trailer request. Validate one-session-only playback, cancellation on
-selection change, keyboard/focus, reduced motion and real Wayland rendering.
 
 ## Later
 

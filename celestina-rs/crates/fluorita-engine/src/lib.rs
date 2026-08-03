@@ -35,6 +35,7 @@ pub mod probe;
 pub mod session;
 pub mod source;
 pub mod trailer;
+pub mod watch;
 pub mod worker;
 
 pub use artwork::{pending as pending_artwork, PendingArtwork};
@@ -48,4 +49,5 @@ pub use error::{EngineError, EngineResult};
 pub use library::{scan, ScanLimits, ScanOutcome};
 pub use session::MpvSession;
 pub use source::SourceHandle;
+pub use watch::{LibraryChange, LibraryWatcher, ResyncReason};
 pub use worker::{EngineWorker, Job, JobOutcome};

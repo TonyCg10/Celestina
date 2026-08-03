@@ -16,23 +16,14 @@ use crate::backend::RenderHandle;
 use crate::error::{EngineError, EngineResult};
 use crate::source::SourceHandle;
 
-/// Options every instance gets, whatever it is for.
-const BASELINE: &[(&str, &str)] = &[
+/// Options every instance gets, whatever it is for. Their absence is a
+/// determinism or safety hole, so a rejection aborts creating the instance
+/// entirely — see [`Instance::new`].
+const REQUIRED_BASELINE: &[(&str, &str)] = &[
     // Determinism: the engine must not inherit the user's mpv configuration.
     ("config", "no"),
     ("load-scripts", "no"),
-    // Fluorita owns every pixel of chrome and every key. `load-scripts` only
-    // covers the user's own; mpv also ships built-in Lua — an on-screen
-    // console, a stats overlay, a track selector — which draw over the app and
-    // cost a thread each. They are all off.
     ("osc", "no"),
-    ("load-console", "no"),
-    ("load-context-menu", "no"),
-    ("load-stats-overlay", "no"),
-    ("load-auto-profiles", "no"),
-    ("load-select", "no"),
-    ("load-positioning", "no"),
-    ("load-commands", "no"),
     ("osd-level", "0"),
     ("input-default-bindings", "no"),
     ("input-vo-keyboard", "no"),
@@ -41,6 +32,28 @@ const BASELINE: &[(&str, &str)] = &[
     // file the user asked for.
     ("load-unsafe-playlists", "no"),
     ("ytdl", "no"),
+];
+
+/// Fluorita owns every pixel of chrome and every key. `load-scripts` above
+/// only covers the user's own scripts; mpv also ships built-in Lua — an
+/// on-screen console, a stats overlay, a track selector — which would draw
+/// over the app and cost a thread each. This list turns each one off.
+///
+/// Applied best-effort, unlike the required baseline: these seven names are
+/// newer mpv properties (absent from mpv 0.37, the version Ubuntu 24.04 ships
+/// and what CI's runner installs from apt). One of these being unknown to an
+/// older `libmpv` must degrade — this app's chrome might get an overlay drawn
+/// on it by mpv's own script, same as a D-Bus failure degrades a service
+/// rather than blocking it — never take down instance creation, and thus every
+/// kind of playback, over a single missing hardening toggle.
+const HARDENING: &[(&str, &str)] = &[
+    ("load-console", "no"),
+    ("load-context-menu", "no"),
+    ("load-stats-overlay", "no"),
+    ("load-auto-profiles", "no"),
+    ("load-select", "no"),
+    ("load-positioning", "no"),
+    ("load-commands", "no"),
 ];
 
 pub struct Instance {
@@ -58,15 +71,20 @@ impl std::fmt::Debug for Instance {
 impl Instance {
     /// Builds an instance with the baseline plus `options`.
     pub fn new(options: &[(&str, &str)]) -> EngineResult<Self> {
-        let owned: Vec<(String, String)> = BASELINE
+        let required: Vec<(String, String)> = REQUIRED_BASELINE
             .iter()
             .chain(options.iter())
             .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
             .collect();
 
         let mpv = Mpv::with_initializer(|init| {
-            for (name, value) in &owned {
+            for (name, value) in &required {
                 init.set_property(name, value.as_str())?;
+            }
+            // Best-effort: an unknown property here must not fail the whole
+            // instance, only skip that one hardening toggle.
+            for (name, value) in HARDENING {
+                let _ = init.set_property(name, *value);
             }
             Ok(())
         })
@@ -201,10 +219,10 @@ pub fn wait_for_load(
 
 #[cfg(test)]
 mod tests {
-    use super::{Instance, BASELINE};
+    use super::{Instance, HARDENING, REQUIRED_BASELINE};
 
     #[test]
-    fn the_baseline_refuses_user_configuration_and_chrome() {
+    fn the_required_baseline_refuses_user_configuration_and_chrome() {
         // A regression here would mean the engine draws mpv's OSC over
         // Fluorita's own controls, or behaves differently on another machine.
         for required in [
@@ -215,8 +233,34 @@ mod tests {
             ("ytdl", "no"),
         ] {
             assert!(
-                BASELINE.contains(&required),
-                "missing baseline option: {required:?}"
+                REQUIRED_BASELINE.contains(&required),
+                "missing required baseline option: {required:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn hardening_options_are_the_ones_absent_from_older_mpv() {
+        // These are what mpv 0.37 (Ubuntu 24.04's apt package, which is what
+        // CI's `ubuntu-latest` runner installs) does not know. Instance
+        // creation must survive their absence rather than fail entirely.
+        for toggle in [
+            "load-console",
+            "load-context-menu",
+            "load-stats-overlay",
+            "load-auto-profiles",
+            "load-select",
+            "load-positioning",
+            "load-commands",
+        ] {
+            assert!(
+                HARDENING.iter().any(|(name, _)| *name == toggle),
+                "missing hardening toggle: {toggle}"
+            );
+            assert!(
+                !REQUIRED_BASELINE.iter().any(|(name, _)| *name == toggle),
+                "{toggle} must be best-effort, not required — an older mpv \
+                 rejecting it must not fail every instance"
             );
         }
     }
@@ -232,7 +276,9 @@ mod tests {
     }
 
     #[test]
-    fn a_rejected_option_is_a_typed_backend_failure() {
+    fn a_rejected_required_option_is_a_typed_backend_failure() {
+        // Passed as a per-call option, not a hardening toggle: this path must
+        // still fail loudly, unlike the best-effort one above.
         let error = Instance::new(&[("no-such-option-at-all", "1")])
             .expect_err("mpv rejects unknown options");
 

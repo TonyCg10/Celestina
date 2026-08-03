@@ -17,7 +17,9 @@ use fluorita_core::{EngineReport, PlaybackRequest, PlaybackState, ReportKind};
 use libmpv2::events::{Event, PropertyData};
 use libmpv2::{mpv_end_file_reason, EndFileReason, Format, Mpv};
 
-use crate::backend::{AudioOutput, EngineSession, RenderHandle, SessionRequest, VideoOutput};
+use crate::backend::{
+    AudioOutput, EngineSession, FrameStats, RenderHandle, SessionRequest, VideoOutput,
+};
 use crate::error::{EngineError, EngineResult};
 use crate::instance::Instance;
 use crate::source::SourceHandle;
@@ -191,6 +193,18 @@ impl EngineSession for MpvSession {
         }
         self.started = true;
         self.instance.load(&self.source)
+    }
+
+    fn frame_stats(&self) -> FrameStats {
+        // Every one of these is absent until the backend has something real to
+        // say: `display-fps` and `vsync-jitter` in particular stay unknown
+        // until the host reports when frames actually reach the screen.
+        FrameStats {
+            dropped: self.instance.optional_i64("frame-drop-count"),
+            delayed: self.instance.optional_i64("vo-delayed-frame-count"),
+            display_fps: self.instance.optional_f64("display-fps"),
+            vsync_jitter: self.instance.optional_f64("vsync-jitter"),
+        }
     }
 
     fn render_handle(&self) -> Option<RenderHandle> {

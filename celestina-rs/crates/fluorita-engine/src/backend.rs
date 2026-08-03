@@ -94,6 +94,26 @@ pub trait MediaEngine: Send + Sync {
     fn open_session(&self, request: SessionRequest) -> EngineResult<Box<dyn EngineSession>>;
 }
 
+/// What the backend says about how the picture is actually arriving.
+///
+/// Only meaningful for a session that presents: an audio session has no frames
+/// to drop. Every field is optional because the backend legitimately does not
+/// know some of them until it has been running — and a zero it never measured
+/// would read as "perfect", which is the one answer a pacing report must not
+/// invent.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FrameStats {
+    /// Frames the decoder threw away to keep up.
+    pub dropped: Option<i64>,
+    /// Frames that were presented late.
+    pub delayed: Option<i64>,
+    /// The display refresh rate the backend estimates from presentation
+    /// feedback. `None` until the host tells it when frames reach the screen.
+    pub display_fps: Option<f64>,
+    /// How irregular that feedback is, as the backend measures it.
+    pub vsync_jitter: Option<f64>,
+}
+
 /// One playback session: commands in, confirmed reports out.
 ///
 /// The session never invents state. Everything a host may believe arrives as an
@@ -119,6 +139,9 @@ pub trait EngineSession: Send {
     /// "nothing to play" — the failure this split exists to prevent. The host
     /// opens, hands out the handle, waits for its surface, then starts.
     fn start(&mut self) -> EngineResult<()>;
+
+    /// What the backend measured about presentation so far.
+    fn frame_stats(&self) -> FrameStats;
 
     /// The backend handle a GPU surface needs, while the session is open.
     ///

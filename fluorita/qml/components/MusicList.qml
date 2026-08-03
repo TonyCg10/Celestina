@@ -30,14 +30,17 @@ ListView {
         var titles = list.library.musicTitles;
         var artists = list.library.musicArtists;
         var albums = list.library.musicAlbums;
-        var count = Math.min(paths.length, titles.length, artists.length, albums.length);
+        var live = list.library.musicAvailable;
+        var count = Math.min(paths.length, titles.length, artists.length,
+                             albums.length, live.length);
         var woven = [];
         for (var index = 0; index < count; ++index) {
             woven.push({
                 path: paths[index],
                 title: titles[index],
                 artist: artists[index],
-                album: albums[index]
+                album: albums[index],
+                available: live[index] === "1"
             });
         }
         return woven;
@@ -75,8 +78,12 @@ ListView {
         width: ListView.view.width
         height: CelestinaTheme.rowHeight
 
+        opacity: row.modelData.available ? 1 : CelestinaTheme.disabledContentOpacity
+
         Accessible.role: Accessible.ListItem
-        Accessible.name: row.modelData.title
+        Accessible.name: row.modelData.available
+            ? row.modelData.title
+            : qsTr("%1 — sin encontrar").arg(row.modelData.title)
         Accessible.description: qsTr("%1 · %2").arg(row.modelData.artist).arg(row.modelData.album)
         Accessible.focusable: true
         Accessible.onPressAction: list.activated(row.modelData.path)
