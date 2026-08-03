@@ -107,6 +107,7 @@ Window {
             anchors.verticalCenter: parent.verticalCenter
             reading: panel.providerSource.providers.audio
             onMuteToggled: panel.providerSource.sendCommand("audio", "toggle-mute")
+            onMicMuteToggled: panel.providerSource.sendCommand("audio", "toggle-mic-mute")
             onMixerRequested: panel.providerSource.sendCommand("audio", "open-mixer")
             onStepRequested: (direction) => panel.providerSource.sendCommand(
                 "audio", direction > 0 ? "louder" : "quieter")

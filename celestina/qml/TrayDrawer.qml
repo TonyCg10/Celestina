@@ -13,6 +13,7 @@ pragma ComponentBehavior: Bound
 
 import CelestinaStyle
 import QtQuick
+import QtQuick.Controls
 
 Row {
     id: root
@@ -123,8 +124,13 @@ Row {
         anchors.verticalCenter: parent.verticalCenter
         iconName: root.open ? "chevron-right" : "chevron-down"
         role: CelestinaButton.Ghost
+        // `helpText` still names the button for AT-SPI (`CelestinaIconButton`
+        // ties `Accessible.name` to it); the visible tooltip it also drives is
+        // switched off here — a hover popup over a 40 px panel was landing on
+        // top of the tray icons right next to it and swallowing their clicks.
         helpText: root.open ? qsTr("Ocultar la bandeja")
                             : qsTr("Mostrar la bandeja (%1)").arg(root.items.length)
+        ToolTip.visible: false
         onClicked: root.open = !root.open
     }
 

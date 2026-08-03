@@ -9,6 +9,7 @@
 // request it could not make.
 import CelestinaStyle
 import QtQuick
+import QtQuick.Controls
 
 CelestinaIconButton {
     id: root
@@ -26,8 +27,12 @@ CelestinaIconButton {
 
     iconName: "scissors"
     role: failed ? CelestinaButton.Destructive : CelestinaButton.Ghost
+    // `helpText` still names the button for AT-SPI; the hover tooltip it also
+    // drives is switched off — on a 40 px panel it lands over neighboring
+    // widgets and can swallow their clicks (same fix as `TrayDrawer`).
     helpText: failed ? qsTr("No se pudo pedir la captura")
                      : qsTr("Captura de pantalla")
+    ToolTip.visible: false
     onClicked: root.captureRequested()
 
     Timer {
