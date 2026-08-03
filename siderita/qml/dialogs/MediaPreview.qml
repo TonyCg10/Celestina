@@ -23,10 +23,20 @@ Item {
 
     readonly property bool playing: preview.player.state === "reproduciendo"
     readonly property bool failed: preview.player.state === "error"
-    // Hay imagen en movimiento sólo cuando el motor ha dado un handle y la
-    // superficie puede pintarlo; si no, se muestra la carátula.
+    // `renderHandle` se pone a distinto de cero en cuanto el motor crea la
+    // instancia de mpv — que siempre se crea, sea cual sea el contenido del
+    // archivo — mucho antes de intentar abrirlo o decodificarlo. Fiarse sólo
+    // del handle dejaba una superficie negra para siempre con un archivo que
+    // mpv nunca podía abrir: el texto de estado/error de debajo quedaba
+    // tapado por un vídeo "activo" que jamás iba a pintar un fotograma. La
+    // imagen en movimiento sólo se muestra cuando el motor ya confirmó
+    // reproducción real.
+    readonly property bool confirmedPlaying: preview.player.state === "reproduciendo"
+        || preview.player.state === "pausado"
+        || preview.player.state === "terminado"
     readonly property bool showsVideo: preview.player.kind === "vídeo"
         && preview.player.renderHandle !== 0
+        && preview.confirmedPlaying
 
     // La imagen en movimiento ocupa el hueco entero; el transporte va debajo.
     MpvVideo {
@@ -125,8 +135,8 @@ Item {
 
         CelestinaSlider {
             anchors.verticalCenter: parent.verticalCenter
-            width: parent.width - CelestinaTheme.controlHeight - 90
-                   - CelestinaTheme.spaceMd * 2
+            width: parent.width - CelestinaTheme.controlHeight - 90 - volumeGroup.width
+                   - CelestinaTheme.spaceMd * 3
             enabled: preview.player.durationMs > 0
             value: preview.player.positionMs
             to: preview.player.durationMs
@@ -151,6 +161,51 @@ Item {
             font.pixelSize: CelestinaTheme.fontCaption
             Accessible.role: Accessible.StaticText
             Accessible.name: text
+        }
+
+        Row {
+            id: volumeGroup
+
+            // El icono recuerda a qué nivel volver al desmutear. Sólo se
+            // guarda mientras suena algo: guardar un 0 dejaría el botón sin
+            // adónde volver.
+            property int rememberedPercent: 100
+            readonly property bool muted: preview.player.volumePercent <= 0
+
+            anchors.verticalCenter: parent.verticalCenter
+            width: CelestinaTheme.controlHeightXs + CelestinaTheme.spaceSm + 64
+            spacing: CelestinaTheme.spaceSm
+
+            Connections {
+                target: preview.player
+                function onVolumePercentChanged() {
+                    if (preview.player.volumePercent > 0)
+                        volumeGroup.rememberedPercent = preview.player.volumePercent
+                }
+            }
+
+            CelestinaIconButton {
+                anchors.verticalCenter: parent.verticalCenter
+                iconName: volumeGroup.muted ? "media-volume-muted" : "media-volume"
+                helpText: volumeGroup.muted ? qsTr("Activar sonido") : qsTr("Silenciar")
+                onClicked: volumeGroup.muted
+                    ? preview.player.setVolume(
+                          volumeGroup.rememberedPercent > 0 ? volumeGroup.rememberedPercent : 100)
+                    : preview.player.setVolume(0)
+            }
+
+            CelestinaSlider {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 64
+                value: preview.player.volumePercent
+                to: 100
+                step: 5
+
+                Accessible.name: qsTr("Volumen")
+                Accessible.description: qsTr("Flechas para subir o bajar el volumen")
+
+                onMoved: function(target) { preview.player.setVolume(Math.round(target)) }
+            }
         }
     }
 
