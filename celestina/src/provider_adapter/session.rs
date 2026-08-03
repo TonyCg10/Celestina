@@ -47,8 +47,13 @@ pub fn spawn(runtime: &Arc<Mutex<ProviderRuntime>>) -> io::Result<()> {
 
 /// Asks the daemon for the next profile it offers. A click is a request here
 /// too: the panel never paints the profile it asked for, only the one the
-/// daemon reports next.
-pub fn cycle_power_profile() -> Result<(), String> {
+/// daemon reports next — which is why a successful switch republishes
+/// immediately rather than leaving the panel to show the old profile for up
+/// to [`INTERVAL`] until the next poll catches up.
+pub fn cycle_power_profile(
+    runtime: &Mutex<ProviderRuntime>,
+    id: &ProviderId,
+) -> Result<(), String> {
     let listing = run_bounded("powerprofilesctl", &["list"])
         .ok_or_else(|| "power-profiles-daemon did not answer".to_owned())?;
     let active = power::parse_active(&listing)
@@ -57,8 +62,10 @@ pub fn cycle_power_profile() -> Result<(), String> {
         .ok_or_else(|| format!("there is nothing to switch to from '{active}'"))?;
 
     run_bounded("powerprofilesctl", &["set", &next])
-        .map(|_| ())
-        .ok_or_else(|| format!("the daemon refused the profile '{next}'"))
+        .ok_or_else(|| format!("the daemon refused the profile '{next}'"))?;
+
+    publish_power(runtime, id);
+    Ok(())
 }
 
 fn publish_network(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
