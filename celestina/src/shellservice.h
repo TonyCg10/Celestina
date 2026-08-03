@@ -8,6 +8,7 @@
 #include <QVariantMap>
 
 class NiriClient;
+class OverlayController;
 class QDBusConnection;
 
 // The session's one way in.
@@ -50,6 +51,12 @@ public:
     // sees the name always finds the object behind it.
     Attachment attach(const QDBusConnection &bus);
 
+    // Wired in after construction, once main() has built the overlay
+    // controllers — a shell that starts without one still owns the bus name
+    // and serves every other verb; that overlay's toggle just errors.
+    void setLauncherController(OverlayController *controller);
+    void setClipboardController(OverlayController *controller);
+
     static QString serviceName();
     static QString objectPath();
     static QString interfaceName();
@@ -77,8 +84,14 @@ private slots:
 
 private:
     qulonglong focusWorkspace(const QVariantMap &options);
+    // A toggle is a local UI action with no compositor round trip to wait on,
+    // unlike `focusWorkspace`: it resolves the moment it runs, so it needs no
+    // entry in `m_focusRequests`.
+    qulonglong toggleOverlay(OverlayController *controller, const QString &verb);
 
     QPointer<NiriClient> m_niri;
+    QPointer<OverlayController> m_launcher;
+    QPointer<OverlayController> m_clipboard;
     QTimer m_stateTimer;
     // The bus sees this service's own request ids, never another component's
     // counter; the map is bounded by the Niri client's own request table.

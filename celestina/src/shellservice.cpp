@@ -6,6 +6,7 @@
 #include <QVariantList>
 
 #include "niriclient.h"
+#include "overlaycontroller.h"
 
 namespace {
 // Bumped only when the payloads change shape. Consumers read it before they
@@ -105,16 +106,52 @@ void ShellService::publishState()
     emit Changed(GetState());
 }
 
+void ShellService::setLauncherController(OverlayController *controller)
+{
+    m_launcher = controller;
+}
+
+void ShellService::setClipboardController(OverlayController *controller)
+{
+    m_clipboard = controller;
+}
+
 qulonglong ShellService::Command(const QString &verb, const QVariantMap &options)
 {
     if (verb == QStringLiteral("focus-workspace"))
         return focusWorkspace(options);
+    if (verb == QStringLiteral("launcher-toggle"))
+        return toggleOverlay(m_launcher, verb);
+    if (verb == QStringLiteral("clipboard-toggle"))
+        return toggleOverlay(m_clipboard, verb);
 
     sendErrorReply(
         QDBusError::UnknownMethod,
         QStringLiteral("this shell does not serve the verb '%1'").arg(verb)
     );
     return 0;
+}
+
+qulonglong ShellService::toggleOverlay(OverlayController *controller, const QString &verb)
+{
+    if (!controller) {
+        sendErrorReply(
+            QDBusError::Failed,
+            QStringLiteral("this shell has no '%1' surface").arg(verb)
+        );
+        return 0;
+    }
+
+    controller->toggle();
+
+    const qulonglong requestId = ++m_lastRequestId;
+    QVariantMap details;
+    details.insert(QStringLiteral("version"), shellStateVersion);
+    details.insert(QStringLiteral("verb"), verb);
+    // A toggle either opened or closed the overlay before this line runs —
+    // there is nothing pending to report later, unlike a compositor request.
+    emit CommandResult(requestId, QStringLiteral("confirmed"), details);
+    return requestId;
 }
 
 qulonglong ShellService::focusWorkspace(const QVariantMap &options)

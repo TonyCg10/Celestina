@@ -85,6 +85,10 @@ qt_add_executable(celestina
     src/panelmenusurface.cpp
     src/panelmenucontroller.h
     src/panelmenucontroller.cpp
+    src/overlaysurface.h
+    src/overlaysurface.cpp
+    src/overlaycontroller.h
+    src/overlaycontroller.cpp
     src/trayitems.h
     src/trayitems.cpp
     src/traywatcher.h
@@ -95,6 +99,8 @@ qt_add_executable(celestina
     src/trayiconprovider.cpp
     src/traymenu.h
     src/traymenu.cpp
+    src/traywatcherservice.h
+    src/traywatcherservice.cpp
 )
 add_dependencies(celestina celestina-helpers)
 
@@ -141,6 +147,8 @@ qt_add_qml_module(celestina
         qml/TrayMenu.qml
         qml/CaptureButton.qml
         qml/PanelMenu.qml
+        qml/LauncherOverlay.qml
+        qml/ClipboardOverlay.qml
     RESOURCES
         ../celestina-style/icons/phone.svg
         ../celestina-style/icons/battery-charging.svg
@@ -219,6 +227,20 @@ if(BUILD_TESTING)
     target_link_libraries(celestina-tray-menu-test PRIVATE Qt6::Test)
     add_test(NAME celestina-tray-menu COMMAND celestina-tray-menu-test)
 
+    # Claims a test-only watcher name on a real session bus and exercises the
+    # registry other applications depend on; it skips where no bus exists.
+    qt_add_executable(celestina-tray-watcher-service-test
+        tests/traywatcherservice_test.cpp
+        src/traywatcherservice.h
+        src/traywatcherservice.cpp
+    )
+    target_include_directories(celestina-tray-watcher-service-test PRIVATE src)
+    target_link_libraries(celestina-tray-watcher-service-test PRIVATE Qt6::Test Qt6::DBus)
+    add_test(NAME celestina-tray-watcher-service COMMAND celestina-tray-watcher-service-test)
+    set_tests_properties(celestina-tray-watcher-service PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    )
+
     qt_add_executable(celestina-shell-commandline-test
         tests/shellcommandline_test.cpp
         src/shellcommandline.h
@@ -240,12 +262,28 @@ if(BUILD_TESTING)
         src/protocoldecoder.cpp
         src/workspacefocusrequests.h
         src/workspacefocusrequests.cpp
+        src/overlaycontroller.h
+        src/overlaycontroller.cpp
+        src/overlaysurface.h
+        src/overlaysurface.cpp
+        src/surfacemanager.h
+        src/surfacemanager.cpp
+        src/shellprovidersclient.h
+        src/shellprovidersclient.cpp
+        src/providerstates.h
+        src/providerstates.cpp
     )
     target_include_directories(celestina-shell-service-test PRIVATE src)
     target_compile_definitions(celestina-shell-service-test PRIVATE
         CELESTINA_NIRI_ADAPTER="${NIRI_ADAPTER_BINARY}"
+        CELESTINA_PROVIDER_ADAPTER="${PROVIDER_ADAPTER_BINARY}"
     )
-    target_link_libraries(celestina-shell-service-test PRIVATE Qt6::Test Qt6::DBus)
+    target_link_libraries(celestina-shell-service-test PRIVATE
+        Qt6::Test
+        Qt6::DBus
+        Qt6::Quick
+        LayerShellQt::Interface
+    )
     add_test(NAME celestina-shell-service COMMAND celestina-shell-service-test)
     set_tests_properties(celestina-shell-service PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
@@ -262,6 +300,8 @@ if(BUILD_TESTING)
         src/panelmenusurface.cpp
         src/panelmenucontroller.h
         src/panelmenucontroller.cpp
+        src/overlaysurface.h
+        src/overlaysurface.cpp
         src/niriclient.h
         src/niriclient.cpp
         src/protocoldecoder.h

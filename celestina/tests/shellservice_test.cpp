@@ -40,6 +40,7 @@ private slots:
     void refusesAVerbItDoesNotServe();
     void refusesFocusWorkspaceWithoutUsableOptions();
     void refusesToPretendARequestWasSentWithoutAnAdapter();
+    void refusesOverlayTogglesWithoutAControllerWired();
 
 private:
     QDBusMessage callTo(const QString &interface, const QString &member) const
@@ -181,6 +182,24 @@ void ShellServiceTest::refusesToPretendARequestWasSentWithoutAnAdapter()
     // A request that was never sent must not come back as a pending id.
     QVERIFY(!reply.isValid());
     QCOMPARE(reply.error().type(), QDBusError::Failed);
+}
+
+// `initTestCase` never wires a launcher or clipboard controller — the same
+// "the shell exists but this surface does not" shape
+// `refusesToPretendARequestWasSentWithoutAnAdapter` already covers for the
+// compositor adapter.
+void ShellServiceTest::refusesOverlayTogglesWithoutAControllerWired()
+{
+    for (const QString &verb : {
+             QStringLiteral("launcher-toggle"),
+             QStringLiteral("clipboard-toggle"),
+         }) {
+        QDBusPendingReply<qulonglong> reply =
+            m_client.asyncCall(command(verb, QVariantMap()));
+        QVERIFY(settle(reply));
+        QVERIFY2(!reply.isValid(), qPrintable(verb));
+        QCOMPARE(reply.error().type(), QDBusError::Failed);
+    }
 }
 
 QTEST_MAIN(ShellServiceTest)

@@ -33,6 +33,8 @@ transient client of it — it never starts a shell and never claims the name:
 
 ```sh
 celestina msg get-state
+celestina msg launcher-toggle    # opens/closes the app launcher overlay
+celestina msg clipboard-toggle   # opens/closes the clipboard-history overlay
 ```
 
 Panel mode is layer-shell or nothing: on a platform that cannot carry a layer
@@ -102,7 +104,7 @@ real session is still owned by the R0 exit test.
 | `CMakeLists.txt` | Qt executable/module + LayerShellQt + KWindowSystem |
 | `src/main.cpp` | process bootstrap, style import self-provisioning, `--pick-output` mode |
 | `src/panelmanager.cpp`, `.h` | per-output layer-shell panel lifecycle: creation, hotplug and teardown, one surface per `QScreen` |
-| `src/provider_adapter/` | the aggregate provider helper: one process for every bar provider needing long-lived, non-Qt IO. `main.rs` is the plumbing, `tools.rs` the bounded way it runs the session's own tools, and one module per provider (`sysmon`, `media`, `audio`, `session`) |
+| `src/provider_adapter/` | the aggregate provider helper: one process for every bar provider needing long-lived, non-Qt IO. `main.rs` is the plumbing, `tools.rs` the bounded way it runs the session's own tools, and one module per provider (`sysmon`, `media`, `audio`, `session`, `launcher`, `clipboard`) |
 | `src/providerstates.cpp`, `.h` | host-side validation of what that helper publishes, and the provider state QML reads |
 | `src/shellprovidersclient.cpp`, `.h` | the single Qt bridge to the provider helper: process lifecycle, framing, confirmed marshaling and bounded commands |
 | `src/niri_adapter.rs` | pinned Niri event stream, state reduction and reconnect loop; emits narrow workspace snapshots and performs the host's bounded focus requests on a separate short-lived socket |
@@ -115,6 +117,8 @@ real session is still owned by the R0 exit test.
 | `src/surfacemanager.cpp`, `.h` | the shared layer-surface recipe: a `LayerSurfaceSpec` plus `mapLayerSurface`, holding only what the panel and the menu both set differently, and the platform check that refuses a session without layer shell |
 | `src/panelmenusurface.cpp`, `.h` | the menu's surface and lifetime: adopts a content window, maps it through the shared recipe, cleans up a compositor dismissal |
 | `src/panelmenucontroller.cpp`, `.h` | builds the menu window and routes an item back to the same focus request a click makes |
+| `src/overlaysurface.cpp`, `.h` | the third surface kind: a centered, on-demand-keyboard overlay opened from a keybind rather than a click — empty `LayerSurfaceSpec::anchors` is what centers it; mechanics only, shared by the launcher and the clipboard history |
+| `src/overlaycontroller.cpp`, `.h` | loads one QML component, toggles its `OverlaySurface`, and nothing else — the launcher and the clipboard history are two instances of this one class; each component talks to `providerSource` directly like any bar widget |
 | `src/panelblurcontroller.cpp`, `.h` | per-surface KWindowEffects capability/retry/geometry lifecycle and the explicit readable fallback state |
 | `src/trayitems.cpp`, `.h` | what a StatusNotifierItem is once distrusted: registrations, absent properties, title fallback, bounded lists |
 | `src/traywatcher.cpp`, `.h` | the panel's SNI host: registers with the session's watcher, reads items asynchronously, resolves their icons and publishes them |
@@ -128,9 +132,9 @@ real session is still owned by the R0 exit test.
 | `tests/trayicons_test.cpp` | QtTest coverage for reading the session's icon theme and converting another application's pixels |
 | `tests/providerstates_test.cpp` | QtTest coverage for every provider frame the host refuses, set replacement, generations and clearing |
 | `tests/shellcommandline_test.cpp` | QtTest coverage for verb/option parsing, typing and every refusal |
-| `tests/shellservice_test.cpp` | QtTest coverage over a real session bus (skipped without one): the exported interface, the state version and each rejected command |
+| `tests/shellservice_test.cpp` | QtTest coverage over a real session bus (skipped without one): the exported interface, the state version and each rejected command, including the two overlay toggles refused without a controller wired |
 | `tests/workspacefocusrequests_test.cpp` | QtTest coverage for the request policy: acceptance is not arrival, matched confirmation, rejection, timeout, adapter loss |
-| `tests/surfacemanager_test.cpp` | QtTest coverage offscreen for the shared recipe and the menu surface: panel and menu specs, reopening, dismissal, cleanup, and the real menu file loading |
+| `tests/surfacemanager_test.cpp` | QtTest coverage offscreen for the shared recipe, the menu surface and the overlay surface: panel and menu specs, reopening, dismissal, cleanup, and the real menu/launcher/clipboard QML files loading |
 | `tests/tst_workspacestrip.qml` | Qt Quick Test coverage for the scroll step: origin, wrap at both ends, bursts, foreign outputs |
 | `tests/tst_outputchooser.qml` | Qt Quick Test coverage for preserving the selected output across reorder and removal snapshots |
 | `qml/Panel.qml` | hidden-until-configured three-region root window: two ordered flanks around a geometrically centred clock |
@@ -147,6 +151,8 @@ real session is still owned by the R0 exit test.
 | `qml/Clock.qml` | the lived clock format, realigned every second |
 | `qml/PhoneStatus.qml` | phone identity, charge state and battery |
 | `qml/PanelMenu.qml` | the panel's context menu content: a shared `GlassContextMenu` whose items are real focus requests |
+| `qml/LauncherOverlay.qml` | `Mod+Space`'s content: a search field and a keyboard-driven results list, talking to the `launcher` provider directly; no per-entry icon (named loss, R2) |
+| `qml/ClipboardOverlay.qml` | the clipboard-history content: a keyboard-driven list of previews, talking to the `clipboard` provider directly; select, remove and clear all address a row by index, never by its full text |
 | `qml/OutputChooser.qml` | the screen-share chooser dialog (consumes CelestinaStyle) |
 | `scripts/run.sh` | build (Release) + activate the panel — the one script the shell needs |
 | `ROADMAP.md` | status, checkpoints, design decisions and the R0–R9 phase list |

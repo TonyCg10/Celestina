@@ -6,6 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+# The launcher's index is the session's own `.desktop` files, read by the same
+# suite reader the file manager uses rather than a second parser.
+celestina-core.workspace = true
 # The shell's helper protocol is line-delimited JSON in both directions, and
 # provider payloads are open maps that each provider owns. Serde is the one
 # parser for that envelope; nothing here needs a second format.

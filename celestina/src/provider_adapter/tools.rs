@@ -72,7 +72,27 @@ pub fn run_bounded_with(program: &str, args: &[&str], timeout: Duration) -> Opti
 /// pipes. A short-lived thread waits on it so a launched tool never lingers as
 /// a zombie, and the helper never blocks on one.
 pub fn launch(program: &str) -> Result<(), String> {
+    launch_argv(&[program])
+}
+
+/// The same, for a launch that needs its own arguments — an application's
+/// `Exec`, or a URL handed to `xdg-open`. `argv` is never run through a shell:
+/// it is exactly the words execve receives, which is what keeps a `.desktop`
+/// file's own text from being interpreted as anything more than a program name
+/// and its arguments.
+///
+/// # Errors
+///
+/// Returns `Err` for an empty `argv`, or one whose program could not be
+/// started at all; a launch is a request, and this is what a request that
+/// could not even be made looks like.
+pub fn launch_argv(argv: &[&str]) -> Result<(), String> {
+    let [program, arguments @ ..] = argv else {
+        return Err("nothing to launch".to_owned());
+    };
+
     let child = Command::new(program)
+        .args(arguments)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())

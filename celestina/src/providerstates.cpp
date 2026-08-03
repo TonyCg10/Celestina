@@ -2,10 +2,12 @@
 
 #include <cmath>
 
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QJsonValue>
+#include <QVariantList>
 
 namespace {
 // The only protocol version that exists. A helper announcing a newer one is a
@@ -20,6 +22,10 @@ constexpr qsizetype maxTextChars = 512;
 // Generations and request ids are `u64` on the wire; the host only compares
 // them, so it keeps them exact by never letting one arrive as a JSON number.
 constexpr qsizetype maxRequestIdChars = 32;
+// A list provider (the launcher's results, the clipboard's history) shows a
+// screenful of rows, never a database dump — the same order of magnitude each
+// one already bounds itself to on the Rust side.
+constexpr qsizetype maxArrayItems = 64;
 
 ProviderMessage invalid(const QString &reason)
 {
@@ -55,9 +61,11 @@ bool isWholeNumber(const QJsonValue &value)
         && number <= 9007199254740991.0;
 }
 
-// A payload is one flat object of scalars: the panel reads values, never
-// documents, and a nested structure would carry unbounded depth with it.
-bool readPayload(const QJsonObject &source, QVariantMap *payload)
+// A row inside a list field — one search hit, one history entry — follows the
+// exact same "flat object of scalars" rule a payload does, just addressed by
+// an array index instead of a provider id. Reusing the rule rather than a
+// looser one is what keeps a row from becoming a second, unbounded document.
+bool readRow(const QJsonObject &source, QVariantMap *row)
 {
     if (source.size() > maxPayloadKeys)
         return false;
@@ -66,6 +74,46 @@ bool readPayload(const QJsonObject &source, QVariantMap *payload)
         const QJsonValue value = field.value();
         if (value.isObject() || value.isArray())
             return false;
+        if (value.isString() && value.toString().size() > maxTextChars)
+            return false;
+
+        row->insert(field.key(), value.toVariant());
+    }
+    return true;
+}
+
+// A payload is a flat object of scalars — or, for a field that describes a
+// list (the launcher's results, the clipboard's history), a bounded array of
+// rows with that same flat shape. One level of structure is what a list
+// overlay's row needs; a row that itself nested a list would carry the
+// unbounded depth the flat rule exists to rule out, so `readRow` never
+// recurses back into this function.
+bool readPayload(const QJsonObject &source, QVariantMap *payload)
+{
+    if (source.size() > maxPayloadKeys)
+        return false;
+
+    for (auto field = source.constBegin(); field != source.constEnd(); ++field) {
+        const QJsonValue value = field.value();
+        if (value.isObject())
+            return false;
+        if (value.isArray()) {
+            const QJsonArray array = value.toArray();
+            if (array.size() > maxArrayItems)
+                return false;
+
+            QVariantList rows;
+            for (const QJsonValue &item : array) {
+                if (!item.isObject())
+                    return false;
+                QVariantMap row;
+                if (!readRow(item.toObject(), &row))
+                    return false;
+                rows.append(row);
+            }
+            payload->insert(field.key(), rows);
+            continue;
+        }
         if (value.isString() && value.toString().size() > maxTextChars)
             return false;
 

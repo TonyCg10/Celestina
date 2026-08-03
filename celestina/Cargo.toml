@@ -41,6 +41,17 @@ magnetita-core = { path = "../celestina-rs/crates/magnetita-core" }
 # signature — and the panel answers to the same two questions the phone bridge
 # does.
 celestina-core = { path = "../celestina-rs/crates/celestina-core" }
+# The clipboard history provider is a data-control client: it watches and sets
+# the desktop selection over Wayland directly, because that role has no
+# subprocess tool to shell out to the way sysmon or audio do. `ext-data-control`
+# is the standardized successor to wlroots' own protocol; niri advertises both,
+# and the standardized one is the one to prefer going forward.
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+# Already a transitive dependency of `wayland-backend`; used directly only for
+# `pipe()`, so receiving a selection needs no raw libc call in a workspace that
+# forbids unsafe code.
+rustix = { version = "1", features = ["pipe"] }
 
 [lints.rust]
 unsafe_code = "forbid"

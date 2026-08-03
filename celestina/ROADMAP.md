@@ -840,8 +840,36 @@ controller now says *"ask this item for its menu"* and *"this entry was
 chosen"* as signals, and the host wires those to the tray: the menu code no
 longer knows a tray exists.
 
-**Not exercised:** clicking an entry, which acts on the application — that is
-for the live run, deliberately not triggered here.
+**The watcher (2026-07-31).** A tray has two halves, and the panel now has
+both. Being *a* host reads items; being *the* watcher is the registry every
+application looks for before it publishes anything at all — which is why a
+session with a host and no watcher has no tray. Noctalia owns that name today,
+so the registry stays dormant; it claims the name only when nobody is being the
+watcher, and takes over the moment the previous one leaves. That is the R8
+prerequisite closed while it was fresh, rather than discovered when Noctalia
+goes.
+
+It is a separate class from the host on purpose: reading items and being a
+registry other applications depend on are different jobs with different
+lifetimes. When this shell owns the name, its own host talks to it exactly like
+it would talk to anyone else's.
+
+Seven more QtTest cases run it over a real session bus under a test-only name —
+never the session's own, because a test must not become the tray every
+application here publishes to: the name refused when someone else holds it, an
+item that names its bus name, one that names only its path (the shape half this
+session's items use, where the sender is the service), the first host announced
+and only the first, and everything an owner published leaving with it.
+
+That last one failed first, and the failure was the test's: `disconnectFromBus`
+closes a connection only once the last `QDBusConnection` referring to it is
+gone, so the "application" the test was quitting stayed alive and nothing left.
+Proven with a throwaway probe before touching the code — which was right — and
+the test now scopes the connection it means to end.
+
+**Not exercised:** clicking an entry, which acts on the application, and the
+takeover itself, which needs Noctalia's watcher to actually go away — for the
+live run, deliberately not triggered here.
 
 **Gate:** Noctalia's bar hidden permanently on all three outputs; Noctalia
 keeps running headless for everything else. Named at the gate: the cat is an
@@ -898,27 +926,180 @@ production provider or widget has landed, by design.
 pins, categories, fuzzy search, `kitty -e` for `Terminal=true` — plus a
 separate clipboard-history panel using the backend selected in the work order.
 
-- [ ] Pure desktop-entry index + fuzzy match/rank module in
+- [x] Pure desktop-entry index + fuzzy match/rank module in
       `celestina-shell-core` (usage boost optional), unit-tested; `.desktop`
       scanning generalizes the
       `siderita/src/apps.rs` precedent instead of duplicating it — compare
       before writing
-- [ ] On-demand keyboard overlay surface (`KeyboardInteractivityOnDemand`,
-      overlay layer) opened via `celestina msg launcher-toggle`; Escape and
-      focus-loss dismissal; full keyboard operation + AT-SPI before it is
-      called done (`PickerWindow`/`CelestinaModalLayer` patterns)
-- [ ] Pinned apps, categories, launch (spawn detached); a launch is a request —
-      failures surface, they don't vanish
-- [ ] Clipboard-history backend decision closed in the work order and its
+- [x] On-demand keyboard overlay surface (`KeyboardInteractivityOnDemand`,
+      overlay layer) opened via `celestina msg launcher-toggle`; dismissed by
+      Escape or by toggling the same bind again. **Focus-loss dismissal was
+      built, then removed by author decision** (below) — full keyboard
+      operation + AT-SPI, both landed, matching `PickerWindow`/
+      `CelestinaModalLayer` patterns
+- [x] Launch (spawn detached); a launch is a request — failures surface, they
+      don't vanish. **Pins and a clickable category grid are a named,
+      deliberate loss — see the author decision below**, not an oversight
+- [x] Clipboard-history backend decision closed in the work order and its
       selected implementation delivered; clipper's notecards/pins remain the
       named loss recorded below
-- [ ] Web-search provider (open URL in the default browser); emoji/kaomoji/
+- [x] Web-search provider (open URL in the default browser); emoji/kaomoji/
       unicode providers are optional later, never gates
-- [ ] Integrated R2 exit accepted on the real session per the work order;
+- [x] Integrated R2 exit accepted on the real session per the work order;
       record dated launcher/clipboard/accessibility evidence here
 
+**R2 groundwork — the index and the matching (2026-07-31).** Compared before
+writing, as the item demands. Siderita's `apps.rs` already had two of the three
+pieces: the XDG directory rules, *identical* to what a launcher needs, and a
+`[Desktop Entry]` parser reading five keys where a launcher needs nine. Same
+recipe, narrower. So it moved to `celestina_core::desktop_entry` — the suite's
+reader, not the shell's — and Siderita now asks it instead of its own copy. Its
+own 69 tests pass unchanged, which is what says the migration kept its
+behaviour; two differences it would have hidden were preserved deliberately: an
+id is claimed by the most specific directory whether or not that entry handles
+the type, and an entry with no name is still launchable under its id.
+
+The matching is `celestina-shell-core::launcher`, and it is pure: a caller hands
+in what it read and gets back what answers, so none of it needs a desktop to
+test. What a person types is folded past the accents a keyboard makes optional
+— `musica` finds `Música` — and letters in order are enough, so `gimp` finds
+`GNU Image Manipulation Program`. What an entry is *called* outranks what it
+merely mentions: an editor with `archivos` among its keywords never comes before
+the application actually called Archivos. Ties break by name, so the list cannot
+reorder itself between two keystrokes that mean the same thing — tested by
+ranking the same entries read in both directions.
+
+Six new cases here, 19 in the shared reader, 64 in the crate, and Siderita
+green. **Not landed:** the surface, the launching, and the pins and categories —
+this is the index and the ordering only.
+
+**Author decision — pins and categories dropped, fuzzy search carries the
+phase (2026-08-02).** The goal text above names an app grid with pins and
+categories; what landed is a search-first overlay — type, filter, `Enter`
+launches the highlighted row — with no browsable grid. Raised explicitly and
+confirmed by the author: for a keyboard-driven launcher, two or three letters
+already resolves what a pinned tile or a category click was for, and a grid
+would be a second, unused way to reach the same entries. Clipper's
+notecards/pins were already a recorded loss (R2 groundwork above); this
+extends the same call to Noctalia's own launcher grid. Reopen if lived use
+says otherwise.
+
+**The provider protocol's payload bound did not fit a list — extended, not
+worked around (2026-08-02).** `providerstates.cpp`'s `readPayload` refused
+any array or object field outright ("a payload is one flat object of
+scalars"), written when every provider was a bar scalar. The launcher's
+search results and the clipboard's history are both genuinely list-shaped,
+and the first attempt to publish either would have invalidated the *entire*
+provider frame — sysmon, audio, media, everything sharing the one frame with
+it — not just the new provider. Fixed at the root: a payload field may now
+also be a bounded array of rows with that same flat-scalars shape, one level
+of structure and no deeper, reusing the existing per-row bound rather than
+inventing a second one. New host-side tests cover the accepted shape, a row
+that itself nests a list (refused), a bare non-object array item (refused,
+the same case an existing test already covered for numbers) and an
+over-bound array (refused). `celestina-provider-states-test` passes with the
+extension in place.
+
+**The launcher and clipboard-history overlays (2026-08-02).** Both are a new
+surface kind — `OverlaySurface`, centered rather than anchored, since a
+keybind names no click position the way the panel's menu has one; leaving
+`LayerSurfaceSpec::anchors` empty is what tells the compositor to center an
+overlay on its output. `OverlayController` owns exactly the mechanics both
+share — load a QML component, map/toggle/tear down the surface — and neither
+overlay is routed through a domain-specific controller: each talks to
+`providerSource` directly, the same way every bar widget already does.
+`ShellService` gained `launcher-toggle` and `clipboard-toggle`, dispatched
+like every other `celestina msg` verb and resolved synchronously, since a
+local toggle has no compositor round trip to wait on.
+
+The launcher shows no per-entry icon — the launcher provider publishes
+identifiers and text, not pixmaps, and a freedesktop icon-theme lookup into a
+QML image provider is a separate, unbuilt feature this phase does not need
+to gate on; recognizing an entry by name and generic name is what the phase's
+own exit test actually asks for. Search is one list with one row appended
+when the query is non-empty — "Buscar «query» en la Web" — so `Up`/`Down`/
+`Enter` never special-case the web-search path; activating that row is the
+web-search provider. The clipboard overlay shows a preview, never a whole
+entry: the provider bounds what it publishes to `MAX_PUBLISHED_ENTRIES`
+rows of `MAX_PREVIEW_CHARS`, collapsed to one line, and a selection or a
+removal addresses a row by index rather than round-tripping its text.
+
+Evidence: `celestina-provider-states-test`, `celestina-surface-manager-test`
+(now covering `OverlaySurface`'s centering/no-anchor spec, refuse-double-open,
+external-dismissal cleanup, no leaked window, and both overlay QML files
+loaded from source with a null `providerSource`) and
+`celestina-shell-service-test` (both toggle verbs refused with
+`QDBusError::Failed` when no controller is wired) all pass; `cargo fmt
+--check`, `cargo clippy -D warnings` and `cargo test` clean across
+`celestina-core`, `celestina-shell-core` and the `celestina-shell` package;
+`all_qmllint` clean; the repo-wide architecture guard passes.
+
+Then exercised for real, on this machine's live Niri session, not offscreen:
+built and ran the actual panel, which claimed `org.celestina.Shell` cleanly.
+`celestina msg launcher-toggle` opened exactly one overlay, centered, over
+this machine's real 60+ indexed `.desktop` entries. Typed `firefox` through a
+virtual keyboard (`wtype`): the fuzzy match surfaced LibreWolf by its
+description ("A fork of Firefox…") with a "Buscar «firefox» en la Web" row
+beneath it, `Down`/`Enter` launched LibreWolf for real, and the overlay
+dismissed itself the moment the launch was confirmed. `Escape` dismissed a
+reopened overlay on its own. For the clipboard history: two real selections
+made with `wl-copy` appeared newest-first; `Down`+`Enter` re-selected the
+older one and `wl-paste` immediately read it back, moving it to the front of
+the persisted history; the history survived a full process restart in the
+same order; `Tab` moved keyboard focus to the "Vaciar" button with a visible
+focus ring, and `Space` (not `Return` — `QtQuick.Controls.Button`'s own
+convention) activated it, clearing the history and reaching the empty state
+("El portapapeles está vacío"). The test process, its two screenshots'
+worth of state and the browser it launched were all torn down afterward;
+nothing was left running on the session.
+
+**Not exercised:** a `Terminal=true` entry launching through `kitty -e` (no
+such entry was indexed on this machine to launch for real, though the
+`kitty -e` wrapping itself is unit-tested in `desktop_entry` and exercised
+identically to every other launch path); a real screen reader confirming
+what AT-SPI announces, as opposed to the roles/names/selected-state the QML
+declares; a failed launch's inline error message, which needs a `.desktop`
+entry that indexes but cannot actually start; and sensitive-clipboard
+exclusion (`is_sensitive`/password-manager mimes), which needs a real
+password-manager copy to trigger rather than a synthetic one.
+
+**Corrections found running the panel for real, on this machine's own daily
+session (2026-08-02).** Two bugs the offscreen evidence above could not have
+caught, because both need real provider churn and real typing to show up:
+
+The launcher's highlighted row jumped back to the top a few keystrokes into
+an otherwise ordinary arrow-key session. Cause: `onHitsChanged` reset
+`currentIndex`, but `hits` is a `var` sliced out of `providerSource`'s
+aggregate `providers` map — every *unrelated* bar provider republishing
+(CPU, audio, anything on its own poll) hands QML a new-but-equal-content
+array reference, and `var` properties re-signal on reference change, not
+value change, the way a plain `int` or `string` property does. The reset now
+keys off `queryText` (a string) and clamps against `rowCount` (an int) —
+both of which QML only re-signals when the value itself actually differs.
+
+The volume and the microphone shared one full-width `MouseArea`, so clicking
+the "micro" indicator — which sat inside that same area — toggled the
+speaker's mute instead of the microphone the label names; `toggle-mic-mute`
+already existed as a provider verb and was simply never wired to anything of
+its own. Split into two `Item`s with their own click areas and their own
+`Accessible` roles, and the microphone control is now shown whenever a
+default source exists rather than only while it is muted — a toggle that
+disappears the moment you use it in one direction leaves no way back from
+the panel.
+
+**Author decision — focus-loss dismissal removed (2026-08-02).** The overlay
+work order named focus-loss as a dismissal trigger alongside Escape, and it
+shipped that way. Living with it on a real session, closing the launcher or
+the clipboard history just because another window took focus — an Alt-Tab
+to check something — was worse than the exclusive-keyboard state it was
+guarding against: a `KeyboardInteractivityOnDemand` overlay only holds the
+keyboard while it has focus in the first place, so nothing was actually left
+capturing input behind another window. Removed from both overlays; Escape
+and re-toggling the same bind are the two ways out now.
+
 **Gate:** `Mod+Space` rebinds to the shell; Noctalia's launcher and clipper go
-unused. **Fallback:** the old bind is one line in `config.kdl`.
+unused — not yet flipped in `config.kdl`, which stays an explicit author
+action. **Fallback:** the old bind is one line in `config.kdl`.
 
 ### R3 — Session verbs: OSD, night light, caffeine, DPMS, composed lock
 
@@ -1066,6 +1247,7 @@ display-manager-grade compositor and is not planned.
 |---|---|
 | music-search (YouTube search + mpv library in the bar) | not replaced; external mpv/playerctl workflows — Fluorita-shaped territory if it ever comes in-tree |
 | clipper notecards / pincards | the clipboard backend chosen in R2 keeps plain history; notes and pins are lost unless a small file-backed flow is requested |
+| launcher pinned-apps grid / category browsing | author decision, R2 (2026-08-02): fuzzy search alone carries the phase — a keyboard launcher resolves in a few keystrokes what a pinned tile or category click was for; reopen if lived use says otherwise |
 | catwalk cat | optional cosmetic widget someday; never a gate |
 | screen-toolkit (annotate, pin, QR, measure, webcam, palette) | one external tool per function (`satty` for annotate, `niri msg pick-color`, existing grim/tesseract OCR bind) — or dropped; record which after living without |
 | screen-recorder plugin | `gpu-screen-recorder` CLI directly (the plugin is already unplaced) |

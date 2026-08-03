@@ -18,6 +18,7 @@
 
 #include "devicesclient.h"
 #include "niriclient.h"
+#include "overlaycontroller.h"
 #include "panelmanager.h"
 #include "panelmenucontroller.h"
 #include "shellclient.h"
@@ -249,6 +250,21 @@ int main(int argc, char *argv[])
     auto *menu = new PanelMenuController(&engine, niri, &app);
     if (!menu->isEnabled())
         qInfo() << "Celestina is running without the panel context menu.";
+
+    // The launcher and the clipboard history: two keybind-driven overlays,
+    // opened and closed the same way, each loading its own QML component. See
+    // `OverlayController`'s own doc for why one class serves both.
+    auto *launcher =
+        new OverlayController(&engine, providers, QStringLiteral("LauncherOverlay"), &app);
+    if (!launcher->isEnabled())
+        qWarning() << "Celestina is running without its launcher overlay.";
+    shell->setLauncherController(launcher);
+
+    auto *clipboard =
+        new OverlayController(&engine, providers, QStringLiteral("ClipboardOverlay"), &app);
+    if (!clipboard->isEnabled())
+        qWarning() << "Celestina is running without its clipboard history overlay.";
+    shell->setClipboardController(clipboard);
 
     // The menu controller draws menus; the tray host holds the conversation
     // with the application that owns one. Wiring them here keeps the controller

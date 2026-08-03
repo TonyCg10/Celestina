@@ -7,6 +7,7 @@
 #include <QVariantMap>
 #include <QWindow>
 
+#include "overlaysurface.h"
 #include "panelmenucontroller.h"
 #include "panelmenusurface.h"
 #include "surfacemanager.h"
@@ -31,6 +32,12 @@ private slots:
     void theMenuIsOnUnlessTheEnvironmentTurnsItOff();
     void theMenuContentLoadsAndFitsItsSurface();
     void theMenuSurfaceIsBigEnoughToClickEveryItem();
+
+    void anOverlaySurfaceCentersWithoutAnAnchorAndTakesFocus();
+    void theOverlayRefusesToOpenTwiceAndSurvivesReopening();
+    void theOverlayReportsAndCleansUpAnExternalDismissal();
+    void aClosedOverlayLeavesNoWindowBehind();
+    void theLauncherAndClipboardOverlaysLoadAndMap();
 
 private:
     QWindow *makePanel()
@@ -277,6 +284,115 @@ void SurfaceManagerTest::theMenuSurfaceIsBigEnoughToClickEveryItem()
     const QSize mapped = content->size();
     QTest::qWait(200);
     QCOMPARE(content->size(), mapped);
+}
+
+// Unlike the panel's menu, an overlay is opened from a keybind rather than a
+// click: there is no anchor point, so the recipe leaves `anchors` empty for
+// the compositor to read as "center this on its output" (R2's launcher and
+// clipboard history).
+void SurfaceManagerTest::anOverlaySurfaceCentersWithoutAnAnchorAndTakesFocus()
+{
+    QWindow *const content = makeContent();
+    const QSize contentSize = content->size();
+
+    OverlaySurface surface;
+    QVERIFY(surface.open(content, nullptr));
+    QVERIFY(surface.isOpen());
+    QCOMPARE(surface.window(), content);
+    QCOMPARE(content->transientParent(), nullptr);
+    QVERIFY(!content->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
+    // The overlay describes no size beyond its content's own.
+    QCOMPARE(content->size(), contentSize);
+
+    auto *layerWindow = LayerShellQt::Window::get(content);
+    QVERIFY(layerWindow);
+    QCOMPARE(layerWindow->anchors(), LayerShellQt::Window::Anchors());
+    QCOMPARE(layerWindow->keyboardInteractivity(),
+             LayerShellQt::Window::KeyboardInteractivityOnDemand);
+}
+
+void SurfaceManagerTest::theOverlayRefusesToOpenTwiceAndSurvivesReopening()
+{
+    OverlaySurface surface;
+    QVERIFY(surface.open(makeContent(), nullptr));
+    QWindow *const second = makeContent();
+    QVERIFY(!surface.open(second, nullptr));
+    // A refused open never adopts the window, so its caller still owns it.
+    delete second;
+    surface.close();
+    QVERIFY(!surface.isOpen());
+    QVERIFY(surface.open(makeContent(), nullptr));
+}
+
+void SurfaceManagerTest::theOverlayReportsAndCleansUpAnExternalDismissal()
+{
+    OverlaySurface surface;
+    QSignalSpy dismissed(&surface, &OverlaySurface::dismissed);
+    QWindow *const content = makeContent();
+    QVERIFY(surface.open(content, nullptr));
+    // What a compositor dismissal looks like from this side.
+    content->hide();
+    QCOMPARE(dismissed.count(), 1);
+    QVERIFY(!surface.isOpen());
+}
+
+void SurfaceManagerTest::aClosedOverlayLeavesNoWindowBehind()
+{
+    QPointer<QWindow> tracked;
+
+    {
+        OverlaySurface surface;
+        QWindow *const content = makeContent();
+        tracked = content;
+        QVERIFY(surface.open(content, nullptr));
+    }
+    QTRY_VERIFY(tracked.isNull());
+
+    {
+        OverlaySurface surface;
+        QWindow *const content = makeContent();
+        tracked = content;
+        QVERIFY(surface.open(content, nullptr));
+        surface.close();
+    }
+    QTRY_VERIFY(tracked.isNull());
+}
+
+// The real overlay files, loaded from source the way the host loads them —
+// `OverlayController` itself loads through the compiled `CelestinaDesktop`
+// module rather than a file path, which only the `celestina` binary carries;
+// this proves the QML content and window contract on their own, the same
+// boundary `theMenuContentLoadsAndFitsItsSurface` already draws for the menu.
+// `providerSource` is left null, exercising the same "provider unavailable"
+// path a real session hits while its helper is still starting.
+void SurfaceManagerTest::theLauncherAndClipboardOverlaysLoadAndMap()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+
+    for (const QString &fileName : {
+             QStringLiteral("LauncherOverlay.qml"),
+             QStringLiteral("ClipboardOverlay.qml"),
+         }) {
+        QQmlComponent component(
+            &engine,
+            QUrl::fromLocalFile(QStringLiteral(CELESTINA_QML_DIR "/") + fileName)
+        );
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+
+        QObject *root = component.createWithInitialProperties({
+            {QStringLiteral("reducedMotion"), true},
+            {QStringLiteral("providerSource"), QVariant::fromValue<QObject *>(nullptr)},
+        });
+        QVERIFY2(root, qPrintable(component.errorString()));
+
+        auto *content = qobject_cast<QWindow *>(root);
+        QVERIFY2(content, qPrintable(fileName));
+        QVERIFY2(content->metaObject()->indexOfSignal("dismissed()") >= 0, qPrintable(fileName));
+
+        OverlaySurface surface;
+        QVERIFY2(surface.open(content, nullptr), qPrintable(fileName));
+    }
 }
 
 QTEST_MAIN(SurfaceManagerTest)

@@ -14,6 +14,7 @@ private slots:
     void readsAProviderFrameAndItsGeneration();
     void refusesAFrameFromAnotherProtocolVersion();
     void refusesUnusableProviderNamesValuesAndSizes();
+    void readsAListFieldAsBoundedRowsButNeverNestsFurther();
     void readsACommandResult();
     void aFrameReplacesTheWholeSetSoAWithdrawnProviderCannotLinger();
     void aNewGenerationIsAChangeEvenWithIdenticalValues();
@@ -83,6 +84,54 @@ void ProviderStatesTest::refusesUnusableProviderNamesValuesAndSizes()
                            R"("providers":{"media":{"title":")";
     oversized.append(QByteArray(600, 'x'));
     oversized.append(R"("}}})");
+    QCOMPARE(parseProviderMessage(oversized).kind, ProviderMessage::Kind::Invalid);
+}
+
+void ProviderStatesTest::readsAListFieldAsBoundedRowsButNeverNestsFurther()
+{
+    // A list provider — the launcher's results, the clipboard's history —
+    // describes each row as a flat object; the field carrying them reads as a
+    // QVariantList of QVariantMaps, the same shape a QML ListView model needs.
+    const ProviderMessage message = parseProviderMessage(
+        R"({"kind":"providers","version":1,"generation":1,"providers":{"launcher":)"
+        R"({"query":"fire","hits":[{"id":"firefox.desktop","name":"Firefox"},)"
+        R"({"id":"files.desktop","name":"Files"}],"truncated":false}}})"
+    );
+    QCOMPARE(message.kind, ProviderMessage::Kind::Providers);
+    const QVariantMap launcher = message.providers.value(QStringLiteral("launcher")).toMap();
+    const QVariantList hits = launcher.value(QStringLiteral("hits")).toList();
+    QCOMPARE(hits.size(), 2);
+    QCOMPARE(hits.at(0).toMap().value(QStringLiteral("id")).toString(),
+             QStringLiteral("firefox.desktop"));
+    QCOMPARE(hits.at(1).toMap().value(QStringLiteral("name")).toString(),
+             QStringLiteral("Files"));
+
+    const QList<QByteArray> refused {
+        // A row that is itself not a flat object — one level of structure is
+        // all a list field is allowed, so a row cannot carry another list.
+        R"({"kind":"providers","version":1,"generation":1,)"
+        R"("providers":{"launcher":{"hits":[{"nested":[1,2]}]}}})",
+        // An array item that is not an object at all.
+        R"({"kind":"providers","version":1,"generation":1,)"
+        R"("providers":{"launcher":{"hits":["firefox.desktop"]}}})",
+    };
+    for (const QByteArray &line : refused) {
+        QVERIFY2(
+            parseProviderMessage(line).kind == ProviderMessage::Kind::Invalid,
+            line.constData()
+        );
+    }
+
+    // More rows than a list overlay could ever show at once is a broken
+    // provider, refused the same way an oversized payload already is.
+    QByteArray oversized = R"({"kind":"providers","version":1,"generation":1,)"
+                           R"("providers":{"launcher":{"hits":[)";
+    for (int i = 0; i < 65; ++i) {
+        if (i > 0)
+            oversized.append(',');
+        oversized.append(R"({"id":"a"})");
+    }
+    oversized.append(R"(]}}})");
     QCOMPARE(parseProviderMessage(oversized).kind, ProviderMessage::Kind::Invalid);
 }
 

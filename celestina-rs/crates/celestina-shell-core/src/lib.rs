@@ -14,12 +14,15 @@
 //!   answer the ones a helper cannot serve.
 //! - [`coalesce`] — how often a changing provider is allowed to reach the GUI
 //!   thread.
+//! - [`clipboard`] — what counts as clipboard history worth keeping.
 //! - [`audio`] — what the session's audio device is set to, and whether it is
 //!   silenced.
 //! - [`brightness`] — what a monitor says about itself over DDC, and the three
 //!   states a slow, optional conversation leaves a panel in.
 //! - [`network`], [`bluetooth`], [`power`] — how the session is online, what is
 //!   connected to it, and which power profile it is running.
+//! - [`launcher`] — which application a person means when they type part of a
+//!   name.
 //! - [`sysmon`] — what `/proc` says about CPU and memory, and what counts as a
 //!   load worth noticing.
 //! - [`runtime`] — the aggregate those three add up to: which providers a
@@ -32,8 +35,10 @@
 pub mod audio;
 pub mod bluetooth;
 pub mod brightness;
+pub mod clipboard;
 pub mod coalesce;
 pub mod command;
+pub mod launcher;
 pub mod lines;
 pub mod network;
 pub mod power;
