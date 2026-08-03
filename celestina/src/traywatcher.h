@@ -10,6 +10,7 @@
 #include "trayicons.h"
 #include "trayitems.h"
 #include "traymenu.h"
+#include "traywatcherservice.h"
 
 class QDBusServiceWatcher;
 
@@ -101,6 +102,9 @@ private:
     QSharedPointer<TrayIconCache> m_icons;
     TrayItems m_items;
     QDBusServiceWatcher *m_watcherPresence;
+    // The registry itself, started only when nobody else is being it. Noctalia
+    // owns the name today, so this stays dormant until it leaves.
+    TrayWatcherService *m_registry;
     bool m_available = false;
     bool m_hostRegistered = false;
 };

@@ -90,6 +90,8 @@ TrayWatcher::TrayWatcher(QSharedPointer<TrayIconCache> icons, QObject *parent)
           this
       ))
 {
+    m_registry = new TrayWatcherService(TrayWatcherService::wellKnownName(), this);
+
     connect(
         m_watcherPresence,
         &QDBusServiceWatcher::serviceOwnerChanged,
@@ -99,6 +101,13 @@ TrayWatcher::TrayWatcher(QSharedPointer<TrayIconCache> icons, QObject *parent)
 
     // Foreign icons only: without this Qt can resolve none of them.
     configureForeignIconThemes();
+
+    // Be the watcher if nobody is. A session with a host and no watcher has no
+    // tray at all: an application looks for that name and publishes nothing
+    // when it is missing.
+    if (m_registry->claim())
+        qInfo() << "Celestina is the session's tray watcher.";
+
     attach();
 }
 
@@ -158,10 +167,16 @@ void TrayWatcher::watcherOwnerChanged(
     Q_UNUSED(was)
 
     if (now.isEmpty()) {
-        // No watcher means no application is publishing to anyone. Whatever was
-        // on screen belongs to a session that no longer exists.
+        // The watcher left. Whatever was on screen belonged to a session that
+        // no longer exists — and if nobody else takes the name, this shell
+        // does, because otherwise no application can publish a tray item at
+        // all.
         qInfo() << "Celestina lost the tray watcher.";
         setUnavailable();
+        if (m_registry->claim()) {
+            qInfo() << "Celestina took over as the session's tray watcher.";
+            attach();
+        }
         return;
     }
 
