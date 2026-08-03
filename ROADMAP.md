@@ -82,12 +82,16 @@ reusing `celestina-rs` + `celestina-style`:
   double-click/Enter opens the full app. F1 builds the shared media/library core.
 - **[Grafita](grafita/)** — the general text editor, no longer only planned:
   G1 delivered the content-based shared document core, G2 the embedded Siderita
-  modal that `Space` opens, and G3 the standalone application with its own
-  window, desktop entry and installer. Both surfaces are verified headlessly and
-  neither has been seen in a real session.
+  modal that `Space` opens (now driven by content on double-click/Enter too),
+  G3 the standalone application with its own window, desktop entry and
+  installer, G4 find/replace/go-to-line/highlight, and G6 tabs — one running
+  instance, one session per document, save-as for untitled tabs and a
+  recent-documents list.
 
-Fluorita has a tested core crate and no UI surface yet; Grafita has both of its
-surfaces built and headlessly verified, still awaiting a real-session pass.
+Fluorita has a tested core crate and no UI surface yet; Grafita has both
+surfaces built with G0–G4 and G6 done, and both driven by the author with a
+real keyboard and mouse (typing, shortcuts, find bar, tabs, drag-to-reorder),
+with a few bugs found and fixed along the way.
 **[Magnetita](magnetita/) has left the planning stage** (shipped 1.0.0; see the
 status snapshot above). That is
 deliberate: Siderita already consumes the freedesktop artwork cache and has
@@ -237,9 +241,10 @@ installed style release is not a prerequisite before STYLE-D's external gate.
       [NOCTALIA-REPLACEMENT.md](celestina/NOCTALIA-REPLACEMENT.md)
 - [ ] Suite conventions: single-instance behavior, a small IPC/activation convention, `open-with`/handler wiring, drag-and-drop between first-party apps — all over freedesktop standards
 - [ ] One settings + theming source shared by the shell and every app
-- [ ] Additional first-party apps — **Grafita** has landed its G1 document core
-      and **Fluorita** its F1 media core. Each reuses `celestina-rs`
-      + `celestina-style`, adds its own bounded domain/engine crates and advances
+- [ ] Additional first-party apps — **Grafita** has landed G0–G4 and G6 (both
+      surfaces, find/replace, tabs) and **Fluorita** its F1 media core. Each
+      reuses `celestina-rs` + `celestina-style`, adds its own bounded
+      domain/engine crates and advances
       through reviewable milestones rather than a feature batch
 
 ## Later / someday

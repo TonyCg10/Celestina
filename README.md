@@ -6,9 +6,9 @@ set of conventions — lean alternatives to heavyweight external apps, made
 possible because the session owns its own shell.
 
 **Current focus:** the Niri shell continues its first real daily panel slice.
-Grafita is now a working app on both its surfaces, and Fluorita has its core, its
-libmpv engine and a guarded scaffold. Siderita and Magnetita already proved the
-suite contracts both new apps reuse.
+Grafita is a working app on both its surfaces — used on a real session, tabs and
+all — and Fluorita has its core, its libmpv engine and a guarded scaffold.
+Siderita and Magnetita already proved the suite contracts both new apps reuse.
 
 ## Projects
 
@@ -27,11 +27,11 @@ projects.
 ### Authorized / ready to implement
 
 Both were ratified on 2026-07-30 and both build gates are open. Grafita is no
-longer only planned: its shared document core, its embedded Siderita modal and
-its standalone application all exist, verified headlessly. Fluorita's F1 media
-and library contract is done and tested, its decode-backend spike measured on
-this machine, its engine built over the chosen backend, and its application is a
-guarded scaffold that does not play yet.
+longer only planned: its shared document core, both surfaces, find/replace and
+tabs all exist and the standalone app has been used on a real session. Fluorita's
+F1 media and library contract is done and tested, its decode-backend spike
+measured on this machine, its engine built over the chosen backend, and its
+application is a guarded scaffold that does not play yet.
 
 | Project | Role | Stack |
 |---|---|---|
@@ -48,14 +48,18 @@ Its application plays: a Qt Quick surface libmpv renders into, a session owned
 off the GUI thread and a transport that only moves when the engine confirms,
 verified with real video and audio in the author's Wayland session.
 
-Grafita has finished G1, G2 and G3: `grafita-core` opens, edits and safely saves
-real files; `Space` in Siderita opens its editing modal; and the standalone
-application opens a document named on the command line, guards its own quit, and
-installs with a desktop entry and icon. Both surfaces have been driven
-headlessly — including proof that editing a CRLF file through Qt's own text
-widget leaves its line endings alone — but neither has been seen in a real
-session. Siderita's `Space` activation has explicit shared contracts for both
-apps: Grafita edits text and Fluorita views/plays local media.
+Grafita has finished G0–G4 and G6: `grafita-core` opens, edits and safely saves
+real files, with literal find/replace, go-to-line and measured indentation;
+`Space` in Siderita opens its editing modal, and double-click/Enter now route to
+the standalone app by content, not by name; the standalone application has tabs
+— one running instance, one document session per tab, save-as for an untitled
+document and a recent-documents list. Editing a CRLF file through Qt's own text
+widget leaves its line endings alone, proven both headlessly and on the
+author's real session across both surfaces — typing, shortcuts, the find bar and
+tabs all driven by hand, with bugs found along the way (a tab-close that told
+nobody, a tab strip that hid itself at one tab, drag-to-reorder needed
+building) and fixed. Siderita's activation has explicit shared contracts for
+both apps: Grafita edits text and Fluorita views/plays local media.
 
 **Fluorita** is the suite's local media library and player. Its full app has a
 **Gallery** for images/video and **Music** for albums, artists and tracks. Its
