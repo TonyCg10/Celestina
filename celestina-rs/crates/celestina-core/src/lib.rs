@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod atomic_file;
+pub mod desktop_entry;
 pub mod image;
 pub mod percent;
 pub mod xdg;
