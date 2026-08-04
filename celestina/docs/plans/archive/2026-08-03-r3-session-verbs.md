@@ -1,8 +1,10 @@
 # R3 — session verbs
 
 - **Opened:** 2026-08-03
-- **Status:** active
+- **Status:** done
 - **Plan ID:** r3-session-verbs
+- **Closed:** 2026-08-04
+- **Successor:** none; the roadmap is idle until an R4 notifications plan is opened
 - **Scope:** celestina
 - **Implementation checkpoint:** R3
 - **Author-validation checkpoint:** `VAL-R3` in [`../../../VALIDATION.md`](../../../VALIDATION.md)
@@ -66,12 +68,17 @@ stable symbols are authoritative; line counts are a hand-off aid and may drift.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | R3-A | `celestina:` | done | [inventory](../../inventories/2026-08-03-r3-session-verbs/R3-A.numstat.tsv) | 41 files, +3096/-105 | Typed session verbs and bounded level policy in the pure core; volume, mute and brightness carried to their providers and confirmed by a later reading; a corner OSD raised by published readings; night light and idle inhibit held by an owned child that is released on shutdown and failure; DPMS through Niri; a lock that refuses because no provider exists; and the optional bindings with their rollback | [R3 session verbs](../../evidence/2026-08-04-r3-session-verbs.md) | `VAL-R3` |
+| R3-Z | `celestina:` | done | [inventory](../../inventories/2026-08-03-r3-session-verbs/R3-Z.numstat.tsv) | 10 files, +203/-117 | Close the checkpoint: run the registered exit, record the verified and deployed bundle, and archive this plan | [R3 completion](../../evidence/2026-08-04-r3-completion.md) | `VAL-R3` |
 
 The six build-order steps closed as one unit because they deliver one milestone
 in one commit. Splitting them further would have required one exclusive
 inventory *and* one exclusive evidence record each, which for a single
 verification run means five near-identical records — fragmentation for
 appearance rather than for review.
+
+R3-Z is administrative: it carries the registered production exit and the
+archive move, which is why it is a second unit rather than an edit to the
+delivery R3-A already inventoried and committed.
 
 ## Decisions and rollback
 

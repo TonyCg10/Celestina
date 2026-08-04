@@ -4,7 +4,8 @@ Active plans turn a settled roadmap milestone into causal implementation units
 and a persistent commit ledger. They record execution; they do not authorize
 repository, package or live-session changes.
 
-- Active: [R3 session verbs](active/2026-08-03-r3-session-verbs.md)
+- Active: none
+- Archived: [R3 session verbs](archive/2026-08-03-r3-session-verbs.md)
 
 Each unit stores its immutable inventory under
 [`../inventories/<plan-slug>/<unit>.numstat.tsv`](../inventories/), outside both

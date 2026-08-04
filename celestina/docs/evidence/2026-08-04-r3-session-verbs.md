@@ -1,7 +1,7 @@
 # Evidence: R3 session verbs, OSD and held session states
 
 - **Date:** 2026-08-04
-- **Scope:** R3-A through R3-E of [the R3 plan](../plans/active/2026-08-03-r3-session-verbs.md)
+- **Scope:** R3-A through R3-E of [the R3 plan](../plans/archive/2026-08-03-r3-session-verbs.md)
 - **Environment:** Arch Linux checkout at `928ea71105570b423ee3496e02900b437ac4baaf` with the uncommitted R3 batch and another session's unrelated uncommitted Grafita/Fluorita work; Rust/Cargo 1.97.1, GCC 16.1.1, CMake 4.4.2, Qt 6.11.1
 - **Artifact:** `celestina/build/production-artifact.toml`, source fingerprint `sha256:60c5f3a4121ecad7e5bde0742759a1849747bd3886f3418268f23821e0882c0f`, built from the declared version 0.2.0
 

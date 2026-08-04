@@ -1,0 +1,18 @@
+# R3-Z exact change inventory
+
+Base revision	6e48ec8f9dd45eb24c14e6c325f8381f8a5e3848
+Pathspec	celestina/
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+6	6	de250fa59b5de0e1a4452fc294547073b0b07c83f107463f6a5354f77d553856	celestina/ROADMAP.md
+8	8	24adc894c03e62d1b4cbe287f6d0cd1d6b37abc73e1484a02e2b26c272c6e6c1	celestina/STATUS.md
+57	0	b99df2af9ce1d9df72814140925f3ea236af48ed15ff6abba5a6e52544786aa0	celestina/docs/evidence/2026-08-04-r3-completion.md
+1	1	fe79c69ee0b960b57fa03cfdfae5a4241b2b41ad3ab03b4bf0ab18762dd38ef0	celestina/docs/evidence/2026-08-04-r3-session-verbs.md
+2	1	35d8ba49709a1b7f320cb800c6df63dac10383abf84bafe6c4fca2f9acf1a6ae	celestina/docs/plans/README.md
+0	99	deleted	celestina/docs/plans/active/2026-08-03-r3-session-verbs.md
+2	1	51bf249b753290831e95c62b8a4b5c975d1e697e46058229eb8c111db10efba2	celestina/docs/plans/active/README.md
+106	0	abeb0c183b65373213f7feaeed432490289b07ba39ce59a7148896b7a4a70ee0	celestina/docs/plans/archive/2026-08-03-r3-session-verbs.md
+3	1	311933021f83896c640fdaa8817cf07089c32aa3e6b5dcb8ecf0f1969cc571d4	celestina/docs/plans/archive/README.md
+18	0	self	celestina/docs/inventories/2026-08-03-r3-session-verbs/R3-Z.numstat.tsv

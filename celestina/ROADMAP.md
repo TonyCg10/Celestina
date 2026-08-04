@@ -1,7 +1,7 @@
 # Celestina implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** R3
+- **Status:** idle
+- **Active implementation checkpoint:** none
 
 This roadmap contains only work an agent can implement and verify. Real Niri,
 hardware, visual and assistive-technology checks live in
@@ -22,7 +22,7 @@ of the design when they provide the narrow capability the shell needs.
 | R0 | complete | Shared surface recipe, popup path and versioned session command channel |
 | R1 | complete | Daily bar providers, DDC, media, audio and complete SNI host/watcher path |
 | R2 | complete | Keyboard launcher and shell-owned clipboard history overlays |
-| R3 | active | OSD, night light, caffeine/idle, DPMS and fail-closed session verbs |
+| R3 | complete | OSD, night light, caffeine/idle, DPMS and fail-closed session verbs |
 | R4-R5, R7 | planned | Notifications, control center and session look |
 | R6 | conditional | First-party lock starts only if SHELL-D2 is applied |
 | R8 | partially planned | Reversible Noctalia removal; Polkit/dock slices remain conditional |
@@ -50,10 +50,10 @@ truthful OSD without depending on a Noctalia command path.
       by default until the author explicitly enables it.
 - [x] Compose DPMS through Niri and expose a fail-closed lock-and-suspend
       contract that refuses while no approved locker provider exists.
-- [ ] Supply exact opt-in configuration and rollback instructions without
+- [x] Supply exact opt-in configuration and rollback instructions without
       mutating the author's live Niri configuration.
-- [ ] Run the automated exit in
-      [the active R3 plan](docs/plans/active/2026-08-03-r3-session-verbs.md) and let
+- [x] Run the automated exit in
+      [the archived R3 plan](docs/plans/archive/2026-08-03-r3-session-verbs.md) and let
       `scripts/complete-production.sh` build the release once, verify those
       exact bytes and update the on-disk bundle without a second build or
       replacement of the live session.

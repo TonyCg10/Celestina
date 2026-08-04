@@ -1,7 +1,7 @@
 # Celestina status
 
 - **Updated:** 2026-08-04
-- **Implementation:** R0-R2 complete; R3 active
+- **Implementation:** R0-R3 complete; no checkpoint is active
 - **Author validation:** mixed; see [VALIDATION.md](VALIDATION.md)
 - **Live migration:** Noctalia still supplies every responsibility not yet
   explicitly handed over by the author
@@ -52,16 +52,16 @@ artifacts, commands and limits are recorded in the suite
 [evidence](../docs/evidence/2026-08-03-repository-governance.md). This does not
 replace any real Niri check in [VALIDATION.md](VALIDATION.md).
 
-R3 has not run its own registered verification end to end yet: the suite-wide
-architecture guard is failing on another project's uncommitted change, so
-`scripts/verify-production.sh` stops before it reaches this project's checks.
-Every other step of that script passes against the release bundle built on
-2026-08-04 — Rust format, Clippy and tests, QML lint, CTest 13/13, the
-offscreen smoke and the dynamic-library check.
+R3 ran its registered exit end to end on 2026-08-04: `complete-production.sh`
+built the 0.2.0 bundle once, verified those exact bytes — Rust checks, QML lint,
+CTest 13/13 and an eight-second offscreen smoke — and deployed them to the
+author's normal test prefix under `~/.local`. The live session was not replaced
+and no service, package manager or configuration was touched. The record is
+[the R3 completion evidence](docs/evidence/2026-08-04-r3-completion.md).
 
 ## Records
 
-- Current implementation plan: [R3 session verbs](docs/plans/active/2026-08-03-r3-session-verbs.md)
+- Last completed plan: [R3 session verbs](docs/plans/archive/2026-08-03-r3-session-verbs.md)
 - Open product questions: [discussion queue](docs/discussions/README.md)
 - Accepted product decisions: [decision index](docs/decisions/README.md)
 - Completed detailed roadmap: [history through 2026-08-03](docs/history/roadmap-through-2026-08-03.md)
