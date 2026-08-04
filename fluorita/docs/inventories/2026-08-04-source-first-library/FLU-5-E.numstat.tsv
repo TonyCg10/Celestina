@@ -1,0 +1,19 @@
+# FLU-5-E exact change inventory
+
+Base revision	5bb3cb4dc7eae4147b412e37398f02a45ad803ec
+Pathspec	fluorita/ROADMAP.md
+Pathspec	fluorita/STATUS.md
+Pathspec	fluorita/docs/evidence/2026-08-04-source-first-library.md
+Pathspec	fluorita/docs/inventories/2026-08-04-source-first-library/FLU-5-E.numstat.tsv
+Pathspec	fluorita/docs/plans/active/2026-08-04-source-first-library.md
+Pathspec	fluorita/docs/plans/archive/2026-08-04-source-first-library.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+4	4	66b44feb64d77f360f2bb7abced098ec4a9011da91f573097084d7fd50ce5ae4	fluorita/ROADMAP.md
+1	1	049edfd34db6b9be4ee2f386a59166e52d212f168b2e190b8d2542c3c47f652c	fluorita/STATUS.md
+1	1	ea75d313b962874546557b9d3d8d22f47c918b59373036f3177457d41a26c8b1	fluorita/docs/evidence/2026-08-04-source-first-library.md
+19	0	self	fluorita/docs/inventories/2026-08-04-source-first-library/FLU-5-E.numstat.tsv
+0	156	deleted	fluorita/docs/plans/active/2026-08-04-source-first-library.md
+159	0	339606f6ab1eb1f571e198eed1558267ce318f282d9d3dabc91f7be1a73b95a6	fluorita/docs/plans/archive/2026-08-04-source-first-library.md

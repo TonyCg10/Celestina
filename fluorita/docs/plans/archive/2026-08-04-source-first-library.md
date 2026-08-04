@@ -2,10 +2,12 @@
 
 - **Opened:** 2026-08-04
 - **Plan ID:** source-first-library
-- **Status:** active
+- **Status:** done
 - **Scope:** fluorita
 - **Implementation checkpoint:** F5
 - **Author-validation checkpoint:** VAL-FLU-SOURCES
+- **Closed:** 2026-08-04
+- **Successor:** F6, [immersive-content](../active/2026-08-04-immersive-content.md)
 
 ## Hypothesis
 
@@ -117,6 +119,7 @@ unrecognised file seeds instead of emptying the library.
 
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
+| FLU-5-E | `fluorita:` | done | [inventory](../../inventories/2026-08-04-source-first-library/FLU-5-E.numstat.tsv) | 6 files, +184/-162 | Archive this plan and return the Fluorita roadmap to idle now that its unit is delivered | [evidence](../../evidence/2026-08-04-source-first-library.md) | None |
 | FLU-5-D | `fluorita:` | done | [inventory](../../inventories/2026-08-04-source-first-library/FLU-5-D.numstat.tsv) | 30 files, +2477/-315 | Navigate the library by mapped folder: persistent user-owned sources, source-scoped projections, the sidebar and its adaptive panel, single-click activation, and the documents and version transition that carry them | [evidence](../../evidence/2026-08-04-source-first-library.md) | `VAL-FLU-SOURCES` |
 
 The four steps of the build order are review boundaries, not separate
@@ -150,7 +153,7 @@ build. The ledger keeps the base authority `fluorita:`; the suffix is commit
 intent, not a second scope.
 
 This plan depends on suite checkpoint ACT-1
-([plan](../../../../docs/plans/active/2026-08-04-source-first-library-navigation.md)),
+([plan](../../../../docs/plans/archive/2026-08-04-source-first-library-navigation.md)),
 which amends the activation contract this surface would otherwise contradict.
 That unit is documentation only and lands under `suite:`; it is never folded
 into this batch.

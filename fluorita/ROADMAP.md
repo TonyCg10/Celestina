@@ -1,7 +1,7 @@
 # Fluorita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** F5
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Related author validation:** none; completed observations are in
   [VALIDATION.md](VALIDATION.md)
 
@@ -52,7 +52,7 @@ belongs to the author's commit request.
       content panel, and activate an item on a single click.
 
 The build order, exclusions, exit and ledger are in the
-[active plan](docs/plans/active/2026-08-04-source-first-library.md).
+[archived plan](docs/plans/archive/2026-08-04-source-first-library.md).
 
 ## Conditions for opening the next checkpoint
 
@@ -73,7 +73,7 @@ or duplication between standalone and Siderita.
 
 ## Implementation exit
 
-For F5 and any newly authorised checkpoint, close implementation when focused
+For any newly authorised checkpoint, close implementation when focused
 core/engine tests and lifecycle/resource bounds pass and every affected
 deployable host completes its registered production flow. Fluorita-only work
 uses `fluorita/scripts/complete-production.sh`; a shared `fluorita-core`,

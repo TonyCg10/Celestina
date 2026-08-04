@@ -29,7 +29,7 @@
 ## Active work
 
 F5 replaces the two kind tabs with the source sidebar its
-[plan](docs/plans/active/2026-08-04-source-first-library.md) describes, under
+[plan](docs/plans/archive/2026-08-04-source-first-library.md) describes, under
 suite [ADR 0006](../docs/decisions/0006-source-first-library-navigation.md).
 The library lane's Rust and QML moved to English as it was rewritten, and the
 matching language-baseline rows went down or away with it.

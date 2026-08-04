@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-04
 - **Scope:** Fluorita F5; plan
-  [source-first-library](../plans/active/2026-08-04-source-first-library.md)
+  [source-first-library](../plans/archive/2026-08-04-source-first-library.md)
 - **Environment:** Linux 7.1.5-1-cachyos, Qt 6, libmpv present, offscreen Qt
   platform for every automated surface check; the author's checkout carried
   unrelated uncommitted Celestina (R3) and Grafita (G7) work throughout and was
