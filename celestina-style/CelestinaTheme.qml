@@ -745,6 +745,13 @@ QtObject {
     readonly property real glassBlurMultiplier: 3.0
     readonly property real glassSaturation: -0.03
     readonly property real glassSampleScale: 0.55
+
+    // Ambient light: a blurred copy of the content lighting the space around
+    // it. Both values pull it back from the picture it sits behind — at full
+    // strength the light competes with the thing it is meant to frame, and the
+    // desaturation keeps a vivid photograph from washing the room in one hue.
+    readonly property real ambientBrightness: -0.30
+    readonly property real ambientSaturation: -0.20
     readonly property int glassSampleMargin:
             Math.ceil(glassBlurMax * (1 + glassBlurMultiplier))
     // Fine noise dither over the blur — kills the banding the downsample pyramid
