@@ -1,0 +1,27 @@
+# STYLE-G7-A exact change inventory
+
+Base revision	a567c205806ef4acd44d20915470f96f74b942fb
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaLineGutter.qml
+Pathspec	celestina-style/CelestinaScrollBar.qml
+Pathspec	celestina-style/ROADMAP.md
+Pathspec	celestina-style/STATUS.md
+Pathspec	celestina-style/VALIDATION.md
+Pathspec	celestina-style/qmldir
+Pathspec	celestina-style/docs/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+3	1	39f25a2002664006c5881ea33121573e072fd9fcbdfd1ae2c935c9008d9582dc	celestina-style/CMakeLists.txt
+173	0	6d1de8b23bd4fafe6200ca9beec3033154f9432a72f27f9bb5c2ca52f4ab3b95	celestina-style/CelestinaLineGutter.qml
+141	0	8d4004cb059f5bcab6bd998cff1430b9f5ef9a304279ea6a37d6be7aa0e5aaba	celestina-style/CelestinaScrollBar.qml
+23	4	ebd1a132a4c160e690535c67060fc6f5dc0134a8a011f997af6d55fc70af9242	celestina-style/ROADMAP.md
+8	3	ae882515c53c0d758e21182e8835cdc836cf697a25e9ac653f2972972da56eea	celestina-style/STATUS.md
+18	0	7cd96b9cbf1851065d9a4ef5a0a3c6bacee64bedfe761e14784667331ccc2c88	celestina-style/VALIDATION.md
+81	0	417b777aff16c61f7f5ba3e2c9541c65b47d97bf047ddfd9ae564f54753c0670	celestina-style/docs/evidence/2026-08-04-shared-reading-controls.md
+27	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-A.numstat.tsv
+88	0	4795285c042570c5464fe429339087d43586623e96d9095c52f9a6dd7d83d47a	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+2	0	8c63fb5cdd321c6d213d69147255df153c59ecd9db10a8c28b7d1eec5c547e2e	celestina-style/qmldir
+1	0	e4b1a8ba448cd50e906cfc40e56292b84dbcfda5a5f6eeda1bcf15ff93adef0e	docs/version-history.tsv

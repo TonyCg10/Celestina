@@ -1,12 +1,31 @@
 # CelestinaStyle implementation roadmap
 
-- **Status:** planned
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** STYLE-G7
 - **Related author validation:** `VAL-STYLE-01` through `VAL-STYLE-03` in
   [VALIDATION.md](VALIDATION.md); they do not block implementation
 
-`STYLE-M1` is the next settled maintenance checkpoint and has no active
-execution plan.
+`STYLE-M1` remains the next settled maintenance checkpoint after `STYLE-G7`
+and has no active execution plan.
+
+## STYLE-G7 — Shared reading controls
+
+The falsifiable problem: two applications need the same two reading controls —
+a scroll position and a line-number column — and the sharing contract admits a
+control only once a second consumer proves the same semantics. Grafita built
+both locally; Siderita's editor and quick look are that second consumer. Copying
+them would leave the suite with two owners of one anatomy.
+
+The tangible outcome is `CelestinaScrollBar` and `CelestinaLineGutter` in the
+canonical module, registered in `qmldir` and the QML module, built from semantic
+`CelestinaTheme` tokens rather than from a re-skinned `QtQuick.Controls`
+template, and consumed through the canonical path by both applications.
+
+The plan is
+[Shared reading controls](docs/plans/active/2026-08-04-shared-reading-controls.md).
+It excludes any further gutter content — diff or breakpoint markers, folding, a
+minimap — and any keyboard of the scroll bar's own, because the surfaces it
+reports on already reach every position they can.
 
 ## STYLE-M1 — Stable and motion-complete public contract
 

@@ -8,3 +8,4 @@ grafita	1.0.0	baseline	GOV-2-A	Adopt the existing Grafita version as the verifie
 fluorita	1.0.0	baseline	GOV-2-A	Adopt the existing Fluorita version as the verified baseline
 celestina	0.2.0	milestone	R3-A	Add the session verb checkpoint
 fluorita	1.1.0	milestone	FLU-5-D	Change the library to navigate by mapped folder
+celestina-style	1.1.0	milestone	STYLE-G7-A	Publish the shared scroll bar and line gutter

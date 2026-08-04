@@ -1,13 +1,18 @@
 # CelestinaStyle status
 
-- **Updated:** 2026-08-03
-- **Implementation:** the shared 1.0 source contract is live; `STYLE-M1` is
-  planned and has no active execution plan
+- **Updated:** 2026-08-04
+- **Implementation:** the shared source contract is live at 1.1 with the two
+  reading controls published; `STYLE-G7` is the active checkpoint and
+  `STYLE-M1` remains planned with no execution plan
 - **Author validation:** previous real-session review exists, with focused
   follow-ups pending in [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
 
+- `CelestinaScrollBar` and `CelestinaLineGutter` are published: a scroll
+  position built from primitives so its whole anatomy comes from tokens, and
+  line numbers that build only the delegates a viewport shows. Grafita's window
+  and Siderita's two text surfaces are their consumers.
 - `qmldir` and `CMakeLists.txt` expose the same canonical type set, including
   `CelestinaSlider`, `CelestinaInputShield` and the filled folder/file icons.
 - Siderita, Magnetita, Grafita and Fluorita consume canonical files through

@@ -48,6 +48,24 @@ perception, input devices or assistive-technology stack. It does not block
 - **Result:** deferred until STYLE-M1 and a real AT-SPI stack are available
 - **Evidence:** AT-SPI observations and dated captures
 
+## VAL-STYLE-04 — Shared reading controls at the author's scale
+
+- **Status:** pending
+- **Related implementation:** checkpoint STYLE-G7,
+  [plan](docs/plans/active/2026-08-04-shared-reading-controls.md)
+- **Requires:** the author's real display scale, compositor and pointer, with
+  the verified Grafita and Siderita artifacts that consume both components
+- **Procedure:** open a long document in Grafita's window and in Siderita's
+  embedded editor and quick look; read the gutter's numerals at the author's
+  scale in light and dark; drag each scroll bar, click its empty track and
+  leave the pointer away from it
+- **Pass condition:** the numerals are legible and right-aligned against the
+  text without competing with it, the bar is visible at rest and reaches at
+  least 3:1 against the surface behind it, and both look and move identically
+  in all three surfaces
+- **Result:** pending
+- **Evidence:** dated captures naming the output scale and colour scheme
+
 ## Closed historical observations
 
 `VAL-STYLE-BASE` and `VAL-STYLE-BLUR` are preserved in the
