@@ -1,7 +1,7 @@
 # Celestina suite implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** LNG-1
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
 This file contains only cross-project implementation. Each project's
@@ -98,6 +98,28 @@ The build order, exclusions and ledger are in the
 [archived plan](docs/plans/archive/2026-08-04-source-first-library-navigation.md).
 The product work it unblocked is owned by
 [fluorita/ROADMAP.md](fluorita/ROADMAP.md).
+
+## LNG-1 — Spanish product copy
+
+**Hypothesis:** the language contract can hold development truth in English and
+product copy in Spanish without weakening anything it enforces, because the
+boundary between them is mechanical.
+
+**Tangible outcome:** a Spanish desktop stops being contradicted by its own
+rules. The guard accepts Spanish where a person reads it, keeps rejecting it
+everywhere else, and its ratchet can record the reduction that acceptance
+causes.
+
+- [x] Record the decision and amend the standard, the root contract and the
+      workflow documents that repeat it.
+- [x] Teach the scanner the `qsTr()` and `product-copy` exemptions, with
+      positive and negative fixtures for each.
+- [x] Add the declared-migration escape to the commit guard, so a row whose
+      reduction no source earned can still be recorded.
+- [x] Record the reduction the migration earned.
+
+The build order, exclusions and ledger are in the
+[active plan](docs/plans/active/2026-08-04-spanish-product-copy.md).
 
 ## Project implementation fronts
 

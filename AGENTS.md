@@ -7,15 +7,20 @@ provider-specific copies.
 
 ## Repository language
 
-English is the only repository working language. Write rules, documentation,
-roadmaps, decisions, plans, evidence, identifiers, code comments, diagnostics,
-test names, fixtures, commit subjects, and canonical UI copy in English. Do not
-mix languages inside a file. Non-English text is allowed only in explicit
-localization resources or fixtures that test international input, and must be
-labelled as such. Historical material keeps its original bytes until a
-dedicated migration translates it without changing meaning. Agents speak to
-the author in Spanish unless the author requests another language. See
-[docs/standards/language.md](docs/standards/language.md).
+The repository stores two kinds of text. **Development truth is English**:
+rules, documentation, roadmaps, decisions, plans, evidence, identifiers, code
+comments, diagnostics, test names, fixtures, protocol tokens, and commit
+subjects. **Product copy is Spanish**: the words a person reads while using the
+products, declared as the literal arguments of `qsTr()` in QML or the string
+literals of a file whose head says `language-contract: product-copy`. A surface
+is Spanish throughout; a half-translated screen is a defect. Other non-English
+text is allowed only in explicit localization resources or fixtures that test
+international input, and must be labelled as such. Historical material keeps
+its original bytes until a dedicated migration translates it without changing
+meaning. Agents speak to the author in Spanish unless the author requests
+another language. See
+[docs/standards/language.md](docs/standards/language.md) and
+[ADR 0007](docs/decisions/0007-spanish-product-copy.md).
 
 ## Mandatory preflight
 
@@ -216,7 +221,11 @@ then activate it with any measurement update in a later commit. Hooks are
 repository-integrity controls, not an adversarial sandbox. A `lines`
 row may disappear only when the same staged unit changes or deletes that source
 and its evidence contains the exact field
-``- **Resolved architecture debt:** `path/to/source` ``. This is qualitative
+``- **Resolved architecture debt:** `path/to/source` ``. A language row may fall
+without its source only for a declared scanner migration, which needs both
+`scripts/check-language-contract.py` staged and the exact field
+``- **Resolved language debt:** `scripts/check-language-contract.py` `` in the
+same unit's evidence. This is qualitative
 architectural closure, not a line threshold. Local evidence lives under the
 project's canonical `docs/evidence/`; suite evidence lives under root
 `docs/evidence/`. A component prefix cannot create a nested lookalike evidence

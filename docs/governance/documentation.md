@@ -22,9 +22,10 @@ Link to a canonical rule instead of copying it.
 ## Language
 
 Current rules, documentation, and templates are English under
-[the language standard](../standards/language.md). Historical records may retain
-original bytes until a dedicated translation. Conversation with the author may
-be Spanish and is not copied into repository documents verbatim.
+[the language standard](../standards/language.md); product copy is Spanish
+under [ADR 0007](../decisions/0007-spanish-product-copy.md). Historical records
+may retain original bytes until a dedicated translation. Conversation with the
+author may be Spanish and is not copied into repository documents verbatim.
 
 ## Roadmap and validation split
 

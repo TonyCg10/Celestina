@@ -47,7 +47,15 @@ implementation. An ADR explains a decision but does not grant permission.
   The staged source must exactly match the new numeric row. Removing an
   architecture `lines` row also requires the exact
   ``- **Resolved architecture debt:** `path/to/source` `` field in that unit's
-  staged evidence; line count alone never proves resolution. Only the owning
+  staged evidence; line count alone never proves resolution. A language row may
+  fall without the file that holds it in exactly one case: an accepted scanner
+  migration, where the measuring rule changed and no source earned the
+  reduction. That needs both halves in the same commit —
+  `scripts/check-language-contract.py` staged, and the exact
+  ``- **Resolved language debt:** `scripts/check-language-contract.py` `` field
+  in the unit's staged evidence. Either half alone is refused: evidence without
+  a scanner change is a row being deleted, and a scanner change nobody wrote
+  down is indistinguishable from dropping inconvenient debt. Only the owning
   project's canonical `docs/evidence/`, or root `docs/evidence/` for `suite:`,
   is valid. Component prefixes cannot retire the row through a nested lookalike
   evidence directory. Normal commit paths and prefixes must be authorized by

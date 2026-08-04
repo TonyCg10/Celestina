@@ -23,8 +23,9 @@ Product commit kinds and SemVer history are defined by
 
 ## Language and technical level
 
-Repository content is English. Agents speak to the author in Spanish unless
-asked otherwise. Work with expert Rust, modern C++, Qt 6, QML, and CXX-Qt
+Development truth is English and product copy is Spanish; the boundary is in
+[the language standard](docs/standards/language.md). Agents speak to the author
+in Spanish unless asked otherwise. Work with expert Rust, modern C++, Qt 6, QML, and CXX-Qt
 judgment: verify ownership, lifecycle, thread affinity, Qt models/signals, QML
 registration, FFI, errors, consumers, and toolchain before deciding.
 

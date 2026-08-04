@@ -27,6 +27,14 @@ SPANISH_WORDS = re.compile(
     re.IGNORECASE,
 )
 LOCALE_DESKTOP = re.compile(r"^[A-Za-z][A-Za-z0-9-]*\[[A-Za-z_@.-]+\]=")
+# Product copy, per ADR 0007. Only these two forms are user-visible text; the
+# comments, identifiers and diagnostics around them are still development truth
+# and are still scanned.
+QSTR_LITERAL = re.compile(
+    r"""qsTr\s*\(\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')""", re.DOTALL
+)
+PRODUCT_COPY_MARKER = "language-contract: product-copy"
+STRING_LITERAL = re.compile(r"""("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')""")
 
 
 def is_localization(path: str) -> bool:
@@ -57,13 +65,26 @@ def is_canonical(path: str) -> bool:
     return False
 
 
-def suspicious_lines(text: str) -> list[int]:
-    if "language-contract: allow-non-english" in "\n".join(text.splitlines()[:10]):
+def suspicious_lines(text: str, *, suffix: str = "") -> list[int]:
+    head = "\n".join(text.splitlines()[:10])
+    if "language-contract: allow-non-english" in head:
         return []
+    # A marked file declares that its string literals are what a person reads.
+    # Everything outside a literal in that file is still development truth.
+    product_copy = PRODUCT_COPY_MARKER in head
+    if suffix == ".qml":
+        # Only the argument of qsTr() is product copy. A bare literal in QML is
+        # a state token, an icon name or a path — development truth. Blanked
+        # over the whole text rather than line by line, because a wrapped call
+        # puts the literal on the line after `qsTr(`; the replacement keeps the
+        # newlines so reported line numbers still point at the real source.
+        text = QSTR_LITERAL.sub(lambda m: "\n" * m.group(0).count("\n"), text)
     result: list[int] = []
     for number, line in enumerate(text.splitlines(), 1):
         if LOCALE_DESKTOP.match(line):
             continue
+        if product_copy and suffix != ".qml":
+            line = STRING_LITERAL.sub("", line)
         if ACCENTED_SPANISH.search(line) or len(SPANISH_WORDS.findall(line)) >= 2:
             result.append(number)
     return result
@@ -91,7 +112,7 @@ def scan(root: Path) -> tuple[dict[str, int], list[str]]:
             text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
-        lines = suspicious_lines(text)
+        lines = suspicious_lines(text, suffix=path.suffix.lower())
         if not lines:
             continue
         if is_canonical(relative):

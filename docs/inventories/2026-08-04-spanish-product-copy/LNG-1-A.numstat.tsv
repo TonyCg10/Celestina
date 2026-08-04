@@ -1,0 +1,35 @@
+# LNG-1-A exact change inventory
+
+Base revision	4d7af1ab307f111254eb1965ed5b7550c0a62f88
+Pathspec	AGENTS.md
+Pathspec	CONTRIBUTING.md
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/decisions/
+Pathspec	docs/evidence/2026-08-04-spanish-product-copy.md
+Pathspec	docs/governance/
+Pathspec	docs/inventories/2026-08-04-spanish-product-copy/
+Pathspec	docs/plans/active/2026-08-04-spanish-product-copy.md
+Pathspec	docs/standards/language.md
+Pathspec	scripts/
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+19	10	97fbfca3337878c58af6c20605c451d264e2edd3fc22f39073adfe8de6e474d1	AGENTS.md
+3	2	086f9f93aa843c842a3dcecbaeb6eb6306e0e6e868d935f9233c6952f4cc80f4	CONTRIBUTING.md
+24	2	908b505fd09e7d94708d066475619918ed74dbb23685d10b95deaa52e2f85b58	ROADMAP.md
+12	3	4fbef6b2dbbd7448b7f7314424a1e28cf991314f15515e624efea7645dc9ae44	STATUS.md
+83	0	9ad2a463c5e2f0f6b999250880d48089d74c9b7bfd4e6865def0e28906052765	docs/decisions/0007-spanish-product-copy.md
+1	0	ae4e9d696d23c476f705a8eaab59c3278ffbbd12a2ffc74db41aa3ea6cf6054f	docs/decisions/README.md
+61	0	7e3778de3e79b6e36960ce9acee2a61a9ca5ce6ca462c7f5384c0409f5a89a35	docs/evidence/2026-08-04-spanish-product-copy.md
+9	1	3bd7280fc239eb61eadf3dad23c20bf5765972955c86caa5699440a2377dc9a5	docs/governance/change-policy.md
+4	3	34f1a144b15bc65639f651cfa0cf50804c6a8c68706c78ed6099d29dd2c51aee	docs/governance/documentation.md
+35	0	self	docs/inventories/2026-08-04-spanish-product-copy/LNG-1-A.numstat.tsv
+69	0	edfd0e3f9cf0ba154930b549dacf4bc2a73dccfb60ab8417aae0d6fa4315f300	docs/plans/active/2026-08-04-spanish-product-copy.md
+31	7	eb30b38f824287d0bb1611ffe0f139605c0c854f0309abed3c890d949629093a	docs/standards/language.md
+24	3	87cdc5cc3c871705a3481a7c24c225309e49823506e2ba3dde8f5eb843b3f76d	scripts/check-language-contract.py
+72	1	02537d008901f5cdb6a2812f027e420c475574af912c20f27c048a473d8e2d1c	scripts/commit_scope.py
+2	12	95ade071e7bf7838f04cc3fbb1aa8299761344c366e61bf7884e300bd0520b43	scripts/language-baseline.tsv
+38	0	9f18fa73478921cf996c6141c0ef6ef8793e85c3167ac4fd08d6ccf00afc0c6d	scripts/test-commit-scope.sh
+81	0	f221185545cdfcf567105a2fd7733ab19b98a59bb533a990dab9dd4655fa3baa	scripts/test-language-contract.py

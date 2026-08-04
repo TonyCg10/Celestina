@@ -459,6 +459,44 @@ if [ -n "$ratchet_tmp" ]; then
     git -C "$ratchet_tmp" add .
     check_ratchets siderita || fail "fully translated staged content could not retire its row"
 
+    # A scanner migration is the one way a language row falls without the file
+    # that holds it: the rule changed, not the file. It takes both halves.
+    reset_ratchet_fixture
+    sed -i '/FolderView.qml/d' "$ratchet_tmp/scripts/language-baseline.tsv"
+    mkdir -p "$ratchet_tmp/siderita/docs/evidence"
+    printf '%s\n' '# Language guard migration' '' \
+        '- **Resolved language debt:** `scripts/check-language-contract.py`' \
+        > "$ratchet_tmp/siderita/docs/evidence/language.md"
+    printf '%s\n' '# migrated scanner' >> "$ratchet_tmp/scripts/check-language-contract.py"
+    git -C "$ratchet_tmp" add scripts/language-baseline.tsv \
+        scripts/check-language-contract.py siderita/docs/evidence/language.md
+    check_ratchets siderita || fail "a declared scanner migration could not retire its row"
+
+    # The evidence alone proves nothing: without the scanner in the same commit
+    # the measurement did not change and the row is simply being deleted.
+    reset_ratchet_fixture
+    sed -i '/FolderView.qml/d' "$ratchet_tmp/scripts/language-baseline.tsv"
+    mkdir -p "$ratchet_tmp/siderita/docs/evidence"
+    printf '%s\n' '# Language guard migration' '' \
+        '- **Resolved language debt:** `scripts/check-language-contract.py`' \
+        > "$ratchet_tmp/siderita/docs/evidence/language.md"
+    git -C "$ratchet_tmp" add scripts/language-baseline.tsv \
+        siderita/docs/evidence/language.md
+    if check_ratchets siderita; then
+        fail "a language row fell on evidence alone, with no scanner change"
+    fi
+
+    # And the scanner alone proves nothing either: a migration nobody wrote
+    # down is indistinguishable from quietly dropping inconvenient debt.
+    reset_ratchet_fixture
+    sed -i '/FolderView.qml/d' "$ratchet_tmp/scripts/language-baseline.tsv"
+    printf '%s\n' '# migrated scanner' >> "$ratchet_tmp/scripts/check-language-contract.py"
+    git -C "$ratchet_tmp" add scripts/language-baseline.tsv \
+        scripts/check-language-contract.py
+    if check_ratchets siderita; then
+        fail "a language row fell on a scanner change nobody declared"
+    fi
+
     reset_ratchet_fixture
     git -C "$ratchet_tmp" rm -q siderita/qml/views/FolderView.qml
     sed -i '/^lines\tsiderita\/qml\/views\/FolderView.qml\t/d' \

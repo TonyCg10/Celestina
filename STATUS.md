@@ -1,9 +1,9 @@
 # Suite status
 
 - **Updated:** 2026-08-04
-- **Current focus:** suite governance is idle; project work follows each local
-  roadmap
-- **Implementation checkpoint:** none
+- **Current focus:** LNG-1, splitting development truth from product copy in
+  the language contract; all other project work follows each local roadmap
+- **Implementation checkpoint:** LNG-1
 - **Author-validation checkpoint:** VAL-GOV-1
 
 ## Completed governance migration
@@ -32,6 +32,15 @@ and need an accepted decision first: hardening the language detector, requiring
 inventories for project-prefixed source commits, defining proportionality for
 `complete-production.sh` across shared-crate consumers, and collapsing the
 ledger rules currently written in five documents.
+
+## Active cross-project work
+
+LNG-1 makes product copy Spanish and leaves development truth English. The
+standard listed "canonical UI copy" among the things English governs, and that
+was enforced, so a Spanish desktop acquired an English media library. The
+reasoning is in
+[ADR 0007](docs/decisions/0007-spanish-product-copy.md); the unit is in the
+[active plan](docs/plans/active/2026-08-04-spanish-product-copy.md).
 
 ## Completed cross-project work
 

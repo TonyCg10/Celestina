@@ -19,6 +19,12 @@ ROOT = Path(__file__).resolve().parent.parent
 ARCHITECTURE_RATCHET = "scripts/architecture-baseline.tsv"
 LANGUAGE_RATCHET = "scripts/language-baseline.tsv"
 ARCHITECTURE_RESOLUTION_FIELD = "- **Resolved architecture debt:** `{}`"
+# The language ratchet's counterpart, and a narrower one. Architecture debt is
+# resolved per source; language debt can also fall because the *measuring rule*
+# changed — an exemption the scanner did not make before — and then no source
+# earned the reduction and none can be staged with it. That is the only case
+# this field covers, which is why it names the scanner rather than a file.
+LANGUAGE_MIGRATION_FIELD = "- **Resolved language debt:** `{}`"
 PROJECT_REGISTRY = "scripts/project_registry.py"
 ARCHITECTURE_SCANNER = "scripts/architecture_scanners.py"
 LANGUAGE_SCANNER = "scripts/check-language-contract.py"
@@ -407,6 +413,65 @@ def has_staged_architecture_resolution(
     return False
 
 
+def has_staged_language_migration(
+    root: Path,
+    prefix: str,
+    staged: set[str],
+    registry: dict[str, Any],
+    architecture_namespace: dict[str, object],
+) -> bool:
+    """Whether this commit is an accepted language-scanner migration.
+
+    Two things must be true together, and neither alone is enough. The scanner
+    itself has to change in this commit, because a measurement can only move
+    without a source when the rule doing the measuring moved. And the unit's
+    evidence has to say so in the exact declared field, so the reduction is
+    something somebody wrote down rather than something that merely happened.
+    """
+    if LANGUAGE_SCANNER not in staged:
+        return False
+
+    evidence_root_for_prefix = architecture_namespace.get(
+        "canonical_evidence_root_for_prefix"
+    )
+    is_evidence_path = architecture_namespace.get("is_canonical_evidence_path")
+    if not callable(evidence_root_for_prefix) or not callable(is_evidence_path):
+        fail(f"{ARCHITECTURE_SCANNER} does not expose canonical evidence rules")
+    try:
+        evidence_root = call_dynamic_rule(
+            f"HEAD:{ARCHITECTURE_SCANNER} canonical_evidence_root_for_prefix",
+            evidence_root_for_prefix,
+            registry,
+            prefix,
+        )
+    except (TypeError, ValueError, RuntimeError) as error:
+        fail(f"{REGISTRY}: could not resolve evidence ownership: {error}")
+    if evidence_root is None:
+        return False
+
+    marker = LANGUAGE_MIGRATION_FIELD.format(LANGUAGE_SCANNER)
+    for path in sorted(staged):
+        if not call_dynamic_rule(
+            f"HEAD:{ARCHITECTURE_SCANNER} is_canonical_evidence_path",
+            is_evidence_path,
+            path,
+            (evidence_root,),
+        ):
+            continue
+        if index_mode(root, path) not in {"100644", "100755"}:
+            continue
+        raw = git_blob(root, "INDEX", path)
+        if raw is None:
+            continue
+        try:
+            lines = raw.decode("utf-8").splitlines()
+        except UnicodeDecodeError:
+            continue
+        if marker in (line.strip() for line in lines):
+            return True
+    return False
+
+
 def architecture_value(
     raw: bytes,
     kind: str,
@@ -605,6 +670,7 @@ def validate_ratchet_updates(
         before: dict[object, int],
         after: dict[object, int],
         source_path: Callable[[object], str],
+        sourceless: Callable[[], bool] = lambda: False,
     ) -> None:
         changed = changed_keys(before, after)
         if not changed and not allow_all:
@@ -620,7 +686,7 @@ def validate_ratchet_updates(
                 fail(f"{ratchet_path}: new debt row is forbidden: {key}")
             if new is not None and old is not None and new >= old:
                 fail(f"{ratchet_path}: a changed row must strictly decrease: {key}")
-            if source not in staged:
+            if source not in staged and not sourceless():
                 fail(
                     f"{ratchet_path}: changed row requires its source in the same commit: "
                     f"{source}"
@@ -677,6 +743,11 @@ def validate_ratchet_updates(
             language_before,
             language_after,
             lambda key: str(key),
+            # A declared scanner migration is the one way a row may fall
+            # without the file that holds it: the rule changed, not the file.
+            lambda: has_staged_language_migration(
+                root, prefix, staged, registry, architecture_namespace
+            ),
         )
     validate_language_index(root, language_after, staged, language_namespace)
 

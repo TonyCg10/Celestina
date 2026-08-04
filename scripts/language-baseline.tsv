@@ -42,17 +42,7 @@
 4	celestina-style/scripts/smoke-production.sh
 16	celestina-style/scripts/sync-phosphor-shapes.sh
 18	celestina-style/tests/tst_icongradient.qml
-2	celestina/qml/AudioLevel.qml
-2	celestina/qml/ClipboardOverlay.qml
-3	celestina/qml/LauncherOverlay.qml
-2	celestina/qml/MediaMini.qml
 31	celestina/qml/OutputChooser.qml
-1	celestina/qml/PanelMenu.qml
-1	celestina/qml/PhoneStatus.qml
-1	celestina/qml/SessionStatus.qml
-1	celestina/qml/TrayDrawer.qml
-1	celestina/qml/TrayMenu.qml
-2	celestina/qml/WorkspaceStrip.qml
 1	celestina/scripts/activate-production.sh
 2	celestina/scripts/qmllint-production.sh
 1	celestina/scripts/run.sh
@@ -61,7 +51,7 @@
 1	celestina/tests/traymenu_test.cpp
 5	celestina/tests/tst_outputchooser.qml
 2	fluorita/org.celestina.Fluorita.desktop
-6	fluorita/qml/components/SeekBar.qml
+5	fluorita/qml/components/SeekBar.qml
 4	fluorita/qml/components/VolumeBar.qml
 3	fluorita/scripts/run.sh
 24	fluorita/scripts/smoke.sh
@@ -134,7 +124,7 @@
 2	siderita/qml/dialogs/BatchRenameDialog.qml
 1	siderita/qml/dialogs/ConflictDialog.qml
 4	siderita/qml/dialogs/IconPickerDialog.qml
-21	siderita/qml/dialogs/MediaPreview.qml
+19	siderita/qml/dialogs/MediaPreview.qml
 1	siderita/qml/dialogs/NamePromptDialog.qml
 5	siderita/qml/dialogs/PhoneMediaDialog.qml
 2	siderita/qml/dialogs/PropertiesDialog.qml

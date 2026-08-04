@@ -73,6 +73,87 @@ class LanguageContractTests(unittest.TestCase):
         )
         self.assertEqual(self.run_guard().returncode, 0)
 
+    def test_qml_product_copy_is_allowed_but_only_inside_qstr(self) -> None:
+        self.write_baseline()
+        (self.root / "src/Surface.qml").write_text(
+            'Text { text: qsTr("Añadir carpeta…") }\n', encoding="utf-8"
+        )
+        self.assertEqual(self.run_guard().returncode, 0)
+
+        # A bare literal in QML is a state token, an icon name or a path — not
+        # something a person reads — so it stays development truth.
+        (self.root / "src/Surface.qml").write_text(
+            'Text { text: qsTr("Añadir carpeta…") }\nText { text: "Imágenes" }\n',
+            encoding="utf-8",
+        )
+        result = self.run_guard()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("new non-English repository text", result.stdout)
+
+    def test_a_wrapped_qstr_call_is_still_product_copy(self) -> None:
+        # The literal sits on the line after `qsTr(`, which a line-by-line
+        # scanner misses; the line numbers it reports must still be right.
+        self.write_baseline()
+        (self.root / "src/Surface.qml").write_text(
+            "Item {\n"
+            "    Accessible.description: qsTr(\n"
+            '        "Quita la carpeta de la biblioteca")\n'
+            "}\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(self.run_guard().returncode, 0)
+
+        (self.root / "src/Surface.qml").write_text(
+            "Item {\n"
+            "    Accessible.description: qsTr(\n"
+            '        "Quita la carpeta de la biblioteca")\n'
+            '    property string token: "Imágenes"\n'
+            "}\n",
+            encoding="utf-8",
+        )
+        result = self.run_guard()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("1 suspicious line", result.stdout)
+
+    def test_qml_comments_are_still_development_truth(self) -> None:
+        self.write_baseline()
+        (self.root / "src/Surface.qml").write_text(
+            '// El agente ejecuta la prueba de la aplicación.\n', encoding="utf-8"
+        )
+        result = self.run_guard()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("new non-English repository text", result.stdout)
+
+    def test_marked_source_exempts_literals_and_nothing_else(self) -> None:
+        self.write_baseline()
+        (self.root / "src/copy.rs").write_text(
+            "// language-contract: product-copy\n"
+            "/// English doc comment.\n"
+            'pub const EMPTY: &str = "Sin álbum";\n',
+            encoding="utf-8",
+        )
+        self.assertEqual(self.run_guard().returncode, 0)
+
+        # The marker is not a place to park development prose.
+        (self.root / "src/copy.rs").write_text(
+            "// language-contract: product-copy\n"
+            "// El agente ejecuta la prueba de la aplicación.\n"
+            'pub const EMPTY: &str = "Sin álbum";\n',
+            encoding="utf-8",
+        )
+        result = self.run_guard()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("new non-English repository text", result.stdout)
+
+    def test_an_unmarked_source_keeps_the_old_rule(self) -> None:
+        self.write_baseline()
+        (self.root / "src/other.rs").write_text(
+            'pub const EMPTY: &str = "Sin álbum";\n', encoding="utf-8"
+        )
+        result = self.run_guard()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("new non-English repository text", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
