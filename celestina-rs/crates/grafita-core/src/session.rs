@@ -287,6 +287,17 @@ impl DocumentSession {
         self.document.as_ref().map_or(0, Document::line_count)
     }
 
+    /// Where a widget's caret is, for a status line. With no document open the
+    /// answer is the first position, which is where a caret would be if there
+    /// were one — a host should hide the readout rather than ask.
+    #[must_use]
+    pub fn caret_location(&self, utf16_offset: usize) -> crate::position::Location {
+        self.document.as_ref().map_or(
+            crate::position::Location { line: 1, column: 1 },
+            |document| document.caret_location(utf16_offset),
+        )
+    }
+
     fn select_current(&self) -> Outcome {
         let (Some(found), Some(document)) = (self.search.current(), self.document.as_ref()) else {
             return Outcome::nothing();

@@ -13,6 +13,10 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaSectionLabel.qml",
     "qml/CelestinaFocusRing.qml",
     "qml/CelestinaTextField.qml",
+    // The editing surface's two shared affordances: a second consumer
+    // (Siderita's quick look) moved them out of Grafita and into the style.
+    "qml/CelestinaScrollBar.qml",
+    "qml/CelestinaLineGutter.qml",
     // La capa modal declara su suelo de entrada con este primitivo, así que
     // el módulo de la app tiene que publicarlo también.
     "qml/CelestinaInputShield.qml",
@@ -76,7 +80,12 @@ fn main() {
         // header is moc'd (Q_OBJECT); the .cpp is compiled.
         .cpp_file("cpp/highlighter.cpp")
         .cpp_file("cpp/highlighter.h")
-        .files(["src/activation.rs", "src/session.rs", "src/syntax.rs"]);
+        .files([
+            "src/activation.rs",
+            "src/preferences.rs",
+            "src/session.rs",
+            "src/syntax.rs",
+        ]);
 
     // SAFETY: only adds an include directory for our own headers.
     let builder = unsafe {

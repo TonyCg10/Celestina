@@ -67,9 +67,19 @@ pub mod qobject {
         #[qproperty(i32, search_index)]
         #[qproperty(i32, line_count)]
         #[qproperty(QString, indentation_label)]
+        // caretLine / caretColumn — where the widget's caret is, counted from
+        //                           1, the column in characters
+        #[qproperty(i32, caret_line)]
+        #[qproperty(i32, caret_column)]
         // The numeric language the syntax highlighter colours by.
         #[qproperty(i32, language_id)]
         type GrafitaSession = super::GrafitaSessionRust;
+
+        /// Reports where the widget's caret now is, as the UTF-16 offset Qt
+        /// counts in. The line and character column it maps to are the
+        /// document's answer, not the widget's.
+        #[qinvokable]
+        fn set_caret(self: Pin<&mut GrafitaSession>, offset: i32);
 
         /// The document's text changed underneath the widget — an open, an undo
         /// or a redo. The widget adopts `text` and puts its cursor at `caret`,
@@ -203,8 +213,13 @@ pub struct GrafitaSessionRust {
     search_index: i32,
     line_count: i32,
     indentation_label: QString,
+    caret_line: i32,
+    caret_column: i32,
     language_id: i32,
 
+    /// The caret the widget last reported, kept so an edit can re-answer it
+    /// without the widget having to report it again.
+    caret_offset: usize,
     session: DocumentSession,
     worker: Option<DocumentWorker>,
     /// The close under way was asked for in order to quit, so completing it
@@ -232,7 +247,10 @@ impl Default for GrafitaSessionRust {
             search_index: -1,
             line_count: 0,
             indentation_label: QString::default(),
+            caret_line: 1,
+            caret_column: 1,
             language_id: 0,
+            caret_offset: 0,
             session: DocumentSession::new(Limits::default()),
             worker: None,
             quitting: false,
@@ -263,6 +281,23 @@ impl qobject::GrafitaSession {
                     .set_error_text(QString::from("Grafita solo abre archivos locales"));
             }
         }
+    }
+
+    /// Deliberately not routed through [`Self::dispatch`]: moving a caret is
+    /// not a session action, so it must not clear a refusal message or
+    /// re-publish the whole state on every arrow key.
+    pub fn set_caret(mut self: Pin<&mut Self>, offset: i32) {
+        let offset = usize::try_from(offset).unwrap_or(0);
+        self.as_mut().rust_mut().get_mut().caret_offset = offset;
+        self.publish_caret();
+    }
+
+    fn publish_caret(mut self: Pin<&mut Self>) {
+        let location = self.rust().session.caret_location(self.rust().caret_offset);
+        self.as_mut()
+            .set_caret_line(i32::try_from(location.line).unwrap_or(i32::MAX));
+        self.as_mut()
+            .set_caret_column(i32::try_from(location.column).unwrap_or(i32::MAX));
     }
 
     pub fn recent_documents(&self) -> cxx_qt_lib::QStringList {
@@ -563,6 +598,10 @@ impl qobject::GrafitaSession {
             .set_indentation_label(QString::from(indentation.unwrap_or("")));
         let language = crate::syntax::language_code(self.rust().session.language());
         self.as_mut().set_language_id(i32::from(language));
+        // The same offset can be a different line after an edit, an undo or an
+        // open, so the readout is re-derived here rather than waiting for the
+        // widget to report a caret that did not itself move.
+        self.publish_caret();
     }
 }
 

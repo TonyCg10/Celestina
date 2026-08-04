@@ -18,7 +18,7 @@ use crate::highlight::{self, Language, LineState, Span as HighlightSpan};
 use crate::history::{History, Revision};
 use crate::indent::{self, Indentation};
 use crate::open::OpenedFile;
-use crate::position::{Position, PositionError, Span};
+use crate::position::{Location, Position, PositionError, Span};
 use crate::save::{SaveRefusal, SaveReport, SaveRequest};
 use crate::search;
 use crate::target::Target;
@@ -363,6 +363,13 @@ impl Document {
     #[must_use]
     pub fn caret_utf16(&self, position: Position) -> usize {
         display::utf16_offset_at(&self.buffer, position)
+    }
+
+    /// Where a widget's caret is, worded for a status line: line and character
+    /// column, both counted from one.
+    #[must_use]
+    pub fn caret_location(&self, utf16_offset: usize) -> Location {
+        display::location_at_utf16(&self.buffer, utf16_offset)
     }
 
     /// Takes the whole text a widget now holds and applies the one difference

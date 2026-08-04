@@ -1,4 +1,5 @@
 mod activation;
+mod preferences;
 mod session;
 mod syntax;
 mod url;

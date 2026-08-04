@@ -162,6 +162,37 @@ ApplicationWindow {
         window.requestQuit()
     }
 
+    // How the user reads, remembered across launches. One per window rather
+    // than one per tab: the text size belongs to the reader, not to whichever
+    // document happens to be in front.
+    GrafitaPreferences {
+        id: readingPreferences
+    }
+
+    // Ctrl + and Ctrl − are written out rather than taken from
+    // `StandardKey.ZoomIn`, which is Ctrl++ alone: on the layouts Grafita is
+    // used on, `+` is a shifted key, so the standard binding would demand a
+    // three-finger chord for the one shortcut people press repeatedly. The
+    // unshifted `=` and `-` that share those keycaps are bound to the same
+    // action, which is what every other editor does.
+    Shortcut {
+        sequences: ["Ctrl++", "Ctrl+=", "Ctrl+Shift+="]
+        onActivated: readingPreferences.enlargeText()
+    }
+    Shortcut {
+        sequences: ["Ctrl+-", "Ctrl+_"]
+        onActivated: readingPreferences.shrinkText()
+    }
+    // Wrapping has no StandardKey, so both of its real conventions are bound.
+    // Alt+Z is the one most editors use, but a compositor that takes Alt as its
+    // own modifier swallows it before any application sees it — which is the
+    // case on the author's session. F10 is Kate's binding for the same command
+    // and survives that, so neither habit is the wrong one here.
+    Shortcut {
+        sequences: ["Alt+Z", "F10"]
+        onActivated: readingPreferences.toggleWrap()
+    }
+
     Shortcut {
         sequences: [StandardKey.Save]
         onActivated: if (activeSession) activeSession.save()
@@ -296,6 +327,7 @@ ApplicationWindow {
                     anchors.fill: parent
                     session: documentSession
                     blocked: documentSession.closePrompt
+                    reading: readingPreferences
                 }
 
                 UnsavedDialog {

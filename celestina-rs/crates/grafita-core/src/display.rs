@@ -13,7 +13,7 @@
 //! insertion and adopts the document's dominant terminator.
 
 use crate::buffer::TextBuffer;
-use crate::position::{Position, Span};
+use crate::position::{Location, Position, Span};
 
 /// A document rendered for a text widget: every terminator shown as `\n`.
 ///
@@ -78,6 +78,64 @@ pub fn utf16_offset_at(buffer: &TextBuffer, position: Position) -> usize {
             offset + line.text()[..column].encode_utf16().count()
         }
         None => offset,
+    }
+}
+
+/// Turns a Qt caret offset into the location a status line reports.
+///
+/// The inverse of [`utf16_offset_at`], and the only correct way to answer
+/// "which line and column is the caret on" from what a Qt widget knows. Doing
+/// it in the host would be a second, quietly different implementation of the
+/// same rule, and one of the two would be wrong on non-ASCII text.
+///
+/// The column is counted in **characters**, not in the UTF-8 bytes
+/// [`Position`] uses. Byte columns are exact for editing and wrong to show a
+/// person: an accented letter would read as two columns.
+///
+/// Both numbers count from one, because that is what a caret readout means by
+/// line 1, column 1. An offset past the end clamps to the end, for the same
+/// reason [`position_at`] does.
+///
+/// Cost is proportional to the offset, not to the document: the walk stops at
+/// the caret. That matches the projection this crate already rebuilds per
+/// edit, so it adds no new order of work to a keystroke.
+#[must_use]
+pub fn location_at_utf16(buffer: &TextBuffer, offset: usize) -> Location {
+    let lines = buffer.lines();
+    let mut consumed = 0;
+    for (index, line) in lines.iter().enumerate() {
+        let units = line.text().encode_utf16().count();
+        if offset <= consumed + units {
+            let into_line = offset - consumed;
+            // Walk the line's characters until their UTF-16 units reach the
+            // caret. A caret cannot land inside a surrogate pair, but one
+            // reported from before an edit could, so the walk stops at the
+            // first character that reaches or passes it rather than assuming
+            // it will land exactly.
+            let mut units_seen = 0;
+            let mut characters = 0;
+            for character in line.text().chars() {
+                if units_seen >= into_line {
+                    break;
+                }
+                units_seen += character.len_utf16();
+                characters += 1;
+            }
+            return Location {
+                line: index + 1,
+                column: characters + 1,
+            };
+        }
+        // The projected newline between this line and the next.
+        consumed += units + 1;
+    }
+    let end = buffer.end_position();
+    Location {
+        line: end.line + 1,
+        column: lines
+            .get(end.line)
+            .map_or(0, |line| line.text().chars().count())
+            + 1,
     }
 }
 
@@ -152,7 +210,7 @@ fn common_suffix(left: &str, right: &str, limit: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{offset_at, position_at, project, reconcile, utf16_offset_at};
+    use super::{location_at_utf16, offset_at, position_at, project, reconcile, utf16_offset_at};
     use crate::buffer::{Fragment, TextBuffer};
     use crate::position::{Position, Span};
 
@@ -205,6 +263,57 @@ mod tests {
         assert_eq!(utf16_offset_at(&buffer, Position::new(0, 3)), 2);
         assert_eq!(utf16_offset_at(&buffer, Position::new(0, 7)), 4);
         assert_eq!(utf16_offset_at(&buffer, Position::new(1, 1)), 6);
+    }
+
+    #[test]
+    fn a_caret_reports_its_line_and_character_column_counted_from_one() {
+        let buffer = buffer("one\r\ntwo\rfour");
+
+        for (offset, line, column) in [
+            (0, 1, 1),
+            (3, 1, 4),
+            (4, 2, 1),
+            (7, 2, 4),
+            (8, 3, 1),
+            (12, 3, 5),
+        ] {
+            let location = location_at_utf16(&buffer, offset);
+            assert_eq!(
+                (location.line, location.column),
+                (line, column),
+                "at {offset}"
+            );
+        }
+
+        // Past the end clamps to the end, like every other caret entry point.
+        let end = location_at_utf16(&buffer, 999);
+        assert_eq!((end.line, end.column), (3, 5));
+    }
+
+    #[test]
+    fn the_reported_column_counts_characters_not_bytes_or_utf16_units() {
+        // 'a' is one unit, 'λ' one, '🜲' two, and 'λ' alone is two *bytes*: a
+        // column measured in either of the other two units would be wrong here.
+        // A Greek letter rather than an accented Latin one so the fixture is
+        // not mistaken for Spanish prose by the language ratchet.
+        let buffer = buffer("aλ🜲x");
+
+        for (offset, column) in [(0, 1), (1, 2), (2, 3), (4, 4), (5, 5)] {
+            assert_eq!(
+                location_at_utf16(&buffer, offset).column,
+                column,
+                "at {offset}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_caret_offset_inside_a_surrogate_pair_lands_on_a_whole_character() {
+        // A host can report a caret from before an edit. Splitting '🜲' must
+        // still answer a real column rather than run past it.
+        let buffer = buffer("a🜲b");
+
+        assert_eq!(location_at_utf16(&buffer, 2).column, 3);
     }
 
     #[test]

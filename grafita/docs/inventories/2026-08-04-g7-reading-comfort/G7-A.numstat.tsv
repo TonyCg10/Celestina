@@ -1,0 +1,45 @@
+# G7-A exact change inventory
+
+Base revision	5eb017dda5d759414eeb64bb2141398d208b1a9c
+Pathspec	celestina-rs/crates/grafita-core/src/
+Pathspec	docs/version-history.tsv
+Pathspec	grafita/Cargo.lock
+Pathspec	grafita/Cargo.toml
+Pathspec	grafita/ROADMAP.md
+Pathspec	grafita/STATUS.md
+Pathspec	grafita/VALIDATION.md
+Pathspec	grafita/build.rs
+Pathspec	grafita/docs/
+Pathspec	grafita/qml/
+Pathspec	grafita/src/
+Pathspec	scripts/language-baseline.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+111	2	0f24ab16146958c40dfb79d2e12e2287c63329ed1b5c9b1f5427d24998788e6b	celestina-rs/crates/grafita-core/src/display.rs
+8	1	db829e6d720ff9a7c24798103dddb5265f4d1e59edc77c67c3bb06870d54c0f6	celestina-rs/crates/grafita-core/src/document.rs
+3	1	cd1ac8d23ef7775d3bcf9fb90b480e18d109d2e9d041cc3ec6515f8ffb551294	celestina-rs/crates/grafita-core/src/lib.rs
+11	0	aa9953d743e19d77dcd455388a357250c5f96fa154ddb81a68e8e62aa54bf327	celestina-rs/crates/grafita-core/src/position.rs
+214	0	3486fa9d2a636c4b504c6c060244e64f1bedacb39171f55297d4fb9ba1c8f005	celestina-rs/crates/grafita-core/src/preferences.rs
+11	0	a0ef15ff96b80e667fa685352ad975b2ab14137d089b0398fc8719b8768cc39d	celestina-rs/crates/grafita-core/src/session.rs
+1	0	79132f930cb58786374b92ed12f6b6f5b709cb3cef3ba993dfc839eda42695ef	docs/version-history.tsv
+1	1	f13318e323b2042c3560459849af00c54dcf154060b1bb3857594a6603ee85e2	grafita/Cargo.lock
+1	1	67d80cfa0d259eaa0175ed346cbbb46b5593384b22bd78ee406c46872c16c9cb	grafita/Cargo.toml
+22	10	eff83ba6b8d468e44b5c4b1446e45cfcc37ce10370428a0ac15b929165e22489	grafita/ROADMAP.md
+15	5	17960fedecbc672d7a4180f7b5bf40a04c47103ff36da93452f79c63fa1a2cc2	grafita/STATUS.md
+34	2	1c536d469981b4d8396683a70bb124c003b1964f6b06e10de99032b00d62872c	grafita/VALIDATION.md
+10	1	4bf2f7dfc17c716bc602beed2dbc9e90ead5f46fd25e3ad517e6c3f578a19f08	grafita/build.rs
+98	0	e24ccb43c68495379bec5110d07e368316c1dbac59e9e07b48e999d896b75769	grafita/docs/evidence/2026-08-04-g7-reading-comfort.md
+45	0	self	grafita/docs/inventories/2026-08-04-g7-reading-comfort/G7-A.numstat.tsv
+164	0	13316fe36ac78f1f65a6bc55a27821c0cbcfc8eb58d01f26e98d867c08f8619b	grafita/docs/plans/active/2026-08-04-g7-reading-comfort.md
+1	0	4f81b47d986d0b6f3663ab2cafd60d595686a8638e47dee8e9c748b65e883d82	grafita/qml/CelestinaLineGutter.qml
+1	0	eb9268b528b5b93e314a70ec14af08f82a55491bf3c1b69b52a37663d809bbad	grafita/qml/CelestinaScrollBar.qml
+32	0	747a951aeb556d620f9ff504c55560627da1156c3e0b0dd2e497583b16f12f75	grafita/qml/Main.qml
+27	4	6d14f5e7b23ee88256bd952a59339f0b493530cb78a2fff77bec5b509d1c8525	grafita/qml/components/DocumentFooter.qml
+9	19	3354331a7c83b38d5193f55e1f0d4e076752a5eccce2542cc10629eb7a2297c8	grafita/qml/components/DocumentHeader.qml
+96	7	e241fe85e8f8bdd6f569029811f17b7b13722f8f9fb133d7594a9e7e2b118531	grafita/qml/components/DocumentView.qml
+1	0	33cbe322233cc93f1e75a7aea40ccfc5de1ca336b0a7de6da2a291069411c277	grafita/src/main.rs
+109	0	d2a61809b14eea690e11f97e539e2b9c34fc831ef38de7ec81421e0bd24e9632	grafita/src/preferences.rs
+39	0	ef4e103429213cfa4381f6fda5687c7a4323cabd5151d3589899dac9fda27696	grafita/src/session.rs
+0	1	658c73d27c9304919460e8e509594c6a62bbdcd581719da5683da56052fc86d2	scripts/language-baseline.tsv

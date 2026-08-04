@@ -82,7 +82,6 @@
 2	fluorita/src/player.rs
 2	grafita/build.rs
 1	grafita/qml/Main.qml
-1	grafita/qml/components/DocumentHeader.qml
 3	grafita/qml/components/FindBar.qml
 1	grafita/qml/components/TabStrip.qml
 3	grafita/scripts/run.sh

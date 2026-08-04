@@ -1,10 +1,11 @@
 # Grafita status
 
-- **Updated:** 2026-08-03
-- **Implementation:** the registered product version and checkpoints G0-G6 are
-  present; there is no active implementation checkpoint
-- **Author validation:** the version-1 interaction pass is closed; intentionally
-  excluded coverage is recorded in [VALIDATION.md](VALIDATION.md)
+- **Updated:** 2026-08-04
+- **Implementation:** checkpoints G0-G6 are present; G7 (reading comfort) is
+  the active checkpoint and its code is written but not yet delivered
+- **Author validation:** the version-1 interaction pass is closed; `VAL-G7` is
+  requested and intentionally excluded coverage is recorded in
+  [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
 
@@ -18,6 +19,15 @@
   and guarded close while keeping its own bounded Qt/QML adapter.
 - The archived evidence records real keyboard/mouse use of both surfaces,
   modal focus containment/restoration, find/tabs and the app icon.
+- The standalone editing surface numbers its logical lines, keeps the text
+  clear of the frame, reports the caret's line and character column in its
+  footer, and shows a scroll bar on whichever axis can move. Text size and
+  wrapping come from `$XDG_CONFIG_HOME/grafita/preferences`, moved with
+  `Ctrl +` / `Ctrl −` or the `Ctrl` wheel and with `F10` / `Alt + Z`. The
+  encoding label is gone; the encoding itself is still a document property the
+  core preserves.
+- `grafita-core` owns the mapping from a widget's UTF-16 caret offset to a line
+  and a character column, so no host counts columns for itself.
 - Legacy encodings are an explicit product exclusion until a real document
   demonstrates the need; they are not an incomplete version-1 item.
 

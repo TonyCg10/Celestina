@@ -47,6 +47,17 @@ impl fmt::Display for Position {
     }
 }
 
+/// A caret location worded for a person rather than for the buffer.
+///
+/// Deliberately not a [`Position`]: both numbers count from one, and `column`
+/// counts characters instead of the UTF-8 bytes an edit needs. Keeping the two
+/// apart is what stops a display number from being handed back as an offset.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct Location {
+    pub line: usize,
+    pub column: usize,
+}
+
 /// An ordered region of the buffer, possibly empty.
 ///
 /// Selections arrive from hosts as anchor/head pairs in either direction, so

@@ -1,9 +1,13 @@
 import QtQuick
 import org.celestina.grafita 1.0
 
-// The document's name, its unsaved marker, its encoding, and whatever the file
-// on disk disagrees about. A conflict is the user's to act on, so it stays in
-// view rather than passing as a toast.
+// The document's name, its unsaved marker, and whatever the file on disk
+// disagrees about. A conflict is the user's to act on, so it stays in view
+// rather than passing as a toast.
+//
+// The encoding is deliberately not shown. Grafita only opens what it can write
+// back byte-for-byte, so the answer is "the one it already was" every time —
+// a label that never says anything the user has to act on is furniture.
 Item {
     id: root
 
@@ -18,7 +22,8 @@ Item {
         anchors.leftMargin: CelestinaTheme.spaceLg
         anchors.top: parent.top
         anchors.topMargin: CelestinaTheme.spaceMd
-        width: parent.width - encoding.width - CelestinaTheme.space3xl
+        anchors.right: parent.right
+        anchors.rightMargin: CelestinaTheme.spaceLg
         elide: Text.ElideMiddle
         visible: root.session.active
         text: root.session.dirty ? root.session.name + " •" : root.session.name
@@ -32,21 +37,6 @@ Item {
         Accessible.role: Accessible.StaticText
         Accessible.name: root.session.dirty
                          ? root.session.name + ", sin guardar" : root.session.name
-    }
-
-    Text {
-        id: encoding
-        anchors.right: parent.right
-        anchors.rightMargin: CelestinaTheme.spaceLg
-        anchors.verticalCenter: heading.verticalCenter
-        visible: root.session.active
-        text: root.session.encodingLabel
-        color: CelestinaTheme.textMuted
-        font.family: CelestinaTheme.sansFamily
-        font.pixelSize: CelestinaTheme.fontCaption
-
-        Accessible.role: Accessible.StaticText
-        Accessible.name: "Codificación " + root.session.encodingLabel
     }
 
     Text {

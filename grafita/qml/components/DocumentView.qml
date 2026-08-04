@@ -17,6 +17,10 @@ Item {
     // True while the unsaved-work question is up: the document surface stops
     // accepting actions so the question is the only thing that can be answered.
     required property bool blocked
+    // How the user reads: text size and wrapping. Owned and stored by the
+    // window, because that is a property of the reader rather than of whichever
+    // document happens to be in front.
+    required property var reading
 
     // Called by the window when the document's text moved underneath the widget.
     function adopt(text, caret) {
@@ -82,13 +86,65 @@ Item {
         // here could only be one that also fires on every click. On an editing
         // surface the caret is the focus affordance.
 
+        // The numbers sit outside the Flickable, not inside it. With wrapping
+        // off the content scrolls sideways, and a gutter that travelled with it
+        // would take the numbers off the left edge of the window.
+        CelestinaLineGutter {
+            id: gutter
+            anchors.left: parent.left
+            // The text is set in from the border rather than run against it: a
+            // caret or a descender touching the frame reads as a rendering
+            // fault, and the first column needs somewhere to breathe.
+            anchors.leftMargin: CelestinaTheme.spaceMd
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.topMargin: CelestinaTheme.spaceMd
+            anchors.bottomMargin: CelestinaTheme.spaceMd
+            surface: body
+            viewportY: scroller.contentY
+            viewportHeight: scroller.height
+        }
+
         Flickable {
             id: scroller
-            anchors.fill: parent
-            anchors.margins: CelestinaTheme.spaceSm
+            // A gap wide enough that a number and the line it belongs to do
+            // not read as one string.
+            anchors.left: gutter.right
+            anchors.leftMargin: CelestinaTheme.spaceMd
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.rightMargin: CelestinaTheme.spaceMd
+            anchors.topMargin: CelestinaTheme.spaceMd
+            anchors.bottomMargin: CelestinaTheme.spaceMd
             clip: true
-            contentWidth: width
+            contentWidth: body.width
             contentHeight: body.paintedHeight
+            // Wrapped text has nothing to scroll to sideways, so the viewport
+            // is pinned rather than left free to drift off the first column.
+            boundsBehavior: Flickable.StopAtBounds
+
+            // Ctrl and the wheel resize the text instead of scrolling it.
+            // Deltas are accumulated to a full notch so a touchpad's stream of
+            // small values moves one step at a time rather than sweeping
+            // through the whole range in a gesture.
+            WheelHandler {
+                property real pending: 0
+                readonly property real notch: 120
+
+                acceptedModifiers: Qt.ControlModifier
+                onWheel: function(event) {
+                    pending += event.angleDelta.y
+                    while (pending >= notch) {
+                        pending -= notch
+                        root.reading.enlargeText()
+                    }
+                    while (pending <= -notch) {
+                        pending += notch
+                        root.reading.shrinkText()
+                    }
+                }
+            }
 
             // Keep the caret on screen without animating the viewport, which
             // would be motion the user did not ask for.
@@ -97,13 +153,17 @@ Item {
                     contentY = rectangle.y
                 else if (rectangle.y + rectangle.height > contentY + height)
                     contentY = rectangle.y + rectangle.height - height
+                if (rectangle.x < contentX)
+                    contentX = rectangle.x
+                else if (rectangle.x + rectangle.width > contentX + width)
+                    contentX = rectangle.x + rectangle.width - width
             }
 
             // The line the caret is on. Painted behind the text and only while
             // nothing is selected: over a selection it would fight the
             // selection colour for the same pixels.
             Rectangle {
-                width: scroller.width
+                width: Math.max(scroller.width, body.width)
                 height: body.cursorRectangle.height
                 y: body.cursorRectangle.y
                 visible: body.activeFocus && !body.selectedText
@@ -113,8 +173,13 @@ Item {
 
             TextEdit {
                 id: body
-                width: scroller.width
-                wrapMode: TextEdit.Wrap
+                // Wrapped, the surface is exactly the viewport. Unwrapped, it
+                // is as wide as its longest line, which is what gives the
+                // Flickable something to scroll sideways through.
+                width: root.reading.wrap
+                       ? scroller.width
+                       : Math.max(scroller.width, body.implicitWidth)
+                wrapMode: root.reading.wrap ? TextEdit.Wrap : TextEdit.NoWrap
                 selectByMouse: true
                 selectByKeyboard: true
                 persistentSelection: true
@@ -122,7 +187,7 @@ Item {
                 selectionColor: CelestinaTheme.accent
                 selectedTextColor: CelestinaTheme.accentInk
                 font.family: CelestinaTheme.monoFamily
-                font.pixelSize: CelestinaTheme.fontCaption
+                font.pixelSize: root.reading.fontSize
 
                 Accessible.role: Accessible.EditableText
                 Accessible.name: root.session.active
@@ -132,6 +197,9 @@ Item {
                 // holds and lets the core work out the edit.
                 onTextChanged: root.session.applyText(text)
                 onCursorRectangleChanged: scroller.revealCursor(cursorRectangle)
+                // The widget knows where its caret is as a UTF-16 offset; only
+                // the document can say which line and column that is.
+                onCursorPositionChanged: root.session.setCaret(cursorPosition)
 
                 // Colour without touching the text. A QSyntaxHighlighter applies
                 // formats to the document's blocks and leaves the characters
@@ -147,6 +215,27 @@ Item {
                     keywordColor: CelestinaTheme.codeKeyword
                 }
             }
+        }
+
+        // Over the viewport's edges rather than beside them: the text keeps its
+        // full width, and a bar exists only while there is something to scroll.
+        // The vertical one stops short of the horizontal one so the two never
+        // overlap in the corner.
+        CelestinaScrollBar {
+            surface: scroller
+            anchors.right: scroller.right
+            anchors.top: scroller.top
+            anchors.bottom: scroller.bottom
+            anchors.bottomMargin: sideways.visible ? sideways.height : 0
+        }
+
+        CelestinaScrollBar {
+            id: sideways
+            horizontal: true
+            surface: scroller
+            anchors.left: scroller.left
+            anchors.right: scroller.right
+            anchors.bottom: scroller.bottom
         }
     }
 

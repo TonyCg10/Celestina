@@ -1,15 +1,27 @@
 # Grafita implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
-- **Related author validation:** none; completed observations and deliberate
-  exclusions are in [VALIDATION.md](VALIDATION.md)
+- **Status:** active
+- **Active implementation checkpoint:** G7
+- **Related author validation:** `VAL-G7`; earlier completed observations and
+  deliberate exclusions are in [VALIDATION.md](VALIDATION.md)
 
-## No active implementation checkpoint
+## G7 — reading comfort
 
-Grafita 1.0 is implemented and its G0-G6 arc is closed. Do not keep an empty
-milestone open, copy manual checks into this file or turn conditional ideas into
-work without a demonstrated need and author approval.
+The falsifiable problem the author demonstrated: the surface shows an encoding
+label that never asks for an action, gives no line to refer to, runs the first
+column against the frame, and offers no way to change the text size. The
+boundary is `grafita-core` for the stored preference and the application for
+presentation; the tangible result is a numbered, inset editing surface whose
+text size is chosen with `Ctrl +` / `Ctrl −` and survives a relaunch.
+
+The plan is [G7 — reading comfort](docs/plans/active/2026-08-04-g7-reading-comfort.md).
+It excludes a settings surface, any second preference, and the embedded
+Siderita surface, and it preserves the content-based acceptance and loss-free
+save contracts because it adds no path that reads or writes a document.
+
+Do not keep an empty milestone open after this one closes, copy manual checks
+into this file, or turn the conditional ideas below into work without a
+demonstrated need and author approval.
 
 ## Conditions for opening the next checkpoint
 

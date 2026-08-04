@@ -1,9 +1,9 @@
 import QtQuick
 import org.celestina.grafita 1.0
 
-// What just happened on the left, what can be done on the right. A refusal
-// outranks a completed action: if the last write did not happen, that is the
-// sentence the user needs.
+// Where the caret is and what just happened on the left, what can be done on
+// the right. A refusal outranks a completed action: if the last write did not
+// happen, that is the sentence the user needs.
 Item {
     id: root
 
@@ -11,9 +11,32 @@ Item {
 
     implicitHeight: actions.height + CelestinaTheme.space2xl
 
+    // The caret's position, which is what a person quotes when they talk about
+    // a place in a file. Both numbers come from the document rather than from
+    // the widget: the column counts characters, so an accented letter is one
+    // column and not the two bytes it occupies.
+    Text {
+        id: caret
+        anchors.left: parent.left
+        anchors.leftMargin: CelestinaTheme.spaceLg
+        anchors.verticalCenter: actions.verticalCenter
+        visible: root.session.active
+        text: "Ln " + root.session.caretLine + ", Col " + root.session.caretColumn
+        color: CelestinaTheme.textMuted
+        font.family: CelestinaTheme.monoFamily
+        font.pixelSize: CelestinaTheme.fontCaption
+
+        // Spelled out for assistive technology, where "Ln" and "Col" would be
+        // read as words. English because the repository language standard
+        // admits no other; the visible abbreviations above are neutral.
+        Accessible.role: Accessible.StaticText
+        Accessible.name: "Line " + root.session.caretLine
+                         + ", column " + root.session.caretColumn
+    }
+
     Text {
         id: status
-        anchors.left: parent.left
+        anchors.left: caret.visible ? caret.right : parent.left
         anchors.leftMargin: CelestinaTheme.spaceLg
         anchors.right: actions.left
         anchors.rightMargin: CelestinaTheme.spaceMd
