@@ -11,7 +11,7 @@ import sys
 import tomllib
 import types
 from collections.abc import Callable
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 
@@ -516,9 +516,13 @@ def language_value(
     scanner = language_namespace.get("suspicious_lines")
     if not callable(scanner):
         fail("language contract does not expose suspicious_lines")
+    # The suffix decides which product-copy exemption applies, so the index must
+    # be measured exactly as the repository scan measures it. Dropping it here
+    # counted every `qsTr()` string as debt and disagreed with the guard the
+    # same commit had just run.
     return call_dynamic_rule(
         f"HEAD:{LANGUAGE_SCANNER} suspicious_lines",
-        lambda value: len(scanner(value)),
+        lambda value: len(scanner(value, suffix=PurePosixPath(source).suffix.lower())),
         text,
     )
 
