@@ -21,9 +21,13 @@ the author in Spanish unless the author requests another language. See
 
 Before acting:
 
-1. Read this file and the affected project's `AGENTS.md` completely.
-2. Read its `README.md`, `STATUS.md`, `ROADMAP.md`, and `VALIDATION.md`; read the
-   active plan ledger when one exists.
+1. Run `python3 scripts/agent-context.py PATH` for the area you will touch and
+   read every document it prints, completely. Its output is the reading order,
+   not a summary: root and local `AGENTS.md`, the registered cross-cutting
+   rules, the owner's `README.md`, `STATUS.md`, `ROADMAP.md`, `VALIDATION.md`,
+   applicable contracts, and any active plan ledger.
+2. Read the active plan ledger completely when one exists; it is the
+   cross-session hand-off and it names the unit you may edit.
 3. Inspect `git status`, the real checkout, consumers, manifests, and guards.
    Documentation may be stale.
 4. Search first with `rg` or `rg --files`; reuse existing contracts instead of
@@ -157,6 +161,7 @@ implementing it. Proximity to the open file does not determine ownership.
 - `VALIDATION.md`: author-only real-session, hardware, or perceptual tests.
 - `docs/plans/active/`: execution order and durable change ledger.
 - `docs/inventories/`: exact immutable inventories for closed units.
+- `docs/version-history.tsv`: append-only product version history.
 - `docs/decisions/`, `discussions/`, `evidence/`, and `history/`: decisions,
   debate, proof, and history respectively.
 
@@ -196,8 +201,26 @@ change, plan, evidence, and inventory. Binary rows use `-/-`; mode-only rows use
 
 The main project prefix covers its tree, associated crates, and exact registered
 manifests. A component prefix covers only component code and those manifests,
-never plans, ledgers, status, or evidence. Local evidence lives under the
-project's `docs/evidence/`; suite evidence lives under root `docs/evidence/`.
+never plans, ledgers, status, or evidence. Both additionally cover
+`commit_policy.shared_ratchet_files`, so a change that shrinks a guarded file
+lowers its baseline row in the same commit instead of publishing a revision
+whose relevant guard is red. Python rules committed in HEAD interpret source,
+baselines and registry TOML from INDEX; staged or unstaged rule modules never
+execute in the current hook. HEAD and INDEX must both authorize every normal
+commit path and prefix, so staged policy cannot authorize its own expansion.
+Delivery discovery uses the conservative union of HEAD and INDEX layouts and
+rejects conflicting ownership. Merge commits cannot change ratchets and their
+staged guarded sources must still match the INDEX baselines. A semantic rule
+change becomes authority after landing: first add compatible dormant behavior,
+then activate it with any measurement update in a later commit. Hooks are
+repository-integrity controls, not an adversarial sandbox. A `lines`
+row may disappear only when the same staged unit changes or deletes that source
+and its evidence contains the exact field
+``- **Resolved architecture debt:** `path/to/source` ``. This is qualitative
+architectural closure, not a line threshold. Local evidence lives under the
+project's canonical `docs/evidence/`; suite evidence lives under root
+`docs/evidence/`. A component prefix cannot create a nested lookalike evidence
+directory to retire debt; use the owning project's primary prefix.
 
 A tracked inventory is immutable: never edit, move, rename, or reuse it. Later
 work gets a new unit and inventory. Archiving moves only the plan from
@@ -225,6 +248,10 @@ Every project uses entries registered in `docs/projects.toml`:
    unless the author explicitly opts out.
 5. The shell additionally has `activate-production.sh`; completion updates the
    on-disk bundle but never replaces a live session.
+
+For a product `bug`, `milestone` or `release`, bump the registered SemVer source
+and append its history row before this build. `maintenance` changes do neither.
+See [docs/contracts/versioning.md](docs/contracts/versioning.md).
 
 Do not use a parallel Cargo/CMake build as final evidence when it leaves a
 different deployable binary. Do not run `clean`; production targets and caches
@@ -254,14 +281,23 @@ author requests a commit:
    the same plan;
 2. compare its paths with the index and exclude unrelated work;
 3. separate projects unless the change is genuinely cross-suite;
-4. use the `docs/projects.toml` prefix and an imperative English subject:
-   `<prefix>: <action>`;
-5. run `python3 scripts/check-staged-units.py INVENTORY...`, then include code,
-   plan, inventories, and evidence in the same commit.
+4. keep the ledger's registered base prefix, choose the delivered change kind,
+   and use an imperative English subject:
+   `<prefix>-<bug|milestone|release|maintenance>: <action>`;
+5. for a product bug, milestone or release, apply the exact PATCH, MINOR or
+   MAJOR transition and append the matching `docs/version-history.tsv` row;
+6. run `python3 scripts/version_tool.py check` and
+   `python3 scripts/check-staged-units.py INVENTORY...`, then include code,
+   version declarations, history, plan, inventories, and evidence in the same
+   commit.
 
 `.githooks/pre-commit` and `.githooks/commit-msg` verify the staged batch,
-format, scope, and the single ledger-declared prefix. `suite:` never wraps
-incompatible local batches. Enable hooks in each clone with
+format, base scope, change kind, version transition, and the single
+ledger-declared prefix. `suite:` never wraps incompatible local batches. Enable hooks in each clone with
 `git config core.hooksPath .githooks`; Git does not transport that setting.
 Merges cannot close inventoried delivery units: finish the merge, then deliver
-the unit in an ordinary prefixed commit.
+the unit in an ordinary prefixed commit. Normal, revert and fixup subjects must
+start their inner action with a recognized English imperative and pass a
+conservative non-English prose detector. This is an integrity heuristic, not a
+complete linguistic parser. Historical replay uses an explicit scope-only mode
+and does not retrofit grammar onto old subjects.

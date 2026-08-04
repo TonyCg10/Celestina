@@ -41,7 +41,25 @@ implementation. An ADR explains a decision but does not grant permission.
 
 - Preserve unrelated changes, committed or not.
 - Do not revert or reformat outside the unit.
-- Never raise baselines, allowlists, or limits to silence a guard.
+- Never raise baselines, allowlists, or limits to silence a guard. Lowering a
+  ratchet row that a real improvement earned is the opposite case: it belongs in
+  the same commit, which is what `commit_policy.shared_ratchet_files` allows.
+  The staged source must exactly match the new numeric row. Removing an
+  architecture `lines` row also requires the exact
+  ``- **Resolved architecture debt:** `path/to/source` `` field in that unit's
+  staged evidence; line count alone never proves resolution. Only the owning
+  project's canonical `docs/evidence/`, or root `docs/evidence/` for `suite:`,
+  is valid. Component prefixes cannot retire the row through a nested lookalike
+  evidence directory. Normal commit paths and prefixes must be authorized by
+  both HEAD and INDEX; a staged registry cannot authorize its own expansion.
+  Committed Python from HEAD interprets both registry revisions and all staged
+  source/baseline data, so neither INDEX nor worktree rule modules execute.
+  Delivery layouts are the conservative HEAD/INDEX union and conflicting owner
+  or prefix assignments fail. Merge commits cannot change ratchets and their
+  staged guarded sources must match the INDEX rows exactly. A semantics-changing
+  rule migration first lands compatible dormant behavior, then activates it
+  with any baseline adjustment after that implementation is committed. Hooks
+  are repository-integrity controls, not an adversarial sandbox.
 - Separate mechanical and behavioral changes when independently verifiable.
 - Update the ledger before expanding scope.
 
@@ -75,6 +93,9 @@ Every active plan contains:
 
 Line numbers are secondary because they drift. Update the row at scope changes
 and closure; future agents rely on it instead of conversation context.
+The ledger stores this base authority (`siderita:`), while the final commit
+subject adds the change kind (`siderita-bug:`). The suffix never creates or
+widens a path scope.
 
 ## Plan identity and roadmap link
 
@@ -132,13 +153,25 @@ Before commit:
 - the index equals the inventory union;
 - all linked inventories and evidence are staged;
 - one registered prefix covers every staged path;
-- the subject is `<prefix>: <English imperative>`;
+- the subject is
+  `<prefix>-<bug|milestone|release|maintenance>: <English imperative>`;
+- a product `bug`, `milestone` or `release` makes the exact PATCH, MINOR or
+  MAJOR transition and appends one matching immutable version-history row;
+- `maintenance` changes do not alter a registered product version or its
+  history;
 - partial staging does not change inventory truth;
 - merges finish before delivery units close.
 
 `.githooks/pre-commit`, `.githooks/commit-msg`,
 `scripts/check-staged-units.py`, and `scripts/commit_scope.py` enforce these
-rules locally and in CI where applicable.
+rules locally and in CI where applicable. New normal, revert and fixup subjects
+must begin their inner action with a recognized English imperative and pass a
+conservative non-English prose detector; this deliberately catches common
+violations but is not full linguistic analysis. Historical replay has a
+scope-only mode so inherited subjects are not rewritten.
+
+The complete mapping, multi-product suite rule and revert/fixup policy live in
+[the product version contract](../contracts/versioning.md).
 
 ## Archive transition
 

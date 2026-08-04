@@ -3,11 +3,17 @@ set -eu
 
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 suite_root=$(CDPATH= cd -- "$project_root/.." && pwd)
+artifact_tool=$suite_root/scripts/production_artifact.py
+
+if [ "$#" -eq 0 ]; then
+    exec python3 "$artifact_tool" run-build grafita
+fi
+if [ "$#" -ne 1 ] || [ "$1" != "--production-runner-internal" ] || \
+    [ "${CELESTINA_PRODUCTION_RUNNER_PHASE:-}" != "build" ]; then
+    echo "build-production: internal mode is reserved for the production runner" >&2
+    exit 2
+fi
 
 (cd "$project_root" && cargo build --release --locked --bin grafita)
 
-python3 "$suite_root/scripts/production_artifact.py" record-build grafita \
-    --build-command 'cargo build --manifest-path grafita/Cargo.toml --release --locked --bin grafita'
-
-echo ">> Grafita release lista en $project_root/target/release/grafita (sin instalar)"
-
+echo ">> Grafita release build steps completed (not installed)"

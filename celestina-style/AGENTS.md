@@ -38,7 +38,7 @@ constraints for `celestina-style/`; it cannot relax the root or grant authority.
 - `celestina-style/scripts/build-production.sh`
 - `celestina-style/scripts/verify-production.sh`
 - `celestina-style/scripts/status-production.sh`
-- Verification of every affected consumer
+- Every affected deployable consumer's registered `complete-production.sh`
 
 The gallery and automatable tests are part of verification. Blur, compositor,
 real focus, and AT-SPI belong in `VALIDATION.md`. This module is nondeployable

@@ -48,10 +48,12 @@ This plan records work but grants no authorization beyond the repository rules.
 - CMake registration, QML lint and CTest pass.
 - Rust format, Clippy and package tests pass with the lockfile unchanged.
 - The architecture and documentation contracts pass.
-- `scripts/verify-production.sh` leaves the same release artifacts that
-  deploy/activate consume; no second compilation is required.
-- No process is activated, package installed, service changed or live config
-  edited by the automated exit.
+- `scripts/complete-production.sh` builds once, verifies those exact bytes and
+  updates the on-disk bundle that deploy/activate consume; no second
+  compilation is required and the live session is never replaced.
+- The author-test bundle is updated, but no live process or session is replaced,
+  no package manager or system prefix is touched, no service is changed and no
+  live configuration is edited by the automated exit.
 
 R3 implementation closes on this evidence. The live OSD, monitor, gamma,
 idle/DPMS and lock/suspend checks remain an independent `VAL-R3` run.

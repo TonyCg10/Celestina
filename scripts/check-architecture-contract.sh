@@ -6,7 +6,7 @@ set -uo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "$script_dir/.." && pwd)
-readonly baseline_file="$script_dir/architecture-baseline.tsv"
+readonly baseline_file="${ARCHITECTURE_BASELINE_FILE:-$script_dir/architecture-baseline.tsv}"
 readonly architecture_scanner="$script_dir/architecture_scanners.py"
 
 cd "$repo_root"
@@ -37,67 +37,26 @@ check_baseline_history() {
     [[ -n $compare_ref ]] || return
 
     if ! git rev-parse --verify --quiet "$compare_ref^{commit}" >/dev/null; then
-        fail "no se puede resolver ARCHITECTURE_COMPARE_REF=$compare_ref; falta historial para proteger el baseline"
+        fail "cannot resolve ARCHITECTURE_COMPARE_REF=$compare_ref; history is missing to protect the baseline"
         return
     fi
 
     if ! git cat-file -e "$compare_ref:scripts/architecture-baseline.tsv" 2>/dev/null; then
-        echo "architecture: baseline inicial; no existe historial en $compare_ref"
+        echo "architecture: initial baseline; no history at $compare_ref"
         return
     fi
 
-    if ! python3 - "$compare_ref" "$baseline_file" <<'PY'
-import pathlib
-import subprocess
-import sys
-
-compare_ref = sys.argv[1]
-current_path = pathlib.Path(sys.argv[2])
-
-def parse(text, source):
-    result = {}
-    for number, raw in enumerate(text.splitlines(), 1):
-        if not raw or raw.startswith("#"):
-            continue
-        parts = raw.split("\t")
-        if len(parts) != 3 or parts[0] not in {"lines", "control"} or not parts[2].isdigit():
-            print(f"architecture: ERROR: {source}:{number}: baseline TSV invalido", file=sys.stderr)
-            raise SystemExit(2)
-        key = (parts[0], parts[1])
-        if key in result:
-            print(f"architecture: ERROR: {source}:{number}: entrada duplicada: {parts[0]} {parts[1]}", file=sys.stderr)
-            raise SystemExit(2)
-        result[key] = int(parts[2])
-    return result
-
-old_text = subprocess.run(
-    ["git", "show", f"{compare_ref}:scripts/architecture-baseline.tsv"],
-    check=True,
-    capture_output=True,
-    text=True,
-).stdout
-old = parse(old_text, compare_ref)
-current = parse(current_path.read_text(encoding="utf-8"), str(current_path))
-errors = []
-for key, maximum in current.items():
-    kind, name = key
-    if key not in old:
-        errors.append(f"nueva deuda baseline {kind}: {name} ({maximum})")
-    elif maximum > old[key]:
-        errors.append(f"baseline aumentado: {kind} {name} {old[key]} -> {maximum}")
-if errors:
-    for error in errors:
-        print(f"architecture: ERROR: {error}", file=sys.stderr)
-    raise SystemExit(1)
-PY
+    if ! python3 "$architecture_scanner" baseline-history \
+        "$compare_ref" "$baseline_file" "$repo_root/docs/projects.toml" \
+        --root "$repo_root"
     then
-        fail "el baseline de arquitectura solo puede disminuir respecto a $compare_ref"
+        fail "the architecture baseline may only decrease against $compare_ref"
     fi
 }
 
 check_modularity_debt() {
     if [[ ! -f $baseline_file ]]; then
-        fail "falta el baseline $baseline_file"
+        fail "missing baseline $baseline_file"
         return
     fi
 
@@ -111,27 +70,27 @@ check_modularity_debt() {
 
         IFS=$'\t' read -r kind path maximum extra <<< "$raw"
         if [[ -z ${kind:-} || -z ${path:-} || -z ${maximum:-} || -n ${extra:-} ]]; then
-            fail "scripts/architecture-baseline.tsv:$line_number: se esperaban exactamente tres columnas TSV"
+            fail "scripts/architecture-baseline.tsv:$line_number: expected exactly three TSV columns"
             continue
         fi
         if [[ $kind != lines && $kind != control ]]; then
-            fail "scripts/architecture-baseline.tsv:$line_number: clase desconocida '$kind'"
+            fail "scripts/architecture-baseline.tsv:$line_number: unknown class '$kind'"
             continue
         fi
         if [[ ! $maximum =~ ^[1-9][0-9]*$ ]]; then
-            fail "scripts/architecture-baseline.tsv:$line_number: '$maximum' no es un maximo positivo"
+            fail "scripts/architecture-baseline.tsv:$line_number: '$maximum' is not a positive maximum"
             continue
         fi
         entry="$kind:$path"
         if [[ ${baseline_entries[$entry]+present} ]]; then
-            fail "scripts/architecture-baseline.tsv:$line_number: entrada duplicada para '$kind $path'"
+            fail "scripts/architecture-baseline.tsv:$line_number: duplicate entry for '$kind $path'"
             continue
         fi
         baseline_entries["$entry"]=1
 
         [[ $kind == lines ]] || continue
         if is_generated_path "$path" || ! is_guarded_source "$path"; then
-            fail "scripts/architecture-baseline.tsv:$line_number: '$path' no pertenece al conjunto vigilado"
+            fail "scripts/architecture-baseline.tsv:$line_number: '$path' is not in the guarded set"
             continue
         fi
         baseline["$path"]=$maximum
@@ -148,13 +107,13 @@ check_modularity_debt() {
     done < <(git ls-files --cached --others --exclude-standard -z)
 
     if ((guarded_count == 0)); then
-        fail "no se encontraron fuentes Rust/QML/C++ para medir"
+        fail "found no Rust/QML/C++ sources to measure"
     fi
 
     local lines expected
     for path in "${!baseline[@]}"; do
         if [[ ! -f $path ]]; then
-            fail "scripts/architecture-baseline.tsv: deuda obsoleta o fichero ausente: '$path'"
+            fail "scripts/architecture-baseline.tsv: stale debt or missing file: '$path'"
             continue
         fi
         # awk counts the final logical line even when a file omits its trailing
@@ -162,9 +121,9 @@ check_modularity_debt() {
         lines=$(awk 'END { print NR }' "$path")
         expected=${baseline[$path]}
         if ((lines > expected)); then
-            fail "$path: crecio de $expected a $lines lineas; la deuda inventariada no puede crecer"
+            fail "$path: grew from $expected to $lines lines; inventoried debt may not grow"
         elif ((lines < expected)); then
-            fail "$path: bajo de $expected a $lines lineas; reduzca el baseline a $lines para fijar la mejora"
+            fail "$path: fell from $expected to $lines lines; lower the baseline to $lines to lock the improvement in"
         fi
     done
 }
@@ -184,7 +143,7 @@ module_start = re.search(
     r"\blet\s+([A-Za-z_]\w*)\s*=\s*QmlModule::new\s*\(", text
 )
 if not module_start:
-    print(f"{source}: no se encontro la construccion QmlModule", file=sys.stderr)
+    print(f"{source}: QmlModule construction not found", file=sys.stderr)
     raise SystemExit(1)
 
 # Read the complete QmlModule builder statement, not arbitrary path strings in
@@ -212,21 +171,21 @@ for offset, char in enumerate(text[statement_start:], statement_start):
         opening = pairs[char]
         depth[opening] -= 1
         if depth[opening] < 0:
-            print(f"{source}: delimitadores invalidos en QmlModule", file=sys.stderr)
+            print(f"{source}: invalid delimiters in QmlModule", file=sys.stderr)
             raise SystemExit(1)
     elif char == ";" and all(value == 0 for value in depth.values()):
         statement_end = offset + 1
         break
 
 if statement_end is None:
-    print(f"{source}: sentencia QmlModule incompleta", file=sys.stderr)
+    print(f"{source}: incomplete QmlModule statement", file=sys.stderr)
     raise SystemExit(1)
 
 module_var = module_start.group(1)
 module_statement = text[statement_start:statement_end]
 builder_pattern = rf"CxxQtBuilder::new_qml_module\s*\(\s*{re.escape(module_var)}\s*\)"
 if not re.search(builder_pattern, text[statement_end:]):
-    print(f"{source}: QmlModule '{module_var}' no llega a CxxQtBuilder", file=sys.stderr)
+    print(f"{source}: QmlModule '{module_var}' never reaches CxxQtBuilder", file=sys.stderr)
     raise SystemExit(1)
 
 paths = re.findall(r'QmlFile::from\s*\(\s*"(qml/[^"\n]+\.qml)"\s*\)', module_statement)
@@ -238,20 +197,20 @@ if re.search(r"\.qml_files\s*\(\s*QML_FILES\s*\)", module_statement):
         flags=re.S,
     )
     if not qml_files:
-        print(f"{source}: QML_FILES se usa, pero no tiene el formato canonico", file=sys.stderr)
+        print(f"{source}: QML_FILES is used but does not have the canonical format", file=sys.stderr)
         raise SystemExit(1)
     listed_strings = re.findall(r'"([^"\n]+)"', qml_files.group(1))
     invalid = [path for path in listed_strings if not re.fullmatch(r"qml/[^\n]+\.qml", path)]
     if invalid:
-        print(f"{source}: QML_FILES contiene una ruta no QML: {invalid[0]}", file=sys.stderr)
+        print(f"{source}: QML_FILES contains a non-QML path: {invalid[0]}", file=sys.stderr)
         raise SystemExit(1)
     paths.extend(listed_strings)
 
 if not paths:
-    print(f"{source}: QmlModule no registra ningun fichero QML", file=sys.stderr)
+    print(f"{source}: QmlModule registers no QML file", file=sys.stderr)
     raise SystemExit(1)
 if len(paths) != len(set(paths)):
-    print(f"{source}: hay rutas QML registradas mas de una vez", file=sys.stderr)
+    print(f"{source}: some QML paths are registered more than once", file=sys.stderr)
     raise SystemExit(1)
 
 for path in sorted(paths):
@@ -266,11 +225,11 @@ check_qml_registration() {
     for app in siderita magnetita grafita fluorita; do
         build_file="$app/build.rs"
         if [[ ! -f $build_file ]]; then
-            fail "falta $build_file"
+            fail "missing $build_file"
             continue
         fi
         if ! registry=$(build_qml_registry "$build_file"); then
-            fail "$build_file: no se pudo obtener el registro QML efectivo"
+            fail "$build_file: could not read the effective QML registry"
             continue
         fi
 
@@ -287,31 +246,31 @@ check_qml_registration() {
                     resolved_file=$(realpath -e -- "$file" 2>/dev/null || true)
                     resolved_canonical=$(realpath -e -- "$canonical" 2>/dev/null || true)
                     if [[ -z $resolved_file || $resolved_file != "$resolved_canonical" ]]; then
-                        fail "$file: symlink compartido apunta fuera de $canonical"
+                        fail "$file: shared symlink points outside $canonical"
                     fi
                     if ! grep -Fxq -- "qml/$base" <<< "$registry"; then
-                        fail "$file: symlink compartido no registrado en $build_file como qml/$base"
+                        fail "$file: shared symlink not registered in $build_file as qml/$base"
                     fi
                     continue
                 fi
             fi
 
             if ! grep -Fxq -- "$relative" <<< "$registry"; then
-                fail "$file: QML regular ausente de $build_file (falta \"$relative\")"
+                fail "$file: plain QML missing from $build_file (missing \"$relative\")"
             fi
         done < <(find "$app/qml" \( -type f -o -type l \) -name '*.qml' -print0)
 
         while IFS= read -r registered; do
             [[ -n $registered ]] || continue
             if [[ ! -e "$app/$registered" && ! -L "$app/$registered" ]]; then
-                fail "$build_file: registra '$registered', pero el fichero no existe"
+                fail "$build_file: registers '$registered', but the file does not exist"
             fi
         done <<< "$registry"
     done
 
     if ! python3 "$architecture_scanner" cmake-qml-registration \
         celestina/CMakeLists.txt celestina/qml celestina; then
-        fail "celestina/CMakeLists.txt: registro QML incompleto o invalido"
+        fail "celestina/CMakeLists.txt: incomplete or invalid QML registration"
     fi
 }
 
@@ -329,7 +288,7 @@ qmldir_path = style / "qmldir"
 errors = []
 
 if not cmake_path.is_file() or not qmldir_path.is_file():
-    print("architecture: ERROR: faltan qmldir o CMakeLists.txt de celestina-style", file=sys.stderr)
+    print("architecture: ERROR: celestina-style qmldir or CMakeLists.txt is missing", file=sys.stderr)
     raise SystemExit(1)
 
 cmake = re.sub(r"#.*", "", cmake_path.read_text(encoding="utf-8"))
@@ -337,7 +296,7 @@ cmake = re.sub(r"#.*", "", cmake_path.read_text(encoding="utf-8"))
 def cmake_list(keyword):
     match = re.search(rf"(?m)^\s*{keyword}\s*$", cmake)
     if not match:
-        errors.append(f"{cmake_path}: falta la seccion {keyword}")
+        errors.append(f"{cmake_path}: missing the {keyword} section")
         return []
     result = []
     for line in cmake[match.end():].splitlines():
@@ -362,7 +321,7 @@ for number, raw in enumerate(qmldir_path.read_text(encoding="utf-8").splitlines(
         line,
     )
     if not match:
-        errors.append(f"{qmldir_path}:{number}: entrada publica invalida")
+        errors.append(f"{qmldir_path}:{number}: invalid public entry")
         continue
     qmldir_entries.append(
         {"singleton": bool(match.group(1)), "type": match.group(2), "file": match.group(4)}
@@ -374,7 +333,7 @@ qmldir_qml = [entry["file"] for entry in qmldir_entries]
 def report_duplicates(label, values):
     for value, count in collections.Counter(values).items():
         if count > 1:
-            errors.append(f"{label}: entrada duplicada '{value}'")
+            errors.append(f"{label}: duplicate entry '{value}'")
 
 report_duplicates(f"{cmake_path} QML_FILES", cmake_qml)
 report_duplicates(str(qmldir_path), qmldir_qml)
@@ -383,9 +342,9 @@ def compare_sets(left_label, left, right_label, right):
     left_set = set(left)
     right_set = set(right)
     for value in sorted(left_set - right_set):
-        errors.append(f"{value}: presente en {left_label}, ausente de {right_label}")
+        errors.append(f"{value}: present in {left_label}, missing from {right_label}")
     for value in sorted(right_set - left_set):
-        errors.append(f"{value}: presente en {right_label}, ausente de {left_label}")
+        errors.append(f"{value}: present in {right_label}, missing from {left_label}")
 
 compare_sets("celestina-style", actual_qml, "CMake QML_FILES", cmake_qml)
 compare_sets("celestina-style", actual_qml, "qmldir", qmldir_qml)
@@ -394,7 +353,7 @@ for entry in qmldir_entries:
     expected_type = pathlib.Path(entry["file"]).stem
     if entry["type"] != expected_type:
         errors.append(
-            f"{qmldir_path}: tipo '{entry['type']}' no coincide con {entry['file']}"
+            f"{qmldir_path}: type '{entry['type']}' does not match {entry['file']}"
         )
 
 cmake_singletons = set()
@@ -410,12 +369,12 @@ compare_sets("CMake singletons", cmake_singletons, "qmldir singletons", qmldir_s
 qrc_resources = []
 qrc_paths = sorted(style.glob("*.qrc"))
 if not qrc_paths:
-    errors.append("celestina-style: no se encontraron manifiestos QRC")
+    errors.append("celestina-style: no QRC manifest found")
 for qrc_path in qrc_paths:
     try:
         root = ET.parse(qrc_path).getroot()
     except (ET.ParseError, OSError) as error:
-        errors.append(f"{qrc_path}: QRC invalido: {error}")
+        errors.append(f"{qrc_path}: invalid QRC: {error}")
         continue
     for element in root.findall(".//file"):
         if element.text and element.text.strip():
@@ -426,7 +385,7 @@ report_duplicates(f"{cmake_path} RESOURCES", cmake_resources)
 compare_sets("CMake RESOURCES", cmake_resources, "QRC", qrc_resources)
 for resource in sorted(set(cmake_resources) | set(qrc_resources)):
     if not (style / resource).is_file():
-        errors.append(f"celestina-style/{resource}: recurso declarado pero ausente")
+        errors.append(f"celestina-style/{resource}: resource declared but missing")
 
 if errors:
     for error in errors:
@@ -445,19 +404,19 @@ check_top_level_auto_bindings() {
     # binding has parenthesis depth zero.
     if ! hits=$(python3 "$architecture_scanner" qml-auto-bindings \
         siderita/qml magnetita/qml grafita/qml fluorita/qml celestina/qml celestina-style); then
-        fail "el scanner de auto-bindings QML no pudo completar la inspeccion"
+        fail "the QML auto-binding scanner could not complete its inspection"
         return
     fi
 
     if [[ -n $hits ]]; then
         printf '%s\n' "$hits"
-        fail "auto-binding 'x: x' a profundidad QML superior; renombre la propiedad o use un alias"
+        fail "'x: x' auto-binding at higher QML depth; rename the property or use an alias"
     fi
 }
 
 check_visual_contract() {
     if ! bash celestina-style/scripts/check-style-contract.sh; then
-        fail "fallo el guard visual de celestina-style"
+        fail "the celestina-style visual guard failed"
     fi
 }
 
@@ -466,7 +425,7 @@ check_shared_style_links() {
 
     if ! python3 "$architecture_scanner" shared-style-links \
         celestina-style siderita/qml magnetita/qml grafita/qml fluorita/qml celestina/qml; then
-        fail "los symlinks QML compartidos no respetan el destino canonico relativo"
+        fail "shared QML symlinks do not respect the relative canonical target"
     fi
 
     for app in siderita magnetita grafita fluorita; do
@@ -481,13 +440,13 @@ check_shared_style_links() {
             [[ -e $file || -L $file ]] || continue
 
             if [[ ! -L $file ]]; then
-                fail "$file: copia del estilo compartido; debe ser un symlink a $canonical"
+                fail "$file: copy of the shared style; it must be a symlink to $canonical"
                 continue
             fi
             resolved_file=$(realpath -e -- "$file" 2>/dev/null || true)
             resolved_canonical=$(realpath -e -- "$canonical" 2>/dev/null || true)
             if [[ -z $resolved_file || $resolved_file != "$resolved_canonical" ]]; then
-                fail "$file: symlink del estilo apunta fuera de $canonical"
+                fail "$file: style symlink points outside $canonical"
             fi
         done
     done
@@ -512,7 +471,7 @@ check_local_control_ratchet() {
     if ! control_rows=$(python3 "$architecture_scanner" local-controls \
         --style-root celestina-style \
         siderita/qml magnetita/qml grafita/qml fluorita/qml celestina/qml); then
-        fail "el scanner de controles Qt locales no pudo completar la inspeccion"
+        fail "the local Qt control scanner could not complete its inspection"
         return
     fi
 
@@ -525,19 +484,19 @@ check_local_control_ratchet() {
 
     for key in "${!actual[@]}"; do
         if [[ ! ${baseline[$key]+present} ]]; then
-            fail "$key: control Qt reconstruido fuera del baseline; reutilice o amplie celestina-style"
+            fail "$key: Qt control rebuilt outside the baseline; reuse or extend celestina-style"
             continue
         fi
         if ((actual[$key] > baseline[$key])); then
-            fail "$key: crecio de ${baseline[$key]} a ${actual[$key]} instancias de control Qt local"
+            fail "$key: grew from ${baseline[$key]} to ${actual[$key]} local Qt control instances"
         elif ((actual[$key] < baseline[$key])); then
-            fail "$key: se redujo el control local; baje su entrada en scripts/architecture-baseline.tsv"
+            fail "$key: the local control shrank; lower its row in scripts/architecture-baseline.tsv"
         fi
     done
 
     for key in "${!baseline[@]}"; do
         if [[ ! ${actual[$key]+present} ]]; then
-            fail "$key: excepcion de control local obsoleta; retirela del guard"
+            fail "$key: stale local control exception; remove it from the guard"
         fi
     done
 }
@@ -551,13 +510,13 @@ check_dependency_direction() {
     # aliases cannot evade this boundary.
     if ! metadata=$(cargo metadata --manifest-path celestina-rs/Cargo.toml \
         --format-version 1 --no-deps --locked 2>/dev/null); then
-        fail "cargo metadata no pudo validar las dependencias de celestina-rs"
+        fail "cargo metadata could not validate the celestina-rs dependencies"
     elif ! hits=$(python3 "$architecture_scanner" dependency-metadata \
         <<< "$metadata"); then
-        fail "el scanner de dependencias no pudo interpretar cargo metadata"
+        fail "the dependency scanner could not parse cargo metadata"
     elif [[ -n $hits ]]; then
         printf '%s\n' "$hits"
-        fail "un crate de celestina-rs declara una dependencia de UI/compositor"
+        fail "a celestina-rs crate declares a UI/compositor dependency"
     fi
 
     if hits=$(grep -RInEH --include='*.qml' \
@@ -567,13 +526,13 @@ check_dependency_direction() {
     else
         grep_status=$?
         if ((grep_status != 1)); then
-            fail "grep no pudo inspeccionar las dependencias QML de celestina-style"
+            fail "grep could not inspect the celestina-style QML dependencies"
             return
         fi
     fi
     if [[ -n $hits ]]; then
         printf '%s\n' "$hits"
-        fail "celestina-style importa un modulo de aplicacion"
+        fail "celestina-style imports an application module"
     fi
 }
 
@@ -591,4 +550,4 @@ if ((failures)); then
     exit 1
 fi
 
-echo "Contrato de arquitectura: OK"
+echo "Architecture contract: OK"

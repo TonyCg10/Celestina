@@ -42,15 +42,16 @@ versioned QML surface whose inventories, aliases and motion checks fail on drift
 | STYLE-M1-A | planned | none | Public compatibility/deprecation contract and inventory test | Registry/parity guard plus focused negative fixture |
 | STYLE-M1-B | planned | STYLE-M1-A | Complete legacy-motion inventory and reduced route | Style guard, QML tests and negative fixture |
 | STYLE-M1-C | planned | STYLE-M1-A | Explicit mono and fallback contract | Module lint plus affected consumer builds |
-| STYLE-M1-D | planned | STYLE-M1-B, STYLE-M1-C | One verified production module and compatible consumers | Style production verify plus each affected consumer's registered verify script |
+| STYLE-M1-D | planned | STYLE-M1-B, STYLE-M1-C | One verified production module and affected consumers deployed with it | Style production verify plus each affected deployable consumer's registered completion script |
 
 ## Implementation exit
 
 Close `STYLE-M1` when public inventory drift and unguarded motion both fail
 automatically, the font contract is explicit, and the canonical module passes
-its `scripts/verify-production.sh` while affected consumers pass their own
-registered verify scripts. Real compositor and
-assistive-technology results remain independent validation rows.
+its `scripts/verify-production.sh` while every affected deployable consumer
+passes its registered `complete-production.sh`, placing those exact bytes in the
+author's normal test destination. Real compositor and assistive-technology
+results remain independent validation rows.
 
 ## Closed evidence
 

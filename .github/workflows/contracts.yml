@@ -1,4 +1,5 @@
-# Cross-suite contracts: architecture, style, documentation, language, and Git.
+# Cross-suite contracts: architecture, style, documentation, language, versions,
+# and Git.
 # This workflow intentionally has no path filter because it verifies relations
 # between projects.
 name: contracts
@@ -25,13 +26,16 @@ jobs:
           bash scripts/test-architecture-scanners.sh
           bash scripts/check-architecture-contract.sh
 
-      - name: Documentation, language, and agent context
+      - name: Documentation, language, versions, and agent context
         env:
           LANGUAGE_COMPARE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: |
           bash scripts/test-documentation-contract.sh
           bash scripts/check-documentation-contract.sh
           python3 scripts/check-language-contract.py
+          python3 scripts/test-version-contract.py
+          python3 scripts/version_tool.py check
+          python3 scripts/audit-version-commits.py
 
       # Hooks are local by definition (`core.hooksPath` is not transported), so
       # verify pushed history even when a commit came from an unconfigured clone,

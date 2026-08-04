@@ -48,7 +48,10 @@ exact artifacts without replacing the installed binary, touching trust state or
 restarting the service. Status reports whether the seal still matches the
 current inputs. Deploy consumes the verified manifest without recompiling and
 owns the single stop→copy→start sequence. `scripts/run.sh` remains an
-application-only human convenience, not the canonical workflow.
+application-only human convenience, not the canonical workflow. A change to
+`magnetita-core` also completes the Celestina shell because that bundle consumes
+the shared phone projection; shell completion updates disk but does not replace
+the live session.
 
 After completion, open `magnetita` for pairing, diagnostics and
 settings; the daemon continues to provide devices while the window is closed.

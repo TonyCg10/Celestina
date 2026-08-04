@@ -52,7 +52,10 @@ Build creates the release artifact once; verify tests that exact artifact
 without replacing the installed binary; status reports whether the verification
 seal still matches the current inputs; deploy installs the already verified
 binary, desktop entry and icons without recompiling. `scripts/run.sh` remains a
-human convenience, not the canonical agent verification entry.
+human convenience, not the canonical agent verification entry. A change to
+`grafita-core` also completes Siderita because its embedded editor consumes the
+same crate; verifying the second host without completing it would leave the
+author's installed file manager stale.
 
 After completion, launch `grafita [PATH]` or use the desktop
 entry.

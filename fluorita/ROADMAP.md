@@ -31,11 +31,14 @@ or duplication between standalone and Siderita.
 ## Implementation exit
 
 For any newly authorised checkpoint, close implementation when focused
-core/engine tests pass, both hosts are verified where the shared contract is
-affected, lifecycle/resource bounds are automated, and
-`scripts/verify-production.sh` passes against the artifact made by
-`scripts/build-production.sh`. Real playback or perceptual acceptance belongs
-to `VALIDATION.md` and never keeps implementation open.
+core/engine tests and lifecycle/resource bounds pass and every affected
+deployable host completes its registered production flow. Fluorita-only work
+uses `fluorita/scripts/complete-production.sh`; a shared `fluorita-core`,
+`fluorita-engine` or `fluorita-qt` change also uses
+`siderita/scripts/complete-production.sh`. Each command builds its release once,
+verifies those exact bytes and deploys them to the author's normal test
+destination. Real playback or perceptual acceptance belongs to `VALIDATION.md`
+and never keeps implementation open.
 
 ## Closed evidence
 

@@ -9,15 +9,15 @@ prefix=${HOME}/.local
 while [ "$#" -gt 0 ]; do
     case "$1" in
         -h|--help)
-            echo "uso: scripts/deploy-production.sh [--prefix DIR]" >&2
+            echo "usage: scripts/deploy-production.sh [--prefix DIR]" >&2
             exit 0
             ;;
         --prefix)
             shift
-            prefix=${1:?--prefix necesita un directorio}
+            prefix=${1:?--prefix requires a directory}
             ;;
         *)
-            echo "deploy-production: opción desconocida: $1" >&2
+            echo "deploy-production: unknown option: $1" >&2
             exit 2
             ;;
     esac
@@ -42,4 +42,4 @@ production_install_tree \
 production_install_file \
     "$project_root/scripts/celestina-launcher.sh" "$prefix/bin/celestina" 0755
 
-echo ">> bundle Celestina desplegado en $prefix; la sesión no fue activada"
+echo ">> Celestina bundle deployed to $prefix; the session was not activated"

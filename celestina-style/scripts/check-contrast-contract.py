@@ -28,7 +28,7 @@ def literal(name: str) -> RGBA:
         TEXT,
     )
     if not match:
-        raise ValueError(f"no se encontró un literal directo para {name}")
+        raise ValueError(f"no direct literal found for {name}")
     value = match.group(1)[1:]
     if len(value) == 6:
         alpha = 255
@@ -46,7 +46,7 @@ def scalar(name: str) -> float:
         TEXT,
     )
     if not match:
-        raise ValueError(f"no se encontró el escalar {name}")
+        raise ValueError(f"scalar {name} not found")
     return float(match.group(1))
 
 
@@ -66,7 +66,7 @@ def mixed_role(
         rf"theme\.{re.escape(amount_name)}\s*\)"
     )
     if not re.search(pattern, TEXT, flags=re.S):
-        raise ValueError(f"el rol {name} ya no usa la receta contractual")
+        raise ValueError(f"role {name} no longer uses the contractual recipe")
     return mix(source, target, amount)
 
 
@@ -135,10 +135,10 @@ def oklch_channels(lightness: float, chroma: float, hue: float) -> list[float]:
 
 
 def from_oklch(lightness: float, chroma: float, hue: float, alpha: float) -> RGBA:
-    """El mismo mapeo de gamut que el tema: bajar croma, nunca recortar canales.
+    """Use the theme's gamut mapping: reduce chroma, never clip channels.
 
-    Recortar gira el tono, y esta receta existe justamente para que un ámbar no
-    se vuelva oliva al oscurecerlo.
+    Clipping rotates the hue; this recipe specifically prevents amber from
+    turning olive when darkened.
     """
     channels = oklch_channels(lightness, chroma, hue)
     if not all(-0.002 <= c <= 1.002 for c in channels):
@@ -177,12 +177,12 @@ failures: list[str] = []
 def require(label: str, foreground: RGBA, background: RGBA, minimum: float) -> None:
     ratio = contrast(foreground, background)
     if ratio + 1e-9 < minimum:
-        failures.append(f"{label}: {ratio:.2f}:1; mínimo {minimum:.1f}:1")
+        failures.append(f"{label}: {ratio:.2f}:1; minimum {minimum:.1f}:1")
 
 
 def extremes() -> Iterable[tuple[str, RGBA]]:
-    yield "negro", (0, 0, 0, 1)
-    yield "blanco", (1, 1, 1, 1)
+    yield "black", (0, 0, 0, 1)
+    yield "white", (1, 1, 1, 1)
 
 
 try:
@@ -210,17 +210,17 @@ try:
     )
 
     panel_inks = {
-        "texto": text_hi,
-        "texto secundario": text_lo,
-        "enlace/acento": accent_link,
-        "peligro": danger,
-        "aviso": warning,
+        "text": text_hi,
+        "secondary text": text_lo,
+        "link/accent": accent_link,
+        "danger": danger,
+        "warning": warning,
     }
     for tint_name in ("compositorGlassTint", "compositorGlassFallback"):
         tint = literal(tint_name)
         for backdrop_name, backdrop in extremes():
             surface = composite(tint, backdrop)
-            require(f"{tint_name}/{backdrop_name}/foco exterior",
+            require(f"{tint_name}/{backdrop_name}/outer focus",
                     focus_ring, surface, 3.0)
             for ink_name, ink in panel_inks.items():
                 require(
@@ -232,65 +232,65 @@ try:
     progress_track = literal("mediaProgressTrack")
     for artwork_name, artwork in extremes():
         media_surface = composite(media_scrim, artwork)
-        require(f"media/{artwork_name}/texto", text_hi, media_surface, 4.5)
-        require(f"media/{artwork_name}/foco exterior",
+        require(f"media/{artwork_name}/text", text_hi, media_surface, 4.5)
+        require(f"media/{artwork_name}/outer focus",
                 focus_ring, media_surface, 3.0)
         rendered_track = composite(progress_track, media_surface)
         rendered_progress = composite(progress, media_surface)
         require(
-            f"media/{artwork_name}/progreso", rendered_progress, rendered_track, 3.0
+            f"media/{artwork_name}/progress", rendered_progress, rendered_track, 3.0
         )
 
     primary_states = {
         "normal": accent,
         "hover": mix(accent, accent_lift, hover_mix),
-        "pulsado": mix(accent, night, pressed_mix),
+        "pressed": mix(accent, night, pressed_mix),
     }
     for state, fill in primary_states.items():
-        require(f"botón primario/{state}", accent_ink, fill, 4.5)
+        require(f"primary button/{state}", accent_ink, fill, 4.5)
 
     for surface_name, surface in {
         "canvas": night,
-        "tarjeta": card,
-        "elevada": elevated,
+        "card": card,
+        "elevated": elevated,
     }.items():
-        require(f"foco exterior/{surface_name}", focus_ring, surface, 3.0)
+        require(f"outer focus/{surface_name}", focus_ring, surface, 3.0)
 
-    for state in ("normal", "hover", "pulsado"):
-        require(f"foco/botón destructivo/{state}/exterior",
+    for state in ("normal", "hover", "pressed"):
+        require(f"focus/destructive button/{state}/outer",
                 focus_ring, card, 3.0)
 
     require(
-        "texto seleccionado/campo",
+        "selected text/field",
         accent_ink,
-        primary_states["pulsado"],
+        primary_states["pressed"],
         4.5,
     )
 
-    # Los tonos de glifo sobre sus superficies: un icono no es texto, así que su
-    # suelo es el 3:1 de gráficos no textuales.
+    # Glyph tones against their surfaces: an icon is not text, so its floor is
+    # the 3:1 ratio for non-text graphics.
     glyph_tones = {
-        "carpeta": mixed_role(
+        "folder": mixed_role(
             "glyphDirectory", "accent", "accentLift", accent, accent_lift,
             "accentLinkMix", link_mix,
         ),
-        "archivo": literal("glyphFile"),
-        "enlace": literal("glyphSymlink"),
-        "navegación": literal("glyphNavigation"),
-        "dispositivo": literal("glyphDevice"),
-        "favorito": literal("favorite"),
+        "file": literal("glyphFile"),
+        "link": literal("glyphSymlink"),
+        "navigation": literal("glyphNavigation"),
+        "device": literal("glyphDevice"),
+        "favorite": literal("favorite"),
     }
     for tone_name, tone in glyph_tones.items():
         for surface_name, surface in {
             "canvas": night,
-            "tarjeta": card,
-            "elevada": elevated,
+            "card": card,
+            "elevated": elevated,
         }.items():
-            require(f"glifo {tone_name}/{surface_name}", tone, surface, 3.0)
+            require(f"glyph {tone_name}/{surface_name}", tone, surface, 3.0)
 
-    # El lavado de los iconos de contenido: lo que se pinta son los dos extremos
-    # y el fondo de la carpeta, no el token, así que es a ellos a quienes se les
-    # exige el 3:1 de gráficos no textuales sobre las superficies reales.
+    # Content icon washes paint the two endpoints and the folder backdrop, not
+    # the token itself, so each must meet the 3:1 non-text floor against the
+    # actual surfaces.
     wash_lift = scalar("iconGradientLift")
     wash_drop = scalar("iconGradientDrop")
     wash_turn = scalar("iconGradientTurn")
@@ -303,20 +303,19 @@ try:
                               saturation * (1 + wash_chroma / 2), hue, tone[3])
         for surface_name, surface in {
             "canvas": night,
-            "tarjeta": card,
-            "elevada": elevated,
+            "card": card,
+            "elevated": elevated,
         }.items():
-            require(f"icono {tone_name}/{surface_name}/lavado alto",
+            require(f"icon {tone_name}/{surface_name}/high wash",
                     top, surface, 3.0)
-            require(f"icono {tone_name}/{surface_name}/lavado bajo",
+            require(f"icon {tone_name}/{surface_name}/low wash",
                     bottom, surface, 3.0)
-            require(f"icono {tone_name}/{surface_name}/fondo carpeta",
+            require(f"icon {tone_name}/{surface_name}/folder backdrop",
                     backdrop, surface, 3.0)
 
-    # La hoja y el emblema no se pintan sobre la ventana sino sobre el propio
-    # icono, así que su par es el bolsillo y el fondo de la carpeta. La tinta del
-    # emblema no es fija: sobre un tono claro se cambia por una profunda, y aquí
-    # se reproduce esa misma decisión.
+    # The sheet and emblem are painted on the icon rather than the window, so
+    # their pairs are the pocket and folder backdrop. Emblem ink is not fixed:
+    # a light tone selects a deeper ink, which is reproduced here.
     sheet = literal("iconSheet")
     ink_threshold = scalar("iconEmblemInkThreshold")
     ink_lightness = scalar("iconEmblemInkLightness")
@@ -328,7 +327,7 @@ try:
             if pocket_l <= ink_threshold
             else from_oklch(ink_lightness, pocket_c * 0.85, pocket_h, 1.0)
         )
-        require(f"emblema/{tone_name}", ink, bottom, 3.0)
+        require(f"emblem/{tone_name}", ink, bottom, 3.0)
 
         lightness, saturation, hue = to_oklch(tone)
         backdrop = from_oklch(max(0.0, lightness - backdrop_drop),
@@ -339,17 +338,17 @@ try:
             if backdrop_l <= ink_threshold
             else from_oklch(ink_lightness, backdrop_c * 0.85, backdrop_h, 1.0)
         )
-        require(f"hoja/{tone_name}", paper, backdrop, 3.0)
+        require(f"sheet/{tone_name}", paper, backdrop, 3.0)
 
-    require("botón destructivo/pulsado", night, danger, 4.5)
-    require("metadata tenue/tarjeta", text_faint, card, 4.5)
+    require("destructive button/pressed", night, danger, 4.5)
+    require("faint metadata/card", text_faint, card, 4.5)
 except (OSError, ValueError) as error:
-    print(f"contraste: ERROR: {error}", file=sys.stderr)
+    print(f"contrast: ERROR: {error}", file=sys.stderr)
     raise SystemExit(2) from error
 
 if failures:
     for failure in failures:
-        print(f"contraste: ERROR: {failure}", file=sys.stderr)
+        print(f"contrast: ERROR: {failure}", file=sys.stderr)
     raise SystemExit(1)
 
-print("Contrato de contraste: OK")
+print("Contrast contract: OK")

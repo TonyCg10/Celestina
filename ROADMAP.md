@@ -1,6 +1,6 @@
 # Celestina suite implementation roadmap
 
-- **Status:** done
+- **Status:** idle
 - **Active implementation checkpoint:** none
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
@@ -40,6 +40,43 @@ project.
 The exact build order, exclusions, commit inventory and results live in the
 [archived plan](docs/plans/archive/2026-08-03-repository-governance.md) and
 [evidence record](docs/evidence/2026-08-03-repository-governance.md).
+
+## GOV-2 — Align the guards with the contract they enforce
+
+**Hypothesis:** the mechanical gaps found by auditing GOV-1 and the author's
+accepted typed-version convention can share one coherent guard boundary because
+both are interpreted from the same committed registry and staged delivery.
+
+**Tangible outcome:** a green run of every guard and fixture suite prints
+English only; a project commit that shrinks a guarded file is accepted together
+with its baseline row; `agent-context.py` prints the standards local contracts
+require; typed product commits advance exact SemVer declarations and append
+durable history; and no root document describes a workflow, exit command or CI
+job the checkout lacks.
+
+- [x] Translate every changed unratcheted guard and production entry point that
+      emitted Spanish, and lower or remove each baseline row whose measured
+      debt was eliminated by the translated sections.
+- [x] Register `commit_policy.shared_ratchet_files` so a shrunk guarded file and
+      its ratchet row land in the same commit instead of publishing a revision
+      whose own architecture guard is red.
+- [x] Register `suite.shared_rules` and print it from `scripts/agent-context.py`
+      so the deterministic context is complete, not merely sufficient.
+- [x] Correct ADR 0001, the CI contract map, every stale project exit command,
+      the shell plan's deployment wording and the volatile claims in the root
+      `STATUS.md`.
+- [x] Adopt `bug`, `milestone`, `release` and `maintenance` commit kinds,
+      register the six current product version sources, and enforce exact
+      SemVer/history transitions without inventing retrospective releases.
+- [x] Close the single ledger unit with its inventory and evidence record
+      when the author requests the commit.
+
+The remaining exclusions are deliberate and each needs an accepted decision first:
+hardening the language detector (it would force a re-based ratchet), requiring
+inventories for project-prefixed source commits, defining proportionality for
+`complete-production.sh` fan-out across shared-crate consumers, and collapsing
+the ledger rules that are currently written in five documents. They are recorded
+in [the archived plan](docs/plans/archive/2026-08-03-guard-contract-alignment.md).
 
 ## Project implementation fronts
 

@@ -12,6 +12,7 @@ roadmap = "ROADMAP.md"
 validation = "VALIDATION.md"
 active_plans = "docs/plans/active"
 allow_all_commit_paths = true
+shared_rules = ["CONTRIBUTING.md", "docs/standards/fixture.md"]
 
 [[projects]]
 id = "app"
@@ -25,6 +26,7 @@ status = "app/STATUS.md"
 roadmap = "app/ROADMAP.md"
 validation = "app/VALIDATION.md"
 active_plans = "app/docs/plans/active"
+context_documents = ["app/docs/context.md"]
 source_roots = ["app/src", "core/crates/app-core"]
 commit_roots = ["app/", "core/crates/app-core/"]
 production_role = "desktop-application"
@@ -51,6 +53,7 @@ readme = "core/README.md"
 status = "core/STATUS.md"
 roadmap = "core/ROADMAP.md"
 validation = "core/VALIDATION.md"
+context_documents = []
 source_roots = ["core/crates"]
 commit_roots = ["core/"]
 production_role = "rust-workspace"

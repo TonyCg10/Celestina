@@ -29,10 +29,13 @@ based acceptance and loss-free-save contracts.
 ## Implementation exit
 
 For any newly authorised checkpoint, close implementation when its code and
-focused domain tests pass, both affected hosts are checked where applicable,
-and `scripts/verify-production.sh` passes against the exact artifact produced by
-`scripts/build-production.sh`. A perceptible/manual result goes to
-`VALIDATION.md` and never keeps the implementation checkpoint open.
+focused domain tests pass and every affected deployable host completes its
+registered production flow. Grafita-only work uses
+`grafita/scripts/complete-production.sh`; a shared `grafita-core` change also
+uses `siderita/scripts/complete-production.sh`. Each command builds its release
+once, verifies those exact bytes and deploys them to the author's normal test
+destination. A perceptible/manual result goes to `VALIDATION.md` and never
+keeps the implementation checkpoint open.
 
 ## Closed evidence
 

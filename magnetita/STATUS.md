@@ -1,8 +1,8 @@
 # Magnetita status
 
 - **Updated:** 2026-08-03
-- **Implementation:** version 1.0.0 and the post-release protocol/D-Bus/MPRIS
-  hardening are present; `MAG-M1` is planned and not active
+- **Implementation:** the registered product version and the post-release
+  protocol/D-Bus/MPRIS hardening are present; `MAG-M1` is planned and not active
 - **Author validation:** the original 1.0 daily set passed on the real phone;
   hardening revalidation remains in [VALIDATION.md](VALIDATION.md)
 

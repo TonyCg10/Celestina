@@ -8,10 +8,10 @@ default_prefix=${HOME}/.local
 prefix=$default_prefix
 if [ "${1:-}" = "--prefix" ]; then
     shift
-    prefix=${1:?--prefix necesita un directorio}
+    prefix=${1:?--prefix requires a directory}
     shift
 fi
-[ "$#" -eq 0 ] || { echo "uso: scripts/deploy-production.sh [--prefix DIR]" >&2; exit 2; }
+[ "$#" -eq 0 ] || { echo "usage: scripts/deploy-production.sh [--prefix DIR]" >&2; exit 2; }
 
 app_id=org.celestina.Siderita
 production_require_verified "$suite_root" siderita
@@ -31,4 +31,4 @@ if [ "$prefix" = "$default_prefix" ] && command -v busctl >/dev/null 2>&1; then
         org.freedesktop.DBus ReloadConfig >/dev/null 2>&1 || true
 fi
 
-echo ">> Siderita verificada desplegada en $prefix sin recompilar"
+echo ">> verified Siderita deployed to $prefix without rebuilding"

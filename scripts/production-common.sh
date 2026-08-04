@@ -109,7 +109,7 @@ production_install_xdg_application() (
     production_prefix=$6
 
     if ! command -v rsvg-convert >/dev/null 2>&1; then
-        echo "deploy-production: se necesita rsvg-convert (librsvg)" >&2
+        echo "deploy-production: rsvg-convert (librsvg) is required" >&2
         return 1
     fi
 

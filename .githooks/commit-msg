@@ -4,7 +4,7 @@ set -eu
 # Canonical prefixes and roots live in docs/projects.toml. The guard also checks
 # the single prefix of the staged inventory batch. This wrapper stays small so
 # scope can be tested without preparing the index:
-#   printf '%s\n' PATH... | .githooks/commit-msg --check 'prefix: action'
+#   printf '%s\n' PATH... | .githooks/commit-msg --check 'prefix-kind: action'
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 root=$(CDPATH= cd -- "$script_dir/.." && pwd)

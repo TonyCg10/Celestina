@@ -11,6 +11,7 @@
 | `VALIDATION.md` | manual author checks and results | implementation tasks |
 | `docs/plans/active/` | settled execution order and change ledger | open design debate |
 | `docs/inventories/` | exact stable immutable unit inventories | backlog or execution prose |
+| `docs/version-history.tsv` | append-only product version transitions | copied current-version declarations |
 | `docs/decisions/` | accepted decisions and consequences | active work lists |
 | `docs/discussions/` | dated unresolved/adversarial reasoning | silently settled policy |
 | `docs/evidence/` | commands, environment, observations, limits | aspirations |
@@ -116,6 +117,8 @@ A new registered project includes, in one coherent unit:
 
 - entry in `docs/projects.toml` with owner, prefix, source/commit roots, and
   production entries;
+- a canonical product version source plus adoption-baseline history row, or an
+  explicit `versioned = false` declaration for an aggregate workspace;
 - local `AGENTS.md`, `README.md`, `STATUS.md`, `ROADMAP.md`, and
   `VALIDATION.md`;
 - project-local `docs/plans/{active,archive}`, `docs/evidence`, and

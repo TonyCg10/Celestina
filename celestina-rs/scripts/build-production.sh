@@ -3,11 +3,17 @@ set -eu
 
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 suite_root=$(CDPATH= cd -- "$project_root/.." && pwd)
+artifact_tool=$suite_root/scripts/production_artifact.py
+
+if [ "$#" -eq 0 ]; then
+    exec python3 "$artifact_tool" run-build celestina-rs
+fi
+if [ "$#" -ne 1 ] || [ "$1" != "--production-runner-internal" ] || \
+    [ "${CELESTINA_PRODUCTION_RUNNER_PHASE:-}" != "build" ]; then
+    echo "build-production: internal mode is reserved for the production runner" >&2
+    exit 2
+fi
 
 (cd "$project_root" && cargo build --workspace --release --locked)
 
-python3 "$suite_root/scripts/production_artifact.py" record-build celestina-rs \
-    --build-command 'cargo build --manifest-path celestina-rs/Cargo.toml --workspace --release --locked'
-
-echo ">> workspace Rust release listo en $project_root/target (sin instalar)"
-
+echo ">> Rust release workspace build steps completed (not installed)"

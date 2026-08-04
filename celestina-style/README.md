@@ -45,9 +45,10 @@ scripts/status-production.sh
 The first command builds the registered production module; the second verifies
 that exact artifact and its local visual contracts without installing it;
 status reports whether the verification seal still matches the current inputs.
-When a shared change can affect an application, run that consumer's registered
-verify script separately and record both results. CelestinaStyle is not
-deployable. For a human visual review,
+CelestinaStyle is not deployable. When a shared change affects an application,
+run every affected consumer's registered `complete-production.sh`; verification
+of the module alone does not place the changed style in the author's installed
+applications. For a human visual review,
 `gallery/run.sh` opens the source gallery; its offscreen mode does not prove
 blur or compositor effects.
 

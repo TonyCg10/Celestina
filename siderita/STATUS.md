@@ -1,8 +1,8 @@
 # Siderita status
 
 - **Updated:** 2026-08-03
-- **Implementation:** version 1.0.1 is present; CP0-CP7 behaviour exists in the
-  checkout and the next portal-parenting checkpoint is planned, not active
+- **Implementation:** the registered product version and CP0-CP7 behaviour are
+  present; the next portal-parenting checkpoint is planned, not active
 - **Author validation:** mixed; current manual queue is in
   [VALIDATION.md](VALIDATION.md)
 

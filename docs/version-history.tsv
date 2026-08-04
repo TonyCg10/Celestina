@@ -1,0 +1,8 @@
+# Append-only Celestina product version history.
+# owner	version	kind	unit	summary
+celestina	0.1.0	baseline	GOV-2-A	Adopt the existing Celestina version as the verified baseline
+celestina-style	1.0.0	baseline	GOV-2-A	Adopt the existing CelestinaStyle version as the verified baseline
+siderita	1.0.1	baseline	GOV-2-A	Adopt the existing Siderita version as the verified baseline
+magnetita	1.0.0	baseline	GOV-2-A	Adopt the existing Magnetita version as the verified baseline
+grafita	1.0.0	baseline	GOV-2-A	Adopt the existing Grafita version as the verified baseline
+fluorita	1.0.0	baseline	GOV-2-A	Adopt the existing Fluorita version as the verified baseline

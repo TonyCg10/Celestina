@@ -41,14 +41,15 @@ on invalid/unsupported ones and still answers every request.
 |---|---|---|---|---|
 | SID-M1-A | planned | none | Typed bounded parser and invalid-handle fallbacks | Focused Rust/C++ tests |
 | SID-M1-B | planned | SID-M1-A | Minimal imported-parent lifecycle wired before map | Qt lifecycle test where headless support permits |
-| SID-M1-C | planned | SID-M1-B | Portal remains compatible and production artifact is verified | `scripts/build-production.sh` then `scripts/verify-production.sh` |
+| SID-M1-C | planned | SID-M1-B | Portal remains compatible and the author's binary carries the verified bytes | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
 Close `SID-M1` when valid/invalid/unsupported handle paths are covered, portal
-requests still answer and the exact production artifact passes
-`scripts/verify-production.sh`. Do not keep the checkpoint open for the real
-Wayland parent-child observation; that result belongs to `VAL-SID-04`.
+requests still answer and `scripts/complete-production.sh` builds, verifies and
+deploys those exact bytes so the author's normal binary needs no rebuild. Do not
+keep the checkpoint open for the real Wayland parent-child observation; that
+result belongs to `VAL-SID-04`.
 
 ## Closed evidence
 

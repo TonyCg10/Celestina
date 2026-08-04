@@ -8,7 +8,7 @@ cd "$repo_root"
 
 contract_manifest=''
 if ! contract_manifest=$(mktemp); then
-    echo "No se pudo crear el manifiesto temporal del contrato QML." >&2
+    echo "Could not create the temporary QML contract manifest." >&2
     exit 1
 fi
 trap 'rm -f -- "$contract_manifest"' EXIT
@@ -18,7 +18,7 @@ if ! find siderita/qml magnetita/qml grafita/qml fluorita/qml celestina/qml cele
     -type f -name '*.qml' \
     ! -path 'celestina-style/CelestinaTheme.qml' \
     -print0 > "$contract_manifest"; then
-    echo "No se pudo enumerar el árbol QML completo." >&2
+    echo "Could not enumerate the complete QML tree." >&2
     exit 1
 fi
 
@@ -28,7 +28,7 @@ while IFS= read -r -d '' file; do
 done < "$contract_manifest"
 
 if ((${#contract_files[@]} == 0)); then
-    echo "No se encontraron archivos QML para auditar." >&2
+    echo "Found no QML files to audit." >&2
     exit 1
 fi
 
@@ -39,11 +39,11 @@ if structural_hits=$(python3 scripts/architecture_scanners.py qml-style-contract
     siderita/qml magnetita/qml grafita/qml fluorita/qml celestina/qml celestina-style); then
     if [[ -n $structural_hits ]]; then
         printf '%s\n' "$structural_hits"
-        printf 'ERROR: el scanner estructural encontro valores visuales directos.\n\n' >&2
+        printf 'ERROR: the structural scanner found direct visual values.\n\n' >&2
         failures=1
     fi
 else
-    printf 'ERROR: el scanner estructural no pudo completar el contrato visual.\n\n' >&2
+    printf 'ERROR: the structural scanner could not complete the visual contract.\n\n' >&2
     failures=1
 fi
 
@@ -51,11 +51,11 @@ if copy_hits=$(python3 scripts/architecture_scanners.py style-copies \
     celestina-style siderita/qml magnetita/qml grafita/qml fluorita/qml celestina/qml); then
     if [[ -n $copy_hits ]]; then
         printf '%s\n' "$copy_hits"
-        printf 'ERROR: una copia renombrada evade los enlaces de celestina-style.\n\n' >&2
+        printf 'ERROR: a renamed copy bypasses the celestina-style links.\n\n' >&2
         failures=1
     fi
 else
-    printf 'ERROR: no se pudo comparar el estilo compartido con sus consumidores.\n\n' >&2
+    printf 'ERROR: could not compare the shared style with its consumers.\n\n' >&2
     failures=1
 fi
 
@@ -69,7 +69,7 @@ check_pattern() {
     else
         status=$?
         if ((status != 1)); then
-            printf 'ERROR: grep no pudo completar el contrato visual (%s).\n\n' \
+            printf 'ERROR: grep could not complete the visual contract (%s).\n\n' \
                 "$message" >&2
             failures=1
             return
@@ -86,46 +86,46 @@ check_pattern() {
 # primitive values and derivation recipes live. App and component QML consume
 # semantic tokens only.
 check_pattern \
-    'literal hexadecimal fuera de CelestinaTheme.qml' \
+    'hexadecimal literal outside CelestinaTheme.qml' \
     '#[[:xdigit:]]{3,8}'
 check_pattern \
-    'color nominal fuera de CelestinaTheme.qml; usa un token semántico' \
+    'named color outside CelestinaTheme.qml; use a semantic token' \
     "(color|border\\.color|selectionColor|selectedTextColor|placeholderTextColor|fillColor)[[:space:]]*:[[:space:]]*['\"][[:alpha:]][[:alnum:]_-]*['\"]"
 check_pattern \
-    'transformación de color local; deriva el estado en CelestinaTheme.qml' \
+    'local color transformation; derive the state in CelestinaTheme.qml' \
     'Qt\.(rgba|darker|lighter|tint)[[:space:]]*\('
 check_pattern \
-    'acceso a ref.* desde un consumidor; usa un rol semántico sys.*' \
+    'ref.* access from a consumer; use a semantic sys.* role' \
     'CelestinaTheme\.ref([^[:alnum:]_]|$)'
 
 # These values affect the visual language globally. Numeric layout coordinates
 # remain local by design, but visual anatomy and state must be tokenized.
 check_pattern \
-    'duración de animación directa; usa la escala motion*' \
+    'direct animation duration; use the motion* scale' \
     'duration[[:space:]]*:[[:space:]]*[0-9]'
 check_pattern \
-    'curva de animación directa; usa un token ease*' \
+    'direct animation curve; use an ease* token' \
     'easing\.type[[:space:]]*:[[:space:]]*Easing\.'
 check_pattern \
-    'tamaño tipográfico directo; usa un rol font*' \
+    'direct type size; use a font* role' \
     'font\.pixelSize[[:space:]]*:[[:space:]]*[0-9]'
 check_pattern \
-    'peso tipográfico directo; usa un rol weight*' \
+    'direct type weight; use a weight* role' \
     'font\.weight[[:space:]]*:[[:space:]]*[0-9]|Font\.(Normal|Medium|DemiBold|Bold)'
 check_pattern \
-    'tracking tipográfico directo; usa un token de tipografía' \
+    'direct type tracking; use a typography token' \
     'font\.letterSpacing[[:space:]]*:[[:space:]]*[0-9]'
 check_pattern \
-    'radio visual directo; usa radius* o una cápsula derivada de height' \
+    'direct visual radius; use radius* or a capsule derived from height' \
     'radius[[:space:]]*:[[:space:]]*[0-9]'
 check_pattern \
-    'grosor de borde directo; usa borderHairline o borderFocus' \
+    'direct border thickness; use borderHairline or borderFocus' \
     'border\.width[[:space:]]*:[^;]*[[:space:]?:][1-9][0-9]*(\.[0-9]+)?([[:space:]?:)]|$)'
 check_pattern \
-    'padding visual directo; usa space* o una métrica comp*' \
+    'direct visual padding; use space* or a comp* metric' \
     '(^|[^[:alnum:]_])(leftPadding|rightPadding|topPadding|bottomPadding|padding)[[:space:]]*:[[:space:]]*[1-9][0-9]*(\.[0-9]+)?([[:space:]]|$)'
 check_pattern \
-    'opacidad visual directa; usa un token de estado/énfasis' \
+    'direct visual opacity; use a state/emphasis token' \
     'opacity[[:space:]]*:[^;]*[[:space:]?:]0\.[0-9]+'
 
 if ! python3 celestina-style/scripts/check-contrast-contract.py; then
@@ -136,4 +136,4 @@ if ((failures)); then
     exit 1
 fi
 
-echo "Contrato visual QML: OK"
+echo "QML visual contract: OK"

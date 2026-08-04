@@ -1,8 +1,8 @@
 # Fluorita status
 
 - **Updated:** 2026-08-03
-- **Implementation:** version 1.0.0 and checkpoints F0-F4 are present; there is
-  no active implementation checkpoint
+- **Implementation:** the registered product version and checkpoints F0-F4 are
+  present; there is no active implementation checkpoint
 - **Author validation:** the version-1 playback and interaction pass is closed;
   see [VALIDATION.md](VALIDATION.md)
 

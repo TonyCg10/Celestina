@@ -50,8 +50,10 @@ truthful OSD without depending on a Noctalia command path.
 - [ ] Supply exact opt-in configuration and rollback instructions without
       mutating the author's live Niri configuration.
 - [ ] Run the automated exit in
-      [the active R3 plan](docs/plans/active/2026-08-03-r3-session-verbs.md) and leave the
-      canonical production artifact ready for installation without rebuilding.
+      [the active R3 plan](docs/plans/active/2026-08-03-r3-session-verbs.md) and let
+      `scripts/complete-production.sh` build the release once, verify those
+      exact bytes and update the on-disk bundle without a second build or
+      replacement of the live session.
 
 The concrete locker integration is not part of the active R3 plan while
 [SHELL-D1](docs/discussions/2026-08-03-external-locker.md) remains open. Applying
@@ -126,8 +128,8 @@ windows.
 ## Implementation exit rule
 
 An item becomes complete only with code, same-change automated tests, updated
-contracts and a fresh production artifact from
-`scripts/verify-production.sh`. A build is not compositor, hardware, visual or
+contracts and the deployed bundle that `scripts/complete-production.sh`
+produces. A build is not compositor, hardware, visual or
 accessibility evidence. Those results are
 recorded only in [VALIDATION.md](VALIDATION.md); a failed validation creates a
 new corrective implementation item instead of reopening the completed one.

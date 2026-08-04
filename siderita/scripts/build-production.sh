@@ -3,11 +3,17 @@ set -eu
 
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 suite_root=$(CDPATH= cd -- "$project_root/.." && pwd)
+artifact_tool=$suite_root/scripts/production_artifact.py
+
+if [ "$#" -eq 0 ]; then
+    exec python3 "$artifact_tool" run-build siderita
+fi
+if [ "$#" -ne 1 ] || [ "$1" != "--production-runner-internal" ] || \
+    [ "${CELESTINA_PRODUCTION_RUNNER_PHASE:-}" != "build" ]; then
+    echo "build-production: internal mode is reserved for the production runner" >&2
+    exit 2
+fi
 
 (cd "$project_root" && cargo build --release --locked --bin siderita)
 
-python3 "$suite_root/scripts/production_artifact.py" record-build siderita \
-    --build-command 'cargo build --manifest-path siderita/Cargo.toml --release --locked --bin siderita'
-
-echo ">> Siderita release lista en $project_root/target/release/siderita (sin instalar)"
-
+echo ">> Siderita release build steps completed (not installed)"

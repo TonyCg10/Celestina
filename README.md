@@ -24,7 +24,8 @@ direction is [docs/VISION.md](docs/VISION.md); current work is
 
 Each project owns a concise README, current STATUS, implementation-only ROADMAP,
 author VALIDATION queue and local AGENTS delta. The machine-readable inventory
-of paths, commit scopes and production artifact commands is
+of paths, commit scopes, product version sources and production artifact
+commands is
 [docs/projects.toml](docs/projects.toml).
 
 ## Architecture
@@ -56,15 +57,25 @@ separate production entries:
 ```sh
 PROJECT/scripts/build-production.sh
 PROJECT/scripts/verify-production.sh
+PROJECT/scripts/complete-production.sh  # deployable applications only
 PROJECT/scripts/status-production.sh
 ```
 
 The first command creates the canonical release artifact; the second verifies
-that exact artifact without installing or activating it; the third reports
-whether it remains current. When explicitly requested,
-`deploy-production.sh` copies the already verified artifact without rebuilding.
-The shell additionally has `activate-production.sh`, kept separate because
-starting it mutates the live session.
+that exact artifact without installing or activating it; the last reports
+whether it remains current. For a bug fix or milestone in a deployable app,
+`complete-production.sh` is the required exit: it builds once, verifies those
+exact bytes, deploys them to the author's normal test destination and confirms
+the installed copy, so the author never recompiles the change. Running
+`deploy-production.sh` as a separate operation or choosing another prefix still
+requires an explicit request. The shell additionally has
+`activate-production.sh`, kept separate because starting it mutates the live
+session; completion updates its on-disk bundle but never activates it.
+
+Before that build, a product bug, completed milestone or major release advances
+PATCH, MINOR or MAJOR exactly and appends the same delivery to the version
+history. Maintenance changes do not bump. See
+[the version contract](docs/contracts/versioning.md).
 
 The full contract, including artifact fingerprints and stale-input refusal, is
 [docs/contracts/production-artifacts.md](docs/contracts/production-artifacts.md).

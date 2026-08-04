@@ -104,14 +104,14 @@ def load_registry(root: Path) -> dict[str, object]:
         with registry_path.open("rb") as handle:
             registry = tomllib.load(handle)
     except (OSError, tomllib.TOMLDecodeError) as error:
-        raise RegistryError(f"no se puede leer docs/projects.toml: {error}") from error
+        raise RegistryError(f"cannot read docs/projects.toml: {error}") from error
 
     if registry.get("schema_version") != 1:
-        raise RegistryError("docs/projects.toml requiere schema_version = 1")
+        raise RegistryError("docs/projects.toml requires schema_version = 1")
     if not isinstance(registry.get("suite"), dict):
-        raise RegistryError("docs/projects.toml no contiene [suite]")
+        raise RegistryError("docs/projects.toml does not contain [suite]")
     if not isinstance(registry.get("projects"), list):
-        raise RegistryError("docs/projects.toml no contiene [[projects]]")
+        raise RegistryError("docs/projects.toml does not contain [[projects]]")
     return registry
 
 
@@ -352,14 +352,14 @@ class DocumentationContract:
 
     def registry_path(self, raw: object, field: str) -> Path | None:
         if not isinstance(raw, str) or not raw.strip():
-            self.error("docs/projects.toml", f"{field} debe ser una ruta no vacía")
+            self.error("docs/projects.toml", f"{field} must be a non-empty path")
             return None
         if Path(raw).is_absolute():
-            self.error("docs/projects.toml", f"{field} debe ser relativo: {raw}")
+            self.error("docs/projects.toml", f"{field} must be relative: {raw}")
             return None
         candidate = (self.root / raw).resolve(strict=False)
         if not inside_root(self.root, candidate):
-            self.error("docs/projects.toml", f"{field} sale del repositorio: {raw}")
+            self.error("docs/projects.toml", f"{field} leaves the repository: {raw}")
             return None
         return candidate
 
@@ -367,7 +367,7 @@ class DocumentationContract:
         try:
             return path.read_text(encoding="utf-8")
         except (OSError, UnicodeError) as error:
-            self.error(path, f"no se puede leer como UTF-8: {error}")
+            self.error(path, f"cannot be read as UTF-8: {error}")
             return None
 
     def require_document(self, raw: object, role: str, owner_id: str = "") -> None:
@@ -375,7 +375,7 @@ class DocumentationContract:
         if path is None:
             return
         if not path.is_file():
-            self.error(path, f"documento registrado no existe ({role})")
+            self.error(path, f"registered document does not exist ({role})")
             return
         if path in self.checked_documents:
             return
@@ -385,42 +385,42 @@ class DocumentationContract:
             return
         headings = markdown_headings(text)
         if not any(level == 1 for level, _heading, _line in headings):
-            self.error(path, "falta título H1")
+            self.error(path, "missing H1 title")
         if role == "status":
             updated = markdown_metadata(text).get("updated", "")
             if not valid_date(updated):
-                self.error(path, "STATUS requiere `- **Updated:** YYYY-MM-DD`")
+                self.error(path, "STATUS requires `- **Updated:** YYYY-MM-DD`")
         elif role == "roadmap":
             normalized = [normalized_heading(heading) for _level, heading, _line in headings]
             if not any("implementation exit" in heading for heading in normalized):
-                self.error(path, "ROADMAP requiere un heading `Implementation exit`")
+                self.error(path, "ROADMAP requires an `Implementation exit` heading")
             fields = markdown_metadata(text)
             status_value = fields.get("status")
             roadmap_status = normalized_status(status_value or "")
             if not status_value:
-                self.error(path, "ROADMAP requiere metadata `Status`")
+                self.error(path, "ROADMAP requires `Status` metadata")
             elif roadmap_status not in ROADMAP_STATES:
-                self.error(path, f"estado de roadmap inválido: {status_value}")
+                self.error(path, f"invalid roadmap status: {status_value}")
 
             checkpoint_raw = fields.get("active implementation checkpoint", "")
             checkpoint = checkpoint_value(checkpoint_raw)
             if not checkpoint:
                 self.error(
                     path,
-                    "ROADMAP requiere metadata `Active implementation checkpoint`",
+                    "ROADMAP requires `Active implementation checkpoint` metadata",
                 )
             elif roadmap_status in {"active", "blocked"}:
                 if no_active_checkpoint(checkpoint):
                     self.error(
                         path,
-                        f"ROADMAP {roadmap_status} requiere un checkpoint activo",
+                        f"ROADMAP {roadmap_status} requires an active checkpoint",
                     )
                 elif not CHECKPOINT_RE.fullmatch(checkpoint):
-                    self.error(path, f"checkpoint de roadmap inválido: {checkpoint}")
+                    self.error(path, f"invalid roadmap checkpoint: {checkpoint}")
             elif roadmap_status in {"planned", "idle", "done"} and not no_active_checkpoint(checkpoint):
                 self.error(
                     path,
-                    f"ROADMAP {roadmap_status} requiere `Active implementation checkpoint: none`",
+                    f"ROADMAP {roadmap_status} requires `Active implementation checkpoint: none`",
                 )
 
             if owner_id and roadmap_status in ROADMAP_STATES and checkpoint:
@@ -437,18 +437,18 @@ class DocumentationContract:
     ) -> None:
         plan_id = checkpoint_value(fields.get("plan id", ""))
         if not plan_id:
-            self.error(path, f"{label} requiere metadata `Plan ID`")
+            self.error(path, f"{label} requires `Plan ID` metadata")
             return
         if not CHECKPOINT_RE.fullmatch(plan_id):
-            self.error(path, f"Plan ID inválido: {plan_id}")
+            self.error(path, f"invalid Plan ID: {plan_id}")
             return
         key = owner_id, plan_id
         previous = self.owner_plan_ids.get(key)
         if previous is not None and previous != path:
             self.error(
                 path,
-                f"Plan ID `{plan_id}` duplicado para owner `{owner_id}`; "
-                f"ya pertenece a {self.relative(previous)}",
+                f"duplicate Plan ID `{plan_id}` for owner `{owner_id}`; "
+                f"already belongs to {self.relative(previous)}",
             )
             return
         self.owner_plan_ids[key] = path
@@ -458,15 +458,15 @@ class DocumentationContract:
         if path is None:
             return
         if not path.is_file():
-            self.error(path, f"script registrado no existe ({field})")
+            self.error(path, f"registered script does not exist ({field})")
             return
         try:
             mode = path.stat().st_mode
         except OSError as error:
-            self.error(path, f"no se puede inspeccionar el script: {error}")
+            self.error(path, f"cannot inspect script: {error}")
             return
         if not mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH):
-            self.error(path, f"script registrado no es ejecutable ({field})")
+            self.error(path, f"registered script is not executable ({field})")
 
     def check_registry(self) -> None:
         try:
@@ -477,16 +477,61 @@ class DocumentationContract:
         try:
             self.commit_scopes = build_commit_scopes(self.registry)
         except (KeyError, TypeError, ValueError) as error:
-            self.error("docs/projects.toml", f"alcance de commits inválido: {error}")
+            self.error("docs/projects.toml", f"invalid commit scope: {error}")
+
+        version_policy = self.registry.get("version_policy")
+        if version_policy is not None:
+            if not isinstance(version_policy, dict):
+                self.error("docs/projects.toml", "version_policy must be a table")
+                version_policy = None
+            else:
+                expected_increments = {
+                    "bug_increment": "patch",
+                    "milestone_increment": "minor",
+                    "release_increment": "major",
+                    "maintenance_increment": "none",
+                }
+                for field, expected in expected_increments.items():
+                    if version_policy.get(field) != expected:
+                        self.error(
+                            "docs/projects.toml",
+                            f"version_policy.{field} must be `{expected}`",
+                        )
+                if version_policy.get("tag_format") != "<project>-v<version>":
+                    self.error(
+                        "docs/projects.toml",
+                        "version_policy.tag_format must be `<project>-v<version>`",
+                    )
+                history = self.registry_path(
+                    version_policy.get("history_file"),
+                    "version_policy.history_file",
+                )
+                if history is not None and not history.is_file():
+                    self.error(history, "registered version history does not exist")
 
         suite = self.registry["suite"]
         assert isinstance(suite, dict)
         self.owner_evidence_directories["suite"] = (self.root / "docs" / "evidence").resolve()
         for field in ("agents", "readme", "status", "roadmap", "validation"):
             self.require_document(suite.get(field), field, "suite")
+        if "shared_rules" not in suite:
+            self.error("docs/projects.toml", "suite.shared_rules is required")
+        else:
+            shared_rules = suite.get("shared_rules")
+            if not isinstance(shared_rules, list):
+                self.error("docs/projects.toml", "suite.shared_rules must be a list")
+            elif not shared_rules:
+                self.error(
+                    "docs/projects.toml",
+                    "suite.shared_rules must be a non-empty list",
+                )
+            else:
+                for index, rule in enumerate(shared_rules):
+                    self.require_document(rule, f"shared_rules[{index}]", "suite")
+
         active_plans = self.registry_path(suite.get("active_plans"), "suite.active_plans")
         if active_plans is not None and not active_plans.is_dir():
-            self.error(active_plans, "directorio de planes activos registrado no existe")
+            self.error(active_plans, "registered active-plan directory does not exist")
         elif active_plans is not None:
             self.register_owner_delivery_roots("suite", active_plans)
 
@@ -495,39 +540,104 @@ class DocumentationContract:
             self.prefixes.add(suite_prefix)
             self.owner_prefixes["suite"] = {suite_prefix}
         else:
-            self.error("docs/projects.toml", "suite.commit_prefix es obligatorio")
+            self.error("docs/projects.toml", "suite.commit_prefix is required")
 
         seen_ids: set[str] = set()
         seen_prefixes: set[str] = set(self.prefixes)
         projects = self.registry["projects"]
         assert isinstance(projects, list)
         if not projects:
-            self.error("docs/projects.toml", "debe registrar al menos un proyecto")
+            self.error("docs/projects.toml", "must register at least one project")
         for index, project in enumerate(projects):
             label = f"projects[{index}]"
             if not isinstance(project, dict):
-                self.error("docs/projects.toml", f"{label} no es una tabla")
+                self.error("docs/projects.toml", f"{label} is not a table")
                 continue
             project_id = project.get("id")
             if not isinstance(project_id, str) or not project_id:
-                self.error("docs/projects.toml", f"{label}.id es obligatorio")
+                self.error("docs/projects.toml", f"{label}.id is required")
             elif project_id in seen_ids:
-                self.error("docs/projects.toml", f"id duplicado: {project_id}")
+                self.error("docs/projects.toml", f"duplicate id: {project_id}")
             else:
                 seen_ids.add(project_id)
 
             prefix = project.get("commit_prefix")
             if not isinstance(prefix, str) or not prefix:
-                self.error("docs/projects.toml", f"{label}.commit_prefix es obligatorio")
+                self.error("docs/projects.toml", f"{label}.commit_prefix is required")
             elif prefix in seen_prefixes:
-                self.error("docs/projects.toml", f"prefijo duplicado: {prefix}")
+                self.error("docs/projects.toml", f"duplicate prefix: {prefix}")
             else:
                 seen_prefixes.add(prefix)
                 self.prefixes.add(prefix)
 
+            if version_policy is not None:
+                version_source = project.get("version_source")
+                unversioned = project.get("versioned") is False
+                if isinstance(version_source, dict) == unversioned:
+                    self.error(
+                        "docs/projects.toml",
+                        f"{label} must declare either version_source or "
+                        "versioned = false",
+                    )
+                mirrors = project.get("version_mirrors", [])
+                if not isinstance(mirrors, list):
+                    self.error(
+                        "docs/projects.toml",
+                        f"{label}.version_mirrors must be a list",
+                    )
+                    mirrors = []
+                sources = (
+                    [version_source, *mirrors]
+                    if isinstance(version_source, dict)
+                    else []
+                )
+                for source_index, source in enumerate(sources):
+                    source_label = (
+                        f"{label}.version_source"
+                        if source_index == 0
+                        else f"{label}.version_mirrors[{source_index - 1}]"
+                    )
+                    if not isinstance(source, dict):
+                        self.error(
+                            "docs/projects.toml",
+                            f"{source_label} must be a table",
+                        )
+                        continue
+                    kind = source.get("kind")
+                    if kind not in {"cargo-package", "cargo-lock", "cmake-project"}:
+                        self.error(
+                            "docs/projects.toml",
+                            f"{source_label}.kind is invalid",
+                        )
+                    selector = "project" if kind == "cmake-project" else "package"
+                    if not isinstance(source.get(selector), str) or not source.get(selector):
+                        self.error(
+                            "docs/projects.toml",
+                            f"{source_label}.{selector} is required",
+                        )
+                    source_path = self.registry_path(
+                        source.get("path"), f"{source_label}.path"
+                    )
+                    if source_path is not None and not source_path.is_file():
+                        self.error(source_path, "registered version source does not exist")
+                    if (
+                        source_path is not None
+                        and isinstance(prefix, str)
+                        and prefix in self.commit_scopes
+                    ):
+                        relative_source = self.relative(source_path)
+                        if not path_allowed(
+                            relative_source,
+                            self.commit_scopes[prefix],
+                        ):
+                            self.error(
+                                "docs/projects.toml",
+                                f"{source_label}.path is outside `{prefix}:` scope",
+                            )
+
             project_root = self.registry_path(project.get("path"), f"{label}.path")
             if project_root is not None and not project_root.is_dir():
-                self.error(project_root, "directorio de proyecto registrado no existe")
+                self.error(project_root, "registered project directory does not exist")
             owner_id = project_id if isinstance(project_id, str) and project_id else label
             if project_root is not None:
                 self.owner_evidence_directories[owner_id] = (
@@ -535,35 +645,54 @@ class DocumentationContract:
                 ).resolve()
             for field in ("agents", "readme", "status", "roadmap", "validation"):
                 self.require_document(project.get(field), field, owner_id)
+            if "context_documents" not in project:
+                self.error(
+                    "docs/projects.toml",
+                    f"{label}.context_documents is required",
+                )
+            else:
+                context_documents = project.get("context_documents")
+                if not isinstance(context_documents, list):
+                    self.error(
+                        "docs/projects.toml",
+                        f"{label}.context_documents must be a list",
+                    )
+                else:
+                    for context_index, document in enumerate(context_documents):
+                        self.require_document(
+                            document,
+                            f"{label}.context_documents[{context_index}]",
+                            owner_id,
+                        )
             if "active_plans" in project:
                 project_plans = self.registry_path(project.get("active_plans"), f"{label}.active_plans")
                 if project_plans is not None and not project_plans.is_dir():
-                    self.error(project_plans, "directorio de planes activos registrado no existe")
+                    self.error(project_plans, "registered active-plan directory does not exist")
                 elif project_plans is not None:
                     self.register_owner_delivery_roots(owner_id, project_plans)
 
             source_roots = project.get("source_roots")
             if not isinstance(source_roots, list) or not source_roots:
-                self.error("docs/projects.toml", f"{label}.source_roots debe ser una lista no vacía")
+                self.error("docs/projects.toml", f"{label}.source_roots must be a non-empty list")
             else:
                 for source_index, source_root in enumerate(source_roots):
                     path = self.registry_path(source_root, f"{label}.source_roots[{source_index}]")
                     if path is not None and not path.exists():
-                        self.error(path, "source root registrado no existe")
+                        self.error(path, "registered source root does not exist")
 
             commit_roots = project.get("commit_roots")
             if not isinstance(commit_roots, list) or not commit_roots:
-                self.error("docs/projects.toml", f"{label}.commit_roots debe ser una lista no vacía")
+                self.error("docs/projects.toml", f"{label}.commit_roots must be a non-empty list")
 
             for field in ("production_role", "artifact_manifest", "artifact_paths"):
                 if field not in project:
-                    self.error("docs/projects.toml", f"{label}.{field} es obligatorio")
+                    self.error("docs/projects.toml", f"{label}.{field} is required")
             self.require_script(project.get("build_script"), f"{label}.build_script")
             self.require_script(project.get("verify_script"), f"{label}.verify_script")
             self.require_script(project.get("status_script"), f"{label}.status_script")
             deployable = project.get("deployable")
             if not isinstance(deployable, bool):
-                self.error("docs/projects.toml", f"{label}.deployable debe ser booleano")
+                self.error("docs/projects.toml", f"{label}.deployable must be boolean")
             elif deployable:
                 self.require_script(project.get("deploy_script"), f"{label}.deploy_script")
                 self.require_script(project.get("complete_script"), f"{label}.complete_script")
@@ -575,19 +704,19 @@ class DocumentationContract:
             if isinstance(prefix, str) and prefix:
                 allowed_prefixes.add(prefix)
             if not isinstance(component_scopes, list):
-                self.error("docs/projects.toml", f"{label}.component_commit_scopes debe ser una lista")
+                self.error("docs/projects.toml", f"{label}.component_commit_scopes must be a list")
                 self.owner_prefixes[owner_id] = allowed_prefixes
                 continue
             for component_index, component in enumerate(component_scopes):
                 component_label = f"{label}.component_commit_scopes[{component_index}]"
                 if not isinstance(component, dict):
-                    self.error("docs/projects.toml", f"{component_label} no es una tabla")
+                    self.error("docs/projects.toml", f"{component_label} is not a table")
                     continue
                 component_prefix = component.get("prefix")
                 if not isinstance(component_prefix, str) or not component_prefix:
-                    self.error("docs/projects.toml", f"{component_label}.prefix es obligatorio")
+                    self.error("docs/projects.toml", f"{component_label}.prefix is required")
                 elif component_prefix in seen_prefixes:
-                    self.error("docs/projects.toml", f"prefijo duplicado: {component_prefix}")
+                    self.error("docs/projects.toml", f"duplicate prefix: {component_prefix}")
                 else:
                     seen_prefixes.add(component_prefix)
                     self.prefixes.add(component_prefix)
@@ -640,7 +769,7 @@ class DocumentationContract:
             previous_path, previous_line = previous
             self.error(
                 path,
-                f"{validation_id} duplicado; primero en "
+                f"duplicate {validation_id}; first at "
                 f"{self.relative(previous_path)}:{previous_line}",
             )
         else:
@@ -665,21 +794,21 @@ class DocumentationContract:
         self.record_validation_id(path, validation_id, line_number)
         for field in required_fields:
             if not fields.get(field, "").strip():
-                self.error(path, f"{validation_id} requiere metadata `{field.title()}`")
+                self.error(path, f"{validation_id} requires `{field.title()}` metadata")
 
         status_value = fields.get("status", "")
         status = normalized_status(status_value)
         if status not in VALIDATION_STATES:
-            self.error(path, f"{validation_id} requiere Status en {sorted(VALIDATION_STATES)}")
+            self.error(path, f"{validation_id} requires Status in {sorted(VALIDATION_STATES)}")
             return
 
         result = normalized_status(fields.get("result", ""))
         evidence = normalized_status(fields.get("evidence", ""))
         if status in {"passed", "failed", "obsolete"}:
             if evidence in {"", "none", "not available", "n/a"}:
-                self.error(path, f"{validation_id} cerrado requiere evidencia")
+                self.error(path, f"closed {validation_id} requires evidence")
             if result in {"", "not run", "pending", "none", "n/a"}:
-                self.error(path, f"{validation_id} cerrado requiere resultado observado")
+                self.error(path, f"closed {validation_id} requires an observed result")
 
         if status in {"passed", "failed"}:
             evidence_targets = [
@@ -692,14 +821,14 @@ class DocumentationContract:
             if not evidence_targets:
                 self.error(
                     path,
-                    f"{validation_id} {status} requiere expediente `.md` resoluble "
-                    "bajo `evidence/`",
+                    f"{validation_id} {status} requires a resolvable `.md` record "
+                    "under `evidence/`",
                 )
 
         if status == "failed":
             remediation = fields.get("remediation", "")
             if not remediation.strip():
-                self.error(path, f"{validation_id} failed requiere metadata `Remediation`")
+                self.error(path, f"failed {validation_id} requires `Remediation` metadata")
             else:
                 remediation_targets = [
                     candidate
@@ -711,15 +840,15 @@ class DocumentationContract:
                 if not remediation_targets:
                     self.error(
                         path,
-                        f"{validation_id} failed requiere remediación enlazada a un plan "
-                        "active/archive resoluble",
+                        f"failed {validation_id} requires remediation linked to a resolvable "
+                        "active/archive plan",
                     )
                 remediation_units = set(REMEDIATION_UNIT_RE.findall(remediation))
                 if len(remediation_units) != 1:
                     self.error(
                         path,
-                        f"{validation_id} failed requiere una única unidad de remediación "
-                        "entre backticks",
+                        f"failed {validation_id} requires exactly one remediation unit "
+                        "in backticks",
                     )
                 elif remediation_targets:
                     remediation_unit = next(iter(remediation_units))
@@ -729,8 +858,8 @@ class DocumentationContract:
                     ):
                         self.error(
                             path,
-                            f"{validation_id} failed enlaza un plan cuyo ledger no contiene "
-                            f"la unidad `{remediation_unit}`",
+                            f"failed {validation_id} links a plan whose ledger does not contain "
+                            f"unit `{remediation_unit}`",
                         )
 
         if status == "obsolete":
@@ -744,7 +873,7 @@ class DocumentationContract:
             if not accepted_targets:
                 self.error(
                     path,
-                    f"{validation_id} obsolete requiere enlace resoluble a decisión o evidencia",
+                    f"obsolete {validation_id} requires a resolvable decision or evidence link",
                 )
 
     def check_validation_sections(self, path: Path, text: str) -> None:
@@ -780,7 +909,7 @@ class DocumentationContract:
                 if looks_like_case:
                     self.error(
                         path,
-                        f"línea {line_number}: caso manual debe comenzar con ID `VAL-*` válido",
+                        f"line {line_number}: manual case must begin with a valid `VAL-*` ID",
                     )
                 continue
             validation_id = title_match.group("id")
@@ -810,7 +939,7 @@ class DocumentationContract:
             if missing_columns:
                 self.error(
                     path,
-                    "tabla de validación carece de columnas: " + ", ".join(missing_columns),
+                    "validation table is missing columns: " + ", ".join(missing_columns),
                 )
             cursor += 2
             while cursor < len(lines) and lines[cursor].lstrip().startswith("|"):
@@ -818,18 +947,18 @@ class DocumentationContract:
                 line_number = cursor + 1
                 cursor += 1
                 if len(cells) != len(header):
-                    self.error(path, f"validación línea {line_number}: número de celdas incorrecto")
+                    self.error(path, f"validation line {line_number}: incorrect cell count")
                     continue
 
                 for field in mandatory_columns:
                     if field in header and not cells[header.index(field)].strip():
-                        self.error(path, f"validación línea {line_number}: `{field}` vacío")
+                        self.error(path, f"validation line {line_number}: empty `{field}`")
 
                 if "id" not in header:
                     continue
                 validation_id = cells[header.index("id")].strip("` ")
                 if not VALIDATION_ID_RE.fullmatch(validation_id):
-                    self.error(path, f"validación línea {line_number}: ID `VAL-*` inválido: {validation_id}")
+                    self.error(path, f"validation line {line_number}: invalid `VAL-*` ID: {validation_id}")
                     continue
                 fields = {
                     field: cells[header.index(field)] if field in header else ""
@@ -851,7 +980,7 @@ class DocumentationContract:
                 and filename.endswith(".instructions.md")
             )
             if filename in VENDOR_FILENAMES or is_copilot_instruction:
-                self.error(path, "archivo normativo específico de proveedor prohibido")
+                self.error(path, "provider-specific normative file is forbidden")
 
     def check_markdown_links(self, files: list[Path]) -> None:
         markdown_files = [path for path in files if path.suffix.casefold() == ".md"]
@@ -873,16 +1002,16 @@ class DocumentationContract:
                     if not raw_path:
                         target_path = document
                     elif Path(raw_path).is_absolute():
-                        self.error(document, f"línea {line_number}: enlace local debe ser relativo: {target}")
+                        self.error(document, f"line {line_number}: local link must be relative: {target}")
                         continue
                     else:
                         target_path = (document.parent / raw_path).resolve(strict=False)
 
                 if not inside_root(self.root, target_path):
-                    self.error(document, f"línea {line_number}: enlace sale del repositorio: {target}")
+                    self.error(document, f"line {line_number}: link leaves the repository: {target}")
                     continue
                 if not target_path.exists():
-                    self.error(document, f"línea {line_number}: enlace local roto: {target}")
+                    self.error(document, f"line {line_number}: broken local link: {target}")
                     continue
                 if fragment and target_path.is_file() and target_path.suffix.casefold() == ".md":
                     anchors = anchor_cache.get(target_path)
@@ -893,12 +1022,12 @@ class DocumentationContract:
                         anchors = github_anchors(linked_text)
                         anchor_cache[target_path] = anchors
                     if fragment not in anchors:
-                        self.error(document, f"línea {line_number}: anchor local no existe: {target}")
+                        self.error(document, f"line {line_number}: local anchor does not exist: {target}")
 
     def check_dated_document_name(self, path: Path, role: str) -> None:
         match = DATED_DOCUMENT_RE.fullmatch(path.name)
         if match is None or not valid_date(match.group("date") if match else ""):
-            self.error(path, f"{role} requiere nombre `YYYY-MM-DD-short-topic.md`")
+            self.error(path, f"{role} requires name `YYYY-MM-DD-short-topic.md`")
 
     def required_section_bodies(
         self,
@@ -925,11 +1054,11 @@ class DocumentationContract:
 
         for section in required:
             if not bodies[section]:
-                self.error(path, f"{role} requiere heading `{section.title()}`")
+                self.error(path, f"{role} requires heading `{section.title()}`")
                 continue
             for body in bodies[section]:
                 if not body.strip():
-                    self.error(path, f"sección obligatoria `{section.title()}` está vacía")
+                    self.error(path, f"required section `{section.title()}` is empty")
         return bodies
 
     def canonical_applied_target(self, target: Path) -> bool:
@@ -953,7 +1082,7 @@ class DocumentationContract:
     ) -> None:
         readme = directory / "README.md"
         if not readme.is_file():
-            self.error(readme, f"índice de {role} no existe")
+            self.error(readme, f"{role} index does not exist")
             return
         text = self.read_document(readme)
         if text is None:
@@ -967,12 +1096,12 @@ class DocumentationContract:
                 link_counts[resolved] += 1
         for record, count in link_counts.items():
             if count == 0:
-                self.error(readme, f"registro huérfano no enlazado: {self.relative(record)}")
+                self.error(readme, f"unlinked orphan record: {self.relative(record)}")
             elif count != 1:
                 self.error(
                     readme,
-                    f"registro debe enlazarse exactamente una vez: {self.relative(record)} "
-                    f"({count} enlaces)",
+                    f"record must be linked exactly once: {self.relative(record)} "
+                    f"({count} links)",
                 )
 
         metadata_status: dict[Path, str] = {}
@@ -1001,7 +1130,7 @@ class DocumentationContract:
                 line_number = cursor + 1
                 cursor += 1
                 if len(cells) != len(header):
-                    self.error(readme, f"índice línea {line_number}: número de celdas incorrecto")
+                    self.error(readme, f"index line {line_number}: incorrect cell count")
                     continue
                 targets = [
                     self.resolve_local_link(readme, target)
@@ -1011,8 +1140,8 @@ class DocumentationContract:
                 if len(indexed_records) != 1:
                     self.error(
                         readme,
-                        f"índice línea {line_number}: entrada stale requiere un registro "
-                        f"canónico de {role}",
+                        f"index line {line_number}: stale entry requires one canonical "
+                        f"{role} record",
                     )
                     continue
                 record = indexed_records[0]
@@ -1021,8 +1150,8 @@ class DocumentationContract:
                 if listed_status != actual_status:
                     self.error(
                         readme,
-                        f"índice línea {line_number}: Status `{listed_status}` no coincide "
-                        f"con metadata `{actual_status}` de {self.relative(record)}",
+                        f"index line {line_number}: Status `{listed_status}` does not match "
+                        f"metadata `{actual_status}` in {self.relative(record)}",
                     )
 
     def canonical_document_directories(self, name: str) -> list[Path]:
@@ -1122,7 +1251,7 @@ class DocumentationContract:
     def check_decisions(self) -> None:
         directories = self.canonical_document_directories("decisions")
         if not directories[0].is_dir():
-            self.error(directories[0], "directorio de decisiones no existe")
+            self.error(directories[0], "decision directory does not exist")
             return
         for directory in directories:
             records = sorted(
@@ -1133,27 +1262,27 @@ class DocumentationContract:
             self.check_canonical_index(directory, records, "decisions")
             for path in records:
                 if not ADR_DOCUMENT_RE.fullmatch(path.name):
-                    self.error(path, "decisión requiere nombre `NNNN-short-topic.md`")
+                    self.error(path, "decision requires name `NNNN-short-topic.md`")
                 text = self.read_document(path)
                 if text is None:
                     continue
                 fields = markdown_metadata(text)
                 if not valid_date(fields.get("date", "")):
-                    self.error(path, "decisión requiere `Date: YYYY-MM-DD`")
+                    self.error(path, "decision requires `Date: YYYY-MM-DD`")
                 status_value = normalized_status(fields.get("status", ""))
                 if status_value not in DECISION_STATES:
-                    self.error(path, f"estado de decisión inválido: {fields.get('status', '')}")
+                    self.error(path, f"invalid decision status: {fields.get('status', '')}")
                 self.required_section_bodies(
                     path,
                     text,
                     ("context", "decision", "consequences", "revisit when"),
-                    "decisión",
+                    "decision",
                 )
 
     def check_discussions(self) -> None:
         directories = self.canonical_document_directories("discussions")
         if not directories[0].is_dir():
-            self.error(directories[0], "directorio de discusiones no existe")
+            self.error(directories[0], "discussion directory does not exist")
             return
         for directory in directories:
             records = sorted(
@@ -1163,18 +1292,18 @@ class DocumentationContract:
             )
             self.check_canonical_index(directory, records, "discussions")
             for path in records:
-                self.check_dated_document_name(path, "discusión")
+                self.check_dated_document_name(path, "discussion")
                 text = self.read_document(path)
                 if text is None:
                     continue
                 fields = markdown_metadata(text)
                 if not valid_date(fields.get("opened", "")):
-                    self.error(path, "discusión requiere `Opened: YYYY-MM-DD`")
+                    self.error(path, "discussion requires `Opened: YYYY-MM-DD`")
                 discussion_status = normalized_status(fields.get("status", ""))
                 if discussion_status not in DISCUSSION_STATES:
-                    self.error(path, f"estado de discusión inválido: {fields.get('status', '')}")
+                    self.error(path, f"invalid discussion status: {fields.get('status', '')}")
                 if not fields.get("question"):
-                    self.error(path, "discusión requiere metadata `Question`")
+                    self.error(path, "discussion requires `Question` metadata")
                 bodies = self.required_section_bodies(
                     path,
                     text,
@@ -1186,7 +1315,7 @@ class DocumentationContract:
                         "falsifiers and evidence needed",
                         "conclusion",
                     ),
-                    "discusión",
+                    "discussion",
                 )
                 if discussion_status in {"concluded", "applied"}:
                     conclusion = "\n".join(bodies.get("conclusion", []))
@@ -1195,7 +1324,7 @@ class DocumentationContract:
                         "",
                     )
                     if re.search(r"\bpending\b", first_content, re.IGNORECASE):
-                        self.error(path, f"discusión {discussion_status} conserva Conclusion Pending")
+                        self.error(path, f"{discussion_status} discussion retains Conclusion Pending")
                 if discussion_status == "applied":
                     canonical_targets = [
                         candidate
@@ -1204,12 +1333,12 @@ class DocumentationContract:
                         and self.canonical_applied_target(candidate)
                     ]
                     if not canonical_targets:
-                        self.error(path, "discusión applied requiere enlace al hogar canónico actualizado")
+                        self.error(path, "applied discussion requires a link to the updated canonical home")
 
     def check_evidence(self) -> None:
         directories = self.canonical_document_directories("evidence")
         if not directories[0].is_dir():
-            self.error(directories[0], "directorio de evidencia no existe")
+            self.error(directories[0], "evidence directory does not exist")
             return
         for path in sorted(
             candidate
@@ -1217,21 +1346,21 @@ class DocumentationContract:
             for candidate in directory.rglob("*.md")
             if candidate.name != "README.md"
         ):
-            self.check_dated_document_name(path, "evidencia")
+            self.check_dated_document_name(path, "evidence")
             text = self.read_document(path)
             if text is None:
                 continue
             fields = markdown_metadata(text)
             if not valid_date(fields.get("date", "")):
-                self.error(path, "evidencia requiere `Date: YYYY-MM-DD`")
+                self.error(path, "evidence requires `Date: YYYY-MM-DD`")
             for field in ("scope", "environment", "artifact"):
                 if not fields.get(field):
-                    self.error(path, f"evidencia requiere metadata `{field.title()}`")
+                    self.error(path, f"evidence requires `{field.title()}` metadata")
             self.required_section_bodies(
                 path,
                 text,
                 ("procedure", "result", "limits"),
-                "evidencia",
+                "evidence",
             )
 
     def check_active_plan_directory(
@@ -1246,31 +1375,31 @@ class DocumentationContract:
         for path in sorted(directory.glob("*.md")):
             if path.name == "README.md":
                 continue
-            self.check_dated_document_name(path, "plan activo")
+            self.check_dated_document_name(path, "active plan")
             text = self.read_document(path)
             if text is None:
                 continue
             fields = markdown_metadata(text)
-            self.check_plan_id(path, fields, "plan activo", owner_id)
+            self.check_plan_id(path, fields, "active plan", owner_id)
             if not valid_date(fields.get("opened", "")):
-                self.error(path, "plan activo requiere `Opened: YYYY-MM-DD`")
+                self.error(path, "active plan requires `Opened: YYYY-MM-DD`")
             plan_status = normalized_status(fields.get("status", ""))
             if plan_status != "active":
-                self.error(path, "un archivo bajo plans/active requiere `Status: active`")
+                self.error(path, "a file under plans/active requires `Status: active`")
             for field in ("scope", "implementation checkpoint", "author-validation checkpoint"):
                 if not fields.get(field):
-                    self.error(path, f"plan activo requiere metadata `{field.title()}`")
+                    self.error(path, f"active plan requires `{field.title()}` metadata")
             scope = fields.get("scope", "")
             expected_scope = owner_id
             if not scope_matches_owner(scope, expected_scope, str(owner.get("name", ""))):
-                self.error(path, f"Scope no corresponde al directorio activo de `{expected_scope}`")
+                self.error(path, f"Scope does not match active directory for `{expected_scope}`")
 
             checkpoint = checkpoint_value(fields.get("implementation checkpoint", ""))
             if checkpoint and (
                 no_active_checkpoint(checkpoint)
                 or not CHECKPOINT_RE.fullmatch(checkpoint)
             ):
-                self.error(path, f"checkpoint de plan activo inválido: {checkpoint}")
+                self.error(path, f"invalid active-plan checkpoint: {checkpoint}")
             if plan_status == "active" and checkpoint:
                 self.active_plan_records.append((owner_id, path, checkpoint))
 
@@ -1286,7 +1415,7 @@ class DocumentationContract:
                 "change and commit ledger",
             ):
                 if required not in normalized:
-                    self.error(path, f"plan activo requiere heading `{required.title()}`")
+                    self.error(path, f"active plan requires heading `{required.title()}`")
             ledger_line = normalized.get("change and commit ledger")
             if ledger_line is not None:
                 self.check_ledger(path, text, ledger_line, owner_id)
@@ -1302,23 +1431,23 @@ class DocumentationContract:
             return
         directory = active.parent / "archive"
         if not directory.is_dir():
-            self.error(directory, "directorio de planes archivados no existe")
+            self.error(directory, "archived-plan directory does not exist")
             return
         for path in sorted(directory.glob("*.md")):
             if path.name == "README.md":
                 continue
-            self.check_dated_document_name(path, "plan archivado")
+            self.check_dated_document_name(path, "archived plan")
             text = self.read_document(path)
             if text is None:
                 continue
             fields = markdown_metadata(text)
-            self.check_plan_id(path, fields, "plan archivado", owner_id)
+            self.check_plan_id(path, fields, "archived plan", owner_id)
             if not valid_date(fields.get("opened", "")):
-                self.error(path, "plan archivado requiere `Opened: YYYY-MM-DD`")
+                self.error(path, "archived plan requires `Opened: YYYY-MM-DD`")
             if not valid_date(fields.get("closed", "")):
-                self.error(path, "plan archivado requiere `Closed: YYYY-MM-DD`")
+                self.error(path, "archived plan requires `Closed: YYYY-MM-DD`")
             if normalized_status(fields.get("status", "")) != "done":
-                self.error(path, "un archivo bajo plans/archive requiere `Status: done`")
+                self.error(path, "a file under plans/archive requires `Status: done`")
             for field in (
                 "scope",
                 "implementation checkpoint",
@@ -1326,11 +1455,11 @@ class DocumentationContract:
                 "successor",
             ):
                 if not fields.get(field):
-                    self.error(path, f"plan archivado requiere metadata `{field.title()}`")
+                    self.error(path, f"archived plan requires `{field.title()}` metadata")
             if not scope_matches_owner(
                 fields.get("scope", ""), owner_id, str(owner.get("name", ""))
             ):
-                self.error(path, f"Scope no corresponde al archivo de `{owner_id}`")
+                self.error(path, f"Scope does not match file owner `{owner_id}`")
             headings = markdown_headings(text)
             normalized = {normalized_heading(heading): line for _level, heading, line in headings}
             for required in (
@@ -1343,13 +1472,13 @@ class DocumentationContract:
                 "change and commit ledger",
             ):
                 if required not in normalized:
-                    self.error(path, f"plan archivado requiere heading `{required.title()}`")
+                    self.error(path, f"archived plan requires heading `{required.title()}`")
             ledger_line = normalized.get("change and commit ledger")
             if ledger_line is not None:
                 self.check_ledger(path, text, ledger_line, owner_id, require_done=True)
                 self.check_archived_plan_transition(path, owner_id)
             if re.search(r"PENDING FINAL|pending final split|0 files, \+0/-0", text, re.IGNORECASE):
-                self.error(path, "plan archivado conserva placeholders de cierre")
+                self.error(path, "archived plan retains closing placeholders")
 
     def check_archived_plan_transition(self, path: Path, owner_id: str) -> None:
         if not self.is_real_git_root():
@@ -1407,9 +1536,9 @@ class DocumentationContract:
         if not transition_found:
             self.error(
                 path,
-                f"movimiento `{active_relative}` -> `{plan_relative}` en {archive_commit} "
-                "requiere una unidad done con inventario del mismo endpoint que reclame "
-                "la eliminación active y la adición archive",
+                f"move `{active_relative}` -> `{plan_relative}` in {archive_commit} "
+                "requires a done unit with an inventory at the same endpoint that claims "
+                "the active deletion and archive addition",
             )
 
     def check_active_plans(self) -> None:
@@ -1476,7 +1605,7 @@ class DocumentationContract:
         if len(lines) != 1:
             self.error(
                 inventory_path,
-                f"inventario de {unit}: Git no devuelve una única fila numstat para {raw_path}",
+                f"inventory for {unit}: Git did not return exactly one numstat row for {raw_path}",
             )
             return None
         cells = lines[0].split(b"\t", maxsplit=2)
@@ -1485,7 +1614,7 @@ class DocumentationContract:
         if not values_are_lines and not values_are_binary:
             self.error(
                 inventory_path,
-                f"inventario de {unit}: Git devuelve numstat inválido para {raw_path}",
+                f"inventory for {unit}: Git returned invalid numstat for {raw_path}",
             )
             return None
         return cells[0].decode("ascii"), cells[1].decode("ascii")
@@ -1593,15 +1722,15 @@ class DocumentationContract:
         if plan_moved and not inventory_is_stable:
             self.error(
                 inventory_path,
-                f"inventario histórico de {unit} sólo puede sobrevivir al movimiento del plan "
-                f"desde el root estable `{stable_root}/`",
+                f"historical inventory for {unit} can survive a plan move only "
+                f"from the stable root `{stable_root}/`",
             )
             return None
         if plan_moved and (not current_plan_id or not current_plan_id_explicit):
             self.error(
                 current_plan_path,
-                f"plan movido con inventario histórico requiere metadata `Plan ID` estable "
-                f"para {unit}",
+                f"a moved plan with a historical inventory requires stable `Plan ID` metadata "
+                f"for {unit}",
             )
             return None
 
@@ -1639,9 +1768,9 @@ class DocumentationContract:
             rendered = current_plan_id or "<missing>"
             self.error(
                 inventory_path,
-                f"endpoint histórico de {unit} requiere un único plan host con Plan ID "
-                f"`{rendered}`, unidad done y enlace al mismo inventario; "
-                f"encontrados: {len(matching_hosts)}",
+                f"historical endpoint for {unit} requires exactly one host plan with Plan ID "
+                f"`{rendered}`, a done unit, and a link to the same inventory; "
+                f"found: {len(matching_hosts)}",
             )
             return None
         return matching_hosts[0]
@@ -1657,7 +1786,7 @@ class DocumentationContract:
                 rendered = ", ".join(f"`{prefix}:`" for prefix in sorted(prefixes))
                 self.error(
                     claims[-1][0],
-                    f"unidades del mismo lote {group} usan prefijos incompatibles: {rendered}",
+                    f"units in batch {group} use incompatible prefixes: {rendered}",
                 )
 
             for index, (left_path, left_unit, _left_prefix, left_plan, left_paths) in enumerate(claims):
@@ -1668,11 +1797,11 @@ class DocumentationContract:
                     if not shared:
                         continue
                     rendered = ", ".join(f"`{path}`" for path in sorted(shared)[:10])
-                    suffix = f" y {len(shared) - 10} más" if len(shared) > 10 else ""
+                    suffix = f" and {len(shared) - 10} more" if len(shared) > 10 else ""
                     self.error(
                         right_path,
-                        f"inventarios {left_unit} ({self.relative(left_path)}) y {right_unit} "
-                        f"reclaman las mismas rutas: {rendered}{suffix}",
+                        f"inventories {left_unit} ({self.relative(left_path)}) and {right_unit} "
+                        f"claim the same paths: {rendered}{suffix}",
                     )
 
             expected_group_paths = self.inventory_group_paths.get(group)
@@ -1681,10 +1810,10 @@ class DocumentationContract:
                 missing = sorted(expected_group_paths - claimed_paths)
                 if missing:
                     rendered = ", ".join(f"`{path}`" for path in missing[:10])
-                    suffix = f" y {len(missing) - 10} más" if len(missing) > 10 else ""
+                    suffix = f" and {len(missing) - 10} more" if len(missing) > 10 else ""
                     self.error(
                         claims[-1][0],
-                        f"lote histórico {group} contiene rutas sin inventario: "
+                        f"historical batch {group} contains paths without an inventory: "
                         f"{rendered}{suffix}",
                     )
 
@@ -1727,7 +1856,7 @@ class DocumentationContract:
             if plan_relative not in row_paths:
                 self.error(
                     inventory_path,
-                    f"inventario de {unit} no contiene el plan que aloja el ledger: "
+                    f"inventory for {unit} does not contain the plan hosting the ledger: "
                     f"{plan_relative}",
                 )
             if pathspecs and plan_path.parent.name == "active":
@@ -1736,7 +1865,7 @@ class DocumentationContract:
                 )
             return
         if not self.git_object_exists(f"{base_revision}^{{commit}}"):
-            self.error(inventory_path, f"Base revision no existe en Git: {base_revision}")
+            self.error(inventory_path, f"Base revision does not exist in Git: {base_revision}")
             return
 
         inventory_relative = self.relative(inventory_path)
@@ -1749,7 +1878,7 @@ class DocumentationContract:
             inventory_relative,
         )
         if tracked is None or status is None:
-            self.error(inventory_path, "no se pudo consultar el estado Git del inventario")
+            self.error(inventory_path, "could not query the inventory Git status")
             return
         inventory_is_tracked = tracked.returncode == 0
         inventory_is_dirty = not inventory_is_tracked or bool(status.stdout.strip())
@@ -1758,12 +1887,12 @@ class DocumentationContract:
             if plan_relative not in row_paths:
                 self.error(
                     inventory_path,
-                    f"inventario de {unit} no contiene el plan que aloja el ledger: "
+                    f"inventory for {unit} does not contain the plan hosting the ledger: "
                     f"{plan_relative}",
                 )
             head = self.git_command("rev-parse", "HEAD")
             if head is None or head.returncode != 0:
-                self.error(inventory_path, "no se pudo resolver HEAD para verificar el inventario")
+                self.error(inventory_path, "could not resolve HEAD to verify the inventory")
                 return
             endpoint = None
             ancestor_target = head.stdout.decode("ascii").strip()
@@ -1771,28 +1900,28 @@ class DocumentationContract:
             if base_revision != ancestor_target:
                 self.error(
                     inventory_path,
-                    f"Base revision de {unit} debe ser el HEAD previo al commit: "
+                    f"Base revision for {unit} must be the HEAD before the commit: "
                     f"{ancestor_target}",
                 )
                 return
         else:
             last_change = self.git_command("log", "-1", "--format=%H", "--", inventory_relative)
             if last_change is None or last_change.returncode != 0 or not last_change.stdout.strip():
-                self.error(inventory_path, "no se pudo resolver el commit histórico del inventario")
+                self.error(inventory_path, "could not resolve the historical inventory commit")
                 return
             endpoint = last_change.stdout.decode("ascii").strip()
             ancestor_target = endpoint
             claim_group = f"commit:{endpoint}"
             parent = self.git_command("rev-parse", f"{endpoint}^")
             if parent is None or parent.returncode != 0:
-                self.error(inventory_path, "no se pudo resolver el padre del commit del inventario")
+                self.error(inventory_path, "could not resolve the inventory commit parent")
                 return
             direct_parent = parent.stdout.decode("ascii").strip()
             if base_revision != direct_parent:
                 self.error(
                     inventory_path,
-                    f"Base revision de {unit} debe ser el padre directo del commit "
-                    f"del inventario: {direct_parent}",
+                    f"Base revision for {unit} must be the direct parent of the inventory "
+                    f"commit: {direct_parent}",
                 )
                 return
 
@@ -1808,7 +1937,7 @@ class DocumentationContract:
             if historical_prefix != commit_prefix:
                 self.error(
                     inventory_path,
-                    f"commit histórico de {unit} requiere asunto con `{commit_prefix}: `",
+                    f"historical commit for {unit} requires a subject with `{commit_prefix}: `",
                 )
             historical_plan_host = self.check_historical_plan_host(
                 inventory_path,
@@ -1838,7 +1967,7 @@ class DocumentationContract:
         if ancestor is None or ancestor.returncode != 0:
             self.error(
                 inventory_path,
-                f"Base revision {base_revision} no es ancestro del endpoint {ancestor_target}",
+                f"Base revision {base_revision} is not an ancestor of endpoint {ancestor_target}",
             )
             return
 
@@ -1863,7 +1992,7 @@ class DocumentationContract:
                 or untracked is None
                 or untracked.returncode != 0
             ):
-                self.error(inventory_path, "no se pudo enumerar el cambio Git actual")
+                self.error(inventory_path, "could not enumerate the current Git change")
                 return
             worktree_paths = {
                 os.fsdecode(raw_path)
@@ -1881,7 +2010,7 @@ class DocumentationContract:
                 endpoint,
             )
             if changed is None or changed.returncode != 0:
-                self.error(inventory_path, "no se pudo enumerar el cambio Git histórico")
+                self.error(inventory_path, "could not enumerate the historical Git change")
                 return
             worktree_paths = {
                 os.fsdecode(raw_path) for raw_path in changed.stdout.split(b"\0") if raw_path
@@ -1896,13 +2025,13 @@ class DocumentationContract:
                 if outside_scope:
                     rendered = ", ".join(f"`{path}`" for path in outside_scope[:10])
                     suffix = (
-                        f" y {len(outside_scope) - 10} más"
+                        f" and {len(outside_scope) - 10} more"
                         if len(outside_scope) > 10
                         else ""
                     )
                     self.error(
                         inventory_path,
-                        f"commit histórico fuera de alcance de `{commit_prefix}:`: "
+                        f"historical commit outside the scope of `{commit_prefix}:`: "
                         f"{rendered}{suffix}",
                     )
             self.inventory_group_paths.setdefault(claim_group, set()).update(worktree_paths)
@@ -1930,17 +2059,17 @@ class DocumentationContract:
         extra_paths = sorted(inventory_paths - actual_paths)
         if missing_paths:
             rendered = ", ".join(f"`{path}`" for path in missing_paths[:10])
-            suffix = f" y {len(missing_paths) - 10} más" if len(missing_paths) > 10 else ""
+            suffix = f" and {len(missing_paths) - 10} more" if len(missing_paths) > 10 else ""
             self.error(
                 inventory_path,
-                f"inventario de {unit} omite rutas cambiadas según Git: {rendered}{suffix}",
+                f"inventory for {unit} omits paths changed according to Git: {rendered}{suffix}",
             )
         if extra_paths:
             rendered = ", ".join(f"`{path}`" for path in extra_paths[:10])
-            suffix = f" y {len(extra_paths) - 10} más" if len(extra_paths) > 10 else ""
+            suffix = f" and {len(extra_paths) - 10} more" if len(extra_paths) > 10 else ""
             self.error(
                 inventory_path,
-                f"inventario de {unit} contiene rutas sin cambio según Git: {rendered}{suffix}",
+                f"inventory for {unit} contains paths unchanged according to Git: {rendered}{suffix}",
             )
 
         for line_number, expected_added, expected_deleted, content, raw_path in rows:
@@ -2005,37 +2134,37 @@ class DocumentationContract:
                 final_bytes = self.commit_path_bytes(endpoint, raw_path)
 
             if actual != (expected_added, expected_deleted):
-                rendered = "sin cambio" if actual is None else f"{actual[0]}/{actual[1]}"
+                rendered = "unchanged" if actual is None else f"{actual[0]}/{actual[1]}"
                 self.error(
                     inventory_path,
-                    f"línea {line_number}: numstat stale para {raw_path}; "
-                    f"inventario {expected_added}/{expected_deleted}, Git {rendered}",
+                    f"line {line_number}: stale numstat for {raw_path}; "
+                    f"inventory {expected_added}/{expected_deleted}, Git {rendered}",
                 )
 
             if content == "deleted":
                 if final_bytes is not None:
                     self.error(
                         inventory_path,
-                        f"línea {line_number}: {raw_path} usa `deleted` pero existe en el estado final",
+                        f"line {line_number}: {raw_path} uses `deleted` but exists in the final state",
                     )
             elif content == "self":
                 if final_bytes is None:
                     self.error(
                         inventory_path,
-                        f"línea {line_number}: el inventario `self` no existe en el estado final",
+                        f"line {line_number}: the `self` inventory does not exist in the final state",
                     )
             elif final_bytes is None:
                 self.error(
                     inventory_path,
-                    f"línea {line_number}: falta el estado final de {raw_path} para verificar SHA-256",
+                    f"line {line_number}: final state for {raw_path} is missing for SHA-256 verification",
                 )
             else:
                 actual_hash = hashlib.sha256(final_bytes).hexdigest()
                 if content != actual_hash:
                     self.error(
                         inventory_path,
-                        f"línea {line_number}: SHA-256 stale para {raw_path}; "
-                        f"inventario {content}, estado final {actual_hash}",
+                        f"line {line_number}: stale SHA-256 for {raw_path}; "
+                        f"inventory {content}, final state {actual_hash}",
                     )
 
     def check_numstat_inventory(
@@ -2063,7 +2192,7 @@ class DocumentationContract:
         if not stable_root or inventory_relative != expected_inventory:
             self.error(
                 inventory_path,
-                f"inventario de {unit} debe vivir exactamente en "
+                f"inventory for {unit} must live exactly at "
                 f"`{expected_inventory}`",
             )
         plan_text = self.read_document(plan_path)
@@ -2076,7 +2205,7 @@ class DocumentationContract:
         if not base_revision_valid:
             self.error(
                 inventory_path,
-                f"inventario de {unit} requiere una única línea "
+                f"inventory for {unit} requires exactly one "
                 "`Base revision<TAB><40 hex>`",
             )
         base_revision = base_revision_lines[0].split("\t", maxsplit=1)[1] if base_revision_valid else ""
@@ -2088,7 +2217,7 @@ class DocumentationContract:
             if len(cells) != 2 or cells[0] != "Pathspec":
                 self.error(
                     inventory_path,
-                    f"línea {index}: Pathspec requiere `Pathspec<TAB>ruta`",
+                    f"line {index}: Pathspec requires `Pathspec<TAB>path`",
                 )
                 continue
             pathspec = cells[1]
@@ -2106,22 +2235,22 @@ class DocumentationContract:
             if not pathspec_valid:
                 self.error(
                     inventory_path,
-                    f"línea {index}: Pathspec no es una frontera normalizada permitida "
-                    f"para `{owner_id}`: {pathspec}",
+                    f"line {index}: Pathspec is not an allowed normalized boundary "
+                    f"for `{owner_id}`: {pathspec}",
                 )
             elif pathspec in pathspecs:
-                self.error(inventory_path, f"línea {index}: Pathspec duplicado: {pathspec}")
+                self.error(inventory_path, f"line {index}: duplicate Pathspec: {pathspec}")
             else:
                 pathspecs.add(pathspec)
                 commit_scope = self.commit_scopes.get(commit_prefix)
                 if commit_scope is not None and not pathspec_allowed(pathspec, commit_scope):
                     self.error(
                         inventory_path,
-                        f"línea {index}: Pathspec fuera del alcance de `{commit_prefix}:`: "
+                        f"line {index}: Pathspec outside the scope of `{commit_prefix}:`: "
                         f"{pathspec}",
                     )
         if not pathspecs:
-            self.error(inventory_path, f"inventario de {unit} requiere al menos un `Pathspec`")
+            self.error(inventory_path, f"inventory for {unit} requires at least one `Pathspec`")
         header_lines = [
             index
             for index, line in enumerate(lines)
@@ -2130,7 +2259,7 @@ class DocumentationContract:
         if len(header_lines) != 1:
             self.error(
                 inventory_path,
-                f"inventario de {unit} requiere una única cabecera "
+                f"inventory for {unit} requires exactly one header "
                 "`added\\tdeleted\\tcontent\\tpath`",
             )
             return
@@ -2148,7 +2277,7 @@ class DocumentationContract:
             if len(cells) != len(NUMSTAT_HEADER):
                 self.error(
                     inventory_path,
-                    f"línea {index}: fila numstat requiere cuatro columnas separadas por tabulador",
+                    f"line {index}: numstat row requires four tab-separated columns",
                 )
                 continue
             added, deleted, content, raw_path = cells
@@ -2161,26 +2290,26 @@ class DocumentationContract:
             ):
                 self.error(
                     inventory_path,
-                    f"línea {index}: added/deleted deben ser enteros no negativos o `-/-`",
+                    f"line {index}: added/deleted must be non-negative integers or `-/-`",
                 )
                 continue
             content_valid = NUMSTAT_CONTENT_RE.fullmatch(content) is not None
             if not content_valid:
                 self.error(
                     inventory_path,
-                    f"línea {index}: content debe ser SHA-256 o marcador de cierre permitido",
+                    f"line {index}: content must be SHA-256 or an allowed closing marker",
                 )
             if content == "self":
                 self_rows += 1
                 if raw_path != inventory_relative:
                     self.error(
                         inventory_path,
-                        f"línea {index}: marcador `self` sólo pertenece al propio inventario",
+                        f"line {index}: `self` marker belongs only to the inventory itself",
                     )
             elif raw_path == inventory_relative:
                 self.error(
                     inventory_path,
-                    f"línea {index}: la fila del propio inventario requiere marcador `self`",
+                    f"line {index}: the inventory's own row requires the `self` marker",
                 )
             path_parts = raw_path.split("/")
             path_valid = not (
@@ -2193,10 +2322,10 @@ class DocumentationContract:
             if not path_valid:
                 self.error(
                     inventory_path,
-                    f"línea {index}: ruta numstat no es relativa y normalizada: {raw_path}",
+                    f"line {index}: numstat path is not relative and normalized: {raw_path}",
                 )
             elif raw_path in paths:
-                self.error(inventory_path, f"línea {index}: ruta numstat duplicada: {raw_path}")
+                self.error(inventory_path, f"line {index}: duplicate numstat path: {raw_path}")
             else:
                 paths.add(raw_path)
                 if pathspecs and not any(
@@ -2204,7 +2333,7 @@ class DocumentationContract:
                 ):
                     self.error(
                         inventory_path,
-                        f"línea {index}: ruta fuera de Pathspec para {unit}: {raw_path}",
+                        f"line {index}: path outside Pathspec for {unit}: {raw_path}",
                     )
             if values_are_lines:
                 added_total += int(added)
@@ -2215,25 +2344,25 @@ class DocumentationContract:
         if self_rows != 1:
             self.error(
                 inventory_path,
-                f"inventario de {unit} requiere exactamente una fila `self` propia",
+                f"inventory for {unit} requires exactly one `self` row of its own",
             )
         if evidence_relatives and not paths.intersection(evidence_relatives):
             self.error(
                 inventory_path,
-                f"inventario de {unit} no contiene ningún expediente enlazado "
-                "desde `Automated evidence`",
+                f"inventory for {unit} contains no record linked "
+                "from `Automated evidence`",
             )
         if len(paths) != expected_files:
             self.error(
                 inventory_path,
-                f"inventario de {unit} declara {len(paths)} rutas únicas; "
-                f"Diffstat declara {expected_files} archivos",
+                f"inventory for {unit} declares {len(paths)} unique paths; "
+                f"Diffstat declares {expected_files} files",
             )
         if added_total != expected_added or deleted_total != expected_deleted:
             self.error(
                 inventory_path,
-                f"inventario de {unit} suma +{added_total}/-{deleted_total}; "
-                f"Diffstat declara +{expected_added}/-{expected_deleted}",
+                f"inventory for {unit} totals +{added_total}/-{deleted_total}; "
+                f"Diffstat declares +{expected_added}/-{expected_deleted}",
             )
         if base_revision:
             self.check_inventory_against_git(
@@ -2276,14 +2405,14 @@ class DocumentationContract:
         if foreign_evidence_paths:
             self.error(
                 path,
-                f"ledger línea {line_number}: Automated evidence fuera del owner "
+                f"ledger line {line_number}: Automated evidence outside owner "
                 f"`{owner_id}`",
             )
         if not evidence_paths:
             self.error(
                 path,
-                f"ledger línea {line_number}: unidad done requiere expediente resoluble "
-                f"bajo `evidence/` del owner `{owner_id}` en `Automated evidence`",
+                f"ledger line {line_number}: done unit requires a resolvable record "
+                f"under owner `{owner_id}` `evidence/` in `Automated evidence`",
             )
 
         inventory_targets = [
@@ -2295,15 +2424,15 @@ class DocumentationContract:
         if len(inventory_targets) != 1:
             self.error(
                 path,
-                f"ledger línea {line_number}: unidad done requiere un único enlace "
-                "a inventario `.numstat.tsv` en `Files / areas`",
+                f"ledger line {line_number}: done unit requires exactly one link "
+                "to a `.numstat.tsv` inventory in `Files / areas`",
             )
         else:
             inventory_path = self.resolve_local_link(path, inventory_targets[0])
             if inventory_path is None:
                 self.error(
                     path,
-                    f"ledger línea {line_number}: inventario `.numstat.tsv` no es resoluble",
+                    f"ledger line {line_number}: `.numstat.tsv` inventory is not resolvable",
                 )
             else:
                 previous = self.inventory_units.get(inventory_path)
@@ -2311,8 +2440,8 @@ class DocumentationContract:
                     previous_plan, previous_unit, previous_line = previous
                     self.error(
                         path,
-                        f"ledger línea {line_number}: inventario ya pertenece a {previous_unit} "
-                        f"en {self.relative(previous_plan)}:{previous_line}",
+                        f"ledger line {line_number}: inventory already belongs to {previous_unit} "
+                        f"at {self.relative(previous_plan)}:{previous_line}",
                     )
                 else:
                     self.inventory_units[inventory_path] = (path, unit, line_number)
@@ -2346,16 +2475,16 @@ class DocumentationContract:
                 break
             cursor += 1
         if cursor + 1 >= len(lines) or not lines[cursor].lstrip().startswith("|"):
-            self.error(path, "ledger no contiene tabla Markdown")
+            self.error(path, "ledger contains no Markdown table")
             return
         header = [" ".join(cell.casefold().split()) for cell in split_table_row(lines[cursor])]
         separator = split_table_row(lines[cursor + 1])
         if not is_separator_row(separator):
-            self.error(path, "ledger no contiene separador de tabla válido")
+            self.error(path, "ledger contains no valid table separator")
             return
         missing = [column for column in LEDGER_COLUMNS if column not in header]
         if missing:
-            self.error(path, f"ledger carece de columnas: {', '.join(missing)}")
+            self.error(path, f"ledger is missing columns: {', '.join(missing)}")
             return
         indexes = {column: header.index(column) for column in LEDGER_COLUMNS}
         cursor += 2
@@ -2365,43 +2494,43 @@ class DocumentationContract:
             cells = split_table_row(lines[cursor])
             cursor += 1
             if len(cells) != len(header):
-                self.error(path, f"ledger línea {cursor}: número de celdas incorrecto")
+                self.error(path, f"ledger line {cursor}: incorrect cell count")
                 continue
             row_count += 1
             unit = cells[indexes["unit"]].strip("` ")
             if not unit:
-                self.error(path, f"ledger línea {cursor}: Unit vacío")
+                self.error(path, f"ledger line {cursor}: empty Unit")
             elif unit in units:
-                self.error(path, f"ledger línea {cursor}: Unit duplicado: {unit}")
+                self.error(path, f"ledger line {cursor}: duplicate Unit: {unit}")
             units.add(unit)
 
             prefix = cells[indexes["commit prefix"]].strip("` ")
             allowed_prefixes = self.owner_prefixes.get(owner_id, set())
             if not prefix.endswith(":") or prefix[:-1] not in allowed_prefixes:
-                allowed = ", ".join(f"{item}:" for item in sorted(allowed_prefixes)) or "ninguno"
+                allowed = ", ".join(f"{item}:" for item in sorted(allowed_prefixes)) or "none"
                 self.error(
                     path,
-                    f"ledger línea {cursor}: prefijo fuera del owner `{owner_id}`: "
-                    f"{prefix} (permitidos: {allowed})",
+                    f"ledger line {cursor}: prefix outside owner `{owner_id}`: "
+                    f"{prefix} (allowed: {allowed})",
                 )
             status_value = normalized_status(cells[indexes["status"]])
             if status_value not in PLAN_STATES:
-                self.error(path, f"ledger línea {cursor}: estado inválido: {status_value}")
+                self.error(path, f"ledger line {cursor}: invalid status: {status_value}")
             elif require_done and status_value != "done":
-                self.error(path, f"ledger línea {cursor}: plan archivado requiere unidades done")
+                self.error(path, f"ledger line {cursor}: archived plan requires done units")
             for column in ("files / areas", "intended change", "automated evidence", "author validation"):
                 if not cells[indexes[column]].strip():
-                    self.error(path, f"ledger línea {cursor}: `{column}` vacío")
+                    self.error(path, f"ledger line {cursor}: empty `{column}`")
             diffstat = cells[indexes["diffstat"]].strip()
             if not diffstat:
-                self.error(path, f"ledger línea {cursor}: `Diffstat` vacío")
+                self.error(path, f"ledger line {cursor}: empty `Diffstat`")
             elif status_value == "done":
                 final_diffstat = diffstat.strip("` ")
                 diffstat_match = DONE_DIFFSTAT_RE.fullmatch(final_diffstat)
                 if diffstat_match is None:
                     self.error(
                         path,
-                        f"ledger línea {cursor}: unidad done requiere diffstat "
+                        f"ledger line {cursor}: done unit requires diffstat "
                         "`N files, +X/-Y`",
                     )
                 else:
@@ -2416,7 +2545,7 @@ class DocumentationContract:
                         prefix[:-1] if prefix.endswith(":") else prefix,
                     )
         if row_count == 0:
-            self.error(path, "ledger no contiene unidades")
+            self.error(path, "ledger contains no units")
 
     def check_roadmap_plan_links(self) -> None:
         plans_by_owner: dict[str, list[tuple[Path, str]]] = {}
@@ -2434,31 +2563,31 @@ class DocumentationContract:
             if not matching:
                 self.error(
                     roadmap_path,
-                    f"ROADMAP {status_value} requiere exactamente un plan activo del owner "
-                    f"`{owner_id}` para `{checkpoint}`",
+                    f"ROADMAP {status_value} requires exactly one active plan for owner "
+                    f"`{owner_id}` at `{checkpoint}`",
                 )
             elif len(matching) > 1:
                 self.error(
                     roadmap_path,
-                    f"ROADMAP `{owner_id}` tiene varios planes activos para `{checkpoint}`",
+                    f"ROADMAP `{owner_id}` has multiple active plans for `{checkpoint}`",
                 )
 
         for owner_id, plan_path, checkpoint in self.active_plan_records:
             roadmap = self.roadmaps.get(owner_id)
             if roadmap is None:
-                self.error(plan_path, f"plan activo huérfano: owner `{owner_id}` sin ROADMAP")
+                self.error(plan_path, f"orphan active plan: owner `{owner_id}` has no ROADMAP")
                 continue
             _roadmap_path, status_value, roadmap_checkpoint = roadmap
             if status_value not in {"active", "blocked"}:
                 self.error(
                     plan_path,
-                    f"plan activo huérfano: ROADMAP `{owner_id}` está {status_value}",
+                    f"orphan active plan: ROADMAP `{owner_id}` is {status_value}",
                 )
             elif checkpoint != roadmap_checkpoint:
                 self.error(
                     plan_path,
-                    f"checkpoint de plan `{checkpoint}` no coincide con ROADMAP "
-                    f"`{roadmap_checkpoint}` del owner `{owner_id}`",
+                    f"plan checkpoint `{checkpoint}` does not match ROADMAP "
+                    f"`{roadmap_checkpoint}` for owner `{owner_id}`",
                 )
 
     def run(self) -> list[str]:
@@ -2495,10 +2624,10 @@ def main(argv: list[str] | None = None) -> int:
     if errors:
         for error in errors:
             print(error, file=sys.stderr)
-        print(f"Contrato de documentación: {len(errors)} error(es).", file=sys.stderr)
+        print(f"Documentation contract: {len(errors)} error(s).", file=sys.stderr)
         return 1
     if not arguments.quiet:
-        print("Contrato de documentación: OK")
+        print("Documentation contract: OK")
     return 0
 
 

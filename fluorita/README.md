@@ -55,7 +55,10 @@ without replacing the installed binary or registering desktop handlers; status
 reports whether the verification seal still matches the current inputs; deploy
 installs the already verified binary, desktop entry and icons without
 recompiling. `scripts/run.sh` remains a human convenience, not the canonical
-agent verification entry.
+agent verification entry. A change to a shared Fluorita crate also completes
+Siderita because its embedded media surface consumes the same core, engine and
+Qt seam; verifying the second host without completing it would leave the
+author's installed file manager stale.
 
 Desktop-entry registration can become the effective default for an unpinned
 MIME type on this desktop. Completion is authorised to register it, but the

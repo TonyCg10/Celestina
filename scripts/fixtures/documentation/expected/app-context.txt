@@ -1,5 +1,8 @@
 AGENTS.md
 app/AGENTS.md
+CONTRIBUTING.md
+docs/standards/fixture.md
+app/docs/context.md
 app/README.md
 app/STATUS.md
 app/ROADMAP.md

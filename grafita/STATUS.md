@@ -1,8 +1,8 @@
 # Grafita status
 
 - **Updated:** 2026-08-03
-- **Implementation:** version 1.0.0 and checkpoints G0-G6 are present; there is
-  no active implementation checkpoint
+- **Implementation:** the registered product version and checkpoints G0-G6 are
+  present; there is no active implementation checkpoint
 - **Author validation:** the version-1 interaction pass is closed; intentionally
   excluded coverage is recorded in [VALIDATION.md](VALIDATION.md)
 

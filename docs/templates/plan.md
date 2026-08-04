@@ -53,6 +53,12 @@ short basename without the `YYYY-MM-DD-` prefix is recommended; a different id
 is valid only when it is equally stable and unambiguous. Archiving never changes
 it.
 
+The ledger records the base scope (`project:`), not the final subject suffix.
+At closure classify the atomic batch as `bug`, `milestone`, `release` or
+`maintenance`. A versioned product delivery applies the matching SemVer change
+and append-only history row before its production build; see
+[the version contract](../contracts/versioning.md).
+
 Before setting a unit to `done`, calculate tracked paths with
 `git diff --numstat --no-renames` and each new path against `/dev/null`; preserve
 the exact path inventory and record the sum as `N files, +X/-Y`. Replace

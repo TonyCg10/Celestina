@@ -1,0 +1,64 @@
+schema_version = 1
+
+[suite]
+id = "suite"
+name = "Fixture suite"
+root = "."
+commit_prefix = "suite"
+agents = "AGENTS.md"
+readme = "README.md"
+status = "STATUS.md"
+roadmap = "ROADMAP.md"
+validation = "VALIDATION.md"
+active_plans = "docs/plans/active"
+allow_all_commit_paths = true
+
+[[projects]]
+id = "app"
+name = "App"
+path = "app"
+kind = "fixture"
+commit_prefix = "app"
+agents = "app/AGENTS.md"
+readme = "app/README.md"
+status = "app/STATUS.md"
+roadmap = "app/ROADMAP.md"
+validation = "app/VALIDATION.md"
+active_plans = "app/docs/plans/active"
+context_documents = ["app/docs/context.md"]
+source_roots = ["app/src", "core/crates/app-core"]
+commit_roots = ["app/", "core/crates/app-core/"]
+production_role = "desktop-application"
+deployable = true
+build_script = "app/scripts/build-production.sh"
+verify_script = "app/scripts/verify-production.sh"
+status_script = "app/scripts/status-production.sh"
+deploy_script = "app/scripts/deploy-production.sh"
+complete_script = "app/scripts/complete-production.sh"
+artifact_manifest = "app/target/production-artifact.toml"
+artifact_paths = ["app/target/release/app"]
+component_commit_scopes = [
+  { prefix = "app-core", roots = ["core/crates/app-core/"] },
+]
+
+[[projects]]
+id = "core"
+name = "Core workspace"
+path = "core"
+kind = "rust-workspace"
+commit_prefix = "core"
+agents = "core/AGENTS.md"
+readme = "core/README.md"
+status = "core/STATUS.md"
+roadmap = "core/ROADMAP.md"
+validation = "core/VALIDATION.md"
+context_documents = []
+source_roots = ["core/crates"]
+commit_roots = ["core/"]
+production_role = "rust-workspace"
+deployable = false
+build_script = "core/scripts/build-production.sh"
+verify_script = "core/scripts/verify-production.sh"
+status_script = "core/scripts/status-production.sh"
+artifact_manifest = "core/target/production-artifact.toml"
+artifact_paths = ["core/target/release"]

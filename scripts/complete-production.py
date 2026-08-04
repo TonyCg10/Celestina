@@ -22,10 +22,10 @@ def main() -> int:
         (item for item in registry["projects"] if item["id"] == args.project), None
     )
     if project is None:
-        parser.error(f"proyecto no registrado: {args.project}")
+        parser.error(f"unregistered project: {args.project}")
     if not project.get("deployable", False):
         parser.error(
-            f"{args.project} no es desplegable; completa y despliega sus consumidores"
+            f"{args.project} is not deployable; complete and deploy its consumers"
         )
 
     for key in ("build_script", "verify_script", "deploy_script", "status_script"):

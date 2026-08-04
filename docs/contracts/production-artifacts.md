@@ -40,15 +40,47 @@ the author's binary.
 
 The manifest records at least project, profile, artifact paths and digests, Git
 revision, dirty state, production and verification fingerprints, relevant
-toolchain, UTC time, and build/verify commands. A changed source fingerprint
-invalidates deployment; it never triggers a hidden rebuild. A change limited to
-tests, smoke, guards, deploy, activate, status, or shared helpers invalidates
-verification and reruns verify without rebuilding release.
+toolchain, UTC time, and the supervised build/verify entrypoints. A changed
+source fingerprint invalidates deployment; it never triggers a hidden rebuild.
+A change limited to tests, smoke, guards, deploy, activate, status, or shared
+helpers invalidates verification and reruns verify without rebuilding release.
+
+The no-argument `build-production.sh` is the canonical user-facing build entry.
+It delegates to `scripts/production_artifact.py run-build`, which captures the
+production fingerprint and then invokes exactly the registry-declared build
+script once in a reserved internal mode. That child runs the real Cargo or CMake
+steps without writing a manifest. Only after the child exits zero does the
+runner recheck production inputs and artifact stability and write the pending
+manifest. There is no public start/record pair and an internal child cannot seal
+itself. A nonzero child or changed interval leaves no new build seal.
 
 `scripts/production_artifact.py` computes fingerprints from registered
 `production_inputs` and `verification_inputs`. It follows source symlinks so a
 shared QML change invalidates consumers, ignores targets/builds/VCS caches, and
 never uses mtimes for artifact identity.
+
+The verification fingerprint requires `verify_script` and `status_script` for
+every project; deployable projects additionally require `deploy_script`,
+`complete_script`, and the shared completion orchestrator. A declared activation
+entry is required too. Deleting or unregistering any required lifecycle script
+invalidates verification and cannot be resealed until the contract is restored.
+
+The canonical no-argument `verify-production.sh` similarly delegates to
+`scripts/production_artifact.py run-verification`. The runner validates the
+current build, captures a digest over the source fingerprint, complete artifact
+set and current verification fingerprint, and invokes exactly the registered
+verify script in its reserved internal mode. It clears any prior verification
+seal before launching the child, so a failed re-verification cannot leave old
+success looking current. It marks the manifest verified only after that child
+exits zero and the complete digest is unchanged. A source,
+artifact or verification-input change during the child leaves the manifest
+unverified. The removed public start/record commands cannot bless a prior or
+unrelated execution by supplying descriptive text.
+
+This supervision proves that the registered entrypoint returned success over an
+unchanged interval. It does not prove that every command implemented inside that
+entrypoint is semantically sufficient; review and fixture coverage still own
+that contract.
 
 ## Exact verification
 

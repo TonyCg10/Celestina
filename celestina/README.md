@@ -43,12 +43,16 @@ session protocol version declared in `Cargo.toml`.
 ```sh
 scripts/build-production.sh
 scripts/verify-production.sh
+scripts/complete-production.sh
 scripts/status-production.sh
 ```
 
 Build creates the production bundle without mapping a panel. Verify consumes
-that same bundle and never activates the shell. Status reports whether the host,
-both Rust helpers and source-imported style inputs are still current.
+that same bundle and never activates the shell. Complete is the canonical exit
+for an implemented shell bug or milestone: it builds once, verifies those exact
+bytes, deploys the on-disk author-test bundle and checks its status without
+replacing the live shell. Status reports whether the host, both Rust helpers and
+source-imported style inputs are still current.
 
 Activating a shell changes the live session and is intentionally separate:
 

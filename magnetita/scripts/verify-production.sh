@@ -6,7 +6,15 @@ suite_root=$(CDPATH= cd -- "$project_root/.." && pwd)
 artifact_tool=$suite_root/scripts/production_artifact.py
 binary=$project_root/target/release/magnetita
 
-python3 "$artifact_tool" check magnetita
+if [ "$#" -eq 0 ]; then
+    exec python3 "$artifact_tool" run-verification magnetita
+fi
+if [ "$#" -ne 1 ] || [ "$1" != "--production-runner-internal" ] || \
+    [ "${CELESTINA_PRODUCTION_RUNNER_PHASE:-}" != "verify" ]; then
+    echo "verify-production: internal mode is reserved for the production runner" >&2
+    exit 2
+fi
+
 "$suite_root/scripts/test-production-artifacts.sh"
 bash "$suite_root/scripts/check-architecture-contract.sh"
 (cd "$project_root" && cargo fmt --all --check)
@@ -21,14 +29,4 @@ bash "$suite_root/scripts/check-architecture-contract.sh"
 "$suite_root/scripts/qmllint-cxxqt.sh" "$project_root"
 "$project_root/scripts/smoke.sh" --binary "$binary"
 
-python3 "$artifact_tool" record-verification magnetita \
-    --verify-command 'scripts/test-production-artifacts.sh' \
-    --verify-command 'bash scripts/check-architecture-contract.sh' \
-    --verify-command 'cargo fmt/clippy/test --manifest-path magnetita/Cargo.toml' \
-    --verify-command 'cargo fmt --manifest-path celestina-rs/Cargo.toml --all --check' \
-    --verify-command 'cargo clippy --manifest-path celestina-rs/Cargo.toml -p celestina-core -p magnetita-core -p magnetita-net -p magnetitad --all-targets --locked -- -D warnings' \
-    --verify-command 'cargo test --manifest-path celestina-rs/Cargo.toml -p celestina-core -p magnetita-core -p magnetita-net -p magnetitad' \
-    --verify-command 'scripts/qmllint-cxxqt.sh magnetita' \
-    --verify-command 'magnetita/scripts/smoke.sh --binary magnetita/target/release/magnetita'
-
-echo ">> bundle Magnetita + magnetitad vigente y verificado; servicio intacto"
+echo ">> Magnetita + magnetitad verification steps completed; service untouched"

@@ -39,15 +39,18 @@ repeatedly with every owned worker joined and no stale snapshot applied.
 |---|---|---|---|---|
 | MAG-M1-A | planned | none | Complete ownership map and failing close/burst regression | Focused app lifecycle test |
 | MAG-M1-B | planned | MAG-M1-A | Cancelable, joined read/watch lifecycle | Repeated create/burst/close test |
-| MAG-M1-C | planned | MAG-M1-B | App, daemon and D-Bus consumers remain compatible | `scripts/build-production.sh` then `scripts/verify-production.sh` |
+| MAG-M1-C | planned | MAG-M1-B | App, daemon and D-Bus consumers remain compatible; installed bytes are current | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
 Close `MAG-M1` when every app-owned thread has a deterministic termination path,
 refresh coalescing still delivers the newest confirmed snapshot, post-shutdown
 callbacks are rejected and the exact production artifacts pass
-`scripts/verify-production.sh`. Do not wait for a real phone session to close
-the checkpoint.
+`scripts/complete-production.sh`, including deployment to the author's normal
+test destination without a second build. If an implementation unit changes
+`magnetita-core`, it also runs `celestina/scripts/complete-production.sh` so the
+installed shell bundle carries the same shared contract without activating the
+live session. Do not wait for a real phone session to close the checkpoint.
 
 ## Closed evidence
 

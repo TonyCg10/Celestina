@@ -18,6 +18,8 @@ Before proposing, changing, or reviewing:
 The source map is [docs/README.md](docs/README.md), the project registry is
 [docs/projects.toml](docs/projects.toml), and repository language is defined by
 [docs/standards/language.md](docs/standards/language.md).
+Product commit kinds and SemVer history are defined by
+[docs/contracts/versioning.md](docs/contracts/versioning.md).
 
 ## Language and technical level
 
@@ -144,9 +146,13 @@ Do not commit or push without an explicit request. When requested:
 1. choose one unit or the atomic batch of uncommitted `done` units in its plan;
 2. compare inventory paths with the index and exclude unrelated work;
 3. separate projects unless the unit is genuinely cross-suite;
-4. use the single ledger prefix and an imperative English subject;
-5. run staged inventory and commit-scope guards;
-6. include code, plan, inventory, and evidence in the same commit.
+4. keep the single ledger base prefix and use
+   `<prefix>-<bug|milestone|release|maintenance>: <English imperative>`;
+5. apply the exact SemVer transition and append the version-history row for a
+   product bug, milestone or release; maintenance changes leave both untouched;
+6. run the version, staged-inventory and commit-scope guards;
+7. include code, version declarations, history, plan, inventory and evidence
+   in the same commit.
 
 Finish merges before closing delivery units. Enable local hooks with
 `git config core.hooksPath .githooks`.

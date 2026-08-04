@@ -17,6 +17,7 @@ vendor-neutral: every agent follows the same repository contract.
 | Which questions are still being argued? | root or project-local `docs/discussions/`, indexed from [discussions/](discussions/) |
 | What settled work is being implemented? | root/project `ROADMAP.md` and [plans/](plans/) |
 | Which exact paths formed each delivery commit? | [inventories/](inventories/) or the owner-local `docs/inventories/` |
+| What version does each product declare and how did it advance? | registered sources in [projects.toml](projects.toml) and [version-history.tsv](version-history.tsv) |
 | What must the author test manually? | root/project `VALIDATION.md` |
 | What was actually verified? | [evidence/](evidence/) or registered project-local `docs/evidence/` |
 | What is retained only as history? | [history/](history/) and [plans/archive/](plans/archive/) |
@@ -29,10 +30,20 @@ otherwise restricted area.
 ## Deterministic agent context
 
 Run `python3 scripts/agent-context.py PATH` from the repository root. It prints,
-in reading order, the root and local agent rules, every applicable general and
-product owner, its README/STATUS/ROADMAP/VALIDATION set, relevant contracts and
-both suite and project active plans. Shared crates therefore retain the
-`celestina-rs` context and also receive the more specific consumer context.
+in reading order, the root and local agent rules, the cross-cutting rules
+registered as `suite.shared_rules`, the selected owners' explicit
+`context_documents`, every applicable general and product owner, its
+README/STATUS/ROADMAP/VALIDATION set, relevant contracts and both suite and
+project active plans. Shared crates therefore retain the `celestina-rs` context
+and also receive the more specific consumer context.
+
+The output is meant to be complete, not merely sufficient: a local `AGENTS.md`
+names the workflow, governance and engineering standards it depends on, so the
+registry lists them once and the helper prints them rather than leaving an agent
+to rediscover them by following links. Adding a standard means registering it.
+Every project declares `context_documents`, using an explicit empty list when it
+has no additional local document. The documentation guard rejects missing
+configuration and registered paths that do not exist.
 
 ## Promotion flow
 
@@ -60,10 +71,12 @@ contains one of its inventories.
 - [Repository language standard](standards/language.md)
 - [Content activation contract](contracts/content-activation.md)
 - [Reusable production artifacts](contracts/production-artifacts.md)
+- [Product versions and typed commits](contracts/versioning.md)
 
 ## Completed migration
 
 - [Repository governance and delivery-system migration](plans/archive/2026-08-03-repository-governance.md)
+- [Guard, artifact and version-contract alignment](plans/archive/2026-08-03-guard-contract-alignment.md)
 
 Reusable skeletons live in [templates/](templates/). Copy one only when the
 corresponding canonical document does not already exist; migrate useful history

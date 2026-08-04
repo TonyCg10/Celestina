@@ -14,12 +14,218 @@ import json
 import pathlib
 import re
 import shlex
+import subprocess
 import sys
+import tomllib
 from collections.abc import Iterable, Iterator
+from typing import Any
 
 
 class ScannerError(RuntimeError):
     """A scanner could not inspect its complete declared input."""
+
+
+def _normalized_project_path(raw: object, label: str) -> str:
+    if not isinstance(raw, str):
+        raise ScannerError(f"{label} must be a relative project path")
+    path = pathlib.PurePosixPath(raw)
+    if (
+        path.is_absolute()
+        or str(path) != raw
+        or raw in {"", "."}
+        or any(part in {"", ".", ".."} for part in path.parts)
+    ):
+        raise ScannerError(f"{label} is not a normalized project path: {raw}")
+    return raw
+
+
+def _normalized_commit_roots(raw: object, label: str) -> tuple[str, ...]:
+    if not isinstance(raw, list) or not raw:
+        raise ScannerError(f"{label} must contain directory roots")
+    roots: list[str] = []
+    for value in raw:
+        if not isinstance(value, str) or not value.endswith("/"):
+            raise ScannerError(f"{label} requires roots ending in '/': {value}")
+        path = pathlib.PurePosixPath(value)
+        if (
+            path.is_absolute()
+            or str(path) + "/" != value
+            or any(part in {"", ".", ".."} for part in path.parts)
+        ):
+            raise ScannerError(f"{label} contains a non-normalized root: {value}")
+        roots.append(value)
+    return tuple(dict.fromkeys(roots))
+
+
+def canonical_evidence_root_for_prefix(
+    registry: dict[str, Any], prefix: str
+) -> str | None:
+    """Return the only evidence root allowed to close debt for a prefix.
+
+    Suite and primary project prefixes own durable evidence. Component prefixes
+    intentionally return ``None`` because their narrow atomic scope cannot own
+    a ledger/evidence record.
+    """
+
+    suite = registry.get("suite")
+    if not isinstance(suite, dict) or not isinstance(suite.get("commit_prefix"), str):
+        raise ScannerError("registry suite.commit_prefix is missing or invalid")
+    if prefix == suite["commit_prefix"]:
+        return "docs/evidence"
+
+    projects = registry.get("projects", [])
+    if not isinstance(projects, list):
+        raise ScannerError("registry projects must be a list")
+    matches: list[str] = []
+    for index, project in enumerate(projects):
+        if not isinstance(project, dict):
+            raise ScannerError(f"registry projects[{index}] must be a table")
+        if project.get("commit_prefix") != prefix:
+            continue
+        owner = _normalized_project_path(
+            project.get("path"), f"projects[{index}].path"
+        )
+        matches.append(f"{owner}/docs/evidence")
+    if len(matches) > 1:
+        raise ScannerError(f'registry prefix "{prefix}:" has multiple owners')
+    return matches[0] if matches else None
+
+
+def canonical_evidence_roots_for_source(
+    registry: dict[str, Any], source: str
+) -> tuple[str, ...]:
+    """Return suite evidence plus registered project evidence owning source."""
+
+    roots = ["docs/evidence"]
+    projects = registry.get("projects", [])
+    if not isinstance(projects, list):
+        raise ScannerError("registry projects must be a list")
+    for index, project in enumerate(projects):
+        if not isinstance(project, dict):
+            raise ScannerError(f"registry projects[{index}] must be a table")
+        commit_roots = _normalized_commit_roots(
+            project.get("commit_roots"), f"projects[{index}].commit_roots"
+        )
+        if not any(source.startswith(root) for root in commit_roots):
+            continue
+        owner = _normalized_project_path(
+            project.get("path"), f"projects[{index}].path"
+        )
+        roots.append(f"{owner}/docs/evidence")
+    return tuple(dict.fromkeys(roots))
+
+
+def is_canonical_evidence_path(path: str, roots: Iterable[str]) -> bool:
+    candidate = pathlib.PurePosixPath(path)
+    if (
+        candidate.is_absolute()
+        or str(candidate) != path
+        or candidate.suffix != ".md"
+        or any(part in {"", ".", ".."} for part in candidate.parts)
+    ):
+        return False
+    return any(path.startswith(f"{root}/") for root in roots)
+
+
+def parse_architecture_baseline(
+    text: str, source: str
+) -> dict[tuple[str, str], int]:
+    result: dict[tuple[str, str], int] = {}
+    for number, raw in enumerate(text.splitlines(), 1):
+        if not raw or raw.startswith("#"):
+            continue
+        parts = raw.split("\t")
+        if (
+            len(parts) != 3
+            or parts[0] not in {"lines", "control"}
+            or not parts[2].isdigit()
+            or int(parts[2]) <= 0
+        ):
+            raise ScannerError(f"{source}:{number}: invalid architecture baseline row")
+        key = (parts[0], parts[1])
+        if key in result:
+            raise ScannerError(f"{source}:{number}: duplicate architecture baseline row")
+        result[key] = int(parts[2])
+    return result
+
+
+def check_architecture_baseline_history(
+    root: pathlib.Path,
+    compare_ref: str,
+    current_path: pathlib.Path,
+    registry_path: pathlib.Path,
+) -> None:
+    """Reject new/raised debt and non-canonical resolution evidence."""
+
+    try:
+        old_text = subprocess.run(
+            ["git", "show", f"{compare_ref}:scripts/architecture-baseline.tsv"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        changed_paths = set(
+            subprocess.run(
+                ["git", "diff", "--name-only", "--no-renames", compare_ref, "--"],
+                cwd=root,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.splitlines()
+        )
+        changed_paths.update(
+            subprocess.run(
+                ["git", "ls-files", "--others", "--exclude-standard"],
+                cwd=root,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.splitlines()
+        )
+        current_text = current_path.read_text(encoding="utf-8")
+        with registry_path.open("rb") as handle:
+            registry = tomllib.load(handle)
+    except (OSError, UnicodeError, subprocess.CalledProcessError, tomllib.TOMLDecodeError) as error:
+        raise ScannerError(f"could not inspect architecture baseline history: {error}") from error
+
+    old = parse_architecture_baseline(old_text, compare_ref)
+    current = parse_architecture_baseline(current_text, str(current_path))
+
+    def has_resolution_evidence(source: str) -> bool:
+        marker = f"- **Resolved architecture debt:** `{source}`"
+        roots = canonical_evidence_roots_for_source(registry, source)
+        for path in sorted(changed_paths):
+            if not is_canonical_evidence_path(path, roots):
+                continue
+            candidate = root / path
+            if candidate.is_symlink() or not candidate.is_file():
+                continue
+            try:
+                lines = candidate.read_text(encoding="utf-8").splitlines()
+            except (OSError, UnicodeError):
+                continue
+            if marker in (line.strip() for line in lines):
+                return True
+        return False
+
+    errors: list[str] = []
+    for key, maximum in current.items():
+        kind, name = key
+        if key not in old:
+            errors.append(f"new baseline debt {kind}: {name} ({maximum})")
+        elif maximum > old[key]:
+            errors.append(f"baseline raised: {kind} {name} {old[key]} -> {maximum}")
+    for kind, name in sorted(set(old) - set(current)):
+        if kind == "lines" and (
+            name not in changed_paths or not has_resolution_evidence(name)
+        ):
+            errors.append(
+                "baseline row removed without a changed source and canonical "
+                f"resolution evidence: {name}"
+            )
+    if errors:
+        raise ScannerError("\n".join(errors))
 
 
 def qml_files(inputs: Iterable[str]) -> Iterator[pathlib.Path]:
@@ -27,14 +233,14 @@ def qml_files(inputs: Iterable[str]) -> Iterator[pathlib.Path]:
     for raw in inputs:
         source = pathlib.Path(raw)
         if not source.exists() and not source.is_symlink():
-            raise ScannerError(f"ruta QML ausente: {source}")
+            raise ScannerError(f"missing QML path: {source}")
         if source.is_symlink() and not source.exists():
-            raise ScannerError(f"symlink QML roto: {source}")
+            raise ScannerError(f"broken QML symlink: {source}")
 
         candidates = [source] if source.is_file() else source.rglob("*.qml")
         for path in sorted(candidates):
             if path.is_symlink() and not path.exists():
-                raise ScannerError(f"symlink QML roto: {path}")
+                raise ScannerError(f"broken QML symlink: {path}")
             if not path.is_file():
                 continue
             if "build" in path.parts or "target" in path.parts or path in seen:
@@ -164,7 +370,7 @@ def scan_local_controls(
 ) -> None:
     style_root = pathlib.Path(style_root_raw) if style_root_raw else None
     if style_root is not None and not style_root.is_dir():
-        raise ScannerError(f"arbol de estilo ausente: {style_root}")
+        raise ScannerError(f"missing style tree: {style_root}")
 
     for path in qml_files(inputs):
         # Shared controls are intentionally linked into each app. Exclude only
@@ -178,47 +384,47 @@ def scan_local_controls(
 
 STYLE_RULES = (
     (
-        "literal hexadecimal fuera del tema",
+        "hexadecimal literal outside the theme",
         re.compile(r"#[0-9a-fA-F]{3,8}(?![0-9a-fA-F])"),
     ),
     (
-        "transformacion de color local",
+        "local color transformation",
         re.compile(r"\bQt\s*\.\s*(?:rgba|darker|lighter|tint)\s*\("),
     ),
     (
-        "acceso directo a CelestinaTheme.ref",
+        "direct CelestinaTheme.ref access",
         re.compile(r"\bCelestinaTheme\s*\.\s*ref(?:\W|$)"),
     ),
-    ("duracion numerica directa", re.compile(r"\bduration\s*:\s*[0-9]", re.S)),
+    ("direct numeric duration", re.compile(r"\bduration\s*:\s*[0-9]", re.S)),
     (
-        "curva de animacion directa",
+        "direct animation curve",
         re.compile(r"\beasing\s*\.\s*type\s*:\s*Easing\s*\.", re.S),
     ),
     (
-        "tamano tipografico numerico directo",
+        "direct numeric font size",
         re.compile(r"\bfont\s*\.\s*pixelSize\s*:\s*[0-9]", re.S),
     ),
     (
-        "peso tipografico directo",
+        "direct font weight",
         re.compile(
             r"\bfont\s*\.\s*weight\s*:\s*[0-9]"
             r"|\bFont\s*\.\s*(?:Normal|Medium|DemiBold|Bold)"
         ),
     ),
     (
-        "tracking tipografico numerico directo",
+        "direct numeric letter spacing",
         re.compile(r"\bfont\s*\.\s*letterSpacing\s*:\s*[0-9]", re.S),
     ),
-    ("radio numerico directo", re.compile(r"\bradius\s*:\s*[0-9]", re.S)),
+    ("direct numeric radius", re.compile(r"\bradius\s*:\s*[0-9]", re.S)),
     (
-        "grosor de borde numerico directo",
+        "direct numeric border width",
         re.compile(
             r"\bborder\s*\.\s*width\s*:\s*[1-9][0-9]*(?:\.[0-9]+)?",
             re.S,
         ),
     ),
     (
-        "padding numerico directo",
+        "direct numeric padding",
         re.compile(
             r"\b(?:leftPadding|rightPadding|topPadding|bottomPadding|padding)"
             r"\s*:\s*[1-9][0-9]*(?:\.[0-9]+)?",
@@ -226,7 +432,7 @@ STYLE_RULES = (
         ),
     ),
     (
-        "opacidad fraccional directa",
+        "direct fractional opacity",
         re.compile(r"\bopacity\s*:\s*0\.[0-9]+", re.S),
     ),
 )
@@ -295,7 +501,7 @@ def scan_named_color_bindings(path: pathlib.Path, text: str) -> None:
             if named.group(1).lower() not in QML_NAMED_COLORS:
                 continue
             print(
-                f"{path}:{index + 1}: color nominal fuera del tema: "
+                f"{path}:{index + 1}: named color outside the theme: "
                 f"{named.group(0)}"
             )
 
@@ -325,7 +531,7 @@ def normalized_qml(text: str) -> bytes:
 def scan_qml_style_contract(theme_raw: str, inputs: Iterable[str]) -> None:
     theme = pathlib.Path(theme_raw)
     if not theme.is_file():
-        raise ScannerError(f"tema QML ausente: {theme}")
+        raise ScannerError(f"missing QML theme: {theme}")
     canonical_theme = theme.resolve()
 
     for path in qml_files(inputs):
@@ -343,7 +549,7 @@ def scan_qml_style_contract(theme_raw: str, inputs: Iterable[str]) -> None:
 def scan_style_copies(style_root_raw: str, inputs: Iterable[str]) -> None:
     style_root = pathlib.Path(style_root_raw)
     if not style_root.is_dir():
-        raise ScannerError(f"arbol de estilo ausente: {style_root}")
+        raise ScannerError(f"missing style tree: {style_root}")
 
     canonical: dict[bytes, list[pathlib.Path]] = {}
     for path in sorted(style_root.glob("*.qml")):
@@ -355,7 +561,7 @@ def scan_style_copies(style_root_raw: str, inputs: Iterable[str]) -> None:
         canonical.setdefault(digest, []).append(path)
 
     if not canonical:
-        raise ScannerError(f"no hay QML canonico en {style_root}")
+        raise ScannerError(f"no canonical QML found in {style_root}")
 
     for path in qml_files(inputs):
         if canonical_style_link(path, style_root):
@@ -365,13 +571,13 @@ def scan_style_copies(style_root_raw: str, inputs: Iterable[str]) -> None:
         ).digest()
         matches = canonical.get(digest, [])
         for source in matches:
-            print(f"{path}: copia estructural de {source}; use el enlace compartido")
+            print(f"{path}: structural copy of {source}; use the shared link")
 
 
 def check_shared_style_links(style_root_raw: str, inputs: Iterable[str]) -> None:
     style_root = pathlib.Path(style_root_raw)
     if not style_root.is_dir():
-        raise ScannerError(f"arbol de estilo ausente: {style_root}")
+        raise ScannerError(f"missing style tree: {style_root}")
 
     errors: list[str] = []
     for path in qml_files(inputs):
@@ -381,15 +587,15 @@ def check_shared_style_links(style_root_raw: str, inputs: Iterable[str]) -> None
         target = path.readlink()
         canonical = style_root / path.name
         if target.is_absolute():
-            errors.append(f"{path}: el symlink QML compartido debe ser relativo")
+            errors.append(f"{path}: the shared QML symlink must be relative")
             continue
         if not canonical.is_file():
             errors.append(
-                f"{path}: no existe el componente homonimo {canonical}"
+                f"{path}: the sibling component {canonical} does not exist"
             )
             continue
         if path.resolve(strict=True) != canonical.resolve(strict=True):
-            errors.append(f"{path}: symlink compartido apunta fuera de {canonical}")
+            errors.append(f"{path}: shared symlink points outside {canonical}")
 
     if errors:
         raise ScannerError("\n".join(errors))
@@ -401,7 +607,7 @@ def cmake_call(text: str, command: str, target: str) -> str:
         rf"\b{re.escape(command)}\s*\(\s*{re.escape(target)}(?:\s|$)", text
     )
     if not start:
-        raise ScannerError(f"no se encontro {command}({target} ...)")
+        raise ScannerError(f"could not find {command}({target} ...)")
 
     opening = text.find("(", start.start())
     depth = 0
@@ -427,25 +633,25 @@ def cmake_call(text: str, command: str, target: str) -> str:
                 return text[opening + 1 : offset]
             if depth < 0:
                 break
-    raise ScannerError(f"llamada {command}({target} ...) incompleta")
+    raise ScannerError(f"incomplete {command}({target} ...) call")
 
 
 def check_cmake_qml_registration(cmake_raw: str, qml_root_raw: str, target: str) -> None:
     cmake_path = pathlib.Path(cmake_raw)
     qml_root = pathlib.Path(qml_root_raw)
     if not cmake_path.is_file():
-        raise ScannerError(f"CMakeLists ausente: {cmake_path}")
+        raise ScannerError(f"missing CMakeLists: {cmake_path}")
     if not qml_root.is_dir():
-        raise ScannerError(f"arbol QML ausente: {qml_root}")
+        raise ScannerError(f"missing QML tree: {qml_root}")
 
     body = cmake_call(cmake_path.read_text(encoding="utf-8"), "qt_add_qml_module", target)
     try:
         tokens = shlex.split(body, comments=False, posix=True)
     except ValueError as error:
-        raise ScannerError(f"{cmake_path}: argumentos CMake invalidos: {error}") from error
+        raise ScannerError(f"{cmake_path}: invalid CMake arguments: {error}") from error
 
     if tokens.count("QML_FILES") != 1:
-        raise ScannerError(f"{cmake_path}: se esperaba una unica seccion QML_FILES")
+        raise ScannerError(f"{cmake_path}: expected exactly one QML_FILES section")
     start = tokens.index("QML_FILES") + 1
 
     registered: list[str] = []
@@ -453,13 +659,13 @@ def check_cmake_qml_registration(cmake_raw: str, qml_root_raw: str, target: str)
         if re.fullmatch(r"[A-Z][A-Z0-9_]*", token):
             break
         if not re.fullmatch(r"qml/[^\s$()]+\.qml", token):
-            raise ScannerError(f"{cmake_path}: entrada QML no literal: {token}")
+            raise ScannerError(f"{cmake_path}: non-literal QML entry: {token}")
         registered.append(token)
 
     if not registered:
-        raise ScannerError(f"{cmake_path}: QML_FILES esta vacio")
+        raise ScannerError(f"{cmake_path}: QML_FILES is empty")
     if len(registered) != len(set(registered)):
-        raise ScannerError(f"{cmake_path}: hay rutas QML duplicadas")
+        raise ScannerError(f"{cmake_path}: there are duplicate QML paths")
 
     base = cmake_path.parent
     actual = sorted(
@@ -467,9 +673,9 @@ def check_cmake_qml_registration(cmake_raw: str, qml_root_raw: str, target: str)
     )
     errors = []
     for path in sorted(set(actual) - set(registered)):
-        errors.append(f"{path}: QML regular ausente de {cmake_path}")
+        errors.append(f"{path}: plain QML missing from {cmake_path}")
     for path in sorted(set(registered) - set(actual)):
-        errors.append(f"{cmake_path}: registra '{path}', pero el fichero no existe")
+        errors.append(f"{cmake_path}: registers '{path}', but the file does not exist")
     if errors:
         raise ScannerError("\n".join(errors))
 
@@ -477,11 +683,11 @@ def check_cmake_qml_registration(cmake_raw: str, qml_root_raw: str, target: str)
 def scan_dependency_metadata() -> None:
     raw = sys.stdin.read()
     if not raw.strip():
-        raise ScannerError("cargo metadata no produjo JSON")
+        raise ScannerError("cargo metadata produced no JSON")
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as error:
-        raise ScannerError(f"cargo metadata produjo JSON invalido: {error}") from error
+        raise ScannerError(f"cargo metadata produced invalid JSON: {error}") from error
 
     banned = re.compile(
         r"^(?:cxx[-_]qt.*|qmetaobject.*|qml.*|qt(?:6)?(?:[-_].*|types)?|"
@@ -528,6 +734,12 @@ def parse_arguments() -> argparse.Namespace:
     cmake.add_argument("qml_root")
     cmake.add_argument("target")
 
+    history = subparsers.add_parser("baseline-history")
+    history.add_argument("compare_ref")
+    history.add_argument("baseline", type=pathlib.Path)
+    history.add_argument("registry", type=pathlib.Path)
+    history.add_argument("--root", type=pathlib.Path, default=pathlib.Path.cwd())
+
     subparsers.add_parser("dependency-metadata")
     return parser.parse_args()
 
@@ -548,6 +760,13 @@ def main() -> int:
         elif arguments.command == "cmake-qml-registration":
             check_cmake_qml_registration(
                 arguments.cmake, arguments.qml_root, arguments.target
+            )
+        elif arguments.command == "baseline-history":
+            check_architecture_baseline_history(
+                arguments.root.resolve(),
+                arguments.compare_ref,
+                arguments.baseline.resolve(),
+                arguments.registry.resolve(),
             )
         else:
             scan_dependency_metadata()

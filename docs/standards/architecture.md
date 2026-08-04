@@ -62,6 +62,45 @@ legacy coordinators in `scripts/architecture-baseline.tsv` may not grow. That
 file is a ratchet for concrete debt, not a size standard for new code. Raising
 it requires author approval, justification, and a removal condition.
 
+The ratchet is an equality, not a ceiling: shrinking a guarded file also fails
+the guard until its row records the exact staged value. Lower that row in the
+same commit as the change that earned it. `commit_policy.shared_ratchet_files`
+puts the baseline inside every project and component prefix precisely so that
+improvement and its row cannot be split into two commits, the first of which
+would be a published revision whose own architecture guard is red.
+
+Resolving a coordinator's architectural debt is qualitative; it is not defined
+by crossing a line-count threshold or deleting the filename. A `lines` row may
+be removed while its source remains only when the same unit changes that source
+and records this exact field in its staged evidence:
+
+```text
+- **Resolved architecture debt:** `path/to/source`
+```
+
+That evidence must name the extracted owners, the removed reasons to change and
+the characterization or boundary tests that prove the old path now only
+coordinates or delegates. Deleting or renaming the source still requires the
+field so moving the same debt cannot bypass the ratchet. It lives only in the
+owning project's canonical `docs/evidence/`, or root `docs/evidence/` for a
+`suite:` unit; a component prefix cannot invent a nested lookalike directory.
+Control rows are mechanical and disappear only when the staged source measures
+zero under the scanner committed in HEAD. The same committed Python interprets
+both HEAD and INDEX registry TOML plus INDEX baselines; no staged or unstaged
+rule module executes in the current hook. Commit authority is the intersection
+of the HEAD and INDEX scopes, so a staged registry cannot grant its own prefix
+or broader paths. Delivery roots are the conservative union of both registry
+layouts and a conflicting owner or prefix fails. Merge commits cannot change
+either ratchet and every staged guarded source in a merge must still equal its
+INDEX baseline.
+
+A guard implementation change becomes interpretation authority only after it
+lands. If a semantic scanner change alters measurement, migrate it in two
+compatible commits: first land dormant or backward-compatible implementation
+without changing current counts; then activate it and update the ratchet under
+that now-committed rule. These hooks are repository-integrity controls, not an
+adversarial sandbox and not a substitute for protected remote review.
+
 ## Reuse and non-redundancy
 
 Search by responsibility, not only name. Every domain rule, transformation,

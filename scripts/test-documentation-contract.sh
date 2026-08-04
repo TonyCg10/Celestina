@@ -15,12 +15,12 @@ trap 'rm -rf -- "$temporary"' EXIT HUP INT TERM
 
 failures=0
 fail() {
-    printf 'FALLO: %s\n' "$1" >&2
+    printf 'FAIL: %s\n' "$1" >&2
     failures=$((failures + 1))
 }
 
 if ! python3 "$checker" --root "$valid" --quiet; then
-    fail "la fixture positiva no satisface el contrato"
+    fail "the positive fixture does not satisfy the contract"
 fi
 
 missing_plan_id=$temporary/missing-plan-id
@@ -29,10 +29,10 @@ sed -i '/^- \*\*Plan ID:\*\*/d' \
     "$missing_plan_id/app/docs/plans/active/2026-08-03-app.md"
 if python3 "$checker" --root "$missing_plan_id" --quiet \
     > "$temporary/missing-plan-id.out" 2>&1; then
-    fail "el guard aceptó un plan activo sin Plan ID"
-elif ! grep -F 'plan activo requiere metadata `Plan ID`' \
+    fail "the guard accepted an active plan without a Plan ID"
+elif ! grep -F 'active plan requires `Plan ID` metadata' \
     "$temporary/missing-plan-id.out" >/dev/null; then
-    fail "el Plan ID ausente no produjo diagnóstico estable"
+    fail "the missing Plan ID produced no stable diagnostic"
 fi
 
 duplicate_plan_id=$temporary/duplicate-plan-id
@@ -41,10 +41,10 @@ cp "$duplicate_plan_id/app/docs/plans/active/2026-08-03-app.md" \
     "$duplicate_plan_id/app/docs/plans/active/2026-08-03-app-copy.md"
 if python3 "$checker" --root "$duplicate_plan_id" --quiet \
     > "$temporary/duplicate-plan-id.out" 2>&1; then
-    fail "el guard aceptó un Plan ID duplicado dentro del owner"
-elif ! grep -F 'Plan ID `app` duplicado para owner `app`' \
+    fail "the guard accepted a duplicate Plan ID within one owner"
+elif ! grep -F 'duplicate Plan ID `app` for owner `app`' \
     "$temporary/duplicate-plan-id.out" >/dev/null; then
-    fail "el Plan ID duplicado no produjo diagnóstico estable"
+    fail "the duplicate Plan ID produced no stable diagnostic"
 fi
 
 wrong_inventory_root=$temporary/wrong-inventory-root
@@ -60,10 +60,10 @@ sed -i "s|app/docs/inventories/2026-08-03-app/APP-1B.numstat.tsv|$wrong_inventor
     "$wrong_inventory_legacy"
 if python3 "$checker" --root "$wrong_inventory_root" --quiet \
     > "$temporary/wrong-inventory-root.out" 2>&1; then
-    fail "el guard aceptó un inventario fuera del root estable del plan"
-elif ! grep -F 'debe vivir exactamente en `app/docs/inventories/2026-08-03-app/APP-1B.numstat.tsv`' \
+    fail "the guard accepted an inventory outside the plan's stable root"
+elif ! grep -F 'must live exactly at `app/docs/inventories/2026-08-03-app/APP-1B.numstat.tsv`' \
     "$temporary/wrong-inventory-root.out" >/dev/null; then
-    fail "el root de inventario incorrecto no produjo diagnóstico estable"
+    fail "the incorrect inventory root produced no stable diagnostic"
 fi
 
 nonboolean_suite=$temporary/nonboolean-suite
@@ -72,10 +72,10 @@ sed -i 's/allow_all_commit_paths = true/allow_all_commit_paths = "false"/' \
     "$nonboolean_suite/docs/projects.toml"
 if python3 "$checker" --root "$nonboolean_suite" --quiet \
     > "$temporary/nonboolean-suite.out" 2>&1; then
-    fail "el registro aceptó allow_all_commit_paths no booleano"
-elif ! grep -F 'suite.allow_all_commit_paths debe ser booleano' \
+    fail "the registry accepted a non-boolean allow_all_commit_paths"
+elif ! grep -F 'suite.allow_all_commit_paths must be boolean' \
     "$temporary/nonboolean-suite.out" >/dev/null; then
-    fail "allow_all_commit_paths no booleano no produjo diagnóstico estable"
+    fail "non-boolean allow_all_commit_paths produced no stable diagnostic"
 fi
 
 nonboolean_project=$temporary/nonboolean-project
@@ -84,10 +84,10 @@ sed -i '/commit_roots = \["app\/", "core\/crates\/app-core\/"\]/a include_worksp
     "$nonboolean_project/docs/projects.toml"
 if python3 "$checker" --root "$nonboolean_project" --quiet \
     > "$temporary/nonboolean-project.out" 2>&1; then
-    fail "el registro aceptó include_workspace_manifests no booleano"
-elif ! grep -F 'projects[0].include_workspace_manifests debe ser booleano' \
+    fail "the registry accepted a non-boolean include_workspace_manifests"
+elif ! grep -F 'projects[0].include_workspace_manifests must be boolean' \
     "$temporary/nonboolean-project.out" >/dev/null; then
-    fail "include_workspace_manifests no booleano no produjo diagnóstico estable"
+    fail "non-boolean include_workspace_manifests produced no stable diagnostic"
 fi
 
 git_case=$temporary/git-inventory
@@ -140,7 +140,7 @@ evidence_hash=${evidence_hash%% *}
 } > "$git_inventory"
 
 if ! python3 "$checker" --root "$git_case" --quiet; then
-    fail "el inventario Git actual válido fue rechazado"
+    fail "the valid current Git inventory was rejected"
 fi
 
 cp "$git_inventory" "$temporary/git-inventory.valid.tsv"
@@ -148,19 +148,19 @@ sed -i "s/$source_hash/fffffffffffffffffffffffffffffffffffffffffffffffffffffffff
     "$git_inventory"
 if python3 "$checker" --root "$git_case" --quiet \
     > "$temporary/git-stale-hash.out" 2>&1; then
-    fail "el guard aceptó un SHA-256 stale"
-elif ! grep -F "SHA-256 stale" "$temporary/git-stale-hash.out" >/dev/null; then
-    fail "el SHA-256 stale no produjo diagnóstico estable"
+    fail "the guard accepted a stale SHA-256"
+elif ! grep -F "stale SHA-256" "$temporary/git-stale-hash.out" >/dev/null; then
+    fail "the stale SHA-256 produced no stable diagnostic"
 fi
 cp "$temporary/git-inventory.valid.tsv" "$git_inventory"
 
 sed -i '\|core/crates/app-core/src/lib.rs|d' "$git_inventory"
 if python3 "$checker" --root "$git_case" --quiet \
     > "$temporary/git-missing-path.out" 2>&1; then
-    fail "el guard aceptó un inventario que omitía una ruta cambiada"
-elif ! grep -F 'omite rutas cambiadas según Git' \
+    fail "the guard accepted an inventory that omitted a changed path"
+elif ! grep -F 'omits paths changed according to Git' \
     "$temporary/git-missing-path.out" >/dev/null; then
-    fail "la ruta Git omitida no produjo diagnóstico estable"
+    fail "the omitted Git path produced no stable diagnostic"
 fi
 cp "$temporary/git-inventory.valid.tsv" "$git_inventory"
 
@@ -172,9 +172,9 @@ sed -i "s/^1\t0\t$source_hash/2\t0\t$source_hash/" "$git_inventory"
 sed -i "s/$plan_hash/$stale_plan_hash/" "$git_inventory"
 if python3 "$checker" --root "$git_case" --quiet \
     > "$temporary/git-stale-numstat.out" 2>&1; then
-    fail "el guard aceptó un numstat stale"
-elif ! grep -F "numstat stale" "$temporary/git-stale-numstat.out" >/dev/null; then
-    fail "el numstat stale no produjo diagnóstico estable"
+    fail "the guard accepted stale numstat"
+elif ! grep -F "stale numstat" "$temporary/git-stale-numstat.out" >/dev/null; then
+    fail "the stale numstat produced no stable diagnostic"
 fi
 cp "$temporary/git-plan.valid.md" "$git_plan"
 cp "$temporary/git-inventory.valid.tsv" "$git_inventory"
@@ -188,28 +188,28 @@ git -C "$git_case" add \
     app/docs/evidence/2026-08-03-fixture.md
 git -C "$git_case" commit -qm "fixup! app: record verified inventory"
 if ! python3 "$checker" --root "$git_case" --quiet; then
-    fail "el inventario histórico limpio fue rechazado"
+    fail "the clean historical inventory was rejected"
 fi
 printf 'pub fn later_change() {}\n' >> "$git_source"
 git -C "$git_case" add "$git_source"
 git -C "$git_case" commit -qm "app-core: change source later"
 if ! python3 "$checker" --root "$git_case" --quiet; then
-    fail "un cambio posterior invalidó el inventario histórico"
+    fail "a later change invalidated the historical inventory"
 fi
 printf '\n' >> "$git_inventory"
 git -C "$git_case" add "$git_inventory"
 git -C "$git_case" commit -qm "app: move inventory endpoint"
 if python3 "$checker" --root "$git_case" --quiet \
     > "$temporary/git-multicommit-range.out" 2>&1; then
-    fail "el guard aceptó un inventario histórico repartido entre commits"
-elif ! grep -F 'debe ser el padre directo del commit del inventario' \
+    fail "the guard accepted a historical inventory split across commits"
+elif ! grep -F 'must be the direct parent of the inventory commit' \
     "$temporary/git-multicommit-range.out" >/dev/null; then
-    fail "el rango histórico multicommit no produjo diagnóstico estable"
+    fail "the multi-commit historical range produced no stable diagnostic"
 fi
 
-# Un inventario histórico vive fuera del directorio móvil de planes. El plan
-# puede pasar de active/ a archive/ sin reescribir ni desplazar el TSV: el guard
-# conserva C1 como endpoint y contrasta allí el host original del ledger.
+# A historical inventory lives outside the movable plan directory. The plan may
+# move from active/ to archive/ without rewriting or relocating the TSV: the
+# guard retains C1 as the endpoint and checks the original ledger host there.
 archive_case=$temporary/git-archive-lifecycle
 cp -R "$valid" "$archive_case"
 archive_active_plan_rel=app/docs/plans/active/2026-08-03-app.md
@@ -293,10 +293,10 @@ cp "$archive_inventory" "$temporary/archive-inventory.valid.tsv"
 sed -i "\|$archive_active_plan_rel|d" "$archive_inventory"
 if python3 "$checker" --root "$archive_case" --quiet \
     > "$temporary/archive-dirty-host.out" 2>&1; then
-    fail "el guard aceptó un inventario dirty sin su plan host actual"
-elif ! grep -F 'no contiene el plan que aloja el ledger' \
+    fail "the guard accepted a dirty inventory without its current host plan"
+elif ! grep -F 'does not contain the plan hosting the ledger' \
     "$temporary/archive-dirty-host.out" >/dev/null; then
-    fail "el plan host ausente en inventario dirty no produjo diagnóstico estable"
+    fail "the missing host plan in the dirty inventory produced no stable diagnostic"
 fi
 cp "$temporary/archive-inventory.valid.tsv" "$archive_inventory"
 
@@ -306,11 +306,11 @@ git -C "$archive_case" add \
 git -C "$archive_case" commit -qm "app: preserve immutable inventory endpoint"
 archive_endpoint=$(git -C "$archive_case" rev-parse HEAD)
 if ! python3 "$checker" --root "$archive_case" --quiet; then
-    fail "el inventario estable fue rechazado en su endpoint histórico"
+    fail "the stable inventory was rejected at its historical endpoint"
 fi
 
-# El mismo movimiento sin unidad administrativa debe fallar una vez
-# materializado en Git. La copia conserva C1 como padre directo de C2.
+# The same move without an administrative unit must fail once materialized in
+# Git. The copy retains C1 as the direct parent of C2.
 archive_missing_case=$temporary/git-archive-without-unit
 mkdir -p "$archive_missing_case"
 cp -R "$archive_case/." "$archive_missing_case"
@@ -329,14 +329,14 @@ git -C "$archive_missing_case" add -A -- \
 git -C "$archive_missing_case" commit -qm "app: archive plan without inventory"
 if python3 "$checker" --root "$archive_missing_case" --quiet \
     > "$temporary/archive-without-unit.out" 2>&1; then
-    fail "el guard aceptó un active->archive histórico sin unidad administrativa"
-elif ! grep -F 'requiere una unidad done con inventario del mismo endpoint' \
+    fail "the guard accepted a historical active->archive move without an administrative unit"
+elif ! grep -F 'requires a done unit with an inventory at the same endpoint' \
     "$temporary/archive-without-unit.out" >/dev/null; then
-    fail "el active->archive sin unidad no produjo diagnóstico estable"
+    fail "the active->archive move without a unit produced no stable diagnostic"
 fi
 
-# C2 archiva el plan mediante una unidad administrativa propia. Su inventario
-# permanece en el root estable y reclama tanto D active como A archive.
+# C2 archives the plan through its own administrative unit. Its inventory stays
+# at the stable root and claims both the active deletion and archive addition.
 mkdir -p "$archive_case/app/docs/plans/archive"
 git -C "$archive_case" mv "$archive_active_plan_rel" "$archive_final_plan_rel"
 archive_plan=$archive_case/$archive_final_plan_rel
@@ -463,7 +463,7 @@ write_archive_transition_inventory \
     "$archive_transition_plan_hash" "$archive_transition_roadmap_hash" \
     "$archive_transition_validation_hash" "$archive_transition_evidence_hash"
 if ! python3 "$checker" --root "$archive_case" --quiet; then
-    fail "la unidad administrativa dirty del archivo fue rechazada"
+    fail "the dirty archive administrative unit was rejected"
 fi
 git -C "$archive_case" add -A -- \
     "$archive_roadmap_rel" "$archive_validation_rel" \
@@ -472,20 +472,20 @@ git -C "$archive_case" add -A -- \
 git -C "$archive_case" commit -qm "app: archive completed plan"
 archive_transition_endpoint=$(git -C "$archive_case" rev-parse HEAD)
 if ! python3 "$checker" --root "$archive_case" --quiet; then
-    fail "el plan archivado con unidad administrativa fue rechazado"
+    fail "the archived plan with an administrative unit was rejected"
 fi
 archive_observed_endpoint=$(git -C "$archive_case" log -1 --format=%H -- "$archive_inventory_rel")
 if [ "$archive_observed_endpoint" != "$archive_endpoint" ]; then
-    fail "el ciclo de archivo reescribió el endpoint del inventario estable"
+    fail "the archive lifecycle rewrote the stable inventory endpoint"
 fi
 archive_transition_observed_endpoint=$(git -C "$archive_case" log -1 --format=%H -- \
     "$archive_transition_inventory_rel")
 if [ "$archive_transition_observed_endpoint" != "$archive_transition_endpoint" ]; then
-    fail "la unidad administrativa no comparte endpoint con C2"
+    fail "the administrative unit does not share an endpoint with C2"
 fi
 
-# Un plan creado directamente bajo archive/ sigue necesitando su ledger done,
-# pero no una fila artificial D active: el sibling nunca existió en el padre.
+# A plan created directly under archive/ still needs its done ledger, but not an
+# artificial active deletion row: the sibling never existed in the parent.
 direct_plan_rel=app/docs/plans/archive/2026-08-03-direct.md
 direct_inventory_rel=app/docs/inventories/2026-08-03-direct/APP-DIRECT.numstat.tsv
 direct_evidence_rel=app/docs/evidence/2026-08-03-direct-archive.md
@@ -573,39 +573,39 @@ write_direct_archive_inventory \
     "$direct_inventory_added" "$direct_inventory_deleted" \
     "$direct_plan_hash" "$direct_evidence_hash"
 if ! python3 "$checker" --root "$archive_case" --quiet; then
-    fail "el alta dirty directa bajo archive fue rechazada"
+    fail "the dirty direct addition under archive was rejected"
 fi
 git -C "$archive_case" add \
     "$direct_plan_rel" "$direct_inventory_rel" "$direct_evidence_rel"
 git -C "$archive_case" commit -qm "app: record direct archived plan"
 if ! python3 "$checker" --root "$archive_case" --quiet; then
-    fail "el alta histórica directa bajo archive exigió un movimiento inexistente"
+    fail "the direct historical addition under archive required a nonexistent move"
 fi
 
 cp "$archive_plan" "$temporary/archive-plan.valid.md"
 sed -i 's/- \*\*Plan ID:\*\* app/- **Plan ID:** APP-OTHER/' "$archive_plan"
 if python3 "$checker" --root "$archive_case" --quiet \
     > "$temporary/archive-plan-id.out" 2>&1; then
-    fail "el guard aceptó un Plan ID distinto después de archivar"
-elif ! grep -F 'endpoint histórico de APP-1B requiere un único plan host con Plan ID `APP-OTHER`' \
+    fail "the guard accepted a different Plan ID after archiving"
+elif ! grep -F 'historical endpoint for APP-1B requires exactly one host plan with Plan ID `APP-OTHER`' \
     "$temporary/archive-plan-id.out" >/dev/null; then
-    fail "el Plan ID divergente no produjo diagnóstico estable"
+    fail "the divergent Plan ID produced no stable diagnostic"
 fi
 cp "$temporary/archive-plan.valid.md" "$archive_plan"
 
 sed -i 's/| APP-1B |/| APP-RENAMED |/' "$archive_plan"
 if python3 "$checker" --root "$archive_case" --quiet \
     > "$temporary/archive-unit-id.out" 2>&1; then
-    fail "el guard aceptó una unidad distinta después de archivar"
-elif ! grep -F 'endpoint histórico de APP-RENAMED requiere un único plan host' \
+    fail "the guard accepted a different unit after archiving"
+elif ! grep -F 'historical endpoint for APP-RENAMED requires exactly one host plan' \
     "$temporary/archive-unit-id.out" >/dev/null; then
-    fail "la unidad histórica divergente no produjo diagnóstico estable"
+    fail "the divergent historical unit produced no stable diagnostic"
 fi
 cp "$temporary/archive-plan.valid.md" "$archive_plan"
 
-# Dos inventarios del mismo commit pueden compartir el plan que aloja el
-# ledger, pero no atribuirse la misma ruta de implementación. Esta prueba se
-# ejecuta después del commit para cubrir exactamente la lectura de CI.
+# Two inventories from one commit may share the plan hosting the ledger, but
+# they may not claim the same implementation path. This test runs after the
+# commit to cover the exact CI read path.
 overlap_case=$temporary/git-historical-overlap
 cp -R "$valid" "$overlap_case"
 overlap_plan=$overlap_case/app/docs/plans/active/2026-08-03-app.md
@@ -742,10 +742,10 @@ git -C "$overlap_case" add .
 git -C "$overlap_case" commit -qm "app: record conflicting historical inventories"
 if python3 "$checker" --root "$overlap_case" --quiet \
     > "$temporary/git-historical-overlap.out" 2>&1; then
-    fail "el guard aceptó inventarios históricos que se solapan"
-elif ! grep -F 'reclaman las mismas rutas' \
+    fail "the guard accepted overlapping historical inventories"
+elif ! grep -F 'claim the same paths' \
     "$temporary/git-historical-overlap.out" >/dev/null; then
-    fail "el solapamiento histórico no produjo diagnóstico estable"
+    fail "the historical overlap produced no stable diagnostic"
 fi
 
 worktree_case=$temporary/ignored-worktree
@@ -754,28 +754,106 @@ cp -R "$valid/." "$worktree_case/"
 cp "$fixture_root/ignored-worktree/CLAUDE.fixture" \
     "$worktree_case/.claude/worktrees/ignored/CLAUDE.md"
 if ! python3 "$checker" --root "$worktree_case" --quiet; then
-    fail "el guard recorrió .claude/worktrees"
+    fail "the guard traversed .claude/worktrees"
 fi
 
 if ! python3 "$context" --root "$valid" app/src/main.rs \
     > "$temporary/app-context.txt"; then
-    fail "agent-context no resolvió una ruta del proyecto"
+    fail "agent-context did not resolve a project path"
 elif ! diff -u "$expected/app-context.txt" "$temporary/app-context.txt"; then
-    fail "agent-context devolvió un orden incorrecto para app"
+    fail "agent-context returned the wrong order for app"
 fi
 
 if ! python3 "$context" --root "$valid" core/crates/app-core/src/lib.rs \
     > "$temporary/core-context.txt"; then
-    fail "agent-context no resolvió un source root compartido"
+    fail "agent-context did not resolve a shared source root"
 elif ! diff -u "$expected/core-context.txt" "$temporary/core-context.txt"; then
-    fail "agent-context omitió el AGENTS físico o el proyecto owner"
+    fail "agent-context omitted the physical AGENTS file or project owner"
+fi
+
+cross_owner_symlink=$temporary/cross-owner-symlink
+cp -R "$valid/." "$cross_owner_symlink/"
+ln -s ../../core/crates/app-core/src/lib.rs \
+    "$cross_owner_symlink/app/src/core-link.rs"
+if ! python3 "$context" --root "$cross_owner_symlink" \
+    app/src/../src/core-link.rs > "$temporary/cross-owner-symlink-context.txt"; then
+    fail "agent-context could not resolve a normalized cross-owner symlink"
+elif ! diff -u "$expected/cross-owner-symlink-context.txt" \
+    "$temporary/cross-owner-symlink-context.txt"; then
+    fail "agent-context did not preserve lexical owner order for a symlink"
+fi
+
+ln -s ../../../outside "$cross_owner_symlink/app/src/outside-link"
+if python3 "$context" --root "$cross_owner_symlink" app/src/outside-link \
+    > "$temporary/outside-symlink.out" 2>&1; then
+    fail "agent-context accepted a symlink whose resolved target leaves the repository"
+elif ! grep -F "resolved path leaves the repository" \
+    "$temporary/outside-symlink.out" >/dev/null; then
+    fail "agent-context had no stable escaped symlink diagnostic"
 fi
 
 if python3 "$context" --root "$valid" ../outside \
     > "$temporary/outside.out" 2>&1; then
-    fail "agent-context aceptó una ruta fuera del repositorio"
-elif ! grep -F "path sale del repositorio" "$temporary/outside.out" >/dev/null; then
-    fail "agent-context falló fuera del repo sin diagnóstico estable"
+    fail "agent-context accepted a path outside the repository"
+elif ! grep -F "path leaves the repository" "$temporary/outside.out" >/dev/null; then
+    fail "agent-context failed outside the repository without a stable diagnostic"
+fi
+
+missing_context_field=$temporary/missing-context-field
+cp -R "$valid" "$missing_context_field"
+sed -i '/context_documents = \["app\/docs\/context.md"\]/d' \
+    "$missing_context_field/docs/projects.toml"
+if python3 "$checker" --root "$missing_context_field" --quiet \
+    > "$temporary/missing-context-field-checker.out" 2>&1; then
+    fail "the documentation guard accepted an owner without context_documents"
+elif ! grep -F 'projects[0].context_documents is required' \
+    "$temporary/missing-context-field-checker.out" >/dev/null; then
+    fail "the missing context_documents field had no stable diagnostic"
+fi
+if python3 "$context" --root "$missing_context_field" app/src/main.rs \
+    > "$temporary/missing-context-field-context.out" 2>&1; then
+    fail "agent-context accepted an owner without context_documents"
+elif ! grep -F 'app.context_documents: required list' \
+    "$temporary/missing-context-field-context.out" >/dev/null; then
+    fail "agent-context had no stable missing context_documents diagnostic"
+fi
+
+missing_context_document=$temporary/missing-context-document
+cp -R "$valid" "$missing_context_document"
+sed -i 's|app/docs/context.md|app/docs/not-created.md|' \
+    "$missing_context_document/docs/projects.toml"
+if python3 "$checker" --root "$missing_context_document" --quiet \
+    > "$temporary/missing-context-document-checker.out" 2>&1; then
+    fail "the documentation guard accepted a missing owner context document"
+elif ! grep -F 'projects[0].context_documents[0]' \
+    "$temporary/missing-context-document-checker.out" >/dev/null; then
+    fail "the missing owner context document had no stable diagnostic"
+fi
+if python3 "$context" --root "$missing_context_document" app/src/main.rs \
+    > "$temporary/missing-context-document-context.out" 2>&1; then
+    fail "agent-context accepted a missing owner context document"
+elif ! grep -F 'app.context_documents[0]: file does not exist' \
+    "$temporary/missing-context-document-context.out" >/dev/null; then
+    fail "agent-context had no stable missing owner document diagnostic"
+fi
+
+empty_shared_rules=$temporary/empty-shared-rules
+cp -R "$valid" "$empty_shared_rules"
+sed -i 's|shared_rules = \["CONTRIBUTING.md", "docs/standards/fixture.md"\]|shared_rules = []|' \
+    "$empty_shared_rules/docs/projects.toml"
+if python3 "$checker" --root "$empty_shared_rules" --quiet \
+    > "$temporary/empty-shared-rules-checker.out" 2>&1; then
+    fail "the documentation guard accepted an empty suite.shared_rules"
+elif ! grep -F 'suite.shared_rules must be a non-empty list' \
+    "$temporary/empty-shared-rules-checker.out" >/dev/null; then
+    fail "the empty suite.shared_rules field had no stable diagnostic"
+fi
+if python3 "$context" --root "$empty_shared_rules" app/src/main.rs \
+    > "$temporary/empty-shared-rules-context.out" 2>&1; then
+    fail "agent-context accepted an empty suite.shared_rules"
+elif ! grep -F 'suite.shared_rules: must be a non-empty list' \
+    "$temporary/empty-shared-rules-context.out" >/dev/null; then
+    fail "agent-context had no stable empty suite.shared_rules diagnostic"
 fi
 
 expect_failure() {
@@ -787,103 +865,111 @@ expect_failure() {
     cp -R "$invalid/$case_name/." "$work/"
     if python3 "$checker" --root "$work" --quiet \
         > "$temporary/$case_name.out" 2>&1; then
-        fail "la fixture negativa $case_name pasó"
+        fail "negative fixture $case_name passed"
         return
     fi
     if ! grep -F "$expected_text" "$temporary/$case_name.out" >/dev/null; then
-        fail "la fixture $case_name no emitió: $expected_text"
+        fail "fixture $case_name did not emit: $expected_text"
     fi
 }
 
-expect_failure vendor-specific "archivo normativo específico de proveedor prohibido"
+expect_failure vendor-specific "provider-specific normative file is forbidden"
 for vendor_path in CLAUDE.md GEMINI.md .cursorrules \
     .github/copilot-instructions.md .github/instructions/project.instructions.md; do
     if ! grep -F "$vendor_path" "$temporary/vendor-specific.out" >/dev/null; then
-        fail "la fixture vendor-specific no detectó $vendor_path"
+        fail "the vendor-specific fixture did not detect $vendor_path"
     fi
 done
-expect_failure broken-link "enlace local roto"
-expect_failure broken-anchor "anchor local no existe"
-expect_failure bad-plan 'plans/active requiere `Status: active`'
-expect_failure bad-ledger "ledger carece de columnas: diffstat"
-expect_failure active-no-plan "requiere exactamente un plan activo"
-expect_failure inactive-checkpoint 'requiere `Active implementation checkpoint: none`'
-expect_failure checkpoint-mismatch "no coincide con ROADMAP"
-expect_failure duplicate-active-plan "tiene varios planes activos"
-expect_failure orphan-plan "plan activo huérfano"
-expect_failure wrong-prefix 'prefijo fuera del owner `app`'
-expect_failure suite-prefix-local 'prefijo fuera del owner `app`'
-expect_failure component-prefix-ledger 'prefijo fuera del owner `app`'
-expect_failure foreign-owner-evidence 'Automated evidence fuera del owner `app`'
-expect_failure suite-project-evidence 'Automated evidence fuera del owner `suite`'
-expect_failure overlapping-pathspec 'reclaman las mismas rutas'
-expect_failure bad-done-diffstat 'unidad done requiere diffstat `N files, +X/-Y`'
-expect_failure done-without-inventory 'unidad done requiere un único enlace a inventario `.numstat.tsv`'
-expect_failure done-broken-inventory 'inventario `.numstat.tsv` no es resoluble'
-expect_failure done-without-evidence 'requiere expediente resoluble bajo `evidence/`'
-expect_failure done-broken-evidence 'requiere expediente resoluble bajo `evidence/`'
-expect_failure noncanonical-done-evidence 'requiere expediente resoluble bajo `evidence/`'
-expect_failure bad-numstat-syntax 'content debe ser SHA-256 o marcador de cierre permitido'
-expect_failure finalized-numstat-marker 'content debe ser SHA-256 o marcador de cierre permitido'
-expect_failure wrong-numstat-self 'marcador `self` sólo pertenece al propio inventario'
-expect_failure bad-numstat-base 'requiere una única línea `Base revision<TAB><40 hex>`'
-if ! grep -F 'requiere al menos un `Pathspec`' \
-    "$temporary/bad-numstat-base.out" >/dev/null; then
-    fail "el inventario sin frontera Pathspec no produjo diagnóstico estable"
+expect_failure missing-shared-rule "suite.shared_rules is required"
+if python3 "$context" --root "$temporary/missing-shared-rule" app/src/main.rs \
+    > "$temporary/missing-shared-rule-context.out" 2>&1; then
+    fail "agent-context accepted a missing suite.shared_rules field"
+elif ! grep -F 'suite.shared_rules: required in docs/projects.toml' \
+    "$temporary/missing-shared-rule-context.out" >/dev/null; then
+    fail "agent-context had no stable missing suite.shared_rules diagnostic"
 fi
-expect_failure duplicate-numstat-base 'requiere una única línea `Base revision<TAB><40 hex>`'
-expect_failure duplicate-numstat-path 'ruta numstat duplicada'
-expect_failure numstat-sum-mismatch 'Diffstat declara +66/-1'
-expect_failure numstat-file-count 'Diffstat declara 4 archivos'
-expect_failure numstat-missing-plan 'no contiene el plan que aloja el ledger'
-expect_failure numstat-missing-evidence 'no contiene ningún expediente enlazado'
-expect_failure bad-decision "estado de decisión inválido"
-expect_failure bad-local-decision "estado de decisión inválido"
-expect_failure nested-bad-decision "estado de decisión inválido"
-expect_failure orphan-decision-index "registro huérfano no enlazado"
-expect_failure duplicate-decision-index "registro debe enlazarse exactamente una vez"
-expect_failure stale-decision-status 'Status `proposed` no coincide con metadata `accepted`'
-expect_failure stale-decision-entry "entrada stale requiere un registro canónico"
-expect_failure orphan-discussion-index "registro huérfano no enlazado"
-expect_failure stale-discussion-status 'Status `concluded` no coincide con metadata `open`'
-expect_failure empty-decision-section 'sección obligatoria `Decision` está vacía'
-expect_failure empty-discussion-section 'sección obligatoria `Strongest Case` está vacía'
-expect_failure concluded-pending-discussion "conserva Conclusion Pending"
-expect_failure applied-without-canonical-link "requiere enlace al hogar canónico actualizado"
-expect_failure bad-local-discussion 'discusión requiere heading `Strongest Case`'
-expect_failure nested-bad-discussion 'discusión requiere heading `Strongest Case`'
-expect_failure bad-decision-name 'decisión requiere nombre `NNNN-short-topic.md`'
-expect_failure bad-discussion-name 'discusión requiere nombre `YYYY-MM-DD-short-topic.md`'
-expect_failure bad-evidence-name 'evidencia requiere nombre `YYYY-MM-DD-short-topic.md`'
-expect_failure bad-active-plan-name 'plan activo requiere nombre `YYYY-MM-DD-short-topic.md`'
-expect_failure bad-archive-plan-name 'plan archivado requiere nombre `YYYY-MM-DD-short-topic.md`'
-expect_failure bad-archived-plan 'plan archivado requiere `Closed: YYYY-MM-DD`'
-expect_failure bad-validation "requiere Status en"
-expect_failure missing-validation-fields 'requiere metadata `Related Implementation`'
-expect_failure duplicate-validation "VAL-APP-DUP duplicado"
-expect_failure passed-without-evidence "VAL-APP-PASSED cerrado requiere evidencia"
-expect_failure passed-evidence-readme 'passed requiere expediente `.md` resoluble bajo `evidence/`'
-expect_failure passed-evidence-unregistered 'passed requiere expediente `.md` resoluble bajo `evidence/`'
-expect_failure failed-evidence-noncanonical 'failed requiere expediente `.md` resoluble bajo `evidence/`'
-expect_failure empty-validation-cell 'validación línea 5: `requires` vacío'
-expect_failure invalid-validation-id 'ID `VAL-*` inválido'
-expect_failure unmarked-validation-heading 'caso manual debe comenzar con ID `VAL-*` válido'
-expect_failure malformed-validation-heading 'caso manual debe comenzar con ID `VAL-*` válido'
-expect_failure failed-without-remediation-link 'failed requiere remediación enlazada a un plan active/archive resoluble'
-expect_failure failed-broken-remediation 'failed requiere remediación enlazada a un plan active/archive resoluble'
-expect_failure failed-remediation-nonplan 'failed requiere remediación enlazada a un plan active/archive resoluble'
-expect_failure failed-remediation-unregistered 'failed requiere remediación enlazada a un plan active/archive resoluble'
-expect_failure failed-remediation-missing-unit 'ledger no contiene la unidad `APP-MISSING`'
-expect_failure obsolete-without-result 'cerrado requiere resultado observado'
-expect_failure obsolete-without-decision 'obsolete requiere enlace resoluble a decisión o evidencia'
-expect_failure obsolete-target-unregistered 'obsolete requiere enlace resoluble a decisión o evidencia'
-expect_failure obsolete-target-index 'obsolete requiere enlace resoluble a decisión o evidencia'
-expect_failure empty-evidence-section 'sección obligatoria `Procedure` está vacía'
-expect_failure missing-script "script registrado no existe"
+expect_failure broken-link "broken local link"
+expect_failure broken-anchor "local anchor does not exist"
+expect_failure bad-plan 'a file under plans/active requires `Status: active`'
+expect_failure bad-ledger "ledger is missing columns: diffstat"
+expect_failure active-no-plan "requires exactly one active plan"
+expect_failure inactive-checkpoint 'requires `Active implementation checkpoint: none`'
+expect_failure checkpoint-mismatch "does not match ROADMAP"
+expect_failure duplicate-active-plan "has multiple active plans"
+expect_failure orphan-plan "orphan active plan"
+expect_failure wrong-prefix 'prefix outside owner `app`'
+expect_failure suite-prefix-local 'prefix outside owner `app`'
+expect_failure component-prefix-ledger 'prefix outside owner `app`'
+expect_failure foreign-owner-evidence 'Automated evidence outside owner `app`'
+expect_failure suite-project-evidence 'Automated evidence outside owner `suite`'
+expect_failure overlapping-pathspec 'claim the same paths'
+expect_failure bad-done-diffstat 'done unit requires diffstat `N files, +X/-Y`'
+expect_failure done-without-inventory 'done unit requires exactly one link to a `.numstat.tsv` inventory'
+expect_failure done-broken-inventory '`.numstat.tsv` inventory is not resolvable'
+expect_failure done-without-evidence 'requires a resolvable record'
+expect_failure done-broken-evidence 'requires a resolvable record'
+expect_failure noncanonical-done-evidence 'requires a resolvable record'
+expect_failure bad-numstat-syntax 'content must be SHA-256 or an allowed closing marker'
+expect_failure finalized-numstat-marker 'content must be SHA-256 or an allowed closing marker'
+expect_failure wrong-numstat-self '`self` marker belongs only to the inventory itself'
+expect_failure bad-numstat-base 'requires exactly one `Base revision<TAB><40 hex>`'
+if ! grep -F 'requires at least one `Pathspec`' \
+    "$temporary/bad-numstat-base.out" >/dev/null; then
+    fail "the inventory without a Pathspec boundary produced no stable diagnostic"
+fi
+expect_failure duplicate-numstat-base 'requires exactly one `Base revision<TAB><40 hex>`'
+expect_failure duplicate-numstat-path 'duplicate numstat path'
+expect_failure numstat-sum-mismatch 'Diffstat declares +66/-1'
+expect_failure numstat-file-count 'Diffstat declares 4 files'
+expect_failure numstat-missing-plan 'does not contain the plan hosting the ledger'
+expect_failure numstat-missing-evidence 'contains no record linked'
+expect_failure bad-decision "invalid decision status"
+expect_failure bad-local-decision "invalid decision status"
+expect_failure nested-bad-decision "invalid decision status"
+expect_failure orphan-decision-index "unlinked orphan record"
+expect_failure duplicate-decision-index "record must be linked exactly once"
+expect_failure stale-decision-status 'Status `proposed` does not match metadata `accepted`'
+expect_failure stale-decision-entry "stale entry requires one canonical decisions record"
+expect_failure orphan-discussion-index "unlinked orphan record"
+expect_failure stale-discussion-status 'Status `concluded` does not match metadata `open`'
+expect_failure empty-decision-section 'required section `Decision` is empty'
+expect_failure empty-discussion-section 'required section `Strongest Case` is empty'
+expect_failure concluded-pending-discussion "retains Conclusion Pending"
+expect_failure applied-without-canonical-link "requires a link to the updated canonical home"
+expect_failure bad-local-discussion 'discussion requires heading `Strongest Case`'
+expect_failure nested-bad-discussion 'discussion requires heading `Strongest Case`'
+expect_failure bad-decision-name 'decision requires name `NNNN-short-topic.md`'
+expect_failure bad-discussion-name 'discussion requires name `YYYY-MM-DD-short-topic.md`'
+expect_failure bad-evidence-name 'evidence requires name `YYYY-MM-DD-short-topic.md`'
+expect_failure bad-active-plan-name 'active plan requires name `YYYY-MM-DD-short-topic.md`'
+expect_failure bad-archive-plan-name 'archived plan requires name `YYYY-MM-DD-short-topic.md`'
+expect_failure bad-archived-plan 'archived plan requires `Closed: YYYY-MM-DD`'
+expect_failure bad-validation "requires Status in"
+expect_failure missing-validation-fields 'requires `Related Implementation` metadata'
+expect_failure duplicate-validation "duplicate VAL-APP-DUP"
+expect_failure passed-without-evidence "closed VAL-APP-PASSED requires evidence"
+expect_failure passed-evidence-readme 'passed requires a resolvable `.md` record under `evidence/`'
+expect_failure passed-evidence-unregistered 'passed requires a resolvable `.md` record under `evidence/`'
+expect_failure failed-evidence-noncanonical 'failed requires a resolvable `.md` record under `evidence/`'
+expect_failure empty-validation-cell 'validation line 5: empty `requires`'
+expect_failure invalid-validation-id 'invalid `VAL-*` ID'
+expect_failure unmarked-validation-heading 'manual case must begin with a valid `VAL-*` ID'
+expect_failure malformed-validation-heading 'manual case must begin with a valid `VAL-*` ID'
+expect_failure failed-without-remediation-link 'requires remediation linked to a resolvable active/archive plan'
+expect_failure failed-broken-remediation 'requires remediation linked to a resolvable active/archive plan'
+expect_failure failed-remediation-nonplan 'requires remediation linked to a resolvable active/archive plan'
+expect_failure failed-remediation-unregistered 'requires remediation linked to a resolvable active/archive plan'
+expect_failure failed-remediation-missing-unit 'ledger does not contain unit `APP-MISSING`'
+expect_failure obsolete-without-result 'requires an observed result'
+expect_failure obsolete-without-decision 'requires a resolvable decision or evidence link'
+expect_failure obsolete-target-unregistered 'requires a resolvable decision or evidence link'
+expect_failure obsolete-target-index 'requires a resolvable decision or evidence link'
+expect_failure empty-evidence-section 'required section `Procedure` is empty'
+expect_failure missing-script "registered script does not exist"
 
 if [ "$failures" -ne 0 ]; then
-    printf '\nContrato documental: %s fixture(s) fallaron.\n' "$failures" >&2
+    printf '\nDocumentation contract: %s fixture(s) failed.\n' "$failures" >&2
     exit 1
 fi
 
-printf 'Contrato documental y agent-context: OK\n'
+printf 'Documentation contract and agent-context: OK\n'

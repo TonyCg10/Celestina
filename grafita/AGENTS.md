@@ -57,8 +57,9 @@ Grafita constraints; it cannot relax the root or grant authority.
 - `grafita/scripts/status-production.sh`
 
 Verification exercises the canonical release artifact without touching the
-installed binary. Closing a bug or milestone runs `complete-production.sh` to
-deploy those same bytes without recompilation. Perceptual, physical keyboard,
-IME, AT-SPI, and compositor checks belong in `VALIDATION.md`. Review byte
-preservation, ownership, thread affinity, Qt models, QML registration, and both
-core consumers.
+installed binary. Closing a bug or milestone runs
+`grafita/scripts/complete-production.sh`; when `grafita-core` changes, it also
+runs `siderita/scripts/complete-production.sh` so both installed consumers carry
+the verified bytes. Perceptual, physical keyboard, IME, AT-SPI, and compositor
+checks belong in `VALIDATION.md`. Review byte preservation, ownership, thread
+affinity, Qt models, QML registration, and both core consumers.

@@ -12,7 +12,13 @@ mkdir -p "$case_root/docs/plans/active" \
     "$case_root/app/docs/plans/active" \
     "$case_root/app/docs/inventories/2026-08-03-unit" \
     "$case_root/app/docs/evidence" \
-    "$case_root/app/src"
+    "$case_root/app/src" \
+    "$case_root/scripts"
+cp "$script_dir/project_registry.py" \
+    "$script_dir/documentation_contract.py" \
+    "$script_dir/architecture_scanners.py" \
+    "$script_dir/check-language-contract.py" \
+    "$case_root/scripts/"
 {
     printf 'schema_version = 1\n\n'
     printf '[suite]\n'
@@ -149,14 +155,76 @@ python3 "$checker" --root "$case_root" --quiet
 python3 "$checker" --root "$case_root" --quiet "$inventory_rel" "$inventory_b_rel"
 python3 "$commit_checker" --root "$case_root" \
     --check-index 'app: record exact delivery'
+
+# An unstaged registry must not redefine which staged plans and inventories
+# exist. Corrupt one INDEX inventory, point only the worktree registry at a
+# lookalike plan root, and require the committed parser plus INDEX layout to
+# retain the failure.
+cp "$inventory" "$temporary/inventory-a.valid.tsv"
+sed -i '/^Base revision\t/d' "$inventory"
+git -C "$case_root" add "$inventory_rel"
+sed -i 's|app/docs/plans/active|shadow/docs/plans/active|' \
+    "$case_root/docs/projects.toml"
+if python3 "$checker" --root "$case_root" --quiet \
+    > "$temporary/worktree-registry-divergence.out" 2>&1; then
+    printf 'FAIL: an unstaged registry hid an invalid staged inventory\n' >&2
+    exit 1
+elif ! grep -F 'inventory requires one Base revision' \
+    "$temporary/worktree-registry-divergence.out" >/dev/null; then
+    printf 'FAIL: registry divergence produced no stable inventory diagnostic\n' >&2
+    exit 1
+fi
+git -C "$case_root" show :docs/projects.toml > "$case_root/docs/projects.toml"
+cp "$temporary/inventory-a.valid.tsv" "$inventory"
+git -C "$case_root" add "$inventory_rel"
+
+# INDEX cannot hide an existing delivery root either. HEAD and INDEX layouts
+# form a conservative union, so a staged registry move still discovers the
+# invalid inventory under the committed root.
+sed -i '/^Base revision\t/d' "$inventory"
+git -C "$case_root" add "$inventory_rel"
+sed -i 's|app/docs/plans/active|shadow/docs/plans/active|' \
+    "$case_root/docs/projects.toml"
+git -C "$case_root" add docs/projects.toml
+if python3 "$checker" --root "$case_root" --quiet \
+    > "$temporary/staged-registry-divergence.out" 2>&1; then
+    printf 'FAIL: a staged registry hid an invalid staged inventory\n' >&2
+    exit 1
+elif ! grep -F 'inventory requires one Base revision' \
+    "$temporary/staged-registry-divergence.out" >/dev/null; then
+    printf 'FAIL: staged registry divergence produced no stable diagnostic\n' >&2
+    exit 1
+fi
+git -C "$case_root" reset -q HEAD -- docs/projects.toml
+git -C "$case_root" show HEAD:docs/projects.toml > "$case_root/docs/projects.toml"
+cp "$temporary/inventory-a.valid.tsv" "$inventory"
+git -C "$case_root" add "$inventory_rel"
+
+# Reassigning an existing plan directory to another prefix/owner in INDEX is
+# ambiguous and must fail instead of selecting either interpretation.
+sed -i '/^\[\[projects\]\]/,$ s/commit_prefix = "app"/commit_prefix = "renamed"/' \
+    "$case_root/docs/projects.toml"
+git -C "$case_root" add docs/projects.toml
+if python3 "$checker" --root "$case_root" --quiet \
+    > "$temporary/layout-owner-conflict.out" 2>&1; then
+    printf 'FAIL: conflicting HEAD/INDEX plan ownership was accepted\n' >&2
+    exit 1
+elif ! grep -F 'conflicting owners' \
+    "$temporary/layout-owner-conflict.out" >/dev/null; then
+    printf 'FAIL: plan ownership conflict produced no stable diagnostic\n' >&2
+    exit 1
+fi
+git -C "$case_root" reset -q HEAD -- docs/projects.toml
+git -C "$case_root" show HEAD:docs/projects.toml > "$case_root/docs/projects.toml"
+
 if python3 "$commit_checker" --root "$case_root" \
     --check-index 'suite: absorb app delivery' \
     > "$temporary/wrong-subject-prefix.out" 2>&1; then
-    printf 'FALLO: commit-msg aceptó suite: para una unidad app:\n' >&2
+    printf 'FAIL: commit-msg accepted suite: for an app unit:\n' >&2
     exit 1
-elif ! grep -F 'el lote requiere asunto `app:`, no `suite:`' \
+elif ! grep -F 'the batch requires subject `app:`, not `suite:`' \
     "$temporary/wrong-subject-prefix.out" >/dev/null; then
-    printf 'FALLO: el asunto divergente no produjo diagnóstico estable\n' >&2
+    printf 'FAIL: the divergent subject produced no stable diagnostic\n' >&2
     exit 1
 fi
 printf 'Merge branch fixture\n' > "$temporary/merge-message.txt"
@@ -164,11 +232,11 @@ printf '%s\n' "$base" > "$case_root/.git/MERGE_HEAD"
 if python3 "$commit_checker" --root "$case_root" \
     "$temporary/merge-message.txt" \
     > "$temporary/merge-delivery.out" 2>&1; then
-    printf 'FALLO: commit-msg aceptó cerrar una unidad dentro de un merge\n' >&2
+    printf 'FAIL: commit-msg accepted a unit closure inside a merge\n' >&2
     exit 1
-elif ! grep -F 'un merge no puede cerrar unidades de entrega' \
+elif ! grep -F 'a merge cannot close delivery units' \
     "$temporary/merge-delivery.out" >/dev/null; then
-    printf 'FALLO: el lote dentro del merge no produjo diagnóstico estable\n' >&2
+    printf 'FAIL: the merge delivery batch produced no stable diagnostic\n' >&2
     exit 1
 fi
 rm -f "$case_root/.git/MERGE_HEAD"
@@ -180,11 +248,11 @@ printf '\n[Orphan inventory](../../inventories/2026-08-03-unit/UNIT-A.numstat.ts
 git -C "$case_root" add "$plan_rel"
 if python3 "$checker" --root "$case_root" --quiet \
     > "$temporary/orphan-inventory.out" 2>&1; then
-    printf 'FALLO: el checker aceptó un inventario enlazado fuera del ledger\n' >&2
+    printf 'FAIL: the checker accepted an inventory linked outside the ledger\n' >&2
     exit 1
-elif ! grep -F 'requiere una única fila done host' \
+elif ! grep -F 'requires exactly one host done row' \
     "$temporary/orphan-inventory.out" >/dev/null; then
-    printf 'FALLO: el inventario huérfano no produjo diagnóstico estable\n' >&2
+    printf 'FAIL: the orphan inventory produced no stable diagnostic\n' >&2
     exit 1
 fi
 cp "$temporary/plan.staged.md" "$plan"
@@ -194,11 +262,11 @@ sed -i 's/| UNIT-A | `app:`/| UNIT-A | `app-core:`/' "$plan"
 git -C "$case_root" add "$plan_rel"
 if python3 "$checker" --root "$case_root" --quiet \
     > "$temporary/wrong-prefix.out" 2>&1; then
-    printf 'FALLO: el checker aceptó el prefijo de otro owner/componente\n' >&2
+    printf 'FAIL: the checker accepted another owner/component prefix\n' >&2
     exit 1
-elif ! grep -F 'fila done UNIT-A de app requiere prefijo app' \
+elif ! grep -F 'done row UNIT-A for app requires prefix app' \
     "$temporary/wrong-prefix.out" >/dev/null; then
-    printf 'FALLO: el prefijo incorrecto no produjo diagnóstico estable\n' >&2
+    printf 'FAIL: the wrong prefix produced no stable diagnostic\n' >&2
     exit 1
 fi
 cp "$temporary/plan.staged.md" "$plan"
@@ -217,11 +285,11 @@ cp "$temporary/plan.staged.md" "$plan"
 mv "$plan" "$temporary/plan-missing-from-worktree.md"
 if python3 "$checker" --root "$case_root" --quiet \
     > "$temporary/missing-host.out" 2>&1; then
-    printf 'FALLO: el checker aceptó un plan host ausente del worktree\n' >&2
+    printf 'FAIL: the checker accepted a host plan missing from the worktree\n' >&2
     exit 1
-elif ! grep -F 'plan host staged no existe en el worktree' \
+elif ! grep -F 'staged host plan does not exist in the worktree' \
     "$temporary/missing-host.out" >/dev/null; then
-    printf 'FALLO: el host ausente no produjo diagnóstico estable\n' >&2
+    printf 'FAIL: the missing host produced no stable diagnostic\n' >&2
     exit 1
 fi
 mv "$temporary/plan-missing-from-worktree.md" "$plan"
@@ -232,10 +300,10 @@ git -C "$case_root" add "$inventory_b_rel"
 git -C "$case_root" reset -q HEAD -- "$source_b_rel"
 if python3 "$checker" --root "$case_root" --quiet \
     > "$temporary/overlap.out" 2>&1; then
-    printf 'FALLO: el checker aceptó inventarios staged solapados\n' >&2
+    printf 'FAIL: the checker accepted overlapping staged inventories\n' >&2
     exit 1
-elif ! grep -F 'inventarios staged se solapan' "$temporary/overlap.out" >/dev/null; then
-    printf 'FALLO: el solapamiento staged no produjo diagnóstico estable\n' >&2
+elif ! grep -F 'staged inventories overlap' "$temporary/overlap.out" >/dev/null; then
+    printf 'FAIL: the staged overlap produced no stable diagnostic\n' >&2
     exit 1
 fi
 cp "$temporary/inventory-b.valid.tsv" "$inventory_b"
@@ -244,10 +312,10 @@ git -C "$case_root" add "$inventory_b_rel" "$source_b_rel"
 git -C "$case_root" reset -q HEAD -- "$source_rel"
 if python3 "$checker" --root "$case_root" --quiet \
     > "$temporary/missing.out" 2>&1; then
-    printf 'FALLO: el checker aceptó una ruta inventariada no staged\n' >&2
+    printf 'FAIL: the checker accepted an inventoried path that was not staged\n' >&2
     exit 1
-elif ! grep -F 'inventario contiene rutas no staged' "$temporary/missing.out" >/dev/null; then
-    printf 'FALLO: la ruta omitida no produjo diagnóstico estable\n' >&2
+elif ! grep -F 'inventory contains paths that are not staged' "$temporary/missing.out" >/dev/null; then
+    printf 'FAIL: the omitted path produced no stable diagnostic\n' >&2
     exit 1
 fi
 git -C "$case_root" add "$source_rel"
@@ -256,11 +324,11 @@ printf 'extra\n' > "$case_root/extra.txt"
 git -C "$case_root" add extra.txt
 if python3 "$checker" --root "$case_root" --quiet \
     > "$temporary/extra.out" 2>&1; then
-    printf 'FALLO: el checker aceptó una ruta staged extra\n' >&2
+    printf 'FAIL: the checker accepted an extra staged path\n' >&2
     exit 1
-elif ! grep -F 'staging contiene rutas fuera del lote inventariado' \
+elif ! grep -F 'staging contains paths outside the inventoried batch' \
     "$temporary/extra.out" >/dev/null; then
-    printf 'FALLO: la ruta extra no produjo diagnóstico estable\n' >&2
+    printf 'FAIL: the extra path produced no stable diagnostic\n' >&2
     exit 1
 fi
 git -C "$case_root" reset -q HEAD -- extra.txt
@@ -268,11 +336,11 @@ git -C "$case_root" reset -q HEAD -- extra.txt
 git -C "$case_root" reset -q HEAD -- "$inventory_rel"
 if python3 "$checker" --root "$case_root" --quiet \
     > "$temporary/reference.out" 2>&1; then
-    printf 'FALLO: el checker aceptó un inventario enlazado pero no staged\n' >&2
+    printf 'FAIL: the checker accepted a linked inventory that was not staged\n' >&2
     exit 1
-elif ! grep -F 'referencia inventarios nuevos que no están staged' \
+elif ! grep -F 'references new inventories that are not staged' \
     "$temporary/reference.out" >/dev/null; then
-    printf 'FALLO: el inventario no staged no produjo diagnóstico estable\n' >&2
+    printf 'FAIL: the unstaged inventory produced no stable diagnostic\n' >&2
     exit 1
 fi
 git -C "$case_root" add "$inventory_rel"
@@ -288,11 +356,11 @@ git -C "$case_root" reset -q HEAD -- \
     "$source_b_rel" "$evidence_b_rel" "$inventory_b_rel"
 if python3 "$checker" --root "$case_root" --quiet \
     > "$temporary/partial-plan.out" 2>&1; then
-    printf 'FALLO: el checker aceptó una unidad done fuera del staging parcial\n' >&2
+    printf 'FAIL: the checker accepted a done unit outside partial staging\n' >&2
     exit 1
-elif ! grep -F 'plan host deja inventarios done fuera del índice' \
+elif ! grep -F 'host plan leaves done inventories outside the index' \
     "$temporary/partial-plan.out" >/dev/null; then
-    printf 'FALLO: el staging parcial del plan no produjo diagnóstico estable\n' >&2
+    printf 'FAIL: partial plan staging produced no stable diagnostic\n' >&2
     exit 1
 fi
 git -C "$case_root" add \
@@ -302,10 +370,10 @@ sed -i 's/pub fn changed()/pub fn staged()/' "$source"
 git -C "$case_root" add "$source_rel"
 if python3 "$checker" --root "$case_root" --quiet \
     > "$temporary/hash.out" 2>&1; then
-    printf 'FALLO: el checker aceptó un hash staged obsoleto\n' >&2
+    printf 'FAIL: the checker accepted a stale staged hash\n' >&2
     exit 1
-elif ! grep -F 'SHA-256 staged no coincide' "$temporary/hash.out" >/dev/null; then
-    printf 'FALLO: el hash staged obsoleto no produjo diagnóstico estable\n' >&2
+elif ! grep -F 'staged SHA-256 mismatch' "$temporary/hash.out" >/dev/null; then
+    printf 'FAIL: the stale staged hash produced no stable diagnostic\n' >&2
     exit 1
 fi
 
@@ -314,7 +382,11 @@ mkdir -p "$archive_root/docs/plans/active" \
     "$archive_root/app/docs/plans/active" \
     "$archive_root/app/docs/plans/archive" \
     "$archive_root/app/docs/inventories/2026-08-03-archive" \
-    "$archive_root/app/docs/evidence"
+    "$archive_root/app/docs/evidence" \
+    "$archive_root/scripts"
+cp "$script_dir/project_registry.py" \
+    "$script_dir/documentation_contract.py" \
+    "$archive_root/scripts/"
 {
     printf 'schema_version = 1\n\n'
     printf '[suite]\n'
@@ -361,11 +433,11 @@ mv "$old_plan" "$new_plan"
 git -C "$archive_root" add -A
 if python3 "$checker" --root "$archive_root" --quiet \
     > "$temporary/archive-without-unit.out" 2>&1; then
-    printf 'FALLO: el checker aceptó archivar un plan sin unidad administrativa\n' >&2
+    printf 'FAIL: the checker accepted archiving a plan without an administrative unit\n' >&2
     exit 1
-elif ! grep -F 'archivar un plan requiere una unidad administrativa' \
+elif ! grep -F 'archiving a plan requires an administrative unit' \
     "$temporary/archive-without-unit.out" >/dev/null; then
-    printf 'FALLO: el archivado sin unidad no produjo diagnóstico estable\n' >&2
+    printf 'FAIL: archiving without a unit produced no stable diagnostic\n' >&2
     exit 1
 fi
 printf '| ARCHIVE-MOVE | `app:` | done | [Archive inventory](../../inventories/2026-08-03-archive/ARCHIVE-MOVE.numstat.tsv) | Archive plan | exact | evidence | None |\n' >> "$new_plan"
@@ -423,11 +495,11 @@ printf '\nmutation\n' >> "$old_inventory"
 git -C "$archive_root" add "$old_inventory_rel"
 if python3 "$checker" --root "$archive_root" --quiet \
     > "$temporary/immutable-inventory.out" 2>&1; then
-    printf 'FALLO: el checker aceptó modificar un inventario histórico\n' >&2
+    printf 'FAIL: the checker accepted a historical inventory modification\n' >&2
     exit 1
-elif ! grep -F 'los inventarios históricos son inmutables' \
+elif ! grep -F 'historical inventories are immutable' \
     "$temporary/immutable-inventory.out" >/dev/null; then
-    printf 'FALLO: la mutación histórica no produjo diagnóstico estable\n' >&2
+    printf 'FAIL: the historical mutation produced no stable diagnostic\n' >&2
     exit 1
 fi
 
@@ -438,7 +510,13 @@ mkdir -p "$mixed_root/docs/plans/active" \
     "$mixed_root/app/src" \
     "$mixed_root/core/docs/plans/active" \
     "$mixed_root/core/docs/inventories/2026-08-03-core" \
-    "$mixed_root/core/src"
+    "$mixed_root/core/src" \
+    "$mixed_root/scripts"
+cp "$script_dir/project_registry.py" \
+    "$script_dir/documentation_contract.py" \
+    "$script_dir/architecture_scanners.py" \
+    "$script_dir/check-language-contract.py" \
+    "$mixed_root/scripts/"
 {
     printf 'schema_version = 1\n\n'
     printf '[suite]\n'
@@ -503,12 +581,12 @@ git -C "$mixed_root" add -A
 if python3 "$commit_checker" --root "$mixed_root" \
     --check-index 'suite: merge incompatible delivery units' \
     > "$temporary/mixed-prefixes.out" 2>&1; then
-    printf 'FALLO: commit-msg aceptó owners incompatibles bajo suite:\n' >&2
+    printf 'FAIL: commit-msg accepted incompatible owners under suite:\n' >&2
     exit 1
-elif ! grep -F 'requiere un único prefijo de commit: app, core' \
+elif ! grep -F 'requires exactly one commit prefix: app, core' \
     "$temporary/mixed-prefixes.out" >/dev/null; then
-    printf 'FALLO: el lote multiowner no produjo diagnóstico estable\n' >&2
+    printf 'FAIL: the multi-owner batch produced no stable diagnostic\n' >&2
     exit 1
 fi
 
-printf 'Inventarios staged: OK\n'
+printf 'Staged inventories: OK\n'

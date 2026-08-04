@@ -37,14 +37,15 @@ converges on the newest request under a deliberately slow scan.
 |---|---|---|---|---|
 | CORE-M1-A | planned | none | Reproduction proving obsolete in-flight work survives today | Focused failing executor test |
 | CORE-M1-B | planned | CORE-M1-A | Running scan receives cancellation when superseded | `cargo test -p siderita-core --locked` |
-| CORE-M1-C | planned | CORE-M1-B | Workspace contracts and artifact remain valid | `scripts/build-production.sh` then `scripts/verify-production.sh` |
+| CORE-M1-C | planned | CORE-M1-B | Workspace contracts remain valid and Siderita's installed binary contains the changed core | Workspace verification, then `siderita/scripts/complete-production.sh` |
 
 ## Implementation exit
 
 Close `CORE-M1` when the focused cancellation tests pass, no stale generation
-publishes, shutdown joins cleanly and the canonical workspace artifact passes
-`scripts/verify-production.sh`. Do not add a pending Siderita interaction test
-to this checkpoint.
+publishes, shutdown joins cleanly, the canonical workspace artifact passes its
+registered verification, and `siderita/scripts/complete-production.sh` deploys
+the exact affected Siderita bytes to the author's normal test destination. Do
+not add a pending Siderita interaction test to this checkpoint.
 
 ## Closed evidence
 

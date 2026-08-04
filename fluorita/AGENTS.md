@@ -58,8 +58,9 @@ Fluorita constraints; it cannot relax the root or grant authority.
 
 Verification uses the canonical release artifact without replacing the
 installed binary or registering MIME. Closing a bug or milestone runs
-`complete-production.sh` to update the normal binary and registration. A docs-
-only change or audit does not deploy. Report any effective handler change.
-Playback, frame pacing, tearing, focus, and real visual perception belong in
-`VALIDATION.md`. Review ownership, thread affinity, libmpv/render lifecycle,
-QML registration, and both engine consumers.
+`fluorita/scripts/complete-production.sh`; when a shared Fluorita crate changes,
+it also runs `siderita/scripts/complete-production.sh` so both installed
+consumers carry the verified bytes. A docs-only change or audit does not deploy.
+Report any effective handler change. Playback, frame pacing, tearing, focus,
+and real visual perception belong in `VALIDATION.md`. Review ownership, thread
+affinity, libmpv/render lifecycle, QML registration, and both engine consumers.

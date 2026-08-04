@@ -12,19 +12,8 @@ import re
 import subprocess
 import sys
 import tomllib
+import types
 from urllib.parse import unquote, urlsplit
-
-from documentation_contract import (
-    CHECKPOINT_RE,
-    HEADING_RE,
-    LEDGER_COLUMNS,
-    extract_inline_links,
-    is_separator_row,
-    markdown_headings,
-    normalized_heading,
-    normalized_status,
-    split_table_row,
-)
 
 
 BASE_RE = re.compile(r"Base revision\t([0-9a-f]{40})")
@@ -34,6 +23,21 @@ HEADER = "added\tdeleted\tcontent\tpath"
 
 class StagedUnitError(RuntimeError):
     pass
+
+
+HEAD_PROJECT_RULES = "scripts/project_registry.py"
+HEAD_DOCUMENTATION_RULES = "scripts/documentation_contract.py"
+DOCUMENTATION_RULE_NAMES = (
+    "CHECKPOINT_RE",
+    "HEADING_RE",
+    "LEDGER_COLUMNS",
+    "extract_inline_links",
+    "is_separator_row",
+    "markdown_headings",
+    "normalized_heading",
+    "normalized_status",
+    "split_table_row",
+)
 
 
 def git(root: Path, *args: str, check: bool = True) -> bytes:
@@ -46,9 +50,72 @@ def git(root: Path, *args: str, check: bool = True) -> bytes:
     if check and process.returncode != 0:
         detail = process.stderr.decode("utf-8", "replace").strip()
         raise StagedUnitError(
-            f"git {' '.join(args)} falló" + (f": {detail}" if detail else "")
+            f"git {' '.join(args)} failed" + (f": {detail}" if detail else "")
         )
     return process.stdout
+
+
+def committed_python_module(
+    root: Path,
+    path: str,
+    module_name: str,
+) -> types.ModuleType:
+    raw = git(root, "show", f"HEAD:{path}", check=False)
+    if not raw:
+        raise StagedUnitError(f"committed interpretation rule is missing: {path}")
+    try:
+        source = raw.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise StagedUnitError(
+            f"committed interpretation rule is not UTF-8: {path}: {error}"
+        ) from error
+
+    module = types.ModuleType(module_name)
+    module.__file__ = f"HEAD:{path}"
+    module.__package__ = None
+    sys.modules[module_name] = module
+    try:
+        exec(compile(source, module.__file__, "exec"), module.__dict__)
+    except SystemExit as error:
+        raise StagedUnitError(
+            f"committed interpretation rule attempted to exit: {path}: {error.code!r}"
+        ) from error
+    except Exception as error:
+        raise StagedUnitError(
+            f"could not load committed interpretation rule: {path}: {error}"
+        ) from error
+    return module
+
+
+def install_committed_documentation_rules(root: Path) -> None:
+    """Install only the ledger parsers committed in HEAD.
+
+    The staged-unit guard reads delivery data from INDEX and may inspect the
+    worktree only to fail conservatively on omitted partial-plan changes. No
+    unstaged or staged Python module defines what counts as an inventory.
+    """
+
+    previous_project_registry = sys.modules.get("project_registry")
+    try:
+        committed_python_module(root, HEAD_PROJECT_RULES, "project_registry")
+        documentation = committed_python_module(
+            root,
+            HEAD_DOCUMENTATION_RULES,
+            "_celestina_head_documentation_contract",
+        )
+    finally:
+        if previous_project_registry is None:
+            sys.modules.pop("project_registry", None)
+        else:
+            sys.modules["project_registry"] = previous_project_registry
+
+    for name in DOCUMENTATION_RULE_NAMES:
+        value = getattr(documentation, name, None)
+        if value is None:
+            raise StagedUnitError(
+                f"{HEAD_DOCUMENTATION_RULES} does not expose required rule {name}"
+            )
+        globals()[name] = value
 
 
 def decode_paths(raw: bytes) -> list[str]:
@@ -63,7 +130,7 @@ def normalized_repo_path(raw: str) -> str:
         or str(path) != raw
         or any(part in {"", ".", ".."} for part in path.parts)
     ):
-        raise StagedUnitError(f"ruta de inventario no normalizada: {raw}")
+        raise StagedUnitError(f"non-normalized inventory path: {raw}")
     return raw
 
 
@@ -93,15 +160,15 @@ def worktree_bytes(root: Path, path: str) -> bytes | None:
         resolved = candidate.resolve(strict=False)
         resolved.relative_to(root.resolve())
     except (OSError, ValueError) as error:
-        raise StagedUnitError(f"ruta de plan sale del repositorio: {path}") from error
+        raise StagedUnitError(f"plan path leaves the repository: {path}") from error
     if candidate.is_symlink():
-        raise StagedUnitError(f"un plan canónico no puede ser symlink: {path}")
+        raise StagedUnitError(f"a canonical plan cannot be a symlink: {path}")
     try:
         return candidate.read_bytes()
     except FileNotFoundError:
         return None
     except OSError as error:
-        raise StagedUnitError(f"no se pudo leer el plan del worktree: {path}: {error}") from error
+        raise StagedUnitError(f"could not read the worktree plan: {path}: {error}") from error
 
 
 def inventory_references(text: str, plan_path: str) -> set[str]:
@@ -114,33 +181,60 @@ def inventory_references(text: str, plan_path: str) -> set[str]:
         normalized = posixpath.normpath(posixpath.join(parent, target))
         if normalized == ".." or normalized.startswith("../"):
             raise StagedUnitError(
-                f"referencia de inventario sale del repositorio: {plan_path} -> {target}"
+                f"inventory reference leaves the repository: {plan_path} -> {target}"
             )
         references.add(normalized_repo_path(normalized))
     return references
 
 
-def delivery_layouts(root: Path) -> dict[str, tuple[str, str, str]]:
-    registry_path = root / "docs" / "projects.toml"
+def registry_delivery_layouts(
+    root: Path,
+    revision: str,
+) -> dict[str, tuple[str, str, str]]:
+    if revision == "INDEX":
+        raw = index_bytes(root, "docs/projects.toml")
+    elif revision == "HEAD":
+        raw = git(root, "show", "HEAD:docs/projects.toml", check=False) or None
+    else:
+        raise StagedUnitError(f"unknown registry revision: {revision}")
+    if raw is None:
+        raise StagedUnitError(f"{revision}:docs/projects.toml: registry is missing")
     try:
-        with registry_path.open("rb") as handle:
-            registry = tomllib.load(handle)
-    except (OSError, tomllib.TOMLDecodeError) as error:
-        raise StagedUnitError(f"no se pudo leer docs/projects.toml: {error}") from error
+        registry = tomllib.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+        raise StagedUnitError(
+            f"{revision}:docs/projects.toml: invalid registry: {error}"
+        ) from error
 
-    owners: list[object] = [registry.get("suite")]
-    projects = registry.get("projects", [])
-    if isinstance(projects, list):
-        owners.extend(projects)
+    suite = registry.get("suite")
+    projects = registry.get("projects")
+    if registry.get("schema_version") != 1:
+        raise StagedUnitError(
+            f"{revision}:docs/projects.toml requires schema_version = 1"
+        )
+    if not isinstance(suite, dict):
+        raise StagedUnitError(
+            f"{revision}:docs/projects.toml does not contain [suite]"
+        )
+    if not isinstance(projects, list):
+        raise StagedUnitError(
+            f"{revision}:docs/projects.toml does not contain [[projects]]"
+        )
+
+    owners: list[object] = [suite, *projects]
     layouts: dict[str, tuple[str, str, str]] = {}
-    for owner in owners:
+    for index, owner in enumerate(owners):
         if not isinstance(owner, dict):
-            continue
+            raise StagedUnitError(
+                f"{revision}:docs/projects.toml owner {index} is not a table"
+            )
         owner_id = owner.get("id")
         prefix = owner.get("commit_prefix")
         active = owner.get("active_plans")
         if not all(isinstance(value, str) and value for value in (owner_id, prefix, active)):
-            continue
+            raise StagedUnitError(
+                f"{revision}:docs/projects.toml owner {index} lacks id, prefix, or active plans"
+            )
         active = normalized_repo_path(active)
         docs_root = posixpath.dirname(posixpath.dirname(active))
         inventory_root = posixpath.join(docs_root, "inventories")
@@ -150,9 +244,26 @@ def delivery_layouts(root: Path) -> dict[str, tuple[str, str, str]]:
         ):
             if plan_directory in layouts:
                 raise StagedUnitError(
-                    f"directorio de planes registrado por varios owners: {plan_directory}"
+                    f"plan directory registered by multiple owners: {plan_directory}"
                 )
             layouts[plan_directory] = (owner_id, prefix, inventory_root)
+    return layouts
+
+
+def delivery_layouts(root: Path) -> dict[str, tuple[str, str, str]]:
+    """Return the conservative union of committed and staged delivery roots."""
+
+    committed = registry_delivery_layouts(root, "HEAD")
+    staged = registry_delivery_layouts(root, "INDEX")
+    layouts = dict(committed)
+    for directory, layout in staged.items():
+        previous = layouts.get(directory)
+        if previous is not None and previous != layout:
+            raise StagedUnitError(
+                "HEAD and INDEX assign one plan directory to conflicting owners: "
+                f"{directory}: {previous[0]}/{previous[1]} vs {layout[0]}/{layout[1]}"
+            )
+        layouts[directory] = layout
     return layouts
 
 
@@ -215,7 +326,7 @@ def ledger_inventory_records(
             continue
         unit = cells[indexes["unit"]].strip("` ")
         if CHECKPOINT_RE.fullmatch(unit) is None:
-            raise StagedUnitError(f"fila done tiene unit inválida en {plan_path}: {unit}")
+            raise StagedUnitError(f"done row has an invalid unit in {plan_path}: {unit}")
         raw_prefix = cells[indexes["commit prefix"]].strip().strip("`").strip()
         commit_prefix = raw_prefix[:-1] if raw_prefix.endswith(":") else raw_prefix
         for inventory_path in inventory_references(
@@ -231,12 +342,12 @@ def ledger_inventory_records(
             )
             if inventory_path != expected:
                 raise StagedUnitError(
-                    f"fila done {unit} debe enlazar su ruta canónica {expected}: "
+                    f"done row {unit} must link its canonical path {expected}: "
                     f"{inventory_path}"
                 )
             if commit_prefix != owner_prefix:
                 raise StagedUnitError(
-                    f"fila done {unit} de {owner_id} requiere prefijo "
+                    f"done row {unit} for {owner_id} requires prefix "
                     f"{owner_prefix}: {commit_prefix}"
                 )
     return records
@@ -259,7 +370,7 @@ def staged_ledger_records(
         try:
             text = staged.decode("utf-8")
         except UnicodeDecodeError as error:
-            raise StagedUnitError(f"plan staged no es UTF-8: {plan_path}: {error}") from error
+            raise StagedUnitError(f"staged plan is not UTF-8: {plan_path}: {error}") from error
         owner_id, owner_prefix, inventory_root = layouts[posixpath.dirname(plan_path)]
         for inventory_path, candidates in ledger_inventory_records(
             text,
@@ -283,7 +394,7 @@ def newly_referenced_inventories(
         try:
             staged_text = staged.decode("utf-8")
         except UnicodeDecodeError as error:
-            raise StagedUnitError(f"plan staged no es UTF-8: {plan_path}: {error}") from error
+            raise StagedUnitError(f"staged plan is not UTF-8: {plan_path}: {error}") from error
         base = git(root, "show", f"HEAD:{plan_path}", check=False)
         try:
             base_text = base.decode("utf-8") if base else ""
@@ -308,14 +419,14 @@ def unstaged_new_inventory_references(
         worktree = worktree_bytes(root, plan_path)
         if worktree is None:
             raise StagedUnitError(
-                f"plan host staged no existe en el worktree: {plan_path}"
+                f"staged host plan does not exist in the worktree: {plan_path}"
             )
         try:
             staged_text = staged.decode("utf-8")
             worktree_text = worktree.decode("utf-8")
         except UnicodeDecodeError as error:
             raise StagedUnitError(
-                f"plan staged/worktree no es UTF-8: {plan_path}: {error}"
+                f"staged/worktree plan is not UTF-8: {plan_path}: {error}"
             ) from error
         staged_references = inventory_references(staged_text, plan_path)
         missing = inventory_references(worktree_text, plan_path) - staged_references
@@ -335,7 +446,7 @@ def staged_inventory_hosts(
         try:
             text = staged.decode("utf-8")
         except UnicodeDecodeError as error:
-            raise StagedUnitError(f"plan staged no es UTF-8: {plan_path}: {error}") from error
+            raise StagedUnitError(f"staged plan is not UTF-8: {plan_path}: {error}") from error
         for inventory_path in inventory_references(text, plan_path):
             hosts.setdefault(inventory_path, set()).add(plan_path)
     return hosts
@@ -346,24 +457,24 @@ def parse_inventory(
 ) -> list[tuple[str, str, str, str, str]]:
     raw = index_bytes(root, inventory_path)
     if raw is None:
-        raise StagedUnitError(f"inventario no está staged: {inventory_path}")
+        raise StagedUnitError(f"inventory is not staged: {inventory_path}")
     try:
         lines = raw.decode("utf-8").splitlines()
     except UnicodeDecodeError as error:
         raise StagedUnitError(
-            f"inventario staged no es UTF-8: {inventory_path}: {error}"
+            f"staged inventory is not UTF-8: {inventory_path}: {error}"
         ) from error
 
     bases = [match.group(1) for line in lines if (match := BASE_RE.fullmatch(line))]
     if len(bases) != 1:
-        raise StagedUnitError(f"inventario requiere una Base revision: {inventory_path}")
+        raise StagedUnitError(f"inventory requires one Base revision: {inventory_path}")
     if bases[0] != head:
         raise StagedUnitError(
-            f"Base revision staged debe ser HEAD {head}: {inventory_path} declara {bases[0]}"
+            f"staged Base revision must be HEAD {head}: {inventory_path} declares {bases[0]}"
         )
     headers = [index for index, line in enumerate(lines) if line == HEADER]
     if len(headers) != 1:
-        raise StagedUnitError(f"inventario requiere una cabecera numstat: {inventory_path}")
+        raise StagedUnitError(f"inventory requires one numstat header: {inventory_path}")
 
     rows: list[tuple[str, str, str, str, str]] = []
     seen: set[str] = set()
@@ -373,25 +484,25 @@ def parse_inventory(
             continue
         cells = line.split("\t")
         if len(cells) != 4:
-            raise StagedUnitError(f"fila staged inválida en {inventory_path}: {line}")
+            raise StagedUnitError(f"invalid staged row in {inventory_path}: {line}")
         added, deleted, content, path = cells
         normalized_repo_path(path)
         if path in seen:
-            raise StagedUnitError(f"ruta duplicada en {inventory_path}: {path}")
+            raise StagedUnitError(f"duplicate path in {inventory_path}: {path}")
         seen.add(path)
         values_are_lines = added.isdecimal() and deleted.isdecimal()
         values_are_binary = added == "-" and deleted == "-"
         if not values_are_lines and not values_are_binary:
-            raise StagedUnitError(f"numstat inválido en {inventory_path}: {path}")
+            raise StagedUnitError(f"invalid numstat in {inventory_path}: {path}")
         if content == "self":
             self_rows += 1
             if path != inventory_path:
-                raise StagedUnitError(f"self no pertenece a {inventory_path}: {path}")
+                raise StagedUnitError(f"self row does not belong to {inventory_path}: {path}")
         elif content != "deleted" and HASH_RE.fullmatch(content) is None:
-            raise StagedUnitError(f"contenido inválido en {inventory_path}: {path}")
+            raise StagedUnitError(f"invalid content in {inventory_path}: {path}")
         rows.append((inventory_path, added, deleted, content, path))
     if self_rows != 1:
-        raise StagedUnitError(f"inventario requiere una fila self: {inventory_path}")
+        raise StagedUnitError(f"inventory requires one self row: {inventory_path}")
     return rows
 
 
@@ -399,10 +510,10 @@ def actual_numstat(root: Path, path: str) -> tuple[str, str]:
     output = git(root, "diff", "--cached", "--numstat", "--no-renames", "HEAD", "--", path)
     lines = [line for line in output.splitlines() if line]
     if len(lines) != 1:
-        raise StagedUnitError(f"Git no devuelve un numstat staged único: {path}")
+        raise StagedUnitError(f"Git did not return one staged numstat row: {path}")
     cells = lines[0].split(b"\t", maxsplit=2)
     if len(cells) != 3:
-        raise StagedUnitError(f"Git devuelve numstat staged inválido: {path}")
+        raise StagedUnitError(f"Git returned an invalid staged numstat row: {path}")
     return cells[0].decode("ascii"), cells[1].decode("ascii")
 
 
@@ -426,7 +537,7 @@ def validate_batch(
             for plan, references in sorted(partially_staged.items())
         )
         raise StagedUnitError(
-            "plan host deja inventarios done fuera del índice: " + rendered
+            "host plan leaves done inventories outside the index: " + rendered
         )
 
     new_references = newly_referenced_inventories(root, staged_paths, plan_dirs)
@@ -439,7 +550,7 @@ def validate_batch(
     )
     if noncanonical_references:
         raise StagedUnitError(
-            "el plan enlaza inventarios fuera del root estable del owner: "
+            "plan links inventories outside the owner's stable root: "
             + ", ".join(noncanonical_references)
         )
     missing_references = sorted(
@@ -449,7 +560,7 @@ def validate_batch(
     )
     if missing_references:
         raise StagedUnitError(
-            "el plan staged referencia inventarios nuevos que no están staged: "
+            "staged plan references new inventories that are not staged: "
             + ", ".join(missing_references)
         )
 
@@ -468,8 +579,8 @@ def validate_batch(
     )
     if immutable:
         raise StagedUnitError(
-            "los inventarios históricos son inmutables; crea una unidad e inventario "
-            "nuevos: " + ", ".join(immutable)
+            "historical inventories are immutable; create a new unit and inventory: "
+            + ", ".join(immutable)
         )
     staged_inventories = {
         path for path in all_staged_inventories if index_bytes(root, path) is not None
@@ -482,40 +593,40 @@ def validate_batch(
         )
         if noncanonical:
             raise StagedUnitError(
-                "inventarios seleccionados fuera de planes canónicos: "
+                "selected inventories are outside canonical plans: "
                 + ", ".join(noncanonical)
             )
         unavailable = sorted(path for path in selected if index_bytes(root, path) is None)
         if unavailable:
             raise StagedUnitError(
-                "inventarios seleccionados no existen en el índice: "
+                "selected inventories do not exist in the index: "
                 + ", ".join(unavailable)
             )
         omitted = sorted(staged_inventories - selected)
         if omitted:
             raise StagedUnitError(
-                "hay inventarios staged no seleccionados: " + ", ".join(omitted)
+                "staged inventories were not selected: " + ", ".join(omitted)
             )
     else:
         selected = staged_inventories
     if selected and forbid_delivery:
         raise StagedUnitError(
-            "un merge no puede cerrar unidades de entrega; commitea el lote "
-            "inventariado por separado"
+            "a merge cannot close delivery units; commit the inventoried batch "
+            "separately"
         )
     if not selected:
         if deleted_plans:
             raise StagedUnitError(
-                "eliminar o archivar un plan requiere una unidad administrativa "
-                "con inventario nuevo: " + ", ".join(deleted_plans)
+                "deleting or archiving a plan requires an administrative unit "
+                "with a new inventory: " + ", ".join(deleted_plans)
             )
         if deleted_inventories:
             raise StagedUnitError(
-                "inventarios eliminados requieren un inventario destino que reclame "
-                "su ruta como deleted: " + ", ".join(sorted(deleted_inventories))
+                "deleted inventories require a destination inventory that claims "
+                "their path as deleted: " + ", ".join(sorted(deleted_inventories))
             )
         if not quiet:
-            print("staged-unit: no hay cierre de unidad staged")
+            print("staged-unit: no staged unit closure")
         return
 
     head = git(root, "rev-parse", "HEAD").decode("ascii").strip()
@@ -536,9 +647,9 @@ def validate_batch(
         if len(candidates) != 1:
             rendered = ", ".join(
                 sorted(f"{plan}#{unit}" for plan, unit, _prefix, _owner in candidates)
-            ) or "ninguno"
+            ) or "none"
             raise StagedUnitError(
-                f"inventario staged requiere una única fila done host: {inventory_path} "
+                f"staged inventory requires exactly one host done row: {inventory_path} "
                 f"({rendered})"
             )
         inventory_host[inventory_path] = candidates[0][0]
@@ -546,13 +657,13 @@ def validate_batch(
 
     if len(required_prefixes) != 1:
         raise StagedUnitError(
-            "un lote de inventarios requiere un único prefijo de commit: "
+            "an inventory batch requires exactly one commit prefix: "
             + ", ".join(sorted(required_prefixes))
         )
     required_prefix = next(iter(required_prefixes))
     if commit_prefix is not None and commit_prefix != required_prefix:
         raise StagedUnitError(
-            f"el lote requiere asunto `{required_prefix}:`, no `{commit_prefix}:`"
+            f"the batch requires subject `{required_prefix}:`, not `{commit_prefix}:`"
         )
 
     ordered = sorted(selected)
@@ -563,7 +674,7 @@ def validate_batch(
                 shared.discard(inventory_host[left])
             if shared:
                 raise StagedUnitError(
-                    f"inventarios staged se solapan: {left}, {right}: "
+                    f"staged inventories overlap: {left}, {right}: "
                     + ", ".join(sorted(shared))
                 )
 
@@ -572,11 +683,11 @@ def validate_batch(
     extra = sorted(claimed_paths - staged_paths)
     if missing:
         raise StagedUnitError(
-            "staging contiene rutas fuera del lote inventariado: " + ", ".join(missing)
+            "staging contains paths outside the inventoried batch: " + ", ".join(missing)
         )
     if extra:
         raise StagedUnitError(
-            "inventario contiene rutas no staged: " + ", ".join(extra)
+            "inventory contains paths that are not staged: " + ", ".join(extra)
         )
 
     for path, rows in sorted(claims.items()):
@@ -585,28 +696,28 @@ def validate_batch(
         for source, expected_added, expected_deleted, content in rows:
             if (expected_added, expected_deleted) != (actual_added, actual_deleted):
                 raise StagedUnitError(
-                    f"numstat staged no coincide para {path} en {source}: "
-                    f"inventario {expected_added}/{expected_deleted}, "
+                    f"staged numstat mismatch for {path} in {source}: "
+                    f"inventory {expected_added}/{expected_deleted}, "
                     f"Git {actual_added}/{actual_deleted}"
                 )
             if content == "self":
                 continue
             if content == "deleted":
                 if staged is not None:
-                    raise StagedUnitError(f"{path} declara deleted pero existe en el índice")
+                    raise StagedUnitError(f"{path} declares deleted but exists in the index")
                 continue
             if staged is None:
-                raise StagedUnitError(f"{path} no existe en el índice")
+                raise StagedUnitError(f"{path} does not exist in the index")
             digest = hashlib.sha256(staged).hexdigest()
             if digest != content:
                 raise StagedUnitError(
-                    f"SHA-256 staged no coincide para {path} en {source}: "
-                    f"inventario {content}, índice {digest}"
+                    f"staged SHA-256 mismatch for {path} in {source}: "
+                    f"inventory {content}, index {digest}"
                 )
     if not quiet:
         print(
-            f"staged-unit: OK ({len(selected)} inventario(s), "
-            f"{len(staged_paths)} ruta(s))"
+            f"staged-unit: OK ({len(selected)} inventory file(s), "
+            f"{len(staged_paths)} path(s))"
         )
 
 
@@ -620,6 +731,7 @@ def main() -> None:
     args = parser.parse_args()
     root = args.root.resolve()
     try:
+        install_committed_documentation_rules(root)
         validate_batch(
             root,
             args.inventories,

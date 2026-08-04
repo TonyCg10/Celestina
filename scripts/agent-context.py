@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -73,6 +74,21 @@ def selected_projects(relative: Path, registry: dict[str, object]) -> list[dict[
     )
 
 
+def projects_for_targets(
+    relatives: list[Path], registry: dict[str, object]
+) -> list[dict[str, object]]:
+    """Select lexical owners first, then add resolved-target owners once."""
+    result: list[dict[str, object]] = []
+    seen: set[int] = set()
+    for relative in relatives:
+        for project in selected_projects(relative, registry):
+            identity = id(project)
+            if identity not in seen:
+                seen.add(identity)
+                result.append(project)
+    return result
+
+
 def scope_matches(scope: str, projects: list[dict[str, object]]) -> bool:
     normalized = " ".join(scope.casefold().replace("`", "").split())
     tokens = set(re.findall(r"[a-z0-9][a-z0-9-]*", normalized))
@@ -95,14 +111,14 @@ def add_path(
     label: str,
 ) -> None:
     if not isinstance(raw, str) or not raw:
-        errors.append(f"{label}: ruta ausente en docs/projects.toml")
+        errors.append(f"{label}: missing path in docs/projects.toml")
         return
     candidate = (root / raw).resolve(strict=False)
     if not inside_root(root, candidate):
-        errors.append(f"{label}: ruta sale del repositorio: {raw}")
+        errors.append(f"{label}: path leaves the repository: {raw}")
         return
     if not candidate.is_file():
-        errors.append(f"{label}: archivo no existe: {raw}")
+        errors.append(f"{label}: file does not exist: {raw}")
         return
     if candidate not in seen:
         seen.add(candidate)
@@ -123,12 +139,70 @@ def physical_agent_files(root: Path, target: Path) -> list[Path]:
     return agents
 
 
+def shared_rule_documents(
+    root: Path, registry: dict[str, object], errors: list[str]
+) -> list[Path]:
+    """Return the cross-cutting rules every local AGENTS.md already requires.
+
+    Local contracts point at the workflow, governance and engineering standards
+    but cannot enumerate them for a path, so the registry owns that list and
+    this helper keeps the printed context complete instead of only sufficient.
+    """
+    suite = registry.get("suite")
+    assert isinstance(suite, dict)
+    if "shared_rules" not in suite:
+        errors.append("suite.shared_rules: required in docs/projects.toml")
+        return []
+    raw_rules = suite.get("shared_rules")
+    if not isinstance(raw_rules, list):
+        errors.append("suite.shared_rules: must be a list in docs/projects.toml")
+        return []
+    if not raw_rules:
+        errors.append("suite.shared_rules: must be a non-empty list in docs/projects.toml")
+        return []
+    result: list[Path] = []
+    seen: set[Path] = set()
+    for index, raw in enumerate(raw_rules):
+        add_path(result, seen, errors, root, raw, f"suite.shared_rules[{index}]")
+    return result
+
+
+def owner_context_documents(
+    root: Path, owner: dict[str, object], errors: list[str]
+) -> list[Path]:
+    """Return the explicit owner-local documents required for its paths."""
+    owner_id = str(owner.get("id", "project"))
+    if "context_documents" not in owner:
+        errors.append(
+            f"{owner_id}.context_documents: required list in docs/projects.toml"
+        )
+        return []
+    raw_documents = owner.get("context_documents")
+    if not isinstance(raw_documents, list):
+        errors.append(
+            f"{owner_id}.context_documents: must be a list in docs/projects.toml"
+        )
+        return []
+    result: list[Path] = []
+    seen: set[Path] = set()
+    for index, raw in enumerate(raw_documents):
+        add_path(
+            result,
+            seen,
+            errors,
+            root,
+            raw,
+            f"{owner_id}.context_documents[{index}]",
+        )
+    return result
+
+
 def relevant_contracts(
     root: Path, projects: list[dict[str, object]], errors: list[str]
 ) -> list[Path]:
     directory = root / "docs/contracts"
     if not directory.is_dir():
-        errors.append("docs/contracts: directorio no existe")
+        errors.append("docs/contracts: directory does not exist")
         return []
     result: list[Path] = []
     for path in sorted(directory.glob("*.md")):
@@ -137,7 +211,7 @@ def relevant_contracts(
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeError) as error:
-            errors.append(f"{path.relative_to(root)}: no se puede leer: {error}")
+            errors.append(f"{path.relative_to(root)}: cannot read: {error}")
             continue
         scope = markdown_metadata(text).get("scope", "")
         if scope_matches(scope, projects):
@@ -149,13 +223,13 @@ def relevant_active_plans(
     root: Path,
     registry: dict[str, object],
     projects: list[dict[str, object]],
-    relative_target: Path,
+    relative_targets: list[Path],
     errors: list[str],
 ) -> list[Path]:
     suite = registry.get("suite")
     assert isinstance(suite, dict)
     result: list[Path] = []
-    target_label = relative_target.as_posix()
+    target_labels = [target.as_posix() for target in relative_targets]
     owners = [("suite", suite), *[(str(project.get("id", "project")), project) for project in projects]]
     seen_directories: set[Path] = set()
     for owner_label, owner in owners:
@@ -163,14 +237,18 @@ def relevant_active_plans(
         if raw_directory is None and owner_label != "suite":
             continue
         if not isinstance(raw_directory, str):
-            errors.append(f"{owner_label}.active_plans: ruta ausente en docs/projects.toml")
+            errors.append(
+                f"{owner_label}.active_plans: missing path in docs/projects.toml"
+            )
             continue
         directory = (root / raw_directory).resolve(strict=False)
         if directory in seen_directories:
             continue
         seen_directories.add(directory)
         if not inside_root(root, directory) or not directory.is_dir():
-            errors.append(f"{owner_label}.active_plans: directorio no existe: {raw_directory}")
+            errors.append(
+                f"{owner_label}.active_plans: directory does not exist: {raw_directory}"
+            )
             continue
         for path in sorted(directory.glob("*.md")):
             if path.name == "README.md":
@@ -178,13 +256,16 @@ def relevant_active_plans(
             try:
                 text = path.read_text(encoding="utf-8")
             except (OSError, UnicodeError) as error:
-                errors.append(f"{path.relative_to(root)}: no se puede leer: {error}")
+                errors.append(f"{path.relative_to(root)}: cannot read: {error}")
                 continue
             fields = markdown_metadata(text)
             if normalized_status(fields.get("status", "")) != "active":
                 continue
             scope = fields.get("scope", "")
-            ledger_mentions_target = target_label not in {"", "."} and target_label in text
+            ledger_mentions_target = any(
+                target_label not in {"", "."} and target_label in text
+                for target_label in target_labels
+            )
             project_path_mentioned = any(
                 isinstance(project.get("path"), str) and str(project["path"]) in text
                 for project in projects
@@ -201,14 +282,21 @@ def resolve_context(root: Path, raw_target: str) -> tuple[list[Path], list[str]]
     except RegistryError as error:
         return [], [str(error)]
 
-    target = Path(raw_target)
-    if not target.is_absolute():
-        target = root / target
-    target = target.resolve(strict=False)
-    if not inside_root(root, target):
-        return [], [f"path sale del repositorio: {raw_target}"]
-    relative = target.relative_to(root)
-    projects = selected_projects(relative, registry)
+    raw_path = Path(raw_target)
+    if not raw_path.is_absolute():
+        raw_path = root / raw_path
+    lexical_target = Path(os.path.abspath(raw_path))
+    if not inside_root(root, lexical_target):
+        return [], [f"lexical path leaves the repository: {raw_target}"]
+    resolved_target = lexical_target.resolve(strict=False)
+    if not inside_root(root, resolved_target):
+        return [], [f"resolved path leaves the repository: {raw_target}"]
+
+    targets = [lexical_target]
+    if resolved_target != lexical_target:
+        targets.append(resolved_target)
+    relative_targets = [target.relative_to(root) for target in targets]
+    projects = projects_for_targets(relative_targets, registry)
 
     result: list[Path] = []
     seen: set[Path] = set()
@@ -216,10 +304,11 @@ def resolve_context(root: Path, raw_target: str) -> tuple[list[Path], list[str]]
     assert isinstance(suite, dict)
 
     add_path(result, seen, errors, root, suite.get("agents"), "suite.agents")
-    for agent_file in physical_agent_files(root, target):
-        if agent_file not in seen:
-            seen.add(agent_file)
-            result.append(agent_file)
+    for target in targets:
+        for agent_file in physical_agent_files(root, target):
+            if agent_file not in seen:
+                seen.add(agent_file)
+                result.append(agent_file)
     for project in projects:
         add_path(
             result,
@@ -229,6 +318,17 @@ def resolve_context(root: Path, raw_target: str) -> tuple[list[Path], list[str]]
             project.get("agents"),
             f"{project.get('id', 'project')}.agents",
         )
+
+    for rule in shared_rule_documents(root, registry, errors):
+        if rule not in seen:
+            seen.add(rule)
+            result.append(rule)
+
+    for project in projects:
+        for document in owner_context_documents(root, project, errors):
+            if document not in seen:
+                seen.add(document)
+                result.append(document)
 
     document_owners = projects if projects else [suite]
     for owner in document_owners:
@@ -240,7 +340,9 @@ def resolve_context(root: Path, raw_target: str) -> tuple[list[Path], list[str]]
         if contract not in seen:
             seen.add(contract)
             result.append(contract)
-    for plan in relevant_active_plans(root, registry, projects, relative, errors):
+    for plan in relevant_active_plans(
+        root, registry, projects, relative_targets, errors
+    ):
         if plan not in seen:
             seen.add(plan)
             result.append(plan)

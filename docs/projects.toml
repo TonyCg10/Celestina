@@ -12,10 +12,41 @@ roadmap = "ROADMAP.md"
 validation = "VALIDATION.md"
 active_plans = "docs/plans/active"
 allow_all_commit_paths = true
+# Cross-cutting rules every local AGENTS.md already requires. They are listed
+# here so `scripts/agent-context.py` prints a complete reading order instead of
+# leaving an agent to rediscover the standards through link chasing.
+shared_rules = [
+  "CONTRIBUTING.md",
+  "docs/README.md",
+  "docs/governance/change-policy.md",
+  "docs/governance/documentation.md",
+  "docs/standards/architecture.md",
+  "docs/standards/rust-cpp-qt-qml.md",
+  "docs/standards/verification.md",
+  "docs/standards/language.md",
+  "docs/contracts/versioning.md",
+]
 
 [commit_policy]
-subject_format = "<prefix>: <English imperative>"
+subject_format = "<prefix>-<kind>: <English imperative>"
 workspace_manifests = ["celestina-rs/Cargo.toml", "celestina-rs/Cargo.lock"]
+# Debt ratchets every prefix may lower in the same commit that earns the
+# reduction. Splitting them into a follow-up commit would publish a revision
+# whose relevant guard already fails.
+shared_ratchet_files = [
+  "scripts/architecture-baseline.tsv",
+  "scripts/language-baseline.tsv",
+]
+
+[version_policy]
+# Product manifests remain canonical; this file registers how to read them.
+# History is append-only and the fixed mapping is enforced by committed code.
+history_file = "docs/version-history.tsv"
+tag_format = "<project>-v<version>"
+bug_increment = "patch"
+milestone_increment = "minor"
+release_increment = "major"
+maintenance_increment = "none"
 
 [[projects]]
 id = "celestina"
@@ -23,12 +54,21 @@ name = "Celestina shell"
 path = "celestina"
 kind = "qt-shell"
 commit_prefix = "celestina"
+version_source = { kind = "cmake-project", path = "celestina/CMakeLists.txt", project = "celestina" }
+version_mirrors = [
+  { kind = "cargo-package", path = "celestina/Cargo.toml", package = "celestina-shell" },
+  { kind = "cargo-lock", path = "celestina/Cargo.lock", package = "celestina-shell" },
+]
 agents = "celestina/AGENTS.md"
 readme = "celestina/README.md"
 status = "celestina/STATUS.md"
 roadmap = "celestina/ROADMAP.md"
 validation = "celestina/VALIDATION.md"
 active_plans = "celestina/docs/plans/active"
+context_documents = [
+  "celestina/docs/discussions/README.md",
+  "celestina/docs/decisions/README.md",
+]
 source_roots = ["celestina/src", "celestina/qml", "celestina-rs/crates/celestina-shell-core"]
 commit_roots = ["celestina/", "celestina-rs/crates/celestina-shell-core/"]
 include_workspace_manifests = true
@@ -54,12 +94,14 @@ name = "CelestinaStyle"
 path = "celestina-style"
 kind = "qml-module"
 commit_prefix = "celestina-style"
+version_source = { kind = "cmake-project", path = "celestina-style/CMakeLists.txt", project = "celestina-style" }
 agents = "celestina-style/AGENTS.md"
 readme = "celestina-style/README.md"
 status = "celestina-style/STATUS.md"
 roadmap = "celestina-style/ROADMAP.md"
 validation = "celestina-style/VALIDATION.md"
 active_plans = "celestina-style/docs/plans/active"
+context_documents = ["celestina-style/DESIGN.md"]
 source_roots = ["celestina-style"]
 commit_roots = ["celestina-style/"]
 include_workspace_manifests = false
@@ -79,12 +121,14 @@ name = "Celestina Rust workspace"
 path = "celestina-rs"
 kind = "rust-workspace"
 commit_prefix = "celestina-rs"
+versioned = false
 agents = "celestina-rs/AGENTS.md"
 readme = "celestina-rs/README.md"
 status = "celestina-rs/STATUS.md"
 roadmap = "celestina-rs/ROADMAP.md"
 validation = "celestina-rs/VALIDATION.md"
 active_plans = "celestina-rs/docs/plans/active"
+context_documents = []
 source_roots = ["celestina-rs/crates"]
 commit_roots = ["celestina-rs/"]
 include_workspace_manifests = false
@@ -108,12 +152,17 @@ name = "Siderita"
 path = "siderita"
 kind = "cxx-qt-application"
 commit_prefix = "siderita"
+version_source = { kind = "cargo-package", path = "siderita/Cargo.toml", package = "siderita" }
+version_mirrors = [
+  { kind = "cargo-lock", path = "siderita/Cargo.lock", package = "siderita" },
+]
 agents = "siderita/AGENTS.md"
 readme = "siderita/README.md"
 status = "siderita/STATUS.md"
 roadmap = "siderita/ROADMAP.md"
 validation = "siderita/VALIDATION.md"
 active_plans = "siderita/docs/plans/active"
+context_documents = ["celestina-style/DESIGN.md"]
 source_roots = ["siderita/src", "siderita/cpp", "siderita/qml", "siderita/portal", "celestina-rs/crates/siderita-core", "celestina-rs/crates/siderita-ops", "celestina-rs/crates/siderita-qt"]
 commit_roots = ["siderita/", "celestina-rs/crates/siderita-core/", "celestina-rs/crates/siderita-ops/", "celestina-rs/crates/siderita-qt/"]
 include_workspace_manifests = true
@@ -140,12 +189,17 @@ name = "Magnetita"
 path = "magnetita"
 kind = "cxx-qt-application-and-daemon"
 commit_prefix = "magnetita"
+version_source = { kind = "cargo-package", path = "magnetita/Cargo.toml", package = "magnetita" }
+version_mirrors = [
+  { kind = "cargo-lock", path = "magnetita/Cargo.lock", package = "magnetita" },
+]
 agents = "magnetita/AGENTS.md"
 readme = "magnetita/README.md"
 status = "magnetita/STATUS.md"
 roadmap = "magnetita/ROADMAP.md"
 validation = "magnetita/VALIDATION.md"
 active_plans = "magnetita/docs/plans/active"
+context_documents = ["celestina-style/DESIGN.md"]
 source_roots = ["magnetita/src", "magnetita/qml", "celestina-rs/crates/magnetita-core", "celestina-rs/crates/magnetita-net", "celestina-rs/crates/magnetitad"]
 commit_roots = ["magnetita/", "celestina-rs/crates/magnetita-core/", "celestina-rs/crates/magnetita-net/", "celestina-rs/crates/magnetitad/"]
 include_workspace_manifests = true
@@ -172,12 +226,17 @@ name = "Grafita"
 path = "grafita"
 kind = "cxx-qt-application"
 commit_prefix = "grafita"
+version_source = { kind = "cargo-package", path = "grafita/Cargo.toml", package = "grafita" }
+version_mirrors = [
+  { kind = "cargo-lock", path = "grafita/Cargo.lock", package = "grafita" },
+]
 agents = "grafita/AGENTS.md"
 readme = "grafita/README.md"
 status = "grafita/STATUS.md"
 roadmap = "grafita/ROADMAP.md"
 validation = "grafita/VALIDATION.md"
 active_plans = "grafita/docs/plans/active"
+context_documents = ["celestina-style/DESIGN.md"]
 source_roots = ["grafita/src", "grafita/cpp", "grafita/qml", "celestina-rs/crates/grafita-core"]
 commit_roots = ["grafita/", "celestina-rs/crates/grafita-core/"]
 include_workspace_manifests = true
@@ -202,12 +261,17 @@ name = "Fluorita"
 path = "fluorita"
 kind = "cxx-qt-media-application"
 commit_prefix = "fluorita"
+version_source = { kind = "cargo-package", path = "fluorita/Cargo.toml", package = "fluorita" }
+version_mirrors = [
+  { kind = "cargo-lock", path = "fluorita/Cargo.lock", package = "fluorita" },
+]
 agents = "fluorita/AGENTS.md"
 readme = "fluorita/README.md"
 status = "fluorita/STATUS.md"
 roadmap = "fluorita/ROADMAP.md"
 validation = "fluorita/VALIDATION.md"
 active_plans = "fluorita/docs/plans/active"
+context_documents = ["celestina-style/DESIGN.md"]
 source_roots = ["fluorita/src", "fluorita/cpp", "fluorita/qml", "celestina-rs/crates/fluorita-core", "celestina-rs/crates/fluorita-engine", "celestina-rs/crates/fluorita-qt"]
 commit_roots = ["fluorita/", "celestina-rs/crates/fluorita-core/", "celestina-rs/crates/fluorita-engine/", "celestina-rs/crates/fluorita-qt/"]
 include_workspace_manifests = true

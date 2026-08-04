@@ -5,8 +5,8 @@ project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 suite_root=$(CDPATH= cd -- "$project_root/.." && pwd)
 . "$suite_root/scripts/production-common.sh"
 prefix=${HOME}/.local
-if [ "${1:-}" = "--prefix" ]; then shift; prefix=${1:?--prefix necesita un directorio}; shift; fi
-[ "$#" -eq 0 ] || { echo "uso: scripts/deploy-production.sh [--prefix DIR]" >&2; exit 2; }
+if [ "${1:-}" = "--prefix" ]; then shift; prefix=${1:?--prefix requires a directory}; shift; fi
+[ "$#" -eq 0 ] || { echo "usage: scripts/deploy-production.sh [--prefix DIR]" >&2; exit 2; }
 
 app_id=org.celestina.Magnetita
 daemon_unit=magnetitad.service
@@ -56,8 +56,8 @@ if [ "$prefix" = "$default_prefix" ] && command -v systemctl >/dev/null 2>&1; th
 fi
 trap - EXIT HUP INT TERM
 
-echo ">> Magnetita + magnetitad verificados desplegados en $prefix sin recompilar"
+echo ">> verified Magnetita + magnetitad deployed to $prefix without rebuilding"
 if [ "$service_was_active" -eq 0 ]; then
-    echo "   magnetitad permaneció inactivo; deploy no habilita servicios nuevos"
+    echo "   magnetitad stayed inactive; deploy never enables a new service"
 fi
 
