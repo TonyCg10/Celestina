@@ -349,6 +349,18 @@ bool NiriClient::applyRequestResult(const QJsonObject &root)
 
     const QString reason =
         boundedString(root.value(QStringLiteral("reason")), maxTitleLength);
+    if (m_actionRequests.remove(requestId)) {
+        // Niri answered the action itself, so its answer is the outcome — this
+        // is the compositor reporting what it did, not a helper reporting that
+        // it will try.
+        emit actionFinished(
+            requestId,
+            accepted ? QStringLiteral("confirmed") : QStringLiteral("failed"),
+            reason
+        );
+        return true;
+    }
+
     if (m_screenshotRequests.remove(requestId)) {
         if (!accepted) {
             qWarning().noquote() << "Celestina's screenshot request failed:" << reason;
@@ -470,26 +482,45 @@ bool NiriClient::rebuildWorkspaces()
     return true;
 }
 
-qulonglong NiriClient::requestScreenshot()
+qulonglong NiriClient::sendRequest(const QString &kind)
 {
     if (m_process.state() != QProcess::Running)
         return 0;
 
     const quint64 requestId = ++m_lastRequestId;
     QByteArray line = QJsonDocument(QJsonObject {
-                                        {QStringLiteral("kind"), QStringLiteral("screenshot")},
+                                        {QStringLiteral("kind"), kind},
                                         {QStringLiteral("id"), QString::number(requestId)},
                                     })
                           .toJson(QJsonDocument::Compact);
     line.append('\n');
 
-    if (m_process.write(line) != line.size()) {
+    if (m_process.write(line) != line.size())
+        return 0;
+
+    return requestId;
+}
+
+qulonglong NiriClient::requestScreenshot()
+{
+    const qulonglong requestId = sendRequest(QStringLiteral("screenshot"));
+    if (requestId == 0) {
         qWarning() << "Celestina could not send a screenshot request.";
         emit screenshotFailed(tr("no se pudo pedir la captura"));
         return 0;
     }
 
     m_screenshotRequests.insert(requestId);
+    return requestId;
+}
+
+qulonglong NiriClient::requestDisplaysOff()
+{
+    const qulonglong requestId = sendRequest(QStringLiteral("power-off-monitors"));
+    if (requestId == 0)
+        return 0;
+
+    m_actionRequests.insert(requestId);
     return requestId;
 }
 
@@ -501,6 +532,17 @@ void NiriClient::setUnavailable()
     if (!m_screenshotRequests.isEmpty()) {
         m_screenshotRequests.clear();
         emit screenshotFailed(tr("el ayudante de Niri no está disponible"));
+    }
+
+    // The same for an action: whoever asked is told it failed rather than
+    // being left waiting on a compositor that is no longer being listened to.
+    const QSet<quint64> pendingActions = std::exchange(m_actionRequests, {});
+    for (const quint64 requestId : pendingActions) {
+        emit actionFinished(
+            requestId,
+            QStringLiteral("failed"),
+            tr("the Niri helper is unavailable")
+        );
     }
 
     // Nothing in flight can still be confirmed once the compositor's state is

@@ -41,6 +41,8 @@ private slots:
     void refusesFocusWorkspaceWithoutUsableOptions();
     void refusesToPretendARequestWasSentWithoutAnAdapter();
     void refusesOverlayTogglesWithoutAControllerWired();
+    void refusesToLockWhileNoLockerProviderExists();
+    void refusesSessionVerbsWithoutAProviderHelper();
 
 private:
     QDBusMessage callTo(const QString &interface, const QString &member) const
@@ -182,6 +184,14 @@ void ShellServiceTest::refusesToPretendARequestWasSentWithoutAnAdapter()
     // A request that was never sent must not come back as a pending id.
     QVERIFY(!reply.isValid());
     QCOMPARE(reply.error().type(), QDBusError::Failed);
+
+    // Blanking the outputs is the compositor's to do, so with no adapter there
+    // is nothing to ask and nothing to report as pending either.
+    QDBusPendingReply<qulonglong> blanked =
+        m_client.asyncCall(command(QStringLiteral("displays-off"), QVariantMap()));
+    QVERIFY(settle(blanked));
+    QVERIFY(!blanked.isValid());
+    QCOMPARE(blanked.error().type(), QDBusError::Failed);
 }
 
 // `initTestCase` never wires a launcher or clipboard controller — the same
@@ -196,6 +206,45 @@ void ShellServiceTest::refusesOverlayTogglesWithoutAControllerWired()
          }) {
         QDBusPendingReply<qulonglong> reply =
             m_client.asyncCall(command(verb, QVariantMap()));
+        QVERIFY(settle(reply));
+        QVERIFY2(!reply.isValid(), qPrintable(verb));
+        QCOMPARE(reply.error().type(), QDBusError::Failed);
+    }
+}
+
+// Fail-closed: a shell that cannot lock says so. Reporting success here would
+// leave the session open while the person believes it is not, which is the one
+// failure this verb must never have.
+void ShellServiceTest::refusesToLockWhileNoLockerProviderExists()
+{
+    for (const QString &verb : {
+             QStringLiteral("lock"),
+             QStringLiteral("lock-and-suspend"),
+         }) {
+        QDBusPendingReply<qulonglong> reply =
+            m_client.asyncCall(command(verb, QVariantMap()));
+        QVERIFY(settle(reply));
+        QVERIFY2(!reply.isValid(), qPrintable(verb));
+        QCOMPARE(reply.error().type(), QDBusError::NotSupported);
+        QVERIFY(reply.error().message().contains(QStringLiteral("locker")));
+    }
+}
+
+// `initTestCase` wires no provider client either, so every verb that would
+// reach a device fails visibly instead of being reported as pending.
+void ShellServiceTest::refusesSessionVerbsWithoutAProviderHelper()
+{
+    const QList<QPair<QString, QVariantMap>> verbs {
+        {QStringLiteral("volume-step"), {{QStringLiteral("by"), 5}}},
+        {QStringLiteral("mute-toggle"), {}},
+        {QStringLiteral("night-light-on"), {}},
+        {QStringLiteral("caffeine-toggle"), {}},
+        {QStringLiteral("brightness-step"),
+         {{QStringLiteral("by"), -5}, {QStringLiteral("output"), QStringLiteral("DP-1")}}},
+    };
+
+    for (const auto &[verb, options] : verbs) {
+        QDBusPendingReply<qulonglong> reply = m_client.asyncCall(command(verb, options));
         QVERIFY(settle(reply));
         QVERIFY2(!reply.isValid(), qPrintable(verb));
         QCOMPARE(reply.error().type(), QDBusError::Failed);

@@ -37,15 +37,18 @@ validation lane, not implementation status.
 `org.celestina.Shell1`, expose confirmed or failed state, and can raise a
 truthful OSD without depending on a Noctalia command path.
 
-- [ ] Add typed, bounded volume, brightness, DPMS and session verbs to the
+- [x] Add typed, bounded volume, brightness, DPMS and session verbs to the
       shell command vocabulary and cover success, refusal and provider loss.
-- [ ] Add the top-right OSD surface using the existing `LayerSurfaceSpec`,
-      `CelestinaSlider`/toast contract and the reduced-motion path.
-- [ ] Compose fixed 2700 K night light through an owned, bounded `wlsunset`
+- [x] Add the top-right OSD surface using the existing `LayerSurfaceSpec` and
+      the shared track/typography contract, driven by published readings and
+      honouring the reduced-motion path. It draws a meter rather than a
+      `CelestinaSlider`: the surface never takes a pointer or the keyboard, so
+      offering a control it cannot accept would be a lie about what it is.
+- [x] Compose fixed 2700 K night light through an owned, bounded `wlsunset`
       lifecycle that releases gamma on normal shutdown and failure.
-- [ ] Add shell-owned caffeine/idle-inhibit state; keep the idle chain disabled
+- [x] Add shell-owned caffeine/idle-inhibit state; keep the idle chain disabled
       by default until the author explicitly enables it.
-- [ ] Compose DPMS through Niri and expose a fail-closed lock-and-suspend
+- [x] Compose DPMS through Niri and expose a fail-closed lock-and-suspend
       contract that refuses while no approved locker provider exists.
 - [ ] Supply exact opt-in configuration and rollback instructions without
       mutating the author's live Niri configuration.

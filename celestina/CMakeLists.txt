@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.1.0 LANGUAGES CXX)
+project(celestina VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -46,6 +46,8 @@ add_custom_target(celestina-helpers ALL
         src/provider_adapter/media.rs
         src/provider_adapter/audio.rs
         src/provider_adapter/session.rs
+        src/provider_adapter/held.rs
+        src/provider_adapter/sessionholds.rs
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     COMMENT "Building the Rust helpers (Niri event stream, aggregate providers)"
     VERBATIM
@@ -69,6 +71,12 @@ qt_add_executable(celestina
     src/panelmanager.cpp
     src/workspacefocusrequests.h
     src/workspacefocusrequests.cpp
+    src/sessionrequests.h
+    src/sessionrequests.cpp
+    src/osdreadings.h
+    src/osdreadings.cpp
+    src/osdcontroller.h
+    src/osdcontroller.cpp
     src/shellcommandline.h
     src/shellcommandline.cpp
     src/shellservice.h
@@ -149,6 +157,7 @@ qt_add_qml_module(celestina
         qml/PanelMenu.qml
         qml/LauncherOverlay.qml
         qml/ClipboardOverlay.qml
+        qml/SessionOsd.qml
     RESOURCES
         ../celestina-style/icons/phone.svg
         ../celestina-style/icons/battery-charging.svg
@@ -190,6 +199,24 @@ if(BUILD_TESTING)
     target_include_directories(celestina-workspace-focus-test PRIVATE src)
     target_link_libraries(celestina-workspace-focus-test PRIVATE Qt6::Test)
     add_test(NAME celestina-workspace-focus COMMAND celestina-workspace-focus-test)
+
+    qt_add_executable(celestina-session-requests-test
+        tests/sessionrequests_test.cpp
+        src/sessionrequests.h
+        src/sessionrequests.cpp
+    )
+    target_include_directories(celestina-session-requests-test PRIVATE src)
+    target_link_libraries(celestina-session-requests-test PRIVATE Qt6::Test)
+    add_test(NAME celestina-session-requests COMMAND celestina-session-requests-test)
+
+    qt_add_executable(celestina-osd-readings-test
+        tests/osdreadings_test.cpp
+        src/osdreadings.h
+        src/osdreadings.cpp
+    )
+    target_include_directories(celestina-osd-readings-test PRIVATE src)
+    target_link_libraries(celestina-osd-readings-test PRIVATE Qt6::Test)
+    add_test(NAME celestina-osd-readings COMMAND celestina-osd-readings-test)
 
     qt_add_executable(celestina-provider-states-test
         tests/providerstates_test.cpp
@@ -256,6 +283,8 @@ if(BUILD_TESTING)
         tests/shellservice_test.cpp
         src/shellservice.h
         src/shellservice.cpp
+        src/sessionrequests.h
+        src/sessionrequests.cpp
         src/niriclient.h
         src/niriclient.cpp
         src/protocoldecoder.h

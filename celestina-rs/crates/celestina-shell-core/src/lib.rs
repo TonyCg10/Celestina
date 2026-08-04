@@ -23,6 +23,9 @@
 //!   connected to it, and which power profile it is running.
 //! - [`launcher`] — which application a person means when they type part of a
 //!   name.
+//! - [`session`] — what a key binding may ask the session to become: the typed
+//!   verbs, the bounds their options must satisfy, and what a step leaves a
+//!   level at.
 //! - [`sysmon`] — what `/proc` says about CPU and memory, and what counts as a
 //!   load worth noticing.
 //! - [`runtime`] — the aggregate those three add up to: which providers a
@@ -43,6 +46,7 @@ pub mod lines;
 pub mod network;
 pub mod power;
 pub mod runtime;
+pub mod session;
 pub mod snapshot;
 pub mod sysmon;
 

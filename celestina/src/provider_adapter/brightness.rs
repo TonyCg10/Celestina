@@ -19,6 +19,7 @@ use std::time::{Duration, Instant};
 
 use celestina_shell_core::brightness::{self, DdcDisplay};
 use celestina_shell_core::runtime::ProviderRuntime;
+use celestina_shell_core::session::{self, LevelChange, SessionRequest};
 use celestina_shell_core::snapshot::{Payload, ProviderId};
 use serde_json::Value;
 
@@ -39,8 +40,6 @@ const REFRESH: Duration = Duration::from_secs(300);
 /// nothing at all. Finding none is therefore not a verdict, so the search is
 /// retried on its own shorter interval instead of waiting out a full refresh.
 const REDETECT: Duration = Duration::from_secs(30);
-/// The step a wheel notch asks for, in percent of the monitor's own range.
-const STEP_PERCENT: u8 = 5;
 
 pub const NAME: &str = "brightness";
 
@@ -49,13 +48,13 @@ pub const NAME: &str = "brightness";
 /// helper process and one brightness provider in it; threading it through the
 /// command dispatch would put a slow monitor's business in every provider's
 /// signature.
-static PENDING: OnceLock<Mutex<HashMap<String, i32>>> = OnceLock::new();
+static PENDING: OnceLock<Mutex<HashMap<String, LevelChange>>> = OnceLock::new();
 
-fn pending() -> &'static Mutex<HashMap<String, i32>> {
+fn pending() -> &'static Mutex<HashMap<String, LevelChange>> {
     PENDING.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn lock_pending() -> std::sync::MutexGuard<'static, HashMap<String, i32>> {
+fn lock_pending() -> std::sync::MutexGuard<'static, HashMap<String, LevelChange>> {
     match pending().lock() {
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
@@ -76,23 +75,28 @@ pub fn spawn(runtime: &Arc<Mutex<ProviderRuntime>>) -> io::Result<()> {
     Ok(())
 }
 
-/// Records a step and returns at once. The wheel is answered by the panel's
+/// Records a target and returns at once. The wheel is answered by the panel's
 /// next reading, not by this call — which is the only honest thing a control
 /// over a one-second conversation can do.
 pub fn action(verb: &str, options: &Payload) -> Result<(), String> {
-    let direction: i32 = match verb {
-        "brighter" => 1,
-        "dimmer" => -1,
-        _ => return Err(format!("'{NAME}' does not serve the verb '{verb}'")),
+    let SessionRequest::Brightness(change) = session::parse_for(NAME, verb, options)? else {
+        // A session verb another provider carries is not this one's to serve.
+        return Err(session::unserved_verb(NAME, verb));
     };
 
+    // A monitor is named, never assumed: this session has more than one and
+    // stepping the wrong one is worse than refusing.
     let output = options
         .get("output")
         .and_then(Value::as_str)
         .filter(|output| !output.is_empty())
-        .ok_or_else(|| format!("'{NAME}' needs the output to step"))?;
+        .ok_or_else(|| format!("'{NAME}' needs the output to change"))?;
 
-    *lock_pending().entry(output.to_owned()).or_insert(0) += direction;
+    let mut owed = lock_pending();
+    let combined = owed
+        .get(output)
+        .map_or(change, |pending| pending.followed_by(change));
+    owed.insert(output.to_owned(), combined);
     Ok(())
 }
 
@@ -166,24 +170,32 @@ fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
     let mut refreshed = Instant::now();
     loop {
         // One target per monitor, however many notches produced it.
-        let steps: Vec<(String, i32)> = lock_pending().drain().collect();
-        for (connector, steps) in steps {
+        let targets: Vec<(String, LevelChange)> = lock_pending().drain().collect();
+        for (connector, change) in targets {
             let Some(display) = displays
                 .iter()
                 .find(|display| display.connector == connector)
             else {
                 continue;
             };
-            let Some(current) = levels.get(&connector).copied().flatten() else {
-                // Stepping from a value nobody has read would be guessing.
-                eprintln!(
-                    "celestina-provider-adapter: brightness: {connector} has not answered yet"
-                );
-                continue;
+            let read_back = levels.get(&connector).copied().flatten();
+            let current = match (change, read_back) {
+                // An absolute target needs no reading; a step from a value
+                // nobody has read would be guessing.
+                (LevelChange::Set(_), _) => read_back.unwrap_or_default(),
+                (LevelChange::Step(_), Some(level)) => level,
+                (LevelChange::Step(_), None) => {
+                    eprintln!(
+                        "celestina-provider-adapter: brightness: {connector} has not answered yet"
+                    );
+                    continue;
+                }
             };
 
-            let wanted = brightness::stepped(current, steps, STEP_PERCENT);
-            if wanted != current && write(display, wanted) {
+            let wanted = change.applied_to(current);
+            // A monitor that has not answered is written to even when the
+            // target matches the placeholder: `unknown` is not `already there`.
+            if (wanted != current || read_back.is_none()) && write(display, wanted) {
                 // What the monitor settled on, not what it was asked for.
                 levels.insert(connector.clone(), read(display));
                 publish(runtime, id, &levels);

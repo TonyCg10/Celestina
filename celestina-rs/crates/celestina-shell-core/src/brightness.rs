@@ -88,21 +88,6 @@ pub fn parse_brightness(reading: &str) -> Option<u8> {
     u8::try_from(current.min(max) * 100 / max).ok()
 }
 
-/// The value to ask for after a step, in whole percent of the monitor's range.
-///
-/// Steps are clamped rather than wrapped: a brightness that jumped from dark to
-/// full because a wheel went one notch too far would be a surprise, not a
-/// control.
-#[must_use]
-pub fn stepped(current: u8, steps: i32, step_percent: u8) -> u8 {
-    let delta = steps.saturating_mul(i32::from(step_percent));
-    i32::from(current)
-        .saturating_add(delta)
-        .clamp(0, 100)
-        .try_into()
-        .unwrap_or(100)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,17 +150,5 @@ mod tests {
         assert_eq!(parse_brightness("VCP 10 C 50 0\n"), None);
         assert_eq!(parse_brightness("DDC communication failed\n"), None);
         assert_eq!(parse_brightness(""), None);
-    }
-
-    #[test]
-    fn a_step_clamps_instead_of_wrapping() {
-        assert_eq!(stepped(50, 1, 5), 55);
-        assert_eq!(stepped(50, -1, 5), 45);
-        assert_eq!(stepped(50, 3, 5), 65);
-        // A wheel that runs past either end stops there.
-        assert_eq!(stepped(98, 1, 5), 100);
-        assert_eq!(stepped(2, -1, 5), 0);
-        assert_eq!(stepped(50, i32::MAX, 5), 100);
-        assert_eq!(stepped(50, i32::MIN, 5), 0);
     }
 }

@@ -18,9 +18,11 @@
 #include "shellservice.h"
 
 namespace {
-// Long enough to outlast the shell's own request timeout and its terminal
-// hold, short enough that a keybind never leaves a process behind.
-constexpr int resultTimeoutMs = 5000;
+// The shell owns how long a request may stay pending; this only has to outlast
+// it, so the two numbers cannot drift apart. A client still exits the moment a
+// terminal state arrives — this bound is reached only when the shell itself
+// stops answering.
+const int resultTimeoutMs = ShellService::maxRequestLifetimeMs() + 2000;
 
 void reportError(const QString &message)
 {

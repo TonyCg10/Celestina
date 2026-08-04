@@ -21,7 +21,7 @@ OverlayController::OverlayController(
     , m_component(engine)
     , m_providers(providers)
     , m_componentName(qmlComponentName)
-    , m_surface(new OverlaySurface(this))
+    , m_surface(new OverlaySurface(OverlaySurface::Placement::Centered, this))
     , m_enabled(true)
 {
     m_component.loadFromModule("CelestinaDesktop", m_componentName);

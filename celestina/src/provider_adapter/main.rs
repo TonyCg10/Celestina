@@ -30,9 +30,11 @@ use celestina_shell_core::runtime::ProviderRuntime;
 mod audio;
 mod brightness;
 mod clipboard;
+mod held;
 mod launcher;
 mod media;
 mod session;
+mod sessionholds;
 mod sysmon;
 mod tools;
 
@@ -71,12 +73,19 @@ impl Clock {
 fn perform(command: &Command, runtime: &Mutex<ProviderRuntime>) -> Result<(), String> {
     match command.provider.as_str() {
         sysmon::NAME => sysmon::action(&command.verb),
-        audio::NAME => audio::action(&command.verb, runtime, &command.provider),
+        audio::NAME => audio::action(&command.verb, &command.options, runtime, &command.provider),
         media::NAME => media::action(&command.verb),
         brightness::NAME => brightness::action(&command.verb, &command.options),
         session::POWER if command.verb == "cycle" => {
             session::cycle_power_profile(runtime, &command.provider)
         }
+        provider @ (sessionholds::NIGHT_LIGHT | sessionholds::CAFFEINE) => sessionholds::action(
+            provider,
+            &command.verb,
+            &command.options,
+            runtime,
+            &command.provider,
+        ),
         launcher::NAME => {
             launcher::action(&command.verb, &command.options, runtime, &command.provider)
         }
@@ -188,6 +197,7 @@ fn run() -> io::Result<()> {
     audio::spawn(&runtime)?;
     brightness::spawn(&runtime)?;
     session::spawn(&runtime)?;
+    sessionholds::spawn(&runtime)?;
     launcher::spawn(&runtime)?;
     clipboard::spawn(&runtime)?;
 
@@ -208,6 +218,10 @@ fn run() -> io::Result<()> {
             if worker.join().is_err() {
                 eprintln!("celestina-provider-adapter: the command worker panicked");
             }
+            // Held states are given back before this process goes: nothing
+            // else in the session knows how to release this helper's children,
+            // and `exit` runs no destructor that would.
+            sessionholds::release_all();
             process::exit(0);
         })?;
 

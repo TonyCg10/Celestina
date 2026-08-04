@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use celestina_shell_core::audio::{self, AudioLevel};
 use celestina_shell_core::runtime::ProviderRuntime;
+use celestina_shell_core::session::{self, MuteDevice, SessionRequest, Switch};
 use celestina_shell_core::snapshot::{Payload, ProviderId};
 use serde_json::Value;
 
@@ -16,17 +17,16 @@ use super::tools::{launch, lock_runtime, run_bounded};
 /// matters for how it feels is that the panel re-reads immediately after a
 /// change it made itself, which it does.
 const INTERVAL: Duration = Duration::from_secs(2);
-/// The session's own step and ceiling: `config.kdl` raises volume with
-/// `wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.1+ -l 1.0`, and Noctalia's bar
-/// scrolled in 5 % steps. The keys keep their step; the panel keeps the bar's.
-const VOLUME_UP: &str = "0.05+";
-const VOLUME_DOWN: &str = "0.05-";
+/// The session's own ceiling: no overdrive, the same `-l 1.0` the keys already
+/// pass to `wpctl`.
 const VOLUME_CEILING: &str = "1.0";
 /// The mixer the session already has. `qpwgraph` is a patchbay, not a mixer.
 const EXTERNAL_MIXER: &str = "pavucontrol";
 /// wpctl's names for "whatever the session is playing through / listening with".
 const SINK: &str = "@DEFAULT_AUDIO_SINK@";
 const SOURCE: &str = "@DEFAULT_AUDIO_SOURCE@";
+/// Not a session verb: it starts a program instead of changing the session.
+const OPEN_MIXER: &str = "open-mixer";
 
 pub const NAME: &str = "audio";
 
@@ -44,16 +44,55 @@ pub fn spawn(runtime: &Arc<Mutex<ProviderRuntime>>) -> io::Result<()> {
     Ok(())
 }
 
-pub fn action(verb: &str, runtime: &Mutex<ProviderRuntime>, id: &ProviderId) -> Result<(), String> {
-    let args: Vec<&str> = match verb {
-        // The session's own ceiling: no overdrive, the same `-l 1.0` the keys
-        // already pass.
-        "louder" => vec!["set-volume", SINK, VOLUME_UP, "-l", VOLUME_CEILING],
-        "quieter" => vec!["set-volume", SINK, VOLUME_DOWN],
-        "toggle-mute" => vec!["set-mute", SINK, "toggle"],
-        "toggle-mic-mute" => vec!["set-mute", SOURCE, "toggle"],
-        "open-mixer" => return launch(EXTERNAL_MIXER),
-        _ => return Err(format!("'{NAME}' does not serve the verb '{verb}'")),
+/// wpctl takes a unit fraction. A whole percent is written out exactly, so
+/// nothing this shell asks for passes through a float.
+fn unit_fraction(percent: u8) -> String {
+    format!("{}.{:02}", percent / 100, percent % 100)
+}
+
+fn device(which: MuteDevice) -> &'static str {
+    match which {
+        MuteDevice::Output => SINK,
+        MuteDevice::Input => SOURCE,
+    }
+}
+
+/// Serves the session's audio verbs, plus the one verb that is not a session
+/// verb at all: opening the mixer is starting a program, not asking the
+/// session to become something.
+pub fn action(
+    verb: &str,
+    options: &Payload,
+    runtime: &Mutex<ProviderRuntime>,
+    id: &ProviderId,
+) -> Result<(), String> {
+    if verb == OPEN_MIXER {
+        return launch(EXTERNAL_MIXER);
+    }
+
+    let request = session::parse_for(NAME, verb, options)?;
+
+    let level_target;
+    let args: Vec<&str> = match request {
+        SessionRequest::Volume(change) => {
+            // The level the device is at is the only thing a step can be
+            // relative to, and it is also what the panel will show next.
+            let current = level(SINK)
+                .ok_or_else(|| "wpctl reports no readable default audio device".to_owned())?;
+            level_target = unit_fraction(change.applied_to(current.percent));
+            vec!["set-volume", SINK, &level_target, "-l", VOLUME_CEILING]
+        }
+        SessionRequest::Mute(which, state) => vec![
+            "set-mute",
+            device(which),
+            match state {
+                Switch::On => "1",
+                Switch::Off => "0",
+                Switch::Toggle => "toggle",
+            },
+        ],
+        // A session verb another provider carries is not this one's to serve.
+        _ => return Err(session::unserved_verb(NAME, verb)),
     };
 
     run_bounded("wpctl", &args).ok_or_else(|| format!("wpctl refused to {verb}"))?;

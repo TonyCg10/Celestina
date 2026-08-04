@@ -43,12 +43,23 @@ public:
     // is nothing later to confirm it against — the compositor takes over the
     // screen — so the panel reports only that the request could not be made.
     Q_INVOKABLE qulonglong requestScreenshot();
+    // Asks Niri to blank the outputs. Unlike a workspace focus, the shell sees
+    // no later snapshot that could confirm it: the compositor's own answer to
+    // the request is the outcome, and it is reported as such.
+    qulonglong requestDisplaysOff();
 
 signals:
     void changed();
     // One transition of one request: "pending", then "confirmed" or "failed".
     void focusRequestChanged(qulonglong requestId, const QString &state);
     void screenshotFailed(const QString &reason);
+    // One compositor action whose result Niri itself reported: "confirmed" or
+    // "failed", once, with the compositor's reason when it refused.
+    void actionFinished(
+        qulonglong requestId,
+        const QString &state,
+        const QString &reason
+    );
 
 private slots:
     void readStandardOutput();
@@ -62,6 +73,9 @@ private:
     void startAdapter();
     void scheduleRestart();
     void applyMessage(const QByteArray &line);
+    // Sends one `kind`-tagged request line to the adapter. Returns 0 when it
+    // could not even be written.
+    qulonglong sendRequest(const QString &kind);
     bool applySnapshot(const QJsonObject &root);
     bool applyRequestResult(const QJsonObject &root);
     void setUnavailable();
@@ -84,6 +98,10 @@ private:
     // workspace requests: nothing confirms them, so they are only remembered
     // long enough to report a refusal against the right button.
     QSet<quint64> m_screenshotRequests;
+    // Actions whose outcome is reported to whoever asked. Nothing confirms
+    // them later either, but unlike a screenshot the requester is told when
+    // the compositor did carry one out.
+    QSet<quint64> m_actionRequests;
     // The compositor's snapshot as validated, before request state is merged
     // into the list QML consumes.
     QVariantList m_snapshot;

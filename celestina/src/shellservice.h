@@ -5,10 +5,14 @@
 #include <QObject>
 #include <QPointer>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QVariantMap>
+
+#include "sessionrequests.h"
 
 class NiriClient;
 class OverlayController;
+class ShellProvidersClient;
 class QDBusConnection;
 
 // The session's one way in.
@@ -56,6 +60,16 @@ public:
     // and serves every other verb; that overlay's toggle just errors.
     void setLauncherController(OverlayController *controller);
     void setClipboardController(OverlayController *controller);
+    // The bridge every session verb that changes a device travels over. A
+    // shell without it still owns the bus name and serves every other verb;
+    // those verbs then fail visibly instead of pretending to have worked.
+    void setProvidersClient(ShellProvidersClient *providers);
+
+    // The longest a request may stay pending before the shell reports a
+    // failure. A monitor over DDC is what makes it seconds rather than
+    // milliseconds; a client waiting on a result outlasts this rather than
+    // guessing its own bound.
+    static int maxRequestLifetimeMs();
 
     static QString serviceName();
     static QString objectPath();
@@ -81,9 +95,29 @@ signals:
 private slots:
     void publishState();
     void reportFocusRequest(qulonglong niriRequestId, const QString &state);
+    // A compositor action Niri answered itself, reported once against the
+    // request the session bus knows about.
+    void reportAction(
+        qulonglong niriRequestId,
+        const QString &state,
+        const QString &reason
+    );
 
 private:
     qulonglong focusWorkspace(const QVariantMap &options);
+    // Asks the compositor to blank the outputs. There is no matching verb to
+    // wake them: any input does, and that is the compositor's business.
+    qulonglong powerOffMonitors();
+    // Forwards one session verb to its provider and starts waiting for the
+    // reading that would prove it happened.
+    qulonglong requestSession(
+        const QString &verb,
+        const QVariantMap &options,
+        const SessionRequests::Expectation &expectation
+    );
+    // Emits one `CommandResult` per transition the table recorded, and keeps
+    // the expiry tick running only while something is still in flight.
+    void reportSessionOutcomes();
     // A toggle is a local UI action with no compositor round trip to wait on,
     // unlike `focusWorkspace`: it resolves the moment it runs, so it needs no
     // entry in `m_focusRequests`.
@@ -92,9 +126,18 @@ private:
     QPointer<NiriClient> m_niri;
     QPointer<OverlayController> m_launcher;
     QPointer<OverlayController> m_clipboard;
+    QPointer<ShellProvidersClient> m_providers;
     QTimer m_stateTimer;
+    // A pending session verb must not wait forever for a device that will
+    // never answer, so the table is swept while anything is in flight.
+    QTimer m_sessionTimer;
+    // Monotonic and independent of the wall clock, which a session may change.
+    QElapsedTimer m_clock;
+    SessionRequests m_sessionRequests;
     // The bus sees this service's own request ids, never another component's
     // counter; the map is bounded by the Niri client's own request table.
     QHash<qulonglong, qulonglong> m_focusRequests;
+    // The same, for compositor actions whose outcome Niri reports itself.
+    QHash<qulonglong, qulonglong> m_actionRequests;
     qulonglong m_lastRequestId = 0;
 };

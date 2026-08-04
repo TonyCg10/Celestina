@@ -16,6 +16,10 @@ Window {
     // The system tray host: other applications' own controls.
     required property var traySource
     property bool compositorBlurAvailable: false
+    // One wheel notch, in whole percent. The panel names the step it takes
+    // instead of leaving each provider to invent one, so volume and brightness
+    // move by the same amount under the same gesture.
+    readonly property int levelStep: 5
     // Forwarded to the host, which owns every surface this window does not.
     signal contextMenuRequested(int globalX, int globalY, var workspaces)
     signal trayMenuRequested(string service, string path, int globalX, int globalY)
@@ -106,11 +110,11 @@ Window {
         AudioLevel {
             anchors.verticalCenter: parent.verticalCenter
             reading: panel.providerSource.providers.audio
-            onMuteToggled: panel.providerSource.sendCommand("audio", "toggle-mute")
-            onMicMuteToggled: panel.providerSource.sendCommand("audio", "toggle-mic-mute")
+            onMuteToggled: panel.providerSource.sendCommand("audio", "mute-toggle")
+            onMicMuteToggled: panel.providerSource.sendCommand("audio", "mic-mute-toggle")
             onMixerRequested: panel.providerSource.sendCommand("audio", "open-mixer")
             onStepRequested: (direction) => panel.providerSource.sendCommand(
-                "audio", direction > 0 ? "louder" : "quieter")
+                "audio", "volume-step", {"by": direction > 0 ? panel.levelStep : -panel.levelStep})
         }
 
         BrightnessLevel {
@@ -120,8 +124,10 @@ Window {
             // The step names its own monitor: one helper serves every panel,
             // and each panel speaks only for the output it is mapped on.
             onStepRequested: (direction) => panel.providerSource.sendCommand(
-                "brightness", direction > 0 ? "brighter" : "dimmer",
-                {"output": panel.outputName})
+                "brightness", "brightness-step", {
+                    "by": direction > 0 ? panel.levelStep : -panel.levelStep,
+                    "output": panel.outputName
+                })
         }
 
         CaptureButton {

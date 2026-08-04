@@ -6,7 +6,11 @@
 #include "surfacemanager.h"
 
 namespace {
-LayerSurfaceSpec overlaySpec(QScreen *screen, const QSize &size)
+// How far the on-screen display sits from the corner, clear of the panel's own
+// exclusive zone.
+constexpr int notificationMargin = 16;
+
+LayerSurfaceSpec centeredSpec(QScreen *screen, const QSize &size)
 {
     LayerSurfaceSpec spec;
     spec.scope = QStringLiteral("celestina-overlay");
@@ -26,10 +30,34 @@ LayerSurfaceSpec overlaySpec(QScreen *screen, const QSize &size)
     spec.acceptsFocus = true;
     return spec;
 }
+
+LayerSurfaceSpec notificationSpec(QScreen *screen, const QSize &size)
+{
+    LayerSurfaceSpec spec;
+    spec.scope = QStringLiteral("celestina-osd");
+    spec.screen = screen;
+    // Two anchors and no width/height anchor pair: the surface keeps its own
+    // size and is pinned to the corner the panel's own controls live in.
+    auto anchors = LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop);
+    anchors |= LayerShellQt::Window::AnchorRight;
+    spec.anchors = anchors;
+    spec.margins = QMargins(0, notificationMargin, notificationMargin, 0);
+    spec.desiredSize = size;
+    spec.exclusiveZone = 0;
+    spec.layer = LayerShellQt::Window::LayerOverlay;
+    // A display that is read, not used: it never takes the keyboard, never
+    // activates, and never steals focus from what the person is doing.
+    spec.keyboard = LayerShellQt::Window::KeyboardInteractivityNone;
+    spec.activateOnShow = false;
+    spec.closeOnDismissed = true;
+    spec.acceptsFocus = false;
+    return spec;
+}
 } // namespace
 
-OverlaySurface::OverlaySurface(QObject *parent)
+OverlaySurface::OverlaySurface(Placement placement, QObject *parent)
     : QObject(parent)
+    , m_placement(placement)
 {
 }
 
@@ -49,7 +77,10 @@ bool OverlaySurface::open(QWindow *content, QScreen *screen)
         contentVisibilityChanged(visible);
     });
 
-    if (!mapLayerSurface(content, overlaySpec(screen, content->size()))) {
+    const LayerSurfaceSpec spec = m_placement == Placement::Centered
+        ? centeredSpec(screen, content->size())
+        : notificationSpec(screen, content->size());
+    if (!mapLayerSurface(content, spec)) {
         qWarning() << "Celestina could not map an overlay surface.";
         content->disconnect(this);
         m_content.clear();

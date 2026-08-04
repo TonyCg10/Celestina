@@ -110,12 +110,17 @@ enum HostCommand {
     /// Open Niri's own screenshot UI. The shell asks the compositor to
     /// capture; it never captures anything itself.
     Screenshot { id: String },
+    /// Blank the outputs now. There is no matching "on": any input wakes them,
+    /// and the compositor owns that, not this shell.
+    PowerOffMonitors { id: String },
 }
 
 impl HostCommand {
     fn id(&self) -> &str {
         match self {
-            Self::FocusWorkspace { id, .. } | Self::Screenshot { id } => id,
+            Self::FocusWorkspace { id, .. }
+            | Self::Screenshot { id }
+            | Self::PowerOffMonitors { id } => id,
         }
     }
 }
@@ -359,6 +364,7 @@ fn run_commands(receiver: &Receiver<HostCommand>, writer: &AdapterWriter) {
         let outcome = match &command {
             HostCommand::FocusWorkspace { workspace, .. } => focus_workspace(workspace),
             HostCommand::Screenshot { .. } => screenshot(),
+            HostCommand::PowerOffMonitors { .. } => perform(Action::PowerOffMonitors {}),
         };
         let frame = match &outcome {
             Ok(()) => RequestFrame::accepted(command.id()),

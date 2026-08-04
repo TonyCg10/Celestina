@@ -38,6 +38,7 @@ private slots:
     void theOverlayReportsAndCleansUpAnExternalDismissal();
     void aClosedOverlayLeavesNoWindowBehind();
     void theLauncherAndClipboardOverlaysLoadAndMap();
+    void aNotificationSurfaceSitsInTheCornerAndRefusesFocus();
 
 private:
     QWindow *makePanel()
@@ -295,7 +296,7 @@ void SurfaceManagerTest::anOverlaySurfaceCentersWithoutAnAnchorAndTakesFocus()
     QWindow *const content = makeContent();
     const QSize contentSize = content->size();
 
-    OverlaySurface surface;
+    OverlaySurface surface(OverlaySurface::Placement::Centered);
     QVERIFY(surface.open(content, nullptr));
     QVERIFY(surface.isOpen());
     QCOMPARE(surface.window(), content);
@@ -311,9 +312,32 @@ void SurfaceManagerTest::anOverlaySurfaceCentersWithoutAnAnchorAndTakesFocus()
              LayerShellQt::Window::KeyboardInteractivityOnDemand);
 }
 
+// The on-screen display shares the overlay's mechanics and nothing else: it is
+// pinned to the panel's own corner, never activated and never given the
+// keyboard, because it is read rather than used.
+void SurfaceManagerTest::aNotificationSurfaceSitsInTheCornerAndRefusesFocus()
+{
+    QWindow *const content = makeContent();
+    const QSize contentSize = content->size();
+
+    OverlaySurface surface(OverlaySurface::Placement::Notification);
+    QVERIFY(surface.open(content, nullptr));
+    QCOMPARE(content->size(), contentSize);
+    QVERIFY(content->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
+
+    auto *layerWindow = LayerShellQt::Window::get(content);
+    QVERIFY(layerWindow);
+    auto expected = LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop);
+    expected |= LayerShellQt::Window::AnchorRight;
+    QCOMPARE(layerWindow->anchors(), expected);
+    QCOMPARE(layerWindow->keyboardInteractivity(),
+             LayerShellQt::Window::KeyboardInteractivityNone);
+    QCOMPARE(layerWindow->exclusionZone(), 0);
+}
+
 void SurfaceManagerTest::theOverlayRefusesToOpenTwiceAndSurvivesReopening()
 {
-    OverlaySurface surface;
+    OverlaySurface surface(OverlaySurface::Placement::Centered);
     QVERIFY(surface.open(makeContent(), nullptr));
     QWindow *const second = makeContent();
     QVERIFY(!surface.open(second, nullptr));
@@ -326,7 +350,7 @@ void SurfaceManagerTest::theOverlayRefusesToOpenTwiceAndSurvivesReopening()
 
 void SurfaceManagerTest::theOverlayReportsAndCleansUpAnExternalDismissal()
 {
-    OverlaySurface surface;
+    OverlaySurface surface(OverlaySurface::Placement::Centered);
     QSignalSpy dismissed(&surface, &OverlaySurface::dismissed);
     QWindow *const content = makeContent();
     QVERIFY(surface.open(content, nullptr));
@@ -341,7 +365,7 @@ void SurfaceManagerTest::aClosedOverlayLeavesNoWindowBehind()
     QPointer<QWindow> tracked;
 
     {
-        OverlaySurface surface;
+        OverlaySurface surface(OverlaySurface::Placement::Centered);
         QWindow *const content = makeContent();
         tracked = content;
         QVERIFY(surface.open(content, nullptr));
@@ -349,7 +373,7 @@ void SurfaceManagerTest::aClosedOverlayLeavesNoWindowBehind()
     QTRY_VERIFY(tracked.isNull());
 
     {
-        OverlaySurface surface;
+        OverlaySurface surface(OverlaySurface::Placement::Centered);
         QWindow *const content = makeContent();
         tracked = content;
         QVERIFY(surface.open(content, nullptr));
@@ -390,7 +414,7 @@ void SurfaceManagerTest::theLauncherAndClipboardOverlaysLoadAndMap()
         QVERIFY2(content, qPrintable(fileName));
         QVERIFY2(content->metaObject()->indexOfSignal("dismissed()") >= 0, qPrintable(fileName));
 
-        OverlaySurface surface;
+        OverlaySurface surface(OverlaySurface::Placement::Centered);
         QVERIFY2(surface.open(content, nullptr), qPrintable(fileName));
     }
 }

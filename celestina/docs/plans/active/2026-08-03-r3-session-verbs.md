@@ -65,13 +65,30 @@ stable symbols are authoritative; line counts are a hand-off aid and may drift.
 
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
-| R3-A | `celestina:` | planned | `celestina-shell-core`, shell command protocol | — | Typed session verbs and policy | Unit and protocol tests | None |
-| R3-B | `celestina:` | planned | provider adapter, Qt host | — | Bounded providers and confirmed outcomes | Rust/CTest lifecycle cases | None |
-| R3-C | `celestina:` | planned | surface manager, OSD QML, style consumer | — | OSD presentation and reduced motion | registration, lint, offscreen tests | `VAL-R3` |
-| R3-D | `celestina:` | planned | night light, idle inhibit, DPMS, lock refusal seam | — | Deterministic session lifecycles without an assumed locker | failure/lifecycle tests | `VAL-R3` |
-| R3-E | `celestina:` | planned | docs and opt-in config examples | — | Reversible handover instructions | documentation contract | `VAL-R3` |
+| R3-A | `celestina:` | done | [inventory](../../inventories/2026-08-03-r3-session-verbs/R3-A.numstat.tsv) | 41 files, +3096/-105 | Typed session verbs and bounded level policy in the pure core; volume, mute and brightness carried to their providers and confirmed by a later reading; a corner OSD raised by published readings; night light and idle inhibit held by an owned child that is released on shutdown and failure; DPMS through Niri; a lock that refuses because no provider exists; and the optional bindings with their rollback | [R3 session verbs](../../evidence/2026-08-04-r3-session-verbs.md) | `VAL-R3` |
+
+The six build-order steps closed as one unit because they deliver one milestone
+in one commit. Splitting them further would have required one exclusive
+inventory *and* one exclusive evidence record each, which for a single
+verification run means five near-identical records — fragmentation for
+appearance rather than for review.
 
 ## Decisions and rollback
+
+R3-D holds night light and the idle inhibitor by owning somebody else's
+process — `wlsunset` at a fixed 2700 K and `systemd-inhibit --mode=block` — so
+the published state is whether this helper still has that child, checked every
+time it is asked and released on shutdown, on failure and when the tool cannot
+start at all. They share one module because they share one lifecycle. DPMS is
+composed through Niri, whose synchronous answer is the outcome rather than a
+helper's acceptance. Locking is refused: the refusal site is the seam a locker
+provider is wired into when SHELL-D1 is applied.
+
+R3-C draws the OSD level as a meter over the shared track tokens instead of a
+`CelestinaSlider`. Its surface takes neither pointer nor keyboard, so a control
+that looked draggable would offer an interaction the surface cannot accept. The
+OSD is also raised by published readings rather than by command outcomes, which
+is what keeps it from announcing a request the device never carried out.
 
 The locker choice is intentionally open in
 [`../../discussions/README.md`](../../discussions/README.md); that slice must not be

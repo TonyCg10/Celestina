@@ -18,6 +18,7 @@
 
 #include "devicesclient.h"
 #include "niriclient.h"
+#include "osdcontroller.h"
 #include "overlaycontroller.h"
 #include "panelmanager.h"
 #include "panelmenucontroller.h"
@@ -268,6 +269,15 @@ int main(int argc, char *argv[])
     if (!clipboard->isEnabled())
         qWarning() << "Celestina is running without its clipboard history overlay.";
     shell->setClipboardController(clipboard);
+    // Session verbs change devices, and every device the shell can change is
+    // behind the one provider helper.
+    shell->setProvidersClient(providers);
+
+    // The on-screen display follows the readings that helper publishes, not the
+    // requests the shell made: a key that changed nothing raises nothing.
+    auto *osd = new OsdController(&engine, providers, &app);
+    if (!osd->isEnabled())
+        qWarning() << "Celestina is running without its on-screen display.";
 
     // The menu controller draws menus; the tray host holds the conversation
     // with the application that owns one. Wiring them here keeps the controller

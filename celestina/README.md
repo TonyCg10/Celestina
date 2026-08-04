@@ -71,11 +71,86 @@ The already-built host also acts as a transient client:
 celestina msg get-state
 celestina msg launcher-toggle
 celestina msg clipboard-toggle
+celestina msg volume-step by=5
+celestina msg volume-set level=40
+celestina msg mute-toggle
+celestina msg mic-mute-on
+celestina msg brightness-step by=-5 output=DP-1
+celestina msg brightness-set level=60 output=DP-1
+celestina msg night-light-toggle
+celestina msg caffeine-on
+celestina msg displays-off
 ```
+
+`lock` and `lock-and-suspend` are accepted vocabulary and refused in practice:
+this shell has no locker provider yet, and it reports that rather than leaving
+a session open that somebody believes is locked.
+
+A corner on-screen display appears whenever a provider publishes a new volume,
+microphone or monitor level — from these verbs, from the panel's wheel, from
+another application or from a monitor's own buttons. It is driven by readings,
+so a verb that changed nothing shows nothing, and it never takes focus or the
+keyboard.
+
+A session verb is answered twice: `pending` when the shell forwards it, and
+then `confirmed` or `failed` once the provider reports what actually happened —
+or does not report it in time. The helper accepting a request is not the device
+having changed, so `accepted` is never published as an outcome.
 
 Client mode does not start a shell or claim the session service name. Panel mode
 requires a live Wayland compositor with layer-shell support; `offscreen` is a
 test mode and never evidence about Niri geometry, focus or blur.
+
+The client exits 0 on `confirmed` and non-zero on `failed` or on no answer, and
+prints the final state on stdout — so a verb can be tried from a terminal
+before it is ever bound to a key.
+
+## Optional session key bindings
+
+Celestina never edits a Niri configuration. Nothing below is applied by
+installing, building or running the shell: it is a block to copy into
+`~/.config/niri/config.kdl` by hand, and deleting it is the whole rollback.
+
+Each verb needs the tool that carries it, and refuses in one sentence when it
+is missing rather than reporting a change that did not happen:
+
+| Verbs | Tool |
+|---|---|
+| `volume-*`, `mute-*`, `mic-mute-*` | `wpctl` (WirePlumber) |
+| `brightness-*` | `ddcutil`, and a monitor that answers DDC/CI |
+| `night-light-*` | `wlsunset` |
+| `caffeine-*` | `systemd-inhibit` (systemd) |
+| `displays-off` | Niri itself |
+| `lock`, `lock-and-suspend` | nothing yet — these are refused on purpose |
+
+```kdl
+binds {
+    XF86AudioRaiseVolume  allow-when-locked=true { spawn "celestina" "msg" "volume-step" "by=5"; }
+    XF86AudioLowerVolume  allow-when-locked=true { spawn "celestina" "msg" "volume-step" "by=-5"; }
+    XF86AudioMute         allow-when-locked=true { spawn "celestina" "msg" "mute-toggle"; }
+    XF86AudioMicMute      allow-when-locked=true { spawn "celestina" "msg" "mic-mute-toggle"; }
+
+    // Brightness names the monitor it means; there is no "the" screen.
+    XF86MonBrightnessUp   { spawn "celestina" "msg" "brightness-step" "by=5" "output=DP-1"; }
+    XF86MonBrightnessDown { spawn "celestina" "msg" "brightness-step" "by=-5" "output=DP-1"; }
+
+    Mod+Shift+N { spawn "celestina" "msg" "night-light-toggle"; }
+    Mod+Shift+C { spawn "celestina" "msg" "caffeine-toggle"; }
+    Mod+Shift+D { spawn "celestina" "msg" "displays-off"; }
+}
+```
+
+Adapt the keys and the output name: `celestina msg get-state` lists the outputs
+this session actually has, and the panel's brightness widget already knows which
+monitor each panel speaks for.
+
+Two states are held by a child process this shell owns — night light and
+caffeine — and both are released when the shell stops, including when it
+crashes. Nothing survives a session to be undone by hand.
+
+The old Noctalia bindings remain the rollback and keep working: they are
+separate lines calling a different program, so both can coexist while the
+handover is checked, and removing either one changes nothing about the other.
 
 ## Project documents
 

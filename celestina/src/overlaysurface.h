@@ -24,7 +24,24 @@ class OverlaySurface final : public QObject
     Q_OBJECT
 
 public:
-    explicit OverlaySurface(QObject *parent = nullptr);
+    // Where the surface sits, and therefore whether it takes the keyboard.
+    //
+    // The mechanics below — adopt a window, map it, tear it down when the
+    // compositor dismisses it — are the same for both; only the description
+    // handed to `LayerSurfaceSpec` differs, which is why this is one field
+    // rather than a second class copying the teardown.
+    enum class Placement {
+        // Centered, focused, answering the keyboard: the launcher and the
+        // clipboard history.
+        Centered,
+        // Anchored under the panel in the top-right corner and never focused:
+        // the on-screen display, which is read, not used.
+        Notification,
+    };
+
+    // Both arguments are explicit: a surface's placement is a decision its
+    // owner makes, not a default it can drift into.
+    OverlaySurface(Placement placement, QObject *parent = nullptr);
     ~OverlaySurface() override;
 
     // Adopts `content` — created, not yet shown — and maps it centered on
@@ -42,4 +59,5 @@ private:
     void contentVisibilityChanged(bool visible);
 
     QPointer<QWindow> m_content;
+    Placement m_placement;
 };
