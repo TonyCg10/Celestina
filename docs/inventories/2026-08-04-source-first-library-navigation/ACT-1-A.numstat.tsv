@@ -1,0 +1,22 @@
+# ACT-1-A exact change inventory
+
+Base revision	4fdcb35353856b4c0e9f46e3ecf45cb3022cace8
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/contracts/content-activation.md
+Pathspec	docs/decisions/
+Pathspec	docs/evidence/2026-08-04-source-first-library-navigation.md
+Pathspec	docs/inventories/2026-08-04-source-first-library-navigation/
+Pathspec	docs/plans/active/2026-08-04-source-first-library-navigation.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+23	2	cdb5532682ff2a25e4879f7649ee19e2d2f3cf73f50198d69ee44847b0d7e0d0	ROADMAP.md
+15	4	606eb91dc3f623b41f21d6c423e7b934b9477482e54f198ed7c94bd9370235d5	STATUS.md
+8	3	59ac65dd62d9965ef176a7c6b2002bc9603125301f0ad35acc8dd861927780dd	docs/contracts/content-activation.md
+74	0	dac65589cd24508d7cfbfdec2ed41447fd28dec38c6d4aa136e763e624b10367	docs/decisions/0006-source-first-library-navigation.md
+1	0	b6f0dc8f701c654f834e3bdbab1388ee094b4495cee1a941e1e549822ed21755	docs/decisions/README.md
+49	0	9ab6b60c65fffacd4192f551bd1fc411c875922fc4d4f873f5de00507edbd75f	docs/evidence/2026-08-04-source-first-library-navigation.md
+22	0	self	docs/inventories/2026-08-04-source-first-library-navigation/ACT-1-A.numstat.tsv
+68	0	4b02d1489c3783bbe92a725e845d31d1ad9c8be097d7e395feac15a5b4b97956	docs/plans/active/2026-08-04-source-first-library-navigation.md

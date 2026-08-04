@@ -36,9 +36,14 @@ Qt state and QML composition. Neither application imports the other's UI tree.
   where that is safe; it does not silently report success.
 - The embedded Grafita surface is a real simple editor, not the standalone tab
   or project UI.
-- Standalone Fluorita retains Gallery for images/video and Music for
-  albums/artists/tracks; the embedded surface remains a minimal item viewer or
-  player.
+- Standalone Fluorita retains the full library and navigates it by configured
+  media source: a sidebar of the roots the user mapped, each showing the
+  supported content inside it. Gallery for images/video and Music for
+  albums/artists/tracks remain the two catalogue projections, selected by the
+  kinds the chosen source contributes rather than by a fixed tab. The embedded
+  surface remains a minimal item viewer or player with no library, sources or
+  settings. See
+  [ADR 0006](../decisions/0006-source-first-library-navigation.md).
 
 Changing this mapping requires an accepted decision and updates to every
 consumer with automated evidence in the implementation unit. It also creates or

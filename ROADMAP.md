@@ -1,7 +1,7 @@
 # Celestina suite implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** ACT-1
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
 This file contains only cross-project implementation. Each project's
@@ -77,6 +77,27 @@ inventories for project-prefixed source commits, defining proportionality for
 `complete-production.sh` fan-out across shared-crate consumers, and collapsing
 the ledger rules that are currently written in five documents. They are recorded
 in [the archived plan](docs/plans/archive/2026-08-03-guard-contract-alignment.md).
+
+## ACT-1 — Source-first standalone library navigation
+
+**Hypothesis:** the activation contract can name the configured media source as
+the standalone library's top-level axis without weakening any invariant it
+already enforces.
+
+**Tangible outcome:** the contract describes Gallery and Music as catalogue
+projections a selected source resolves to, an accepted ADR records why, and the
+Fluorita implementation plan is authorized against a contract it does not
+contradict.
+
+- [x] Record the accepted decision and its index row.
+- [x] Amend the single behavioural-invariant bullet naming the standalone
+      surfaces, leaving the gesture mapping and embedded-surface boundary
+      untouched.
+
+The build order, exclusions and ledger are in the
+[active plan](docs/plans/active/2026-08-04-source-first-library-navigation.md).
+The product work it unblocks is owned by
+[fluorita/ROADMAP.md](fluorita/ROADMAP.md).
 
 ## Project implementation fronts
 
