@@ -1,9 +1,9 @@
 # Suite status
 
 - **Updated:** 2026-08-04
-- **Current focus:** ACT-1, the one cross-project contract change Fluorita's
-  source-first library needs; all other project work follows each local roadmap
-- **Implementation checkpoint:** ACT-1
+- **Current focus:** suite governance is idle; project work follows each local
+  roadmap
+- **Implementation checkpoint:** none
 - **Author-validation checkpoint:** VAL-GOV-1
 
 ## Completed governance migration
@@ -33,7 +33,7 @@ inventories for project-prefixed source commits, defining proportionality for
 `complete-production.sh` across shared-crate consumers, and collapsing the
 ledger rules currently written in five documents.
 
-## Active cross-project work
+## Completed cross-project work
 
 ACT-1 amends the one activation-contract bullet that named Gallery and Music as
 fixed standalone surfaces. The author specified the standalone library as a
@@ -42,7 +42,7 @@ that; the projections themselves are unchanged and the embedded Siderita
 surface is explicitly untouched. The reasoning is in
 [ADR 0006](docs/decisions/0006-source-first-library-navigation.md) and the unit
 is in the
-[active plan](docs/plans/active/2026-08-04-source-first-library-navigation.md).
+[archived plan](docs/plans/archive/2026-08-04-source-first-library-navigation.md).
 
 ## Current truth boundary
 

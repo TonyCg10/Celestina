@@ -1,7 +1,7 @@
 # Celestina suite implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** ACT-1
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
 This file contains only cross-project implementation. Each project's
@@ -95,8 +95,8 @@ contradict.
       untouched.
 
 The build order, exclusions and ledger are in the
-[active plan](docs/plans/active/2026-08-04-source-first-library-navigation.md).
-The product work it unblocks is owned by
+[archived plan](docs/plans/archive/2026-08-04-source-first-library-navigation.md).
+The product work it unblocked is owned by
 [fluorita/ROADMAP.md](fluorita/ROADMAP.md).
 
 ## Project implementation fronts

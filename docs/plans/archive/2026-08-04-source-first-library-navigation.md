@@ -2,10 +2,12 @@
 
 - **Opened:** 2026-08-04
 - **Plan ID:** source-first-library-navigation
-- **Status:** active
+- **Status:** done
 - **Scope:** suite
 - **Implementation checkpoint:** ACT-1
 - **Author-validation checkpoint:** none
+- **Closed:** 2026-08-04
+- **Successor:** none
 
 ## Hypothesis
 
@@ -62,6 +64,7 @@ report the same declarations before and after.
 
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
+| ACT-1-B | `suite:` | done | [inventory](../../inventories/2026-08-04-source-first-library-navigation/ACT-1-B.numstat.tsv) | 6 files, +100/-78 | Archive this plan and return the suite roadmap to idle now that its unit is delivered | [evidence](../../evidence/2026-08-04-source-first-library-navigation.md) | None |
 | ACT-1-A | `suite:` | done | [inventory](../../inventories/2026-08-04-source-first-library-navigation/ACT-1-A.numstat.tsv) | 8 files, +260/-9 | Make the activation contract describe source-first standalone navigation and record the accepted decision behind it | [evidence](../../evidence/2026-08-04-source-first-library-navigation.md) | None |
 
 This unit is documentation only and closes as `suite-maintenance`. It delivers

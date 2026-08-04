@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-04
 - **Scope:** ACT-1-A; plan
-  [source-first-library-navigation](../plans/active/2026-08-04-source-first-library-navigation.md)
+  [source-first-library-navigation](../plans/archive/2026-08-04-source-first-library-navigation.md)
 - **Environment:** documentation only; no build, no artifact, no deployment
 - **Artifact:** not applicable
 

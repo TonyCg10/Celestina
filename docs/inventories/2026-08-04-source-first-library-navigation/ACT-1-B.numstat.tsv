@@ -1,0 +1,19 @@
+# ACT-1-B exact change inventory
+
+Base revision	6821047ce77f704c4d22105af22a0d1c7c7114f9
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/evidence/2026-08-04-source-first-library-navigation.md
+Pathspec	docs/inventories/2026-08-04-source-first-library-navigation/ACT-1-B.numstat.tsv
+Pathspec	docs/plans/active/2026-08-04-source-first-library-navigation.md
+Pathspec	docs/plans/archive/2026-08-04-source-first-library-navigation.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+4	4	7cc1b25e3db90fc847fd13e9e122db11ee0625720906d17e624b39d37e30e7c0	ROADMAP.md
+5	5	782c627c3426bea7bef2f29908fb62d3595297e4e257f2a0932e2a535b0da515	STATUS.md
+1	1	fc7ece64cef161b7175d6276e9b5745989983d23e5f40eb7970d621ae45a6ccf	docs/evidence/2026-08-04-source-first-library-navigation.md
+19	0	self	docs/inventories/2026-08-04-source-first-library-navigation/ACT-1-B.numstat.tsv
+0	68	deleted	docs/plans/active/2026-08-04-source-first-library-navigation.md
+71	0	9001fd0a6e07db63e6a5c222786628a07f435b487de638f3182cb1a592ebaac8	docs/plans/archive/2026-08-04-source-first-library-navigation.md
