@@ -1,18 +1,22 @@
 # Fluorita status
 
-- **Updated:** 2026-08-03
-- **Implementation:** the registered product version and checkpoints F0-F4 are
-  present; there is no active implementation checkpoint
+- **Updated:** 2026-08-04
+- **Implementation:** checkpoints F0-F4 are closed; F5 rebuilds the library
+  around the configured roots and is the active implementation checkpoint
 - **Author validation:** the version-1 playback and interaction pass is closed;
-  see [VALIDATION.md](VALIDATION.md)
+  `VAL-FLU-SOURCES` is open for the new surface — see
+  [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
 
-- The shared core/engine implement media classification, Gallery/Music
-  projections, persistent incremental catalogue/watch, bounded metadata and
-  artwork generation, cancelable trailers and confirmed playback over libmpv.
-- Standalone Fluorita provides the library, complete player, image toolkit path,
-  video render seam, seek/volume controls, direct activation and MPRIS2.
+- The shared core/engine implement media classification, source-scoped
+  Gallery/Music projections, user-owned persistent roots, persistent
+  incremental catalogue/watch, bounded metadata and artwork generation,
+  cancelable trailers and confirmed playback over libmpv.
+- Standalone Fluorita provides the library behind a sidebar of the mapped
+  folders — added through the desktop folder chooser and removed again — with
+  the complete player, image toolkit path, video render seam, seek/volume
+  controls, single-click and direct activation, and MPRIS2.
 - Siderita embeds the same engine/render contracts for image, video and audio,
   while ordinary browsing starts no decoder and uses cached static artwork.
 - The archived evidence records real-session playback in both hosts, correct
@@ -21,6 +25,14 @@
 - Desktop registration is a stateful deploy concern: on the recorded unpinned
   environment it made Fluorita the effective handler for its advertised media
   types. Verification must not reproduce that side effect.
+
+## Active work
+
+F5 replaces the two kind tabs with the source sidebar its
+[plan](docs/plans/active/2026-08-04-source-first-library.md) describes, under
+suite [ADR 0006](../docs/decisions/0006-source-first-library-navigation.md).
+The library lane's Rust and QML moved to English as it was rewritten, and the
+matching language-baseline rows went down or away with it.
 
 ## Conditional work, not active debt
 

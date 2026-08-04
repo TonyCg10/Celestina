@@ -153,6 +153,20 @@ case "$browsing" in
         fail "explorar la biblioteca arrancó el motor (hilos: $browsing)" "$scratch/biblioteca.log" ;;
 esac
 
+# 4b) The sidebar's data reached disk. The library is navigated by configured
+# root, and the handles the stored catalogue keys its records by only mean
+# anything if the configuration itself was written down. A run that produced no
+# store either failed to resolve any root or silently kept the set in memory,
+# where the next launch would reissue every handle.
+sources=$scratch/config/fluorita/sources.tsv
+[ -f "$sources" ] || \
+    fail "browsing the library stored no folder configuration" "$scratch/biblioteca.log"
+head -n 1 "$sources" | grep -qx 'fluorita-sources 1' || \
+    fail "the stored folder configuration has an unrecognised header"
+if [ "$(grep -c '' "$sources")" -lt 2 ]; then
+    fail "the stored folder configuration lists no root"
+fi
+
 # ── 5) Una imagen: la decodifica el toolkit, no el motor ────────────────────
 python3 - "$scratch/foto.png" <<'PNG'
 import struct, sys, zlib

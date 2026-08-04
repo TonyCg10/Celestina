@@ -1,4 +1,5 @@
 mod activation;
+mod folders;
 mod image;
 mod library;
 mod mpris;

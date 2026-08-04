@@ -8,6 +8,7 @@ use std::time::SystemTime;
 
 use crate::catalogue::Catalogue;
 use crate::media::{MediaId, MediaKind};
+use crate::source::SourceScope;
 
 /// Which of the two Gallery kinds to show.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -60,15 +61,18 @@ impl GalleryItem {
     }
 }
 
-/// Projects the catalogue into the Gallery grid.
+/// Projects the catalogue into the Gallery grid, scoped to one configured root
+/// or to all of them.
 #[must_use]
 pub fn gallery(
     catalogue: &Catalogue,
+    scope: SourceScope,
     filter: GalleryFilter,
     order: GalleryOrder,
 ) -> Vec<GalleryItem> {
     let mut items: Vec<GalleryItem> = catalogue
         .records()
+        .filter(|record| scope.accepts(record.source()))
         .filter(|record| filter.accepts(record.kind()))
         .map(|record| GalleryItem {
             id: record.id().clone(),
@@ -102,7 +106,7 @@ mod tests {
     use super::{gallery, GalleryFilter, GalleryOrder};
     use crate::catalogue::{Catalogue, MediaRecord, SourceIdentity};
     use crate::media::{MediaId, MediaKind};
-    use crate::source::{KindSet, SourceSet};
+    use crate::source::{KindSet, SourceScope, SourceSet};
     use std::collections::BTreeSet;
     use std::path::PathBuf;
     use std::time::{Duration, SystemTime};
@@ -131,8 +135,63 @@ mod tests {
     }
 
     #[test]
+    fn a_scoped_grid_shows_one_configured_root_and_no_other() {
+        // Two roots, so scoping is the only thing that can separate them: both
+        // hold an image of the same kind and neither is missing.
+        let mut sources = SourceSet::new();
+        let pictures = sources
+            .add(PathBuf::from("/home/toni/Pictures"), KindSet::gallery())
+            .expect("absolute root");
+        let videos = sources
+            .add(PathBuf::from("/home/toni/Videos"), KindSet::gallery())
+            .expect("absolute root");
+        let mut catalogue = Catalogue::new();
+        for (inode, source, path, kind) in [
+            (1, pictures, "/home/toni/Pictures/a.png", MediaKind::Image),
+            (2, videos, "/home/toni/Videos/clip.mkv", MediaKind::Video),
+        ] {
+            catalogue.upsert(MediaRecord::new(
+                MediaId::filesystem(66, inode),
+                source,
+                PathBuf::from(path),
+                kind,
+                SourceIdentity::new(1, SystemTime::UNIX_EPOCH + Duration::from_secs(10)),
+            ));
+        }
+
+        let scoped = gallery(
+            &catalogue,
+            SourceScope::One(pictures),
+            GalleryFilter::All,
+            GalleryOrder::NameAscending,
+        );
+        assert_eq!(
+            scoped
+                .iter()
+                .map(|item| item.display_name.clone())
+                .collect::<Vec<_>>(),
+            vec!["a"]
+        );
+        assert_eq!(
+            gallery(
+                &catalogue,
+                SourceScope::All,
+                GalleryFilter::All,
+                GalleryOrder::NameAscending
+            )
+            .len(),
+            2
+        );
+    }
+
+    #[test]
     fn gallery_shows_images_and_video_but_never_audio() {
-        let items = gallery(&catalogue(), GalleryFilter::All, GalleryOrder::NewestFirst);
+        let items = gallery(
+            &catalogue(),
+            SourceScope::All,
+            GalleryFilter::All,
+            GalleryOrder::NewestFirst,
+        );
 
         assert_eq!(items.len(), 3);
         assert!(items.iter().all(|item| item.kind != MediaKind::Audio));
@@ -147,11 +206,23 @@ mod tests {
         let catalogue = catalogue();
 
         assert_eq!(
-            gallery(&catalogue, GalleryFilter::Videos, GalleryOrder::NewestFirst).len(),
+            gallery(
+                &catalogue,
+                SourceScope::All,
+                GalleryFilter::Videos,
+                GalleryOrder::NewestFirst
+            )
+            .len(),
             1
         );
         assert_eq!(
-            gallery(&catalogue, GalleryFilter::Images, GalleryOrder::NewestFirst).len(),
+            gallery(
+                &catalogue,
+                SourceScope::All,
+                GalleryFilter::Images,
+                GalleryOrder::NewestFirst
+            )
+            .len(),
             2
         );
     }
@@ -160,7 +231,12 @@ mod tests {
     fn ordering_is_deterministic_and_honours_the_choice() {
         let catalogue = catalogue();
 
-        let newest = gallery(&catalogue, GalleryFilter::All, GalleryOrder::NewestFirst);
+        let newest = gallery(
+            &catalogue,
+            SourceScope::All,
+            GalleryFilter::All,
+            GalleryOrder::NewestFirst,
+        );
         assert_eq!(
             newest
                 .iter()
@@ -169,7 +245,12 @@ mod tests {
             vec!["b", "clip", "a"]
         );
 
-        let by_name = gallery(&catalogue, GalleryFilter::All, GalleryOrder::NameAscending);
+        let by_name = gallery(
+            &catalogue,
+            SourceScope::All,
+            GalleryFilter::All,
+            GalleryOrder::NameAscending,
+        );
         assert_eq!(
             by_name
                 .iter()
@@ -179,7 +260,12 @@ mod tests {
         );
         assert_eq!(
             by_name,
-            gallery(&catalogue, GalleryFilter::All, GalleryOrder::NameAscending)
+            gallery(
+                &catalogue,
+                SourceScope::All,
+                GalleryFilter::All,
+                GalleryOrder::NameAscending
+            )
         );
     }
 
@@ -188,7 +274,12 @@ mod tests {
         let mut catalogue = catalogue();
         catalogue.reconcile(&BTreeSet::new());
 
-        let items = gallery(&catalogue, GalleryFilter::All, GalleryOrder::NewestFirst);
+        let items = gallery(
+            &catalogue,
+            SourceScope::All,
+            GalleryFilter::All,
+            GalleryOrder::NewestFirst,
+        );
 
         assert_eq!(items.len(), 3);
         assert!(items.iter().all(|item| !item.available));

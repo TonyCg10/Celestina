@@ -1,22 +1,23 @@
 import QtQuick
 import org.celestina.fluorita 1.0
 
-// Galería: imágenes y vídeo juntos, como manda el contrato del producto.
+// Gallery: the images and video of the selected folder, together.
 //
-// Las miniaturas salen del caché freedesktop compartido *si ya existen*. Nadie
-// las genera aquí: hacerlo arrancaría un decodificador por tarjeta, que es
-// justo el coste que navegar no debe pagar. Sin miniatura hay glifo, no hueco.
+// Thumbnails come from the shared freedesktop cache *only if they already
+// exist*. Nothing generates one here: that would start a decoder per card,
+// which is exactly the cost browsing must not pay. No thumbnail means a glyph,
+// not a hole.
 GridView {
     id: grid
 
     required property FluoritaLibrary library
-    // Emitida al activar una tarjeta; la ventana decide qué hacer con ella.
+    // Emitted when a card is activated; the window decides what to do with it.
     signal activated(string path)
 
-    // Las columnas llegan alineadas por índice, pero se publican una a una: si
-    // el modelo se atara a ellas, se reconstruiría a mitad de la publicación
-    // con la mitad de las columnas del escaneo anterior. Por eso se teje una
-    // sola vez, cuando la revisión dice que ya están todas.
+    // The columns arrive index-aligned but are published one at a time: a model
+    // bound to them would rebuild halfway through a publication with half the
+    // columns still holding the previous one. So it is woven once, when the
+    // revision says every column is in place.
     property var rows: []
     model: grid.rows
 
@@ -33,8 +34,8 @@ GridView {
         var kinds = grid.library.galleryKinds;
         var thumbs = grid.library.galleryThumbnails;
         var live = grid.library.galleryAvailable;
-        // Defensivo: una columna corta significaría un error de publicación, y
-        // es mejor mostrar menos filas que filas con campos indefinidos.
+        // Defensive: a short column would mean a publication error, and fewer
+        // rows are better than rows with undefined fields.
         var count = Math.min(paths.length, names.length, kinds.length,
                              thumbs.length, live.length);
         var woven = [];
@@ -56,14 +57,14 @@ GridView {
     cellHeight: grid.cellWidth
     clip: true
     focus: true
-    // Entra en la cadena de tabulación: sin esto el foco se queda aquí y las
-    // acciones de la cabecera no se pueden alcanzar sin ratón.
+    // Joins the tab chain: without this the focus stays here and the header
+    // actions cannot be reached without a pointer.
     activeFocusOnTab: true
-    // Sin scroll animado: el movimiento reducido no tiene nada que apagar aquí.
+    // No animated scrolling: reduced motion has nothing to switch off here.
     boundsBehavior: Flickable.StopAtBounds
 
     Accessible.role: Accessible.List
-    Accessible.name: qsTr("Galería")
+    Accessible.name: qsTr("Gallery")
 
     delegate: Item {
         id: cell
@@ -74,15 +75,15 @@ GridView {
         width: grid.cellWidth
         height: grid.cellHeight
 
-        // Atenuado, no escondido: el archivo no está donde el catálogo lo vio,
-        // y desaparecerlo de la vista se leería como pérdida de datos.
+        // Dimmed, not hidden: the file is not where the catalogue saw it, and
+        // making it disappear would read as data loss.
         opacity: cell.modelData.available ? 1 : CelestinaTheme.disabledContentOpacity
 
         Accessible.role: Accessible.Cell
         Accessible.name: cell.modelData.name
         Accessible.description: cell.modelData.available
             ? cell.modelData.kind
-            : qsTr("%1 — sin encontrar").arg(cell.modelData.kind)
+            : qsTr("%1 — not found").arg(cell.modelData.kind)
         Accessible.focusable: true
         Accessible.onPressAction: grid.activated(cell.modelData.path)
 
@@ -109,14 +110,14 @@ GridView {
                     sourceSize.height: grid.cellHeight
                 }
 
-                // Sin miniatura cacheada: el tipo, dicho con el icono del tema.
+                // No cached thumbnail: the kind, said with the theme's icon.
                 CelestinaIcon {
                     anchors.centerIn: thumbnail
                     visible: !thumbnail.visible
                     width: Math.round(grid.cellWidth * 0.32)
                     height: width
                     sourceSize: Qt.size(width, height)
-                    name: cell.modelData.kind === "vídeo" ? "file-video-camera" : "file-image"
+                    name: cell.modelData.kind === "video" ? "file-video-camera" : "file-image"
                     fallbackName: "file"
                 }
 
@@ -134,17 +135,29 @@ GridView {
             }
         }
 
-        TapHandler {
-            acceptedButtons: Qt.LeftButton
-            onSingleTapped: {
+        // One click opens it. Selecting on the first click and opening only on
+        // the second made the library read as if activation were broken: the
+        // card visibly responded and then nothing happened. A double click
+        // still delivers two clicks, so the window ignores a request to open
+        // what is already open rather than restarting the session.
+        //
+        // A MouseArea stacked above the card, not a handler on the item beneath
+        // it. `CelestinaSurface` is a `Pane`, and a Control filling the cell
+        // takes the press before a parent's TapHandler ever sees it — which is
+        // why clicking a card did nothing at all while the keyboard worked.
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
                 grid.currentIndex = cell.index;
                 grid.forceActiveFocus();
+                grid.activated(cell.modelData.path);
             }
-            onDoubleTapped: grid.activated(cell.modelData.path)
         }
     }
 
-    // El teclado abre lo que el ratón abre con doble clic.
+    // The keyboard opens what the pointer opens.
     Keys.onReturnPressed: grid.activateCurrent()
     Keys.onEnterPressed: grid.activateCurrent()
     Keys.onSpacePressed: grid.activateCurrent()

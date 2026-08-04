@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use crate::media::{MediaId, MediaKind};
-use crate::source::SourceId;
+use crate::source::{SourceId, SourceSet};
 
 /// Size and mtime, the pair that decides whether derived resources are stale.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -273,6 +273,28 @@ impl Catalogue {
         self.records.remove(id)
     }
 
+    /// Drops every record whose root is no longer configured, returning how
+    /// many went. This is what unmapping a folder means: the library stops
+    /// knowing about its contents.
+    ///
+    /// Leaving those records behind would be worse than untidy. They would keep
+    /// appearing in any unscoped projection, no scan would ever refresh them
+    /// because nothing walks that root any more, and the next reconciliation
+    /// would mark them missing — which reads as data loss for files that are
+    /// perfectly intact. As everywhere else in the catalogue, not one of those
+    /// files is touched.
+    ///
+    /// Expressed against the whole configuration rather than one handle so
+    /// there is a single answer to "does this record still belong", whether it
+    /// is asked after a removal or when a stored catalogue is read back beside
+    /// a stored configuration.
+    pub fn retain_configured(&mut self, sources: &SourceSet) -> usize {
+        let before = self.records.len();
+        self.records
+            .retain(|_, record| sources.get(record.source).is_some());
+        before - self.records.len()
+    }
+
     /// Every record, in stable identity order.
     pub fn records(&self) -> impl Iterator<Item = &MediaRecord> {
         self.records.values()
@@ -389,6 +411,39 @@ mod tests {
             kind,
             identity(1_000),
         )
+    }
+
+    #[test]
+    fn unmapping_a_root_takes_its_records_and_leaves_every_other_one() {
+        let mut sources = SourceSet::new();
+        let dropped = sources
+            .add(PathBuf::from("/mnt/archive"), KindSet::gallery())
+            .expect("absolute root");
+        let kept = sources
+            .add(PathBuf::from("/home/toni/Pictures"), KindSet::gallery())
+            .expect("absolute root");
+        let mut catalogue = Catalogue::new();
+        for (inode, source, path) in [
+            (1, dropped, "/mnt/archive/a.png"),
+            (2, dropped, "/mnt/archive/b.png"),
+            (3, kept, "/home/toni/Pictures/c.png"),
+        ] {
+            catalogue.upsert(MediaRecord::new(
+                MediaId::filesystem(66, inode),
+                source,
+                PathBuf::from(path),
+                MediaKind::Image,
+                identity(1_000),
+            ));
+        }
+
+        // Nothing is configured away yet, so nothing goes.
+        assert_eq!(catalogue.retain_configured(&sources), 0);
+
+        assert!(sources.remove(dropped));
+        assert_eq!(catalogue.retain_configured(&sources), 2);
+        assert_eq!(catalogue.len(), 1);
+        assert!(catalogue.records().all(|record| record.source() == kept));
     }
 
     #[test]

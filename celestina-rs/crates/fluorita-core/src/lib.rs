@@ -45,4 +45,6 @@ pub use preview::{
     StaticArtworkRequest, TrailerBudget, TrailerHost, TrailerLease, TrailerRejected,
     TrailerRequest, MAX_TRAILERS_PER_HOST,
 };
-pub use source::{KindSet, MediaSource, SourceId, SourceRejected, SourceSet, XdgMediaDirs};
+pub use source::{
+    KindSet, MediaSource, SourceId, SourceRejected, SourceScope, SourceSet, XdgMediaDirs,
+};

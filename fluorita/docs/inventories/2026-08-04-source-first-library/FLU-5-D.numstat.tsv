@@ -1,0 +1,52 @@
+# FLU-5-D exact change inventory
+
+Base revision	c0dfb24cdf10b68602ff22aa4a99a706b096cfb7
+Pathspec	celestina-rs/crates/fluorita-core/
+Pathspec	celestina-rs/crates/fluorita-engine/
+Pathspec	docs/version-history.tsv
+Pathspec	fluorita/Cargo.lock
+Pathspec	fluorita/Cargo.toml
+Pathspec	fluorita/README.md
+Pathspec	fluorita/ROADMAP.md
+Pathspec	fluorita/STATUS.md
+Pathspec	fluorita/VALIDATION.md
+Pathspec	fluorita/build.rs
+Pathspec	fluorita/docs/
+Pathspec	fluorita/qml/
+Pathspec	fluorita/scripts/smoke.sh
+Pathspec	fluorita/src/
+Pathspec	scripts/language-baseline.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+56	1	4ee2269d6ac093fd66511642d02cc8292945b483ead220c84b7fada74a18aabe	celestina-rs/crates/fluorita-core/src/catalogue.rs
+100	9	ed3cc517d341ddcbba9859ce9467d63563d51292ca8dacb3115b138dbb7fe3e5	celestina-rs/crates/fluorita-core/src/gallery.rs
+3	1	ff180aa077672839e4f0c8d6bdf3e0fb4c21ee2ec89db46bbdc79de76648338b	celestina-rs/crates/fluorita-core/src/lib.rs
+56	10	5d6bfa3b47f805295ab4a5fc9761cd7b01669381e238ff0cff88489ee57605a1	celestina-rs/crates/fluorita-core/src/music.rs
+213	6	997759dba9ba000f900cd349ca71f44ba98f95fca09f696e920a86cafdce3e59	celestina-rs/crates/fluorita-core/src/source.rs
+2	0	20d763ea1ae6cb644503d2a707412b2853e1dc29197f70fd8835f5574cd34dba	celestina-rs/crates/fluorita-engine/src/lib.rs
+390	0	c69aa29561888e7c6bbaffebba9d7084e0e83d268335b9b29bdea852decec0b4	celestina-rs/crates/fluorita-engine/src/source_store.rs
+1	0	edac909afe197690b260d5bb026418ba686d714a2d6b2e579391e849b044ec5f	docs/version-history.tsv
+1	1	39a0e28497decc4fea7c82b55d04d3ea2eea6ad4bc670172000c2b6d1c8183e7	fluorita/Cargo.lock
+1	1	8ef777396d9f7803edb2b850d01f03e36c38829e5b4e8759ef462a35caef75cc	fluorita/Cargo.toml
+12	8	ad0484fc231e68fd4710354c4b53c3424451adb960861558c2e5f7b0c7842bad	fluorita/README.md
+50	7	4857956f4de30e859ab66a6d0083ef8d33c69a08fe8b67cff20d80d59551416d	fluorita/ROADMAP.md
+21	9	5c55e8894f094cce9f9dea0e2a741ebb6e21f02c2e5da4ce9e21aea58f97d990	fluorita/STATUS.md
+28	2	14678ee241fe1e53643c4eb044e724b94d08a44c83df39dac054be1587463f00	fluorita/VALIDATION.md
+1	0	4d486c742559ddd1bb47a840ef23e5d617896e17e7b2339ba884ef7d93138f9f	fluorita/build.rs
+156	0	6660a5515d1544f809c2ba3418ce3182dce8f24fad127c98b9da9a4d173f253d	fluorita/docs/evidence/2026-08-04-source-first-library.md
+52	0	self	fluorita/docs/inventories/2026-08-04-source-first-library/FLU-5-D.numstat.tsv
+156	0	258ef8fc0a59834f377414582fa61bfe754bedc446208529443f8589b1f81604	fluorita/docs/plans/active/2026-08-04-source-first-library.md
+16	10	d8d25970bf88551689434c639e54e2eed3e2a794e9b70e6cb2c96d9efcfa5ab7	fluorita/qml/Main.qml
+38	25	082d7eece3c4e88461a9616ec0f7d1256d8d4bad955a67a72a23717c147e4ab9	fluorita/qml/components/GalleryGrid.qml
+308	0	4d889dfe9cf773dea96601cb737e843e47f1babd3f88d64c8259d6158030701d	fluorita/qml/components/LibrarySidebar.qml
+99	102	2309b5c877488f6673feafcf56716e7d984751657a2a0007899f2c2b1e17a2af	fluorita/qml/components/LibraryView.qml
+23	17	8a4b7df736417c0b0fa7ee84df7c7083c441fa5428f0f2ae7f5503edb09e4a6a	fluorita/qml/components/MusicList.qml
+14	0	9d0c5f6a7c77e8af3293f6a202d1f1fe018dc7a7a807e4cbb5d8bcd26d94964b	fluorita/scripts/smoke.sh
+194	0	68abe86e201cadb4e0b30ede66021eaa94ea9f77c40848a044046b053a0c9428	fluorita/src/folders.rs
+270	41	8f7f3247bc69566a53f4f1b0f5b8ac3388e66e99ad02a17d80f38acb0a8a4612	fluorita/src/library.rs
+98	33	7804054776173b9952c1dda916e437f44d160c4559c307f25755c3abbf562af9	fluorita/src/library/project.rs
+116	25	d50dad6d31109539181e0213be2084bdbfc8031b43ac5488f0b5ae1dd9ac86dd	fluorita/src/library/work.rs
+1	0	6f28a9d34c4daf7b84ac94b49a6fcaf2dd77256e7f65c88d6c0722c66dc38373	fluorita/src/main.rs
+1	7	5603e44e92db2c2863989a0eb5a9ef4a945ab130bff5296c907b95c63ed9a70b	scripts/language-baseline.tsv

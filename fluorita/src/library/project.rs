@@ -6,15 +6,19 @@
 
 use std::path::Path;
 
-use fluorita_core::{gallery, Catalogue, GalleryFilter, GalleryOrder, MediaKind, MusicLibrary};
+use fluorita_core::{
+    gallery, Catalogue, GalleryFilter, GalleryOrder, MediaKind, MusicLibrary, SourceScope,
+    SourceSet,
+};
 
 use super::work::{thumbnail_cache_root, MAX_ARTWORK_PER_PASS};
 
 /// Everything one publication produces, already shaped for QML.
 #[derive(Default)]
 pub(super) struct LibrarySnapshot {
-    /// `guardada` while showing what was stored and the walk is still running,
-    /// `lista` once the walk has been folded in, `error` when it could not be.
+    /// `stored` while showing what was read back and the walk is still
+    /// running, `ready` once the walk has been folded in, `error` when it
+    /// could not be.
     pub(super) state: &'static str,
     pub(super) summary: String,
     pub(super) truncated: bool,
@@ -23,20 +27,40 @@ pub(super) struct LibrarySnapshot {
     pub(super) track_count: i32,
     pub(super) gallery: Vec<[String; 5]>,
     pub(super) music: Vec<[String; 5]>,
+    /// The sidebar: one row per configured root, in configuration order —
+    /// handle, label and the root itself.
+    pub(super) sources: Vec<[String; 3]>,
     /// What the projection was made from, kept so an explicit artwork pass has
     /// something to work on without re-walking the disk.
     pub(super) catalogue: Catalogue,
+    /// The configuration the rows were projected under, so the host answers a
+    /// later add or remove from what it published rather than from a set the
+    /// worker may have replaced since.
+    pub(super) configured: SourceSet,
     /// How many items the shared cache has no usable thumbnail for.
     pub(super) artwork_pending: i32,
 }
 
+/// Projects one publication: the sidebar, and the content of `scope` inside it.
+///
+/// `scope` is the selected root. Every count and the summary describe exactly
+/// what the grid and the list are showing, because a header that counted the
+/// whole library while one folder was open would be describing something the
+/// user cannot see.
 pub(super) fn project(
     catalogue: &Catalogue,
+    configured: &SourceSet,
+    scope: SourceScope,
     truncated: bool,
     state: &'static str,
 ) -> LibrarySnapshot {
     let cache_root = thumbnail_cache_root();
-    let items = gallery(catalogue, GalleryFilter::All, GalleryOrder::NewestFirst);
+    let items = gallery(
+        catalogue,
+        scope,
+        GalleryFilter::All,
+        GalleryOrder::NewestFirst,
+    );
 
     let image_count = items
         .iter()
@@ -58,7 +82,7 @@ pub(super) fn project(
         .collect();
     let missing = items.iter().filter(|item| !item.available).count();
 
-    let music = MusicLibrary::project(catalogue);
+    let music = MusicLibrary::project(catalogue, scope);
     let music_rows: Vec<[String; 5]> = music
         .artists
         .iter()
@@ -82,9 +106,26 @@ pub(super) fn project(
             .unwrap_or(i32::MAX)
     });
 
+    let source_rows: Vec<[String; 3]> = configured
+        .sources()
+        .iter()
+        .map(|source| {
+            [
+                source.id().value().to_string(),
+                source.display_name(),
+                // Lossy for display only. Nothing reopens a root from this: the
+                // scan walks `MediaSource::root` and every item carries its own
+                // byte-exact path.
+                source.root().to_string_lossy().into_owned(),
+            ]
+        })
+        .collect();
+
     LibrarySnapshot {
         state,
         catalogue: catalogue.clone(),
+        configured: configured.clone(),
+        sources: source_rows,
         artwork_pending,
         summary: summarize(
             image_count,
@@ -92,6 +133,7 @@ pub(super) fn project(
             music_rows.len(),
             missing,
             truncated,
+            matches!(scope, SourceScope::One(_)),
         ),
         truncated,
         image_count: i32::try_from(image_count).unwrap_or(i32::MAX),
@@ -103,17 +145,17 @@ pub(super) fn project(
 }
 
 pub(super) fn unknown_artist() -> String {
-    "Sin artista".to_owned()
+    "Unknown artist".to_owned()
 }
 
 pub(super) fn unknown_album() -> String {
-    "Sin álbum".to_owned()
+    "Unknown album".to_owned()
 }
 
 pub(super) const fn kind_label(kind: MediaKind) -> &'static str {
     match kind {
-        MediaKind::Image => "imagen",
-        MediaKind::Video => "vídeo",
+        MediaKind::Image => "image",
+        MediaKind::Video => "video",
         MediaKind::Audio => "audio",
     }
 }
@@ -137,40 +179,50 @@ pub(super) fn cached_thumbnail(cache_root: Option<&Path>, source: &Path) -> Stri
     fluorita_core::file_uri(&entry).unwrap_or_default()
 }
 
-/// What the header says. Counts are what the scan actually saw, and a
-/// truncated pass says so instead of reading like a complete inventory.
 /// `1`/`0` rather than a word: QML reads it as a flag, and a translated string
 /// in a data column would be a translation nobody asked for.
 pub(super) fn flag(value: bool) -> String {
     if value { "1" } else { "0" }.to_owned()
 }
 
+/// What the header says about what is on screen.
+///
+/// The counts describe the selected scope, not the whole library, and a
+/// truncated pass says so instead of reading like a complete inventory. An
+/// empty result distinguishes an empty folder from an empty library, because
+/// "no media in your folders" would be a lie told while three other folders sit
+/// in the sidebar with content in them.
 pub(super) fn summarize(
     images: usize,
     videos: usize,
     tracks: usize,
     missing: usize,
     truncated: bool,
+    scoped: bool,
 ) -> String {
     if images == 0 && videos == 0 && tracks == 0 {
-        return "No hay medios en tus carpetas".to_owned();
+        return if scoped {
+            "Nothing supported in this folder".to_owned()
+        } else {
+            "No media in your folders".to_owned()
+        };
     }
     let mut parts: Vec<String> = Vec::new();
     if images > 0 {
-        parts.push(format!("{images} {}", plural(images, "imagen", "imágenes")));
+        parts.push(format!("{images} {}", plural(images, "image", "images")));
     }
     if videos > 0 {
-        parts.push(format!("{videos} {}", plural(videos, "vídeo", "vídeos")));
+        parts.push(format!("{videos} {}", plural(videos, "video", "videos")));
     }
     if tracks > 0 {
-        parts.push(format!("{tracks} {}", plural(tracks, "pista", "pistas")));
+        parts.push(format!("{tracks} {}", plural(tracks, "track", "tracks")));
     }
     if missing > 0 {
-        parts.push(format!("{missing} sin encontrar",));
+        parts.push(format!("{missing} not found"));
     }
     let counted = parts.join(" · ");
     if truncated {
-        format!("{counted} (exploración incompleta: se alcanzó un límite)")
+        format!("{counted} (incomplete scan: a limit was reached)")
     } else {
         counted
     }
@@ -188,28 +240,41 @@ mod tests {
 
     #[test]
     fn the_summary_counts_what_was_found() {
-        assert_eq!(summarize(86, 8, 0, 0, false), "86 imágenes · 8 vídeos");
-        assert_eq!(summarize(1, 1, 1, 0, false), "1 imagen · 1 vídeo · 1 pista");
+        assert_eq!(summarize(86, 8, 0, 0, false, false), "86 images · 8 videos");
         assert_eq!(
-            summarize(0, 0, 0, 0, false),
-            "No hay medios en tus carpetas"
+            summarize(1, 1, 1, 0, false, false),
+            "1 image · 1 video · 1 track"
+        );
+    }
+
+    #[test]
+    fn an_empty_folder_is_not_reported_as_an_empty_library() {
+        // The distinction is the whole point of a sidebar: three folders with
+        // content and one without must not all say the library is empty.
+        assert_eq!(
+            summarize(0, 0, 0, 0, false, true),
+            "Nothing supported in this folder"
+        );
+        assert_eq!(
+            summarize(0, 0, 0, 0, false, false),
+            "No media in your folders"
         );
     }
 
     #[test]
     fn a_truncated_scan_never_reads_like_a_complete_inventory() {
-        let summary = summarize(50_000, 0, 0, 0, true);
-        assert!(summary.contains("incompleta"));
-        assert!(summary.contains("50000 imágenes"));
+        let summary = summarize(50_000, 0, 0, 0, true, false);
+        assert!(summary.contains("incomplete"));
+        assert!(summary.contains("50000 images"));
     }
 
     #[test]
     fn what_went_missing_is_counted_out_loud() {
-        // Un archivo que ya no está sigue en la rejilla —un disco desconectado
-        // no es pérdida de datos— pero el encabezado lo dice.
+        // A file that is no longer there stays in the grid — a disconnected
+        // drive is not data loss — but the header says so.
         assert_eq!(
-            summarize(2, 1, 0, 1, false),
-            "2 imágenes · 1 vídeo · 1 sin encontrar"
+            summarize(2, 1, 0, 1, false, false),
+            "2 images · 1 video · 1 not found"
         );
     }
 
@@ -220,7 +285,7 @@ mod tests {
         let root = std::env::temp_dir().join("fluorita-library-tests");
         std::fs::create_dir_all(&root).expect("scratch");
         assert_eq!(
-            cached_thumbnail(Some(&root), Path::new("/home/toni/Vídeos/clip.mkv")),
+            cached_thumbnail(Some(&root), Path::new("/home/toni/Videos/clip.mkv")),
             ""
         );
         assert_eq!(cached_thumbnail(None, Path::new("/home/toni/x.png")), "");
@@ -229,7 +294,7 @@ mod tests {
     #[test]
     fn an_existing_thumbnail_is_offered_as_a_url() {
         let root = std::env::temp_dir().join("fluorita-library-tests/cache");
-        let source = Path::new("/home/toni/Vídeos/clip con espacio.mkv");
+        let source = Path::new("/home/toni/Videos/clip with space.mkv");
         let entry = fluorita_core::large_thumbnail_path(&root, source).expect("cache path");
         std::fs::create_dir_all(entry.parent().expect("parent")).expect("cache dir");
         std::fs::write(&entry, b"fake png").expect("entry");
@@ -242,9 +307,9 @@ mod tests {
     }
 
     #[test]
-    fn kind_labels_are_the_spanish_the_interface_shows() {
-        assert_eq!(kind_label(MediaKind::Image), "imagen");
-        assert_eq!(kind_label(MediaKind::Video), "vídeo");
+    fn kind_labels_are_the_words_the_interface_shows() {
+        assert_eq!(kind_label(MediaKind::Image), "image");
+        assert_eq!(kind_label(MediaKind::Video), "video");
         assert_eq!(kind_label(MediaKind::Audio), "audio");
     }
 }

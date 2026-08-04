@@ -2,8 +2,15 @@
 //!
 //! Fluorita reads media out of roots the user configured — it is not a file
 //! manager and never crawls the filesystem at large. This module owns which
-//! roots exist, which kinds each one contributes and whether a given path
-//! belongs to one; the scan that walks them lives outside this crate.
+//! roots exist, which kinds each one contributes, whether a given path belongs
+//! to one and which of them a projection is scoped to; the scan that walks them
+//! and the file they are stored in both live outside this crate.
+//!
+//! The roots are the axis the library is navigated by, so a [`SourceId`] is not
+//! a within-session convenience: the stored catalogue keys every record by one.
+//! [`SourceSet::restore`] therefore exists beside [`SourceSet::add`], so a
+//! configuration read back from disk keeps the identities its records already
+//! refer to instead of being renumbered by load order.
 
 use std::path::{Path, PathBuf};
 
@@ -114,10 +121,47 @@ impl MediaSource {
         self.kinds
     }
 
+    /// The label the sidebar shows: the root's final component, or the whole
+    /// path when it has none. Lossy only for display — the scan and every
+    /// projection use [`MediaSource::root`], never this.
+    #[must_use]
+    pub fn display_name(&self) -> String {
+        self.root
+            .file_name()
+            .unwrap_or(self.root.as_os_str())
+            .to_string_lossy()
+            .into_owned()
+    }
+
     /// Whether this root both contains `path` and wants that kind.
     #[must_use]
     pub fn accepts(&self, path: &Path, kind: MediaKind) -> bool {
         self.kinds.contains(kind) && path.starts_with(&self.root)
+    }
+}
+
+/// Which configured roots a projection covers.
+///
+/// The library is navigated by source, so every projection needs this; making
+/// it an argument rather than a filter applied afterwards keeps the decision
+/// with the records instead of leaving each host to re-derive it.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum SourceScope {
+    /// Every configured root. What a whole-library operation reads.
+    #[default]
+    All,
+    /// One root, whether or not it is still configured. A scope naming a root
+    /// that was just removed simply matches nothing.
+    One(SourceId),
+}
+
+impl SourceScope {
+    #[must_use]
+    pub const fn accepts(self, source: SourceId) -> bool {
+        match self {
+            Self::All => true,
+            Self::One(scoped) => scoped.0 == source.0,
+        }
     }
 }
 
@@ -132,6 +176,9 @@ pub enum SourceRejected {
     /// The same root, or a root already covered by (or covering) another one:
     /// nesting would catalogue the same file under two sources.
     Overlapping,
+    /// A restored identity that another configured root already holds. Two
+    /// roots sharing one handle would make every stored record ambiguous.
+    DuplicateIdentity,
 }
 
 /// The configured roots, in configuration order.
@@ -147,9 +194,39 @@ impl SourceSet {
         Self::default()
     }
 
-    /// Configures one root. Rejects a relative, empty-kinded or overlapping
-    /// root rather than accepting a library that would double-count files.
+    /// Configures one root under a freshly issued identity. Rejects a relative,
+    /// empty-kinded or overlapping root rather than accepting a library that
+    /// would double-count files.
     pub fn add(&mut self, root: PathBuf, kinds: KindSet) -> Result<SourceId, SourceRejected> {
+        let id = SourceId(self.next_id);
+        self.insert(id, root, kinds)
+    }
+
+    /// Configures one root under an identity it already had.
+    ///
+    /// This is how a stored configuration comes back: the catalogue on disk
+    /// keys its records by these handles, so reissuing them in load order would
+    /// silently reassign every record to the wrong root. A stored entry is
+    /// validated exactly like a new one, because a configuration file is input
+    /// like any other, and a duplicate handle is refused rather than shadowed.
+    pub fn restore(
+        &mut self,
+        id: SourceId,
+        root: PathBuf,
+        kinds: KindSet,
+    ) -> Result<SourceId, SourceRejected> {
+        if self.sources.iter().any(|source| source.id == id) {
+            return Err(SourceRejected::DuplicateIdentity);
+        }
+        self.insert(id, root, kinds)
+    }
+
+    fn insert(
+        &mut self,
+        id: SourceId,
+        root: PathBuf,
+        kinds: KindSet,
+    ) -> Result<SourceId, SourceRejected> {
         if !root.is_absolute() {
             return Err(SourceRejected::NotAbsolute);
         }
@@ -164,10 +241,26 @@ impl SourceSet {
             return Err(SourceRejected::Overlapping);
         }
 
-        let id = SourceId(self.next_id);
-        self.next_id += 1;
+        // Never below an identity already in use: a later `add` that reissued a
+        // restored handle would produce exactly the ambiguity `restore` exists
+        // to prevent.
+        self.next_id = self.next_id.max(id.0.saturating_add(1));
         self.sources.push(MediaSource { id, root, kinds });
         Ok(id)
+    }
+
+    /// Stops reading a root. Returns whether anything was configured under that
+    /// handle.
+    ///
+    /// This removes the root from the library, never from the disk. Its
+    /// catalogue records stop being projected because nothing scopes to a
+    /// handle that no longer exists; the files themselves are untouched, and
+    /// the handle is not reissued, so adding the same folder back is a new
+    /// source rather than a resurrection of stale records.
+    pub fn remove(&mut self, id: SourceId) -> bool {
+        let before = self.sources.len();
+        self.sources.retain(|source| source.id != id);
+        self.sources.len() != before
     }
 
     #[must_use]
@@ -328,6 +421,120 @@ mod tests {
         assert_eq!(super::SourceId::from_value(identifier.value()), identifier);
         // A handle from a previous configuration names nothing now.
         assert!(set.get(super::SourceId::from_value(99)).is_none());
+    }
+
+    #[test]
+    fn a_removed_root_stops_owning_anything_and_never_reissues_its_handle() {
+        let mut set = SourceSet::new();
+        let pictures = set
+            .add(PathBuf::from("/home/toni/Pictures"), KindSet::gallery())
+            .expect("absolute root");
+
+        assert!(set.remove(pictures));
+        // Removing again is not an error; it simply changed nothing.
+        assert!(!set.remove(pictures));
+        assert!(set.is_empty());
+        assert!(set
+            .owner_of(Path::new("/home/toni/Pictures/a.png"), MediaKind::Image)
+            .is_none());
+
+        // Adding the same folder back is a new source. Reusing the handle would
+        // resurrect the stored records of a root the user removed.
+        let again = set
+            .add(PathBuf::from("/home/toni/Pictures"), KindSet::gallery())
+            .expect("absolute root");
+        assert_ne!(again, pictures);
+    }
+
+    #[test]
+    fn a_restored_configuration_keeps_the_handles_its_records_refer_to() {
+        let mut set = SourceSet::new();
+        let music = set
+            .restore(
+                super::SourceId::from_value(7),
+                PathBuf::from("/home/toni/Music"),
+                KindSet::audio(),
+            )
+            .expect("absolute root");
+
+        assert_eq!(music.value(), 7);
+        // The next issued handle cannot collide with a restored one.
+        let fresh = set
+            .add(PathBuf::from("/home/toni/Pictures"), KindSet::gallery())
+            .expect("absolute root");
+        assert!(fresh.value() > 7);
+    }
+
+    #[test]
+    fn a_stored_configuration_is_validated_like_any_other_input() {
+        let mut set = SourceSet::new();
+        set.restore(
+            super::SourceId::from_value(2),
+            PathBuf::from("/home/toni/Pictures"),
+            KindSet::gallery(),
+        )
+        .expect("absolute root");
+
+        // The same handle twice would make every stored record ambiguous.
+        assert_eq!(
+            set.restore(
+                super::SourceId::from_value(2),
+                PathBuf::from("/home/toni/Music"),
+                KindSet::audio()
+            ),
+            Err(SourceRejected::DuplicateIdentity)
+        );
+        // A stored file gets no exemption from the rules a new root obeys.
+        assert_eq!(
+            set.restore(
+                super::SourceId::from_value(3),
+                PathBuf::from("Pictures"),
+                KindSet::gallery()
+            ),
+            Err(SourceRejected::NotAbsolute)
+        );
+        assert_eq!(
+            set.restore(
+                super::SourceId::from_value(4),
+                PathBuf::from("/home/toni/Pictures/2026"),
+                KindSet::gallery()
+            ),
+            Err(SourceRejected::Overlapping)
+        );
+        assert_eq!(set.sources().len(), 1);
+    }
+
+    #[test]
+    fn a_scope_covers_everything_or_exactly_one_root() {
+        let mut set = SourceSet::new();
+        let pictures = set
+            .add(PathBuf::from("/home/toni/Pictures"), KindSet::gallery())
+            .expect("absolute root");
+        let music = set
+            .add(PathBuf::from("/home/toni/Music"), KindSet::audio())
+            .expect("absolute root");
+
+        assert!(super::SourceScope::All.accepts(pictures));
+        assert!(super::SourceScope::All.accepts(music));
+        assert!(super::SourceScope::One(pictures).accepts(pictures));
+        assert!(!super::SourceScope::One(pictures).accepts(music));
+        // A scope naming a root that was just removed matches nothing rather
+        // than falling back to everything.
+        set.remove(pictures);
+        assert!(!super::SourceScope::One(pictures).accepts(music));
+    }
+
+    #[test]
+    fn a_root_is_labelled_by_its_final_component() {
+        let mut set = SourceSet::new();
+        let id = set
+            .add(PathBuf::from("/home/toni/Videos"), KindSet::gallery())
+            .expect("absolute root");
+
+        assert_eq!(
+            set.get(id).map(super::MediaSource::display_name).as_deref(),
+            Some("Videos")
+        );
     }
 
     #[test]

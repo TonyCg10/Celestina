@@ -29,9 +29,15 @@ ApplicationWindow {
         ? qsTr("Fluorita — %1").arg(window.openLabel)
         : qsTr("Fluorita")
 
-    // Abrir un item: el reproductor toma la ventana. La etiqueta es sólo para
-    // mostrar; la ruta es la que va al motor.
+    // Opening an item: the player takes the window. The label is for display
+    // only; the path is what goes to the engine.
     function open(path) {
+        // Opening what is already open would tear the session down and build it
+        // again — a visible restart for anyone who double-clicks a card out of
+        // habit now that one click is enough.
+        if (path === window.openPath) {
+            return;
+        }
         window.openPath = path;
         window.openLabel = path.substring(path.lastIndexOf("/") + 1);
         mediaPlayer.open(path);
@@ -99,22 +105,22 @@ ApplicationWindow {
         enabled: window.playing
         onActivated: mediaPlayer.setVolume(Math.max(0, mediaPlayer.volumeLevel - 0.05))
     }
-    // Generar las miniaturas que faltan, sin depender del ratón ni del orden
-    // de tabulación.
+    // Generate the missing thumbnails without depending on the pointer or on
+    // the tab order.
     Shortcut {
         sequence: "Ctrl+G"
         enabled: !window.playing && mediaLibrary.artworkPending > 0
-            && mediaLibrary.artworkState === "parada"
+            && mediaLibrary.artworkState === "idle"
         onActivated: mediaLibrary.generateArtwork()
     }
     Shortcut {
         sequence: "Ctrl+Shift+G"
-        enabled: !window.playing && mediaLibrary.artworkState === "generando"
+        enabled: !window.playing && mediaLibrary.artworkState === "generating"
         onActivated: mediaLibrary.cancelArtwork()
     }
 
-    // Volver a la biblioteca: cierra la sesión y devuelve la ventana a las
-    // rejillas, sin salir de la aplicación.
+    // Back to the library: closes the session and gives the window back to the
+    // content, without leaving the application.
     Shortcut {
         sequence: "Escape"
         enabled: window.playing
@@ -146,8 +152,8 @@ ApplicationWindow {
         if (window.requestedPath.length > 0) {
             mediaPlayer.open(window.requestedPath)
         } else {
-            // Sin argumento: la biblioteca. El escaneo corre en el worker del
-            // motor, así que esta llamada vuelve de inmediato.
+            // No argument: the library. The scan runs on the engine's worker,
+            // so this call returns at once.
             mediaLibrary.scan()
         }
     }

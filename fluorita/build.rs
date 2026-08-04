@@ -17,6 +17,7 @@ const QML_FILES: &[&str] = &[
     // region.
     "qml/components/GalleryGrid.qml",
     "qml/components/ImageView.qml",
+    "qml/components/LibrarySidebar.qml",
     "qml/components/LibraryView.qml",
     "qml/components/MusicList.qml",
     "qml/components/PlayerSurface.qml",

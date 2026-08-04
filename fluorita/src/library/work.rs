@@ -9,12 +9,15 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use celestina_core::CancellationToken;
-use fluorita_core::{Catalogue, MediaKind, SourceSet, XdgMediaDirs};
+use cxx_qt_lib::QString;
+use fluorita_core::{Catalogue, MediaKind, SourceScope, SourceSet, XdgMediaDirs};
 use fluorita_engine::backend::ArtworkJob;
 use fluorita_engine::worker::{EngineWorker, Job, JobOutcome};
-use fluorita_engine::{catalogue_store, LibraryChange, LibraryWatcher, ScanLimits};
+use fluorita_engine::{catalogue_store, source_store, LibraryChange, LibraryWatcher, ScanLimits};
 
-use super::project::{project, LibrarySnapshot};
+use crate::folders::{self, FolderChoice};
+
+use super::project::project;
 use super::qobject;
 
 /// How long the worker waits for the scan before checking whether the host is
@@ -94,50 +97,124 @@ pub(super) fn run_artwork(
     let _ = qt_thread.queue(move |library| library.artwork_finished(produced));
 }
 
-/// Turns row-major records into the four index-aligned lists QML binds to.
-pub(super) fn run_scan(qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>) {
-    let store = catalogue_store::default_path();
+/// Asks the desktop for a folder and reports the answer through the queue.
+///
+/// The whole exchange happens here because it blocks for as long as the person
+/// takes to decide. Only the answer crosses back, as two strings: the chosen
+/// path, empty when nothing was chosen, and a notice, empty when there is
+/// nothing to say. A dismissed dialog is therefore silent, and a desktop that
+/// could not be asked says why.
+pub(super) fn run_folder_choice(qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>) {
+    let (path, notice) = match folders::choose("Add a folder to your library") {
+        FolderChoice::Chosen(path) => (path.to_string_lossy().into_owned(), String::new()),
+        FolderChoice::Cancelled => (String::new(), String::new()),
+        FolderChoice::Unavailable(reason) => (
+            String::new(),
+            format!("The desktop could not offer a folder chooser: {reason}"),
+        ),
+    };
+    let _ = qt_thread.queue(move |library| {
+        library.folder_chosen(QString::from(&path), QString::from(&notice));
+    });
+}
 
-    // What was known last time, on screen before anything is walked.
+/// Reads the catalogue and the configuration, walks the roots, then watches.
+///
+/// `configured` is `Some` when the user just changed the configuration; that
+/// set is stored before anything is walked, so the choice survives even a scan
+/// that fails. It is `None` on launch, when the stored configuration — or the
+/// first-run seed — is what to use.
+pub(super) fn run_scan(
+    qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>,
+    configured: Option<SourceSet>,
+    scope: SourceScope,
+    cancellation: &CancellationToken,
+) {
+    let store = catalogue_store::default_path();
+    let source_store_path = source_store::default_path();
+
+    // `store_now` is the whole point of persisting: a set that only lives in
+    // this process would hand out fresh handles next launch, and the catalogue
+    // on disk keys every record by one. A seed is therefore written down too —
+    // it is the configuration until the user changes it, and one media
+    // directory appearing or disappearing would otherwise shift every handle
+    // under the stored records.
+    let (sources, store_now) = match configured {
+        Some(sources) => (sources, true),
+        None => match source_store_path.as_deref() {
+            Some(path) => {
+                let loaded = source_store::load(path, &media_directories());
+                if loaded.skipped > 0 {
+                    eprintln!(
+                        "fluorita: {} stored folder entries could not be read",
+                        loaded.skipped
+                    );
+                }
+                (loaded.sources, loaded.seeded)
+            }
+            None => (SourceSet::seeded_from(&media_directories()), false),
+        },
+    };
+    // Stored before anything is walked. A scan that fails afterwards costs a
+    // scan; a choice lost because the scan failed would look like the button
+    // did nothing.
+    if store_now {
+        if let Some(path) = source_store_path.as_deref() {
+            if let Err(error) = source_store::save(path, &sources) {
+                eprintln!("fluorita: could not store the configured folders: {error}");
+            }
+        }
+    }
+
+    // What was known last time, on screen before anything is walked — minus
+    // anything belonging to a root that is no longer configured.
     let mut catalogue = match store.as_deref().map(catalogue_store::load) {
         Some(Ok(outcome)) => outcome.catalogue,
         _ => Catalogue::new(),
     };
+    catalogue.retain_configured(&sources);
     if !catalogue.is_empty() {
-        let stored = project(&catalogue, false, "guardada");
+        let stored = project(&catalogue, &sources, scope, false, "stored");
         let _ = qt_thread.queue(move |library| library.apply(stored));
     }
 
-    let sources = SourceSet::seeded_from(&media_directories());
-    let sources_for_watch = SourceSet::seeded_from(&media_directories());
     if sources.is_empty() {
-        return publish_failure(qt_thread, "No hay carpetas de medios que explorar");
+        return publish_failure(qt_thread, &sources, scope, "No media folders to scan");
     }
 
     let Ok(worker) = EngineWorker::start() else {
-        return publish_failure(qt_thread, "No se pudo iniciar el explorador");
+        return publish_failure(qt_thread, &sources, scope, "Could not start the scanner");
     };
     if worker
         .submit(Job::Scan {
             generation: celestina_core::Generation::INITIAL,
-            sources: Box::new(sources),
+            sources: Box::new(sources.clone()),
             limits: ScanLimits::conservative(),
         })
         .is_err()
     {
-        return publish_failure(qt_thread, "No se pudo iniciar el explorador");
+        return publish_failure(qt_thread, &sources, scope, "Could not start the scanner");
     }
 
     let Some(JobOutcome::Scanned { result, .. }) = worker.poll(SCAN_TIMEOUT) else {
-        return publish_failure(qt_thread, "La exploración no terminó a tiempo");
+        return publish_failure(
+            qt_thread,
+            &sources,
+            scope,
+            "The scan did not finish in time",
+        );
     };
     let Ok(outcome) = result else {
-        return publish_failure(qt_thread, "No se pudo explorar la biblioteca");
+        return publish_failure(qt_thread, &sources, scope, "Could not scan the library");
     };
 
     let truncated = outcome.truncated;
     let complete = outcome.is_complete();
     catalogue.absorb(outcome.records, complete);
+    // A root that is no longer configured keeps no records: the scan cannot
+    // refresh what it does not walk, and a stale entry would read as a file
+    // that went missing.
+    catalogue.retain_configured(&sources);
 
     // Tags are the expensive part, and the only reason this catalogue is worth
     // storing: what is read here is not read again unless the file changes.
@@ -149,12 +226,19 @@ pub(super) fn run_scan(qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>
         let _ = catalogue_store::save(path, &catalogue);
     }
 
-    let refreshed = project(&catalogue, truncated, "lista");
+    let refreshed = project(&catalogue, &sources, scope, truncated, "ready");
     let _ = qt_thread.queue(move |library| library.apply(refreshed));
     let _ = learned;
 
     // From here the library keeps itself up to date without walking again.
-    watch_library(&sources_for_watch, catalogue, store.as_deref(), qt_thread);
+    watch_library(
+        &sources,
+        scope,
+        catalogue,
+        store.as_deref(),
+        qt_thread,
+        cancellation,
+    );
 }
 
 /// Folds changes in as they happen, until the host goes away.
@@ -166,9 +250,11 @@ pub(super) fn run_scan(qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>
 /// see is guessing.
 pub(super) fn watch_library(
     sources: &SourceSet,
+    scope: SourceScope,
     mut catalogue: Catalogue,
     store: Option<&Path>,
     qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>,
+    cancellation: &CancellationToken,
 ) {
     let Ok(watcher) = LibraryWatcher::start(sources) else {
         // No watcher is a library that is merely not live; the scan it already
@@ -178,10 +264,13 @@ pub(super) fn watch_library(
     for root in watcher.unwatched() {
         // Counted in the log rather than hidden: a root nobody watches looks
         // like a scan that forgot it.
-        eprintln!("fluorita: no se pudo vigilar {}", root.display());
+        eprintln!("fluorita: could not watch {}", root.display());
     }
 
-    loop {
+    // The host stops this loop by cancelling, which is what lets a second scan
+    // — after the user maps or unmaps a folder — join this thread instead of
+    // waiting on a watch that would otherwise run until the window closes.
+    while !cancellation.is_cancelled() {
         let Some(batch) = watcher.poll(WATCH_POLL) else {
             // The host is gone when the queue stops accepting work; a probe
             // send is how that is noticed without a second channel.
@@ -224,7 +313,7 @@ pub(super) fn watch_library(
         if let Some(path) = store {
             let _ = catalogue_store::save(path, &catalogue);
         }
-        let refreshed = project(&catalogue, false, "lista");
+        let refreshed = project(&catalogue, sources, scope, false, "ready");
         if qt_thread
             .queue(move |library| library.apply(refreshed))
             .is_err()
@@ -331,15 +420,17 @@ pub(super) fn learn_tags(worker: &EngineWorker, catalogue: &mut Catalogue) -> us
     learned
 }
 
+/// Reports a failure without losing the sidebar: the roots are still
+/// configured, and a window that dropped them would leave no way to add or
+/// remove one after a scan went wrong.
 pub(super) fn publish_failure(
     qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>,
+    sources: &SourceSet,
+    scope: SourceScope,
     message: &str,
 ) {
-    let snapshot = LibrarySnapshot {
-        state: "error",
-        summary: message.to_owned(),
-        ..LibrarySnapshot::default()
-    };
+    let mut snapshot = project(&Catalogue::new(), sources, scope, false, "error");
+    snapshot.summary = message.to_owned();
     let _ = qt_thread.queue(move |library| library.apply(snapshot));
 }
 

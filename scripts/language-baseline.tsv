@@ -61,10 +61,6 @@
 1	celestina/tests/traymenu_test.cpp
 5	celestina/tests/tst_outputchooser.qml
 2	fluorita/org.celestina.Fluorita.desktop
-6	fluorita/qml/Main.qml
-16	fluorita/qml/components/GalleryGrid.qml
-17	fluorita/qml/components/LibraryView.qml
-11	fluorita/qml/components/MusicList.qml
 6	fluorita/qml/components/SeekBar.qml
 4	fluorita/qml/components/VolumeBar.qml
 3	fluorita/scripts/run.sh
@@ -81,9 +77,7 @@
 17	fluorita/spikes/spikelib.py
 4	fluorita/src/activation.rs
 3	fluorita/src/image.rs
-3	fluorita/src/library.rs
-14	fluorita/src/library/project.rs
-4	fluorita/src/library/work.rs
+3	fluorita/src/library/work.rs
 2	fluorita/src/mpris.rs
 2	fluorita/src/player.rs
 2	grafita/build.rs

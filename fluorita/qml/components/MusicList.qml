@@ -1,20 +1,20 @@
 import QtQuick
 import org.celestina.fluorita 1.0
 
-// Música: las pistas en el orden que ya decidió la proyección del core
-// (artista → álbum → pista), agrupadas por artista.
+// Music: the tracks of the selected folder in the order the core projection
+// already decided (artist → album → track), grouped by artist.
 //
-// El bucket «Sin artista» es deliberado: una pista sin etiquetas sigue siendo
-// música del usuario y desaparecerla sería peor que admitir que no sabemos de
-// quién es.
+// The "Unknown artist" bucket is deliberate: an untagged track is still the
+// user's music, and hiding it would be worse than admitting we do not know
+// whose it is.
 ListView {
     id: list
 
     required property FluoritaLibrary library
     signal activated(string path)
 
-    // Igual que la galería: se teje cuando la revisión dice que las cuatro
-    // columnas de este escaneo ya están publicadas.
+    // Like the gallery: woven when the revision says every column of this
+    // publication is in place.
     property var rows: []
     model: list.rows
 
@@ -48,14 +48,14 @@ ListView {
 
     clip: true
     focus: true
-    // Entra en la cadena de tabulación: sin esto el foco se queda aquí y las
-    // acciones de la cabecera no se pueden alcanzar sin ratón.
+    // Joins the tab chain: without this the focus stays here and the header
+    // actions cannot be reached without a pointer.
     activeFocusOnTab: true
     boundsBehavior: Flickable.StopAtBounds
     spacing: CelestinaTheme.spaceXs
 
-    // El orden ya viene agrupado por artista, así que seccionar no reordena
-    // nada: sólo pone el rótulo donde cambia.
+    // The order already arrives grouped by artist, so sectioning reorders
+    // nothing: it only puts the label where the artist changes.
     section.property: "artist"
     section.criteria: ViewSection.FullString
     section.delegate: CelestinaSectionLabel {
@@ -67,7 +67,7 @@ ListView {
     }
 
     Accessible.role: Accessible.List
-    Accessible.name: qsTr("Música")
+    Accessible.name: qsTr("Music")
 
     delegate: Item {
         id: row
@@ -83,7 +83,7 @@ ListView {
         Accessible.role: Accessible.ListItem
         Accessible.name: row.modelData.available
             ? row.modelData.title
-            : qsTr("%1 — sin encontrar").arg(row.modelData.title)
+            : qsTr("%1 — not found").arg(row.modelData.title)
         Accessible.description: qsTr("%1 · %2").arg(row.modelData.artist).arg(row.modelData.album)
         Accessible.focusable: true
         Accessible.onPressAction: list.activated(row.modelData.path)
@@ -129,13 +129,19 @@ ListView {
             }
         }
 
-        TapHandler {
-            acceptedButtons: Qt.LeftButton
-            onSingleTapped: {
+        // One click plays it, for the same reason the grid opens on one click,
+        // and through a MouseArea stacked above the surface for the same reason
+        // the grid uses one: a `Pane` filling the row swallows the press that a
+        // parent's TapHandler would need.
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
                 list.currentIndex = row.index;
                 list.forceActiveFocus();
+                list.activated(row.modelData.path);
             }
-            onDoubleTapped: list.activated(row.modelData.path)
         }
     }
 

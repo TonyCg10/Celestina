@@ -1,8 +1,34 @@
 # Fluorita author validation
 
 This manual lane does not contain implementation and does not block
-[ROADMAP.md](ROADMAP.md). Fluorita has no currently requested pending author
-validation.
+[ROADMAP.md](ROADMAP.md).
+
+## VAL-FLU-SOURCES — the source-first library in a real session
+
+- **Status:** pending
+- **Related implementation:** F5
+- **Requires:** the deployed Fluorita binary, a real Wayland session, a working
+  `org.freedesktop.portal.FileChooser` backend, and at least one folder of
+  pictures and one of music outside the seeded XDG directories
+- **Procedure:** launch Fluorita with no argument; select each folder in the
+  sidebar in turn; press "Add folder…" and choose a folder outside the seeded
+  ones; restart Fluorita; remove that folder again; then click once on an item,
+  double-click another, and repeat both with Tab, the arrow keys and Enter
+- **Pass condition:** the sidebar lists the mapped folders; selecting one shows
+  exactly its supported media, with the grid for pictures and video, artists
+  and albums for music, and both for a folder holding both; the chosen folder
+  appears as an entry and is still there after the restart; removing it drops
+  it and its items from the library while every file stays on disk; one click
+  opens or plays an item; a double click does not restart what it just opened;
+  and the keyboard reaches and activates the same things as the pointer
+- **Result:** not run
+- **Evidence:** none
+
+The agent lane proved compilation, the domain rules, QML construction offscreen
+and that the folder configuration reaches disk. It cannot prove appearance,
+pointer behaviour or the desktop's own dialog. A failure records the
+observation here and opens a linked corrective implementation unit; it does not
+reopen F5.
 
 ## Closed historical observations
 

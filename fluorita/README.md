@@ -5,12 +5,16 @@ application, plus a bounded image/video/audio surface embedded in Siderita.
 
 ## User contract
 
-- Index only configured local roots, initially seeded from existing XDG
-  Pictures, Videos and Music directories; never crawl the whole filesystem or
-  delete a source when it leaves the catalogue.
-- Gallery projects images and video; Music projects artists, albums and tracks.
-  Direct activation opens and starts an individual item without hiding the
-  library.
+- Index only configured local roots. The first run seeds them from the existing
+  XDG Pictures, Videos and Music directories; after that they are the user's,
+  added through the desktop folder chooser and removed again, and persisted.
+  Never crawl the whole filesystem, and never delete a file when its root or
+  its record leaves the catalogue.
+- The library is navigated by root: a sidebar of the mapped folders, each
+  showing the supported media inside it. Gallery projects images and video and
+  Music projects artists, albums and tracks; which of them renders follows what
+  the selected folder holds. One click opens an item, and direct activation
+  starts it without hiding the library.
 - In Siderita, `Space` views/plays media in place and double-click/`Enter`
   launches standalone Fluorita. The canonical mapping is the
   [content-activation contract](../docs/contracts/content-activation.md).
@@ -28,8 +32,8 @@ navigation never starts the decoder merely to show a row.
 | `../celestina-rs/crates/fluorita-core` | Media identity/kind, catalogue projections, capabilities, playback truth and generation-stamped resource contracts; no Qt/decode |
 | `../celestina-rs/crates/fluorita-engine` | Bounded scan/watch, persisted catalogue, metadata, artwork, trailers and libmpv playback |
 | `../celestina-rs/crates/fluorita-qt` | Shared C++/Qt Quick framebuffer/render seam for libmpv |
-| `src/` | Standalone CXX-Qt adapters, owned workers, activation and MPRIS2 |
-| `qml/` | Gallery, Music and complete player composition |
+| `src/` | Standalone CXX-Qt adapters, owned workers, the folder-chooser portal client, activation and MPRIS2 |
+| `qml/` | Source sidebar, Gallery, Music and complete player composition |
 | `cpp/` | The narrow toolkit image-probe seam unavailable through CXX-Qt |
 | `../siderita/src/media.rs`, `../siderita/qml/dialogs/` | Separate thin adapter and minimal embedded player |
 | `../celestina-style` | Canonical visual tokens, controls and assets |

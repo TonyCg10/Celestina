@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use crate::catalogue::Catalogue;
 use crate::media::{MediaId, MediaKind};
+use crate::source::SourceScope;
 
 /// One playable track.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -66,14 +67,15 @@ pub struct MusicLibrary {
 }
 
 impl MusicLibrary {
-    /// Projects every audio record in the catalogue.
+    /// Projects the audio records of one configured root, or of all of them.
     #[must_use]
-    pub fn project(catalogue: &Catalogue) -> Self {
+    pub fn project(catalogue: &Catalogue, scope: SourceScope) -> Self {
         let mut grouped: BTreeMap<Option<String>, BTreeMap<Option<String>, Album>> =
             BTreeMap::new();
 
         for record in catalogue
             .records()
+            .filter(|record| scope.accepts(record.source()))
             .filter(|record| record.kind() == MediaKind::Audio)
         {
             let metadata = record.metadata();
@@ -177,7 +179,7 @@ mod tests {
     use super::MusicLibrary;
     use crate::catalogue::{Catalogue, MediaMetadata, MediaRecord, SourceIdentity};
     use crate::media::{MediaId, MediaKind};
-    use crate::source::{KindSet, SourceSet};
+    use crate::source::{KindSet, SourceScope, SourceSet};
     use std::collections::BTreeSet;
     use std::path::PathBuf;
     use std::time::{Duration, SystemTime};
@@ -206,6 +208,50 @@ mod tests {
                 SourceIdentity::new(1, SystemTime::UNIX_EPOCH + Duration::from_secs(10)),
             )
             .with_metadata(metadata),
+        );
+    }
+
+    #[test]
+    fn a_scoped_projection_shows_one_configured_root_and_no_other() {
+        let mut sources = SourceSet::new();
+        let music = sources
+            .add(PathBuf::from("/home/toni/Music"), KindSet::audio())
+            .expect("absolute root");
+        let archive = sources
+            .add(PathBuf::from("/home/toni/Archive"), KindSet::audio())
+            .expect("absolute root");
+        let mut catalogue = Catalogue::new();
+        for (inode, source, path, artist) in [
+            (1, music, "/home/toni/Music/a.flac", "Recent"),
+            (2, archive, "/home/toni/Archive/b.flac", "Older"),
+        ] {
+            catalogue.upsert(
+                MediaRecord::new(
+                    MediaId::filesystem(66, inode),
+                    source,
+                    PathBuf::from(path),
+                    MediaKind::Audio,
+                    SourceIdentity::new(1, SystemTime::UNIX_EPOCH + Duration::from_secs(10)),
+                )
+                .with_metadata(tagged(artist, "Album", "Track", 1)),
+            );
+        }
+
+        let scoped = MusicLibrary::project(&catalogue, SourceScope::One(music));
+
+        assert_eq!(
+            scoped
+                .artists
+                .iter()
+                .map(|artist| artist.name.clone())
+                .collect::<Vec<_>>(),
+            vec![Some("Recent".to_owned())]
+        );
+        assert_eq!(
+            MusicLibrary::project(&catalogue, SourceScope::All)
+                .artists
+                .len(),
+            2
         );
     }
 
@@ -242,7 +288,7 @@ mod tests {
             tagged("Alfa", "Dos", "C", 1),
         );
 
-        let library = MusicLibrary::project(&catalogue);
+        let library = MusicLibrary::project(&catalogue, SourceScope::All);
 
         assert_eq!(
             library
@@ -279,7 +325,7 @@ mod tests {
             MediaMetadata::default(),
         );
 
-        let library = MusicLibrary::project(&catalogue);
+        let library = MusicLibrary::project(&catalogue, SourceScope::All);
 
         assert_eq!(library.artists.len(), 2);
         assert_eq!(library.artists[1].name, None);
@@ -308,7 +354,7 @@ mod tests {
             MediaMetadata::default(),
         );
 
-        assert!(MusicLibrary::project(&catalogue).is_empty());
+        assert!(MusicLibrary::project(&catalogue, SourceScope::All).is_empty());
     }
 
     #[test]
@@ -337,7 +383,7 @@ mod tests {
             },
         );
 
-        let library = MusicLibrary::project(&catalogue);
+        let library = MusicLibrary::project(&catalogue, SourceScope::All);
         let album = &library.artists[0].albums[0];
 
         assert_eq!(album.year, Some(1999));
@@ -372,7 +418,7 @@ mod tests {
             tagged("Alfa", "Uno", "B", 2),
         );
 
-        let library = MusicLibrary::project(&catalogue);
+        let library = MusicLibrary::project(&catalogue, SourceScope::All);
 
         assert_eq!(
             library.artists[0].albums[0].total_duration(),
@@ -398,8 +444,8 @@ mod tests {
         );
         catalogue.reconcile(&BTreeSet::new());
 
-        let first = MusicLibrary::project(&catalogue);
-        let second = MusicLibrary::project(&catalogue);
+        let first = MusicLibrary::project(&catalogue, SourceScope::All);
+        let second = MusicLibrary::project(&catalogue, SourceScope::All);
 
         assert_eq!(first, second);
         assert_eq!(first.tracks().count(), 2);
