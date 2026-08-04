@@ -65,6 +65,10 @@ pub mod qobject {
         #[qproperty(QString, error_text)]
         #[qproperty(QString, conflict_text)]
         #[qproperty(bool, close_prompt)]
+        // caretLine / caretColumn — where the widget's caret is, counted from
+        //                           1, the column in characters
+        #[qproperty(i32, caret_line)]
+        #[qproperty(i32, caret_column)]
         type GrafitaEditor = super::GrafitaEditorRust;
 
         /// The document's text changed underneath the widget — an open, an undo
@@ -113,6 +117,12 @@ pub mod qobject {
         #[qinvokable]
         fn apply_text(self: Pin<&mut GrafitaEditor>, text: &QString);
 
+        /// Reports where the widget's caret now is, as the UTF-16 offset Qt
+        /// counts in. Which line and character column that is remains the
+        /// document's answer, so both surfaces agree on it.
+        #[qinvokable]
+        fn set_caret(self: Pin<&mut GrafitaEditor>, offset: i32);
+
         #[qinvokable]
         fn undo(self: Pin<&mut GrafitaEditor>);
 
@@ -159,7 +169,12 @@ pub struct GrafitaEditorRust {
     error_text: QString,
     conflict_text: QString,
     close_prompt: bool,
+    caret_line: i32,
+    caret_column: i32,
 
+    /// The caret the widget last reported, kept so an edit can re-answer it
+    /// without the widget having to report it again.
+    caret_offset: usize,
     session: DocumentSession,
     worker: Option<DocumentWorker>,
 }
@@ -179,6 +194,9 @@ impl Default for GrafitaEditorRust {
             error_text: QString::default(),
             conflict_text: QString::default(),
             close_prompt: false,
+            caret_line: 1,
+            caret_column: 1,
+            caret_offset: 0,
             session: DocumentSession::new(Limits {
                 max_bytes: EMBEDDED_MAX_BYTES,
                 ..Limits::default()
@@ -189,6 +207,23 @@ impl Default for GrafitaEditorRust {
 }
 
 impl qobject::GrafitaEditor {
+    /// Deliberately not routed through [`Self::dispatch`]: moving a caret is
+    /// not a session action, so it must not clear a refusal message or
+    /// re-publish the whole state on every arrow key.
+    pub fn set_caret(mut self: Pin<&mut Self>, offset: i32) {
+        let offset = usize::try_from(offset).unwrap_or(0);
+        self.as_mut().rust_mut().get_mut().caret_offset = offset;
+        self.publish_caret();
+    }
+
+    fn publish_caret(mut self: Pin<&mut Self>) {
+        let location = self.rust().session.caret_location(self.rust().caret_offset);
+        self.as_mut()
+            .set_caret_line(i32::try_from(location.line).unwrap_or(i32::MAX));
+        self.as_mut()
+            .set_caret_column(i32::try_from(location.column).unwrap_or(i32::MAX));
+    }
+
     pub fn request_preview(mut self: Pin<&mut Self>, path: &QString) {
         let path = PathBuf::from(path.to_string());
         let outcome = self.as_mut().rust_mut().get_mut().session.open(&path);
@@ -371,6 +406,10 @@ impl qobject::GrafitaEditor {
             .map(conflict_text)
             .unwrap_or_default();
         self.as_mut().set_conflict_text(QString::from(conflict));
+        // The same offset can be a different line after an edit, an undo or an
+        // open, so the readout is re-derived here rather than waiting for the
+        // widget to report a caret that did not itself move.
+        self.publish_caret();
     }
 }
 

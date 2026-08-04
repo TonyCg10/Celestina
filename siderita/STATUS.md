@@ -1,13 +1,19 @@
 # Siderita status
 
-- **Updated:** 2026-08-03
+- **Updated:** 2026-08-04
 - **Implementation:** the registered product version and CP0-CP7 behaviour are
-  present; the next portal-parenting checkpoint is planned, not active
+  present; `SID-G7` (shared reading surface) is the active checkpoint and the
+  portal-parenting one remains planned
 - **Author validation:** mixed; current manual queue is in
   [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
 
+- The embedded Grafita editor and the quick look's text pane number their
+  lines and scroll with the suite's shared `CelestinaLineGutter` and
+  `CelestinaScrollBar`; the editor reports the caret's line and character
+  column and no longer shows an encoding label. Both consume the same
+  `grafita-core` mapping Grafita's own window does.
 - The Rust/CXX-Qt/QML implementation is the only Siderita application. It
   navigates, filters, sorts, searches, watches, tabs and performs loss-free file
   operations through the shared Siderita crates.

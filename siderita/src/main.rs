@@ -11,6 +11,7 @@ mod icons;
 mod media;
 mod places;
 mod portal;
+mod preferences;
 mod properties;
 mod recent;
 mod search;

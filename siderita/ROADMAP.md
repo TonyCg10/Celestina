@@ -1,11 +1,32 @@
 # Siderita implementation roadmap
 
-- **Status:** planned
-- **Active implementation checkpoint:** none
-- **Related author validation:** `VAL-SID-04` in
-  [VALIDATION.md](VALIDATION.md); it does not block implementation
+- **Status:** active
+- **Active implementation checkpoint:** SID-G7
+- **Related author validation:** `VAL-SID-G7` and `VAL-SID-04` in
+  [VALIDATION.md](VALIDATION.md); neither blocks implementation
 
-`SID-M1` is the next settled checkpoint and has no active execution plan.
+`SID-M1` remains the next settled checkpoint after `SID-G7` and has no active
+execution plan.
+
+## SID-G7 — Shared reading surface in both text panes
+
+The falsifiable problem the author demonstrated: Siderita opens text in two
+places — the embedded Grafita editor and the quick look's text pane — and
+neither gives a reader a line to refer to, a scroll position drawn by the suite,
+or the text size they chose in Grafita. The quick look additionally reached for
+raw `QtQuick.Controls` `ScrollView` and `TextArea`, which the architecture
+baseline carries as debt.
+
+The boundary is `grafita-core` for every document rule and Siderita's own `src/`
+for the Qt marshalling, exactly as each host already adapts `DocumentSession`.
+The tangible outcome is two text surfaces that number their lines, scroll with
+the shared bar, report the caret's line and character column, honour the stored
+text size, and retire two raw-control baseline rows instead of adding any.
+
+The plan is
+[Shared reading surface](docs/plans/active/2026-08-04-shared-reading-surface.md).
+It excludes a settings surface, any preference Siderita owns for itself, and the
+components themselves, which are `STYLE-G7`'s.
 
 ## SID-M1 — Parent portal pickers on Wayland
 

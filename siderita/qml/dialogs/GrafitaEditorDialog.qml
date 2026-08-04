@@ -17,6 +17,9 @@ CelestinaModalLayer {
     property var editor      // GrafitaEditor
     property var owner       // FolderView root: focus return and sizing
     property var backdrop    // mainPanel: what the glass samples
+    // GrafitaPreferences: the text size the reader chose, shared with Grafita's
+    // own window through the file it stores.
+    property var reading
 
     // Declared inside the folder view, but it is a window-level surface: left
     // as a child of the view it stopped at the view's edge, leaving the sidebar
@@ -32,6 +35,11 @@ CelestinaModalLayer {
     dismissOnEscape: false
     dismissOnOutsideClick: false
     onDismissRequested: editorLayer.editor.requestClose()
+
+    // Whatever is stored right now, not whatever was stored when this folder
+    // view was built: Grafita may be open beside Siderita and may have moved
+    // the size since.
+    onShownChanged: if (editorLayer.shown) editorLayer.reading.reload()
 
     Connections {
         target: editorLayer.editor
@@ -75,7 +83,7 @@ CelestinaModalLayer {
                 id: heading
                 x: CelestinaTheme.spaceLg
                 y: CelestinaTheme.spaceMd
-                width: parent.width - encoding.width - CelestinaTheme.space3xl
+                width: parent.width - CelestinaTheme.space2xl
                 elide: Text.ElideMiddle
                 text: editorLayer.editor.dirty
                       ? editorLayer.editor.name + " •"
@@ -94,19 +102,11 @@ CelestinaModalLayer {
                                  : editorLayer.editor.name
             }
 
-            Text {
-                id: encoding
-                anchors.right: parent.right
-                anchors.rightMargin: CelestinaTheme.spaceLg
-                y: heading.y
-                text: editorLayer.editor.encodingLabel
-                color: CelestinaTheme.textMuted
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontCaption
-
-                Accessible.role: Accessible.StaticText
-                Accessible.name: "Codificación " + editorLayer.editor.encodingLabel
-            }
+            // The encoding is deliberately not shown, as in Grafita's own
+            // window: the editor only opens what it can write back byte for
+            // byte, so the label's answer never changes and never asks for an
+            // action. The encoding itself is still the document's, and the
+            // core still preserves it.
 
             // A refusal or a disagreement with the file on disk. Both are the
             // user's to act on, so neither is a transient toast.
@@ -152,13 +152,57 @@ CelestinaModalLayer {
                 // the contract forbids. For an editing surface the caret is the
                 // focus affordance, and it is already there.
 
+                // Numbered lines, and the text set in from the frame rather
+                // than run against it — the same surface Grafita's own window
+                // shows, because it is the same document being edited.
+                CelestinaLineGutter {
+                    id: gutter
+                    anchors.left: parent.left
+                    anchors.leftMargin: CelestinaTheme.spaceMd
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.topMargin: CelestinaTheme.spaceMd
+                    anchors.bottomMargin: CelestinaTheme.spaceMd
+                    surface: body
+                    viewportY: scroller.contentY
+                    viewportHeight: scroller.height
+                }
+
                 Flickable {
                     id: scroller
-                    anchors.fill: parent
-                    anchors.margins: CelestinaTheme.spaceSm
+                    anchors.left: gutter.right
+                    anchors.leftMargin: CelestinaTheme.spaceMd
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.rightMargin: CelestinaTheme.spaceMd
+                    anchors.topMargin: CelestinaTheme.spaceMd
+                    anchors.bottomMargin: CelestinaTheme.spaceMd
                     clip: true
                     contentWidth: width
                     contentHeight: body.paintedHeight
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    // Ctrl and the wheel resize the text instead of scrolling
+                    // it, accumulated to a full notch so a touchpad moves one
+                    // step at a time rather than sweeping the whole range.
+                    WheelHandler {
+                        property real pending: 0
+                        readonly property real notch: 120
+
+                        acceptedModifiers: Qt.ControlModifier
+                        onWheel: function(event) {
+                            pending += event.angleDelta.y
+                            while (pending >= notch) {
+                                pending -= notch
+                                editorLayer.reading.enlargeText()
+                            }
+                            while (pending <= -notch) {
+                                pending += notch
+                                editorLayer.reading.shrinkText()
+                            }
+                        }
+                    }
 
                     // Keep the caret on screen without animating the viewport,
                     // which would be motion the user did not ask for.
@@ -181,7 +225,7 @@ CelestinaModalLayer {
                         selectionColor: CelestinaTheme.accent
                         selectedTextColor: CelestinaTheme.accentInk
                         font.family: CelestinaTheme.monoFamily
-                        font.pixelSize: CelestinaTheme.fontCaption
+                        font.pixelSize: editorLayer.reading.fontSize
 
                         Accessible.role: Accessible.EditableText
                         Accessible.name: "Contenido de " + editorLayer.editor.name
@@ -190,6 +234,9 @@ CelestinaModalLayer {
                         // widget now holds and lets the core work out the edit.
                         onTextChanged: editorLayer.editor.applyText(text)
                         onCursorRectangleChanged: scroller.revealCursor(cursorRectangle)
+                        // The widget knows its caret as a UTF-16 offset; only
+                        // the document can say which line and column that is.
+                        onCursorPositionChanged: editorLayer.editor.setCaret(cursorPosition)
 
                         // Undo, redo and save are the document's, not the
                         // widget's: intercepted before Qt's own text history,
@@ -210,17 +257,67 @@ CelestinaModalLayer {
                                                    || (shift && event.key === Qt.Key_Z))) {
                                 editorLayer.editor.redo()
                                 event.accepted = true
+                            } else if (control && (event.key === Qt.Key_Plus
+                                                   || event.key === Qt.Key_Equal)) {
+                                // The same size, moved from the same surface
+                                // the reader is in. A stored size that could
+                                // only be changed by leaving for Grafita would
+                                // be half a preference.
+                                editorLayer.reading.enlargeText()
+                                event.accepted = true
+                            } else if (control && (event.key === Qt.Key_Minus
+                                                   || event.key === Qt.Key_Underscore)) {
+                                editorLayer.reading.shrinkText()
+                                event.accepted = true
                             }
                         }
                     }
                 }
+
+                // Over the viewport's edges rather than beside them, and only
+                // while there is something to scroll.
+                CelestinaScrollBar {
+                    surface: scroller
+                    anchors.right: scroller.right
+                    anchors.top: scroller.top
+                    anchors.bottom: scroller.bottom
+                    anchors.bottomMargin: sideways.visible ? sideways.height : 0
+                }
+
+                CelestinaScrollBar {
+                    id: sideways
+                    horizontal: true
+                    surface: scroller
+                    anchors.left: scroller.left
+                    anchors.right: scroller.right
+                    anchors.bottom: scroller.bottom
+                }
+            }
+
+            // Where the caret is, in the document's own counting: the column
+            // is characters, so an accented letter is one column.
+            Text {
+                id: caret
+                x: CelestinaTheme.spaceLg
+                anchors.verticalCenter: footer.verticalCenter
+                visible: editorLayer.editor.active
+                text: "Ln " + editorLayer.editor.caretLine
+                      + ", Col " + editorLayer.editor.caretColumn
+                color: CelestinaTheme.textMuted
+                font.family: CelestinaTheme.monoFamily
+                font.pixelSize: CelestinaTheme.fontCaption
+
+                Accessible.role: Accessible.StaticText
+                Accessible.name: "Line " + editorLayer.editor.caretLine
+                                 + ", column " + editorLayer.editor.caretColumn
             }
 
             Text {
                 id: status
-                x: CelestinaTheme.spaceLg
+                x: caret.visible ? caret.x + caret.width + CelestinaTheme.spaceLg
+                                 : CelestinaTheme.spaceLg
                 anchors.verticalCenter: footer.verticalCenter
-                width: parent.width - footer.width - CelestinaTheme.space3xl
+                width: parent.width - footer.width - status.x - CelestinaTheme.spaceLg
                 elide: Text.ElideRight
                 text: editorLayer.editor.busy ? "Trabajando…" : editorLayer.editor.statusText
                 color: CelestinaTheme.textMuted

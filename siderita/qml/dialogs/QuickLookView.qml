@@ -1,7 +1,5 @@
 import QtQuick
 import QtQuick.Window
-import QtQuick.Controls
-import QtQuick.Layouts
 import org.celestina.siderita 1.0
 
     // ── Quick-look preview (spacebar) ────────────────────────────────
@@ -15,6 +13,10 @@ CelestinaModalLayer {
     property var owner
     property var panel   // mainPanel: ayudas de selección y medios
     property var player  // SideritaPlayer: el reproductor incrustado
+    // GrafitaPreferences: the text size the reader chose, shared with Grafita's
+    // own window through the file it stores. Read only here — a peek offers no
+    // way to change it, and its own key map already owns Space and the arrows.
+    property var reading
     anchors.fill: parent
     z: 70
     shown: owner.quickLookOpen
@@ -46,7 +48,11 @@ CelestinaModalLayer {
     // Una sesión a la vez: cada paso de selección cierra la anterior antes de
     // abrir nada, y cerrar el modal no deja ningún decodificador vivo.
     onQlPathChanged: quickLookView.syncPlayer()
-    onShownChanged: quickLookView.syncPlayer()
+    onShownChanged: {
+        quickLookView.syncPlayer()
+        if (quickLookView.shown)
+            quickLookView.reading.reload()
+    }
 
     function syncPlayer() {
         if (!quickLookView.player)
@@ -160,19 +166,83 @@ CelestinaModalLayer {
             }
 
             // (3) Text / code
-            ScrollView {
+            //
+            // Composed from the same pieces as Grafita's editing surface — a
+            // Flickable, the shared gutter and the shared scroll bars — rather
+            // than from a `ScrollView`. A preview whose whole purpose is to
+            // let you read a file should number its lines like the editor that
+            // opens it, and the two surfaces now differ only in that this one
+            // cannot be typed into.
+            Item {
+                id: preview
                 anchors.fill: parent
                 visible: !quickLookView.qlIsImage && quickLookView.qlHasText
-                clip: true
-                TextArea {
-                    readOnly: true
-                    text: quickLookView.qlText
-                    wrapMode: TextArea.NoWrap
-                    selectByMouse: true
-                    background: null
-                    color: CelestinaTheme.text
-                    font.family: CelestinaTheme.monoFamily
-                    font.pixelSize: CelestinaTheme.fontCaption
+
+                CelestinaLineGutter {
+                    id: previewGutter
+                    anchors.left: parent.left
+                    // The text is set in from the card rather than run against
+                    // it, and the first column needs somewhere to breathe.
+                    anchors.leftMargin: CelestinaTheme.spaceSm
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    surface: previewText
+                    viewportY: previewScroller.contentY
+                    viewportHeight: previewScroller.height
+                }
+
+                Flickable {
+                    id: previewScroller
+                    // A gap wide enough that a number and its line do not read
+                    // as one string.
+                    anchors.left: previewGutter.right
+                    anchors.leftMargin: CelestinaTheme.spaceMd
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.rightMargin: CelestinaTheme.spaceSm
+                    clip: true
+                    contentWidth: previewText.width
+                    contentHeight: previewText.paintedHeight
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    TextEdit {
+                        id: previewText
+                        // Unwrapped, so the shape of code survives the peek;
+                        // the surface is as wide as its longest line, which is
+                        // what the horizontal bar below scrolls through.
+                        width: Math.max(previewScroller.width, implicitWidth)
+                        readOnly: true
+                        text: quickLookView.qlText
+                        wrapMode: TextEdit.NoWrap
+                        selectByMouse: true
+                        color: CelestinaTheme.text
+                        selectionColor: CelestinaTheme.accent
+                        selectedTextColor: CelestinaTheme.accentInk
+                        font.family: CelestinaTheme.monoFamily
+                        font.pixelSize: quickLookView.reading.fontSize
+
+                        Accessible.role: Accessible.StaticText
+                        Accessible.name: quickLookView.qlText
+                    }
+                }
+
+                CelestinaScrollBar {
+                    surface: previewScroller
+                    anchors.right: previewScroller.right
+                    anchors.top: previewScroller.top
+                    anchors.bottom: previewScroller.bottom
+                    anchors.bottomMargin: previewSideways.visible
+                                          ? previewSideways.height : 0
+                }
+
+                CelestinaScrollBar {
+                    id: previewSideways
+                    horizontal: true
+                    surface: previewScroller
+                    anchors.left: previewScroller.left
+                    anchors.right: previewScroller.right
+                    anchors.bottom: previewScroller.bottom
                 }
             }
 

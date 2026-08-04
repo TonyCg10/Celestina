@@ -63,6 +63,30 @@ corrective implementation unit.
 - **Result:** deferred until SID-M1 produces its verified artifact
 - **Evidence:** window tree plus dated requester outcomes
 
+## VAL-SID-G7 — Numbered text panes and the shared text size
+
+- **Status:** pending
+- **Related implementation:** checkpoint SID-G7,
+  [plan](docs/plans/active/2026-08-04-shared-reading-surface.md)
+- **Requires:** the author's own compositor, keyboard layout and display scale,
+  and a text file long enough to scroll with at least one line far wider than
+  the dialog
+- **Procedure:** press `Space` on that file to open the quick look, then open it
+  in the embedded editor; scroll both to the end and back; drag each scroll bar
+  and click its empty track; press `Ctrl +` and `Ctrl −` in each surface; move
+  the caret onto a line containing non-ASCII characters; change the size in
+  Grafita's own window, then open a Siderita surface again
+- **Pass condition:** every visible line carries exactly one number, level with
+  the row it starts on and unchanged by wrapping; the numbers stay pinned when
+  the text scrolls sideways; the footer's line and column match the caret,
+  including on the non-ASCII line; no encoding label remains; the size shortcuts
+  reach both surfaces from the physical layout through the modal and stop at
+  their limits; and a size changed in Grafita is the size the next Siderita
+  surface opens at, in both directions
+- **Result:** pending
+- **Evidence:** dated observations naming the file, the output scale and the
+  compositor
+
 ## Closed historical observations
 
 `VAL-SID-BASE`, `VAL-SID-GRAFITA` and `VAL-SID-FLUORITA` are preserved in the

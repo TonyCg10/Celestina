@@ -14,6 +14,10 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaSectionLabel.qml",
     "qml/CelestinaFocusRing.qml",
     "qml/CelestinaSlider.qml",
+    // Shared with Grafita: the quick look reads a file the same way the
+    // editor does, so it numbers and scrolls with the same two components.
+    "qml/CelestinaScrollBar.qml",
+    "qml/CelestinaLineGutter.qml",
     "qml/CelestinaTextField.qml",
     "qml/CelestinaInputShield.qml",
     "qml/CelestinaFolderIcon.qml",
@@ -183,6 +187,7 @@ fn main() {
             "src/editor.rs",
             "src/media.rs",
             "src/portal.rs",
+            "src/preferences.rs",
         ]);
     // SAFETY: only adds an include directory for our own headers.
     let builder = unsafe {

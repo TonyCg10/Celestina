@@ -134,12 +134,21 @@ Item {
         panel: root.panel
     }
 
+    // How the reader reads, as Grafita stores it. Held here beside the
+    // document state rather than inside either surface, so the peek and the
+    // editor cannot drift apart, and re-read when a surface opens so a size
+    // changed in Grafita — or in another folder view — is the one shown.
+    GrafitaPreferences {
+        id: readingPreferences
+    }
+
     QuickLookView {
         id: quickLookDialog
         controller: root.controller
         owner: root.owner
         panel: root.panel
         player: mediaPlayerState
+        reading: readingPreferences
     }
 
     // El reproductor incrustado detrás del modal de `Espacio`. Como el editor,
@@ -166,6 +175,7 @@ Item {
         editor: grafitaEditorState
         owner: root.owner
         backdrop: root.panel
+        reading: readingPreferences
     }
 
     PhoneMediaDialog {

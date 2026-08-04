@@ -133,7 +133,6 @@
 5	siderita/qml/components/sidebar/SidebarPhoneSection.qml
 2	siderita/qml/dialogs/BatchRenameDialog.qml
 1	siderita/qml/dialogs/ConflictDialog.qml
-1	siderita/qml/dialogs/GrafitaEditorDialog.qml
 4	siderita/qml/dialogs/IconPickerDialog.qml
 21	siderita/qml/dialogs/MediaPreview.qml
 1	siderita/qml/dialogs/NamePromptDialog.qml

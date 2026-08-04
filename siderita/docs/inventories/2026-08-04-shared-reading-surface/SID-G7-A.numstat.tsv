@@ -1,0 +1,39 @@
+# SID-G7-A exact change inventory
+
+Base revision	c60d5397bf5a00748a3a5196fd4c5217e03fdda2
+Pathspec	docs/version-history.tsv
+Pathspec	scripts/architecture-baseline.tsv
+Pathspec	scripts/language-baseline.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/ROADMAP.md
+Pathspec	siderita/STATUS.md
+Pathspec	siderita/VALIDATION.md
+Pathspec	siderita/build.rs
+Pathspec	siderita/docs/
+Pathspec	siderita/qml/
+Pathspec	siderita/src/
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	25c7119722740acaad0856db6a56df312150a1cd82a3cc1bd7e5f1d017ac0cb4	docs/version-history.tsv
+0	2	2ba812c64f2822178558dbcfbe7d0c7dd3f746f1a70631dee09a02f0dc8e6052	scripts/architecture-baseline.tsv
+0	1	3ea9d1e1975a5896e8ab6c226b876d30fc3a1bd9bf329c25b2e671c57a0a126b	scripts/language-baseline.tsv
+1	1	765ec4488f52586f08561e0a88afd27c45374525e2812cf56f77626ff9ef7eec	siderita/Cargo.lock
+1	1	ca6a5b8ce517d4c876ba15658b756854fdc685c67cecb08545892b796c7bb865	siderita/Cargo.toml
+26	5	ea977c74dc07726673dbdb9110a3e263c7774976903c88ecc60e9a6d15626d24	siderita/ROADMAP.md
+8	2	485b8d530c155d5bdfdcbe81986427847e07e241a235bf7343b01a1c14276519	siderita/STATUS.md
+24	0	05fa295d802a0e70059f12fee7926c7d45e0101fb6e0ea7329cac0bb8e426f5b	siderita/VALIDATION.md
+5	0	e90b75f222878f8ab0f66733f525c7251c3cd3344b0144b27db23db33b2ee469	siderita/build.rs
+115	0	99922f584679b68205a98566c4e95ec29ec33eece242486d570b3952ea72fbca	siderita/docs/evidence/2026-08-04-shared-reading-surface.md
+39	0	self	siderita/docs/inventories/2026-08-04-shared-reading-surface/SID-G7-A.numstat.tsv
+118	0	ded5295c786f4bd54e71e429b6dabe93e269b36b77497e062ffb97f4b45a8f5b	siderita/docs/plans/active/2026-08-04-shared-reading-surface.md
+1	0	4f81b47d986d0b6f3663ab2cafd60d595686a8638e47dee8e9c748b65e883d82	siderita/qml/CelestinaLineGutter.qml
+1	0	eb9268b528b5b93e314a70ec14af08f82a55491bf3c1b69b52a37663d809bbad	siderita/qml/CelestinaScrollBar.qml
+10	0	49d4392a8ca057e88a04f7396c3a17dafa9fa0ec3de14d7ffbbfed07e4461ba6	siderita/qml/components/folder/FolderActions.qml
+116	19	cb8638fa32f3eb0f9c2356cd6ef43cd144f33f7b31f5a2939926bc30a6e9a11d	siderita/qml/dialogs/GrafitaEditorDialog.qml
+84	14	a6ac9422e9e37d4debb1668dcd98aa31b17a2fa5c50f7efb0e9789f3ae17a509	siderita/qml/dialogs/QuickLookView.qml
+39	0	ba7edca5f7c9fd34d23c0c02ef3d9a41dcc0712a70005ed26b49bbc0df33dcf4	siderita/src/editor.rs
+1	0	0e5b7d57b5023bd6b0d43fa51e889668d429fd0ae7fe6a26800d437991f9671b	siderita/src/main.rs
+125	0	91b60d506d675bc66150d0b5ebeb50ddb37459793be4299cf730d7957aaab0a0	siderita/src/preferences.rs

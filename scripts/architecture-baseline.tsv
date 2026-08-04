@@ -14,8 +14,6 @@ control	siderita/qml/components/SizeRow.qml:Slider	1
 control	siderita/qml/components/chrome/BottomControls.qml:BusyIndicator	1
 control	siderita/qml/components/chrome/FloatingButton.qml:Button	1
 control	siderita/qml/dialogs/ConflictDialog.qml:CheckBox	1
-control	siderita/qml/dialogs/QuickLookView.qml:ScrollView	1
-control	siderita/qml/dialogs/QuickLookView.qml:TextArea	1
 control	siderita/qml/menus/EntryContextMenu.qml:MenuSeparator	1
 control	siderita/qml/menus/FolderMenu.qml:MenuSeparator	1
 control	siderita/qml/menus/SizePopup.qml:Popup	1
