@@ -11,8 +11,16 @@ GridView {
     id: grid
 
     required property FluoritaLibrary library
-    // Emitted when a card is activated; the window decides what to do with it.
-    signal activated(string path)
+    // Emitted when a card is activated, with the card's own rectangle in scene
+    // coordinates. The window grows the player from exactly that rectangle, so
+    // the thing the person clicked is the thing that expands.
+    // `poster` is the thumbnail already on screen in the card. The window grows
+    // that, not an empty player: the picture is loaded, so opening must not
+    // show black while a decoder catches up.
+    signal activated(string path, rect origin, string poster, string kind)
+    // Emitted with the item and where to put its menu, in the grid's own
+    // coordinates. The host maps it into whatever layer owns the overlay.
+    signal menuRequested(string path, string name, real x, real y)
 
     // The columns arrive index-aligned but are published one at a time: a model
     // bound to them would rebuild halfway through a publication with half the
@@ -64,7 +72,7 @@ GridView {
     boundsBehavior: Flickable.StopAtBounds
 
     Accessible.role: Accessible.List
-    Accessible.name: qsTr("Gallery")
+    Accessible.name: qsTr("Galería")
 
     delegate: Item {
         id: cell
@@ -81,9 +89,15 @@ GridView {
 
         Accessible.role: Accessible.Cell
         Accessible.name: cell.modelData.name
+        // `kind` is a token the delegate also switches its glyph on, so the
+        // word a person hears is chosen here rather than shipped in the data.
+        readonly property string kindWord: cell.modelData.kind === "video"
+            ? qsTr("vídeo")
+            : cell.modelData.kind === "audio" ? qsTr("audio") : qsTr("imagen")
+
         Accessible.description: cell.modelData.available
-            ? cell.modelData.kind
-            : qsTr("%1 — not found").arg(cell.modelData.kind)
+            ? cell.kindWord
+            : qsTr("%1 — sin encontrar").arg(cell.kindWord)
         Accessible.focusable: true
         Accessible.onPressAction: grid.activated(cell.modelData.path)
 
@@ -149,10 +163,18 @@ GridView {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: {
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onClicked: function(mouse) {
                 grid.currentIndex = cell.index;
                 grid.forceActiveFocus();
-                grid.activated(cell.modelData.path);
+                if (mouse.button === Qt.RightButton) {
+                    const point = mapToItem(grid, mouse.x, mouse.y);
+                    grid.menuRequested(cell.modelData.path, cell.modelData.name,
+                                       point.x, point.y);
+                    return;
+                }
+                grid.activated(cell.modelData.path, grid.originOf(cell),
+                               cell.modelData.thumbnail, cell.modelData.kind);
             }
         }
     }
@@ -162,8 +184,36 @@ GridView {
     Keys.onEnterPressed: grid.activateCurrent()
     Keys.onSpacePressed: grid.activateCurrent()
 
+    // The pointer's right-click, for the keyboard.
+    Keys.onMenuPressed: grid.menuForCurrent()
+
     function activateCurrent() {
-        if (grid.currentIndex >= 0 && grid.currentIndex < grid.model.length)
-            grid.activated(grid.model[grid.currentIndex].path);
+        if (grid.currentIndex < 0 || grid.currentIndex >= grid.model.length)
+            return;
+        const cell = grid.itemAtIndex(grid.currentIndex);
+        grid.activated(grid.model[grid.currentIndex].path,
+                       cell ? grid.originOf(cell) : Qt.rect(0, 0, 0, 0),
+                       grid.model[grid.currentIndex].thumbnail,
+                       grid.model[grid.currentIndex].kind);
+    }
+
+    // The cell's rectangle in the scene, which is the one coordinate space both
+    // the grid and the window can agree on without either reaching into the
+    // other.
+    function originOf(cell) {
+        const point = cell.mapToItem(null, 0, 0);
+        return Qt.rect(point.x, point.y, cell.width, cell.height);
+    }
+
+    function menuForCurrent() {
+        if (grid.currentIndex < 0 || grid.currentIndex >= grid.model.length)
+            return;
+        const item = grid.model[grid.currentIndex];
+        const cell = grid.itemAtIndex(grid.currentIndex);
+        // Anchored to the focused cell when it is realised, and to the grid's
+        // corner when it is scrolled out of the view.
+        const x = cell ? cell.x - grid.contentX : 0;
+        const y = cell ? cell.y - grid.contentY : 0;
+        grid.menuRequested(item.path, item.name, x, y);
     }
 }

@@ -14,11 +14,14 @@
 //! Symlinks are not followed. A library that follows them can be walked in a
 //! circle by one `ln -s`, and the same file would arrive under two names.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use celestina_core::CancellationToken;
-use fluorita_core::{MediaId, MediaKind, MediaRecord, MediaSource, SourceIdentity, SourceSet};
+use fluorita_core::{
+    MediaId, MediaKind, MediaRecord, MediaSource, SourceId, SourceIdentity, SourceSet,
+};
 
 use crate::error::{EngineError, EngineResult};
 
@@ -63,6 +66,12 @@ pub struct ScanOutcome {
     /// Counted rather than dropped silently, so a scan that saw half a library
     /// can say so.
     pub unreadable: usize,
+    /// The roots that actually answered. A root missing from this set was not
+    /// read — an unplugged drive, a share that is down, a directory the user
+    /// cannot open — so nothing may be concluded about the files under it.
+    /// A root that is here and complete is the only case where "the scan did
+    /// not see it" means "it is gone".
+    pub reached: BTreeSet<SourceId>,
 }
 
 impl ScanOutcome {
@@ -85,6 +94,13 @@ pub fn scan(
     for source in sources.sources() {
         if outcome.truncated {
             break;
+        }
+        // Asked before walking, and separately from it: `walk` reports a
+        // directory it could not open the same way at any depth, and the host
+        // needs to know about *this root* specifically before it is allowed to
+        // conclude that anything under it was deleted.
+        if std::fs::read_dir(source.root()).is_ok() {
+            outcome.reached.insert(source.id());
         }
         walk(
             source,

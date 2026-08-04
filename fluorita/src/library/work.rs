@@ -17,6 +17,7 @@ use fluorita_engine::{catalogue_store, source_store, LibraryChange, LibraryWatch
 
 use crate::folders::{self, FolderChoice};
 
+use super::copy;
 use super::project::project;
 use super::qobject;
 
@@ -105,16 +106,37 @@ pub(super) fn run_artwork(
 /// nothing to say. A dismissed dialog is therefore silent, and a desktop that
 /// could not be asked says why.
 pub(super) fn run_folder_choice(qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>) {
-    let (path, notice) = match folders::choose("Add a folder to your library") {
+    let (path, notice) = match folders::choose(copy::CHOOSE_FOLDER) {
         FolderChoice::Chosen(path) => (path.to_string_lossy().into_owned(), String::new()),
         FolderChoice::Cancelled => (String::new(), String::new()),
         FolderChoice::Unavailable(reason) => (
             String::new(),
-            format!("The desktop could not offer a folder chooser: {reason}"),
+            format!("{}: {reason}", copy::CHOOSER_UNAVAILABLE),
         ),
     };
     let _ = qt_thread.queue(move |library| {
         library.folder_chosen(QString::from(&path), QString::from(&notice));
+    });
+}
+
+/// Moves one item to the desktop Trash and reports the outcome.
+///
+/// On the same filesystem this is an atomic rename; from another mount it is a
+/// real copy-verify-remove, which is why it never runs on the GUI thread. The
+/// operation owns the freedesktop rules — reserving the info file, rolling back
+/// a failure — and this function only carries the answer back.
+pub(super) fn run_trash(path: &Path, qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>) {
+    let cancellation = CancellationToken::new();
+    let mut progress = |_progress| {};
+    let notice = match siderita_ops::trash(path, &cancellation, &mut progress) {
+        Ok(_) => String::new(),
+        // The reason matters: "permission denied" and "it is already gone" call
+        // for different things from the person reading it.
+        Err(error) => format!("{}: {error}", copy::TRASH_FAILED),
+    };
+    let moved = path.to_string_lossy().into_owned();
+    let _ = qt_thread.queue(move |library| {
+        library.item_trashed(QString::from(&moved), QString::from(&notice));
     });
 }
 
@@ -179,11 +201,11 @@ pub(super) fn run_scan(
     }
 
     if sources.is_empty() {
-        return publish_failure(qt_thread, &sources, scope, "No media folders to scan");
+        return publish_failure(qt_thread, &sources, scope, copy::NO_SOURCES);
     }
 
     let Ok(worker) = EngineWorker::start() else {
-        return publish_failure(qt_thread, &sources, scope, "Could not start the scanner");
+        return publish_failure(qt_thread, &sources, scope, copy::SCANNER_UNAVAILABLE);
     };
     if worker
         .submit(Job::Scan {
@@ -193,24 +215,27 @@ pub(super) fn run_scan(
         })
         .is_err()
     {
-        return publish_failure(qt_thread, &sources, scope, "Could not start the scanner");
+        return publish_failure(qt_thread, &sources, scope, copy::SCANNER_UNAVAILABLE);
     }
 
     let Some(JobOutcome::Scanned { result, .. }) = worker.poll(SCAN_TIMEOUT) else {
-        return publish_failure(
-            qt_thread,
-            &sources,
-            scope,
-            "The scan did not finish in time",
-        );
+        return publish_failure(qt_thread, &sources, scope, copy::SCAN_TIMED_OUT);
     };
     let Ok(outcome) = result else {
-        return publish_failure(qt_thread, &sources, scope, "Could not scan the library");
+        return publish_failure(qt_thread, &sources, scope, copy::SCAN_FAILED);
     };
 
     let truncated = outcome.truncated;
     let complete = outcome.is_complete();
+    let reached = outcome.reached.clone();
     catalogue.absorb(outcome.records, complete);
+    // A file the walk did not find under a root that answered is deleted, not
+    // merely absent, and the library stops showing it. Only a complete pass may
+    // conclude this, and only for the roots that actually answered — a drive
+    // that is not plugged in keeps everything it holds.
+    if complete {
+        catalogue.forget_vanished(&reached);
+    }
     // A root that is no longer configured keeps no records: the scan cannot
     // refresh what it does not walk, and a stale entry would read as a file
     // that went missing.
@@ -285,11 +310,15 @@ pub(super) fn watch_library(
             match change {
                 LibraryChange::Touched(path) => changed |= absorb_one(&mut catalogue, &path),
                 LibraryChange::Removed(path) => {
+                    // The watcher saw this exact file go, in a root it is
+                    // watching right now, so the root plainly answers. That is
+                    // the same evidence a completed scan gives, so the record
+                    // goes rather than lingering as a permanently missing row.
                     let id = catalogue
                         .find_by_path(&path)
                         .map(|record| record.id().clone());
                     if let Some(id) = id {
-                        changed |= catalogue.mark_missing(&id);
+                        changed |= catalogue.forget(&id).is_some();
                     }
                 }
                 LibraryChange::Resync(_) => {
@@ -301,7 +330,11 @@ pub(super) fn watch_library(
                         continue;
                     };
                     let complete = outcome.is_complete();
+                    let reached = outcome.reached.clone();
                     catalogue.absorb(outcome.records, complete);
+                    if complete {
+                        catalogue.forget_vanished(&reached);
+                    }
                     changed = true;
                 }
             }

@@ -167,6 +167,9 @@ struct Snapshot {
 pub struct PlayerRust {
     state: QString,
     render_handle: u64,
+    /// An item asked for while a surface was still rendering the previous one.
+    /// It starts once that surface confirms it has let go.
+    pending_open: Option<PathBuf>,
     position_seconds: f64,
     duration_seconds: f64,
     seekable: bool,
@@ -205,11 +208,30 @@ impl cxx_qt::Initialize for qobject::FluoritaPlayer {
 
 impl qobject::FluoritaPlayer {
     /// Opens one item on the worker thread.
+    /// Opens an item, closing whatever is open first.
+    ///
+    /// A live render context cannot simply be torn down under the surface that
+    /// is drawing from it — that is the whole reason [`Self::close`] hands the
+    /// handle back before stopping the worker. Replacing one video with another
+    /// went straight to `stop_worker`, destroying the mpv instance while the
+    /// Qt item still rendered from it, and crashed. So a session with a live
+    /// surface is closed through the same handshake and the new item waits for
+    /// the surface to confirm.
     pub fn open(mut self: core::pin::Pin<&mut Self>, path: &QString) {
         let path = PathBuf::from(path.to_string());
         if path.as_os_str().is_empty() {
             return;
         }
+        if *self.render_handle() != 0 {
+            self.as_mut().rust_mut().pending_open = Some(path);
+            self.close();
+            return;
+        }
+        self.begin(path);
+    }
+
+    /// The half of opening that assumes nothing is rendering any more.
+    fn begin(mut self: core::pin::Pin<&mut Self>, path: PathBuf) {
         self.as_mut().stop_worker();
         self.as_mut().reset_for(&path);
 
@@ -354,6 +376,12 @@ impl qobject::FluoritaPlayer {
         self.as_mut().set_position_seconds(0.0);
         self.as_mut().set_duration_seconds(0.0);
         self.as_mut().set_pending(false);
+        // Someone asked for the next item while this one was still rendering.
+        // Now that the surface has let go, it is safe to start.
+        let waiting = self.as_mut().rust_mut().pending_open.take();
+        if let Some(path) = waiting {
+            self.begin(path);
+        }
     }
 
     fn closing(&self) -> bool {

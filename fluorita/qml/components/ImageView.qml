@@ -11,6 +11,11 @@ Item {
     id: view
 
     required property string source
+    // True only once the toolkit has a decoded picture to draw. "The player has
+    // a source" is not the same thing and is what a caller must not confuse it
+    // with: between the two there is a decode, and anyone who hands over at the
+    // first one shows an empty rectangle for its duration.
+    readonly property bool presented: picture.status === Image.Ready
     // What the window may show at most. A scaled read of a large photograph is
     // cheap where the format allows it, and never larger than the surface.
     readonly property int decodeCap: Math.max(1, Math.ceil(

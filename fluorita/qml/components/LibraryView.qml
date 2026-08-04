@@ -17,13 +17,20 @@ Item {
     id: view
 
     required property FluoritaLibrary library
-    signal activated(string path)
+    signal activated(string path, rect origin, string poster, string kind)
 
     readonly property bool hasGallery: view.library.imageCount + view.library.videoCount > 0
     readonly property bool hasMusic: view.library.trackCount > 0
     readonly property bool hasContent: view.hasGallery || view.hasMusic
 
+    // The library's content, and the one thing the floating layers blur. It is
+    // a sibling of them, never their parent: `GlassSurface` samples the item it
+    // is handed, and handing it an ancestor of the card asks it to capture
+    // itself — which yields nothing, so the glass silently falls back to a flat
+    // fill. Siderita passes its `contentLayer` for exactly this reason.
     RowLayout {
+        id: libraryBody
+
         anchors.fill: parent
         spacing: 0
 
@@ -31,6 +38,7 @@ Item {
             Layout.fillHeight: true
             Layout.preferredWidth: implicitWidth
             library: view.library
+            overlayParent: view
             onSourceSelected: function(source) { view.library.selectSource(source) }
             onFolderRequested: view.library.addFolder()
             onFolderRemoved: function(source) { view.library.removeFolder(source) }
@@ -71,10 +79,10 @@ Item {
                     visible: view.library.artworkPending > 0
                         || view.library.artworkState !== "idle"
                     text: view.library.artworkState === "idle"
-                        ? qsTr("Generate %1 thumbnails").arg(view.library.artworkPending)
+                        ? qsTr("Generar %1 miniaturas").arg(view.library.artworkPending)
                         : view.library.artworkState === "cancelling"
-                            ? qsTr("Cancelling…")
-                            : qsTr("Generating %1 of %2 — cancel")
+                            ? qsTr("Cancelando…")
+                            : qsTr("Generando %1 de %2 — cancelar")
                                 .arg(view.library.artworkDone)
                                 .arg(view.library.artworkTotal)
                     role: view.library.artworkState === "generating"
@@ -83,7 +91,7 @@ Item {
                     enabled: view.library.artworkState !== "cancelling"
                     Accessible.name: text
                     Accessible.description: qsTr(
-                        "Extracts the frame or cover the shared cache is missing. Ctrl+G")
+                        "Extrae el fotograma o la carátula que falta en la caché compartida. Ctrl+G")
                     onClicked: view.library.artworkState === "generating"
                         ? view.library.cancelArtwork()
                         : view.library.generateArtwork()
@@ -91,14 +99,23 @@ Item {
             }
 
             GalleryGrid {
+                id: galleryGrid
+
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 visible: view.hasGallery
                 library: view.library
-                onActivated: function(path) { view.activated(path) }
+                onActivated: function(path, origin, poster, kind) {
+                    view.activated(path, origin, poster, kind)
+                }
+                onMenuRequested: function(path, name, x, y) {
+                    view.showMenu(galleryGrid, path, name, x, y);
+                }
             }
 
             MusicList {
+                id: musicList
+
                 Layout.fillWidth: true
                 // A folder holding both keeps the grid above and the tracks
                 // below at a readable height, instead of one of them collapsing
@@ -109,7 +126,12 @@ Item {
                     : -1
                 visible: view.hasMusic
                 library: view.library
-                onActivated: function(path) { view.activated(path) }
+                onActivated: function(path, origin, poster, kind) {
+                    view.activated(path, origin, poster, kind)
+                }
+                onMenuRequested: function(path, name, x, y) {
+                    view.showMenu(musicList, path, name, x, y);
+                }
             }
 
             // Honest states: scanning, empty, or a failure with its reason.
@@ -119,7 +141,7 @@ Item {
                 Layout.fillHeight: true
                 visible: !view.hasContent
                 text: view.library.state === "scanning"
-                    ? qsTr("Scanning your folders…")
+                    ? qsTr("Explorando tus carpetas…")
                     : view.library.summary
                 color: view.library.state === "error"
                     ? CelestinaTheme.danger
@@ -133,5 +155,47 @@ Item {
                 Accessible.name: text
             }
         }
+    }
+
+    // What happened to the last item action. A row disappearing with no word
+    // for it reads as a crash, and a Trash move that failed must never look
+    // like one that worked.
+    Text {
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: CelestinaTheme.spaceLg
+        width: Math.min(parent.width - CelestinaTheme.spaceLg * 2, 520)
+        visible: view.library.itemNotice.length > 0
+        text: view.library.itemNotice
+        color: CelestinaTheme.danger
+        font.family: CelestinaTheme.sansFamily
+        font.pixelSize: CelestinaTheme.fontRowSecondary
+        wrapMode: Text.WordWrap
+        horizontalAlignment: Text.AlignHCenter
+        Accessible.role: Accessible.StaticText
+        Accessible.name: text
+    }
+
+    // The shared menu is a real `Menu`: it is popped at a point in a parent's
+    // coordinates and the overlay keeps it on screen by itself, so nothing here
+    // clamps or positions it.
+    function showMenu(source, path, name, x, y) {
+        const point = source.mapToItem(view, x, y);
+        itemMenu.targetName = name;
+        itemMenu.targetPath = path;
+        itemMenu.popup(view, point.x, point.y);
+    }
+
+    ItemMenu {
+        id: itemMenu
+
+        backdropSource: libraryBody
+        onTrashRequested: function(path) { view.library.trashItem(path) }
+        onPropertiesRequested: function(path) { view.library.describeItem(path) }
+    }
+
+    ItemDetailPanel {
+        library: view.library
+        backdrop: libraryBody
     }
 }

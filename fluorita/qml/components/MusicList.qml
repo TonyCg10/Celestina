@@ -11,7 +11,10 @@ ListView {
     id: list
 
     required property FluoritaLibrary library
-    signal activated(string path)
+    // A track has no poster in this projection; the signature is the grid's so
+    // the window has one door.
+    signal activated(string path, rect origin, string poster, string kind)
+    signal menuRequested(string path, string name, real x, real y)
 
     // Like the gallery: woven when the revision says every column of this
     // publication is in place.
@@ -31,8 +34,9 @@ ListView {
         var artists = list.library.musicArtists;
         var albums = list.library.musicAlbums;
         var live = list.library.musicAvailable;
+        var covers = list.library.musicThumbnails;
         var count = Math.min(paths.length, titles.length, artists.length,
-                             albums.length, live.length);
+                             albums.length, live.length, covers.length);
         var woven = [];
         for (var index = 0; index < count; ++index) {
             woven.push({
@@ -40,7 +44,8 @@ ListView {
                 title: titles[index],
                 artist: artists[index],
                 album: albums[index],
-                available: live[index] === "1"
+                available: live[index] === "1",
+                thumbnail: covers[index]
             });
         }
         return woven;
@@ -67,7 +72,7 @@ ListView {
     }
 
     Accessible.role: Accessible.List
-    Accessible.name: qsTr("Music")
+    Accessible.name: qsTr("Música")
 
     delegate: Item {
         id: row
@@ -83,7 +88,7 @@ ListView {
         Accessible.role: Accessible.ListItem
         Accessible.name: row.modelData.available
             ? row.modelData.title
-            : qsTr("%1 — not found").arg(row.modelData.title)
+            : qsTr("%1 — sin encontrar").arg(row.modelData.title)
         Accessible.description: qsTr("%1 · %2").arg(row.modelData.artist).arg(row.modelData.album)
         Accessible.focusable: true
         Accessible.onPressAction: list.activated(row.modelData.path)
@@ -137,10 +142,18 @@ ListView {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: {
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onClicked: function(mouse) {
                 list.currentIndex = row.index;
                 list.forceActiveFocus();
-                list.activated(row.modelData.path);
+                if (mouse.button === Qt.RightButton) {
+                    const point = mapToItem(list, mouse.x, mouse.y);
+                    list.menuRequested(row.modelData.path, row.modelData.title,
+                                       point.x, point.y);
+                    return;
+                }
+                list.activated(row.modelData.path, list.originOf(row),
+                               row.modelData.thumbnail, "audio");
             }
         }
     }
@@ -149,8 +162,28 @@ ListView {
     Keys.onEnterPressed: list.activateCurrent()
     Keys.onSpacePressed: list.activateCurrent()
 
+    Keys.onMenuPressed: list.menuForCurrent()
+
     function activateCurrent() {
-        if (list.currentIndex >= 0 && list.currentIndex < list.model.length)
-            list.activated(list.model[list.currentIndex].path);
+        if (list.currentIndex < 0 || list.currentIndex >= list.model.length)
+            return;
+        const row = list.itemAtIndex(list.currentIndex);
+        list.activated(list.model[list.currentIndex].path,
+                       row ? list.originOf(row) : Qt.rect(0, 0, 0, 0),
+                       list.model[list.currentIndex].thumbnail, "audio");
+    }
+
+    function originOf(row) {
+        const point = row.mapToItem(null, 0, 0);
+        return Qt.rect(point.x, point.y, row.width, row.height);
+    }
+
+    function menuForCurrent() {
+        if (list.currentIndex < 0 || list.currentIndex >= list.model.length)
+            return;
+        const item = list.model[list.currentIndex];
+        const row = list.itemAtIndex(list.currentIndex);
+        const y = row ? row.y - list.contentY : 0;
+        list.menuRequested(item.path, item.title, 0, y);
     }
 }

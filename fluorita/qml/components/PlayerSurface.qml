@@ -15,6 +15,10 @@ Item {
     required property FluoritaPlayer player
     // Empty until something is open; shown when there is no picture to show.
     required property string label
+    // The item's own artwork, used to light the space the picture does not
+    // fill. Empty when nothing is cached for it, and then the canvas stays as
+    // it is rather than being lit by a colour nobody measured.
+    required property string ambientSource
 
     // Three surfaces, one at a time: moving picture, still, or a plain label.
     //
@@ -34,14 +38,46 @@ Item {
         && surface.confirmedPlaying
     readonly property bool showsImage: surface.player.imageSource.length > 0
     readonly property bool showsPicture: surface.showsVideo || surface.showsImage
+    // What is actually on screen, as opposed to what has been asked for. A
+    // still is only present once the toolkit decoded it; a video only once the
+    // engine confirmed playback and the render surface exists. Anything
+    // handing over to this surface must wait for *this*, not for `showsPicture`.
+    readonly property bool picturePresented: surface.showsVideo
+        || (surface.showsImage && still.presented)
 
     Accessible.role: Accessible.Grouping
     Accessible.name: qsTr("Reproductor")
 
+    // Under everything, including the still and the video: it is light, not
+    // content, and nothing here reads it or reacts to it.
+    AmbientLight {
+        id: ambient
+
+        anchors.fill: parent
+        source: surface.ambientSource
+    }
+
+    // Sized to the film rather than filled, whenever the artwork tells us what
+    // shape the film is.
+    //
+    // Filling meant mpv drew its own letterbox — black — across the whole
+    // surface, and black bands painted over the ambient light are exactly the
+    // hole the light exists to remove. Letterboxing by geometry leaves those
+    // bands unpainted, so what shows through them is the light.
+    //
+    // With no artwork there is no shape to trust and no light to reveal, so it
+    // falls back to filling, which is what it always did.
     MpvVideo {
         id: video
 
-        anchors.fill: parent
+        readonly property bool shaped: ambient.lit && ambient.contentAspect > 0
+        readonly property real fitted: Math.min(surface.width / ambient.contentAspect,
+                                               surface.height)
+
+        anchors.centerIn: video.shaped ? surface : undefined
+        anchors.fill: video.shaped ? undefined : parent
+        width: video.shaped ? Math.round(video.fitted * ambient.contentAspect) : 0
+        height: video.shaped ? Math.round(video.fitted) : 0
         visible: surface.showsVideo
         // The one value the surface needs from the engine: a zero handle means
         // there is nothing to render, including while a session is closing.
@@ -52,6 +88,8 @@ Item {
     }
 
     ImageView {
+        id: still
+
         anchors.fill: parent
         anchors.bottomMargin: CelestinaTheme.spaceLg * 3
         visible: surface.showsImage

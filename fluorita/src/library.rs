@@ -39,13 +39,15 @@ use std::thread::JoinHandle;
 
 use celestina_core::CancellationToken;
 
+mod copy;
+mod detail;
 mod project;
 mod work;
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
 use project::{project, LibrarySnapshot};
-use work::{run_artwork, run_folder_choice, run_scan};
+use work::{run_artwork, run_folder_choice, run_scan, run_trash};
 
 use fluorita_core::{Catalogue, SourceId, SourceScope, SourceSet};
 
@@ -108,6 +110,21 @@ pub mod qobject {
         /// Why the last folder request could not be answered, or empty. A
         /// cancelled dialog is not a failure and leaves this empty.
         #[qproperty(QString, folder_notice)]
+        /// The properties panel: open, and the item it describes. Every field
+        /// is already a display string, and filling them opens no file.
+        #[qproperty(bool, detail_open)]
+        #[qproperty(QString, detail_name)]
+        #[qproperty(QString, detail_path)]
+        #[qproperty(QString, detail_kind)]
+        #[qproperty(QString, detail_size)]
+        #[qproperty(QString, detail_modified)]
+        #[qproperty(QString, detail_duration)]
+        #[qproperty(QString, detail_folder)]
+        /// Set when the described file is not where the catalogue saw it.
+        #[qproperty(QString, detail_notice)]
+        /// What happened to the last item action, or empty. A successful trash
+        /// says so too: a row vanishing with no word for it reads as a crash.
+        #[qproperty(QString, item_notice)]
         /// Gallery rows, index-aligned: absolute path, display name, kind and
         /// the cached thumbnail URL (empty when nothing produced one).
         #[qproperty(QStringList, gallery_paths)]
@@ -125,6 +142,8 @@ pub mod qobject {
         #[qproperty(QStringList, music_artists)]
         #[qproperty(QStringList, music_albums)]
         #[qproperty(QStringList, music_available)]
+        /// The cached cover for each track, empty when nothing produced one.
+        #[qproperty(QStringList, music_thumbnails)]
         type FluoritaLibrary = super::LibraryRust;
 
         /// Walks the configured roots. Safe to call again: a scan in flight is
@@ -150,6 +169,21 @@ pub mod qobject {
         /// its files is touched.
         #[qinvokable]
         fn remove_folder(self: Pin<&mut FluoritaLibrary>, source: i32);
+
+        /// Fills the properties panel for one item and opens it. Reads only
+        /// what the catalogue already knows; it starts no decoder.
+        #[qinvokable]
+        fn describe_item(self: Pin<&mut FluoritaLibrary>, path: &QString);
+
+        /// Closes the properties panel.
+        #[qinvokable]
+        fn close_detail(self: Pin<&mut FluoritaLibrary>);
+
+        /// Sends one item to the desktop Trash. Returns at once: the move can
+        /// be a real cross-filesystem copy, so it runs on a worker and the
+        /// result arrives through the queue.
+        #[qinvokable]
+        fn trash_item(self: Pin<&mut FluoritaLibrary>, path: &QString);
 
         /// Produces the thumbnails the shared cache is missing, for video and
         /// audio only. This is the one thing here that starts the media
@@ -185,6 +219,17 @@ pub struct LibraryRust {
     choosing_folder: bool,
     folder_notice: QString,
 
+    detail_open: bool,
+    detail_name: QString,
+    detail_path: QString,
+    detail_kind: QString,
+    detail_size: QString,
+    detail_modified: QString,
+    detail_duration: QString,
+    detail_folder: QString,
+    detail_notice: QString,
+    item_notice: QString,
+
     gallery_paths: QStringList,
     gallery_names: QStringList,
     gallery_kinds: QStringList,
@@ -196,6 +241,7 @@ pub struct LibraryRust {
     music_artists: QStringList,
     music_albums: QStringList,
     music_available: QStringList,
+    music_thumbnails: QStringList,
 
     worker: Option<JoinHandle<()>>,
     /// Cancels the scan and, above all, the watch loop that follows it. Without
@@ -208,6 +254,9 @@ pub struct LibraryRust {
     /// The configuration as last published, so an add or a remove is applied to
     /// what the user is looking at.
     configured: SourceSet,
+    /// The trash move in flight, if any. One at a time: two answers racing to
+    /// change the same catalogue would publish whichever finished last.
+    trash_worker: Option<JoinHandle<()>>,
     /// The folder chooser in flight, if any. One at a time: a second dialog
     /// would let two answers race to configure the same library.
     folder_worker: Option<JoinHandle<()>>,
@@ -238,6 +287,16 @@ impl Default for LibraryRust {
             selected_source: EVERY_SOURCE,
             choosing_folder: false,
             folder_notice: QString::default(),
+            detail_open: false,
+            detail_name: QString::default(),
+            detail_path: QString::default(),
+            detail_kind: QString::default(),
+            detail_size: QString::default(),
+            detail_modified: QString::default(),
+            detail_duration: QString::default(),
+            detail_folder: QString::default(),
+            detail_notice: QString::default(),
+            item_notice: QString::default(),
             gallery_paths: QStringList::default(),
             gallery_names: QStringList::default(),
             gallery_kinds: QStringList::default(),
@@ -248,11 +307,13 @@ impl Default for LibraryRust {
             music_artists: QStringList::default(),
             music_albums: QStringList::default(),
             music_available: QStringList::default(),
+            music_thumbnails: QStringList::default(),
             worker: None,
             cancellation: CancellationToken::new(),
             catalogue: Catalogue::new(),
             configured: SourceSet::new(),
             folder_worker: None,
+            trash_worker: None,
             artwork_worker: None,
             artwork_cancellation: CancellationToken::new(),
         }
@@ -272,8 +333,7 @@ impl qobject::FluoritaLibrary {
     fn start_scan(mut self: core::pin::Pin<&mut Self>, configured: Option<SourceSet>) {
         self.as_mut().close();
         self.as_mut().set_state(QString::from("scanning"));
-        self.as_mut()
-            .set_summary(QString::from("Scanning your folders…"));
+        self.as_mut().set_summary(QString::from(copy::SCANNING));
 
         let cancellation = CancellationToken::new();
         self.as_mut().rust_mut().cancellation = cancellation.clone();
@@ -291,7 +351,7 @@ impl qobject::FluoritaLibrary {
             Err(_) => {
                 self.as_mut().set_state(QString::from("error"));
                 self.as_mut()
-                    .set_summary(QString::from("Could not start the scan"));
+                    .set_summary(QString::from(copy::SCAN_NOT_STARTED));
             }
         }
     }
@@ -343,7 +403,7 @@ impl qobject::FluoritaLibrary {
             Err(_) => {
                 self.as_mut().set_choosing_folder(false);
                 self.as_mut()
-                    .set_folder_notice(QString::from("Could not ask the desktop for a folder"));
+                    .set_folder_notice(QString::from(copy::CHOOSER_UNAVAILABLE));
             }
         }
     }
@@ -365,6 +425,95 @@ impl qobject::FluoritaLibrary {
             self.as_mut().set_selected_source(EVERY_SOURCE);
         }
         self.start_scan(Some(configured));
+    }
+
+    pub fn describe_item(mut self: core::pin::Pin<&mut Self>, path: &QString) {
+        let wanted = std::path::PathBuf::from(path.to_string());
+        let Some(record) = self.rust().catalogue.find_by_path(&wanted).cloned() else {
+            // The row named a file the catalogue no longer holds — a scan just
+            // forgot it, or the panel was opened on a stale grid. Saying so
+            // beats opening a panel full of blanks.
+            self.as_mut()
+                .set_item_notice(QString::from(copy::ITEM_GONE));
+            return;
+        };
+        let detail = detail::describe(&record, &self.rust().configured);
+        self.as_mut().set_detail_name(QString::from(&detail.name));
+        self.as_mut().set_detail_path(QString::from(&detail.path));
+        self.as_mut().set_detail_kind(QString::from(&detail.kind));
+        self.as_mut().set_detail_size(QString::from(&detail.size));
+        self.as_mut()
+            .set_detail_modified(QString::from(&detail.modified));
+        self.as_mut()
+            .set_detail_duration(QString::from(&detail.duration));
+        self.as_mut()
+            .set_detail_folder(QString::from(&detail.folder));
+        self.as_mut()
+            .set_detail_notice(QString::from(&detail.notice));
+        self.as_mut().set_item_notice(QString::default());
+        self.as_mut().set_detail_open(true);
+    }
+
+    pub fn close_detail(mut self: core::pin::Pin<&mut Self>) {
+        self.as_mut().set_detail_open(false);
+    }
+
+    pub fn trash_item(mut self: core::pin::Pin<&mut Self>, path: &QString) {
+        if self.rust().trash_worker.is_some() {
+            return;
+        }
+        let wanted = std::path::PathBuf::from(path.to_string());
+        if self.rust().catalogue.find_by_path(&wanted).is_none() {
+            self.as_mut()
+                .set_item_notice(QString::from(copy::ITEM_GONE));
+            return;
+        }
+        self.as_mut().set_item_notice(QString::default());
+
+        let qt_thread = self.qt_thread();
+        let worker = std::thread::Builder::new()
+            .name("fluorita-trash".to_owned())
+            .spawn(move || run_trash(&wanted, &qt_thread));
+        match worker {
+            Ok(handle) => self.as_mut().rust_mut().trash_worker = Some(handle),
+            Err(_) => self
+                .as_mut()
+                .set_item_notice(QString::from(copy::TRASH_NOT_STARTED)),
+        }
+    }
+
+    /// The trash move finished. Runs on the GUI thread, through the queue.
+    ///
+    /// The record goes only when the engine confirms the file actually moved.
+    /// Dropping it on request would show the item gone while it was still on
+    /// disk, which is exactly the "requested is not confirmed" mistake the
+    /// suite's contract exists to prevent.
+    fn item_trashed(mut self: core::pin::Pin<&mut Self>, path: QString, notice: QString) {
+        if let Some(handle) = self.as_mut().rust_mut().trash_worker.take() {
+            let _ = handle.join();
+        }
+        self.as_mut().set_item_notice(notice.clone());
+        if !notice.to_string().is_empty() {
+            return;
+        }
+        let moved = std::path::PathBuf::from(path.to_string());
+        let id = self
+            .rust()
+            .catalogue
+            .find_by_path(&moved)
+            .map(|record| record.id().clone());
+        if let Some(id) = id {
+            self.as_mut().rust_mut().catalogue.forget(&id);
+        }
+        // The panel may be describing the very item that just left.
+        if self.detail_path() == &path {
+            self.as_mut().set_detail_open(false);
+        }
+        let catalogue = self.rust().catalogue.clone();
+        let configured = self.rust().configured.clone();
+        let scope = self.rust().scope();
+        let refreshed = project(&catalogue, &configured, scope, *self.truncated(), "ready");
+        self.apply(refreshed);
     }
 
     /// Starts the explicit artwork pass.
@@ -423,7 +572,7 @@ impl qobject::FluoritaLibrary {
                     .set_selected_source(i32::try_from(added.value()).unwrap_or(EVERY_SOURCE));
                 self.start_scan(Some(configured));
             }
-            Err(rejection) => self.set_folder_notice(QString::from(rejected(rejection))),
+            Err(rejection) => self.set_folder_notice(QString::from(copy::rejected(rejection))),
         }
     }
 
@@ -474,6 +623,7 @@ impl qobject::FluoritaLibrary {
         self.as_mut().set_music_artists(music[2].clone());
         self.as_mut().set_music_albums(music[3].clone());
         self.as_mut().set_music_available(music[4].clone());
+        self.as_mut().set_music_thumbnails(music[5].clone());
 
         self.as_mut().set_artwork_pending(snapshot.artwork_pending);
         self.as_mut().rust_mut().catalogue = snapshot.catalogue;
@@ -508,23 +658,6 @@ impl LibraryRust {
     }
 }
 
-/// Why the domain refused a chosen folder, in words the person who chose it can
-/// act on.
-const fn rejected(rejection: fluorita_core::SourceRejected) -> &'static str {
-    match rejection {
-        fluorita_core::SourceRejected::NotAbsolute => {
-            "That folder has no absolute path, so it cannot be mapped"
-        }
-        fluorita_core::SourceRejected::NoKinds => "That folder would contribute nothing",
-        fluorita_core::SourceRejected::Overlapping => {
-            "That folder is already inside one you mapped"
-        }
-        fluorita_core::SourceRejected::DuplicateIdentity => {
-            "That folder collides with one already mapped"
-        }
-    }
-}
-
 impl Drop for LibraryRust {
     fn drop(&mut self) {
         self.cancellation.cancel();
@@ -535,6 +668,11 @@ impl Drop for LibraryRust {
         // the dialog open. Joining it is the only way its thread cannot report
         // into an object that is going away.
         if let Some(handle) = self.folder_worker.take() {
+            let _ = handle.join();
+        }
+        // A cross-filesystem trash move is a real copy. Joining it is what
+        // stops a half-moved file from being left behind by a closing window.
+        if let Some(handle) = self.trash_worker.take() {
             let _ = handle.join();
         }
         // Cancel before joining: an artwork pass would otherwise hold the

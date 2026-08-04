@@ -1,6 +1,6 @@
 [package]
 name = "fluorita"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2021"
 rust-version = "1.85"
 license = "GPL-3.0-or-later"
@@ -28,6 +28,12 @@ fluorita-core = { path = "../celestina-rs/crates/fluorita-core" }
 # The decoder itself. The app never talks to libmpv: it opens sessions through
 # the engine's narrow contract and hands the surface one opaque handle.
 fluorita-engine = { path = "../celestina-rs/crates/fluorita-engine" }
+# The freedesktop Trash spec has one owner in this monorepo, and this is it: a
+# pure crate over `celestina-core` that reserves the info file with `O_EXCL`,
+# renames when it can, copies-verifies-removes across filesystems and rolls back
+# on failure. Reimplementing "delete" in a media player instead would be a
+# second, less careful implementation of a rule that must not have two.
+siderita-ops = { path = "../celestina-rs/crates/siderita-ops" }
 
 # MPRIS2: how a shell panel, the media keys and Magnetita's phone link read one
 # source of truth instead of three. Already the suite's D-Bus crate (Siderita's

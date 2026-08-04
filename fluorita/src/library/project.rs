@@ -11,6 +11,7 @@ use fluorita_core::{
     SourceSet,
 };
 
+use super::copy;
 use super::work::{thumbnail_cache_root, MAX_ARTWORK_PER_PASS};
 
 /// Everything one publication produces, already shaped for QML.
@@ -26,7 +27,7 @@ pub(super) struct LibrarySnapshot {
     pub(super) video_count: i32,
     pub(super) track_count: i32,
     pub(super) gallery: Vec<[String; 5]>,
-    pub(super) music: Vec<[String; 5]>,
+    pub(super) music: Vec<[String; 6]>,
     /// The sidebar: one row per configured root, in configuration order —
     /// handle, label and the root itself.
     pub(super) sources: Vec<[String; 3]>,
@@ -82,8 +83,10 @@ pub(super) fn project(
         .collect();
     let missing = items.iter().filter(|item| !item.available).count();
 
+    // Borrowed once for the nested closures: each track asks the same cache.
+    let covers = cache_root.as_deref();
     let music = MusicLibrary::project(catalogue, scope);
-    let music_rows: Vec<[String; 5]> = music
+    let music_rows: Vec<[String; 6]> = music
         .artists
         .iter()
         .flat_map(|artist| {
@@ -95,6 +98,11 @@ pub(super) fn project(
                         artist.name.clone().unwrap_or_else(unknown_artist),
                         album.title.clone().unwrap_or_else(unknown_album),
                         flag(track.available),
+                        // The embedded cover, from the same shared cache the
+                        // grid reads. Without it a track has nothing to light
+                        // the room with, and the ambient light would be the one
+                        // kind of content that does not get one.
+                        cached_thumbnail(covers, &track.path),
                     ]
                 })
             })
@@ -145,14 +153,20 @@ pub(super) fn project(
 }
 
 pub(super) fn unknown_artist() -> String {
-    "Unknown artist".to_owned()
+    copy::UNKNOWN_ARTIST.to_owned()
 }
 
 pub(super) fn unknown_album() -> String {
-    "Unknown album".to_owned()
+    copy::UNKNOWN_ALBUM.to_owned()
 }
 
-pub(super) const fn kind_label(kind: MediaKind) -> &'static str {
+/// The kind as a stable token, not as a word.
+///
+/// QML compares this to choose a glyph and translates it for display. Shipping
+/// the Spanish noun in the data column instead would make the surface's
+/// behaviour depend on the product's language, so renaming a label would break
+/// an icon.
+pub(crate) const fn kind_label(kind: MediaKind) -> &'static str {
     match kind {
         MediaKind::Image => "image",
         MediaKind::Video => "video",
@@ -190,7 +204,7 @@ pub(super) fn flag(value: bool) -> String {
 /// The counts describe the selected scope, not the whole library, and a
 /// truncated pass says so instead of reading like a complete inventory. An
 /// empty result distinguishes an empty folder from an empty library, because
-/// "no media in your folders" would be a lie told while three other folders sit
+/// the library-wide sentence would be a lie told while three other folders sit
 /// in the sidebar with content in them.
 pub(super) fn summarize(
     images: usize,
@@ -202,48 +216,56 @@ pub(super) fn summarize(
 ) -> String {
     if images == 0 && videos == 0 && tracks == 0 {
         return if scoped {
-            "Nothing supported in this folder".to_owned()
+            copy::EMPTY_FOLDER
         } else {
-            "No media in your folders".to_owned()
-        };
+            copy::EMPTY_LIBRARY
+        }
+        .to_owned();
     }
     let mut parts: Vec<String> = Vec::new();
     if images > 0 {
-        parts.push(format!("{images} {}", plural(images, "image", "images")));
+        parts.push(copy::images(images));
     }
     if videos > 0 {
-        parts.push(format!("{videos} {}", plural(videos, "video", "videos")));
+        parts.push(copy::videos(videos));
     }
     if tracks > 0 {
-        parts.push(format!("{tracks} {}", plural(tracks, "track", "tracks")));
+        parts.push(copy::tracks(tracks));
     }
     if missing > 0 {
-        parts.push(format!("{missing} not found"));
+        parts.push(copy::missing(missing));
     }
     let counted = parts.join(" · ");
     if truncated {
-        format!("{counted} (incomplete scan: a limit was reached)")
+        format!("{counted} {}", copy::TRUNCATED)
     } else {
         counted
     }
 }
 
-pub(super) fn plural(count: usize, one: &str, many: &str) -> String {
-    if count == 1 { one } else { many }.to_owned()
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{cached_thumbnail, kind_label, summarize};
+    use super::{cached_thumbnail, copy, kind_label, summarize};
     use fluorita_core::MediaKind;
     use std::path::Path;
 
     #[test]
     fn the_summary_counts_what_was_found() {
-        assert_eq!(summarize(86, 8, 0, 0, false, false), "86 images · 8 videos");
+        // Composed from the copy module rather than from a second copy of the
+        // words: this asserts that summarize assembles the parts, and leaves
+        // what the parts say to the module that owns them.
+        assert_eq!(
+            summarize(86, 8, 0, 0, false, false),
+            format!("{} · {}", copy::images(86), copy::videos(8))
+        );
         assert_eq!(
             summarize(1, 1, 1, 0, false, false),
-            "1 image · 1 video · 1 track"
+            format!(
+                "{} · {} · {}",
+                copy::images(1),
+                copy::videos(1),
+                copy::tracks(1)
+            )
         );
     }
 
@@ -251,21 +273,17 @@ mod tests {
     fn an_empty_folder_is_not_reported_as_an_empty_library() {
         // The distinction is the whole point of a sidebar: three folders with
         // content and one without must not all say the library is empty.
-        assert_eq!(
-            summarize(0, 0, 0, 0, false, true),
-            "Nothing supported in this folder"
-        );
-        assert_eq!(
-            summarize(0, 0, 0, 0, false, false),
-            "No media in your folders"
-        );
+        assert_eq!(summarize(0, 0, 0, 0, false, true), copy::EMPTY_FOLDER);
+        assert_eq!(summarize(0, 0, 0, 0, false, false), copy::EMPTY_LIBRARY);
+        assert_ne!(copy::EMPTY_FOLDER, copy::EMPTY_LIBRARY);
     }
 
     #[test]
     fn a_truncated_scan_never_reads_like_a_complete_inventory() {
         let summary = summarize(50_000, 0, 0, 0, true, false);
-        assert!(summary.contains("incomplete"));
-        assert!(summary.contains("50000 images"));
+
+        assert!(summary.ends_with(copy::TRUNCATED), "unexpected: {summary}");
+        assert!(summary.starts_with(&copy::images(50_000)));
     }
 
     #[test]
@@ -274,7 +292,12 @@ mod tests {
         // drive is not data loss — but the header says so.
         assert_eq!(
             summarize(2, 1, 0, 1, false, false),
-            "2 images · 1 video · 1 not found"
+            format!(
+                "{} · {} · {}",
+                copy::images(2),
+                copy::videos(1),
+                copy::missing(1)
+            )
         );
     }
 
@@ -307,7 +330,7 @@ mod tests {
     }
 
     #[test]
-    fn kind_labels_are_the_words_the_interface_shows() {
+    fn kind_labels_are_stable_tokens_rather_than_words() {
         assert_eq!(kind_label(MediaKind::Image), "image");
         assert_eq!(kind_label(MediaKind::Video), "video");
         assert_eq!(kind_label(MediaKind::Audio), "audio");

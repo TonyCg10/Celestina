@@ -295,6 +295,29 @@ impl Catalogue {
         before - self.records.len()
     }
 
+    /// Drops every missing record whose root actually answered, returning how
+    /// many went.
+    ///
+    /// This is the difference between a file that is gone and a library that
+    /// could not be read. Keeping a missing record is right when the root is a
+    /// drive that is not plugged in: the files are fine and dropping them would
+    /// look like the library ate them. It is wrong once the root has been
+    /// walked successfully and the file was still not there, because then the
+    /// only honest reading is that it was deleted — and a library that keeps
+    /// showing what the user deleted, even from the Trash, is not being
+    /// careful, it is being wrong.
+    ///
+    /// `reached` must come from a *complete* pass. A truncated or cancelled
+    /// scan proves nothing about what is missing, which is the same rule
+    /// [`Catalogue::reconcile`] already obeys.
+    pub fn forget_vanished(&mut self, reached: &BTreeSet<SourceId>) -> usize {
+        let before = self.records.len();
+        self.records.retain(|_, record| {
+            record.availability == Availability::Available || !reached.contains(&record.source)
+        });
+        before - self.records.len()
+    }
+
     /// Every record, in stable identity order.
     pub fn records(&self) -> impl Iterator<Item = &MediaRecord> {
         self.records.values()
@@ -392,7 +415,7 @@ mod tests {
     use crate::media::{MediaId, MediaKind};
     use crate::source::{KindSet, SourceSet};
     use std::collections::BTreeSet;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::time::{Duration, SystemTime};
 
     fn identity(secs: u64) -> SourceIdentity {
@@ -411,6 +434,73 @@ mod tests {
             kind,
             identity(1_000),
         )
+    }
+
+    #[test]
+    fn a_deleted_file_is_forgotten_once_its_root_has_actually_answered() {
+        let mut sources = SourceSet::new();
+        let pictures = sources
+            .add(PathBuf::from("/home/toni/Pictures"), KindSet::gallery())
+            .expect("absolute root");
+        let removable = sources
+            .add(PathBuf::from("/run/media/toni/backup"), KindSet::gallery())
+            .expect("absolute root");
+        let mut catalogue = Catalogue::new();
+        for (inode, source, path) in [
+            (1, pictures, "/home/toni/Pictures/kept.png"),
+            (2, pictures, "/home/toni/Pictures/deleted.png"),
+            (3, removable, "/run/media/toni/backup/unplugged.png"),
+        ] {
+            catalogue.upsert(MediaRecord::new(
+                MediaId::filesystem(66, inode),
+                source,
+                PathBuf::from(path),
+                MediaKind::Image,
+                identity(1_000),
+            ));
+        }
+
+        // A complete pass that reached Pictures and could not read the removable
+        // drive: it saw only the file that is still there.
+        let seen = BTreeSet::from([MediaId::filesystem(66, 1)]);
+        catalogue.reconcile(&seen);
+        let reached = BTreeSet::from([pictures]);
+
+        assert_eq!(catalogue.forget_vanished(&reached), 1);
+        assert_eq!(catalogue.len(), 2);
+        // The deleted file is gone for good; the one on the unplugged drive is
+        // kept, because nothing was ever learned about it this pass.
+        assert!(catalogue
+            .find_by_path(Path::new("/home/toni/Pictures/deleted.png"))
+            .is_none());
+        assert!(catalogue
+            .find_by_path(Path::new("/run/media/toni/backup/unplugged.png"))
+            .is_some_and(|record| !record.is_available()));
+        assert!(catalogue
+            .find_by_path(Path::new("/home/toni/Pictures/kept.png"))
+            .is_some_and(MediaRecord::is_available));
+    }
+
+    #[test]
+    fn a_root_that_never_answered_keeps_everything_it_holds() {
+        let mut sources = SourceSet::new();
+        let removable = sources
+            .add(PathBuf::from("/run/media/toni/backup"), KindSet::gallery())
+            .expect("absolute root");
+        let mut catalogue = Catalogue::new();
+        catalogue.upsert(MediaRecord::new(
+            MediaId::filesystem(66, 1),
+            removable,
+            PathBuf::from("/run/media/toni/backup/a.png"),
+            MediaKind::Image,
+            identity(1_000),
+        ));
+        catalogue.reconcile(&BTreeSet::new());
+
+        // An empty `reached` set is exactly the unplugged case: forgetting here
+        // would be the library eating a drive's contents.
+        assert_eq!(catalogue.forget_vanished(&BTreeSet::new()), 0);
+        assert_eq!(catalogue.len(), 1);
     }
 
     #[test]

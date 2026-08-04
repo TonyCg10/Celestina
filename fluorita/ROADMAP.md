@@ -1,7 +1,7 @@
 # Fluorita implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** F6
 - **Related author validation:** none; completed observations are in
   [VALIDATION.md](VALIDATION.md)
 
@@ -54,6 +54,44 @@ belongs to the author's commit request.
 The build order, exclusions, exit and ledger are in the
 [archived plan](docs/plans/archive/2026-08-04-source-first-library.md).
 
+## F6 — Immersive content and honest catalogue
+
+**Measured need.** Three faults the author found while using F5, and one thing
+it lacked. Deleted files kept appearing — even ones emptied from the Trash —
+because the catalogue marks a missing record and nothing ever forgets it; the
+rule was written for a disconnected drive and could not tell that case from a
+real deletion. Opening an item jumped rather than moved, so the connection
+between the card clicked and the picture shown was left to the person to infer.
+There was no way to act on an item: no delete, no properties. And there was no
+way to reach the next item without leaving the one you were on.
+
+**Bounded resource and lifecycle model.** No new decode and no frame grabbing.
+The ambient light and the opening transition both reuse the thumbnail the card
+already had, so neither costs a second read. Trashing is the suite's existing
+freedesktop operation on a worker, and the record goes only when the engine
+confirms the file moved. Stepping between items closes the previous session
+through the render handshake `close` already defines rather than tearing an
+mpv instance down under a live surface.
+
+**Tangible result.** The library shows what is there. An item grows out of its
+card and shrinks back into it. Right-click offers Trash and Properties. A
+picture gets a filmstrip of the rest of the folder on approach; a video or a
+track gets previous and next. Whatever is open lights the space around it.
+
+- [ ] Forget what a completed scan of a reachable root did not find, and keep
+      what an unreachable one holds.
+- [ ] Grow the open item out of its card and back, carrying the loaded
+      thumbnail so nothing shows black while a decoder starts.
+- [ ] Offer Trash and Properties on an item, through the suite's shared menu
+      and modal.
+- [ ] Navigate the folder without leaving the item, by filmstrip or by arrows
+      according to what is open.
+- [ ] Light the space around the content with the content's own artwork.
+- [ ] Return the surface to Spanish under ADR 0007.
+
+The build order, exclusions, exit and ledger are in the
+[active plan](docs/plans/active/2026-08-04-immersive-content.md).
+
 ## Conditions for opening the next checkpoint
 
 A new checkpoint must begin with a measured user need, a bounded resource and
@@ -73,7 +111,7 @@ or duplication between standalone and Siderita.
 
 ## Implementation exit
 
-For any newly authorised checkpoint, close implementation when focused
+For F6 and any newly authorised checkpoint, close implementation when focused
 core/engine tests and lifecycle/resource bounds pass and every affected
 deployable host completes its registered production flow. Fluorita-only work
 uses `fluorita/scripts/complete-production.sh`; a shared `fluorita-core`,
