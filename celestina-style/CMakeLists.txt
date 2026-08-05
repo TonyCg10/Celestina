@@ -139,6 +139,26 @@ qt_add_qml_module(celestina-style
 
 target_link_libraries(celestina-style PRIVATE Qt6::Quick)
 
+# Order QML type registration behind the module it describes.
+#
+# `qt_add_qml_module` puts the same `cmake_automoc_parser` invocation in two
+# generated targets — `celestina-style` and `celestina-style_qmltyperegistration`
+# — and that command writes `meta_types/<target>_json_file_list.txt.timestamp`
+# as a side effect the build system never declares as an output. Nothing
+# therefore orders the two copies, so a parallel build can run both at once and
+# one truncates the file while the other is reading it. The verification run saw
+# exactly that, twice: `Could not open: …_json_file_list.txt.timestamp`, with the
+# file present and readable the moment the build stopped.
+#
+# `all_qmllint` reaches both through the type-registration subtree. Ordering the
+# lint target alone is insufficient: Make may build that target's module and
+# `all_qmltyperegistrations` prerequisites in parallel. The target that owns the
+# second parser invocation therefore depends directly on the module that owns
+# the first, closing the actual writer-to-writer race.
+if(TARGET celestina-style_qmltyperegistration)
+    add_dependencies(celestina-style_qmltyperegistration celestina-style)
+endif()
+
 if(BUILD_TESTING)
     find_package(Qt6 6.9 REQUIRED COMPONENTS QuickTest)
     qt_add_executable(celestina-style-modal-test

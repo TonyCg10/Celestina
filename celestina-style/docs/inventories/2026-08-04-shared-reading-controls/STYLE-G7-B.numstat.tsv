@@ -1,0 +1,12 @@
+# STYLE-G7-B exact change inventory
+
+Base revision	79cb124ad02867c02fbcdd418b166b3b3e5de445
+Pathspec	celestina-style/
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+20	0	ea1d6ea6c70b83e905cd0d93f22d635ddcaa6cbd76035b123375569ba9281d4f	celestina-style/CMakeLists.txt
+101	0	fda435f800dd09451642635cbbda1ebb99a5cdea35cbc85fcf0778e479b84761	celestina-style/docs/evidence/2026-08-05-qmllint-ordering.md
+10	0	8c90b6c1d6c2406cb22e776b1f6db0d7eced1fc686d6cbd6e5fcee5fb51029be	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+12	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-B.numstat.tsv

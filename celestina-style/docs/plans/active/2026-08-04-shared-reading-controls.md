@@ -65,7 +65,17 @@ stable symbols are authoritative; line counts are a hand-off aid and may drift.
 
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
+| STYLE-G7-B | `celestina-style:` | done | [inventory](../../inventories/2026-08-04-shared-reading-controls/STYLE-G7-B.numstat.tsv) | 4 files, +143/-0 | Order QML type registration behind the module itself, so the two generated targets that carry the same metatypes extraction cannot run it at once | [evidence](../../evidence/2026-08-05-qmllint-ordering.md) | None |
 | STYLE-G7-A | `celestina-style:` | done | [inventory](../../inventories/2026-08-04-shared-reading-controls/STYLE-G7-A.numstat.tsv) | 11 files, +565/-8 | Publish `CelestinaScrollBar` and `CelestinaLineGutter`, register both, and move the module to 1.1.0 | [evidence](../../evidence/2026-08-04-shared-reading-controls.md) | `VAL-STYLE-04` |
+
+## Why the ordering fix is a unit of this checkpoint
+
+It was found verifying this checkpoint's own artifact: `verify-production.sh`
+builds `all_qmllint`, and that step failed twice with
+`Could not open: meta_types/celestina-style_json_file_list.txt.timestamp`. The
+defect belongs to how this module's targets are generated, not to the controls
+themselves, so it is a second unit here rather than a new checkpoint for one
+`add_dependencies` line.
 
 ## Decisions and rollback
 
