@@ -218,26 +218,12 @@ int main(int argc, char *argv[])
         break;
     }
 
-    // Session providers outlive the engine and are exposed to every per-output
-    // panel. Niri state arrives from the Rust helper and is marshalled by the
-    // thin Qt adapter on this GUI thread.
-    auto *niri = new NiriClient(&app);
-    auto *phone = new DevicesClient(&app);
-    // One helper carries every bar provider; this is the panel's only bridge
-    // to it, shared by every output rather than created per widget.
-    auto *providers = new ShellProvidersClient(&app);
-
-    // The tray host and the provider that draws what it resolved share one
-    // cache; the engine owns the provider, so neither of them owns the cache.
-    auto trayIcons = QSharedPointer<TrayIconCache>::create();
-    engine.addImageProvider(QStringLiteral("tray"), new TrayIconProvider(trayIcons));
-    auto *tray = new TrayWatcher(trayIcons, &app);
-
     // The command channel is claimed before a single surface is mapped: a
-    // second panel-mode process must defer to the owner, not flash a duplicate
-    // panel first. A session without a bus keeps its panels and loses only the
-    // channel — D-Bus degrades the service, never the shell.
-    auto *shell = new ShellService(niri, &app);
+    // second panel-mode process must defer before constructing any adapter,
+    // provider or tray service. In particular, a rejected host must never run
+    // an automatic DDC probe. A session without a bus keeps its panels and
+    // loses only the channel — D-Bus degrades the service, never the shell.
+    auto *shell = new ShellService(nullptr, &app);
     switch (shell->attach(QDBusConnection::sessionBus())) {
     case ShellService::Attachment::NameTaken:
         qCritical() << "Celestina is already running this session; deferring to "
@@ -251,6 +237,22 @@ int main(int argc, char *argv[])
                 << "at" << ShellService::objectPath();
         break;
     }
+
+    // Only the accepted host may start session helpers. They outlive the
+    // engine and are exposed to every per-output panel. Niri state arrives
+    // from the Rust helper and is marshalled on this GUI thread.
+    auto *niri = new NiriClient(&app);
+    shell->setNiriClient(niri);
+    auto *phone = new DevicesClient(&app);
+    // One helper carries every bar provider; this is the panel's only bridge
+    // to it, shared by every output rather than created per widget.
+    auto *providers = new ShellProvidersClient(&app);
+
+    // The tray host and the provider that draws what it resolved share one
+    // cache; the engine owns the provider, so neither of them owns the cache.
+    auto trayIcons = QSharedPointer<TrayIconCache>::create();
+    engine.addImageProvider(QStringLiteral("tray"), new TrayIconProvider(trayIcons));
+    auto *tray = new TrayWatcher(trayIcons, &app);
 
     // The session's background: one surface per output, on the layer
     // everything else sits on. It is mapped before the panels so a screen is

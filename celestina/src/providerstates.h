@@ -70,9 +70,13 @@ public:
 
     QVariantMap providers() const { return m_providers; }
     quint64 generation() const { return m_generation; }
+    quint64 revision() const { return m_revision; }
     bool isEmpty() const { return m_providers.isEmpty(); }
 
 private:
     QVariantMap m_providers;
     quint64 m_generation = 0;
+    // Local binding epoch, independent of the helper generation. A provider
+    // may appear or disappear many times while one helper stays alive.
+    quint64 m_revision = 0;
 };

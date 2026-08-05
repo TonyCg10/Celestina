@@ -25,6 +25,22 @@ Window {
     signal trayMenuRequested(string service, string path, int globalX, int globalY)
     signal notificationCentreRequested()
 
+    // QVariantMap keys are dynamic: `media` may not exist when this component
+    // first binds and may be inserted by a later frame from the same helper.
+    // Reading the host's snapshot revision first gives every lookup one stable
+    // notification dependency instead of depending on a key that did not yet
+    // exist in Qt's property cache.
+    function provider(name) {
+        // The condition is deliberately part of the returned expression. An
+        // otherwise unused local read can be removed by qmlcachegen, leaving
+        // the binding with the same missing-key dependency that caused the
+        // live failure. Revisions are unsigned, so this branch is only the
+        // stable notification edge for a real host.
+        if (panel.providerSource.revision < 0)
+            return undefined;
+        return panel.providerSource.providers[name];
+    }
+
     width: Screen.width
     height: 40
     visible: false
@@ -78,15 +94,16 @@ Window {
         SysMon {
             id: sysMon
 
-            reading: panel.providerSource.providers.sysmon
+            reading: panel.provider("sysmon")
             onMonitorRequested: panel.providerSource.sendCommand("sysmon", "open-monitor")
         }
 
         MediaMini {
             id: media
+            objectName: "celestina-panel-media"
 
             anchors.verticalCenter: parent.verticalCenter
-            reading: panel.providerSource.providers.media
+            reading: panel.provider("media")
             onToggleRequested: panel.providerSource.sendCommand("media", "PlayPause")
         }
 
@@ -118,15 +135,15 @@ Window {
 
         SessionStatus {
             anchors.verticalCenter: parent.verticalCenter
-            network: panel.providerSource.providers.network
-            bluetooth: panel.providerSource.providers.bluetooth
-            power: panel.providerSource.providers.power
+            network: panel.provider("network")
+            bluetooth: panel.provider("bluetooth")
+            power: panel.provider("power")
             onProfileCycleRequested: panel.providerSource.sendCommand("power", "cycle")
         }
 
         AudioLevel {
             anchors.verticalCenter: parent.verticalCenter
-            reading: panel.providerSource.providers.audio
+            reading: panel.provider("audio")
             onMuteToggled: panel.providerSource.sendCommand("audio", "mute-toggle")
             onMicMuteToggled: panel.providerSource.sendCommand("audio", "mic-mute-toggle")
             onMixerRequested: panel.providerSource.sendCommand("audio", "open-mixer")
@@ -136,7 +153,7 @@ Window {
 
         BrightnessLevel {
             anchors.verticalCenter: parent.verticalCenter
-            reading: panel.providerSource.providers.brightness
+            reading: panel.provider("brightness")
             outputName: panel.outputName
             // The step names its own monitor: one helper serves every panel,
             // and each panel speaks only for the output it is mapped on.
@@ -149,7 +166,7 @@ Window {
 
         NotificationIndicator {
             anchors.verticalCenter: parent.verticalCenter
-            reading: panel.providerSource.providers.notifications
+            reading: panel.provider("notifications")
             // The panel asks; the host owns the surface that answers, exactly
             // as it does for the menus.
             onHistoryRequested: panel.notificationCentreRequested()

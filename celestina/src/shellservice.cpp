@@ -118,7 +118,6 @@ std::optional<SessionRequests::Expectation> sessionExpectation(
 
 ShellService::ShellService(NiriClient *niri, QObject *parent)
     : QObject(parent)
-    , m_niri(niri)
 {
     m_stateTimer.setSingleShot(true);
     m_stateTimer.setInterval(stateCoalesceMs);
@@ -131,6 +130,18 @@ ShellService::ShellService(NiriClient *niri, QObject *parent)
         reportSessionOutcomes();
     });
 
+    setNiriClient(niri);
+}
+
+void ShellService::setNiriClient(NiriClient *niri)
+{
+    if (m_niri == niri)
+        return;
+
+    if (m_niri)
+        disconnect(m_niri.data(), nullptr, this, nullptr);
+
+    m_niri = niri;
     if (!m_niri)
         return;
 

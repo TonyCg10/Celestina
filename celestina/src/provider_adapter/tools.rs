@@ -5,7 +5,8 @@
 //! are run: bounded, killed if they outstay their welcome, and never able to
 //! block the helper by hanging.
 
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -37,6 +38,22 @@ pub fn run_bounded(program: &str, args: &[&str]) -> Option<String> {
 /// physical conversation with a monitor and takes about a second; giving it the
 /// panel's timeout would mean never reading a brightness at all.
 pub fn run_bounded_with(program: &str, args: &[&str], timeout: Duration) -> Option<String> {
+    run_bounded_with_cancel(program, args, timeout, None)
+}
+
+/// Runs a bounded tool owned by a cancellable provider. Shutdown kills and
+/// reaps the direct child before the worker returns, so terminating the helper
+/// cannot reparent a probe that was still talking to hardware.
+pub fn run_bounded_with_cancel(
+    program: &str,
+    args: &[&str],
+    timeout: Duration,
+    cancelled: Option<&AtomicBool>,
+) -> Option<String> {
+    if cancelled.is_some_and(|flag| flag.load(Ordering::Acquire)) {
+        return None;
+    }
+
     let mut child = Command::new(program)
         .args(args)
         .stdin(Stdio::null())
@@ -50,14 +67,18 @@ pub fn run_bounded_with(program: &str, args: &[&str], timeout: Duration) -> Opti
         match child.try_wait() {
             Ok(Some(_)) => break,
             Ok(None) => {
-                if Instant::now() >= deadline {
-                    let _ = child.kill();
-                    let _ = child.wait();
+                if cancelled.is_some_and(|flag| flag.load(Ordering::Acquire))
+                    || Instant::now() >= deadline
+                {
+                    stop_and_reap(&mut child);
                     return None;
                 }
                 thread::sleep(Duration::from_millis(20));
             }
-            Err(_) => return None,
+            Err(_) => {
+                stop_and_reap(&mut child);
+                return None;
+            }
         }
     }
 
@@ -66,6 +87,11 @@ pub fn run_bounded_with(program: &str, args: &[&str], timeout: Duration) -> Opti
         return None;
     }
     Some(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+fn stop_and_reap(child: &mut Child) {
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 /// Runs an external tool the session already uses, detached from this helper's
@@ -107,4 +133,32 @@ pub fn launch_argv(argv: &[&str]) -> Result<(), String> {
         })
         .map_err(|error| format!("cannot wait on {program}: {error}"))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    #[test]
+    fn cancellation_stops_a_bounded_child_before_its_deadline() {
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let request = Arc::clone(&cancelled);
+        let canceller = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(40));
+            request.store(true, Ordering::Release);
+        });
+
+        let started = Instant::now();
+        let output = run_bounded_with_cancel(
+            "sleep",
+            &["5"],
+            Duration::from_secs(10),
+            Some(&cancelled),
+        );
+
+        assert!(output.is_none());
+        assert!(started.elapsed() < Duration::from_secs(1));
+        assert!(canceller.join().is_ok());
+    }
 }

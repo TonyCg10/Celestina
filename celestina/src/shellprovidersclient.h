@@ -27,6 +27,7 @@ class ShellProvidersClient final : public QObject
     Q_OBJECT
     Q_PROPERTY(bool available READ available NOTIFY changed)
     Q_PROPERTY(QVariantMap providers READ providers NOTIFY changed)
+    Q_PROPERTY(qulonglong revision READ revision NOTIFY changed)
 
 public:
     explicit ShellProvidersClient(QObject *parent = nullptr);
@@ -34,6 +35,7 @@ public:
 
     bool available() const { return m_available; }
     QVariantMap providers() const { return m_states.providers(); }
+    qulonglong revision() const { return m_states.revision(); }
 
     // Asks a provider to do something. Returns 0 when the request could not
     // even be sent; otherwise the id its result will carry. Acceptance is not
@@ -73,5 +75,6 @@ private:
     quint64 m_lastRequestId = 0;
     bool m_available = false;
     bool m_stopping = false;
+    bool m_tracedMediaVisual = false;
     int m_restartDelayMs = 0;
 };

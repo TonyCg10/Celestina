@@ -51,6 +51,11 @@ public:
 
     explicit ShellService(NiriClient *niri, QObject *parent = nullptr);
 
+    // The session name is claimed before the adapter is constructed. A host
+    // that must defer therefore starts no helper process and performs no
+    // provider IO; the accepted host wires Niri immediately afterwards.
+    void setNiriClient(NiriClient *niri);
+
     // Exports the object first and claims the name second, so a client that
     // sees the name always finds the object behind it.
     Attachment attach(const QDBusConnection &bus);

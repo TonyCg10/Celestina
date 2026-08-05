@@ -1,7 +1,7 @@
 # Celestina implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** LVR-3
 
 This roadmap contains only work an agent can implement and verify. Real Niri,
 hardware, visual and assistive-technology checks live in
@@ -28,12 +28,33 @@ of the design when they provide the narrow capability the shell needs.
 | R7 | complete | Wallpaper, portal values and the generated Niri colours |
 | LVR-1 | complete | Correct the failures exposed by the 2026-08-04 live validation run |
 | LVR-2 | complete | Correct the failures exposed by the 2026-08-05 follow-up run |
+| LVR-3 | active | Correct late provider insertion and provider lifecycle defects exposed during the GPU-loss audit |
 | R6 | conditional | First-party lock starts only if SHELL-D2 is applied |
 | R8 | complete | Reversible Noctalia removal; Polkit/dock slices remain conditional |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
 
 Recorded live observations and remaining author checks are status on the
 validation lane, not implementation status.
+
+## LVR-3 — Late provider insertion and safe provider lifecycle
+
+**Outcome:** a provider added to a later frame of the first helper generation
+becomes visible without restarting that helper, and a rejected or terminating
+host cannot start, overlap or abandon an automatic DDC operation.
+
+The 0.6.2 live rerun proved that Firefox, `playerctl` and the Rust media
+provider were healthy: an isolated helper published media immediately, while
+the original host showed it only after replacing its helper. The bounded work
+is recorded in
+[the active LVR-3 plan](docs/plans/active/2026-08-05-late-provider-insertion.md).
+
+The separate GPU-loss audit found two confirmed PCIe device-loss boots after
+Celestina-shaped DDC activity and concrete process-lifecycle defects in the
+shell. It did not prove causation. The author authorized source and record
+corrections while every executable check remains suspended for a long
+Noctalia-only observation. The evidence boundaries are recorded in the
+[system audit](docs/evidence/2026-08-05-gpu-loss-system-audit.md) and
+[Celestina lifecycle record](docs/evidence/2026-08-05-ddc-process-lifecycle.md).
 
 ## LVR-2 — Live validation follow-up
 

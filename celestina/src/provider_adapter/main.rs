@@ -18,7 +18,10 @@
 
 use std::io::{self, BufReader, BufWriter, Stdout};
 use std::process::{self, ExitCode};
-use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{
+    sync_channel, Receiver, RecvTimeoutError, SyncSender, TrySendError,
+};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -129,8 +132,14 @@ fn run_commands(
     receiver: &Receiver<Command>,
     runtime: &Mutex<ProviderRuntime>,
     writer: &HelperWriter,
+    shutdown: &AtomicBool,
 ) {
-    while let Ok(command) = receiver.recv() {
+    while !shutdown.load(Ordering::Acquire) {
+        let command = match receiver.recv_timeout(IDLE_TICK) {
+            Ok(command) => command,
+            Err(RecvTimeoutError::Timeout) => continue,
+            Err(RecvTimeoutError::Disconnected) => return,
+        };
         if let Some(rejection) = lock_runtime(runtime).refuse_unknown(&command) {
             reject(writer, &rejection);
             continue;
@@ -144,6 +153,7 @@ fn run_commands(
         };
         if let Err(error) = writer.emit(&frame) {
             eprintln!("celestina-provider-adapter: {error}");
+            shutdown.store(true, Ordering::Release);
             return;
         }
     }
@@ -202,6 +212,7 @@ fn run() -> io::Result<()> {
     let runtime = Arc::new(Mutex::new(ProviderRuntime::new(process::id().into())));
     let clock = Clock::new();
     let (sender, receiver) = sync_channel::<Command>(COMMAND_QUEUE_CAPACITY);
+    let shutdown = Arc::new(AtomicBool::new(false));
 
     // QProcess uses SIGTERM for an orderly helper restart. The held programs
     // affect the whole session, so they must be released before this process
@@ -211,12 +222,12 @@ fn run() -> io::Result<()> {
         signal_hook::consts::SIGINT,
         signal_hook::consts::SIGHUP,
     ])?;
+    let signal_shutdown = Arc::clone(&shutdown);
     thread::Builder::new()
         .name("shutdown-signals".to_owned())
         .spawn(move || {
             if shutdown_signals.forever().next().is_some() {
-                sessionholds::release_all();
-                process::exit(0);
+                signal_shutdown.store(true, Ordering::Release);
             }
         })?;
 
@@ -229,7 +240,14 @@ fn run() -> io::Result<()> {
     sysmon::spawn(&runtime)?;
     media::spawn(&runtime)?;
     audio::spawn(&runtime)?;
-    brightness::spawn(&runtime)?;
+    // A diagnostic safety hold can remove DDC without changing any other
+    // provider. It is intentionally process-local and opt-in; normal product
+    // behavior still owns brightness.
+    let brightness_worker = if std::env::var_os("CELESTINA_DISABLE_DDC").is_some() {
+        None
+    } else {
+        Some(brightness::spawn(&runtime, &shutdown)?)
+    };
     session::spawn(&runtime)?;
     sessionholds::spawn(&runtime)?;
     launcher::spawn(&runtime)?;
@@ -243,43 +261,63 @@ fn run() -> io::Result<()> {
 
     let worker_runtime = Arc::clone(&runtime);
     let worker_writer = Arc::clone(&writer);
+    let worker_shutdown = Arc::clone(&shutdown);
     let worker = thread::Builder::new()
         .name("provider-commands".to_owned())
-        .spawn(move || run_commands(&receiver, &worker_runtime, &worker_writer))?;
+        .spawn(move || {
+            run_commands(
+                &receiver,
+                &worker_runtime,
+                &worker_writer,
+                &worker_shutdown,
+            );
+        })?;
 
     let reader_writer = Arc::clone(&writer);
+    let reader_shutdown = Arc::clone(&shutdown);
     thread::Builder::new()
         .name("host-commands".to_owned())
         .spawn(move || {
             read_host_commands(&sender, &reader_writer);
-            // Our stdin closed, so the host is gone or shutting down. Close the
-            // queue, let the worker finish what it holds, and leave together.
+            // Our stdin closed, so the host is gone or shutting down. Dropping
+            // the sender closes the queue; the main thread owns every join and
+            // the final release order.
             drop(sender);
-            if worker.join().is_err() {
-                eprintln!("celestina-provider-adapter: the command worker panicked");
-            }
-            // Held states are given back before this process goes: nothing
-            // else in the session knows how to release this helper's children,
-            // and `exit` runs no destructor that would.
-            sessionholds::release_all();
-            process::exit(0);
+            reader_shutdown.store(true, Ordering::Release);
         })?;
 
     // Publish what the runtime says is owed, when it says it is owed. With no
     // provider having spoken yet the host still gets an immediate empty frame,
     // so it knows the helper is alive and carrying nothing.
-    loop {
+    while !shutdown.load(Ordering::Acquire) {
         let now = clock.now_ms();
         let mut state = lock_runtime(&runtime);
         if state.due(now) {
             if let Err(error) = writer.emit(&state.take_frame(now)) {
                 eprintln!("celestina-provider-adapter: {error}");
-                return Ok(());
+                shutdown.store(true, Ordering::Release);
+                break;
             }
         }
         drop(state);
         thread::sleep(IDLE_TICK);
     }
+
+    // Stop hardware IO before allowing the process to return. The brightness
+    // worker observes this flag inside each bounded DDC child, kills and reaps
+    // that child, then becomes joinable. No abrupt process exit bypasses this
+    // ownership chain.
+    shutdown.store(true, Ordering::Release);
+    if let Some(brightness_worker) = brightness_worker {
+        if brightness_worker.join().is_err() {
+            eprintln!("celestina-provider-adapter: the brightness worker panicked");
+        }
+    }
+    if worker.join().is_err() {
+        eprintln!("celestina-provider-adapter: the command worker panicked");
+    }
+    sessionholds::release_all();
+    Ok(())
 }
 
 fn main() -> ExitCode {

@@ -229,6 +229,8 @@ bool ProviderStates::apply(const ProviderMessage &message)
     // lingering.
     m_generation = message.generation;
     m_providers = message.providers;
+    if (changed)
+        ++m_revision;
     return changed;
 }
 
@@ -239,5 +241,6 @@ bool ProviderStates::clear()
 
     m_providers.clear();
     m_generation = 0;
+    ++m_revision;
     return true;
 }

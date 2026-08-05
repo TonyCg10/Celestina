@@ -1,7 +1,8 @@
 # Active Celestina plans
 
-There is no active shell plan. Completed plans remain under
-[`../archive/`](../archive/).
+The active shell plan is
+[LVR-3 late provider insertion](2026-08-05-late-provider-insertion.md).
+Completed plans remain under [`../archive/`](../archive/).
 Each plan owns a persistent change ledger and remains separate from author-only
 validation.
 

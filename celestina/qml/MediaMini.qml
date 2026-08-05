@@ -28,8 +28,11 @@ Item {
     readonly property string artPath: hasPlayer && reading.artPath !== undefined
                                       ? reading.artPath : ""
 
+    // Measure the title independently from the elided Text's assigned width.
+    // The panel starts this item at zero width; asking that Text for its
+    // implicit width creates a zero-width sizing cycle on the live surface.
     implicitWidth: hasPlayer
-                   ? Math.min(220, label.implicitWidth) + cover.width + (cover.visible ? CelestinaTheme.spaceSm : 0)
+                   ? Math.min(220, titleMetrics.advanceWidth) + cover.width + (cover.visible ? CelestinaTheme.spaceSm : 0)
                    : 0
     implicitHeight: 26
     visible: hasPlayer
@@ -57,6 +60,13 @@ Item {
         asynchronous: true
         cache: false
         smooth: true
+    }
+
+    TextMetrics {
+        id: titleMetrics
+
+        text: root.hasPlayer ? root.reading.nowPlaying : ""
+        font: label.font
     }
 
     Text {

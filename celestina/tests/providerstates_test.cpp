@@ -18,6 +18,7 @@ private slots:
     void readsACommandResult();
     void aFrameReplacesTheWholeSetSoAWithdrawnProviderCannotLinger();
     void aNewGenerationIsAChangeEvenWithIdenticalValues();
+    void aProviderInsertedInTheSameGenerationAdvancesTheBindingRevision();
     void clearingDropsEverythingTheHelperHadPublished();
     void acceptsTheShapeTheNotificationProviderActuallyPublishes();
     void anUnreadableFrameLeavesEveryOtherProvidersReadingAlone();
@@ -195,6 +196,28 @@ void ProviderStatesTest::aNewGenerationIsAChangeEvenWithIdenticalValues()
         R"({"kind":"providers","version":1,"generation":2,"providers":{"sysmon":{"cpu":12}}})";
     QVERIFY(states.apply(parseProviderMessage(restarted)));
     QCOMPARE(states.generation(), 2u);
+}
+
+void ProviderStatesTest::aProviderInsertedInTheSameGenerationAdvancesTheBindingRevision()
+{
+    ProviderStates states;
+    QVERIFY(states.apply(parseProviderMessage(
+        R"({"kind":"providers","version":1,"generation":7,"providers":{"sysmon":{"cpu":12}}})"
+    )));
+    const quint64 beforeMedia = states.revision();
+
+    QVERIFY(states.apply(parseProviderMessage(
+        R"({"kind":"providers","version":1,"generation":7,"providers":{)"
+        R"("sysmon":{"cpu":12},"media":{"nowPlaying":"Lofi","playing":true}}})"
+    )));
+    QCOMPARE(states.generation(), 7u);
+    QCOMPARE(states.revision(), beforeMedia + 1);
+    QCOMPARE(
+        states.providers().value(QStringLiteral("media")).toMap().value(
+            QStringLiteral("nowPlaying")
+        ).toString(),
+        QStringLiteral("Lofi")
+    );
 }
 
 // The live failure this test exists for: the notification provider published a

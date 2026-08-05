@@ -23,7 +23,7 @@ Window {
     signal dismissed()
 
     Shortcut {
-        sequence: StandardKey.Cancel
+        sequence: "Escape"
         context: Qt.WindowShortcut
         onActivated: centre.dismissed()
     }

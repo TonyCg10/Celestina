@@ -16,8 +16,11 @@
 //! author's session, take its notification name or show anything on screen.
 
 use std::collections::HashMap;
+use std::fs;
 use std::io::{BufRead, BufReader};
+use std::path::PathBuf;
 use std::process::{Child, ChildStdout, Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
@@ -32,6 +35,7 @@ const DEADLINE: Duration = Duration::from_secs(15);
 /// How long a property that must never hold is watched for. The helper
 /// publishes several frames a second, so this is many chances to be wrong.
 const WATCH: Duration = Duration::from_secs(3);
+static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(1);
 
 /// A private session bus, torn down with the test whatever it fails on.
 struct PrivateBus {
@@ -72,19 +76,39 @@ impl Drop for PrivateBus {
 struct Helper {
     process: Child,
     frames: BufReader<ChildStdout>,
+    config_directory: PathBuf,
 }
 
 impl Helper {
     fn start(address: &str) -> Self {
+        // A helper restores the person's persisted session choices, including
+        // caffeine. Integration tests must never inherit those choices and
+        // take a real inhibitor merely because the live shell last had one.
+        let config_directory = std::env::temp_dir().join(format!(
+            "celestina-notification-test-{}-{}",
+            std::process::id(),
+            NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&config_directory).expect("the test config directory exists");
         let mut process = Command::new(env!("CARGO_BIN_EXE_celestina-provider-adapter"))
             .env("DBUS_SESSION_BUS_ADDRESS", address)
+            .env("XDG_CONFIG_HOME", &config_directory)
+            // The private-bus test exercises notifications only. Connecting
+            // its aggregate helpers to the author's real compositor would
+            // import live clipboard frames and can fill stdout after the test
+            // deliberately stops draining its first helper.
+            .env("WAYLAND_DISPLAY", "celestina-test-no-wayland")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
             .expect("the provider helper starts");
         let frames = BufReader::new(process.stdout.take().expect("the helper's frames"));
-        Self { process, frames }
+        Self {
+            process,
+            frames,
+            config_directory,
+        }
     }
 
     /// Reads frames for `window`, returning the first that satisfies `wanted`.
@@ -136,6 +160,7 @@ impl Drop for Helper {
     fn drop(&mut self) {
         let _ = self.process.kill();
         let _ = self.process.wait();
+        let _ = fs::remove_dir_all(&self.config_directory);
     }
 }
 

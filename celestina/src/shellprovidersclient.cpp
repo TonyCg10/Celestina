@@ -1,8 +1,11 @@
 #include "shellprovidersclient.h"
 
 #include <QDebug>
+#include <QGuiApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTimer>
+#include <QWindow>
 
 namespace {
 constexpr qint64 readChunkBytes = 64 * 1024;
@@ -11,7 +14,7 @@ constexpr int maximumRestartDelayMs = 10 * 1000;
 // A bounded provider command may still be finishing when stdin closes. Give
 // the helper enough time to drain that command and release every held child
 // before SIGTERM becomes necessary.
-constexpr int gracefulShutdownMs = 1250;
+constexpr int gracefulShutdownMs = 3000;
 } // namespace
 
 ShellProvidersClient::ShellProvidersClient(QObject *parent)
@@ -72,6 +75,7 @@ void ShellProvidersClient::startHelper()
         return;
 
     m_decoder.reset();
+    m_tracedMediaVisual = false;
     m_process.start();
 }
 
@@ -148,6 +152,10 @@ void ShellProvidersClient::helperError(QProcess::ProcessError error)
 void ShellProvidersClient::applyLine(const QByteArray &line)
 {
     const ProviderMessage message = parseProviderMessage(line);
+    // Opt-in live diagnosis for the aggregate boundary. Provider payloads can
+    // contain private text, so the trace names keys only and is silent unless
+    // the launch environment explicitly requests it.
+    const bool tracing = qEnvironmentVariableIsSet("CELESTINA_PROVIDER_TRACE");
     // One rule decides what a frame means for what is on screen; this only
     // obeys it. See `FrameEffect` for why an unreadable frame changes nothing.
     switch (effectOf(message)) {
@@ -176,8 +184,39 @@ void ShellProvidersClient::applyLine(const QByteArray &line)
     const bool becameAvailable = !m_available;
     m_available = true;
     m_restartDelayMs = initialRestartDelayMs;
-    if (m_states.apply(message) || becameAvailable)
+    const bool stateChanged = m_states.apply(message);
+    if (tracing && stateChanged) {
+        qInfo().noquote() << "Celestina provider frame"
+                          << message.generation << "keys"
+                          << message.providers.keys().join(u',');
+    }
+    if (stateChanged || becameAvailable)
         emit changed();
+
+    if (tracing && !m_tracedMediaVisual
+        && message.providers.contains(QStringLiteral("media"))) {
+        m_tracedMediaVisual = true;
+        QTimer::singleShot(0, this, [] {
+            for (QWindow *window : QGuiApplication::allWindows()) {
+                QObject *media = window->findChild<QObject *>(
+                    QStringLiteral("celestina-panel-media")
+                );
+                if (!media)
+                    continue;
+                QObject *container = media->parent();
+                qInfo().noquote()
+                    << "Celestina media visual"
+                    << window->objectName()
+                    << "hasPlayer" << media->property("hasPlayer")
+                    << "visible" << media->property("visible")
+                    << "x" << media->property("x")
+                    << "width" << media->property("width")
+                    << "implicitWidth" << media->property("implicitWidth")
+                    << "containerWidth"
+                    << (container ? container->property("width") : QVariant());
+            }
+        });
+    }
 }
 
 void ShellProvidersClient::setUnavailable()

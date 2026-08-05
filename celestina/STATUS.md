@@ -2,17 +2,26 @@
 
 - **Updated:** 2026-08-05
 - **Implementation:** R0-R5, R7, R8's departure slice, LVR-1 and LVR-2 are
-  complete in celestina 0.6.2
+  complete in celestina 0.6.2; LVR-3 is active after the live media rerun
 - **Author validation:** the 2026-08-05 follow-up passed clipboard remediation,
   tray/notification protocol flows, Spanish copy, startup diagnostics, portal
   integration and output hotplug, but failed first-generation media,
   notification-centre Escape and held-child cleanup. Version 0.6.2 corrects
-  those three defects and awaits their focused live rerun. See
+  notification Escape and held-child cleanup await their focused live rerun.
+  The 0.6.2 media rerun failed again and is now owned by LVR-3. See
   [VALIDATION.md](VALIDATION.md) and the
   [follow-up evidence](docs/evidence/2026-08-05-live-validation-follow-up.md)
 - **Live migration:** Noctalia remains the rollback and must not be removed.
   `scripts/handover-status.sh` reports the unrecorded responsibilities, and the
   removal tool refuses while any are unbuilt, unrecorded or failed
+- **GPU safety hold:** two retained boots lost the Navi 48 GPU from PCIe after
+  Celestina-shaped DDC activity. Correlation is strong but causation remains
+  unresolved. The live session is now Noctalia-only; no Celestina executable,
+  provider, build, test, deployment or activation may run until the author ends
+  the long observation. LVR-3-B corrects only the confirmed Celestina process
+  defects during this hold. See the
+  [system audit](docs/evidence/2026-08-05-gpu-loss-system-audit.md) and
+  [lifecycle record](docs/evidence/2026-08-05-ddc-process-lifecycle.md).
 
 ## Current checkout truth
 
@@ -138,7 +147,7 @@ the author reruns them against 0.6.2.
 
 ## Records
 
-- Active plan: none
+- Active plan: [LVR-3 late provider insertion](docs/plans/active/2026-08-05-late-provider-insertion.md)
 - Last completed plan: [LVR-2 live validation follow-up](docs/plans/archive/2026-08-05-live-validation-follow-up.md)
 - The milestone before it: [R8 Noctalia departure](docs/plans/archive/2026-08-04-r8-noctalia-departure.md)
 - Open product questions: [discussion queue](docs/discussions/README.md)

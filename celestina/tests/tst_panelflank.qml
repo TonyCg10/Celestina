@@ -109,4 +109,20 @@ TestCase {
         verify(media.hasPlayer);
         verify(flank.reservedWidth > 0);
     }
+
+    function test_a_late_long_title_gets_an_independent_natural_width() {
+        media.reading = undefined;
+        wait(0);
+        compare(media.implicitWidth, 0);
+
+        media.reading = ({
+            "nowPlaying": testCase.longTitle,
+            "playing": true,
+            "progress": "live"
+        });
+        wait(0);
+
+        verify(media.hasPlayer);
+        compare(media.implicitWidth, 220);
+    }
 }

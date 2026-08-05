@@ -13,8 +13,9 @@
 
 use std::collections::HashMap;
 use std::io;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::thread;
+use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use celestina_shell_core::brightness::{self, DdcDisplay};
@@ -23,7 +24,7 @@ use celestina_shell_core::session::{self, LevelChange, SessionRequest};
 use celestina_shell_core::snapshot::{Payload, ProviderId};
 use serde_json::Value;
 
-use super::tools::{lock_runtime, run_bounded_with};
+use super::tools::{lock_runtime, run_bounded_with_cancel};
 
 /// A monitor may take its time. This is generous against a warm read of about a
 /// second and the near-ten-second first call, and still bounded: a monitor that
@@ -43,6 +44,33 @@ const REDETECT: Duration = Duration::from_secs(30);
 
 pub const NAME: &str = "brightness";
 
+/// Owns the brightness thread and makes every early-return path cancellable.
+/// Dropping a bare `JoinHandle` would detach the worker; this guard instead
+/// requests shutdown and waits until any active DDC child has been reaped.
+pub struct Worker {
+    shutdown: Arc<AtomicBool>,
+    handle: Option<JoinHandle<()>>,
+}
+
+impl Worker {
+    pub fn join(mut self) -> thread::Result<()> {
+        self.shutdown.store(true, Ordering::Release);
+        match self.handle.take() {
+            Some(handle) => handle.join(),
+            None => Ok(()),
+        }
+    }
+}
+
+impl Drop for Worker {
+    fn drop(&mut self) {
+        self.shutdown.store(true, Ordering::Release);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
 /// What each monitor has been asked to become, by connector name. Empty means
 /// nothing is owed. It is a module singleton because there is exactly one
 /// helper process and one brightness provider in it; threading it through the
@@ -61,18 +89,27 @@ fn lock_pending() -> std::sync::MutexGuard<'static, HashMap<String, LevelChange>
     }
 }
 
-pub fn spawn(runtime: &Arc<Mutex<ProviderRuntime>>) -> io::Result<()> {
-    let Ok(id) = ProviderId::new(NAME) else {
-        eprintln!("celestina-provider-adapter: brightness: unusable provider name");
-        return Ok(());
-    };
+pub fn spawn(
+    runtime: &Arc<Mutex<ProviderRuntime>>,
+    shutdown: &Arc<AtomicBool>,
+) -> io::Result<Worker> {
+    let id = ProviderId::new(NAME).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "brightness has an unusable provider name",
+        )
+    })?;
 
     lock_runtime(runtime).register(id.clone());
     let runtime = Arc::clone(runtime);
-    thread::Builder::new()
+    let worker_shutdown = Arc::clone(shutdown);
+    let handle = thread::Builder::new()
         .name(NAME.to_owned())
-        .spawn(move || run(&runtime, &id))?;
-    Ok(())
+        .spawn(move || run(&runtime, &id, &worker_shutdown))?;
+    Ok(Worker {
+        shutdown: Arc::clone(shutdown),
+        handle: Some(handle),
+    })
 }
 
 /// Records a target and returns at once. The wheel is answered by the panel's
@@ -102,29 +139,36 @@ pub fn action(verb: &str, options: &Payload) -> Result<(), String> {
 
 /// The monitors that answer DDC at all. Detection is the expensive call, so it
 /// happens once: a monitor plugged in later is picked up on the next refresh.
-fn detect() -> Vec<DdcDisplay> {
-    run_bounded_with("ddcutil", &["detect", "--brief"], DDC_TIMEOUT)
+fn detect(shutdown: &AtomicBool) -> Vec<DdcDisplay> {
+    run_bounded_with_cancel(
+        "ddcutil",
+        &["detect", "--brief"],
+        DDC_TIMEOUT,
+        Some(shutdown),
+    )
         .map(|listing| brightness::parse_detect(&listing))
         .unwrap_or_default()
 }
 
-fn read(display: &DdcDisplay) -> Option<u8> {
+fn read(display: &DdcDisplay, shutdown: &AtomicBool) -> Option<u8> {
     let number = display.number.to_string();
-    run_bounded_with(
+    run_bounded_with_cancel(
         "ddcutil",
         &["--display", &number, "getvcp", "10", "--brief"],
         DDC_TIMEOUT,
+        Some(shutdown),
     )
     .and_then(|reading| brightness::parse_brightness(&reading))
 }
 
-fn write(display: &DdcDisplay, value: u8) -> bool {
+fn write(display: &DdcDisplay, value: u8, shutdown: &AtomicBool) -> bool {
     let number = display.number.to_string();
     let level = value.to_string();
-    run_bounded_with(
+    run_bounded_with_cancel(
         "ddcutil",
         &["--display", &number, "setvcp", "10", &level],
         DDC_TIMEOUT,
+        Some(shutdown),
     )
     .is_some()
 }
@@ -152,8 +196,11 @@ fn publish(
     }
 }
 
-fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
-    let mut displays = detect();
+fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId, shutdown: &AtomicBool) {
+    let mut displays = detect(shutdown);
+    if shutdown.load(Ordering::Acquire) {
+        return;
+    }
     let mut levels: HashMap<String, Option<u8>> = displays
         .iter()
         .map(|display| (display.connector.clone(), None))
@@ -163,12 +210,15 @@ fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
     publish(runtime, id, &levels);
 
     for display in &displays {
-        levels.insert(display.connector.clone(), read(display));
+        if shutdown.load(Ordering::Acquire) {
+            return;
+        }
+        levels.insert(display.connector.clone(), read(display, shutdown));
         publish(runtime, id, &levels);
     }
 
     let mut refreshed = Instant::now();
-    loop {
+    while !shutdown.load(Ordering::Acquire) {
         // One target per monitor, however many notches produced it.
         let targets: Vec<(String, LevelChange)> = lock_pending().drain().collect();
         for (connector, change) in targets {
@@ -195,9 +245,11 @@ fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
             let wanted = change.applied_to(current);
             // A monitor that has not answered is written to even when the
             // target matches the placeholder: `unknown` is not `already there`.
-            if (wanted != current || read_back.is_none()) && write(display, wanted) {
+            if (wanted != current || read_back.is_none())
+                && write(display, wanted, shutdown)
+            {
                 // What the monitor settled on, not what it was asked for.
-                levels.insert(connector.clone(), read(display));
+                levels.insert(connector.clone(), read(display, shutdown));
                 publish(runtime, id, &levels);
             }
         }
@@ -208,10 +260,10 @@ fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
             REFRESH
         };
         if refreshed.elapsed() >= due {
-            displays = detect();
+            displays = detect(shutdown);
             levels = displays
                 .iter()
-                .map(|display| (display.connector.clone(), read(display)))
+                .map(|display| (display.connector.clone(), read(display, shutdown)))
                 .collect();
             publish(runtime, id, &levels);
             refreshed = Instant::now();

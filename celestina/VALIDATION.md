@@ -7,6 +7,28 @@ or deferred cases here do not keep an implementation milestone open.
 A failed case records its result here and creates a new corrective
 implementation unit; it does not rewrite the completed milestone.
 
+## VAL-GPU-01 — Noctalia-only GPU stability hold
+
+- **Status:** in progress
+- **Related implementation:** LVR-3-B
+- **Requires:** Noctalia alone; unchanged kernel, monitors and existing GPU
+  mitigations; no Celestina process, provider, build, test or activation
+- **Procedure:** use the normal session for a period longer than the prior
+  observed failure window without performing a Noctalia to Celestina to
+  Noctalia handover. Preserve the next affected boot journal if the PCIe loss
+  recurs.
+- **Pass condition:** an author-declared long observation completes without
+  `device lost from bus!`, a full freeze or a green-screen terminal state.
+- **Result:** in progress from 2026-08-05. After several hours using only
+  Noctalia, the failure had not recurred. This is provisional supporting
+  evidence, not yet a completed long observation. Noctalia still has ddcutil
+  enabled, so this isolates Celestina and the handover sequence rather than DDC
+  as a whole.
+- **Interpretation:** recurrence disproves Celestina as a necessary condition;
+  non-recurrence is strong evidence against the handover but does not identify
+  the exact failing kernel, firmware, DDC, PCIe or hardware layer.
+- **Evidence:** [GPU loss system audit](docs/evidence/2026-08-05-gpu-loss-system-audit.md)
+
 ## VAL-SHELL-01 — Request failure and compositor recovery
 
 - **Status:** pending
@@ -47,8 +69,10 @@ implementation unit; it does not rewrite the completed milestone.
   return, but a full Celestina start misses an already-playing Firefox source
   that `playerctl` sees. Restarting only `celestina-provider-adapter` makes that
   source appear immediately.
-- **Remediation:** implemented in 0.6.2 by `LVR-2-A`; a bounded startup probe
-  regression passes, and the live full-shell rerun remains required.
+- **Remediation:** the 0.6.2 full-shell rerun failed again: its original helper
+  omitted media visually, an isolated helper published it, and replacing only
+  the original helper made it appear. Active `LVR-3-A` owns the late provider
+  insertion boundary.
 - **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-R1-02 — StatusNotifierWatcher takeover
