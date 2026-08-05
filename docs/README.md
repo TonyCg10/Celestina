@@ -8,6 +8,7 @@ vendor-neutral: every agent follows the same repository contract.
 | Question | Canonical home |
 |---|---|
 | What is the suite and what is deliberately outside it? | [VISION.md](VISION.md) |
+| What belongs on the host and how are external applications audited? | [HOST-HYGIENE.md](../HOST-HYGIENE.md) |
 | What exists and what is active now? | root/project `STATUS.md`, checked against the checkout |
 | What may an agent change? | root and nearest local `AGENTS.md`, plus the author's request |
 | How are changes governed? | [governance/](governance/) |
