@@ -29,6 +29,8 @@
 //!   with it.
 //! - [`calendar`] — which day falls where in a month, computed rather than
 //!   fetched.
+//! - [`handover`] — what the old shell still does for this session, and what it
+//!   would take to stop needing it.
 //! - [`appearance`] — what this session looks like, in the terms the settings
 //!   portal asks in.
 //! - [`niri_colours`] — the compositor's own colours, generated from the same
@@ -57,6 +59,7 @@ pub mod calendar;
 pub mod clipboard;
 pub mod coalesce;
 pub mod command;
+pub mod handover;
 pub mod launcher;
 pub mod lines;
 pub mod network;

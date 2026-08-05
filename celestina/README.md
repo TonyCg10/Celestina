@@ -187,6 +187,35 @@ they are different backend names and different files. Do not merge them.
 Removing the file is the rollback; the shell answers only those two keys and
 refuses every other, so whichever backend owns them keeps doing so.
 
+## Leaving Noctalia behind
+
+Two scripts, and the first one decides.
+
+```bash
+celestina/scripts/handover-status.sh
+```
+
+Read-only: it starts nothing, writes nothing, and can run while both shells
+are up. It lists what this shell has taken over and what it has not, reading
+`VALIDATION.md` for what you have actually recorded as working — code alone
+never counts, because everything here compiles and much of it has never been
+seen on a screen.
+
+```bash
+celestina/scripts/handover-remove.sh --confirm
+```
+
+Refuses while that report is incomplete, which today it is. It uninstalls
+nothing: it moves Noctalia's autostart entry aside, so the way back is moving
+it back. The rollback file is written **before** anything changes, and if it
+cannot be written nothing changes. Without `--confirm` it only says what it
+would do.
+
+Screen lock and the polkit agent are on the list and deliberately unbuilt —
+they wait on [SHELL-D2](docs/discussions/2026-08-03-first-party-session-lock.md)
+and [SHELL-D3](docs/discussions/2026-08-03-polkit-agent.md). Until those are
+decided, this session still needs Noctalia for them, and the report says so.
+
 ## Project documents
 
 - [Current status](STATUS.md)

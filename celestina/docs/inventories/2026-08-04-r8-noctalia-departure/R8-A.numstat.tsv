@@ -1,0 +1,29 @@
+# R8-A exact change inventory
+
+Base revision	8e65ea1643dc4571b2c820b0f3c0ae0b4e5d7049
+Pathspec	celestina/
+Pathspec	celestina-rs/crates/celestina-shell-core/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+228	0	96eb5fb8faa10750bb22a814e750ec01ececfd3f5c79a553eeb1e9e8e7db0268	celestina-rs/crates/celestina-shell-core/src/handover.rs
+3	0	1b0a00dff87eb1ef595f0a255455a9fc1d88c4edf22afe47fbe5fb80f73212ee	celestina-rs/crates/celestina-shell-core/src/lib.rs
+1	1	7ae4ecca4f27fdcfb9613c7f4f9bb3a289c12d8aa1d35fd9e182e021a5d3a856	celestina/CMakeLists.txt
+1	1	1ac3c005f0abe3302dc30c3668d18bee6a8c46917a5fc2daf2556b4b0d2d768a	celestina/Cargo.lock
+1	1	c1a22ba59d583341a49b98e2a16a346da6a0aeac649cb0013ebe5a917661ec03	celestina/Cargo.toml
+29	0	d06d0ae3e1ccc8ad2db407a6b5cb427a758d3e47772035e78a9538d956d2c13d	celestina/README.md
+7	2	dadb4d4beaa0b38391dbf22def4bf87c418d086e34cd2b6c33681f5d2e428779	celestina/ROADMAP.md
+4	3	3308e7850aed5fa8f33889df2af86b5dab565a5957b1579fc1ed49f17a5337a8	celestina/STATUS.md
+16	0	a0defc069c81f4ee627666645514770fec66fe4be1679ab0ac9fdaf9f5a774a4	celestina/VALIDATION.md
+69	0	51743993e848f4d868128ee5a941c3cf5433e1c46e3fe6ea89d98ccdab8d84a2	celestina/docs/evidence/2026-08-04-r8-noctalia-departure.md
+2	1	585e3a86e6da0e3ed26f33155f618a22313bcb859121dd82de9551ec85788c61	celestina/docs/plans/README.md
+3	2	ec4dbad9e86dcfa2cbe7faeae9c1c4d41ee13e204b31efbcd288aedee0ec5703	celestina/docs/plans/active/README.md
+98	0	e08af714e5be8a1e38c83ba1e4e0c11b176c1dd9a12b6e41fc08bb62713b5576	celestina/docs/plans/archive/2026-08-04-r8-noctalia-departure.md
+1	0	4c9d62e0db653a7fc51c877f2246afee3b597603c1653af8401fd6cd95fb3a76	celestina/docs/plans/archive/README.md
+74	0	9ea9f66d717cb3782841c603e76d760fd1838dd8e00eaaa205861292f5ab36ce	celestina/scripts/handover-remove.sh
+72	0	a41fc936649cae7739456552b5dcc9707c0b72098e923568be820d718c3c7c5c	celestina/scripts/handover-status.sh
+10	0	511d999224043c545469ef7c709b3493cb72e7f2bfc6080a4e75c679bf4099cf	celestina/scripts/verify-production.sh
+1	0	1029a4b51bf919864eafe4c9f61c3e24af14d30eab1b04ad51744eac1bf182f2	docs/version-history.tsv
+29	0	self	celestina/docs/inventories/2026-08-04-r8-noctalia-departure/R8-A.numstat.tsv

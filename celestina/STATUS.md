@@ -1,10 +1,11 @@
 # Celestina status
 
 - **Updated:** 2026-08-04
-- **Implementation:** R0-R5 and R7 complete; no checkpoint is active
+- **Implementation:** R0-R5, R7 and R8's departure slice complete; no checkpoint is active
 - **Author validation:** mixed; see [VALIDATION.md](VALIDATION.md)
 - **Live migration:** Noctalia still supplies every responsibility not yet
-  explicitly handed over by the author
+  explicitly handed over. `scripts/handover-status.sh` reports which, and the
+  removal tool refuses while any is unbuilt or unrecorded — today, all of them
 
 ## Current checkout truth
 
@@ -92,7 +93,7 @@ and no service, package manager or configuration was touched. The record is
 
 ## Records
 
-- Last completed plan: [R7 session look](docs/plans/archive/2026-08-04-r7-session-look.md)
+- Last completed plan: [R8 Noctalia departure](docs/plans/archive/2026-08-04-r8-noctalia-departure.md)
 - Open product questions: [discussion queue](docs/discussions/README.md)
 - Accepted product decisions: [decision index](docs/decisions/README.md)
 - Completed detailed roadmap: [history through 2026-08-03](docs/history/roadmap-through-2026-08-03.md)

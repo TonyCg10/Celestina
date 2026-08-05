@@ -27,7 +27,7 @@ of the design when they provide the narrow capability the shell needs.
 | R5 | complete | Control centre, session menu, weather and calendar |
 | R7 | complete | Wallpaper, portal values and the generated Niri colours |
 | R6 | conditional | First-party lock starts only if SHELL-D2 is applied |
-| R8 | partially planned | Reversible Noctalia removal; Polkit/dock slices remain conditional |
+| R8 | complete | Reversible Noctalia removal; Polkit/dock slices remain conditional |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
 
 Recorded live observations and remaining author checks are status on the
@@ -134,8 +134,13 @@ generated colours remain an independent `VAL-R7` run.
 
 ## R8 — Polkit, optional dock and Noctalia departure
 
-- [ ] Supply reversible Noctalia removal and rollback tooling without applying
+- [x] Supply reversible Noctalia removal and rollback tooling without applying
       it to the live session automatically.
+
+R8 closes on the evidence in
+[the archived R8 plan](docs/plans/archive/2026-08-04-r8-noctalia-departure.md).
+Actually removing Noctalia is `VAL-R8` and is the author's decision on their
+own session.
 
 Polkit integration is not an R8 implementation item until
 [SHELL-D3](docs/discussions/2026-08-03-polkit-agent.md) is applied. Any

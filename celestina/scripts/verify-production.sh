@@ -32,6 +32,16 @@ bash "$suite_root/scripts/check-architecture-contract.sh"
 ctest --test-dir "$build_dir" --output-on-failure
 "$project_root/scripts/smoke-production.sh"
 
+# The handover report, run for the one thing verification can prove about it:
+# that it works and changes nothing. Its exit code says whether the session
+# could do without Noctalia yet — 2 means not yet, which is a state, not a
+# failure of this build.
+"$project_root/scripts/handover-status.sh" || handover_state=$?
+if [[ ${handover_state:-0} -gt 2 ]]; then
+    echo "verify: the handover report itself failed" >&2
+    exit 1
+fi
+
 missing=$(
     ldd "$build_dir/celestina" \
         "$style_root/build/libcelestina-style.so" \

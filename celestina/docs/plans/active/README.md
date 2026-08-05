@@ -1,7 +1,8 @@
 # Active Celestina plans
 
-No shell plan is active: R3, R4, R5 and R7 closed on 2026-08-04 and moved to
-[`../archive/`](../archive/). The next checkpoint opens its own plan here.
+No shell plan is active: R3, R4, R5, R7 and R8 closed on 2026-08-04 and moved
+to [`../archive/`](../archive/). R6 and the remaining R8 slices wait on their
+discussions rather than on a plan.
 Each plan owns a persistent change ledger and remains separate from author-only
 validation.
 

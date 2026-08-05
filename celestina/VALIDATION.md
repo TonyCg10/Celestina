@@ -137,6 +137,22 @@ implementation unit; it does not rewrite the completed milestone.
   R7's automated exit is green
 - **Evidence:** none
 
+## VAL-R8 — Living without Noctalia
+
+- **Status:** deferred
+- **Related implementation:** R8 (complete)
+- **Requires:** `VAL-R3`, `VAL-R4`, `VAL-R5` and `VAL-R7` passed and recorded,
+  and the author's decision to depend on this shell alone
+- **Procedure:** run the handover report, confirm it is complete, disable
+  Noctalia's autostart through the tool, use the session for a normal day, and
+  restore Noctalia from the written rollback at least once to prove the way
+  back works.
+- **Pass condition:** nothing the author relies on is missing for a full day,
+  and the rollback restores Noctalia without a manual repair.
+- **Result:** deferred; the report is incomplete while the earlier validations
+  are, and the tool refuses on purpose
+- **Evidence:** none
+
 ## VAL-SHELL-LOCK — Concrete lock, suspend and resume lifecycle
 
 - **Status:** deferred
