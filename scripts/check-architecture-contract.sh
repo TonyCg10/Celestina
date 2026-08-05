@@ -415,6 +415,10 @@ check_top_level_auto_bindings() {
 }
 
 check_visual_contract() {
+    if ! python3 scripts/check-sealed-colours.py; then
+        failures=1
+    fi
+
     if ! bash celestina-style/scripts/check-style-contract.sh; then
         fail "the celestina-style visual guard failed"
     fi
