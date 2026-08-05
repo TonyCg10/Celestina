@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-08-04
 - **Plan ID:** spanish-product-copy
-- **Status:** active
+- **Closed:** 2026-08-05
+- **Successor:** none; PRD-1 opened after it and archived this plan, whose unit landed in `8008056`
+- **Status:** done
 - **Scope:** suite
 - **Implementation checkpoint:** LNG-1
 - **Author-validation checkpoint:** none
@@ -62,6 +64,7 @@ No product version moves: this unit ships no product behaviour.
 
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
+| LNG-1-B | `suite:` | done | [inventory](../../inventories/2026-08-04-spanish-product-copy/LNG-1-B.numstat.tsv) | 8 files, +153/-74 | Archive the delivered language plan through its own administrative unit and reconcile the suite roadmap, status, evidence link and active-plan index | [evidence](../../evidence/2026-08-05-spanish-product-copy-archive.md) | None |
 | LNG-1-A | `suite:` | done | [inventory](../../inventories/2026-08-04-spanish-product-copy/LNG-1-A.numstat.tsv) | 17 files, +568/-44 | Split development truth from product copy in the language contract, teach both guards the boundary, and record the reduction the migration earned | [evidence](../../evidence/2026-08-04-spanish-product-copy.md) | None |
 
 This unit closes as `suite-maintenance`. It is genuinely cross-suite: the rule

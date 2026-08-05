@@ -1,0 +1,23 @@
+# LNG-1-B exact change inventory
+
+Base revision	e170be5824cd8c975b6dc1e32a53117dd9d4647e
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/evidence/2026-08-04-spanish-product-copy.md
+Pathspec	docs/evidence/2026-08-05-spanish-product-copy-archive.md
+Pathspec	docs/plans/active/README.md
+Pathspec	docs/plans/active/2026-08-04-spanish-product-copy.md
+Pathspec	docs/plans/archive/2026-08-04-spanish-product-copy.md
+Pathspec	docs/inventories/2026-08-04-spanish-product-copy/LNG-1-B.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+17	2	5a3d222a32f07460af446838a759564c8752659d0f6716eabbf0eb21bae12c44	ROADMAP.md
+1	1	10ad9ba1640b2d16aa5940b851de08a2a20ea59e3446b88e05a07d2ca74e6414	STATUS.md
+1	1	bfd1174dc8e256259a18d5814fdf341555cefa80f2569cb6861718c9cd87249a	docs/evidence/2026-08-04-spanish-product-copy.md
+36	0	297c25f3e78c9f441c6a1b78d50adaf827ffda25837dc7a271f7994fc69eccf8	docs/evidence/2026-08-05-spanish-product-copy-archive.md
+3	1	e416b2f12f34616715035d5dfa50ab3c8f4a14fbe224888d4cd55254d5c564b7	docs/plans/active/README.md
+0	69	deleted	docs/plans/active/2026-08-04-spanish-product-copy.md
+72	0	36fc3581a4228a256ccf808fb9f4361c72392f8898f3c75ccd37f55008d5c63c	docs/plans/archive/2026-08-04-spanish-product-copy.md
+23	0	self	docs/inventories/2026-08-04-spanish-product-copy/LNG-1-B.numstat.tsv

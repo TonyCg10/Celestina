@@ -1,0 +1,15 @@
+# PRD-1-A exact change inventory
+
+Base revision	e170be5824cd8c975b6dc1e32a53117dd9d4647e
+Pathspec	docs/projects.toml
+Pathspec	docs/plans/active/2026-08-05-desktop-entry-registration.md
+Pathspec	docs/evidence/2026-08-05-desktop-entry-registration.md
+Pathspec	docs/inventories/2026-08-05-desktop-entry-registration/PRD-1-A.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+2	2	d7eab6a8237f633e98b4e906dc4f467aeec354cb07ffd8c43e48740fec213551	docs/projects.toml
+72	0	f6b2bb47beb10002b3453f2bbceb5d932293b5ca97e769abafc59625b5db8ffd	docs/plans/active/2026-08-05-desktop-entry-registration.md
+52	0	8ba473c2c7cd27fa0cdc43d75a084f545c3c4929a9d4d2735e026e73646bc38b	docs/evidence/2026-08-05-desktop-entry-registration.md
+15	0	self	docs/inventories/2026-08-05-desktop-entry-registration/PRD-1-A.numstat.tsv

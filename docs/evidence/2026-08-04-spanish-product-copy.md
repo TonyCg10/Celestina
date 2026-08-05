@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-04
 - **Scope:** LNG-1-A; plan
-  [spanish-product-copy](../plans/active/2026-08-04-spanish-product-copy.md)
+  [spanish-product-copy](../plans/archive/2026-08-04-spanish-product-copy.md)
 - **Environment:** guards and fixtures only; no build, artifact or deployment
 - **Artifact:** not applicable
 

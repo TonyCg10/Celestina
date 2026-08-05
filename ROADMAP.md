@@ -1,7 +1,7 @@
 # Celestina suite implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** LNG-1
+- **Active implementation checkpoint:** PRD-1
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
 This file contains only cross-project implementation. Each project's
@@ -99,6 +99,21 @@ The build order, exclusions and ledger are in the
 The product work it unblocked is owned by
 [fluorita/ROADMAP.md](fluorita/ROADMAP.md).
 
+## PRD-1 — The shell's desktop entry as a registered artifact
+
+**Hypothesis:** a file the shell deploys is a file the manifest seals, and the
+registry is the only place that decides which those are.
+
+**Tangible outcome:** `celestina.desktop` is a production input and a sealed
+artifact, so deploy copies only what verification sealed and the installed copy
+can be reported on.
+
+- [x] Register the entry and close the delivered LNG-1 checkpoint so exactly one
+      suite checkpoint is active.
+
+The build order, exclusions and results live in
+[the active PRD-1 plan](docs/plans/active/2026-08-05-desktop-entry-registration.md).
+
 ## LNG-1 — Spanish product copy
 
 **Hypothesis:** the language contract can hold development truth in English and
@@ -119,7 +134,7 @@ causes.
 - [x] Record the reduction the migration earned.
 
 The build order, exclusions and ledger are in the
-[active plan](docs/plans/active/2026-08-04-spanish-product-copy.md).
+[active plan](docs/plans/archive/2026-08-04-spanish-product-copy.md).
 
 ## Project implementation fronts
 

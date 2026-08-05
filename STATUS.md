@@ -40,7 +40,7 @@ standard listed "canonical UI copy" among the things English governs, and that
 was enforced, so a Spanish desktop acquired an English media library. The
 reasoning is in
 [ADR 0007](docs/decisions/0007-spanish-product-copy.md); the unit is in the
-[active plan](docs/plans/active/2026-08-04-spanish-product-copy.md).
+[active plan](docs/plans/archive/2026-08-04-spanish-product-copy.md).
 
 ## Completed cross-project work
 
