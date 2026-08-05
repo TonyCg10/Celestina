@@ -9,3 +9,4 @@ unit and inventory.
 - [R3 session verbs](2026-08-03-r3-session-verbs.md) — closed 2026-08-04
 - [R4 notifications](2026-08-04-r4-notifications.md) — closed 2026-08-04
 - [R5 control centre](2026-08-04-r5-control-centre.md) — closed 2026-08-04
+- [R7 session look](2026-08-04-r7-session-look.md) — closed 2026-08-04

@@ -11,6 +11,7 @@
 #include "panelmenucontroller.h"
 #include "panelmenusurface.h"
 #include "surfacemanager.h"
+#include "wallpapermanager.h"
 
 // Surface *mechanics* only. A platform without a compositor still creates,
 // configures, shows, hides and destroys windows, so the shared recipe's window
@@ -40,6 +41,7 @@ private slots:
     void theLauncherAndClipboardOverlaysLoadAndMap();
     void aCornerSurfaceSitsUnderThePanelAndRefusesFocus();
     void aReadoutSurfaceSitsLowAndCentredSoItNeverCoversAToast();
+    void aWallpaperCoversItsOutputAndReservesNothing();
 
 private:
     QWindow *makePanel()
@@ -356,6 +358,33 @@ void SurfaceManagerTest::aReadoutSurfaceSitsLowAndCentredSoItNeverCoversAToast()
     );
     QCOMPARE(layerWindow->keyboardInteractivity(),
              LayerShellQt::Window::KeyboardInteractivityNone);
+}
+
+// The background everything else sits on: anchored on all four edges so the
+// compositor sizes it, reserving nothing, and never taking focus or the
+// keyboard. Offscreen this proves the description only — never that a
+// compositor honoured it.
+void SurfaceManagerTest::aWallpaperCoversItsOutputAndReservesNothing()
+{
+    QWindow *const content = makeContent();
+    QVERIFY(mapLayerSurface(content, wallpaperSurfaceSpec(nullptr)));
+
+    auto *layerWindow = LayerShellQt::Window::get(content);
+    QVERIFY(layerWindow);
+    QCOMPARE(layerWindow->layer(), LayerShellQt::Window::LayerBackground);
+    // Anchored on all four edges: the compositor sizes it to the output.
+    auto expected = LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop);
+    expected |= LayerShellQt::Window::AnchorBottom;
+    expected |= LayerShellQt::Window::AnchorLeft;
+    expected |= LayerShellQt::Window::AnchorRight;
+    QCOMPARE(layerWindow->anchors(), expected);
+    // A wallpaper reserves nothing; it is what everything else sits on.
+    QCOMPARE(layerWindow->exclusionZone(), -1);
+    QCOMPARE(layerWindow->keyboardInteractivity(),
+             LayerShellQt::Window::KeyboardInteractivityNone);
+    QVERIFY(content->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
+    content->hide();
+    content->deleteLater();
 }
 
 void SurfaceManagerTest::theOverlayRefusesToOpenTwiceAndSurvivesReopening()

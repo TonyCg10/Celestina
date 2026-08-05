@@ -30,15 +30,18 @@ use celestina_shell_core::runtime::ProviderRuntime;
 mod audio;
 mod brightness;
 mod clipboard;
+mod generated;
 mod held;
 mod launcher;
 mod media;
 mod notifications;
+mod portal_settings;
 mod session;
 mod sessionholds;
 mod settings;
 mod sysmon;
 mod tools;
+mod wallpaper;
 mod weather;
 
 use tools::lock_runtime;
@@ -94,6 +97,9 @@ fn perform(command: &Command, runtime: &Mutex<ProviderRuntime>) -> Result<(), St
         }
         clipboard::NAME => clipboard::action(&command.verb, &command.options),
         settings::NAME => settings::action(&command.verb, &command.options),
+        wallpaper::NAME => {
+            wallpaper::action(&command.verb, &command.options, runtime, &command.provider)
+        }
         notifications::NAME => {
             notifications::action(&command.verb, &command.options, runtime, &command.provider)
         }
@@ -213,6 +219,10 @@ fn run() -> io::Result<()> {
     clipboard::spawn(&runtime)?;
     notifications::spawn(&runtime)?;
     weather::spawn(&runtime)?;
+    wallpaper::spawn(&runtime)?;
+    portal_settings::spawn(&runtime)?;
+    // Offered, never applied: the author references these or does not.
+    generated::write_all();
 
     let worker_runtime = Arc::clone(&runtime);
     let worker_writer = Arc::clone(&writer);

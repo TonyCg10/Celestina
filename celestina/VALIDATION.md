@@ -120,6 +120,23 @@ implementation unit; it does not rewrite the completed milestone.
   R5's automated exit is green
 - **Evidence:** none
 
+## VAL-R7 — Wallpaper, portal values and Niri colours
+
+- **Status:** deferred
+- **Related implementation:** R7 (complete)
+- **Requires:** the R7 automated exit green, physical monitors to hotplug, and
+  the author choosing to reference the generated colour include
+- **Procedure:** map a wallpaper on each output and check the image belongs to
+  the screen showing it; unplug and replug a monitor; point an application at
+  the portal and read the colour scheme back; reference the generated include
+  in Niri and compare its borders with the panel.
+- **Pass condition:** no output shows another output's image or a black
+  rectangle standing in for one, hotplug changes only the affected surface, the
+  portal values match the sealed tokens, and Niri's borders match the panel's.
+- **Result:** deferred until the author runs it against the deployed bundle;
+  R7's automated exit is green
+- **Evidence:** none
+
 ## VAL-SHELL-LOCK — Concrete lock, suspend and resume lifecycle
 
 - **Status:** deferred

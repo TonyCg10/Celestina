@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.4.0 LANGUAGES CXX)
+project(celestina VERSION 0.5.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -69,6 +69,8 @@ qt_add_executable(celestina
     src/panelblurcontroller.cpp
     src/panelmanager.h
     src/panelmanager.cpp
+    src/wallpapermanager.h
+    src/wallpapermanager.cpp
     src/workspacefocusrequests.h
     src/workspacefocusrequests.cpp
     src/sessionrequests.h
@@ -168,6 +170,7 @@ qt_add_qml_module(celestina
         qml/ControlCentre.qml
         qml/SessionMenu.qml
         qml/MonthCalendar.qml
+        qml/Wallpaper.qml
     RESOURCES
         ../celestina-style/icons/phone.svg
         ../celestina-style/icons/battery-charging.svg
@@ -333,6 +336,14 @@ if(BUILD_TESTING)
     # placement or focus.
     qt_add_executable(celestina-surface-manager-test
         tests/surfacemanager_test.cpp
+        src/wallpapermanager.h
+        src/wallpapermanager.cpp
+        src/shellprovidersclient.h
+        src/shellprovidersclient.cpp
+        src/providerstates.h
+        src/providerstates.cpp
+        src/protocoldecoder.h
+        src/protocoldecoder.cpp
         src/surfacemanager.h
         src/surfacemanager.cpp
         src/panelmenusurface.h
@@ -349,6 +360,9 @@ if(BUILD_TESTING)
         src/workspacefocusrequests.cpp
     )
     target_include_directories(celestina-surface-manager-test PRIVATE src)
+    target_compile_definitions(celestina-surface-manager-test PRIVATE
+        CELESTINA_PROVIDER_ADAPTER="${PROVIDER_ADAPTER_BINARY}"
+    )
     target_compile_definitions(celestina-surface-manager-test PRIVATE
         CELESTINA_NIRI_ADAPTER="${NIRI_ADAPTER_BINARY}"
         CELESTINA_STYLE_IMPORT_ROOT="${CELESTINA_STYLE_IMPORT_ROOT}"

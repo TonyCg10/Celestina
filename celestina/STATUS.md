@@ -1,7 +1,7 @@
 # Celestina status
 
 - **Updated:** 2026-08-04
-- **Implementation:** R0-R5 complete; no checkpoint is active
+- **Implementation:** R0-R5 and R7 complete; no checkpoint is active
 - **Author validation:** mixed; see [VALIDATION.md](VALIDATION.md)
 - **Live migration:** Noctalia still supplies every responsibility not yet
   explicitly handed over by the author
@@ -60,6 +60,13 @@
   the provider withdraws and the panel shows nothing rather than the shell
   taking notifications away from a running server.
 
+- The shell draws the session's wallpaper itself: one background surface per
+  output, sized by the compositor, reserving nothing. An output with no image
+  of its own paints a deliberate fallback rather than another screen's picture
+  or a black rectangle, and a file that fails to decode falls back the same
+  way. Images live in `$XDG_DATA_HOME/celestina/wallpapers`, named for the
+  output (`DP-1.png`) or `default.*`.
+
 ## Durable boundaries
 
 `celestina-shell-core` owns pure protocol and policy. Rust helpers own bounded
@@ -85,7 +92,7 @@ and no service, package manager or configuration was touched. The record is
 
 ## Records
 
-- Last completed plan: [R5 control centre](docs/plans/archive/2026-08-04-r5-control-centre.md)
+- Last completed plan: [R7 session look](docs/plans/archive/2026-08-04-r7-session-look.md)
 - Open product questions: [discussion queue](docs/discussions/README.md)
 - Accepted product decisions: [decision index](docs/decisions/README.md)
 - Completed detailed roadmap: [history through 2026-08-03](docs/history/roadmap-through-2026-08-03.md)

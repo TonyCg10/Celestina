@@ -7,7 +7,8 @@ repository, package or live-session changes.
 - Active: none
 - Archived: [R3 session verbs](archive/2026-08-03-r3-session-verbs.md),
   [R4 notifications](archive/2026-08-04-r4-notifications.md),
-  [R5 control centre](archive/2026-08-04-r5-control-centre.md)
+  [R5 control centre](archive/2026-08-04-r5-control-centre.md),
+  [R7 session look](archive/2026-08-04-r7-session-look.md)
 
 Each unit stores its immutable inventory under
 [`../inventories/<plan-slug>/<unit>.numstat.tsv`](../inventories/), outside both

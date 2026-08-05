@@ -29,6 +29,12 @@
 //!   with it.
 //! - [`calendar`] — which day falls where in a month, computed rather than
 //!   fetched.
+//! - [`appearance`] — what this session looks like, in the terms the settings
+//!   portal asks in.
+//! - [`niri_colours`] — the compositor's own colours, generated from the same
+//!   sealed tokens the panel paints with so the two cannot drift.
+//! - [`wallpaper`] — which image belongs on which screen, and what an output
+//!   with none shows instead.
 //! - [`settings`] — the only state this shell owns rather than reads, and the
 //!   rule that a choice is published only once it is durable.
 //! - [`session`] — what a key binding may ask the session to become: the typed
@@ -43,6 +49,7 @@
 //! millisecond stamp and IO as a `Write`, so every rule above is testable
 //! without a process, a socket or a clock.
 
+pub mod appearance;
 pub mod audio;
 pub mod bluetooth;
 pub mod brightness;
@@ -53,6 +60,7 @@ pub mod command;
 pub mod launcher;
 pub mod lines;
 pub mod network;
+pub mod niri_colours;
 pub mod notifications;
 pub mod power;
 pub mod runtime;
@@ -60,6 +68,7 @@ pub mod session;
 pub mod settings;
 pub mod snapshot;
 pub mod sysmon;
+pub mod wallpaper;
 pub mod weather;
 
 /// Truncates hostile or accidental text to a bounded prefix, counting

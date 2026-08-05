@@ -29,6 +29,7 @@
 #include "shellservice.h"
 #include "surfacemanager.h"
 #include "trayiconprovider.h"
+#include "wallpapermanager.h"
 #include "traywatcher.h"
 
 namespace {
@@ -250,6 +251,19 @@ int main(int argc, char *argv[])
                 << "at" << ShellService::objectPath();
         break;
     }
+
+    // The session's background: one surface per output, on the layer
+    // everything else sits on. It is mapped before the panels so a screen is
+    // never briefly panelled over an empty compositor backdrop.
+    auto *wallpapers = new WallpaperManager(
+        &app,
+        &engine,
+        providers,
+        reducedMotionRequested(),
+        &app
+    );
+    if (!wallpapers->start())
+        qInfo() << "Celestina is running without a shell-drawn wallpaper.";
 
     // The panel's context menu is part of the panel; `CELESTINA_PANEL_MENU=0`
     // is the way back if it ever misbehaves on a session.

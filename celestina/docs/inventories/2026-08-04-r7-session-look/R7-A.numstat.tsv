@@ -1,0 +1,37 @@
+# R7-A exact change inventory
+
+Base revision	69c958b81f3df438e5445a9808f6bb5c2bc64b58
+Pathspec	celestina/
+Pathspec	celestina-rs/crates/celestina-shell-core/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+111	0	ee6fc3999b4c43c507f32a03bd51bf4225f952c1305ae8116e7498eddc9dafa7	celestina-rs/crates/celestina-shell-core/src/appearance.rs
+9	0	16f1884e46f71a00ca0321040a6fc72b705acf89b3354648da5bb6f8a95ba222	celestina-rs/crates/celestina-shell-core/src/lib.rs
+179	0	4a9f244b63252c624e48a4b1d57e5141fdb9e8254ab6d44969c2cc9544e60276	celestina-rs/crates/celestina-shell-core/src/niri_colours.rs
+188	0	f39f39c03f55c870f3dac1f08c8cc3291d27493bb6e12adce4f6758d0299663c	celestina-rs/crates/celestina-shell-core/src/wallpaper.rs
+15	1	0a6ce5d93ee2bf412d348bbc0db8eb658cf26086632cfd227404e1dc2bfb1b6f	celestina/CMakeLists.txt
+1	1	4e2f1837adc13f1159a0c0dacd4a8b8c8f85b9e25fd40910bf2c77dba98e722b	celestina/Cargo.lock
+1	1	e8e2751d4f9dfc1191b13264c3009f168a4813bc5de8bea2e59ad41c149e5355	celestina/Cargo.toml
+35	0	576ff4d476f2fdaa0342cab175afe21bb1de7ea6c9b9774305938f73d4ebc227	celestina/README.md
+13	4	0f3965d9a7f4c65fc25f5216a191dd1e56007c65fc739db7fa4b41582df03ea1	celestina/ROADMAP.md
+9	2	bc6f4961d5dc7a9f5319df3818827f9e2f4e94617681967cf9d3592475beefcb	celestina/STATUS.md
+17	0	008614102060e181fb2d6bd988449e4ed3860c6e082830cf76f00d1c8ad95dcc	celestina/VALIDATION.md
+83	0	8223ee8f1ba4d3b8145a369b7e8bcba83b8dfda70e107d94ca4638783d89c602	celestina/docs/evidence/2026-08-04-r7-session-look.md
+2	1	9fdd8b2bf6b5277b0762d9e67be27f560cb23054725d725f2fc5f84f26cc4d2b	celestina/docs/plans/README.md
+1	1	8e2dee01f7a588e96e0fe2ffd6748c337118e38b093917c1ce47a75eafe4cec9	celestina/docs/plans/active/README.md
+114	0	16fccc95f860fde6daa30437e04894e680e640895eaf0e0f859e878c4e6cc605	celestina/docs/plans/archive/2026-08-04-r7-session-look.md
+1	0	37b320f6e321747859c5885ece94d3ce7f3173cd70d2b0d699a7ac8bdf8c5e70	celestina/docs/plans/archive/README.md
+76	0	2218ba4d24d88c976a5e8f70599ec4a1315be0b0cf19397b2de4354487bd693f	celestina/qml/Wallpaper.qml
+14	0	1dba0acc1c926ba0a1084215ba368150b508c547017909273b43a0b86d54eb57	celestina/src/main.cpp
+50	0	b89b2a82e41b4574c231f6e3c41e3b96705cf050622151472c0cde731b708d52	celestina/src/provider_adapter/generated.rs
+10	0	9ac2411e5bdc4c6176d2fe81086829ec351c653142a32c9b56165ba56744318f	celestina/src/provider_adapter/main.rs
+263	0	a4f7f5267ccf0043e6134519c873fda9d922134d33c8e27ce93f874e1cc8bfbb	celestina/src/provider_adapter/portal_settings.rs
+170	0	4e934c50a75465aaa1a31119c46b14f93e5cb5c93f2745d02007cfb333066afd	celestina/src/provider_adapter/wallpaper.rs
+184	0	962f8d6ebabb64ad052923ee1dd85ccd835d230bfec26f58d36fce691791f6e5	celestina/src/wallpapermanager.cpp
+71	0	16cf01fad7353110f6007aad0e3bebc8f1607dd0090e48a4d5f6571995a865ff	celestina/src/wallpapermanager.h
+29	0	9b3f287a9ad0dd582bfa86d5f922f98d95807384d994b42e55add910bb1d24d4	celestina/tests/surfacemanager_test.cpp
+1	0	157e2fbecfd8b07e9080a10fb2f50c510097938a71dfd313b35ae81f3290f540	docs/version-history.tsv
+37	0	self	celestina/docs/inventories/2026-08-04-r7-session-look/R7-A.numstat.tsv

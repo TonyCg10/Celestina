@@ -25,7 +25,7 @@ of the design when they provide the narrow capability the shell needs.
 | R3 | complete | OSD, night light, caffeine/idle, DPMS and fail-closed session verbs |
 | R4 | complete | Freedesktop notification server, toasts, history and do-not-disturb |
 | R5 | complete | Control centre, session menu, weather and calendar |
-| R7 | planned | Session look and wallpaper |
+| R7 | complete | Wallpaper, portal values and the generated Niri colours |
 | R6 | conditional | First-party lock starts only if SHELL-D2 is applied |
 | R8 | partially planned | Reversible Noctalia removal; Polkit/dock slices remain conditional |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
@@ -118,10 +118,19 @@ scope is retained here only to preserve product direction:
 
 ## R7 — Wallpaper and session look
 
-- [ ] Add per-output wallpaper surfaces with truthful fallback and reduced
+**Outcome:** the look of this session has one source — the sealed theme — and
+the wallpaper, the portal values and Niri's own colours are derived from it
+rather than restated.
+
+- [x] Add per-output wallpaper surfaces with truthful fallback and reduced
       motion.
-- [ ] Serve the `Settings` portal values owned by the shell.
-- [ ] Generate the Niri colour include from the sealed theme contract.
+- [x] Serve the `Settings` portal values owned by the shell.
+- [x] Generate the Niri colour include from the sealed theme contract.
+
+R7 closes on the evidence in
+[the archived R7 plan](docs/plans/archive/2026-08-04-r7-session-look.md). Real
+wallpaper appearance, hotplug on physical monitors and Niri drawing the
+generated colours remain an independent `VAL-R7` run.
 
 ## R8 — Polkit, optional dock and Noctalia departure
 

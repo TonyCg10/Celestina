@@ -152,6 +152,41 @@ The old Noctalia bindings remain the rollback and keep working: they are
 separate lines calling a different program, so both can coexist while the
 handover is checked, and removing either one changes nothing about the other.
 
+## Optional session look
+
+Three things the shell offers and never applies. Each is generated into
+`$XDG_DATA_HOME/celestina/generated/` and referenced by you, or not.
+
+**Wallpaper.** Put images in `$XDG_DATA_HOME/celestina/wallpapers`, named for
+the output they belong to — `DP-1.png`, `HDMI-A-1.jpg` — or `default.png` for
+every screen without one of its own. An output with no image paints a plain
+fallback rather than another screen's picture. Nothing to configure: the shell
+picks the file up within a few seconds.
+
+**Niri colours.** `niri-colours.kdl` holds the focus ring and backdrop
+generated from the sealed theme, so the compositor's borders match the panel's.
+Reference it from `config.kdl`:
+
+```kdl
+include "~/.local/share/celestina/generated/niri-colours.kdl"
+```
+
+Deleting that line is the whole rollback. The shell never edits your Niri
+configuration.
+
+**Appearance portal.** `celestina-shell.portal` registers the shell as the
+backend answering `color-scheme` and `accent-color`, so applications stop
+guessing and dark dialogs stay dark:
+
+```bash
+cp ~/.local/share/celestina/generated/celestina-shell.portal ~/.local/share/xdg-desktop-portal/portals/
+```
+
+It sits *beside* Siderita's `celestina.portal`, which serves the file chooser —
+they are different backend names and different files. Do not merge them.
+Removing the file is the rollback; the shell answers only those two keys and
+refuses every other, so whichever backend owns them keeps doing so.
+
 ## Project documents
 
 - [Current status](STATUS.md)
