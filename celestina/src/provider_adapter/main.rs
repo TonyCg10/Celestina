@@ -203,6 +203,23 @@ fn run() -> io::Result<()> {
     let clock = Clock::new();
     let (sender, receiver) = sync_channel::<Command>(COMMAND_QUEUE_CAPACITY);
 
+    // QProcess uses SIGTERM for an orderly helper restart. The held programs
+    // affect the whole session, so they must be released before this process
+    // leaves even when stdin did not close first.
+    let mut shutdown_signals = signal_hook::iterator::Signals::new([
+        signal_hook::consts::SIGTERM,
+        signal_hook::consts::SIGINT,
+        signal_hook::consts::SIGHUP,
+    ])?;
+    thread::Builder::new()
+        .name("shutdown-signals".to_owned())
+        .spawn(move || {
+            if shutdown_signals.forever().next().is_some() {
+                sessionholds::release_all();
+                process::exit(0);
+            }
+        })?;
+
     // Settings first: they are what the person chose, and the providers below
     // start from them rather than from their own defaults.
     settings::spawn(&runtime);

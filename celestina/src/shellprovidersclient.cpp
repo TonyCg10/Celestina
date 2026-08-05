@@ -8,6 +8,10 @@ namespace {
 constexpr qint64 readChunkBytes = 64 * 1024;
 constexpr int initialRestartDelayMs = 250;
 constexpr int maximumRestartDelayMs = 10 * 1000;
+// A bounded provider command may still be finishing when stdin closes. Give
+// the helper enough time to drain that command and release every held child
+// before SIGTERM becomes necessary.
+constexpr int gracefulShutdownMs = 1250;
 } // namespace
 
 ShellProvidersClient::ShellProvidersClient(QObject *parent)
@@ -52,11 +56,11 @@ ShellProvidersClient::~ShellProvidersClient()
     // joins its worker and leaves. Terminating is the fallback for a helper
     // that does not.
     m_process.closeWriteChannel();
-    if (m_process.waitForFinished(250))
+    if (m_process.waitForFinished(gracefulShutdownMs))
         return;
 
     m_process.terminate();
-    if (!m_process.waitForFinished(250)) {
+    if (!m_process.waitForFinished(gracefulShutdownMs)) {
         m_process.kill();
         m_process.waitForFinished(250);
     }

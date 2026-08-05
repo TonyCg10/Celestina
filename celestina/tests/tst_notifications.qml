@@ -35,6 +35,24 @@ TestCase {
         reducedMotion: false
     }
 
+    SignalSpy {
+        id: dismissedSpy
+
+        target: centre
+        signalName: "dismissed"
+    }
+
+    function test_escape_dismisses_the_centre_at_the_window_boundary() {
+        dismissedSpy.clear();
+        centre.show();
+        centre.requestActivate();
+        tryCompare(centre, "active", true);
+
+        keyClick(Qt.Key_Escape);
+        compare(dismissedSpy.count, 1);
+        centre.hide();
+    }
+
     function test_nothing_to_say_is_nothing_to_show() {
         indicator.reading = {"unread": 0, "quiet": false};
         verify(indicator.serving);

@@ -22,6 +22,12 @@ Window {
 
     signal dismissed()
 
+    Shortcut {
+        sequence: StandardKey.Cancel
+        context: Qt.WindowShortcut
+        onActivated: centre.dismissed()
+    }
+
     readonly property int cardWidth: 460
     readonly property int cardHeight: 520
 
@@ -166,10 +172,7 @@ Window {
                     onCurrentIndexChanged: centre.currentIndex = currentIndex
 
                     Keys.onPressed: (event) => {
-                        if (event.key === Qt.Key_Escape) {
-                            centre.dismissed();
-                            event.accepted = true;
-                        } else if (event.key === Qt.Key_Return
+                        if (event.key === Qt.Key_Return
                                    || event.key === Qt.Key_Enter) {
                             centre.invokeFirst(centre.currentIndex);
                             event.accepted = true;

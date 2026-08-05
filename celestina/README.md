@@ -183,9 +183,25 @@ cp ~/.local/share/celestina/generated/celestina-shell.portal ~/.local/share/xdg-
 ```
 
 It sits *beside* Siderita's `celestina.portal`, which serves the file chooser —
-they are different backend names and different files. Do not merge them.
-Removing the file is the rollback; the shell answers only those two keys and
-refuses every other, so whichever backend owns them keeps doing so.
+they are different backend names and different files. Do not merge them. The
+descriptor makes the backend available; Niri must also select it for Settings.
+Add this key to the existing `[preferred]` section in
+`~/.config/xdg-desktop-portal/niri-portals.conf`:
+
+```ini
+org.freedesktop.impl.portal.Settings=celestina-shell
+```
+
+Then restart the broker so it rereads both files:
+
+```bash
+systemctl --user restart xdg-desktop-portal
+```
+
+The shell answers only those two appearance keys and refuses every other
+Settings key, so Siderita remains the FileChooser backend. Rollback is exact:
+remove the Settings line and `celestina-shell.portal`, then restart
+`xdg-desktop-portal` again.
 
 ## Leaving Noctalia behind
 

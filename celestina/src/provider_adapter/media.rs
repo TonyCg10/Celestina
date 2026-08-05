@@ -18,6 +18,12 @@ const INTERVAL: Duration = Duration::from_secs(2);
 /// With no player at all there is nothing to poll for, so the helper asks less
 /// often rather than spawning `playerctl` twice a second all day.
 const IDLE_INTERVAL: Duration = Duration::from_secs(5);
+/// A player can register on the session bus just after the shell starts. The
+/// first generation probes briefly at human-startup pace before falling back
+/// to the cheap idle cadence; restarting the helper must never be what makes an
+/// already-playing source discoverable.
+const STARTUP_INTERVAL: Duration = Duration::from_millis(500);
+const STARTUP_PROBES: u8 = 20;
 
 pub const NAME: &str = "media";
 
@@ -109,6 +115,7 @@ fn position_ms(field: &str) -> i64 {
 }
 
 fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
+    let mut startup_probes = STARTUP_PROBES;
     loop {
         let Some(player) = active_player() else {
             // No player is not a paused player: the widget goes away rather
@@ -117,9 +124,10 @@ fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
             // itself — "no player is running" — instead of reading as though
             // this helper had no media provider at all.
             lock_runtime(runtime).withdraw(id);
-            thread::sleep(IDLE_INTERVAL);
+            thread::sleep(no_player_delay(&mut startup_probes));
             continue;
         };
+        startup_probes = 0;
 
         // One spawn for everything: the shared format, plus the two fields the
         // suite's vocabulary deliberately leaves out because they move on their
@@ -175,15 +183,33 @@ fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
     }
 }
 
+fn no_player_delay(startup_probes: &mut u8) -> Duration {
+    if *startup_probes == 0 {
+        return IDLE_INTERVAL;
+    }
+
+    *startup_probes -= 1;
+    STARTUP_INTERVAL
+}
+
 #[cfg(test)]
 mod tests {
-    use super::artwork_path;
+    use super::{artwork_path, no_player_delay, IDLE_INTERVAL, STARTUP_INTERVAL};
 
     use std::fs;
     use std::io::Write;
     use std::path::PathBuf;
 
     const PNG_HEADER: &[u8] = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR";
+
+    #[test]
+    fn the_first_generation_retries_a_late_player_without_a_restart() {
+        let mut probes = 2;
+
+        assert_eq!(no_player_delay(&mut probes), STARTUP_INTERVAL);
+        assert_eq!(no_player_delay(&mut probes), STARTUP_INTERVAL);
+        assert_eq!(no_player_delay(&mut probes), IDLE_INTERVAL);
+    }
 
     /// A file under the test runner's own temporary directory, named for the
     /// case that made it, removed when the case is done.

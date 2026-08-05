@@ -41,29 +41,31 @@ implementation unit; it does not rewrite the completed milestone.
   DDC burst coalescing and one tray menu action with provider loss cases.
 - **Pass condition:** every action reports confirmed or failed truthfully and a
   slow/missing provider does not block or stale the rest of the bar.
-- **Result:** audio, microphone, DDC, per-output workspaces, OSD and focus
-  behaviour passed their exercised paths, but Firefox exposed a playing MPRIS
-  title and no media widget appeared on either panel. The later invalid
-  notification frame also withdrew every unrelated bar provider and exposed an
-  unguarded `AudioLevel` accessibility binding.
-- **Remediation:** `LVR-1-A` in [the live validation remediation plan](docs/plans/archive/2026-08-04-live-validation-remediation.md), delivered in celestina 0.6.1: the media widget was being clipped out of the panel by the workspace strip, and the audio widget's accessible text read an absent provider; both are corrected and covered by PanelFlank and AudioLevel regressions..
-  Ready for the author to run this case again; it is not passed until
-  they do.
-- **Evidence:** [2026-08-04 live validation failures](docs/evidence/2026-08-04-live-validation-failures.md)
+- **Result:** failed again on 2026-08-05. Audio, microphone, DDC, CPU/RAM,
+  workspaces, OSD, tray interactions and provider isolation passed. Media is
+  usable once published, including pause/resume and player disappearance and
+  return, but a full Celestina start misses an already-playing Firefox source
+  that `playerctl` sees. Restarting only `celestina-provider-adapter` makes that
+  source appear immediately.
+- **Remediation:** implemented in 0.6.2 by `LVR-2-A`; a bounded startup probe
+  regression passes, and the live full-shell rerun remains required.
+- **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-R1-02 — StatusNotifierWatcher takeover
 
-- **Status:** pending
+- **Status:** passed
 - **Related implementation:** R1 (complete)
 - **Requires:** permission to stop the current watcher owner temporarily
 - **Procedure:** inspect owners/items, remove the existing watcher and observe
   Celestina claiming the name and retaining registrations.
 - **Pass condition:** exactly one watcher owns the name and valid tray items
   remain available through takeover and rollback.
-- **Result:** partial; Celestina became the sole watcher and retained the three
-  observed Solaar, NetworkManager and Blueman registrations. Item activation,
-  context-menu behaviour and the rollback were not run before testing stopped.
-- **Evidence:** [2026-08-04 live validation failures](docs/evidence/2026-08-04-live-validation-failures.md)
+- **Result:** passed on 2026-08-05. Celestina became the sole watcher, retained
+  Solaar, NetworkManager and Blueman, served left-click activation and
+  right-click menus, removed only NetworkManager when `nm-applet` stopped and
+  restored it on restart. Noctalia reclaimed the name and tray during rollback,
+  and Celestina later reacquired it without losing registrations.
+- **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-R2-01 — Deferred launcher edge cases
 
@@ -79,11 +81,11 @@ implementation unit; it does not rewrite the completed milestone.
   launcher path, name search and populated clipboard path worked; the short
   initial launcher list is the provider's current 24-row bound, not evidence of
   a missing application index.
-- **Evidence:** [2026-08-04 live validation failures](docs/evidence/2026-08-04-live-validation-failures.md)
+- **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-R2-02 — Clipboard deletion and empty-state dismissal
 
-- **Status:** failed
+- **Status:** passed
 - **Related implementation:** R2 (complete)
 - **Requires:** live shell with at least one ordinary clipboard entry
 - **Procedure:** open clipboard history, remove one row through its visible and
@@ -92,18 +94,14 @@ implementation unit; it does not rewrite the completed milestone.
 - **Pass condition:** deletion is discoverable without a context-menu guess,
   every delete path is keyboard and assistive-technology reachable, and the
   overlay retains a normal dismissal path when no list row exists.
-- **Result:** the populated keyboard and context-menu paths worked, but no
-  visible per-row delete action was discoverable. After `Vaciar`, the list that
-  owned the key handler disappeared and the empty overlay could not be closed
-  normally; `celestina msg clipboard-toggle` was the external workaround.
-- **Remediation:** `LVR-1-A` in [the live validation remediation plan](docs/plans/archive/2026-08-04-live-validation-remediation.md), delivered in celestina 0.6.1: the emptied clipboard keeps the keyboard and Escape still closes it, and each row carries a visible, Tab-reachable, named delete beside the unchanged Delete/Backspace and context-menu paths..
-  Ready for the author to run this case again; it is not passed until
-  they do.
-- **Evidence:** [2026-08-04 live validation failures](docs/evidence/2026-08-04-live-validation-failures.md)
+- **Result:** passed on 2026-08-05. The visible row action, keyboard Delete,
+  context-menu path and `Vaciar` worked; Escape dismissed the empty overlay,
+  which then reopened and closed normally.
+- **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-R3 — Session verbs and lifecycle
 
-- **Status:** deferred
+- **Status:** failed
 - **Related implementation:** R3 (complete)
 - **Requires:** R3 automated exit green plus explicit permission for each live
   mutation
@@ -111,12 +109,15 @@ implementation unit; it does not rewrite the completed milestone.
   rollback ready; confirm lock-and-suspend refuses while no provider exists.
 - **Pass condition:** each provider-confirmed state is truthful, external
   lifecycles release cleanly and the refusal path never suspends unlocked.
-- **Result:** partial; night light and caffeine each acquired and released their
-  external hold, and both locker verbs refused safely. DPMS, forced child death,
-  helper restart and resume were not run, so the full case remains deferred.
-- **Evidence:** [2026-08-04 live validation failures](docs/evidence/2026-08-04-live-validation-failures.md)
-  records the live subset; [R3 completion](docs/evidence/2026-08-04-r3-completion.md)
-  records the automated exit
+- **Result:** failed on final rollback. OSD, night-light and caffeine toggles,
+  forced child death, aggregate-helper restart, DPMS/wake recovery and both
+  locker refusals behaved correctly. After Celestina exited, however, four
+  reparented `systemd-inhibit --what=idle:sleep` children remained and blocked
+  explicit suspend until terminated individually.
+- **Remediation:** implemented in 0.6.2 by `LVR-2-A`; a process regression
+  proves SIGTERM releases an active held child before helper exit, and the live
+  repeated lifecycle rerun remains required.
+- **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-R4 — Notification server, toasts and handover
 
@@ -131,16 +132,16 @@ implementation unit; it does not rewrite the completed milestone.
 - **Pass condition:** no name is ever taken from a running server, every toast
   shows only what the producer sent within its bounds, and history, unread count
   and assistive-technology announcements stay truthful.
-- **Result:** name handover succeeded, but the first ordinary `Notify` published
-  a nested action list that the C++ host decoder rejects. The invalid aggregate
-  frame then cleared Wi-Fi, Bluetooth, audio, CPU and RAM state, so testing
-  stopped before replacement, close, actions, DND, history or accessibility.
-- **Remediation:** `LVR-1-A` in [the live validation remediation plan](docs/plans/archive/2026-08-04-live-validation-remediation.md), delivered in celestina 0.6.1: notification actions now travel as a bounded flat sibling list the C++ decoder accepts, and an unreadable frame no longer clears unrelated providers..
-  Ready for the author to run this case again; it is not passed until
-  they do.
-- **Evidence:** [2026-08-04 live validation failures](docs/evidence/2026-08-04-live-validation-failures.md)
-  records the live failure; [R4 notifications](docs/evidence/2026-08-04-r4-notifications.md)
-  covers the automated and private-bus paths
+- **Result:** failed on keyboard dismissal. Server handover, ordinary and
+  critical toasts, replacement, close, action return, DND, unread/history,
+  deletion, clearing and rollback all worked without unrelated providers
+  disappearing. Escape did not close the notification centre after focus left
+  its inner list; the panel indicator remained the workaround. Paired-phone and
+  screen-reader paths remain deferred.
+- **Remediation:** implemented in 0.6.2 by `LVR-2-A`; Escape is owned by the
+  notification window and its offscreen regression passes. Live focus-state
+  validation remains required.
+- **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-R5 — Control centre, weather and calendar
 
@@ -155,11 +156,11 @@ implementation unit; it does not rewrite the completed milestone.
 - **Pass condition:** no control paints a value its provider never reported, a
   failed request is visible as failed, settings survive a restart, and an
   absent weather reading reads as absent rather than as stale.
-- **Result:** partial; the exercised normal controls and two-step session-menu
-  paths behaved correctly. No location was configured, so absent weather was
-  expected; forced write failure, restart persistence and screen-reader paths
-  remain deferred. Visible copy was English and is tracked separately.
-- **Evidence:** [2026-08-04 live validation failures](docs/evidence/2026-08-04-live-validation-failures.md)
+- **Result:** partial; normal controls, two-step session-menu paths and DND
+  persistence across a full restart worked. No location was configured, so
+  absent weather remained expected. Forced provider-write failure and
+  screen-reader paths remain deferred.
+- **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-R7 — Wallpaper, portal values and Niri colours
 
@@ -174,15 +175,20 @@ implementation unit; it does not rewrite the completed milestone.
 - **Pass condition:** no output shows another output's image or a black
   rectangle standing in for one, hotplug changes only the affected surface, the
   portal values match the sealed tokens, and Niri's borders match the panel's.
-- **Result:** partial; both physical outputs showed their shell wallpaper and no
-  black fallback was reported. Hotplug, portal-value consumption and Niri
-  colour comparison remain deferred; startup diagnostics are tracked in
-  `VAL-SHELL-03`.
-- **Evidence:** [2026-08-04 live validation failures](docs/evidence/2026-08-04-live-validation-failures.md)
+- **Result:** partial; wallpapers were correct on both outputs, physical
+  removal/reconnection of `DP-2` changed only that output, and the public portal
+  returned the sealed dark scheme and accent through a proven GTK rollback and
+  restoration. Descriptor installation also required explicit
+  `Settings=celestina-shell` selection in the live Niri preference file, which
+  the README does not currently say. The author explicitly omitted the Niri
+  colour-include comparison, so the complete case remains deferred.
+- **Remediation:** implemented in 0.6.2 by `LVR-2-A`; the README records the
+  missing portal selection, broker restart and exact rollback.
+- **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-SHELL-03 — Live accessibility and application identity diagnostics
 
-- **Status:** failed
+- **Status:** passed
 - **Related implementation:** S0/R7 (complete)
 - **Requires:** verified production bundle activated on a live Niri session
 - **Procedure:** start the two-output shell, retain its startup diagnostics and
@@ -190,17 +196,15 @@ implementation unit; it does not rewrite the completed milestone.
 - **Pass condition:** every `Accessible` property is attached to a supported
   QML object, the deployed application id is discoverable by the host portal,
   and neither path emits a runtime contract error.
-- **Result:** each wallpaper surface reported that `Accessible` was attached to
-  an unsupported root `Window`, and Qt failed host-portal registration because
-  application information for `celestina` was not found.
-- **Remediation:** `LVR-1-A` in [the live validation remediation plan](docs/plans/archive/2026-08-04-live-validation-remediation.md), delivered in celestina 0.6.1: wallpaper accessibility hangs on an Item rather than the Window, and the desktop entry is a sealed production artifact installed to the user's applications directory..
-  Ready for the author to run this case again; it is not passed until
-  they do.
-- **Evidence:** [2026-08-04 live validation failures](docs/evidence/2026-08-04-live-validation-failures.md)
+- **Result:** passed on 2026-08-05. A clean two-output restart emitted none of
+  the prior accessibility, application-id, provider-frame or audio binding
+  diagnostics; both session names were reacquired and a post-restart
+  notification worked.
+- **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-COPY-01 — Spanish product copy
 
-- **Status:** failed
+- **Status:** passed
 - **Related implementation:** current QML surfaces and the Spanish product-copy
   contract
 - **Requires:** verified production bundle and each implemented overlay exposed
@@ -210,12 +214,9 @@ implementation unit; it does not rewrite the completed milestone.
   product surface.
 - **Pass condition:** every person-facing string is Spanish throughout each
   surface; no half-translated overlay remains.
-- **Result:** the control centre and session menu visibly remained in English;
-  the same product-copy pass has not yet been validated across all overlays.
-- **Remediation:** `LVR-1-A` in [the live validation remediation plan](docs/plans/archive/2026-08-04-live-validation-remediation.md), delivered in celestina 0.6.1: every exposed surface is Spanish, including the panel title that was still English..
-  Ready for the author to run this case again; it is not passed until
-  they do.
-- **Evidence:** [2026-08-04 live validation failures](docs/evidence/2026-08-04-live-validation-failures.md)
+- **Result:** passed on 2026-08-05 for launcher, clipboard, notification centre,
+  control centre, session menu and panel copy.
+- **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-R8 — Living without Noctalia
 
@@ -230,9 +231,12 @@ implementation unit; it does not rewrite the completed milestone.
   back works.
 - **Pass condition:** nothing the author relies on is missing for a full day,
   and the rollback restores Noctalia without a manual repair.
-- **Result:** deferred; the report is incomplete, live failures now have the
-  corrective LVR-1 checkpoint, and the tool refuses on purpose
-- **Evidence:** none
+- **Result:** deferred. Watcher and notification rollback to Noctalia worked,
+  but first-generation media, notification-centre Escape and four orphan sleep
+  inhibitors failed. Screen lock and Polkit remain unbuilt, Niri colour
+  adoption was omitted, and several AT/configuration-dependent cases remain
+  deferred. The removal tool must continue to refuse.
+- **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-SHELL-LOCK — Concrete lock, suspend and resume lifecycle
 

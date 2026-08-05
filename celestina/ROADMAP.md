@@ -27,12 +27,26 @@ of the design when they provide the narrow capability the shell needs.
 | R5 | complete | Control centre, session menu, weather and calendar |
 | R7 | complete | Wallpaper, portal values and the generated Niri colours |
 | LVR-1 | complete | Correct the failures exposed by the 2026-08-04 live validation run |
+| LVR-2 | complete | Correct the failures exposed by the 2026-08-05 follow-up run |
 | R6 | conditional | First-party lock starts only if SHELL-D2 is applied |
 | R8 | complete | Reversible Noctalia removal; Polkit/dock slices remain conditional |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
 
 Recorded live observations and remaining author checks are status on the
 validation lane, not implementation status.
+
+## LVR-2 — Live validation follow-up
+
+**Outcome:** media is present on the first helper generation, overlays always
+retain their Escape dismissal path, held children cannot survive their helper,
+and the appearance-portal instructions describe the selection step a real Niri
+session requires.
+
+The author authorized and completed the bounded corrective implementation on
+2026-08-05. Its scope and evidence are in
+[the archived LVR-2 plan](docs/plans/archive/2026-08-05-live-validation-follow-up.md).
+Screen lock, Polkit, Niri colour adoption and deferred assistive-technology
+checks remain outside it.
 
 ## LVR-1 — Live validation remediation
 

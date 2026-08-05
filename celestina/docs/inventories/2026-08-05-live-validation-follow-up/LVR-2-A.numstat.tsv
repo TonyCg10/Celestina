@@ -1,0 +1,28 @@
+# LVR-2-A exact change inventory
+
+Base revision	327678254623ea53b63b81ca29d4074573910bbb
+Pathspec	celestina/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	5e0f9a82b5dd6b9ba728624755df32275abfe6f8071d7b92e6f43982d0f0ceaf	celestina/CMakeLists.txt
+12	1	388d814da4e9675cc05cc3dbaa11f0ec0fe69edcf2044200a12ec721c57859e2	celestina/Cargo.lock
+6	1	f00c08b0b6d0fb9f3eddc5d4cef2f185946f03441ad028a76b39960d26b33725	celestina/Cargo.toml
+19	3	7ea0408fb5217768abd4eacf90a38110292c7afa2cc739a3d438416a7c52defa	celestina/README.md
+14	0	69337cb24f1cf48edb583d05501ccec318c6c8f16ca532f2d3cc3e03f64df2c3	celestina/ROADMAP.md
+47	23	39e2b85824a049ddedc81474b8c71f84b5cc777b34bd88aad9171592e771619a	celestina/STATUS.md
+73	69	7cb5be73bbb9f35e0583954b859c3255179a61085d8258b2cdae0124d0900c44	celestina/VALIDATION.md
+229	0	fc67ebdd9cdc472928881c82b1cd38a5b00001c094af447068f8946e1500eeaf	celestina/docs/evidence/2026-08-05-live-validation-follow-up.md
+2	4	da4d358403e739ea7420602c29c7bbb7f6ed3aaa4a00d7df5de6ae18dd229472	celestina/docs/plans/active/README.md
+1	0	6a028d6df7bbc66fa81c01b01daefcce8dd5cbf66a2df1088683cef8a0d48dc5	celestina/docs/plans/archive/README.md
+83	0	b860f5519f5b4c168e05683ce0f43d70f54a5f46167f9d0e41f97a634270c141	celestina/docs/plans/archive/2026-08-05-live-validation-follow-up.md
+7	4	b45d064161c1730b5ed286c2e7f8767c4bafbbb96db4c743e24533f658bdf4ce	celestina/qml/NotificationCenter.qml
+17	0	1eec6ae4fc35e7d917c4a5e1f5da2602ecc527be4d54164c7f608a1129e8b6e8	celestina/src/provider_adapter/main.rs
+28	2	f5c85664615a99efcf4a0aa623eee53753d5cc012315b366d35f8d300c49fc0b	celestina/src/provider_adapter/media.rs
+6	2	4f0287974bfaba7fe5fb7f7faf5a810eb9e5e6f855cc624665a424441fbde6da	celestina/src/shellprovidersclient.cpp
+115	0	900a440cef80b31de3c0ad05212bfb9e6052498f10e662b19af69918d3176b22	celestina/tests/held_shutdown.rs
+18	0	7d4221b327d44dfae764018be73e9a912e924c3708af5a37aa200278c8307e90	celestina/tests/tst_notifications.qml
+1	0	579497cb498e6409067b65103fd8c832f4ddaeed9d963b171001a426bb363817	docs/version-history.tsv
+28	0	self	celestina/docs/inventories/2026-08-05-live-validation-follow-up/LVR-2-A.numstat.tsv

@@ -12,3 +12,4 @@ unit and inventory.
 - [R7 session look](2026-08-04-r7-session-look.md) — closed 2026-08-04
 - [R8 Noctalia departure](2026-08-04-r8-noctalia-departure.md) — closed 2026-08-04
 - [Live validation remediation](2026-08-04-live-validation-remediation.md) — closed 2026-08-05
+- [Live validation follow-up](2026-08-05-live-validation-follow-up.md) — closed 2026-08-05
