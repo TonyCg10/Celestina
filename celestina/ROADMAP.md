@@ -26,12 +26,43 @@ of the design when they provide the narrow capability the shell needs.
 | R4 | complete | Freedesktop notification server, toasts, history and do-not-disturb |
 | R5 | complete | Control centre, session menu, weather and calendar |
 | R7 | complete | Wallpaper, portal values and the generated Niri colours |
+| LVR-1 | complete | Correct the failures exposed by the 2026-08-04 live validation run |
 | R6 | conditional | First-party lock starts only if SHELL-D2 is applied |
 | R8 | complete | Reversible Noctalia removal; Polkit/dock slices remain conditional |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
 
 Recorded live observations and remaining author checks are status on the
 validation lane, not implementation status.
+
+## LVR-1 — Live validation remediation
+
+**Outcome:** the live shell keeps valid media and unrelated provider readings
+visible, remains dismissible in clipboard empty state, starts without the
+recorded accessibility or application-id diagnostics, and presents complete
+Spanish product copy.
+
+This is a corrective checkpoint; it does not reopen or rewrite the completed
+R1-R8 milestones. Its record is
+[the archived remediation plan](docs/plans/archive/2026-08-04-live-validation-remediation.md).
+The corrections landed in celestina 0.6.1; the live cases they answer are the
+author's to run again, and none of them is passed until they do.
+
+- [x] Reproduce the media absence — measured, not assumed: `playerctl` answers
+      in 3-5 ms and the provider publishes a valid player, so the timeout
+      hypothesis was wrong and the widget was being clipped off the panel by
+      the workspace strip. Guard absent audio readings at the QML boundary.
+- [x] Preserve clipboard dismissal after clearing and expose an accessible
+      visible delete action (delivered in `LVR-1-A`).
+- [x] Align the bounded notification action payload with the host decoder and
+      isolate malformed provider state from unrelated readings (delivered in `LVR-1-A`).
+- [x] Repair wallpaper accessibility attachment and deployed application
+      identity (delivered in `LVR-1-A`).
+- [x] Translate all exposed shell product copy into Spanish as complete
+      surfaces (delivered in `LVR-1-A`).
+
+The source observation, confirmed notification failure chain and unrun live
+checks are recorded in
+[the 2026-08-04 evidence](docs/evidence/2026-08-04-live-validation-failures.md).
 
 ## R3 — Session verbs
 

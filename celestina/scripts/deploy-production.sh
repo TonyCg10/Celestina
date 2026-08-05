@@ -41,5 +41,11 @@ production_install_tree \
     "$bundle/CelestinaStyle"
 production_install_file \
     "$project_root/scripts/celestina-launcher.sh" "$prefix/bin/celestina" 0755
+# Not a launcher entry — it is `NoDisplay` — but the application information the
+# desktop needs to answer for the running shell. Without it the portal declines
+# to register the host at all.
+production_install_file \
+    "$project_root/celestina.desktop" \
+    "$prefix/share/applications/celestina.desktop" 0644
 
 echo ">> Celestina bundle deployed to $prefix; the session was not activated"

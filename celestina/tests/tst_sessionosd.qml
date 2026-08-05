@@ -24,7 +24,7 @@ TestCase {
         osd.kind = "volume";
         osd.percent = 40;
         osd.muted = false;
-        compare(osd.headline, "Volume");
+        compare(osd.headline, "Volumen");
         compare(osd.valueText, "40 %");
         verify(osd.hasLevel);
     }
@@ -33,7 +33,7 @@ TestCase {
         osd.kind = "volume";
         osd.percent = 40;
         osd.muted = true;
-        compare(osd.valueText, "Muted");
+        compare(osd.valueText, "Silenciado");
         // The level it remembers is still there to be drawn.
         verify(osd.hasLevel);
     }
@@ -43,7 +43,7 @@ TestCase {
         osd.percent = -1;
         osd.muted = false;
         verify(!osd.hasLevel);
-        compare(osd.valueText, "No reading");
+        compare(osd.valueText, "Sin lectura");
     }
 
     function test_a_monitor_is_named_in_its_title() {
@@ -51,7 +51,7 @@ TestCase {
         osd.percent = 55;
         osd.muted = false;
         osd.label = "DP-2";
-        compare(osd.headline, "Brightness — DP-2");
+        compare(osd.headline, "Brillo — DP-2");
         compare(osd.valueText, "55 %");
     }
 
@@ -60,7 +60,7 @@ TestCase {
         osd.percent = 30;
         osd.muted = false;
         osd.label = "";
-        compare(osd.spokenText, "Volume: 30 %");
+        compare(osd.spokenText, "Volumen: 30 %");
     }
 
     function test_an_unknown_kind_is_shown_rather_than_dropped() {

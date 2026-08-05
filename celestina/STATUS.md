@@ -1,11 +1,16 @@
 # Celestina status
 
-- **Updated:** 2026-08-04
-- **Implementation:** R0-R5, R7 and R8's departure slice complete; no checkpoint is active
-- **Author validation:** mixed; see [VALIDATION.md](VALIDATION.md)
-- **Live migration:** Noctalia still supplies every responsibility not yet
-  explicitly handed over. `scripts/handover-status.sh` reports which, and the
-  removal tool refuses while any is unbuilt or unrecorded — today, all of them
+- **Updated:** 2026-08-05
+- **Implementation:** R0-R5, R7 and R8's departure slice complete; the
+  corrective checkpoint LVR-1 closed on 2026-08-05 in celestina 0.6.1
+- **Author validation:** five cases recorded as failed on 2026-08-04 and
+  corrected since; none is passed until the author runs it again. See
+  [VALIDATION.md](VALIDATION.md), the
+  [live evidence](docs/evidence/2026-08-04-live-validation-failures.md) and
+  [what was done about it](docs/evidence/2026-08-05-live-validation-remediation.md)
+- **Live migration:** Noctalia remains the rollback and must not be removed.
+  `scripts/handover-status.sh` reports the unrecorded responsibilities, and the
+  removal tool refuses while any are unbuilt, unrecorded or failed
 
 ## Current checkout truth
 
@@ -13,8 +18,12 @@
   `org.celestina.Shell1` session interface.
 - Rust helpers reduce Niri state and carry the aggregate providers through the
   pure `celestina-shell-core` contracts.
-- The panel contains real workspace/window, system, media, audio, DDC and tray
-  state. It can become the StatusNotifierWatcher when no other process owns it.
+- The panel contains workspace/window, system, media, audio, DDC and tray
+  paths. Live validation proved workspace, audio and DDC paths, but a valid
+  Firefox MPRIS player did not appear. The provider was publishing it correctly;
+  the workspace strip was claiming the whole flank and the panel clipped the
+  widget away, which `LVR-1-A` corrected. It can become the
+  StatusNotifierWatcher when no other process owns it.
 - The launcher and clipboard-history overlays are implemented and use the same
   surface and command contracts.
 - Typed volume, mute and brightness session verbs enter through
@@ -57,9 +66,13 @@
   toast offers. The on-screen display moved low and centred so a volume key
   cannot paint over a notification.
 - The aggregate helper can be the session's `org.freedesktop.Notifications`
-  server, but claims the name only when it is free. Noctalia owns it today, so
-  the provider withdraws and the panel shows nothing rather than the shell
-  taking notifications away from a running server.
+  server, but claims the name only when it is free. Live handover proved the
+  ownership rule, then the first notification exposed a Rust/C++ payload-shape
+  mismatch: the host rejected the aggregate frame and withdrew unrelated
+  provider state. `LVR-1-A` corrected both halves — actions travel as a flat
+  sibling list the host decodes, and an unreadable frame no longer clears
+  unrelated providers — and the case is the author's to run again. Exact bus
+  ownership must be checked rather than inferred from which bar is visible.
 
 - The shell draws the session's wallpaper itself: one background surface per
   output, sized by the compositor, reserving nothing. An output with no image
@@ -91,9 +104,19 @@ author's normal test prefix under `~/.local`. The live session was not replaced
 and no service, package manager or configuration was touched. The record is
 [the R3 completion evidence](docs/evidence/2026-08-04-r3-completion.md).
 
+The deployed 0.6.0 bundle was verified again and activated by the author on
+2026-08-04. CTest 13/13 and the release smoke passed, and normal panel,
+workspace, audio, DDC and session-hold paths worked. The run stopped when the
+first live notification invalidated the complete provider frame; it also found
+missing browser media, an undismissable clipboard empty state, English product
+copy and startup accessibility/application-id diagnostics. The exact stop
+point, causes and unrun checks are in the
+[live validation evidence](docs/evidence/2026-08-04-live-validation-failures.md).
+
 ## Records
 
-- Last completed plan: [R8 Noctalia departure](docs/plans/archive/2026-08-04-r8-noctalia-departure.md)
+- Last completed plan: [LVR-1 live validation remediation](docs/plans/archive/2026-08-04-live-validation-remediation.md)
+- The milestone before it: [R8 Noctalia departure](docs/plans/archive/2026-08-04-r8-noctalia-departure.md)
 - Open product questions: [discussion queue](docs/discussions/README.md)
 - Accepted product decisions: [decision index](docs/decisions/README.md)
 - Completed detailed roadmap: [history through 2026-08-03](docs/history/roadmap-through-2026-08-03.md)

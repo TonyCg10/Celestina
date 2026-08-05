@@ -33,7 +33,7 @@ Window {
     color: compositorBlurAvailable
            ? CelestinaTheme.compositorGlassTint
            : CelestinaTheme.compositorGlassFallback
-    title: qsTr("Celestina Panel")
+    title: qsTr("Panel de Celestina")
     flags: Qt.FramelessWindowHint | Qt.WindowDoesNotAcceptFocus
 
     Component.onCompleted: CelestinaTheme.reducedMotion = reducedMotion
@@ -49,11 +49,23 @@ Window {
         anchors.right: clock.left
         anchors.rightMargin: CelestinaTheme.space2xl
         anchors.verticalCenter: parent.verticalCenter
+        // What the strip must leave for the widgets that follow it. Measured
+        // by their own width rather than by `visible`, which also depends on
+        // the window being shown: what matters here is whether a widget has
+        // anything to occupy. An absent one is zero wide and reserves nothing,
+        // its gap included.
+        reservedWidth: leftFlank.roomFor(sysMon) + leftFlank.roomFor(media)
 
         WorkspaceStrip {
-            // Its natural width until the flank runs out, so the window title
-            // elides inside the panel instead of being cut mid-glyph.
-            width: Math.min(implicitWidth, leftFlank.width)
+            // Its natural width until the flank runs out — *minus* what the
+            // widgets beside it need. Taking the whole flank is what hid the
+            // media widget on a live session: the strip grows with the focused
+            // window's title, the flank clips what does not fit, and everything
+            // after the strip silently left the bar. The title elides instead.
+            width: Math.min(
+                implicitWidth,
+                Math.max(0, leftFlank.width - leftFlank.reservedWidth)
+            )
             niriAvailable: panel.niriProvider.available
             outputName: panel.outputName
             workspaces: panel.niriProvider.workspaces
@@ -64,11 +76,15 @@ Window {
         }
 
         SysMon {
+            id: sysMon
+
             reading: panel.providerSource.providers.sysmon
             onMonitorRequested: panel.providerSource.sendCommand("sysmon", "open-monitor")
         }
 
         MediaMini {
+            id: media
+
             anchors.verticalCenter: parent.verticalCenter
             reading: panel.providerSource.providers.media
             onToggleRequested: panel.providerSource.sendCommand("media", "PlayPause")

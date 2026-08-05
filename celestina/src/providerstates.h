@@ -36,6 +36,25 @@ struct ProviderMessage {
 
 ProviderMessage parseProviderMessage(const QByteArray &line);
 
+// What a decoded message means for what the host is already showing.
+//
+// Named and tested because getting it wrong is not visible in a diff: a live
+// session lost every reading on the bar — audio, Wi-Fi, Bluetooth, CPU, RAM —
+// because one provider published a value this host could not decode and the
+// host answered by clearing *everything*, exactly as it does when the helper
+// dies. A frame that cannot be read says nothing about the helper being alive,
+// and nothing about what the other providers last truthfully reported.
+enum class FrameEffect {
+    // Adopt this set of provider values.
+    Replace,
+    // Drop the frame and change nothing. Losing a frame is not losing a helper.
+    Ignore,
+    // Answer one command; provider state is untouched.
+    Answer,
+};
+
+FrameEffect effectOf(const ProviderMessage &message);
+
 // The last state each provider published, and the generation it belongs to.
 //
 // A generation is one helper process. When it changes, nothing from the

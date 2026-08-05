@@ -178,6 +178,19 @@ ProviderMessage readResult(const QJsonObject &root)
 }
 } // namespace
 
+FrameEffect effectOf(const ProviderMessage &message)
+{
+    switch (message.kind) {
+    case ProviderMessage::Kind::Providers:
+        return FrameEffect::Replace;
+    case ProviderMessage::Kind::Result:
+        return FrameEffect::Answer;
+    case ProviderMessage::Kind::Invalid:
+        break;
+    }
+    return FrameEffect::Ignore;
+}
+
 ProviderMessage parseProviderMessage(const QByteArray &line)
 {
     QJsonParseError parseError;

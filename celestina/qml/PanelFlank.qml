@@ -16,6 +16,19 @@ Item {
     // so that, when space runs out, it is the innermost widget that is clipped
     // rather than the one at the screen edge.
     property bool trailing: false
+    // Width this flank's first widget must leave for the ones after it. A
+    // widget that grows with its content — the workspace strip carries the
+    // focused window's title — would otherwise claim the whole row and the
+    // clip below would quietly remove everything behind it from the bar.
+    property real reservedWidth: 0
+    readonly property real spacing: row.spacing
+
+    // What one widget costs this row: its own width, plus the gap before it
+    // when it has any width at all. A widget with nothing to show costs
+    // nothing, gap included, exactly as the Row lays it out.
+    function roomFor(widget) {
+        return widget.implicitWidth > 0 ? widget.implicitWidth + row.spacing : 0;
+    }
     default property alias widgets: row.data
     readonly property real contentWidth: row.implicitWidth
 

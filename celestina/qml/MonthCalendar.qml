@@ -25,8 +25,8 @@ Column {
     readonly property bool showingThisMonth: root.shownYear === root.today.getFullYear()
                                              && root.shownMonth === root.today.getMonth()
 
-    readonly property var weekdayNames: [qsTr("Mo"), qsTr("Tu"), qsTr("We"),
-                                         qsTr("Th"), qsTr("Fr"), qsTr("Sa"), qsTr("Su")]
+    readonly property var weekdayNames: [qsTr("lu"), qsTr("ma"), qsTr("mi"),
+                                         qsTr("ju"), qsTr("vi"), qsTr("sá"), qsTr("do")]
 
     spacing: CelestinaTheme.spaceXs
 
@@ -40,7 +40,7 @@ Column {
 
         CelestinaButton {
             text: qsTr("‹")
-            helpText: qsTr("The month before")
+            helpText: qsTr("El mes anterior")
             onClicked: root.step(-1)
         }
 
@@ -58,7 +58,7 @@ Column {
 
         CelestinaButton {
             text: qsTr("›")
-            helpText: qsTr("The month after")
+            helpText: qsTr("El mes siguiente")
             onClicked: root.step(1)
         }
     }
@@ -109,7 +109,7 @@ Column {
                 height: CelestinaTheme.space2xl
 
                 Accessible.role: Accessible.StaticText
-                Accessible.name: cell.isToday ? qsTr("%1, today").arg(cell.day) : String(cell.day)
+                Accessible.name: cell.isToday ? qsTr("%1, hoy").arg(cell.day) : String(cell.day)
 
                 Rectangle {
                     anchors.centerIn: parent

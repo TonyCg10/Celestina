@@ -38,10 +38,22 @@ Window {
 
     Component.onCompleted: {
         CelestinaTheme.reducedMotion = reducedMotion;
-        entryList.forceActiveFocus();
+        overlay.takeFocus();
+    }
+
+    // The list owns the keyboard while it exists, and it stops existing when
+    // the history is emptied — which left `Vaciar` producing an overlay that
+    // could not be closed, because the only thing handling Escape had just
+    // become invisible. Focus falls back to the card, which is always there.
+    function takeFocus() {
+        if (overlay.entries.length > 0)
+            entryList.forceActiveFocus();
+        else
+            card.forceActiveFocus();
     }
 
     onEntriesChanged: {
+        overlay.takeFocus();
         if (overlay.currentIndex >= overlay.entries.length)
             overlay.currentIndex = overlay.entries.length > 0 ? overlay.entries.length - 1 : -1;
         else if (overlay.currentIndex < 0 && overlay.entries.length > 0)
@@ -72,6 +84,11 @@ Window {
 
         GlassCard {
             id: card
+
+            // Escape closes the overlay whether or not the list is there to
+            // hear it.
+            focus: overlay.entries.length === 0
+            Keys.onEscapePressed: overlay.dismissed()
             anchors.fill: parent
             backdropSource: scene
             Accessible.role: Accessible.Dialog
@@ -166,51 +183,22 @@ Window {
                         event.accepted = true;
                     }
 
-                    delegate: Item {
-                        id: row
-
+                    delegate: ClipboardEntryRow {
                         required property int index
                         required property var modelData
-                        readonly property bool current: overlay.currentIndex === row.index
 
                         width: ListView.view.width
-                        height: 34
-                        Accessible.role: Accessible.ListItem
-                        Accessible.name: row.modelData.preview
-                        Accessible.selected: row.current
-
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: CelestinaTheme.radiusSm
-                            color: row.current
-                                   ? CelestinaTheme.badgeAccentFill
-                                   : rowMouse.containsMouse
-                                     ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
+                        entry: modelData
+                        current: overlay.currentIndex === index
+                        // What a click means belongs to the overlay: the row
+                        // reports, and the provider decides.
+                        onSelected: {
+                            overlay.currentIndex = index;
+                            overlay.select(index);
                         }
-
-                        Text {
-                            x: CelestinaTheme.spaceSm
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width - CelestinaTheme.spaceSm * 2
-                            text: row.modelData.preview
-                            color: row.current ? CelestinaTheme.accent : CelestinaTheme.text
-                            font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: CelestinaTheme.fontRowSecondary
-                            elide: Text.ElideRight
-                        }
-
-                        MouseArea {
-                            id: rowMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            acceptedButtons: Qt.LeftButton | Qt.RightButton
-                            onClicked: function(mouse) {
-                                overlay.currentIndex = row.index;
-                                if (mouse.button === Qt.RightButton)
-                                    overlay.remove(row.index);
-                                else
-                                    overlay.select(row.index);
-                            }
+                        onRemoved: {
+                            overlay.currentIndex = index;
+                            overlay.remove(index);
                         }
                     }
                 }

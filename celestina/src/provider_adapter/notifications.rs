@@ -47,6 +47,10 @@ const TICK: Duration = Duration::from_millis(250);
 /// How many ended notifications the panel is handed. History is capped in the
 /// core; this is how much of it crosses the wire at once.
 const PUBLISHED_HISTORY: usize = 20;
+/// The action rows that cross with them. The host bounds list length itself;
+/// this keeps the helper from ever reaching that bound and having its frame
+/// refused, which would take the whole aggregate down with it.
+const MAX_PUBLISHED_ACTIONS: usize = 32;
 
 /// The one state machine this helper serves, shared between the bus thread and
 /// the tick that expires what it holds.
@@ -83,6 +87,14 @@ fn image_of(hints: &HashMap<String, OwnedValue>) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
+/// One notification as a **flat** row.
+///
+/// Deliberately without its actions. The host accepts a provider payload of
+/// scalars plus, for a list field, one bounded array of flat rows — one level
+/// of structure, so a row that nested its own list would carry the unbounded
+/// depth that rule exists to forbid. This row used to carry an `actions` array
+/// and the host rejected the whole frame because of it; the actions now travel
+/// beside the notifications in their own flat list.
 fn entry_json(entry: &Notification) -> Value {
     json!({
         "id": entry.id,
@@ -95,11 +107,25 @@ fn entry_json(entry: &Notification) -> Value {
             Urgency::Critical => "critical",
         },
         "read": entry.read,
-        "actions": entry.actions.iter().map(|action| json!({
-            "key": action.key,
-            "label": action.label,
-        })).collect::<Vec<Value>>(),
+        "actionCount": entry.actions.len(),
     })
+}
+
+/// Every action of every listed notification, each naming the notification it
+/// belongs to. Flat rows, one bounded list, joined by the surface.
+fn actions_json<'a>(entries: impl Iterator<Item = &'a Notification>) -> Vec<Value> {
+    entries
+        .flat_map(|entry| {
+            entry.actions.iter().map(move |action| {
+                json!({
+                    "notification": entry.id,
+                    "key": action.key,
+                    "label": action.label,
+                })
+            })
+        })
+        .take(MAX_PUBLISHED_ACTIONS)
+        .collect()
 }
 
 /// Publishes what the panel may show. The toast list is what the core says may
@@ -110,12 +136,7 @@ fn publish(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
     let mut payload = Payload::new();
     payload.insert(
         "toasts".to_owned(),
-        Value::Array(
-            held.toasts()
-                .iter()
-                .map(|entry| entry_json(entry))
-                .collect(),
-        ),
+        Value::Array(held.toasts().into_iter().map(entry_json).collect()),
     );
     payload.insert(
         "history".to_owned(),
@@ -134,6 +155,18 @@ fn publish(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
         Value::from(held.history().len() > PUBLISHED_HISTORY),
     );
     payload.insert("historyCap".to_owned(), Value::from(MAX_HISTORY));
+    // The actions of everything published above, in one flat sibling list.
+    // They cannot live inside their notification: the host takes one level of
+    // structure, and a row carrying its own list is a frame it refuses — which
+    // on a live session emptied the entire bar.
+    payload.insert(
+        "actions".to_owned(),
+        Value::Array(actions_json(
+            held.toasts()
+                .into_iter()
+                .chain(held.history().iter().take(PUBLISHED_HISTORY)),
+        )),
+    );
     drop(held);
 
     if let Err(error) = lock_runtime(runtime).publish(id, payload) {

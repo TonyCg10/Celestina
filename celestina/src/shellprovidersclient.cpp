@@ -144,13 +144,14 @@ void ShellProvidersClient::helperError(QProcess::ProcessError error)
 void ShellProvidersClient::applyLine(const QByteArray &line)
 {
     const ProviderMessage message = parseProviderMessage(line);
-    switch (message.kind) {
-    case ProviderMessage::Kind::Invalid:
+    // One rule decides what a frame means for what is on screen; this only
+    // obeys it. See `FrameEffect` for why an unreadable frame changes nothing.
+    switch (effectOf(message)) {
+    case FrameEffect::Ignore:
         qWarning().noquote()
             << "Celestina rejected a provider helper frame:" << message.error;
-        setUnavailable();
         return;
-    case ProviderMessage::Kind::Result: {
+    case FrameEffect::Answer: {
         bool parsed = false;
         const quint64 requestId = message.requestId.toULongLong(&parsed);
         if (!parsed) {
@@ -164,7 +165,7 @@ void ShellProvidersClient::applyLine(const QByteArray &line)
         emit commandResult(requestId, message.state, message.reason);
         return;
     }
-    case ProviderMessage::Kind::Providers:
+    case FrameEffect::Replace:
         break;
     }
 

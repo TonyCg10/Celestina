@@ -23,6 +23,11 @@ Window {
     // an `actions` list of `{key, label}`. `var` is necessary: QML has no typed
     // map-list.
     required property var toasts
+    // Every action of every toast, each naming the notification it belongs to.
+    // They arrive beside the toasts rather than inside them: the host accepts
+    // one level of structure, and a row carrying its own list took the whole
+    // frame — and with it the rest of the bar — down on a live session.
+    required property var actions
     required property var providerSource
     required property bool reducedMotion
 
@@ -32,9 +37,19 @@ Window {
     width: cardWidth
     height: column.implicitHeight
     color: CelestinaTheme.clear
-    title: qsTr("Celestina notifications")
+    title: qsTr("Notificaciones de Celestina")
 
     Component.onCompleted: CelestinaTheme.reducedMotion = stack.reducedMotion
+
+    // The actions offered by one notification.
+    function actionsFor(id) {
+        const mine = [];
+        for (let index = 0; index < stack.actions.length; ++index) {
+            if (stack.actions[index].notification === id)
+                mine.push(stack.actions[index]);
+        }
+        return mine;
+    }
 
     function dismiss(id) {
         if (stack.providerSource)
@@ -63,6 +78,7 @@ Window {
                 required property var modelData
 
                 readonly property bool critical: card.modelData.urgency === "critical"
+                readonly property var offered: stack.actionsFor(card.modelData.id)
                 readonly property string spokenText: qsTr("%1: %2. %3")
                     .arg(card.modelData.app)
                     .arg(card.modelData.summary)
@@ -116,7 +132,7 @@ Window {
                             iconName: "x"
                             // Dismissing is this person having dealt with it,
                             // which is not what a timeout means.
-                            helpText: qsTr("Dismiss this notification")
+                            helpText: qsTr("Descartar esta notificación")
                             onClicked: stack.dismiss(card.modelData.id)
                         }
                     }
@@ -145,11 +161,11 @@ Window {
 
                     Row {
                         width: parent.width
-                        visible: card.modelData.actions.length > 0
+                        visible: card.offered.length > 0
                         spacing: CelestinaTheme.spaceSm
 
                         Repeater {
-                            model: card.modelData.actions
+                            model: card.offered
 
                             delegate: CelestinaButton {
                                 required property var modelData

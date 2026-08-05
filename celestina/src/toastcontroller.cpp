@@ -56,26 +56,29 @@ void ToastController::providersChanged()
 
     // A helper that went away is showing nothing, whatever was on screen when
     // it left. The server is the only thing that knows what is still live.
-    const QVariantList toasts =
+    const QVariantMap published =
         m_providers->available()
-        ? m_providers->providers()
-              .value(QStringLiteral("notifications"))
-              .toMap()
-              .value(QStringLiteral("toasts"))
-              .toList()
-        : QVariantList();
+        ? m_providers->providers().value(QStringLiteral("notifications")).toMap()
+        : QVariantMap();
+    const QVariantList toasts = published.value(QStringLiteral("toasts")).toList();
 
     if (toasts.isEmpty()) {
         hide();
         return;
     }
-    show(toasts);
+    // The actions travel beside the notifications, not inside them; the surface
+    // joins them by id.
+    show(toasts, published.value(QStringLiteral("actions")).toList());
 }
 
-QWindow *ToastController::createWindow(const QVariantList &toasts)
+QWindow *ToastController::createWindow(
+    const QVariantList &toasts,
+    const QVariantList &actions
+)
 {
     const QVariantMap initialProperties {
         {QStringLiteral("toasts"), toasts},
+        {QStringLiteral("actions"), actions},
         {QStringLiteral("providerSource"), QVariant::fromValue(m_providers.data())},
         {QStringLiteral("reducedMotion"),
          qEnvironmentVariableIsSet("CELESTINA_REDUCED_MOTION")},
@@ -97,7 +100,7 @@ QWindow *ToastController::createWindow(const QVariantList &toasts)
     return window;
 }
 
-void ToastController::show(const QVariantList &toasts)
+void ToastController::show(const QVariantList &toasts, const QVariantList &actions)
 {
     if (!m_enabled)
         return;
@@ -107,10 +110,11 @@ void ToastController::show(const QVariantList &toasts)
     // person was reading.
     if (QWindow *const shown = m_surface->window()) {
         shown->setProperty("toasts", toasts);
+        shown->setProperty("actions", actions);
         return;
     }
 
-    QWindow *const stack = createWindow(toasts);
+    QWindow *const stack = createWindow(toasts, actions);
     if (!stack)
         return;
 

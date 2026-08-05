@@ -172,18 +172,44 @@ fn client(address: &str) -> Connection {
         .expect("a client connection to the private bus")
 }
 
+/// Posts a notification that offers one real action, which is what a producer
+/// with buttons sends and what `actions=[]` never exercises.
+fn notify_with_action(proxy: &Proxy<'_>, replaces: u32, body: &str) -> u32 {
+    let hints: HashMap<&str, ZValue> = HashMap::new();
+    proxy
+        .call(
+            "Notify",
+            &(
+                "Magnetita",
+                replaces,
+                "phone",
+                "Pixel",
+                body,
+                vec!["open", "Abrir"],
+                hints,
+                -1i32,
+            ),
+        )
+        .expect("the server answers Notify")
+}
+
+/// The rows of one published list field.
+fn rows<'a>(payload: &'a Value, field: &str) -> &'a [Value] {
+    payload
+        .get(field)
+        .and_then(Value::as_array)
+        .map_or(&[], Vec::as_slice)
+}
+
+/// Magnetita's own shape: no actions, no hints, replacement by id, then close.
 #[test]
-fn the_server_answers_magnetitas_flow_and_never_takes_a_taken_name() {
+fn the_server_answers_magnetitas_flow() {
     let Some(bus) = PrivateBus::start() else {
-        // Recorded rather than silently passed: without dbus-daemon this
-        // machine cannot run the only check that needs two processes.
         eprintln!("skipped: no dbus-daemon to start a private session bus");
         return;
     };
 
     let mut helper = Helper::start(&bus.address);
-    // The provider appears once the helper owns the name; on a private bus
-    // nothing else does.
     assert!(
         helper
             .wait_for(|frame| notifications(frame).map(|_| ()))
@@ -203,11 +229,11 @@ fn the_server_answers_magnetitas_flow_and_never_takes_a_taken_name() {
 
     let live = helper
         .wait_for(|frame| {
-            let toasts = notifications(frame)?.get("toasts")?.as_array()?;
-            let entry = toasts
+            let toasts = rows(notifications(frame)?, "toasts");
+            toasts
                 .iter()
-                .find(|entry| entry.get("id").and_then(Value::as_u64) == Some(u64::from(id)))?;
-            Some(entry.clone())
+                .find(|entry| entry.get("id").and_then(Value::as_u64) == Some(u64::from(id)))
+                .cloned()
         })
         .expect("the replacement reaches the panel");
     assert_eq!(live.get("app").and_then(Value::as_str), Some("Magnetita"));
@@ -242,15 +268,13 @@ fn the_server_answers_magnetitas_flow_and_never_takes_a_taken_name() {
     let remembered = helper
         .wait_for(|frame| {
             let payload = notifications(frame)?;
-            let toasts = payload.get("toasts")?.as_array()?;
-            if toasts
+            if rows(payload, "toasts")
                 .iter()
                 .any(|entry| entry.get("id").and_then(Value::as_u64) == Some(u64::from(id)))
             {
                 return None;
             }
-            let history = payload.get("history")?.as_array()?;
-            history
+            rows(payload, "history")
                 .iter()
                 .find(|entry| entry.get("id").and_then(Value::as_u64) == Some(u64::from(id)))
                 .cloned()
@@ -260,10 +284,100 @@ fn the_server_answers_magnetitas_flow_and_never_takes_a_taken_name() {
         remembered.get("summary").and_then(Value::as_str),
         Some("Pixel")
     );
+}
 
-    // The property this session depends on: a second shell finds the name
-    // taken and serves nothing, rather than displacing the first.
-    //
+/// A notification that offers a button, published in the shape the host can
+/// decode.
+///
+/// The live failure this covers: actions used to travel *inside* their
+/// notification, the C++ decoder refused the whole frame for nesting a list,
+/// and every unrelated provider's reading was cleared with it. The actions must
+/// still arrive — dropping them would "fix" the rejection by losing the feature.
+#[test]
+fn an_offered_action_is_published_flat_and_still_names_its_notification() {
+    let Some(bus) = PrivateBus::start() else {
+        eprintln!("skipped: no dbus-daemon to start a private session bus");
+        return;
+    };
+
+    let mut helper = Helper::start(&bus.address);
+    assert!(
+        helper
+            .wait_for(|frame| notifications(frame).map(|_| ()))
+            .is_some(),
+        "the helper never claimed the name"
+    );
+
+    let connection = client(&bus.address);
+    let proxy = Proxy::new(&connection, SERVICE, OBJECT, SERVICE).expect("the server is there");
+
+    let id = notify_with_action(&proxy, 0, "Un mensaje con bot\u{f3}n");
+    assert_ne!(id, 0);
+
+    let payload = helper
+        .wait_for(|frame| {
+            let payload = notifications(frame)?;
+            rows(payload, "actions")
+                .iter()
+                .any(|action| {
+                    action.get("notification").and_then(Value::as_u64) == Some(u64::from(id))
+                })
+                .then(|| payload.clone())
+        })
+        .expect("the offered action reaches the panel");
+
+    // The action is carried, and says which notification offers it.
+    let action = rows(&payload, "actions")
+        .iter()
+        .find(|action| action.get("notification").and_then(Value::as_u64) == Some(u64::from(id)))
+        .expect("the action names its notification");
+    assert_eq!(action.get("key").and_then(Value::as_str), Some("open"));
+    assert_eq!(action.get("label").and_then(Value::as_str), Some("Abrir"));
+
+    // The notification itself says how many it offers, without carrying them.
+    let toast = rows(&payload, "toasts")
+        .iter()
+        .find(|entry| entry.get("id").and_then(Value::as_u64) == Some(u64::from(id)))
+        .expect("the notification is live");
+    assert_eq!(toast.get("actionCount").and_then(Value::as_u64), Some(1));
+
+    // And nothing published nests a list: that is the rule the host enforces
+    // and the one this payload broke on a live session.
+    for (field, value) in payload.as_object().expect("a payload") {
+        let Some(rows) = value.as_array() else {
+            continue;
+        };
+        for row in rows {
+            let row = row
+                .as_object()
+                .unwrap_or_else(|| panic!("{field} carries something that is not a row"));
+            for (key, nested) in row {
+                assert!(
+                    !nested.is_array() && !nested.is_object(),
+                    "{field}.{key} nests a list the host will refuse"
+                );
+            }
+        }
+    }
+}
+
+/// The property this session depends on: a second shell finds the name taken
+/// and serves nothing, rather than displacing the first.
+#[test]
+fn a_second_shell_never_takes_a_name_that_is_already_owned() {
+    let Some(bus) = PrivateBus::start() else {
+        eprintln!("skipped: no dbus-daemon to start a private session bus");
+        return;
+    };
+
+    let mut first = Helper::start(&bus.address);
+    assert!(
+        first
+            .wait_for(|frame| notifications(frame).map(|_| ()))
+            .is_some(),
+        "the first helper never claimed the name"
+    );
+
     // Watched over a window rather than judged on one frame: a helper that
     // published its other providers first and only then claimed the name would
     // pass a single-frame check for the wrong reason.
@@ -286,6 +400,7 @@ fn the_server_answers_magnetitas_flow_and_never_takes_a_taken_name() {
     );
 
     // The first one still owns it and still answers.
-    let after = notify(&proxy, 0, "Still served by the first shell");
-    assert_ne!(after, 0);
+    let connection = client(&bus.address);
+    let proxy = Proxy::new(&connection, SERVICE, OBJECT, SERVICE).expect("the first shell answers");
+    assert_ne!(notify(&proxy, 0, "Still served by the first shell"), 0);
 }

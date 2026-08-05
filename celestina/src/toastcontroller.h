@@ -41,9 +41,9 @@ public:
 
 private:
     void providersChanged();
-    void show(const QVariantList &toasts);
+    void show(const QVariantList &toasts, const QVariantList &actions);
     void hide();
-    QWindow *createWindow(const QVariantList &toasts);
+    QWindow *createWindow(const QVariantList &toasts, const QVariantList &actions);
 
     QQmlComponent m_component;
     QPointer<ShellProvidersClient> m_providers;

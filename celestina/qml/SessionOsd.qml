@@ -32,19 +32,19 @@ Window {
     readonly property bool hasLevel: percent >= 0
     readonly property string headline: {
         if (osd.kind === "volume")
-            return qsTr("Volume");
+            return qsTr("Volumen");
         if (osd.kind === "microphone")
-            return qsTr("Microphone");
+            return qsTr("Micrófono");
         if (osd.kind === "brightness")
-            return osd.label.length > 0 ? qsTr("Brightness — %1").arg(osd.label)
-                                        : qsTr("Brightness");
+            return osd.label.length > 0 ? qsTr("Brillo — %1").arg(osd.label)
+                                        : qsTr("Brillo");
         return osd.kind;
     }
     readonly property string valueText: {
         if (osd.muted)
-            return qsTr("Muted");
+            return qsTr("Silenciado");
         if (!osd.hasLevel)
-            return qsTr("No reading");
+            return qsTr("Sin lectura");
         return qsTr("%1 %").arg(osd.percent);
     }
     // What a screen reader is told, in one sentence: the same two facts the
@@ -54,7 +54,7 @@ Window {
     width: 260
     height: 96
     color: CelestinaTheme.clear
-    title: qsTr("Celestina on-screen display")
+    title: qsTr("Indicador en pantalla de Celestina")
 
     Component.onCompleted: CelestinaTheme.reducedMotion = osd.reducedMotion
 
@@ -150,7 +150,7 @@ Window {
                 Text {
                     width: parent.width
                     visible: !osd.hasLevel && !osd.muted
-                    text: qsTr("The provider reported no level for this device.")
+                    text: qsTr("El proveedor no informó de ningún nivel para este dispositivo.")
                     color: CelestinaTheme.textMuted
                     font.family: CelestinaTheme.sansFamily
                     font.pixelSize: CelestinaTheme.fontCaption

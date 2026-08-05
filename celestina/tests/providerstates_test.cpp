@@ -19,6 +19,8 @@ private slots:
     void aFrameReplacesTheWholeSetSoAWithdrawnProviderCannotLinger();
     void aNewGenerationIsAChangeEvenWithIdenticalValues();
     void clearingDropsEverythingTheHelperHadPublished();
+    void acceptsTheShapeTheNotificationProviderActuallyPublishes();
+    void anUnreadableFrameLeavesEveryOtherProvidersReadingAlone();
 };
 
 void ProviderStatesTest::readsAProviderFrameAndItsGeneration()
@@ -193,6 +195,86 @@ void ProviderStatesTest::aNewGenerationIsAChangeEvenWithIdenticalValues()
         R"({"kind":"providers","version":1,"generation":2,"providers":{"sysmon":{"cpu":12}}})";
     QVERIFY(states.apply(parseProviderMessage(restarted)));
     QCOMPARE(states.generation(), 2u);
+}
+
+// The live failure this test exists for: the notification provider published a
+// row carrying its own `actions` array, this decoder refused the whole frame,
+// and the bar lost every unrelated reading. The provider now publishes actions
+// as a sibling list of flat rows, and this is that exact shape.
+void ProviderStatesTest::acceptsTheShapeTheNotificationProviderActuallyPublishes()
+{
+    const QByteArray frame = QByteArrayLiteral(
+        R"({"kind":"providers","version":1,"generation":7,"providers":{)"
+        R"("notifications":{"toasts":[{"id":1,"app":"Magnetita","summary":"Pixel",)"
+        R"("body":"Un mensaje","urgency":"normal","read":false,"actionCount":1}],)"
+        R"("actions":[{"notification":1,"key":"open","label":"Abrir"}],)"
+        R"("history":[],"unread":1,"quiet":false,"historyCap":50,"historyTruncated":false},)"
+        R"("audio":{"volume":40,"muted":false}}})"
+    );
+
+    const ProviderMessage message = parseProviderMessage(frame);
+    QCOMPARE(message.kind, ProviderMessage::Kind::Providers);
+
+    const QVariantMap notifications =
+        message.providers.value(QStringLiteral("notifications")).toMap();
+    const QVariantList toasts = notifications.value(QStringLiteral("toasts")).toList();
+    QCOMPARE(toasts.size(), 1);
+    QCOMPARE(toasts.first().toMap().value(QStringLiteral("summary")).toString(),
+             QStringLiteral("Pixel"));
+
+    // The action is carried, and says which notification it belongs to.
+    const QVariantList actions = notifications.value(QStringLiteral("actions")).toList();
+    QCOMPARE(actions.size(), 1);
+    QCOMPARE(actions.first().toMap().value(QStringLiteral("notification")).toInt(), 1);
+    QCOMPARE(actions.first().toMap().value(QStringLiteral("label")).toString(),
+             QStringLiteral("Abrir"));
+
+    // And the unrelated provider in the same frame survives, which is the whole
+    // point: one provider's payload must not decide another's fate.
+    QCOMPARE(message.providers.value(QStringLiteral("audio")).toMap()
+                 .value(QStringLiteral("volume")).toInt(),
+             40);
+}
+
+// The live failure: one provider published a value this host could not decode,
+// the host cleared everything, and the bar lost audio, Wi-Fi, Bluetooth, CPU
+// and RAM at once. A frame that cannot be read is dropped; only the helper
+// really going away clears what it published.
+void ProviderStatesTest::anUnreadableFrameLeavesEveryOtherProvidersReadingAlone()
+{
+    ProviderStates states;
+    QVERIFY(states.apply(parseProviderMessage(QByteArrayLiteral(
+        R"({"kind":"providers","version":1,"generation":3,"providers":{)"
+        R"("audio":{"volume":40},"network":{"connection":"Tonys 1"},)"
+        R"("sysmon":{"cpu":12,"memory":34}}})"
+    ))));
+
+    const ProviderMessage unreadable = parseProviderMessage(
+        QByteArrayLiteral(R"({"kind":"providers","version":1,"generation":4,)"
+                          R"("providers":{"notifications":{"rows":[{"nested":[1]}]}}})")
+    );
+    QCOMPARE(unreadable.kind, ProviderMessage::Kind::Invalid);
+
+    // The rule the host obeys, named so this cannot regress silently.
+    QCOMPARE(effectOf(unreadable), FrameEffect::Ignore);
+
+    // Nothing was applied, so every unrelated reading is exactly as it was.
+    QCOMPARE(states.providers().value(QStringLiteral("audio")).toMap()
+                 .value(QStringLiteral("volume")).toInt(), 40);
+    QCOMPARE(states.providers().value(QStringLiteral("network")).toMap()
+                 .value(QStringLiteral("connection")).toString(),
+             QStringLiteral("Tonys 1"));
+    QCOMPARE(states.providers().value(QStringLiteral("sysmon")).toMap()
+                 .value(QStringLiteral("memory")).toInt(), 34);
+
+    // A readable frame is still adopted, and the helper really going away is
+    // still what clears the lot.
+    QCOMPARE(effectOf(parseProviderMessage(QByteArrayLiteral(
+                 R"({"kind":"providers","version":1,"generation":4,"providers":{}})"
+             ))),
+             FrameEffect::Replace);
+    QVERIFY(states.clear());
+    QVERIFY(states.providers().isEmpty());
 }
 
 void ProviderStatesTest::clearingDropsEverythingTheHelperHadPublished()

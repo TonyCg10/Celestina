@@ -40,13 +40,27 @@ Window {
     readonly property var entries: centre.live.concat(centre.past)
     readonly property bool truncated: centre.serving
                                       && centre.state.historyTruncated === true
+    // Actions arrive beside the notifications, each naming the one it belongs
+    // to: the host takes one level of structure, so a notification carrying its
+    // own list of actions is a frame it refuses.
+    readonly property var offeredActions: centre.serving && centre.state.actions !== undefined
+                                          ? centre.state.actions : []
+
+    function actionsFor(id) {
+        const mine = [];
+        for (let index = 0; index < centre.offeredActions.length; ++index) {
+            if (centre.offeredActions[index].notification === id)
+                mine.push(centre.offeredActions[index]);
+        }
+        return mine;
+    }
 
     property int currentIndex: entries.length > 0 ? 0 : -1
 
     width: cardWidth
     height: cardHeight
     color: CelestinaTheme.clear
-    title: qsTr("Notifications")
+    title: qsTr("Notificaciones")
 
     Component.onCompleted: {
         CelestinaTheme.reducedMotion = centre.reducedMotion;
@@ -77,9 +91,10 @@ Window {
         if (index < 0 || index >= centre.live.length)
             return;
         const entry = centre.live[index];
-        if (entry.actions.length === 0)
+        const offered = centre.actionsFor(entry.id);
+        if (offered.length === 0)
             return;
-        centre.send("invoke", {"id": entry.id, "action": entry.actions[0].key});
+        centre.send("invoke", {"id": entry.id, "action": offered[0].key});
     }
 
     Item {
@@ -91,7 +106,7 @@ Window {
             anchors.fill: parent
             backdropSource: scene
             Accessible.role: Accessible.Dialog
-            Accessible.name: qsTr("Notifications")
+            Accessible.name: qsTr("Notificaciones")
 
             Column {
                 anchors.fill: parent
@@ -106,8 +121,8 @@ Window {
                         width: parent.width - quietButton.width - clearButton.width
                                - parent.spacing * 2
                         anchors.verticalCenter: parent.verticalCenter
-                        text: centre.quiet ? qsTr("Notifications — silenced")
-                                           : qsTr("Notifications")
+                        text: centre.quiet ? qsTr("Notificaciones — silenciadas")
+                                           : qsTr("Notificaciones")
                         color: CelestinaTheme.text
                         elide: Text.ElideRight
                         font.family: CelestinaTheme.sansFamily
@@ -118,20 +133,20 @@ Window {
                     CelestinaButton {
                         id: quietButton
 
-                        text: centre.quiet ? qsTr("Allow") : qsTr("Silence")
+                        text: centre.quiet ? qsTr("Permitir") : qsTr("Silenciar")
                         role: centre.quiet ? CelestinaButton.Selected
                                            : CelestinaButton.Tonal
-                        helpText: qsTr("Hold notifications back except critical ones (D)")
+                        helpText: qsTr("Retener las notificaciones salvo las críticas (D)")
                         onClicked: centre.send("quiet-toggle", {})
                     }
 
                     CelestinaButton {
                         id: clearButton
 
-                        text: qsTr("Clear")
+                        text: qsTr("Vaciar")
                         role: CelestinaButton.Destructive
                         enabled: centre.past.length > 0
-                        helpText: qsTr("Forget what has already ended")
+                        helpText: qsTr("Olvidar lo que ya terminó")
                         onClicked: centre.send("clear-history", {})
                     }
                 }
@@ -209,7 +224,7 @@ Window {
                                 // without a second column of labels.
                                 text: row.live
                                       ? row.modelData.app
-                                      : qsTr("%1 — ended").arg(row.modelData.app)
+                                      : qsTr("%1 — terminada").arg(row.modelData.app)
                                 color: CelestinaTheme.textMuted
                                 elide: Text.ElideRight
                                 font.family: CelestinaTheme.sansFamily
@@ -255,10 +270,10 @@ Window {
                     visible: !centre.serving || centre.entries.length === 0
                              || centre.truncated
                     text: !centre.serving
-                          ? qsTr("Another program is this session's notification server, so this shell has nothing to show.")
+                          ? qsTr("Otro programa es el servidor de notificaciones de esta sesión, así que este shell no tiene nada que mostrar.")
                           : centre.entries.length === 0
-                            ? qsTr("Nothing has been said lately.")
-                            : qsTr("Older notifications are not kept.")
+                            ? qsTr("No se ha dicho nada últimamente.")
+                            : qsTr("Las notificaciones más antiguas no se conservan.")
                     color: CelestinaTheme.textMuted
                     wrapMode: Text.WordWrap
                     font.family: CelestinaTheme.sansFamily

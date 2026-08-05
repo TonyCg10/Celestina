@@ -35,6 +35,19 @@ Item {
     readonly property bool hasMic: hasReading && reading.micVolume !== undefined
     readonly property bool micMuted: hasMic && reading.micMuted === true
 
+    // What a screen reader is told about the speaker. Named here, and read
+    // through `hasReading`, because an `Accessible` binding is evaluated even
+    // while the widget is hidden: reaching into an absent reading from one is
+    // what threw on every frame the helper missed.
+    readonly property string spokenVolume: !hasReading
+            ? qsTr("Volumen sin lectura")
+            : muted
+              ? qsTr("Volumen silenciado, %1 %").arg(reading.volume)
+              : qsTr("Volumen %1 %").arg(reading.volume)
+    readonly property string spokenMic: !hasMic
+            ? qsTr("Micrófono sin lectura")
+            : micMuted ? qsTr("Micrófono silenciado") : qsTr("Micrófono activo")
+
     implicitWidth: hasReading ? readings.implicitWidth : 0
     implicitHeight: 26
     visible: hasReading
@@ -72,9 +85,7 @@ Item {
             width: volumeText.implicitWidth
             height: 26
             Accessible.role: Accessible.Button
-            Accessible.name: root.muted
-                    ? qsTr("Volumen silenciado, %1 %").arg(root.reading.volume)
-                    : qsTr("Volumen %1 %").arg(root.reading.volume)
+            Accessible.name: root.spokenVolume
             Accessible.onPressAction: root.muteToggled()
             Accessible.onScrollUpAction: root.stepRequested(1)
             Accessible.onScrollDownAction: root.stepRequested(-1)
@@ -115,8 +126,7 @@ Item {
             width: micText.implicitWidth
             height: 26
             Accessible.role: Accessible.Button
-            Accessible.name: root.micMuted ? qsTr("Micrófono silenciado")
-                                           : qsTr("Micrófono activo")
+            Accessible.name: root.spokenMic
             Accessible.onPressAction: root.micMuteToggled()
 
             Text {

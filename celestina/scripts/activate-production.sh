@@ -55,5 +55,6 @@ production_status "$suite_root" celestina \
     --installed "celestina/build/rust-target/release/celestina-provider-adapter=$prefix/libexec/celestina/celestina-provider-adapter" \
     --installed "celestina-style/build/libcelestina-style.so=$prefix/libexec/celestina/libcelestina-style.so" \
     --installed "celestina-style/build/CelestinaStyle=$prefix/libexec/celestina/CelestinaStyle" \
-    --installed "celestina/scripts/celestina-launcher.sh=$prefix/bin/celestina"
+    --installed "celestina/scripts/celestina-launcher.sh=$prefix/bin/celestina" \
+    --installed "celestina/celestina.desktop=$prefix/share/applications/celestina.desktop"
 exec "$prefix/bin/celestina" "$@"

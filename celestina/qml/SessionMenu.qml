@@ -27,14 +27,14 @@ Window {
     // `verb` is the session channel's own vocabulary; nothing here invents a
     // name for an action.
     readonly property var actions: [
-        {"verb": "log-out", "label": qsTr("Log out"),
-         "warning": qsTr("This ends the session and closes everything open.")},
-        {"verb": "reboot", "label": qsTr("Restart"),
-         "warning": qsTr("This restarts the machine.")},
-        {"verb": "power-off", "label": qsTr("Power off"),
-         "warning": qsTr("This shuts the machine down.")},
-        {"verb": "suspend", "label": qsTr("Suspend"),
-         "warning": qsTr("This sleeps the machine.")}
+        {"verb": "log-out", "label": qsTr("Cerrar sesión"),
+         "warning": qsTr("Esto cierra la sesión y todo lo que haya abierto.")},
+        {"verb": "reboot", "label": qsTr("Reiniciar"),
+         "warning": qsTr("Esto reinicia el equipo.")},
+        {"verb": "power-off", "label": qsTr("Apagar"),
+         "warning": qsTr("Esto apaga el equipo.")},
+        {"verb": "suspend", "label": qsTr("Suspender"),
+         "warning": qsTr("Esto suspende el equipo.")}
     ]
 
     property string armed: ""
@@ -45,7 +45,7 @@ Window {
     width: cardWidth
     height: column.implicitHeight + CelestinaTheme.spaceLg * 2
     color: CelestinaTheme.clear
-    title: qsTr("Session")
+    title: qsTr("Sesión")
 
     Component.onCompleted: {
         CelestinaTheme.reducedMotion = menu.reducedMotion;
@@ -86,7 +86,7 @@ Window {
             anchors.fill: parent
             backdropSource: scene
             Accessible.role: Accessible.Dialog
-            Accessible.name: qsTr("Session")
+            Accessible.name: qsTr("Sesión")
 
             Column {
                 id: column
@@ -122,12 +122,12 @@ Window {
                         CelestinaButton {
                             width: entry.width
                             text: entry.isArmed
-                                  ? qsTr("%1 — press again").arg(entry.modelData.label)
+                                  ? qsTr("%1 — pulsa otra vez").arg(entry.modelData.label)
                                   : entry.modelData.label
                             role: entry.isArmed ? CelestinaButton.Destructive
                                                 : CelestinaButton.Tonal
                             Accessible.name: entry.isArmed
-                                    ? qsTr("%1. %2 Press again to confirm.")
+                                    ? qsTr("%1. %2 Pulsa otra vez para confirmar.")
                                       .arg(entry.modelData.label)
                                       .arg(entry.modelData.warning)
                                     : entry.modelData.label
@@ -142,13 +142,13 @@ Window {
                                 if (entry.isArmed)
                                     return entry.modelData.warning;
                                 if (menu.outcomeState === "pending")
-                                    return qsTr("asking…");
+                                    return qsTr("preguntando…");
                                 if (menu.outcomeState === "failed") {
                                     return menu.outcomeReason.length > 0
-                                           ? qsTr("refused: %1").arg(menu.outcomeReason)
-                                           : qsTr("refused");
+                                           ? qsTr("rechazado: %1").arg(menu.outcomeReason)
+                                           : qsTr("rechazado");
                                 }
-                                return qsTr("the session manager accepted this");
+                                return qsTr("el gestor de sesión lo aceptó");
                             }
                             color: menu.outcomeState === "failed"
                                    && menu.outcomeVerb === entry.modelData.verb

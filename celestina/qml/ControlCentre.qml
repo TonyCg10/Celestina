@@ -51,7 +51,7 @@ Window {
     width: cardWidth
     height: cardHeight
     color: CelestinaTheme.clear
-    title: qsTr("Control centre")
+    title: qsTr("Centro de control")
 
     Component.onCompleted: {
         CelestinaTheme.reducedMotion = centre.reducedMotion;
@@ -66,7 +66,7 @@ Window {
             // A request that could not even be sent is a failure now, not a
             // pending one that will never resolve.
             const failed = centre.outcomes;
-            failed[verb] = {"state": "failed", "reason": qsTr("the shell could not send this")};
+            failed[verb] = {"state": "failed", "reason": qsTr("el shell no pudo enviarlo")};
             centre.outcomes = failed;
             return;
         }
@@ -139,11 +139,11 @@ Window {
                 text: {
                     const outcome = row.outcome;
                     if (outcome && outcome.state === "pending")
-                        return qsTr("%1 · asking…").arg(row.reading);
+                        return qsTr("%1 · preguntando…").arg(row.reading);
                     if (outcome && outcome.state === "failed") {
                         return outcome.reason.length > 0
-                               ? qsTr("%1 · failed: %2").arg(row.reading).arg(outcome.reason)
-                               : qsTr("%1 · failed").arg(row.reading);
+                               ? qsTr("%1 · falló: %2").arg(row.reading).arg(outcome.reason)
+                               : qsTr("%1 · falló").arg(row.reading);
                     }
                     return row.reading;
                 }
@@ -176,7 +176,7 @@ Window {
             anchors.fill: parent
             backdropSource: scene
             Accessible.role: Accessible.Dialog
-            Accessible.name: qsTr("Control centre")
+            Accessible.name: qsTr("Centro de control")
 
             Column {
                 anchors.fill: parent
@@ -187,7 +187,7 @@ Window {
 
                 Text {
                     width: parent.width
-                    text: qsTr("Control centre")
+                    text: qsTr("Centro de control")
                     color: CelestinaTheme.text
                     font.family: CelestinaTheme.sansFamily
                     font.pixelSize: CelestinaTheme.fontRowTitle
@@ -196,11 +196,11 @@ Window {
                 }
 
                 ControlRow {
-                    label: qsTr("Volume")
+                    label: qsTr("Volumen")
                     reading: centre.audio && centre.audio.volume !== undefined
-                             ? (centre.audio.muted ? qsTr("%1 %, muted").arg(centre.audio.volume)
+                             ? (centre.audio.muted ? qsTr("%1 %, silenciado").arg(centre.audio.volume)
                                                    : qsTr("%1 %").arg(centre.audio.volume))
-                             : qsTr("no readable device")
+                             : qsTr("sin dispositivo legible")
                     verb: "mute-toggle"
 
                     Row {
@@ -210,19 +210,19 @@ Window {
                             id: firstControl
 
                             text: qsTr("−")
-                            helpText: qsTr("Quieter by %1 %").arg(centre.levelStep)
+                            helpText: qsTr("Bajar %1 %").arg(centre.levelStep)
                             onClicked: centre.send("audio", "volume-step", {"by": -centre.levelStep})
                         }
 
                         CelestinaButton {
                             text: qsTr("+")
-                            helpText: qsTr("Louder by %1 %").arg(centre.levelStep)
+                            helpText: qsTr("Subir %1 %").arg(centre.levelStep)
                             onClicked: centre.send("audio", "volume-step", {"by": centre.levelStep})
                         }
 
                         CelestinaSwitch {
                             checked: centre.audio !== undefined && centre.audio.muted === true
-                            Accessible.name: qsTr("Silence the speaker")
+                            Accessible.name: qsTr("Silenciar el altavoz")
                             // The provider decides what `checked` becomes; this
                             // only asks, and puts the switch back where the
                             // reading says it is until an answer arrives.
@@ -236,16 +236,16 @@ Window {
                 }
 
                 ControlRow {
-                    label: qsTr("Night light")
+                    label: qsTr("Luz nocturna")
                     reading: centre.nightLight === undefined
-                             ? qsTr("no provider")
-                             : (centre.nightLight.active ? qsTr("on") : qsTr("off"))
+                             ? qsTr("sin proveedor")
+                             : (centre.nightLight.active ? qsTr("encendida") : qsTr("apagada"))
                     verb: "night-light-toggle"
 
                     CelestinaSwitch {
                         checked: centre.nightLight !== undefined
                                  && centre.nightLight.active === true
-                        Accessible.name: qsTr("Night light")
+                        Accessible.name: qsTr("Luz nocturna")
                         onToggled: {
                             checked = Qt.binding(() => centre.nightLight !== undefined
                                                  && centre.nightLight.active === true);
@@ -255,16 +255,16 @@ Window {
                 }
 
                 ControlRow {
-                    label: qsTr("Stay awake")
+                    label: qsTr("Mantener despierto")
                     reading: centre.caffeine === undefined
-                             ? qsTr("no provider")
-                             : (centre.caffeine.active ? qsTr("on") : qsTr("off"))
+                             ? qsTr("sin proveedor")
+                             : (centre.caffeine.active ? qsTr("encendida") : qsTr("apagada"))
                     verb: "caffeine-toggle"
 
                     CelestinaSwitch {
                         checked: centre.caffeine !== undefined
                                  && centre.caffeine.active === true
-                        Accessible.name: qsTr("Keep the session awake")
+                        Accessible.name: qsTr("Mantener la sesión despierta")
                         onToggled: {
                             checked = Qt.binding(() => centre.caffeine !== undefined
                                                  && centre.caffeine.active === true);
@@ -274,18 +274,18 @@ Window {
                 }
 
                 ControlRow {
-                    label: qsTr("Silence notifications")
+                    label: qsTr("Silenciar notificaciones")
                     reading: centre.notifications === undefined
-                             ? qsTr("another program serves notifications")
-                             : (centre.notifications.quiet ? qsTr("silenced")
-                                                           : qsTr("allowed"))
+                             ? qsTr("otro programa sirve las notificaciones")
+                             : (centre.notifications.quiet ? qsTr("silenciadas")
+                                                           : qsTr("permitidas"))
                     verb: "quiet-toggle"
 
                     CelestinaSwitch {
                         enabled: centre.notifications !== undefined
                         checked: centre.notifications !== undefined
                                  && centre.notifications.quiet === true
-                        Accessible.name: qsTr("Silence notifications")
+                        Accessible.name: qsTr("Silenciar notificaciones")
                         onToggled: {
                             checked = Qt.binding(() => centre.notifications !== undefined
                                                  && centre.notifications.quiet === true);
@@ -295,15 +295,15 @@ Window {
                 }
 
                 ControlRow {
-                    label: qsTr("Power profile")
+                    label: qsTr("Perfil de energía")
                     reading: centre.power && centre.power.active !== undefined
-                             ? centre.power.active : qsTr("no daemon")
+                             ? centre.power.active : qsTr("sin demonio")
                     verb: "cycle"
 
                     CelestinaButton {
-                        text: qsTr("Next")
+                        text: qsTr("Siguiente")
                         enabled: centre.power !== undefined
-                        helpText: qsTr("Switch to the next profile the daemon offers")
+                        helpText: qsTr("Cambiar al siguiente perfil que ofrece el demonio")
                         onClicked: centre.send("power", "cycle")
                     }
                 }
@@ -311,15 +311,15 @@ Window {
                 // Read-only on purpose: this shell is not a network or
                 // Bluetooth manager, and a switch here would promise one.
                 ControlRow {
-                    label: qsTr("Network")
+                    label: qsTr("Red")
                     reading: centre.network && centre.network.connection !== undefined
-                             ? centre.network.connection : qsTr("nothing is carrying this session")
+                             ? centre.network.connection : qsTr("nada transporta esta sesión")
                 }
 
                 ControlRow {
                     label: qsTr("Bluetooth")
                     reading: centre.bluetooth && centre.bluetooth.first !== undefined
-                             ? centre.bluetooth.first : qsTr("nothing connected")
+                             ? centre.bluetooth.first : qsTr("nada conectado")
                 }
 
                 // Absent rather than stale: the provider withdraws a reading
@@ -327,11 +327,11 @@ Window {
                 // nothing to say instead of showing an old temperature.
                 ControlRow {
                     label: centre.weather && centre.weather.label !== undefined
-                           ? qsTr("Weather — %1").arg(centre.weather.label)
-                           : qsTr("Weather")
+                           ? qsTr("Tiempo — %1").arg(centre.weather.label)
+                           : qsTr("Tiempo")
                     reading: centre.weather && centre.weather.celsius !== undefined
                              ? qsTr("%1 °C").arg(centre.weather.celsius)
-                             : qsTr("no current reading")
+                             : qsTr("sin lectura actual")
                 }
 
                 MonthCalendar {

@@ -29,47 +29,58 @@ Window {
     readonly property bool showingImage: wallpaper.source.length > 0 && wallpaper.decodable
 
     color: CelestinaTheme.compositorGlassFallback
-    title: qsTr("Celestina wallpaper")
+    title: qsTr("Fondo de Celestina")
 
     Component.onCompleted: CelestinaTheme.reducedMotion = wallpaper.reducedMotion
 
     onSourceChanged: wallpaper.decodable = true
 
-    Accessible.role: Accessible.Graphic
-    Accessible.name: wallpaper.showingImage
-                     ? qsTr("Wallpaper on %1").arg(wallpaper.outputName)
-                     : qsTr("No wallpaper on %1").arg(wallpaper.outputName)
-
-    Image {
-        id: image
+    // The description belongs to an Item, not to this Window: Qt attaches
+    // `Accessible` only to something deriving from Item or Action, and a live
+    // session logged the rejection twice at startup. The surface still needs a
+    // name — a screen reader meeting an unlabelled full-screen graphic has
+    // nothing to say about it — so it hangs on the content instead.
+    Item {
+        id: scene
 
         anchors.fill: parent
-        visible: wallpaper.showingImage
-        source: wallpaper.source.length > 0 ? "file://" + wallpaper.source : ""
-        fillMode: Image.PreserveAspectCrop
-        // A wallpaper is decoded once and looked at for hours; doing it off the
-        // GUI thread keeps a large photograph from stalling the panel with it.
-        asynchronous: true
-        cache: false
-        // Reading the file at the screen's own size rather than at the
-        // photograph's: a 6000-pixel image would otherwise cost its full
-        // decoded size in memory on every output showing it.
-        sourceSize.width: wallpaper.width
-        sourceSize.height: wallpaper.height
 
-        onStatusChanged: {
-            if (status === Image.Error)
-                wallpaper.decodable = false;
-        }
+        Accessible.role: Accessible.Graphic
+        Accessible.name: wallpaper.showingImage
+                         ? qsTr("Fondo en %1").arg(wallpaper.outputName)
+                         : qsTr("Sin fondo en %1").arg(wallpaper.outputName)
 
-        // Appearing is worth a fade; reduced motion keeps the image and drops
-        // the travel.
-        opacity: status === Image.Ready ? 1 : 0
-        Behavior on opacity {
-            enabled: !CelestinaTheme.reducedMotion
-            NumberAnimation {
-                duration: CelestinaTheme.motionNormal
-                easing.type: CelestinaTheme.easeStandard
+        Image {
+            id: image
+
+            anchors.fill: parent
+            visible: wallpaper.showingImage
+            source: wallpaper.source.length > 0 ? "file://" + wallpaper.source : ""
+            fillMode: Image.PreserveAspectCrop
+            // A wallpaper is decoded once and looked at for hours; doing it off the
+            // GUI thread keeps a large photograph from stalling the panel with it.
+            asynchronous: true
+            cache: false
+            // Reading the file at the screen's own size rather than at the
+            // photograph's: a 6000-pixel image would otherwise cost its full
+            // decoded size in memory on every output showing it.
+            sourceSize.width: wallpaper.width
+            sourceSize.height: wallpaper.height
+
+            onStatusChanged: {
+                if (status === Image.Error)
+                    wallpaper.decodable = false;
+            }
+
+            // Appearing is worth a fade; reduced motion keeps the image and drops
+            // the travel.
+            opacity: status === Image.Ready ? 1 : 0
+            Behavior on opacity {
+                enabled: !CelestinaTheme.reducedMotion
+                NumberAnimation {
+                    duration: CelestinaTheme.motionNormal
+                    easing.type: CelestinaTheme.easeStandard
+                }
             }
         }
     }

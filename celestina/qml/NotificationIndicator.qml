@@ -39,8 +39,8 @@ Item {
 
     Accessible.role: Accessible.Button
     Accessible.name: root.quiet
-            ? qsTr("Notifications silenced, %1 unread").arg(root.unread)
-            : qsTr("%1 unread notifications").arg(root.unread)
+            ? qsTr("Notificaciones silenciadas, %1 sin leer").arg(root.unread)
+            : qsTr("%1 notificaciones sin leer").arg(root.unread)
     Accessible.onPressAction: root.historyRequested()
 
     Row {
@@ -66,7 +66,7 @@ Item {
             // The word appears only while the session is silenced: the rest of
             // the time the number needs no caption.
             visible: root.quiet
-            text: qsTr("silenced")
+            text: qsTr("silenciadas")
             color: CelestinaTheme.textMuted
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontCaption
