@@ -25,6 +25,7 @@
 #include "panelmenucontroller.h"
 #include "shellclient.h"
 #include "shellprovidersclient.h"
+#include "sessionactions.h"
 #include "shellservice.h"
 #include "surfacemanager.h"
 #include "trayiconprovider.h"
@@ -297,6 +298,34 @@ int main(int argc, char *argv[])
     if (!notificationCentre->isEnabled())
         qWarning() << "Celestina is running without its notification centre.";
     shell->setNotificationCentreController(notificationCentre);
+
+    // One place to change what the panel reports, over the verbs that already
+    // exist: `celestina msg control-centre-toggle`.
+    auto *controlCentre = new OverlayController(
+        &engine,
+        providers,
+        QStringLiteral("ControlCentre"),
+        &app
+    );
+    if (!controlCentre->isEnabled())
+        qWarning() << "Celestina is running without its control centre.";
+    shell->setControlCentreController(controlCentre);
+
+    // Ending the session: asked twice in the surface, and answered by whoever
+    // owns the session rather than by this shell.
+    auto *sessionMenu = new OverlayController(
+        &engine,
+        providers,
+        QStringLiteral("SessionMenu"),
+        &app
+    );
+    sessionMenu->setExtraProperties(
+        {{QStringLiteral("shellSource"),
+          QVariant::fromValue(new SessionActions(shell, &app))}}
+    );
+    if (!sessionMenu->isEnabled())
+        qWarning() << "Celestina is running without its session menu.";
+    shell->setSessionMenuController(sessionMenu);
 
     // The menu controller draws menus; the tray host holds the conversation
     // with the application that owns one. Wiring them here keeps the controller

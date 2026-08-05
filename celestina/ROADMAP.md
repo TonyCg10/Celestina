@@ -24,7 +24,8 @@ of the design when they provide the narrow capability the shell needs.
 | R2 | complete | Keyboard launcher and shell-owned clipboard history overlays |
 | R3 | complete | OSD, night light, caffeine/idle, DPMS and fail-closed session verbs |
 | R4 | complete | Freedesktop notification server, toasts, history and do-not-disturb |
-| R5, R7 | planned | Control center and session look |
+| R5 | complete | Control centre, session menu, weather and calendar |
+| R7 | planned | Session look and wallpaper |
 | R6 | conditional | First-party lock starts only if SHELL-D2 is applied |
 | R8 | partially planned | Reversible Noctalia removal; Polkit/dock slices remain conditional |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
@@ -88,11 +89,20 @@ notifications remain an independent `VAL-R4` run.
 
 ## R5 — Control center, session menu, weather and calendar
 
-- [ ] Implement the multi-provider write surface with confirmed network,
+**Outcome:** one surface writes to every provider the panel already reads from,
+showing what each provider reported rather than what was asked for, and the
+settings behind it survive a restart because they were written durably first.
+
+- [x] Implement the multi-provider write surface with confirmed network,
       Bluetooth, night-light, caffeine, DND, power, audio and brightness state.
-- [ ] Implement typed session actions with visible request outcomes.
-- [ ] Add bounded Open-Meteo policy/cache and a local calendar month view.
-- [ ] Persist settings atomically before publishing them.
+- [x] Implement typed session actions with visible request outcomes.
+- [x] Add bounded Open-Meteo policy/cache and a local calendar month view.
+- [x] Persist settings atomically before publishing them.
+
+R5 closes on the evidence in
+[the archived R5 plan](docs/plans/archive/2026-08-04-r5-control-centre.md). Real
+network and Bluetooth switching, a real weather location and appearance remain
+an independent `VAL-R5` run.
 
 ## R6 — Conditional first-party lock and idle
 

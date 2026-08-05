@@ -92,6 +92,24 @@ pub enum MuteDevice {
     Input,
 }
 
+/// Ending the session, or the machine's day.
+///
+/// These are the requests a person cannot take back, which is why they are
+/// typed rather than a string reaching a shell: `power-off` and `reboot` must
+/// never be what a mistyped verb falls through to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PowerAction {
+    /// End this session and return to the greeter. The compositor does it;
+    /// this shell asks.
+    LogOut,
+    Reboot,
+    PowerOff,
+    /// Sleep. Fail-closed like [`SessionRequest::Lock`]: a session that
+    /// suspends unlocked wakes up unlocked, so this is refused while no locker
+    /// provider exists.
+    Suspend,
+}
+
 /// One typed request. The variants name capabilities, not tools: which program
 /// or protocol serves night light or a lock is the provider's business, and is
 /// deliberately absent from the vocabulary a binding writes.
@@ -109,6 +127,7 @@ pub enum SessionRequest {
     DisplaysOff,
     Lock,
     LockAndSuspend,
+    Power(PowerAction),
 }
 
 fn level(options: &Payload) -> Result<u8, String> {
@@ -188,6 +207,10 @@ pub fn parse_request(verb: &str, options: &Payload) -> Result<SessionRequest, St
             options,
         )?))),
         "displays-off" => Ok(SessionRequest::DisplaysOff),
+        "log-out" => Ok(SessionRequest::Power(PowerAction::LogOut)),
+        "reboot" => Ok(SessionRequest::Power(PowerAction::Reboot)),
+        "power-off" => Ok(SessionRequest::Power(PowerAction::PowerOff)),
+        "suspend" => Ok(SessionRequest::Power(PowerAction::Suspend)),
         "lock" => Ok(SessionRequest::Lock),
         "lock-and-suspend" => Ok(SessionRequest::LockAndSuspend),
         _ => Err(format!("this shell does not serve the verb '{verb}'")),
@@ -212,13 +235,43 @@ pub fn unserved_verb(provider: &str, verb: &str) -> String {
 ///
 /// Returns the sentence the requester should be shown.
 pub fn parse_for(provider: &str, verb: &str, options: &Payload) -> Result<SessionRequest, String> {
-    parse_request(verb, options).map_err(|reason| {
+    let request = parse_request(verb, options).map_err(|reason| {
         if reason.contains(verb) {
             unserved_verb(provider, verb)
         } else {
             reason
         }
-    })
+    })?;
+
+    // A verb this vocabulary knows is still not this provider's to serve. The
+    // check lives here rather than in each provider because "who serves what"
+    // is one fact, and a provider repeating it is a copy that can drift — the
+    // audio provider must refuse `reboot` for the same reason it refuses
+    // `defenestrate`, and neither must reach a device.
+    if serves(provider, request) {
+        Ok(request)
+    } else {
+        Err(unserved_verb(provider, verb))
+    }
+}
+
+/// Whether `provider` is the one that carries `request`.
+///
+/// Requests with no provider of their own — ending the session, locking it,
+/// blanking the outputs — belong to the host, which asks the compositor or the
+/// session manager directly. No provider name serves them.
+#[must_use]
+pub fn serves(provider: &str, request: SessionRequest) -> bool {
+    match request {
+        SessionRequest::Volume(_) | SessionRequest::Mute(..) => provider == "audio",
+        SessionRequest::Brightness(_) => provider == "brightness",
+        SessionRequest::NightLight(_) => provider == "night-light",
+        SessionRequest::Caffeine(_) => provider == "caffeine",
+        SessionRequest::DisplaysOff
+        | SessionRequest::Lock
+        | SessionRequest::LockAndSuspend
+        | SessionRequest::Power(_) => false,
+    }
 }
 
 /// The refusal a request owes when the capability it names has no provider.
@@ -238,7 +291,11 @@ pub fn no_provider(request: SessionRequest) -> String {
         SessionRequest::NightLight(_) => "night light",
         SessionRequest::Caffeine(_) => "the idle inhibitor",
         SessionRequest::DisplaysOff => "the compositor's display power control",
-        SessionRequest::Lock | SessionRequest::LockAndSuspend => "a session locker",
+        SessionRequest::Lock
+        | SessionRequest::LockAndSuspend
+        | SessionRequest::Power(PowerAction::Suspend) => "a session locker",
+        SessionRequest::Power(PowerAction::LogOut) => "the compositor",
+        SessionRequest::Power(PowerAction::Reboot | PowerAction::PowerOff) => "the session manager",
     };
     format!("this shell has no provider for {capability}")
 }
@@ -366,9 +423,36 @@ mod tests {
     }
 
     #[test]
+    fn the_verbs_that_end_a_session_are_typed_one_by_one() {
+        for (verb, action) in [
+            ("log-out", PowerAction::LogOut),
+            ("reboot", PowerAction::Reboot),
+            ("power-off", PowerAction::PowerOff),
+            ("suspend", PowerAction::Suspend),
+        ] {
+            assert_eq!(
+                parse_request(verb, &Payload::new()),
+                Ok(SessionRequest::Power(action))
+            );
+        }
+        // Nothing falls through to one of these: a near miss is refused, not
+        // rounded to the nearest irreversible action.
+        assert!(parse_request("power", &Payload::new()).is_err());
+        assert!(parse_request("power-off-now", &Payload::new()).is_err());
+        assert!(parse_request("shutdown", &Payload::new()).is_err());
+    }
+
+    #[test]
+    fn suspending_needs_the_same_locker_lock_does() {
+        // A session that suspends unlocked wakes up unlocked.
+        assert!(no_provider(SessionRequest::Power(PowerAction::Suspend)).contains("locker"));
+        assert!(no_provider(SessionRequest::Power(PowerAction::Reboot)).contains("session manager"));
+    }
+
+    #[test]
     fn an_unknown_verb_is_refused_with_its_own_name() {
-        let refusal = parse_request("reboot", &Payload::new()).expect_err("unknown");
-        assert!(refusal.contains("reboot"));
+        let refusal = parse_request("defenestrate", &Payload::new()).expect_err("unknown");
+        assert!(refusal.contains("defenestrate"));
     }
 
     #[test]
@@ -394,9 +478,18 @@ mod tests {
 
     #[test]
     fn a_provider_refuses_an_unknown_verb_in_its_own_name() {
-        let refusal = parse_for("audio", "reboot", &Payload::new()).expect_err("unknown");
+        let refusal = parse_for("audio", "defenestrate", &Payload::new()).expect_err("unknown");
         assert!(refusal.contains("audio"));
-        assert!(refusal.contains("reboot"));
+        assert!(refusal.contains("defenestrate"));
+
+        // Deliberately a verb this vocabulary *does* know: the audio provider
+        // must refuse it in its own name rather than letting it through.
+        let foreign = parse_for("audio", "reboot", &Payload::new()).expect_err("not audio's");
+        assert!(foreign.contains("audio"));
+        assert!(foreign.contains("reboot"));
+        let wrong_device =
+            parse_for("audio", "brightness-step", &step_option(5)).expect_err("not audio's");
+        assert!(wrong_device.contains("audio"));
 
         // A verb it could serve, with an option it cannot use, keeps the
         // sentence that names the option.

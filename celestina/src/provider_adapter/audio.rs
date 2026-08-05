@@ -91,7 +91,7 @@ pub fn action(
                 Switch::Toggle => "toggle",
             },
         ],
-        // A session verb another provider carries is not this one's to serve.
+        // `parse_for` already refused everything this provider does not serve.
         _ => return Err(session::unserved_verb(NAME, verb)),
     };
 

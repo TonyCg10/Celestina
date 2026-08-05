@@ -43,6 +43,8 @@ private slots:
     void refusesOverlayTogglesWithoutAControllerWired();
     void refusesToLockWhileNoLockerProviderExists();
     void refusesSessionVerbsWithoutAProviderHelper();
+    void refusesToSuspendAnUnlockedSession();
+    void refusesToEndTheSessionWithoutAnAdapter();
 
 private:
     QDBusMessage callTo(const QString &interface, const QString &member) const
@@ -249,6 +251,29 @@ void ShellServiceTest::refusesSessionVerbsWithoutAProviderHelper()
         QVERIFY2(!reply.isValid(), qPrintable(verb));
         QCOMPARE(reply.error().type(), QDBusError::Failed);
     }
+}
+
+// Fail-closed, like `lock`: a session that suspends unlocked wakes up
+// unlocked, so this refuses while no locker provider exists.
+void ShellServiceTest::refusesToSuspendAnUnlockedSession()
+{
+    QDBusPendingReply<qulonglong> reply =
+        m_client.asyncCall(command(QStringLiteral("suspend"), QVariantMap()));
+    QVERIFY(settle(reply));
+    QVERIFY(!reply.isValid());
+    QCOMPARE(reply.error().type(), QDBusError::NotSupported);
+    QVERIFY(reply.error().message().contains(QStringLiteral("locker")));
+}
+
+// The compositor owns the session. With no adapter there is nothing to ask,
+// and a request that was never sent must not come back as a pending id.
+void ShellServiceTest::refusesToEndTheSessionWithoutAnAdapter()
+{
+    QDBusPendingReply<qulonglong> reply =
+        m_client.asyncCall(command(QStringLiteral("log-out"), QVariantMap()));
+    QVERIFY(settle(reply));
+    QVERIFY(!reply.isValid());
+    QCOMPARE(reply.error().type(), QDBusError::Failed);
 }
 
 QTEST_MAIN(ShellServiceTest)

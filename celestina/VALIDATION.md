@@ -87,7 +87,7 @@ implementation unit; it does not rewrite the completed milestone.
 ## VAL-R4 — Notification server, toasts and handover
 
 - **Status:** deferred
-- **Related implementation:** R4 (active)
+- **Related implementation:** R4 (complete)
 - **Requires:** the R4 automated exit green, a session where
   `org.freedesktop.Notifications` can be observed, a paired phone for
   Magnetita's mirror and a screen reader
@@ -97,7 +97,27 @@ implementation unit; it does not rewrite the completed milestone.
 - **Pass condition:** no name is ever taken from a running server, every toast
   shows only what the producer sent within its bounds, and history, unread count
   and assistive-technology announcements stay truthful.
-- **Result:** deferred until R4 implementation closes
+- **Result:** deferred until the author stops the session's current server and
+  authorizes the handover; R4's automated exit is green and its verified bundle
+  is deployed under `~/.local`
+- **Evidence:** [R4 notifications](docs/evidence/2026-08-04-r4-notifications.md)
+  covers the automated exit and a private bus only, never the live checks above
+
+## VAL-R5 — Control centre, weather and calendar
+
+- **Status:** deferred
+- **Related implementation:** R5 (complete)
+- **Requires:** the R5 automated exit green, a real network and Bluetooth to
+  switch, a weather location the author chooses, and a screen reader
+- **Procedure:** exercise every control in the centre, confirm each shows the
+  provider's own reading rather than the requested one, force one write to fail
+  and check the control reports it, then restart the shell and confirm settings
+  survived.
+- **Pass condition:** no control paints a value its provider never reported, a
+  failed request is visible as failed, settings survive a restart, and an
+  absent weather reading reads as absent rather than as stale.
+- **Result:** deferred until the author runs it against the deployed bundle;
+  R5's automated exit is green
 - **Evidence:** none
 
 ## VAL-SHELL-LOCK — Concrete lock, suspend and resume lifecycle

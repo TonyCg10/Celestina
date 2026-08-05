@@ -129,10 +129,10 @@ pub fn action(
         return Err(session::unserved_verb(provider, verb));
     };
 
-    // A session verb another provider carries is not this one's to serve.
-    let ((NIGHT_LIGHT, SessionRequest::NightLight(state))
-    | (CAFFEINE, SessionRequest::Caffeine(state))) =
-        (provider, session::parse_for(provider, verb, options)?)
+    // `parse_for` already refused anything this provider does not serve, so
+    // the only shapes left are the two switches these holds are.
+    let (SessionRequest::NightLight(state) | SessionRequest::Caffeine(state)) =
+        session::parse_for(provider, verb, options)?
     else {
         return Err(session::unserved_verb(provider, verb));
     };
@@ -140,12 +140,28 @@ pub fn action(
     let mut hold = lock_hold(shared);
     let current = hold.is_held();
     let outcome = hold.set(wanted(state, current));
+    let now_held = hold.is_held();
     // Whatever happened — taken, released or refused — the panel is told what
     // is true now rather than what was asked for.
-    publish(runtime, id, hold.is_held());
+    publish(runtime, id, now_held);
     drop(hold);
 
-    outcome.map(|_| ())
+    outcome?;
+    // The session really changed, so the choice that describes it is recorded.
+    // A preference that persisted while the change itself failed would be a
+    // promise nothing kept, which is why this is after the outcome.
+    let remembered = if provider == NIGHT_LIGHT {
+        super::settings::remember(|settings| settings.night_light = now_held)
+    } else {
+        super::settings::remember(|settings| settings.caffeine = now_held)
+    };
+    if let Err(error) = remembered {
+        // The session is in the state that was asked for; only its survival
+        // past this session failed, and that is worth saying without undoing
+        // what did work.
+        eprintln!("celestina-provider-adapter: {provider}: {error}");
+    }
+    Ok(())
 }
 
 /// Releases both holds. The helper calls this before it exits, so a shell that
@@ -164,7 +180,28 @@ fn publish(runtime: &Mutex<ProviderRuntime>, id: &ProviderId, held: bool) {
     }
 }
 
+/// Puts the session back into the states the person chose last time.
+///
+/// A failure here is reported and left: a tool that has since been uninstalled
+/// must not stop the rest of the shell from starting, and the published state
+/// will simply say the hold is not held.
+fn restore() {
+    let chosen = super::settings::current();
+    for (wanted, hold, what) in [
+        (chosen.night_light, night(), NIGHT_LIGHT),
+        (chosen.caffeine, awake(), CAFFEINE),
+    ] {
+        if !wanted {
+            continue;
+        }
+        if let Err(error) = lock_hold(hold).set(true) {
+            eprintln!("celestina-provider-adapter: {what}: {error}");
+        }
+    }
+}
+
 fn run(runtime: &Mutex<ProviderRuntime>, night_id: &ProviderId, caffeine_id: &ProviderId) {
+    restore();
     loop {
         // Asking is what notices a holder that died, so this is a poll of this
         // helper's own children rather than of the session.

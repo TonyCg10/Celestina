@@ -524,6 +524,16 @@ qulonglong NiriClient::requestDisplaysOff()
     return requestId;
 }
 
+qulonglong NiriClient::requestLogOut()
+{
+    const qulonglong requestId = sendRequest(QStringLiteral("quit"));
+    if (requestId == 0)
+        return 0;
+
+    m_actionRequests.insert(requestId);
+    return requestId;
+}
+
 void NiriClient::setUnavailable()
 {
     // A helper that went away can no longer answer a screenshot request, and

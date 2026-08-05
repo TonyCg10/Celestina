@@ -61,6 +61,8 @@ public:
     void setLauncherController(OverlayController *controller);
     void setClipboardController(OverlayController *controller);
     void setNotificationCentreController(OverlayController *controller);
+    void setControlCentreController(OverlayController *controller);
+    void setSessionMenuController(OverlayController *controller);
     // The bridge every session verb that changes a device travels over. A
     // shell without it still owns the bus name and serves every other verb;
     // those verbs then fail visibly instead of pretending to have worked.
@@ -109,6 +111,18 @@ private:
     // Asks the compositor to blank the outputs. There is no matching verb to
     // wake them: any input does, and that is the compositor's business.
     qulonglong powerOffMonitors();
+    // Ends the session through the compositor, which owns it.
+    qulonglong logOut();
+    // Asks logind to reboot or power off. `method` is its own method name; the
+    // outcome is whatever logind answers, never an assumption.
+    qulonglong askLogind(const QString &verb, const QString &method);
+    // Reports one finished request on the bus.
+    void reportOutcome(
+        qulonglong requestId,
+        const QString &verb,
+        const QString &state,
+        const QString &reason
+    );
     // Forwards one session verb to its provider and starts waiting for the
     // reading that would prove it happened.
     qulonglong requestSession(
@@ -128,6 +142,8 @@ private:
     QPointer<OverlayController> m_launcher;
     QPointer<OverlayController> m_clipboard;
     QPointer<OverlayController> m_notificationCentre;
+    QPointer<OverlayController> m_controlCentre;
+    QPointer<OverlayController> m_sessionMenu;
     QPointer<ShellProvidersClient> m_providers;
     QTimer m_stateTimer;
     // A pending session verb must not wait forever for a device that will
@@ -141,5 +157,7 @@ private:
     QHash<qulonglong, qulonglong> m_focusRequests;
     // The same, for compositor actions whose outcome Niri reports itself.
     QHash<qulonglong, qulonglong> m_actionRequests;
+    // Which verb each of those was, so the outcome says what it answered.
+    QHash<qulonglong, QString> m_actionVerbs;
     qulonglong m_lastRequestId = 0;
 };

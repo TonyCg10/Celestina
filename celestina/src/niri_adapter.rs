@@ -113,6 +113,8 @@ enum HostCommand {
     /// Blank the outputs now. There is no matching "on": any input wakes them,
     /// and the compositor owns that, not this shell.
     PowerOffMonitors { id: String },
+    /// End the session. The compositor owns it; this shell only asks.
+    Quit { id: String },
 }
 
 impl HostCommand {
@@ -120,7 +122,8 @@ impl HostCommand {
         match self {
             Self::FocusWorkspace { id, .. }
             | Self::Screenshot { id }
-            | Self::PowerOffMonitors { id } => id,
+            | Self::PowerOffMonitors { id }
+            | Self::Quit { id } => id,
         }
     }
 }
@@ -365,6 +368,12 @@ fn run_commands(receiver: &Receiver<HostCommand>, writer: &AdapterWriter) {
             HostCommand::FocusWorkspace { workspace, .. } => focus_workspace(workspace),
             HostCommand::Screenshot { .. } => screenshot(),
             HostCommand::PowerOffMonitors { .. } => perform(Action::PowerOffMonitors {}),
+            // The confirmation prompt is skipped because the shell already
+            // asked: a second prompt the compositor draws over everything would
+            // be answering a question nobody saw asked.
+            HostCommand::Quit { .. } => perform(Action::Quit {
+                skip_confirmation: true,
+            }),
         };
         let frame = match &outcome {
             Ok(()) => RequestFrame::accepted(command.id()),

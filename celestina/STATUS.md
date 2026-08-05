@@ -1,7 +1,7 @@
 # Celestina status
 
 - **Updated:** 2026-08-04
-- **Implementation:** R0-R4 complete; no checkpoint is active
+- **Implementation:** R0-R5 complete; no checkpoint is active
 - **Author validation:** mixed; see [VALIDATION.md](VALIDATION.md)
 - **Live migration:** Noctalia still supplies every responsibility not yet
   explicitly handed over by the author
@@ -36,6 +36,20 @@
 - No task document authorizes changing Niri configuration, installing a locker,
   activating the shell or stopping Noctalia.
 
+- A control centre — `celestina msg control-centre-toggle` — changes volume,
+  mute, night light, caffeine, do-not-disturb and the power profile through the
+  verbs that already existed, and shows each request as pending, confirmed or
+  failed beside the provider's own reading. Network and Bluetooth are read-only
+  there: this shell is not a manager for either.
+- The session menu — `celestina msg session-menu-toggle` — asks twice before
+  ending anything: log out through the compositor, restart and power off
+  through logind, and suspend refused while no locker exists.
+- The control centre also carries a month calendar, computed rather than
+  fetched, and a weather reading that is absent rather than stale. No location
+  means no weather and no request: this shell does not look up where somebody
+  is.
+- Choices survive a restart: they are written durably before anything publishes
+  them, and night light, caffeine and do-not-disturb are restored at startup.
 - Toasts appear in the top-right corner and never take focus; the notification
   centre — the panel's unread indicator, or
   `celestina msg notifications-toggle` — is the keyboard path to every action a
@@ -71,7 +85,7 @@ and no service, package manager or configuration was touched. The record is
 
 ## Records
 
-- Last completed plan: [R4 notifications](docs/plans/archive/2026-08-04-r4-notifications.md)
+- Last completed plan: [R5 control centre](docs/plans/archive/2026-08-04-r5-control-centre.md)
 - Open product questions: [discussion queue](docs/discussions/README.md)
 - Accepted product decisions: [decision index](docs/decisions/README.md)
 - Completed detailed roadmap: [history through 2026-08-03](docs/history/roadmap-through-2026-08-03.md)

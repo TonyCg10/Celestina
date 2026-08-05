@@ -4,6 +4,7 @@
 #include <QPointer>
 #include <QQmlComponent>
 #include <QString>
+#include <QVariantMap>
 
 class OverlaySurface;
 class QQmlEngine;
@@ -33,6 +34,12 @@ public:
         QObject *parent = nullptr
     );
 
+    // Properties this overlay's component needs beyond the provider bridge —
+    // the session menu's own request channel, for instance. Set before the
+    // overlay is first opened; a component that does not declare one simply
+    // never receives it.
+    void setExtraProperties(const QVariantMap &properties);
+
     // False when the component itself failed to load — a broken QML file, not
     // a missing provider. The overlay simply never opens; nothing crashes.
     bool isEnabled() const { return m_enabled; }
@@ -49,6 +56,7 @@ private:
     QQmlComponent m_component;
     QPointer<ShellProvidersClient> m_providers;
     QString m_componentName;
+    QVariantMap m_extraProperties;
     OverlaySurface *m_surface;
     bool m_enabled;
 };

@@ -2,6 +2,9 @@
 
 #include <QDBusConnection>
 #include <QDBusError>
+#include <QDBusMessage>
+#include <QDBusPendingCallWatcher>
+#include <QDBusPendingReply>
 #include <QDebug>
 #include <QVariantList>
 
@@ -28,6 +31,13 @@ constexpr qint64 brightnessTimeoutMs = 30000;
 // Taking or releasing a hold is starting or killing a process; the provider
 // republishes as soon as it has.
 constexpr qint64 holdTimeoutMs = 3000;
+
+// The session manager every systemd session already has. The shell asks it and
+// reimplements nothing: what "power off" means for this machine — inhibitors,
+// other sessions, unsaved work — is logind's to know.
+constexpr auto logindService = "org.freedesktop.login1";
+constexpr auto logindPath = "/org/freedesktop/login1";
+constexpr auto logindInterface = "org.freedesktop.login1.Manager";
 
 // Which provider carries a session verb, and what would count as having seen
 // it happen.
@@ -222,6 +232,16 @@ void ShellService::setNotificationCentreController(OverlayController *controller
     m_notificationCentre = controller;
 }
 
+void ShellService::setControlCentreController(OverlayController *controller)
+{
+    m_controlCentre = controller;
+}
+
+void ShellService::setSessionMenuController(OverlayController *controller)
+{
+    m_sessionMenu = controller;
+}
+
 void ShellService::setProvidersClient(ShellProvidersClient *providers)
 {
     m_providers = providers;
@@ -269,10 +289,33 @@ qulonglong ShellService::Command(const QString &verb, const QVariantMap &options
         return toggleOverlay(m_clipboard, verb);
     if (verb == QStringLiteral("notifications-toggle"))
         return toggleOverlay(m_notificationCentre, verb);
+    if (verb == QStringLiteral("control-centre-toggle"))
+        return toggleOverlay(m_controlCentre, verb);
+    if (verb == QStringLiteral("session-menu-toggle"))
+        return toggleOverlay(m_sessionMenu, verb);
     if (const auto expectation = sessionExpectation(verb, options))
         return requestSession(verb, options, *expectation);
     if (verb == QStringLiteral("displays-off"))
         return powerOffMonitors();
+    if (verb == QStringLiteral("log-out"))
+        return logOut();
+    if (verb == QStringLiteral("reboot"))
+        return askLogind(verb, QStringLiteral("Reboot"));
+    if (verb == QStringLiteral("power-off"))
+        return askLogind(verb, QStringLiteral("PowerOff"));
+    if (verb == QStringLiteral("suspend")) {
+        // Fail-closed, exactly like `lock`: a session that suspends unlocked
+        // wakes up unlocked, so this is refused while no locker provider
+        // exists rather than quietly sleeping an open session.
+        sendErrorReply(
+            QDBusError::NotSupported,
+            QStringLiteral(
+                "this shell has no provider for a session locker, so 'suspend' "
+                "is refused rather than sleeping an unlocked session"
+            )
+        );
+        return 0;
+    }
     if (verb == QStringLiteral("lock") || verb == QStringLiteral("lock-and-suspend")) {
         // Fail-closed by contract: this shell has no locker provider, and a
         // shell that cannot lock says so instead of reporting success and
@@ -334,6 +377,89 @@ qulonglong ShellService::powerOffMonitors()
 
     const qulonglong requestId = ++m_lastRequestId;
     m_actionRequests.insert(niriRequestId, requestId);
+    m_actionVerbs.insert(niriRequestId, QStringLiteral("displays-off"));
+    return requestId;
+}
+
+void ShellService::reportOutcome(
+    qulonglong requestId,
+    const QString &verb,
+    const QString &state,
+    const QString &reason
+)
+{
+    QVariantMap details;
+    details.insert(QStringLiteral("version"), shellStateVersion);
+    details.insert(QStringLiteral("verb"), verb);
+    if (!reason.isEmpty())
+        details.insert(QStringLiteral("reason"), reason);
+    emit CommandResult(requestId, state, details);
+}
+
+qulonglong ShellService::logOut()
+{
+    // The compositor owns the session; the shell asks it to end and reports
+    // only whether the request could be made.
+    const qulonglong niriRequestId = m_niri ? m_niri->requestLogOut() : 0;
+    if (niriRequestId == 0) {
+        sendErrorReply(
+            QDBusError::Failed,
+            QStringLiteral("the shell could not ask the compositor to end the session")
+        );
+        return 0;
+    }
+
+    const qulonglong requestId = ++m_lastRequestId;
+    m_actionRequests.insert(niriRequestId, requestId);
+    m_actionVerbs.insert(niriRequestId, QStringLiteral("log-out"));
+    return requestId;
+}
+
+qulonglong ShellService::askLogind(const QString &verb, const QString &method)
+{
+    QDBusConnection bus = QDBusConnection::systemBus();
+    if (!bus.isConnected()) {
+        sendErrorReply(
+            QDBusError::Failed,
+            QStringLiteral("the shell cannot reach the session manager")
+        );
+        return 0;
+    }
+
+    QDBusMessage call = QDBusMessage::createMethodCall(
+        QString::fromLatin1(logindService),
+        QString::fromLatin1(logindPath),
+        QString::fromLatin1(logindInterface),
+        method
+    );
+    // `false` is "do not ask me to authenticate interactively": a shell cannot
+    // answer a polkit prompt, so a session that is not allowed to do this must
+    // fail visibly instead of hanging on a dialogue nobody will see.
+    call.setArguments({false});
+
+    const qulonglong requestId = ++m_lastRequestId;
+    auto *watcher = new QDBusPendingCallWatcher(bus.asyncCall(call), this);
+    connect(
+        watcher,
+        &QDBusPendingCallWatcher::finished,
+        this,
+        [this, requestId, verb](QDBusPendingCallWatcher *finished) {
+            const QDBusPendingReply<> reply = *finished;
+            finished->deleteLater();
+            // logind answering is the outcome. Nothing here assumes the machine
+            // is going down: if it refuses, the session stays exactly as it is.
+            if (reply.isError()) {
+                reportOutcome(
+                    requestId,
+                    verb,
+                    QStringLiteral("failed"),
+                    reply.error().message()
+                );
+                return;
+            }
+            reportOutcome(requestId, verb, QStringLiteral("confirmed"), QString());
+        }
+    );
     return requestId;
 }
 
@@ -418,13 +544,9 @@ void ShellService::reportAction(
     if (request == m_actionRequests.constEnd())
         return;
 
-    QVariantMap details;
-    details.insert(QStringLiteral("version"), shellStateVersion);
-    details.insert(QStringLiteral("verb"), QStringLiteral("displays-off"));
-    if (!reason.isEmpty())
-        details.insert(QStringLiteral("reason"), reason);
-    emit CommandResult(request.value(), state, details);
+    reportOutcome(request.value(), m_actionVerbs.value(niriRequestId), state, reason);
     m_actionRequests.remove(niriRequestId);
+    m_actionVerbs.remove(niriRequestId);
 }
 
 qulonglong ShellService::focusWorkspace(const QVariantMap &options)

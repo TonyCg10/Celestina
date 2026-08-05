@@ -80,7 +80,7 @@ pub fn spawn(runtime: &Arc<Mutex<ProviderRuntime>>) -> io::Result<()> {
 /// over a one-second conversation can do.
 pub fn action(verb: &str, options: &Payload) -> Result<(), String> {
     let SessionRequest::Brightness(change) = session::parse_for(NAME, verb, options)? else {
-        // A session verb another provider carries is not this one's to serve.
+        // `parse_for` already refused everything this provider does not serve.
         return Err(session::unserved_verb(NAME, verb));
     };
 

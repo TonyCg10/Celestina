@@ -47,6 +47,8 @@ public:
     // no later snapshot that could confirm it: the compositor's own answer to
     // the request is the outcome, and it is reported as such.
     qulonglong requestDisplaysOff();
+    // Asks Niri to end the session. Its own answer is the outcome.
+    qulonglong requestLogOut();
 
 signals:
     void changed();

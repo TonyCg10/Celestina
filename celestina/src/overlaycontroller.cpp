@@ -32,6 +32,11 @@ OverlayController::OverlayController(
     }
 }
 
+void OverlayController::setExtraProperties(const QVariantMap &properties)
+{
+    m_extraProperties = properties;
+}
+
 bool OverlayController::isOpen() const
 {
     return m_surface->isOpen();
@@ -39,11 +44,16 @@ bool OverlayController::isOpen() const
 
 QWindow *OverlayController::createWindow()
 {
-    const QVariantMap initialProperties {
+    QVariantMap initialProperties {
         {QStringLiteral("providerSource"), QVariant::fromValue(m_providers.data())},
         {QStringLiteral("reducedMotion"),
          qEnvironmentVariableIsSet("CELESTINA_REDUCED_MOTION")},
     };
+    for (auto extra = m_extraProperties.constBegin();
+         extra != m_extraProperties.constEnd();
+         ++extra) {
+        initialProperties.insert(extra.key(), extra.value());
+    }
     QObject *rootObject = m_component.createWithInitialProperties(initialProperties);
     if (!rootObject) {
         qCritical().noquote() << "Celestina could not create its" << m_componentName

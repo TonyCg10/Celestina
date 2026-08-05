@@ -25,6 +25,12 @@
 //!   name.
 //! - [`notifications`] — what the session's applications are trying to say:
 //!   identity, replacement, expiry, actions, capabilities and how much is kept.
+//! - [`weather`] — the one thing that leaves the machine, and how little goes
+//!   with it.
+//! - [`calendar`] — which day falls where in a month, computed rather than
+//!   fetched.
+//! - [`settings`] — the only state this shell owns rather than reads, and the
+//!   rule that a choice is published only once it is durable.
 //! - [`session`] — what a key binding may ask the session to become: the typed
 //!   verbs, the bounds their options must satisfy, and what a step leaves a
 //!   level at.
@@ -40,6 +46,7 @@
 pub mod audio;
 pub mod bluetooth;
 pub mod brightness;
+pub mod calendar;
 pub mod clipboard;
 pub mod coalesce;
 pub mod command;
@@ -50,8 +57,10 @@ pub mod notifications;
 pub mod power;
 pub mod runtime;
 pub mod session;
+pub mod settings;
 pub mod snapshot;
 pub mod sysmon;
+pub mod weather;
 
 /// Truncates hostile or accidental text to a bounded prefix, counting
 /// characters so a multi-byte boundary is never split.

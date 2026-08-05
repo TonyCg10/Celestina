@@ -363,12 +363,20 @@ pub fn action(
         }
         "mark-read" => lock_state().mark_read(),
         "clear-history" => lock_state().clear_history(),
-        "quiet-on" => lock_state().set_quiet(true),
-        "quiet-off" => lock_state().set_quiet(false),
-        "quiet-toggle" => {
+        "quiet-on" | "quiet-off" | "quiet-toggle" => {
             let mut held = lock_state();
-            let quiet = held.is_quiet();
-            held.set_quiet(!quiet);
+            let quiet = match verb {
+                "quiet-on" => true,
+                "quiet-off" => false,
+                _ => !held.is_quiet(),
+            };
+            held.set_quiet(quiet);
+            drop(held);
+            // Silencing a session is a choice, not a reading: a person who
+            // silenced it did not mean "until the next restart".
+            if let Err(error) = super::settings::remember(|settings| settings.quiet = quiet) {
+                eprintln!("celestina-provider-adapter: {NAME}: {error}");
+            }
         }
         _ => return Err(format!("'{NAME}' does not serve the verb '{verb}'")),
     }
@@ -394,6 +402,10 @@ fn run(runtime: &Arc<Mutex<ProviderRuntime>>, id: &ProviderId) {
             return;
         }
     }
+
+    // The session starts silenced if that is what the person chose; nothing
+    // else here survives a restart on purpose.
+    lock_state().set_quiet(super::settings::current().quiet);
 
     publish(runtime, id);
     loop {

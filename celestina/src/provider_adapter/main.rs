@@ -36,8 +36,10 @@ mod media;
 mod notifications;
 mod session;
 mod sessionholds;
+mod settings;
 mod sysmon;
 mod tools;
+mod weather;
 
 use tools::lock_runtime;
 
@@ -91,6 +93,7 @@ fn perform(command: &Command, runtime: &Mutex<ProviderRuntime>) -> Result<(), St
             launcher::action(&command.verb, &command.options, runtime, &command.provider)
         }
         clipboard::NAME => clipboard::action(&command.verb, &command.options),
+        settings::NAME => settings::action(&command.verb, &command.options),
         notifications::NAME => {
             notifications::action(&command.verb, &command.options, runtime, &command.provider)
         }
@@ -194,6 +197,10 @@ fn run() -> io::Result<()> {
     let clock = Clock::new();
     let (sender, receiver) = sync_channel::<Command>(COMMAND_QUEUE_CAPACITY);
 
+    // Settings first: they are what the person chose, and the providers below
+    // start from them rather than from their own defaults.
+    settings::spawn(&runtime);
+
     // Each provider announces itself before it reads anything, so a command can
     // reach it while it is still starting up.
     sysmon::spawn(&runtime)?;
@@ -205,6 +212,7 @@ fn run() -> io::Result<()> {
     launcher::spawn(&runtime)?;
     clipboard::spawn(&runtime)?;
     notifications::spawn(&runtime)?;
+    weather::spawn(&runtime)?;
 
     let worker_runtime = Arc::clone(&runtime);
     let worker_writer = Arc::clone(&writer);
