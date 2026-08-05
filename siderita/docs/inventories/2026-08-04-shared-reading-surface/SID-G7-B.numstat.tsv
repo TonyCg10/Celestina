@@ -1,0 +1,27 @@
+# SID-G7-B exact change inventory
+
+Base revision	77999d56936ce6b2a647461f78d6356b7d1168a4
+Pathspec	siderita/
+Pathspec	docs/version-history.tsv
+Pathspec	scripts/language-baseline.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	69fef52311e61f3afaab11fee538635e0b9eef587a8cdedc9a82462f75762758	docs/version-history.tsv
+1	1	27ee8d2ac461ca006dfafe59d7a17ed516a5e22655e388403d6cb5b2dc047ac8	scripts/language-baseline.tsv
+1	1	5f0a058692d3888834a30abd56684f4725bc3315a436ac7fec65df2ec6093378	siderita/Cargo.lock
+1	1	75fe3606703a4dee3a5b1806fa9271b0c6b007c55ae51bb247dfe80e41d64459	siderita/Cargo.toml
+33	4	0cacfd3c76fbc92d06fc08693d2a6f66446bbc75e5808030cf760ff38d5fc617	siderita/STATUS.md
+144	2	370d0f2fcfa934225214dfa91a76c4ad2407e295eb66b8293b5c38251bcec4c5	siderita/build.rs
+51	0	ea1f97e45c46d3f9c577b5e97924fbf3557b0bf27d379d4beb8e182c7c53838a	siderita/cpp/siderita/windowparent.h
+131	0	1d86e9ed2fcf8a1ff6472e4fd3abc85b6569447e5936e7fc2ae2d1ab8b331a43	siderita/cpp/windowparent.cpp
+17	0	968b2f5f10ecf7e95e6e408e42ffb7a9e17c9946b67fc4cd51e85fdf44a02f55	siderita/docs/evidence/2026-08-05-portal-picker.md
+7	0	fbb68d7dda94cc6fdbd0322138cbe3414d0a84799e51c068aec2d1b154331709	siderita/docs/plans/active/2026-08-04-shared-reading-surface.md
+4	0	b6313571ba58e1e77641b0a53061f74ad95c3b13b8c11c7660ba313f3545f8cf	siderita/qml/Main.qml
+51	17	c95ffc893b47ad1b307b878f4d1a0929596fb0b287d54c3a24256567f63afbd9	siderita/qml/PickerWindow.qml
+60	15	2b6dffe465e7269c9a8d4203c345fff5050265cd4199bfc45415b2d6cce65bb7	siderita/qml/components/picker/PickerCellDelegate.qml
+5	2	43d727ac7bc2d8a6ca32aa9c9b6970bf690972edef2453dd4458fee85249f849	siderita/qml/components/picker/PickerSidebar.qml
+3	0	f7a93ca012d6d67a42a992befbff8f3cba443174b93d1c8aa5555d09e22335f1	siderita/src/main.rs
+83	11	618235c554e6cc397fa5274ec26b4fdf832790db78337f229b2a7d05cfa70bf6	siderita/src/portal.rs
+27	0	self	siderita/docs/inventories/2026-08-04-shared-reading-surface/SID-G7-B.numstat.tsv

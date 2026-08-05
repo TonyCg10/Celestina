@@ -81,6 +81,13 @@ commit cannot produce.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | SID-G7-A | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-A.numstat.tsv) | 20 files, +715/-45 | Adopt the shared reading controls and the core caret mapping in both text surfaces, over a re-reading preferences adapter, and retire the three baseline rows the change earns | [evidence](../../evidence/2026-08-04-shared-reading-surface.md) | `VAL-SID-G7` |
+| SID-G7-B | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-B.numstat.tsv) | 17 files, +620/-54 | Turn the portal picker into a compact dialog and import its bounded Wayland parent handle through the narrow C++/Qt seam | [portal picker evidence](../../evidence/2026-08-05-portal-picker.md) | `VAL-SID-02`, `VAL-SID-04` |
+
+SID-G7-B is the independent portal correction that was already in the dirty
+checkout when the author requested every pending change be delivered. It does
+not extend the shared reading-surface rules. Its C++ seam exists because Qt's
+private Wayland surface interface and generated `xdg-foreign` protocol are not
+available through the safe CXX-Qt boundary.
 
 ## Decisions and rollback
 

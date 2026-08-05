@@ -96,7 +96,7 @@
 9	siderita/build.rs
 3	siderita/qml/CelestinaPlaceDefs.qml
 10	siderita/qml/Main.qml
-41	siderita/qml/PickerWindow.qml
+38	siderita/qml/PickerWindow.qml
 1	siderita/qml/components/PropRow.qml
 1	siderita/qml/components/SizeRow.qml
 4	siderita/qml/components/chrome/BottomControls.qml

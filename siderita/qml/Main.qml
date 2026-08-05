@@ -327,6 +327,10 @@ ApplicationWindow {
             token: model.token
             mode: model.mode
             appId: model.appId
+            // Ask by token instead of extending the signal: signal arity is a
+            // QML contract, and only this window needs the value. The backend
+            // retains it from the moment the request arrives.
+            parentWindow: portalService.parentWindow(model.token)
             acceptLabel: model.acceptLabel
             multiple: model.multiple
             directory: model.directory

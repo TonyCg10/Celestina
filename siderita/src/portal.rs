@@ -43,6 +43,13 @@ pub mod qobject {
         type QString = cxx_qt_lib::QString;
         include!("cxx-qt-lib/qstringlist.h");
         type QStringList = cxx_qt_lib::QStringList;
+
+        // The transient-parent shim (see cpp/windowparent.cpp): the picker asks
+        // it to make itself a child of the window named by `parent_window`.
+        include!("siderita/windowparent.h");
+
+        #[rust_name = "register_window_parent"]
+        fn register_siderita_window_parent();
     }
 
     #[auto_cxx_name]
@@ -52,7 +59,8 @@ pub mod qobject {
         type FileChooserPortal = super::FileChooserPortalRust;
 
         /// A desktop application is asking for files. `token` identifies this
-        /// request when answering; `mode` is `open` | `save` | `saves`.
+        /// request when answering; `mode` is `open` | `save` | `saves`. The
+        /// caller's own window is deliberately *not* here: see `parent_window`.
         #[qsignal]
         fn pick_requested(
             self: Pin<&mut FileChooserPortal>,
@@ -98,6 +106,18 @@ pub mod qobject {
         #[qinvokable]
         fn portal_mode(self: &FileChooserPortal) -> bool;
 
+        /// The window the request came from, as the portal describes it
+        /// (`wayland:<xdg-foreign handle>`; empty when the caller sent none or
+        /// the request is already over).
+        ///
+        /// Asked for by token rather than delivered with the request: a signal's
+        /// arity is the QML contract, and this is read once, late — when the
+        /// picker has a surface to make a child of — by the one window that
+        /// cares. Carrying it through the request model would make every other
+        /// reader of that model carry it too.
+        #[qinvokable]
+        fn parent_window(self: &FileChooserPortal, token: &QString) -> QString;
+
         /// Answers a request with the chosen paths — an empty list is the user
         /// cancelling. Called from the picker window.
         #[qinvokable]
@@ -116,6 +136,8 @@ type Slot = async_channel::Sender<Vec<String>>;
 pub struct FileChooserPortalRust {
     started: bool,
     pending: Arc<Mutex<HashMap<String, Slot>>>,
+    /// The caller's window per open request, for the picker to ask about.
+    parents: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl qobject::FileChooserPortal {
@@ -135,8 +157,9 @@ impl qobject::FileChooserPortal {
         let qt = self.qt_thread();
         let notifier = qt.clone();
         let pending = Arc::clone(&self.rust().pending);
+        let parents = Arc::clone(&self.rust().parents);
         std::thread::spawn(move || {
-            if let Err(error) = serve(qt, pending) {
+            if let Err(error) = serve(qt, pending, parents) {
                 eprintln!("Siderita: portal FileChooser no disponible: {error}");
                 let reason = error.to_string();
                 let _ = notifier.queue(move |portal: Pin<&mut qobject::FileChooserPortal>| {
@@ -149,6 +172,19 @@ impl qobject::FileChooserPortal {
     /// Whether `--portal` was passed: activated as the desktop's file chooser.
     pub fn portal_mode(&self) -> bool {
         portal_mode()
+    }
+
+    /// The window that asked, for a request still open.
+    pub fn parent_window(&self, token: &QString) -> QString {
+        let token = token.to_string();
+        let handle = self
+            .rust()
+            .parents
+            .lock()
+            .ok()
+            .and_then(|map| map.get(&token).cloned())
+            .unwrap_or_default();
+        QString::from(handle.as_str())
     }
 
     /// Hands the picker's result to the waiting D-Bus task. An empty list is
@@ -173,6 +209,7 @@ impl qobject::FileChooserPortal {
 struct FileChooser {
     qt: cxx_qt::CxxQtThread<qobject::FileChooserPortal>,
     pending: Arc<Mutex<HashMap<String, Slot>>>,
+    parents: Arc<Mutex<HashMap<String, String>>>,
     next_token: AtomicU64,
 }
 
@@ -184,12 +221,20 @@ impl FileChooser {
         #[zbus(object_server)] server: &zbus::ObjectServer,
         handle: OwnedObjectPath,
         app_id: String,
-        _parent_window: String,
+        parent_window: String,
         title: String,
         options: HashMap<String, OwnedValue>,
     ) -> (u32, HashMap<String, OwnedValue>) {
-        self.run(server, handle, "open", app_id, title, options)
-            .await
+        self.run(
+            server,
+            handle,
+            "open",
+            app_id,
+            parent_window,
+            title,
+            options,
+        )
+        .await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -198,12 +243,20 @@ impl FileChooser {
         #[zbus(object_server)] server: &zbus::ObjectServer,
         handle: OwnedObjectPath,
         app_id: String,
-        _parent_window: String,
+        parent_window: String,
         title: String,
         options: HashMap<String, OwnedValue>,
     ) -> (u32, HashMap<String, OwnedValue>) {
-        self.run(server, handle, "save", app_id, title, options)
-            .await
+        self.run(
+            server,
+            handle,
+            "save",
+            app_id,
+            parent_window,
+            title,
+            options,
+        )
+        .await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -212,12 +265,20 @@ impl FileChooser {
         #[zbus(object_server)] server: &zbus::ObjectServer,
         handle: OwnedObjectPath,
         app_id: String,
-        _parent_window: String,
+        parent_window: String,
         title: String,
         options: HashMap<String, OwnedValue>,
     ) -> (u32, HashMap<String, OwnedValue>) {
-        self.run(server, handle, "saves", app_id, title, options)
-            .await
+        self.run(
+            server,
+            handle,
+            "saves",
+            app_id,
+            parent_window,
+            title,
+            options,
+        )
+        .await
     }
 }
 
@@ -228,6 +289,7 @@ impl FileChooser {
         handle: OwnedObjectPath,
         mode: &str,
         app_id: String,
+        parent_window: String,
         title: String,
         options: HashMap<String, OwnedValue>,
     ) -> (u32, HashMap<String, OwnedValue>) {
@@ -235,6 +297,11 @@ impl FileChooser {
         let (sender, receiver) = async_channel::bounded::<Vec<String>>(1);
         if let Ok(mut map) = self.pending.lock() {
             map.insert(token.clone(), sender);
+        }
+        // Kept for as long as the request is open: the picker reads it once it
+        // has a surface, which is well after this point.
+        if let Ok(mut map) = self.parents.lock() {
+            map.insert(token.clone(), parent_window);
         }
 
         // The front-end cancels through this object; it lives exactly as long as
@@ -279,6 +346,9 @@ impl FileChooser {
         let chosen = receiver.recv().await.ok();
 
         if let Ok(mut map) = self.pending.lock() {
+            map.remove(&token);
+        }
+        if let Ok(mut map) = self.parents.lock() {
             map.remove(&token);
         }
         let _ = server.remove::<Request, _>(&handle).await;
@@ -331,10 +401,12 @@ impl Request {
 fn serve(
     qt: cxx_qt::CxxQtThread<qobject::FileChooserPortal>,
     pending: Arc<Mutex<HashMap<String, Slot>>>,
+    parents: Arc<Mutex<HashMap<String, String>>>,
 ) -> zbus::Result<()> {
     let chooser = FileChooser {
         qt,
         pending,
+        parents,
         next_token: AtomicU64::new(1),
     };
     // The blocking builder, like FileManager1: it owns an async connection and

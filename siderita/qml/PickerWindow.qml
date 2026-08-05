@@ -25,6 +25,9 @@ Window {
     required property string token
     required property string mode          // "open" | "save" | "saves"
     required property string appId
+    // The requester's window as named by the portal (`wayland:<handle>` from
+    // `xdg-foreign`), or empty when the requester supplied none.
+    required property string parentWindow
     required property string requestTitle
     required property string acceptLabel
     required property bool multiple
@@ -57,10 +60,13 @@ Window {
             : directory ? "Elegir carpeta"
             : "Abrir"
 
-    width: 1180
-    height: 800
-    minimumWidth: 640
-    minimumHeight: 460
+    // A dialog-sized surface rather than another file manager: its caller is
+    // waiting for one answer, and a window that covers the requester reads as
+    // an application switch.
+    width: 780
+    height: 560
+    minimumWidth: 520
+    minimumHeight: 380
     visible: true
     color: CelestinaTheme.canvas
     title: requestTitle.length > 0 ? requestTitle
@@ -68,6 +74,29 @@ Window {
     // A picker belongs to the application that asked for it, so it is a dialog,
     // not another file manager window in the switcher.
     flags: Qt.Dialog
+
+    // ── Dialog ownership ──────────────────────────────────────────────────
+    // The compositor can stack the picker over its requester only after the
+    // portal's `xdg-foreign` handle establishes their parent-child relation.
+    // Try once after the first surface exists. Without protocol support or a
+    // requester handle, the dialog remains an ordinary centred window.
+    SideritaWindowParent {
+        id: parenting
+    }
+
+    // One attempt, not one per frame: after a frame the surface exists, so a
+    // refusal here belongs to the compositor rather than a creation race.
+    // Retrying would cost a Wayland roundtrip on every frame.
+    property bool adoptionTried: false
+    property bool adopted: false
+
+    onFrameSwapped: {
+        if (adoptionTried)
+            return
+        adoptionTried = true
+        if (picker.parentWindow.length > 0)
+            adopted = parenting.adopt(picker, picker.parentWindow)
+    }
 
     // ── Browsing ─────────────────────────────────────────────────────────
     // Its own controller: the picker browses independently of whatever the main
@@ -140,6 +169,11 @@ Window {
     }
 
     Component.onCompleted: {
+        // Request the centre of the active screen. The compositor remains free
+        // to place Wayland windows and, when supported, the imported parent
+        // relationship above decides which requester this dialog belongs to.
+        x = Math.round(Screen.virtualX + (Screen.width - width) / 2)
+        y = Math.round(Screen.virtualY + (Screen.height - height) / 2)
         iconScale = controller.savedContentIconScale()
         textScale = controller.savedContentTextScale()
         interfaceIconScale = controller.savedInterfaceIconScale()
@@ -468,19 +502,19 @@ Window {
                 topMargin: picker.saving ? 116 : 70
                 bottomMargin: 72
 
-                // Columnas que llenan el ancho: el hueco sobrante se reparte
-                // entre ellas en vez de amontonarse a la derecha.
-                readonly property int cellSide: Math.round(
-                        116 * Math.max(picker.iconScale, picker.textScale))
-                readonly property int columns: Math.max(1, Math.floor(width / cellSide))
-                cellWidth: Math.floor(width / columns)
-                // El alto lo dicta lo que hay dentro — icono, hueco, dos líneas
-                // de nombre y su respiro — y no el ancho de la columna. Es la
-                // misma cuenta que la cuadrícula principal; midiendo por el
-                // ancho, el recuadro de selección arrastraba un vacío abajo.
-                cellHeight: Math.round(72 * picker.iconScale) + 8
-                            + Math.round(CelestinaTheme.fontCaption * 2.9 * picker.textScale)
-                            + 20
+                // One column: a narrow dialog is scanned by name and compared
+                // by date, while a thumbnail grid makes a linear reading task
+                // move in two directions. Retain a one-column GridView so the
+                // existing selection band and row/column keyboard traversal
+                // keep their established contract.
+                readonly property int columns: 1
+                cellWidth: width
+                // The compact icon and two text rows determine row height,
+                // with the same breathing room as the side panel.
+                cellHeight: Math.max(
+                        Math.round(CelestinaTheme.iconSm * picker.iconScale) + 8,
+                        Math.round(CelestinaTheme.fontBody * picker.textScale)
+                        + Math.round(CelestinaTheme.fontCaption * picker.textScale) + 6) + 8
 
                 // Sin `ScrollBar.vertical.policy`: en un GridView esa propiedad
                 // adjunta sólo existe si se le asigna una barra, así que leerla

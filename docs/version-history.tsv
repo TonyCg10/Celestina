@@ -18,3 +18,4 @@ celestina	0.5.0	milestone	R7-A	Add the session look checkpoint
 celestina	0.6.0	milestone	R8-A	Add the reversible departure checkpoint
 celestina	0.6.1	bug	LVR-1-A	Fix the live validation failures
 celestina	0.6.2	bug	LVR-2-A	Fix the follow-up live validation failures
+siderita	1.2.0	milestone	SID-G7-B	Add compact parented portal pickers

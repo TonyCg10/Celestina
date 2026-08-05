@@ -51,6 +51,9 @@ fn main() {
 
     // Register the native list model type before any QML is loaded.
     controller::qobject::register_entry_model();
+    // Same for the picker's transient-parent shim: the QML that opens a picker
+    // declares one, so the type has to exist before that QML is read.
+    portal::qobject::register_window_parent();
 
     let mut engine = QQmlApplicationEngine::new();
     if let Some(mut engine) = engine.as_mut() {

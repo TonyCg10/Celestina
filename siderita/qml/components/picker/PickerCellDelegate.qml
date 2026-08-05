@@ -9,6 +9,10 @@ Item {
     required property string token
     required property string kind
     required property string path
+    // The row's two secondary values arrive through named model roles just as
+    // `name` and `path` do.
+    required property string sizeText
+    required property string dateText
     required property int cellWidth
     required property int cellHeight
     required property real iconScale
@@ -66,10 +70,16 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        anchors.margins: 4
+        anchors.topMargin: 1
+        anchors.bottomMargin: 1
         radius: CelestinaTheme.radiusSm
+        // Draw the current row even when it cannot be chosen. A folder is not
+        // a valid answer to an ordinary file request, so otherwise clicking it
+        // appeared to do nothing. Chosen and current remain distinct: the
+        // former uses selection fill, the latter the hover tone.
         color: root.chosen ? CelestinaTheme.surfaceSelected
-               : root.interactive && cellMouse.containsMouse
+               : (root.interactive
+                  && (cellMouse.containsMouse || root.currentItem))
                  ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
         border.width: root.focusVisible ? CelestinaTheme.borderFocus
                       : root.chosen ? CelestinaTheme.borderHairline : 0
@@ -87,9 +97,9 @@ Item {
     Rectangle {
         id: tile
 
-        anchors.horizontalCenter: parent.horizontalCenter
-        y: 10
-        width: Math.round(72 * root.iconScale)
+        x: 10
+        anchors.verticalCenter: parent.verticalCenter
+        width: Math.round(CelestinaTheme.iconSm * root.iconScale)
         height: width
         radius: CelestinaTheme.radiusSm
         clip: true
@@ -98,7 +108,7 @@ Item {
         EntryGlyph {
             anchors.centerIn: parent
             visible: !preview.ready
-            width: Math.round(54 * root.iconScale)
+            width: parent.width
             height: width
             kind: root.kind
             path: root.path
@@ -119,7 +129,7 @@ Item {
             opacity: ready ? 1 : 0
             source: root.previewable
                     ? "image://thumb/" + encodeURIComponent(root.path) : ""
-            sourceSize: Qt.size(256, 256)
+            sourceSize: Qt.size(64, 64)
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
             cache: true
@@ -134,18 +144,53 @@ Item {
         }
     }
 
+    // Measure the date from the right first and give the remaining width to
+    // the name, so a long name elides instead of pushing dates outside the row.
     Text {
-        anchors.horizontalCenter: parent.horizontalCenter
-        y: tile.y + tile.height + 8
-        width: parent.width - 14
-        horizontalAlignment: Text.AlignHCenter
-        text: root.name
-        color: CelestinaTheme.text
+        id: dateLabel
+
+        anchors.right: parent.right
+        anchors.rightMargin: 12
+        anchors.verticalCenter: parent.verticalCenter
+        // Visibility follows row width rather than this label's own position;
+        // using `x` here would create a self-referential binding.
+        visible: root.dateText.length > 0 && root.width > 340
+        text: root.dateText
+        color: CelestinaTheme.textMuted
         font.family: CelestinaTheme.sansFamily
         font.pixelSize: Math.round(CelestinaTheme.fontCaption * root.textScale)
         elide: Text.ElideRight
-        maximumLineCount: 2
-        wrapMode: Text.Wrap
+    }
+
+    Column {
+        x: tile.x + tile.width + 10
+        anchors.verticalCenter: parent.verticalCenter
+        width: Math.max(0, (dateLabel.visible ? dateLabel.x : root.width - 12)
+                           - x - 12)
+        spacing: 0
+
+        Text {
+            width: parent.width
+            text: root.name
+            color: CelestinaTheme.text
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: Math.round(CelestinaTheme.fontBody * root.textScale)
+            elide: Text.ElideRight
+            maximumLineCount: 1
+        }
+
+        Text {
+            width: parent.width
+            // The details view uses a dash when a folder has no size. In this
+            // compact row it is noise, so preserve the row height but hide it.
+            visible: text.length > 0 && text !== "—"
+            text: root.sizeText
+            color: CelestinaTheme.textMuted
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: Math.round(CelestinaTheme.fontCaption * root.textScale)
+            elide: Text.ElideRight
+            maximumLineCount: 1
+        }
     }
 
     MouseArea {

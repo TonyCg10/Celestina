@@ -40,9 +40,12 @@ Item {
         id: panel
         x: 12
         y: 12
-        width: 220
+        // Narrower and available at a smaller width than the main-window
+        // sidebar: places are central to this dialog and disappear only when
+        // the user shrinks it beyond the room they need.
+        width: 190
         height: parent.height - y - 12
-        visible: parent.width >= 820
+        visible: parent.width >= 560
         role: CelestinaSurface.Panel
 
         property bool placesCollapsed: false
