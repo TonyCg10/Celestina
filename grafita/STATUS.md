@@ -1,6 +1,6 @@
 # Grafita status
 
-- **Updated:** 2026-08-04
+- **Updated:** 2026-08-05
 - **Implementation:** checkpoints G0-G6 are present; G7 (reading comfort) is
   the active checkpoint and its code is written but not yet delivered
 - **Author validation:** the version-1 interaction pass is closed; `VAL-G7` is
@@ -26,6 +26,11 @@
   `Ctrl +` / `Ctrl −` or the `Ctrl` wheel and with `F10` / `Alt + Z`. The
   encoding label is gone; the encoding itself is still a document property the
   core preserves.
+- Opening and saving go through the session's file-chooser portal. The process
+  selects the `xdgdesktopportal` Qt platform theme when the environment names
+  none, because without a theme Qt answers `FileDialog` with a drawing of its
+  own instead of asking the desktop. An explicit `QT_QPA_PLATFORMTHEME` still
+  wins.
 - `grafita-core` owns the mapping from a widget's UTF-16 caret offset to a line
   and a character column, so no host counts columns for itself.
 - Legacy encodings are an explicit product exclusion until a real document
@@ -52,6 +57,12 @@ the exact canonical release passed app/core format, Clippy, tests, QML lint and
 an eight-second isolated smoke. See the suite
 [evidence](../docs/evidence/2026-08-03-repository-governance.md). No installed
 binary or desktop-handler state was changed.
+
+On 2026-08-05 the platform-theme selection was built in release and installed
+into `~/.local` with `scripts/run.sh` at the author's request. No desktop
+handler or portal route was changed: the process only stops overriding what the
+session already routes. That the dialog a real open now shows is Siderita's is
+part of `VAL-SID-02`.
 
 ## Records
 

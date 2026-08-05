@@ -1,0 +1,17 @@
+# G7-B exact change inventory
+
+Base revision	cec9c22ff94566b383126b85b60a08d469005b27
+Pathspec	grafita/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	fc5c7c27337f3537f1a191aa21081cebefcdb401e44b543238b381fe94de0242	docs/version-history.tsv
+1	1	4f5152a16bb31697a25608249e651f44053a6a471feb8cb7550b1c266d411b02	grafita/Cargo.lock
+1	1	7b44308014069883475857609df9ebc115fba38ba62d879a45e28f6286985bf1	grafita/Cargo.toml
+12	1	c04513d3b51e63fb54960c8cf36c8631efdf4faf5e2ff673098e3d11c24be549	grafita/STATUS.md
+13	0	34b63c68b256632d7b7e684c44f268b0c95f19232b769cea6573f1a68900fa99	grafita/docs/evidence/2026-08-05-portal-file-dialog.md
+6	0	0c45e2e82a70d37f17937148df6564e50d8a5a455e57c69f5c6c02393a767e87	grafita/docs/plans/active/2026-08-04-g7-reading-comfort.md
+9	0	69cd264d5fae8a5b1df100a63c74b302af66604533b4f25dac442d942d6065ad	grafita/src/main.rs
+17	0	self	grafita/docs/inventories/2026-08-04-g7-reading-comfort/G7-B.numstat.tsv

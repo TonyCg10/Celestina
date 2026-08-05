@@ -104,6 +104,12 @@ single commit cannot produce.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | G7-A | `grafita:` | done | [inventory](../../inventories/2026-08-04-g7-reading-comfort/G7-A.numstat.tsv) | 26 files, +1064/-55 | Stored clamped text size and wrap mode with their one-per-window Qt adapter; core-owned caret line and character column; the gutter and scroll bar composed into the window pinned beside the viewport; wider text inset; horizontal scrolling; size, wrap and wheel gestures; caret readout in the footer; encoding label removed and its language-ratchet row retired | [evidence](../../evidence/2026-08-04-g7-reading-comfort.md) | `VAL-G7` |
+| G7-B | `grafita:` | done | [inventory](../../inventories/2026-08-04-g7-reading-comfort/G7-B.numstat.tsv) | 8 files, +60/-3 | Preserve an explicit platform theme while routing otherwise unowned Qt file dialogs through the session portal | [portal file-dialog evidence](../../evidence/2026-08-05-portal-file-dialog.md) | `VAL-SID-02` |
+
+G7-B is a bounded corrective delivery discovered while validating open/save in
+the completed reading surface. It changes no document or reading rule: it
+selects the portal platform theme only when the environment has not already
+selected one.
 
 ## Decisions and rollback
 

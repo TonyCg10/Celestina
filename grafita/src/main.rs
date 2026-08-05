@@ -24,6 +24,15 @@ fn main() {
         }
     }
 
+    // Without a platform theme Qt has nobody to ask for a file dialog and
+    // draws its own floating window outside this session's portal route. The
+    // portal theme sends `FileDialog` through
+    // `org.freedesktop.impl.portal.FileChooser`, which this session routes to
+    // Siderita. An explicit environment choice still wins.
+    if std::env::var_os("QT_QPA_PLATFORMTHEME").is_none() {
+        std::env::set_var("QT_QPA_PLATFORMTHEME", "xdgdesktopportal");
+    }
+
     let mut app = QGuiApplication::new();
 
     if let Some(mut app) = app.as_mut() {
