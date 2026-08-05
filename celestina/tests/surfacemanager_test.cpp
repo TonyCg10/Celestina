@@ -38,7 +38,8 @@ private slots:
     void theOverlayReportsAndCleansUpAnExternalDismissal();
     void aClosedOverlayLeavesNoWindowBehind();
     void theLauncherAndClipboardOverlaysLoadAndMap();
-    void aNotificationSurfaceSitsInTheCornerAndRefusesFocus();
+    void aCornerSurfaceSitsUnderThePanelAndRefusesFocus();
+    void aReadoutSurfaceSitsLowAndCentredSoItNeverCoversAToast();
 
 private:
     QWindow *makePanel()
@@ -312,15 +313,15 @@ void SurfaceManagerTest::anOverlaySurfaceCentersWithoutAnAnchorAndTakesFocus()
              LayerShellQt::Window::KeyboardInteractivityOnDemand);
 }
 
-// The on-screen display shares the overlay's mechanics and nothing else: it is
-// pinned to the panel's own corner, never activated and never given the
-// keyboard, because it is read rather than used.
-void SurfaceManagerTest::aNotificationSurfaceSitsInTheCornerAndRefusesFocus()
+// Toasts share the overlay's mechanics and nothing else: pinned to the panel's
+// own corner, never activated and never given the keyboard, because they are
+// read rather than used.
+void SurfaceManagerTest::aCornerSurfaceSitsUnderThePanelAndRefusesFocus()
 {
     QWindow *const content = makeContent();
     const QSize contentSize = content->size();
 
-    OverlaySurface surface(OverlaySurface::Placement::Notification);
+    OverlaySurface surface(OverlaySurface::Placement::Corner);
     QVERIFY(surface.open(content, nullptr));
     QCOMPARE(content->size(), contentSize);
     QVERIFY(content->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
@@ -333,6 +334,28 @@ void SurfaceManagerTest::aNotificationSurfaceSitsInTheCornerAndRefusesFocus()
     QCOMPARE(layerWindow->keyboardInteractivity(),
              LayerShellQt::Window::KeyboardInteractivityNone);
     QCOMPARE(layerWindow->exclusionZone(), 0);
+}
+
+// The readout deliberately does not share that corner: a volume key pressed
+// while a notification is up must not paint over it.
+void SurfaceManagerTest::aReadoutSurfaceSitsLowAndCentredSoItNeverCoversAToast()
+{
+    QWindow *const content = makeContent();
+
+    OverlaySurface surface(OverlaySurface::Placement::Readout);
+    QVERIFY(surface.open(content, nullptr));
+    QVERIFY(content->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
+
+    auto *layerWindow = LayerShellQt::Window::get(content);
+    QVERIFY(layerWindow);
+    // Anchored to the bottom only: one anchor with no opposing pair is what
+    // centres it horizontally.
+    QCOMPARE(
+        layerWindow->anchors(),
+        LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorBottom)
+    );
+    QCOMPARE(layerWindow->keyboardInteractivity(),
+             LayerShellQt::Window::KeyboardInteractivityNone);
 }
 
 void SurfaceManagerTest::theOverlayRefusesToOpenTwiceAndSurvivesReopening()

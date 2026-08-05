@@ -217,6 +217,11 @@ void ShellService::setClipboardController(OverlayController *controller)
     m_clipboard = controller;
 }
 
+void ShellService::setNotificationCentreController(OverlayController *controller)
+{
+    m_notificationCentre = controller;
+}
+
 void ShellService::setProvidersClient(ShellProvidersClient *providers)
 {
     m_providers = providers;
@@ -262,6 +267,8 @@ qulonglong ShellService::Command(const QString &verb, const QVariantMap &options
         return toggleOverlay(m_launcher, verb);
     if (verb == QStringLiteral("clipboard-toggle"))
         return toggleOverlay(m_clipboard, verb);
+    if (verb == QStringLiteral("notifications-toggle"))
+        return toggleOverlay(m_notificationCentre, verb);
     if (const auto expectation = sessionExpectation(verb, options))
         return requestSession(verb, options, *expectation);
     if (verb == QStringLiteral("displays-off"))

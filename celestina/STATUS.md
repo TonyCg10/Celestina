@@ -1,7 +1,7 @@
 # Celestina status
 
 - **Updated:** 2026-08-04
-- **Implementation:** R0-R3 complete; no checkpoint is active
+- **Implementation:** R0-R4 complete; no checkpoint is active
 - **Author validation:** mixed; see [VALIDATION.md](VALIDATION.md)
 - **Live migration:** Noctalia still supplies every responsibility not yet
   explicitly handed over by the author
@@ -36,6 +36,16 @@
 - No task document authorizes changing Niri configuration, installing a locker,
   activating the shell or stopping Noctalia.
 
+- Toasts appear in the top-right corner and never take focus; the notification
+  centre — the panel's unread indicator, or
+  `celestina msg notifications-toggle` — is the keyboard path to every action a
+  toast offers. The on-screen display moved low and centred so a volume key
+  cannot paint over a notification.
+- The aggregate helper can be the session's `org.freedesktop.Notifications`
+  server, but claims the name only when it is free. Noctalia owns it today, so
+  the provider withdraws and the panel shows nothing rather than the shell
+  taking notifications away from a running server.
+
 ## Durable boundaries
 
 `celestina-shell-core` owns pure protocol and policy. Rust helpers own bounded
@@ -61,7 +71,7 @@ and no service, package manager or configuration was touched. The record is
 
 ## Records
 
-- Last completed plan: [R3 session verbs](docs/plans/archive/2026-08-03-r3-session-verbs.md)
+- Last completed plan: [R4 notifications](docs/plans/archive/2026-08-04-r4-notifications.md)
 - Open product questions: [discussion queue](docs/discussions/README.md)
 - Accepted product decisions: [decision index](docs/decisions/README.md)
 - Completed detailed roadmap: [history through 2026-08-03](docs/history/roadmap-through-2026-08-03.md)

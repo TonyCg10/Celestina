@@ -35,8 +35,13 @@ public:
         // clipboard history.
         Centered,
         // Anchored under the panel in the top-right corner and never focused:
-        // the on-screen display, which is read, not used.
-        Notification,
+        // the toast stack, which is where this session's notifications belong
+        // and where the panel's own unread indicator points.
+        Corner,
+        // Low and centred, never focused: a value readout tied to a key press.
+        // It is deliberately not in the corner — a volume key pressed while a
+        // notification is up must not paint over it.
+        Readout,
     };
 
     // Both arguments are explicit: a surface's placement is a decision its

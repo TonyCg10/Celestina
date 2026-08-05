@@ -60,6 +60,7 @@ public:
     // and serves every other verb; that overlay's toggle just errors.
     void setLauncherController(OverlayController *controller);
     void setClipboardController(OverlayController *controller);
+    void setNotificationCentreController(OverlayController *controller);
     // The bridge every session verb that changes a device travels over. A
     // shell without it still owns the bus name and serves every other verb;
     // those verbs then fail visibly instead of pretending to have worked.
@@ -126,6 +127,7 @@ private:
     QPointer<NiriClient> m_niri;
     QPointer<OverlayController> m_launcher;
     QPointer<OverlayController> m_clipboard;
+    QPointer<OverlayController> m_notificationCentre;
     QPointer<ShellProvidersClient> m_providers;
     QTimer m_stateTimer;
     // A pending session verb must not wait forever for a device that will

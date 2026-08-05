@@ -1,5 +1,7 @@
 #include "panelmanager.h"
 
+#include "overlaycontroller.h"
+
 #include <QDebug>
 #include <QGuiApplication>
 #include <QQmlEngine>
@@ -79,6 +81,17 @@ PanelManager::~PanelManager()
         if (panel)
             delete panel.data();
     }
+}
+
+void PanelManager::setNotificationCentre(OverlayController *centre)
+{
+    m_notificationCentre = centre;
+}
+
+void PanelManager::notificationCentreRequested()
+{
+    if (m_notificationCentre)
+        m_notificationCentre->toggle();
 }
 
 bool PanelManager::start()
@@ -186,6 +199,13 @@ bool PanelManager::ensurePanel(QScreen *screen)
             SLOT(trayMenuRequested(QString, QString, int, int))
         );
     }
+
+    connect(
+        window,
+        SIGNAL(notificationCentreRequested()),
+        this,
+        SLOT(notificationCentreRequested())
+    );
 
     m_panels.insert(screen, window);
     QObject::connect(

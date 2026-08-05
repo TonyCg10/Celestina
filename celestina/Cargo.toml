@@ -1,6 +1,6 @@
 [package]
 name = "celestina-shell"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.85"
 publish = false
@@ -52,6 +52,13 @@ wayland-protocols = { version = "0.32", features = ["client", "staging"] }
 # `pipe()`, so receiving a selection needs no raw libc call in a workspace that
 # forbids unsafe code.
 rustix = { version = "1", features = ["pipe"] }
+# The notification server is a session-bus service, not a tool this helper can
+# shell out to: it must own a well-known name, answer method calls and emit
+# signals. zbus is already the suite's D-Bus client and server — magnetitad
+# serves `org.celestina.Devices1` with it — so this is the established
+# dependency rather than a second dialect. The blocking API is used because this
+# helper is threads and blocking IO, with no async runtime anywhere in it.
+zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
 
 [lints.rust]
 unsafe_code = "forbid"

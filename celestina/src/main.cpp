@@ -20,6 +20,7 @@
 #include "niriclient.h"
 #include "osdcontroller.h"
 #include "overlaycontroller.h"
+#include "toastcontroller.h"
 #include "panelmanager.h"
 #include "panelmenucontroller.h"
 #include "shellclient.h"
@@ -279,6 +280,24 @@ int main(int argc, char *argv[])
     if (!osd->isEnabled())
         qWarning() << "Celestina is running without its on-screen display.";
 
+    // Toasts follow the notification server's own list; when another program
+    // owns that name this controller simply never has anything to show.
+    auto *toasts = new ToastController(&engine, providers, &app);
+    if (!toasts->isEnabled())
+        qWarning() << "Celestina is running without its toast stack.";
+
+    // The keyboard path to everything a toast offers, opened from the panel's
+    // unread indicator or from `celestina msg notifications-toggle`.
+    auto *notificationCentre = new OverlayController(
+        &engine,
+        providers,
+        QStringLiteral("NotificationCenter"),
+        &app
+    );
+    if (!notificationCentre->isEnabled())
+        qWarning() << "Celestina is running without its notification centre.";
+    shell->setNotificationCentreController(notificationCentre);
+
     // The menu controller draws menus; the tray host holds the conversation
     // with the application that owns one. Wiring them here keeps the controller
     // from knowing that a tray exists at all.
@@ -314,6 +333,7 @@ int main(int argc, char *argv[])
         menu,
         reducedMotionRequested()
     );
+    panels.setNotificationCentre(notificationCentre);
     if (!panels.start())
         return EXIT_FAILURE;
 

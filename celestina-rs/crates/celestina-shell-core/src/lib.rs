@@ -23,6 +23,8 @@
 //!   connected to it, and which power profile it is running.
 //! - [`launcher`] — which application a person means when they type part of a
 //!   name.
+//! - [`notifications`] — what the session's applications are trying to say:
+//!   identity, replacement, expiry, actions, capabilities and how much is kept.
 //! - [`session`] — what a key binding may ask the session to become: the typed
 //!   verbs, the bounds their options must satisfy, and what a step leaves a
 //!   level at.
@@ -44,6 +46,7 @@ pub mod command;
 pub mod launcher;
 pub mod lines;
 pub mod network;
+pub mod notifications;
 pub mod power;
 pub mod runtime;
 pub mod session;

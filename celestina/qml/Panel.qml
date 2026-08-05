@@ -23,6 +23,7 @@ Window {
     // Forwarded to the host, which owns every surface this window does not.
     signal contextMenuRequested(int globalX, int globalY, var workspaces)
     signal trayMenuRequested(string service, string path, int globalX, int globalY)
+    signal notificationCentreRequested()
 
     width: Screen.width
     height: 40
@@ -128,6 +129,16 @@ Window {
                     "by": direction > 0 ? panel.levelStep : -panel.levelStep,
                     "output": panel.outputName
                 })
+        }
+
+        NotificationIndicator {
+            anchors.verticalCenter: parent.verticalCenter
+            reading: panel.providerSource.providers.notifications
+            // The panel asks; the host owns the surface that answers, exactly
+            // as it does for the menus.
+            onHistoryRequested: panel.notificationCentreRequested()
+            onQuietToggled: panel.providerSource.sendCommand(
+                "notifications", "quiet-toggle")
         }
 
         CaptureButton {

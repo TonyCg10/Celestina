@@ -23,6 +23,8 @@ class QScreen;
 // reachable through CXX-Qt. The manager is deliberately limited to window
 // creation, layer-shell configuration and screen bookkeeping; Niri state,
 // blur policy and presentation live in their own owners.
+class OverlayController;
+
 class PanelManager final : public QObject
 {
     Q_OBJECT
@@ -43,10 +45,17 @@ public:
 
     bool start();
 
+    // Wired in after construction, once main() has built the overlay. A shell
+    // without it keeps every panel and only that request goes unanswered.
+    void setNotificationCentre(OverlayController *centre);
+
 private slots:
     // The panel's QML root asks for a context menu at a screen point; the
     // manager knows which window asked and hands both to the menu controller.
     void panelMenuRequested(int globalX, int globalY, const QVariant &workspaces);
+    // The notification centre is an overlay the host owns; a panel only asks
+    // for it.
+    void notificationCentreRequested();
     // A tray item's own menu, asked for from the panel that shows it.
     void trayMenuRequested(
         const QString &service,
@@ -68,6 +77,7 @@ private:
     // Disposable until R0-E picks a popup surface: the manager only forwards
     // the panel's request to it and owns no menu state of its own.
     QPointer<PanelMenuController> m_menu;
+    QPointer<OverlayController> m_notificationCentre;
     QHash<QScreen *, QPointer<QWindow>> m_panels;
     bool m_reducedMotion;
 };

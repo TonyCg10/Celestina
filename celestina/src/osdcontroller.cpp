@@ -26,7 +26,7 @@ OsdController::OsdController(
     : QObject(parent)
     , m_component(engine)
     , m_providers(providers)
-    , m_surface(new OverlaySurface(OverlaySurface::Placement::Notification, this))
+    , m_surface(new OverlaySurface(OverlaySurface::Placement::Readout, this))
     , m_enabled(true)
 {
     m_component.loadFromModule("CelestinaDesktop", QLatin1String(componentName));

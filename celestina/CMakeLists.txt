@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.2.0 LANGUAGES CXX)
+project(celestina VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -77,6 +77,8 @@ qt_add_executable(celestina
     src/osdreadings.cpp
     src/osdcontroller.h
     src/osdcontroller.cpp
+    src/toastcontroller.h
+    src/toastcontroller.cpp
     src/shellcommandline.h
     src/shellcommandline.cpp
     src/shellservice.h
@@ -158,6 +160,9 @@ qt_add_qml_module(celestina
         qml/LauncherOverlay.qml
         qml/ClipboardOverlay.qml
         qml/SessionOsd.qml
+        qml/ToastStack.qml
+        qml/NotificationIndicator.qml
+        qml/NotificationCenter.qml
     RESOURCES
         ../celestina-style/icons/phone.svg
         ../celestina-style/icons/battery-charging.svg

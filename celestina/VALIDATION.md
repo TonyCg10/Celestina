@@ -72,15 +72,32 @@ implementation unit; it does not rewrite the completed milestone.
 ## VAL-R3 — Session verbs and lifecycle
 
 - **Status:** deferred
-- **Related implementation:** R3 (active)
+- **Related implementation:** R3 (complete)
 - **Requires:** R3 automated exit green plus explicit permission for each live
   mutation
 - **Procedure:** exercise OSD, gamma release, caffeine/idle and DPMS with
   rollback ready; confirm lock-and-suspend refuses while no provider exists.
 - **Pass condition:** each provider-confirmed state is truthful, external
   lifecycles release cleanly and the refusal path never suspends unlocked.
-- **Result:** deferred until the R3 automated exit is green and live mutations
-  are explicitly authorized
+- **Result:** deferred until the author authorizes each live mutation; the R3
+  automated exit is green and the verified bundle is deployed under `~/.local`
+- **Evidence:** [R3 completion](docs/evidence/2026-08-04-r3-completion.md) covers
+  the automated exit only, never the live checks above
+
+## VAL-R4 — Notification server, toasts and handover
+
+- **Status:** deferred
+- **Related implementation:** R4 (active)
+- **Requires:** the R4 automated exit green, a session where
+  `org.freedesktop.Notifications` can be observed, a paired phone for
+  Magnetita's mirror and a screen reader
+- **Procedure:** confirm the shell declines the name while another server owns
+  it; then, with that server stopped, exercise a real notification, a
+  replacement, a close, an action, do-not-disturb and the unread indicator.
+- **Pass condition:** no name is ever taken from a running server, every toast
+  shows only what the producer sent within its bounds, and history, unread count
+  and assistive-technology announcements stay truthful.
+- **Result:** deferred until R4 implementation closes
 - **Evidence:** none
 
 ## VAL-SHELL-LOCK — Concrete lock, suspend and resume lifecycle

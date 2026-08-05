@@ -23,7 +23,8 @@ of the design when they provide the narrow capability the shell needs.
 | R1 | complete | Daily bar providers, DDC, media, audio and complete SNI host/watcher path |
 | R2 | complete | Keyboard launcher and shell-owned clipboard history overlays |
 | R3 | complete | OSD, night light, caffeine/idle, DPMS and fail-closed session verbs |
-| R4-R5, R7 | planned | Notifications, control center and session look |
+| R4 | complete | Freedesktop notification server, toasts, history and do-not-disturb |
+| R5, R7 | planned | Control center and session look |
 | R6 | conditional | First-party lock starts only if SHELL-D2 is applied |
 | R8 | partially planned | Reversible Noctalia removal; Polkit/dock slices remain conditional |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
@@ -68,13 +69,22 @@ complete. Its real-session checks then proceed independently under `VAL-R3`.
 
 ## R4 — Notifications
 
-- [ ] Implement the freedesktop notification state machine in
+**Outcome:** the shell serves `org.freedesktop.Notifications` when nothing else
+owns it, shows a capped toast stack and history, and answers Magnetita's real
+producer flow. It never takes the name from a server that is already running.
+
+- [x] Implement the freedesktop notification state machine in
       `celestina-shell-core`, including replacement, expiry, actions and caps.
-- [ ] Add the bounded bus producer and hostile-image handling to the aggregate
-      provider runtime.
-- [ ] Add compact toasts, capped history, DND and the unread panel indicator.
-- [ ] Prove producer/consumer compatibility automatically, including
+- [x] Add the bounded notification server and hostile-image handling to the
+      aggregate provider runtime, claiming the bus name only when it is free.
+- [x] Add compact toasts, capped history, DND and the unread panel indicator.
+- [x] Prove producer/consumer compatibility automatically, including
       Magnetita's `Notify`, replacement and close flows.
+
+R4 closed on the evidence in
+[the archived R4 plan](docs/plans/archive/2026-08-04-r4-notifications.md). Real
+toast appearance, the handover from Noctalia's server and over-the-air phone
+notifications remain an independent `VAL-R4` run.
 
 ## R5 — Control center, session menu, weather and calendar
 

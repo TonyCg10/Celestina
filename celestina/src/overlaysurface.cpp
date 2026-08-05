@@ -6,9 +6,12 @@
 #include "surfacemanager.h"
 
 namespace {
-// How far the on-screen display sits from the corner, clear of the panel's own
+// How far a corner surface sits from the edges, clear of the panel's own
 // exclusive zone.
-constexpr int notificationMargin = 16;
+constexpr int cornerMargin = 16;
+// How far the readout sits above the bottom edge: out of the way of anything
+// anchored at the bottom, and low enough to read without covering content.
+constexpr int readoutMargin = 96;
 
 LayerSurfaceSpec centeredSpec(QScreen *screen, const QSize &size)
 {
@@ -31,17 +34,24 @@ LayerSurfaceSpec centeredSpec(QScreen *screen, const QSize &size)
     return spec;
 }
 
-LayerSurfaceSpec notificationSpec(QScreen *screen, const QSize &size)
+// A surface that is read rather than used: it never takes the keyboard, never
+// activates and never steals focus from what the person is doing. Only where it
+// sits differs between the two.
+LayerSurfaceSpec quietSpec(
+    QScreen *screen,
+    const QSize &size,
+    const QString &scope,
+    LayerShellQt::Window::Anchors anchors,
+    const QMargins &margins
+)
 {
     LayerSurfaceSpec spec;
-    spec.scope = QStringLiteral("celestina-osd");
+    spec.scope = scope;
     spec.screen = screen;
-    // Two anchors and no width/height anchor pair: the surface keeps its own
-    // size and is pinned to the corner the panel's own controls live in.
-    auto anchors = LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop);
-    anchors |= LayerShellQt::Window::AnchorRight;
+    // Anchors without an opposing pair: the surface keeps its own size and is
+    // pinned to the edge it names.
     spec.anchors = anchors;
-    spec.margins = QMargins(0, notificationMargin, notificationMargin, 0);
+    spec.margins = margins;
     spec.desiredSize = size;
     spec.exclusiveZone = 0;
     spec.layer = LayerShellQt::Window::LayerOverlay;
@@ -52,6 +62,30 @@ LayerSurfaceSpec notificationSpec(QScreen *screen, const QSize &size)
     spec.closeOnDismissed = true;
     spec.acceptsFocus = false;
     return spec;
+}
+
+LayerSurfaceSpec cornerSpec(QScreen *screen, const QSize &size)
+{
+    auto anchors = LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop);
+    anchors |= LayerShellQt::Window::AnchorRight;
+    return quietSpec(
+        screen,
+        size,
+        QStringLiteral("celestina-toasts"),
+        anchors,
+        QMargins(0, cornerMargin, cornerMargin, 0)
+    );
+}
+
+LayerSurfaceSpec readoutSpec(QScreen *screen, const QSize &size)
+{
+    return quietSpec(
+        screen,
+        size,
+        QStringLiteral("celestina-osd"),
+        LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorBottom),
+        QMargins(0, 0, 0, readoutMargin)
+    );
 }
 } // namespace
 
@@ -77,9 +111,18 @@ bool OverlaySurface::open(QWindow *content, QScreen *screen)
         contentVisibilityChanged(visible);
     });
 
-    const LayerSurfaceSpec spec = m_placement == Placement::Centered
-        ? centeredSpec(screen, content->size())
-        : notificationSpec(screen, content->size());
+    LayerSurfaceSpec spec;
+    switch (m_placement) {
+    case Placement::Centered:
+        spec = centeredSpec(screen, content->size());
+        break;
+    case Placement::Corner:
+        spec = cornerSpec(screen, content->size());
+        break;
+    case Placement::Readout:
+        spec = readoutSpec(screen, content->size());
+        break;
+    }
     if (!mapLayerSurface(content, spec)) {
         qWarning() << "Celestina could not map an overlay surface.";
         content->disconnect(this);

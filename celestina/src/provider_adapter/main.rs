@@ -33,6 +33,7 @@ mod clipboard;
 mod held;
 mod launcher;
 mod media;
+mod notifications;
 mod session;
 mod sessionholds;
 mod sysmon;
@@ -90,6 +91,9 @@ fn perform(command: &Command, runtime: &Mutex<ProviderRuntime>) -> Result<(), St
             launcher::action(&command.verb, &command.options, runtime, &command.provider)
         }
         clipboard::NAME => clipboard::action(&command.verb, &command.options),
+        notifications::NAME => {
+            notifications::action(&command.verb, &command.options, runtime, &command.provider)
+        }
         provider => Err(format!(
             "'{provider}' does not serve the verb '{}'",
             command.verb
@@ -200,6 +204,7 @@ fn run() -> io::Result<()> {
     sessionholds::spawn(&runtime)?;
     launcher::spawn(&runtime)?;
     clipboard::spawn(&runtime)?;
+    notifications::spawn(&runtime)?;
 
     let worker_runtime = Arc::clone(&runtime);
     let worker_writer = Arc::clone(&writer);
