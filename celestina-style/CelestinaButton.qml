@@ -52,6 +52,13 @@ Button {
 
     contentItem: Text {
         text: control.text
+        // A label is text, never markup. These controls carry strings their
+        // process did not write — a notification's action, another
+        // application's tray menu — and `Text.AutoText` renders anything that
+        // looks like markup as rich text, which lets a producer draw its own
+        // interface inside ours and, with `<img src=…>`, make this process
+        // fetch a URL on its behalf.
+        textFormat: Text.PlainText
         font: control.font
         color: !control.enabled
                ? CelestinaTheme.textMuted

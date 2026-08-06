@@ -34,3 +34,4 @@ celestina	0.6.4	bug	LVR-3-B	Harden shell channels and provider lifecycle
 siderita	1.2.4	bug	SID-G7-F	Keep an accented filename resolvable by the thumbnail provider
 fluorita	1.2.4	bug	F6-E	Drop a render handle from a session the player already left
 celestina	0.6.5	bug	LVR-3-C	Correct which helper the escalation timer kills
+celestina-style	1.1.2	bug	STYLE-G7-D	Keep a shared control label as plain text

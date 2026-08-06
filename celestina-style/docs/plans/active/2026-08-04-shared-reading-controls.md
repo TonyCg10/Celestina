@@ -66,6 +66,7 @@ stable symbols are authoritative; line counts are a hand-off aid and may drift.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | STYLE-G7-C | `celestina-style:` | done | [inventory](../../inventories/2026-08-04-shared-reading-controls/STYLE-G7-C.numstat.tsv) | 15 files, +679/-18 | Derive the scroll handle's position from the same two distances its drag uses (STY-M1); stop the shape generator truncating its own source before the first download and ship Phosphor's MIT notice it claims to carry (STY-M2, STY-M4); give the gallery a private import root instead of a predictable name in `/tmp` (STY-M3); look icon names up without the prototype chain (STY-B1); name an icon-only button when its consumer supplied no help text (STY-B2); and let a disabled primary keep the accent wash the theme already defines for it (STY-B3) | [evidence](../../evidence/2026-08-05-static-audit-corrections.md) | `VAL-STYLE-04`, `VAL-STYLE-05` |
+| STYLE-G7-D | `celestina-style:` | done | [inventory](../../inventories/2026-08-04-shared-reading-controls/STYLE-G7-D.numstat.tsv) | 7 files, +105/-1 | Declare `textFormat: Text.PlainText` on the label text of `CelestinaButton` and `GlassMenuItem`, the two shared controls that render a string the process did not write — a notification's action and another application's tray menu — where `Text.AutoText` let a producer draw rich text inside the shell and fetch a URL through it | `check-style-contract.sh`, the architecture and language guards, `qmllint-cxxqt.sh siderita` — recorded in [label plain text evidence](../../evidence/2026-08-06-label-plain-text.md) | `VAL-R4` |
 | STYLE-G7-B | `celestina-style:` | done | [inventory](../../inventories/2026-08-04-shared-reading-controls/STYLE-G7-B.numstat.tsv) | 4 files, +143/-0 | Order QML type registration behind the module itself, so the two generated targets that carry the same metatypes extraction cannot run it at once | [evidence](../../evidence/2026-08-05-qmllint-ordering.md) | None |
 | STYLE-G7-A | `celestina-style:` | done | [inventory](../../inventories/2026-08-04-shared-reading-controls/STYLE-G7-A.numstat.tsv) | 11 files, +565/-8 | Publish `CelestinaScrollBar` and `CelestinaLineGutter`, register both, and move the module to 1.1.0 | [evidence](../../evidence/2026-08-04-shared-reading-controls.md) | `VAL-STYLE-04` |
 
@@ -97,3 +98,8 @@ consumer, so they moved here in the same delivery rather than being copied.
 Rollback is the reverse of the registration: removing both rows from `qmldir`
 and `CMakeLists.txt` returns the module to its 1.0 type set, and the consumers
 that reference them fail their own lint rather than degrading silently.
+
+STYLE-G7-D lands here rather than in Celestina because the controls are shared.
+The shell closed this for its own `Text` items; these two label paths are not
+`Text` items, and fixing them in one consumer would have left the same hole open
+for the other three and put a second copy of the rule in the tree.

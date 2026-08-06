@@ -1,0 +1,16 @@
+# STYLE-G7-D exact change inventory
+
+Base revision	4b548d99bf33f4319a4cac681fbf9876797b19fe
+Pathspec	celestina-style/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	ec05e789357d3c7337aa664d53892378b152eca1329573e86a9aab2193fea82a	celestina-style/CMakeLists.txt
+7	0	7dd48bca537a04ba713940c2e5d50edab87e140a4090e6c89f07e5d7d6c04719	celestina-style/CelestinaButton.qml
+7	0	a40805bccbdcf921191a96fb295f492b0cd0960f7129f882c3fa61b825ead507	celestina-style/GlassMenuItem.qml
+67	0	7029288f059429c9af99603cf0ca6a88dc596591de1f8d451f1ab14daaa5108b	celestina-style/docs/evidence/2026-08-06-label-plain-text.md
+6	0	8504528315e4f1e36cdaf87063f229e7c73e1d4ee46275629409dc7786f8f158	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+1	0	227ae845fb689f8debcf901e6417aae0e5d7c44705636f18ef68ba84cd871b75	docs/version-history.tsv
+16	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-D.numstat.tsv
