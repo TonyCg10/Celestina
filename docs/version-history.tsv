@@ -25,3 +25,4 @@ celestina-style	1.1.1	bug	STYLE-G7-C	Correct the scroll handle mapping and two s
 grafita	1.1.2	bug	G7-C	Keep save as from marking unwritten keystrokes saved
 fluorita	1.2.1	bug	F6-B	Keep the mpv core alive until its render context is freed
 siderita	1.2.1	bug	SID-G7-C	Keep a paste into an entry's own folder from trashing it
+magnetita	1.0.1	bug	MAG-S1-A	Validate the SFTP reply before it reaches the mount command

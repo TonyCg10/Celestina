@@ -22,6 +22,7 @@
 //! [`Session`]: magnetita_core::Session
 
 pub mod cert;
+mod deadline;
 pub mod device;
 pub mod discovery;
 pub mod link;

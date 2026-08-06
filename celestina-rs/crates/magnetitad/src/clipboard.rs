@@ -1,8 +1,17 @@
 //! Wayland clipboard process adaptation for the daemon.
 
-use std::io::{Read, Write};
+use std::io::Read;
 use std::process::{Command, Stdio};
+use std::sync::atomic::AtomicBool;
 use std::thread;
+use std::time::{Duration, Instant};
+
+use crate::subprocess;
+
+/// How long one clipboard tool may take. [`read`] and [`write`] run on the
+/// thread pumping a phone link, so an unresponsive compositor tool must cost
+/// that link a bounded pause and nothing more.
+const CLIPBOARD_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Every clipboard read is restricted to text. `wl-paste` otherwise hands back
 /// whatever the selection offers — the raw bytes of a copied image, which no
@@ -68,14 +77,14 @@ pub(crate) fn spawn_watch(on_change: impl Fn(String) + Send + 'static) {
 /// input to every layer above than having no value at all. What remains still
 /// has to satisfy the domain's own rule, so a caller never has to re-check it.
 pub(crate) fn read() -> Option<String> {
-    let output = Command::new("wl-paste")
-        .args(["--no-newline", "--type", TEXT_TYPE])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    decode(output.stdout).filter(|text| magnetita_core::clipboard::is_syncable(text))
+    let stopping = AtomicBool::new(false);
+    let output = subprocess::command_output_from(
+        "wl-paste",
+        &["--no-newline", "--type", TEXT_TYPE],
+        Instant::now() + CLIPBOARD_TIMEOUT,
+        &stopping,
+    )?;
+    decode(output).filter(|text| magnetita_core::clipboard::is_syncable(text))
 }
 
 /// The decode half of [`read`], separated so the rule can be tested without a
@@ -84,23 +93,17 @@ fn decode(bytes: Vec<u8>) -> Option<String> {
     String::from_utf8(bytes).ok()
 }
 
-/// Put text on the desktop and reap wl-copy's foreground process.
+/// Put text on the desktop, bounded and with the whole process group reaped.
 pub(crate) fn write(text: &str) -> bool {
-    let Ok(mut child) = Command::new("wl-copy")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-    else {
-        return false;
-    };
-    if let Some(mut stdin) = child.stdin.take() {
-        if stdin.write_all(text.as_bytes()).is_err() {
-            let _ = child.wait();
-            return false;
-        }
-    }
-    child.wait().is_ok()
+    let stopping = AtomicBool::new(false);
+    subprocess::run_with_input(
+        "wl-copy",
+        &[],
+        text.as_bytes(),
+        Instant::now() + CLIPBOARD_TIMEOUT,
+        &stopping,
+    )
+    .succeeded
 }
 
 #[cfg(test)]

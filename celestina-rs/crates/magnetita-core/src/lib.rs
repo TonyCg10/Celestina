@@ -32,12 +32,15 @@ pub mod ping;
 pub mod session;
 pub mod sftp;
 pub mod share;
+pub mod text;
 
 pub use battery::{read_battery, Battery, TYPE_BATTERY, TYPE_BATTERY_REQUEST};
 pub use clipboard::{read_clipboard, TYPE_CLIPBOARD, TYPE_CLIPBOARD_CONNECT};
 pub use event::{ConnectionEvent, LostReason};
 pub use findmyphone::TYPE_FINDMYPHONE_REQUEST;
-pub use identity::{DeviceType, Identity, DEFAULT_PORT, PROTOCOL_VERSION, TYPE_IDENTITY};
+pub use identity::{
+    DeviceType, Identity, DEFAULT_PORT, MIN_PROTOCOL_VERSION, PROTOCOL_VERSION, TYPE_IDENTITY,
+};
 pub use mpris::{
     playback_progress, read_album_art, read_mpris, read_mpris_request, request_album_art,
     IncomingAlbumArt, MediaAction, MprisRequest, MprisUpdate, PlaybackProgress, PlayerState,

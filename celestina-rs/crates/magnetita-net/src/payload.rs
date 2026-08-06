@@ -21,6 +21,7 @@ use rustls::{ClientConnection, ServerConnection, StreamOwned};
 use celestina_core::CancellationToken;
 use magnetita_core::{is_payload_port, PAYLOAD_PORT_MAX, PAYLOAD_PORT_MIN};
 
+use crate::deadline::{is_retryable_timeout, remaining_before};
 use crate::tls::{peer_leaf_fingerprint, TlsConfigs};
 
 /// How long to wait for the payload socket to connect and for its reads.
@@ -306,20 +307,6 @@ fn flush_cancellable(writer: &mut impl Write, cancellation: &CancellationToken) 
             Ok(()) => Ok(true),
             Err(error) => Err(error),
         },
-    )
-}
-
-fn remaining_before(deadline: Instant, message: &'static str) -> io::Result<Duration> {
-    deadline
-        .checked_duration_since(Instant::now())
-        .filter(|remaining| !remaining.is_zero())
-        .ok_or_else(|| io::Error::new(io::ErrorKind::TimedOut, message))
-}
-
-fn is_retryable_timeout(error: &io::Error) -> bool {
-    matches!(
-        error.kind(),
-        io::ErrorKind::Interrupted | io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
     )
 }
 

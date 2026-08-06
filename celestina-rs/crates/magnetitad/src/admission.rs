@@ -6,13 +6,42 @@
 //! concurrent discovery paths cannot race past the per-device interval.
 
 use std::collections::HashMap;
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
+
+use magnetita_core::DEFAULT_PORT;
 
 const MAX_UNTRUSTED_LINKS: usize = 42;
 const MAX_UNTRUSTED_LINKS_PER_IP: usize = 4;
 const DIAL_THROTTLE: Duration = Duration::from_millis(500);
+
+/// Whether an announced address is one this daemon may dial.
+///
+/// A UDP announcement is unauthenticated and forgeable, so the address it
+/// leads to is chosen by whoever sent the datagram. Without this the daemon
+/// opens a TCP connection to any address on any port a datagram names, which
+/// makes it a scanning and reflection primitive for anyone on the LAN. A real
+/// KDE Connect peer is on the local network and listens on the standard port,
+/// so both halves are required: the standard port, and an address inside a
+/// range that cannot be routed off the local network.
+pub(crate) fn is_dialable(address: SocketAddr) -> bool {
+    address.port() == DEFAULT_PORT && is_local_address(address.ip())
+}
+
+fn is_local_address(address: IpAddr) -> bool {
+    match address {
+        IpAddr::V4(v4) => v4.is_private() || v4.is_link_local() || v4.is_loopback(),
+        // `is_unique_local` and `is_unicast_link_local` are still unstable, so
+        // the two prefixes are matched here: fc00::/7 and fe80::/10.
+        IpAddr::V6(v6) => {
+            let octets = v6.octets();
+            v6.is_loopback()
+                || octets[0] & 0xfe == 0xfc
+                || (octets[0] == 0xfe && octets[1] & 0xc0 == 0x80)
+        }
+    }
+}
 
 #[derive(Default)]
 struct State {
@@ -124,7 +153,7 @@ impl Drop for Permit {
 
 #[cfg(test)]
 mod tests {
-    use std::net::{IpAddr, Ipv4Addr};
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::Arc;
     use std::time::{Duration, Instant};
 
@@ -132,6 +161,27 @@ mod tests {
 
     fn address(last_octet: u8) -> IpAddr {
         IpAddr::V4(Ipv4Addr::new(10, 0, 0, last_octet))
+    }
+
+    #[test]
+    fn only_the_standard_port_on_a_local_address_may_be_dialed() {
+        let dialable = |address: &str| super::is_dialable(address.parse::<SocketAddr>().unwrap());
+
+        assert!(dialable("192.168.1.40:1716"));
+        assert!(dialable("10.0.0.85:1716"));
+        assert!(dialable("172.16.4.2:1716"));
+        assert!(dialable("169.254.10.1:1716"));
+        assert!(dialable("127.0.0.1:1716"));
+        assert!(dialable("[fe80::1]:1716"));
+        assert!(dialable("[fd00::1]:1716"));
+
+        // A forged datagram naming an arbitrary port turns the daemon into a
+        // port scanner; naming a public address turns it into a reflector.
+        assert!(!dialable("192.168.1.40:22"));
+        assert!(!dialable("192.168.1.40:0"));
+        assert!(!dialable("8.8.8.8:1716"));
+        assert!(!dialable("172.32.0.1:1716"));
+        assert!(!dialable("[2001:db8::1]:1716"));
     }
 
     #[test]

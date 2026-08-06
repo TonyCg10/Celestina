@@ -17,8 +17,8 @@
 //! [`fingerprint`]: DeviceCert::fingerprint
 
 use std::fs;
-use std::io::{self, BufReader};
-use std::path::{Path, PathBuf};
+use std::io::{self, BufReader, Write};
+use std::path::Path;
 
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 
@@ -50,10 +50,10 @@ impl DeviceCert {
                 key_pem: fs::read_to_string(&key_path)?,
             });
         }
-        fs::create_dir_all(dir)?;
+        create_private_dir(dir)?;
         let fresh = DeviceCert::generate(device_id);
         write_private(&key_path, &fresh.key_pem)?;
-        fs::write(&cert_path, &fresh.cert_pem)?;
+        celestina_core::atomic_file::replace(&cert_path, fresh.cert_pem.as_bytes())?;
         Ok(fresh)
     }
 
@@ -125,9 +125,13 @@ pub fn fingerprint_der(der: &CertificateDer<'_>) -> String {
 /// KDE Connect's human-comparable code for one active pairing exchange.
 ///
 /// Both peers sort the two RFC 5280 SubjectPublicKeyInfo encodings in the same
-/// descending byte order, hash them, and for protocol v8 append the request's
-/// decimal Unix timestamp. A restored v8 session has no active timestamp, so it
-/// truthfully has no new code to display.
+/// descending byte order, hash them, and append the request's decimal Unix
+/// timestamp. A restored session has no active timestamp, so it truthfully has
+/// no new code to display, and a peer declaring a protocol below
+/// [`MIN_PROTOCOL_VERSION`] has no code at all: dropping the timestamp is the
+/// downgrade the floor exists to refuse, not a compatibility mode.
+///
+/// [`MIN_PROTOCOL_VERSION`]: magnetita_core::MIN_PROTOCOL_VERSION
 pub fn verification_key(
     ours: &CertificateDer<'_>,
     peer: &CertificateDer<'_>,
@@ -157,10 +161,10 @@ fn verification_key_from_spki(
     let mut hash = ring::digest::Context::new(&ring::digest::SHA256);
     hash.update(a);
     hash.update(b);
-    if protocol_version >= 8 {
-        let timestamp = timestamp?;
-        hash.update(timestamp.to_string().as_bytes());
+    if protocol_version < magnetita_core::MIN_PROTOCOL_VERSION {
+        return None;
     }
+    hash.update(timestamp?.to_string().as_bytes());
     let digest = hash.finish();
     let code = digest.as_ref()[..4]
         .iter()
@@ -175,15 +179,60 @@ fn public_key_der(certificate: &CertificateDer<'_>) -> io::Result<Vec<u8>> {
     Ok(parsed.subject_public_key_info().as_ref().to_vec())
 }
 
-/// Writes a private key owner-readable-only where the platform allows it.
-fn write_private(path: &PathBuf, pem: &str) -> io::Result<()> {
-    fs::write(path, pem)?;
+/// Create the certificate directory owner-only, so a key written inside it is
+/// unreachable to other local users even for the instant before its own mode
+/// is in force.
+#[cfg(unix)]
+fn create_private_dir(dir: &Path) -> io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(dir)
+}
+
+#[cfg(not(unix))]
+fn create_private_dir(dir: &Path) -> io::Result<()> {
+    fs::create_dir_all(dir)
+}
+
+/// Publish the private key atomically and owner-only.
+///
+/// The mode is part of the *creation*, not a repair afterwards: a plain write
+/// followed by `set_permissions` leaves a window in which `privateKey.pem` is
+/// world-readable, and this is the one file in the suite whose disclosure is
+/// total. The atomic sibling-then-rename shape is the suite's, but
+/// [`celestina_core::atomic_file::replace`] cannot be reused here because its
+/// temporary is created at the process umask, which is exactly the window this
+/// closes. The rename means an interrupted write leaves the previous key —
+/// or no key — never a truncated PEM the daemon can never start from again.
+fn write_private(path: &Path, pem: &str) -> io::Result<()> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let temporary = parent.join(format!(".{KEY_FILE}.{}.tmp", std::process::id()));
+    let _ = fs::remove_file(&temporary);
+    let result = (|| {
+        let mut file = private_file(&temporary)?;
+        file.write_all(pem.as_bytes())?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temporary, path)?;
+        fs::File::open(parent)?.sync_all()
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+fn private_file(path: &Path) -> io::Result<fs::File> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
     }
-    Ok(())
+    options.open(path)
 }
 
 #[cfg(test)]
@@ -231,6 +280,29 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn the_private_key_is_never_readable_by_another_local_user() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir().join(format!("mag-cert-mode-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        DeviceCert::ensure(&dir, "celestina-abc").unwrap();
+
+        let key_mode = std::fs::metadata(dir.join(super::KEY_FILE))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(key_mode & 0o777, 0o600, "the key must be owner-only");
+        let dir_mode = std::fs::metadata(&dir).unwrap().permissions().mode();
+        assert_eq!(dir_mode & 0o777, 0o700, "the directory must be owner-only");
+        // The publication is a rename, so no temporary survives it.
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn the_pairing_code_is_symmetric_and_timestamp_bound() {
         let a = DeviceCert::generate("a").chain().unwrap().remove(0);
@@ -255,7 +327,22 @@ mod tests {
         let a = DeviceCert::generate("a").chain().unwrap().remove(0);
         let b = DeviceCert::generate("b").chain().unwrap().remove(0);
         assert_eq!(verification_key(&a, &b, None, 8).unwrap(), None);
-        assert!(verification_key(&a, &b, None, 7).unwrap().is_some());
+    }
+
+    #[test]
+    fn a_protocol_below_the_floor_has_no_code_at_all() {
+        let a = DeviceCert::generate("a").chain().unwrap().remove(0);
+        let b = DeviceCert::generate("b").chain().unwrap().remove(0);
+        assert_eq!(
+            verification_key(
+                &a,
+                &b,
+                Some(1_700_000_000),
+                magnetita_core::MIN_PROTOCOL_VERSION - 1
+            )
+            .unwrap(),
+            None
+        );
     }
 
     #[test]

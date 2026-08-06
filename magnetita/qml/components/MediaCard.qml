@@ -156,6 +156,8 @@ CelestinaSurface {
         }
 
         Text {
+            // Peer-supplied text: never interpreted as markup.
+            textFormat: Text.PlainText
             width: parent.width
             text: root.hasMedia && root.title.length > 0
                   ? root.title : "Nada reproduciéndose"
@@ -167,6 +169,8 @@ CelestinaSurface {
         }
 
         Text {
+            // Peer-supplied text: never interpreted as markup.
+            textFormat: Text.PlainText
             width: parent.width
             text: root.hasMedia ? root.secondaryLine
                                 : "Controla el audio del dispositivo"

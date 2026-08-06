@@ -1,12 +1,68 @@
 # Magnetita implementation roadmap
 
-- **Status:** planned
-- **Active implementation checkpoint:** none
-- **Related author validation:** `VAL-MAG-01` through `VAL-MAG-05` in
+- **Status:** active
+- **Active implementation checkpoint:** MAG-S1
+- **Related author validation:** `VAL-MAG-01` through `VAL-MAG-07` in
   [VALIDATION.md](VALIDATION.md); they do not block implementation
 
-`MAG-M1` is the next settled reliability checkpoint and has no active execution
-plan.
+`MAG-S1` is executing under
+[its plan](docs/plans/active/2026-08-05-network-input-hardening.md). `MAG-M1`
+remains the next settled reliability checkpoint and has no execution plan.
+
+## MAG-S1 — Hostile network input at the daemon's boundaries
+
+## Hypothesis and tangible outcome
+
+Every defect the 2026-08-05 static audit raised against Magnetita is one
+boundary trusting a value the peer chose, so validating each where the value
+becomes typed removes the class rather than the instances. The tangible outcome
+is a daemon a paired phone cannot turn into command execution, a mount cannot
+be redirected away from the authenticated link, a handshake that ends on an
+absolute deadline, a protocol floor the peer cannot argue its way below, and a
+private key no other local user can read.
+
+## Scope
+
+- Validate the `kdeconnect.sftp` user, path and password at the decode boundary
+  and mount only against the TLS-authenticated address (`MAG-C1`, `MAG-M6`).
+- Bound the whole handshake with one absolute deadline and log admission
+  exhaustion (`MAG-A1`).
+- Floor the protocol at 8, take the peer identity only from the encrypted
+  channel, restrict dialling to the standard port on local addresses, and
+  decide trust before publishing a device (`MAG-A2`, `MAG-M2`, `MAG-M5`).
+- Apply the existing bounded-subprocess discipline to the clipboard and the
+  mount (`MAG-A3`).
+- Create the private key owner-only and atomically; bound peer-chosen text and
+  the notification map; render remote strings as plain text (`MAG-M7`).
+
+## Exclusions
+
+- Commit, version transition, production build, deployment, and any restart or
+  inspection of the live `magnetitad`.
+- `MAG-M1`'s app-side read/watch lifecycle.
+- The `Revocations`/registry locks held across payload file I/O, which cannot
+  be shortened without reordering the revocation barrier's locking policy.
+- Any project other than Magnetita and its three registered crates.
+
+## Build order
+
+| Unit | Status | Dependency | Implementation result | Agent evidence |
+|---|---|---|---|---|
+| MAG-S1-A | done | none | The SFTP reply cannot become an sshfs option or redirect the mount | [evidence](docs/evidence/2026-08-05-network-input-hardening.md) |
+| MAG-S1-B | done | none | One absolute handshake deadline from the crate's single owner of that recipe | [evidence](docs/evidence/2026-08-05-network-input-hardening.md) |
+| MAG-S1-C | done | MAG-S1-B | Protocol floor, encrypted-only identity, bounded dial target, trust before publication | [evidence](docs/evidence/2026-08-05-network-input-hardening.md) |
+| MAG-S1-D | done | none | Clipboard and mount subprocesses bounded and reaped like media's | [evidence](docs/evidence/2026-08-05-network-input-hardening.md) |
+| MAG-S1-E | done | none | Owner-only atomic key, bounded peer text, plain-text rendering | [evidence](docs/evidence/2026-08-05-network-input-hardening.md) |
+
+## Implementation exit
+
+Close `MAG-S1` when every unit's tests pass alongside format, Clippy, the
+workspace check, QML lint and the architecture contract, **and** the author has
+requested the canonical `scripts/complete-production.sh` exit. The corrections
+were authorized without a production build or deployment, so the units stay
+`active` and the installed daemon still carries the uncorrected bytes until
+that request arrives. `magnetita-core` changed, so closing will also require
+`celestina/scripts/complete-production.sh`.
 
 ## MAG-M1 — Deterministic app read/watch lifecycle
 

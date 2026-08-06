@@ -71,3 +71,13 @@ pub(crate) fn log(tag: &str, message: &str) {
 pub(crate) fn log_event(event: &ConnectionEvent) {
     log("event", &format!("{event:?}"));
 }
+
+/// Record that an untrusted-link slot was refused. Exhaustion denies the real
+/// phone, so a silent skip makes the denial undiagnosable — the one symptom
+/// the author would otherwise have to guess at.
+pub(crate) fn log_admission_exhausted(path: &str, address: std::net::IpAddr) {
+    log(
+        "admission",
+        &format!("{path}: no untrusted-link slot left for {address}"),
+    );
+}

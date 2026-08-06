@@ -11,9 +11,10 @@
 //!    the **client**.
 //! 2. Once the channel is encrypted, each side reads the other's certificate and
 //!    pins it (the fingerprint the [`TrustStore`] checks).
-//! 3. For protocol ≥ 8 the identities are re-sent **encrypted** and re-read, so
-//!    the trusted name is one nobody could have forged before TLS. (For < 8 the
-//!    plaintext identity stands.)
+//! 3. The identities are re-sent **encrypted** and re-read, so the trusted name
+//!    is one nobody could have forged before TLS. This step is not optional:
+//!    see [`MIN_PROTOCOL_VERSION`], which this transport enforces on both
+//!    roles because the peer, not us, declares the version.
 //!
 //! After that a [`Link`] is just a line-delimited packet stream over TLS:
 //! [`read_packet`] and [`send_packet`]. Blocking, one connection; the session
@@ -27,17 +28,41 @@
 use std::fmt;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use rustls::pki_types::ServerName;
 use rustls::{ClientConnection, ServerConnection, StreamOwned};
 use serde_json::Value;
 
-use magnetita_core::{Identity, NetworkPacket};
+use magnetita_core::{Identity, NetworkPacket, MIN_PROTOCOL_VERSION};
 
 use crate::cert::{fingerprint_der, verification_key};
+use crate::deadline::{is_retryable_timeout, remaining_before};
 use crate::discovery::Announcement;
 use crate::tls::TlsConfigs;
+
+/// How often a bounded handshake read wakes to re-check its absolute deadline.
+/// The socket timeout only sets that cadence; [`HandshakeDeadline`] decides
+/// when the phase is over.
+const HANDSHAKE_POLL_INTERVAL: Duration = Duration::from_millis(250);
+
+/// The absolute end of one handshake, fixed before the first byte.
+///
+/// Every read below re-checks it, so a peer cannot hold a connection — and the
+/// daemon's admission permit with it — by sending one byte per socket timeout.
+#[derive(Clone, Copy)]
+struct HandshakeDeadline(Instant);
+
+impl HandshakeDeadline {
+    fn starting_now(budget: Duration) -> Self {
+        Self(Instant::now() + budget)
+    }
+
+    /// Errors once the whole handshake budget is spent.
+    fn check(self) -> io::Result<()> {
+        remaining_before(self.0, "the handshake did not finish in time").map(|_| ())
+    }
+}
 
 /// A blocking TLS transport — either role's connection, boxed so a [`Link`] is
 /// one type regardless of whether we dialed or accepted.
@@ -80,10 +105,12 @@ impl Link {
     ) -> Result<Link, LinkError> {
         let addr = announcement.link_addr().ok_or(LinkError::NoLinkAddress)?;
         let peer_proto = announcement.identity.protocol_version;
+        require_supported_protocol(peer_proto)?;
+        let deadline = HandshakeDeadline::starting_now(timeout);
 
         let mut tcp = TcpStream::connect_timeout(&addr, timeout)?;
         tcp.set_nodelay(true).ok();
-        tcp.set_read_timeout(Some(timeout))?;
+        tcp.set_read_timeout(Some(HANDSHAKE_POLL_INTERVAL))?;
         tcp.set_write_timeout(Some(timeout))?;
 
         // 1. Our identity in the clear, telling the phone we mean it specifically.
@@ -98,10 +125,7 @@ impl Link {
 
         // 2. We dialed, so we are the TLS server.
         let mut conn = ServerConnection::new(tls.server_config()).map_err(LinkError::Tls)?;
-        conn.complete_io(&mut tcp)?;
-        if conn.is_handshaking() {
-            return Err(LinkError::HandshakeIncomplete);
-        }
+        complete_tls(&mut conn, &mut tcp, deadline)?;
 
         // 3. Pin the certificate the peer just proved it owns.
         let peer_certificate = conn
@@ -111,16 +135,12 @@ impl Link {
             .ok_or(LinkError::NoPeerCertificate)?;
         let fingerprint = fingerprint_der(&peer_certificate);
 
-        // 4. v8: re-exchange identities encrypted; else keep the announce's.
+        // 4. Re-exchange identities encrypted. The announcement is an
+        //    unauthenticated datagram, so it only constrains who we accept on
+        //    the other end; the identity we keep is the one read over TLS.
         let peer = {
             let mut stream = rustls::Stream::new(&mut conn, &mut tcp);
-            exchange_identity(
-                &mut stream,
-                ours,
-                next_id,
-                peer_proto,
-                announcement.identity.clone(),
-            )?
+            exchange_identity(&mut stream, ours, next_id, &announcement.identity, deadline)?
         };
 
         tcp.set_read_timeout(None).ok();
@@ -148,17 +168,18 @@ impl Link {
         timeout: Duration,
     ) -> Result<Link, LinkError> {
         let peer_addr = tcp.peer_addr()?;
+        let deadline = HandshakeDeadline::starting_now(timeout);
         tcp.set_nodelay(true).ok();
-        tcp.set_read_timeout(Some(timeout))?;
+        tcp.set_read_timeout(Some(HANDSHAKE_POLL_INTERVAL))?;
         tcp.set_write_timeout(Some(timeout))?;
 
         // 1. The peer's plaintext identity. Read exactly one line, byte by byte,
         //    so we do not swallow the TLS ClientHello we are about to send.
-        let line = read_delimited_line(&mut tcp)?;
+        let line = read_delimited_line(&mut tcp, deadline)?;
         let packet = NetworkPacket::parse(&line).map_err(LinkError::Parse)?;
         validate_target(&packet, ours)?;
         let pre = Identity::from_packet(&packet).ok_or(LinkError::PeerIdentityMissing)?;
-        let peer_proto = pre.protocol_version;
+        require_supported_protocol(pre.protocol_version)?;
 
         // 2. They dialed, so we are the TLS client.
         let server_name = ServerName::try_from(pre.device_id.clone())
@@ -166,10 +187,7 @@ impl Link {
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid TLS server name"))?;
         let mut conn =
             ClientConnection::new(tls.client_config(), server_name).map_err(LinkError::Tls)?;
-        conn.complete_io(&mut tcp)?;
-        if conn.is_handshaking() {
-            return Err(LinkError::HandshakeIncomplete);
-        }
+        complete_tls(&mut conn, &mut tcp, deadline)?;
 
         // 3. Pin the peer certificate.
         let peer_certificate = conn
@@ -179,10 +197,10 @@ impl Link {
             .ok_or(LinkError::NoPeerCertificate)?;
         let fingerprint = fingerprint_der(&peer_certificate);
 
-        // 4. v8 encrypted exchange (or keep the plaintext identity for < 8).
+        // 4. The encrypted exchange. Only what arrives here is the peer.
         let peer = {
             let mut stream = rustls::Stream::new(&mut conn, &mut tcp);
-            exchange_identity(&mut stream, ours, next_id, peer_proto, pre)?
+            exchange_identity(&mut stream, ours, next_id, &pre, deadline)?
         };
 
         tcp.set_read_timeout(None).ok();
@@ -316,27 +334,56 @@ fn plaintext_identity_line(ours: &Identity, target_id: &str, target_proto: i32, 
     format!("{}\n", packet.to_line())
 }
 
-/// The post-TLS identity step. For protocol ≥ 8 we send our identity encrypted
-/// and read the peer's encrypted identity, which becomes the trusted one; below
-/// 8 the pre-TLS identity stands.
+/// Refuse a peer that declares a protocol below [`MIN_PROTOCOL_VERSION`].
+fn require_supported_protocol(peer_proto: i32) -> Result<(), LinkError> {
+    if peer_proto < MIN_PROTOCOL_VERSION {
+        return Err(LinkError::ProtocolTooOld(peer_proto));
+    }
+    Ok(())
+}
+
+/// Run a TLS handshake to completion under one absolute deadline. A socket
+/// timeout only ends the current syscall, so the retry is expected; the
+/// deadline is what ends the phase.
+fn complete_tls<D>(
+    conn: &mut rustls::ConnectionCommon<D>,
+    tcp: &mut TcpStream,
+    deadline: HandshakeDeadline,
+) -> Result<(), LinkError> {
+    loop {
+        deadline.check()?;
+        match conn.complete_io(tcp) {
+            Ok(_) if !conn.is_handshaking() => return Ok(()),
+            Ok(_) => {}
+            Err(error) if is_retryable_timeout(&error) => {}
+            Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => {
+                return Err(LinkError::HandshakeIncomplete);
+            }
+            Err(error) => return Err(LinkError::Io(error)),
+        }
+    }
+}
+
+/// The post-TLS identity step, which is mandatory: the identity we keep is the
+/// one read from the encrypted channel, never the plaintext or announced one.
+/// `expected` is what the pre-TLS side claimed, and only constrains the answer
+/// — a peer that changes its id or version across TLS is refused.
 fn exchange_identity(
     stream: &mut dyn ReadWrite,
     ours: &Identity,
     next_id: &mut dyn FnMut() -> i64,
-    peer_proto: i32,
-    pre_tls_peer: Identity,
+    expected: &Identity,
+    deadline: HandshakeDeadline,
 ) -> Result<Identity, LinkError> {
-    if peer_proto < 8 {
-        return Ok(pre_tls_peer);
-    }
     let line = format!("{}\n", ours.to_packet(next_id()).to_line());
     stream.write_all(line.as_bytes())?;
     stream.flush()?;
 
-    let reply = read_delimited_line(stream)?;
+    let reply = read_delimited_line(stream, deadline)?;
     let packet = NetworkPacket::parse(&reply).map_err(LinkError::Parse)?;
     let post_tls_peer = Identity::from_packet(&packet).ok_or(LinkError::PeerIdentityMissing)?;
-    validate_secure_identity(&pre_tls_peer, post_tls_peer)
+    require_supported_protocol(post_tls_peer.protocol_version)?;
+    validate_secure_identity(expected, post_tls_peer)
 }
 
 fn validate_secure_identity(
@@ -375,12 +422,23 @@ fn validate_target(packet: &NetworkPacket, ours: &Identity) -> Result<(), LinkEr
 
 /// Reads one `\n`-terminated line one byte at a time, so nothing past the line
 /// is buffered where a later reader (or the TLS layer) cannot see it. Used for
-/// the two identity reads, not the hot packet loop.
-fn read_delimited_line<R: Read + ?Sized>(r: &mut R) -> Result<String, LinkError> {
+/// the two identity reads, not the hot packet loop. Byte-at-a-time reading is
+/// exactly the shape a per-syscall timeout cannot bound, so the whole loop runs
+/// under the handshake's absolute `deadline`.
+fn read_delimited_line<R: Read + ?Sized>(
+    r: &mut R,
+    deadline: HandshakeDeadline,
+) -> Result<String, LinkError> {
     let mut buf = Vec::new();
     let mut byte = [0u8; 1];
     loop {
-        match r.read(&mut byte)? {
+        deadline.check()?;
+        let read = match r.read(&mut byte) {
+            Ok(read) => read,
+            Err(error) if is_retryable_timeout(&error) => continue,
+            Err(error) => return Err(LinkError::Io(error)),
+        };
+        match read {
             0 => break,
             _ => {
                 if byte[0] == b'\n' {
@@ -419,6 +477,11 @@ pub enum LinkError {
     PeerIdentityMissing,
     /// The encrypted v8 identity changed the pre-TLS id or protocol version.
     PeerIdentityChanged,
+    /// The peer declared a protocol below [`MIN_PROTOCOL_VERSION`], where the
+    /// identity is not bound to the certificate. Carries what it declared.
+    ///
+    /// [`MIN_PROTOCOL_VERSION`]: magnetita_core::MIN_PROTOCOL_VERSION
+    ProtocolTooOld(i32),
     /// A connector explicitly targeted a different device or protocol version.
     WrongTarget,
     /// A single packet line exceeded [`MAX_PACKET_LINE`] — reading on would
@@ -448,6 +511,11 @@ impl fmt::Display for LinkError {
             LinkError::PeerIdentityChanged => {
                 write!(f, "the peer changed identity during the v8 handshake")
             }
+            LinkError::ProtocolTooOld(declared) => write!(
+                f,
+                "the peer declared protocol {declared}, below the supported minimum \
+                 {MIN_PROTOCOL_VERSION}"
+            ),
             LinkError::WrongTarget => {
                 write!(f, "the connection request targeted a different device")
             }
@@ -478,7 +546,7 @@ mod tests {
     use crate::cert::DeviceCert;
     use crate::discovery::Announcement;
     use crate::tls::TlsConfigs;
-    use magnetita_core::{ping_packet, Identity};
+    use magnetita_core::{ping_packet, Identity, MIN_PROTOCOL_VERSION};
     use std::net::TcpListener;
     use std::thread;
     use std::time::Duration;
@@ -604,6 +672,110 @@ mod tests {
             .unwrap()
             .expect("a packet, not a close");
         assert!(got.is("kdeconnect.ping"));
+    }
+
+    #[test]
+    fn a_peer_below_the_protocol_floor_is_refused_before_dialing() {
+        let desk_cert = DeviceCert::generate("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        let desk_tls = TlsConfigs::build(&desk_cert).unwrap();
+        let desk_identity = Identity::desktop("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "Celestina");
+
+        // Nothing listens here: reaching the socket at all would already be the
+        // defect, because the version decides before the dial.
+        let mut announced = Identity::desktop("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "Old Phone");
+        announced.protocol_version = MIN_PROTOCOL_VERSION - 1;
+        announced.tcp_port = Some(1);
+        let announcement = Announcement {
+            identity: announced,
+            source: "127.0.0.1:1".parse().unwrap(),
+        };
+
+        assert!(matches!(
+            Link::connect(
+                &announcement,
+                &desk_identity,
+                &desk_tls,
+                &mut counter(),
+                Duration::from_secs(5),
+            ),
+            Err(LinkError::ProtocolTooOld(version)) if version == MIN_PROTOCOL_VERSION - 1
+        ));
+    }
+
+    #[test]
+    fn an_accepted_peer_below_the_protocol_floor_never_reaches_tls() {
+        use std::io::Write;
+
+        let desk_cert = DeviceCert::generate("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        let desk_tls = TlsConfigs::build(&desk_cert).unwrap();
+        let desk_identity = Identity::desktop("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "Celestina");
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let dialer = thread::spawn(move || {
+            let mut old = Identity::desktop("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "Old Phone");
+            old.protocol_version = MIN_PROTOCOL_VERSION - 1;
+            let mut tcp = std::net::TcpStream::connect(addr).unwrap();
+            let _ = tcp.write_all(format!("{}\n", old.to_packet(1).to_line()).as_bytes());
+        });
+
+        let (tcp, _) = listener.accept().unwrap();
+        let result = Link::accept(
+            tcp,
+            &desk_identity,
+            &desk_tls,
+            &mut counter(),
+            Duration::from_secs(5),
+        );
+        dialer.join().unwrap();
+
+        assert!(matches!(result, Err(LinkError::ProtocolTooOld(_))));
+    }
+
+    #[test]
+    fn a_dribbling_peer_cannot_hold_the_handshake_past_its_budget() {
+        use std::io::Write;
+
+        let desk_cert = DeviceCert::generate("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        let desk_tls = TlsConfigs::build(&desk_cert).unwrap();
+        let desk_identity = Identity::desktop("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "Celestina");
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let dribbler_stop = std::sync::Arc::clone(&stop);
+        // One byte at a time, never a newline: each byte resets a per-syscall
+        // timeout, so only an absolute deadline ends this.
+        let dribbler = thread::spawn(move || {
+            let Ok(mut tcp) = std::net::TcpStream::connect(addr) else {
+                return;
+            };
+            while !dribbler_stop.load(std::sync::atomic::Ordering::Acquire) {
+                if tcp.write_all(b" ").is_err() {
+                    return;
+                }
+                thread::sleep(Duration::from_millis(20));
+            }
+        });
+
+        let (tcp, _) = listener.accept().unwrap();
+        let budget = Duration::from_millis(600);
+        let started = std::time::Instant::now();
+        let result = Link::accept(tcp, &desk_identity, &desk_tls, &mut counter(), budget);
+        let elapsed = started.elapsed();
+        stop.store(true, std::sync::atomic::Ordering::Release);
+        dribbler.join().unwrap();
+
+        match result.err() {
+            Some(LinkError::Io(error)) => {
+                assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+            }
+            other => panic!("expected an absolute handshake timeout, got {other:?}"),
+        }
+        assert!(
+            elapsed < budget * 4,
+            "the handshake must end near its budget, took {elapsed:?}"
+        );
     }
 
     #[test]

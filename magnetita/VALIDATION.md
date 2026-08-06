@@ -69,6 +69,45 @@ does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
 - **Result:** deferred until numeric resource ceilings are accepted
 - **Evidence:** commands, interval, samples and mount paths
 
+## VAL-MAG-06 — The hardened boundaries against the real phone
+
+- **Status:** pending
+- **Related implementation:** `MAG-S1-A`, `MAG-S1-C`, `MAG-S1-E`
+- **Requires:** the corrected daemon deployed, the author's real phone with the
+  stock KDE Connect Android client, and the usual LAN
+- **Procedure:** connect from both initiators; confirm the phone still pairs,
+  reconnects as trusted, mounts its storage and shows its volumes; raise,
+  update and cancel a phone notification; set a phone device name containing
+  `<b>bold</b>` and a media title containing markup and read every Magnetita
+  surface that shows them; then inspect `privateKey.pem`'s mode on disk
+- **Pass condition:** pairing, reconnection and the mount all still work with
+  no visible change; notifications still replace and withdraw correctly; the
+  markup is drawn literally on every surface rather than rendered; the key is
+  `0600` and its directory `0700`
+- **Result:** not run — the corrections were made without a production build,
+  so the installed daemon is still the uncorrected one
+- **Evidence:** dates, the phone's announced protocol version, the log lines
+  around the handshake, a screenshot of each surface showing the literal
+  markup, and the `stat` output for the key
+
+## VAL-MAG-07 — Bounded clipboard and mount under a real compositor
+
+- **Status:** pending
+- **Related implementation:** `MAG-S1-D`
+- **Requires:** the corrected daemon deployed, a live Wayland session with
+  `wl-copy`/`wl-paste`, and a paired phone with storage permission granted
+- **Procedure:** copy text on the phone and confirm it lands on the desktop
+  selection and survives — the desktop clipboard must still hold it a minute
+  later, with the backgrounded `wl-copy` alive; mount and unmount the phone's
+  storage several times; then disconnect the phone mid-mount
+- **Pass condition:** the clipboard value persists (the process-group teardown
+  must not kill `wl-copy`'s background child), the mount appears and is
+  browsable, unmount leaves no stale path, and no operation freezes the link
+- **Result:** not run — this is the correction most exposed to a difference
+  between `sh` in a unit test and the real tools, and it has not been observed
+- **Evidence:** `pgrep -a wl-copy` after a copy, `findmnt` around each mount,
+  and the daemon log for the interval
+
 ## Closed historical observations
 
 `VAL-MAG-1.0` is preserved in the

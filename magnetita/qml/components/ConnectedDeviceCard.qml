@@ -69,6 +69,8 @@ CelestinaSurface {
             }
 
             Text {
+                // Peer-supplied text: never interpreted as markup.
+                textFormat: Text.PlainText
                 text: root.stateText.length > 0 ? root.stateText : "conectado"
                 color: root.stateText === "desconectado"
                        ? CelestinaTheme.textMuted : CelestinaTheme.success
@@ -78,6 +80,8 @@ CelestinaSurface {
         }
 
         Text {
+            // Peer-supplied text: never interpreted as markup.
+            textFormat: Text.PlainText
             width: parent.width
             text: root.deviceName
             color: CelestinaTheme.text
@@ -88,6 +92,8 @@ CelestinaSurface {
         }
 
         Text {
+            // Peer-supplied text: never interpreted as markup.
+            textFormat: Text.PlainText
             width: parent.width
             text: root.deviceType.length > 0
                   ? root.deviceType + (root.mounted ? " · " + root.mountPath : "")
@@ -99,6 +105,8 @@ CelestinaSurface {
         }
 
         Text {
+            // Peer-supplied text: never interpreted as markup.
+            textFormat: Text.PlainText
             visible: root.verificationKey.length > 0
             width: parent.width
             text: "Verifica en ambos dispositivos · " + root.verificationKey
@@ -142,6 +150,8 @@ CelestinaSurface {
             }
 
             Text {
+                // Peer-supplied text: never interpreted as markup.
+                textFormat: Text.PlainText
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.batteryPercent
                       + (root.batteryPercent === "—" ? "" : "%")

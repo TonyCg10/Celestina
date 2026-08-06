@@ -8,6 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::identity::MIN_PROTOCOL_VERSION;
 use crate::packet::NetworkPacket;
 
 /// The `type` of a pairing packet.
@@ -65,6 +66,9 @@ pub enum PairAction {
 pub enum PairError {
     MissingTimestamp,
     ClockSkew,
+    /// The peer declared a protocol below [`MIN_PROTOCOL_VERSION`], where the
+    /// request carries no timestamp to bind the exchange to this moment.
+    UnsupportedProtocol,
 }
 
 /// Material that exists only for a pairing completed on this live session.
@@ -168,13 +172,17 @@ impl Pairing {
         protocol_version: i32,
         now: i64,
     ) -> Result<PairAction, PairError> {
-        if protocol_version >= 8 {
-            let timestamp = message.timestamp.ok_or(PairError::MissingTimestamp)?;
-            if timestamp.abs_diff(now) > MAX_CLOCK_SKEW_SECS {
-                return Err(PairError::ClockSkew);
-            }
+        // Unconditional: the timestamp is what makes the displayed code belong
+        // to this exchange rather than to any replay of it, and a peer that
+        // declares an older protocol to shed the check is the case this guards.
+        if protocol_version < MIN_PROTOCOL_VERSION {
+            return Err(PairError::UnsupportedProtocol);
         }
-        self.timestamp = message.timestamp;
+        let timestamp = message.timestamp.ok_or(PairError::MissingTimestamp)?;
+        if timestamp.abs_diff(now) > MAX_CLOCK_SKEW_SECS {
+            return Err(PairError::ClockSkew);
+        }
+        self.timestamp = Some(timestamp);
         self.fresh_exchange = true;
         self.state = PairState::RequestedByPeer;
         Ok(PairAction::None)
@@ -308,7 +316,7 @@ mod tests {
     }
 
     #[test]
-    fn the_skew_boundary_is_accepted_and_v7_remains_compatible() {
+    fn the_skew_boundary_is_accepted() {
         let mut v8 = Pairing::new();
         assert_eq!(
             v8.received(
@@ -319,13 +327,20 @@ mod tests {
             Ok(PairAction::None)
         );
         assert_eq!(v8.state(), PairState::RequestedByPeer);
+    }
 
-        let mut v7 = Pairing::new();
-        assert_eq!(
-            v7.received(PairMessage::response(true), 7, NOW),
-            Ok(PairAction::None)
-        );
-        assert_eq!(v7.state(), PairState::RequestedByPeer);
+    #[test]
+    fn a_request_below_the_protocol_floor_is_refused_with_or_without_a_timestamp() {
+        // Declaring an older protocol used to skip the timestamp and drift
+        // checks entirely, which is the whole reason a peer would declare it.
+        for message in [PairMessage::response(true), PairMessage::request(NOW)] {
+            let mut old = Pairing::new();
+            assert_eq!(
+                old.received(message, super::MIN_PROTOCOL_VERSION - 1, NOW),
+                Err(PairError::UnsupportedProtocol)
+            );
+            assert_eq!(old.state(), PairState::Unpaired);
+        }
     }
 
     #[test]

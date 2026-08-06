@@ -31,6 +31,8 @@ Item {
         spacing: 3
 
         Text {
+            // Peer-supplied text: never interpreted as markup.
+            textFormat: Text.PlainText
             width: parent.width
             text: root.deviceName
             color: CelestinaTheme.text
@@ -41,6 +43,8 @@ Item {
         }
 
         Text {
+            // Peer-supplied text: never interpreted as markup.
+            textFormat: Text.PlainText
             width: parent.width
             text: root.fingerprint.length > 0
                   ? "Huella del certificado · " + root.fingerprint

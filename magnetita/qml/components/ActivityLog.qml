@@ -83,6 +83,8 @@ CelestinaSurface {
             }
 
             Text {
+                // Peer-supplied text: never interpreted as markup.
+                textFormat: Text.PlainText
                 anchors.left: logIcon.right
                 anchors.leftMargin: 10
                 anchors.right: parent.right

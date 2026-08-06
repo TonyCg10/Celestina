@@ -54,6 +54,7 @@ mod revocation;
 mod runtime;
 mod session_registration;
 mod settings;
+mod subprocess;
 use admission::{Admission, Permit};
 use devices::{
     command_channel, push_log, set_verification_key, Command, Commands, DeviceEntry, Devices, Log,
@@ -111,9 +112,9 @@ struct Daemon {
     admission: Arc<Admission>,
     payloads: PayloadLimiter,
     dbus: Option<zbus::blocking::Connection>,
-    /// phone-notification-id → freedesktop-server-id, so an update replaces and a
-    /// cancel withdraws the right desktop notification.
-    notifications: Mutex<HashMap<String, u32>>,
+    /// The bounded phone-id→server-id map behind notification replace and
+    /// withdraw, owned by the module that posts them.
+    notifications: notify::Mirror,
     /// The last clipboard value we synced (sent or received), so our own
     /// wl-copy of a received clipboard is not echoed back and no loop forms.
     last_clipboard: Mutex<String>,
@@ -178,7 +179,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         admission: Arc::new(Admission::new()),
         payloads: PayloadLimiter::new(),
         dbus,
-        notifications: Mutex::new(HashMap::new()),
+        notifications: notify::Mirror::default(),
         last_clipboard: Mutex::new(String::new()),
     });
 
@@ -216,7 +217,10 @@ fn run() -> Result<(), Box<dyn Error>> {
                 continue;
             }
         };
-        if announcement.link_addr().is_none() {
+        let Some(address) = announcement.link_addr() else {
+            continue;
+        };
+        if !admission::is_dialable(address) {
             continue;
         }
         if daemon
@@ -230,10 +234,8 @@ fn run() -> Result<(), Box<dyn Error>> {
         if !daemon.admission.allow_dial(device_id, Instant::now()) {
             continue;
         }
-        let Some(address) = announcement.link_addr() else {
-            continue;
-        };
         let Some(permit) = daemon.admission.try_acquire(address.ip()) else {
+            runtime::log_admission_exhausted("dial", address.ip());
             continue;
         };
         spawn_dialer(Arc::clone(&daemon), announcement, permit);
@@ -271,6 +273,7 @@ fn spawn_accepter(listener: TcpListener, daemon: Arc<Daemon>) {
                 continue;
             };
             let Some(permit) = daemon.admission.try_acquire(address.ip()) else {
+                runtime::log_admission_exhausted("accept", address.ip());
                 continue;
             };
             let daemon = Arc::clone(&daemon);
@@ -340,6 +343,30 @@ impl Daemon {
         let peer_type = type_label(link.peer().device_type);
         let fingerprint = link.peer_fingerprint().to_owned();
 
+        // Decide trust before publishing anything. The device id and name are
+        // still the peer's own claim, so a peer whose certificate does not
+        // match the one pinned for that id must never occupy the registry slot
+        // of the device it is impersonating, nor put its chosen name on screen.
+        let trust_check = self
+            .revocations
+            .if_pairing_allowed(&peer_id, || {
+                self.trust.lock_ok().check(&peer_id, &fingerprint)
+            })
+            .unwrap_or(TrustCheck::Unknown);
+        if trust_check == TrustCheck::Changed {
+            log(
+                "REFUSED",
+                &format!("{peer_name}: certificate changed — unpair and re-pair on purpose"),
+            );
+            ui_log(
+                self,
+                &peer_name,
+                "RECHAZADO: el certificado cambió — vuelve a emparejar a propósito",
+                true,
+            );
+            return;
+        }
+
         let (sender, commands) = command_channel();
         {
             // Hold the lock across check-and-insert so two paths cannot both
@@ -369,7 +396,7 @@ impl Daemon {
         );
         ui_log(self, &peer_name, "conectado y cifrado", false);
 
-        if let Err(e) = self.run_link(link, &peer_id, &peer_name, commands, permit) {
+        if let Err(e) = self.run_link(link, &peer_id, &peer_name, commands, permit, trust_check) {
             let message = e.to_string();
             log("link", &format!("{peer_name}: {message}"));
             // A reset / broken pipe / EOF is the phone dropping the link — a
@@ -395,30 +422,17 @@ impl Daemon {
         peer_name: &str,
         commands: mpsc::Receiver<Command>,
         mut admission: Permit,
+        trust_check: TrustCheck,
     ) -> Result<(), Box<dyn Error>> {
         let peer_fp = link.peer_fingerprint().to_owned();
         let link_host = link.peer_addr().ip().to_string();
         let protocol_version = link.peer().protocol_version;
 
         let mut trusted = false;
-        let trust_check = self
-            .revocations
-            .if_pairing_allowed(peer_id, || self.trust.lock_ok().check(peer_id, &peer_fp))
-            .unwrap_or(TrustCheck::Unknown);
         let session = match trust_check {
-            TrustCheck::Changed => {
-                log(
-                    "REFUSED",
-                    &format!("{peer_name}: certificate changed — unpair and re-pair on purpose"),
-                );
-                ui_log(
-                    self,
-                    peer_name,
-                    "RECHAZADO: el certificado cambió — vuelve a emparejar a propósito",
-                    true,
-                );
-                return Ok(());
-            }
+            // `serve` refuses a changed certificate before publishing the
+            // device, so this link cannot be one.
+            TrustCheck::Changed => return Ok(()),
             TrustCheck::Trusted => {
                 log("trust", &format!("{peer_name} is already paired"));
                 trusted = true;
@@ -732,8 +746,11 @@ impl Daemon {
                 }
                 match read_sftp(packet) {
                     Some(SftpReply::Mount(info)) if mount.is_none() => {
-                        let host = info.ip.clone().unwrap_or_else(|| link_host.clone());
-                        match Mount::open(peer_id, &host, &info) {
+                        // The mount always targets the address of the TLS link
+                        // we already authenticated, never an address the reply
+                        // names: a peer that could choose the host could point
+                        // the mount, and its one-session password, anywhere.
+                        match Mount::open(peer_id, &link_host, &info) {
                             Ok(m) => {
                                 log("mounted", &format!("{peer_name} at {}", m.path().display()));
                                 ui_log(self, peer_name, "archivos montados", false);
@@ -814,33 +831,16 @@ impl Daemon {
         }
     }
 
-    /// Mirror a phone notification to the desktop's notification server, keeping
-    /// the id map so an update replaces and a cancel withdraws the right one.
+    /// Mirror a phone notification to the desktop's notification server.
     fn mirror_notification(&self, device_id: &str, device_name: &str, note: Notification) {
         let Some(connection) = &self.dbus else {
             return;
         };
-        let key = format!("{device_id}\u{0}{}", note.id);
-        if note.is_cancel {
-            if let Some(server_id) = self.notifications.lock_ok().remove(&key) {
-                notify::close(connection, server_id);
-            }
-            return;
-        }
-        let app = if note.app_name.is_empty() {
-            device_name
-        } else {
-            &note.app_name
-        };
-        let summary = if note.title.is_empty() {
-            app.to_owned()
-        } else {
-            note.title.clone()
-        };
-        let replaces = self.notifications.lock_ok().get(&key).copied().unwrap_or(0);
-        if let Some(server_id) = notify::post(connection, app, replaces, &summary, &note.text) {
-            self.notifications.lock_ok().insert(key, server_id);
-            ui_log(self, device_name, &format!("🔔 {app}: {summary}"), false);
+        if let Some(line) = self
+            .notifications
+            .apply(connection, device_id, device_name, &note)
+        {
+            ui_log(self, device_name, &line, false);
         }
     }
 

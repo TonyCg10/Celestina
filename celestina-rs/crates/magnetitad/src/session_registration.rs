@@ -42,6 +42,8 @@ impl Drop for SessionRegistration {
             artwork::clear_device(&self.device_id);
             devices.remove(&self.device_id);
         }
+        self.daemon.notifications.forget_device(&self.device_id);
+        {}
         self.daemon.revocations.clear_if(&self.device_id, || {
             !self.daemon.devices.lock_ok().contains_key(&self.device_id)
         });

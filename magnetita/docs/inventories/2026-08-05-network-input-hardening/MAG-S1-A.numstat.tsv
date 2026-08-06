@@ -1,0 +1,46 @@
+# MAG-S1-A exact change inventory
+
+Base revision	edaab5e1186b559be1ab74a1262822cf0bfcc1ea
+Pathspec	magnetita/
+Pathspec	celestina-rs/crates/magnetita-core/
+Pathspec	celestina-rs/crates/magnetita-net/
+Pathspec	celestina-rs/crates/magnetitad/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+40	1	8de2b943e15a4d1d5eeacbed29d005718ee1a809171cbeb5163d961f14d87fc1	celestina-rs/crates/magnetita-core/src/identity.rs
+4	1	a05ee8c03dd404aafcd160b4c32a912d433a615b2dce24fdb8b83a9370b753f0	celestina-rs/crates/magnetita-core/src/lib.rs
+60	10	39aa2812c56bca57c7e5bc819e1710cf470e2b95b90170a979d943e09aeb3aff	celestina-rs/crates/magnetita-core/src/notification.rs
+28	13	d09f1546f21d74a9fc1e214bb0add0e1b53a9c00d40b915e2f7e4c5a895cb3e5	celestina-rs/crates/magnetita-core/src/pair.rs
+170	10	a3d5c6bb41e34d571b024d85f4aed7e6e7dabcf11c101b8f4a0023865b7f02a1	celestina-rs/crates/magnetita-core/src/sftp.rs
+55	0	837abfdece881ec9a8bf0e041ff5abf8910e1a939c728fbfdc4e5fbc70528181	celestina-rs/crates/magnetita-core/src/text.rs
+104	17	88d4dc743cf4331d580b785ebfbb7c209d26bcd6feb53588a59ec170af9404f4	celestina-rs/crates/magnetita-net/src/cert.rs
+70	0	3142204041b9d59c1ae43d722e7e713e58dfbfaec10d7282177e31e7c596ef59	celestina-rs/crates/magnetita-net/src/deadline.rs
+1	0	f0feb73bbd1583ab7ccabf66896b32a19b97bfea234982efa53a25d07225a2d9	celestina-rs/crates/magnetita-net/src/lib.rs
+213	41	dda19625c3a3e34c30a02741164cc96c447e35535bfe35aae73b6c1e0eae4e05	celestina-rs/crates/magnetita-net/src/link.rs
+1	14	4f6df2c285969d771385b130d8ac9305401106a8fe3cd03a4bf00a48bb1b31d9	celestina-rs/crates/magnetita-net/src/payload.rs
+52	2	c44f3e07e6ccbfe3f349f152874dd7d06a33024ff07d89a420cc1bd00f2b8905	celestina-rs/crates/magnetitad/src/admission.rs
+28	25	07fa5f6bc7231ef8cb71428fc71f48abd4bcccbd4a96fc7eb9a364e1a418d37f	celestina-rs/crates/magnetitad/src/clipboard.rs
+51	51	16909c54f0cb305ef1277d6ed9587313848cc93d9181b4377a5c58f6706034b3	celestina-rs/crates/magnetitad/src/main.rs
+11	153	f5d01533c0fe4364727f53df614d40cf940e35f778c0d229202ae45b1ca005cc	celestina-rs/crates/magnetitad/src/media.rs
+62	34	9d913f988162e7e32c2a95799e8a24c9fd6e83d0f27b7861aebb25644fe0ce60	celestina-rs/crates/magnetitad/src/mount.rs
+84	0	0e365be4630892c6d77e6c12c15d2117d269d7634a62c6ecf8275e60db91cebb	celestina-rs/crates/magnetitad/src/notify.rs
+10	0	7ec9a88dc9e257f982feb13e223ac372ec96f814349fa380d013e8254c9a960f	celestina-rs/crates/magnetitad/src/runtime.rs
+2	0	9aa32add2ebb4699b62c0ff2510b5680a0577ba24eab137e9b0afa1ef1379a5f	celestina-rs/crates/magnetitad/src/session_registration.rs
+419	0	a580371dd6ad8ccbae8bc6b591f7194a5c0793b15f877f7e09bd3dc1a516c093	celestina-rs/crates/magnetitad/src/subprocess.rs
+1	0	21512cae60b26290fe76ae3f13dbd11901f6185e25c6d9d3d04a9ec9f9a99f50	docs/version-history.tsv
+1	1	740c2befa05a2f7fd3d8264e9c5d59f13a178fbab9a4f853a5b32a91b766bc47	magnetita/Cargo.lock
+1	1	66dc8a12781ef0f41986293b78ed46492bd1aa700b4294a02ed1a510f8eef2bf	magnetita/Cargo.toml
+61	5	e4d0906d8709afef90e31c984bd481a49037a3243ae9a015a5d8183c077f79ca	magnetita/ROADMAP.md
+19	6	4adbb858e45c8b7f30d50957cae039995b5c15b93b11e239608259ad2375b27d	magnetita/STATUS.md
+39	0	f25872fabad253af6c4a07e949630a0d43f25e7cd3ec17711b39c2f3c70aeb04	magnetita/VALIDATION.md
+224	0	fc1d786816f58e633f7e18b700ef8812a1e29df97f5722f1b962003c68c30af5	magnetita/docs/evidence/2026-08-05-network-input-hardening.md
+107	0	26c73b6ef4cdcdff33bc09b75f87d0aace7b7cbec9c0deb42ed84a8487b7bea2	magnetita/docs/plans/active/2026-08-05-network-input-hardening.md
+3	2	7ab66f7c01184ce731aaa9bd675ddf0138c31f76a8a67f5d82edf518ef5422a1	magnetita/docs/plans/active/README.md
+2	0	0a8dd43b8813945b1910dd1d3d6d0c665e037835f1b39d837c026a773187142c	magnetita/qml/components/ActivityLog.qml
+10	0	146d33935b1072de190cad2a299c49b6f08fc9a1df3c97c00a48325234b477a2	magnetita/qml/components/ConnectedDeviceCard.qml
+4	0	134df2a485c35365606709fddbcb73334530489e318d7c88bb810afc78e26895	magnetita/qml/components/MediaCard.qml
+4	0	8cf98272f3cb3c3cd1241f792046c78377d93ffaa524b77e3ec20a3cd9fd4cec	magnetita/qml/components/PairedDeviceRow.qml
+46	0	self	magnetita/docs/inventories/2026-08-05-network-input-hardening/MAG-S1-A.numstat.tsv

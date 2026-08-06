@@ -41,12 +41,13 @@ pub enum SftpReply {
     Error(String),
 }
 
-/// The details for opening the phone's SFTP mount. The host is *not* here — it is
-/// the linked phone's address, which the transport already knows.
+/// The details for opening the phone's SFTP mount. The host is *not* here — it
+/// is the linked phone's address, which the transport already knows, and which
+/// is the only address a mount may target. A body's `ip` field is read and
+/// discarded: honouring it would let the peer redirect the mount, and the
+/// one-session password with it, to a host of its choosing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SftpMount {
-    /// Some phones echo their `ip`; when absent the caller uses the link address.
-    pub ip: Option<String>,
     pub port: u16,
     pub user: String,
     pub password: String,
@@ -95,15 +96,69 @@ pub fn read_sftp(packet: &NetworkPacket) -> Option<SftpReply> {
         return Some(SftpReply::Error(message.to_owned()));
     }
 
+    let multi_paths = read_str_array(body.get("multiPaths"));
+    if !multi_paths.iter().all(|path| is_valid_remote_path(path)) {
+        return None;
+    }
     Some(SftpReply::Mount(SftpMount {
-        ip: body.get("ip").and_then(Value::as_str).map(str::to_owned),
         port: read_port(body.get("port")?)?,
-        user: body.get("user")?.as_str()?.to_owned(),
-        password: body.get("password")?.as_str()?.to_owned(),
-        path: body.get("path")?.as_str()?.to_owned(),
-        multi_paths: read_str_array(body.get("multiPaths")),
+        user: read_user(body.get("user")?)?,
+        password: read_password(body.get("password")?)?,
+        path: read_path(body.get("path")?)?,
+        multi_paths,
         path_names: read_str_array(body.get("pathNames")),
     }))
+}
+
+/// Longest peer-supplied SFTP string accepted. A real account name and a real
+/// Android storage path are far shorter; the bound only stops a peer from
+/// handing the mount an argument no honest phone would send.
+const MAX_SFTP_FIELD: usize = 4096;
+
+/// Longest account name accepted, matching the length limits real systems put
+/// on a user name.
+const MAX_SFTP_USER: usize = 64;
+
+/// The account name goes straight into `sshfs`'s `user@host:path` positional
+/// argument, so it is held to a strict allowlist. Anything else — an empty
+/// value, a separator, whitespace, or a leading `-` that would turn the
+/// argument into an option `sshfs` forwards to `ssh` — is not a user name and
+/// is refused before the daemon can spawn anything with it.
+fn read_user(value: &Value) -> Option<String> {
+    let user = value.as_str()?;
+    let valid = !user.is_empty()
+        && user.len() <= MAX_SFTP_USER
+        && user
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+        && !user.starts_with('-');
+    valid.then(|| user.to_owned())
+}
+
+/// The remote root shares the same positional argument as the user name, so it
+/// must be an ordinary absolute path: no leading `-`, no control byte that a
+/// log or an option file would read as a new line, and bounded.
+fn read_path(value: &Value) -> Option<String> {
+    let path = value.as_str()?;
+    is_valid_remote_path(path).then(|| path.to_owned())
+}
+
+fn is_valid_remote_path(path: &str) -> bool {
+    path.starts_with('/')
+        && path.len() <= MAX_SFTP_FIELD
+        && !path.chars().any(char::is_control)
+        && !path.contains('\0')
+}
+
+/// The one-session password is written to `sshfs`'s stdin as a single line, so
+/// it may hold anything except the newline that would end that line early, a
+/// NUL, or more bytes than a session credential ever needs.
+fn read_password(value: &Value) -> Option<String> {
+    let password = value.as_str()?;
+    let valid = password.len() <= MAX_SFTP_FIELD
+        && !password.contains(['\n', '\r', '\0'])
+        && !password.is_empty();
+    valid.then(|| password.to_owned())
 }
 
 /// The port arrives as a JSON number from most phones and a string from some;
@@ -153,7 +208,6 @@ mod tests {
         let SftpReply::Mount(m) = read_sftp(&NetworkPacket::parse(raw).unwrap()).unwrap() else {
             panic!("expected a mount");
         };
-        assert_eq!(m.ip.as_deref(), Some("10.0.0.85"));
         assert_eq!(m.port, 1739);
         assert_eq!(m.user, "kdeconnect");
         assert_eq!(m.password, "s3cr3t");
@@ -208,6 +262,112 @@ mod tests {
         let raw = r#"{"id":1,"type":"kdeconnect.sftp","body":{
             "port":1739,"user":"kdeconnect","path":"/"}}"#;
         assert!(read_sftp(&NetworkPacket::parse(raw).unwrap()).is_none());
+    }
+
+    /// A `kdeconnect.sftp` body with `user` and `path` chosen by the caller.
+    fn mount_body(user: &str, path: &str) -> NetworkPacket {
+        NetworkPacket::new(
+            1,
+            super::TYPE_SFTP,
+            serde_json::json!({
+                "port": 1739,
+                "user": user,
+                "password": "s3cr3t",
+                "path": path,
+            }),
+        )
+    }
+
+    #[test]
+    fn a_user_that_would_become_an_sshfs_option_is_refused() {
+        // argv[1] is `<user>@<host>:<path>`; a user starting with `-` makes the
+        // whole argument an option sshfs forwards to ssh, which runs
+        // ProxyCommand through a shell.
+        for hostile in [
+            "-oProxyCommand=touch /tmp/pwned #",
+            "-o",
+            "kde connect",
+            "kde@connect",
+            "kde:connect",
+            "kde/connect",
+            "",
+        ] {
+            assert!(
+                read_sftp(&mount_body(hostile, "/storage/emulated/0")).is_none(),
+                "{hostile:?} must not decode into a mount"
+            );
+        }
+    }
+
+    #[test]
+    fn a_user_longer_than_any_account_name_is_refused() {
+        let long = "a".repeat(65);
+        assert!(read_sftp(&mount_body(&long, "/storage/emulated/0")).is_none());
+    }
+
+    #[test]
+    fn a_path_that_is_not_an_ordinary_absolute_path_is_refused() {
+        for hostile in [
+            "-oProxyCommand=touch /tmp/pwned",
+            "storage/emulated/0",
+            "",
+            "/storage\nemulated",
+            "/storage\remulated",
+            "/storage\u{0}emulated",
+        ] {
+            assert!(
+                read_sftp(&mount_body("kdeconnect", hostile)).is_none(),
+                "{hostile:?} must not decode into a mount"
+            );
+        }
+    }
+
+    #[test]
+    fn a_hostile_volume_path_refuses_the_whole_reply() {
+        let packet = NetworkPacket::new(
+            1,
+            super::TYPE_SFTP,
+            serde_json::json!({
+                "port": 1739,
+                "user": "kdeconnect",
+                "password": "s3cr3t",
+                "path": "/storage/emulated/0",
+                "multiPaths": ["/storage/emulated/0", "-oProxyCommand=id"],
+                "pathNames": ["Internal storage", "SD card"],
+            }),
+        );
+        assert!(read_sftp(&packet).is_none());
+    }
+
+    #[test]
+    fn a_password_that_could_end_its_stdin_line_early_is_refused() {
+        for hostile in ["", "s3cr3t\nmore", "s3cr3t\rmore", "s3cr3t\u{0}"] {
+            let packet = NetworkPacket::new(
+                1,
+                super::TYPE_SFTP,
+                serde_json::json!({
+                    "port": 1739,
+                    "user": "kdeconnect",
+                    "password": hostile,
+                    "path": "/storage/emulated/0",
+                }),
+            );
+            assert!(
+                read_sftp(&packet).is_none(),
+                "{hostile:?} must not decode into a mount"
+            );
+        }
+    }
+
+    #[test]
+    fn an_ordinary_reply_still_decodes_after_the_checks() {
+        let SftpReply::Mount(m) = read_sftp(&mount_body("kdeconnect", "/storage/emulated/0"))
+            .expect("a legitimate reply still parses")
+        else {
+            panic!("expected a mount");
+        };
+        assert_eq!(m.user, "kdeconnect");
+        assert_eq!(m.path, "/storage/emulated/0");
     }
 
     #[test]

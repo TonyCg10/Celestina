@@ -7,10 +7,8 @@
 //! `org.mpris.MediaPlayer2` off the bus directly would buy nothing one small,
 //! already-packaged tool does not already do.
 
-use std::fs::File;
-use std::io::{self, Read};
-use std::os::unix::process::CommandExt;
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::io;
+use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::sync::Arc;
@@ -18,13 +16,10 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use magnetita_core::{mpris, MprisRequest, PlayerState};
-use rustix::fs::{fcntl_getfl, fcntl_setfl, OFlags};
-use rustix::pipe::{pipe_with, PipeFlags};
-use rustix::process::{kill_process_group, Pid, Signal};
+
+use crate::subprocess;
 
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(2);
-const MAX_OUTPUT_BYTES: usize = 256 * 1024;
-const OUTPUT_READ_CHUNK: usize = 8 * 1024;
 const WORK_QUEUE: usize = 16;
 
 pub enum Reply {
@@ -118,7 +113,7 @@ fn run_request(request: MprisRequest, replies: &SyncSender<Reply>, stopping: &At
     if let Some(volume) = request.set_volume {
         set_volume(&player, volume, deadline, stopping);
     }
-    if wants_state && !cancelled(stopping, deadline) {
+    if wants_state && !subprocess::cancelled(stopping, deadline) {
         if let Some(state) = state(&player, deadline, stopping) {
             let _ = replies.try_send(Reply::State(state));
         }
@@ -185,155 +180,17 @@ fn set_volume(player: &str, volume: i32, deadline: Instant, stopping: &AtomicBoo
 }
 
 fn command_output(args: &[&str], deadline: Instant, stopping: &AtomicBool) -> Option<Vec<u8>> {
-    command_output_from("playerctl", args, deadline, stopping)
-}
-
-fn command_output_from(
-    program: &str,
-    args: &[&str],
-    deadline: Instant,
-    stopping: &AtomicBool,
-) -> Option<Vec<u8>> {
-    if cancelled(stopping, deadline) {
-        return None;
-    }
-    let (mut output_reader, stdout) = output_pipe().ok()?;
-    let (mut child, group) = spawn_grouped(program, args, stdout).ok()?;
-    let (status, output) =
-        wait_with_output(&mut child, group, &mut output_reader, deadline, stopping)?;
-    status.success().then_some(output)
+    subprocess::command_output_from("playerctl", args, deadline, stopping)
 }
 
 fn command_status(args: &[&str], deadline: Instant, stopping: &AtomicBool) {
-    if cancelled(stopping, deadline) {
+    if subprocess::cancelled(stopping, deadline) {
         return;
     }
-    let Ok((mut child, group)) = spawn_grouped("playerctl", args, Stdio::null()) else {
+    let Ok((mut child, group)) = subprocess::spawn_grouped("playerctl", args, Stdio::null()) else {
         return;
     };
-    let _ = wait_bounded(&mut child, group, deadline, stopping);
-}
-
-fn output_pipe() -> io::Result<(File, Stdio)> {
-    let (read_end, write_end) = pipe_with(PipeFlags::CLOEXEC)?;
-    let flags = fcntl_getfl(&read_end)?;
-    fcntl_setfl(&read_end, flags | OFlags::NONBLOCK)?;
-    Ok((File::from(read_end), Stdio::from(write_end)))
-}
-
-fn spawn_grouped(program: &str, args: &[&str], stdout: Stdio) -> io::Result<(Child, Pid)> {
-    let mut command = Command::new(program);
-    command
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(stdout)
-        .stderr(Stdio::null())
-        .process_group(0);
-    let child = command.spawn()?;
-    let group = Pid::from_child(&child);
-    Ok((child, group))
-}
-
-fn wait_with_output(
-    child: &mut Child,
-    group: Pid,
-    reader: &mut File,
-    deadline: Instant,
-    stopping: &AtomicBool,
-) -> Option<(ExitStatus, Vec<u8>)> {
-    let mut output = Vec::new();
-    loop {
-        if cancelled(stopping, deadline) {
-            terminate_group_and_reap(child, group);
-            return None;
-        }
-        if drain_available(reader, &mut output).is_err() {
-            terminate_group_and_reap(child, group);
-            return None;
-        }
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                terminate_group(group);
-                if drain_available(reader, &mut output).is_err() {
-                    return None;
-                }
-                return Some((status, output));
-            }
-            Ok(None) => std::thread::sleep(poll_delay(deadline)),
-            Err(_) => {
-                terminate_group_and_reap(child, group);
-                return None;
-            }
-        }
-    }
-}
-
-fn drain_available(reader: &mut File, output: &mut Vec<u8>) -> io::Result<()> {
-    let mut chunk = [0_u8; OUTPUT_READ_CHUNK];
-    loop {
-        let remaining = MAX_OUTPUT_BYTES.saturating_sub(output.len());
-        let read_limit = (remaining + 1).min(chunk.len());
-        match reader.read(&mut chunk[..read_limit]) {
-            Ok(0) => return Ok(()),
-            Ok(read) if read > remaining => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "playerctl output exceeded the bounded capture size",
-                ));
-            }
-            Ok(read) => output.extend_from_slice(&chunk[..read]),
-            Err(error) if error.kind() == io::ErrorKind::WouldBlock => return Ok(()),
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-            Err(error) => return Err(error),
-        }
-    }
-}
-
-fn wait_bounded(
-    child: &mut Child,
-    group: Pid,
-    deadline: Instant,
-    stopping: &AtomicBool,
-) -> Option<ExitStatus> {
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                terminate_group(group);
-                return Some(status);
-            }
-            Ok(None) if !cancelled(stopping, deadline) => {
-                std::thread::sleep(poll_delay(deadline));
-            }
-            Ok(None) => {
-                terminate_group_and_reap(child, group);
-                return None;
-            }
-            Err(_) => {
-                terminate_group_and_reap(child, group);
-                return None;
-            }
-        }
-    }
-}
-
-fn terminate_group(group: Pid) {
-    let _ = kill_process_group(group, Signal::KILL);
-}
-
-fn terminate_group_and_reap(child: &mut Child, group: Pid) {
-    terminate_group(group);
-    let _ = child.kill();
-    let _ = child.wait();
-}
-
-fn poll_delay(deadline: Instant) -> Duration {
-    deadline
-        .saturating_duration_since(Instant::now())
-        .min(Duration::from_millis(10))
-}
-
-fn cancelled(stopping: &AtomicBool, deadline: Instant) -> bool {
-    stopping.load(Ordering::Acquire) || Instant::now() >= deadline
+    let _ = subprocess::wait_bounded(&mut child, group, deadline, stopping);
 }
 
 #[cfg(test)]
@@ -343,7 +200,8 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::time::{Duration, Instant};
 
-    use super::{command_output_from, spawn_grouped, wait_bounded, Worker};
+    use super::Worker;
+    use crate::subprocess::{command_output_from, spawn_grouped, wait_bounded};
     use magnetita_core::mpris::parse_playerctl_state as parse_state;
 
     static TEST_SEQUENCE: AtomicU64 = AtomicU64::new(0);

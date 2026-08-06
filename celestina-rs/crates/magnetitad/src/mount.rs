@@ -10,11 +10,25 @@
 //! The mount is tied to the link: hold the [`Mount`] while connected and drop it
 //! on disconnect — [`Drop`] unmounts, so a lost link never strands a dead mount.
 
-use std::io::{self, Write};
+use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
+use std::sync::atomic::AtomicBool;
+use std::time::{Duration, Instant};
 
 use magnetita_core::SftpMount;
+
+use crate::subprocess;
+
+/// How long the whole mount attempt may take. [`Mount::open`] runs on the
+/// thread pumping the phone link, and a phone that answers SFTP with an
+/// address that accepts the TCP connection and then says nothing would
+/// otherwise stall that link for as long as it likes.
+const MOUNT_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// How long releasing a mountpoint may take. Unmount runs from `Drop`, so it
+/// must never be the thing that keeps a closing link alive.
+const UNMOUNT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// A live sshfs mount of one phone. Unmounts when dropped.
 pub struct Mount {
@@ -31,32 +45,33 @@ impl Mount {
         // Clear any stale mount left by a previous crash before remounting.
         let _ = unmount(&mountpoint);
 
+        // Every component of this argument was validated at the decode
+        // boundary, which is what keeps it a path rather than an sshfs option.
         let remote = format!("{}@{}:{}", sftp.user, host, sftp.path);
-        let mut child = Command::new("sshfs")
-            .arg(&remote)
-            .arg(&mountpoint)
-            .args(["-p", &sftp.port.to_string()])
-            .args(SSHFS_OPTIONS)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .spawn()?;
+        let port = sftp.port.to_string();
+        let mountpoint_arg = mountpoint.to_string_lossy().into_owned();
+        let mut args = vec![
+            remote.as_str(),
+            mountpoint_arg.as_str(),
+            "-p",
+            port.as_str(),
+        ];
+        args.extend_from_slice(SSHFS_OPTIONS);
 
         // sshfs reads the one-session password from stdin (-o password_stdin).
-        if let Some(mut stdin) = child.stdin.take() {
-            writeln!(stdin, "{}", sftp.password)?;
-        }
-
-        let output = child.wait_with_output()?;
-        if !output.status.success() {
-            let reason = String::from_utf8_lossy(&output.stderr);
-            let reason = reason.trim();
-            let reason = if reason.is_empty() {
-                "sshfs failed"
-            } else {
-                reason
-            };
-            return Err(io::Error::other(reason.to_owned()));
+        let password = format!("{}\n", sftp.password);
+        let stopping = AtomicBool::new(false);
+        let outcome = subprocess::run_with_input(
+            "sshfs",
+            &args,
+            password.as_bytes(),
+            Instant::now() + MOUNT_TIMEOUT,
+            &stopping,
+        );
+        if !outcome.succeeded {
+            return Err(io::Error::other(
+                outcome.reason("sshfs did not establish the mount within its budget"),
+            ));
         }
         Ok(Mount { mountpoint })
     }
@@ -114,19 +129,30 @@ pub fn clear_stale() {
 }
 
 fn unmount(mountpoint: &Path) -> io::Result<()> {
-    Command::new("fusermount3")
-        .arg("-u")
-        .arg(mountpoint)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()?;
+    let stopping = AtomicBool::new(false);
+    let path = mountpoint.to_string_lossy().into_owned();
+    let (mut child, group) =
+        subprocess::spawn_grouped("fusermount3", &["-u", path.as_str()], Stdio::null())?;
+    subprocess::wait_bounded(
+        &mut child,
+        group,
+        Instant::now() + UNMOUNT_TIMEOUT,
+        &stopping,
+    )
+    .ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::TimedOut,
+            "fusermount3 did not finish in time",
+        )
+    })?;
     Ok(())
 }
 
 /// sshfs options: the phone's one-session password over stdin, no host-key
-/// checks (the server is ephemeral and already trusted over TLS), auto-reconnect
-/// with liveness probes, and acceptance of the ssh-rsa host key some phones
-/// still present (added, not forced).
+/// checks (the server is ephemeral and already trusted over TLS), a bounded
+/// connect so an address that never answers cannot hold the attempt open,
+/// auto-reconnect with liveness probes, and acceptance of the ssh-rsa host key
+/// some phones still present (added, not forced).
 const SSHFS_OPTIONS: &[&str] = &[
     "-o",
     "password_stdin",
@@ -140,6 +166,8 @@ const SSHFS_OPTIONS: &[&str] = &[
     "PubkeyAuthentication=no",
     "-o",
     "HostKeyAlgorithms=+ssh-rsa",
+    "-o",
+    "ConnectTimeout=10",
     "-o",
     "reconnect",
     "-o",

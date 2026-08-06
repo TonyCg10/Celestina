@@ -26,6 +26,22 @@ pub const DEFAULT_PORT: u16 = 1716;
 /// the peer skip it while we wait for it, and the link stalls.
 pub const PROTOCOL_VERSION: i32 = 8;
 
+/// The oldest protocol version this suite will speak to.
+///
+/// Below 8 the handshake has no encrypted identity re-exchange and a pairing
+/// request carries no timestamp, so the peer's identity is bound to nothing a
+/// LAN attacker could not also produce. The peer declares its own version, so
+/// honouring an older one lets the peer choose to be unauthenticated. Every
+/// current KDE Connect client speaks 8, so the floor rejects only attacks.
+pub const MIN_PROTOCOL_VERSION: i32 = 8;
+
+/// Longest device id accepted. A real KDE Connect id is 32 hex characters;
+/// this only refuses a value no honest peer sends.
+const MAX_DEVICE_ID: usize = 128;
+
+/// Longest device name shown. The name is peer-chosen text on a label.
+const MAX_DEVICE_NAME: usize = 128;
+
 /// What a device calls itself — drives the icon and, later, per-type behaviour.
 /// Unknown keeps a strange value from rejecting an otherwise-valid identity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -129,7 +145,15 @@ impl Identity {
         if !packet.is(TYPE_IDENTITY) {
             return None;
         }
-        serde_json::from_value(packet.body.clone()).ok()
+        let mut identity: Identity = serde_json::from_value(packet.body.clone()).ok()?;
+        // The id keys the registry, the trust store and a mount path component,
+        // so an unbounded one is refused rather than shortened. The name is
+        // only shown, so it is bounded to a label's length.
+        if !crate::text::is_bounded_identifier(&identity.device_id, MAX_DEVICE_ID) {
+            return None;
+        }
+        identity.device_name = crate::text::bounded(&identity.device_name, MAX_DEVICE_NAME);
+        Some(identity)
     }
 
     /// Whether the device both offers `outgoing` and accepts our matching send —
@@ -158,6 +182,21 @@ mod tests {
             outgoing_capabilities: vec!["kdeconnect.ping".to_owned()],
             tcp_port: Some(1716),
         }
+    }
+
+    #[test]
+    fn an_identity_bounds_its_name_and_refuses_an_unbounded_id() {
+        let mut long_id = Identity::desktop("x", "Phone");
+        long_id.device_id = "x".repeat(super::MAX_DEVICE_ID + 1);
+        assert_eq!(Identity::from_packet(&long_id.to_packet(1)), None);
+
+        let mut empty_id = Identity::desktop("x", "Phone");
+        empty_id.device_id = String::new();
+        assert_eq!(Identity::from_packet(&empty_id.to_packet(1)), None);
+
+        let long_name = Identity::desktop("phone", "n".repeat(super::MAX_DEVICE_NAME + 10));
+        let decoded = Identity::from_packet(&long_name.to_packet(1)).unwrap();
+        assert_eq!(decoded.device_name.chars().count(), super::MAX_DEVICE_NAME);
     }
 
     #[test]

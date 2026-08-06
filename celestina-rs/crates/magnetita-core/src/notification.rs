@@ -13,6 +13,18 @@
 use serde_json::Value;
 
 use crate::packet::NetworkPacket;
+use crate::text::{bounded, is_bounded_identifier};
+
+/// Longest notification id accepted. It is a map key on the desktop side, so
+/// it is refused rather than shortened.
+const MAX_NOTIFICATION_ID: usize = 256;
+
+/// Longest app name or title shown. A label is not a document.
+const MAX_NOTIFICATION_LABEL: usize = 256;
+
+/// Longest notification body shown. Generous for a real message, bounded so a
+/// peer cannot decide how much text the desktop holds and draws.
+const MAX_NOTIFICATION_TEXT: usize = 4096;
 
 /// The notification packet type.
 pub const TYPE_NOTIFICATION: &str = "kdeconnect.notification";
@@ -40,12 +52,15 @@ pub fn read_notification(packet: &NetworkPacket) -> Option<Notification> {
         return None;
     }
     let body = packet.body.as_object()?;
-    let id = body.get("id").and_then(Value::as_str)?.to_owned();
+    let id = body.get("id").and_then(Value::as_str)?;
+    if !is_bounded_identifier(id, MAX_NOTIFICATION_ID) {
+        return None;
+    }
     Some(Notification {
-        id,
-        app_name: string_field(body, "appName"),
-        title: string_field(body, "title"),
-        text: string_field(body, "text"),
+        id: id.to_owned(),
+        app_name: string_field(body, "appName", MAX_NOTIFICATION_LABEL),
+        title: string_field(body, "title", MAX_NOTIFICATION_LABEL),
+        text: string_field(body, "text", MAX_NOTIFICATION_TEXT),
         is_cancel: body
             .get("isCancel")
             .and_then(Value::as_bool)
@@ -53,11 +68,11 @@ pub fn read_notification(packet: &NetworkPacket) -> Option<Notification> {
     })
 }
 
-fn string_field(body: &serde_json::Map<String, Value>, key: &str) -> String {
-    body.get(key)
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned()
+fn string_field(body: &serde_json::Map<String, Value>, key: &str, limit: usize) -> String {
+    bounded(
+        body.get(key).and_then(Value::as_str).unwrap_or_default(),
+        limit,
+    )
 }
 
 #[cfg(test)]
@@ -79,6 +94,41 @@ mod tests {
                 text: "¿Vienes?".to_owned(),
                 is_cancel: false,
             })
+        );
+    }
+
+    #[test]
+    fn peer_chosen_text_is_bounded_and_an_unbounded_id_is_refused() {
+        let long_id = "x".repeat(super::MAX_NOTIFICATION_ID + 1);
+        let packet = NetworkPacket::new(
+            1,
+            super::TYPE_NOTIFICATION,
+            serde_json::json!({ "id": long_id }),
+        );
+        assert_eq!(read_notification(&packet), None);
+
+        let packet = NetworkPacket::new(
+            1,
+            super::TYPE_NOTIFICATION,
+            serde_json::json!({
+                "id": "0|com.whatsapp|1|null|10123",
+                "appName": "a".repeat(super::MAX_NOTIFICATION_LABEL + 10),
+                "title": "t".repeat(super::MAX_NOTIFICATION_LABEL + 10),
+                "text": "b".repeat(super::MAX_NOTIFICATION_TEXT + 10),
+            }),
+        );
+        let notification = read_notification(&packet).unwrap();
+        assert_eq!(
+            notification.app_name.chars().count(),
+            super::MAX_NOTIFICATION_LABEL
+        );
+        assert_eq!(
+            notification.title.chars().count(),
+            super::MAX_NOTIFICATION_LABEL
+        );
+        assert_eq!(
+            notification.text.chars().count(),
+            super::MAX_NOTIFICATION_TEXT
         );
     }
 
