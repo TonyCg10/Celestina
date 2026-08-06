@@ -354,7 +354,12 @@ fn complete_tls<D>(
         deadline.check()?;
         match conn.complete_io(tcp) {
             Ok(_) if !conn.is_handshaking() => return Ok(()),
-            Ok(_) => {}
+            // Still handshaking, and it came back without blocking. The
+            // timeout branch below is paced by the socket read timeout; this
+            // one is not, so without a wait it would spin a pump thread at full
+            // CPU until the deadline. The same interval, because it is waiting
+            // for the same thing: more bytes from the peer.
+            Ok(_) => std::thread::sleep(HANDSHAKE_POLL_INTERVAL),
             Err(error) if is_retryable_timeout(&error) => {}
             Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => {
                 return Err(LinkError::HandshakeIncomplete);

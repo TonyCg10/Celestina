@@ -10,6 +10,10 @@
 
 ## Current checkout truth
 
+- Uncommitted in the checkout: `MAG-S1-C`. The one arm of the TLS handshake loop
+  that retried without waiting now sleeps the same interval the socket timeout
+  uses, so it cannot spin a pump thread until the deadline.
+
 - `magnetitad` implements KDE Connect discovery, TCP/TLS trust, local pairing,
   storage mount, the daily plugins and `org.celestina.Devices1`.
 - Siderita consumes the mount/device/media contract; the Celestina shell
