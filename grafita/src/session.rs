@@ -151,6 +151,21 @@ pub mod qobject {
         #[qinvokable]
         fn save_as(self: Pin<&mut GrafitaSession>, path: &QString);
 
+        /// The same, for the `file://` URL a file chooser answers with.
+        ///
+        /// The decoding is here rather than in QML because turning a URL into a
+        /// local path is a domain rule with one owner: a destination named
+        /// `informe#final.txt` arrives percent-encoded, and a surface that cut
+        /// the scheme off by hand would create a file with the escape in its
+        /// name while reporting success.
+        #[qinvokable]
+        fn save_url(self: Pin<&mut GrafitaSession>, url: &QString);
+
+        /// The user was asked where the document goes and answered "nowhere".
+        /// Any close waiting on that write is disarmed.
+        #[qinvokable]
+        fn cancel_save_as(self: Pin<&mut GrafitaSession>);
+
         /// Opens a document by path. Whether it can be edited is decided by its
         /// bytes, never by its name or its MIME entry.
         #[qinvokable]
@@ -220,6 +235,9 @@ pub struct GrafitaSessionRust {
     /// The caret the widget last reported, kept so an edit can re-answer it
     /// without the widget having to report it again.
     caret_offset: usize,
+    /// A message about one named file, waiting for the publish that would
+    /// otherwise replace it with the generic wording of the same refusal.
+    pending_error: Option<String>,
     session: DocumentSession,
     worker: Option<DocumentWorker>,
     /// The close under way was asked for in order to quit, so completing it
@@ -251,6 +269,7 @@ impl Default for GrafitaSessionRust {
             caret_column: 1,
             language_id: 0,
             caret_offset: 0,
+            pending_error: None,
             session: DocumentSession::new(Limits::default()),
             worker: None,
             quitting: false,
@@ -315,6 +334,30 @@ impl qobject::GrafitaSession {
     pub fn save_as(mut self: Pin<&mut Self>, path: &QString) {
         let path = PathBuf::from(path.to_string());
         let outcome = self.as_mut().rust_mut().get_mut().session.save_as(&path);
+        self.dispatch(outcome);
+    }
+
+    /// The chooser's answer, decoded by the same rule an open is decoded by.
+    pub fn save_url(mut self: Pin<&mut Self>, url: &QString) {
+        let url = url.to_string();
+        match crate::url::local_path(&url) {
+            Some(path) => {
+                let outcome = self.as_mut().rust_mut().get_mut().session.save_as(&path);
+                self.dispatch(outcome);
+            }
+            None => {
+                self.as_mut().rust_mut().get_mut().pending_error =
+                    Some("Grafita solo guarda en archivos locales".to_owned());
+                self.publish();
+            }
+        }
+    }
+
+    /// The chooser was dismissed. The document stays exactly as it is, and a
+    /// close that was waiting for the write stops waiting for it.
+    pub fn cancel_save_as(mut self: Pin<&mut Self>) {
+        self.as_mut().rust_mut().get_mut().quitting = false;
+        let outcome = self.as_mut().rust_mut().get_mut().session.cancel_save_as();
         self.dispatch(outcome);
     }
 
@@ -458,9 +501,11 @@ impl qobject::GrafitaSession {
                     .document_reset(QString::from(text.as_str()), caret);
             }
             Some(Event::Declined { path, reason }) => {
+                // Held rather than set: `publish` below reports the same
+                // refusal in general terms, and whichever ran last would be the
+                // only one the user ever saw. The one naming the file wins.
                 let message = format!("{}: {}", display_name(&path), decline_text(reason));
-                self.as_mut()
-                    .set_error_text(QString::from(message.as_str()));
+                self.as_mut().rust_mut().get_mut().pending_error = Some(message);
             }
             Some(Event::Select { start, end }) => {
                 let start = i32::try_from(start).unwrap_or(i32::MAX);
@@ -526,8 +571,9 @@ impl qobject::GrafitaSession {
 
     /// Copies the session's state into the properties QML binds to.
     ///
-    /// A declined open leaves its message in `errorText`, so that one field is
-    /// only overwritten when the session itself has something to say.
+    /// A message that names a file outranks the general wording of the same
+    /// refusal: "programa: no es texto…" tells the user which of the two files
+    /// they just opened was refused, where "Este archivo no es texto" does not.
     fn publish(mut self: Pin<&mut Self>) {
         let state = self.rust().session.state().clone();
 
@@ -568,7 +614,11 @@ impl qobject::GrafitaSession {
         };
         self.as_mut().set_status_text(QString::from(status));
 
-        if let Some(failure) = state.failure.as_ref() {
+        let pending = self.as_mut().rust_mut().get_mut().pending_error.take();
+        if let Some(message) = pending {
+            self.as_mut()
+                .set_error_text(QString::from(message.as_str()));
+        } else if let Some(failure) = state.failure.as_ref() {
             let text = failure_text(failure);
             self.as_mut().set_error_text(QString::from(text.as_str()));
         } else if state.active {

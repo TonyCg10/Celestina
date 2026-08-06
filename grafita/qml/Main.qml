@@ -193,9 +193,14 @@ ApplicationWindow {
         onActivated: readingPreferences.toggleWrap()
     }
 
+    // Guarded exactly as the footer's button is. A second press over the same
+    // document state would queue a write against the identity the first one is
+    // about to replace, and the file's own save would come back as somebody
+    // else's change.
     Shortcut {
         sequences: [StandardKey.Save]
-        onActivated: if (activeSession) activeSession.save()
+        onActivated: if (activeSession && activeSession.dirty && !activeSession.busy)
+                         activeSession.save()
     }
     Shortcut {
         sequences: [StandardKey.Undo]
@@ -328,6 +333,10 @@ ApplicationWindow {
                     session: documentSession
                     blocked: documentSession.closePrompt
                     reading: readingPreferences
+                    // Nowhere to save to after all: a quit sweep that was
+                    // waiting on this document stops here rather than staying
+                    // armed and closing a later tab on its own.
+                    onSaveCancelled: window.cancelQuit()
                 }
 
                 UnsavedDialog {

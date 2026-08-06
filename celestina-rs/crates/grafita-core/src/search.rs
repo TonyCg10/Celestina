@@ -219,14 +219,22 @@ impl LiveSearch {
     }
 
     /// Moves the selection by `delta` occurrences, wrapping at both ends.
+    ///
+    /// With nothing selected — after a replace-all, say — stepping selects an
+    /// end of the list rather than moving away from an occurrence that was
+    /// never selected: forwards lands on the first match, backwards on the
+    /// last. Counting from a phantom index zero would skip the first one.
     pub fn step(&mut self, delta: isize) {
         if self.matches.is_empty() {
             self.index = None;
             return;
         }
         let total = self.matches.len() as isize;
-        let current = self.index.unwrap_or(0) as isize;
-        self.index = Some((current + delta).rem_euclid(total) as usize);
+        self.index = Some(match self.index {
+            Some(current) => (current as isize + delta).rem_euclid(total) as usize,
+            None if delta < 0 => self.matches.len() - 1,
+            None => 0,
+        });
     }
 
     /// Drops the selection while keeping the pattern.
@@ -269,7 +277,7 @@ impl LiveSearch {
 
 #[cfg(test)]
 mod tests {
-    use super::{count, find_all, index_at, next, previous, Match, Query};
+    use super::{count, find_all, index_at, next, previous, LiveSearch, Match, Query};
     use crate::buffer::TextBuffer;
     use crate::position::Position;
 
@@ -428,5 +436,23 @@ mod tests {
         assert_eq!(index_at(&all, Position::new(0, 1)), Some(0));
         assert_eq!(index_at(&all, Position::new(0, 9)), Some(1));
         assert_eq!(index_at(&all, Position::new(0, 5)), None);
+    }
+
+    #[test]
+    fn stepping_with_nothing_selected_lands_on_an_end_of_the_list() {
+        let buffer = buffer("uno dos uno\ntres uno\n");
+        let mut search = LiveSearch::default();
+        search.set("uno", plain(), Some(&buffer));
+        assert_eq!(search.index(), Some(0));
+
+        // Deselected, forwards must find the *first* occurrence again rather
+        // than the second.
+        search.deselect();
+        search.step(1);
+        assert_eq!(search.index(), Some(0));
+
+        search.deselect();
+        search.step(-1);
+        assert_eq!(search.index(), Some(2));
     }
 }

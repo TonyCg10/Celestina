@@ -142,10 +142,28 @@ impl Document {
 
     /// Adopts the file a "save as" just wrote, after which every ordinary save
     /// rule applies to it.
+    ///
+    /// Adopting the file is all this does. Whether the document is *clean* is a
+    /// separate question with a separate answer — [`Document::mark_saved_at`] —
+    /// because the write took time and the keys pressed during it are in the
+    /// document but not in the file.
     pub fn adopt_target(&mut self, target: Target) {
         self.target = Some(target);
         self.conflict = None;
-        self.history.mark_saved();
+    }
+
+    /// Pins the savepoint when `revision` is still the document's own.
+    ///
+    /// A write that left with an older revision does not describe the document
+    /// as it stands, so clearing dirty state on it would mark keystrokes saved
+    /// that were never written.
+    pub fn mark_saved_at(&mut self, revision: Revision) -> SaveApplication {
+        if revision == self.revision {
+            self.history.mark_saved();
+            SaveApplication::Clean
+        } else {
+            SaveApplication::StillDirty
+        }
     }
 
     #[must_use]
@@ -503,12 +521,7 @@ impl Document {
             target.adopt(report.identity);
         }
         self.conflict = None;
-        if report.revision == self.revision {
-            self.history.mark_saved();
-            SaveApplication::Clean
-        } else {
-            SaveApplication::StillDirty
-        }
+        self.mark_saved_at(report.revision)
     }
 
     /// Records what a refused save says about the file on disk.

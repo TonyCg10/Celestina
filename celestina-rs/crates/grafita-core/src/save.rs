@@ -290,6 +290,17 @@ fn create_temporary(resolved: &Path, parent: &Path) -> Result<(PathBuf, File), S
     })
 }
 
+/// A completed "save as": the file that now exists and how durable it is.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CreatedFile {
+    /// The file the document may now adopt.
+    pub target: Target,
+    /// How durable the write turned out to be. Reported rather than assumed:
+    /// the directory sync can fail, and a host that states durability it did
+    /// not observe is telling the user something it does not know.
+    pub durability: Durability,
+}
+
 /// Writes `bytes` to a path the document does not yet own, and returns the
 /// target it may now adopt.
 ///
@@ -302,8 +313,11 @@ fn create_temporary(resolved: &Path, parent: &Path) -> Result<(PathBuf, File), S
 ///
 /// An existing destination is overwritten, because the caller reached here
 /// through a file chooser that already asked. Its metadata is reproduced, so
-/// saving over a file does not quietly widen its permissions.
-pub fn create(path: &Path, bytes: &[u8]) -> Result<Target, SaveRefusal> {
+/// saving over a file does not quietly widen its permissions, and a destination
+/// that is a symlink is resolved first, so the write lands on the file the link
+/// names instead of replacing the link with a regular file — the same rule
+/// [`perform`] follows through [`Target`].
+pub fn create(path: &Path, bytes: &[u8]) -> Result<CreatedFile, SaveRefusal> {
     let parent = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -319,13 +333,21 @@ pub fn create(path: &Path, bytes: &[u8]) -> Result<Target, SaveRefusal> {
             ),
         )
     })?;
+    // A destination that already exists is resolved through every link in it,
+    // so the temporary is a sibling of the *real* file and the rename replaces
+    // that file rather than the link pointing at it.
     let destination = parent.join(name);
+    let destination = destination.canonicalize().unwrap_or(destination);
+    let directory = destination
+        .parent()
+        .filter(|directory| !directory.as_os_str().is_empty())
+        .map_or(parent, Path::to_path_buf);
 
     // An existing destination keeps its own permissions and ownership: the user
     // asked to write *this* file, not to reset how it is protected.
     let existing = destination.metadata().ok().filter(fs::Metadata::is_file);
 
-    let (temporary, mut file) = create_temporary(&destination, &parent)?;
+    let (temporary, mut file) = create_temporary(&destination, &directory)?;
     let outcome = (|| {
         file.write_all(bytes)
             .map_err(|error| SaveRefusal::io(&temporary, &error))?;
@@ -337,7 +359,19 @@ pub fn create(path: &Path, bytes: &[u8]) -> Result<Target, SaveRefusal> {
         drop(file);
         fs::rename(&temporary, &destination)
             .map_err(|error| SaveRefusal::io(&destination, &error))?;
-        Target::resolve(&destination).map_err(|error| SaveRefusal::io(&destination, &error))
+
+        // Past the rename the file exists. Syncing the directory only decides
+        // whether the new entry survives a power loss, so its failure lowers
+        // the durability reported instead of claiming the save did not happen.
+        let durability = match File::open(&directory).and_then(|handle| handle.sync_all()) {
+            Ok(()) => Durability::Durable,
+            Err(error) => Durability::Reduced {
+                message: error.to_string(),
+            },
+        };
+        let target =
+            Target::resolve(&destination).map_err(|error| SaveRefusal::io(&destination, &error))?;
+        Ok(CreatedFile { target, durability })
     })();
     if outcome.is_err() {
         let _ = fs::remove_file(&temporary);

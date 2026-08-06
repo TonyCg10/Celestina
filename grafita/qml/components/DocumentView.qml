@@ -248,23 +248,30 @@ Item {
         onAccepted: root.session.openUrl(openDialog.selectedFile.toString())
     }
 
+    // The destination chooser was dismissed, so whatever was waiting on the
+    // write — a tab closing, a quit sweep — has to stop waiting for it.
+    signal saveCancelled()
+
     // Where a document with no file yet goes. Reached by saving one, so the
     // question is asked at the moment the user actually wants an answer.
+    //
+    // The chosen URL is handed over whole. Percent-decoding it and deciding
+    // what counts as a local file are document rules with one owner in the
+    // core, not something a surface may take apart with `substring`.
     FileDialog {
         id: saveDialog
         title: "Guardar como"
         fileMode: FileDialog.SaveFile
-        onAccepted: root.saveTo(saveDialog.selectedFile)
+        onAccepted: root.session.saveUrl(saveDialog.selectedFile.toString())
+        onRejected: {
+            root.session.cancelSaveAs()
+            root.saveCancelled()
+        }
     }
 
     /// Called by the window when the document says it has nowhere to go.
     function askDestination() {
         saveDialog.open()
-    }
-
-    function saveTo(url) {
-        const text = url.toString()
-        root.session.saveAs(text.startsWith("file://") ? text.substring(7) : text)
     }
 
     // The documents this window could pick up again. Re-read whenever the empty

@@ -557,3 +557,267 @@ fn a_refused_save_as_leaves_the_document_unbound() {
 
     let _ = fs::remove_dir_all(root);
 }
+
+/// The whole point of the editor: a keystroke that lands while a "save as" is
+/// being written and synced is in the document and not in the file, so the
+/// document must still be dirty when the answer arrives.
+#[test]
+fn editing_during_a_save_as_leaves_the_document_dirty() {
+    let root = scratch("save-as-raced");
+    let destination = root.join("carrera.txt");
+
+    let mut session = DocumentSession::new(Limits::default());
+    let _ = session.new_document();
+    let _ = session.apply_display_text("primera\n");
+
+    // The bytes leave here; the job is not answered yet.
+    let job = session.save_as(&destination).job.expect("a save-as job");
+
+    // The user keeps typing while the worker writes and syncs.
+    let _ = session.apply_display_text("primera\nsegunda\n");
+
+    let _ = pump(&mut session, job);
+
+    assert_eq!(
+        fs::read(&destination).expect("read back"),
+        b"primera\n",
+        "only the snapshotted bytes were written"
+    );
+    assert!(
+        session.state().dirty,
+        "the keystrokes typed during the write are not in the file"
+    );
+    assert!(session.has_destination(), "the file itself is adopted");
+
+    let _ = fs::remove_dir_all(root);
+}
+
+/// And the close waiting on that write waits for the rest of the work rather
+/// than taking it away with the tab.
+#[test]
+fn a_save_as_that_left_work_behind_does_not_close_the_document() {
+    let root = scratch("save-as-raced-close");
+    let destination = root.join("cierre.txt");
+
+    let mut session = DocumentSession::new(Limits::default());
+    let _ = session.new_document();
+    let _ = session.apply_display_text("primera\n");
+    let _ = session.request_close();
+
+    let outcome = session.save_and_close();
+    assert_eq!(outcome.event, Some(Event::DestinationNeeded));
+    let job = session.save_as(&destination).job.expect("a save-as job");
+    let _ = session.apply_display_text("primera\nsegunda\n");
+
+    let event = pump(&mut session, job);
+
+    assert_eq!(
+        event, None,
+        "closing would discard the unwritten keystrokes"
+    );
+    assert!(session.state().active);
+    assert!(session.state().dirty);
+
+    let _ = fs::remove_dir_all(root);
+}
+
+/// Cancelling the destination chooser must disarm the pending close, or an
+/// ordinary save much later closes the document on its own.
+#[test]
+fn cancelling_the_destination_chooser_disarms_the_pending_close() {
+    let root = scratch("save-as-cancelled");
+    let path = root.join("mantener.txt");
+    fs::write(&path, b"contenido\n").expect("write");
+
+    let (mut session, _) = open_session(&path);
+    let _ = session.apply_display_text("contenido editado\n");
+    let _ = session.request_close();
+    // A document with a file saves straight away, so the armed state is reached
+    // the way the host reaches it: the answer to the guarded question.
+    let _ = session.save_and_close();
+    let _ = session.cancel_save_as();
+
+    // Much later, an ordinary save.
+    let _ = session.apply_display_text("contenido editado otra vez\n");
+    let job = session.save().job.expect("a save job");
+    let event = pump(&mut session, job);
+
+    assert_eq!(event, None, "an ordinary save must not close anything");
+    assert!(session.state().active);
+    assert!(!session.state().dirty);
+
+    let _ = fs::remove_dir_all(root);
+}
+
+/// Two saves of the same document state are one write. Queueing the second
+/// would snapshot the identity the first is about to replace, and its own
+/// predecessor would come back as "another program changed this file".
+#[test]
+fn saving_twice_over_the_same_state_writes_once_and_raises_no_conflict() {
+    let root = scratch("double-save");
+    let path = root.join("doble.txt");
+    fs::write(&path, b"antes\n").expect("write");
+
+    let (mut session, _) = open_session(&path);
+    let _ = session.apply_display_text("despues\n");
+
+    let first = session.save().job.expect("a save job");
+    assert!(
+        session.save().job.is_none(),
+        "the same state is already with the worker"
+    );
+
+    let _ = pump(&mut session, first);
+    assert!(!session.state().dirty);
+    assert_eq!(session.state().conflict, None);
+    assert!(session.state().failure.is_none());
+
+    // And a clean document writes nothing at all.
+    assert!(session.save().job.is_none());
+
+    let _ = fs::remove_dir_all(root);
+}
+
+/// A classify answer is recognised by the question it belongs to, not by its
+/// age: `classify` deliberately does not move the newest-question mark, so the
+/// staleness filter must not be what decides its fate.
+#[test]
+fn a_classify_answer_survives_an_open_asked_for_after_it() {
+    let root = scratch("classify-then-open");
+    let asked = root.join("preguntado.txt");
+    let opened = root.join("abierto.txt");
+    fs::write(&asked, b"esto es texto\n").expect("write");
+    fs::write(&opened, b"otra cosa\n").expect("write");
+
+    let mut session = DocumentSession::new(Limits::default());
+    let classify = session.classify(&asked).job.expect("a probe job");
+    let open = session.open(&opened).job.expect("a probe job");
+
+    let event = pump(&mut session, classify);
+    assert_eq!(
+        event,
+        Some(Event::Classified {
+            path: asked.canonicalize().expect("canonical"),
+            editable: true
+        }),
+        "the question the host is waiting on must still be answered"
+    );
+
+    let _ = pump(&mut session, open);
+    assert_eq!(session.state().name, "abierto.txt");
+
+    let _ = fs::remove_dir_all(root);
+}
+
+/// Matches point into the buffer they were found in, so opening another
+/// document must not leave them pointing into it.
+#[test]
+fn opening_another_document_clears_the_live_search() {
+    let root = scratch("search-across-documents");
+    let first = root.join("primero.txt");
+    let second = root.join("segundo.txt");
+    fs::write(&first, b"gato gato gato\n").expect("write");
+    fs::write(&second, b"corto\n").expect("write");
+
+    let (mut session, _) = open_session(&first);
+    let _ = session.set_search("gato", grafita_core::search::Query::default());
+    assert_eq!(session.state().search_matches, 3);
+
+    let job = session.open(&second).job.expect("a probe job");
+    let _ = pump(&mut session, job);
+
+    assert_eq!(session.state().search_matches, 0);
+    assert_eq!(session.state().search_index, None);
+
+    // Replacing now must splice nothing: there is no selected occurrence.
+    let _ = session.replace_current("perro");
+    assert_eq!(session.display_text(), "corto\n");
+
+    let _ = fs::remove_dir_all(root);
+}
+
+/// An action with more members than the undo bound is still one action: undoing
+/// it must not stop half way through, in a state no user step produced.
+#[test]
+fn a_replace_all_larger_than_the_undo_bound_is_reversed_completely() {
+    let root = scratch("replace-all-bound");
+    let path = root.join("muchos.txt");
+    let occurrences = 600;
+    let original: String = (0..occurrences).map(|_| "x\n").collect();
+    fs::write(&path, original.as_bytes()).expect("write");
+
+    let (mut session, _) = open_session(&path);
+    let _ = session.set_search("x", grafita_core::search::Query::default());
+    let _ = session.replace_all("y");
+    assert_eq!(
+        session.display_text().matches('y').count(),
+        occurrences,
+        "every occurrence was replaced"
+    );
+
+    let _ = session.undo();
+    assert_eq!(
+        session.document().expect("document").text(),
+        original,
+        "one undo returns the document the user had"
+    );
+
+    let _ = fs::remove_dir_all(root);
+}
+
+/// After a replace-all nothing is selected, so "next" must find the first
+/// occurrence rather than counting from an index that was never there.
+#[test]
+fn find_next_after_a_replace_all_selects_the_first_occurrence() {
+    let root = scratch("find-after-replace-all");
+    let path = root.join("siguiente.txt");
+    fs::write(&path, b"a b a b a\n").expect("write");
+
+    let (mut session, _) = open_session(&path);
+    let _ = session.set_search("b", grafita_core::search::Query::default());
+    // A replacement that still contains the pattern leaves occurrences behind
+    // and no selection, which is the state this is about.
+    let _ = session.replace_all("bb");
+    assert_eq!(session.state().search_matches, 4);
+    assert_eq!(session.state().search_index, None);
+
+    let outcome = session.find_next();
+    assert_eq!(
+        session.state().search_index,
+        Some(0),
+        "the first occurrence must not be skipped"
+    );
+    assert_eq!(outcome.event, Some(Event::Select { start: 2, end: 3 }));
+
+    // And from the first, backwards wraps to the last.
+    let _ = session.find_previous();
+    assert_eq!(session.state().search_index, Some(3));
+
+    let _ = fs::remove_dir_all(root);
+}
+
+/// A "save as" onto a symlink writes the file the link names and leaves the
+/// link in place, exactly as an ordinary save does.
+#[test]
+fn a_save_as_onto_a_symlink_writes_through_it() {
+    let root = scratch("save-as-symlink");
+    let real = root.join("real.txt");
+    let link = root.join("enlace");
+    fs::write(&real, b"antes\n").expect("write");
+    std::os::unix::fs::symlink(&real, &link).expect("symlink");
+
+    let mut session = DocumentSession::new(Limits::default());
+    let _ = session.new_document();
+    let _ = session.apply_display_text("despues\n");
+    let job = session.save_as(&link).job.expect("a save-as job");
+    let _ = pump(&mut session, job);
+
+    assert!(
+        fs::symlink_metadata(&link).expect("stat").is_symlink(),
+        "the link is followed, never replaced"
+    );
+    assert_eq!(fs::read(&real).expect("read back"), b"despues\n");
+    assert!(!session.state().dirty);
+
+    let _ = fs::remove_dir_all(root);
+}

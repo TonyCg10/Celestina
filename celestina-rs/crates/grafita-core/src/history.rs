@@ -182,16 +182,51 @@ impl History {
             inserted_end,
             caret_before,
         });
+        self.trim();
+    }
+
+    /// Enforces the bound without ever splitting an action.
+    ///
+    /// Changes recorded inside one group are undone together, so discarding
+    /// part of a group would leave a state no user action produced: undoing a
+    /// replace-all would restore some occurrences and not others. A group is
+    /// therefore dropped whole or kept whole, and the oldest run is never
+    /// dropped while it is the only one on the stack — discarding the action
+    /// just recorded would make what the user did this instant irreversible.
+    fn trim(&mut self) {
         while self.undo.len() > self.limit {
-            let evicted = self.undo.pop_front();
-            let lost_savepoint = match (self.savepoint, evicted) {
-                (Savepoint::AtOrigin, _) => true,
-                (Savepoint::AtChange(marked), Some(change)) => change.sequence == marked,
-                _ => false,
-            };
-            if lost_savepoint {
-                self.savepoint = Savepoint::Unreachable;
+            let run = self.oldest_run();
+            if run >= self.undo.len() {
+                return;
             }
+            for _ in 0..run {
+                self.discard_oldest();
+            }
+        }
+    }
+
+    /// How many changes at the front of the stack form one action.
+    fn oldest_run(&self) -> usize {
+        match self.undo.front().and_then(Change::group) {
+            Some(group) => self
+                .undo
+                .iter()
+                .take_while(|change| change.group == Some(group))
+                .count(),
+            None => usize::from(!self.undo.is_empty()),
+        }
+    }
+
+    /// Drops the oldest change, noting when the saved state goes with it.
+    fn discard_oldest(&mut self) {
+        let evicted = self.undo.pop_front();
+        let lost_savepoint = match (self.savepoint, evicted) {
+            (Savepoint::AtOrigin, _) => true,
+            (Savepoint::AtChange(marked), Some(change)) => change.sequence == marked,
+            _ => false,
+        };
+        if lost_savepoint {
+            self.savepoint = Savepoint::Unreachable;
         }
     }
 
@@ -335,5 +370,45 @@ mod tests {
         }
         assert!(!history.is_clean());
         assert!(!history.can_undo());
+    }
+
+    #[test]
+    fn the_bound_never_discards_part_of_one_action() {
+        let mut history = History::with_limit(4);
+        history.open_group();
+        for _ in 0..10 {
+            record(&mut history, "x");
+        }
+        history.close_group();
+
+        // Every member of the action is still there: an action reversed only
+        // in part is a state the user never asked for.
+        let mut reversed = 0;
+        while let Some(change) = history.take_undo() {
+            assert_eq!(change.group(), Some(0));
+            history.finish_undo(change);
+            reversed += 1;
+        }
+        assert_eq!(reversed, 10);
+    }
+
+    #[test]
+    fn an_older_action_is_discarded_whole_to_make_room() {
+        let mut history = History::with_limit(4);
+        history.open_group();
+        for _ in 0..3 {
+            record(&mut history, "viejo");
+        }
+        history.close_group();
+        for _ in 0..4 {
+            record(&mut history, "nuevo");
+        }
+
+        // The old group went as one, leaving only ungrouped changes.
+        let mut remaining = Vec::new();
+        while let Some(change) = history.take_undo() {
+            remaining.push(change.group());
+        }
+        assert_eq!(remaining, vec![None, None, None, None]);
     }
 }

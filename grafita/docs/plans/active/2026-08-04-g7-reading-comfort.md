@@ -105,11 +105,21 @@ single commit cannot produce.
 |---|---|---|---|---|---|---|---|
 | G7-A | `grafita:` | done | [inventory](../../inventories/2026-08-04-g7-reading-comfort/G7-A.numstat.tsv) | 26 files, +1064/-55 | Stored clamped text size and wrap mode with their one-per-window Qt adapter; core-owned caret line and character column; the gutter and scroll bar composed into the window pinned beside the viewport; wider text inset; horizontal scrolling; size, wrap and wheel gestures; caret readout in the footer; encoding label removed and its language-ratchet row retired | [evidence](../../evidence/2026-08-04-g7-reading-comfort.md) | `VAL-G7` |
 | G7-B | `grafita:` | done | [inventory](../../inventories/2026-08-04-g7-reading-comfort/G7-B.numstat.tsv) | 8 files, +60/-3 | Preserve an explicit platform theme while routing otherwise unowned Qt file dialogs through the session portal | [portal file-dialog evidence](../../evidence/2026-08-05-portal-file-dialog.md) | `VAL-SID-02` |
+| G7-C | `grafita:` | done | [inventory](../../inventories/2026-08-04-g7-reading-comfort/G7-C.numstat.tsv) | 18 files, +780/-51 | Make "save as" obey the same revision rule as an ordinary save, decode its destination through `url::local_path`, write through a symlink and report the durability it observed; refuse a duplicate or clean save; disarm a cancelled destination chooser; answer a classify superseded by an open; reset the live search on a new document; keep the undo bound from splitting an action; and stop a generic refusal from overwriting the one that names the file | `cargo test -p grafita-core`, `cargo clippy -p grafita-core --all-targets`, `cargo fmt`, `cargo check`/`cargo test`/`cargo clippy` in `grafita/`, `scripts/qmllint-cxxqt.sh grafita`, `bash scripts/check-architecture-contract.sh` — recorded in [loss-free save-as evidence](../../evidence/2026-08-05-loss-free-save-as.md) | `VAL-GRA-SAVEAS` |
 
 G7-B is a bounded corrective delivery discovered while validating open/save in
 the completed reading surface. It changes no document or reading rule: it
 selects the portal platform theme only when the environment has not already
 selected one.
+
+G7-C is a second corrective delivery, from the suite audit in
+[`docs/evidence/2026-08-05-static-suite-audit.md`](../../../../docs/evidence/2026-08-05-static-suite-audit.md):
+findings `GRA-C1`, `GRA-A1`, `GRA-A2`, `GRA-A3`, `GRA-A4`, `GRA-M2` and
+`GRA-M4`. It changes no reading rule either; every correction is about the
+document's own contract — that a byte the user typed is either in the file or
+still marked unsaved. `GRA-M6` and `GRA-M7` are deliberately outside it: the
+first is an incremental-reconciliation redesign that needs its own measurement,
+and the second cannot be confirmed without running the application.
 
 ## Decisions and rollback
 

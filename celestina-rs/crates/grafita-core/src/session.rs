@@ -158,6 +158,9 @@ pub struct DocumentSession {
     /// The user answered the guarded-close question with "save", so a completed
     /// save must close rather than merely clean the document.
     close_after_save: bool,
+    /// The revision of the write currently with the worker, so pressing save
+    /// twice over the same document state queues one write rather than two.
+    in_flight: Option<Revision>,
     search: LiveSearch,
     /// The generations of classify-only questions in flight, so each answer is
     /// recognised as one and never mistaken for an open the user asked for.
@@ -176,6 +179,7 @@ impl DocumentSession {
             clock: GenerationClock::default(),
             latest: Generation::INITIAL,
             close_after_save: false,
+            in_flight: None,
             search: LiveSearch::default(),
             pending_classify: Vec::new(),
         }
@@ -198,6 +202,7 @@ impl DocumentSession {
         };
         self.document = Some(document);
         self.close_after_save = false;
+        self.in_flight = None;
         self.search = LiveSearch::default();
         self.refresh();
         Outcome::event(Event::PushText { text, caret: 0 })
@@ -233,6 +238,7 @@ impl DocumentSession {
         self.state.busy = true;
         self.state.failure = None;
         self.state.saved = None;
+        self.in_flight = Some(document.revision());
         Outcome::job(Job::SaveAs {
             path: path.to_path_buf(),
             bytes: document.to_bytes(),
@@ -449,16 +455,28 @@ impl DocumentSession {
 
     /// Queues a write. Nothing about the document changes here: it is clean
     /// only once a report for this very revision comes back.
+    ///
+    /// A clean document writes nothing, and neither does a second request for a
+    /// state already with the worker. Queueing that second write would snapshot
+    /// the identity the *first* one is about to replace, so its own predecessor
+    /// would come back as "another program changed this file".
     pub fn save(&mut self) -> Outcome {
         let Some(document) = self.document.as_ref() else {
             return Outcome::nothing();
         };
+        if !self.state.dirty {
+            return Outcome::nothing();
+        }
         // No file yet: the host has to ask where this document goes. That is
         // an event, not a refusal — a new document is a perfectly good document
         // that simply has not been given a name.
         let Some(request) = document.save_request() else {
             return Outcome::event(Event::DestinationNeeded);
         };
+        if self.in_flight == Some(document.revision()) {
+            return Outcome::nothing();
+        }
+        self.in_flight = Some(document.revision());
         let job = Job::Save {
             request: Box::new(request),
             generation: document.generation(),
@@ -482,8 +500,20 @@ impl DocumentSession {
     /// Answers the guarded question: write, then close.
     pub fn save_and_close(&mut self) -> Outcome {
         self.state.close_prompt = false;
+        if !self.state.dirty {
+            return self.close();
+        }
         self.close_after_save = true;
         self.save()
+    }
+
+    /// The host asked where the document goes and the user answered "nowhere".
+    ///
+    /// Without this a cancelled chooser leaves the pending close armed, and
+    /// some ordinary save much later closes the document on its own.
+    pub fn cancel_save_as(&mut self) -> Outcome {
+        self.close_after_save = false;
+        Outcome::nothing()
     }
 
     /// Answers it by throwing the edit away.
@@ -502,7 +532,12 @@ impl DocumentSession {
     pub fn receive(&mut self, completion: Completion) -> Outcome {
         match completion {
             Completion::Probed { generation, result } => {
-                if generation < self.latest {
+                // Membership is checked before staleness, and deliberately so:
+                // a classify does not move `latest`, so an open asked for after
+                // it would otherwise make the classify's own answer look stale
+                // and drop it — leaving the question the host is waiting on
+                // unanswered for ever.
+                if !self.pending_classify.contains(&generation) && generation < self.latest {
                     return Outcome::nothing();
                 }
                 self.receive_probe(generation, *result)
@@ -515,13 +550,16 @@ impl DocumentSession {
                 self.receive_open(*result)
             }
             Completion::Created {
-                generation, result, ..
+                generation,
+                revision,
+                result,
             } => {
                 if self.document.as_ref().map(Document::generation) != Some(generation) {
                     return Outcome::nothing();
                 }
                 self.state.busy = false;
-                self.receive_created(*result)
+                self.in_flight = None;
+                self.receive_created(revision, *result)
             }
             Completion::Saved {
                 generation, result, ..
@@ -533,6 +571,7 @@ impl DocumentSession {
                     return Outcome::nothing();
                 }
                 self.state.busy = false;
+                self.in_flight = None;
                 self.receive_save(*result)
             }
         }
@@ -615,6 +654,11 @@ impl DocumentSession {
                 };
                 self.document = Some(document);
                 self.close_after_save = false;
+                self.in_flight = None;
+                // A pattern's matches point into the buffer they were found in.
+                // Carrying them into a different document would let a replace
+                // splice at offsets that never held a match.
+                self.search = LiveSearch::default();
                 self.refresh();
                 // Remembered only once it actually opened: a file that refused
                 // has no business in a list of things you can reopen.
@@ -669,23 +713,35 @@ impl DocumentSession {
 
     /// Takes the answer to a "save as": the document adopts the file that was
     /// just written and becomes an ordinary saved document.
-    fn receive_created(&mut self, result: Result<crate::target::Target, SaveRefusal>) -> Outcome {
+    ///
+    /// `revision` is the state the bytes left with. Anything typed while the
+    /// worker was writing and syncing is in the document and not in the file,
+    /// so it keeps the document dirty exactly as it does for an ordinary save.
+    /// A close waiting on this write is then abandoned rather than honoured:
+    /// closing would take those keystrokes with it, so the document stays open
+    /// and dirty and the user asks again.
+    fn receive_created(
+        &mut self,
+        revision: Revision,
+        result: Result<crate::save::CreatedFile, SaveRefusal>,
+    ) -> Outcome {
         let Some(document) = self.document.as_mut() else {
             return Outcome::nothing();
         };
         match result {
-            Ok(target) => {
-                let name = file_name(target.resolved());
-                let path = target.resolved().to_path_buf();
-                document.adopt_target(target);
+            Ok(created) => {
+                let name = file_name(created.target.resolved());
+                let path = created.target.resolved().to_path_buf();
+                document.adopt_target(created.target);
+                let applied = document.mark_saved_at(revision);
                 self.state.name = name;
                 self.state.path = path;
-                self.state.saved = Some(Durability::Durable);
+                self.state.saved = Some(created.durability);
                 self.state.failure = None;
                 self.refresh();
                 let closing = self.close_after_save;
                 self.close_after_save = false;
-                if closing {
+                if closing && matches!(applied, SaveApplication::Clean) {
                     return self.close();
                 }
                 Outcome::nothing()
@@ -701,6 +757,8 @@ impl DocumentSession {
     fn close(&mut self) -> Outcome {
         self.document = None;
         self.close_after_save = false;
+        self.in_flight = None;
+        self.search = LiveSearch::default();
         self.state = SessionState::default();
         Outcome::event(Event::Closed)
     }

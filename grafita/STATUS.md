@@ -3,9 +3,9 @@
 - **Updated:** 2026-08-05
 - **Implementation:** checkpoints G0-G6 are present; G7 (reading comfort) is
   the active checkpoint and its code is written but not yet delivered
-- **Author validation:** the version-1 interaction pass is closed; `VAL-G7` is
-  requested and intentionally excluded coverage is recorded in
-  [VALIDATION.md](VALIDATION.md)
+- **Author validation:** the version-1 interaction pass is closed; `VAL-G7` and
+  `VAL-GRA-SAVEAS` are requested and intentionally excluded coverage is
+  recorded in [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
 
@@ -33,6 +33,17 @@
   wins.
 - `grafita-core` owns the mapping from a widget's UTF-16 caret offset to a line
   and a character column, so no host counts columns for itself.
+- "Guardar como" obeys the same revision rule as an ordinary save: keystrokes
+  that land while the worker writes and syncs keep the document dirty and stop
+  a pending close, rather than being marked saved. Its destination is decoded
+  by the same `url::local_path` an open uses, an existing symlink is written
+  through rather than replaced, and the durability reported is the one the
+  directory sync actually produced. A clean document and a state already with
+  the worker queue no second write, a dismissed chooser disarms whatever was
+  waiting on it, a classify answer survives an open asked for after it, the
+  live search is reset when a new document is adopted, and the undo bound
+  drops an action whole or not at all. Written under unit `G7-C`, covered by
+  `grafita-core` tests, not yet built or deployed.
 - Legacy encodings are an explicit product exclusion until a real document
   demonstrates the need; they are not an incomplete version-1 item.
 
@@ -57,6 +68,16 @@ the exact canonical release passed app/core format, Clippy, tests, QML lint and
 an eight-second isolated smoke. See the suite
 [evidence](../docs/evidence/2026-08-03-repository-governance.md). No installed
 binary or desktop-handler state was changed.
+
+Also on 2026-08-05, unit `G7-C` corrected the save-as, duplicate-save,
+classify-staleness, search-lifetime and undo-bound defects the suite audit
+found. Its automated record is the
+[loss-free save-as evidence](docs/evidence/2026-08-05-loss-free-save-as.md).
+No release was built and no installed binary was replaced: the author asked for
+the corrections and their tests, not for the production flow. Two audit items
+remain open by decision — the per-keystroke O(n) work (`GRA-M6`), which needs
+its own measured unit, and the U+2028 round-trip (`GRA-M7`), which the audit
+itself marks speculative and which no static change can settle.
 
 On 2026-08-05 the platform-theme selection was built in release and installed
 into `~/.local` with `scripts/run.sh` at the author's request. No desktop

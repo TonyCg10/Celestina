@@ -22,3 +22,4 @@ siderita	1.2.0	milestone	SID-G7-B	Add compact parented portal pickers
 grafita	1.1.1	bug	G7-B	Fix file dialogs to use the desktop portal
 celestina	0.6.3	bug	LVR-3-A	Fix provider insertion and DDC lifecycle
 celestina-style	1.1.1	bug	STYLE-G7-C	Correct the scroll handle mapping and two scripts
+grafita	1.1.2	bug	G7-C	Keep save as from marking unwritten keystrokes saved

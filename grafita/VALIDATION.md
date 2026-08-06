@@ -36,6 +36,31 @@ This manual lane does not contain implementation and does not block
   which the synthetic-input tool cannot produce, and `Alt + Z`, which the
   author's compositor claims for itself
 
+## VAL-GRA-SAVEAS — "Guardar como" against the session's file chooser
+
+- **Status:** pending
+- **Related implementation:** checkpoint G7, unit `G7-C` in the
+  [plan](docs/plans/active/2026-08-04-g7-reading-comfort.md);
+  [evidence](docs/evidence/2026-08-05-loss-free-save-as.md)
+- **Requires:** the author's own session, its file-chooser portal and whichever
+  backend that portal routes to
+- **Procedure:** in a document with no file yet, press `Ctrl+S`; in the chooser
+  type a name containing `#` and `%`, accept, and look at the folder; repeat
+  and dismiss the chooser instead, then keep editing and save normally later;
+  with several tabs open, dirty two of them, quit, and dismiss the chooser the
+  sweep raises; in a saved document press `Ctrl+S` twice in quick succession;
+  save over an existing symlink
+- **Pass condition:** the file created carries the literal name that was typed,
+  not its percent-encoded form; a dismissed chooser closes no tab then or
+  later, and an abandoned quit sweep leaves every tab where it was; two quick
+  saves write once and raise no external-change banner; a
+  symlinked destination is still a symlink afterwards and the file it names
+  holds the new bytes
+- **Scope:** Grafita's own window. Siderita's embedded editor has no "save as"
+- **Result:** pending
+- **Evidence:** the agent lane covered the rules in `grafita-core` tests only;
+  no chooser, portal or compositor was exercised
+
 ## Closed historical observations
 
 `VAL-GRA-EMBEDDED`, `VAL-GRA-STANDALONE` and `VAL-GRA-COMFORT` are preserved in

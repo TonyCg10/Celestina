@@ -1,0 +1,28 @@
+# G7-C exact change inventory
+
+Base revision	a882551260ff1ba2a26596b4eab888f434e8f9b1
+Pathspec	grafita/
+Pathspec	celestina-rs/crates/grafita-core/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+20	7	d1a6a196cc7ee169a6b945d9b07f7c895d561340b23f4f1a87b8f3b718142197	celestina-rs/crates/grafita-core/src/document.rs
+83	8	ff5c6b878397f9f5aa0aeeaeda8527b4688c0b84eae562ba9baada2f123a0d0a	celestina-rs/crates/grafita-core/src/history.rs
+38	4	924d581eacbec8977bf3d2f4966f7ee34a02d2536e1386420bab2424eebfdde4	celestina-rs/crates/grafita-core/src/save.rs
+29	3	8473906cd986208a5e3c2a889d4de55306f05c2baffe899abf998b642d897480	celestina-rs/crates/grafita-core/src/search.rs
+68	10	6ca5bd89f57d2c47493c9863e4ab9212f17f9016e5b321306971bb576095a3a1	celestina-rs/crates/grafita-core/src/session.rs
+2	2	7264830ac6f56d2a14a59dddb35ae06a9ddd38147551737004e8ebafe40c4159	celestina-rs/crates/grafita-core/src/worker.rs
+264	0	a8bd72d712cb3d0cc458aaa363ba6622456aed038893e19b69bb56469bd084d9	celestina-rs/crates/grafita-core/tests/sessions.rs
+1	0	ed069d40a81e3012e37839332a22eea9801f012a2abc83308aef053ab967aac5	docs/version-history.tsv
+1	1	e1b17616e30dc733bc6bc57ef8e1247ad655cc77cb963b60babdcc77bf671da4	grafita/Cargo.lock
+1	1	fcddd1f51b403619130814b75cdbbb265335f6564cf5636c628b3de7ba605c43	grafita/Cargo.toml
+24	3	1244ec584d4d126ad434b68a0863c4dc357433854abcf030542911cc0fb62eda	grafita/STATUS.md
+25	0	afb3b42ea29c10e5facd4210e688059fc111e2fef1a5cc989bed4b77419ae256	grafita/VALIDATION.md
+108	0	59881b528703c631109baaf6ee91aeafeb4e09fde3314543caf66aca2f127f8d	grafita/docs/evidence/2026-08-05-loss-free-save-as.md
+10	0	74206c1a27b0b58a71c6000f6bd622983747c2f8e418811da1e36ab5a24c498b	grafita/docs/plans/active/2026-08-04-g7-reading-comfort.md
+10	1	074656e730313ae0c6658e42124d4719809ecc1ac21a212bdca1810d05a66fcc	grafita/qml/Main.qml
+13	6	cbaded2fd88113f01d94cab2ffb4db5afe55e57da28cb8051ed00d4c5d5a667a	grafita/qml/components/DocumentView.qml
+55	5	50d40ee6af954f2e3abade9b560bc0ef436ef6d9d78e5466cda4121a693398f3	grafita/src/session.rs
+28	0	self	grafita/docs/inventories/2026-08-04-g7-reading-comfort/G7-C.numstat.tsv

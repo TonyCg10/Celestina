@@ -22,7 +22,7 @@ use celestina_core::{CancellationToken, Generation};
 
 use crate::history::Revision;
 use crate::open::{open, probe, Limits, OpenRefusal, OpenedFile, ProbeOutcome};
-use crate::save::{perform, SaveRefusal, SaveReport, SaveRequest};
+use crate::save::{perform, CreatedFile, SaveRefusal, SaveReport, SaveRequest};
 
 /// A piece of blocking work for the document worker.
 #[derive(Clone, Debug)]
@@ -103,7 +103,7 @@ pub enum Completion {
     Created {
         generation: Generation,
         revision: Revision,
-        result: Box<Result<crate::target::Target, SaveRefusal>>,
+        result: Box<Result<CreatedFile, SaveRefusal>>,
     },
 }
 
