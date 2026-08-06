@@ -1,0 +1,12 @@
+# Errors an immutable record can no longer be spared.
+#
+# A tracked inventory may never be edited, recalculated or reused, so a defect
+# written into one cannot be repaired by a later commit. Listing it here keeps
+# the contract gateable without pretending the defect is not there: every error
+# is still printed, prefixed with the reason below.
+#
+# Only `docs/inventories/` paths may appear, and only while they really fail —
+# a stale entry is itself an error, so this list can only shrink.
+#
+# path<TAB>reason
+siderita/docs/inventories/2026-08-04-shared-reading-surface/SID-G7-D.numstat.tsv	its seven boundaries were written on one line, so none matches a row; the delivered bytes are correct and fully listed, and the inventory is immutable

@@ -2210,6 +2210,17 @@ class DocumentationContract:
             )
         base_revision = base_revision_lines[0].split("\t", maxsplit=1)[1] if base_revision_valid else ""
         pathspecs: set[str] = set()
+        # Which declared boundaries actually claimed a row.
+        #
+        # Declaring one that goes unused is harmless — a unit may name a crate
+        # it turned out not to touch. What is not harmless is *none* of them
+        # matching, which is what a line holding several boundaries at once
+        # produces: it matches nothing, `actual_paths` comes back empty, and the
+        # check that the inventory omits no changed path quietly stops existing.
+        # Rejecting whitespace instead would be wrong — a repository path may
+        # legitimately contain a space — so the rule is what the boundaries
+        # *do*, not how they are spelled.
+        used_pathspecs: set[str] = set()
         for index, line in enumerate(lines, start=1):
             if not line.startswith("Pathspec"):
                 continue
@@ -2328,9 +2339,13 @@ class DocumentationContract:
                 self.error(inventory_path, f"line {index}: duplicate numstat path: {raw_path}")
             else:
                 paths.add(raw_path)
-                if pathspecs and not any(
-                    self.path_matches_pathspec(raw_path, pathspec) for pathspec in pathspecs
-                ):
+                matched = [
+                    pathspec
+                    for pathspec in pathspecs
+                    if self.path_matches_pathspec(raw_path, pathspec)
+                ]
+                used_pathspecs.update(matched)
+                if pathspecs and not matched:
                     self.error(
                         inventory_path,
                         f"line {index}: path outside Pathspec for {unit}: {raw_path}",
@@ -2341,6 +2356,13 @@ class DocumentationContract:
             if content_valid and path_valid:
                 git_rows.append((index, added, deleted, content, raw_path))
 
+        if pathspecs and not used_pathspecs:
+            self.error(
+                inventory_path,
+                f"no Pathspec in {unit} claims any row, so nothing bounds this "
+                "inventory and the comparison against Git cannot run: "
+                + ", ".join(f"`{pathspec}`" for pathspec in sorted(pathspecs)),
+            )
         if self_rows != 1:
             self.error(
                 inventory_path,
@@ -2602,7 +2624,66 @@ class DocumentationContract:
             self.check_active_plans()
             self.check_inventory_claims()
             self.check_roadmap_plan_links()
-        return sorted(set(self.errors))
+        return self.partition_errata(sorted(set(self.errors)))
+
+    def partition_errata(self, errors: list[str]) -> list[str]:
+        """Splits off the errors an immutable record can no longer be spared.
+
+        An inventory is immutable once tracked — never edited, recalculated or
+        reused — so a defect written into one is not something a later commit
+        can repair. Without somewhere to put that, one malformed line would keep
+        this contract red for ever, and a contract that is always red is one
+        nobody can gate on. Listing it is therefore the opposite of hiding it:
+        the errors are still printed, every entry must give a reason, and the
+        scope is only `docs/inventories/`, so this cannot become a way to excuse
+        a document somebody could simply fix.
+
+        The list can only shrink: an entry that no longer matches a real error
+        is itself an error, so a boundary that stops failing must be removed.
+        """
+        errata = read_documentation_errata(self.root)
+        if not errata:
+            return errors
+        remaining: list[str] = []
+        excused: dict[str, list[str]] = {}
+        for error in errors:
+            label = error.split(":", 1)[0]
+            if label in errata and "/docs/inventories/" in f"/{label}":
+                excused.setdefault(label, []).append(error)
+            else:
+                remaining.append(error)
+        for path, reason in sorted(errata.items()):
+            if "/docs/inventories/" not in f"/{path}":
+                remaining.append(
+                    f"{ERRATA_FILE}: only an inventory may be listed: {path}"
+                )
+            elif path not in excused:
+                remaining.append(
+                    f"{ERRATA_FILE}: {path} reports no error, so its erratum is "
+                    "stale and must be removed"
+                )
+            else:
+                for error in excused[path]:
+                    print(f"erratum ({reason}): {error}", file=sys.stderr)
+        return remaining
+
+
+ERRATA_FILE = "scripts/documentation-errata.tsv"
+
+
+def read_documentation_errata(root: Path) -> dict[str, str]:
+    """Immutable records whose errors are recorded rather than repairable."""
+    path = root / ERRATA_FILE
+    if not path.is_file():
+        return {}
+    errata: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        cells = line.split("\t")
+        if len(cells) == 2 and cells[0] and cells[1].strip():
+            errata[cells[0]] = cells[1].strip()
+    return errata
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
