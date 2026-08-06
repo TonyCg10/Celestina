@@ -96,8 +96,8 @@ impl DirectoryEntry {
         // *leads to* is a separate fact, resolved once here with a following
         // read, so navigation does not have to touch the disk again. A dangling
         // or unreadable target is simply not a directory.
-        let targets_directory = file_type.is_symlink()
-            && std::fs::metadata(&path).is_ok_and(|target| target.is_dir());
+        let targets_directory =
+            file_type.is_symlink() && std::fs::metadata(&path).is_ok_and(|target| target.is_dir());
 
         Ok(Self {
             id: EntryId::new(parent, parent_metadata, &name),

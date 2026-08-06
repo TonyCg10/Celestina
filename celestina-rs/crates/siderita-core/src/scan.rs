@@ -420,8 +420,11 @@ mod tests {
             .expect("link to the directory");
         std::os::unix::fs::symlink(fixture.path().join("file"), fixture.path().join("to-file"))
             .expect("link to the file");
-        std::os::unix::fs::symlink(fixture.path().join("absent"), fixture.path().join("dangling"))
-            .expect("link to nothing");
+        std::os::unix::fs::symlink(
+            fixture.path().join("absent"),
+            fixture.path().join("dangling"),
+        )
+        .expect("link to nothing");
 
         let mut coordinator = ScanCoordinator::new();
         let request = coordinator
