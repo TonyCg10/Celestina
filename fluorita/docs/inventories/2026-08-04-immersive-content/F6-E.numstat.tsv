@@ -1,0 +1,20 @@
+# F6-E exact change inventory
+
+Base revision	a0501f73943a2c7975cc38a1ed60018267ecdc31
+Pathspec	fluorita/
+Pathspec	celestina-rs/crates/fluorita-core/
+Pathspec	celestina-rs/crates/fluorita-engine/
+Pathspec	celestina-rs/crates/fluorita-qt/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	50526ef896346351432600bba6963cd1fe1b3dbb70946609a707519f4fffb15b	docs/version-history.tsv
+1	1	d52ff541778f8b49e7c0452539a6874624c22bc54f71562768dc3df03c94ade3	fluorita/Cargo.lock
+1	1	b3562ce0cc98cf61d0d9e1fe2abc809a89bea6d448d580559ec742882f93443f	fluorita/Cargo.toml
+6	0	9794f7850bc2f478582105115ec8e38d1465726484036b6f1a441a029979c715	fluorita/STATUS.md
+74	0	b6d866b580a9c05b45423e7734f0c6c463473294aba5424523b39585dc1e5536	fluorita/docs/evidence/2026-08-06-session-generation.md
+8	0	5380dc399b46afe3354ed2c10792508db69dd2f85ae34719f25e8587d2a84ea4	fluorita/docs/plans/active/2026-08-04-immersive-content.md
+62	4	a62ea96dd0f77a9b408004e0d2934513c1bd7ced7144ada6b92fab0bdc405958	fluorita/src/player.rs
+20	0	self	fluorita/docs/inventories/2026-08-04-immersive-content/F6-E.numstat.tsv

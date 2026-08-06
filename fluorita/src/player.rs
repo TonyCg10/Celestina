@@ -182,6 +182,11 @@ pub struct PlayerRust {
     render_handle: u64,
     /// An item asked for while a surface was still rendering the previous one.
     /// It starts once that surface confirms it has let go.
+    /// Which session the player is on. A worker publishes its render handle
+    /// asynchronously, so a close that lands in that window would otherwise be
+    /// overtaken by the handle of the session it just destroyed — leaving a
+    /// live-looking address for an `mpv_handle` that is gone.
+    generation: u64,
     pending_open: Option<PathBuf>,
     position_seconds: f64,
     duration_seconds: f64,
@@ -290,6 +295,8 @@ impl qobject::FluoritaPlayer {
 
         let (sender, receiver) = mpsc::channel::<Command>();
         let qt_thread = self.qt_thread();
+        let generation = self.rust().generation.wrapping_add(1);
+        self.as_mut().rust_mut().generation = generation;
 
         let worker = std::thread::Builder::new()
             .name("fluorita-player".to_owned())
@@ -297,7 +304,7 @@ impl qobject::FluoritaPlayer {
                 // The publisher needs the path too, and the worker takes it by
                 // value; one clone is cheaper than making the session borrow.
                 let path = path.clone();
-                move || run_session(&path, kind, &receiver, &qt_thread)
+                move || run_session(&path, kind, generation, &receiver, &qt_thread)
             });
 
         match worker {
@@ -395,7 +402,19 @@ impl qobject::FluoritaPlayer {
     /// The handle goes first: the surface must stop rendering before anything
     /// it renders from can be destroyed.
     pub fn close(mut self: core::pin::Pin<&mut Self>) {
-        if self.worker().is_none() || self.closing() {
+        if self.worker().is_none() {
+            // Nothing to close. An activation parked while a close was in
+            // flight still has to go somewhere: leaving it here is what turned
+            // a stale handle into a player that answered nothing for the rest
+            // of the session.
+            if let Some(path) = self.as_mut().rust_mut().pending_open.take() {
+                self.as_mut().rust_mut().closing = false;
+                self.as_mut().set_render_handle(0);
+                self.begin(path);
+            }
+            return;
+        }
+        if self.closing() {
             return;
         }
         // Marked before the handle is cleared, not after. A surface with no
@@ -641,6 +660,7 @@ fn state_label(state: PlaybackState) -> &'static str {
 fn run_session(
     path: &std::path::Path,
     kind: MediaKind,
+    session_generation: u64,
     commands: &mpsc::Receiver<Command>,
     qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaPlayer>,
 ) {
@@ -678,8 +698,16 @@ fn run_session(
 
     if let Some(handle) = session.render_handle() {
         let address = handle.value();
-        let _ = qt_thread.queue(move |player| {
-            player.set_render_handle(address);
+        let _ = qt_thread.queue(move |mut player| {
+            // The close that ended this session may already have run: it joins
+            // the worker and destroys the instance, and this closure was queued
+            // before either. Publishing now would hand the surface the address
+            // of a freed `mpv_handle`, and leave the player holding a handle
+            // with no worker — a state in which every later activation is a
+            // silent no-op.
+            if player.rust().generation == session_generation {
+                player.as_mut().set_render_handle(address);
+            }
         });
     }
 
@@ -821,6 +849,36 @@ mod tests {
         let key = celestina_core::pathkey::encode(path);
         let size = super::qobject::probe_image(&QString::from(key.as_str()));
         (size.width(), size.height())
+    }
+
+    /// A handle published by a session the player has already left must be
+    /// dropped. The address it carries belongs to an `mpv_handle` that
+    /// `stop_worker` has destroyed, and accepting it leaves the player holding
+    /// a handle with no worker — the state in which `decide_open` routes every
+    /// later activation to a close that returns immediately.
+    #[test]
+    fn a_handle_from_a_session_already_left_is_not_published() {
+        // The guard the queued closure applies, stated as the rule it is.
+        fn publishes(current: u64, published_by: u64) -> bool {
+            current == published_by
+        }
+        assert!(publishes(7, 7));
+        assert!(!publishes(8, 7), "a close bumped past this session");
+        // The counter wraps rather than overflowing, and a wrap is still a
+        // different session.
+        assert!(!publishes(0, u64::MAX));
+    }
+
+    /// The other half: a close that finds no worker still has to resolve an
+    /// activation parked while the previous one was closing.
+    #[test]
+    fn an_activation_parked_during_a_close_is_not_stranded() {
+        // Parking happens on `Wait`, which is what `closing` produces.
+        assert_eq!(decide_open(false, true), OpenAction::Wait);
+        assert_eq!(decide_open(true, true), OpenAction::Wait);
+        // And a player still holding a handle routes through the close that
+        // now has to honour what was parked.
+        assert_eq!(decide_open(true, false), OpenAction::CloseFirst);
     }
 
     #[test]

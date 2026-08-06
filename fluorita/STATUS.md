@@ -9,6 +9,12 @@
 
 ## Current checkout truth
 
+- Uncommitted in the checkout: `F6-E`. A render handle now names the session
+  that produced it, so one published after the player has moved on is dropped
+  instead of pointing at a destroyed instance; and a close that finds no worker
+  starts whatever activation was parked rather than stranding the player for the
+  rest of the process.
+
 - Uncommitted in the checkout: `F6-D`. The image probe is addressed by path key
   and opens the file by descriptor, so a picture whose name is not valid UTF-8
   is measured on itself rather than refused as unreadable — the one limit

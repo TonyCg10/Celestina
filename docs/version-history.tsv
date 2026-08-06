@@ -32,3 +32,4 @@ siderita	1.2.3	bug	SID-G7-E	Keep the thumbnail source and the clipboard byte-exa
 fluorita	1.2.3	bug	F6-D	Keep an image whose name is not UTF-8 measurable
 celestina	0.6.4	bug	LVR-3-B	Harden shell channels and provider lifecycle
 siderita	1.2.4	bug	SID-G7-F	Keep an accented filename resolvable by the thumbnail provider
+fluorita	1.2.4	bug	F6-E	Drop a render handle from a session the player already left
