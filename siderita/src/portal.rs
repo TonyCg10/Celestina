@@ -318,9 +318,11 @@ impl FileChooser {
         // `SaveFiles` asks for a *folder* and supplies the names itself, so the
         // dialog is a directory chooser however the caller filled the rest in.
         let saving_many = mode == "saves";
-        let requested_names = saving_many
-            .then(|| file_names(&options))
-            .unwrap_or_default();
+        let requested_names = if saving_many {
+            file_names(&options)
+        } else {
+            Vec::new()
+        };
 
         let multiple = bool_option(&options, "multiple") && !saving_many;
         let directory = bool_option(&options, "directory") || saving_many;
