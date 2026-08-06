@@ -28,3 +28,4 @@ siderita	1.2.1	bug	SID-G7-C	Keep a paste into an entry's own folder from trashin
 magnetita	1.0.1	bug	MAG-S1-A	Validate the SFTP reply before it reaches the mount command
 fluorita	1.2.2	bug	F6-C	Keep a name that is not UTF-8 usable across the Qt seam
 siderita	1.2.2	bug	SID-G7-D	Keep a name that is not UTF-8 usable across the Qt seam
+siderita	1.2.3	bug	SID-G7-E	Keep the thumbnail source and the clipboard byte-exact

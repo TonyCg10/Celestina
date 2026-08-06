@@ -13,7 +13,7 @@ namespace {
 const QString kGnomeFormat = QStringLiteral("x-special/gnome-copied-files");
 } // namespace
 
-void siderita_set_clipboard_uris(const QStringList& paths, bool cut)
+void siderita_set_clipboard_uris(const QStringList& uris, bool cut)
 {
     QClipboard* clipboard = QGuiApplication::clipboard();
     if (clipboard == nullptr) {
@@ -23,10 +23,16 @@ void siderita_set_clipboard_uris(const QStringList& paths, bool cut)
     // QClipboard takes ownership of the QMimeData.
     auto* mime = new QMimeData();
     QList<QUrl> urls;
-    urls.reserve(paths.size());
+    urls.reserve(uris.size());
     QByteArray gnome = cut ? QByteArrayLiteral("cut") : QByteArrayLiteral("copy");
-    for (const QString& path : paths) {
-        const QUrl url = QUrl::fromLocalFile(path);
+    for (const QString& uri : uris) {
+        // `fromEncoded`, not `fromLocalFile`: the escapes are already the ones
+        // Rust chose, and re-deriving them from a path would need a QString
+        // spelling of a name that may not have one.
+        const QUrl url = QUrl::fromEncoded(uri.toLatin1());
+        if (!url.isValid()) {
+            continue;
+        }
         urls.append(url);
         gnome.append('\n');
         gnome.append(url.toEncoded());
@@ -50,7 +56,10 @@ QStringList siderita_read_clipboard_uris()
     const QList<QUrl> urls = mime->urls();
     for (const QUrl& url : urls) {
         if (url.isLocalFile()) {
-            out.append(url.toLocalFile());
+            // `toEncoded`, not `toLocalFile`: the second one has to produce a
+            // QString path, and that is exactly where a byte with no UTF-8
+            // meaning used to be replaced. Rust decodes the URI instead.
+            out.append(QString::fromLatin1(url.toEncoded()));
         }
     }
     return out;

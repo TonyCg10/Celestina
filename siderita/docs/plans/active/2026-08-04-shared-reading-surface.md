@@ -84,7 +84,7 @@ commit cannot produce.
 | SID-G7-B | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-B.numstat.tsv) | 17 files, +620/-54 | Turn the portal picker into a compact dialog and import its bounded Wayland parent handle through the narrow C++/Qt seam | [portal picker evidence](../../evidence/2026-08-05-portal-picker.md) | `VAL-SID-02`, `VAL-SID-04` |
 | SID-G7-C | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-C.numstat.tsv) | 34 files, +1263/-229 | Treat an entry pasted into its own folder as a duplicate instead of trashing it to make room for itself; answer the portal's `writable` only when it was asked for and confirm an overwrite before returning a save destination; guard trash behind the running-operation check that paste already had; skip an entry that vanished mid-scan instead of failing the listing, and keep a quiet refresh quiet; navigate a symlink that points at a directory; purge a trash entry by its own info path rather than by list position; decode dropped URIs by bytes in Rust; write the four remaining configuration files atomically; and move paste planning and execution out of the coordinator into `controller/paste.rs`, lowering its earned baseline row from 1223 to 1171 | `cargo check`, `cargo test`, `cargo fmt` in `siderita/` and for the `siderita-*` crates — recorded in [destructive-operation guards evidence](../../evidence/2026-08-05-destructive-operation-guards.md) | `VAL-SID-05` |
 | SID-G7-D | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-D.numstat.tsv) | 57 files, +1283/-441 | Apply [ADR 0008](../../../../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md) to Siderita, closing audit finding `SID-A2`: publish every path crossing the Qt seam as its byte-exact percent key beside its own lossy display text; decode that key at every invokable with a typed refusal instead of rebuilding a `PathBuf` from the `QString`; stop QML composing paths (breadcrumbs, the save picker's typed name, the quick look's `file://` URL, the thumbnail ids, the sidebar's derived names); migrate the persisted bookmarks, favourites, icons, folder views and tab session to keys; leave the `file://`, portal and Trash encodings that face other processes exactly as they are; and lower the earned `controller.rs` architecture row from 1171 to 1106 while retiring its language-debt row | [byte-exact path seam evidence](../../evidence/2026-08-06-byte-exact-path-seam.md) | `VAL-SID-06` |
-
+| SID-G7-E | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-E.numstat.tsv) | 18 files, +699/-83 | Close the two limits `SID-G7-D` recorded: carry the thumbnail provider's decoded path as `QByteArray` and address the source file by `::stat` and a descriptor opened on its bytes, computing the freedesktop cache key over those bytes in the spelling `percent::encode_qt_path` owns; and make the system-clipboard seam exchange percent-encoded `file://` URIs written and read by `dbus::path_to_uri`/`uri_to_path` instead of lossy `QString` paths | [thumbnail and clipboard bytes evidence](../../evidence/2026-08-06-thumbnail-and-clipboard-bytes.md) | `VAL-SID-06` |
 SID-G7-B is the independent portal correction that was already in the dirty
 checkout when the author requested every pending change be delivered. It does
 not extend the shared reading-surface rules. Its C++ seam exists because Qt's
@@ -114,6 +114,19 @@ the same boundary in Fluorita — is not closed by this unit. Like SID-G7-C it
 stays `active` because the author asked for the
 code, its tests and its evidence without the production flow, so it has neither
 an inventory nor a version transition.
+
+SID-G7-E closes the two limits SID-G7-D wrote down rather than adding a new
+rule: both were places where a byte-exact key arrived and was then decoded into
+a `QString`, which cannot hold what the key exists to carry. The thumbnail
+provider keeps its decoded path as bytes and addresses the file by descriptor;
+the clipboard seam stops exchanging paths and exchanges the percent-encoded
+`file://` URIs the desktop actually speaks, written and read by the codec
+`src/dbus.rs` already owns. Neither half adds a codec, and the freedesktop cache
+key keeps the exact spelling `celestina_core::percent::encode_qt_path` documents,
+which is now asserted by a test across the two languages instead of by a comment
+in each. Like the units before it, it stays `active` because the author asked
+for the code, its tests and its evidence without the production flow, so it has
+neither an inventory nor a version transition.
 
 ## Decisions and rollback
 

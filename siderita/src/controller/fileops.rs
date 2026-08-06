@@ -17,18 +17,20 @@ use super::qobject;
 use super::{display_name, ConflictStrategy, PasteOutcome, PendingPaste, UndoAction};
 use crate::pathkey;
 
-/// The system clipboard's local paths as owned `PathBuf`s, skipping empty
-/// strings so a stray blank never becomes a filesystem operation on `""`.
+/// The paths behind the system clipboard's `file://` URIs, skipping anything
+/// that does not decode to one so a stray entry never becomes a filesystem
+/// operation on `""`.
 ///
 /// Not keys: this list comes from Qt's own clipboard, shared with every other
-/// application on the desktop, and it speaks paths. Qt cannot spell a name that
-/// is not valid UTF-8 there, which is the documented limit of pasting such a
-/// name between applications rather than something this seam can repair.
+/// application on the desktop, and what the desktop exchanges there is a
+/// percent-encoded URI. It is decoded here, byte by byte, by the same codec
+/// that wrote it — so a name that is not valid UTF-8 survives a copy to another
+/// application and back, which is precisely what the older path-shaped seam
+/// could not do.
 fn clipboard_paths(list: &QStringList) -> Vec<PathBuf> {
     list.iter()
         .map(QString::to_string)
-        .filter(|path| !path.is_empty())
-        .map(PathBuf::from)
+        .filter_map(|uri| crate::dbus::uri_to_path(&uri))
         .collect()
 }
 
@@ -257,12 +259,15 @@ impl qobject::SideritaController {
     pub(crate) fn set_clipboard(mut self: Pin<&mut Self>, paths: Vec<PathBuf>, cut: bool) {
         // Publish to the system clipboard too, so other file managers can paste
         // what Siderita copied or cut (text/uri-list + gnome-copied-files).
-        // That shim speaks paths to the rest of the desktop, so it is handed
-        // the lossy spelling; the view's ghosting list is keyed instead, since
-        // it is compared against the keys the rows publish.
+        // That shim speaks `file://` URIs to the rest of the desktop, and they
+        // are built here by the same byte-exact codec the drag payload and the
+        // portal answers use — one spelling, so a name that is not valid UTF-8
+        // reaches the other application intact. The view's ghosting list is
+        // keyed instead, since it is compared against the keys the rows
+        // publish.
         let uris: QStringList = paths
             .iter()
-            .map(|path| QString::from(path.to_string_lossy().as_ref()))
+            .map(|path| QString::from(crate::dbus::path_to_uri(path).as_str()))
             .collect();
         qobject::system_clipboard_set_uris(&uris, cut);
         let keys: QStringList = paths.iter().map(|path| pathkey::publish(path)).collect();
@@ -770,5 +775,51 @@ impl qobject::SideritaController {
             )
         };
         self.as_mut().set_op_error(QString::from(summary.as_str()));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clipboard_paths;
+    use crate::dbus::path_to_uri;
+    use cxx_qt_lib::{QString, QStringList};
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+    use std::path::PathBuf;
+
+    /// What the system clipboard would hand back for these paths, once the C++
+    /// shim has published them and read them again: the URIs, unchanged, since
+    /// `QUrl` carries percent-encoded bytes verbatim.
+    fn round_trip(paths: &[PathBuf]) -> Vec<PathBuf> {
+        let published: QStringList = paths
+            .iter()
+            .map(|path| QString::from(path_to_uri(path).as_str()))
+            .collect();
+        clipboard_paths(&published)
+    }
+
+    #[test]
+    fn a_name_that_is_not_utf8_survives_the_system_clipboard_byte_for_byte() {
+        // A byte fixture, not text, so the language contract does not apply.
+        let path = PathBuf::from(OsString::from_vec(b"/tmp/na\xffme".to_vec()));
+        assert_eq!(round_trip(std::slice::from_ref(&path)), vec![path]);
+    }
+
+    #[test]
+    fn the_names_a_uri_used_to_truncate_survive_too() {
+        let paths: Vec<PathBuf> = ["/tmp/informe#3.pdf", "/tmp/a b.txt", "/tmp/q?.txt"]
+            .iter()
+            .map(PathBuf::from)
+            .collect();
+        assert_eq!(round_trip(&paths), paths);
+    }
+
+    #[test]
+    fn a_clipboard_entry_that_is_not_a_local_file_uri_is_skipped() {
+        let held: QStringList = ["", "http://example.com/x", "file:///tmp/nota.txt"]
+            .iter()
+            .map(|value| QString::from(*value))
+            .collect();
+        assert_eq!(clipboard_paths(&held), vec![PathBuf::from("/tmp/nota.txt")]);
     }
 }

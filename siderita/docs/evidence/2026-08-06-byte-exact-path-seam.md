@@ -146,14 +146,17 @@ The new tests, all in the unit they belong to:
   `deploy-production.sh` and `complete-production.sh` were not run, there is no
   version transition and no inventory. The release binary built here exists only
   so `qmllint` and the smoke had a current generated QML module.
-- **Thumbnails for a non-UTF-8 name still do not resolve.** The provider is
-  C++ and addresses files through `QString`, which cannot hold such a name.
-  The entry keeps its themed glyph — a missing thumbnail, never a wrong file —
-  and `cpp/thumbnailprovider.cpp` says so at the decode site.
-- **The system clipboard still speaks paths.** `cpp/clipboard.cpp` exchanges
-  `QUrl` with the rest of the desktop, so copying a non-UTF-8 name *to another
-  application* remains lossy. Inside Siderita the internal clipboard carries
-  real `PathBuf`s and is unaffected.
+- **Thumbnails for a non-UTF-8 name did not resolve when this unit closed.** The
+  provider is C++ and addressed files through `QString`, which cannot hold such
+  a name, so the entry kept its themed glyph. Not inevitable after all:
+  [`SID-G7-E`](2026-08-06-thumbnail-and-clipboard-bytes.md) carries the decoded
+  path as `QByteArray` and opens the file by descriptor.
+- **The system clipboard spoke paths when this unit closed.** `cpp/clipboard.cpp`
+  exchanged `QString` paths with the rest of the desktop, so copying a non-UTF-8
+  name *to another application* was lossy. Also closed by
+  [`SID-G7-E`](2026-08-06-thumbnail-and-clipboard-bytes.md), which exchanges the
+  percent-encoded URIs the desktop actually speaks. Inside Siderita the internal
+  clipboard carried real `PathBuf`s throughout and was never affected.
 - **Mark migration has one blind spot.** `pathkey::normalize` cannot tell a
   legacy raw path that literally contains `%XX` from a key. Such a record
   normalizes to a different key and its star, icon or remembered view is

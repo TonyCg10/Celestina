@@ -211,6 +211,9 @@ fn main() {
             "src/media.rs",
             "src/portal.rs",
             "src/preferences.rs",
+            // Binds one C++ helper so a test can pin the thumbnail cache key to
+            // its Rust owner; it declares no QObject.
+            "src/thumbnails.rs",
         ]);
     // The generated protocol joins the same compilation as the shim that uses
     // it, and only when it could be generated: without it the shim compiles to

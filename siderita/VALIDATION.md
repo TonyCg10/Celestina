@@ -95,9 +95,10 @@ picker look broken for a reason that lived entirely in the requester.
 ## VAL-SID-06 — A file whose name is not valid UTF-8, by hand
 
 - **Status:** pending
-- **Related implementation:** `SID-G7-D`,
+- **Related implementation:** `SID-G7-D` and `SID-G7-E`,
   [ADR 0008](../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md),
-  [evidence](docs/evidence/2026-08-06-byte-exact-path-seam.md)
+  [seam evidence](docs/evidence/2026-08-06-byte-exact-path-seam.md) and
+  [thumbnail and clipboard evidence](docs/evidence/2026-08-06-thumbnail-and-clipboard-bytes.md)
 - **Requires:** the deployed Siderita binary on the author's real Wayland
   session, a scratch folder, and one file created there whose name is not valid
   UTF-8 — for example
@@ -120,10 +121,16 @@ picker look broken for a reason that lived entirely in the requester.
 - **Evidence:** the exact bytes of the name, the compositor, and the other
   application named
 
-Known limits recorded in advance, so they are not read as failures: the entry
-shows its generic glyph instead of a thumbnail, and copying it *to another
-application* through the system clipboard is still lossy. Both are in the
-evidence's `Limits`.
+The two limits recorded in advance are no longer limits: `SID-G7-E` gave the
+thumbnail provider the file's bytes and made the system clipboard exchange
+percent-encoded URIs, so both are now part of what this run checks. Add to the
+procedure: look at the entry when it is an image — it should show a real
+thumbnail, not a glyph — and, in the copy to the other application, paste it
+there and copy something back. What remains outside this row is a filename
+containing `;`, which Qt and GLib percent-encode differently and which therefore
+lands on two different thumbnail cache entries; that interop limit is in the
+[evidence](docs/evidence/2026-08-06-thumbnail-and-clipboard-bytes.md)'s `Limits`
+and is not a Siderita defect.
 
 ## VAL-SID-G7 — Numbered text panes and the shared text size
 

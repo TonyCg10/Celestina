@@ -22,13 +22,31 @@
   untouched. This closes audit finding `SID-A2` in the checkout; `FLU-M1`, the
   same defect in Fluorita, is untouched. Compiled, unit-tested, QML Test 47/47
   and an offscreen smoke — no production run, no version transition, and nothing
-  tried by hand on a real session: that is `VAL-SID-06`. Two limits stand and are
-  recorded in the
-  [evidence](docs/evidence/2026-08-06-byte-exact-path-seam.md): a non-UTF-8 name
-  still gets a generic glyph instead of a thumbnail, because the C++ provider
-  addresses files through `QString`; and the system clipboard still exchanges
+  tried by hand on a real session: that is `VAL-SID-06`. The two limits it
+  recorded in its
+  [evidence](docs/evidence/2026-08-06-byte-exact-path-seam.md) are closed by
+  `SID-G7-E` below and are no longer open: a non-UTF-8 name used to get a
+  generic glyph instead of a thumbnail, because the C++ provider
+  addressed files through `QString`; and the system clipboard used to exchange
   paths with the rest of the desktop, so copying such a name *to another
-  application* remains lossy.
+  application* was lossy.
+- Uncommitted in the checkout: `SID-G7-E`, the two remaining Qt seams that still
+  decoded a byte-exact key into a `QString`. The thumbnail provider now carries
+  the decoded path as `QByteArray`, finds the file with `::stat` on those bytes,
+  reads it through a descriptor opened on them, derives the extension from them,
+  and computes the freedesktop cache key over them in the exact spelling
+  `celestina_core::percent::encode_qt_path` owns — a test asserts the C++ and the
+  Rust agree byte for byte, and another decodes a real 2x2 PNG named with
+  `b"na\xffme.png"` out of a temporary directory. The system clipboard stops
+  exchanging paths with the rest of the desktop and exchanges the
+  percent-encoded `file://` URIs it actually speaks, written and read by
+  `dbus::path_to_uri` and `dbus::uri_to_path`, so a non-UTF-8 name survives a
+  copy to another application and back; `holds_exactly` still compares real
+  `PathBuf`s. Compiled, `cargo fmt`/Clippy clean, 93 unit tests, both repository
+  guards and `qmllint` unchanged — no production run, no version transition, no
+  inventory and nothing tried by hand: that is still `VAL-SID-06`. What remains
+  is in the
+  [evidence](docs/evidence/2026-08-06-thumbnail-and-clipboard-bytes.md).
 - Uncommitted in the checkout: `SID-G7-C`, the corrective unit from the suite
   audit. Pasting an entry into its own folder now duplicates instead of trashing
   the original to make room for it; the portal answers `writable` only when it

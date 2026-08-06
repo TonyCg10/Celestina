@@ -1,0 +1,30 @@
+# SID-G7-E exact change inventory
+
+Base revision	a42732889f2ab362aecac4f9c8357181cf95a721
+Pathspec	siderita/
+Pathspec	celestina-rs/crates/siderita-core/
+Pathspec	celestina-rs/crates/siderita-ops/
+Pathspec	celestina-rs/crates/siderita-qt/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	ac1ff781ef7f3dc732b2242660c94bd031309aa2ff5b0cbfac9adae80bba4d3f	docs/version-history.tsv
+1	1	9ba77dc21cf1eaa6657076b8aa2841182629a98606a5cd221485f2c30166d691	siderita/Cargo.lock
+1	1	823f2056211e6547255dc52e050d18cdb15b835326c11f26e80eb18d36bcd32f	siderita/Cargo.toml
+24	6	eb55a68d2c198ccb9039670c300c37db8c3af023264566a50a1263a22ec56be0	siderita/STATUS.md
+13	6	b11eaa314141ad24120d74d0a7ec066302dff854e8481e8d88dcd92643e1c2be	siderita/VALIDATION.md
+3	0	e44596a4e0713c88079b7174840bf307dfc8501464b7a5e8e16c547d8ee57afb	siderita/build.rs
+14	5	56f67b42490aa6c9355f0d3f38553196a0d56941513cd105ddec7d4fea6d1486	siderita/cpp/clipboard.cpp
+13	5	c760f647a9bb756fb74265b9b37d7199d8b56fa8654027d6842756eba790617b	siderita/cpp/siderita/clipboard.h
+32	5	3fb6afbcdcd5d2d1bebf71e2c2a3c24c43c9e94b5b420aa4386946fe11b03fbb	siderita/cpp/siderita/thumbnailprovider.h
+146	33	5e97e23930360bf53196d407cdf000c4aad9138184f653569f32a3d00765724f	siderita/cpp/thumbnailprovider.cpp
+11	8	856d4ab13019abdf366054e12b3024670c00b36ec9b228207b951c589a2d8181	siderita/docs/evidence/2026-08-06-byte-exact-path-seam.md
+166	0	624952d4dbe054efecc23d7133117b252ce9b452ec36663905175bb0e13335e7	siderita/docs/evidence/2026-08-06-thumbnail-and-clipboard-bytes.md
+14	1	e881d1c2915f4a4cf3de228b57d870f99b74b737900a5b945de2db4077ef80d8	siderita/docs/plans/active/2026-08-04-shared-reading-surface.md
+1	1	7fc32b8634fda8a45e6e3943d8e80adbc771a56c51624aa9a96f5d93e1393d4a	siderita/src/controller.rs
+62	11	73a72df73a213994b594f5a3bf8dced09b5bf6eba47c280e58b8a378424c08e9	siderita/src/controller/fileops.rs
+7	0	4970e804e0bb683e1a325f60f82ced2d6a3b01c1c6b445cdf1923d55b2dadf79	siderita/src/main.rs
+164	0	aa6d8d9c1e61c743c76dc24fdef6307c27fe3071de45a6dc72cf46dbdcd6dbaa	siderita/src/thumbnails.rs
+30	0	self	siderita/docs/inventories/2026-08-04-shared-reading-surface/SID-G7-E.numstat.tsv

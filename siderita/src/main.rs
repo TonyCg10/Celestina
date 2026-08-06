@@ -17,6 +17,13 @@ mod properties;
 mod recent;
 mod search;
 mod settings;
+// The C++ thumbnail provider's cache-key spelling, bound only where it is
+// checked. Nothing in Rust computes a thumbnail, but that spelling must equal
+// `celestina_core::percent::encode_qt_path` byte for byte or the shared
+// freedesktop cache stops being shared — a rule that deserves a test rather
+// than a comment in two languages.
+#[cfg(test)]
+mod thumbnails;
 mod volumes;
 
 use cxx_qt_lib::{

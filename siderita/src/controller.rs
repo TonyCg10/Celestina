@@ -33,7 +33,7 @@ pub mod qobject {
         include!("siderita/clipboard.h");
 
         #[rust_name = "system_clipboard_set_uris"]
-        fn siderita_set_clipboard_uris(paths: &QStringList, cut: bool);
+        fn siderita_set_clipboard_uris(uris: &QStringList, cut: bool);
 
         #[rust_name = "system_clipboard_read_uris"]
         fn siderita_read_clipboard_uris() -> QStringList;
