@@ -101,9 +101,16 @@ pub mod qobject {
         #[qproperty(f64, volume_level)]
         type FluoritaPlayer = super::PlayerRust;
 
-        /// Opens `path` and starts it. A second call replaces the first.
+        /// Opens the item a path key names and starts it. A second call
+        /// replaces the first.
+        ///
+        /// The argument is a key under
+        /// [ADR 0008](../../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md),
+        /// which is what the library's rows and the command-line scaffold both
+        /// publish. A value that is not one is refused out loud rather than
+        /// opened as whatever file its characters happen to name.
         #[qinvokable]
-        fn open(self: Pin<&mut FluoritaPlayer>, path: &QString);
+        fn open(self: Pin<&mut FluoritaPlayer>, key: &QString);
 
         #[qinvokable]
         fn play(self: Pin<&mut FluoritaPlayer>);
@@ -223,11 +230,24 @@ impl qobject::FluoritaPlayer {
     /// Qt item still rendered from it, and crashed. So a session with a live
     /// surface is closed through the same handshake and the new item waits for
     /// the surface to confirm.
-    pub fn open(mut self: core::pin::Pin<&mut Self>, path: &QString) {
-        let path = PathBuf::from(path.to_string());
-        if path.as_os_str().is_empty() {
+    pub fn open(mut self: core::pin::Pin<&mut Self>, key: &QString) {
+        let text = key.to_string();
+        // An empty key is the ordinary "nothing to open" case — a bare launch
+        // binds one — and stays silent. Anything else that is not a key is a
+        // caller error, and a player that quietly did nothing about it would be
+        // indistinguishable from one that is simply slow.
+        if text.is_empty() {
             return;
         }
+        let path = match celestina_core::pathkey::decode(&text) {
+            Ok(path) => path,
+            Err(_) => {
+                self.as_mut().set_state(QString::from("error"));
+                self.as_mut()
+                    .set_error_message(QString::from(crate::copy::UNREADABLE_KEY));
+                return;
+            }
+        };
         match decide_open(*self.render_handle() != 0, self.closing()) {
             OpenAction::Begin => self.begin(path),
             OpenAction::CloseFirst => {
@@ -307,13 +327,19 @@ impl qobject::FluoritaPlayer {
     /// Judges a still against its budget and hands it to the toolkit.
     fn show_image(mut self: core::pin::Pin<&mut Self>, path: &std::path::Path) {
         let bytes = std::fs::metadata(path).map(|data| data.len()).unwrap_or(0);
-        let probed = {
-            let measured = qobject::probe_image(&QString::from(path.to_string_lossy().as_ref()));
+        // `QImageReader` takes a `QString` and spells it back out as a
+        // filesystem name, so a path this side cannot express exactly is a path
+        // it would open some *other* file for. Rather than measure the wrong
+        // header, the probe is skipped and the budget decides on the file size
+        // alone — which reports the picture as unreadable, honestly, instead of
+        // trusting dimensions that came from a different file.
+        let probed = path.to_str().and_then(|spelled| {
+            let measured = qobject::probe_image(&QString::from(spelled));
             let (width, height) = (measured.width(), measured.height());
             (width > 0 && height > 0)
                 .then(|| (u32::try_from(width).ok(), u32::try_from(height).ok()))
                 .and_then(|(width, height)| Some((width?, height?)))
-        };
+        });
 
         match ImageDecision::judge(bytes, probed) {
             // The URL is the suite's frozen `file://` spelling, so a name with

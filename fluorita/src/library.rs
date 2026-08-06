@@ -16,6 +16,12 @@
 //!   only when the user asks for it, bounded and cancellable, never on launch.
 //! - **A truncated scan says so.** Reconciliation may only conclude that a file
 //!   disappeared from a pass that actually finished.
+//! - **A path crossing to QML is a key, not text.** Rows publish
+//!   `celestina_core::percent`-encoded path bytes and every verb decodes them
+//!   back; the name a person reads travels in its own column and never returns.
+//!   That is [ADR 0008](../../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md),
+//!   and it is why a file whose name is not UTF-8 can now be described or
+//!   trashed instead of reporting that it is no longer in the library.
 //! - **What was learned is not learned again.** The catalogue is read from disk
 //!   before the walk and published straight away, so the window opens on the
 //!   library it had; the walk then refreshes it and only files whose bytes
@@ -38,6 +44,8 @@
 use std::thread::JoinHandle;
 
 use celestina_core::CancellationToken;
+
+use celestina_core::pathkey;
 
 mod copy;
 mod detail;
@@ -96,11 +104,11 @@ pub mod qobject {
         /// publication.
         #[qproperty(i32, revision)]
         /// The sidebar, index-aligned: the root's handle as text, the label to
-        /// show and the root itself. Configuration order, which is the order
-        /// the user built.
+        /// show and where it is, as display text. Configuration order, which is
+        /// the order the user built.
         #[qproperty(QStringList, source_ids)]
         #[qproperty(QStringList, source_names)]
-        #[qproperty(QStringList, source_paths)]
+        #[qproperty(QStringList, source_locations)]
         /// The selected root's handle, or `-1` for every root at once. The
         /// content below is always exactly this scope.
         #[qproperty(i32, selected_source)]
@@ -114,7 +122,9 @@ pub mod qobject {
         /// is already a display string, and filling them opens no file.
         #[qproperty(bool, detail_open)]
         #[qproperty(QString, detail_name)]
-        #[qproperty(QString, detail_path)]
+        /// Where the item is, for a person to read. Lossy, like every label,
+        /// and never given back to a verb — the menu acts on the row's key.
+        #[qproperty(QString, detail_location)]
         #[qproperty(QString, detail_kind)]
         #[qproperty(QString, detail_size)]
         #[qproperty(QString, detail_modified)]
@@ -125,9 +135,15 @@ pub mod qobject {
         /// What happened to the last item action, or empty. A successful trash
         /// says so too: a row vanishing with no word for it reads as a crash.
         #[qproperty(QString, item_notice)]
-        /// Gallery rows, index-aligned: absolute path, display name, kind and
-        /// the cached thumbnail URL (empty when nothing produced one).
-        #[qproperty(QStringList, gallery_paths)]
+        /// Gallery rows, index-aligned: the item's path key, its display name,
+        /// its kind and the cached thumbnail URL (empty when nothing produced
+        /// one).
+        ///
+        /// The key is opaque ASCII under
+        /// [ADR 0008](../../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md):
+        /// it is the only value `describe_item`, `trash_item` and the player's
+        /// `open` accept, and it is not text to show. The name beside it is.
+        #[qproperty(QStringList, gallery_keys)]
         #[qproperty(QStringList, gallery_names)]
         #[qproperty(QStringList, gallery_kinds)]
         #[qproperty(QStringList, gallery_thumbnails)]
@@ -136,8 +152,9 @@ pub mod qobject {
         /// a disconnected drive is not data loss — but it must say so.
         #[qproperty(QStringList, gallery_available)]
         /// Music rows, index-aligned and already in projection order, so a
-        /// `ListView` can section on the artist without sorting anything.
-        #[qproperty(QStringList, music_paths)]
+        /// `ListView` can section on the artist without sorting anything. The
+        /// first column is a path key, on the same terms as the gallery's.
+        #[qproperty(QStringList, music_keys)]
         #[qproperty(QStringList, music_titles)]
         #[qproperty(QStringList, music_artists)]
         #[qproperty(QStringList, music_albums)]
@@ -172,8 +189,11 @@ pub mod qobject {
 
         /// Fills the properties panel for one item and opens it. Reads only
         /// what the catalogue already knows; it starts no decoder.
+        ///
+        /// Takes the row's path key. A value that is not one is refused rather
+        /// than turned into some other file's path.
         #[qinvokable]
-        fn describe_item(self: Pin<&mut FluoritaLibrary>, path: &QString);
+        fn describe_item(self: Pin<&mut FluoritaLibrary>, key: &QString);
 
         /// Closes the properties panel.
         #[qinvokable]
@@ -181,9 +201,9 @@ pub mod qobject {
 
         /// Sends one item to the desktop Trash. Returns at once: the move can
         /// be a real cross-filesystem copy, so it runs on a worker and the
-        /// result arrives through the queue.
+        /// result arrives through the queue. Takes the row's path key.
         #[qinvokable]
-        fn trash_item(self: Pin<&mut FluoritaLibrary>, path: &QString);
+        fn trash_item(self: Pin<&mut FluoritaLibrary>, key: &QString);
 
         /// Produces the thumbnails the shared cache is missing, for video and
         /// audio only. This is the one thing here that starts the media
@@ -214,14 +234,14 @@ pub struct LibraryRust {
 
     source_ids: QStringList,
     source_names: QStringList,
-    source_paths: QStringList,
+    source_locations: QStringList,
     selected_source: i32,
     choosing_folder: bool,
     folder_notice: QString,
 
     detail_open: bool,
     detail_name: QString,
-    detail_path: QString,
+    detail_location: QString,
     detail_kind: QString,
     detail_size: QString,
     detail_modified: QString,
@@ -229,14 +249,18 @@ pub struct LibraryRust {
     detail_folder: QString,
     detail_notice: QString,
     item_notice: QString,
+    /// Which item the properties panel is about, byte-exact. Not published:
+    /// `detail_location` is the lossy label a person reads, and comparing that
+    /// would confuse two files whose names differ only in bytes no font shows.
+    described: Option<std::path::PathBuf>,
 
-    gallery_paths: QStringList,
+    gallery_keys: QStringList,
     gallery_names: QStringList,
     gallery_kinds: QStringList,
     gallery_thumbnails: QStringList,
     gallery_available: QStringList,
 
-    music_paths: QStringList,
+    music_keys: QStringList,
     music_titles: QStringList,
     music_artists: QStringList,
     music_albums: QStringList,
@@ -283,13 +307,13 @@ impl Default for LibraryRust {
             revision: 0,
             source_ids: QStringList::default(),
             source_names: QStringList::default(),
-            source_paths: QStringList::default(),
+            source_locations: QStringList::default(),
             selected_source: EVERY_SOURCE,
             choosing_folder: false,
             folder_notice: QString::default(),
             detail_open: false,
             detail_name: QString::default(),
-            detail_path: QString::default(),
+            detail_location: QString::default(),
             detail_kind: QString::default(),
             detail_size: QString::default(),
             detail_modified: QString::default(),
@@ -297,12 +321,13 @@ impl Default for LibraryRust {
             detail_folder: QString::default(),
             detail_notice: QString::default(),
             item_notice: QString::default(),
-            gallery_paths: QStringList::default(),
+            described: None,
+            gallery_keys: QStringList::default(),
             gallery_names: QStringList::default(),
             gallery_kinds: QStringList::default(),
             gallery_thumbnails: QStringList::default(),
             gallery_available: QStringList::default(),
-            music_paths: QStringList::default(),
+            music_keys: QStringList::default(),
             music_titles: QStringList::default(),
             music_artists: QStringList::default(),
             music_albums: QStringList::default(),
@@ -427,8 +452,16 @@ impl qobject::FluoritaLibrary {
         self.start_scan(Some(configured));
     }
 
-    pub fn describe_item(mut self: core::pin::Pin<&mut Self>, path: &QString) {
-        let wanted = std::path::PathBuf::from(path.to_string());
+    pub fn describe_item(mut self: core::pin::Pin<&mut Self>, key: &QString) {
+        // A key that did not come from a published row is refused the same way
+        // a row the catalogue has forgotten is: there is no item to describe,
+        // and inventing a `PathBuf` from the characters would open a panel
+        // about a different file.
+        let Ok(wanted) = pathkey::decode(&key.to_string()) else {
+            self.as_mut()
+                .set_item_notice(QString::from(copy::ITEM_GONE));
+            return;
+        };
         let Some(record) = self.rust().catalogue.find_by_path(&wanted).cloned() else {
             // The row named a file the catalogue no longer holds — a scan just
             // forgot it, or the panel was opened on a stale grid. Saying so
@@ -439,7 +472,12 @@ impl qobject::FluoritaLibrary {
         };
         let detail = detail::describe(&record, &self.rust().configured);
         self.as_mut().set_detail_name(QString::from(&detail.name));
-        self.as_mut().set_detail_path(QString::from(&detail.path));
+        self.as_mut()
+            .set_detail_location(QString::from(&detail.location));
+        // Which item the panel is about, byte-exact, so a trash that removes it
+        // can close it. `detail_location` is display text and two different
+        // files can spell the same one.
+        self.as_mut().rust_mut().described = Some(wanted);
         self.as_mut().set_detail_kind(QString::from(&detail.kind));
         self.as_mut().set_detail_size(QString::from(&detail.size));
         self.as_mut()
@@ -458,11 +496,18 @@ impl qobject::FluoritaLibrary {
         self.as_mut().set_detail_open(false);
     }
 
-    pub fn trash_item(mut self: core::pin::Pin<&mut Self>, path: &QString) {
+    pub fn trash_item(mut self: core::pin::Pin<&mut Self>, key: &QString) {
         if self.rust().trash_worker.is_some() {
             return;
         }
-        let wanted = std::path::PathBuf::from(path.to_string());
+        // Refused before anything is moved. A key this process did not emit
+        // names no item here, and guessing a path for it would send a file the
+        // user never pointed at to the Trash.
+        let Ok(wanted) = pathkey::decode(&key.to_string()) else {
+            self.as_mut()
+                .set_item_notice(QString::from(copy::ITEM_GONE));
+            return;
+        };
         if self.rust().catalogue.find_by_path(&wanted).is_none() {
             self.as_mut()
                 .set_item_notice(QString::from(copy::ITEM_GONE));
@@ -488,7 +533,11 @@ impl qobject::FluoritaLibrary {
     /// Dropping it on request would show the item gone while it was still on
     /// disk, which is exactly the "requested is not confirmed" mistake the
     /// suite's contract exists to prevent.
-    fn item_trashed(mut self: core::pin::Pin<&mut Self>, path: QString, notice: QString) {
+    ///
+    /// `key` is the same key the worker was started from, carried back through
+    /// the queue: the answer crosses as a `QString`, so it travels as a key for
+    /// the same reason a published row does.
+    fn item_trashed(mut self: core::pin::Pin<&mut Self>, key: QString, notice: QString) {
         if let Some(handle) = self.as_mut().rust_mut().trash_worker.take() {
             let _ = handle.join();
         }
@@ -496,7 +545,9 @@ impl qobject::FluoritaLibrary {
         if !notice.to_string().is_empty() {
             return;
         }
-        let moved = std::path::PathBuf::from(path.to_string());
+        let Ok(moved) = pathkey::decode(&key.to_string()) else {
+            return;
+        };
         let id = self
             .rust()
             .catalogue
@@ -505,8 +556,9 @@ impl qobject::FluoritaLibrary {
         if let Some(id) = id {
             self.as_mut().rust_mut().catalogue.forget(&id);
         }
-        // The panel may be describing the very item that just left.
-        if self.detail_path() == &path {
+        // The panel may be describing the very item that just left. Compared by
+        // bytes, not by the label the panel is showing.
+        if self.rust().described.as_deref() == Some(moved.as_path()) {
             self.as_mut().set_detail_open(false);
         }
         let catalogue = self.rust().catalogue.clone();
@@ -544,29 +596,32 @@ impl qobject::FluoritaLibrary {
 
     /// The folder chooser answered. Runs on the GUI thread, through the queue.
     ///
-    /// An empty path means the dialog was dismissed, which is not a failure and
+    /// An empty key means the dialog was dismissed, which is not a failure and
     /// says nothing. A refused root — relative, nested inside a configured one,
     /// already mapped — is the domain's decision, and it is reported rather
     /// than swallowed, because the folder visibly did not appear.
-    fn folder_chosen(mut self: core::pin::Pin<&mut Self>, path: QString, notice: QString) {
+    ///
+    /// The chosen folder crosses back as a key. The portal already hands over
+    /// raw bytes, and a directory whose name is not UTF-8 was being mapped
+    /// under its lossy spelling — a root the scan would then find nothing in.
+    fn folder_chosen(mut self: core::pin::Pin<&mut Self>, key: QString, notice: QString) {
         self.as_mut().set_choosing_folder(false);
         if let Some(handle) = self.as_mut().rust_mut().folder_worker.take() {
             let _ = handle.join();
         }
         self.as_mut().set_folder_notice(notice);
 
-        let chosen = path.to_string();
-        if chosen.is_empty() {
+        let Ok(chosen) = pathkey::decode(&key.to_string()) else {
+            // Includes the dismissed dialog, which sends an empty key and has
+            // already had its say above: there is nothing to add and nothing
+            // more to report.
             return;
-        }
+        };
         let mut configured = self.rust().configured.clone();
         // Everything supported inside it: the user chose this folder for its
         // contents, and a kind filter they were never asked about would hide
         // files that are plainly there.
-        match configured.add(
-            std::path::PathBuf::from(&chosen),
-            fluorita_core::KindSet::all(),
-        ) {
+        match configured.add(chosen, fluorita_core::KindSet::all()) {
             Ok(added) => {
                 self.as_mut()
                     .set_selected_source(i32::try_from(added.value()).unwrap_or(EVERY_SOURCE));
@@ -608,17 +663,17 @@ impl qobject::FluoritaLibrary {
         let sources = columns(&snapshot.sources);
         self.as_mut().set_source_ids(sources[0].clone());
         self.as_mut().set_source_names(sources[1].clone());
-        self.as_mut().set_source_paths(sources[2].clone());
+        self.as_mut().set_source_locations(sources[2].clone());
 
         let gallery = columns(&snapshot.gallery);
-        self.as_mut().set_gallery_paths(gallery[0].clone());
+        self.as_mut().set_gallery_keys(gallery[0].clone());
         self.as_mut().set_gallery_names(gallery[1].clone());
         self.as_mut().set_gallery_kinds(gallery[2].clone());
         self.as_mut().set_gallery_thumbnails(gallery[3].clone());
         self.as_mut().set_gallery_available(gallery[4].clone());
 
         let music = columns(&snapshot.music);
-        self.as_mut().set_music_paths(music[0].clone());
+        self.as_mut().set_music_keys(music[0].clone());
         self.as_mut().set_music_titles(music[1].clone());
         self.as_mut().set_music_artists(music[2].clone());
         self.as_mut().set_music_albums(music[3].clone());

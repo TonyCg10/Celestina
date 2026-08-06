@@ -1,6 +1,6 @@
 # Fluorita status
 
-- **Updated:** 2026-08-04
+- **Updated:** 2026-08-06
 - **Implementation:** checkpoints F0-F4 are closed; F5 rebuilds the library
   around the configured roots and is the active implementation checkpoint
 - **Author validation:** the version-1 playback and interaction pass is closed;
@@ -9,7 +9,23 @@
 
 ## Current checkout truth
 
-- Uncommitted in the checkout: `F6-B`, the corrective unit from the suite audit.
+- Uncommitted in the checkout: `F6-C`, the Fluorita half of
+  [ADR 0008](../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md). A
+  path crossing to QML is now a percent-encoded key — `fluorita/src/pathkey.rs`
+  composes it over the suite's one codec — and every verb decodes it back with a
+  typed refusal instead of rebuilding a `PathBuf` from a lossy string. The name,
+  the location and the title a person reads travel in their own columns and
+  never come back. A file whose name is not valid UTF-8 can therefore be opened,
+  described and trashed; before this it listed and answered the library's
+  item-is-gone notice (`copy::ITEM_GONE`) to everything. Compiled, linted and
+  unit-tested, with no inventory, no version transition and no production run. Nothing has been
+  tried on a real session: that is `VAL-FLU-BYTES`. One limit stands and is
+  recorded rather than hidden — an image with such a name is refused as
+  unreadable, because the C++ probe seam takes a `QString` and Qt has no
+  lossless spelling for those bytes. Siderita's half of the same ADR (`SID-A2`)
+  is a separate unit and is untouched here.
+- Delivered as `fluorita-bug` at 1.2.1, built, verified and deployed: `F6-B`,
+  the corrective unit from the suite audit.
   A render context's release is now decided by an explicit renderer claim
   instead of by item visibility, which is what allowed the mpv core to be
   destroyed under a live context after a stream failed; an activation arriving
@@ -18,10 +34,8 @@
   leaving the file on "abriendo" for ever; cancellation reaches the scan and the
   tag probes; MPRIS emits its property and seek signals; a watcher refresh
   projects under the scope in force and a scan failure no longer empties the
-  library on screen. Compiled and unit-tested, with no inventory, no version
-  transition and no production run — the author asked for the corrections, not
-  the delivery. None of the teardown paths has been exercised on real GPU state:
-  that is `VAL-FLU-TEARDOWN`.
+  library on screen. None of the teardown paths has been exercised on real GPU
+  state: that is `VAL-FLU-TEARDOWN`.
 - The shared core/engine implement media classification, source-scoped
   Gallery/Music projections, user-owned persistent roots, persistent
   incremental catalogue/watch, bounded metadata and artwork generation,

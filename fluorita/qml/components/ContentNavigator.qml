@@ -11,13 +11,13 @@ Item {
     id: navigator
 
     required property FluoritaLibrary library
-    required property string currentPath
+    required property string currentKey
 
     // Everything the selected folder holds, gallery first and then tracks, in
     // the order each projection already decided.
     property var rows: []
 
-    readonly property int index: navigator.indexOf(navigator.currentPath)
+    readonly property int index: navigator.indexOf(navigator.currentKey)
     readonly property bool hasPrevious: navigator.index > 0
     readonly property bool hasNext: navigator.index >= 0
         && navigator.index < navigator.rows.length - 1
@@ -33,28 +33,28 @@ Item {
 
     function weave() {
         var woven = [];
-        var paths = navigator.library.galleryPaths;
+        var keys = navigator.library.galleryKeys;
         var names = navigator.library.galleryNames;
         var kinds = navigator.library.galleryKinds;
         var thumbs = navigator.library.galleryThumbnails;
         // Defensive: a short column would mean a publication error, and fewer
         // rows are better than rows with undefined fields.
-        var count = Math.min(paths.length, names.length, kinds.length, thumbs.length);
+        var count = Math.min(keys.length, names.length, kinds.length, thumbs.length);
         for (var index = 0; index < count; ++index) {
             woven.push({
-                path: paths[index],
+                key: keys[index],
                 name: names[index],
                 kind: kinds[index],
                 thumbnail: thumbs[index]
             });
         }
-        var trackPaths = navigator.library.musicPaths;
+        var trackKeys = navigator.library.musicKeys;
         var titles = navigator.library.musicTitles;
         var covers = navigator.library.musicThumbnails;
-        var tracks = Math.min(trackPaths.length, titles.length, covers.length);
+        var tracks = Math.min(trackKeys.length, titles.length, covers.length);
         for (var track = 0; track < tracks; ++track) {
             woven.push({
-                path: trackPaths[track],
+                key: trackKeys[track],
                 name: titles[track],
                 kind: "audio",
                 thumbnail: covers[track]
@@ -63,9 +63,11 @@ Item {
         return woven;
     }
 
-    function indexOf(path) {
+    // By key, which is an exact byte identity rather than a label two files
+    // can share once their names are made displayable.
+    function indexOf(key) {
         for (var index = 0; index < navigator.rows.length; ++index) {
-            if (navigator.rows[index].path === path)
+            if (navigator.rows[index].key === key)
                 return index;
         }
         return -1;

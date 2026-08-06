@@ -22,7 +22,7 @@ Item {
     // draws that; it does not work it out a second time.
     required property ContentNavigator navigator
 
-    signal activated(string path, rect origin, string poster, string kind)
+    signal activated(string key, string name, rect origin, string poster, string kind)
 
     readonly property int stripHeight: CelestinaTheme.spaceLg * 5
     // How close the pointer has to come. Deliberately taller than the strip: a
@@ -116,7 +116,7 @@ Item {
                 required property var modelData
                 required property int index
 
-                readonly property bool current: frame.modelData.path === dock.navigator.currentPath
+                readonly property bool current: frame.modelData.key === dock.navigator.currentKey
 
                 width: Math.round(filmstrip.height * 16 / 9)
                 height: filmstrip.height
@@ -124,8 +124,9 @@ Item {
                 Accessible.role: Accessible.ListItem
                 Accessible.name: frame.modelData.name
                 Accessible.focusable: true
-                Accessible.onPressAction: dock.activated(frame.modelData.path, dock.originOf(frame),
-                                                    frame.modelData.thumbnail, frame.modelData.kind)
+                Accessible.onPressAction: dock.activated(frame.modelData.key, frame.modelData.name,
+                                                    dock.originOf(frame), frame.modelData.thumbnail,
+                                                    frame.modelData.kind)
 
                 // The open item is ringed; the rest are the pictures alone,
                 // floating over the content. A card each would put a strip of
@@ -171,8 +172,9 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: dock.activated(frame.modelData.path, dock.originOf(frame),
-                                                    frame.modelData.thumbnail, frame.modelData.kind)
+                    onClicked: dock.activated(frame.modelData.key, frame.modelData.name,
+                                                    dock.originOf(frame), frame.modelData.thumbnail,
+                                                    frame.modelData.kind)
                 }
             }
 
@@ -184,7 +186,8 @@ Item {
                 if (filmstrip.currentIndex < 0 || filmstrip.currentIndex >= rows.length)
                     return;
                 const frame = filmstrip.itemAtIndex(filmstrip.currentIndex);
-                dock.activated(rows[filmstrip.currentIndex].path,
+                dock.activated(rows[filmstrip.currentIndex].key,
+                               rows[filmstrip.currentIndex].name,
                                frame ? dock.originOf(frame) : Qt.rect(0, 0, 0, 0),
                                rows[filmstrip.currentIndex].thumbnail,
                                rows[filmstrip.currentIndex].kind);

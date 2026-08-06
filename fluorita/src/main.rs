@@ -60,16 +60,16 @@ fn main() {
             QString::from("requestedKind"),
             QVariant::from(&QString::from(requested.kind_label())),
         );
-        // The path the player actually opens. It is lossy only if the name is
-        // not UTF-8, and that case is refused by the engine rather than opened
-        // as a different file.
+        // The key the player actually opens, on the same terms as a library
+        // row: percent-encoded path bytes, byte-exact for a name that is not
+        // UTF-8. Empty when Fluorita was launched with no argument.
         initial_properties.insert(
-            QString::from("requestedPath"),
+            QString::from("requestedKey"),
             QVariant::from(&QString::from(
                 requested
                     .path
                     .as_deref()
-                    .map(|path| path.to_string_lossy().into_owned())
+                    .map(celestina_core::pathkey::encode)
                     .unwrap_or_default()
                     .as_str(),
             )),

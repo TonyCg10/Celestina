@@ -19,6 +19,10 @@
 /// what keeps browsing from starting a decoder for a text file.
 pub(crate) const UNKNOWN_KIND: &str = "Fluorita no reconoce este tipo de archivo";
 
+/// A value handed to `open` that is not a path key, so it names no file. Said
+/// out loud rather than opened as whatever its characters happen to spell.
+pub(crate) const UNREADABLE_KEY: &str = "Fluorita no pudo interpretar la ruta de este elemento";
+
 /// A still whose path could not be expressed as a URL for the toolkit.
 pub(crate) const UNRESOLVED_IMAGE: &str = "No se pudo resolver la ruta de la imagen";
 

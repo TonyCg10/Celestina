@@ -3,6 +3,40 @@
 This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md).
 
+## VAL-FLU-BYTES — a file whose name is not UTF-8, in a real window
+
+- **Status:** pending
+- **Related implementation:** F6-C
+- **Requires:** the deployed Fluorita binary, a real Wayland session, and a
+  configured root holding a picture, a video and a track whose names contain a
+  byte that is not valid UTF-8 — create them with
+  `touch $'foto\xff.jpg' $'clip\xff.mkv' $'pista\xff.flac'` in a mapped folder,
+  and one folder named the same way to add through the chooser
+- **Procedure:** rescan the library; click each of the three items once;
+  right-click each one and open its properties, then close it; right-click the
+  track and choose the trash entry; press the add-folder button and choose the
+  folder whose name carries the byte; restart Fluorita; finally launch
+  `fluorita $'/ruta/al/clip\xff.mkv'` from a terminal
+- **Pass condition:** the three items appear with a replacement character in
+  their visible names; one click opens or plays each of them rather than
+  showing the item-is-gone notice; the properties panel fills in for each; the
+  track really leaves the grid and is really in the desktop Trash; the
+  chosen folder appears in the sidebar, still holds its content after the
+  restart, and its removal takes no file with it; and the command line opens the
+  clip in the player
+- **Result:** not run
+- **Evidence:** none
+
+The agent lane proved the codec, the projection, the round trip and the
+catalogue lookup in
+[the byte-exact path seam evidence](docs/evidence/2026-08-06-byte-exact-path-seam.md).
+It cannot prove what Qt does with these strings once a real QML surface, a real
+portal backend and a real filesystem are involved. One known limit is expected
+to fail rather than pass and is recorded there, not here: an image whose name is
+not UTF-8 is refused as unreadable, because the C++ probe seam has no lossless
+spelling for those bytes. A failure records the observation here and opens a
+linked corrective unit.
+
 ## VAL-FLU-TEARDOWN — closing video without taking the process with it
 
 - **Status:** pending

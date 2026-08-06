@@ -17,7 +17,7 @@ Item {
     id: view
 
     required property FluoritaLibrary library
-    signal activated(string path, rect origin, string poster, string kind)
+    signal activated(string key, string name, rect origin, string poster, string kind)
 
     readonly property bool hasGallery: view.library.imageCount + view.library.videoCount > 0
     readonly property bool hasMusic: view.library.trackCount > 0
@@ -105,11 +105,11 @@ Item {
                 Layout.fillHeight: true
                 visible: view.hasGallery
                 library: view.library
-                onActivated: function(path, origin, poster, kind) {
-                    view.activated(path, origin, poster, kind)
+                onActivated: function(key, name, origin, poster, kind) {
+                    view.activated(key, name, origin, poster, kind)
                 }
-                onMenuRequested: function(path, name, x, y) {
-                    view.showMenu(galleryGrid, path, name, x, y);
+                onMenuRequested: function(key, name, x, y) {
+                    view.showMenu(galleryGrid, key, name, x, y);
                 }
             }
 
@@ -126,11 +126,11 @@ Item {
                     : -1
                 visible: view.hasMusic
                 library: view.library
-                onActivated: function(path, origin, poster, kind) {
-                    view.activated(path, origin, poster, kind)
+                onActivated: function(key, name, origin, poster, kind) {
+                    view.activated(key, name, origin, poster, kind)
                 }
-                onMenuRequested: function(path, name, x, y) {
-                    view.showMenu(musicList, path, name, x, y);
+                onMenuRequested: function(key, name, x, y) {
+                    view.showMenu(musicList, key, name, x, y);
                 }
             }
 
@@ -179,10 +179,10 @@ Item {
     // The shared menu is a real `Menu`: it is popped at a point in a parent's
     // coordinates and the overlay keeps it on screen by itself, so nothing here
     // clamps or positions it.
-    function showMenu(source, path, name, x, y) {
+    function showMenu(source, key, name, x, y) {
         const point = source.mapToItem(view, x, y);
         itemMenu.targetName = name;
-        itemMenu.targetPath = path;
+        itemMenu.targetKey = key;
         itemMenu.popup(view, point.x, point.y);
     }
 
@@ -190,8 +190,8 @@ Item {
         id: itemMenu
 
         backdropSource: libraryBody
-        onTrashRequested: function(path) { view.library.trashItem(path) }
-        onPropertiesRequested: function(path) { view.library.describeItem(path) }
+        onTrashRequested: function(key) { view.library.trashItem(key) }
+        onPropertiesRequested: function(key) { view.library.describeItem(key) }
     }
 
     ItemDetailPanel {

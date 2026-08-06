@@ -16,8 +16,10 @@ ApplicationWindow {
     required property string requestedLabel
     // Its classified kind, decided from the name alone — no decoder ran.
     required property string requestedKind
-    // The real path, byte-exact, for the engine. Never rebuilt from the label.
-    required property string requestedPath
+    // The item's path key: percent-encoded path bytes, byte-exact even for a
+    // name that is not UTF-8, and the only thing the player accepts. Never
+    // rebuilt from the label, and never shown.
+    required property string requestedKey
 
     width: 960
     height: 640
@@ -30,13 +32,15 @@ ApplicationWindow {
         : qsTr("Fluorita")
 
     // Opening an item: the player takes the window, growing out of whatever the
-    // person clicked. The label is for display only; the path is what goes to
-    // the engine.
-    function open(path, origin, poster, kind) {
+    // person clicked. `key` is what goes to the engine; `name` is what a person
+    // reads. The two arrive together because the row publishes both — deriving
+    // the label from the key would put percent escapes in the title bar, and
+    // deriving the key from the label would name a file that does not exist.
+    function open(key, name, origin, poster, kind) {
         // Opening what is already open would tear the session down and build it
         // again — a visible restart for anyone who double-clicks a card out of
         // habit now that one click is enough.
-        if (path === window.openPath) {
+        if (key === window.openKey) {
             return;
         }
         // Only the first open of a session grows from a card. Stepping along
@@ -48,9 +52,9 @@ ApplicationWindow {
         }
         window.openPoster = poster === undefined ? "" : poster;
         window.openKind = kind === undefined ? window.requestedKind : kind;
-        window.openPath = path;
-        window.openLabel = path.substring(path.lastIndexOf("/") + 1);
-        mediaPlayer.open(path);
+        window.openKey = key;
+        window.openLabel = name === undefined ? window.requestedLabel : name;
+        mediaPlayer.open(key);
     }
 
     // Leaving: the frame shrinks back to the card it came from and the session
@@ -63,7 +67,8 @@ ApplicationWindow {
         }
         // No origin: the frame is already full size, and stepping must not
         // re-run the expansion.
-        window.open(wanted.path, Qt.rect(0, 0, 0, 0), wanted.thumbnail, wanted.kind);
+        window.open(wanted.key, wanted.name, Qt.rect(0, 0, 0, 0),
+                    wanted.thumbnail, wanted.kind);
     }
 
     function backToLibrary() {
@@ -112,15 +117,15 @@ ApplicationWindow {
             return;
         }
         window.closing = false;
-        window.openPath = "";
+        window.openKey = "";
         window.openLabel = "";
     }
 
     // Empty until something is activated: the library is what a bare launch
     // shows, and the player takes over the window when there is an item.
-    property string openPath: window.requestedPath
+    property string openKey: window.requestedKey
     property string openLabel: window.requestedLabel
-    readonly property bool playing: window.openPath.length > 0
+    readonly property bool playing: window.openKey.length > 0
     // True while the frame is on its way back to the library.
     property bool closing: false
     // Where the open item came from. A bare launch has no card to grow out of,
@@ -162,8 +167,8 @@ ApplicationWindow {
         library: mediaLibrary
         // Activating an item is exactly what the command line does, so it goes
         // through the same door.
-        onActivated: function(path, origin, poster, kind) {
-            window.open(path, origin, poster, kind)
+        onActivated: function(key, name, origin, poster, kind) {
+            window.open(key, name, origin, poster, kind)
         }
     }
 
@@ -254,7 +259,7 @@ ApplicationWindow {
             id: folderNavigator
 
             library: mediaLibrary
-            currentPath: window.openPath
+            currentKey: window.openKey
         }
 
         // A picture gets the filmstrip. It only appears once the frame has
@@ -266,8 +271,8 @@ ApplicationWindow {
             anchors.bottom: parent.bottom
             visible: window.expanded && window.openKind === "image"
             navigator: folderNavigator
-            onActivated: function(path, origin, poster, kind) {
-                window.open(path, origin, poster, kind)
+            onActivated: function(key, name, origin, poster, kind) {
+                window.open(key, name, origin, poster, kind)
             }
         }
 
@@ -368,8 +373,8 @@ ApplicationWindow {
 
     Component.onCompleted: {
         CelestinaTheme.reducedMotion = window.reducedMotion
-        if (window.requestedPath.length > 0) {
-            mediaPlayer.open(window.requestedPath)
+        if (window.requestedKey.length > 0) {
+            mediaPlayer.open(window.requestedKey)
         } else {
             // No argument: the library. The scan runs on the engine's worker,
             // so this call returns at once.

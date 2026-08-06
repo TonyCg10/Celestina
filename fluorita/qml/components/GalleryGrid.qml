@@ -17,10 +17,10 @@ GridView {
     // `poster` is the thumbnail already on screen in the card. The window grows
     // that, not an empty player: the picture is loaded, so opening must not
     // show black while a decoder catches up.
-    signal activated(string path, rect origin, string poster, string kind)
+    signal activated(string key, string name, rect origin, string poster, string kind)
     // Emitted with the item and where to put its menu, in the grid's own
     // coordinates. The host maps it into whatever layer owns the overlay.
-    signal menuRequested(string path, string name, real x, real y)
+    signal menuRequested(string key, string name, real x, real y)
 
     // The columns arrive index-aligned but are published one at a time: a model
     // bound to them would rebuild halfway through a publication with half the
@@ -37,19 +37,19 @@ GridView {
     Component.onCompleted: grid.rows = grid.weave()
 
     function weave() {
-        var paths = grid.library.galleryPaths;
+        var keys = grid.library.galleryKeys;
         var names = grid.library.galleryNames;
         var kinds = grid.library.galleryKinds;
         var thumbs = grid.library.galleryThumbnails;
         var live = grid.library.galleryAvailable;
         // Defensive: a short column would mean a publication error, and fewer
         // rows are better than rows with undefined fields.
-        var count = Math.min(paths.length, names.length, kinds.length,
+        var count = Math.min(keys.length, names.length, kinds.length,
                              thumbs.length, live.length);
         var woven = [];
         for (var index = 0; index < count; ++index) {
             woven.push({
-                path: paths[index],
+                key: keys[index],
                 name: names[index],
                 kind: kinds[index],
                 thumbnail: thumbs[index],
@@ -102,7 +102,8 @@ GridView {
         // The same four values the pointer sends. Passing the path alone left
         // the origin, the poster and the kind undefined, so an item opened with
         // a screen reader lost its transition and its filmstrip.
-        Accessible.onPressAction: grid.activated(cell.modelData.path,
+        Accessible.onPressAction: grid.activated(cell.modelData.key,
+                                                 cell.modelData.name,
                                                  grid.originOf(cell),
                                                  cell.modelData.thumbnail,
                                                  cell.modelData.kind)
@@ -175,12 +176,13 @@ GridView {
                 grid.forceActiveFocus();
                 if (mouse.button === Qt.RightButton) {
                     const point = mapToItem(grid, mouse.x, mouse.y);
-                    grid.menuRequested(cell.modelData.path, cell.modelData.name,
+                    grid.menuRequested(cell.modelData.key, cell.modelData.name,
                                        point.x, point.y);
                     return;
                 }
-                grid.activated(cell.modelData.path, grid.originOf(cell),
-                               cell.modelData.thumbnail, cell.modelData.kind);
+                grid.activated(cell.modelData.key, cell.modelData.name,
+                               grid.originOf(cell), cell.modelData.thumbnail,
+                               cell.modelData.kind);
             }
         }
     }
@@ -197,7 +199,8 @@ GridView {
         if (grid.currentIndex < 0 || grid.currentIndex >= grid.model.length)
             return;
         const cell = grid.itemAtIndex(grid.currentIndex);
-        grid.activated(grid.model[grid.currentIndex].path,
+        grid.activated(grid.model[grid.currentIndex].key,
+                       grid.model[grid.currentIndex].name,
                        cell ? grid.originOf(cell) : Qt.rect(0, 0, 0, 0),
                        grid.model[grid.currentIndex].thumbnail,
                        grid.model[grid.currentIndex].kind);
@@ -220,6 +223,6 @@ GridView {
         // corner when it is scrolled out of the view.
         const x = cell ? cell.x - grid.contentX : 0;
         const y = cell ? cell.y - grid.contentY : 0;
-        grid.menuRequested(item.path, item.name, x, y);
+        grid.menuRequested(item.key, item.name, x, y);
     }
 }

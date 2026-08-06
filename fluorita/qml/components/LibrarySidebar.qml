@@ -49,16 +49,16 @@ Item {
     function weave() {
         var ids = sidebar.library.sourceIds;
         var names = sidebar.library.sourceNames;
-        var paths = sidebar.library.sourcePaths;
+        var locations = sidebar.library.sourceLocations;
         // Defensive: a short column would mean a publication error, and fewer
         // rows are better than rows with undefined fields.
-        var count = Math.min(ids.length, names.length, paths.length);
+        var count = Math.min(ids.length, names.length, locations.length);
         var woven = [];
         for (var index = 0; index < count; ++index) {
             woven.push({
                 source: parseInt(ids[index], 10),
                 name: names[index],
-                path: paths[index]
+                location: locations[index]
             });
         }
         return woven;
@@ -128,7 +128,7 @@ Item {
                 width: ListView.view.width
                 height: sidebar.rowHeight
                 label: folderRow.modelData.name
-                description: folderRow.modelData.path
+                description: folderRow.modelData.location
                 iconName: "folder"
                 current: sidebar.library.selectedSource === folderRow.modelData.source
                 onActivated: sidebar.sourceSelected(folderRow.modelData.source)

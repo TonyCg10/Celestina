@@ -14,12 +14,14 @@ import org.celestina.fluorita 1.0
 GlassContextMenu {
     id: menu
 
-    // The item the menu acts on, set by the host before it opens.
-    property string targetPath: ""
+    // The item the menu acts on, set by the host before it opens: its path
+    // key, which is what the library's verbs take, and its name, which is only
+    // ever read out.
+    property string targetKey: ""
     property string targetName: ""
 
-    signal trashRequested(string path)
-    signal propertiesRequested(string path)
+    signal trashRequested(string key)
+    signal propertiesRequested(string key)
 
     GlassMenuItem {
         text: qsTr("Mover a la papelera")
@@ -27,13 +29,13 @@ GlassContextMenu {
         icon.source: CelestinaTheme.fallbackIcon("user-trash")
         Accessible.description: qsTr(
             "Mueve %1 a la papelera del escritorio, desde donde se puede restaurar").arg(menu.targetName)
-        onTriggered: menu.trashRequested(menu.targetPath)
+        onTriggered: menu.trashRequested(menu.targetKey)
     }
 
     GlassMenuItem {
         text: qsTr("Propiedades")
         icon.name: "info"
         icon.source: CelestinaTheme.fallbackIcon("info")
-        onTriggered: menu.propertiesRequested(menu.targetPath)
+        onTriggered: menu.propertiesRequested(menu.targetKey)
     }
 }

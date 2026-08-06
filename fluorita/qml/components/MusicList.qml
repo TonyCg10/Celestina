@@ -13,8 +13,8 @@ ListView {
     required property FluoritaLibrary library
     // A track has no poster in this projection; the signature is the grid's so
     // the window has one door.
-    signal activated(string path, rect origin, string poster, string kind)
-    signal menuRequested(string path, string name, real x, real y)
+    signal activated(string key, string name, rect origin, string poster, string kind)
+    signal menuRequested(string key, string name, real x, real y)
 
     // Like the gallery: woven when the revision says every column of this
     // publication is in place.
@@ -29,18 +29,18 @@ ListView {
     Component.onCompleted: list.rows = list.weave()
 
     function weave() {
-        var paths = list.library.musicPaths;
+        var keys = list.library.musicKeys;
         var titles = list.library.musicTitles;
         var artists = list.library.musicArtists;
         var albums = list.library.musicAlbums;
         var live = list.library.musicAvailable;
         var covers = list.library.musicThumbnails;
-        var count = Math.min(paths.length, titles.length, artists.length,
+        var count = Math.min(keys.length, titles.length, artists.length,
                              albums.length, live.length, covers.length);
         var woven = [];
         for (var index = 0; index < count; ++index) {
             woven.push({
-                path: paths[index],
+                key: keys[index],
                 title: titles[index],
                 artist: artists[index],
                 album: albums[index],
@@ -93,7 +93,8 @@ ListView {
         Accessible.focusable: true
         // The same four values the pointer sends; the path alone left the
         // origin, the cover and the kind undefined.
-        Accessible.onPressAction: list.activated(row.modelData.path,
+        Accessible.onPressAction: list.activated(row.modelData.key,
+                                                 row.modelData.title,
                                                  list.originOf(row),
                                                  row.modelData.thumbnail,
                                                  "audio")
@@ -153,12 +154,13 @@ ListView {
                 list.forceActiveFocus();
                 if (mouse.button === Qt.RightButton) {
                     const point = mapToItem(list, mouse.x, mouse.y);
-                    list.menuRequested(row.modelData.path, row.modelData.title,
+                    list.menuRequested(row.modelData.key, row.modelData.title,
                                        point.x, point.y);
                     return;
                 }
-                list.activated(row.modelData.path, list.originOf(row),
-                               row.modelData.thumbnail, "audio");
+                list.activated(row.modelData.key, row.modelData.title,
+                               list.originOf(row), row.modelData.thumbnail,
+                               "audio");
             }
         }
     }
@@ -173,7 +175,8 @@ ListView {
         if (list.currentIndex < 0 || list.currentIndex >= list.model.length)
             return;
         const row = list.itemAtIndex(list.currentIndex);
-        list.activated(list.model[list.currentIndex].path,
+        list.activated(list.model[list.currentIndex].key,
+                       list.model[list.currentIndex].title,
                        row ? list.originOf(row) : Qt.rect(0, 0, 0, 0),
                        list.model[list.currentIndex].thumbnail, "audio");
     }
@@ -189,6 +192,6 @@ ListView {
         const item = list.model[list.currentIndex];
         const row = list.itemAtIndex(list.currentIndex);
         const y = row ? row.y - list.contentY : 0;
-        list.menuRequested(item.path, item.title, 0, y);
+        list.menuRequested(item.key, item.title, 0, y);
     }
 }

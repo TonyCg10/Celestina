@@ -15,7 +15,9 @@ use super::copy;
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(super) struct ItemDetail {
     pub(super) name: String,
-    pub(super) path: String,
+    /// Where the item is, as a person reads it. Lossy, and display only: the
+    /// panel is opened from a path key and nothing is ever rebuilt from this.
+    pub(super) location: String,
     pub(super) kind: String,
     pub(super) size: String,
     pub(super) modified: String,
@@ -34,8 +36,8 @@ pub(super) fn describe(record: &MediaRecord, configured: &SourceSet) -> ItemDeta
     ItemDetail {
         name: record.display_name(),
         // Lossy for display only, like every other label: the menu acts on the
-        // byte-exact path the row carries, never on this.
-        path: record.path().to_string_lossy().into_owned(),
+        // path key the row carries, never on this.
+        location: record.path().to_string_lossy().into_owned(),
         kind: copy::kind_noun(record.kind()).to_owned(),
         size: bytes(identity.size),
         modified: timestamp(identity.modified),

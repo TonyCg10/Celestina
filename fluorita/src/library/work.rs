@@ -17,6 +17,7 @@ use fluorita_engine::worker::{EngineWorker, Job, JobOutcome};
 use fluorita_engine::{catalogue_store, source_store, LibraryChange, LibraryWatcher, ScanLimits};
 
 use crate::folders::{self, FolderChoice};
+use celestina_core::pathkey;
 
 use super::copy;
 use super::project::project;
@@ -167,12 +168,16 @@ pub(super) fn run_artwork(
 ///
 /// The whole exchange happens here because it blocks for as long as the person
 /// takes to decide. Only the answer crosses back, as two strings: the chosen
-/// path, empty when nothing was chosen, and a notice, empty when there is
-/// nothing to say. A dismissed dialog is therefore silent, and a desktop that
-/// could not be asked says why.
+/// folder's path key, empty when nothing was chosen, and a notice, empty when
+/// there is nothing to say. A dismissed dialog is therefore silent, and a
+/// desktop that could not be asked says why.
+///
+/// The key rather than the path: the portal returns raw bytes and this crosses
+/// a `QString`, so a folder whose name is not UTF-8 would otherwise be mapped
+/// under its lossy spelling and scanned as a root that does not exist.
 pub(super) fn run_folder_choice(qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>) {
-    let (path, notice) = match folders::choose(copy::CHOOSE_FOLDER) {
-        FolderChoice::Chosen(path) => (path.to_string_lossy().into_owned(), String::new()),
+    let (key, notice) = match folders::choose(copy::CHOOSE_FOLDER) {
+        FolderChoice::Chosen(path) => (pathkey::encode(&path), String::new()),
         FolderChoice::Cancelled => (String::new(), String::new()),
         FolderChoice::Unavailable(reason) => (
             String::new(),
@@ -180,7 +185,7 @@ pub(super) fn run_folder_choice(qt_thread: &cxx_qt::CxxQtThread<qobject::Fluorit
         ),
     };
     let _ = qt_thread.queue(move |library| {
-        library.folder_chosen(QString::from(&path), QString::from(&notice));
+        library.folder_chosen(QString::from(&key), QString::from(&notice));
     });
 }
 
@@ -199,7 +204,9 @@ pub(super) fn run_trash(path: &Path, qt_thread: &cxx_qt::CxxQtThread<qobject::Fl
         // for different things from the person reading it.
         Err(error) => format!("{}: {error}", copy::TRASH_FAILED),
     };
-    let moved = path.to_string_lossy().into_owned();
+    // The key the host started this worker from, handed back so it can forget
+    // exactly the record that moved rather than one that merely looks like it.
+    let moved = pathkey::encode(path);
     let _ = qt_thread.queue(move |library| {
         library.item_trashed(QString::from(&moved), QString::from(&notice));
     });

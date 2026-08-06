@@ -68,7 +68,7 @@ CelestinaModalLayer {
                     { label: qsTr("Tamaño"), value: panel.library.detailSize },
                     { label: qsTr("Modificado"), value: panel.library.detailModified },
                     { label: qsTr("Duración"), value: panel.library.detailDuration },
-                    { label: qsTr("Ubicación"), value: panel.library.detailPath }
+                    { label: qsTr("Ubicación"), value: panel.library.detailLocation }
                 ]
 
                 RowLayout {

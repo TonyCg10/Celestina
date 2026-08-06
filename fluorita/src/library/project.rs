@@ -13,6 +13,7 @@ use fluorita_core::{
 
 use super::copy;
 use super::work::{thumbnail_cache_root, MAX_ARTWORK_PER_PASS};
+use celestina_core::pathkey;
 
 /// Everything one publication produces, already shaped for QML.
 #[derive(Default)]
@@ -26,10 +27,13 @@ pub(super) struct LibrarySnapshot {
     pub(super) image_count: i32,
     pub(super) video_count: i32,
     pub(super) track_count: i32,
+    /// Gallery rows. The first column is the item's **path key**, not its path:
+    /// opaque ASCII a person never reads and every verb accepts. The display
+    /// name beside it is the lossy text, and the two are never swapped.
     pub(super) gallery: Vec<[String; 5]>,
     pub(super) music: Vec<[String; 6]>,
     /// The sidebar: one row per configured root, in configuration order —
-    /// handle, label and the root itself.
+    /// handle, label and the root as display text.
     pub(super) sources: Vec<[String; 3]>,
     /// What the projection was made from, kept so an explicit artwork pass has
     /// something to work on without re-walking the disk.
@@ -73,7 +77,11 @@ pub(super) fn project(
         .iter()
         .map(|item| {
             [
-                item.path.to_string_lossy().into_owned(),
+                // The key, not the path. The catalogue already holds these
+                // bytes exactly; `to_string_lossy` here was the one place that
+                // threw them away, and every verb that took the result back
+                // then named a file that does not exist.
+                pathkey::encode(&item.path),
                 item.display_name.clone(),
                 kind_label(item.kind).to_owned(),
                 cached_thumbnail(cache_root.as_deref(), &item.path),
@@ -93,7 +101,7 @@ pub(super) fn project(
             artist.albums.iter().flat_map(move |album| {
                 album.tracks.iter().map(move |track| {
                     [
-                        track.path.to_string_lossy().into_owned(),
+                        pathkey::encode(&track.path),
                         track.display_name.clone(),
                         artist.name.clone().unwrap_or_else(unknown_artist),
                         album.title.clone().unwrap_or_else(unknown_album),
@@ -121,9 +129,10 @@ pub(super) fn project(
             [
                 source.id().value().to_string(),
                 source.display_name(),
-                // Lossy for display only. Nothing reopens a root from this: the
-                // scan walks `MediaSource::root` and every item carries its own
-                // byte-exact path.
+                // Display text, and published as such: this is a location a
+                // person reads under the folder's name, never a key. Nothing
+                // reopens a root from it — the scan walks `MediaSource::root`
+                // and every item carries its own key.
                 source.root().to_string_lossy().into_owned(),
             ]
         })
@@ -245,7 +254,8 @@ pub(super) fn summarize(
 
 #[cfg(test)]
 mod tests {
-    use super::{cached_thumbnail, copy, kind_label, summarize};
+    use super::{cached_thumbnail, copy, kind_label, project, summarize};
+    use celestina_core::pathkey;
     use fluorita_core::MediaKind;
     use std::path::Path;
 
@@ -327,6 +337,93 @@ mod tests {
         assert!(url.starts_with("file://"), "unexpected url: {url}");
         assert!(url.ends_with(".png"));
         std::fs::remove_file(&entry).ok();
+    }
+
+    /// A picture and a track whose names are not valid UTF-8, in a real
+    /// configured root, catalogued the way a scan would leave them.
+    #[cfg(unix)]
+    fn catalogue_with_a_name_that_is_not_utf8() -> (
+        fluorita_core::Catalogue,
+        fluorita_core::SourceSet,
+        std::path::PathBuf,
+        std::path::PathBuf,
+    ) {
+        use fluorita_core::{Catalogue, KindSet, MediaId, MediaRecord, SourceIdentity, SourceSet};
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+        use std::path::PathBuf;
+        use std::time::{Duration, UNIX_EPOCH};
+
+        let root = PathBuf::from("/home/toni/Pictures");
+        let mut configured = SourceSet::new();
+        let source = configured
+            .add(root.clone(), KindSet::all())
+            .expect("a configured root");
+
+        // `\xff` is never valid UTF-8 in any position, so this name cannot be
+        // spelled as a `String` without losing the byte.
+        let picture = root.join(OsStr::from_bytes(b"na\xffme.png"));
+        let track = root.join(OsStr::from_bytes(b"na\xffme.flac"));
+        let identity = SourceIdentity::new(1_024, UNIX_EPOCH + Duration::from_secs(1_770_000_000));
+
+        let mut catalogue = Catalogue::new();
+        catalogue.upsert(MediaRecord::new(
+            MediaId::filesystem(1, 10),
+            source,
+            picture.clone(),
+            MediaKind::Image,
+            identity,
+        ));
+        catalogue.upsert(MediaRecord::new(
+            MediaId::filesystem(1, 11),
+            source,
+            track.clone(),
+            MediaKind::Audio,
+            identity,
+        ));
+        (catalogue, configured, picture, track)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_name_that_is_not_utf8_is_published_and_stays_resolvable() {
+        use fluorita_core::SourceScope;
+
+        let (catalogue, configured, picture, track) = catalogue_with_a_name_that_is_not_utf8();
+
+        let snapshot = project(&catalogue, &configured, SourceScope::All, false, "ready");
+
+        // (a) It is in the projection at all — the defect never hid the row,
+        // it made the row unusable.
+        assert_eq!(snapshot.gallery.len(), 1);
+        assert_eq!(snapshot.music.len(), 1);
+
+        for (row, wanted) in [
+            (&snapshot.gallery[0][0], &picture),
+            (&snapshot.music[0][0], &track),
+        ] {
+            // (b) The published key round-trips to the same bytes.
+            assert_eq!(&pathkey::decode(row).expect("a path"), wanted);
+            // (c) And the catalogue answers for it, which is what
+            // `describe_item` and `trash_item` ask.
+            let found = catalogue
+                .find_by_path(&pathkey::decode(row).expect("a path"))
+                .expect("the record the row names");
+            assert_eq!(found.path(), wanted.as_path());
+        }
+
+        // Display text is separate and still lossy, in its own column.
+        assert!(snapshot.gallery[0][1].contains('\u{FFFD}'));
+        assert!(!snapshot.gallery[0][0].contains('\u{FFFD}'));
+    }
+
+    #[test]
+    fn a_key_that_this_process_did_not_emit_is_refused_without_panicking() {
+        // What a hand-written or half-decoded value from QML would look like.
+        // The catalogue is never consulted, and nothing unwinds.
+        assert!(pathkey::decode("/home/toni/bad%2").is_err());
+        assert!(pathkey::decode("").is_err());
+        assert!(pathkey::decode("/home/toni/na\u{FFFD}me.png").is_err());
     }
 
     #[test]

@@ -90,6 +90,7 @@ is no animation to wait for.
 |---|---|---|---|---|---|---|---|
 | F6-A | `fluorita:` | done | [inventory](../../inventories/2026-08-04-immersive-content/F6-A.numstat.tsv) | 36 files, +2306/-357 | Stop showing deleted files, open and close items as a movement, act on them, navigate the folder from inside it, and light it with its own artwork — with the surface back in Spanish | [evidence](../../evidence/2026-08-04-immersive-content.md) | `VAL-FLU-IMMERSIVE` |
 | F6-B | `fluorita:` | done | [inventory](../../inventories/2026-08-04-immersive-content/F6-B.numstat.tsv) | 20 files, +878/-78 | Decide a render context's release from an explicit renderer claim instead of item visibility, so the mpv core is never destroyed under a live context; hold an activation that arrives during a close; stop and join the player on teardown; report a context that failed to build instead of leaving the file opening for ever; carry cancellation into the scan and tag probes; emit the MPRIS property and seek signals; project a watcher refresh under the scope in force and a scan failure over the library already on screen; own a touched file only from its real source; and give the accessible activation the same arguments as the pointer one | `cargo check`, `cargo test`, `cargo fmt` in `fluorita/` and for the `fluorita-*` crates — recorded in [render-context lifecycle evidence](../../evidence/2026-08-05-render-context-lifecycle.md) | `VAL-FLU-TEARDOWN` |
+| F6-C | `fluorita:` | done | [inventory](../../inventories/2026-08-04-immersive-content/F6-C.numstat.tsv) | 24 files, +607/-162 | Carry a file's byte-exact identity across the Qt seam as a percent-encoded path key, decode it back with a typed refusal at every entry point, and keep the lossy text a person reads in its own columns — so a file whose name is not UTF-8 can be opened, described and trashed instead of reporting that it is no longer in the library | `cargo fmt --all --check`, `cargo clippy --all-targets --locked -- -D warnings` and `cargo test --all-targets --locked` in `fluorita/` and `celestina-rs/`, plus `scripts/check-architecture-contract.sh`, `scripts/check-language-contract.py` and `scripts/qmllint-cxxqt.sh fluorita` — recorded in [byte-exact path seam evidence](../../evidence/2026-08-06-byte-exact-path-seam.md) | `VAL-FLU-BYTES` |
 
 One unit because it is one worktree: the defect and the features were found and
 fixed against each other, in the same files, and no part of it was ever going to
@@ -107,3 +108,14 @@ because the author asked for the code and its tests without the production
 flow, so it has neither an inventory nor a version transition. `FLU-M1` — the
 lossy Qt seam for non-UTF-8 names — is deliberately outside it: Siderita has
 the same defect at the same boundary, and one shared decision should fix both.
+
+F6-C is that decision applied to Fluorita. The shared ruling is
+[ADR 0008](../../../../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md):
+a path crossing the seam is a percent-encoded key and display text is separate.
+It is a separate unit from F6-B because it is a separate defect with a separate
+cause — F6-B is about the order two teardowns run in, this is about what a path
+*is* on the way to QML — and because Siderita's half of the same ADR lands under
+its own prefix. It is scoped to Fluorita: `celestina-core` keeps the one codec
+both halves compose, and nothing in `siderita-*` is touched here. Like F6-B it
+stays `active` with no inventory and no version transition, because the author
+asked for the implementation and not the delivery.

@@ -1,0 +1,36 @@
+# F6-C exact change inventory
+
+Base revision	7903b5b1f454f00822a88c2697ccaf0b48a1518b
+Pathspec	fluorita/
+Pathspec	celestina-rs/crates/fluorita-core/
+Pathspec	celestina-rs/crates/fluorita-engine/
+Pathspec	celestina-rs/crates/fluorita-qt/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	d1468a30cc2ce0579c2fe784ba61a300807c97bbfe3a6e68285d6798f0ee5b93	docs/version-history.tsv
+1	1	7348a0c885d5a0df0211702de64ad141dec982ab9adea5756f96cd52f6683c07	fluorita/Cargo.lock
+1	1	09011bb77078a98829f1844ecc05c9d821e260dbe96d5682c6563c5fc3d1a442	fluorita/Cargo.toml
+20	6	29c3ac8ee27fbe69a7e832526cdf6e131023d7532d28f4ce5c398f65cad663fc	fluorita/STATUS.md
+34	0	aa1a8520fe19ab0e135a9ce271404e6e41801c99d7d973a47ae1f3cd38b701af	fluorita/VALIDATION.md
+139	0	9d89f7c6f9569294159792ae1a5d3f40dda22b871002deb14840109dcb2057c1	fluorita/docs/evidence/2026-08-06-byte-exact-path-seam.md
+12	0	e2ab9a51b92e05c7e759215638964478cba2fa33840dbcf06d0c1a4efcc42d40	fluorita/docs/plans/active/2026-08-04-immersive-content.md
+25	20	fec1f3bb002298f1e3b2fbf28b5494139856789c443c73afa1ae243f97c63db3	fluorita/qml/Main.qml
+10	7	3a797a30f7d8ad66ca96cb2a5ec92f682c111fc6f829c865c0027b9e61bfabc4	fluorita/qml/components/ContentDock.qml
+12	10	5388eb18ba65b2bc03b1155ac8fd5c11c712d1f51180a712e94865babfb67292	fluorita/qml/components/ContentNavigator.qml
+14	11	b9e5d4ba2ac3d30e085a7f8f52ca711f4eedab1cdb475222de92c034d6c39ac0	fluorita/qml/components/GalleryGrid.qml
+1	1	ed77b31ca8de616bc751fcc5df32d1fea2d26a16583ea3cbf5dc45115744282c	fluorita/qml/components/ItemDetailPanel.qml
+8	6	3307fb2fd2d07f0fedec6645b26b478c5b038b170c6b093676f453e56fd756da	fluorita/qml/components/ItemMenu.qml
+4	4	3744fc47a50397fbf580d8b25b9f48c3103e0e1afcc7114729b0d852bf68fef0	fluorita/qml/components/LibrarySidebar.qml
+13	13	74bf388652f98b2ed8b43e99282ecea2b254e43aa16a5fea8e6aafe72d6f566e	fluorita/qml/components/LibraryView.qml
+14	11	38b91a4c66947a1ed9f573f5df8508ee0d97fed690df4e6f139dc62568dff443	fluorita/qml/components/MusicList.qml
+4	0	ccaf2c5d6ce4b9991b575df2c36eb01472d610b8927f8cae3bd134696e448702	fluorita/src/copy.rs
+96	41	f92ceafbc10132fa341e8a5a5cb5ec36f5f3b34d1053cd091e3a073f7df8bc78	fluorita/src/library.rs
+5	3	e62c77b28ba6398afd664f970f61171ffce41673af403fb1373a1ccf7bff18ab	fluorita/src/library/detail.rs
+104	7	6d45664640ce75ee5ca9aa17d351ffee0d97c0e6bb4ea903e0a588ace88fefb9	fluorita/src/library/project.rs
+14	7	ce4241e97693ed4016f86c6e6edb234b6f25a5961b2edab99905a08187fc6b2d	fluorita/src/library/work.rs
+5	5	1f687a773a17f865c1848c01d9cb2b33a611ede23c218b8ca00d4cb8aeb6284d	fluorita/src/main.rs
+34	8	5fa9cdea882ba1148842c882871d8f7ba984ce3f19da655d9ad65227b8d2b4d9	fluorita/src/player.rs
+36	0	self	fluorita/docs/inventories/2026-08-04-immersive-content/F6-C.numstat.tsv
