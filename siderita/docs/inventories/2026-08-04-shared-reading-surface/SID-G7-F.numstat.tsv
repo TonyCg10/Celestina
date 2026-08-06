@@ -1,0 +1,22 @@
+# SID-G7-F exact change inventory
+
+Base revision	9b6569ea4bcfc9061c3a47184fcbfb65e8c9da2c
+Pathspec	siderita/
+Pathspec	celestina-rs/crates/siderita-core/
+Pathspec	celestina-rs/crates/siderita-ops/
+Pathspec	celestina-rs/crates/siderita-qt/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	86d2ca30fcf8cfdc108dbd4a5c226c77ac449d088f9ce283431f0ac4d1a24a57	docs/version-history.tsv
+1	1	0c7b94e90c39ad607e291195ad776fe274d1456ad88c2acd79679c144ad85022	siderita/Cargo.lock
+1	1	30497d0b28f4381462b55b6f58828c535438c098892b25c15003cc81ffa17542	siderita/Cargo.toml
+6	0	082f67ce968fc8a304590785cbc3e0d46a2e9f60bdb6c280a5db5d132deaafe7	siderita/STATUS.md
+11	0	97539adb4a6788c67c62616f79895320112dcdb3307346db9bc0151cc2e030f3	siderita/cpp/siderita/thumbnailprovider.h
+36	5	0e39619fff7cd0f8a1e2d92b950dd798c56f6560938fc1dcbc27fb140e620b21	siderita/cpp/thumbnailprovider.cpp
+85	0	07641ee00a431b3a57b85684f0f242b20e5af70585e6067eb28c46da1a2c68c0	siderita/docs/evidence/2026-08-06-thumbnail-seam-regression.md
+8	0	2dfcae8c8641b23a3419dd8ec0f3522b178f5a239a42094598fb40af4f52c5e4	siderita/docs/plans/active/2026-08-04-shared-reading-surface.md
+39	1	d628eaee8fa1a0cba2e70669b18081e27fe47fa5f18ec96a8cc6da48951d7c62	siderita/src/thumbnails.rs
+22	0	self	siderita/docs/inventories/2026-08-04-shared-reading-surface/SID-G7-F.numstat.tsv

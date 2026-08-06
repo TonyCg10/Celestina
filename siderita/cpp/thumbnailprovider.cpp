@@ -12,6 +12,7 @@
 #include <QtCore/QFileInfo>
 #include <QtCore/QRunnable>
 #include <QtCore/QStandardPaths>
+#include <QtCore/QUrl>
 #include <QtCore/QThread>
 #include <QtCore/QThreadPool>
 #include <QtGui/QImage>
@@ -226,6 +227,16 @@ QImage loadThumbnail(const QByteArray &pathBytes)
     return image;
 }
 
+// The raw path bytes an image-provider id names.
+//
+// Split out so the test can reach exactly this, and reach it the way Qt does.
+// The seam that broke was never the decode itself: it was the assumption about
+// what the id already is by the time it arrives.
+QByteArray pathBytesForId(const QString &id)
+{
+    return QByteArray::fromPercentEncoding(id.toUtf8());
+}
+
 // One async request: does the work on the global thread pool and hands back the
 // image when done.
 class ThumbnailResponse : public QQuickImageResponse, public QRunnable
@@ -263,11 +274,21 @@ public:
         // delegate must not re-encode it, or this would decode one layer and
         // look for a file literally named "%FF".
         //
-        // The decoded path travels as QByteArray, not QString, for the whole
-        // data path below. A key is ASCII by construction, but what it decodes
-        // to is a raw byte string that a QString cannot hold: the very names
-        // this seam exists for would lose a byte here and address nothing.
-        return new ThumbnailResponse(QByteArray::fromPercentEncoding(id.toLatin1()));
+        // `toUtf8`, and the distinction is not cosmetic. Qt does not pass the
+        // key through: it derives this id with
+        // `url.toString(RemoveScheme | RemoveAuthority)`, whose PrettyDecoded
+        // formatting has already turned every escape that spells valid UTF-8
+        // back into its character. So an accented name arrives decoded, and
+        // `toLatin1` would flatten each of its characters to one byte where the
+        // file on disk holds two — breaking every ordinary name to serve the
+        // rare one. An escape Qt could not decode, which is exactly the
+        // not-valid-UTF-8 case this seam exists for, is still standing here as
+        // `%XX` and is decoded below.
+        //
+        // The decoded path then travels as QByteArray, not QString, for the
+        // whole data path: what a key decodes to is a raw byte string that a
+        // QString cannot hold.
+        return new ThumbnailResponse(pathBytesForId(id));
     }
 };
 
@@ -286,6 +307,16 @@ QSize siderita_thumbnail_source_size(const QByteArray &pathBytes)
         return QSize();
     }
     return QImageReader(&file).size();
+}
+
+QByteArray siderita_thumbnail_resolved_path(const QByteArray &key)
+{
+    // Exactly what a delegate writes, and exactly what Qt does with it before
+    // calling `requestImageResponse`. A key is ASCII, so spelling it back into
+    // a QString here loses nothing.
+    const QUrl url(QStringLiteral("image://thumb/") + QString::fromUtf8(key));
+    const QString id = url.toString(QUrl::RemoveScheme | QUrl::RemoveAuthority).mid(1);
+    return pathBytesForId(id);
 }
 
 void register_siderita_thumbnail_provider(QQmlApplicationEngine &engine)

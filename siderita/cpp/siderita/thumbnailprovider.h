@@ -41,3 +41,14 @@ QByteArray siderita_thumbnail_cache_uri(const QByteArray &pathBytes);
 // touch. What this proves instead is the part that used to be broken — that a
 // name a QString cannot hold is still found and still decoded.
 QSize siderita_thumbnail_source_size(const QByteArray &pathBytes);
+
+// The raw path bytes the provider resolves for a published `key`, reached the
+// way Qt reaches them: through a `image://thumb/<key>` URL, whose id Qt derives
+// with PrettyDecoded formatting before the provider is ever called.
+//
+// This exists because the decode alone is not the seam. The regression this
+// pins was not a wrong decoder but a wrong assumption about what the id already
+// is on arrival: Qt has decoded every escape that spells valid UTF-8, so a name
+// with an accent reaches the provider as characters, not as escapes. A test
+// that hands the provider a key directly cannot see that, and did not.
+QByteArray siderita_thumbnail_resolved_path(const QByteArray &key);

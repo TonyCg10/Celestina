@@ -9,6 +9,12 @@
 
 ## Current checkout truth
 
+- Uncommitted in the checkout: `SID-G7-F`, repairing a regression `SID-G7-E`
+  introduced. The thumbnail provider converts its id with `toUtf8`, so a name
+  carrying an accent resolves again; the seam is now exposed and tested through
+  the same URL a delegate writes, which is where the previous tests were not
+  looking.
+
 - Uncommitted in the checkout: `SID-G7-D`, the byte-exact path seam. Every path
   that crosses the Qt boundary is now the percent key of
   [ADR 0008](../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md),

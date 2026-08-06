@@ -35,12 +35,17 @@ pub mod ffi {
         /// the provider's own guards and descriptor. Invalid when they refuse.
         #[rust_name = "source_size"]
         fn siderita_thumbnail_source_size(path_bytes: &QByteArray) -> QSize;
+
+        /// The path bytes the provider resolves for a published key, reached
+        /// through the same `image://thumb/<key>` URL a delegate writes.
+        #[rust_name = "resolved_path"]
+        fn siderita_thumbnail_resolved_path(key: &QByteArray) -> QByteArray;
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::ffi::{cache_uri, source_size};
+    use super::ffi::{cache_uri, resolved_path, source_size};
     use celestina_core::percent;
     use cxx_qt_lib::QByteArray;
     use std::ffi::OsString;
@@ -100,6 +105,39 @@ mod tests {
     /// The C++ provider's answer for the same bytes.
     fn produced(bytes: &[u8]) -> Vec<u8> {
         Vec::<u8>::from(&cache_uri(&QByteArray::from(bytes)))
+    }
+
+    /// What the provider actually resolves for a key a delegate published.
+    fn resolved(bytes: &[u8]) -> Vec<u8> {
+        let key = percent::encode_qt_path(bytes);
+        Vec::<u8>::from(&resolved_path(&QByteArray::from(key.as_bytes())))
+    }
+
+    #[test]
+    fn a_key_survives_the_url_qt_hands_the_provider() {
+        // Qt derives the provider's id from the URL with PrettyDecoded
+        // formatting, so an escape spelling valid UTF-8 arrives already decoded
+        // and one that does not arrives still escaped. Both have to come back
+        // as the bytes that name the file, and the accented case is the one a
+        // key-only test cannot see: it was broken for a whole delivery while
+        // every direct test stayed green.
+        for name in [
+            b"/home/toni/foto.png".to_vec(),
+            "/home/toni/ni\u{f1}o.png".as_bytes().to_vec(),
+            "/home/toni/Im\u{e1}genes/fotograf\u{ed}a.jpg"
+                .as_bytes()
+                .to_vec(),
+            "/home/toni/\u{1f4c1}/a.png".as_bytes().to_vec(),
+            b"/home/toni/mis fotos/a (1).png".to_vec(),
+            b"/home/toni/na\xffme.png".to_vec(),
+        ] {
+            assert_eq!(
+                resolved(&name),
+                name,
+                "resolving {:?} through the provider URL",
+                String::from_utf8_lossy(&name)
+            );
+        }
     }
 
     #[test]
