@@ -1,13 +1,32 @@
 # Evidence: 2026-08-05 GPU PCIe loss audit
 
+- **Date:** 2026-08-05
 - **Status:** read-only audit complete; causation unresolved
-- **Hardware:** AMD Radeon RX 9070 XT, Navi 48
-- **Kernel:** `linux-cachyos 7.1.5-1-cachyos`
-- **Affected boot IDs:** `0b9e7a92...`, `824f56efef794c53be4ff62c3838177e`
+- **Scope:** the two retained boots that ended with `device lost from bus!`,
+  their preceding DDC activity, and the competing explanations for the PCIe
+  endpoint loss
+- **Environment:** AMD Radeon RX 9070 XT (Navi 48) on kernel
+  `linux-cachyos 7.1.5-1-cachyos`, with AMD firmware `20260622-1`, Mesa
+  `26.1.6`, libdrm `2.4.134` and ddcutil `2.2.7`; affected boot IDs
+  `0b9e7a92...` and `824f56efef794c53be4ff62c3838177e`
 - **Mutation boundary:** no code, configuration, service or live-session state
   was changed while collecting this evidence
+- **Artifact:** none — this is a read-only audit. Its outputs are this record
+  and the isolation hold and deferred phase matrix stated below
 
-## Conclusion boundary
+## Procedure
+
+The retained journals for the affected boots were read and their `ddcutil`
+diagnostics grouped by systemd scope and argument shape, then placed on the
+same timeline as the amdgpu fence timeouts, SMU reads, output connect/disconnect
+events and the abrupt boot endings. The author supplied the session actions that
+the journal cannot show. The installed graphics stack versions and the upstream
+Linux 7.1.6 changelog were then consulted for candidate explanations, together
+with the primary references listed at the end.
+
+## Result
+
+### Conclusion boundary
 
 Both retained boots with a confirmed `device lost from bus!` were preceded by
 DDC processes whose argument shape matches Celestina. One loss began while a
@@ -21,7 +40,7 @@ worker, and terminate the helper without destructing an active child. Those are
 valid product defects even if the ultimate fault is in amdgpu, firmware, Mesa,
 the PCIe link or hardware.
 
-## Confirmed crash 1
+### Confirmed crash 1
 
 Boot `0b9e7a92...` ended abruptly at 2026-08-05 14:16:10 EDT.
 
@@ -45,7 +64,7 @@ Claude scope with Celestina-shaped arguments, 26 in one Kitty scope and 50 in
 another Kitty scope. Successful silent executions are not recoverable from the
 journal and historical entries contain no `_PPID` field.
 
-## Confirmed crash 2
+### Confirmed crash 2
 
 Boot `824f56efef794c53be4ff62c3838177e` ran from 2026-08-05 14:18:20 to
 14:37:57 EDT.
@@ -77,7 +96,7 @@ manual brightness action, Celestina was stopped, Noctalia was restored and the
 machine failed while idle minutes later. Terminal output was not stored in the
 journal, so exact host/helper parentage cannot be reconstructed from that boot.
 
-## Other retained boots
+### Other retained boots
 
 - `8754f430...` ended abruptly without a GPU-loss signature. Its last retained
   event was a DDC error, but it is not a confirmed instance of this crash.
@@ -90,9 +109,9 @@ The two confirmed GPU-loss boots are therefore both positive for preceding
 Celestina-shaped DDC activity. The sample contains no retained clean pre-DDC
 control and is too small to prove causation.
 
-## Competing explanations
+### Competing explanations
 
-### Confirmed
+#### Confirmed
 
 - The endpoint stopped responding over PCIe and amdgpu reported SMU reads of
   `0xFFFFFFFF`.
@@ -106,13 +125,13 @@ control and is too small to prove causation.
 - Noctalia's mpvpaper assignment file was empty during the retained boots, so
   its supervisor had no configured video child to launch.
 
-### Strong correlations
+#### Strong correlations
 
 - Active DDC work and display churn immediately preceded the first loss.
 - A complete shell transition preceded the second loss.
 - Every retained affected boot used kernel 7.1.5 with GFX12 MES active.
 
-### Unproven
+#### Unproven
 
 - That a DDC transaction caused the PCIe loss rather than exposing a kernel,
   firmware, display-core, PCIe or hardware defect.
@@ -121,7 +140,7 @@ control and is too small to prove causation.
 - That media playback or VCN initiated either loss.
 - That Celestina is necessary for the crash.
 
-## Installed-software context
+### Installed-software context
 
 The affected system had AMD firmware `20260622-1`, Mesa `26.1.6`, libdrm
 `2.4.134` and ddcutil `2.2.7`. Kernel 7.1.5 had been installed after 7.1.6 on
@@ -165,6 +184,22 @@ Because the failure is severe and random, these are observation phases rather
 than a transition stress loop. Each phase must exceed the earlier failure
 window by a margin the author accepts. Absence of concurrent or surviving DDC
 PIDs, output churn and fence timeouts is required before advancing.
+
+## Limits
+
+- Causation is unresolved. It is not established that a DDC transaction caused
+  the PCIe loss rather than exposing a kernel, firmware, display-core, PCIe or
+  hardware defect, that a historical `ddcutil` process was orphaned, that both
+  shells held the same DDC bus at the decisive instant, that media playback or
+  VCN initiated either loss, or that Celestina is necessary for the crash.
+- The sample is two positive boots with no retained clean pre-DDC control, and
+  is too small to prove causation.
+- Historical journal entries contain no `_PPID` field and successful silent
+  `ddcutil` executions are not recoverable, so host/helper parentage cannot be
+  reconstructed. Terminal output from the second boot was not stored.
+- No exact upstream report matching Navi 48 plus DDC plus PCIe device loss was
+  found in the primary sources inspected; that absence is not evidence that no
+  such regression exists.
 
 ## Primary external references
 

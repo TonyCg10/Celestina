@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-05
 - **Scope:** author-run follow-up after `LVR-1-A`; corrective checkpoint
-  [LVR-2](../plans/active/2026-08-05-live-validation-follow-up.md)
+  [LVR-2](../plans/archive/2026-08-05-live-validation-follow-up.md)
 - **Environment:** live Niri/Wayland session on Arch Linux; active outputs
   `DP-1` at 2560x1440 logical/1.5 scale and `DP-2` at 1920x1080/1.0 scale;
   Firefox MPRIS player; WirePlumber, DDC/CI, `wlsunset`, systemd-logind and

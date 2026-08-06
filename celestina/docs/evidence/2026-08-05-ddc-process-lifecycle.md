@@ -1,12 +1,29 @@
 # Evidence: 2026-08-05 DDC process lifecycle correction
 
+- **Date:** 2026-08-05
 - **Status:** implementation active; executable evidence suspended
+- **Scope:** celestina — the startup, shutdown and bounded-tool paths that can
+  start, overlap or abandon automatic DDC work
 - **Trigger:** the GPU-loss audit found automatic overlapping DDC work and
   concrete Celestina ownership defects
+- **Environment:** static source review only. No formatter, compiler, unit
+  test, integration test, production build, smoke, deployment or live
+  activation ran; the live session remained exclusively on Noctalia
 - **Safety condition:** Noctalia alone owns the live session until the author
   explicitly ends the observation
+- **Artifact:** none — no binary was produced or may be produced during the
+  hold. The outputs are the source corrections listed below and this record
 
-## Celestina findings
+## Procedure
+
+Read-only review of the Celestina host and provider-helper lifecycle paths
+named below, entered from the GPU-loss audit's finding of automatic overlapping
+DDC work. The corrections were then written as source and text only, under the
+safety condition above; nothing was executed.
+
+## Result
+
+### Celestina findings
 
 The Qt host constructed `ShellProvidersClient` before attempting to own
 `org.celestina.Shell`. A second host that was destined to defer could therefore
@@ -24,7 +41,7 @@ These paths make an orphan or overlap structurally possible. The retained
 journal lacks historical PPIDs, so it does not prove that a particular crash
 contained such an orphan.
 
-## Corrective intent
+### Corrective intent
 
 - Claim the session name before constructing any provider, tray or surface
   owner that can start external work.
@@ -43,7 +60,7 @@ runner still does not claim process-tree ownership for arbitrary programs, so
 future providers that spawn process trees require an explicit process-group
 contract rather than inheriting this DDC fix by assumption.
 
-## Source corrections written during the hold
+### Source corrections written during the hold
 
 - `src/main.cpp` now claims the shell name before constructing Niri, provider
   or tray adapters.
@@ -68,10 +85,14 @@ The correction does not claim to fix amdgpu, firmware or hardware. It removes
 Celestina-owned process races that are invalid independently of the GPU root
 cause.
 
-## Deferred evidence
+## Limits
 
-No formatter, compiler, unit test, integration test, production build, smoke,
-deployment or live activation may run during the Noctalia-only observation.
-Static source review is the only evidence permitted now. The registered
-architecture guard, project verification, canonical production exit and live
-transition matrix remain required after the author releases the hold.
+- The retained journal lacks historical PPIDs, so this record does not prove
+  that a particular crash contained an orphaned DDC child.
+- The correction makes no claim about amdgpu, firmware or hardware.
+- Deferred evidence: no formatter, compiler, unit test, integration test,
+  production build, smoke, deployment or live activation may run during the
+  Noctalia-only observation. Static source review is the only evidence
+  permitted now. The registered architecture guard, project verification,
+  canonical production exit and live transition matrix remain required after
+  the author releases the hold.

@@ -9,7 +9,7 @@ implementation unit; it does not rewrite the completed milestone.
 
 ## VAL-GPU-01 — Noctalia-only GPU stability hold
 
-- **Status:** in progress
+- **Status:** pending
 - **Related implementation:** LVR-3-B
 - **Requires:** Noctalia alone; unchanged kernel, monitors and existing GPU
   mitigations; no Celestina process, provider, build, test or activation
@@ -69,10 +69,10 @@ implementation unit; it does not rewrite the completed milestone.
   return, but a full Celestina start misses an already-playing Firefox source
   that `playerctl` sees. Restarting only `celestina-provider-adapter` makes that
   source appear immediately.
-- **Remediation:** the 0.6.2 full-shell rerun failed again: its original helper
-  omitted media visually, an isolated helper published it, and replacing only
-  the original helper made it appear. Active `LVR-3-A` owns the late provider
-  insertion boundary.
+- **Remediation:** active `LVR-3-A` in [late provider insertion](docs/plans/active/2026-08-05-late-provider-insertion.md) owns the late provider insertion boundary.
+  The 0.6.2 full-shell rerun failed again: its original helper omitted media
+  visually, an isolated helper published it, and replacing only the original
+  helper made it appear.
 - **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-R1-02 — StatusNotifierWatcher takeover
@@ -138,7 +138,7 @@ implementation unit; it does not rewrite the completed milestone.
   locker refusals behaved correctly. After Celestina exited, however, four
   reparented `systemd-inhibit --what=idle:sleep` children remained and blocked
   explicit suspend until terminated individually.
-- **Remediation:** implemented in 0.6.2 by `LVR-2-A`; a process regression
+- **Remediation:** implemented in 0.6.2 by `LVR-2-A` in [live validation follow-up](docs/plans/archive/2026-08-05-live-validation-follow-up.md); a process regression
   proves SIGTERM releases an active held child before helper exit, and the live
   repeated lifecycle rerun remains required.
 - **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
@@ -162,7 +162,7 @@ implementation unit; it does not rewrite the completed milestone.
   disappearing. Escape did not close the notification centre after focus left
   its inner list; the panel indicator remained the workaround. Paired-phone and
   screen-reader paths remain deferred.
-- **Remediation:** implemented in 0.6.2 by `LVR-2-A`; Escape is owned by the
+- **Remediation:** implemented in 0.6.2 by `LVR-2-A` in [live validation follow-up](docs/plans/archive/2026-08-05-live-validation-follow-up.md); Escape is owned by the
   notification window and its offscreen regression passes. Live focus-state
   validation remains required.
 - **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
