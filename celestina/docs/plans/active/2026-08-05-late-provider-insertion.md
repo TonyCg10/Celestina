@@ -75,6 +75,7 @@ implementation exit is reached only after that release.
 | LVR-3-A | `celestina:` | active | provider host/QML binding; host single-instance ordering; provider tool/brightness lifecycle; focused regressions; version and evidence records | pending | Make late provider insertion visible and prevent a rejected or terminating host from starting, overlapping or abandoning automatic DDC work | source regressions written; execution and canonical production exit suspended by the GPU safety hold | `VAL-R1-01`, `VAL-GPU-01` |
 | LVR-3-B | `celestina:` | done | [inventory](../../inventories/2026-08-05-late-provider-insertion/LVR-3-B.numstat.tsv) | 52 files, +1758/-289 | Deliver 0.6.4 with the static-audit corrections and expose one revision-coupled provider lookup to both the compiled module and direct-directory QML tests; the initial singleton resolved as a type rather than a callable instance in the latter | 155 core tests, 43 shell Rust tests, Clippy, qmllint, 13 CTest targets and offscreen smoke pass; canonical verification is blocked only by unrelated Siderita architecture ratchets. The audit that specified these corrections is recorded in [static shell audit](../../evidence/2026-08-05-static-shell-audit.md) | `VAL-R1-01`, `VAL-GPU-01` |
 | LVR-3-C | `celestina:` | done | [inventory](../../inventories/2026-08-05-late-provider-insertion/LVR-3-C.numstat.tsv) | 10 files, +161/-7 | Address the escalation timer to the helper instance it was armed against, so a replacement started inside the grace window is not killed mid-`ddcutil`; and let the handler that receives `exitStatus` own the restart delay, so the spacing an unclean exit earns is actually applied — with `FailedToStart` scheduled where it is, since Qt emits no `finished()` for a process that never ran | None: the GPU safety hold forbids building, testing or running this project. Reviewed by reading and recorded in [helper restart ownership evidence](../../evidence/2026-08-06-helper-restart-ownership.md) | `VAL-R1-01`, `VAL-GPU-01` |
+| LVR-3-D | `celestina:` | done | [inventory](../../inventories/2026-08-05-late-provider-insertion/LVR-3-D.numstat.tsv) | 9 files, +129/-6 | Classify an oversized frame in the Niri adapter the way the provider helper already classifies it: report and skip it rather than end the session, so a frame the host would discard no longer tears down the compositor connection, empties the workspace strip and reconnects into the identical refusal | None: the GPU safety hold forbids building, testing or running this project. Reviewed by reading and recorded in [oversized frame evidence](../../evidence/2026-08-06-oversized-frame-is-skipped.md) | `VAL-R1-01` |
 
 ## Recorded trigger
 
@@ -99,3 +100,10 @@ after an unclean exit unreachable. Like LVR-3-B, it changes only source and text
 during the hold, and unlike LVR-3-B it carries no automated evidence at all —
 nothing may be compiled or run against this project until the author ends the
 observation.
+
+LVR-3-D finishes what aligning the frame budgets started. The helper learned to
+tell a write failure from a frame the host would discard; the Niri adapter did
+not, so it read the second as the end of its session and reconnected into the
+same refusal. Like the units before it, it changes only source and text and
+carries no automated evidence, because nothing may be compiled or run against
+this project until the author ends the observation.

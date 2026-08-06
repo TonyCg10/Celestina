@@ -288,9 +288,27 @@ fn stream_session(writer: &AdapterWriter, emitted_snapshot: &mut bool) -> Result
         if have_workspaces && have_windows {
             let snapshot = shell_snapshot(&state);
             if last_snapshot.as_ref() != Some(&snapshot) {
-                emit_json(writer, &snapshot)?;
-                *emitted_snapshot = true;
-                last_snapshot = Some(snapshot);
+                // A frame the host would discard whole is skipped, not treated
+                // as the end of the session. Ending it here would tear down the
+                // compositor connection, publish `unavailable`, reconnect,
+                // rebuild the same state and refuse the same frame again — a
+                // reconnect loop where the previous behaviour was one dropped
+                // line. Only a real write failure means this channel is gone.
+                match writer.emit(&snapshot) {
+                    Ok(()) => {
+                        *emitted_snapshot = true;
+                        last_snapshot = Some(snapshot);
+                    }
+                    Err(error) if error.is_fatal() => {
+                        return Err(AdapterError::Emit(error));
+                    }
+                    Err(error) => {
+                        eprintln!("celestina-niri-adapter: {error}");
+                        // Deliberately not remembered as the last snapshot: the
+                        // next state change should be offered rather than
+                        // suppressed as a duplicate of one that never landed.
+                    }
+                }
             }
         }
     }

@@ -1,0 +1,19 @@
+# LVR-3-D exact change inventory
+
+Base revision	4310f540e51f6c92279f54b4c154ffad968bdc81
+Pathspec	celestina/
+Pathspec	celestina-rs/crates/celestina-shell-core/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	17eb2fa5672072eb871479eb0569569501d2f7d3dbb3ce597d3525ef2dcfc266	celestina/CMakeLists.txt
+1	1	f8cead37dfa6f991f8b6bd086433f37336ea618bfd7976b2bad0e3a0b65a2cd7	celestina/Cargo.lock
+1	1	bf10a33a55bd4cd96b8920ab8e13d6b253f36e6ba3349e6bcd8f80cd64a46804	celestina/Cargo.toml
+5	0	d574fd0dfcba8eefe621eea801be80e5c4b51b530705dc68f262e3e1452b80b9	celestina/STATUS.md
+72	0	8c20c9db30caa28456c32c37b318a2b13ad70149205fafaa906b1662ccb3afaa	celestina/docs/evidence/2026-08-06-oversized-frame-is-skipped.md
+8	0	bcd1bcc553729aed5a36f88cf29ce79c1c22776e887663643eb8b5d817b01045	celestina/docs/plans/active/2026-08-05-late-provider-insertion.md
+21	3	261857db249dbde4f4b0b4b763819b1a727a9fa373a5097582248b2feca4ab13	celestina/src/niri_adapter.rs
+1	0	afd7916360ab4a4c569a58313c6504f4f9a50e5b2d4fbcc4e2a352f1732d36ae	docs/version-history.tsv
+19	0	self	celestina/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-D.numstat.tsv

@@ -25,6 +25,11 @@
 
 ## Current checkout truth
 
+- Uncommitted in the checkout: `LVR-3-D`. A snapshot the host would discard is
+  now skipped rather than treated as the end of the Niri session, so an
+  oversized frame no longer costs a reconnect loop against the compositor.
+  Source and text only, under the hold.
+
 - Uncommitted in the checkout: `LVR-3-C`, repairing two defects `LVR-3-B`
   introduced into the helper-restart path. The escalation timer now names the
   instance it was armed against, so it cannot kill the replacement that started
