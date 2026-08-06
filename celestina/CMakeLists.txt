@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.6.6 LANGUAGES CXX)
+project(celestina VERSION 0.6.7 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -27,6 +27,23 @@ set(PROVIDER_ADAPTER_BINARY
 
 # One cargo invocation builds every helper the shell spawns; they share a
 # package, a lockfile and the shared core crate.
+# What the helpers are built from, gathered rather than listed.
+#
+# The hand-written list had drifted to ten of the nineteen files under `src/`,
+# and named none of `celestina-shell-core`, which the helpers also compile. It
+# costs nothing today because an `ALL` custom target is always considered out of
+# date and cargo does its own change tracking — but the list is read as a
+# statement about what this target depends on, and it was not one. Globbing at
+# configure time keeps it true without asking anyone to remember.
+file(GLOB_RECURSE CELESTINA_HELPER_SOURCES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.rs
+    ${CMAKE_CURRENT_SOURCE_DIR}/../celestina-rs/crates/celestina-shell-core/src/*.rs
+)
+list(APPEND CELESTINA_HELPER_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml
+    ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.lock
+)
+
 add_custom_target(celestina-helpers ALL
     COMMAND ${CMAKE_COMMAND} -E env
         CARGO_TARGET_DIR=${NIRI_ADAPTER_TARGET_DIR}
@@ -36,18 +53,7 @@ add_custom_target(celestina-helpers ALL
         --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml
         --bins
     BYPRODUCTS ${NIRI_ADAPTER_BINARY} ${PROVIDER_ADAPTER_BINARY}
-    DEPENDS
-        Cargo.toml
-        Cargo.lock
-        src/niri_adapter.rs
-        src/provider_adapter/main.rs
-        src/provider_adapter/tools.rs
-        src/provider_adapter/sysmon.rs
-        src/provider_adapter/media.rs
-        src/provider_adapter/audio.rs
-        src/provider_adapter/session.rs
-        src/provider_adapter/held.rs
-        src/provider_adapter/sessionholds.rs
+    DEPENDS ${CELESTINA_HELPER_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     COMMENT "Building the Rust helpers (Niri event stream, aggregate providers)"
     VERBATIM

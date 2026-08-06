@@ -1,0 +1,18 @@
+# LVR-3-E exact change inventory
+
+Base revision	46f4c60a5e592a895cde4b3eb1193398ba201bd7
+Pathspec	celestina/
+Pathspec	celestina-rs/crates/celestina-shell-core/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+19	13	fdbfb6a740323d14d44d34cb64bba0cac2fccdb37d57f08144159464b8a4ddf3	celestina/CMakeLists.txt
+1	1	738260be05e0978b713d33471715a3828baacb64700aa52a12d3f8fc5aee3765	celestina/Cargo.lock
+1	1	9fabb93839ba1cec0601f7e1234fdb18bd1d118501dd6d4e074a3f89574764f3	celestina/Cargo.toml
+4	0	afcb75fc9d4d086d0942d7ee4a4c98a040e1bfbad3bf1f7c70e7850a5515c1eb	celestina/STATUS.md
+59	0	6a3e8eacbfe33a64c620bf79b62ae772091a7c392cb4e58635d51373035c40b0	celestina/docs/evidence/2026-08-06-helper-sources-gathered.md
+1	0	292d46bff161daa9673da8235f3b1e7a81e20eaa7baf01767b7039077a83c694	celestina/docs/plans/active/2026-08-05-late-provider-insertion.md
+1	0	a0182e80cb29a7b9496b9dbe0a8439ec812d342efc2208aac6cda8638b8c8719	docs/version-history.tsv
+18	0	self	celestina/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-E.numstat.tsv

@@ -25,6 +25,10 @@
 
 ## Current checkout truth
 
+- Uncommitted in the checkout: `LVR-3-E`. The helper target gathers its sources
+  at configure time rather than naming ten of nineteen by hand. Source and text
+  only, under the hold, and not configured.
+
 - Uncommitted in the checkout: `LVR-3-D`. A snapshot the host would discard is
   now skipped rather than treated as the end of the Niri session, so an
   oversized frame no longer costs a reconnect loop against the compositor.
