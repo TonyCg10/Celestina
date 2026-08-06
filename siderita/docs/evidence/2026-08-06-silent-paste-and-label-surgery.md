@@ -99,6 +99,18 @@ report rather than on the wording.
 
 ## Limits
 
+The tab strip keeps its string surgery, and the qmllint ratchet is why. Asking
+the adapter from inside the delegate means reaching the outer `root` id, which
+qmllint counts as an unqualified access; resolving the label on the `ListView`
+and reading it back through `ListView.view` costs more warnings still. The file
+is at its inventoried debt ceiling, so either spelling would have raised it, and
+a ratchet is not something to raise for a label. The heading beside it does ask
+the adapter, and it cost nothing. Closing the strip properly means giving the
+delegate what it needs as a property rather than letting it reach for it, which
+is a change to how the strip is fed and not a label fix.
+
+
+
 Nothing was tried by hand. What is proven is that the planner reports the entry,
 that the controller has a path from that report to a cleared clipboard and a
 status line, and that the label functions agree with their inputs. That the

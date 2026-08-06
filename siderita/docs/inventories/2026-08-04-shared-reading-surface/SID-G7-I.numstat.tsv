@@ -1,0 +1,17 @@
+# SID-G7-I exact change inventory
+
+Base revision	27553d06a18a448e0167ae24e0c31e425154cbe2
+Pathspec	siderita/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	05a246accf669dbe80ce49ed7f3e9b9510b41ee7740f22177d25d8cf53214099	docs/version-history.tsv
+1	1	7964f79ffd65583bf2ae898d929bcf1345efe0ed7ad63f5da8c4995315d7865b	siderita/Cargo.lock
+1	1	8f71c036bc01be937c295f6d79a5c2f44429d82b47480b48eaa6573d75fd7260	siderita/Cargo.toml
+5	0	22136527c244ca5acecfe24533cf4e0252f634435f53affac30dd5d6b2c4289a	siderita/STATUS.md
+12	0	9d29f8ab4508bfd34939618cff3c1c7132c77a96d8a2feabb006a5c161655eaf	siderita/docs/evidence/2026-08-06-silent-paste-and-label-surgery.md
+9	0	cb878cda500d1e979b4b1ee3872061a9eee64f6534d0780d6f79f1c4368ad0c8	siderita/docs/plans/active/2026-08-04-shared-reading-surface.md
+4	7	445400c109ac0a762d0f90defaa011e6999d062be04d5d4c01de2b3e22d2c230	siderita/qml/components/chrome/TabStrip.qml
+17	0	self	siderita/docs/inventories/2026-08-04-shared-reading-surface/SID-G7-I.numstat.tsv

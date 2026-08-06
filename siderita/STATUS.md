@@ -9,6 +9,11 @@
 
 ## Current checkout truth
 
+- Uncommitted in the checkout: `SID-G7-I`. The tab strip keeps deriving its own
+  label: routing it through the adapter costs qmllint warnings the project's
+  inventoried debt ceiling refuses, and a ratchet is not raised for a label. The
+  folder heading, where it cost nothing, keeps the adapter.
+
 - Uncommitted in the checkout: `SID-G7-H`, two of the low findings of the
   [light monorepo audit](../docs/evidence/2026-08-06-light-monorepo-audit.md).
   Pressing Ctrl+V with nothing on the clipboard but a cut into the folder those
