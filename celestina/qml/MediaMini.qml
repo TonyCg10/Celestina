@@ -78,6 +78,9 @@ Item {
         anchors.top: parent.top
         anchors.topMargin: 2
         text: root.hasPlayer ? root.reading.nowPlaying : ""
+        // A track's title belongs to whatever is playing it. It is shown as the
+        // characters it is; `AutoText` would guess some of them were markup.
+        textFormat: Text.PlainText
         // A paused player is still the one the panel is showing; it just is not
         // making a sound, and the ink says so rather than a second icon.
         color: root.hasPlayer && root.reading.playing

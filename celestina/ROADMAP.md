@@ -29,12 +29,115 @@ of the design when they provide the narrow capability the shell needs.
 | LVR-1 | complete | Correct the failures exposed by the 2026-08-04 live validation run |
 | LVR-2 | complete | Correct the failures exposed by the 2026-08-05 follow-up run |
 | LVR-3 | active | Correct late provider insertion and provider lifecycle defects exposed during the GPU-loss audit |
+| AUD-1 | planned | Correct the crash, bound, lifecycle and channel defects recorded by the 2026-08-05 static shell audit |
 | R6 | conditional | First-party lock starts only if SHELL-D2 is applied |
 | R8 | complete | Reversible Noctalia removal; Polkit/dock slices remain conditional |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
 
 Recorded live observations and remaining author checks are status on the
 validation lane, not implementation status.
+
+## AUD-1 — Static audit hardening (planned)
+
+**Outcome:** no session-menu verb can crash the panel, no producer text can
+freeze or stale the provider frame, an unclean helper death cannot overlap
+automatic DDC work, and a hostile peer cannot hang, grow or misdirect the
+shell's channels.
+
+This checkpoint corrects the defects recorded in the
+[2026-08-05 static shell audit](docs/evidence/2026-08-05-static-shell-audit.md).
+It is planned, not active: LVR-3 remains the single active checkpoint, and no
+executable check may run while the Noctalia-only GPU observation holds.
+Activating AUD-1 means closing LVR-3, moving the roadmap's active checkpoint to
+`AUD-1`, and creating its plan in `docs/plans/active/` with Plan ID
+`static-audit-hardening`, carrying the unit breakdown below into the plan's
+ledger. Every unit is corrective product work under the `celestina:` prefix —
+bug deliveries that take the next PATCH transition per delivered batch — and
+adds its focused regression in the same unit. No unit adds a capability,
+protocol field, provider or surface.
+
+Planned units, in priority order:
+
+- **AUD-1-A — In-process session refusals stop crashing the panel.** Guard
+  every `sendErrorReply` and `QDBusContext` access in `ShellService` behind
+  `calledFromDBus()`; an in-process caller receives the same refusal as a
+  failed outcome through the existing return/`commandOutcome` path, so the
+  session menu shows the refusal it was designed to show. Bound the hostile
+  verb text reflected into error replies. Regression: invoking `suspend`,
+  `lock`, an unknown verb and an adapterless `log-out` in-process completes
+  without a crash and reports failure; the D-Bus reply path is unchanged.
+- **AUD-1-B — One text bound across the frame pipeline.** Bound array-row
+  strings in `Snapshot::publish` in the same unit the host counts (UTF-16
+  code units), with the row limit owned by `celestina-shell-core` and merely
+  revalidated by the host; make the notification body bound fit the row bound
+  (or raise the host bound deliberately, in one place); truncate media,
+  launcher and notification row text at publish; cap the outbound frame line
+  size in `SharedWriter::emit` so an oversized provider degrades alone instead
+  of invalidating the channel; refuse oversized host-to-helper command lines
+  in `sendCommand` by returning no request id. Regressions: an 800-character
+  body, emoji-dense text at the boundary and an oversized `.desktop` name all
+  publish bounded and never invalidate a frame.
+- **AUD-1-C — An unclean helper death cannot overlap DDC.** In
+  `ShellProvidersClient::helperError`, escalate TERM-then-KILL instead of
+  immediate SIGKILL; after any unclean helper exit, delay the first restart by
+  at least the bounded DDC child's worst case so an orphan cannot coexist with
+  the replacement's `ddcutil detect`. Make the `sessionholds` thread observe
+  shutdown and be joined; run `release_all` on every helper exit path
+  including early initialization failures; make `Held` kill and reap its child
+  on a `try_wait` error exactly as `tools.rs` does; stop reusing detect-time
+  `ddcutil` display numbers across output changes so a brightness write cannot
+  target a renumbered monitor. Regressions: process regressions for restart
+  spacing after an unclean exit and for hold release on early-init failure.
+- **AUD-1-D — Clipboard channel survives hostile peers and files.** Give the
+  selection pipe read a deadline like `pump` already has, keeping the size
+  bound; re-apply `is_recordable` and a total size bound when loading the
+  persisted history and bound the state-file read; resolve the never-arriving
+  self-echo edge so one real copy cannot be silently swallowed. Regressions: a
+  stuck fake source times out without wedging the thread; a corrupt oversized
+  history file loads bounded.
+- **AUD-1-E — Producer text renders inert.** Set `textFormat: Text.PlainText`
+  on every `Text` element that renders producer text in the toast and
+  notification surfaces; compose accessibility names without chained `.arg`
+  re-substitution; watch for `NameLost` after the notifications claim and
+  withdraw the provider truthfully. Regressions: a markup body renders
+  literally; an offscreen name loss publishes absence.
+- **AUD-1-F — The late-insertion correction covers every surface.** Route the
+  provider reads of `ControlCentre`, `NotificationCenter`, `LauncherOverlay`
+  and `ClipboardOverlay` through the same revision-coupled access `Panel.qml`
+  uses — one shared access point, not four copies. Regression: a provider key
+  inserted while each overlay is open becomes visible, with `weather` as the
+  canonical case.
+- **AUD-1-G — The Niri channel is bounded and expires.** Bound title, label
+  and output-name lengths and the workspace count in the adapter before emit,
+  with the same `bounded` treatment reasons already get; sweep screenshot and
+  action pendings with a deadline in `NiriClient::expireRequests`; give the
+  action worker's socket a read deadline; refuse oversized outbound command
+  lines on this channel as in AUD-1-B. Regressions: a giant window title
+  yields a bounded snapshot; an unanswered action expires as failed.
+- **AUD-1-H — The tray cannot be grown or misdirected by peers.** Bound
+  registration count and id length in the watcher service; disconnect the
+  per-item signal matches on unregister and teardown; drop stale `GetAll`
+  replies for items already unregistered; correct the vanished-owner cleanup
+  to use what `take` returned; key property refresh by registration so
+  well-known-name items update; bound the internal read/icon maps; clear the
+  pending tray-menu target once its answer is consumed. Regression: a
+  register/unregister churn loop leaves no residual state and a
+  well-known-name item still updates.
+
+The remaining low findings in the audit record — the stranded oversized
+command id, the blocking shutdown wait, the wrapped notification id, the
+transient `GetLayout` allocation, the GUI-thread icon decode and the busless
+single-instance lapse — stay recorded there and are corrected only where a
+unit above already owns the code they touch; anything else needs its own
+authorized unit.
+
+**Implementation exit:** after the author ends the GPU hold, each delivered
+batch passes `bash scripts/check-architecture-contract.sh`, the canonical
+`celestina/scripts/complete-production.sh`, `python3 scripts/version_tool.py
+check` and `python3 scripts/check-staged-units.py` with the matching
+`docs/version-history.tsv` row. The live cases these corrections answer —
+`VAL-R1-01`, `VAL-R3`, `VAL-R4`, `VAL-R5` and the `VAL-GPU-01` observation —
+remain author validation and are not closed by any build.
 
 ## LVR-3 — Late provider insertion and safe provider lifecycle
 

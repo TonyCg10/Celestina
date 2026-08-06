@@ -30,3 +30,4 @@ fluorita	1.2.2	bug	F6-C	Keep a name that is not UTF-8 usable across the Qt seam
 siderita	1.2.2	bug	SID-G7-D	Keep a name that is not UTF-8 usable across the Qt seam
 siderita	1.2.3	bug	SID-G7-E	Keep the thumbnail source and the clipboard byte-exact
 fluorita	1.2.3	bug	F6-D	Keep an image whose name is not UTF-8 measurable
+celestina	0.6.4	bug	LVR-3-B	Harden shell channels and provider lifecycle

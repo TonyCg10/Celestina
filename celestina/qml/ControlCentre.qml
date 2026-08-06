@@ -14,6 +14,7 @@ pragma ComponentBehavior: Bound
 import CelestinaStyle
 import QtQuick
 import QtQuick.Window
+import "ProviderReading.js" as ProviderReading
 
 Window {
     id: centre
@@ -26,17 +27,19 @@ Window {
     readonly property int cardWidth: 420
     readonly property int cardHeight: 700
 
-    readonly property var providers: providerSource && providerSource.providers
-                                     ? providerSource.providers : ({})
-    readonly property var audio: centre.providers.audio
-    readonly property var notifications: centre.providers.notifications
-    readonly property var nightLight: centre.providers["night-light"]
-    readonly property var caffeine: centre.providers.caffeine
-    readonly property var power: centre.providers.power
-    readonly property var network: centre.providers.network
-    readonly property var bluetooth: centre.providers.bluetooth
-    readonly property var settings: centre.providers.settings
-    readonly property var weather: centre.providers.weather
+    // Every reading goes through the one access point, so a key inserted while
+    // this window is open becomes visible instead of staying missing until the
+    // window is built again. `weather` is the one that really arrives late: it
+    // has nothing to publish until a location is set and a request succeeds.
+    readonly property var audio: ProviderReading.read(centre.providerSource, "audio")
+    readonly property var notifications: ProviderReading.read(centre.providerSource, "notifications")
+    readonly property var nightLight: ProviderReading.read(centre.providerSource, "night-light")
+    readonly property var caffeine: ProviderReading.read(centre.providerSource, "caffeine")
+    readonly property var power: ProviderReading.read(centre.providerSource, "power")
+    readonly property var network: ProviderReading.read(centre.providerSource, "network")
+    readonly property var bluetooth: ProviderReading.read(centre.providerSource, "bluetooth")
+    readonly property var settings: ProviderReading.read(centre.providerSource, "settings")
+    readonly property var weather: ProviderReading.read(centre.providerSource, "weather")
 
     readonly property int levelStep: centre.settings && centre.settings.levelStep !== undefined
                                      ? centre.settings.levelStep : 5

@@ -5,6 +5,8 @@
 #include <QDBusServiceWatcher>
 #include <QDebug>
 
+#include "trayitems.h"
+
 TrayWatcherService::TrayWatcherService(QString serviceName, QObject *parent)
     : QObject(parent)
     , m_serviceName(std::move(serviceName))
@@ -80,6 +82,16 @@ void TrayWatcherService::RegisterStatusNotifierItem(const QString &serviceOrPath
     if (entry.isEmpty() || owner.isEmpty() || m_items.contains(entry))
         return;
 
+    // One client can call this as many times as it likes with a different path
+    // each time, and every accepted registration costs the host that reads them
+    // four signal match rules on its own bus connection. Past the bus daemon's
+    // per-connection quota nothing on that connection can subscribe to anything
+    // again — a failure that outlasts the tray and reaches the whole panel. So
+    // an over-quota or overlong registration is refused, and refusing it is the
+    // whole answer: the registry keeps serving everyone already in it.
+    if (entry.size() > maxTrayPathLength || m_items.size() >= maxTrayItems)
+        return;
+
     m_items.append(entry);
     m_itemsByOwner[owner].append(entry);
     watchOwner(owner);
@@ -90,6 +102,12 @@ void TrayWatcherService::RegisterStatusNotifierHost(const QString &service)
 {
     const QString host = service.isEmpty() && calledFromDBus() ? message().service() : service;
     if (host.isEmpty() || m_hosts.contains(host))
+        return;
+
+    // A host is watched for unregistration exactly like an item's owner is, so
+    // an unbounded list of them buys the same match-rule exhaustion by another
+    // door. A session has one or two hosts; the same bound covers them.
+    if (host.size() > maxTrayPathLength || m_hosts.size() >= maxTrayItems)
         return;
 
     const bool first = m_hosts.isEmpty();
@@ -113,6 +131,9 @@ void TrayWatcherService::ownerVanished(const QString &service)
     if (m_hosts.removeAll(service) > 0 && m_hosts.isEmpty())
         emit StatusNotifierHostUnregistered();
 
-    if (orphaned.isEmpty() && !m_itemsByOwner.contains(service))
-        m_owners->removeWatchedService(service);
+    // The name is gone and `take()` already removed everything it had, so
+    // nothing is left to watch it for. Keeping the watch is how a session that
+    // has seen applications come and go accumulates match rules for dead names
+    // until the connection cannot subscribe to anything else.
+    m_owners->removeWatchedService(service);
 }

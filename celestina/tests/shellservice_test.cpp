@@ -6,6 +6,7 @@
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
 
+#include "sessionactions.h"
 #include "shellservice.h"
 
 namespace {
@@ -45,6 +46,7 @@ private slots:
     void refusesSessionVerbsWithoutAProviderHelper();
     void refusesToSuspendAnUnlockedSession();
     void refusesToEndTheSessionWithoutAnAdapter();
+    void refusesAnInProcessRequestWithoutReplyingToNobody();
 
 private:
     QDBusMessage callTo(const QString &interface, const QString &member) const
@@ -274,6 +276,58 @@ void ShellServiceTest::refusesToEndTheSessionWithoutAnAdapter()
     QVERIFY(settle(reply));
     QVERIFY(!reply.isValid());
     QCOMPARE(reply.error().type(), QDBusError::Failed);
+}
+
+// The session menu calls `Command` directly, so there is no D-Bus message
+// behind that call and no call context on `QDBusContext`. Every refusal used to
+// reply into that absent context, which took the whole shell down when someone
+// pressed a verb this shell fails closed on — `suspend` being the one the menu
+// actually offers. Reaching the end of this function is the regression: the
+// refusal must survive as an outcome the menu can show.
+void ShellServiceTest::refusesAnInProcessRequestWithoutReplyingToNobody()
+{
+    // A service of its own: no adapter, no provider helper and no overlay
+    // controller, so every verb below travels a refusal path.
+    ShellService shell(nullptr);
+    SessionActions actions(&shell, nullptr);
+    QSignalSpy outcomes(&actions, &SessionActions::commandOutcome);
+
+    const QStringList refused {
+        // The two the menu offers that this shell fails closed on.
+        QStringLiteral("suspend"),
+        QStringLiteral("lock-and-suspend"),
+        // The compositor and provider paths, unreachable without their owners.
+        QStringLiteral("log-out"),
+        QStringLiteral("displays-off"),
+        QStringLiteral("mute-toggle"),
+        // A surface that was never wired, and a verb nobody serves.
+        QStringLiteral("launcher-toggle"),
+        QStringLiteral("launch-rocket"),
+    };
+
+    for (const QString &verb : refused) {
+        actions.send(verb);
+        QCOMPARE(outcomes.count(), 1);
+        const QList<QVariant> outcome = outcomes.takeFirst();
+        QCOMPARE(outcome.at(0).toString(), verb);
+        QCOMPARE(outcome.at(1).toString(), QStringLiteral("failed"));
+        // The reason a bus caller would have received as an error reply: the
+        // menu shows that sentence rather than a bare failure.
+        QVERIFY2(!outcome.at(2).toString().isEmpty(), qPrintable(verb));
+    }
+
+    // A refusal is consumed by the caller it belongs to, so a later request
+    // that fails for its own reason never repeats the previous one.
+    QCOMPARE(shell.takeRefusalReason(), QString());
+
+    // A verb longer than the shell echoes back is answered, not carried: the
+    // refusal names it in bounded form instead of repeating the caller's text.
+    const QString flood(4096, u'x');
+    actions.send(flood);
+    QCOMPARE(outcomes.count(), 1);
+    const QString reason = outcomes.takeFirst().at(2).toString();
+    QVERIFY(!reason.isEmpty());
+    QVERIFY(reason.size() < flood.size());
 }
 
 QTEST_MAIN(ShellServiceTest)

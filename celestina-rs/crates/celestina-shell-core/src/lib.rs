@@ -74,11 +74,27 @@ pub mod sysmon;
 pub mod wallpaper;
 pub mod weather;
 
-/// Truncates hostile or accidental text to a bounded prefix, counting
-/// characters so a multi-byte boundary is never split.
+/// Truncates hostile or accidental text to a bounded prefix.
+///
+/// The limit counts UTF-16 code units, because that is what the Qt host counts
+/// when it revalidates the same field. Counting Unicode scalars here instead
+/// would let text made of astral-plane characters — emoji — pass this bound and
+/// fail the host's, and the host rejects the whole frame rather than one field,
+/// so every provider's reading would freeze over one long title. Characters are
+/// taken whole, so neither a multi-byte boundary nor a surrogate pair is ever
+/// split, and the result can therefore be one unit shorter than the limit.
 #[must_use]
 pub fn bounded(text: &str, limit: usize) -> String {
-    text.chars().take(limit).collect()
+    let mut kept = String::new();
+    let mut units = 0;
+    for character in text.chars() {
+        units += character.len_utf16();
+        if units > limit {
+            break;
+        }
+        kept.push(character);
+    }
+    kept
 }
 
 #[cfg(test)]
@@ -89,5 +105,18 @@ mod tests {
     fn bounding_counts_characters_not_bytes() {
         assert_eq!(bounded("niñez", 3), "niñ");
         assert_eq!(bounded("short", 50), "short");
+    }
+
+    #[test]
+    fn bounding_counts_the_units_the_host_counts() {
+        // Every one of these is a single character and two UTF-16 code units,
+        // so a limit of four admits two of them and no more.
+        let astral = "😀😀😀";
+        assert_eq!(bounded(astral, 4), "😀😀");
+        assert_eq!(bounded(astral, 6), astral);
+        // A limit that would land inside a surrogate pair keeps the character
+        // out rather than splitting it.
+        assert_eq!(bounded(astral, 5), "😀😀");
+        assert_eq!(bounded(astral, 1), "");
     }
 }

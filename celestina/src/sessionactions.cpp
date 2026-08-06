@@ -43,9 +43,15 @@ void SessionActions::send(const QString &verb)
 
     const qulonglong requestId = m_shell->Command(verb, QVariantMap());
     if (requestId == 0) {
-        // The shell refused or could not send it. `Command` reports the reason
-        // on the bus; in-process the menu is told the request did not happen.
-        emit commandOutcome(verb, QStringLiteral("failed"), QString());
+        // The shell refused or could not send it. A bus caller would have this
+        // as an error reply; this call carries no message behind it, so the
+        // refusal is collected instead and the menu shows the same sentence
+        // rather than a bare failure.
+        emit commandOutcome(
+            verb,
+            QStringLiteral("failed"),
+            m_shell->takeRefusalReason()
+        );
         return;
     }
     m_pending.insert(requestId, verb);

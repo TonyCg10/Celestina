@@ -144,21 +144,17 @@ mod tests {
     fn cancellation_stops_a_bounded_child_before_its_deadline() {
         let cancelled = Arc::new(AtomicBool::new(false));
         let request = Arc::clone(&cancelled);
-        let canceller = thread::spawn(move || {
+        let cancellation_thread = thread::spawn(move || {
             thread::sleep(Duration::from_millis(40));
             request.store(true, Ordering::Release);
         });
 
         let started = Instant::now();
-        let output = run_bounded_with_cancel(
-            "sleep",
-            &["5"],
-            Duration::from_secs(10),
-            Some(&cancelled),
-        );
+        let output =
+            run_bounded_with_cancel("sleep", &["5"], Duration::from_secs(10), Some(&cancelled));
 
         assert!(output.is_none());
         assert!(started.elapsed() < Duration::from_secs(1));
-        assert!(canceller.join().is_ok());
+        assert!(cancellation_thread.join().is_ok());
     }
 }

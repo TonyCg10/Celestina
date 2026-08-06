@@ -20,7 +20,15 @@ pub const MAX_PAYLOAD_KEYS: usize = 32;
 pub const MAX_ID_CHARS: usize = 32;
 /// Titles and names arrive from other processes and are shown; they are capped
 /// before they are ever published.
-pub const MAX_TEXT_CHARS: usize = 512;
+///
+/// The unit is the UTF-16 code unit, because the host revalidates this same
+/// bound with Qt's own string length. Two rules that disagree about what "512"
+/// counts would let a field pass here and be rejected there, and a rejected
+/// field costs the whole frame.
+pub const MAX_TEXT_UNITS: usize = 512;
+/// A list field — the launcher's hits, the clipboard's history, the
+/// notification centre's entries — carries at most this many rows.
+pub const MAX_ROW_ITEMS: usize = 64;
 
 pub type Payload = Map<String, Value>;
 
@@ -60,6 +68,10 @@ pub enum SnapshotError {
     TooManyProviders,
     TooManyFields,
     TextTooLong,
+    TooManyRows,
+    /// A value that is neither a scalar nor a list of flat rows. The host
+    /// refuses the same shape, so publishing it would cost the whole frame.
+    UnsupportedValue,
 }
 
 impl std::fmt::Display for SnapshotError {
@@ -69,8 +81,60 @@ impl std::fmt::Display for SnapshotError {
             Self::TooManyProviders => write!(formatter, "too many providers"),
             Self::TooManyFields => write!(formatter, "too many fields in one provider"),
             Self::TextTooLong => write!(formatter, "a provider field is too long"),
+            Self::TooManyRows => write!(formatter, "too many rows in one list field"),
+            Self::UnsupportedValue => {
+                write!(
+                    formatter,
+                    "a provider field is not a scalar or a list of flat rows"
+                )
+            }
         }
     }
+}
+
+/// How long a string is in the unit the host measures it in.
+fn text_units(text: &str) -> usize {
+    text.encode_utf16().count()
+}
+
+/// Whether one scalar is publishable: a string within the bound, or any other
+/// non-composite value. A nested object or list is not a scalar.
+fn scalar_fits(value: &Value) -> Result<(), SnapshotError> {
+    match value {
+        Value::String(text) if text_units(text) > MAX_TEXT_UNITS => Err(SnapshotError::TextTooLong),
+        Value::Array(_) | Value::Object(_) => Err(SnapshotError::UnsupportedValue),
+        _ => Ok(()),
+    }
+}
+
+/// Whether one field of a payload is publishable.
+///
+/// A payload is a flat set of scalars, or — for a field that describes a list —
+/// one bounded array of rows with that same flat shape. This is the host's own
+/// rule, stated once here so a provider learns it refuses a field instead of
+/// having the host discard every provider's reading along with it. A row that
+/// nested its own list would carry the unbounded depth the flat rule exists to
+/// forbid, so rows are checked as scalars and never recurse.
+fn field_fits(value: &Value) -> Result<(), SnapshotError> {
+    let Value::Array(rows) = value else {
+        return scalar_fits(value);
+    };
+
+    if rows.len() > MAX_ROW_ITEMS {
+        return Err(SnapshotError::TooManyRows);
+    }
+    for row in rows {
+        let Value::Object(fields) = row else {
+            return Err(SnapshotError::UnsupportedValue);
+        };
+        if fields.len() > MAX_PAYLOAD_KEYS {
+            return Err(SnapshotError::TooManyFields);
+        }
+        for field in fields.values() {
+            scalar_fits(field)?;
+        }
+    }
+    Ok(())
 }
 
 impl std::error::Error for SnapshotError {}
@@ -122,19 +186,16 @@ impl ProviderSnapshots {
     ///
     /// # Errors
     ///
-    /// Refuses a set past [`MAX_PROVIDERS`], a payload past [`MAX_PAYLOAD_KEYS`]
-    /// and any string field past [`MAX_TEXT_CHARS`], so a broken provider
-    /// cannot grow the frame without bound.
+    /// Refuses a set past [`MAX_PROVIDERS`], a payload past [`MAX_PAYLOAD_KEYS`],
+    /// a list field past [`MAX_ROW_ITEMS`] and any string field past
+    /// [`MAX_TEXT_UNITS`] — inside a row as well as at the top level, because
+    /// the host measures both and discards the entire frame over either.
     pub fn publish(&mut self, id: ProviderId, payload: Payload) -> Result<bool, SnapshotError> {
         if payload.len() > MAX_PAYLOAD_KEYS {
             return Err(SnapshotError::TooManyFields);
         }
-        if payload.values().any(|value| {
-            value
-                .as_str()
-                .is_some_and(|text| text.chars().count() > MAX_TEXT_CHARS)
-        }) {
-            return Err(SnapshotError::TextTooLong);
+        for value in payload.values() {
+            field_fits(value)?;
         }
         if !self.providers.contains_key(&id) && self.providers.len() >= MAX_PROVIDERS {
             return Err(SnapshotError::TooManyProviders);
@@ -264,7 +325,7 @@ mod tests {
             Err(SnapshotError::TooManyFields)
         );
 
-        let long = payload(&[("title", Value::from("x".repeat(MAX_TEXT_CHARS + 1)))]);
+        let long = payload(&[("title", Value::from("x".repeat(MAX_TEXT_UNITS + 1)))]);
         assert_eq!(
             snapshots.publish(id("media"), long),
             Err(SnapshotError::TextTooLong)
@@ -278,6 +339,84 @@ mod tests {
         assert_eq!(
             snapshots.publish(id("one-too-many"), Payload::new()),
             Err(SnapshotError::TooManyProviders)
+        );
+    }
+
+    // A notification body, a launcher hit and a clipboard entry all travel
+    // inside rows. The bound used to be read only at the top level, so an
+    // over-long row field reached the host, the host rejected the entire frame,
+    // and every other provider froze on its last reading until the offending
+    // entry aged out. The row is bounded here, where the frame is built.
+    #[test]
+    fn a_row_field_is_bounded_like_any_other_field() {
+        let mut snapshots = ProviderSnapshots::new(1);
+
+        let long_row = payload(&[(
+            "history",
+            Value::from(vec![Value::from(payload(&[(
+                "body",
+                Value::from("x".repeat(MAX_TEXT_UNITS + 1)),
+            )]))]),
+        )]);
+        assert_eq!(
+            snapshots.publish(id("notifications"), long_row),
+            Err(SnapshotError::TextTooLong)
+        );
+
+        let many_rows: Vec<Value> = (0..=MAX_ROW_ITEMS)
+            .map(|index| Value::from(payload(&[("id", Value::from(index))])))
+            .collect();
+        assert_eq!(
+            snapshots.publish(id("launcher"), payload(&[("hits", Value::from(many_rows))])),
+            Err(SnapshotError::TooManyRows)
+        );
+
+        // One level of structure and no more: a row that carried its own list
+        // would be the unbounded document the flat rule exists to forbid.
+        let nested = payload(&[(
+            "hits",
+            Value::from(vec![Value::from(payload(&[(
+                "tags",
+                Value::from(vec![Value::from("a")]),
+            )]))]),
+        )]);
+        assert_eq!(
+            snapshots.publish(id("launcher"), nested),
+            Err(SnapshotError::UnsupportedValue)
+        );
+
+        // A row whose fields all fit is published, so the bound refuses the
+        // oversized field rather than the shape.
+        snapshots
+            .publish(
+                id("notifications"),
+                payload(&[(
+                    "history",
+                    Value::from(vec![Value::from(payload(&[
+                        ("id", Value::from(1)),
+                        ("body", Value::from("x".repeat(MAX_TEXT_UNITS))),
+                    ]))]),
+                )]),
+            )
+            .expect("published");
+    }
+
+    // The host counts UTF-16 code units. Text that is short in Unicode scalars
+    // but long in those units used to pass here and be refused there.
+    #[test]
+    fn text_is_measured_in_the_units_the_host_measures() {
+        let mut snapshots = ProviderSnapshots::new(1);
+        // Half as many characters as the limit, every one of them two units:
+        // exactly at the bound, and one more character is over it.
+        let at_bound = "😀".repeat(MAX_TEXT_UNITS / 2);
+        let over_bound = format!("{at_bound}😀");
+
+        snapshots
+            .publish(id("media"), payload(&[("title", Value::from(at_bound))]))
+            .expect("published");
+        assert_eq!(
+            snapshots.publish(id("media"), payload(&[("title", Value::from(over_bound))])),
+            Err(SnapshotError::TextTooLong)
         );
     }
 

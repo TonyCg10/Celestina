@@ -195,6 +195,7 @@ Item {
 
                     anchors.centerIn: parent
                     text: workspaceItem.modelData.label
+                    textFormat: Text.PlainText
                     color: workspaceItem.modelData.active ? CelestinaTheme.accentLink : CelestinaTheme.textMuted
                     // A request in flight is not a result: the label stays
                     // readable but visibly unsettled until Niri answers.
@@ -253,6 +254,9 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         visible: root.niriAvailable && root.activeWindowTitle.length > 0
         text: root.activeWindowTitle
+        // A window's title is whatever its client set it to, so it is shown as
+        // characters rather than guessed at as markup.
+        textFormat: Text.PlainText
         color: CelestinaTheme.textMuted
         font.family: CelestinaTheme.sansFamily
         font.pixelSize: CelestinaTheme.fontCaption

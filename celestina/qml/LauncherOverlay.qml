@@ -16,6 +16,7 @@ pragma ComponentBehavior: Bound
 import CelestinaStyle
 import QtQuick
 import QtQuick.Window
+import "ProviderReading.js" as ProviderReading
 
 Window {
     id: overlay
@@ -28,8 +29,7 @@ Window {
     readonly property int cardWidth: 620
     readonly property int cardHeight: 440
 
-    readonly property var launcherState: providerSource && providerSource.providers
-                                          ? providerSource.providers.launcher : undefined
+    readonly property var launcherState: ProviderReading.read(overlay.providerSource, "launcher")
     readonly property bool ready: launcherState !== undefined
                                   && launcherState.ready === true
     readonly property var hits: launcherState && launcherState.hits !== undefined
@@ -253,6 +253,10 @@ Window {
                                 text: row.isWebSearch
                                       ? qsTr("Buscar «%1» en la Web").arg(overlay.queryText)
                                       : row.entry.name
+                                // A `.desktop` file is written by whichever
+                                // package installed it; its name is shown as
+                                // characters, not interpreted.
+                                textFormat: Text.PlainText
                                 color: row.current ? CelestinaTheme.accent : CelestinaTheme.text
                                 font.family: CelestinaTheme.sansFamily
                                 font.pixelSize: CelestinaTheme.fontRowSecondary
@@ -262,6 +266,7 @@ Window {
                                 width: parent.width
                                 visible: text.length > 0
                                 text: row.subtitle
+                                textFormat: Text.PlainText
                                 color: CelestinaTheme.textMuted
                                 font.family: CelestinaTheme.sansFamily
                                 font.pixelSize: CelestinaTheme.fontMini

@@ -79,6 +79,11 @@ Window {
 
                 readonly property bool critical: card.modelData.urgency === "critical"
                 readonly property var offered: stack.actionsFor(card.modelData.id)
+                // Chained because QML's `arg` substitutes one value per call,
+                // unlike its C++ namesake. A producer that puts a `%2` in its
+                // own app name can therefore consume the next substitution and
+                // garble this sentence; it cannot reach past it, and the
+                // rendered text is inert either way.
                 readonly property string spokenText: qsTr("%1: %2. %3")
                     .arg(card.modelData.app)
                     .arg(card.modelData.summary)
@@ -120,6 +125,13 @@ Window {
 
                             width: parent.width - dismissButton.width - parent.spacing
                             text: card.modelData.app
+                            // Whatever a producer sent is shown as the
+                            // characters it sent. `AutoText` would guess this
+                            // was markup and render it — a link, or an image
+                            // this shell would then fetch on the producer's
+                            // behalf. The server never advertises `body-markup`,
+                            // so honouring markup would be a promise nobody made.
+                            textFormat: Text.PlainText
                             color: CelestinaTheme.textMuted
                             elide: Text.ElideRight
                             font.family: CelestinaTheme.sansFamily
@@ -140,6 +152,7 @@ Window {
                     Text {
                         width: parent.width
                         text: card.modelData.summary
+                        textFormat: Text.PlainText
                         color: CelestinaTheme.text
                         elide: Text.ElideRight
                         font.family: CelestinaTheme.sansFamily
@@ -151,6 +164,7 @@ Window {
                         width: parent.width
                         visible: card.modelData.body.length > 0
                         text: card.modelData.body
+                        textFormat: Text.PlainText
                         color: CelestinaTheme.textMuted
                         wrapMode: Text.WordWrap
                         maximumLineCount: 3

@@ -15,9 +15,10 @@ use std::thread;
 
 use celestina_core::desktop_entry::{self, DesktopEntry};
 use celestina_core::CancellationToken;
+use celestina_shell_core::bounded;
 use celestina_shell_core::launcher;
 use celestina_shell_core::runtime::ProviderRuntime;
-use celestina_shell_core::snapshot::{Payload, ProviderId};
+use celestina_shell_core::snapshot::{Payload, ProviderId, MAX_TEXT_UNITS};
 use serde_json::Value;
 
 use super::tools::{launch_argv, lock_runtime};
@@ -184,17 +185,22 @@ pub fn spawn(runtime: &Arc<Mutex<ProviderRuntime>>) -> io::Result<()> {
     Ok(())
 }
 
+/// One hit as a flat row.
+///
+/// Every field here comes from a `.desktop` file that any installed package may
+/// write, so none of them has a length this shell was promised. They are cut to
+/// what a row field carries: one over-long entry would otherwise make the host
+/// reject the frame that lists it, taking every other provider's reading with
+/// it for as long as the entry keeps matching.
 fn hit_payload(entry: &DesktopEntry) -> Value {
+    let field = |text: &str| Value::from(bounded(text, MAX_TEXT_UNITS));
     Value::Object(
         [
-            ("id".to_owned(), Value::from(entry.id.clone())),
-            ("name".to_owned(), Value::from(entry.name.clone())),
-            (
-                "genericName".to_owned(),
-                Value::from(entry.generic_name.clone()),
-            ),
-            ("icon".to_owned(), Value::from(entry.icon.clone())),
-            ("comment".to_owned(), Value::from(entry.comment.clone())),
+            ("id".to_owned(), field(&entry.id)),
+            ("name".to_owned(), field(&entry.name)),
+            ("genericName".to_owned(), field(&entry.generic_name)),
+            ("icon".to_owned(), field(&entry.icon)),
+            ("comment".to_owned(), field(&entry.comment)),
         ]
         .into_iter()
         .collect(),

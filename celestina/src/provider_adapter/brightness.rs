@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use celestina_shell_core::brightness::{self, DdcDisplay};
@@ -25,6 +25,7 @@ use celestina_shell_core::snapshot::{Payload, ProviderId};
 use serde_json::Value;
 
 use super::tools::{lock_runtime, run_bounded_with_cancel};
+use super::worker::Worker;
 
 /// A monitor may take its time. This is generous against a warm read of about a
 /// second and the near-ten-second first call, and still bounded: a monitor that
@@ -43,33 +44,6 @@ const REFRESH: Duration = Duration::from_secs(300);
 const REDETECT: Duration = Duration::from_secs(30);
 
 pub const NAME: &str = "brightness";
-
-/// Owns the brightness thread and makes every early-return path cancellable.
-/// Dropping a bare `JoinHandle` would detach the worker; this guard instead
-/// requests shutdown and waits until any active DDC child has been reaped.
-pub struct Worker {
-    shutdown: Arc<AtomicBool>,
-    handle: Option<JoinHandle<()>>,
-}
-
-impl Worker {
-    pub fn join(mut self) -> thread::Result<()> {
-        self.shutdown.store(true, Ordering::Release);
-        match self.handle.take() {
-            Some(handle) => handle.join(),
-            None => Ok(()),
-        }
-    }
-}
-
-impl Drop for Worker {
-    fn drop(&mut self) {
-        self.shutdown.store(true, Ordering::Release);
-        if let Some(handle) = self.handle.take() {
-            let _ = handle.join();
-        }
-    }
-}
 
 /// What each monitor has been asked to become, by connector name. Empty means
 /// nothing is owed. It is a module singleton because there is exactly one
@@ -103,12 +77,11 @@ pub fn spawn(
     lock_runtime(runtime).register(id.clone());
     let runtime = Arc::clone(runtime);
     let worker_shutdown = Arc::clone(shutdown);
-    let handle = thread::Builder::new()
-        .name(NAME.to_owned())
-        .spawn(move || run(&runtime, &id, &worker_shutdown))?;
-    Ok(Worker {
-        shutdown: Arc::clone(shutdown),
-        handle: Some(handle),
+    // The worker owns the thread: an early return anywhere after this point
+    // still requests cancellation and waits until an active DDC child has been
+    // reaped, because dropping the guard does exactly what joining it does.
+    Worker::spawn(NAME, shutdown, move || {
+        run(&runtime, &id, &worker_shutdown);
     })
 }
 
@@ -146,8 +119,8 @@ fn detect(shutdown: &AtomicBool) -> Vec<DdcDisplay> {
         DDC_TIMEOUT,
         Some(shutdown),
     )
-        .map(|listing| brightness::parse_detect(&listing))
-        .unwrap_or_default()
+    .map(|listing| brightness::parse_detect(&listing))
+    .unwrap_or_default()
 }
 
 fn read(display: &DdcDisplay, shutdown: &AtomicBool) -> Option<u8> {
@@ -245,9 +218,7 @@ fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId, shutdown: &AtomicBool)
             let wanted = change.applied_to(current);
             // A monitor that has not answered is written to even when the
             // target matches the placeholder: `unknown` is not `already there`.
-            if (wanted != current || read_back.is_none())
-                && write(display, wanted, shutdown)
-            {
+            if (wanted != current || read_back.is_none()) && write(display, wanted, shutdown) {
                 // What the monitor settled on, not what it was asked for.
                 levels.insert(connector.clone(), read(display, shutdown));
                 publish(runtime, id, &levels);

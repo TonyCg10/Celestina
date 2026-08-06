@@ -34,6 +34,8 @@ RowLayout {
         Layout.minimumWidth: 0
         Layout.alignment: Qt.AlignVCenter
         text: root.phoneName
+        // The name the paired device reports for itself, shown as characters.
+        textFormat: Text.PlainText
         color: CelestinaTheme.text
         font.family: CelestinaTheme.sansFamily
         font.pixelSize: CelestinaTheme.fontBody

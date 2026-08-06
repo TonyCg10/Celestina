@@ -37,6 +37,10 @@ class TrayWatcher final : public QObject, protected QDBusContext
 
 public:
     TrayWatcher(QSharedPointer<TrayIconCache> icons, QObject *parent = nullptr);
+    // Every signal subscription this host made is undone here. A match rule is
+    // state on the bus connection, not on this object, so it does not leave
+    // with the object unless it is removed.
+    ~TrayWatcher() override;
 
     bool available() const { return m_available; }
     // Each item as QML reads it, with the source of whatever icon could be
@@ -82,6 +86,14 @@ private:
     void refreshRegistrations();
     void readItem(const QString &service, const QString &path);
     void watchItem(const QString &service, const QString &path);
+    // Undoes exactly what `watchItem` subscribed to, and forgets the item's
+    // owner.
+    void unwatchItem(const QString &service, const QString &path);
+    void forgetItems();
+    // Which registration a signal from `sender` about `path` belongs to, empty
+    // when none does. The sender is always a unique name; the registration may
+    // be under a well-known one.
+    QPair<QString, QString> registrationFor(const QString &sender, const QString &path) const;
     void publish();
     void setUnavailable();
     void readMenuLayout(const QString &service, const QString &menuPath, const QString &itemPath);
@@ -93,6 +105,11 @@ private:
     // rather than sorted: an application that has been there all session should
     // not move because another one restarted.
     QList<QPair<QString, QString>> m_registrations;
+    // The unique bus name behind each registered service. An item's own signals
+    // arrive from its unique name whatever name it registered under, so without
+    // this a well-known registration would never be recognized as the sender's
+    // and would silently stop updating.
+    QHash<QString, QString> m_registeredOwners;
     QHash<QString, TrayItem> m_read;
     // The icon source per item key, and how many times it has changed: an
     // application that swaps its icon keeps the same key, so the number is what

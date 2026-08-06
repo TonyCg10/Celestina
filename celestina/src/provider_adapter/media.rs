@@ -5,8 +5,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use celestina_shell_core::bounded;
 use celestina_shell_core::runtime::ProviderRuntime;
-use celestina_shell_core::snapshot::{Payload, ProviderId};
+use celestina_shell_core::snapshot::{Payload, ProviderId, MAX_TEXT_UNITS};
 use magnetita_core::mpris::{self, MediaAction, PlaybackProgress};
 use serde_json::Value;
 
@@ -145,16 +146,35 @@ fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
             let position = appended.next().map_or(-1, position_ms);
             let artwork = appended.next().and_then(artwork_path);
 
+            // A track's own text belongs to whoever is playing it and has no
+            // length any player promises. Publishing it whole would make the
+            // frame refuse itself over a title, so what the panel shows is a
+            // bounded prefix and the rest of the bar keeps updating.
             let mut payload = Payload::new();
-            payload.insert("player".to_owned(), Value::from(state.player.clone()));
-            payload.insert("title".to_owned(), Value::from(state.title.clone()));
-            payload.insert("artist".to_owned(), Value::from(state.artist.clone()));
+            payload.insert(
+                "player".to_owned(),
+                Value::from(bounded(&state.player, MAX_TEXT_UNITS)),
+            );
+            payload.insert(
+                "title".to_owned(),
+                Value::from(bounded(&state.title, MAX_TEXT_UNITS)),
+            );
+            payload.insert(
+                "artist".to_owned(),
+                Value::from(bounded(&state.artist, MAX_TEXT_UNITS)),
+            );
             payload.insert(
                 "nowPlaying".to_owned(),
-                Value::from(state.now_playing.clone()),
+                Value::from(bounded(&state.now_playing, MAX_TEXT_UNITS)),
             );
             payload.insert("playing".to_owned(), Value::from(state.is_playing));
-            if let Some(artwork) = artwork {
+            // A path is not text to cut: a shortened one names a different file
+            // or none. An artwork reference longer than a field may carry is
+            // therefore dropped, and the panel shows the track without a
+            // picture rather than losing the whole reading.
+            if let Some(artwork) =
+                artwork.filter(|path| path.encode_utf16().count() <= MAX_TEXT_UNITS)
+            {
                 payload.insert("artPath".to_owned(), Value::from(artwork));
             }
             match mpris::playback_progress(position, state.length) {

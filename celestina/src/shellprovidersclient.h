@@ -76,5 +76,9 @@ private:
     bool m_available = false;
     bool m_stopping = false;
     bool m_tracedMediaVisual = false;
+    // Whether the helper that just ended did so without running its own
+    // shutdown. Such a helper may have abandoned an active DDC child, so the
+    // replacement is spaced rather than started at the ordinary backoff.
+    bool m_uncleanExit = false;
     int m_restartDelayMs = 0;
 };

@@ -33,7 +33,7 @@ use std::os::fd::AsFd;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use celestina_core::atomic_file;
 use celestina_shell_core::clipboard::{self, ClipboardHistory};
@@ -59,6 +59,16 @@ const TEXT_MIMES: [&str; 2] = ["text/plain;charset=utf-8", "text/plain"];
 /// entry chosen by click answers within a fraction of this — imperceptible —
 /// and it is what lets this thread do without a wakeup pipe of its own.
 const POLL_INTERVAL: Duration = Duration::from_millis(150);
+/// The longest this thread waits on the application that owns the selection.
+/// Generous for a program writing a few kilobytes into a pipe, and bounded
+/// because nothing obliges that program to write anything at all.
+const RECEIVE_TIMEOUT: Duration = Duration::from_secs(2);
+/// Read in pieces so the deadline is checked between them rather than only
+/// before the first one.
+const RECEIVE_CHUNK_BYTES: usize = 8 * 1024;
+/// How long our own `set_selection` may take to come back to us. One compositor
+/// round-trip, generously; past it the echo is not coming.
+const SELF_ECHO_WINDOW: Duration = Duration::from_secs(1);
 
 fn history_path() -> Option<std::path::PathBuf> {
     celestina_core::xdg::state_home().map(|dir| dir.join("celestina").join("clipboard.json"))
@@ -68,12 +78,25 @@ fn load_history() -> ClipboardHistory {
     let Some(path) = history_path() else {
         return ClipboardHistory::new();
     };
-    let Ok(bytes) = std::fs::read(&path) else {
+    // Read bounded rather than whole: this is a file on disk, so its size is
+    // whatever last wrote it rather than whatever this shell last saved.
+    let Ok(file) = File::open(&path) else {
         return ClipboardHistory::new();
     };
+    let mut bytes = Vec::new();
+    if file
+        .take(clipboard::MAX_PERSISTED_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .is_err()
+        || u64::try_from(bytes.len()).unwrap_or(u64::MAX) > clipboard::MAX_PERSISTED_BYTES
+    {
+        return ClipboardHistory::new();
+    }
     let Ok(entries) = serde_json::from_slice::<Vec<String>>(&bytes) else {
         return ClipboardHistory::new();
     };
+    // `from_entries` applies the recording rule again, so nothing loads that
+    // could not have been copied.
     ClipboardHistory::from_entries(entries)
 }
 
@@ -203,10 +226,16 @@ struct State {
     /// Mimes accumulated for each offer as its `offer` events arrive, keyed by
     /// the offer's own id — the same id the later `selection` event names.
     offer_mimes: HashMap<ObjectId, Vec<String>>,
-    /// Set right after we set our own source as the selection; cleared on the
-    /// very next `selection` event, which is that change echoed back. See the
-    /// module doc for why this exists instead of a nested event loop.
-    expect_self_echo: bool,
+    /// When the echo of our own `set_selection` stops being expected.
+    ///
+    /// Armed right after we set our source, and answered by the very next
+    /// `selection` event — that change coming back to us. It carries a deadline
+    /// because the echo may never arrive: another client can take the selection
+    /// first, and a flag armed for good would then swallow the next real copy
+    /// instead. An echo later than this is treated as a real selection, which
+    /// records text already at the front of the list and so changes nothing.
+    /// See the module doc for why this exists instead of a nested event loop.
+    expect_self_echo: Option<Instant>,
     outgoing: Option<(source_proto::ExtDataControlSourceV1, String)>,
     history: ClipboardHistory,
     runtime: Arc<Mutex<ProviderRuntime>>,
@@ -279,7 +308,11 @@ impl Dispatch<device_proto::ExtDataControlDeviceV1, ()> for State {
             device_proto::Event::Selection { id: Some(offer) } => {
                 let mimes = state.offer_mimes.remove(&offer.id()).unwrap_or_default();
 
-                if std::mem::take(&mut state.expect_self_echo) {
+                let echoed = state
+                    .expect_self_echo
+                    .take()
+                    .is_some_and(|until| Instant::now() <= until);
+                if echoed {
                     // Our own re-selection, echoed back. We already know the
                     // text; see the module doc.
                     offer.destroy();
@@ -385,15 +418,18 @@ impl Dispatch<source_proto::ExtDataControlSourceV1, ()> for State {
 delegate_noop!(State: ignore wl_seat::WlSeat);
 delegate_noop!(State: ignore manager_proto::ExtDataControlManagerV1);
 
-/// Asks the offer for one mime type and reads it back, bounded to what
-/// [`clipboard::is_recordable`] would accept anyway — a source that keeps
-/// writing past that is not a clipboard entry, and this stops reading before
-/// it becomes one.
+/// Asks the offer for one mime type and reads it back, bounded in both size and
+/// time.
 ///
-/// Blocks this thread until the source finishes writing or closes; nothing
-/// else here depends on this thread's responsiveness except the clipboard
-/// provider itself, so a slow or stuck source only stalls its own history
-/// entry, the same bound every other provider's subprocess timeout accepts.
+/// The size bound is what [`clipboard::is_recordable`] would accept anyway: a
+/// source that keeps writing past it is not a clipboard entry. The time bound
+/// exists because the other end belongs to whichever application owns the
+/// selection, and nothing obliges it to write or to close. Reading until EOF
+/// parked this thread inside a Wayland event handler for good: the queue was
+/// never pumped again, so history stopped updating, every queued request failed
+/// as busy, and applications pasting an entry this shell had re-offered waited
+/// on a reply that was never going to come. One stuck source now costs its own
+/// entry and nothing else.
 fn receive_text(
     offer: &offer_proto::ExtDataControlOfferV1,
     mime: &str,
@@ -406,12 +442,49 @@ fn receive_text(
     // copy, relayed by the compositor, is what stays open while it writes.
     drop(write_fd);
 
-    let file = File::from(read_fd);
+    let mut file = File::from(read_fd);
+    let limit = clipboard::MAX_ENTRY_BYTES + 1;
     let mut buffer = Vec::new();
-    file.take(u64::try_from(clipboard::MAX_ENTRY_BYTES).unwrap_or(u64::MAX) + 1)
-        .read_to_end(&mut buffer)
-        .ok()?;
+    let deadline = Instant::now() + RECEIVE_TIMEOUT;
+
+    while buffer.len() < limit {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            // The source had its turn and did not finish. What arrived is not a
+            // whole entry, so none of it is recorded.
+            return None;
+        }
+        if !readable_within(&file, remaining) {
+            return None;
+        }
+
+        let mut chunk = [0_u8; RECEIVE_CHUNK_BYTES];
+        let read = file.read(&mut chunk).ok()?;
+        if read == 0 {
+            // The source finished writing and closed its end.
+            break;
+        }
+        buffer.extend_from_slice(&chunk[..read.min(limit - buffer.len())]);
+    }
+
     String::from_utf8(buffer).ok()
+}
+
+/// Waits for one read to become possible, or gives up.
+///
+/// Returns `false` when the wait expired or the poll itself failed; both mean
+/// this thread stops waiting on that source.
+fn readable_within(file: &File, within: Duration) -> bool {
+    let fd = file.as_fd();
+    let mut fds = [PollFd::new(&fd, PollFlags::IN)];
+    let timeout = Timespec {
+        tv_sec: i64::try_from(within.as_secs()).unwrap_or(i64::MAX),
+        tv_nsec: i64::from(within.subsec_nanos()),
+    };
+    matches!(
+        poll(&mut fds, Some(&timeout)),
+        Ok(count) if count > 0 && !fds[0].revents().is_empty()
+    )
 }
 
 fn set_selection(state: &mut State, qh: &QueueHandle<State>, text: String) {
@@ -427,7 +500,7 @@ fn set_selection(state: &mut State, qh: &QueueHandle<State>, text: String) {
         source.offer(mime.to_owned());
     }
     device.set_selection(Some(&source));
-    state.expect_self_echo = true;
+    state.expect_self_echo = Some(Instant::now() + SELF_ECHO_WINDOW);
     state.outgoing = Some((source, text));
 }
 
@@ -509,7 +582,7 @@ fn run(runtime: &Arc<Mutex<ProviderRuntime>>, id: &ProviderId, receiver: &Receiv
         manager: None,
         device: None,
         offer_mimes: HashMap::new(),
-        expect_self_echo: false,
+        expect_self_echo: None,
         outgoing: None,
         history: load_history(),
         runtime: Arc::clone(runtime),

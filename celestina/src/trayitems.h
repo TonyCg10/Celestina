@@ -4,6 +4,20 @@
 #include <QString>
 #include <QVariantMap>
 
+// A tray is a handful of applications. Anything past this is a misbehaving
+// watcher, not a session with that many controls.
+//
+// It is published here because the published list is not the only thing a
+// foreign process can grow: a host that accepts registrations, signal
+// subscriptions or cached icons beyond what it could ever show is growing on
+// another application's word. Everything keyed by an item obeys this same
+// number, so there is one bound to reason about rather than several.
+constexpr qsizetype maxTrayItems = 64;
+// The longest registration string, object path or theme path accepted from
+// another process. A bus name with a path appended is short; anything longer
+// is a client spending the panel's memory rather than naming an item.
+constexpr qsizetype maxTrayPathLength = 512;
+
 // What a StatusNotifierItem is, once the panel has finished distrusting it.
 //
 // Tray items are other applications' controls, published by whatever toolkit

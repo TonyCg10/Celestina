@@ -44,15 +44,24 @@ impl Hold {
             return false;
         };
 
-        if let Ok(None) = child.try_wait() {
+        match child.try_wait() {
             // Still running: the state is genuinely held.
-            return true;
+            Ok(None) => true,
+            // Exited on its own. It has been reaped by `try_wait`, so dropping
+            // the handle leaves nothing behind.
+            Ok(Some(_)) => {
+                self.child = None;
+                false
+            }
+            // Unwaitable. Dropping the handle here would abandon a child that
+            // may still be holding gamma or a logind lock, and the next `set`
+            // would start a second holder beside it. Ending it is what keeps
+            // this helper's claim and the session's state the same thing.
+            Err(_) => {
+                self.release();
+                false
+            }
         }
-
-        // Gone — exited on its own, or unwaitable. Either way this helper no
-        // longer holds anything, so it stops claiming the state.
-        self.child = None;
-        false
     }
 
     /// Takes or releases the hold, and returns whether it is held afterwards.

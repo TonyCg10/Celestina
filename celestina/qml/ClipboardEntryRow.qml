@@ -68,6 +68,10 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         width: parent.width - CelestinaTheme.spaceSm * 2 - removeButton.width
         text: row.entry.preview
+        // Copied text is shown as the characters that were copied. Rendering it
+        // as markup would turn copying a snippet of HTML into a link, or into
+        // an image this shell would fetch.
+        textFormat: Text.PlainText
         color: row.current ? CelestinaTheme.accent : CelestinaTheme.text
         font.family: CelestinaTheme.sansFamily
         font.pixelSize: CelestinaTheme.fontRowSecondary

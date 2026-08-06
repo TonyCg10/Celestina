@@ -1,6 +1,7 @@
 import CelestinaStyle
 import QtQuick
 import QtQuick.Window
+import "ProviderReading.js" as ProviderReading
 
 Window {
     id: panel
@@ -25,20 +26,12 @@ Window {
     signal trayMenuRequested(string service, string path, int globalX, int globalY)
     signal notificationCentreRequested()
 
-    // QVariantMap keys are dynamic: `media` may not exist when this component
-    // first binds and may be inserted by a later frame from the same helper.
-    // Reading the host's snapshot revision first gives every lookup one stable
-    // notification dependency instead of depending on a key that did not yet
-    // exist in Qt's property cache.
+    // A provider key may be inserted by a later frame of the same helper
+    // generation, so every lookup goes through the one access point that makes
+    // a binding depend on the snapshot revision rather than on a key that did
+    // not exist yet. See `ProviderReading`.
     function provider(name) {
-        // The condition is deliberately part of the returned expression. An
-        // otherwise unused local read can be removed by qmlcachegen, leaving
-        // the binding with the same missing-key dependency that caused the
-        // live failure. Revisions are unsigned, so this branch is only the
-        // stable notification edge for a real host.
-        if (panel.providerSource.revision < 0)
-            return undefined;
-        return panel.providerSource.providers[name];
+        return ProviderReading.read(panel.providerSource, name);
     }
 
     width: Screen.width

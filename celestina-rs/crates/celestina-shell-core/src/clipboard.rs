@@ -21,6 +21,11 @@ pub const MAX_ENTRY_BYTES: usize = 256 * 1024;
 /// How many entries the history keeps. Bounded so persistence stays a small
 /// file and a drawer stays a list, not a scrollbar into the past.
 pub const MAX_ENTRIES: usize = 200;
+/// The most a persisted history may be read back from. A file this shell wrote
+/// cannot exceed the two bounds above plus its JSON punctuation; a larger one
+/// was written by something else, and reading it whole to find that out is the
+/// allocation the bound exists to refuse.
+pub const MAX_PERSISTED_BYTES: u64 = (MAX_ENTRIES * (MAX_ENTRY_BYTES + 8)) as u64;
 
 /// The one mime type this suite treats as a signal to remember nothing: the
 /// convention a password manager adds to a selection so a clipboard history
@@ -64,11 +69,22 @@ impl ClipboardHistory {
     /// Restores a history from what was persisted, oldest-last as saved,
     /// truncating to the current cap — a cap lowered since the file was
     /// written must still be honoured.
+    ///
+    /// A restored entry passes the same test a newly copied one does. The file
+    /// is ordinary state on disk that anything running as this person may have
+    /// written, so trusting its contents because this shell wrote it once would
+    /// let a bound that holds for every live selection be bypassed by editing a
+    /// file. Anything that would not be recorded now is dropped rather than
+    /// loaded and re-persisted.
     #[must_use]
     pub fn from_entries(entries: Vec<String>) -> Self {
-        let mut history = Self { entries };
-        history.entries.truncate(MAX_ENTRIES);
-        history
+        Self {
+            entries: entries
+                .into_iter()
+                .filter(|entry| is_recordable(entry))
+                .take(MAX_ENTRIES)
+                .collect(),
+        }
     }
 
     #[must_use]
@@ -176,6 +192,22 @@ mod tests {
         let saved: Vec<String> = (0..MAX_ENTRIES + 5).map(|n| n.to_string()).collect();
         let history = ClipboardHistory::from_entries(saved);
         assert_eq!(history.entries().len(), MAX_ENTRIES);
+    }
+
+    // The state file is ordinary bytes on disk. Trusting them because this
+    // shell wrote them once would let the bound that holds for every live
+    // selection be bypassed by editing a file.
+    #[test]
+    fn restoring_a_history_refuses_what_it_would_never_have_recorded() {
+        let history = ClipboardHistory::from_entries(vec![
+            "keep me".to_owned(),
+            String::new(),
+            "x".repeat(MAX_ENTRY_BYTES + 1),
+            "wide\0load".to_owned(),
+            "keep me too".to_owned(),
+        ]);
+
+        assert_eq!(history.entries(), ["keep me", "keep me too"]);
     }
 
     #[test]

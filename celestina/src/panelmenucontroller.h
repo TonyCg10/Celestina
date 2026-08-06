@@ -76,6 +76,11 @@ private:
     QPoint m_pendingAnchor;
     QString m_pendingService;
     QString m_pendingPath;
+    // Whose menu is on screen right now, which is not the same question: the
+    // request is answered once and forgotten, while the open menu still has to
+    // know where to send an entry the user chooses.
+    QString m_openService;
+    QString m_openPath;
     PanelMenuSurface *m_surface;
     bool m_enabled;
 };

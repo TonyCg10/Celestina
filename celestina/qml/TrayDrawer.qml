@@ -80,6 +80,8 @@ Row {
                 // An application whose icon nothing can resolve is still one
                 // the user should be able to reach.
                 text: entry.modelData.title
+                // Another application's own title, shown as characters.
+                textFormat: Text.PlainText
                 color: CelestinaTheme.textMuted
                 font.family: CelestinaTheme.sansFamily
                 font.pixelSize: CelestinaTheme.fontCaption

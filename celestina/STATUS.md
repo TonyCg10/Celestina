@@ -148,6 +148,14 @@ the author reruns them against 0.6.2.
 ## Records
 
 - Active plan: [LVR-3 late provider insertion](docs/plans/active/2026-08-05-late-provider-insertion.md)
+- Celestina 0.6.4 is built and passes its focused Rust, C++, QML and offscreen
+  checks. Canonical verification and deployment remain pending because the
+  suite architecture guard currently rejects unrelated Siderita ratchet
+  growth; the shell has not been activated and Noctalia still owns the session.
+- Planned next checkpoint: `AUD-1` static audit hardening in
+  [ROADMAP.md](ROADMAP.md), from the
+  [2026-08-05 static shell audit](docs/evidence/2026-08-05-static-shell-audit.md);
+  it opens no plan and runs nothing while LVR-3 and the GPU hold remain active
 - Last completed plan: [LVR-2 live validation follow-up](docs/plans/archive/2026-08-05-live-validation-follow-up.md)
 - The milestone before it: [R8 Noctalia departure](docs/plans/archive/2026-08-04-r8-noctalia-departure.md)
 - Open product questions: [discussion queue](docs/discussions/README.md)

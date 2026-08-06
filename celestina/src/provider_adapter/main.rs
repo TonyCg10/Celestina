@@ -19,9 +19,7 @@
 use std::io::{self, BufReader, BufWriter, Stdout};
 use std::process::{self, ExitCode};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{
-    sync_channel, Receiver, RecvTimeoutError, SyncSender, TrySendError,
-};
+use std::sync::mpsc::{sync_channel, Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -46,8 +44,10 @@ mod sysmon;
 mod tools;
 mod wallpaper;
 mod weather;
+mod worker;
 
 use tools::lock_runtime;
+use worker::Worker;
 
 /// The host may not outrun the helper: further requests are refused with a
 /// visible failure instead of growing an unbounded backlog.
@@ -153,8 +153,12 @@ fn run_commands(
         };
         if let Err(error) = writer.emit(&frame) {
             eprintln!("celestina-provider-adapter: {error}");
-            shutdown.store(true, Ordering::Release);
-            return;
+            // Only a lost pipe ends this worker. A frame that could not be
+            // built is one answer missing, not a reason to stop answering.
+            if error.is_fatal() {
+                shutdown.store(true, Ordering::Release);
+                return;
+            }
         }
     }
 }
@@ -205,6 +209,20 @@ fn read_host_commands(sender: &SyncSender<Command>, writer: &HelperWriter) {
     }
 }
 
+/// Gives back both session holds however `run` ends.
+///
+/// The holds themselves live in process-wide statics, so nothing drops them on
+/// an early return. Releasing only on the success path left a `wlsunset` or
+/// `systemd-inhibit` child running with its helper gone and nothing left that
+/// knew how to end it — the session could then no longer be suspended.
+struct HeldStates;
+
+impl Drop for HeldStates {
+    fn drop(&mut self) {
+        sessionholds::release_all();
+    }
+}
+
 fn run() -> io::Result<()> {
     let writer: HelperWriter = Arc::new(SharedWriter::new(BufWriter::new(io::stdout())));
     // One process, one generation. A host that sees a new generation clears
@@ -249,7 +267,11 @@ fn run() -> io::Result<()> {
         Some(brightness::spawn(&runtime, &shutdown)?)
     };
     session::spawn(&runtime)?;
-    sessionholds::spawn(&runtime)?;
+    // Declared before the holds thread starts and therefore dropped after it
+    // has been joined: whatever this helper is holding is given back however
+    // `run` ends, including the initialization failures below.
+    let _released_on_exit = HeldStates;
+    let holds_worker = sessionholds::spawn(&runtime, &shutdown)?;
     launcher::spawn(&runtime)?;
     clipboard::spawn(&runtime)?;
     notifications::spawn(&runtime)?;
@@ -262,16 +284,9 @@ fn run() -> io::Result<()> {
     let worker_runtime = Arc::clone(&runtime);
     let worker_writer = Arc::clone(&writer);
     let worker_shutdown = Arc::clone(&shutdown);
-    let worker = thread::Builder::new()
-        .name("provider-commands".to_owned())
-        .spawn(move || {
-            run_commands(
-                &receiver,
-                &worker_runtime,
-                &worker_writer,
-                &worker_shutdown,
-            );
-        })?;
+    let worker = Worker::spawn("provider-commands", &shutdown, move || {
+        run_commands(&receiver, &worker_runtime, &worker_writer, &worker_shutdown);
+    })?;
 
     let reader_writer = Arc::clone(&writer);
     let reader_shutdown = Arc::clone(&shutdown);
@@ -295,8 +310,13 @@ fn run() -> io::Result<()> {
         if state.due(now) {
             if let Err(error) = writer.emit(&state.take_frame(now)) {
                 eprintln!("celestina-provider-adapter: {error}");
-                shutdown.store(true, Ordering::Release);
-                break;
+                // A frame the host would have discarded is skipped, not
+                // retried: the next change publishes the whole set again. Only
+                // a lost pipe means there is nobody left to publish to.
+                if error.is_fatal() {
+                    shutdown.store(true, Ordering::Release);
+                    break;
+                }
             }
         }
         drop(state);
@@ -309,14 +329,15 @@ fn run() -> io::Result<()> {
     // ownership chain.
     shutdown.store(true, Ordering::Release);
     if let Some(brightness_worker) = brightness_worker {
-        if brightness_worker.join().is_err() {
-            eprintln!("celestina-provider-adapter: the brightness worker panicked");
-        }
+        brightness_worker.join();
     }
-    if worker.join().is_err() {
-        eprintln!("celestina-provider-adapter: the command worker panicked");
+    worker.join();
+    // The holds thread stops before its holds are given back, so it cannot take
+    // one after the release. `_released_on_exit` performs that release as this
+    // function returns, by whichever path it returns.
+    if let Some(holds_worker) = holds_worker {
+        holds_worker.join();
     }
-    sessionholds::release_all();
     Ok(())
 }
 

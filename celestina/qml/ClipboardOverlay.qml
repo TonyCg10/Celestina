@@ -9,6 +9,7 @@ pragma ComponentBehavior: Bound
 import CelestinaStyle
 import QtQuick
 import QtQuick.Window
+import "ProviderReading.js" as ProviderReading
 
 Window {
     id: overlay
@@ -21,8 +22,7 @@ Window {
     readonly property int cardWidth: 460
     readonly property int cardHeight: 420
 
-    readonly property var clipboardState: providerSource && providerSource.providers
-                                           ? providerSource.providers.clipboard : undefined
+    readonly property var clipboardState: ProviderReading.read(overlay.providerSource, "clipboard")
     readonly property bool offered: clipboardState !== undefined
     readonly property var entries: clipboardState && clipboardState.entries !== undefined
                                    ? clipboardState.entries : []

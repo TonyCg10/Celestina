@@ -37,6 +37,20 @@ const COMMAND_QUEUE_CAPACITY: usize = 32;
 /// bounded length keeps a hostile id out of the downstream frames.
 const MAX_ID_CHARS: usize = 32;
 const MAX_REASON_CHARS: usize = 200;
+/// Workspace labels, output names, window titles and the workspace count are
+/// compositor state, and a window title is whatever its client decided to set —
+/// it can be megabytes long. The host discards any protocol line above its own
+/// line limit as a whole and then declares the shell unavailable, so a single
+/// hostile title would blank the workspace strip on every event for as long as
+/// that window exists. These four limits are therefore the host's own
+/// `maxLabelLength`, `maxTitleLength` and `maxWorkspaceCount` in
+/// `src/niriclient.cpp`: a snapshot this helper publishes must be one the host
+/// accepts, and a value that exceeds them there is rejected, not trimmed. They
+/// are counted in UTF-16 code units because that is what `QString::size()`
+/// measures on the far side.
+const MAX_LABEL_UNITS: usize = 128;
+const MAX_TITLE_UNITS: usize = 512;
+const MAX_WORKSPACES: usize = 512;
 
 /// Every frame leaves through this one writer, so a request result can never
 /// land in the middle of a snapshot line.
@@ -202,14 +216,19 @@ fn shell_snapshot(state: &EventStreamState) -> ShellSnapshot {
                 index: workspace.idx,
                 label: workspace
                     .name
-                    .clone()
+                    .as_deref()
                     .filter(|name| !name.is_empty())
-                    .unwrap_or_else(|| workspace.idx.to_string()),
-                output,
+                    .map_or_else(
+                        || workspace.idx.to_string(),
+                        |name| bounded(name, MAX_LABEL_UNITS),
+                    ),
+                output: bounded(&output, MAX_LABEL_UNITS),
                 active: workspace.is_active,
                 focused: workspace.is_focused,
                 urgent: workspace.is_urgent,
-                active_window_title: active_window.and_then(|window| window.title.clone()),
+                active_window_title: active_window
+                    .and_then(|window| window.title.as_deref())
+                    .map(|title| bounded(title, MAX_TITLE_UNITS)),
             })
         })
         .collect::<Vec<_>>();
@@ -219,6 +238,11 @@ fn shell_snapshot(state: &EventStreamState) -> ShellSnapshot {
             .cmp(&right.output)
             .then(left.index.cmp(&right.index))
     });
+    // Truncating after the sort keeps a stable prefix of the strip instead of
+    // whichever workspaces the compositor's map happened to yield first, so a
+    // session past the cap still shows the same outputs from one event to the
+    // next rather than a reshuffling list.
+    workspaces.truncate(MAX_WORKSPACES);
 
     ShellSnapshot {
         kind: "snapshot",
@@ -570,6 +594,71 @@ mod tests {
         let encoded = serde_json::to_string(&snapshot).expect("the snapshot serializes");
         // A JSON number would reach the host's double-typed parser rounded.
         assert!(encoded.contains(r#""id":"18446744073709551615""#));
+    }
+
+    #[test]
+    fn snapshot_bounds_compositor_text_the_host_would_reject() {
+        // A window title is client-controlled, and the workspace name and
+        // output name are compositor state this helper does not own. Published
+        // unbounded, one of them pushes the line past the host's framing limit,
+        // which discards the whole line and blanks the strip for as long as the
+        // window lives.
+        let mut state = EventStreamState::default();
+        let name = "n".repeat(MAX_LABEL_UNITS + 40);
+        let output = "O".repeat(MAX_LABEL_UNITS + 40);
+        apply_json(
+            &mut state,
+            &format!(
+                r#"{{"WorkspacesChanged":{{"workspaces":[{{"id":3,"idx":1,"name":"{name}","output":"{output}","is_urgent":false,"is_active":true,"is_focused":true,"active_window_id":42}}]}}}}"#
+            ),
+        );
+        let title = "t".repeat(MAX_TITLE_UNITS * 4);
+        apply_json(
+            &mut state,
+            &format!(
+                r#"{{"WindowsChanged":{{"windows":[{{"id":42,"title":"{title}","app_id":"hostile","pid":100,"workspace_id":3,"is_focused":true,"is_floating":false,"is_urgent":false,"layout":{{"pos_in_scrolling_layout":[1,1],"tile_size":[800.0,600.0],"window_size":[800,600],"tile_pos_in_workspace_view":null,"window_offset_in_tile":[0.0,0.0]}},"focus_timestamp":null}}]}}}}"#
+            ),
+        );
+
+        let snapshot = shell_snapshot(&state);
+        let workspace = &snapshot.workspaces[0];
+        assert_eq!(workspace.label.chars().count(), MAX_LABEL_UNITS);
+        assert_eq!(workspace.output.chars().count(), MAX_LABEL_UNITS);
+        assert_eq!(
+            workspace
+                .active_window_title
+                .as_ref()
+                .map(|title| title.chars().count()),
+            Some(MAX_TITLE_UNITS)
+        );
+    }
+
+    #[test]
+    fn snapshot_caps_the_number_of_workspaces() {
+        // The host rejects a workspace list longer than its own cap outright,
+        // so publishing one would cost the whole snapshot rather than its tail.
+        let mut state = EventStreamState::default();
+        let workspaces = (0..3)
+            .flat_map(|output| (1..=250).map(move |index| (output, index)))
+            .map(|(output, index): (u8, u8)| {
+                let id = u64::from(output) * 1000 + u64::from(index);
+                format!(
+                    r#"{{"id":{id},"idx":{index},"name":null,"output":"DP-{output}","is_urgent":false,"is_active":false,"is_focused":false,"active_window_id":null}}"#
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        apply_json(
+            &mut state,
+            &format!(r#"{{"WorkspacesChanged":{{"workspaces":[{workspaces}]}}}}"#),
+        );
+
+        let snapshot = shell_snapshot(&state);
+        assert_eq!(snapshot.workspaces.len(), MAX_WORKSPACES);
+        // The kept prefix is the sorted one, so the same workspaces survive
+        // every event instead of a set that depends on map iteration order.
+        assert_eq!(snapshot.workspaces[0].output, "DP-0");
+        assert_eq!(snapshot.workspaces[0].index, 1);
     }
 
     #[test]

@@ -9,6 +9,7 @@
 #include <QVariantList>
 
 #include <optional>
+#include <utility>
 
 #include "niriclient.h"
 #include "overlaycontroller.h"
@@ -22,6 +23,10 @@ constexpr int shellStateVersion = 1;
 constexpr int stateCoalesceMs = 100;
 constexpr int maxWorkspaceIndex = 255;
 constexpr qsizetype maxOutputNameLength = 128;
+// A verb arrives from the bus and any client may send any string. Quoting one
+// back in a refusal is useful; quoting back a megabyte of it is a way to make
+// the shell carry a caller's payload, so what is echoed is cut first.
+constexpr qsizetype maxEchoedVerbLength = 64;
 // How often the shell looks for a session request that has run out of time.
 constexpr int sessionSweepMs = 250;
 // wpctl answers immediately; a monitor over DDC takes seconds, and refusing it
@@ -38,6 +43,14 @@ constexpr qint64 holdTimeoutMs = 3000;
 constexpr auto logindService = "org.freedesktop.login1";
 constexpr auto logindPath = "/org/freedesktop/login1";
 constexpr auto logindInterface = "org.freedesktop.login1.Manager";
+
+// The form of a verb that is safe to repeat back to whoever sent it.
+QString echoed(const QString &verb)
+{
+    if (verb.size() <= maxEchoedVerbLength)
+        return verb;
+    return verb.left(maxEchoedVerbLength) + QStringLiteral("...");
+}
 
 // Which provider carries a session verb, and what would count as having seen
 // it happen.
@@ -208,6 +221,23 @@ ShellService::Attachment ShellService::attach(const QDBusConnection &bus)
     return Attachment::Owned;
 }
 
+qulonglong ShellService::refuse(QDBusError::ErrorType type, const QString &message)
+{
+    m_refusalReason = message;
+    // Only a real dispatch has a message to answer. Without one there is no
+    // call context behind `QDBusContext`, and replying would dereference it.
+    if (calledFromDBus())
+        sendErrorReply(type, message);
+    else
+        qWarning().noquote() << "Celestina refused a shell request:" << message;
+    return 0;
+}
+
+QString ShellService::takeRefusalReason()
+{
+    return std::exchange(m_refusalReason, QString());
+}
+
 QVariantMap ShellService::GetState()
 {
     QVariantMap state;
@@ -318,45 +348,41 @@ qulonglong ShellService::Command(const QString &verb, const QVariantMap &options
         // Fail-closed, exactly like `lock`: a session that suspends unlocked
         // wakes up unlocked, so this is refused while no locker provider
         // exists rather than quietly sleeping an open session.
-        sendErrorReply(
+        return refuse(
             QDBusError::NotSupported,
             QStringLiteral(
                 "this shell has no provider for a session locker, so 'suspend' "
                 "is refused rather than sleeping an unlocked session"
             )
         );
-        return 0;
     }
     if (verb == QStringLiteral("lock") || verb == QStringLiteral("lock-and-suspend")) {
         // Fail-closed by contract: this shell has no locker provider, and a
         // shell that cannot lock says so instead of reporting success and
         // leaving the session open. The refusal is the seam — a provider is
         // wired in here, and until one is, nothing here pretends.
-        sendErrorReply(
+        return refuse(
             QDBusError::NotSupported,
             QStringLiteral(
                 "this shell has no provider for a session locker, so '%1' is "
                 "refused rather than half-performed"
-            ).arg(verb)
+            ).arg(echoed(verb))
         );
-        return 0;
     }
 
-    sendErrorReply(
+    return refuse(
         QDBusError::UnknownMethod,
-        QStringLiteral("this shell does not serve the verb '%1'").arg(verb)
+        QStringLiteral("this shell does not serve the verb '%1'").arg(echoed(verb))
     );
-    return 0;
 }
 
 qulonglong ShellService::toggleOverlay(OverlayController *controller, const QString &verb)
 {
     if (!controller) {
-        sendErrorReply(
+        return refuse(
             QDBusError::Failed,
-            QStringLiteral("this shell has no '%1' surface").arg(verb)
+            QStringLiteral("this shell has no '%1' surface").arg(echoed(verb))
         );
-        return 0;
     }
 
     controller->toggle();
@@ -377,13 +403,12 @@ qulonglong ShellService::powerOffMonitors()
     // nothing. There is also no "on": any input wakes the outputs.
     const qulonglong niriRequestId = m_niri ? m_niri->requestDisplaysOff() : 0;
     if (niriRequestId == 0) {
-        sendErrorReply(
+        return refuse(
             QDBusError::Failed,
             QStringLiteral(
                 "the shell could not ask the compositor to blank the outputs"
             )
         );
-        return 0;
     }
 
     const qulonglong requestId = ++m_lastRequestId;
@@ -413,11 +438,10 @@ qulonglong ShellService::logOut()
     // only whether the request could be made.
     const qulonglong niriRequestId = m_niri ? m_niri->requestLogOut() : 0;
     if (niriRequestId == 0) {
-        sendErrorReply(
+        return refuse(
             QDBusError::Failed,
             QStringLiteral("the shell could not ask the compositor to end the session")
         );
-        return 0;
     }
 
     const qulonglong requestId = ++m_lastRequestId;
@@ -430,11 +454,10 @@ qulonglong ShellService::askLogind(const QString &verb, const QString &method)
 {
     QDBusConnection bus = QDBusConnection::systemBus();
     if (!bus.isConnected()) {
-        sendErrorReply(
+        return refuse(
             QDBusError::Failed,
             QStringLiteral("the shell cannot reach the session manager")
         );
-        return 0;
     }
 
     QDBusMessage call = QDBusMessage::createMethodCall(
@@ -481,22 +504,20 @@ qulonglong ShellService::requestSession(
 )
 {
     if (!m_providers) {
-        sendErrorReply(
+        return refuse(
             QDBusError::Failed,
             QStringLiteral(
                 "this shell has no provider helper, so it cannot serve '%1'"
-            ).arg(verb)
+            ).arg(echoed(verb))
         );
-        return 0;
     }
     if (m_sessionRequests.isFull()) {
         // Sending a request the shell cannot track would leave the caller
         // waiting on a result that never comes.
-        sendErrorReply(
+        return refuse(
             QDBusError::Failed,
             QStringLiteral("this shell is already waiting on too many requests")
         );
-        return 0;
     }
 
     // Captured before the request is sent, so the value a step is compared
@@ -505,13 +526,12 @@ qulonglong ShellService::requestSession(
     const qulonglong helperRequestId =
         m_providers->sendCommand(expectation.provider, verb, options);
     if (helperRequestId == 0) {
-        sendErrorReply(
+        return refuse(
             QDBusError::Failed,
             QStringLiteral(
                 "the shell could not reach the provider that serves '%1'"
-            ).arg(verb)
+            ).arg(echoed(verb))
         );
-        return 0;
     }
 
     const qulonglong requestId = ++m_lastRequestId;
@@ -568,13 +588,12 @@ qulonglong ShellService::focusWorkspace(const QVariantMap &options)
         options.value(QStringLiteral("index")).toInt(&numeric);
     if (output.isEmpty() || output.size() > maxOutputNameLength || !numeric
         || index < 1 || index > maxWorkspaceIndex) {
-        sendErrorReply(
+        return refuse(
             QDBusError::InvalidArgs,
             QStringLiteral(
                 "focus-workspace needs output=<name> and index=<1..255>"
             )
         );
-        return 0;
     }
 
     const qulonglong niriRequestId =
@@ -582,14 +601,13 @@ qulonglong ShellService::focusWorkspace(const QVariantMap &options)
     if (niriRequestId == 0) {
         // The compositor adapter refused or could not carry the request. A
         // request that was never sent is an error, not a pending id.
-        sendErrorReply(
+        return refuse(
             QDBusError::Failed,
             QStringLiteral(
                 "the shell could not request that workspace; it may not exist "
                 "on that output, or the compositor adapter is unavailable"
             )
         );
-        return 0;
     }
 
     const qulonglong requestId = ++m_lastRequestId;

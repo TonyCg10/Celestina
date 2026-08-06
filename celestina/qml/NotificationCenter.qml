@@ -13,6 +13,7 @@ pragma ComponentBehavior: Bound
 import CelestinaStyle
 import QtQuick
 import QtQuick.Window
+import "ProviderReading.js" as ProviderReading
 
 Window {
     id: centre
@@ -31,8 +32,7 @@ Window {
     readonly property int cardWidth: 460
     readonly property int cardHeight: 520
 
-    readonly property var state: providerSource && providerSource.providers
-                                 ? providerSource.providers.notifications : undefined
+    readonly property var state: ProviderReading.read(centre.providerSource, "notifications")
     // `undefined` means this shell is not the session's notification server —
     // another one owns the name — which is a different thing from having
     // nothing to show.
@@ -199,6 +199,10 @@ Window {
                         implicitHeight: rowBody.implicitHeight + CelestinaTheme.spaceMd
 
                         Accessible.role: Accessible.ListItem
+                        // Chained because QML's `arg` substitutes one value per
+                        // call, unlike its C++ namesake. A producer that puts a
+                        // `%2` in its own app name can garble this sentence but
+                        // cannot reach past it.
                         Accessible.name: qsTr("%1: %2. %3")
                             .arg(row.modelData.app)
                             .arg(row.modelData.summary)
@@ -228,6 +232,12 @@ Window {
                                 text: row.live
                                       ? row.modelData.app
                                       : qsTr("%1 — terminada").arg(row.modelData.app)
+                                // Producer text is shown as characters, never
+                                // interpreted as markup: `AutoText` would guess
+                                // otherwise and render a link, or an image this
+                                // shell would fetch on the producer's behalf.
+                                // The server never advertises `body-markup`.
+                                textFormat: Text.PlainText
                                 color: CelestinaTheme.textMuted
                                 elide: Text.ElideRight
                                 font.family: CelestinaTheme.sansFamily
@@ -237,6 +247,7 @@ Window {
                             Text {
                                 width: parent.width
                                 text: row.modelData.summary
+                                textFormat: Text.PlainText
                                 color: row.live ? CelestinaTheme.text
                                                 : CelestinaTheme.textMuted
                                 elide: Text.ElideRight
@@ -251,6 +262,7 @@ Window {
                                 width: parent.width
                                 visible: row.modelData.body.length > 0
                                 text: row.modelData.body
+                                textFormat: Text.PlainText
                                 color: CelestinaTheme.textMuted
                                 wrapMode: Text.WordWrap
                                 maximumLineCount: 2

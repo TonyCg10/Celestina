@@ -146,6 +146,17 @@ void PanelMenuController::trayMenuReady(
     if (entries.isEmpty())
         return;
 
+    // The request is spent here. An application may answer the same
+    // `AboutToShow` twice, or answer a second time seconds later; without
+    // this the guard above lets that through, because it only rejects a
+    // *different* item — and a menu the user already dismissed reopens itself
+    // at an anchor that has since moved.
+    QWindow *const panel = m_pendingPanel;
+    const QPoint anchor = m_pendingAnchor;
+    m_pendingService.clear();
+    m_pendingPath.clear();
+    m_pendingPanel = nullptr;
+
     QObject *rootObject = m_trayComponent.createWithInitialProperties(QVariantMap {
         {QStringLiteral("entries"), entries},
         {QStringLiteral("reducedMotion"),
@@ -163,21 +174,39 @@ void PanelMenuController::trayMenuReady(
     connect(window, SIGNAL(dismissed()), this, SLOT(close()));
 
     const int inset = window->property("shadowMargin").toInt();
-    const QPoint anchor(
-        m_pendingAnchor.x() - inset,
-        m_pendingPanel->geometry().bottom() + 1 - inset
+    const QPoint placement(
+        anchor.x() - inset,
+        panel->geometry().bottom() + 1 - inset
     );
-    if (!m_surface->open(window, m_pendingPanel, anchor))
+    if (!m_surface->open(window, panel, placement)) {
         delete window;
+        return;
+    }
+
+    m_openService = service;
+    m_openPath = path;
 }
 
 void PanelMenuController::trayEntryChosen(int entryId)
 {
-    emit trayEntryTriggered(m_pendingService, m_pendingPath, entryId);
+    // Nothing is triggered once the menu has closed: `close()` forgets whose it
+    // was, so a late choice reaches no application rather than the wrong one.
+    if (m_openService.isEmpty() && m_openPath.isEmpty())
+        return;
+
+    emit trayEntryTriggered(m_openService, m_openPath, entryId);
     close();
 }
 
 void PanelMenuController::close()
 {
+    // Whatever was asked for is no longer wanted. A pending target that
+    // outlives the menu is what lets a late answer open a surface the user
+    // never asked for.
+    m_pendingService.clear();
+    m_pendingPath.clear();
+    m_pendingPanel = nullptr;
+    m_openService.clear();
+    m_openPath.clear();
     m_surface->close();
 }

@@ -12,6 +12,7 @@
 //! state whose whole effect is stopping the session from sleeping.
 
 use std::io;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
@@ -23,11 +24,15 @@ use serde_json::Value;
 
 use super::held::{wanted, Hold};
 use super::tools::lock_runtime;
+use super::worker::Worker;
 
 /// Nothing here changes on its own, so the poll exists only to notice a holder
 /// that died: rarely enough to cost nothing, often enough that the panel is not
 /// left claiming a state the session lost.
 const INTERVAL: Duration = Duration::from_secs(2);
+/// How many pieces the poll interval is slept in. A shutdown request is noticed
+/// within one piece, so the helper's exit is not held up by a full interval.
+const SLEEP_SLICES: u32 = 8;
 
 pub const NIGHT_LIGHT: &str = "night-light";
 pub const CAFFEINE: &str = "caffeine";
@@ -92,11 +97,14 @@ fn hold_for(provider: &str) -> Option<&'static Mutex<Hold>> {
     }
 }
 
-pub fn spawn(runtime: &Arc<Mutex<ProviderRuntime>>) -> io::Result<()> {
+pub fn spawn(
+    runtime: &Arc<Mutex<ProviderRuntime>>,
+    shutdown: &Arc<AtomicBool>,
+) -> io::Result<Option<Worker>> {
     let (Ok(night_id), Ok(caffeine_id)) = (ProviderId::new(NIGHT_LIGHT), ProviderId::new(CAFFEINE))
     else {
         eprintln!("celestina-provider-adapter: session holds: unusable provider name");
-        return Ok(());
+        return Ok(None);
     };
 
     let mut state = lock_runtime(runtime);
@@ -105,10 +113,15 @@ pub fn spawn(runtime: &Arc<Mutex<ProviderRuntime>>) -> io::Result<()> {
     drop(state);
 
     let runtime = Arc::clone(runtime);
-    thread::Builder::new()
-        .name("session-holds".to_owned())
-        .spawn(move || run(&runtime, &night_id, &caffeine_id))?;
-    Ok(())
+    let worker_shutdown = Arc::clone(shutdown);
+    // This thread starts the session's remembered holds, so it has to be the
+    // thread that stops before they are released. Left detached, it could take
+    // a hold back after `release_all` had already given both up, and the child
+    // it started would then outlive the helper with nothing able to end it.
+    Worker::spawn("session-holds", shutdown, move || {
+        run(&runtime, &night_id, &caffeine_id, &worker_shutdown);
+    })
+    .map(Some)
 }
 
 /// Applies one switch verb and publishes what the session is actually left in.
@@ -185,7 +198,7 @@ fn publish(runtime: &Mutex<ProviderRuntime>, id: &ProviderId, held: bool) {
 /// A failure here is reported and left: a tool that has since been uninstalled
 /// must not stop the rest of the shell from starting, and the published state
 /// will simply say the hold is not held.
-fn restore() {
+fn restore(shutdown: &AtomicBool) {
     let chosen = super::settings::current();
     for (wanted, hold, what) in [
         (chosen.night_light, night(), NIGHT_LIGHT),
@@ -194,21 +207,39 @@ fn restore() {
         if !wanted {
             continue;
         }
+        // Reading the settings takes long enough that a shutdown can arrive
+        // during it. Taking a hold after the helper has decided to leave would
+        // start a child nothing is going to release.
+        if shutdown.load(Ordering::Acquire) {
+            return;
+        }
         if let Err(error) = lock_hold(hold).set(true) {
             eprintln!("celestina-provider-adapter: {what}: {error}");
         }
     }
 }
 
-fn run(runtime: &Mutex<ProviderRuntime>, night_id: &ProviderId, caffeine_id: &ProviderId) {
-    restore();
-    loop {
+fn run(
+    runtime: &Mutex<ProviderRuntime>,
+    night_id: &ProviderId,
+    caffeine_id: &ProviderId,
+    shutdown: &AtomicBool,
+) {
+    restore(shutdown);
+    while !shutdown.load(Ordering::Acquire) {
         // Asking is what notices a holder that died, so this is a poll of this
         // helper's own children rather than of the session.
         let night_held = lock_hold(night()).is_held();
         let awake_held = lock_hold(awake()).is_held();
         publish(runtime, night_id, night_held);
         publish(runtime, caffeine_id, awake_held);
-        thread::sleep(INTERVAL);
+        // Slept in slices so a shutdown is noticed within one of them rather
+        // than after the full poll interval.
+        for _ in 0..SLEEP_SLICES {
+            if shutdown.load(Ordering::Acquire) {
+                return;
+            }
+            thread::sleep(INTERVAL / SLEEP_SLICES);
+        }
     }
 }

@@ -14,6 +14,15 @@ use std::sync::{Mutex, MutexGuard};
 /// discarding it through its newline rather than desynchronizing for good.
 pub const MAX_LINE_BYTES: usize = 4 * 1024;
 
+/// The most a helper may put on one line going the other way.
+///
+/// This is the host's own line limit. The host discards a longer line and drops
+/// every provider's reading with it, and a helper that built such a line would
+/// build it again on the next change — an empty bar with a healthy helper. Every
+/// field is bounded long before this, so reaching it means a frame is wrong
+/// rather than large, and refusing it here keeps the channel synchronized.
+pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum HostLine {
     Complete(Vec<u8>),
@@ -86,14 +95,25 @@ impl<W: Write> SharedWriter<W> {
     /// Writes one JSON frame and its newline, then flushes, holding the lock
     /// for the whole frame.
     ///
+    /// The frame is encoded before the lock is taken and measured before any of
+    /// it is written, so an oversized frame is refused whole. Writing part of
+    /// one and then failing would leave the host mid-line.
+    ///
     /// # Errors
     ///
-    /// Returns the encoding or write failure; a helper that cannot answer its
-    /// host has lost the pipe.
+    /// Returns [`WriteError::Encode`] or [`WriteError::TooLong`] for a frame
+    /// that was never written, and [`WriteError::Write`] when the pipe itself
+    /// failed. Only the last means the host is gone; see
+    /// [`WriteError::is_fatal`].
     pub fn emit<T: serde::Serialize>(&self, value: &T) -> Result<(), WriteError> {
+        let mut line = serde_json::to_vec(value).map_err(WriteError::Encode)?;
+        if line.len() >= MAX_FRAME_BYTES {
+            return Err(WriteError::TooLong(line.len()));
+        }
+        line.push(b'\n');
+
         let mut writer = self.lock();
-        serde_json::to_writer(&mut *writer, value).map_err(WriteError::Encode)?;
-        writer.write_all(b"\n").map_err(WriteError::Write)?;
+        writer.write_all(&line).map_err(WriteError::Write)?;
         writer.flush().map_err(WriteError::Write)
     }
 }
@@ -102,6 +122,21 @@ impl<W: Write> SharedWriter<W> {
 pub enum WriteError {
     Encode(serde_json::Error),
     Write(io::Error),
+    /// A frame the host would have discarded, carrying its size. Nothing was
+    /// written.
+    TooLong(usize),
+}
+
+impl WriteError {
+    /// Whether this ends the helper.
+    ///
+    /// Losing the pipe does: there is nobody left to answer. A frame that could
+    /// not be built or was too long does not — the helper still has a host, and
+    /// leaving over one bad frame would take every working provider with it.
+    #[must_use]
+    pub fn is_fatal(&self) -> bool {
+        matches!(self, Self::Write(_))
+    }
 }
 
 impl std::fmt::Display for WriteError {
@@ -109,6 +144,10 @@ impl std::fmt::Display for WriteError {
         match self {
             Self::Encode(error) => write!(formatter, "cannot encode a frame: {error}"),
             Self::Write(error) => write!(formatter, "cannot write a frame: {error}"),
+            Self::TooLong(bytes) => write!(
+                formatter,
+                "refused a {bytes}-byte frame the host would discard whole"
+            ),
         }
     }
 }
@@ -118,6 +157,7 @@ impl std::error::Error for WriteError {
         match self {
             Self::Encode(error) => Some(error),
             Self::Write(error) => Some(error),
+            Self::TooLong(_) => None,
         }
     }
 }

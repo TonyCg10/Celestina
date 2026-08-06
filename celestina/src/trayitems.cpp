@@ -4,11 +4,7 @@
 #include <QDir>
 
 namespace {
-// A tray is a handful of applications. Anything past this is a misbehaving
-// watcher, not a session with that many controls.
-constexpr qsizetype maxItems = 64;
 constexpr qsizetype maxTextLength = 256;
-constexpr qsizetype maxPathLength = 512;
 
 QString boundedText(const QVariant &value, qsizetype maximum = maxTextLength)
 {
@@ -45,9 +41,9 @@ QString readObjectPath(const QVariant &value)
 {
     if (value.canConvert<QDBusObjectPath>()) {
         const QString path = value.value<QDBusObjectPath>().path();
-        return path == QStringLiteral("/") ? QString() : path.left(maxPathLength);
+        return path == QStringLiteral("/") ? QString() : path.left(maxTrayPathLength);
     }
-    const QString path = value.toString().left(maxPathLength);
+    const QString path = value.toString().left(maxTrayPathLength);
     return path.startsWith(u'/') && path != QStringLiteral("/") ? path : QString();
 }
 } // namespace
@@ -66,7 +62,7 @@ bool parseTrayRegistration(const QString &entry, QString *service, QString *path
         return false;
 
     const QString trimmed = entry.trimmed();
-    if (trimmed.isEmpty() || trimmed.size() > maxPathLength)
+    if (trimmed.isEmpty() || trimmed.size() > maxTrayPathLength)
         return false;
 
     const qsizetype separator = trimmed.indexOf(u'/');
@@ -108,7 +104,7 @@ TrayItem readTrayItem(
     // this panel can resolve, so it is dropped rather than guessed against some
     // working directory.
     const QString themePath =
-        boundedText(properties.value(QStringLiteral("IconThemePath")), maxPathLength);
+        boundedText(properties.value(QStringLiteral("IconThemePath")), maxTrayPathLength);
     if (!themePath.isEmpty() && QDir::isAbsolutePath(themePath))
         item.iconThemePath = themePath;
 
@@ -118,8 +114,8 @@ TrayItem readTrayItem(
 bool TrayItems::replace(const QList<TrayItem> &items)
 {
     QList<TrayItem> bounded = items;
-    if (bounded.size() > maxItems)
-        bounded.resize(maxItems);
+    if (bounded.size() > maxTrayItems)
+        bounded.resize(maxTrayItems);
 
     if (bounded == m_items)
         return false;

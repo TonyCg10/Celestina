@@ -18,6 +18,15 @@ constexpr int maximumRestartDelayMs = 10 * 1000;
 // Requests are short-lived; this is only how often their deadlines are
 // checked, so the panel never holds a stale pending pill for long.
 constexpr int requestSweepIntervalMs = 100;
+// A screenshot or action request has the same deadline as a workspace focus
+// request, and deliberately the same one rather than a second policy: they
+// travel the same pipe to the same compositor, and the adapter answers all of
+// them from one worker. If that worker wedges while its event stream stays
+// alive, nothing else would ever answer these — the request would sit in the
+// table until the queue filled and every later action failed as "queue is
+// full", with no failure reported for any of the requests that caused it.
+constexpr qint64 pendingRequestTimeoutMs =
+    WorkspaceFocusRequests::Timings {}.pendingTimeoutMs;
 constexpr qsizetype maxWorkspaceCount = 512;
 constexpr qsizetype maxLabelLength = 128;
 constexpr qsizetype maxTitleLength = 512;
@@ -46,6 +55,19 @@ bool isDecimalIdentifier(const QJsonValue &value)
             return false;
     }
     return true;
+}
+
+// The ids whose deadline has passed. They are collected before anything is
+// removed or reported, because failing a request can run a listener that sends
+// the next one into the very table being walked.
+QList<quint64> expiredRequests(const QHash<quint64, qint64> &startedMs, qint64 nowMs)
+{
+    QList<quint64> expired;
+    for (auto entry = startedMs.cbegin(); entry != startedMs.cend(); ++entry) {
+        if (nowMs - entry.value() >= pendingRequestTimeoutMs)
+            expired.append(entry.key());
+    }
+    return expired;
 }
 } // namespace
 
@@ -349,23 +371,26 @@ bool NiriClient::applyRequestResult(const QJsonObject &root)
 
     const QString reason =
         boundedString(root.value(QStringLiteral("reason")), maxTitleLength);
-    if (m_actionRequests.remove(requestId)) {
+    if (m_actionRequests.contains(requestId)) {
         // Niri answered the action itself, so its answer is the outcome — this
         // is the compositor reporting what it did, not a helper reporting that
-        // it will try.
-        emit actionFinished(
-            requestId,
-            accepted ? QStringLiteral("confirmed") : QStringLiteral("failed"),
-            reason
-        );
+        // it will try. A refusal leaves through the same path an expiry does,
+        // so the requester cannot tell the two apart by shape.
+        if (!accepted) {
+            failActionRequests({requestId}, reason);
+            return true;
+        }
+
+        m_actionRequests.remove(requestId);
+        emit actionFinished(requestId, QStringLiteral("confirmed"), reason);
         return true;
     }
 
-    if (m_screenshotRequests.remove(requestId)) {
-        if (!accepted) {
-            qWarning().noquote() << "Celestina's screenshot request failed:" << reason;
-            emit screenshotFailed(reason);
-        }
+    if (m_screenshotRequests.contains(requestId)) {
+        if (accepted)
+            m_screenshotRequests.remove(requestId);
+        else
+            failScreenshotRequests({requestId}, reason);
         return true;
     }
 
@@ -419,8 +444,7 @@ qulonglong NiriClient::requestWorkspaceFocus(const QString &output, int index)
         qWarning() << "Celestina could not send a workspace focus request.";
         m_requests.acknowledge(requestId, m_generation, false, nowMs());
     }
-    if (!m_requestTimer.isActive())
-        m_requestTimer.start();
+    startRequestSweep();
     if (rebuildWorkspaces())
         emit changed();
     scheduleRequestOutcomes();
@@ -429,11 +453,64 @@ qulonglong NiriClient::requestWorkspaceFocus(const QString &output, int index)
 
 void NiriClient::expireRequests()
 {
-    if (m_requests.expire(nowMs()) && rebuildWorkspaces())
+    const qint64 now = nowMs();
+    if (m_requests.expire(now) && rebuildWorkspaces())
         emit changed();
     scheduleRequestOutcomes();
-    if (m_requests.isEmpty())
+
+    // A screenshot or an action that ran out of time is reported through the
+    // same path a compositor refusal takes: whoever asked hears "failed" once,
+    // never silence, and the entry stops occupying the adapter's queue budget.
+    failScreenshotRequests(
+        expiredRequests(m_screenshotRequests, now),
+        tr("the Niri helper did not answer in time")
+    );
+    failActionRequests(
+        expiredRequests(m_actionRequests, now),
+        tr("the Niri helper did not answer in time")
+    );
+
+    if (m_requests.isEmpty() && m_screenshotRequests.isEmpty()
+        && m_actionRequests.isEmpty()) {
         m_requestTimer.stop();
+    }
+}
+
+void NiriClient::failScreenshotRequests(
+    const QList<quint64> &requestIds,
+    const QString &reason
+)
+{
+    bool refused = false;
+    for (const quint64 requestId : requestIds)
+        refused = m_screenshotRequests.remove(requestId) > 0 || refused;
+    if (!refused)
+        return;
+
+    // A screenshot has no per-request outcome to report — the panel only knows
+    // that the capture it asked for is not happening — so one refusal covers
+    // however many were in flight.
+    qWarning().noquote() << "Celestina's screenshot request failed:" << reason;
+    emit screenshotFailed(reason);
+}
+
+void NiriClient::failActionRequests(
+    const QList<quint64> &requestIds,
+    const QString &reason
+)
+{
+    for (const quint64 requestId : requestIds) {
+        if (m_actionRequests.remove(requestId) == 0)
+            continue;
+
+        emit actionFinished(requestId, QStringLiteral("failed"), reason);
+    }
+}
+
+void NiriClient::startRequestSweep()
+{
+    if (!m_requestTimer.isActive())
+        m_requestTimer.start();
 }
 
 void NiriClient::scheduleRequestOutcomes()
@@ -510,7 +587,8 @@ qulonglong NiriClient::requestScreenshot()
         return 0;
     }
 
-    m_screenshotRequests.insert(requestId);
+    m_screenshotRequests.insert(requestId, nowMs());
+    startRequestSweep();
     return requestId;
 }
 
@@ -520,7 +598,8 @@ qulonglong NiriClient::requestDisplaysOff()
     if (requestId == 0)
         return 0;
 
-    m_actionRequests.insert(requestId);
+    m_actionRequests.insert(requestId, nowMs());
+    startRequestSweep();
     return requestId;
 }
 
@@ -530,30 +609,25 @@ qulonglong NiriClient::requestLogOut()
     if (requestId == 0)
         return 0;
 
-    m_actionRequests.insert(requestId);
+    m_actionRequests.insert(requestId, nowMs());
+    startRequestSweep();
     return requestId;
 }
 
 void NiriClient::setUnavailable()
 {
-    // A helper that went away can no longer answer a screenshot request, and
-    // an unanswered request must not wait forever for a result that is not
-    // coming.
-    if (!m_screenshotRequests.isEmpty()) {
-        m_screenshotRequests.clear();
-        emit screenshotFailed(tr("el ayudante de Niri no está disponible"));
-    }
-
-    // The same for an action: whoever asked is told it failed rather than
-    // being left waiting on a compositor that is no longer being listened to.
-    const QSet<quint64> pendingActions = std::exchange(m_actionRequests, {});
-    for (const quint64 requestId : pendingActions) {
-        emit actionFinished(
-            requestId,
-            QStringLiteral("failed"),
-            tr("the Niri helper is unavailable")
-        );
-    }
+    // A helper that went away can no longer answer a screenshot or an action,
+    // and an unanswered request must not wait forever for a result that is not
+    // coming. Whoever asked is told it failed rather than being left waiting on
+    // a compositor that is no longer being listened to.
+    failScreenshotRequests(
+        m_screenshotRequests.keys(),
+        tr("el ayudante de Niri no está disponible")
+    );
+    failActionRequests(
+        m_actionRequests.keys(),
+        tr("the Niri helper is unavailable")
+    );
 
     // Nothing in flight can still be confirmed once the compositor's state is
     // gone; the requests fail rather than waiting out their timeout.

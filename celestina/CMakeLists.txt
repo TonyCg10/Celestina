@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.6.3 LANGUAGES CXX)
+project(celestina VERSION 0.6.4 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -173,6 +173,7 @@ qt_add_qml_module(celestina
         qml/MonthCalendar.qml
         qml/Wallpaper.qml
     RESOURCES
+        qml/ProviderReading.js
         ../celestina-style/icons/phone.svg
         ../celestina-style/icons/battery-charging.svg
 )
@@ -297,6 +298,8 @@ if(BUILD_TESTING)
         tests/shellservice_test.cpp
         src/shellservice.h
         src/shellservice.cpp
+        src/sessionactions.h
+        src/sessionactions.cpp
         src/sessionrequests.h
         src/sessionrequests.cpp
         src/niriclient.h

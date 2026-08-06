@@ -22,6 +22,7 @@
 //! testable without a clock.
 
 use crate::bounded;
+use crate::snapshot::MAX_TEXT_UNITS;
 
 /// How many notifications may be shown at once. A stack taller than this is a
 /// wall, and what it hides is the newest thing — the opposite of the point.
@@ -31,7 +32,13 @@ pub const MAX_VISIBLE: usize = 5;
 pub const MAX_HISTORY: usize = 50;
 pub const MAX_APP_NAME_CHARS: usize = 64;
 pub const MAX_SUMMARY_CHARS: usize = 120;
-pub const MAX_BODY_CHARS: usize = 800;
+/// A body is published inside a notification row, so it is bounded by what a
+/// row field may carry. It was once longer than that: the producer's body then
+/// passed this bound, failed the host's, and the host discards a whole frame
+/// rather than one field — one long notification froze every provider on the
+/// panel. Deriving it from the field bound is what keeps the two from drifting
+/// apart again.
+pub const MAX_BODY_CHARS: usize = MAX_TEXT_UNITS;
 pub const MAX_ICON_CHARS: usize = 256;
 /// Actions are buttons on a toast. More than this is a menu nobody asked for.
 pub const MAX_ACTIONS: usize = 4;
@@ -545,6 +552,23 @@ mod tests {
         assert_eq!(entry.app_name.chars().count(), MAX_APP_NAME_CHARS);
         assert_eq!(entry.summary.chars().count(), MAX_SUMMARY_CHARS);
         assert_eq!(entry.body.chars().count(), MAX_BODY_CHARS);
+
+        // The bound the host applies is in UTF-16 code units, so a body of
+        // astral characters is bounded by those units and not by how few
+        // characters they happen to be. This is what a row field may carry, so
+        // a body can never be the field that costs the frame.
+        server.post(
+            &Incoming {
+                body: "😀".repeat(5_000),
+                ..incoming("emoji")
+            },
+            0,
+        );
+        // Live entries keep the order they arrived in, so the emoji body is the
+        // second of the two.
+        let entry = &server.live()[1];
+        assert!(entry.body.encode_utf16().count() <= MAX_BODY_CHARS);
+        assert_eq!(entry.body.chars().count(), MAX_BODY_CHARS / 2);
     }
 
     #[test]

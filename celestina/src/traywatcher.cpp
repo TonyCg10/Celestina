@@ -20,6 +20,21 @@ constexpr auto watcherInterface = "org.kde.StatusNotifierWatcher";
 constexpr auto itemInterface = "org.kde.StatusNotifierItem";
 constexpr auto propertiesInterface = "org.freedesktop.DBus.Properties";
 constexpr auto menuInterface = "com.canonical.dbusmenu";
+constexpr auto busService = "org.freedesktop.DBus";
+constexpr auto busPath = "/org/freedesktop/DBus";
+constexpr auto busInterface = "org.freedesktop.DBus";
+
+// An item announces that something about it changed and expects the host to
+// ask again; none of these signals carry the whole truth. They are named once
+// because subscribing and unsubscribing must be the same set: a match rule the
+// host forgot to remove keeps a gone item's signals arriving for the rest of
+// the session.
+constexpr const char *itemSignals[] = {
+    "NewIcon",
+    "NewStatus",
+    "NewTitle",
+    "NewAttentionIcon",
+};
 
 QString itemKey(const QString &service, const QString &path)
 {
@@ -109,6 +124,11 @@ TrayWatcher::TrayWatcher(QSharedPointer<TrayIconCache> icons, QObject *parent)
         qInfo() << "Celestina is the session's tray watcher.";
 
     attach();
+}
+
+TrayWatcher::~TrayWatcher()
+{
+    forgetItems();
 }
 
 void TrayWatcher::attach()
@@ -201,9 +221,17 @@ void TrayWatcher::refreshRegistrations()
         const QStringList entries =
             reply.arguments().value(0).value<QDBusVariant>().variant().toStringList();
 
-        m_registrations.clear();
+        // The previous list's subscriptions go with it. Re-reading the registry
+        // happens every time a watcher appears, so leaving them would add four
+        // match rules per item to this connection on each takeover.
+        forgetItems();
         m_read.clear();
         for (const QString &entry : entries) {
+            // The watcher is another process and its list is as long as it
+            // likes; the panel accepts only as many items as it could show.
+            if (m_registrations.size() >= maxTrayItems)
+                break;
+
             QString service;
             QString path;
             if (!parseTrayRegistration(entry, &service, &path)) {
@@ -223,9 +251,7 @@ void TrayWatcher::refreshRegistrations()
 void TrayWatcher::watchItem(const QString &service, const QString &path)
 {
     QDBusConnection bus = QDBusConnection::sessionBus();
-    // An item announces that something about it changed and expects the host to
-    // ask again; none of these signals carry the whole truth.
-    for (const auto *signal : {"NewIcon", "NewStatus", "NewTitle", "NewAttentionIcon"}) {
+    for (const auto *signal : itemSignals) {
         bus.connect(
             service,
             path,
@@ -235,6 +261,86 @@ void TrayWatcher::watchItem(const QString &service, const QString &path)
             SLOT(itemPropertiesChanged())
         );
     }
+
+    if (service.startsWith(u':')) {
+        m_registeredOwners.insert(service, service);
+        return;
+    }
+
+    // Who is behind a well-known name is the bus daemon's answer, and it is
+    // asked for the same reason everything else here is asked asynchronously:
+    // the panel does not wait on anyone. Until it answers, that item's own
+    // change signals are simply not attributed to it — a late first icon, not a
+    // stalled panel.
+    QDBusMessage request = QDBusMessage::createMethodCall(
+        QString::fromLatin1(busService),
+        QString::fromLatin1(busPath),
+        QString::fromLatin1(busInterface),
+        QStringLiteral("GetNameOwner")
+    );
+    request.setArguments({service});
+
+    callAsync(this, request, [this, service, path](const QDBusMessage &reply) {
+        const QString owner = reply.arguments().value(0).toString();
+        // The item may have unregistered while the bus was answering; learning
+        // its owner then would leave an entry nothing ever removes.
+        if (owner.isEmpty() || !m_registrations.contains({service, path}))
+            return;
+        m_registeredOwners.insert(owner, service);
+    });
+}
+
+void TrayWatcher::unwatchItem(const QString &service, const QString &path)
+{
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    for (const auto *signal : itemSignals) {
+        bus.disconnect(
+            service,
+            path,
+            QString::fromLatin1(itemInterface),
+            QString::fromLatin1(signal),
+            this,
+            SLOT(itemPropertiesChanged())
+        );
+    }
+
+    // The owner is forgotten only once the application has no registration
+    // left: one process may publish several items behind the one unique name,
+    // and dropping it early would stop the others from updating.
+    for (const auto &registration : m_registrations) {
+        if (registration.first == service)
+            return;
+    }
+    for (auto owner = m_registeredOwners.begin(); owner != m_registeredOwners.end();) {
+        if (owner.value() == service)
+            owner = m_registeredOwners.erase(owner);
+        else
+            ++owner;
+    }
+}
+
+void TrayWatcher::forgetItems()
+{
+    const QList<QPair<QString, QString>> registrations = m_registrations;
+    m_registrations.clear();
+    for (const auto &registration : registrations)
+        unwatchItem(registration.first, registration.second);
+    m_registeredOwners.clear();
+}
+
+QPair<QString, QString> TrayWatcher::registrationFor(
+    const QString &sender,
+    const QString &path
+) const
+{
+    if (m_registrations.contains({sender, path}))
+        return {sender, path};
+
+    const QString registered = m_registeredOwners.value(sender);
+    if (!registered.isEmpty() && m_registrations.contains({registered, path}))
+        return {registered, path};
+
+    return {};
 }
 
 void TrayWatcher::readItem(const QString &service, const QString &path)
@@ -248,6 +354,13 @@ void TrayWatcher::readItem(const QString &service, const QString &path)
     request.setArguments({QString::fromLatin1(itemInterface)});
 
     callAsync(this, request, [this, service, path](const QDBusMessage &reply) {
+        // The item may have unregistered while it was answering. Its properties
+        // are then the last word of something that no longer exists, and
+        // inserting them would put back state that `itemUnregistered` has
+        // already removed and will never be asked to remove again.
+        if (!m_registrations.contains({service, path}))
+            return;
+
         // `GetAll` omits any property whose getter failed rather than failing
         // itself, which is how the one item here with no readable icon name
         // still arrives usable.
@@ -272,8 +385,14 @@ void TrayWatcher::itemRegistered(const QString &entry)
     if (!parseTrayRegistration(entry, &service, &path))
         return;
 
-    if (!m_registrations.contains({service, path}))
+    if (!m_registrations.contains({service, path})) {
+        // Same bound as the registry's, and for the same reason: each accepted
+        // item costs this connection four match rules, and a watcher that keeps
+        // announcing new ones must not be able to spend them all.
+        if (m_registrations.size() >= maxTrayItems)
+            return;
         m_registrations.append({service, path});
+    }
     watchItem(service, path);
     readItem(service, path);
 }
@@ -286,6 +405,7 @@ void TrayWatcher::itemUnregistered(const QString &entry)
         return;
 
     m_registrations.removeAll({service, path});
+    unwatchItem(service, path);
     const QString key = itemKey(service, path);
     m_read.remove(key);
     m_iconSources.remove(key);
@@ -297,12 +417,21 @@ void TrayWatcher::itemUnregistered(const QString &entry)
 void TrayWatcher::itemPropertiesChanged()
 {
     // The signal says only "ask again", and does not say which property moved.
-    const QString service = message().service();
+    //
+    // The sender is a unique name, always: the bus rewrites it whatever name
+    // the application registered its item under. Asking that name for the
+    // properties would read an item that is registered under nothing the panel
+    // knows, so the registration it belongs to is resolved instead.
+    const QString sender = message().service();
     const QString path = message().path();
-    if (service.isEmpty() || path.isEmpty())
+    if (sender.isEmpty() || path.isEmpty())
         return;
 
-    readItem(service, path);
+    const auto registration = registrationFor(sender, path);
+    if (registration.first.isEmpty())
+        return;
+
+    readItem(registration.first, registration.second);
 }
 
 QString TrayWatcher::resolveIcon(const TrayItem &item, const QVariantMap &properties)
@@ -381,7 +510,9 @@ void TrayWatcher::publish()
 
 void TrayWatcher::setUnavailable()
 {
-    m_registrations.clear();
+    // The items belonged to a session that no longer exists, and so do the
+    // subscriptions to them.
+    forgetItems();
     m_read.clear();
     for (const QString &key : m_iconSources.keys())
         m_icons->remove(key);

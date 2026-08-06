@@ -1,9 +1,11 @@
 #pragma once
 
 #include <QDBusContext>
+#include <QDBusError>
 #include <QHash>
 #include <QObject>
 #include <QPointer>
+#include <QString>
 #include <QTimer>
 #include <QElapsedTimer>
 #include <QVariantMap>
@@ -83,6 +85,15 @@ public:
     static QString objectPath();
     static QString interfaceName();
 
+    // Why the last refused request was refused, cleared as it is read.
+    //
+    // A bus caller learns this from the error reply QtDBus sends it. An
+    // in-process caller has no such reply — there is no message behind its
+    // call — so it collects the same sentence here instead of inventing its
+    // own. This is deliberately an ordinary method: a slot or a signal would
+    // be exported and would widen the session interface.
+    QString takeRefusalReason();
+
 public slots:
     // The shell's current state, always carrying `version`.
     QVariantMap GetState();
@@ -142,6 +153,15 @@ private:
     // unlike `focusWorkspace`: it resolves the moment it runs, so it needs no
     // entry in `m_focusRequests`.
     qulonglong toggleOverlay(OverlayController *controller, const QString &verb);
+    // Refuses the request being served and answers whoever asked.
+    //
+    // `QDBusContext` carries a call context only while QtDBus is dispatching a
+    // real message; `sendErrorReply` dereferences that context unconditionally,
+    // so calling it for an in-process caller crashes the shell. Every refusal
+    // goes through here: the reply is sent only when there is a message to
+    // reply to, and the reason is always retained for `takeRefusalReason`.
+    // Returning `0` is what a refused `Command` answers.
+    qulonglong refuse(QDBusError::ErrorType type, const QString &message);
 
     QPointer<NiriClient> m_niri;
     QPointer<OverlayController> m_launcher;
@@ -164,5 +184,8 @@ private:
     QHash<qulonglong, qulonglong> m_actionRequests;
     // Which verb each of those was, so the outcome says what it answered.
     QHash<qulonglong, QString> m_actionVerbs;
+    // The last refusal's sentence, held only until the caller that caused it
+    // reads it. One request is served at a time, so one slot is enough.
+    QString m_refusalReason;
     qulonglong m_lastRequestId = 0;
 };
