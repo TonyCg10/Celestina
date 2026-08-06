@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use celestina_core::Generation;
+use celestina_core::{percent, Generation};
 use magnetita_core::{MediaAction, PlayerState};
 use magnetita_net::TrustStore;
 use zbus::zvariant::{OwnedValue, Value};
@@ -342,10 +342,74 @@ pub enum Command {
     /// Ring the device (find-my-phone).
     Ring,
     /// Send this local file to the device.
-    SendFile(String),
+    ///
+    /// A `PathBuf`, not a `String`: a Linux filename is a byte string that is
+    /// not required to be UTF-8, and the whole point of
+    /// [`Devices::send_file_uri`] is that those bytes reach `serve_file`
+    /// unaltered.
+    SendFile(PathBuf),
     /// Send a media transport verb ("PlayPause", "Next", "Previous") to the
     /// phone's active player.
     Media(MediaAction),
+}
+
+/// Why a URI handed to [`Devices::send_file_uri`] names no local file.
+///
+/// Each variant is a different mistake by the caller, distinguished so the
+/// D-Bus refusal can say which rather than only that something was wrong.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FileUriError {
+    /// Not a `file://` URI at all.
+    NotFileScheme,
+    /// A `file://` URI carrying an authority that is not this host.
+    NotLocal,
+    /// A `%` escape that is not two hexadecimal digits, an empty path, or a
+    /// path that is not absolute.
+    Malformed,
+}
+
+impl std::fmt::Display for FileUriError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Product copy: this reaches the caller as the D-Bus error message.
+        formatter.write_str(match self {
+            Self::NotFileScheme => "se esperaba un URI file://",
+            Self::NotLocal => "el URI file:// apunta a otro equipo",
+            Self::Malformed => "el URI file:// está mal formado",
+        })
+    }
+}
+
+/// The local path a percent-encoded `file://` URI names, decoded by bytes.
+///
+/// The inverse of the encoder Siderita's `dbus::path_to_uri` and the suite's
+/// clipboard already use, and it adds no codec: the escapes are
+/// [`celestina_core::percent`]'s, in its strict reading, because a malformed
+/// escape here means the sender is not speaking this contract and guessing at
+/// its intent is how a transfer reaches the wrong file.
+fn path_for_file_uri(uri: &str) -> Result<PathBuf, FileUriError> {
+    let rest = uri
+        .strip_prefix("file://")
+        .ok_or(FileUriError::NotFileScheme)?;
+    let encoded = match rest.find('/') {
+        // No authority: the path starts immediately.
+        Some(0) => rest,
+        // `file://localhost/...` is the same host spelled the long way.
+        Some(index) if &rest[..index] == "localhost" => &rest[index..],
+        Some(_) => return Err(FileUriError::NotLocal),
+        None if rest.is_empty() => return Err(FileUriError::Malformed),
+        None => return Err(FileUriError::NotLocal),
+    };
+    let bytes = percent::decode_strict(encoded).ok_or(FileUriError::Malformed)?;
+    // A NUL cannot appear in a filename, and a path holding one would be
+    // truncated by every syscall that received it.
+    if bytes.is_empty() || bytes.contains(&0) {
+        return Err(FileUriError::Malformed);
+    }
+    let path = percent::path_from_bytes(&bytes);
+    if !path.is_absolute() {
+        return Err(FileUriError::Malformed);
+    }
+    Ok(path)
 }
 
 /// The per-device command channels, keyed by device id. A link registers its
@@ -503,8 +567,35 @@ impl Devices {
         self.forward(&device_id, Command::Ring)
     }
 
-    /// Send a local file to the connected device (Siderita's "Enviar al móvil").
+    /// Send a local file to the connected device, named by a plain path.
+    ///
+    /// Kept for compatibility and unchanged: this is a published interface, and
+    /// altering what its argument means would break any other caller. A `String`
+    /// argument cannot carry a filename that is not valid UTF-8, so a caller
+    /// that converted a path lossily names a file this daemon will not find.
+    /// The byte-exact path is [`Self::send_file_uri`], and new callers use it.
     fn send_file(&self, device_id: String, path: String) -> zbus::fdo::Result<()> {
+        self.forward(&device_id, Command::SendFile(PathBuf::from(path)))
+    }
+
+    /// Send a local file to the connected device, named by its percent-encoded
+    /// `file://` URI — the byte-exact path, and the one a new caller uses.
+    ///
+    /// The spelling is the one the suite already speaks at every boundary where
+    /// a path leaves a process: the document portal, the clipboard, and a drag
+    /// payload. It is decoded by bytes, so a name that is not valid UTF-8
+    /// arrives as the bytes on disk rather than with a U+FFFD where the byte
+    /// was, which is a file that does not exist. `%23` and `%3F` are ordinary
+    /// name characters here, not URI syntax, because the encoder that produced
+    /// this escaped them for exactly that reason.
+    ///
+    /// A URI that is not a local `file://` one, or whose escapes are malformed,
+    /// is refused with a typed reason rather than salvaged into some other
+    /// path: a malformed URI did not come from a caller that knows this
+    /// contract.
+    fn send_file_uri(&self, device_id: String, uri: String) -> zbus::fdo::Result<()> {
+        let path = path_for_file_uri(&uri)
+            .map_err(|error| zbus::fdo::Error::InvalidArgs(error.to_string()))?;
         self.forward(&device_id, Command::SendFile(path))
     }
 
@@ -575,12 +666,14 @@ impl Devices {
 #[cfg(test)]
 mod tests {
     use super::{
-        command_channel, install_artwork, set_media, set_verification_key, Command, DeviceEntry,
-        Registry, COMMAND_QUEUE_CAPACITY,
+        command_channel, install_artwork, path_for_file_uri, set_media, set_verification_key,
+        Command, DeviceEntry, FileUriError, Registry, COMMAND_QUEUE_CAPACITY,
     };
     use crate::lock::LockOk;
     use magnetita_core::PlayerState;
     use std::collections::BTreeMap;
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
 
@@ -609,6 +702,87 @@ mod tests {
             pos: 30_000,
             ..PlayerState::default()
         }
+    }
+
+    /// The bytes a `SendFile` over a `String` cannot carry: the name the whole
+    /// URI path exists for. A byte fixture, not text.
+    fn non_utf8_path() -> PathBuf {
+        PathBuf::from(OsStr::from_bytes(b"/home/u/na\xffme"))
+    }
+
+    #[test]
+    fn a_file_uri_round_trips_to_the_bytes_on_disk() {
+        // The spelling `celestina_core::percent::encode` produces, which is
+        // what Siderita's `dbus::path_to_uri` hands over.
+        assert_eq!(
+            path_for_file_uri("file:///home/u/na%FFme"),
+            Ok(non_utf8_path())
+        );
+        assert_eq!(
+            path_for_file_uri("file:///home/u/mis%20fotos/a.txt"),
+            Ok(PathBuf::from("/home/u/mis fotos/a.txt"))
+        );
+        // `#` and `?` are name characters here, not URI syntax: the encoder
+        // escaped them precisely so the name would not be read as ending early.
+        assert_eq!(
+            path_for_file_uri("file:///home/u/informe%233.pdf"),
+            Ok(PathBuf::from("/home/u/informe#3.pdf"))
+        );
+        // An empty authority and `localhost` both name this host.
+        assert_eq!(
+            path_for_file_uri("file://localhost/etc/hosts"),
+            Ok(PathBuf::from("/etc/hosts"))
+        );
+    }
+
+    #[test]
+    fn a_uri_that_is_not_a_local_file_is_refused_with_its_reason() {
+        assert_eq!(
+            path_for_file_uri("http://example.com/x"),
+            Err(FileUriError::NotFileScheme)
+        );
+        assert_eq!(
+            path_for_file_uri("/home/u/plain"),
+            Err(FileUriError::NotFileScheme)
+        );
+        assert_eq!(
+            path_for_file_uri("file://otro-equipo/etc/hosts"),
+            Err(FileUriError::NotLocal)
+        );
+        assert_eq!(
+            path_for_file_uri("file://host"),
+            Err(FileUriError::NotLocal)
+        );
+        // A malformed escape is refused rather than salvaged into some path.
+        assert_eq!(
+            path_for_file_uri("file:///home/u/bad%2"),
+            Err(FileUriError::Malformed)
+        );
+        assert_eq!(
+            path_for_file_uri("file:///home/u/bad%zz"),
+            Err(FileUriError::Malformed)
+        );
+        assert_eq!(path_for_file_uri("file://"), Err(FileUriError::Malformed));
+        assert_eq!(
+            path_for_file_uri("file:///a%00b"),
+            Err(FileUriError::Malformed)
+        );
+    }
+
+    #[test]
+    fn the_command_the_uri_becomes_carries_the_bytes_unaltered() {
+        let path = path_for_file_uri("file:///home/u/na%FFme").expect("a local file URI");
+        let command = Command::SendFile(path);
+        let Command::SendFile(carried) = command else {
+            unreachable!("the variant just constructed")
+        };
+        assert_eq!(carried, non_utf8_path());
+        // What the old surface does with the same name, and why it is not the
+        // byte-exact path: a `String` cannot hold the byte at all.
+        assert_ne!(
+            PathBuf::from(non_utf8_path().to_string_lossy().to_string()),
+            non_utf8_path()
+        );
     }
 
     #[test]

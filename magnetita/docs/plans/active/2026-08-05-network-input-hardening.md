@@ -84,6 +84,7 @@ build or deployment, so the units stay `active` until that is requested.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | MAG-S1-A | `magnetita:` | done | [inventory](../../inventories/2026-08-05-network-input-hardening/MAG-S1-A.numstat.tsv) | 34 files, +1987/-387 | Validate the SFTP user, path and password at the decode boundary and drop the peer-supplied `ip`, so a mount argument can no longer become an `ssh` option or point at a host of the phone's choosing; give the whole handshake one absolute deadline and log an exhausted admission pool; floor the protocol at version 8 and take the peer's identity only from the encrypted re-exchange, dialling only a local address on the announced port and publishing a device entry only after the trust check; extract the bounded-subprocess discipline from the media worker and apply it to the clipboard and the mount; write the private key 0600 and atomically; bound peer-supplied text and the notification map; and render remote strings as plain text | `cargo test`, `cargo clippy`, `cargo fmt` for the three crates and the application — recorded in [network input hardening evidence](../../evidence/2026-08-05-network-input-hardening.md) | `VAL-MAG-HARDENING` |
+| MAG-S1-B | `magnetita:` | done | [inventory](../../inventories/2026-08-05-network-input-hardening/MAG-S1-B.numstat.tsv) | 9 files, +345/-10 | Add `SendFileUri`, which names the file by the percent-encoded `file://` URI the portal and the clipboard already speak, decodes it by bytes with the codec `celestina_core::percent` already owns, and refuses a URI that is not a local `file://` one or whose escapes are malformed with a typed reason; carry the resulting path through the existing `Command::SendFile` as a `PathBuf` rather than a `String`, so a filename that is not valid UTF-8 reaches `serve_file` unaltered; and leave `SendFile` exactly as it is for compatibility | `cargo fmt --all --check`, `cargo clippy --all-targets --locked -- -D warnings`, `cargo test --all-targets --locked` for the workspace excluding `celestina-shell-core` — recorded in [byte-exact send evidence](../../evidence/2026-08-06-byte-exact-send-to-phone.md) | `VAL-MAG-HARDENING` |
 
 Every unit stays `active`. A `done` unit requires an exact immutable inventory
 and the single commit that carries it, and the author has not requested a
@@ -105,3 +106,22 @@ and fixed against each other in the same files — the mount is both the injecti
 sink and a subprocess to bound, the certificate module holds both the
 verification key and the private-key write — so exclusive per-step inventories
 would claim a boundary a single commit cannot produce.
+
+## MAG-S1-B — the byte-exact path in
+
+`MAG-S1-B` is not a network-input finding; it joins this plan because it is the
+same discipline at the same layer — a value arriving from outside the daemon is
+validated where it becomes typed, and refused rather than salvaged — and because
+`SendFile`'s argument is the one remaining input to `org.celestina.Devices1`
+that was trusted to be well formed.
+
+The decision it applies was taken outside it, in stage 3 of the
+[light monorepo audit](../../../../docs/evidence/2026-08-06-light-monorepo-audit.md):
+`SendFile` is a published interface, so its meaning does not change and its
+argument keeps carrying a plain path for whatever else may call it. A caller
+that needs the bytes uses the new method. Siderita's send-to-phone menu item is the
+first, under `SID-G7-G`.
+
+The one internal change is `Command::SendFile`'s payload, which becomes a
+`PathBuf`. A `String` cannot hold a filename that is not valid UTF-8 at all, so
+leaving it would have thrown away the bytes one line after decoding them.

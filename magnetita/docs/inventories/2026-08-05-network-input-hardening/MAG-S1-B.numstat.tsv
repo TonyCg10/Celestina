@@ -1,0 +1,21 @@
+# MAG-S1-B exact change inventory
+
+Base revision	9c210a5b8dbf7636ee706f2d3f3a2b9bc61129bb
+Pathspec	magnetita/
+Pathspec	celestina-rs/crates/magnetita-core/
+Pathspec	celestina-rs/crates/magnetita-net/
+Pathspec	celestina-rs/crates/magnetitad/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+179	5	de2b3d6c62ae6208b4c20587948d8e2c273131d01fe18695eaf8e9b146e8ef99	celestina-rs/crates/magnetitad/src/devices.rs
+0	2	708ee65707ed900c9b23a84a380a27885677cd3bdbcd09305fd65c41044613a4	celestina-rs/crates/magnetitad/src/link_commands.rs
+1	0	8d7bbaa4d793a80c954f715a29250dad173547213b365024b6033d02af6745e4	docs/version-history.tsv
+1	1	1be74a835f620b8964a93459b4213de1777b4e065cb85f1f14a6b6482d463c69	magnetita/Cargo.lock
+1	1	1b7fdc518892a5a6954a5ddab4207ff5d73700a917ba5c2f839fe3d8d384f5a5	magnetita/Cargo.toml
+22	1	9d418cc9adc8faccbb88d423454f2d49def18ec3ff9dc183fd63795e54d241df	magnetita/STATUS.md
+100	0	12d732973367d350b74d237823c7511a2541ca425bbec79c2c8f8438820db41e	magnetita/docs/evidence/2026-08-06-byte-exact-send-to-phone.md
+20	0	b5c2b3b36e23faa0051c3be9e3ec0301deb2f21c92e8154607a94296a6efcc72	magnetita/docs/plans/active/2026-08-05-network-input-hardening.md
+21	0	self	magnetita/docs/inventories/2026-08-05-network-input-hardening/MAG-S1-B.numstat.tsv

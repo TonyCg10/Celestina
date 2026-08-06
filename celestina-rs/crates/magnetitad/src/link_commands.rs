@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 use std::error::Error;
-use std::path::PathBuf;
 use std::sync::{mpsc, Mutex};
 
 use celestina_core::CancellationToken;
@@ -175,7 +174,6 @@ impl Daemon {
                 Command::Media(_) => {}
                 Command::SendFile(_) if !device.is_paired() || !settings.share => {}
                 Command::SendFile(path) => {
-                    let path = PathBuf::from(&path);
                     let name = path
                         .file_name()
                         .and_then(|name| name.to_str())
