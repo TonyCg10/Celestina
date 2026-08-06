@@ -192,17 +192,7 @@ pub fn scan_directory(request: &ScanRequest) -> Result<DirectorySnapshot, ScanEr
 
     let directory = fs::read_dir(&request.location)
         .map_err(|error| io_error(request, request.location.clone(), error))?;
-    let mut entries = Vec::new();
-
-    for candidate in directory {
-        ensure_not_cancelled(request)?;
-        let candidate =
-            candidate.map_err(|error| io_error(request, request.location.clone(), error))?;
-        let candidate_path = candidate.path();
-        let entry = DirectoryEntry::read(&request.location, &parent_metadata, candidate)
-            .map_err(|error| io_error(request, candidate_path, error))?;
-        entries.push(entry);
-    }
+    let mut entries = read_entries(request, &parent_metadata, directory)?;
 
     entries.sort_by(compare_entries);
 
@@ -214,6 +204,41 @@ pub fn scan_directory(request: &ScanRequest) -> Result<DirectorySnapshot, ScanEr
         accessed: parent_metadata.accessed().ok(),
         created: parent_metadata.created().ok(),
     })
+}
+
+/// Turns the directory iterator into entries, dropping the names that stopped
+/// existing while it ran.
+///
+/// An entry that vanished between `read_dir` and its metadata read is an entry
+/// that is no longer in the directory, not a directory that cannot be listed —
+/// and a watched folder is rescanned precisely because it is changing, so this
+/// is the ordinary case rather than the exceptional one. Aborting there would
+/// throw away every other name for one file a download or a build just removed.
+/// Any other error still fails the scan.
+fn read_entries<I>(
+    request: &ScanRequest,
+    parent_metadata: &fs::Metadata,
+    directory: I,
+) -> Result<Vec<DirectoryEntry>, ScanError>
+where
+    I: IntoIterator<Item = io::Result<fs::DirEntry>>,
+{
+    let mut entries = Vec::new();
+    for candidate in directory {
+        ensure_not_cancelled(request)?;
+        let candidate = match candidate {
+            Ok(candidate) => candidate,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(io_error(request, request.location.clone(), error)),
+        };
+        let candidate_path = candidate.path();
+        match DirectoryEntry::read(&request.location, parent_metadata, candidate) {
+            Ok(entry) => entries.push(entry),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(io_error(request, candidate_path, error)),
+        }
+    }
+    Ok(entries)
 }
 
 fn ensure_not_cancelled(request: &ScanRequest) -> Result<(), ScanError> {
@@ -358,6 +383,68 @@ mod tests {
         assert_eq!(snapshot.entries().len(), 3);
         assert_eq!(snapshot.visible_entries(false).count(), 2);
         assert_eq!(snapshot.visible_entries(true).count(), 3);
+    }
+
+    #[test]
+    fn an_entry_that_vanishes_mid_scan_is_skipped_not_fatal() {
+        let fixture = TestDirectory::new("vanishing");
+        fs::write(fixture.path().join("stays"), b"content").expect("write fixture");
+        fs::write(fixture.path().join("goes"), b"content").expect("write fixture");
+
+        // The directory iterator is taken first, then one of its names is
+        // removed: exactly the window a watcher-driven rescan races with.
+        let listing: Vec<_> = fs::read_dir(fixture.path())
+            .expect("read fixture directory")
+            .collect();
+        fs::remove_file(fixture.path().join("goes")).expect("remove fixture entry");
+
+        let mut coordinator = ScanCoordinator::new();
+        let request = coordinator
+            .begin(fixture.path())
+            .expect("issue scan request");
+        let parent = fs::metadata(fixture.path()).expect("read parent metadata");
+        let entries =
+            super::read_entries(&request, &parent, listing).expect("listing survives the removal");
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].raw_name(), OsString::from("stays").as_os_str());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_reports_its_kind_and_whether_it_leads_to_a_directory() {
+        let fixture = TestDirectory::new("symlinks");
+        fs::create_dir(fixture.path().join("target")).expect("create target directory");
+        fs::write(fixture.path().join("file"), b"content").expect("write fixture");
+        std::os::unix::fs::symlink(fixture.path().join("target"), fixture.path().join("to-dir"))
+            .expect("link to the directory");
+        std::os::unix::fs::symlink(fixture.path().join("file"), fixture.path().join("to-file"))
+            .expect("link to the file");
+        std::os::unix::fs::symlink(fixture.path().join("absent"), fixture.path().join("dangling"))
+            .expect("link to nothing");
+
+        let mut coordinator = ScanCoordinator::new();
+        let request = coordinator
+            .begin(fixture.path())
+            .expect("issue scan request");
+        let snapshot = scan_directory(&request).expect("scan fixture");
+        let by_name = |name: &str| {
+            snapshot
+                .entries()
+                .iter()
+                .find(|entry| entry.raw_name() == OsString::from(name).as_os_str())
+                .expect("entry is listed")
+        };
+
+        // The kind still describes the entry itself; only the target question
+        // follows the link.
+        assert_eq!(by_name("to-dir").kind(), EntryKind::Symlink);
+        assert!(by_name("to-dir").targets_directory());
+        assert_eq!(by_name("to-file").kind(), EntryKind::Symlink);
+        assert!(!by_name("to-file").targets_directory());
+        assert!(!by_name("dangling").targets_directory());
+        assert!(by_name("target").targets_directory());
+        assert!(!by_name("file").targets_directory());
     }
 
     #[test]

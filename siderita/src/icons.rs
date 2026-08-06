@@ -100,23 +100,15 @@ fn serialize(overrides: &HashMap<String, IconAppearance>) -> String {
     body
 }
 
-/// Persists the overrides through a sibling temporary file and atomic rename.
-/// A crash cannot therefore truncate every saved appearance halfway through a
-/// write. This touches only Siderita's own config, never the user's files.
+/// Persists the overrides through the suite's atomic replacement: a sibling
+/// temporary, synced, then renamed over the file. A crash cannot therefore
+/// truncate every saved appearance halfway through a write. This touches only
+/// Siderita's own config, never the user's files.
 pub fn save(overrides: &HashMap<String, IconAppearance>) -> io::Result<()> {
     let Some(path) = config_file() else {
         return Ok(());
     };
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let temporary = path.with_extension(format!("conf.tmp.{}", std::process::id()));
-    let result =
-        fs::write(&temporary, serialize(overrides)).and_then(|()| fs::rename(&temporary, &path));
-    if result.is_err() {
-        let _ = fs::remove_file(&temporary);
-    }
-    result
+    celestina_core::atomic_file::replace(&path, serialize(overrides).as_bytes())
 }
 
 #[cfg(test)]

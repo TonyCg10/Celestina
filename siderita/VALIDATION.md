@@ -63,6 +63,35 @@ corrective implementation unit.
 - **Result:** deferred until SID-M1 produces its verified artifact
 - **Evidence:** window tree plus dated requester outcomes
 
+## VAL-SID-05 — Destructive verbs and portal answers with a real requester
+
+- **Status:** pending
+- **Related implementation:** SID-G7-C
+- **Requires:** the deployed Siderita binary and portal backend, a real Wayland
+  session, one sandboxed or portal-using application that opens and saves files,
+  a folder holding a symlink to another directory, and a scratch folder that can
+  be safely written into during the test
+- **Procedure:** copy a file and paste it into the folder it already lives in;
+  start a large copy and, while it runs, try "Enviar a la papelera" from the
+  context menu; watch a folder while another process writes into it; activate a
+  symlink that points at a directory; permanently delete one entry from the
+  trash while the list holds several; drag files from another manager into
+  Siderita, including one whose name is not valid UTF-8; then, from the other
+  application, open a file read-only and save over an existing name
+- **Pass condition:** the paste duplicates instead of removing the original; the
+  trash verb is refused while the copy runs and the copy stays cancellable; the
+  watched folder never flashes a read error; the symlink opens as a folder; the
+  purge removes the entry that was chosen; the drop pastes every file it can
+  and reports the ones it cannot; and the requester receives no write access it
+  did not ask for and is asked before overwriting
+- **Result:** not run
+- **Evidence:** none
+
+The unit's automated lane is compilation and unit tests, recorded in the
+[destructive-operation guards evidence](docs/evidence/2026-08-05-destructive-operation-guards.md).
+It cannot serve a real portal request, and this project has already seen a
+picker look broken for a reason that lived entirely in the requester.
+
 ## VAL-SID-G7 — Numbered text panes and the shared text size
 
 - **Status:** pending

@@ -229,7 +229,9 @@ ApplicationWindow {
     // bytes to classify, and asking would be a wasted read.
     function activateEntry(controller, token) {
         const index = controller.indexForToken(token)
-        if (index < 0 || controller.entryKind(index) === "directory") {
+        // A symlinked folder counts as a folder here: it has no bytes worth
+        // classifying and activating it navigates.
+        if (index < 0 || controller.entryTargetsDirectory(index)) {
             controller.activateToken(token)
             return
         }
@@ -428,8 +430,14 @@ ApplicationWindow {
                 entryDragGhost.Drag.keys = entryIsDir
                     ? ["siderita-entry", "siderita-bookmark"]
                     : ["siderita-entry"]
+                // The URI comes from the same Rust codec that answers the
+                // portal, not from `encodeURI`: that one leaves `#` and `?`
+                // raw, so dragging `informe#3.pdf` handed the receiving
+                // application a URI that ended at the `#`. The session store is
+                // a controller that owns no tab, which is why it can be asked
+                // from window scope.
                 entryDragGhost.Drag.mimeData = {
-                    "text/uri-list": "file://" + encodeURI(entryPath) + "\r\n"
+                    "text/uri-list": sessionStore.pathUri(entryPath) + "\r\n"
                 }
             }
         }

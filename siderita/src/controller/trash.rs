@@ -221,13 +221,32 @@ impl qobject::SideritaController {
             self.as_mut().set_trash_active(false);
         }
     }
-    /// Permanently deletes one trashed entry by index, then refreshes the view.
-    pub fn purge_trash(mut self: Pin<&mut Self>, index: i32) {
+    /// The `.trashinfo` record of the trashed entry whose body sits at `trashed`,
+    /// if that entry is still in the loaded list and its record still exists.
+    ///
+    /// The identity of a trashed entry is its own path, never its position: the
+    /// list is reloaded after every restore, purge and empty, so a row index
+    /// captured when a menu opened can name a different entry by the time the
+    /// menu item is clicked — and "Eliminar permanentemente" is irreversible.
+    fn trash_record(&self, trashed: &QString) -> Option<PathBuf> {
+        let trashed = PathBuf::from(trashed.to_string());
+        if trashed.as_os_str().is_empty() {
+            return None;
+        }
+        let info = self
+            .rust()
+            .trash_entries
+            .iter()
+            .find(|entry| entry.trashed == trashed)
+            .map(|entry| entry.info.clone())?;
+        info.exists().then_some(info)
+    }
+
+    /// Permanently deletes the trashed entry whose body sits at `trashed`, then
+    /// refreshes the view.
+    pub fn purge_trash(mut self: Pin<&mut Self>, trashed: &QString) {
         self.as_mut().set_op_error(QString::default());
-        let Ok(index) = usize::try_from(index) else {
-            return;
-        };
-        let Some(info) = self.rust().trash_entries.get(index).map(|e| e.info.clone()) else {
+        let Some(info) = self.trash_record(trashed) else {
             return;
         };
         match siderita_ops::purge_from_trash(&info) {
@@ -242,15 +261,12 @@ impl qobject::SideritaController {
                 .set_op_error(QString::from(error.to_string().as_str())),
         }
     }
-    /// Restores the trashed entry at `index` in the loaded Trash list, then
-    /// refreshes both the Trash view and the current folder (the entry may
-    /// reappear there). A refusal (its origin is taken) surfaces as `op_error`.
-    pub fn restore_trash(mut self: Pin<&mut Self>, index: i32) {
+    /// Restores the trashed entry whose body sits at `trashed`, then refreshes
+    /// both the Trash view and the current folder (the entry may reappear
+    /// there). A refusal (its origin is taken) surfaces as `op_error`.
+    pub fn restore_trash(mut self: Pin<&mut Self>, trashed: &QString) {
         self.as_mut().set_op_error(QString::default());
-        let Ok(index) = usize::try_from(index) else {
-            return;
-        };
-        let Some(info) = self.rust().trash_entries.get(index).map(|e| e.info.clone()) else {
+        let Some(info) = self.trash_record(trashed) else {
             return;
         };
         match siderita_ops::restore_from_trash(&info, &CancellationToken::new()) {

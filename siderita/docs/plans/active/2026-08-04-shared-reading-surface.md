@@ -82,12 +82,25 @@ commit cannot produce.
 |---|---|---|---|---|---|---|---|
 | SID-G7-A | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-A.numstat.tsv) | 20 files, +715/-45 | Adopt the shared reading controls and the core caret mapping in both text surfaces, over a re-reading preferences adapter, and retire the three baseline rows the change earns | [evidence](../../evidence/2026-08-04-shared-reading-surface.md) | `VAL-SID-G7` |
 | SID-G7-B | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-B.numstat.tsv) | 17 files, +620/-54 | Turn the portal picker into a compact dialog and import its bounded Wayland parent handle through the narrow C++/Qt seam | [portal picker evidence](../../evidence/2026-08-05-portal-picker.md) | `VAL-SID-02`, `VAL-SID-04` |
+| SID-G7-C | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-C.numstat.tsv) | 34 files, +1263/-229 | Treat an entry pasted into its own folder as a duplicate instead of trashing it to make room for itself; answer the portal's `writable` only when it was asked for and confirm an overwrite before returning a save destination; guard trash behind the running-operation check that paste already had; skip an entry that vanished mid-scan instead of failing the listing, and keep a quiet refresh quiet; navigate a symlink that points at a directory; purge a trash entry by its own info path rather than by list position; decode dropped URIs by bytes in Rust; write the four remaining configuration files atomically; and move paste planning and execution out of the coordinator into `controller/paste.rs`, lowering its earned baseline row from 1223 to 1171 | `cargo check`, `cargo test`, `cargo fmt` in `siderita/` and for the `siderita-*` crates — recorded in [destructive-operation guards evidence](../../evidence/2026-08-05-destructive-operation-guards.md) | `VAL-SID-05` |
 
 SID-G7-B is the independent portal correction that was already in the dirty
 checkout when the author requested every pending change be delivered. It does
 not extend the shared reading-surface rules. Its C++ seam exists because Qt's
 private Wayland surface interface and generated `xdg-foreign` protocol are not
 available through the safe CXX-Qt boundary.
+
+SID-G7-C is a corrective delivery from the suite audit in
+[`docs/evidence/2026-08-05-static-suite-audit.md`](../../../../docs/evidence/2026-08-05-static-suite-audit.md):
+findings `SID-A1`, `SID-A3`, `SID-M1` to `SID-M5`, `SID-M7`, `SID-M8` and the
+cheap `SID-B4`, `SID-B5`, `SID-B6`, `SID-B9`. Two themes hold it together: an
+operation never destroys what it was asked to preserve, and the portal backend
+answers other applications only what they actually asked for. It stays `active`
+because the author asked for the code and its tests without the production
+flow, so it has neither an inventory nor a version transition. `SID-A2` — the
+lossy Qt seam for non-UTF-8 names — and `SID-M6` — the inherent cross-device
+move window — are deliberately outside it; the first needs one decision shared
+with Fluorita, the second a design choice about renaming before copying.
 
 ## Decisions and rollback
 

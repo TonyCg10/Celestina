@@ -105,7 +105,7 @@ fn save_to(path: &Path, records: &[FolderView]) -> io::Result<()> {
             record.path, record.view_mode, record.sort_field, record.sort_ascending
         ));
     }
-    fs::write(path, text)
+    celestina_core::atomic_file::replace(path, text.as_bytes())
 }
 
 #[cfg(test)]

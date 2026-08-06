@@ -53,7 +53,13 @@ Window {
     // Las pastillas del picker comparten este fondo, así que se decide una vez.
     readonly property bool gridScrolls: entryGrid.contentHeight > entryGrid.height
 
+    // "save" and "saves" both save, but only "save" asks the user for a name:
+    // `SaveFiles` supplies its own list and needs a *folder*, which the backend
+    // already reflects by requesting a directory dialog. Keeping the two apart
+    // is what stopped the multi-file case from showing one name field and
+    // answering with one path.
     readonly property bool saving: mode === "save" || mode === "saves"
+    readonly property bool namingFile: mode === "save"
     readonly property string acceptText:
             acceptLabel.length > 0 ? acceptLabel
             : saving ? "Guardar"
@@ -202,17 +208,38 @@ Window {
     // being shown unless one is selected; a save answers with the typed name in
     // the current folder; an open answers with the selection.
     function chosenPaths() {
-        if (saving) {
+        if (namingFile) {
             const name = pickerChrome.nameText.trim()
-            if (name.length === 0 || name.indexOf("/") >= 0)
+            // `.` and `..` name the folder itself and its parent, not a file to
+            // write: composing them would answer with a directory path. A name
+            // carrying a separator would leave the folder the user chose.
+            if (name.length === 0 || name.indexOf("/") >= 0
+                    || name === "." || name === "..")
                 return []
             return [controller.currentPath + "/" + name]
         }
+        // A directory request — including `SaveFiles`, whose per-file names the
+        // backend composes against this folder — answers with the folder shown
+        // unless one is selected.
         if (directory) {
             const selected = selectedPaths(true)
             return selected.length > 0 ? selected : [controller.currentPath]
         }
         return selectedPaths(false)
+    }
+
+    // Accepting is not answering: a save onto an existing name asks first.
+    // Whether the name is taken is a filesystem question, so the Rust side is
+    // what answers it.
+    function requestAccept() {
+        const paths = picker.chosenPaths()
+        if (paths.length === 0)
+            return
+        if (picker.namingFile && controller.pathExists(paths[0])) {
+            overwritePrompt.ask(paths[0])
+            return
+        }
+        picker.answer(paths)
     }
 
     function selectedPaths(foldersOnly) {
@@ -378,7 +405,7 @@ Window {
             controller.openLocation(path)
         } else if (!directory && !saving) {
             picker.answer([path])
-        } else if (saving) {
+        } else if (namingFile) {
             pickerChrome.nameText = controller.entryNames[index]
         }
     }
@@ -499,7 +526,7 @@ Window {
                 // escondido al principio ni al final. Con márgenes y no con
                 // cabecera/pie: en una GridView el espaciador no desplaza la
                 // primera fila y las celdas nacían debajo de la pastilla.
-                topMargin: picker.saving ? 116 : 70
+                topMargin: picker.namingFile ? 116 : 70
                 bottomMargin: 72
 
                 // One column: a narrow dialog is scanned by name and compared
@@ -565,7 +592,7 @@ Window {
                         picker.selectOnly(controller.entryToken(candidate))
                         picker.anchorIndex = candidate
                     }
-                    if (picker.saving)
+                    if (picker.namingFile)
                         pickerChrome.nameText = controller.entryNames[candidate]
                 }
 
@@ -731,7 +758,7 @@ Window {
                             picker.selectOnly(cell.token)
                             picker.anchorIndex = cell.index
                         }
-                        if (picker.saving)
+                        if (picker.namingFile)
                             pickerChrome.nameText = cell.name
                     }
                     onCellActivated: picker.activate(cell.index)
@@ -807,7 +834,7 @@ Window {
             hostWindow: picker
             contentSurface: contentBox
             backdropView: entryGrid
-            saving: picker.saving
+            saving: picker.namingFile
             gridScrolls: picker.gridScrolls
             filterRows: picker.filterRows
             multiple: picker.multiple
@@ -818,9 +845,16 @@ Window {
             loading: controller.loading
             onFilterActivated: function(index) { picker.applyFilter(index) }
             onToggleHiddenRequested: picker.toggleHidden()
-            onAcceptRequested: picker.answer(picker.chosenPaths())
+            onAcceptRequested: picker.requestAccept()
             onCancelRequested: picker.cancel()
             onViewFocusRequested: entryGrid.forceActiveFocus()
+        }
+
+        PickerOverwriteDialog {
+            id: overwritePrompt
+            backdrop: contentBox
+            owner: picker.contentItem
+            onConfirmed: function(path) { picker.answer([path]) }
         }
     }
 }

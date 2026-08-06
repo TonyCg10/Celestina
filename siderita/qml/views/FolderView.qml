@@ -446,15 +446,15 @@ Item {
             else
                 controller.trashPath(primaryPath)
         }
-        // Converts dropped file:// URLs to local paths (percent-decoded),
-        // skipping any non-file URL, for controller.dropUris.
-        function urlsToPaths(urls) {
+        // The dropped URLs as plain strings, for controller.dropUriList. Not
+        // decoded here: `decodeURIComponent` throws a URIError on an escape
+        // that is not valid UTF-8 — how another manager spells a non-UTF-8
+        // name — and that took the whole batch down in silence. Rust decodes
+        // by bytes and skips only what it cannot resolve.
+        function droppedUris(urls) {
             var out = []
-            for (var i = 0; i < urls.length; i++) {
-                var u = urls[i].toString()
-                if (u.indexOf("file://") === 0)
-                    out.push(decodeURIComponent(u.substring(7)))
-            }
+            for (var i = 0; i < urls.length; i++)
+                out.push(urls[i].toString())
             return out
         }
         // Shift forces a move; the default for a cross-application drop is the
@@ -477,8 +477,8 @@ Item {
                 var move = (drop.keyboardModifiers & Qt.ControlModifier) === 0
                 controller.dropUris([root.ghost.path], destPath, move)
             } else if (drop.hasUrls) {
-                controller.dropUris(urlsToPaths(drop.urls), destPath,
-                                    dropIsMove(drop))
+                controller.dropUriList(droppedUris(drop.urls), destPath,
+                                       dropIsMove(drop))
             }
         }
         // Begin dragging an entry. The drag is Drag.Automatic (so it can also
@@ -593,8 +593,8 @@ Item {
             onDropped: function(drop) {
                 if (!drop.hasUrls)
                     return
-                controller.dropUris(mainPanel.urlsToPaths(drop.urls),
-                                    "", mainPanel.dropIsMove(drop))
+                controller.dropUriList(mainPanel.droppedUris(drop.urls),
+                                       "", mainPanel.dropIsMove(drop))
                 drop.accept()
             }
 

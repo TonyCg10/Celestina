@@ -85,8 +85,8 @@ Item {
         view: root.topBar.activeView
         step: -18
         onExternalDrop: function(drop) {
-            root.controller.dropUris(root.panel.urlsToPaths(drop.urls), "",
-                                     root.panel.dropIsMove(drop))
+            root.controller.dropUriList(root.panel.droppedUris(drop.urls), "",
+                                        root.panel.dropIsMove(drop))
             drop.accept()
         }
     }
@@ -98,8 +98,8 @@ Item {
         view: root.topBar.activeView
         step: 18
         onExternalDrop: function(drop) {
-            root.controller.dropUris(root.panel.urlsToPaths(drop.urls), "",
-                                     root.panel.dropIsMove(drop))
+            root.controller.dropUriList(root.panel.droppedUris(drop.urls), "",
+                                        root.panel.dropIsMove(drop))
             drop.accept()
         }
     }

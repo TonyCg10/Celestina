@@ -49,6 +49,7 @@ pub struct EntryRow {
     display_name: String,
     path: PathBuf,
     kind: RowKind,
+    targets_directory: bool,
     size: u64,
     modified: Option<std::time::SystemTime>,
     hidden: bool,
@@ -73,6 +74,14 @@ impl EntryRow {
     #[must_use]
     pub const fn kind(&self) -> RowKind {
         self.kind
+    }
+
+    /// Whether activating this row means entering a directory: a directory, or
+    /// a symlink whose target is one. [`Self::kind`] still reports what the
+    /// entry itself is, so the listing still labels a link as a link.
+    #[must_use]
+    pub const fn targets_directory(&self) -> bool {
+        self.targets_directory
     }
 
     #[must_use]
@@ -196,6 +205,7 @@ impl SnapshotAdapter {
                 display_name: entry.display_name().into_owned(),
                 path: entry.path().to_path_buf(),
                 kind: entry.kind().into(),
+                targets_directory: entry.targets_directory(),
                 size: entry.size(),
                 modified: entry.modified(),
                 hidden: entry.is_hidden(),
@@ -294,6 +304,31 @@ mod tests {
         assert_eq!(first_tokens["alpha"], second_tokens["alpha"]);
         assert_eq!(first_tokens["beta"], second_tokens["beta"]);
         assert_ne!(second_tokens["gamma"], second_tokens["alpha"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_row_for_a_symlinked_directory_stays_a_symlink_but_leads_into_one() {
+        use siderita_core::EntryKind;
+
+        let fixture = TestDirectory::new();
+        fs::create_dir(fixture.path().join("real")).expect("create target directory");
+        std::os::unix::fs::symlink(fixture.path().join("real"), fixture.path().join("link"))
+            .expect("link to the directory");
+        let mut coordinator = ScanCoordinator::new();
+        let request = coordinator.begin(fixture.path()).expect("scan request");
+        let snapshot = scan_directory(&request).expect("scan fixture");
+        let view = SnapshotAdapter::new()
+            .adapt(&snapshot)
+            .expect("adapt snapshot");
+        let row = view
+            .rows()
+            .iter()
+            .find(|row| row.display_name() == "link")
+            .expect("the link is a row");
+
+        assert_eq!(row.kind(), EntryKind::Symlink.into());
+        assert!(row.targets_directory());
     }
 
     #[test]

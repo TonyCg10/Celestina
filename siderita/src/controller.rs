@@ -12,7 +12,7 @@ use siderita_core::{
 
 /// The filesystem debouncer type kept alive for the controller's lifetime.
 type FsDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
-use siderita_ops::{Progress, TrashEntry};
+use siderita_ops::TrashEntry;
 use siderita_qt::{EntryRow, RowKind, SnapshotAdapter, ViewSnapshot};
 
 #[cxx_qt::bridge]
@@ -245,6 +245,11 @@ pub mod qobject {
         #[qinvokable]
         fn entry_kind(self: &SideritaController, index: i32) -> QString;
 
+        /// Whether activating the entry at `index` enters a directory: a
+        /// folder, or a symlink whose target is one.
+        #[qinvokable]
+        fn entry_targets_directory(self: &SideritaController, index: i32) -> bool;
+
         /// Sets (or, with an empty `icon`, clears) the custom icon for `path`,
         /// persisting it. Refreshes `custom_icon_entries`.
         #[qinvokable]
@@ -370,6 +375,17 @@ pub mod qobject {
             move_entries: bool,
         );
 
+        /// The same drop from a raw `text/uri-list`: the `file://` URIs are
+        /// decoded here, by bytes, so a name another manager percent-encoded
+        /// outside UTF-8 does not abort the whole batch.
+        #[qinvokable]
+        fn drop_uri_list(
+            self: Pin<&mut SideritaController>,
+            uris: &QStringList,
+            destination: &QString,
+            move_entries: bool,
+        );
+
         #[qinvokable]
         fn cancel_op(self: Pin<&mut SideritaController>);
 
@@ -410,15 +426,19 @@ pub mod qobject {
         #[qinvokable]
         fn close_trash(self: Pin<&mut SideritaController>);
 
+        /// Restores one trashed entry, named by the path of its body in the
+        /// Trash (never by row index: the list reloads under the menu).
         #[qinvokable]
-        fn restore_trash(self: Pin<&mut SideritaController>, index: i32);
+        fn restore_trash(self: Pin<&mut SideritaController>, trashed: &QString);
 
         #[qinvokable]
         fn restore_all_trash(self: Pin<&mut SideritaController>);
 
-        /// Permanently deletes one trashed entry (by its index in the list).
+        /// Permanently deletes one trashed entry, named by the path of its
+        /// body in the Trash. Irreversible, so it resolves an identity rather
+        /// than a position.
         #[qinvokable]
-        fn purge_trash(self: Pin<&mut SideritaController>, index: i32);
+        fn purge_trash(self: Pin<&mut SideritaController>, trashed: &QString);
 
         #[qinvokable]
         fn empty_trash(self: Pin<&mut SideritaController>);
@@ -457,6 +477,17 @@ pub mod qobject {
         fn control_phone_media(self: &SideritaController, index: i32, action: &QString);
         #[qinvokable]
         fn display_location_name(self: &SideritaController, path: &QString) -> QString;
+
+        /// `path` as a `file://` URI for a `text/uri-list` payload, encoded by
+        /// the same codec the portal answers with.
+        #[qinvokable]
+        fn path_uri(self: &SideritaController, path: &QString) -> QString;
+
+        /// Whether anything already occupies `path` — the question the save
+        /// picker asks before it agrees to overwrite. A symlink counts, and a
+        /// link to nothing counts too: the name is taken either way.
+        #[qinvokable]
+        fn path_exists(self: &SideritaController, path: &QString) -> bool;
         #[qinvokable]
         fn send_to_phone(self: Pin<&mut SideritaController>, path: &QString);
         #[qinvokable]
@@ -592,6 +623,7 @@ mod find;
 mod marks;
 mod mounts;
 mod navigation;
+mod paste;
 mod scan;
 mod selection;
 mod session;
@@ -611,7 +643,7 @@ impl UndoAction {
 }
 
 /// How to resolve entries whose paste destination already exists.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ConflictStrategy {
     /// Leave the existing entry; the source is not pasted.
     Skip,
@@ -652,6 +684,9 @@ struct PendingPaste {
 /// What a pasted batch did, carried from the worker thread to `finish_paste`.
 pub(crate) struct PasteOutcome {
     total: usize,
+    /// Every entry the batch was asked to place, so a consumed cut can check
+    /// that the system clipboard still holds its own sources before wiping it.
+    sources: Vec<PathBuf>,
     failures: Vec<String>,
     /// Cut sources that could not be moved (kept on the clipboard for a retry).
     unmoved: Vec<PathBuf>,
@@ -718,6 +753,11 @@ pub struct SideritaControllerRust {
     snapshot: Option<DirectorySnapshot>,
     view: Option<ViewSnapshot>,
     pending_nav: Option<PendingNav>,
+    /// Whether the scan generation now in flight is a background watcher
+    /// refresh. A quiet scan owns no banner: it must never write `error_text`
+    /// or the status line, because the folder it is re-reading is being changed
+    /// underneath it and the user did not ask for anything.
+    quiet_scan: bool,
     watch: Option<WatchState>,
     watched: Option<PathBuf>,
     debouncer: Option<FsDebouncer>,
@@ -862,6 +902,7 @@ impl Default for SideritaControllerRust {
             snapshot: None,
             view: None,
             pending_nav: None,
+            quiet_scan: false,
             watch: None,
             watched: None,
             debouncer: None,
@@ -998,99 +1039,6 @@ fn qstringlist_to_paths(list: &QStringList) -> Vec<PathBuf> {
         .filter(|path| !path.is_empty())
         .map(PathBuf::from)
         .collect()
-}
-
-/// Pastes one source into `destination_dir` on the worker thread, applying the
-/// decided `strategy` when the destination is already taken. Records the outcome
-/// (failure, skip, undoable move, kept-back cut) into `outcome`.
-fn paste_one(
-    source: &Path,
-    destination_dir: &Path,
-    cut: bool,
-    strategy: ConflictStrategy,
-    token: &CancellationToken,
-    on_progress: &mut dyn FnMut(Progress),
-    outcome: &mut PasteOutcome,
-) {
-    let Some(name) = source.file_name() else {
-        outcome
-            .failures
-            .push(format!("{}: sin nombre de archivo", display_name(source)));
-        return;
-    };
-    let target = destination_dir.join(name);
-    let colliding = std::fs::symlink_metadata(&target).is_ok();
-
-    if !colliding {
-        place_into(source, destination_dir, cut, token, on_progress, outcome);
-        return;
-    }
-
-    outcome.conflict_touched = true;
-    match strategy {
-        ConflictStrategy::Skip => outcome.skipped += 1,
-        ConflictStrategy::Replace => {
-            // Trash the existing entry (recoverable) before placing the source,
-            // so nothing is hard-deleted to make room.
-            if let Err(error) = siderita_ops::trash(&target, token, on_progress) {
-                outcome
-                    .failures
-                    .push(format!("{}: {error}", display_name(source)));
-                if cut {
-                    outcome.unmoved.push(source.to_path_buf());
-                }
-                return;
-            }
-            place_into(source, destination_dir, cut, token, on_progress, outcome);
-        }
-        ConflictStrategy::KeepBoth => {
-            let freed = siderita_ops::next_available(destination_dir, name, "copia");
-            let result = if cut {
-                siderita_ops::move_as(source, &freed, token, on_progress).map(|_| ())
-            } else {
-                siderita_ops::copy_as(source, &freed, token, on_progress)
-            };
-            if let Err(error) = result {
-                outcome
-                    .failures
-                    .push(format!("{}: {error}", display_name(source)));
-                if cut {
-                    outcome.unmoved.push(source.to_path_buf());
-                }
-            }
-        }
-    }
-}
-
-/// The plain placement (copy or move into a directory, keeping the source name),
-/// shared by the no-collision path and by "replace" after the old entry is gone.
-fn place_into(
-    source: &Path,
-    destination_dir: &Path,
-    cut: bool,
-    token: &CancellationToken,
-    on_progress: &mut dyn FnMut(Progress),
-    outcome: &mut PasteOutcome,
-) {
-    if cut {
-        match siderita_ops::move_entry(source, destination_dir, token, on_progress) {
-            Ok(moved) => {
-                if let Some(parent) = moved.from.parent() {
-                    outcome.undo_moves.push((moved.to, parent.to_path_buf()));
-                }
-            }
-            Err(error) => {
-                outcome
-                    .failures
-                    .push(format!("{}: {error}", display_name(source)));
-                outcome.unmoved.push(source.to_path_buf());
-            }
-        }
-    } else if let Err(error) = siderita_ops::copy(source, destination_dir, token, on_progress) {
-        outcome
-            .failures
-            .push(format!("{}: {error}", display_name(source)));
-    }
 }
 
 /// The final path component, for a compact per-entry line in a batch error.

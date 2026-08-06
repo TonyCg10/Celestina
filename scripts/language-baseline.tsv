@@ -152,7 +152,6 @@
 9	siderita/src/editor.rs
 4	siderita/src/media.rs
 2	siderita/src/places.rs
-2	siderita/src/portal.rs
 1	siderita/src/properties.rs
 1	siderita/src/volumes.rs
 21	siderita/tests/qml/tst_celestina_input_shield.qml

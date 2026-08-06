@@ -67,6 +67,7 @@ const QML_FILES: &[&str] = &[
     "qml/components/picker/PickerChrome.qml",
     "qml/components/picker/PickerCellDelegate.qml",
     "qml/components/picker/PickerFilterMenu.qml",
+    "qml/components/picker/PickerOverwriteDialog.qml",
     "qml/components/picker/PickerSidebar.qml",
     "qml/components/picker/PickerIconRules.qml",
     "qml/components/SizeRow.qml",

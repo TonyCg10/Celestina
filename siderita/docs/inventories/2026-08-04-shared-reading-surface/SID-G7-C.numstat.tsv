@@ -1,0 +1,48 @@
+# SID-G7-C exact change inventory
+
+Base revision	55f735df4d4964fdf91ec8eee6ef7c784d75ee04
+Pathspec	siderita/
+Pathspec	celestina-rs/crates/siderita-core/
+Pathspec	celestina-rs/crates/siderita-ops/
+Pathspec	celestina-rs/crates/siderita-qt/
+Pathspec	scripts/architecture-baseline.tsv
+Pathspec	scripts/language-baseline.tsv
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+18	0	715d4abe66a9fda615e7358fe16827a4d73c6b5e2d2282fc685931dd73351c05	celestina-rs/crates/siderita-core/src/entry.rs
+98	11	e9da4d786303131269cf8830f0eb8e05cc37189341ce5b948710349c5ed2514e	celestina-rs/crates/siderita-core/src/scan.rs
+35	0	fdc5bd04e555bcc6a85e9c62adcb7e960fbc1dd451382319e23dbe34fec5dea2	celestina-rs/crates/siderita-qt/src/view.rs
+1	0	adc05a675d10b52fa26290f21e464b2671e0c97950a426ab1dca8f1b6c8e07d7	docs/version-history.tsv
+1	1	14096f1d6ac151f868bfe9c7575febba2149c559bcfb109dc84e5817ad548357	scripts/architecture-baseline.tsv
+0	1	46a70b2444bec06efc2267bd4cad77f0c41269983b8c1a393b591e8a47804ded	scripts/language-baseline.tsv
+1	1	6355974d1f6ccf647a05e5074ca49be6360cf5b966f0d2046a54cf9ad8cb84c5	siderita/Cargo.lock
+1	1	ee771206d3044d8780f62c269dee590d359e76e7745434e2eea06659ebc7babc	siderita/Cargo.toml
+12	0	491f85e795bc2df28730e89b84518028f122beb132eefd46c3f27deeefae6005	siderita/STATUS.md
+29	0	895c4b37b17e721d1a908fb23a195a723005c2312bc103a8ebafe55debcd1112	siderita/VALIDATION.md
+1	0	867de36298e0d726cb9a8841b75c607917af955dba4d53b6ae9fb8f3ba2a37f9	siderita/build.rs
+106	0	aea8ae9a967228a8bb2acc4523c2fe50c2c3455a61bcd90b0bfd552d50efad67	siderita/docs/evidence/2026-08-05-destructive-operation-guards.md
+13	0	c8bba25183188f5885f8d91f643286bb542fa6dcb70b9fccb7b64b2e22c3a7cb	siderita/docs/plans/active/2026-08-04-shared-reading-surface.md
+10	2	42af854dff98878f0f8bb9f1dc6ec4057a9b056f89f0786a184effb7daa3235d	siderita/qml/Main.qml
+42	8	5598118642df7e28ce5932d05752399b1e09e200e99d92626dea632329df7741	siderita/qml/PickerWindow.qml
+4	4	24c34095afb90d8cef1ac744ffa08d301f97fa65149acdab715796023b031cb7	siderita/qml/components/folder/FolderContentChrome.qml
+98	0	4ae22b62ff4d94288a0d22bb845b50e0fbb3f0c6513637d6c1b2bddae7c5632b	siderita/qml/components/picker/PickerOverwriteDialog.qml
+9	4	941c0f4d1cfe899cc5a12583e1a37f7a6f8d84ff02571ced29f3495dbf57a434	siderita/qml/menus/EntryContextMenu.qml
+12	12	9b5403d3c57baff961878122ad0d450f188ae591ca82cf285386f64d249e592f	siderita/qml/views/FolderView.qml
+1	1	d60da6d6bfeca6391fc7dd47e20777326669d639fb4abbcada852ac6e7a88775	siderita/src/bookmarks.rs
+46	98	9123112d4f028dfc28682b578ebd706745241e67fae11d9d176c203821ba23bb	siderita/src/controller.rs
+69	24	e50461db6ea99fe3f2bd103c48da34571b65b131ac798d6801562147dddda9c9	siderita/src/controller/fileops.rs
+197	0	adcde6eae767b23ee3e1140ba2fe6c2135bd2ca5348de5f25fba2ca3b149e9a2	siderita/src/controller/paste.rs
+16	1	42d5dbcd9b11c43195590dcf0509563dcdeac641bcd0041fb1264a949427b28e	siderita/src/controller/scan.rs
+43	3	5631b05cc48d2ee495fbf5299663a6c2363d1bca5f2a7b1e5899aeb488aad524	siderita/src/controller/selection.rs
+30	14	d18b8710165d93b7ed1d514e32c4540126152507346b3fc7f08c89b6c98e5dd8	siderita/src/controller/trash.rs
+58	2	7fb907fe8b165951e3481097cd58e65d7bb820a18da6cf6e6981bf72c1d339bc	siderita/src/dbus.rs
+1	1	0c653c0555873e04df80597bb52ac1d43a0fa5e3437935442ee1664ad714e88a	siderita/src/favorites.rs
+1	1	0520c5345856096620f998d66dca288c0eb686988d061d946cdcd4cb2209e044	siderita/src/folder_views.rs
+5	13	caa8706a3f52376c9d3e8419223c7cec29c123608bfd8663914c683f7200e64a	siderita/src/icons.rs
+188	24	f999131c5ecaccd1587149b6d18583973123b3bd2e8fac42d7dde29cfb8fd60f	siderita/src/portal.rs
+68	1	31a51b29ed4534d09721291eeee1eaeab95c7a46baa46c93498e5eb45972b56c	siderita/src/recent.rs
+1	1	2efaa2f9f6fa0f15fcef83ac7b6aa7806b4848982d54fc66fb2cd429f7fec8a9	siderita/src/settings.rs
+48	0	self	siderita/docs/inventories/2026-08-04-shared-reading-surface/SID-G7-C.numstat.tsv

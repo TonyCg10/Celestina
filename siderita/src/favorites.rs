@@ -58,7 +58,7 @@ fn save_to(path: &Path, paths: &BTreeSet<String>) -> io::Result<()> {
         text.push_str(entry);
         text.push('\n');
     }
-    fs::write(path, text)
+    celestina_core::atomic_file::replace(path, text.as_bytes())
 }
 
 #[cfg(test)]

@@ -114,6 +114,21 @@ fn parent_folder(uri: &str) -> Option<PathBuf> {
     uri_to_path(uri).and_then(|path| path.parent().map(Path::to_path_buf))
 }
 
+/// A local path as a `file://` URI, percent-encoding by bytes everything a URI
+/// cannot carry raw — `#` and `?` included, which is why this is not
+/// `encodeURI` in QML: a drag of `informe#3.pdf` used to hand the receiving
+/// application a URI that truncated at the `#`.
+///
+/// The exact inverse of [`uri_to_path`], and the only spelling in the app: the
+/// portal's answers and the drag payload must agree, because a file chooser and
+/// a drop can hand the same name to the same application.
+pub(crate) fn path_to_uri(path: &Path) -> String {
+    format!(
+        "file://{}",
+        celestina_core::percent::encode(&celestina_core::percent::path_bytes(path))
+    )
+}
+
 /// Converts a `file://` URI to a local path, percent-decoded byte-for-byte so a
 /// non-UTF-8 path round-trips. Returns `None` for a non-file URI. Shared with the
 /// path bar's `file://` handling.
@@ -134,8 +149,49 @@ pub(crate) fn uri_to_path(uri: &str) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parent_folder, uri_to_path};
-    use std::path::PathBuf;
+    use super::{parent_folder, path_to_uri, uri_to_path};
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn paths_become_percent_encoded_file_uris() {
+        assert_eq!(
+            path_to_uri(Path::new("/home/u/a.txt")),
+            "file:///home/u/a.txt"
+        );
+        assert_eq!(
+            path_to_uri(Path::new("/home/u/a b.txt")),
+            "file:///home/u/a%20b.txt"
+        );
+        // The bug this codec exists to close: `#` and `?` are URI syntax, and a
+        // consumer handed them raw reads the name as ending before them.
+        assert_eq!(
+            path_to_uri(Path::new("/home/u/informe#3.pdf")),
+            "file:///home/u/informe%233.pdf"
+        );
+        assert_eq!(
+            path_to_uri(Path::new("/home/u/q?.txt")),
+            "file:///home/u/q%3F.txt"
+        );
+        // Non-ASCII is encoded byte by byte.
+        assert_eq!(
+            path_to_uri(Path::new("/home/u/\u{65e5}")),
+            "file:///home/u/%E6%97%A5"
+        );
+    }
+
+    #[test]
+    fn a_uri_round_trips_between_the_two_halves() {
+        for path in [
+            "/home/u/some dir/x.txt",
+            "/home/u/informe#3.pdf",
+            "/home/u/\u{65e5}\u{672c}.txt",
+        ] {
+            assert_eq!(
+                uri_to_path(&path_to_uri(Path::new(path))),
+                Some(PathBuf::from(path))
+            );
+        }
+    }
 
     #[test]
     fn decodes_a_plain_file_uri() {

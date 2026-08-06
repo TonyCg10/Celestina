@@ -74,7 +74,51 @@ fn attribute(tag: &str, name: &str) -> Option<String> {
     let start = tag.find(&key)? + key.len();
     let rest = &tag[start..];
     let end = rest.find('"')?;
-    Some(rest[..end].to_owned())
+    Some(unescape(&rest[..end]))
+}
+
+/// Resolves the five XML entities an attribute value may carry.
+///
+/// The writers of this file escape `&` as `&amp;`, so a `href` for a file whose
+/// name contains an ampersand reaches here as `%26` inside `&amp;…` — and
+/// leaving the entity in place made the URI decode to a path that does not
+/// exist, which `load` then filtered out. A file with an `&` in its name simply
+/// never appeared in Recientes.
+///
+/// One pass, so a value that decodes to `&lt;` is not decoded twice.
+fn unescape(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    let mut rest = value;
+    while let Some(start) = rest.find('&') {
+        out.push_str(&rest[..start]);
+        let tail = &rest[start..];
+        let entity = tail
+            .find(';')
+            .map(|end| &tail[..=end])
+            .filter(|entity| entity.len() <= 6);
+        let resolved = match entity {
+            Some("&amp;") => Some('&'),
+            Some("&lt;") => Some('<'),
+            Some("&gt;") => Some('>'),
+            Some("&quot;") => Some('"'),
+            Some("&apos;") => Some('\''),
+            _ => None,
+        };
+        match resolved {
+            // An unknown entity is left exactly as written: guessing at it would
+            // invent a path.
+            Some(character) => {
+                out.push(character);
+                rest = &tail[entity.map_or(1, str::len)..];
+            }
+            None => {
+                out.push('&');
+                rest = &tail[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 #[cfg(test)]
@@ -116,6 +160,29 @@ mod tests {
         let items = parse(r#"<bookmark href="file:///tmp/x"><info/>"#);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].stamp, "");
+    }
+
+    #[test]
+    fn an_escaped_ampersand_in_a_name_still_resolves_to_its_file() {
+        // How every writer of this file spells `rock & roll.mp3`.
+        let items = parse(
+            r#"<bookmark href="file:///tmp/rock%20%26%20roll.mp3" visited="2026-01-01T00:00:00Z"/>"#,
+        );
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].path, PathBuf::from("/tmp/rock & roll.mp3"));
+        assert_eq!(items[0].name, "rock & roll.mp3");
+    }
+
+    #[test]
+    fn the_other_four_entities_resolve_and_an_unknown_one_is_left_alone() {
+        assert_eq!(
+            super::unescape("a &lt;b&gt; &quot;c&quot; &apos;d&apos;"),
+            "a <b> \"c\" 'd'"
+        );
+        // Written by a file called `&`, not an entity.
+        assert_eq!(super::unescape("&amp;amp;"), "&amp;");
+        assert_eq!(super::unescape("100 &euro; & more"), "100 &euro; & more");
+        assert_eq!(super::unescape("nothing to do"), "nothing to do");
     }
 
     #[test]

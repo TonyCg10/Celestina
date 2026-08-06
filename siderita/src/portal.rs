@@ -24,6 +24,8 @@
 
 use core::pin::Pin;
 use std::collections::HashMap;
+use std::ffi::{OsStr, OsString};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -313,8 +315,15 @@ impl FileChooser {
         };
         let _ = server.at(&handle, request).await;
 
-        let multiple = bool_option(&options, "multiple");
-        let directory = bool_option(&options, "directory");
+        // `SaveFiles` asks for a *folder* and supplies the names itself, so the
+        // dialog is a directory chooser however the caller filled the rest in.
+        let saving_many = mode == "saves";
+        let requested_names = saving_many
+            .then(|| file_names(&options))
+            .unwrap_or_default();
+
+        let multiple = bool_option(&options, "multiple") && !saving_many;
+        let directory = bool_option(&options, "directory") || saving_many;
         let accept_label = string_option(&options, "accept_label").unwrap_or_default();
         let current_folder = current_folder(&options).unwrap_or_default();
         let current_name = string_option(&options, "current_name").unwrap_or_default();
@@ -361,12 +370,26 @@ impl FileChooser {
 
         match chosen {
             Some(paths) if !paths.is_empty() => {
-                let uris: Vec<String> = paths.iter().map(|path| path_to_uri(path)).collect();
+                // A `SaveFiles` answer is one folder; the files are the caller's
+                // own list, composed against it here so no two of them land on
+                // the same name.
+                let chosen: Vec<PathBuf> = if saving_many {
+                    compose_save_files(Path::new(&paths[0]), &requested_names)
+                } else {
+                    paths.iter().map(PathBuf::from).collect()
+                };
+                if chosen.is_empty() {
+                    return (RESPONSE_CANCELLED, HashMap::new());
+                }
+                let uris: Vec<String> = chosen
+                    .iter()
+                    .map(|path| crate::dbus::path_to_uri(path))
+                    .collect();
                 let mut results: HashMap<String, OwnedValue> = HashMap::new();
                 if let Ok(value) = OwnedValue::try_from(Value::from(uris)) {
                     results.insert("uris".to_owned(), value);
                 }
-                if let Ok(value) = OwnedValue::try_from(Value::from(true)) {
+                if let Ok(value) = OwnedValue::try_from(Value::from(writable(mode, &options))) {
                     results.insert("writable".to_owned(), value);
                 }
                 (RESPONSE_SUCCESS, results)
@@ -441,6 +464,89 @@ fn serve(
 /// xdg-desktop-portal activates this process to answer a request.
 pub fn portal_mode() -> bool {
     std::env::args_os().any(|arg| arg == "--portal")
+}
+
+/// Whether the answer grants write access to what was chosen.
+///
+/// `writable` is a *result* of `OpenFile`, documented as defaulting to `false`,
+/// and the backend interface defines no request option that asks for it: an
+/// application that wanted to read a file has not asked to be able to change it,
+/// and the front-end uses this flag to decide how the document portal exports
+/// the file to a sandbox. Answering `true` unconditionally handed every reader
+/// write access to whatever the user pointed at. A save is the opposite case —
+/// its whole purpose is to write — and an `OpenFile` that does carry the key is
+/// taken at its word.
+fn writable(mode: &str, options: &HashMap<String, OwnedValue>) -> bool {
+    match mode {
+        "save" | "saves" => true,
+        _ => bool_option(options, "writable"),
+    }
+}
+
+/// The `files` option of `SaveFiles`: an array of NUL-terminated byte arrays,
+/// the names the caller wants written into the folder the user picks.
+///
+/// Every name is a bare file name or it is discarded. This list comes from the
+/// requesting application, so `../../.bashrc` is a name it may well send, and a
+/// path component here would write outside the folder the user agreed to.
+fn file_names(options: &HashMap<String, OwnedValue>) -> Vec<OsString> {
+    let Some(value) = options.get("files") else {
+        return Vec::new();
+    };
+    let Ok(raw) = value
+        .try_clone()
+        .ok()
+        .ok_or(())
+        .and_then(|value| Vec::<Vec<u8>>::try_from(value).map_err(|_| ()))
+    else {
+        return Vec::new();
+    };
+    raw.into_iter()
+        .filter_map(|bytes| {
+            let trimmed: Vec<u8> = bytes.into_iter().take_while(|byte| *byte != 0).collect();
+            let name = celestina_core::percent::path_from_bytes(&trimmed);
+            let name = name.file_name()?.to_os_string();
+            (name != OsStr::new(".") && name != OsStr::new("..")).then_some(name)
+        })
+        .collect()
+}
+
+/// Composes one destination per requested name inside `folder`, giving each a
+/// name nothing else holds.
+///
+/// The spec allows a backend to construct a unique name when the folder already
+/// contains one of them, and requires the answer to keep the caller's order.
+/// De-duplication also covers the batch against itself: a caller that asks to
+/// save two files called `informe.pdf` must get two files.
+fn compose_save_files(folder: &Path, names: &[OsString]) -> Vec<PathBuf> {
+    let mut taken: Vec<PathBuf> = Vec::with_capacity(names.len());
+    for name in names {
+        let mut candidate = folder.join(name);
+        let mut attempt = 2u32;
+        while taken.contains(&candidate) || std::fs::symlink_metadata(&candidate).is_ok() {
+            candidate = folder.join(numbered(name, attempt));
+            let Some(next) = attempt.checked_add(1) else {
+                break;
+            };
+            attempt = next;
+        }
+        taken.push(candidate);
+    }
+    taken
+}
+
+/// `informe.pdf` at 2 becomes `informe (2).pdf`; a name without an extension
+/// keeps the suffix at the end.
+fn numbered(name: &OsStr, attempt: u32) -> OsString {
+    let as_path = Path::new(name);
+    let stem = as_path.file_stem().unwrap_or(name);
+    let mut out = OsString::from(stem);
+    out.push(format!(" ({attempt})"));
+    if let Some(extension) = as_path.extension() {
+        out.push(".");
+        out.push(extension);
+    }
+    out
 }
 
 fn bool_option(options: &HashMap<String, OwnedValue>, key: &str) -> bool {
@@ -542,15 +648,6 @@ fn globs_for_mime(mime: &str) -> Vec<String> {
     globs.iter().map(|glob| (*glob).to_owned()).collect()
 }
 
-/// A local path as a `file://` URI, percent-encoding everything a URI cannot
-/// carry raw. Byte-wise, so a non-UTF-8 path survives the trip.
-fn path_to_uri(path: &str) -> String {
-    format!(
-        "file://{}",
-        celestina_core::percent::encode(path.as_bytes())
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -566,22 +663,89 @@ mod tests {
         );
     }
 
-    #[test]
-    fn paths_become_percent_encoded_file_uris() {
-        assert_eq!(path_to_uri("/home/u/a.txt"), "file:///home/u/a.txt");
-        assert_eq!(path_to_uri("/home/u/a b.txt"), "file:///home/u/a%20b.txt");
-        // Non-ASCII is encoded byte by byte, so it round-trips through the
-        // front-end's own decoder.
-        assert_eq!(path_to_uri("/home/u/á"), "file:///home/u/%C3%A1");
+    fn options(pairs: &[(&str, Value<'static>)]) -> HashMap<String, OwnedValue> {
+        pairs
+            .iter()
+            .filter_map(|(key, value)| {
+                Some((
+                    (*key).to_owned(),
+                    OwnedValue::try_from(value.try_clone().ok()?).ok()?,
+                ))
+            })
+            .collect()
     }
 
     #[test]
-    fn a_uri_round_trips_through_the_shared_decoder() {
-        let path = "/home/u/some dir/ñ.txt";
-        let uri = path_to_uri(path);
+    fn opening_a_file_grants_write_access_only_when_it_was_asked_for() {
+        // The safety property: a request to read is answered as read-only.
+        assert!(!writable("open", &options(&[])));
+        assert!(!writable(
+            "open",
+            &options(&[("writable", Value::from(false))])
+        ));
+        assert!(writable(
+            "open",
+            &options(&[("writable", Value::from(true))])
+        ));
+        // Saving is writing, whatever the options say.
+        assert!(writable("save", &options(&[])));
+        assert!(writable("saves", &options(&[])));
+    }
+
+    #[test]
+    fn save_files_names_are_read_and_stripped_of_any_path() {
+        let requested: Vec<Vec<u8>> = vec![
+            b"informe.pdf\0".to_vec(),
+            b"../../.bashrc\0".to_vec(),
+            b"sub/dir/nota.txt".to_vec(),
+            b"..\0".to_vec(),
+            b"\0".to_vec(),
+        ];
+        let names = file_names(&options(&[("files", Value::from(requested))]));
+
+        // A traversal is reduced to its last component, and `..` and the empty
+        // name are dropped outright.
         assert_eq!(
-            crate::dbus::uri_to_path(&uri),
-            Some(std::path::PathBuf::from(path))
+            names,
+            vec![
+                OsString::from("informe.pdf"),
+                OsString::from(".bashrc"),
+                OsString::from("nota.txt"),
+            ]
         );
+        assert!(file_names(&options(&[])).is_empty());
+    }
+
+    #[test]
+    fn composed_save_files_keep_order_and_never_share_a_name() {
+        let folder = std::env::temp_dir().join(format!(
+            "celestina-portal-saves-{}-{:?}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|elapsed| elapsed.as_nanos())
+                .unwrap_or_default()
+        ));
+        std::fs::create_dir_all(&folder).expect("create fixture folder");
+        std::fs::write(folder.join("informe.pdf"), b"existing").expect("write fixture");
+
+        let composed = compose_save_files(
+            &folder,
+            &[
+                OsString::from("informe.pdf"),
+                OsString::from("informe.pdf"),
+                OsString::from("notas"),
+            ],
+        );
+
+        assert_eq!(
+            composed,
+            vec![
+                folder.join("informe (2).pdf"),
+                folder.join("informe (3).pdf"),
+                folder.join("notas"),
+            ]
+        );
+        let _ = std::fs::remove_dir_all(&folder);
     }
 }

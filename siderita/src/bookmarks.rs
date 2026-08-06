@@ -101,7 +101,7 @@ fn save_to(path: &Path, bookmarks: &[Bookmark]) -> io::Result<()> {
         text.push_str(&location);
         text.push('\n');
     }
-    fs::write(path, text)
+    celestina_core::atomic_file::replace(path, text.as_bytes())
 }
 
 fn sanitize(value: &str) -> String {

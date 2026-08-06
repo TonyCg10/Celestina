@@ -15,8 +15,7 @@ use siderita_ops::{OpError, Progress};
 
 use super::qobject;
 use super::{
-    display_name, paste_one, qstringlist_to_paths, ConflictStrategy, PasteOutcome, PendingPaste,
-    UndoAction,
+    display_name, qstringlist_to_paths, ConflictStrategy, PasteOutcome, PendingPaste, UndoAction,
 };
 
 impl qobject::SideritaController {
@@ -118,7 +117,16 @@ impl qobject::SideritaController {
     /// large file, and running it on the Qt thread would freeze all of Siderita
     /// for as long as it lasts. Reuses the paste operation's progress surface and
     /// cancellation, since it is the same shape of long write.
+    ///
+    /// Refused while another operation is running or a conflict is being
+    /// answered, exactly like `paste`. The two share one progress surface and
+    /// one cancellation token, so a second worker would take over the Cancel
+    /// button from the paste that is still running, interleave its progress and
+    /// let whichever finished first clear the state of the one still alive.
     fn spawn_trash(mut self: Pin<&mut Self>, paths: Vec<PathBuf>) {
+        if *self.op_running() || *self.conflict_pending() {
+            return;
+        }
         let token = CancellationToken::new();
         self.as_mut().rust_mut().get_mut().op_cancel = Some(token.clone());
         self.as_mut().set_op_running(true);
@@ -300,11 +308,42 @@ impl qobject::SideritaController {
         destination: &QString,
         move_entries: bool,
     ) {
+        let sources = qstringlist_to_paths(paths);
+        self.as_mut().drop_paths(sources, destination, move_entries);
+    }
+
+    /// The same drop, given the raw `text/uri-list` the drag carried.
+    ///
+    /// Decoding belongs here rather than in QML: `decodeURIComponent` throws on
+    /// any `%XX` sequence that is not valid UTF-8 — which is exactly how another
+    /// file manager spells a non-UTF-8 name — and one such URI in a batch used
+    /// to abort the whole drop with nothing said. The shared byte-wise codec has
+    /// no such failure mode, and a URI it cannot make a path of is skipped
+    /// alone. QML does not decide what a dropped URI means.
+    pub fn drop_uri_list(
+        mut self: Pin<&mut Self>,
+        uris: &QStringList,
+        destination: &QString,
+        move_entries: bool,
+    ) {
+        let sources: Vec<PathBuf> = uris
+            .iter()
+            .map(QString::to_string)
+            .filter_map(|uri| crate::dbus::uri_to_path(&uri))
+            .collect();
+        self.as_mut().drop_paths(sources, destination, move_entries);
+    }
+
+    fn drop_paths(
+        mut self: Pin<&mut Self>,
+        sources: Vec<PathBuf>,
+        destination: &QString,
+        move_entries: bool,
+    ) {
         if *self.op_running() || *self.conflict_pending() {
             return;
         }
         self.as_mut().set_op_error(QString::default());
-        let sources = qstringlist_to_paths(paths);
 
         let destination = destination.to_string();
         let destination = if destination.is_empty() {
@@ -341,32 +380,30 @@ impl qobject::SideritaController {
             return;
         }
 
-        let colliding: Vec<usize> = sources
-            .iter()
-            .enumerate()
-            .filter(|(_, source)| {
-                source
-                    .file_name()
-                    .map(|name| destination.join(name))
-                    .is_some_and(|target| std::fs::symlink_metadata(target).is_ok())
-            })
-            .map(|(index, _)| index)
-            .collect();
-
-        if colliding.is_empty() {
-            let strategies = vec![ConflictStrategy::Skip; sources.len()];
-            self.as_mut()
-                .spawn_paste(sources, destination, cut, strategies);
+        // Sorted out before any write: free names, real collisions, and the
+        // entry that would collide with itself (see `plan_paste`).
+        let plan = super::paste::plan_paste(sources, &destination, cut);
+        if plan.sources.is_empty() {
             return;
         }
 
-        let decisions = vec![None; sources.len()];
+        if plan.colliding.is_empty() {
+            let strategies = plan
+                .decisions
+                .iter()
+                .map(|choice| choice.unwrap_or(ConflictStrategy::Skip))
+                .collect();
+            self.as_mut()
+                .spawn_paste(plan.sources, destination, cut, strategies);
+            return;
+        }
+
         self.as_mut().rust_mut().get_mut().pending_paste = Some(PendingPaste {
-            sources,
+            sources: plan.sources,
             destination,
             cut,
-            decisions,
-            colliding,
+            decisions: plan.decisions,
+            colliding: plan.colliding,
             cursor: 0,
         });
         self.as_mut().publish_conflict();
@@ -484,6 +521,7 @@ impl qobject::SideritaController {
         std::thread::spawn(move || {
             let mut outcome = PasteOutcome {
                 total: sources.len(),
+                sources: sources.clone(),
                 failures: Vec::new(),
                 unmoved: Vec::new(),
                 undo_moves: Vec::new(),
@@ -525,7 +563,7 @@ impl qobject::SideritaController {
                     });
                 };
 
-                paste_one(
+                super::paste::paste_one(
                     source,
                     &destination,
                     cut,
@@ -570,8 +608,15 @@ impl qobject::SideritaController {
         if cut {
             if outcome.unmoved.is_empty() {
                 // A fully-consumed cut clears both clipboards, matching the
-                // convention other managers follow after a move-paste.
-                qobject::system_clipboard_clear();
+                // convention other managers follow after a move-paste — but the
+                // system clipboard is shared, so it is only wiped while it still
+                // holds the very entries this move consumed. Another application
+                // may have copied something during a long move, and that content
+                // is not ours to discard.
+                let held = qstringlist_to_paths(&qobject::system_clipboard_read_uris());
+                if super::paste::holds_exactly(&held, &outcome.sources) {
+                    qobject::system_clipboard_clear();
+                }
                 self.as_mut().clear_clipboard();
             } else {
                 self.as_mut().set_clipboard(outcome.unmoved, true);

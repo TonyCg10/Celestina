@@ -48,8 +48,10 @@ GlassContextMenu {
         height: visible ? implicitHeight : 0
         icon.name: "edit-undo"
         icon.source: CelestinaTheme.fallbackIcon("file")
-        onTriggered: root.controller.restoreTrash(
-                         root.controller.indexForToken(root.targetToken))
+        // By path, not by row index: the trash list reloads after every
+        // restore or purge, so a position captured when this menu opened can
+        // point at a different entry by the time it is clicked.
+        onTriggered: root.controller.restoreTrash(root.targetPath)
     }
     GlassMenuItem {
         text: "Eliminar permanentemente"
@@ -57,8 +59,7 @@ GlassContextMenu {
         height: visible ? implicitHeight : 0
         icon.name: "edit-delete"
         icon.source: CelestinaTheme.fallbackIcon("file")
-        onTriggered: root.controller.purgeTrash(
-                         root.controller.indexForToken(root.targetToken))
+        onTriggered: root.controller.purgeTrash(root.targetPath)
     }
 
     GlassMenuItem {
@@ -173,6 +174,10 @@ GlassContextMenu {
               : "Enviar a la papelera"
         visible: !root.controller.trashActive
         height: visible ? implicitHeight : 0
+        // Disabled while a copy, move or trash is running, exactly like the
+        // Supr shortcut: a second write would take over the shared progress
+        // surface and the Cancel button from the one already going.
+        enabled: !root.controller.opRunning
         icon.name: "user-trash"
         icon.source: CelestinaTheme.fallbackIcon("file")
         onTriggered: root.panel.trashSelection(

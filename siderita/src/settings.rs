@@ -354,7 +354,7 @@ fn save_to(path: &Path, settings: &Settings) -> io::Result<()> {
         }
     }
     text.push_str(&format!("active_tab={}\n", settings.active_tab.max(0)));
-    fs::write(path, text)
+    celestina_core::atomic_file::replace(path, text.as_bytes())
 }
 
 #[cfg(test)]

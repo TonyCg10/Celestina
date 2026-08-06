@@ -105,7 +105,13 @@ impl qobject::SideritaController {
             .coordinator
             .begin(&destination)
         {
-            Ok(request) => request,
+            Ok(request) => {
+                // Remembered for the answer: only the scan in flight can be
+                // published, so this is the one `handle_scan_result` will hear
+                // from, and a quiet one may not write a banner.
+                self.as_mut().rust_mut().get_mut().quiet_scan = quiet;
+                request
+            }
             Err(error) => {
                 self.as_mut().rust_mut().get_mut().pending_nav = None;
                 if !quiet {
@@ -210,8 +216,17 @@ impl qobject::SideritaController {
                     return;
                 }
 
+                // A background watcher refresh that failed says nothing. The
+                // folder on screen is the last one that read correctly, the user
+                // asked for nothing, and the usual cause is the very change that
+                // triggered the rescan — turning that into a banner made an
+                // active download flicker "No se pudo leer la carpeta".
+                let quiet = self.rust().quiet_scan;
                 let message = error.to_string();
                 self.as_mut().rollback_pending_nav();
+                if quiet {
+                    return;
+                }
                 self.as_mut().set_loading(false);
                 self.as_mut()
                     .set_error_text(QString::from(message.as_str()));

@@ -9,6 +9,18 @@
 
 ## Current checkout truth
 
+- Uncommitted in the checkout: `SID-G7-C`, the corrective unit from the suite
+  audit. Pasting an entry into its own folder now duplicates instead of trashing
+  the original to make room for it; the portal answers `writable` only when it
+  was asked for and confirms an overwrite before returning a save destination;
+  trash takes the running-operation guard paste already had; a vanished entry no
+  longer fails a listing and a quiet refresh stays quiet; a symlink to a
+  directory is navigable; trash entries are purged by info path rather than list
+  position; dropped URIs are decoded by bytes in Rust; and the four remaining
+  configuration files are written atomically. Compiled and unit-tested, with no
+  inventory, no version transition and no production run — the author asked for
+  the corrections, not the delivery. Nothing here has been seen by a real portal
+  requester: that is `VAL-SID-05`.
 - The embedded Grafita editor and the quick look's text pane number their
   lines and scroll with the suite's shared `CelestinaLineGutter` and
   `CelestinaScrollBar`; the editor reports the caret's line and character

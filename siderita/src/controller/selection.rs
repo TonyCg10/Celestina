@@ -67,16 +67,19 @@ impl qobject::SideritaController {
         let selected = self.rust().row_by_token(token).map(|row| {
             (
                 row.path().to_path_buf(),
-                row.kind(),
+                row.targets_directory(),
                 row.display_name().to_owned(),
             )
         });
 
-        let Some((path, kind, name)) = selected else {
+        let Some((path, enters_directory, name)) = selected else {
             return;
         };
 
-        if kind == RowKind::Directory {
+        // A symlink to a folder is browsed rather than handed to `xdg-open`:
+        // the row still labels it a link, but a linked home folder opens where
+        // a folder would.
+        if enters_directory {
             self.as_mut().request_nav_scan(PendingNav::To(path));
         } else {
             self.as_mut().select_token(token);
@@ -234,6 +237,43 @@ impl qobject::SideritaController {
             .row(index)
             .map(|row| QString::from(row.path().to_string_lossy().as_ref()))
             .unwrap_or_default()
+    }
+
+    /// `path` as a `file://` URI, for the `text/uri-list` a drag hands to
+    /// another application.
+    ///
+    /// Composed here rather than in QML: `encodeURI` leaves `#` and `?` raw, so
+    /// dragging `informe#3.pdf` handed the receiving application a URI that
+    /// ended at the `#`. The rule is the portal's rule, and it has one owner.
+    pub fn path_uri(&self, path: &QString) -> QString {
+        let path = path.to_string();
+        if path.is_empty() {
+            return QString::default();
+        }
+        QString::from(crate::dbus::path_to_uri(Path::new(&path)).as_str())
+    }
+
+    /// Whether `path` is taken. One `lstat`, so it is safe to ask from the Qt
+    /// thread; a dangling symlink still occupies the name and answers `true`.
+    pub fn path_exists(&self, path: &QString) -> bool {
+        let path = path.to_string();
+        !path.is_empty() && std::fs::symlink_metadata(&path).is_ok()
+    }
+
+    /// Whether activating the row at `index` enters a directory — true for a
+    /// folder and for a symlink that resolves to one. The activation host asks
+    /// this instead of comparing `entry_kind` to "directory", so a linked folder
+    /// is never sent through the content classifier on its way to being opened.
+    pub fn entry_targets_directory(&self, index: i32) -> bool {
+        if self.rust().virtual_rows() {
+            return usize::try_from(index)
+                .ok()
+                .and_then(|i| self.rust().search_hits.get(i))
+                .is_some_and(|hit| hit.is_dir);
+        }
+        self.rust()
+            .row(index)
+            .is_some_and(siderita_qt::EntryRow::targets_directory)
     }
 
     pub fn entry_kind(&self, index: i32) -> QString {

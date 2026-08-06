@@ -65,6 +65,7 @@ pub struct DirectoryEntry {
     name: OsString,
     path: PathBuf,
     kind: EntryKind,
+    targets_directory: bool,
     size: u64,
     modified: Option<SystemTime>,
     hidden: bool,
@@ -90,12 +91,21 @@ impl DirectoryEntry {
             EntryKind::Other
         };
 
+        // A symlink keeps its own kind — the listing must say what the entry is,
+        // and a size or a rename still belongs to the link itself. What the link
+        // *leads to* is a separate fact, resolved once here with a following
+        // read, so navigation does not have to touch the disk again. A dangling
+        // or unreadable target is simply not a directory.
+        let targets_directory = file_type.is_symlink()
+            && std::fs::metadata(&path).is_ok_and(|target| target.is_dir());
+
         Ok(Self {
             id: EntryId::new(parent, parent_metadata, &name),
             hidden: is_hidden(&name),
             name,
             path,
             kind,
+            targets_directory,
             size: metadata.len(),
             modified: metadata.modified().ok(),
         })
@@ -124,6 +134,14 @@ impl DirectoryEntry {
     #[must_use]
     pub const fn kind(&self) -> EntryKind {
         self.kind
+    }
+
+    /// Whether this entry leads to a directory: a directory itself, or a
+    /// symlink whose target resolved to one. This is what decides navigation;
+    /// [`Self::kind`] still reports the entry's own type.
+    #[must_use]
+    pub const fn targets_directory(&self) -> bool {
+        self.targets_directory || matches!(self.kind, EntryKind::Directory)
     }
 
     #[must_use]
