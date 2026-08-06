@@ -139,16 +139,14 @@ impl qobject::SideritaController {
         self.as_mut().request_nav_scan(PendingNav::To(destination));
     }
 
-    /// The breadcrumbs for the folder being shown, as `name\tkey` lines.
+    /// The breadcrumbs for the folder being shown, as `key\tname` lines.
     pub fn path_segments(&self) -> QStringList {
         let Some(location) = self.rust().history.current() else {
             return QStringList::default();
         };
         crumbs(location, &self.rust().phones)
             .iter()
-            .map(|(name, path)| {
-                QString::from(format!("{name}\t{}", pathkey::encode(path)).as_str())
-            })
+            .map(|(name, path)| QString::from(segment_line(name, path).as_str()))
             .collect()
     }
 
@@ -166,6 +164,20 @@ impl qobject::SideritaController {
             .map(|current| pathkey::publish(&current.join(&name)))
             .unwrap_or_default()
     }
+}
+
+/// One breadcrumb as the single line QML reads: the key, a tab, then the
+/// display name.
+///
+/// The key comes first on purpose. A tab is a legal character in a Linux
+/// filename — and this seam exists precisely for the names nobody expects — so
+/// with the name first a folder called `mis\tfotos` moved the cut and left the
+/// reader holding a fragment instead of a key, which the crumb then refused
+/// with a spurious error banner. A key is unreserved ASCII and `%XX` escapes by
+/// construction, so it can never contain the separator; the name, which may
+/// contain anything, is the remainder and needs no escaping.
+fn segment_line(name: &str, path: &Path) -> String {
+    format!("{}\t{name}", pathkey::encode(path))
 }
 
 /// The crumb trail for `location`: one `(display name, path)` pair per level.
@@ -256,8 +268,9 @@ fn resolve_location(input: &str, current: Option<&Path>) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{crumbs, resolve_location};
+    use super::{crumbs, resolve_location, segment_line};
     use crate::devices::Device;
+    use crate::pathkey;
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
     use std::path::{Path, PathBuf};
@@ -289,6 +302,27 @@ mod tests {
             ["Galaxy S25 Ultra", "DCIM"]
         );
         assert_eq!(trail[1].1, location);
+    }
+
+    #[test]
+    fn a_tab_in_a_folder_name_cannot_damage_its_crumb_key() {
+        let location = PathBuf::from("/home/u/mis\tfotos");
+        let line = segment_line("mis\tfotos", &location);
+        // What QML does: cut at the first tab, key on the left, name on the
+        // right. The name's own tab lands in the remainder, where it is text.
+        let cut = line.find('\t').expect("a separator");
+        let (key, name) = (&line[..cut], &line[cut + 1..]);
+        assert_eq!(key, "/home/u/mis%09fotos");
+        assert_eq!(name, "mis\tfotos");
+        assert_eq!(pathkey::decode_str(key), Ok(location));
+    }
+
+    #[test]
+    fn a_crumb_key_survives_a_name_that_is_not_valid_utf8() {
+        let location = PathBuf::from(OsStr::from_bytes(b"/home/u/na\xffme"));
+        let line = segment_line("na\u{fffd}me", &location);
+        let cut = line.find('\t').expect("a separator");
+        assert_eq!(pathkey::decode_str(&line[..cut]), Ok(location));
     }
 
     #[test]

@@ -57,7 +57,9 @@ fn save_to(path: &Path, paths: &BTreeSet<String>) -> io::Result<()> {
         if entry.contains(['\n', '\r']) {
             continue;
         }
-        text.push_str(entry);
+        // Marked, so the reader knows this is a key and does not have to infer
+        // it from the codec.
+        text.push_str(&crate::pathkey::persist(entry));
         text.push('\n');
     }
     celestina_core::atomic_file::replace(path, text.as_bytes())
@@ -99,6 +101,27 @@ mod tests {
         assert_eq!(loaded.len(), 2);
         assert!(loaded.contains("/a") && loaded.contains("/b"));
         let _ = fs::remove_dir_all(file.parent().unwrap());
+    }
+
+    #[test]
+    fn a_saved_key_holding_a_literal_percent_escape_reads_back_as_itself() {
+        // The key for a folder whose name ends in the characters `%20`. The
+        // written mark is what keeps load from re-encoding it into the key for
+        // `/home/u/100 ` and losing the star.
+        let file = temp_file("literal-escape");
+        let items: BTreeSet<String> = ["/home/u/100%2520".to_owned()].into_iter().collect();
+        save_to(&file, &items).expect("save favorites");
+        assert_eq!(load_from(&file), items);
+        let _ = fs::remove_dir_all(file.parent().expect("temp parent"));
+    }
+
+    #[test]
+    fn legacy_unmarked_records_still_load() {
+        let file = temp_file("legacy");
+        fs::create_dir_all(file.parent().expect("temp parent")).expect("create dir");
+        fs::write(&file, "/home/u/mis fotos\n").expect("write");
+        assert!(load_from(&file).contains("/home/u/mis%20fotos"));
+        let _ = fs::remove_dir_all(file.parent().expect("temp parent"));
     }
 
     #[test]

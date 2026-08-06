@@ -11,6 +11,7 @@
 //! [`volumes`]: crate::volumes
 
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -47,14 +48,22 @@ pub struct Device {
 
 /// Send a local file to a device via Magnetita (best-effort — no bus or no
 /// Magnetita simply does nothing).
-pub fn send_file(device_id: &str, path: &str) {
+///
+/// `SendFileUri`, not `SendFile`: the argument is the percent-encoded `file://`
+/// URI [`crate::dbus::path_to_uri`] writes, which is the same spelling the
+/// portal and the clipboard already carry and the only one that survives a name
+/// that is not valid UTF-8 (ADR 0008). `SendFile` takes a plain path and stays
+/// on the daemon for compatibility with other callers, but a path put through
+/// `to_string_lossy` to reach it names a file Magnetita will not find.
+pub fn send_file(device_id: &str, path: &Path) {
     let Ok(connection) = Connection::session() else {
         return;
     };
     let Ok(proxy) = Proxy::new(&connection, SERVICE, OBJECT, INTERFACE) else {
         return;
     };
-    let _: Result<(), zbus::Error> = proxy.call("SendFile", &(device_id, path));
+    let uri = crate::dbus::path_to_uri(path);
+    let _: Result<(), zbus::Error> = proxy.call("SendFileUri", &(device_id, uri.as_str()));
 }
 
 /// Ask Magnetita to ring a connected phone (best-effort).

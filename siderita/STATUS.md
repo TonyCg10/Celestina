@@ -9,6 +9,26 @@
 
 ## Current checkout truth
 
+- Uncommitted in the checkout: `SID-G7-G`, the three Siderita items of stage 3
+  of the [light monorepo audit](../docs/evidence/2026-08-06-light-monorepo-audit.md).
+  A breadcrumb is published key-first, so a folder whose name contains a tab — a
+  legal filename character — no longer moves the cut QML makes and leaves the
+  crumb holding a fragment instead of a key. A persisted path record is now
+  *marked* as a key when it is written (`key:`) rather than recognised by
+  re-encoding it and hoping the codec is idempotent, which could not tell a
+  pre-ADR raw path holding a literal `%20` from the key for a path holding a
+  space and silently answered with the second — for a bookmark, which is a
+  navigation and a paste target, that is the wrong folder. And the send-to-phone
+  menu item calls Magnetita's new `SendFileUri` with the byte-exact `file://` URI
+  `dbus::path_to_uri` already writes, closing the last verb that put a lossy
+  path out of the process; `SendFile` is untouched, because it is a published
+  interface with other possible callers. Formatted, Clippy-clean, 104 unit tests
+  and both repository guards — no production run, no version transition, no
+  inventory and nothing tried by hand: that is `VAL-SID-06`. A record written
+  before the mark keeps the old ambiguity until its store is saved once; that
+  limit and the rest are in the
+  [evidence](docs/evidence/2026-08-06-path-key-correctness-debt.md).
+
 - Uncommitted in the checkout: `SID-G7-F`, repairing a regression `SID-G7-E`
   introduced. The thumbnail provider converts its id with `toUtf8`, so a name
   carrying an accent resolves again; the seam is now exposed and tested through

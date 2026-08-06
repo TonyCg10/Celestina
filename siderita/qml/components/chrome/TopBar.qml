@@ -90,9 +90,11 @@ Item {
             root.viewFocusRequested()
         }
 
-        // The crumbs come from the controller as `name\tkey` lines. QML does
+        // The crumbs come from the controller as `key\tname` lines. QML does
         // not compose paths (ADR 0008): joining components is a path operation,
         // and a crumb has to carry the exact bytes its click navigates to.
+        // The key is first because a tab is a legal filename character: it can
+        // only ever appear in the name, which is the remainder after the cut.
         function pathSegments() {
             const segs = []
             const lines = root.controller.pathSegments()
@@ -101,8 +103,8 @@ Item {
                 if (cut <= 0)
                     continue
                 segs.push({
-                    name: lines[idx].substring(0, cut),
-                    key: lines[idx].substring(cut + 1)
+                    key: lines[idx].substring(0, cut),
+                    name: lines[idx].substring(cut + 1)
                 })
             }
             return segs

@@ -90,7 +90,9 @@ fn serialize(overrides: &HashMap<String, IconAppearance>) -> String {
 
     let mut body = String::new();
     for (path, appearance) in entries {
-        body.push_str(path);
+        // Marked, so the reader knows this is a key and does not have to infer
+        // it from the codec.
+        body.push_str(&crate::pathkey::persist(path));
         body.push('\t');
         body.push_str(&appearance.icon);
         if !appearance.accent.is_empty() {
@@ -163,7 +165,9 @@ mod tests {
         );
 
         let body = serialize(&appearances);
-        assert_eq!(body, "/a\tfile-code\n/z\t\tamber\n");
+        // The path field is marked as a key; the mark is what tells a later
+        // reader it is one instead of a raw path written before ADR 0008.
+        assert_eq!(body, "key:/a\tfile-code\nkey:/z\t\tamber\n");
         assert_eq!(parse(&body), appearances);
     }
 
@@ -187,5 +191,21 @@ mod tests {
     fn a_legacy_raw_path_record_migrates_to_its_key() {
         let parsed = parse("/tmp/mis fotos\tfolder\tgreen\n");
         assert!(parsed.contains_key("/tmp/mis%20fotos"), "{parsed:?}");
+    }
+
+    #[test]
+    fn a_marked_record_survives_a_name_holding_a_literal_percent_escape() {
+        // Written by this version: `/tmp/100%20` is a directory whose name ends
+        // in the four characters `%20`, and the mark is what stops it being
+        // read back as `/tmp/100 `.
+        let mut appearances = HashMap::new();
+        appearances.insert(
+            "/tmp/100%2520".into(),
+            IconAppearance {
+                icon: "folder".into(),
+                accent: "amber".into(),
+            },
+        );
+        assert_eq!(parse(&serialize(&appearances)), appearances);
     }
 }

@@ -1,0 +1,29 @@
+# SID-G7-G exact change inventory
+
+Base revision	668779dee96cf6a9714ecdc33a607a29ec630651
+Pathspec	siderita/
+Pathspec	celestina-rs/crates/siderita-core/
+Pathspec	celestina-rs/crates/siderita-ops/
+Pathspec	celestina-rs/crates/siderita-qt/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	6cd1016a3824152163dd2d430e3bb6511642856d4c20d8398edd2ac9f6161e03	docs/version-history.tsv
+1	1	222ecd5c924978030e5910ad8b2aa37bd6eb00fb9bc9e382e18354cb6a7be172	siderita/Cargo.lock
+1	1	814247ceef6dc35d4131c328c6eabbd302e3979099a953ce9f559df10a8e29b0	siderita/Cargo.toml
+20	0	f745565aaf43e43424cdfd214372fbedf95ef20167c2e4f1233bf74e367049ca	siderita/STATUS.md
+132	0	0ecc2b5cca77b1c2c83fb59d48368d92b854a9553c8206bde34666089cbe4cab	siderita/docs/evidence/2026-08-06-path-key-correctness-debt.md
+29	0	65a2d8a7bcf1135bd68d243d6999022f230c3226f074af231b76a9da0cf3bc9f	siderita/docs/plans/active/2026-08-04-shared-reading-surface.md
+5	3	5922994e15ac4ffe3824ec53dca203b31f2997f2da84e6b85bb55a174e053cfd	siderita/qml/components/chrome/TopBar.qml
+21	1	ca639522afdceb81e16fba2bfa05746b8a3611e634d43a77cfa87684430f1fd3	siderita/src/bookmarks.rs
+4	1	2ddc75d82b780102545e635bb3d8e6916df0d1db698de22f9d2c591534e8d1a9	siderita/src/controller/mounts.rs
+39	5	c6dd280a12b51cacb379ffeb3ab67a2e90528c573beb4f10f2aa4b04066dfd33	siderita/src/controller/navigation.rs
+4	2	5919f3b8438f54e79f9842207622b82fcd04415c5f101ce5ef0e6823c1597702	siderita/src/controller/session.rs
+11	2	a7d8df88dde33970f5f452d297e72f36d46c1dac49d53a1ad7c4784976151775	siderita/src/devices.rs
+24	1	4923fe32ebcc876dc6b2c044adb9ef80525a0814dbfc18e22635a3274144f7af	siderita/src/favorites.rs
+26	1	a328d5347a9b3bf3f3b14d93cf63f786fed8a00f66b3669a68ce66e15feed158	siderita/src/folder_views.rs
+22	2	e646b65a730b2512b83ab8461122437e5b0623433b5a5f9c92af953d7429841a	siderita/src/icons.rs
+83	7	9967e8aa9af3b9cf8ea241bee177140fc6019893381943e66428e2a6195cdde1	siderita/src/pathkey.rs
+29	0	self	siderita/docs/inventories/2026-08-04-shared-reading-surface/SID-G7-G.numstat.tsv

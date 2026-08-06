@@ -249,7 +249,10 @@ impl qobject::SideritaController {
             return;
         };
         if let Some(phone) = self.rust().phones.iter().find(|phone| phone.connected) {
-            crate::devices::send_file(&phone.id, &path.to_string_lossy());
+            // The path goes out as bytes, not as display text: `send_file` calls
+            // Magnetita's `SendFileUri` with the percent-encoded `file://` URI.
+            // This was the last verb that let a lossy path leave the process.
+            crate::devices::send_file(&phone.id, &path);
         }
     }
 

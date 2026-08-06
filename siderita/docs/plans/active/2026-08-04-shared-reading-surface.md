@@ -86,6 +86,7 @@ commit cannot produce.
 | SID-G7-D | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-D.numstat.tsv) | 57 files, +1283/-441 | Apply [ADR 0008](../../../../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md) to Siderita, closing audit finding `SID-A2`: publish every path crossing the Qt seam as its byte-exact percent key beside its own lossy display text; decode that key at every invokable with a typed refusal instead of rebuilding a `PathBuf` from the `QString`; stop QML composing paths (breadcrumbs, the save picker's typed name, the quick look's `file://` URL, the thumbnail ids, the sidebar's derived names); migrate the persisted bookmarks, favourites, icons, folder views and tab session to keys; leave the `file://`, portal and Trash encodings that face other processes exactly as they are; and lower the earned `controller.rs` architecture row from 1171 to 1106 while retiring its language-debt row | [byte-exact path seam evidence](../../evidence/2026-08-06-byte-exact-path-seam.md) | `VAL-SID-06` |
 | SID-G7-E | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-E.numstat.tsv) | 18 files, +703/-83 | Close the two limits `SID-G7-D` recorded: carry the thumbnail provider's decoded path as `QByteArray` and address the source file by `::stat` and a descriptor opened on its bytes, computing the freedesktop cache key over those bytes in the spelling `percent::encode_qt_path` owns; and make the system-clipboard seam exchange percent-encoded `file://` URIs written and read by `dbus::path_to_uri`/`uri_to_path` instead of lossy `QString` paths | [thumbnail and clipboard bytes evidence](../../evidence/2026-08-06-thumbnail-and-clipboard-bytes.md) | `VAL-SID-06` |
 | SID-G7-F | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-F.numstat.tsv) | 10 files, +210/-8 | Convert the provider id with `toUtf8` rather than `toLatin1`, because Qt hands a provider an id it has already decoded, and expose the seam so a test reaches the decode through the same `image://thumb/<key>` URL a delegate writes instead of entering behind it | `cargo fmt --all --check`, `cargo clippy --all-targets --locked -- -D warnings`, `cargo test --all-targets --locked`, the architecture and language guards — recorded in [thumbnail seam regression evidence](../../evidence/2026-08-06-thumbnail-seam-regression.md) | `VAL-SID-06` |
+| SID-G7-G | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-G.numstat.tsv) | 17 files, +452/-27 | Publish a breadcrumb key-first so a tab in a folder name can no longer move the cut that separates it from its display text; mark a persisted path record as a key when it is written instead of inferring it from codec idempotence, which could not tell a legacy raw path holding a literal `%20` from the key for a path holding a space; and send a file to the phone over Magnetita's new `SendFileUri` with the byte-exact `file://` URI `dbus::path_to_uri` already writes, closing the last verb that put a lossy path out of the process | `cargo fmt --all --check`, `cargo clippy --all-targets --locked -- -D warnings`, `cargo test --all-targets --locked`, the architecture and documentation guards — recorded in [correctness debt evidence](../../evidence/2026-08-06-path-key-correctness-debt.md) | `VAL-SID-06` |
 SID-G7-B is the independent portal correction that was already in the dirty
 checkout when the author requested every pending change be delivered. It does
 not extend the shared reading-surface rules. Its C++ seam exists because Qt's
@@ -170,3 +171,31 @@ serve the one that is not valid UTF-8. The unit exists as much for its test as
 for its one-word fix: the previous tests entered the provider behind the seam
 that carried the wrong assumption, so they stayed green while the grid lost its
 thumbnails.
+
+SID-G7-G takes stage 3 of the
+[light monorepo audit](../../../../docs/evidence/2026-08-06-light-monorepo-audit.md)
+and is three separate repairs to one decision rather than an extension of it.
+All three are places where ADR 0008's key was produced correctly and then
+handed to something that could not keep it whole: a separator a filename may
+legally contain, a persisted record whose spelling had to be guessed, and a
+D-Bus argument typed as a display string. None re-argues the ADR and none adds
+a codec.
+
+The choice of key-first over sanitising the name is deliberate. Sanitising
+would keep the key readable at the cost of showing a name that is not the
+name; putting the key first costs nothing, because a key cannot contain the
+separator by construction while a name can contain anything, so the ambiguity
+is removed rather than papered over.
+
+The persisted mark is `key:`, a prefix neither a key nor a raw path can start
+with, and it is written by every store that keeps a path. A record without it
+predates the mark and keeps the old best-effort migration: the bytes on disk
+carry no evidence either way, existing files must keep loading, and one save
+retires the ambiguity for that store. That residual case is recorded in the
+module and pinned by a test rather than claimed closed.
+
+`SendFile` is untouched. It is a published D-Bus interface and changing what
+its argument means would break any other caller, so the byte-exact path is a
+new method — `SendFileUri`, in `magnetitad` under `MAG-S1-B` — and Siderita is
+its first consumer. That is the same decision the portal and the clipboard
+already took, applied to the one boundary that had not taken it.

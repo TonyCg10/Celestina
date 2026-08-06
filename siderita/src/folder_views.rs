@@ -102,9 +102,14 @@ fn save_to(path: &Path, records: &[FolderView]) -> io::Result<()> {
         if record.path.contains(['\t', '\n', '\r']) {
             continue;
         }
+        // The path is marked, so the reader knows it is a key and does not have
+        // to infer it from the codec.
         text.push_str(&format!(
             "{}\t{}\t{}\t{}\n",
-            record.path, record.view_mode, record.sort_field, record.sort_ascending
+            crate::pathkey::persist(&record.path),
+            record.view_mode,
+            record.sort_field,
+            record.sort_ascending
         ));
     }
     celestina_core::atomic_file::replace(path, text.as_bytes())
@@ -175,6 +180,26 @@ mod tests {
         assert!(forget(&mut records, "/a"));
         assert!(!forget(&mut records, "/a"));
         assert!(records.is_empty());
+    }
+
+    #[test]
+    fn a_saved_key_holding_a_literal_percent_escape_reads_back_as_itself() {
+        // The key for a folder whose name ends in the characters `%20`; the
+        // written mark keeps load from re-encoding it into a different key.
+        let file = temp_file("literal-escape");
+        let records = vec![view("/home/u/100%2520", "grid")];
+        save_to(&file, &records).expect("save");
+        assert_eq!(load_from(&file), records);
+        let _ = fs::remove_dir_all(file.parent().expect("temp parent"));
+    }
+
+    #[test]
+    fn a_legacy_unmarked_record_still_loads() {
+        let file = temp_file("legacy");
+        fs::create_dir_all(file.parent().expect("temp parent")).expect("dir");
+        fs::write(&file, "/home/u/mis fotos\tgrid\t2\tfalse\n").expect("write");
+        assert_eq!(load_from(&file), vec![view("/home/u/mis%20fotos", "grid")]);
+        let _ = fs::remove_dir_all(file.parent().expect("temp parent"));
     }
 
     #[test]

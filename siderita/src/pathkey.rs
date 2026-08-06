@@ -51,20 +51,50 @@ pub fn decode_list(list: &QStringList) -> Result<Vec<PathBuf>, KeyError> {
         .collect()
 }
 
+/// The marker every record written from now on carries, so that reading one
+/// back is a decision rather than a guess.
+///
+/// It is deliberately not a legal start for either spelling it has to be told
+/// apart from: a key and a raw path both begin with `/`.
+const KEY_MARK: &str = "key:";
+
+/// A path key as it is written into a persisted record.
+///
+/// Every store that keeps a path — bookmarks, favourites, icons, folder views,
+/// the tab session — writes through this, so its file becomes unambiguous the
+/// first time it is saved.
+pub fn persist(key: &str) -> String {
+    if key.is_empty() {
+        return String::new();
+    }
+    format!("{KEY_MARK}{key}")
+}
+
 /// A persisted identity string as a key.
 ///
-/// Records written before ADR 0008 hold the raw path, so this decodes first and
-/// re-encodes: a raw path carrying no `%` escape decodes to itself, and a key
-/// round-trips, which makes the conversion idempotent over both spellings.
-/// Known limit: a legacy raw path that literally contains something shaped like
-/// `%XX` normalizes to a different key, and its star or icon is forgotten.
+/// A marked record is a key and is taken verbatim: no codec runs over it, so
+/// there is nothing left to infer. That is the whole point of the mark. The
+/// alternative it replaces — re-encoding whatever was read and relying on the
+/// codec being idempotent over both spellings — cannot distinguish a legacy raw
+/// path that literally contains `%20` from a key that means a path containing a
+/// space, and silently answered with the second. For a bookmark, which is a
+/// navigation and a drop target, that is the wrong folder rather than a
+/// forgotten mark.
+///
+/// An unmarked record predates the mark and is migrated as before, because the
+/// bytes already on disk carry no evidence either way and existing files must
+/// keep loading. That residual ambiguity is bounded: it can only affect records
+/// written before this change, and one save of the store retires it.
 pub fn normalize(stored: &str) -> String {
-    percent::encode(&percent::decode(stored))
+    match stored.strip_prefix(KEY_MARK) {
+        Some(key) => key.to_owned(),
+        None => percent::encode(&percent::decode(stored)),
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{decode_str, encode, normalize, KeyError};
+    use super::{decode_str, encode, normalize, persist, KeyError};
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
     use std::path::PathBuf;
@@ -106,5 +136,51 @@ mod tests {
         let encoded = encode(&non_utf8_path());
         assert_eq!(normalize(&encoded), encoded);
         assert_eq!(decode_str(&normalize(&encoded)), Ok(non_utf8_path()));
+    }
+
+    #[test]
+    fn a_marked_record_is_a_key_and_is_taken_verbatim() {
+        for path in [
+            "/home/u/mis fotos",
+            // The name the codec would otherwise re-read as an escape.
+            "/home/u/100%20de descuento",
+        ] {
+            let key = encode(&PathBuf::from(path));
+            let record = persist(&key);
+            assert!(record.starts_with("key:"), "{record}");
+            assert_eq!(normalize(&record), key);
+            assert_eq!(decode_str(&normalize(&record)), Ok(PathBuf::from(path)));
+        }
+        // Including the case the whole seam exists for.
+        let record = persist(&encode(&non_utf8_path()));
+        assert_eq!(decode_str(&normalize(&record)), Ok(non_utf8_path()));
+        // Writing a record is idempotent in the only sense that matters: the
+        // key it reads back as is the key that went in.
+        assert_eq!(
+            normalize(&persist(&normalize(&record))),
+            encode(&non_utf8_path())
+        );
+        assert_eq!(persist(""), "");
+    }
+
+    #[test]
+    fn an_unmarked_legacy_record_still_migrates() {
+        // Unmarked records predate the mark; existing files must keep loading.
+        assert_eq!(normalize("/home/u/mis fotos"), "/home/u/mis%20fotos");
+        // The residual ambiguity, recorded rather than claimed closed: a legacy
+        // raw path holding a literal `%20` is indistinguishable from a key for
+        // a path holding a space, and is still read as the latter. Only a
+        // record written before the mark can reach this, and saving retires it.
+        assert_eq!(normalize("/home/u/100%20"), "/home/u/100%20");
+        assert_eq!(
+            decode_str(&normalize("/home/u/100%20")),
+            Ok(PathBuf::from("/home/u/100 "))
+        );
+        // Marked, the same name survives — which is the repair.
+        let literal = PathBuf::from("/home/u/100%20");
+        assert_eq!(
+            decode_str(&normalize(&persist(&encode(&literal)))),
+            Ok(literal)
+        );
     }
 }

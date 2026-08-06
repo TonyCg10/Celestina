@@ -92,7 +92,10 @@ fn save_to(path: &Path, bookmarks: &[Bookmark]) -> io::Result<()> {
         }
         text.push_str(&sanitize(&bookmark.name));
         text.push('\t');
-        text.push_str(&location);
+        // Marked, so the reader knows this is a key and does not have to infer
+        // it from the codec. A bookmark is a navigation and a drop target, so
+        // reading it as the wrong path is worse here than anywhere else.
+        text.push_str(&crate::pathkey::persist(&location));
         text.push('\n');
     }
     celestina_core::atomic_file::replace(path, text.as_bytes())
@@ -184,6 +187,23 @@ mod tests {
         let loaded = load_from(&file);
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].path, "/home/u/mis%20fotos");
+        let _ = fs::remove_dir_all(file.parent().expect("temp parent"));
+    }
+
+    #[test]
+    fn a_saved_key_holding_a_literal_percent_escape_reads_back_as_itself() {
+        // `/home/u/100%20` is a folder whose name ends in the four characters
+        // `%20`, so its key doubles the escape. Without the written mark, load
+        // would re-encode a record it could not tell from a legacy raw path and
+        // point the bookmark at `/home/u/100 ` instead — a wrong navigation and
+        // a wrong paste target, not merely a forgotten mark.
+        let file = temp_file("literal-escape");
+        let items = vec![Bookmark {
+            name: "Rebajas".to_owned(),
+            path: "/home/u/100%2520".to_owned(),
+        }];
+        save_to(&file, &items).expect("save bookmarks");
+        assert_eq!(load_from(&file), items);
         let _ = fs::remove_dir_all(file.parent().expect("temp parent"));
     }
 

@@ -45,13 +45,15 @@ impl qobject::SideritaController {
         self.rust().settings.active_tab
     }
 
-    /// Remembers the open tabs. `keys` are path keys and are stored verbatim,
-    /// so a folder whose name is not valid UTF-8 reopens where it was.
+    /// Remembers the open tabs. `keys` are path keys, stored marked as such by
+    /// `pathkey::persist`, so a folder whose name is not valid UTF-8 reopens
+    /// where it was and no reader has to infer which spelling a record holds.
     pub fn save_tabs(mut self: Pin<&mut Self>, keys: &QStringList, active: i32) {
         let tabs: Vec<String> = keys
             .iter()
             .map(ToString::to_string)
             .filter(|key| !key.is_empty())
+            .map(|key| crate::pathkey::persist(&key))
             .collect();
         let mut settings = crate::settings::load();
         settings.tabs = tabs;
