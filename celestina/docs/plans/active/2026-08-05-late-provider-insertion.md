@@ -46,6 +46,7 @@ which is why the same player then appears.
 |---|---|---|---|---|---|---|---|
 | LVR-3-A | `celestina:` | active | provider host/QML binding; host single-instance ordering; provider tool/brightness lifecycle; focused regressions; version and evidence records | pending | Make late provider insertion visible and prevent a rejected or terminating host from starting, overlapping or abandoning automatic DDC work | source regressions written; execution and canonical production exit suspended by the GPU safety hold | `VAL-R1-01`, `VAL-GPU-01` |
 | LVR-3-B | `celestina:` | done | [inventory](../../inventories/2026-08-05-late-provider-insertion/LVR-3-B.numstat.tsv) | 52 files, +1758/-289 | Deliver 0.6.4 with the static-audit corrections and expose one revision-coupled provider lookup to both the compiled module and direct-directory QML tests; the initial singleton resolved as a type rather than a callable instance in the latter | 155 core tests, 43 shell Rust tests, Clippy, qmllint, 13 CTest targets and offscreen smoke pass; canonical verification is blocked only by unrelated Siderita architecture ratchets | `VAL-R1-01`, `VAL-GPU-01` |
+| LVR-3-C | `celestina:` | done | [inventory](../../inventories/2026-08-05-late-provider-insertion/LVR-3-C.numstat.tsv) | 10 files, +161/-7 | Address the escalation timer to the helper instance it was armed against, so a replacement started inside the grace window is not killed mid-`ddcutil`; and let the handler that receives `exitStatus` own the restart delay, so the spacing an unclean exit earns is actually applied — with `FailedToStart` scheduled where it is, since Qt emits no `finished()` for a process that never ran | None: the GPU safety hold forbids building, testing or running this project. Reviewed by reading and recorded in [helper restart ownership evidence](../../evidence/2026-08-06-helper-restart-ownership.md) | `VAL-R1-01`, `VAL-GPU-01` |
 
 ## Recorded trigger
 
@@ -62,3 +63,11 @@ Noctalia to Celestina to Noctalia transition removes the random GPU loss. No
 Celestina executable, provider, build, test, deployment or activation may run
 until the author explicitly ends that observation. LVR-3-B may change only
 repository text and source during the hold.
+
+LVR-3-C repairs LVR-3-B. Both defects are in the path that exists to keep a DDC
+child from being abandoned, and both made it do the opposite: one could kill a
+healthy helper during its first `ddcutil detect`, and the other left the spacing
+after an unclean exit unreachable. Like LVR-3-B, it changes only source and text
+during the hold, and unlike LVR-3-B it carries no automated evidence at all —
+nothing may be compiled or run against this project until the author ends the
+observation.

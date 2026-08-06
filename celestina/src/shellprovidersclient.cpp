@@ -86,6 +86,9 @@ void ShellProvidersClient::startHelper()
     m_tracedMediaVisual = false;
     // The spacing this exit earned has now been served.
     m_uncleanExit = false;
+    // A new instance, and therefore not the one any pending escalation was
+    // armed against.
+    ++m_helperGeneration;
     m_process.start();
 }
 
@@ -164,12 +167,27 @@ void ShellProvidersClient::helperError(QProcess::ProcessError error)
     if (m_stopping)
         return;
 
-    // A read/write failure can arrive while QProcess still reports Running. End
-    // that unusable instance so `helperStopped` owns the restart.
-    if (m_process.state() == QProcess::NotRunning) {
+    // A helper that never started emits no `finished()`, so nothing else will
+    // schedule the replacement and this must. There is also nothing to space
+    // out: a process that did not run abandoned no DDC child.
+    if (error == QProcess::FailedToStart) {
         scheduleRestart();
         return;
     }
+
+    // A read/write failure can arrive while QProcess still reports Running. End
+    // that unusable instance so `helperStopped` owns the restart.
+    //
+    // An instance that has already stopped is left to `helperStopped` as well,
+    // and deliberately: it is the only handler that receives `exitStatus`, and
+    // therefore the only one that can tell an exit that ran the helper's own
+    // shutdown from one that abandoned a DDC child. Scheduling here would arm
+    // the timer first with the ordinary backoff, and `scheduleRestart` returns
+    // early once the timer is active — so the spacing an unclean exit earns
+    // would be settled by whichever of the two signals Qt delivered first, and
+    // in practice never applied at all.
+    if (m_process.state() == QProcess::NotRunning)
+        return;
 
     // SIGTERM, not SIGKILL: the helper answers it by cancelling and reaping any
     // DDC child it owns, which is the whole reason that shutdown path exists.
@@ -177,7 +195,17 @@ void ShellProvidersClient::helperError(QProcess::ProcessError error)
     // nothing left to reap it. A helper that will not leave is still killed —
     // just not before it has been asked.
     m_process.terminate();
-    QTimer::singleShot(gracefulShutdownMs, this, [this] {
+    // Armed against *this* helper, not against whatever is running in three
+    // seconds. The replacement starts on a backoff that begins at 250 ms and
+    // doubles, so the first several restarts land well inside this window; a
+    // timer that only asked `state()` would kill a healthy replacement, and
+    // kill it during the `ddcutil detect` that is its first act — abandoning a
+    // child on the monitor bus, which is the shape this whole path exists to
+    // prevent.
+    const quint64 generation = m_helperGeneration;
+    QTimer::singleShot(gracefulShutdownMs, this, [this, generation] {
+        if (generation != m_helperGeneration)
+            return;
         if (m_process.state() != QProcess::NotRunning) {
             qWarning() << "Celestina's provider helper ignored its termination "
                           "request and is being killed.";

@@ -25,6 +25,14 @@
 
 ## Current checkout truth
 
+- Uncommitted in the checkout: `LVR-3-C`, repairing two defects `LVR-3-B`
+  introduced into the helper-restart path. The escalation timer now names the
+  instance it was armed against, so it cannot kill the replacement that started
+  inside the grace window; and the restart delay is decided by the handler that
+  knows how the helper exited, so the spacing an unclean exit earns is applied
+  rather than lost to a race. Source and text only: under the GPU hold nothing
+  here has been compiled, tested or run.
+
 - A C++20/Qt 6.9+ host maps one top layer-shell panel per output and owns the
   `org.celestina.Shell1` session interface.
 - Rust helpers reduce Niri state and carry the aggregate providers through the

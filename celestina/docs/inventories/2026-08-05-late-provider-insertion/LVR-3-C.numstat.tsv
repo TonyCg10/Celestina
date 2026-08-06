@@ -1,0 +1,20 @@
+# LVR-3-C exact change inventory
+
+Base revision	fcc6fbffc64af47961b622505636395729c31103
+Pathspec	celestina/
+Pathspec	celestina-rs/crates/celestina-shell-core/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	a44f1b451dcecc66ed40eec327a9386eebf80c1616a2b1af0ed8707079045755	celestina/CMakeLists.txt
+1	1	f6f3adc1d3836190d53221cd3a9e66957a641d53c9a11340d7ca9cf57830aee3	celestina/Cargo.lock
+1	1	5d26169df95ef42ebfd6c5beb60ad50e52a87c948f5f13631d8b4aa35c89b565	celestina/Cargo.toml
+8	0	6e66d7f7d012eefefd8133d54052354e06e913f17de56c3ecb3dc74fcae45055	celestina/STATUS.md
+83	0	8b2f88c3716d65b4f350fe4538ec11f63cdec9cb23203f8548cfddbde2506774	celestina/docs/evidence/2026-08-06-helper-restart-ownership.md
+9	0	4f0c007fa7d3dba2e5f947ee1800293fdb0c7c4101a812af5958100e51fd9325	celestina/docs/plans/active/2026-08-05-late-provider-insertion.md
+32	4	9f7ecbfd367872990b2e43ee624b4beb4ccb8ec0b9164b3dd96fbf794e696ff0	celestina/src/shellprovidersclient.cpp
+5	0	7260f66c98efc60233dd2c53e5e18fb9b5f582a8254ab22f431d2fd7f486efb8	celestina/src/shellprovidersclient.h
+1	0	e38c3208273d4eaffa966b36efdf79e5e39f86d73fa44fabec32e8a8fba5067c	docs/version-history.tsv
+20	0	self	celestina/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-C.numstat.tsv

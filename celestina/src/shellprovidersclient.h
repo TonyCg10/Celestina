@@ -80,5 +80,10 @@ private:
     // shutdown. Such a helper may have abandoned an active DDC child, so the
     // replacement is spaced rather than started at the ordinary backoff.
     bool m_uncleanExit = false;
+    // Which helper instance is running. `QProcess` is reused for every
+    // replacement, so a deferred escalation that only asks the process whether
+    // it is running cannot tell the instance it was armed for from the healthy
+    // one that replaced it.
+    quint64 m_helperGeneration = 0;
     int m_restartDelayMs = 0;
 };
