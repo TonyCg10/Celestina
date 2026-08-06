@@ -1,0 +1,19 @@
+# G7-D exact change inventory
+
+Base revision	ea840f7bbb5e77e8a087a2e5e61a5330fb1a4cec
+Pathspec	grafita/
+Pathspec	celestina-rs/crates/grafita-core/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+9	3	79e10b3d6d466f788222f9f68b193e2be4f74bcee7218c6968aa94d7e7676470	celestina-rs/crates/grafita-core/src/session.rs
+19	0	04b471693226da134068aabb944bbaac6215273fbdbbc6fe894e0d62895da007	celestina-rs/crates/grafita-core/tests/sessions.rs
+1	0	440c5c80b3a34f4f84c8b6105a161152dc0f27ce16a98955b3d092881c9f6686	docs/version-history.tsv
+1	1	83e413ab6a6d2894c4f374c4290230598bea863e64791af394f3e696da7a8f7b	grafita/Cargo.lock
+1	1	546b98f65c608cc1abeaa73d9120fd78fdeb0a3fb5e4e5c78e160ef6f25c20fb	grafita/Cargo.toml
+5	0	d6dbd47a797a5ef2c82e805b109517e1273d13e7c6e9d54e53f229c061ab3650	grafita/STATUS.md
+63	0	bc9fe0a01c69fa920cc11a2d0e4810cc6d9632ac4d60e13dfe48b96ba75677d4	grafita/docs/evidence/2026-08-06-naming-an-untouched-document.md
+5	0	ddbe78ea917088c75d32e975cc9262d32bd88b7352ce790a4e2b5c865c70d954	grafita/docs/plans/active/2026-08-04-g7-reading-comfort.md
+19	0	self	grafita/docs/inventories/2026-08-04-g7-reading-comfort/G7-D.numstat.tsv

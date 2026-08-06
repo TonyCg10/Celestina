@@ -821,3 +821,22 @@ fn a_save_as_onto_a_symlink_writes_through_it() {
 
     let _ = fs::remove_dir_all(root);
 }
+
+/// A new document that nobody has typed into still has to be nameable.
+///
+/// The clean check exists so an unchanged *file* is not rewritten. A document
+/// with no file has nothing to rewrite, and answering nothing to the save
+/// shortcut left it with no way to acquire a name at all.
+#[test]
+fn an_untouched_new_document_can_still_be_given_a_destination() {
+    let mut session = DocumentSession::new(Limits::default());
+    let outcome = session.new_document();
+    assert!(matches!(outcome.event, Some(Event::PushText { .. })));
+    assert!(!session.state().dirty, "a new document starts clean");
+
+    let outcome = session.save();
+    assert!(
+        matches!(outcome.event, Some(Event::DestinationNeeded)),
+        "a document with no file asks where it goes, however clean it is"
+    );
+}

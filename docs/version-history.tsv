@@ -38,3 +38,4 @@ celestina-style	1.1.2	bug	STYLE-G7-D	Keep a shared control label as plain text
 celestina	0.6.6	bug	LVR-3-D	Drop a frame the host would discard instead of ending the session
 siderita	1.2.5	bug	SID-G7-G	Keep a breadcrumb and a persisted key unambiguous
 magnetita	1.0.2	bug	MAG-S1-B	Add a byte-exact file URI for sending to the phone
+grafita	1.1.3	bug	G7-D	Keep an untouched new document nameable

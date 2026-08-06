@@ -9,6 +9,11 @@
 
 ## Current checkout truth
 
+- Uncommitted in the checkout: `G7-D`. A new document nobody has typed into can
+  be given a name again: the destination is asked for before the clean guard,
+  which exists to stop an unchanged file being rewritten and does not apply to a
+  document that has no file.
+
 - `grafita-core` owns content-based text acceptance, byte/newline-preserving
   editing, undo/redo, search/replace, indentation, highlighting, conflict
   detection, loss-free save and generation/revision-aware session outcomes.

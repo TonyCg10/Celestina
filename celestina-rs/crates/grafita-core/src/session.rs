@@ -464,15 +464,21 @@ impl DocumentSession {
         let Some(document) = self.document.as_ref() else {
             return Outcome::nothing();
         };
-        if !self.state.dirty {
-            return Outcome::nothing();
-        }
         // No file yet: the host has to ask where this document goes. That is
         // an event, not a refusal — a new document is a perfectly good document
         // that simply has not been given a name.
+        //
+        // Asked before the clean check, and that order is the point. The clean
+        // check exists so an unchanged file is not rewritten; a document with
+        // no file has nothing to rewrite, so the question does not apply to it.
+        // Behind the other order, a new document nobody had typed into yet
+        // could not even be given a name: the shortcut answered nothing at all.
         let Some(request) = document.save_request() else {
             return Outcome::event(Event::DestinationNeeded);
         };
+        if !self.state.dirty {
+            return Outcome::nothing();
+        }
         if self.in_flight == Some(document.revision()) {
             return Outcome::nothing();
         }

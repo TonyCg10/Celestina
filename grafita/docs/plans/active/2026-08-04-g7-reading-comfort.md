@@ -106,6 +106,7 @@ single commit cannot produce.
 | G7-A | `grafita:` | done | [inventory](../../inventories/2026-08-04-g7-reading-comfort/G7-A.numstat.tsv) | 26 files, +1064/-55 | Stored clamped text size and wrap mode with their one-per-window Qt adapter; core-owned caret line and character column; the gutter and scroll bar composed into the window pinned beside the viewport; wider text inset; horizontal scrolling; size, wrap and wheel gestures; caret readout in the footer; encoding label removed and its language-ratchet row retired | [evidence](../../evidence/2026-08-04-g7-reading-comfort.md) | `VAL-G7` |
 | G7-B | `grafita:` | done | [inventory](../../inventories/2026-08-04-g7-reading-comfort/G7-B.numstat.tsv) | 8 files, +60/-3 | Preserve an explicit platform theme while routing otherwise unowned Qt file dialogs through the session portal | [portal file-dialog evidence](../../evidence/2026-08-05-portal-file-dialog.md) | `VAL-SID-02` |
 | G7-C | `grafita:` | done | [inventory](../../inventories/2026-08-04-g7-reading-comfort/G7-C.numstat.tsv) | 18 files, +780/-51 | Make "save as" obey the same revision rule as an ordinary save, decode its destination through `url::local_path`, write through a symlink and report the durability it observed; refuse a duplicate or clean save; disarm a cancelled destination chooser; answer a classify superseded by an open; reset the live search on a new document; keep the undo bound from splitting an action; and stop a generic refusal from overwriting the one that names the file | `cargo test -p grafita-core`, `cargo clippy -p grafita-core --all-targets`, `cargo fmt`, `cargo check`/`cargo test`/`cargo clippy` in `grafita/`, `scripts/qmllint-cxxqt.sh grafita`, `bash scripts/check-architecture-contract.sh` — recorded in [loss-free save-as evidence](../../evidence/2026-08-05-loss-free-save-as.md) | `VAL-GRA-SAVEAS` |
+| G7-D | `grafita:` | done | [inventory](../../inventories/2026-08-04-g7-reading-comfort/G7-D.numstat.tsv) | 9 files, +123/-5 | Ask where a document goes before applying the clean guard, so a new document nobody has typed into can still be given a name — the guard exists to stop an unchanged file being rewritten, and a document with no file has nothing to rewrite | `cargo test -p grafita-core`, `cargo fmt --all --check`, `cargo clippy -p grafita-core --all-targets --locked -- -D warnings` — recorded in [naming an untouched document evidence](../../evidence/2026-08-06-naming-an-untouched-document.md) | `VAL-GRA-SAVEAS` |
 
 G7-B is a bounded corrective delivery discovered while validating open/save in
 the completed reading surface. It changes no document or reading rule: it
@@ -178,3 +179,7 @@ Rollback is per slice: the preference file is ignored when absent, so deleting
 `$XDG_CONFIG_HOME/grafita/preferences` returns the shipped size and wrap mode,
 and reverting the QML slice restores the previous surface without touching the
 core.
+
+G7-D corrects an ordering G7-C introduced. Its clean guard sat before the
+question of whether the document has a file, so it answered for a case it was
+never about and left an untouched new document with no way to acquire a name.
