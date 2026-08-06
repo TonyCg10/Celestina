@@ -51,11 +51,14 @@ Item {
                     return title
                 if (!activeTab || !root.controller)
                     return "…"
-                const path = root.controller.currentPath.replace(/\/+$/, "")
-                if (path.length === 0 || path === "/")
+                // ADR 0008: ask the adapter for the label instead of cutting up
+                // a path here. Touch the device revision so a phone that
+                // (re)announces its name relabels the chip too.
+                root.controller.phoneRevision
+                if (root.controller.currentPathKey.length === 0)
                     return "Inicio"
-                const split = path.lastIndexOf("/")
-                return split >= 0 ? path.substring(split + 1) : path
+                return root.controller.displayLocationName(
+                        root.controller.currentPathKey)
             }
 
             width: Math.max(110, Math.min(200,

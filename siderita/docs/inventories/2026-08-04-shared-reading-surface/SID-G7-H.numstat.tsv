@@ -1,0 +1,24 @@
+# SID-G7-H exact change inventory
+
+Base revision	7803853fc14c39cbfb75beb64d6dcf91ecda2761
+Pathspec	siderita/
+Pathspec	celestina-rs/crates/siderita-core/
+Pathspec	celestina-rs/crates/siderita-ops/
+Pathspec	celestina-rs/crates/siderita-qt/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	d236cdc89fbc62128037ba6831d73bfd1bf0a967bd61c83682531aca1eff62f4	docs/version-history.tsv
+1	1	62b4119f6f68b4e26e32e77334d028b51de06c7fb87c4883fcac73724c77cf0d	siderita/Cargo.lock
+1	1	4b331abb46fc24f888daba244e94ac6c38b303344d400f0f4067d69590576633	siderita/Cargo.toml
+18	0	040c4fe378a6e254184ce5b6cd8289a109ada0e8135f893dcb08bdbc88c214c2	siderita/STATUS.md
+120	0	1c72ac25c01d0483e6010bdfcb7ac1377141ccebc3f5ba6cd1818b4c1109685e	siderita/docs/evidence/2026-08-06-silent-paste-and-label-surgery.md
+36	0	038bc0bc62c846d36d1aa443eda0012ed9cbf2bc6611483a1a2e1493d121c159	siderita/docs/plans/active/2026-08-04-shared-reading-surface.md
+7	4	4dd4faa5175c6b58265402be949e510c0ed108ba9a85c7055080be989e4fefef	siderita/qml/components/chrome/TabStrip.qml
+4	6	ce8be8b7de251f7b575b159586198d8c7ec306b354e5bbf5a46d4fa99bffb441	siderita/qml/components/folder/FolderHeading.qml
+24	0	984cc6a9cbc061983d712da1028dff328f50eb58e12faa69855d1a678dc9336d	siderita/src/controller/display.rs
+27	0	ce94f17e47680f00a8e745f8d5c82ed3418ec5831f7690381493294bfbfb7038	siderita/src/controller/fileops.rs
+80	1	1d82a8194ed522aab7ab67e83b10a113099943336b4b4a79a681435afca51141	siderita/src/controller/paste.rs
+24	0	self	siderita/docs/inventories/2026-08-04-shared-reading-surface/SID-G7-H.numstat.tsv

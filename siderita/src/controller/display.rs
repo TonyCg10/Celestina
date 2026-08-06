@@ -57,6 +57,18 @@ pub(crate) fn row_subtitle(row: &EntryRow) -> String {
     )
 }
 
+/// What a paste made of nothing but cuts into the folder those entries already
+/// live in has to say. There is no work to do, but Ctrl+V must never be a
+/// silent no-op: the person asked for something and deserves to be told why
+/// nothing moved.
+pub(crate) fn same_folder_cut_status(count: usize) -> &'static str {
+    if count == 1 {
+        "El elemento ya está en esta carpeta"
+    } else {
+        "Los elementos ya están en esta carpeta"
+    }
+}
+
 /// The containing folder of a search hit, shown as its subtitle so a result
 /// carries where it lives (the one thing a flat folder row doesn't need).
 pub(crate) fn search_hit_parent(path: &Path) -> String {
@@ -83,6 +95,18 @@ mod tests {
         );
         // No file name (root) falls back to the whole path.
         assert_eq!(super::display_name(Path::new("/")), "/");
+    }
+
+    #[test]
+    fn the_same_folder_cut_status_agrees_with_the_number_of_entries() {
+        assert_eq!(
+            super::same_folder_cut_status(1),
+            "El elemento ya está en esta carpeta"
+        );
+        assert_eq!(
+            super::same_folder_cut_status(2),
+            "Los elementos ya están en esta carpeta"
+        );
     }
 
     #[test]

@@ -16,6 +16,11 @@ pub(crate) struct PastePlan {
     pub(crate) sources: Vec<PathBuf>,
     pub(crate) decisions: Vec<Option<ConflictStrategy>>,
     pub(crate) colliding: Vec<usize>,
+    /// The cut entries dropped because they already live in `destination`.
+    /// Kept rather than merely counted: when they are the *whole* paste there is
+    /// nothing to write, and the caller still has to settle the clipboard they
+    /// came from and tell the person why nothing happened.
+    pub(crate) same_folder_cuts: Vec<PathBuf>,
 }
 
 /// Looks at every source against the name it would take in `destination`.
@@ -33,11 +38,14 @@ pub(crate) struct PastePlan {
 ///
 /// A *cut* into the same folder is instead dropped: moving an entry to where it
 /// already is means doing nothing, which is what a drop onto its own folder
-/// already does. Renaming it to "(copia)" would be a second surprise.
+/// already does. Renaming it to "(copia)" would be a second surprise. It is
+/// reported in `same_folder_cuts` so that a paste made *entirely* of such
+/// entries can still say so rather than end in silence.
 pub(crate) fn plan_paste(sources: Vec<PathBuf>, destination: &Path, cut: bool) -> PastePlan {
     let mut kept = Vec::with_capacity(sources.len());
     let mut decisions = Vec::with_capacity(sources.len());
     let mut colliding = Vec::new();
+    let mut same_folder_cuts = Vec::new();
 
     for source in sources {
         let Some(target) = source.file_name().map(|name| destination.join(name)) else {
@@ -52,6 +60,7 @@ pub(crate) fn plan_paste(sources: Vec<PathBuf>, destination: &Path, cut: bool) -
         }
         if is_same_entry(&source, &target) {
             if cut {
+                same_folder_cuts.push(source);
                 continue;
             }
             kept.push(source);
@@ -67,6 +76,7 @@ pub(crate) fn plan_paste(sources: Vec<PathBuf>, destination: &Path, cut: bool) -
         sources: kept,
         decisions,
         colliding,
+        same_folder_cuts,
     }
 }
 
@@ -193,5 +203,74 @@ fn place_into(
         outcome
             .failures
             .push(format!("{}: {error}", display_name(source)));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{holds_exactly, plan_paste, ConflictStrategy};
+    use std::path::PathBuf;
+
+    /// A scratch directory of this test's own, in the repository idiom: named
+    /// after the case, the process and the thread so parallel tests never share
+    /// one. The paste planner asks the filesystem, so it needs real entries.
+    fn scratch(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "siderita-paste-{label}-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mk test dir");
+        dir
+    }
+
+    /// A scratch directory holding one file, and that file's path.
+    fn folder_with_one_file(label: &str) -> (PathBuf, PathBuf) {
+        let folder = scratch(label);
+        let entry = folder.join("nota.txt");
+        std::fs::write(&entry, b"x").expect("write fixture");
+        (folder, entry)
+    }
+
+    #[test]
+    fn a_cut_into_its_own_folder_is_dropped_and_reported() {
+        let (folder, entry) = folder_with_one_file("cut-self");
+        let plan = plan_paste(vec![entry.clone()], &folder, true);
+        assert!(plan.sources.is_empty());
+        assert_eq!(plan.same_folder_cuts, vec![entry]);
+    }
+
+    #[test]
+    fn the_same_entry_copied_into_its_own_folder_is_a_duplicate_not_a_collision() {
+        let (folder, entry) = folder_with_one_file("copy-self");
+        let plan = plan_paste(vec![entry], &folder, false);
+        assert_eq!(plan.decisions, vec![Some(ConflictStrategy::KeepBoth)]);
+        assert!(plan.colliding.is_empty());
+        assert!(plan.same_folder_cuts.is_empty());
+    }
+
+    #[test]
+    fn a_cut_that_still_has_work_to_do_reports_only_the_dropped_entry() {
+        let (folder, entry) = folder_with_one_file("cut-mixed");
+        let elsewhere = scratch("cut-mixed-source");
+        let other = elsewhere.join("otra.txt");
+        std::fs::write(&other, b"y").expect("write fixture");
+
+        let plan = plan_paste(vec![entry.clone(), other.clone()], &folder, true);
+        assert_eq!(plan.sources, vec![other]);
+        assert_eq!(plan.same_folder_cuts, vec![entry]);
+        assert!(plan.colliding.is_empty());
+    }
+
+    #[test]
+    fn a_clipboard_that_gained_an_entry_is_no_longer_the_one_that_was_consumed() {
+        let consumed = vec![PathBuf::from("/tmp/a"), PathBuf::from("/tmp/b")];
+        assert!(holds_exactly(
+            &[PathBuf::from("/tmp/b"), PathBuf::from("/tmp/a")],
+            &consumed
+        ));
+        assert!(!holds_exactly(&[PathBuf::from("/tmp/a")], &consumed));
+        assert!(!holds_exactly(&[], &consumed));
     }
 }

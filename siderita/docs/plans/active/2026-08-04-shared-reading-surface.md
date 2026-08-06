@@ -87,6 +87,7 @@ commit cannot produce.
 | SID-G7-E | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-E.numstat.tsv) | 18 files, +703/-83 | Close the two limits `SID-G7-D` recorded: carry the thumbnail provider's decoded path as `QByteArray` and address the source file by `::stat` and a descriptor opened on its bytes, computing the freedesktop cache key over those bytes in the spelling `percent::encode_qt_path` owns; and make the system-clipboard seam exchange percent-encoded `file://` URIs written and read by `dbus::path_to_uri`/`uri_to_path` instead of lossy `QString` paths | [thumbnail and clipboard bytes evidence](../../evidence/2026-08-06-thumbnail-and-clipboard-bytes.md) | `VAL-SID-06` |
 | SID-G7-F | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-F.numstat.tsv) | 10 files, +210/-8 | Convert the provider id with `toUtf8` rather than `toLatin1`, because Qt hands a provider an id it has already decoded, and expose the seam so a test reaches the decode through the same `image://thumb/<key>` URL a delegate writes instead of entering behind it | `cargo fmt --all --check`, `cargo clippy --all-targets --locked -- -D warnings`, `cargo test --all-targets --locked`, the architecture and language guards — recorded in [thumbnail seam regression evidence](../../evidence/2026-08-06-thumbnail-seam-regression.md) | `VAL-SID-06` |
 | SID-G7-G | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-G.numstat.tsv) | 17 files, +452/-27 | Publish a breadcrumb key-first so a tab in a folder name can no longer move the cut that separates it from its display text; mark a persisted path record as a key when it is written instead of inferring it from codec idempotence, which could not tell a legacy raw path holding a literal `%20` from the key for a path holding a space; and send a file to the phone over Magnetita's new `SendFileUri` with the byte-exact `file://` URI `dbus::path_to_uri` already writes, closing the last verb that put a lossy path out of the process | `cargo fmt --all --check`, `cargo clippy --all-targets --locked -- -D warnings`, `cargo test --all-targets --locked`, the architecture and documentation guards — recorded in [correctness debt evidence](../../evidence/2026-08-06-path-key-correctness-debt.md) | `VAL-SID-06` |
+| SID-G7-H | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-H.numstat.tsv) | 12 files, +343/-13 | Report a paste made entirely of cuts into the folder those entries already occupy — plan it as a dropped set rather than a discarded one, settle the clipboard it came from and say so on the status line, so Ctrl+V is never a silent no-op; and take the last two QML surfaces that cut a label out of a path off that pattern, asking the adapter for the label [ADR 0008](../../../../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md) says it owns | `cargo fmt --all --check`, `cargo clippy --all-targets --locked -- -D warnings`, `cargo test --all-targets --locked`, the architecture, language and documentation guards — recorded in [silent paste and QML path surgery evidence](../../evidence/2026-08-06-silent-paste-and-label-surgery.md) | `VAL-SID-06` |
 SID-G7-B is the independent portal correction that was already in the dirty
 checkout when the author requested every pending change be delivered. It does
 not extend the shared reading-surface rules. Its C++ seam exists because Qt's
@@ -199,3 +200,38 @@ its argument means would break any other caller, so the byte-exact path is a
 new method — `SendFileUri`, in `magnetitad` under `MAG-S1-B` — and Siderita is
 its first consumer. That is the same decision the portal and the clipboard
 already took, applied to the one boundary that had not taken it.
+
+SID-G7-H takes two of the low findings of the same
+[light monorepo audit](../../../../docs/evidence/2026-08-06-light-monorepo-audit.md).
+They are unrelated as defects and one as a rule: each is a place where the
+application knew something and did not say it.
+
+The silent paste is the sharper of the two. Dropping a cut whose destination is
+the folder it already occupies is right — moving an entry to where it is means
+doing nothing — but the planner discarded it, so when it was the *whole* paste
+nothing distinguished "there was nothing to do" from "the shortcut is broken":
+no status text, and the cut ghost still marking entries that were no longer
+going anywhere. The plan now reports those entries instead of forgetting them,
+which is what lets the caller settle the clipboard and answer. The clipboard is
+settled by the same rule a consumed move already used — the system clipboard is
+only wiped while it still holds exactly these entries, because it is shared with
+the rest of the desktop.
+
+The two QML surfaces are the smaller half and carry no behaviour risk: the text
+was only ever a heading and a tab chip. They are in the unit because ADR 0008
+names this exact pattern as the sign that an adapter is not answering a question
+its QML has, and `FolderHeading` already had the right call one branch above the
+wrong one. No Rust was added for it: `displayLocationName` already answered,
+including the phone-name substitution the tab chip did not previously make.
+
+One deliberate consequence: at the filesystem root the tab chip now reads `/`
+rather than `Inicio`, because that is what the adapter answers and what the
+heading beside it already showed. Inventing product copy in QML to preserve the
+divergence would have been the same defect in a new place.
+
+What was left alone, and recorded rather than fixed: `FolderHeading` still
+compares `currentPathKey` against `phoneMounts` by trimming trailing slashes off
+both. That is string surgery on a key by the ADR's letter, but it is a
+comparison rather than a derivation, and answering it properly means a new
+adapter question (which device, if any, this location is) — a change with its
+own decision, not a tidy-up to fold into a low-finding batch.

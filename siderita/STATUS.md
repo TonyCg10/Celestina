@@ -9,6 +9,24 @@
 
 ## Current checkout truth
 
+- Uncommitted in the checkout: `SID-G7-H`, two of the low findings of the
+  [light monorepo audit](../docs/evidence/2026-08-06-light-monorepo-audit.md).
+  Pressing Ctrl+V with nothing on the clipboard but a cut into the folder those
+  entries already occupy is no longer a silent no-op: the plan reports the
+  entries it drops instead of forgetting them, so the clipboard and its ghost
+  are settled — the system clipboard only while it still holds exactly those
+  entries — and the status line says why nothing moved. And the last two QML
+  surfaces that cut a label out of a path, the tab chip and the folder heading,
+  ask the adapter for it, which is what
+  [ADR 0008](../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md) says
+  owns that answer; the chip gains the phone-name substitution it never made.
+  One visible consequence: at the filesystem root the chip now reads `/` rather
+  than `Inicio`, matching the heading beside it. Formatted, Clippy-clean, 109
+  unit tests and the three repository guards — no production run, no version
+  transition, no inventory and nothing tried by hand: that is `VAL-SID-06`. The
+  limits, including one comparison against a key left deliberately open, are in
+  the [evidence](docs/evidence/2026-08-06-silent-paste-and-label-surgery.md).
+
 - Uncommitted in the checkout: `SID-G7-G`, the three Siderita items of stage 3
   of the [light monorepo audit](../docs/evidence/2026-08-06-light-monorepo-audit.md).
   A breadcrumb is published key-first, so a folder whose name contains a tab — a

@@ -419,6 +419,14 @@ impl qobject::SideritaController {
         // entry that would collide with itself (see `plan_paste`).
         let plan = super::paste::plan_paste(sources, &destination, cut);
         if plan.sources.is_empty() {
+            // Nothing left to write. When the whole paste was a cut into the
+            // folder its entries already live in, that is not a reason to say
+            // nothing: the person pressed Ctrl+V and the cut is still marked.
+            // Settle it — same clipboard convention as a consumed move — and
+            // report it, so the shortcut is never a silent no-op.
+            if !plan.same_folder_cuts.is_empty() {
+                self.as_mut().settle_same_folder_cut(&plan.same_folder_cuts);
+            }
             return;
         }
 
@@ -442,6 +450,25 @@ impl qobject::SideritaController {
             cursor: 0,
         });
         self.as_mut().publish_conflict();
+    }
+
+    /// Closes a paste that turned out to be nothing but cuts into the folder
+    /// their entries already occupy: the ghost stops marking entries that are
+    /// no longer going anywhere, and the status line explains the no-op.
+    ///
+    /// The system clipboard is only wiped while it still holds exactly these
+    /// entries — it is a shared desktop resource, and another application's
+    /// content is not ours to discard. Same rule as `finish_paste`.
+    fn settle_same_folder_cut(mut self: Pin<&mut Self>, cuts: &[PathBuf]) {
+        let held = clipboard_paths(&qobject::system_clipboard_read_uris());
+        if super::paste::holds_exactly(&held, cuts) {
+            qobject::system_clipboard_clear();
+        }
+        self.as_mut().clear_clipboard();
+        self.as_mut()
+            .set_status_text(QString::from(super::display::same_folder_cut_status(
+                cuts.len(),
+            )));
     }
 
     /// Shows the collision now being asked about — its name and how many are

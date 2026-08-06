@@ -51,13 +51,11 @@ Item {
         // Re-evaluate when Magnetita republishes its parallel device lists.
         controller.phoneNames.length
         controller.phoneMounts.length
-        if (controller.currentPathKey.length > 0)
-            return controller.displayLocationName(controller.currentPathKey)
-        const path = controller.currentPath.replace(/\/+$/, "")
-        if (path.length === 0 || path === "/")
+        // ADR 0008: the label comes from the adapter, which owns both the
+        // decode and the phone-name substitution. No path arithmetic here.
+        if (controller.currentPathKey.length === 0)
             return "Inicio"
-        const split = path.lastIndexOf("/")
-        return split >= 0 ? path.substring(split + 1) : path
+        return controller.displayLocationName(controller.currentPathKey)
     }
 
     readonly property string contextLabel: controller.trashActive
