@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import tempfile
 import unittest
@@ -27,12 +28,33 @@ class LanguageContractTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def run_guard(self) -> subprocess.CompletedProcess[str]:
+    def run_guard(self, compare_ref: str | None = None) -> subprocess.CompletedProcess[str]:
+        environment = dict(os.environ)
+        environment.pop("LANGUAGE_COMPARE_REF", None)
+        if compare_ref is not None:
+            environment["LANGUAGE_COMPARE_REF"] = compare_ref
         return subprocess.run(
             ["python3", str(SCRIPT), "--root", str(self.root)],
             text=True,
             capture_output=True,
+            env=environment,
         )
+
+    def git(self, *arguments: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(self.root), *arguments],
+            check=True,
+            text=True,
+            capture_output=True,
+        ).stdout.strip()
+
+    def commit_fixture(self, message: str) -> str:
+        self.git("config", "user.name", "Fixture")
+        self.git("config", "user.email", "fixture@example.invalid")
+        self.git("config", "core.hooksPath", "/dev/null")
+        self.git("add", "-A")
+        self.git("commit", "-qm", message)
+        return self.git("rev-parse", "HEAD")
 
     def write_baseline(self, rows: str = "") -> None:
         (self.root / "scripts/language-baseline.tsv").write_text(
@@ -153,6 +175,53 @@ class LanguageContractTests(unittest.TestCase):
         result = self.run_guard()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("new non-English repository text", result.stdout)
+
+
+    def test_a_resolvable_compare_ref_still_ratchets_the_baseline(self) -> None:
+        (self.root / "src/example.rs").write_text(
+            "// El agente ejecuta la prueba.\n", encoding="utf-8"
+        )
+        self.write_baseline("1\tsrc/example.rs\n")
+        revision = self.commit_fixture("fixture: establish language debt")
+        self.assertEqual(self.run_guard(revision).returncode, 0)
+
+        # Raising a committed row is the case the historical comparison exists
+        # for, and it must still be caught.
+        (self.root / "src/example.rs").write_text(
+            "// El agente ejecuta la prueba.\n// También verifica la aplicación.\n",
+            encoding="utf-8",
+        )
+        self.write_baseline("2\tsrc/example.rs\n")
+        result = self.run_guard(revision)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("baseline increased from 1 to 2", result.stdout)
+
+    def test_an_unresolvable_compare_ref_fails_closed(self) -> None:
+        # The ratchet used to vanish here and the guard printed OK. CI passes
+        # `github.event.before`, which is all zeros when a branch is created.
+        (self.root / "src/example.rs").write_text(
+            "// El agente ejecuta la prueba.\n", encoding="utf-8"
+        )
+        self.write_baseline("1\tsrc/example.rs\n")
+        self.commit_fixture("fixture: establish language debt")
+
+        for compare_ref in ("0" * 40, "this-ref-does-not-exist"):
+            with self.subTest(compare_ref=compare_ref):
+                result = self.run_guard(compare_ref)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(
+                    f"cannot resolve LANGUAGE_COMPARE_REF={compare_ref}", result.stdout
+                )
+
+    def test_a_resolvable_ref_without_a_baseline_is_an_initial_baseline(self) -> None:
+        # A real first commit that predates the baseline file is not a failure;
+        # only a ref that cannot be resolved at all is.
+        (self.root / "src/example.rs").write_text("// English comment.\n", encoding="utf-8")
+        revision = self.commit_fixture("fixture: publish without a baseline")
+        self.write_baseline()
+        result = self.run_guard(revision)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("initial baseline; no history at", result.stdout)
 
 
 if __name__ == "__main__":

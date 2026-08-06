@@ -278,6 +278,12 @@ def verification_fingerprint(root: Path, project: dict[str, Any]) -> str:
         "scripts/production_artifact.py",
         "scripts/production-common.sh",
         "scripts/qmllint-cxxqt.sh",
+        # The qmllint verdict now depends on the recorded warning ratchet, so a
+        # change to it is a change to the verification.
+        "scripts/qmllint-baseline.tsv",
+        # The architecture guard now derives the set of projects it inspects
+        # from the registry, so the registry decides what gets verified.
+        "docs/projects.toml",
         "scripts/test-production-artifacts.py",
         "scripts/test-production-artifacts.sh",
         "scripts/test-production-common.sh",

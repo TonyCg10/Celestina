@@ -318,33 +318,110 @@ elif [[ $output != *"baseline row removed without a changed source and canonical
     fail "the removed baseline row failed without the source-presence diagnostic"
 fi
 
+# The style guard still enumerates QML roots by hand, so keep checking that its
+# lists mention every project that has one. `siderita/qml` appears in each of
+# its input lists and therefore serves as the template.
 for candidate in "$repo_root"/*/; do
     project=$(basename -- "$candidate")
     [[ $project == celestina-style ]] && continue
     [[ -d $candidate/qml ]] || continue
 
-    # Check per line, not per file: each scanner invocation lists its inputs on
-    # one line, and appearing in three of four lists still leaves one scanner
-    # blind. `siderita/qml` appears in every list and therefore serves as the
-    # template for what each list must contain.
-    for guard in "$architecture_guard" "$style_guard"; do
-        while IFS= read -r line; do
-            if [[ $line != *"$project/qml"* ]]; then
-                fail "$(basename -- "$guard"): an input list omits $project/qml -> $line"
-            fi
-        done < <(grep -F 'siderita/qml' "$guard")
-    done
-
-    # Projects with build.rs also pass through the QML-registration and style-
-    # symlink loops, which enumerate bare project names.
-    if [[ -f $candidate/build.rs ]]; then
-        while IFS= read -r line; do
-            if [[ $line != *" $project"* ]]; then
-                fail "architecture guard: a 'for app in' loop omits $project -> $line"
-            fi
-        done < <(grep -E 'for app in .*siderita' "$architecture_guard")
-    fi
+    while IFS= read -r line; do
+        if [[ $line != *"$project/qml"* ]]; then
+            fail "$(basename -- "$style_guard"): an input list omits $project/qml -> $line"
+        fi
+    done < <(grep -F 'siderita/qml' "$style_guard")
 done
+
+# The architecture guard must not enumerate projects by hand at all: a
+# hand-written list is exactly how a registered project gets skipped in
+# silence.
+while IFS= read -r registered_id; do
+    if grep -qE "(for app in|--style-root|scanners?\.py [a-z-]+ ).*\b$registered_id\b" \
+        "$architecture_guard"; then
+        fail "architecture guard: hard-codes the registered project '$registered_id'"
+    fi
+done < <(python3 "$scanner" registry-qml-projects "$repo_root/docs/projects.toml" \
+    | cut -f2)
+
+# The derived list must contain every registered project that owns QML, read
+# independently from the registry rather than from the scanner's own answer.
+if ! python3 - "$scanner" "$repo_root/docs/projects.toml" <<'PY'
+import runpy
+import sys
+import tomllib
+
+namespace = runpy.run_path(sys.argv[1], run_name="_architecture_registry_fixture")
+with open(sys.argv[2], "rb") as handle:
+    registry = tomllib.load(handle)
+
+derive = namespace["registry_qml_projects"]
+expected = {
+    project["id"]
+    for project in registry["projects"]
+    if project["kind"].startswith("cxx-qt-")
+    or project["kind"] in {"qt-shell", "qml-module"}
+}
+assert {row[1] for row in derive(registry)} == expected, "derived project set drifted"
+
+# A registered application that does not declare its own QML root is an error,
+# not a project the guard may quietly skip.
+broken = tomllib.loads(
+    """
+schema_version = 1
+[suite]
+commit_prefix = "suite"
+[[projects]]
+id = "shell"
+kind = "qt-shell"
+path = "shell"
+source_roots = ["shell/qml"]
+[[projects]]
+id = "style"
+kind = "qml-module"
+path = "style"
+source_roots = ["style"]
+[[projects]]
+id = "sextita"
+kind = "cxx-qt-application"
+path = "sextita"
+source_roots = ["sextita/src"]
+"""
+)
+try:
+    derive(broken)
+except namespace["ScannerError"] as error:
+    assert "sextita/qml" in str(error), error
+else:
+    raise AssertionError("a registered application without a QML root was accepted")
+PY
+then
+    fail "the registry-derived QML project list was inconsistent"
+fi
+
+# End to end: a sixth registered application cannot be left uninspected. The
+# guard must fail closed on it instead of printing OK.
+registry_fixture="$fixture_tmp/projects.toml"
+{
+    cat "$repo_root/docs/projects.toml"
+    printf '%s\n' \
+        '' \
+        '[[projects]]' \
+        'id = "sextita"' \
+        'name = "Sextita"' \
+        'path = "sextita"' \
+        'kind = "cxx-qt-application"' \
+        'commit_prefix = "sextita"' \
+        'source_roots = ["sextita/src", "sextita/qml"]' \
+        'commit_roots = ["sextita/"]'
+} > "$registry_fixture"
+
+if output=$(ARCHITECTURE_REGISTRY_FILE="$registry_fixture" \
+    bash "$architecture_guard" 2>&1); then
+    fail "a registered application that does not exist on disk was not inspected"
+elif [[ $output != *"sextita"* ]]; then
+    fail "the guard failed without naming the unregistered-on-disk project"
+fi
 
 if ((failures)); then
     exit 1

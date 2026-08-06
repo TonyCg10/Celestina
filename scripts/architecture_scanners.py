@@ -706,6 +706,95 @@ def scan_dependency_metadata() -> None:
                 print(f"{package_name}: {name}{suffix}")
 
 
+# How a registered `kind` contributes QML to the suite. The guard used to
+# repeat `siderita magnetita grafita fluorita` in five functions, so a sixth
+# registered application would have been skipped in silence while the guard
+# printed OK. The registry is the only place that knows which projects exist,
+# so the list is derived from it and a registered project that owes a QML root
+# is an error rather than an omission.
+QML_ROLE_BY_KIND = {
+    "qt-shell": "shell",
+    "qml-module": "style",
+}
+QML_APPLICATION_KIND_PREFIX = "cxx-qt-"
+
+
+def qml_role_for_kind(kind: str) -> str | None:
+    if kind.startswith(QML_APPLICATION_KIND_PREFIX):
+        return "application"
+    return QML_ROLE_BY_KIND.get(kind)
+
+
+def registry_qml_projects(
+    registry: dict[str, Any]
+) -> list[tuple[str, str, str, str]]:
+    """Return (role, id, path, qml_root) for every project that owns QML.
+
+    ``application`` projects register their QML through a CXX-Qt ``build.rs``,
+    the ``shell`` registers it through CMake, and the ``style`` is the shared
+    module both link against. Any other kind owns no QML root and is skipped.
+    """
+
+    projects = registry.get("projects", [])
+    if not isinstance(projects, list) or not projects:
+        raise ScannerError("registry projects must be a non-empty list")
+    rows: list[tuple[str, str, str, str]] = []
+    seen: set[str] = set()
+    for index, project in enumerate(projects):
+        label = f"projects[{index}]"
+        if not isinstance(project, dict):
+            raise ScannerError(f"{label} must be a table")
+        kind = project.get("kind")
+        if not isinstance(kind, str) or not kind:
+            raise ScannerError(f"{label}.kind is missing or invalid")
+        role = qml_role_for_kind(kind)
+        if role is None:
+            continue
+        identifier = project.get("id")
+        if not isinstance(identifier, str) or not identifier:
+            raise ScannerError(f"{label}.id is missing or invalid")
+        if identifier in seen:
+            raise ScannerError(f"{label}.id is registered twice: {identifier}")
+        seen.add(identifier)
+        path = _normalized_project_path(project.get("path"), f"{label}.path")
+
+        source_roots = project.get("source_roots", [])
+        if not isinstance(source_roots, list) or not source_roots:
+            raise ScannerError(f"{label}.source_roots must contain source roots")
+        for value in source_roots:
+            _normalized_project_path(value, f"{label}.source_roots")
+
+        if role == "style":
+            qml_root = path
+        else:
+            qml_root = f"{path}/qml"
+            # A registered application or shell that does not declare its own
+            # QML root cannot be inspected by the QML scanners, and silently
+            # inspecting nothing is the failure this derivation exists to stop.
+            if qml_root not in source_roots:
+                raise ScannerError(
+                    f"{label}: kind '{kind}' owns QML, but {qml_root} is not "
+                    f"declared in {label}.source_roots"
+                )
+        rows.append((role, identifier, path, qml_root))
+
+    for required in ("application", "shell", "style"):
+        if not any(row[0] == required for row in rows):
+            raise ScannerError(f"the registry declares no {required} QML project")
+    return rows
+
+
+def print_registry_qml_projects(registry_raw: str) -> None:
+    path = pathlib.Path(registry_raw)
+    try:
+        with path.open("rb") as handle:
+            registry = tomllib.load(handle)
+    except tomllib.TOMLDecodeError as error:
+        raise ScannerError(f"{registry_raw}: invalid registry: {error}") from error
+    for row in registry_qml_projects(registry):
+        print("\t".join(row))
+
+
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -740,6 +829,9 @@ def parse_arguments() -> argparse.Namespace:
     history.add_argument("registry", type=pathlib.Path)
     history.add_argument("--root", type=pathlib.Path, default=pathlib.Path.cwd())
 
+    qml_projects = subparsers.add_parser("registry-qml-projects")
+    qml_projects.add_argument("registry")
+
     subparsers.add_parser("dependency-metadata")
     return parser.parse_args()
 
@@ -768,6 +860,8 @@ def main() -> int:
                 arguments.baseline.resolve(),
                 arguments.registry.resolve(),
             )
+        elif arguments.command == "registry-qml-projects":
+            print_registry_qml_projects(arguments.registry)
         else:
             scan_dependency_metadata()
     except (OSError, UnicodeError, ScannerError) as error:

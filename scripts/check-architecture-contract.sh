@@ -18,6 +18,45 @@ fail() {
     failures=1
 }
 
+# The set of projects that own QML comes from docs/projects.toml, never from a
+# list written here. A hand-written list cannot notice a sixth registered
+# application, and a guard that inspects nothing prints OK.
+readonly registry_file="${ARCHITECTURE_REGISTRY_FILE:-$repo_root/docs/projects.toml}"
+application_ids=()
+application_paths=()
+qml_roots=()
+style_root=''
+
+load_registry_projects() {
+    local rows role identifier path qml_root
+    if ! rows=$(python3 "$architecture_scanner" registry-qml-projects \
+        "$registry_file"); then
+        # Fail hard rather than continue with empty lists: every QML check
+        # below would then inspect nothing and report success.
+        printf 'architecture: ERROR: %s\n' \
+            "could not derive the QML projects from $registry_file" >&2
+        exit 1
+    fi
+    while IFS=$'\t' read -r role identifier path qml_root; do
+        [[ -n $role ]] || continue
+        case $role in
+            application)
+                application_ids+=("$identifier")
+                application_paths+=("$path")
+                qml_roots+=("$qml_root")
+                ;;
+            shell) qml_roots+=("$qml_root") ;;
+            style) style_root=$qml_root ;;
+        esac
+    done <<< "$rows"
+
+    if ((${#application_paths[@]} == 0)) || [[ -z $style_root ]]; then
+        printf 'architecture: ERROR: %s\n' \
+            "$registry_file declares no QML application or no shared style" >&2
+        exit 1
+    fi
+}
+
 is_generated_path() {
     case $1 in
         build/* | */build/* | target/* | */target/*) return 0 ;;
@@ -222,10 +261,17 @@ check_qml_registration() {
     local app build_file file relative base canonical registered registry
     local resolved_file resolved_canonical
 
-    for app in siderita magnetita grafita fluorita; do
+    for app in "${application_paths[@]}"; do
         build_file="$app/build.rs"
         if [[ ! -f $build_file ]]; then
             fail "missing $build_file"
+            continue
+        fi
+        # A registered application without its QML root used to make `find`
+        # fail into an empty loop, so nothing was inspected and nothing was
+        # counted as a failure.
+        if [[ ! -d $app/qml ]]; then
+            fail "$app is registered as a QML application, but $app/qml does not exist"
             continue
         fi
         if ! registry=$(build_qml_registry "$build_file"); then
@@ -238,7 +284,7 @@ check_qml_registration() {
 
             if [[ -L $file ]]; then
                 base=${file##*/}
-                canonical="celestina-style/$base"
+                canonical="$style_root/$base"
                 # Shared style links live at qml/<name>. They are exempt from
                 # being regular app sources only when that registered name is
                 # actually present in build.rs.
@@ -403,7 +449,7 @@ check_top_level_auto_bindings() {
     # such as append({key: key}) are inside parentheses; a real top-level QML
     # binding has parenthesis depth zero.
     if ! hits=$(python3 "$architecture_scanner" qml-auto-bindings \
-        siderita/qml magnetita/qml grafita/qml fluorita/qml celestina/qml celestina-style); then
+        "${qml_roots[@]}" "$style_root"); then
         fail "the QML auto-binding scanner could not complete its inspection"
         return
     fi
@@ -428,16 +474,16 @@ check_shared_style_links() {
     local app file base canonical resolved_file resolved_canonical
 
     if ! python3 "$architecture_scanner" shared-style-links \
-        celestina-style siderita/qml magnetita/qml grafita/qml fluorita/qml celestina/qml; then
+        "$style_root" "${qml_roots[@]}"; then
         fail "shared QML symlinks do not respect the relative canonical target"
     fi
 
-    for app in siderita magnetita grafita fluorita; do
+    for app in "${application_paths[@]}"; do
         # Check only assets that the style explicitly exposes for source-tree
         # consumption. This covers QML plus the icon/font manifests and trees,
         # without confusing unrelated same-named application directories.
-        for canonical in celestina-style/*.qml celestina-style/*.qrc \
-            celestina-style/icons celestina-style/fonts; do
+        for canonical in "$style_root"/*.qml "$style_root"/*.qrc \
+            "$style_root/icons" "$style_root/fonts"; do
             [[ -e $canonical || -L $canonical ]] || continue
             base=${canonical##*/}
             file="$app/qml/$base"
@@ -473,8 +519,8 @@ check_local_control_ratchet() {
     done < "$baseline_file"
 
     if ! control_rows=$(python3 "$architecture_scanner" local-controls \
-        --style-root celestina-style \
-        siderita/qml magnetita/qml grafita/qml fluorita/qml celestina/qml); then
+        --style-root "$style_root" \
+        "${qml_roots[@]}"); then
         fail "the local Qt control scanner could not complete its inspection"
         return
     fi
@@ -523,23 +569,29 @@ check_dependency_direction() {
         fail "a celestina-rs crate declares a UI/compositor dependency"
     fi
 
+    # The module names come from the registered application ids, so a newly
+    # registered application cannot import itself into the shared style
+    # unnoticed.
+    local application_alternation
+    application_alternation=$(IFS='|'; printf '%s' "${application_ids[*]}")
     if hits=$(grep -RInEH --include='*.qml' \
-        '^[[:space:]]*import[[:space:]]+org\.celestina\.(siderita|magnetita|grafita|fluorita)([[:space:]]|$)' \
-        celestina-style 2>/dev/null); then
+        "^[[:space:]]*import[[:space:]]+org\.celestina\.($application_alternation)([[:space:]]|$)" \
+        "$style_root" 2>/dev/null); then
         :
     else
         grep_status=$?
         if ((grep_status != 1)); then
-            fail "grep could not inspect the celestina-style QML dependencies"
+            fail "grep could not inspect the $style_root QML dependencies"
             return
         fi
     fi
     if [[ -n $hits ]]; then
         printf '%s\n' "$hits"
-        fail "celestina-style imports an application module"
+        fail "$style_root imports an application module"
     fi
 }
 
+load_registry_projects
 check_baseline_history
 check_modularity_debt
 check_qml_registration

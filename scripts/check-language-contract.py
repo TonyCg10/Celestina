@@ -138,7 +138,24 @@ def read_baseline(path: Path) -> dict[str, int]:
     return result
 
 
-def read_historical_baseline(root: Path, revision: str) -> dict[str, int] | None:
+def compare_ref_resolves(root: Path, revision: str) -> bool:
+    """Whether the comparison ref names a commit this checkout actually has."""
+    return subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"{revision}^{{commit}}"],
+        cwd=root,
+        capture_output=True,
+    ).returncode == 0
+
+
+def historical_baseline_exists(root: Path, revision: str) -> bool:
+    return subprocess.run(
+        ["git", "cat-file", "-e", f"{revision}:scripts/language-baseline.tsv"],
+        cwd=root,
+        capture_output=True,
+    ).returncode == 0
+
+
+def read_historical_baseline(root: Path, revision: str) -> dict[str, int]:
     result = subprocess.run(
         ["git", "show", f"{revision}:scripts/language-baseline.tsv"],
         cwd=root,
@@ -146,7 +163,9 @@ def read_historical_baseline(root: Path, revision: str) -> dict[str, int] | None
         capture_output=True,
     )
     if result.returncode != 0:
-        return None
+        raise ValueError(
+            f"could not read scripts/language-baseline.tsv at {revision}"
+        )
     parsed: dict[str, int] = {}
     for number, raw in enumerate(result.stdout.splitlines(), 1):
         if not raw or raw.startswith("#"):
@@ -188,18 +207,32 @@ def main() -> int:
 
     compare_ref = os.environ.get("LANGUAGE_COMPARE_REF", "")
     if compare_ref:
-        try:
-            historical = read_historical_baseline(root, compare_ref)
-        except ValueError as error:
-            errors.append(str(error))
-            historical = None
-        if historical is not None:
-            for path, count in baseline.items():
-                old = historical.get(path)
-                if old is None:
-                    errors.append(f"{path}: new legacy-language baseline entry is forbidden")
-                elif count > old:
-                    errors.append(f"{path}: baseline increased from {old} to {count}")
+        # Fail closed, exactly as check_baseline_history does in the
+        # architecture guard. A ref that is set but cannot be resolved used to
+        # skip the monotonicity check and still print OK, so the ratchet
+        # disappeared silently. CI passes `github.event.before`, which is all
+        # zeros when a branch is created, so this was reachable in practice.
+        if not compare_ref_resolves(root, compare_ref):
+            errors.append(
+                f"cannot resolve LANGUAGE_COMPARE_REF={compare_ref}; "
+                "history is missing to protect the baseline"
+            )
+        elif not historical_baseline_exists(root, compare_ref):
+            print(f"language-contract: initial baseline; no history at {compare_ref}")
+        else:
+            try:
+                historical = read_historical_baseline(root, compare_ref)
+            except ValueError as error:
+                errors.append(str(error))
+            else:
+                for path, count in baseline.items():
+                    old = historical.get(path)
+                    if old is None:
+                        errors.append(
+                            f"{path}: new legacy-language baseline entry is forbidden"
+                        )
+                    elif count > old:
+                        errors.append(f"{path}: baseline increased from {old} to {count}")
 
     for path, count in legacy.items():
         expected = baseline.get(path)

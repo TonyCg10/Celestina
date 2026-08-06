@@ -91,7 +91,6 @@
 1	magnetita/scripts/smoke.sh
 4	magnetita/src/controller.rs
 12	magnetita/src/devices.rs
-3	scripts/qmllint-cxxqt.sh
 5	scripts/test-production-common.sh
 9	siderita/build.rs
 3	siderita/qml/CelestinaPlaceDefs.qml

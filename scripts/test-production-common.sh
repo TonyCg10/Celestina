@@ -92,4 +92,92 @@ if [ -n "$leftovers" ]; then
     exit 1
 fi
 
+# --- qmllint warning ratchet and batch-boundary status ------------------------
+# The linter used to always print OK, so its warnings could grow without limit,
+# and it read its verdict out of `$?` after an `xargs` pipeline that splits once
+# the argument list is long enough.
+
+qmllint_script=$suite_root/scripts/qmllint-cxxqt.sh
+ratchet_baseline=$scratch/qmllint-baseline.tsv
+printf '%s\n' '# warnings<TAB>project' '10	demo' > "$ratchet_baseline"
+
+ratchet() {
+    QMLLINT_BASELINE_FILE=$ratchet_baseline \
+        sh "$qmllint_script" --check-warning-ratchet "$1" "$2" 2>"$scratch/ratchet.log"
+}
+
+if ! ratchet demo 10; then
+    echo "qmllint fixture: the recorded warning count was rejected" >&2
+    exit 1
+fi
+if ratchet demo 11; then
+    echo "qmllint fixture: a grown warning count was accepted" >&2
+    exit 1
+fi
+grep -q 'may not grow' "$scratch/ratchet.log" || {
+    echo "qmllint fixture: growth failed without a ratchet diagnostic" >&2
+    exit 1
+}
+if ratchet demo 9; then
+    echo "qmllint fixture: an unrecorded improvement was accepted" >&2
+    exit 1
+fi
+grep -q 'lower its row' "$scratch/ratchet.log" || {
+    echo "qmllint fixture: an improvement failed without a lower-the-row diagnostic" >&2
+    exit 1
+}
+if ratchet unregistered 0; then
+    echo "qmllint fixture: a project without a baseline row was accepted" >&2
+    exit 1
+fi
+if QMLLINT_BASELINE_FILE=$scratch/absent.tsv \
+    sh "$qmllint_script" --check-warning-ratchet demo 10 2>/dev/null; then
+    echo "qmllint fixture: a missing baseline file was accepted" >&2
+    exit 1
+fi
+
+# A failure in a non-final xargs batch must still fail the run. The fixture
+# builds enough long paths that xargs splits the invocation, and makes the fake
+# linter refuse exactly one file placed at the front of the list.
+lint_app=$scratch/lint-app
+module_root=$lint_app/target/release/build/demo-hash/out/qt-build-utils/qml_modules
+mkdir -p "$module_root/org/example" "$lint_app/qml"
+printf 'module org.example\n' > "$module_root/org/example/qmldir"
+: > "$module_root/org/example/plugin.qmltypes"
+
+printf '%s\n' 'import QtQuick' > "$lint_app/qml/AAA-refused.qml"
+filler=$lint_app/qml
+depth=0
+while [ "$depth" -lt 6 ]; do
+    filler=$filler/a-directory-with-a-deliberately-long-name-to-lengthen-paths
+    depth=$((depth + 1))
+done
+mkdir -p "$filler"
+index=0
+while [ "$index" -lt 400 ]; do
+    printf 'import QtQuick\n' \
+        > "$filler/Filler-with-a-deliberately-long-file-name-$index.qml"
+    index=$((index + 1))
+done
+
+fake_linter=$scratch/fake-qmllint
+cat > "$fake_linter" <<'FAKE'
+#!/bin/sh
+status=0
+for argument do
+    case $argument in
+        *AAA-refused.qml) status=1 ;;
+    esac
+done
+exit "$status"
+FAKE
+chmod 0755 "$fake_linter"
+
+printf '%s\n' '# warnings<TAB>project' '0	lint-app' > "$scratch/lint-baseline.tsv"
+if QMLLINT=$fake_linter QMLLINT_BASELINE_FILE=$scratch/lint-baseline.tsv \
+    sh "$qmllint_script" "$lint_app" >/dev/null 2>&1; then
+    echo "qmllint fixture: a refused file in a non-final batch reported OK" >&2
+    exit 1
+fi
+
 echo "production-common fixtures: OK"

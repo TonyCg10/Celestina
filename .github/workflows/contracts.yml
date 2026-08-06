@@ -38,8 +38,10 @@ jobs:
           python3 scripts/audit-version-commits.py
 
       # Hooks are local by definition (`core.hooksPath` is not transported), so
-      # verify pushed history even when a commit came from an unconfigured clone,
-      # `--no-verify`, or the web UI.
+      # pushed history is replayed here. The replay is partial by design and
+      # `.github/workflows/README.md` states exactly which properties it checks
+      # and which it does not; do not read this step as a full re-run of the
+      # local hooks.
       - name: Commit scope
         run: |
           bash scripts/test-commit-scope.sh
