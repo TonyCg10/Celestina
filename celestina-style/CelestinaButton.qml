@@ -73,8 +73,21 @@ Button {
                 : CelestinaTheme.radiusSm
         opacity: control.enabled ? 1 : CelestinaTheme.disabledOpacity
         color: {
+            // A disabled primary keeps its accent wash: `accentDisabledFill`
+            // exists for exactly that, and without it the one screen action
+            // that is supposed to stand out becomes indistinguishable from
+            // every tonal control beside it while it waits to become available.
+            //
+            // Only the fill. `accentDisabledInk` is the matching label ink, but
+            // measured against this fill it reaches 2.6:1-3.5:1 — below the
+            // 4.5:1 floor the contract owes normal text in every state — so the
+            // label stays on `textMuted`, which measures 5.1:1-7.3:1 over the
+            // same fill. The remaining roles have no disabled token of their
+            // own, so a disabled destructive still loses its red.
             if (!control.enabled)
-                return CelestinaTheme.controlFill
+                return control.role === CelestinaButton.Primary
+                     ? CelestinaTheme.accentDisabledFill
+                     : CelestinaTheme.controlFill
             if (control.role === CelestinaButton.Primary)
                 return control.down ? CelestinaTheme.accentPressed
                      : control.hovered ? CelestinaTheme.accentHover

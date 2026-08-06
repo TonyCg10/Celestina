@@ -16,7 +16,8 @@ set -euo pipefail
 # nunca editada a mano. Se regenera con este script y se revisa como cualquier
 # otro asset vendorizado.
 #
-# Phosphor Icons, MIT © Phosphor Icons — el aviso viaja en la cabecera generada.
+# Phosphor Icons, MIT © Phosphor Icons — el aviso viaja en la cabecera generada
+# y el texto completo en icons/LICENSE-phosphor.txt.
 
 readonly phosphor_version="v2.0.8"
 readonly phosphor_base="https://raw.githubusercontent.com/phosphor-icons/core/${phosphor_version}/assets/fill"
@@ -25,7 +26,15 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 style_dir=$(cd -- "$script_dir/.." && pwd)
 out_file="$style_dir/CelestinaIconShapes.qml"
 work_dir=$(mktemp -d /tmp/celestina-phosphor-XXXXXX)
-trap 'rm -rf -- "$work_dir"' EXIT
+trap 'rm -rf -- "$work_dir" "$out_file.tmp"' EXIT
+# The generated singleton is assembled here and moved into place only once it
+# is complete. Redirecting the assembling block straight onto the source file
+# would truncate it the instant the block opens, and the block downloads
+# thirteen icons over the network before it has written anything worth keeping:
+# any failure — and `set -e` plus the explicit `exit 1`s make several — would
+# leave the module's own source as a half-written singleton that fails to parse
+# and takes the whole import down with it until someone runs `git checkout`.
+staged_file="$work_dir/CelestinaIconShapes.qml"
 
 svgtoqml=${SVGTOQML:-}
 if [[ -z "$svgtoqml" ]]; then
@@ -74,7 +83,7 @@ shapes=(
     echo "// trae Phosphor. \`CelestinaFileIcon\` los pinta con el lavado de color del tema;"
     echo "// aquí no hay ni un color, sólo geometría."
     echo "//"
-    echo "// Phosphor Icons — MIT © Phosphor Icons. La licencia viaja en icons/LICENSE."
+    echo "// Phosphor Icons — MIT © Phosphor Icons. Licencia: icons/LICENSE-phosphor.txt."
     echo "// ──────────────────────────────────────────────────────────────────────────────"
     echo "QtObject {"
     echo "    // Todos los glifos comparten la rejilla, así que el escalado es uno."
@@ -121,6 +130,22 @@ shapes=(
     echo "        return paths[name] !== undefined ? paths[name] : []"
     echo "    }"
     echo "}"
-} > "$out_file"
+} > "$staged_file"
+
+# Every requested shape must be present before anything replaces the source.
+# The loop bails out on a failed download or an empty conversion, but a
+# truncated body that still parses would be a silently smaller catalogue, and
+# the count is what proves it is not.
+generated=$(grep -cE '^        "[^"]+": \[$' "$staged_file" || true)
+if [[ $generated -ne ${#shapes[@]} ]]; then
+    echo "se generaron $generated formas de ${#shapes[@]}; no se toca el fuente" >&2
+    exit 1
+fi
+
+# Same filesystem as the destination is not guaranteed for a /tmp work area, so
+# copy into place beside the target and rename: the readers of the source tree
+# see either the previous file or the complete new one, never a partial write.
+install -m 644 -- "$staged_file" "$out_file.tmp"
+mv -f -- "$out_file.tmp" "$out_file"
 
 echo "CelestinaIconShapes.qml regenerado con ${#shapes[@]} formas (Phosphor ${phosphor_version})"

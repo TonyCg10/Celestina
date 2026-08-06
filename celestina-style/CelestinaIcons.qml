@@ -14,7 +14,15 @@ QtObject {
             ? Qt.resolvedUrl("icons/").toString()
             : "qrc:/qt/qml/CelestinaStyle/icons/"
 
-    readonly property var available: ({
+    // Both tables are built without a prototype, so a subscript answers only
+    // with a catalogue entry. The names that reach `resolve` are not this
+    // module's: a consumer supplies them and, through
+    // ~/.config/siderita/icons.conf, they ultimately come from a hand-editable
+    // file. On an ordinary object literal `"toString"` and `"constructor"`
+    // resolve up the prototype chain to inherited functions rather than to
+    // `undefined`, which is a lookup succeeding against something that is not
+    // an icon. The guard belongs on the table, not on each reader of it.
+    readonly property var available: Object.assign(Object.create(null), {
         "app-window": true,
         "arrow-down": true,
         "arrow-right": true,
@@ -98,7 +106,7 @@ QtObject {
     // Compatibility aliases deliberately retain the old public identifiers.
     // In particular, values stored in ~/.config/siderita/icons.conf continue
     // to resolve without an eager config migration.
-    readonly property var aliases: ({
+    readonly property var aliases: Object.assign(Object.create(null), {
         "arrow-left": "go-previous",
         "audio-x-generic": "file-music",
         "application-json": "file-braces",

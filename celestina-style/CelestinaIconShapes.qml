@@ -10,7 +10,7 @@ import QtQuick
 // trae Phosphor. `CelestinaFileIcon` los pinta con el lavado de color del tema;
 // aquí no hay ni un color, sólo geometría.
 //
-// Phosphor Icons — MIT © Phosphor Icons. La licencia viaja en icons/LICENSE.
+// Phosphor Icons — MIT © Phosphor Icons. Licencia: icons/LICENSE-phosphor.txt.
 // ──────────────────────────────────────────────────────────────────────────────
 QtObject {
     // Todos los glifos comparten la rejilla, así que el escalado es uno.

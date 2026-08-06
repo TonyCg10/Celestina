@@ -28,10 +28,12 @@ Item {
     // a document where the visible fraction rounds to nothing.
     readonly property int minimumHandle: CelestinaTheme.space2xl
 
+    // Only the visible fraction is read from `visibleArea`: it answers "how
+    // much of this is on screen", which is a length question. "How far down are
+    // we" is answered below in content coordinates instead, because that is the
+    // unit the drag writes back in.
     readonly property real shownFraction: root.horizontal
         ? root.surface.visibleArea.widthRatio : root.surface.visibleArea.heightRatio
-    readonly property real scrolledFraction: root.horizontal
-        ? root.surface.visibleArea.xPosition : root.surface.visibleArea.yPosition
 
     readonly property real trackLength: root.horizontal ? root.width : root.height
     readonly property real handleLength: Math.max(
@@ -43,8 +45,24 @@ Item {
         ? Math.max(0, root.surface.contentWidth - root.surface.width)
         : Math.max(0, root.surface.contentHeight - root.surface.height)
 
-    readonly property real handleOffset:
-        Math.max(0, Math.min(root.handleTravel, root.scrolledFraction * root.trackLength))
+    // How far the content has actually been scrolled, in the coordinates
+    // `scrollToHandle` writes back.
+    readonly property real contentOffset: root.horizontal
+        ? root.surface.contentX : root.surface.contentY
+
+    // Resting position and drag are one mapping read in both directions: the
+    // handle sits at the same fraction of `handleTravel` that the content sits
+    // at of `contentTravel`, which is exactly what `scrollToHandle` inverts.
+    //
+    // Scaling the scrolled fraction by the whole track instead would only agree
+    // with that while the handle is exactly its proportional length, and the
+    // `minimumHandle` clamp breaks the equality in precisely the long documents
+    // it exists for: the handle would then hit the end of the track with
+    // document still to read, and run ahead of the pointer while dragged.
+    readonly property real handleOffset: root.contentTravel <= 0
+        ? 0
+        : Math.max(0, Math.min(root.handleTravel,
+                               root.contentOffset / root.contentTravel * root.handleTravel))
 
     // Nothing to scroll, nothing to say. A bar pinned at full length would be
     // a permanent line down the edge of the text carrying no information.

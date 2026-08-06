@@ -1,0 +1,24 @@
+# STYLE-G7-C exact change inventory
+
+Base revision	47e692442beb69176260bc445297ae1084d932b8
+Pathspec	celestina-style/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	3b3f57ec3a4f9203f68778d3c4d45bafc7c82c882ba24c4548c3d6ed557f2ed0	celestina-style/CMakeLists.txt
+14	1	61453bf6a120d11359aec0a0838fddd74a06dee6557820aacae32ce97d456ea9	celestina-style/CelestinaButton.qml
+13	1	c3f79b13974026d815a750a997a548e6acd354c51f5ff8bb2de83af4f62fc8c6	celestina-style/CelestinaIconButton.qml
+1	1	b0ca40874ef7be844d113c1dc46c9912639a3f9be2846db916effedbf5624a79	celestina-style/CelestinaIconShapes.qml
+10	2	d874897a02d4f601c129129c53442b907aacec32414d574a9ad79331826997aa	celestina-style/CelestinaIcons.qml
+22	4	e80a4868ac6e9ed43f3f384e25141d982f3493c206bd92f8a566a498bfecce22	celestina-style/CelestinaScrollBar.qml
+325	0	b3eec0dac9bde7a77f2e0b98c478d7275bd34ee180b9e788ff668f391126403c	celestina-style/docs/evidence/2026-08-05-static-audit-corrections.md
+1	0	affc56e5bbc16128ed910df00addfc130895de94dec6da4bdb4c8dc028635b35	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+17	4	689a25b7811027da967f2b8b856572f2db63e784cbba2f0f80813406c7356762	celestina-style/gallery/run.sh
+33	0	c30b6953ece4b75417c5a80a8f06d1bd78802e5d07ca3a0281100682af1bd4a9	celestina-style/icons/LICENSE-phosphor.txt
+29	4	b12382afa703481cc2ad22b2b2dd36b2e876fda41e3790f9c857847e88501f62	celestina-style/scripts/sync-phosphor-shapes.sh
+67	0	ffbac0c175bf6956a837897824b233f0db6d58bad2da010c0a6a9bed72c1b91b	celestina-style/tests/tst_iconcatalog.qml
+121	0	1f7e6e742a99f2a4f94200487b0b164b510710d497e6c61155b1f49f23fa45ef	celestina-style/tests/tst_scrollbar.qml
+1	0	cb8e9872c158243cc343f73607af9b59b2fab7169300aeaa43e4c3a4664f6985	docs/version-history.tsv
+24	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-C.numstat.tsv

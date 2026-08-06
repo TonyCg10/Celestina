@@ -15,7 +15,19 @@ CelestinaButton {
     rightPadding: 0
     topPadding: 0
     bottomPadding: 0
-    Accessible.name: helpText
+    // An icon-only button carries no text, so `helpText` is the only name a
+    // screen reader would ever hear — and it defaults to empty. Degrade to the
+    // icon's semantic name rather than announcing an anonymous button.
+    //
+    // Degrade rather than require: `helpText` is inherited from
+    // `CelestinaButton`, where it is genuinely optional because a labelled
+    // button already has its text, and making it required here would refuse to
+    // construct the majority of the icon buttons the suite has today. That is a
+    // consumer-by-consumer copy pass, not this control's fix. `iconName` is an
+    // English catalogue key and therefore a placeholder, not product copy: it
+    // keeps the control operable and makes the missing label audible instead of
+    // silent. The same degradation Siderita's floating button already applies.
+    Accessible.name: helpText.length > 0 ? helpText : iconName
     display: AbstractButton.IconOnly
 
     // Controls own their contentItem's rectangle. Keep that layout viewport
