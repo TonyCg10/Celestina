@@ -118,16 +118,14 @@ New tests, all in the unit they cover:
   the author's session: nobody has yet right-clicked a file whose name is not
   UTF-8 in a real window. That is `VAL-FLU-BYTES` in
   [VALIDATION.md](../../VALIDATION.md).
-- **A non-UTF-8 image is still refused rather than displayed.** The C++
-  `imageprobe` seam takes a `QString`, and Qt has no lossless spelling for those
-  bytes, so the probe is now skipped for a path this side cannot express exactly
-  and `ImageDecision` reports the picture unreadable on the file size alone.
-  That is the same visible outcome as before — the old code probed the lossy
-  name and measured nothing — but it is now deliberate, and it removes the
-  hazard of measuring a *different* file that happens to exist at the lossy
-  name. Showing such an image needs a probe addressed by descriptor or by raw
-  bytes, which is a `fluorita-qt`/`cpp` change nobody has authorised.
-- **The path key lives in the Fluorita adapter, not in `celestina-core`.** ADR
+- **A non-UTF-8 image was refused rather than displayed. Closed by `F6-D`.**
+  This unit skipped the probe for a path it could not spell, which reported the
+  picture unreadable on file size alone — the same visible outcome as before,
+  but deliberate, and without the hazard of measuring a *different* file that
+  happens to exist under the lossy name. `F6-D` removed the limit instead:
+  `imageprobe` now takes the key, decodes it to bytes and opens the file by
+  descriptor, so such an image is measured on itself.
+- **The path key lived in the Fluorita adapter, not in `celestina-core`. Closed:** ADR
   0008 is a suite rule and its natural home is beside the codec it composes, but
   `celestina-core` is outside this unit's authorised scope and Siderita's half
   of the same defect is being implemented separately. `pathkey.rs` is a

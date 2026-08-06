@@ -1,0 +1,24 @@
+# F6-D exact change inventory
+
+Base revision	032860a04bde22a0d78caeb43a061c9e44b08b70
+Pathspec	fluorita/
+Pathspec	celestina-rs/crates/fluorita-core/
+Pathspec	celestina-rs/crates/fluorita-engine/
+Pathspec	celestina-rs/crates/fluorita-qt/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	16419b776c53d5091d0a8a38a32d1e801bfbdd56592341d8f2da1edccd63bc1b	docs/version-history.tsv
+1	1	0373dc3c41d68a868fd75c2fac65c11bd45fb39c332cd10426cdb891c75fa370	fluorita/Cargo.lock
+1	1	89c14befceaecd476da7444e5c90cbdb5d4f80c4852ecd475bbb5a504805c293	fluorita/Cargo.toml
+10	5	dfcdcf2c064b7d9b619fd65acac44e63e6d67513b8d9ff804b77a0d13f3b4c1f	fluorita/STATUS.md
+5	5	2a53a1a33fe2c24d586516728597cab1ee43fe4e313998b904aa55afa61c11f5	fluorita/VALIDATION.md
+8	1	f93ed0e9ff48bc79b6f61beb7a6f982aea7b195643bf240a11a597aa06ce5f11	fluorita/cpp/fluorita/imageprobe.h
+67	2	291791bdb90c94d3d863217d18fea0c7d03ac58933ba9520ffacbdfe079ea2cb	fluorita/cpp/imageprobe.cpp
+8	10	4e7105a03c6951a1695ddac429de82e80ac907a5211e26d78005052971c8dbf1	fluorita/docs/evidence/2026-08-06-byte-exact-path-seam.md
+73	0	d6b1e7f23127e32d01ff2d64a49a065adec7d9939a852c32fa41a813125cb110	fluorita/docs/evidence/2026-08-06-image-probe-bytes.md
+7	0	e0aac38fdd2634e738233fe0a494411e9f234e61ff417a7eb3d29d61e51ccefb	fluorita/docs/plans/active/2026-08-04-immersive-content.md
+99	10	93284850ab80bea61f2fc30609d9a94e778215e50c7c67a04f7ee15f87b61728	fluorita/src/player.rs
+24	0	self	fluorita/docs/inventories/2026-08-04-immersive-content/F6-D.numstat.tsv

@@ -9,6 +9,13 @@
 
 ## Current checkout truth
 
+- Uncommitted in the checkout: `F6-D`. The image probe is addressed by path key
+  and opens the file by descriptor, so a picture whose name is not valid UTF-8
+  is measured on itself rather than refused as unreadable — the one limit
+  `F6-C` had recorded as inevitable. Compiled, linted and unit-tested against
+  the real C++ seam; nothing opened in a real window, which is
+  `VAL-FLU-BYTES`.
+
 - Uncommitted in the checkout: `F6-C`, the Fluorita half of
   [ADR 0008](../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md). A
   path crossing to QML is now a percent-encoded key — `fluorita/src/pathkey.rs`
@@ -19,11 +26,9 @@
   described and trashed; before this it listed and answered the library's
   item-is-gone notice (`copy::ITEM_GONE`) to everything. Compiled, linted and
   unit-tested, with no inventory, no version transition and no production run. Nothing has been
-  tried on a real session: that is `VAL-FLU-BYTES`. One limit stands and is
-  recorded rather than hidden — an image with such a name is refused as
-  unreadable, because the C++ probe seam takes a `QString` and Qt has no
-  lossless spelling for those bytes. Siderita's half of the same ADR (`SID-A2`)
-  is a separate unit and is untouched here.
+  tried on a real session: that is `VAL-FLU-BYTES`. The image limit this unit
+  left open — a picture with such a name refused as unreadable, because the C++
+  probe seam took a `QString` — is closed by `F6-D`.
 - Delivered as `fluorita-bug` at 1.2.1, built, verified and deployed: `F6-B`,
   the corrective unit from the suite audit.
   A render context's release is now decided by an explicit renderer claim

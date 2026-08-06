@@ -31,11 +31,11 @@ The agent lane proved the codec, the projection, the round trip and the
 catalogue lookup in
 [the byte-exact path seam evidence](docs/evidence/2026-08-06-byte-exact-path-seam.md).
 It cannot prove what Qt does with these strings once a real QML surface, a real
-portal backend and a real filesystem are involved. One known limit is expected
-to fail rather than pass and is recorded there, not here: an image whose name is
-not UTF-8 is refused as unreadable, because the C++ probe seam has no lossless
-spelling for those bytes. A failure records the observation here and opens a
-linked corrective unit.
+portal backend and a real filesystem are involved. The image limit this row
+originally carried is gone: `F6-D` addresses the probe by key and opens the file
+by descriptor, so a picture whose name is not UTF-8 is expected to *display*,
+not to be refused. A failure records the observation here and opens a linked
+corrective unit.
 
 ## VAL-FLU-TEARDOWN — closing video without taking the process with it
 

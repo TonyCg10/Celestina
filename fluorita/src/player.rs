@@ -56,7 +56,7 @@ pub mod qobject {
         include!("fluorita/imageprobe.h");
 
         #[rust_name = "probe_image"]
-        fn fluorita_probe_image(path: &QString) -> QSize;
+        fn fluorita_probe_image(key: &QString) -> QSize;
     }
 
     unsafe extern "C++" {
@@ -327,19 +327,19 @@ impl qobject::FluoritaPlayer {
     /// Judges a still against its budget and hands it to the toolkit.
     fn show_image(mut self: core::pin::Pin<&mut Self>, path: &std::path::Path) {
         let bytes = std::fs::metadata(path).map(|data| data.len()).unwrap_or(0);
-        // `QImageReader` takes a `QString` and spells it back out as a
-        // filesystem name, so a path this side cannot express exactly is a path
-        // it would open some *other* file for. Rather than measure the wrong
-        // header, the probe is skipped and the budget decides on the file size
-        // alone — which reports the picture as unreadable, honestly, instead of
-        // trusting dimensions that came from a different file.
-        let probed = path.to_str().and_then(|spelled| {
-            let measured = qobject::probe_image(&QString::from(spelled));
+        // The probe is addressed by path key, not by the path: it opens the
+        // file by descriptor on the decoded bytes, so a name this side cannot
+        // spell is still measured — and measured on itself, never on whatever
+        // file a lossy spelling would have hit.
+        let probed = {
+            let measured = qobject::probe_image(&QString::from(
+                celestina_core::pathkey::encode(path).as_str(),
+            ));
             let (width, height) = (measured.width(), measured.height());
             (width > 0 && height > 0)
                 .then(|| (u32::try_from(width).ok(), u32::try_from(height).ok()))
                 .and_then(|(width, height)| Some((width?, height?)))
-        });
+        };
 
         match ImageDecision::judge(bytes, probed) {
             // The URL is the suite's frozen `file://` spelling, so a name with
@@ -767,7 +767,96 @@ fn publish_failure(qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaPlayer>, mes
 #[cfg(test)]
 mod tests {
     use super::{decide_open, state_label, OpenAction};
+    use cxx_qt_lib::QString;
     use fluorita_core::PlaybackState;
+    use std::ffi::OsString;
+    use std::fs;
+    use std::os::unix::ffi::OsStringExt;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    /// A 2x2 red PNG, written byte by byte so the fixture needs no encoder.
+    const TINY_PNG: &[u8] = &[
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x08, 0x02, 0x00, 0x00, 0x00, 0xfd,
+        0xd4, 0x9a, 0x73, 0x00, 0x00, 0x00, 0x13, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8,
+        0xcf, 0xc0, 0xf0, 0x9f, 0x01, 0x8c, 0xff, 0x33, 0x30, 0x00, 0x00, 0x1f, 0xee, 0x03, 0xfd,
+        0x35, 0x1b, 0x00, 0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60,
+        0x82,
+    ];
+
+    /// A temporary directory that removes itself, holding a file whose name the
+    /// test chooses byte by byte.
+    struct Fixture(PathBuf);
+
+    impl Fixture {
+        fn new(label: &str) -> Self {
+            let nonce = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock after epoch")
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "fluorita-probe-{label}-{}-{nonce}",
+                std::process::id()
+            ));
+            fs::create_dir(&path).expect("create fixture directory");
+            Self(path)
+        }
+
+        fn write(&self, name: &[u8], contents: &[u8]) -> PathBuf {
+            let file = self.0.join(OsString::from_vec(name.to_vec()));
+            fs::write(&file, contents).expect("write fixture file");
+            file
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// The probe, addressed the way `show_image` addresses it.
+    fn probe(path: &std::path::Path) -> (i32, i32) {
+        let key = celestina_core::pathkey::encode(path);
+        let size = super::qobject::probe_image(&QString::from(key.as_str()));
+        (size.width(), size.height())
+    }
+
+    #[test]
+    fn an_image_whose_name_is_not_utf8_is_measured_on_itself() {
+        let fixture = Fixture::new("nonutf8");
+        let picture = fixture.write(b"na\xffme.png", TINY_PNG);
+        // The spelling that used to be handed over names no file at all.
+        assert!(
+            picture.to_str().is_none(),
+            "the fixture must be unspellable"
+        );
+        assert_eq!(probe(&picture), (2, 2));
+    }
+
+    #[test]
+    fn an_ordinary_image_is_still_measured() {
+        let fixture = Fixture::new("ordinary");
+        let picture = fixture.write(b"foto.png", TINY_PNG);
+        assert_eq!(probe(&picture), (2, 2));
+    }
+
+    #[test]
+    fn what_is_not_a_readable_image_measures_nothing_usable() {
+        // Qt spells an invalid size -1x-1, which is why the caller gates on a
+        // positive pair rather than on zero.
+        fn unusable((width, height): (i32, i32)) -> bool {
+            width <= 0 || height <= 0
+        }
+        let fixture = Fixture::new("refusals");
+        let text = fixture.write(b"nota.png", b"not a picture");
+        assert!(unusable(probe(&text)));
+        assert!(unusable(probe(&fixture.0.join("absent.png"))));
+        // A relative key would resolve against this process's directory.
+        let relative = super::qobject::probe_image(&QString::from("foto.png"));
+        assert!(unusable((relative.width(), relative.height())));
+    }
 
     #[test]
     fn an_idle_player_opens_straight_away() {
