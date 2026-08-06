@@ -73,7 +73,7 @@ Item {
 
                 anchors.fill: parent
                 source: preview.path.length > 0
-                    ? "image://thumb/" + encodeURIComponent(preview.path)
+                    ? "image://thumb/" + preview.path
                     : ""
                 fillMode: Image.PreserveAspectFit
                 asynchronous: true

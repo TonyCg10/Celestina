@@ -128,7 +128,7 @@ Item {
             interval: CelestinaTheme.springDelay
             onTriggered: {
                 if (rowDrop.containsDrag)
-                    root.controller.openLocation(root.path)
+                    root.controller.openKey(root.path)
             }
         }
 
@@ -193,7 +193,7 @@ Item {
                 NumberAnimation { duration: CelestinaTheme.motionNormal }
             }
             source: kindGlyph.media !== ""
-                    ? "image://thumb/" + encodeURIComponent(root.path) : ""
+                    ? "image://thumb/" + root.path : ""
             sourceSize.width: 256
             sourceSize.height: 256
             fillMode: Image.PreserveAspectCrop

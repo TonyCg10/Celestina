@@ -19,15 +19,17 @@ CelestinaModalLayer {
     z: 61
     onDismissRequested: batchRename.dismiss()
 
-    property var targets: []          // [{path, name}]
+    property var targets: []          // [{path: key, name: display}]
 
+    // `paths` are path keys. The name shown and edited is the readable one the
+    // controller derives from each key: cutting the key up here would offer a
+    // percent-escaped name to edit, and rename to it.
     function open(paths) {
         var list = []
         for (var i = 0; i < paths.length; i++) {
             var p = paths[i]
-            var slash = p.lastIndexOf("/")
             list.push({ path: p,
-                        name: slash >= 0 ? p.substring(slash + 1) : p })
+                        name: batchRename.controller.displayLocationName(p) })
         }
         targets = list
         findField.text = ""

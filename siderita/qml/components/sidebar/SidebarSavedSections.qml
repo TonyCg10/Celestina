@@ -27,13 +27,13 @@ Item {
             const cut = entries[index].indexOf("\t")
             if (cut <= 0)
                 continue
+            // The first field is a path key, so the name a person reads comes
+            // from the controller rather than from cutting the key up.
             const path = entries[index].substring(0, cut)
-            const slash = path.lastIndexOf("/")
             rows.push({
                 path: path,
                 kind: entries[index].substring(cut + 1),
-                name: slash >= 0 && slash < path.length - 1
-                      ? path.substring(slash + 1) : path
+                name: controller.displayLocationName(path)
             })
         }
         return rows

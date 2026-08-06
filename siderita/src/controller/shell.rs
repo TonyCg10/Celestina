@@ -5,7 +5,7 @@
 //! cannot even be started.
 
 use core::pin::Pin;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QString, QStringList};
@@ -31,16 +31,15 @@ impl qobject::SideritaController {
         }
     }
 
-    /// Opens the "Abrir con…" chooser for `path`: classifies its MIME type,
+    /// Opens the "Abrir con…" chooser for the entry `key` names: classifies its MIME type,
     /// gathers the applications that declare it (plus the current default) and
     /// publishes them for the dialog. A type that cannot be classified is
     /// reported through `op_error`.
-    pub fn open_with(mut self: Pin<&mut Self>, path: &QString) {
+    pub fn open_with(mut self: Pin<&mut Self>, key: &QString) {
         self.as_mut().set_op_error(QString::default());
-        let path = PathBuf::from(path.to_string());
-        if path.as_os_str().is_empty() {
+        let Some(path) = self.as_mut().accept_key(key) else {
             return;
-        }
+        };
 
         let Some(mime) = crate::apps::detect_mime(&path) else {
             self.as_mut()

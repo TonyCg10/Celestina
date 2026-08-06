@@ -191,7 +191,7 @@ Item {
             iconName: ""
             fallbackIcon: "plus"
             Accessible.name: "Nueva pestaña (Ctrl+T)"
-            onClicked: root.hostWindow.openTab(root.controller.currentPath, true)
+            onClicked: root.hostWindow.openTab(root.controller.currentPathKey, true)
         }
     }
 }

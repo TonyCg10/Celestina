@@ -124,9 +124,7 @@ impl qobject::SideritaController {
         };
 
         if !quiet {
-            let display_path = destination.to_string_lossy();
-            self.as_mut()
-                .set_current_path(QString::from(display_path.as_ref()));
+            self.as_mut().publish_location(&destination);
             self.as_mut().set_selected_token(QString::default());
             self.as_mut().set_error_text(QString::default());
             self.as_mut().set_op_error(QString::default());
@@ -174,7 +172,6 @@ impl qobject::SideritaController {
                     return;
                 };
 
-                let display_path = snapshot.location().to_string_lossy().into_owned();
                 let location = snapshot.location().to_path_buf();
 
                 // Commit the deferred navigation now that its scan succeeded —
@@ -194,8 +191,7 @@ impl qobject::SideritaController {
                 }
 
                 self.as_mut().rust_mut().get_mut().snapshot = Some(snapshot);
-                self.as_mut()
-                    .set_current_path(QString::from(display_path.as_str()));
+                self.as_mut().publish_location(&location);
                 self.as_mut().set_loading(false);
                 self.as_mut().set_error_text(QString::default());
                 self.as_mut().update_navigation_state();
@@ -286,10 +282,13 @@ impl qobject::SideritaController {
             .iter()
             .map(|row| QString::from(row_subtitle(row).as_str()))
             .collect();
+        // Identity, not text: a row's path crosses as its key (ADR 0008), so a
+        // name that is not valid UTF-8 can still be opened, renamed or trashed.
+        // What a person reads is `names` / `subtitles`, published beside it.
         let paths: QStringList = view
             .rows()
             .iter()
-            .map(|row| QString::from(row.path().to_string_lossy().as_ref()))
+            .map(|row| crate::pathkey::publish(row.path()))
             .collect();
         // A plain folder listing has no section headers.
         let sections: QStringList = view.rows().iter().map(|_| QString::default()).collect();
@@ -394,6 +393,17 @@ impl qobject::SideritaController {
         );
     }
 
+    /// Publishes the folder being shown twice over, as ADR 0008 requires: the
+    /// lossy text a person reads, and the key every verb and every navigation
+    /// hands back.
+    pub(crate) fn publish_location(mut self: Pin<&mut Self>, location: &Path) {
+        let display = location.to_string_lossy().into_owned();
+        self.as_mut()
+            .set_current_path(QString::from(display.as_str()));
+        self.as_mut()
+            .set_current_path_key(crate::pathkey::publish(location));
+    }
+
     pub(crate) fn update_navigation_state(mut self: Pin<&mut Self>) {
         let history = &self.rust().history;
         let can_go_back = history.can_go_back();
@@ -419,9 +429,7 @@ impl qobject::SideritaController {
         };
 
         if let Some(previous_location) = previous_location {
-            let display_path = previous_location.to_string_lossy();
-            self.as_mut()
-                .set_current_path(QString::from(display_path.as_ref()));
+            self.as_mut().publish_location(&previous_location);
             self.as_mut().update_navigation_state();
         }
     }
@@ -542,5 +550,137 @@ impl qobject::SideritaController {
             // state or clear the list — it just swaps in the fresh snapshot.
             self.as_mut().refresh_quiet();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! The `SID-A2` acceptance path, exercised without Qt: everything below the
+    //! invokables is ordinary Rust, and it is where the bytes were being lost.
+
+    use std::ffi::{OsStr, OsString};
+    use std::fs;
+    use std::os::unix::ffi::{OsStrExt, OsStringExt};
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use celestina_core::CancellationToken;
+    use siderita_core::{scan_directory, ScanCoordinator, ViewOptions};
+    use siderita_qt::SnapshotAdapter;
+
+    use crate::pathkey;
+
+    /// A temporary directory holding one file whose name is not valid UTF-8 —
+    /// the fixture `siderita-core` already scans for, carried up to the seam.
+    struct Fixture(PathBuf);
+
+    impl Fixture {
+        fn new(label: &str) -> Self {
+            let nonce = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock after epoch")
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "siderita-seam-{label}-{}-{nonce}",
+                std::process::id()
+            ));
+            fs::create_dir(&path).expect("create fixture directory");
+            Self(path)
+        }
+
+        fn write_non_utf8(&self) -> PathBuf {
+            let name = OsString::from_vec(b"na\xffme".to_vec());
+            let file = self.0.join(name);
+            fs::write(&file, b"content").expect("write fixture file");
+            file
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn rows_of(directory: &PathBuf) -> Vec<(String, String)> {
+        let mut coordinator = ScanCoordinator::new();
+        let request = coordinator.begin(directory).expect("issue scan request");
+        let snapshot = scan_directory(&request).expect("scan the fixture");
+        let mut adapter = SnapshotAdapter::new();
+        let view = adapter
+            .adapt_projected(&snapshot, &ViewOptions::default())
+            .expect("project the snapshot");
+        view.rows()
+            .iter()
+            .map(|row| (row.display_name().to_owned(), pathkey::encode(row.path())))
+            .collect()
+    }
+
+    #[test]
+    fn a_non_utf8_name_is_listed_and_its_key_round_trips_byte_for_byte() {
+        let fixture = Fixture::new("list");
+        let file = fixture.write_non_utf8();
+
+        let rows = rows_of(&fixture.0);
+        assert_eq!(rows.len(), 1, "the entry is listed: {rows:?}");
+        let (name, key) = &rows[0];
+        // What a person reads still carries the replacement character…
+        assert_eq!(name, "na\u{fffd}me");
+        // …and what comes back to Rust is the file itself, byte for byte.
+        assert_eq!(pathkey::decode_str(key), Ok(file));
+    }
+
+    #[test]
+    fn a_non_utf8_entry_can_be_renamed_through_its_key() {
+        let fixture = Fixture::new("rename");
+        fixture.write_non_utf8();
+        let key = rows_of(&fixture.0)[0].1.clone();
+
+        // Exactly what `rename_path` does once its argument is accepted.
+        let path = pathkey::decode_str(&key).expect("the published key decodes");
+        siderita_ops::rename(&path, OsStr::new("renombrado"), &CancellationToken::new())
+            .expect("rename the entry the key names");
+
+        assert!(fixture.0.join("renombrado").exists());
+        assert!(!path.exists(), "the original name is gone");
+    }
+
+    #[test]
+    fn a_non_utf8_entry_can_be_trashed_through_its_key() {
+        let fixture = Fixture::new("trash");
+        fixture.write_non_utf8();
+        let key = rows_of(&fixture.0)[0].1.clone();
+
+        let path = pathkey::decode_str(&key).expect("the published key decodes");
+        let trashed = siderita_ops::trash(&path, &CancellationToken::new(), &mut |_| {})
+            .expect("trash the entry the key names");
+
+        assert!(!path.exists(), "the entry left its folder");
+        assert!(trashed.info.exists(), "and left a .trashinfo behind");
+        // Put the Trash back the way it was found.
+        let _ = siderita_ops::purge_from_trash(&trashed.info);
+    }
+
+    #[test]
+    fn a_key_the_seam_did_not_produce_is_refused_without_panicking() {
+        for bad in ["/tmp/bad%2", "/tmp/bad%zz", "relative", ""] {
+            assert!(
+                pathkey::decode_str(bad).is_err(),
+                "'{bad}' must be refused rather than salvaged"
+            );
+        }
+        // And the refusal is typed, so a caller can say why.
+        let refusal = pathkey::decode_str("/tmp/bad%2").expect_err("malformed");
+        assert_eq!(refusal, pathkey::KeyError::Malformed);
+    }
+
+    #[test]
+    fn an_ordinary_name_keys_to_the_spelling_the_uri_codec_uses() {
+        // The drag payload is `file://` + the key, so the two must agree.
+        let path = PathBuf::from(OsStr::from_bytes(b"/home/u/informe#3.pdf"));
+        assert_eq!(
+            format!("file://{}", pathkey::encode(&path)),
+            crate::dbus::path_to_uri(&path)
+        );
     }
 }

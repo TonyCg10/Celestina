@@ -18,7 +18,7 @@ Item {
                 || controller.searchActive || controller.searchRunning)
             return -1
         controller.phoneRevision
-        const current = controller.currentPath.replace(/\/+$/, "")
+        const current = controller.currentPathKey.replace(/\/+$/, "")
         for (let index = 0; index < controller.phoneMounts.length; ++index) {
             const mount = controller.phoneMounts[index].replace(/\/+$/, "")
             if (mount.length > 0 && mount === current)
@@ -51,8 +51,8 @@ Item {
         // Re-evaluate when Magnetita republishes its parallel device lists.
         controller.phoneNames.length
         controller.phoneMounts.length
-        if (controller.currentPath.length > 0)
-            return controller.displayLocationName(controller.currentPath)
+        if (controller.currentPathKey.length > 0)
+            return controller.displayLocationName(controller.currentPathKey)
         const path = controller.currentPath.replace(/\/+$/, "")
         if (path.length === 0 || path === "/")
             return "Inicio"

@@ -92,6 +92,39 @@ The unit's automated lane is compilation and unit tests, recorded in the
 It cannot serve a real portal request, and this project has already seen a
 picker look broken for a reason that lived entirely in the requester.
 
+## VAL-SID-06 — A file whose name is not valid UTF-8, by hand
+
+- **Status:** pending
+- **Related implementation:** `SID-G7-D`,
+  [ADR 0008](../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md),
+  [evidence](docs/evidence/2026-08-06-byte-exact-path-seam.md)
+- **Requires:** the deployed Siderita binary on the author's real Wayland
+  session, a scratch folder, and one file created there whose name is not valid
+  UTF-8 — for example
+  `python3 -c "open(b'/tmp/scratch/na\xffme.txt','w').write('hola')"` — plus one
+  other file manager or portal-using application to drag to and from
+- **Procedure:** browse to that folder; read the name the row shows; press
+  `Space` on the entry, then `Enter`; rename it; star it and use the sidebar
+  star to reveal it; give it a custom icon and an accent; open its properties;
+  copy it and paste it into another folder; cut it and paste it back; drag it
+  into the other application and drag it back; send it to the Trash and restore
+  it from there; restart Siderita and check the star, the icon and the tab; then
+  walk the breadcrumbs of a folder whose own name is not valid UTF-8, and use
+  the save picker of the other application to write a new file into it
+- **Pass condition:** the row shows the name with a replacement character where
+  the byte is, and **every** verb above acts on that exact file rather than
+  reporting that it no longer exists; the breadcrumbs navigate; the star, the
+  icon and the reopened tab survive the restart; the drag out hands the other
+  application a URI it can resolve; and the picker writes where it said it would
+- **Result:** not run
+- **Evidence:** the exact bytes of the name, the compositor, and the other
+  application named
+
+Known limits recorded in advance, so they are not read as failures: the entry
+shows its generic glyph instead of a thumbnail, and copying it *to another
+application* through the system clipboard is still lossy. Both are in the
+evidence's `Limits`.
+
 ## VAL-SID-G7 — Numbered text panes and the shared text size
 
 - **Status:** pending

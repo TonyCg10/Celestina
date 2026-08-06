@@ -17,13 +17,13 @@ GlassContextMenu {
         text: "Añadir a marcadores"
         icon.name: "bookmark-new"
         icon.source: CelestinaTheme.fallbackIcon("folder")
-        onTriggered: root.controller.addBookmark(root.controller.currentPath)
+        onTriggered: root.controller.addBookmark(root.controller.currentPathKey)
     }
 
     GlassMenuItem {
         text: "Abrir en pestaña nueva"
         icon.name: "tab-new"
         icon.source: CelestinaTheme.fallbackIcon("folder")
-        onTriggered: root.newTabRequested(root.controller.currentPath, true)
+        onTriggered: root.newTabRequested(root.controller.currentPathKey, true)
     }
 }

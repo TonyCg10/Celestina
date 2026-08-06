@@ -132,7 +132,7 @@ pub mod qobject {
 /// The picker's answer travels down this. A capacity of one is the whole
 /// protocol: exactly one answer per request, and dropping the sender (the
 /// front-end withdrawing) closes it, which the waiting task reads as a cancel.
-type Slot = async_channel::Sender<Vec<String>>;
+type Slot = async_channel::Sender<Vec<PathBuf>>;
 
 #[derive(Default)]
 pub struct FileChooserPortalRust {
@@ -191,9 +191,17 @@ impl qobject::FileChooserPortal {
 
     /// Hands the picker's result to the waiting D-Bus task. An empty list is
     /// the user cancelling — the task tells the difference, not this side.
-    pub fn answer(self: Pin<&mut Self>, token: &QString, paths: &QStringList) {
+    ///
+    /// `keys` are the path keys of ADR 0008, decoded here; the URIs the caller
+    /// finally receives keep the portal's own spelling, produced downstream by
+    /// `crate::dbus::path_to_uri`. A key that will not decode is dropped rather
+    /// than handed to another application as a name it cannot resolve.
+    pub fn answer(self: Pin<&mut Self>, token: &QString, keys: &QStringList) {
         let token = token.to_string();
-        let paths: Vec<String> = paths.iter().map(ToString::to_string).collect();
+        let paths: Vec<PathBuf> = keys
+            .iter()
+            .filter_map(|key| crate::pathkey::decode(key).ok())
+            .collect();
         let slot = self
             .rust()
             .pending
@@ -296,7 +304,7 @@ impl FileChooser {
         options: HashMap<String, OwnedValue>,
     ) -> (u32, HashMap<String, OwnedValue>) {
         let token = format!("p{}", self.next_token.fetch_add(1, Ordering::Relaxed));
-        let (sender, receiver) = async_channel::bounded::<Vec<String>>(1);
+        let (sender, receiver) = async_channel::bounded::<Vec<PathBuf>>(1);
         if let Ok(mut map) = self.pending.lock() {
             map.insert(token.clone(), sender);
         }
@@ -376,9 +384,9 @@ impl FileChooser {
                 // own list, composed against it here so no two of them land on
                 // the same name.
                 let chosen: Vec<PathBuf> = if saving_many {
-                    compose_save_files(Path::new(&paths[0]), &requested_names)
+                    compose_save_files(&paths[0], &requested_names)
                 } else {
-                    paths.iter().map(PathBuf::from).collect()
+                    paths
                 };
                 if chosen.is_empty() {
                     return (RESPONSE_CANCELLED, HashMap::new());
@@ -566,6 +574,7 @@ fn string_option(options: &HashMap<String, OwnedValue>, key: &str) -> Option<Str
 
 /// `current_folder` arrives as a NUL-terminated byte array, not a string — it is
 /// a path, and a path is bytes.
+/// The caller's starting folder, as the path key the picker's `start_at` takes.
 fn current_folder(options: &HashMap<String, OwnedValue>) -> Option<String> {
     let value = options.get("current_folder")?;
     let bytes = Vec::<u8>::try_from(value.try_clone().ok()?).ok()?;
@@ -577,7 +586,10 @@ fn current_folder(options: &HashMap<String, OwnedValue>) -> Option<String> {
     if trimmed.is_empty() {
         return None;
     }
-    Some(String::from_utf8_lossy(&trimmed).into_owned())
+    // The caller sends raw bytes, and the picker is handed a path key
+    // (ADR 0008), so a starting folder whose name is not valid UTF-8 opens
+    // where it was asked to rather than at a lossy near-miss.
+    Some(celestina_core::percent::encode(&trimmed))
 }
 
 /// The caller's filters, flattened to `name\tpattern|pattern|…` lines the QML

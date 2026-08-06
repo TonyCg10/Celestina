@@ -13,7 +13,7 @@ Item {
     readonly property bool missing: entry.kind === "missing"
     readonly property bool current: !missing
                                     && entry.path === (hostWindow.activeController
-                                                       ? hostWindow.activeController.currentPath : "")
+                                                       ? hostWindow.activeController.currentPathKey : "")
 
     height: hostWindow.sidebarRowHeight
 
@@ -79,7 +79,7 @@ Item {
                 if (mouse.button === Qt.MiddleButton)
                     root.hostWindow.openTab(root.entry.path, false)
                 else
-                    controller.openLocation(root.entry.path)
+                    controller.openKey(root.entry.path)
             } else {
                 controller.revealPath(root.entry.path)
             }

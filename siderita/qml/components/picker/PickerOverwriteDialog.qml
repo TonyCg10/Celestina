@@ -19,18 +19,17 @@ CelestinaModalLayer {
     // The surface the card sizes itself against.
     required property Item owner
 
-    // The path that was asked about, and the affirmative answer.
+    // The path key that was asked about, the name to show for it, and the
+    // affirmative answer. The name is passed in rather than cut out of the key:
+    // a key is opaque, and this dialog does not take paths apart.
     property string targetPath: ""
-    readonly property string targetName: {
-        const cut = overwriteDialog.targetPath.lastIndexOf("/")
-        return cut >= 0 ? overwriteDialog.targetPath.substring(cut + 1)
-                        : overwriteDialog.targetPath
-    }
+    property string targetName: ""
 
     signal confirmed(string path)
 
-    function ask(path) {
+    function ask(path, name) {
         overwriteDialog.targetPath = path
+        overwriteDialog.targetName = name
         overwriteDialog.shown = true
     }
 

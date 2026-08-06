@@ -4,8 +4,10 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 /// The XDG config file starred paths live in, if a config home is resolvable.
-/// One absolute path per line — a set, so the file is order-free and a repeated
-/// star costs nothing.
+/// One absolute path key per line — a set, so the file is order-free and a
+/// repeated star costs nothing. Records written before ADR 0008 hold the raw
+/// path and are migrated on load by `pathkey::normalize`, so a star on a name
+/// that is not valid UTF-8 survives a restart.
 fn config_file() -> Option<PathBuf> {
     Some(
         celestina_core::xdg::config_home()?
@@ -40,7 +42,7 @@ fn load_from(path: &Path) -> BTreeSet<String> {
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty())
-        .map(str::to_owned)
+        .map(crate::pathkey::normalize)
         .collect()
 }
 

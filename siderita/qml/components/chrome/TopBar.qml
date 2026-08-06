@@ -90,60 +90,19 @@ Item {
             root.viewFocusRequested()
         }
 
-        function pathSegments(p) {
-            if (!p || p.length === 0)
-                return []
-
-            const normalized = p.length > 1 ? p.replace(/\/+$/, "") : p
-            // A Magnetita mount is an implementation path, not useful
-            // navigation context. Collapse `/run/user/.../magnetita/<id>` into
-            // one device crumb, then keep only real folders beneath it.
-            for (let phoneIndex = 0;
-                 phoneIndex < root.controller.phoneMounts.length;
-                 phoneIndex++) {
-                const rawMount = root.controller.phoneMounts[phoneIndex]
-                const mount = rawMount.length > 1
-                              ? rawMount.replace(/\/+$/, "") : rawMount
-                if (mount.length === 0
-                    || (normalized !== mount
-                        && !normalized.startsWith(mount + "/")))
-                    continue
-
-                const phoneSegments = [{
-                    name: root.controller.phoneNames[phoneIndex]
-                          || root.controller.displayLocationName(mount),
-                    path: mount
-                }]
-                const relativeParts = normalized.substring(mount.length)
-                                                .split("/")
-                                                .filter(function(part) {
-                                                    return part.length > 0
-                                                })
-                let phonePath = mount
-                for (const relativePart of relativeParts) {
-                    phonePath += "/" + relativePart
-                    phoneSegments.push({
-                        name: relativePart,
-                        path: phonePath
-                    })
-                }
-                return phoneSegments
-            }
-
-            const parts = normalized.split("/")
+        // The crumbs come from the controller as `name\tkey` lines. QML does
+        // not compose paths (ADR 0008): joining components is a path operation,
+        // and a crumb has to carry the exact bytes its click navigates to.
+        function pathSegments() {
             const segs = []
-            let acc = ""
-            for (let idx = 0; idx < parts.length; idx++) {
-                const part = parts[idx]
-                if (part.length === 0) {
-                    if (idx === 0)
-                        segs.push({ name: "/", path: "/" })
+            const lines = root.controller.pathSegments()
+            for (let idx = 0; idx < lines.length; idx++) {
+                const cut = lines[idx].indexOf("\t")
+                if (cut <= 0)
                     continue
-                }
-                acc = acc + "/" + part
                 segs.push({
-                    name: root.controller.displayLocationName(acc),
-                    path: acc
+                    name: lines[idx].substring(0, cut),
+                    key: lines[idx].substring(cut + 1)
                 })
             }
             return segs
@@ -215,7 +174,8 @@ Item {
                 model: {
                     root.controller.phoneNames.length
                     root.controller.phoneMounts.length
-                    return pathPill.pathSegments(root.controller.currentPath)
+                    root.controller.currentPathKey
+                    return pathPill.pathSegments()
                 }
 
                 delegate: Row {
@@ -263,8 +223,8 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: root.controller.openLocation(
-                                           crumb.modelData.path)
+                            onClicked: root.controller.openKey(
+                                           crumb.modelData.key)
                         }
                     }
                 }

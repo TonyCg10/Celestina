@@ -68,7 +68,7 @@ GlassContextMenu {
         text: "Abrir en pestaña nueva"
         icon.name: "tab-new"
         icon.source: CelestinaTheme.fallbackIcon("folder")
-        onTriggered: root.newTabRequested(root.controller.currentPath, true)
+        onTriggered: root.newTabRequested(root.controller.currentPathKey, true)
     }
 
     GlassMenuItem {

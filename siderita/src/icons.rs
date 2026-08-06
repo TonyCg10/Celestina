@@ -26,7 +26,9 @@ pub fn valid_accent(key: &str) -> bool {
 }
 
 /// The XDG config file per-path custom icon overrides live in, if a config home
-/// is resolvable. One `path\ticon-name\taccent-key` line each.
+/// is resolvable. One `key\ticon-name\taccent-key` line each, where the first
+/// field is the path key of ADR 0008; records written before that decision hold
+/// the raw path and are migrated on load by `pathkey::normalize`.
 fn config_file() -> Option<PathBuf> {
     Some(
         celestina_core::xdg::config_home()?
@@ -46,7 +48,7 @@ fn parse(content: &str) -> HashMap<String, IconAppearance> {
             // Leading/trailing spaces are legal Linux filename characters.
             // Preserve the path byte-for-byte even though icon/accent keys are
             // normalized as human-edited identifiers.
-            let path = parts.next()?;
+            let path = parts.next().map(crate::pathkey::normalize)?;
             let icon = parts.next()?.trim();
             let accent = parts.next().unwrap_or_default().trim();
             if path.is_empty() {
@@ -61,7 +63,7 @@ fn parse(content: &str) -> HashMap<String, IconAppearance> {
                     String::new()
                 },
             };
-            (!appearance.is_empty()).then(|| (path.to_owned(), appearance))
+            (!appearance.is_empty()).then_some((path, appearance))
         })
         .collect()
 }
@@ -168,8 +170,10 @@ mod tests {
     #[test]
     fn round_trip_preserves_legal_outer_spaces_in_a_path() {
         let mut appearances = HashMap::new();
+        // Outer spaces are legal filename characters; as a path key they are
+        // escaped, which is exactly what keeps them from being trimmed away.
         appearances.insert(
-            "/tmp/ carpeta ".into(),
+            "/tmp/%20carpeta%20".into(),
             IconAppearance {
                 icon: "folder".into(),
                 accent: "green".into(),
@@ -177,5 +181,11 @@ mod tests {
         );
 
         assert_eq!(parse(&serialize(&appearances)), appearances);
+    }
+
+    #[test]
+    fn a_legacy_raw_path_record_migrates_to_its_key() {
+        let parsed = parse("/tmp/mis fotos\tfolder\tgreen\n");
+        assert!(parsed.contains_key("/tmp/mis%20fotos"), "{parsed:?}");
     }
 }

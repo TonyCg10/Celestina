@@ -81,18 +81,19 @@ pub mod qobject {
         #[qproperty(u64, render_handle)]
         type SideritaPlayer = super::SideritaPlayerRust;
 
-        /// This path is not something the embedded player can show. The caller
-        /// falls back to the ordinary quick-look card, with `reason` as the
-        /// sentence to put on it.
+        /// The file this path key names is not something the embedded player
+        /// can show. The caller falls back to the ordinary quick-look card,
+        /// with `reason` as the sentence to put on it.
         #[qsignal]
         fn preview_declined(self: Pin<&mut SideritaPlayer>, path: QString, reason: QString);
 
-        /// Opens `path` in the embedded player when it is media this surface
-        /// can honestly play. Anything else answers [`preview_declined`].
+        /// Opens the file the path key `path` names in the embedded player when
+        /// it is media this surface can honestly play. Anything else answers
+        /// [`preview_declined`].
         #[qinvokable]
         fn request_preview(self: Pin<&mut SideritaPlayer>, path: &QString);
 
-        /// Opens `path` in the standalone Fluorita application.
+        /// Opens the file the path key `path` names in standalone Fluorita.
         ///
         /// Reports whether the launcher could be started at all; a missing
         /// binary is a truthful failure the caller falls back from, not a
@@ -100,8 +101,9 @@ pub mod qobject {
         #[qinvokable]
         fn launch_standalone(self: Pin<&mut SideritaPlayer>, path: &QString) -> bool;
 
-        /// Whether `path` is media this app would hand to Fluorita at all.
-        /// Decided from the name alone, so it costs nothing.
+        /// Whether the file the path key `path` names is media this app would
+        /// hand to Fluorita at all. Decided from the name alone, so it costs
+        /// nothing.
         #[qinvokable]
         fn is_media(self: Pin<&mut SideritaPlayer>, path: &QString) -> bool;
 
@@ -179,7 +181,9 @@ pub struct SideritaPlayerRust {
 
 impl qobject::SideritaPlayer {
     pub fn request_preview(mut self: core::pin::Pin<&mut Self>, path: &QString) {
-        let path = PathBuf::from(path.to_string());
+        let Ok(path) = crate::pathkey::decode(path) else {
+            return;
+        };
         // Whatever was playing goes first: one session, always. A video's
         // surface answers from the render thread, so if the close is still in
         // flight this request waits for it instead of starting beside it.
@@ -249,12 +253,12 @@ impl qobject::SideritaPlayer {
     }
 
     pub fn launch_standalone(self: core::pin::Pin<&mut Self>, path: &QString) -> bool {
-        let path = PathBuf::from(path.to_string());
-        crate::controller::shell::spawn_detached("fluorita", &path).is_ok()
+        crate::pathkey::decode(path)
+            .is_ok_and(|path| crate::controller::shell::spawn_detached("fluorita", &path).is_ok())
     }
 
     pub fn is_media(self: core::pin::Pin<&mut Self>, path: &QString) -> bool {
-        MediaKind::classify_path(&PathBuf::from(path.to_string())).is_some()
+        crate::pathkey::decode(path).is_ok_and(|path| MediaKind::classify_path(&path).is_some())
     }
 
     pub fn toggle(self: core::pin::Pin<&mut Self>) {
@@ -330,7 +334,7 @@ impl qobject::SideritaPlayer {
 
     fn decline(mut self: core::pin::Pin<&mut Self>, path: &std::path::Path, reason: &str) {
         self.as_mut().set_active(false);
-        let path = QString::from(path.to_string_lossy().as_ref());
+        let path = crate::pathkey::publish(path);
         self.preview_declined(path, QString::from(reason));
     }
 

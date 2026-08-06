@@ -7,6 +7,7 @@ use cxx_qt_lib::{QString, QStringList};
 
 use super::qobject;
 use super::{display_name, search_hit_parent, RECENT_LIMIT};
+use crate::pathkey;
 
 impl qobject::SideritaController {
     /// Leaves Trash and repaints the current folder.
@@ -65,7 +66,7 @@ impl qobject::SideritaController {
             .collect();
         let paths: QStringList = entries
             .iter()
-            .map(|e| QString::from(e.trashed.to_string_lossy().as_ref()))
+            .map(|e| pathkey::publish(&e.trashed))
             .collect();
         let kinds: QStringList = entries
             .iter()
@@ -111,7 +112,7 @@ impl qobject::SideritaController {
             .iter()
             .map(|e| crate::search::SearchHit {
                 name: e.name.clone(),
-                path: e.trashed.to_string_lossy().into_owned(),
+                path: e.trashed.clone(),
                 is_dir: e.trashed.is_dir(),
             })
             .collect();
@@ -139,7 +140,7 @@ impl qobject::SideritaController {
             .collect();
         let paths: QStringList = items
             .iter()
-            .map(|item| QString::from(item.path.to_string_lossy().as_ref()))
+            .map(|item| pathkey::publish(&item.path))
             .collect();
         let kinds: QStringList = items
             .iter()
@@ -158,7 +159,7 @@ impl qobject::SideritaController {
         // the Trash rows carry.
         let subtitles: QStringList = items
             .iter()
-            .map(|item| QString::from(search_hit_parent(&item.path.to_string_lossy()).as_str()))
+            .map(|item| QString::from(search_hit_parent(&item.path).as_str()))
             .collect();
         let dates: QStringList = items
             .iter()
@@ -185,7 +186,7 @@ impl qobject::SideritaController {
             .iter()
             .map(|item| crate::search::SearchHit {
                 name: item.name.clone(),
-                path: item.path.to_string_lossy().into_owned(),
+                path: item.path.clone(),
                 is_dir: item.path.is_dir(),
             })
             .collect();
@@ -221,18 +222,16 @@ impl qobject::SideritaController {
             self.as_mut().set_trash_active(false);
         }
     }
-    /// The `.trashinfo` record of the trashed entry whose body sits at `trashed`,
-    /// if that entry is still in the loaded list and its record still exists.
+    /// The `.trashinfo` record of the trashed entry whose body the key
+    /// `trashed` names, if that entry is still in the loaded list and its
+    /// record still exists.
     ///
     /// The identity of a trashed entry is its own path, never its position: the
     /// list is reloaded after every restore, purge and empty, so a row index
     /// captured when a menu opened can name a different entry by the time the
     /// menu item is clicked — and "Eliminar permanentemente" is irreversible.
     fn trash_record(&self, trashed: &QString) -> Option<PathBuf> {
-        let trashed = PathBuf::from(trashed.to_string());
-        if trashed.as_os_str().is_empty() {
-            return None;
-        }
+        let trashed = pathkey::decode(trashed).ok()?;
         let info = self
             .rust()
             .trash_entries

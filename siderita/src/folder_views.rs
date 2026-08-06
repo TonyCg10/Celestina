@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 /// arranged has no record at all and simply follows the global defaults.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FolderView {
+    /// The folder's path key (ADR 0008), not its display text.
     pub path: String,
     pub view_mode: String,
     pub sort_field: i32,
@@ -80,7 +81,8 @@ fn load_from(path: &Path) -> Vec<FolderView> {
                 return None;
             }
             Some(FolderView {
-                path: path.to_owned(),
+                // Records written before ADR 0008 hold the raw path.
+                path: crate::pathkey::normalize(path),
                 view_mode: view_mode.to_owned(),
                 sort_field: sort_field.clamp(0, 3),
                 sort_ascending,

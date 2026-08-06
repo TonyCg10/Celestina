@@ -33,6 +33,16 @@ fn visible_location_name(path: &str, phones: &[crate::devices::Device]) -> Strin
         .unwrap_or_else(|| normalized.to_owned())
 }
 
+/// A mount point as the path key the sidebar navigates with. An unmounted
+/// device has no path and keys to the empty string, which is what the rows read
+/// as "not openable yet".
+fn mount_key(mount: &str) -> QString {
+    if mount.is_empty() {
+        return QString::default();
+    }
+    QString::from(crate::pathkey::encode(Path::new(mount)).as_str())
+}
+
 impl qobject::SideritaController {
     /// Reads the removable volumes UDisks2 reports and publishes them to the
     /// sidebar (parallel name / device / mount-point lists), keeping the full
@@ -61,9 +71,11 @@ impl qobject::SideritaController {
             .iter()
             .map(|volume| QString::from(volume.device.as_str()))
             .collect();
+        // Published as path keys, like every other path this bridge hands out,
+        // so the sidebar can open a mounted volume without spelling its path.
         let mounts: QStringList = volumes
             .iter()
-            .map(|volume| QString::from(volume.mount_point.as_str()))
+            .map(|volume| mount_key(&volume.mount_point))
             .collect();
 
         self.as_mut().rust_mut().get_mut().volumes = volumes;
@@ -115,7 +127,7 @@ impl qobject::SideritaController {
             .collect();
         let mounts: QStringList = phones
             .iter()
-            .map(|phone| QString::from(phone.mount_path.as_str()))
+            .map(|phone| mount_key(&phone.mount_path))
             .collect();
 
         self.as_mut().rust_mut().get_mut().phones = phones;
@@ -181,7 +193,7 @@ impl qobject::SideritaController {
             QString::from(phone.device_type.as_str()),
             flag(phone.connected),
             flag(phone.mounted),
-            QString::from(phone.mount_path.as_str()),
+            mount_key(&phone.mount_path),
             QString::from(phone.media_player.as_str()),
             QString::from(phone.media_title.as_str()),
             QString::from(phone.media_artist.as_str()),
@@ -216,20 +228,28 @@ impl qobject::SideritaController {
         }
     }
 
-    /// Human-facing name for a location. Magnetita mounts by stable device id,
-    /// but that transport detail must not leak into tabs, headings or crumbs.
-    pub fn display_location_name(&self, path: &QString) -> QString {
+    /// Human-facing name for the location `key` names. Magnetita mounts by
+    /// stable device id, but that transport detail must not leak into tabs,
+    /// headings or crumbs. Takes a key and answers display text: this is the
+    /// one direction ADR 0008 allows between the two representations.
+    pub fn display_location_name(&self, key: &QString) -> QString {
+        let Ok(path) = crate::pathkey::decode(key) else {
+            return QString::default();
+        };
         QString::from(visible_location_name(
-            &path.to_string(),
+            &path.to_string_lossy(),
             &self.rust().phones,
         ))
     }
 
     /// Send a local file to the connected phone (the "Enviar al móvil" menu
     /// item). Sends to the first connected phone; a no-op if none is connected.
-    pub fn send_to_phone(self: Pin<&mut Self>, path: &QString) {
+    pub fn send_to_phone(mut self: Pin<&mut Self>, key: &QString) {
+        let Some(path) = self.as_mut().accept_key(key) else {
+            return;
+        };
         if let Some(phone) = self.rust().phones.iter().find(|phone| phone.connected) {
-            crate::devices::send_file(&phone.id, &path.to_string());
+            crate::devices::send_file(&phone.id, &path.to_string_lossy());
         }
     }
 

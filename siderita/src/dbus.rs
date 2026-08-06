@@ -29,8 +29,10 @@ pub mod qobject {
         #[qml_element]
         type FileManager1Service = super::FileManager1ServiceRust;
 
-        /// Emitted on the Qt thread when another application asks (over D-Bus) to
-        /// show a folder; the QML routes it to a new tab.
+        /// Emitted on the Qt thread when another application asks (over D-Bus)
+        /// to show a folder; the QML routes it to a new tab. The folder is
+        /// named by its path key (ADR 0008), which is what a tab opens on — the
+        /// `file://` URIs of the D-Bus interface itself are unchanged.
         #[qsignal]
         fn open_folder_requested(self: Pin<&mut FileManager1Service>, path: QString);
 
@@ -90,9 +92,9 @@ impl FileManager1 {
 impl FileManager1 {
     fn request_folders(&self, folders: impl Iterator<Item = PathBuf>) {
         for folder in folders {
-            let path = folder.to_string_lossy().into_owned();
+            let key = crate::pathkey::encode(&folder);
             let _ = self.qt.queue(move |service| {
-                service.open_folder_requested(QString::from(path.as_str()));
+                service.open_folder_requested(QString::from(key.as_str()));
             });
         }
     }

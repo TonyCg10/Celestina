@@ -99,16 +99,13 @@ ApplicationWindow {
                                         sidebarIconScale, sidebarTextScale)
     }
 
+    // `p` is a path key. Only the controller can turn one into the name a
+    // person reads, so a tab with no controller yet stays on its placeholder
+    // rather than showing a percent-escaped fragment of the key.
     function tabTitle(controller, p) {
-        if (!p || p.length === 0)
+        if (!p || p.length === 0 || !controller)
             return "…"
-        if (controller)
-            return controller.displayLocationName(p)
-        if (p === "/")
-            return "/"
-        const s = p.replace(/\/+$/, "")
-        const i = s.lastIndexOf("/")
-        return i >= 0 ? s.substring(i + 1) : s
+        return controller.displayLocationName(p)
     }
 
     function openTab(path, foreground) {
@@ -362,7 +359,7 @@ ApplicationWindow {
         sequence: "Ctrl+T"
         enabled: !window.lowerSurfaceBlocked
         onActivated: window.openTab(window.activeController
-                                    ? window.activeController.currentPath : "", true)
+                                    ? window.activeController.currentPathKey : "", true)
     }
 
     Shortcut {
@@ -537,9 +534,9 @@ ApplicationWindow {
                                 tabsModel.setProperty(
                                     tabHolder.index, "title",
                                     window.tabTitle(doc.tabController,
-                                                    doc.tabController.currentPath))
+                                                    doc.tabController.currentPathKey))
                             }
-                            function onCurrentPathChanged() { refreshTitle() }
+                            function onCurrentPathKeyChanged() { refreshTitle() }
                             function onPhoneNamesChanged() { refreshTitle() }
                             function onPhoneMountsChanged() { refreshTitle() }
                         }

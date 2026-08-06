@@ -204,26 +204,24 @@ Window {
         entryGrid.forceActiveFocus()
     }
 
-    // What Accept will hand back. A directory request answers with the folder
-    // being shown unless one is selected; a save answers with the typed name in
-    // the current folder; an open answers with the selection.
+    // What Accept will hand back, as path keys. A directory request answers
+    // with the folder being shown unless one is selected; a save answers with
+    // the typed name in the current folder; an open answers with the selection.
     function chosenPaths() {
         if (namingFile) {
-            const name = pickerChrome.nameText.trim()
-            // `.` and `..` name the folder itself and its parent, not a file to
-            // write: composing them would answer with a directory path. A name
-            // carrying a separator would leave the folder the user chose.
-            if (name.length === 0 || name.indexOf("/") >= 0
-                    || name === "." || name === "..")
-                return []
-            return [controller.currentPath + "/" + name]
+            // The name is joined to the folder by the controller, not here:
+            // QML does not compose paths (ADR 0008), and `childKey` is also
+            // what refuses a separator, `.` and `..` — a name that would leave
+            // the folder the user chose or answer with a directory.
+            const key = controller.childKey(pickerChrome.nameText.trim())
+            return key.length > 0 ? [key] : []
         }
         // A directory request — including `SaveFiles`, whose per-file names the
         // backend composes against this folder — answers with the folder shown
         // unless one is selected.
         if (directory) {
             const selected = selectedPaths(true)
-            return selected.length > 0 ? selected : [controller.currentPath]
+            return selected.length > 0 ? selected : [controller.currentPathKey]
         }
         return selectedPaths(false)
     }
@@ -236,7 +234,7 @@ Window {
         if (paths.length === 0)
             return
         if (picker.namingFile && controller.pathExists(paths[0])) {
-            overwritePrompt.ask(paths[0])
+            overwritePrompt.ask(paths[0], pickerChrome.nameText.trim())
             return
         }
         picker.answer(paths)
@@ -402,7 +400,7 @@ Window {
         const path = controller.entryPath(index)
         if (kind === "directory") {
             clearChosen()
-            controller.openLocation(path)
+            controller.openKey(path)
         } else if (!directory && !saving) {
             picker.answer([path])
         } else if (namingFile) {

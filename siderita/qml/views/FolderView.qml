@@ -84,7 +84,7 @@ Item {
         target: controller
         function onRowsReady(names, tokens, kinds, subtitles, paths, sections, sizes, dates) {
             var view = mainPanel.viewMode === "grid" ? fileGrid : folderListView
-            var key = controller.currentPath + "|" + controller.trashActive + "|"
+            var key = controller.currentPathKey + "|" + controller.trashActive + "|"
                     + controller.recentActive + "|" + controller.searchActive + "|"
                     + controller.searchQuery
             var samePlace = key === root.renderedKey

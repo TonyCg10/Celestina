@@ -69,11 +69,10 @@ CelestinaModalLayer {
                                      ? controller.previewText(qlPath) : ""
     readonly property bool qlHasText: qlText.length > 0
 
-    // Per-segment encode so spaces / #, ? etc. in a name survive the
-    // file:// URL without mangling the path separators.
-    function fileUrl(p) {
-        return "file://" + p.split("/").map(encodeURIComponent).join("/")
-    }
+    // The URL comes from the controller, which owns the one `file://` codec
+    // the portal and the drag payload also answer with. Building it here from
+    // the display text could not spell a byte that is not valid UTF-8 at all,
+    // and `encodeURIComponent` disagrees with that codec besides.
 
     Keys.onPressed: function(event) {
         if (event.key === Qt.Key_Escape || event.key === Qt.Key_Space) {
@@ -146,7 +145,7 @@ CelestinaModalLayer {
                 anchors.fill: parent
                 visible: quickLookView.qlIsImage
                 source: quickLookView.qlIsImage
-                        ? quickLookView.fileUrl(quickLookView.qlPath) : ""
+                        ? quickLookView.controller.pathUri(quickLookView.qlPath) : ""
                 sourceSize.width: 1920
                 sourceSize.height: 1920
                 fillMode: Image.PreserveAspectFit

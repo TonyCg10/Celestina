@@ -67,7 +67,7 @@ impl qobject::SideritaController {
     /// when the user switches); `None` keeps whatever the folder already had,
     /// falling back to the global default.
     fn remember_folder_view(mut self: Pin<&mut Self>, view_mode: Option<String>) {
-        let path = self.current_path().to_string();
+        let path = self.current_path_key().to_string();
         if path.is_empty() || self.rust().virtual_rows() {
             return;
         }
@@ -96,7 +96,7 @@ impl qobject::SideritaController {
     /// show. A folder with no record leaves both alone, so it inherits whatever
     /// the user last chose.
     pub(crate) fn apply_folder_view(mut self: Pin<&mut Self>) {
-        let path = self.current_path().to_string();
+        let path = self.current_path_key().to_string();
         let record = crate::folder_views::find(&self.rust().folder_views, &path).cloned();
         let Some(record) = record else {
             self.as_mut().refresh_folder_view_props();
@@ -126,7 +126,7 @@ impl qobject::SideritaController {
     }
 
     fn refresh_folder_view_props(mut self: Pin<&mut Self>) {
-        let path = self.current_path().to_string();
+        let path = self.current_path_key().to_string();
         let mode = crate::folder_views::find(&self.rust().folder_views, &path)
             .map(|record| record.view_mode.clone())
             .unwrap_or_default();
@@ -142,7 +142,7 @@ impl qobject::SideritaController {
 
     /// Drops this folder's record, so it follows the global defaults again.
     pub fn forget_folder_view(mut self: Pin<&mut Self>) {
-        let path = self.current_path().to_string();
+        let path = self.current_path_key().to_string();
         let dropped = {
             let records = &mut self.as_mut().rust_mut().get_mut().folder_views;
             crate::folder_views::forget(records, &path)

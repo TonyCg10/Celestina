@@ -190,7 +190,7 @@ Item {
                                    && root.hostWindow.activeController.recentActive)
                                 : (placePath.length > 0
                                    && placePath === (root.hostWindow.activeController
-                                                     ? root.hostWindow.activeController.currentPath : ""))
+                                                     ? root.hostWindow.activeController.currentPathKey : ""))
                         readonly property bool dragging: placesList.dragIndex === index
                         property bool justDragged: false
 
@@ -211,7 +211,7 @@ Item {
                             else if (isRecent)
                                 ac.openRecent()
                             else if (placePath.length > 0)
-                                ac.openLocation(placePath)
+                                ac.openKey(placePath)
                         }
 
                         // Where the carried row would land.
@@ -435,7 +435,7 @@ Item {
                         readonly property bool mounted: mountPoint.length > 0
                         readonly property bool current: mounted
                             && mountPoint === (root.hostWindow.activeController
-                                               ? root.hostWindow.activeController.currentPath : "")
+                                               ? root.hostWindow.activeController.currentPathKey : "")
 
                         width: placesColumn.width
                         height: root.hostWindow.sidebarRowHeight

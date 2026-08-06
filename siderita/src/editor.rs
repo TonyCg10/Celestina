@@ -17,7 +17,6 @@
 //! turns that into the one splice it represents, which is what keeps a CRLF
 //! file from being silently rewritten by Qt.
 
-use std::path::PathBuf;
 use std::pin::Pin;
 
 use cxx_qt::{CxxQtType, Threading};
@@ -44,7 +43,7 @@ pub mod qobject {
     #[auto_cxx_name]
     extern "RustQt" {
         // active        — a document is open and the modal should be showing
-        // path / name   — the resolved file and its display name
+        // path / name   — the file's path key (ADR 0008) and its display name
         // encodingLabel — the encoding the document is written back in
         // dirty / busy  — differs from disk / the worker is reading or writing
         // statusText    — a completed action, for the quiet status line
@@ -81,7 +80,7 @@ pub mod qobject {
         fn document_reset(self: Pin<&mut GrafitaEditor>, text: QString, caret: i32);
 
         /// The probed file is not editable text. The caller falls back to the
-        /// quick-look preview for this path.
+        /// quick-look preview for this file, named by its path key.
         #[qsignal]
         fn preview_declined(self: Pin<&mut GrafitaEditor>, path: QString, reason: QString);
 
@@ -90,25 +89,28 @@ pub mod qobject {
         #[qsignal]
         fn closed(self: Pin<&mut GrafitaEditor>);
 
-        /// The answer to [`request_launch`]: whether this path holds editable
-        /// text, so activation can pick the editor or the desktop's handler.
+        /// The answer to [`request_launch`]: whether the file this path key
+        /// names holds editable text, so activation can pick the editor or the
+        /// desktop's handler. The key is the same one the caller passed in.
         #[qsignal]
         fn launch_decided(self: Pin<&mut GrafitaEditor>, path: QString, editable: bool);
 
-        /// Asks — by content, never by name — whether `path` is text Grafita
-        /// should open. Nothing is opened here; the answer arrives as
-        /// [`launch_decided`].
+        /// Asks — by content, never by name — whether the file the path key
+        /// `path` names is text Grafita should open. Nothing is opened here;
+        /// the answer arrives as [`launch_decided`].
         #[qinvokable]
         fn request_launch(self: Pin<&mut GrafitaEditor>, path: &QString);
 
-        /// Opens `path` in the standalone Grafita application.
+        /// Opens the file the path key `path` names in the standalone Grafita
+        /// application.
         ///
         /// Reports whether the launcher could be started at all; a missing
         /// binary is a truthful failure, not a silent no-op.
         #[qinvokable]
         fn launch_standalone(self: Pin<&mut GrafitaEditor>, path: &QString) -> bool;
 
-        /// Classifies `path` and opens the editor when it is editable text.
+        /// Classifies the file the path key `path` names and opens the editor
+        /// when it is editable text.
         /// Non-text answers with [`preview_declined`] instead.
         #[qinvokable]
         fn request_preview(self: Pin<&mut GrafitaEditor>, path: &QString);
@@ -225,19 +227,25 @@ impl qobject::GrafitaEditor {
     }
 
     pub fn request_preview(mut self: Pin<&mut Self>, path: &QString) {
-        let path = PathBuf::from(path.to_string());
+        let Ok(path) = crate::pathkey::decode(path) else {
+            return;
+        };
         let outcome = self.as_mut().rust_mut().get_mut().session.open(&path);
         self.dispatch(outcome);
     }
 
     pub fn request_launch(mut self: Pin<&mut Self>, path: &QString) {
-        let path = PathBuf::from(path.to_string());
+        let Ok(path) = crate::pathkey::decode(path) else {
+            return;
+        };
         let outcome = self.as_mut().rust_mut().get_mut().session.classify(&path);
         self.dispatch(outcome);
     }
 
     pub fn launch_standalone(mut self: Pin<&mut Self>, path: &QString) -> bool {
-        let path = PathBuf::from(path.to_string());
+        let Ok(path) = crate::pathkey::decode(path) else {
+            return false;
+        };
         match crate::controller::shell::spawn_detached("grafita", &path) {
             Ok(()) => true,
             Err(error) => {
@@ -311,12 +319,12 @@ impl qobject::GrafitaEditor {
                     .document_reset(QString::from(text.as_str()), caret);
             }
             Some(Event::Declined { path, reason }) => {
-                let path = QString::from(path.to_string_lossy().as_ref());
+                let path = crate::pathkey::publish(&path);
                 self.as_mut()
                     .preview_declined(path, QString::from(decline_text(reason)));
             }
             Some(Event::Classified { path, editable }) => {
-                let path = QString::from(path.to_string_lossy().as_ref());
+                let path = crate::pathkey::publish(&path);
                 self.as_mut().launch_decided(path, editable);
             }
             // The embedded surface only ever edits a file that already
@@ -380,8 +388,7 @@ impl qobject::GrafitaEditor {
         self.as_mut().set_can_undo(state.can_undo);
         self.as_mut().set_can_redo(state.can_redo);
         self.as_mut().set_close_prompt(state.close_prompt);
-        self.as_mut()
-            .set_path(QString::from(state.path.to_string_lossy().as_ref()));
+        self.as_mut().set_path(crate::pathkey::publish(&state.path));
         self.as_mut().set_name(QString::from(state.name.as_str()));
         self.as_mut().set_encoding_label(QString::from(
             state

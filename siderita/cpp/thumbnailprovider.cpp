@@ -162,7 +162,13 @@ class ThumbnailProvider : public QQuickAsyncImageProvider
 public:
     QQuickImageResponse *requestImageResponse(const QString &id, const QSize &) override
     {
-        // The id is the file path (percent-encoded by the delegate); decode it.
+        // The id is the entry's path key (ADR 0008), handed over verbatim: the
+        // delegate must not re-encode it, or this would decode one layer and
+        // look for a file literally named "%FF".
+        //
+        // Known limit: a QString cannot hold a name that is not valid UTF-8, so
+        // such a file resolves to a near-miss here and finds nothing. It keeps
+        // its themed glyph — a missing thumbnail, not a wrong file.
         return new ThumbnailResponse(QUrl::fromPercentEncoding(id.toUtf8()));
     }
 };

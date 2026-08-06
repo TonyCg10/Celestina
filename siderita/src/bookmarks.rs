@@ -2,7 +2,12 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-/// One sidebar bookmark: a display name and the location it points at.
+/// One sidebar bookmark: a display name and the path key it points at.
+///
+/// The key is what ADR 0008 puts across the Qt seam, and storing the same
+/// spelling means a bookmarked folder whose name is not valid UTF-8 still
+/// opens. Records written before that decision hold the raw path; they are
+/// migrated on load by `pathkey::normalize`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Bookmark {
     pub name: String,
@@ -50,17 +55,6 @@ pub fn move_item(bookmarks: &mut Vec<Bookmark>, from: usize, to: usize) -> bool 
     true
 }
 
-/// Derives a default bookmark name from a path's final component.
-pub fn name_for(path: &str) -> String {
-    if path == "/" {
-        return "/".to_owned();
-    }
-    match path.trim_end_matches('/').rsplit('/').next() {
-        Some(name) if !name.is_empty() => name.to_owned(),
-        _ => path.to_owned(),
-    }
-}
-
 fn load_from(path: &Path) -> Vec<Bookmark> {
     let Ok(content) = fs::read_to_string(path) else {
         return Vec::new();
@@ -80,7 +74,7 @@ fn load_from(path: &Path) -> Vec<Bookmark> {
                 } else {
                     name.to_owned()
                 },
-                path: location.to_owned(),
+                path: crate::pathkey::normalize(location),
             })
         })
         .collect()
@@ -183,10 +177,14 @@ mod tests {
     }
 
     #[test]
-    fn name_for_uses_the_last_path_component() {
-        assert_eq!(name_for("/home/user/Downloads"), "Downloads");
-        assert_eq!(name_for("/home/user/Downloads/"), "Downloads");
-        assert_eq!(name_for("/"), "/");
+    fn a_legacy_raw_path_record_is_migrated_to_a_key() {
+        let file = temp_file("migrate");
+        fs::create_dir_all(file.parent().expect("temp parent")).expect("create dir");
+        fs::write(&file, "Mis fotos\t/home/u/mis fotos\n").expect("write");
+        let loaded = load_from(&file);
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].path, "/home/u/mis%20fotos");
+        let _ = fs::remove_dir_all(file.parent().expect("temp parent"));
     }
 
     #[test]

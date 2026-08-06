@@ -4,7 +4,7 @@
 //! match cap, and never follows symlinks (so it can't loop or escape the tree).
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use celestina_core::CancellationToken;
 
@@ -12,7 +12,7 @@ use celestina_core::CancellationToken;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SearchHit {
     pub name: String,
-    pub path: String,
+    pub path: PathBuf,
     pub is_dir: bool,
 }
 
@@ -78,7 +78,7 @@ pub fn search(
                 }
                 outcome.hits.push(SearchHit {
                     name: name.clone().into_owned(),
-                    path: entry.path().to_string_lossy().into_owned(),
+                    path: entry.path(),
                     is_dir,
                 });
             }

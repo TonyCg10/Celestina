@@ -140,7 +140,6 @@
 6	siderita/scripts/run.sh
 12	siderita/scripts/smoke.sh
 2	siderita/src/apps.rs
-1	siderita/src/controller.rs
 5	siderita/src/controller/fileops.rs
 2	siderita/src/controller/find.rs
 1	siderita/src/controller/mounts.rs

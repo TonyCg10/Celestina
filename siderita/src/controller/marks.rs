@@ -9,49 +9,86 @@ use core::pin::Pin;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QString, QStringList};
 
+use super::display::display_name;
 use super::qobject;
-use super::{favorite_entry_list, icon_override_entries};
+use crate::pathkey;
+
+/// One stable, atomic `key\ticon\taccent` line per appearance. QML therefore
+/// sees a complete record at once and never mixes fields from different edits.
+pub(crate) fn icon_override_entries(
+    map: &std::collections::HashMap<String, crate::icons::IconAppearance>,
+) -> QStringList {
+    let mut entries: Vec<(&String, &crate::icons::IconAppearance)> = map.iter().collect();
+    entries.sort_by_key(|(key, _)| *key);
+    entries
+        .iter()
+        .map(|(key, appearance)| {
+            QString::from(format!("{key}\t{}\t{}", appearance.icon, appearance.accent).as_str())
+        })
+        .collect()
+}
+
+/// The starred entries as `key\tkind` lines. The kind is resolved here, once
+/// per refresh, so the sidebar can show a folder as a folder and say plainly
+/// when a favourite's target is gone rather than offering a row that leads
+/// nowhere. A key that will not decode is dropped: it names nothing.
+pub(crate) fn favorite_entry_list(keys: &std::collections::BTreeSet<String>) -> QStringList {
+    keys.iter()
+        .filter_map(|key| {
+            let path = pathkey::decode_str(key).ok()?;
+            let kind = match std::fs::metadata(&path) {
+                Ok(meta) if meta.is_dir() => "directory",
+                Ok(_) => "file",
+                Err(_) => "missing",
+            };
+            Some(QString::from(format!("{key}\t{kind}").as_str()))
+        })
+        .collect()
+}
 
 impl qobject::SideritaController {
-    pub fn set_custom_icon(mut self: Pin<&mut Self>, path: &QString, icon: &QString) {
-        let path = path.to_string();
-        if path.is_empty() {
+    /// Sets the custom icon for the entry `key` names. A key that is not well
+    /// formed is refused: nothing on disk answers to it.
+    pub fn set_custom_icon(mut self: Pin<&mut Self>, key: &QString, icon: &QString) {
+        let Some(key) = self.as_mut().accept_mark(key) else {
             return;
-        }
+        };
         self.as_mut().set_op_error(QString::default());
         let previous = self.rust().custom_icons.clone();
         let icon = icon.to_string();
         {
             let map = &mut self.as_mut().rust_mut().get_mut().custom_icons;
             let empty = {
-                let appearance = map.entry(path.clone()).or_default();
+                let appearance = map.entry(key.clone()).or_default();
                 appearance.icon = icon;
                 appearance.icon.is_empty() && appearance.accent.is_empty()
             };
             if empty {
-                map.remove(&path);
+                map.remove(&key);
             }
         }
         self.as_mut().persist_custom_icons(previous);
     }
 
-    pub fn set_custom_icon_accent(mut self: Pin<&mut Self>, path: &QString, accent: &QString) {
-        let path = path.to_string();
+    pub fn set_custom_icon_accent(mut self: Pin<&mut Self>, key: &QString, accent: &QString) {
         let accent = accent.to_string();
-        if path.is_empty() || !crate::icons::valid_accent(&accent) {
+        if !crate::icons::valid_accent(&accent) {
             return;
         }
+        let Some(key) = self.as_mut().accept_mark(key) else {
+            return;
+        };
         self.as_mut().set_op_error(QString::default());
         let previous = self.rust().custom_icons.clone();
         {
             let map = &mut self.as_mut().rust_mut().get_mut().custom_icons;
             let empty = {
-                let appearance = map.entry(path.clone()).or_default();
+                let appearance = map.entry(key.clone()).or_default();
                 appearance.accent = accent;
                 appearance.icon.is_empty() && appearance.accent.is_empty()
             };
             if empty {
-                map.remove(&path);
+                map.remove(&key);
             }
         }
         self.as_mut().persist_custom_icons(previous);
@@ -85,15 +122,14 @@ impl qobject::SideritaController {
         self.as_mut().set_custom_icon_entries(entries);
     }
 
-    pub fn toggle_favorite(mut self: Pin<&mut Self>, path: &QString) {
-        let path = path.to_string();
-        if path.is_empty() {
+    pub fn toggle_favorite(mut self: Pin<&mut Self>, key: &QString) {
+        let Some(key) = self.as_mut().accept_mark(key) else {
             return;
-        }
+        };
         {
             let set = &mut self.as_mut().rust_mut().get_mut().favorites;
-            if !set.remove(&path) {
-                set.insert(path);
+            if !set.remove(&key) {
+                set.insert(key);
             }
         }
         let _ = crate::favorites::save(&self.rust().favorites);
@@ -114,17 +150,20 @@ impl qobject::SideritaController {
         self.as_mut().set_favorite_entries(entries);
     }
 
-    pub fn add_bookmark(mut self: Pin<&mut Self>, path: &QString) {
-        let path = path.to_string();
-        if path.is_empty() || self.rust().bookmarks.iter().any(|entry| entry.path == path) {
+    pub fn add_bookmark(mut self: Pin<&mut Self>, key: &QString) {
+        let Some(location) = self.as_mut().accept_key(key) else {
+            return;
+        };
+        let key = pathkey::encode(&location);
+        if self.rust().bookmarks.iter().any(|entry| entry.path == key) {
             return;
         }
-        let name = crate::bookmarks::name_for(&path);
+        let name = display_name(&location);
         self.as_mut()
             .rust_mut()
             .get_mut()
             .bookmarks
-            .push(crate::bookmarks::Bookmark { name, path });
+            .push(crate::bookmarks::Bookmark { name, path: key });
         self.as_mut().refresh_bookmark_properties();
         let _ = crate::bookmarks::save(&self.rust().bookmarks);
     }
@@ -196,6 +235,8 @@ impl qobject::SideritaController {
         self.as_mut().set_bookmark_paths(paths);
     }
 
+    /// The path key of the sidebar place `key` names (`HOME`, `DOWNLOAD`, …),
+    /// or an empty string when this machine has no such folder.
     pub fn place_path(&self, key: &QString) -> QString {
         self.rust()
             .places

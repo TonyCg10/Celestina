@@ -78,8 +78,7 @@ impl qobject::SideritaController {
     /// Publishes a finished (or cancelled) search onto the Qt thread.
     fn publish_search(mut self: Pin<&mut Self>, outcome: crate::search::SearchOutcome) {
         let current = self.rust().history.current().map(Path::to_path_buf);
-        let in_current =
-            |hit: &crate::search::SearchHit| current.as_deref() == Path::new(&hit.path).parent();
+        let in_current = |hit: &crate::search::SearchHit| current.as_deref() == hit.path.parent();
 
         // Group the hits: those in the searched folder first, then everything
         // deeper — each group A→Z — so the two sections read contiguously.
@@ -119,9 +118,11 @@ impl qobject::SideritaController {
             .iter()
             .map(|h| QString::from(h.name.as_str()))
             .collect();
+        // Identity, not text (ADR 0008): a hit is opened, revealed and trashed
+        // through the key published here.
         let paths: QStringList = hits
             .iter()
-            .map(|h| QString::from(h.path.as_str()))
+            .map(|h| crate::pathkey::publish(&h.path))
             .collect();
         let kinds: QStringList = hits
             .iter()

@@ -1,6 +1,6 @@
 # Siderita status
 
-- **Updated:** 2026-08-05
+- **Updated:** 2026-08-06
 - **Implementation:** the registered product version and CP0-CP7 behaviour are
   present; `SID-G7` (shared reading surface) is the active checkpoint and the
   portal-parenting one remains planned
@@ -9,6 +9,26 @@
 
 ## Current checkout truth
 
+- Uncommitted in the checkout: `SID-G7-D`, the byte-exact path seam. Every path
+  that crosses the Qt boundary is now the percent key of
+  [ADR 0008](../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md),
+  published beside its own lossy display text; every invokable decodes that key
+  and refuses a malformed one with a typed error instead of rebuilding a
+  `PathBuf` from the `QString`; and QML no longer composes paths — the
+  breadcrumbs, the save picker's typed name, the quick look's `file://` URL and
+  the sidebar's derived names all come from the adapter. The persisted
+  bookmarks, favourites, icons, folder views and tab session migrate to keys on
+  load. The `file://`, portal and Trash encodings that face other processes are
+  untouched. This closes audit finding `SID-A2` in the checkout; `FLU-M1`, the
+  same defect in Fluorita, is untouched. Compiled, unit-tested, QML Test 47/47
+  and an offscreen smoke — no production run, no version transition, and nothing
+  tried by hand on a real session: that is `VAL-SID-06`. Two limits stand and are
+  recorded in the
+  [evidence](docs/evidence/2026-08-06-byte-exact-path-seam.md): a non-UTF-8 name
+  still gets a generic glyph instead of a thumbnail, because the C++ provider
+  addresses files through `QString`; and the system clipboard still exchanges
+  paths with the rest of the desktop, so copying such a name *to another
+  application* remains lossy.
 - Uncommitted in the checkout: `SID-G7-C`, the corrective unit from the suite
   audit. Pasting an entry into its own folder now duplicates instead of trashing
   the original to make room for it; the portal answers `writable` only when it

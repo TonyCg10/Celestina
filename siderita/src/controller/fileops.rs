@@ -14,9 +14,23 @@ use cxx_qt_lib::{QString, QStringList};
 use siderita_ops::{OpError, Progress};
 
 use super::qobject;
-use super::{
-    display_name, qstringlist_to_paths, ConflictStrategy, PasteOutcome, PendingPaste, UndoAction,
-};
+use super::{display_name, ConflictStrategy, PasteOutcome, PendingPaste, UndoAction};
+use crate::pathkey;
+
+/// The system clipboard's local paths as owned `PathBuf`s, skipping empty
+/// strings so a stray blank never becomes a filesystem operation on `""`.
+///
+/// Not keys: this list comes from Qt's own clipboard, shared with every other
+/// application on the desktop, and it speaks paths. Qt cannot spell a name that
+/// is not valid UTF-8 there, which is the documented limit of pasting such a
+/// name between applications rather than something this seam can repair.
+fn clipboard_paths(list: &QStringList) -> Vec<PathBuf> {
+    list.iter()
+        .map(QString::to_string)
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .collect()
+}
 
 impl qobject::SideritaController {
     pub fn new_folder(mut self: Pin<&mut Self>, name: &QString) {
@@ -48,9 +62,14 @@ impl qobject::SideritaController {
         self.finish_op(outcome.map(|_| ()));
     }
 
-    pub fn rename_path(mut self: Pin<&mut Self>, path: &QString, new_name: &QString) {
+    /// Renames the entry `key` names. `new_name` is the text a person typed,
+    /// not a key: the domain validates it and refuses a separator, `.`, `..`
+    /// and NUL.
+    pub fn rename_path(mut self: Pin<&mut Self>, key: &QString, new_name: &QString) {
         self.as_mut().set_op_error(QString::default());
-        let path = PathBuf::from(path.to_string());
+        let Some(path) = self.as_mut().accept_key(key) else {
+            return;
+        };
         let new_name = new_name.to_string();
         let outcome = siderita_ops::rename(&path, OsStr::new(&new_name), &CancellationToken::new());
         if let Ok(renamed) = &outcome {
@@ -67,9 +86,11 @@ impl qobject::SideritaController {
     /// Each rename is attempted independently and refuses to overwrite (the
     /// domain guarantees that), so a name that collides fails alone and is
     /// reported — nothing else in the batch is rolled back or lost.
-    pub fn rename_paths(mut self: Pin<&mut Self>, paths: &QStringList, names: &QStringList) {
+    pub fn rename_paths(mut self: Pin<&mut Self>, keys: &QStringList, names: &QStringList) {
         self.as_mut().set_op_error(QString::default());
-        let paths = qstringlist_to_paths(paths);
+        let Some(paths) = self.as_mut().accept_keys(keys) else {
+            return;
+        };
         let names: Vec<String> = names.iter().map(ToString::to_string).collect();
         if paths.is_empty() || paths.len() != names.len() {
             return;
@@ -90,21 +111,22 @@ impl qobject::SideritaController {
         self.as_mut().finish_batch(paths.len(), &failures);
     }
 
-    pub fn trash_path(mut self: Pin<&mut Self>, path: &QString) {
+    pub fn trash_path(mut self: Pin<&mut Self>, key: &QString) {
         self.as_mut().set_op_error(QString::default());
-        let path = PathBuf::from(path.to_string());
-        if path.as_os_str().is_empty() {
+        let Some(path) = self.as_mut().accept_key(key) else {
             return;
-        }
+        };
         self.as_mut().spawn_trash(vec![path]);
     }
 
     /// Sends every path in a multi-selection to Trash. Each entry is attempted
     /// independently; the view is refreshed once so successes appear, and any
     /// failures are reported together without hiding the ones that did land.
-    pub fn trash_paths(mut self: Pin<&mut Self>, paths: &QStringList) {
+    pub fn trash_paths(mut self: Pin<&mut Self>, keys: &QStringList) {
         self.as_mut().set_op_error(QString::default());
-        let paths = qstringlist_to_paths(paths);
+        let Some(paths) = self.as_mut().accept_keys(keys) else {
+            return;
+        };
         if paths.is_empty() {
             return;
         }
@@ -213,18 +235,19 @@ impl qobject::SideritaController {
         }
     }
 
-    pub fn copy_to_clipboard(mut self: Pin<&mut Self>, path: &QString, cut: bool) {
-        let path = path.to_string();
-        if path.is_empty() {
+    pub fn copy_to_clipboard(mut self: Pin<&mut Self>, key: &QString, cut: bool) {
+        let Some(path) = self.as_mut().accept_key(key) else {
             return;
-        }
-        self.as_mut().set_clipboard(vec![PathBuf::from(path)], cut);
+        };
+        self.as_mut().set_clipboard(vec![path], cut);
     }
 
     /// Loads a multi-selection into the internal clipboard for a later paste,
     /// as either a copy (`cut = false`) or a move (`cut = true`).
-    pub fn copy_paths_to_clipboard(mut self: Pin<&mut Self>, paths: &QStringList, cut: bool) {
-        let paths = qstringlist_to_paths(paths);
+    pub fn copy_paths_to_clipboard(mut self: Pin<&mut Self>, keys: &QStringList, cut: bool) {
+        let Some(paths) = self.as_mut().accept_keys(keys) else {
+            return;
+        };
         if paths.is_empty() {
             return;
         }
@@ -234,11 +257,15 @@ impl qobject::SideritaController {
     pub(crate) fn set_clipboard(mut self: Pin<&mut Self>, paths: Vec<PathBuf>, cut: bool) {
         // Publish to the system clipboard too, so other file managers can paste
         // what Siderita copied or cut (text/uri-list + gnome-copied-files).
+        // That shim speaks paths to the rest of the desktop, so it is handed
+        // the lossy spelling; the view's ghosting list is keyed instead, since
+        // it is compared against the keys the rows publish.
         let uris: QStringList = paths
             .iter()
             .map(|path| QString::from(path.to_string_lossy().as_ref()))
             .collect();
         qobject::system_clipboard_set_uris(&uris, cut);
+        let keys: QStringList = paths.iter().map(|path| pathkey::publish(path)).collect();
         {
             let state = self.as_mut().rust_mut();
             let state = state.get_mut();
@@ -250,7 +277,7 @@ impl qobject::SideritaController {
         // A cut marks its sources for a ghosted style in the view; a copy leaves
         // no such mark and clears any earlier one.
         self.as_mut()
-            .set_cut_paths(if cut { uris } else { QStringList::default() });
+            .set_cut_paths(if cut { keys } else { QStringList::default() });
     }
 
     /// Recomputes whether a paste is available from either clipboard. Called when
@@ -290,7 +317,7 @@ impl qobject::SideritaController {
         // file URIs (e.g. it is unavailable).
         let (sources, cut) = if qobject::system_clipboard_has_uris() {
             (
-                qstringlist_to_paths(&qobject::system_clipboard_read_uris()),
+                clipboard_paths(&qobject::system_clipboard_read_uris()),
                 qobject::system_clipboard_is_cut(),
             )
         } else {
@@ -304,11 +331,13 @@ impl qobject::SideritaController {
     /// conflict-detection and worker as paste. `move_entries` chooses move vs copy.
     pub fn drop_uris(
         mut self: Pin<&mut Self>,
-        paths: &QStringList,
+        keys: &QStringList,
         destination: &QString,
         move_entries: bool,
     ) {
-        let sources = qstringlist_to_paths(paths);
+        let Some(sources) = self.as_mut().accept_keys(keys) else {
+            return;
+        };
         self.as_mut().drop_paths(sources, destination, move_entries);
     }
 
@@ -345,11 +374,12 @@ impl qobject::SideritaController {
         }
         self.as_mut().set_op_error(QString::default());
 
-        let destination = destination.to_string();
+        // An empty destination key means "the folder being shown" — a drop on
+        // empty space, which has no row to name.
         let destination = if destination.is_empty() {
             self.rust().history.current().map(Path::to_path_buf)
         } else {
-            Some(PathBuf::from(destination))
+            self.as_mut().accept_key(destination)
         };
         let Some(destination) = destination else {
             return;
@@ -613,7 +643,7 @@ impl qobject::SideritaController {
                 // holds the very entries this move consumed. Another application
                 // may have copied something during a long move, and that content
                 // is not ours to discard.
-                let held = qstringlist_to_paths(&qobject::system_clipboard_read_uris());
+                let held = clipboard_paths(&qobject::system_clipboard_read_uris());
                 if super::paste::holds_exactly(&held, &outcome.sources) {
                     qobject::system_clipboard_clear();
                 }

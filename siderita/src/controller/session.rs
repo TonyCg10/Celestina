@@ -29,12 +29,15 @@ impl qobject::SideritaController {
         self.as_mut().rust_mut().get_mut().settings = settings;
     }
 
+    /// The folders that were open last time, as path keys. Sessions written
+    /// before ADR 0008 hold raw paths, so each record is migrated on the way
+    /// out rather than rewriting the file behind the user's back.
     pub fn saved_tabs(&self) -> QStringList {
         self.rust()
             .settings
             .tabs
             .iter()
-            .map(|path| QString::from(path.as_str()))
+            .map(|stored| QString::from(crate::pathkey::normalize(stored).as_str()))
             .collect()
     }
 
@@ -42,11 +45,13 @@ impl qobject::SideritaController {
         self.rust().settings.active_tab
     }
 
-    pub fn save_tabs(mut self: Pin<&mut Self>, paths: &QStringList, active: i32) {
-        let tabs: Vec<String> = paths
+    /// Remembers the open tabs. `keys` are path keys and are stored verbatim,
+    /// so a folder whose name is not valid UTF-8 reopens where it was.
+    pub fn save_tabs(mut self: Pin<&mut Self>, keys: &QStringList, active: i32) {
+        let tabs: Vec<String> = keys
             .iter()
             .map(ToString::to_string)
-            .filter(|path| !path.is_empty())
+            .filter(|key| !key.is_empty())
             .collect();
         let mut settings = crate::settings::load();
         settings.tabs = tabs;

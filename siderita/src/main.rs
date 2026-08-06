@@ -9,6 +9,7 @@ mod folder_views;
 mod format;
 mod icons;
 mod media;
+mod pathkey;
 mod places;
 mod portal;
 mod preferences;

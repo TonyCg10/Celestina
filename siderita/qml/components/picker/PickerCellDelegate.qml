@@ -128,7 +128,7 @@ Item {
             visible: opacity > 0
             opacity: ready ? 1 : 0
             source: root.previewable
-                    ? "image://thumb/" + encodeURIComponent(root.path) : ""
+                    ? "image://thumb/" + root.path : ""
             sourceSize: Qt.size(64, 64)
             fillMode: Image.PreserveAspectCrop
             asynchronous: true

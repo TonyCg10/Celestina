@@ -6,7 +6,7 @@
 //! are read from their own lists so every row lookup takes the same path.
 
 use core::pin::Pin;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use celestina_core::CancellationToken;
 use cxx_qt::{CxxQtType, Threading};
@@ -15,6 +15,7 @@ use siderita_qt::RowKind;
 
 use super::qobject;
 use super::{kind_key, kind_label, search_hit_parent, PendingNav};
+use crate::pathkey;
 
 impl qobject::SideritaController {
     pub fn select_token(mut self: Pin<&mut Self>, token: &QString) {
@@ -50,7 +51,7 @@ impl qobject::SideritaController {
             let Some((path, is_dir, name)) = self
                 .rust()
                 .search_hit(token)
-                .map(|hit| (PathBuf::from(&hit.path), hit.is_dir, hit.name.clone()))
+                .map(|hit| (hit.path.clone(), hit.is_dir, hit.name.clone()))
             else {
                 return;
             };
@@ -179,7 +180,7 @@ impl qobject::SideritaController {
             let Some(hit) = self.rust().search_hits.get(index) else {
                 return QStringList::default();
             };
-            return path_info_lines(Path::new(&hit.path), hit.is_dir, None);
+            return path_info_lines(&hit.path, hit.is_dir, None);
         }
 
         let Some(row) = i32::try_from(index)
@@ -225,39 +226,43 @@ impl qobject::SideritaController {
             .unwrap_or(-1)
     }
 
+    /// The path key (ADR 0008) of the row at `index` — its byte-exact
+    /// identity, and the argument every verb on this object expects. The name a
+    /// person reads is `entry_names[index]`; the two are not interchangeable.
     pub fn entry_path(&self, index: i32) -> QString {
         if self.rust().virtual_rows() {
             return usize::try_from(index)
                 .ok()
                 .and_then(|i| self.rust().search_hits.get(i))
-                .map(|hit| QString::from(hit.path.as_str()))
+                .map(|hit| pathkey::publish(&hit.path))
                 .unwrap_or_default();
         }
         self.rust()
             .row(index)
-            .map(|row| QString::from(row.path().to_string_lossy().as_ref()))
+            .map(|row| pathkey::publish(row.path()))
             .unwrap_or_default()
     }
 
-    /// `path` as a `file://` URI, for the `text/uri-list` a drag hands to
-    /// another application.
+    /// The entry `key` names as a `file://` URI — for the `text/uri-list` a
+    /// drag hands to another application, and for any surface that has to load
+    /// the file through a URL.
     ///
     /// Composed here rather than in QML: `encodeURI` leaves `#` and `?` raw, so
     /// dragging `informe#3.pdf` handed the receiving application a URI that
-    /// ended at the `#`. The rule is the portal's rule, and it has one owner.
-    pub fn path_uri(&self, path: &QString) -> QString {
-        let path = path.to_string();
-        if path.is_empty() {
-            return QString::default();
-        }
-        QString::from(crate::dbus::path_to_uri(Path::new(&path)).as_str())
+    /// ended at the `#`, and `encodeURIComponent` per segment cannot spell a
+    /// byte that is not valid UTF-8 at all. The rule is the portal's rule, and
+    /// it has one owner.
+    pub fn path_uri(&self, key: &QString) -> QString {
+        pathkey::decode(key)
+            .map(|path| QString::from(crate::dbus::path_to_uri(&path).as_str()))
+            .unwrap_or_default()
     }
 
-    /// Whether `path` is taken. One `lstat`, so it is safe to ask from the Qt
-    /// thread; a dangling symlink still occupies the name and answers `true`.
-    pub fn path_exists(&self, path: &QString) -> bool {
-        let path = path.to_string();
-        !path.is_empty() && std::fs::symlink_metadata(&path).is_ok()
+    /// Whether the name `key` spells is taken. One `lstat`, so it is safe to
+    /// ask from the Qt thread; a dangling symlink still occupies the name and
+    /// answers `true`.
+    pub fn path_exists(&self, key: &QString) -> bool {
+        pathkey::decode(key).is_ok_and(|path| std::fs::symlink_metadata(path).is_ok())
     }
 
     /// Whether activating the row at `index` enters a directory — true for a
@@ -293,8 +298,10 @@ impl qobject::SideritaController {
     /// Opens the folder holding `path` and selects that entry once it lands —
     /// how a starred *file* reveals itself from the sidebar, instead of the
     /// sidebar quietly launching an application.
-    pub fn reveal_path(mut self: Pin<&mut Self>, path: &QString) {
-        let path = PathBuf::from(path.to_string());
+    pub fn reveal_path(mut self: Pin<&mut Self>, key: &QString) {
+        let Some(path) = self.as_mut().accept_key(key) else {
+            return;
+        };
         let Some(parent) = path.parent().map(Path::to_path_buf) else {
             return;
         };
@@ -309,14 +316,13 @@ impl qobject::SideritaController {
     /// worker, and its answer is what routes `Space` to the editor. What
     /// reaches quick-look has already been refused as editable, so this only
     /// has to render something legible from it.
-    pub fn preview_text(&self, path: &QString) -> QString {
+    pub fn preview_text(&self, key: &QString) -> QString {
         // Cap the read: a preview only needs the first screenful or two, and this
         // runs on the GUI thread (the user pressed space), so it must stay cheap.
         const MAX_BYTES: usize = 128 * 1024;
-        let path = path.to_string();
-        if path.is_empty() {
+        let Ok(path) = pathkey::decode(key) else {
             return QString::default();
-        }
+        };
         let Ok(file) = std::fs::File::open(&path) else {
             return QString::default();
         };
@@ -338,11 +344,10 @@ impl qobject::SideritaController {
     /// Opens the properties panel for `path`: the metadata is gathered inline
     /// (fast), and a folder's recursive size is computed on a worker thread so a
     /// deep tree never blocks the UI.
-    pub fn open_properties(mut self: Pin<&mut Self>, path: &QString) {
-        let path = PathBuf::from(path.to_string());
-        if path.as_os_str().is_empty() {
+    pub fn open_properties(mut self: Pin<&mut Self>, key: &QString) {
+        let Some(path) = self.as_mut().accept_key(key) else {
             return;
-        }
+        };
 
         // Cancel any directory-size walk still running from a previous open.
         if let Some(token) = self.as_mut().rust_mut().get_mut().prop_size_cancel.take() {

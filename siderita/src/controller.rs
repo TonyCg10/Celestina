@@ -13,8 +13,13 @@ use siderita_core::{
 /// The filesystem debouncer type kept alive for the controller's lifetime.
 type FsDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
 use siderita_ops::TrashEntry;
-use siderita_qt::{EntryRow, RowKind, SnapshotAdapter, ViewSnapshot};
+use siderita_qt::{EntryRow, SnapshotAdapter, ViewSnapshot};
 
+/// Every path in this bridge — published or accepted — is a **path key**, the
+/// byte-exact identity defined by ADR 0008 and encoded by [`crate::pathkey`].
+/// It is opaque ASCII; QML never takes it apart, joins it or decodes it. The
+/// text a person reads travels under its own properties (`entry_names`,
+/// `current_path`, the subtitles) and is never an argument to anything here.
 #[cxx_qt::bridge]
 pub mod qobject {
     unsafe extern "C++" {
@@ -64,7 +69,10 @@ pub mod qobject {
     extern "RustQt" {
         #[qobject]
         #[qml_element]
+        // The folder being shown: `current_path` is the lossy text the path bar
+        // and the headings read, `current_path_key` its byte-exact identity.
         #[qproperty(QString, current_path)]
+        #[qproperty(QString, current_path_key)]
         #[qproperty(QString, status_text)]
         #[qproperty(QString, error_text)]
         #[qproperty(QStringList, entry_names)]
@@ -195,8 +203,30 @@ pub mod qobject {
         #[qinvokable]
         fn go_up(self: Pin<&mut SideritaController>);
 
+        /// Navigates to whatever a person typed into the path bar: an absolute
+        /// or relative path, `~`, or a `file://` URI. This is the one entry
+        /// that takes prose rather than a key, because prose is what a keyboard
+        /// produces; everything the interface already holds uses `open_key`.
         #[qinvokable]
         fn open_location(self: Pin<&mut SideritaController>, location: &QString);
+
+        /// Navigates to the folder a path key names.
+        #[qinvokable]
+        fn open_key(self: Pin<&mut SideritaController>, key: &QString);
+
+        /// The breadcrumbs for the folder being shown, as `name\tkey` lines.
+        /// Composed here because QML does not build paths: a Magnetita mount
+        /// collapses into one device crumb, and each crumb carries the key its
+        /// click will navigate to.
+        #[qinvokable]
+        fn path_segments(self: &SideritaController) -> QStringList;
+
+        /// The key for `name` inside the folder being shown — how a surface
+        /// that lets someone type a file name (the save picker) names the file
+        /// without concatenating anything. Empty for a name that would leave
+        /// the folder (`/`, `.`, `..`) or for no folder at all.
+        #[qinvokable]
+        fn child_key(self: &SideritaController, name: &QString) -> QString;
 
         #[qinvokable]
         fn toggle_hidden(self: Pin<&mut SideritaController>);
@@ -618,8 +648,10 @@ pub(crate) enum UndoAction {
     Trash { infos: Vec<PathBuf> },
 }
 
+mod display;
 mod fileops;
 mod find;
+mod keys;
 mod marks;
 mod mounts;
 mod navigation;
@@ -630,6 +662,9 @@ mod session;
 pub(crate) mod shell;
 mod trash;
 mod view_options;
+
+pub(crate) use display::{display_name, kind_key, kind_label, row_subtitle, search_hit_parent};
+pub(crate) use marks::{favorite_entry_list, icon_override_entries};
 
 impl UndoAction {
     /// A short Spanish label for what undo will reverse, for the menu/tooltip.
@@ -733,6 +768,7 @@ impl PendingNav {
 
 pub struct SideritaControllerRust {
     current_path: QString,
+    current_path_key: QString,
     status_text: QString,
     error_text: QString,
     entry_names: QStringList,
@@ -878,6 +914,7 @@ impl Default for SideritaControllerRust {
         let favorite_entries = favorite_entry_list(&favorites);
         Self {
             current_path: QString::default(),
+            current_path_key: QString::default(),
             status_text: QString::from("Preparando Siderita…"),
             error_text: QString::default(),
             entry_names: QStringList::default(),
@@ -994,9 +1031,11 @@ impl Default for SideritaControllerRust {
             clipboard_cut: false,
             last_undo: None,
             bookmarks: Vec::new(),
+            // Published as path keys, like every other path this bridge hands
+            // out, so the sidebar can navigate to one without ever spelling it.
             places: crate::places::resolve()
                 .into_iter()
-                .map(|(key, path)| (key, path.to_string_lossy().into_owned()))
+                .map(|(name, path)| (name, crate::pathkey::encode(&path)))
                 .collect(),
         }
     }
@@ -1031,24 +1070,6 @@ impl SideritaControllerRust {
     }
 }
 
-/// Collects a QML `list<string>` of paths into owned `PathBuf`s, skipping empty
-/// strings so a stray blank never becomes a filesystem operation on `""`.
-fn qstringlist_to_paths(list: &QStringList) -> Vec<PathBuf> {
-    list.iter()
-        .map(QString::to_string)
-        .filter(|path| !path.is_empty())
-        .map(PathBuf::from)
-        .collect()
-}
-
-/// The final path component, for a compact per-entry line in a batch error.
-/// Falls back to the full lossy path when there is no file name (e.g. `/`).
-fn display_name(path: &Path) -> String {
-    path.file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| path.to_string_lossy().into_owned())
-}
-
 /// The first non-flag argument: the location to open. Flags (`--portal`) are
 /// how the process is told *why* it started, not *where*.
 fn launch_argument() -> Option<std::ffi::OsString> {
@@ -1067,98 +1088,12 @@ const fn sort_field_from_index(index: i32) -> Option<SortField> {
     }
 }
 
-/// One stable, atomic `path\ticon\taccent` line per appearance. QML therefore
-/// sees a complete record at once and never mixes fields from different edits.
-fn icon_override_entries(
-    map: &std::collections::HashMap<String, crate::icons::IconAppearance>,
-) -> QStringList {
-    let mut entries: Vec<(&String, &crate::icons::IconAppearance)> = map.iter().collect();
-    entries.sort_by_key(|(path, _)| *path);
-    entries
-        .iter()
-        .map(|(path, appearance)| {
-            QString::from(format!("{path}\t{}\t{}", appearance.icon, appearance.accent).as_str())
-        })
-        .collect()
-}
-
 const RECENT_LIMIT: usize = 100;
-
-/// The starred paths as `path\tkind` lines. The kind is resolved here, once per
-/// refresh, so the sidebar can show a folder as a folder and say plainly when a
-/// favourite's target is gone rather than offering a row that leads nowhere.
-fn favorite_entry_list(paths: &std::collections::BTreeSet<String>) -> QStringList {
-    paths
-        .iter()
-        .map(|path| {
-            let kind = match std::fs::metadata(path) {
-                Ok(meta) if meta.is_dir() => "directory",
-                Ok(_) => "file",
-                Err(_) => "missing",
-            };
-            QString::from(format!("{path}\t{kind}").as_str())
-        })
-        .collect()
-}
-
-const fn kind_key(kind: RowKind) -> &'static str {
-    match kind {
-        RowKind::Directory => "directory",
-        RowKind::File => "file",
-        RowKind::Symlink => "symlink",
-        RowKind::Other => "other",
-    }
-}
-
-const fn kind_label(kind: RowKind) -> &'static str {
-    match kind {
-        RowKind::Directory => "Carpeta",
-        RowKind::File => "Archivo",
-        RowKind::Symlink => "Enlace simbólico",
-        RowKind::Other => "Otro",
-    }
-}
-
-fn row_subtitle(row: &EntryRow) -> String {
-    if row.kind() == RowKind::Directory {
-        return "Carpeta".to_owned();
-    }
-
-    format!(
-        "{} · {}",
-        kind_label(row.kind()),
-        crate::format::size(row.size())
-    )
-}
-
-/// The containing folder of a search hit, shown as its subtitle so a result
-/// carries where it lives (the one thing a flat folder row doesn't need).
-fn search_hit_parent(path: &str) -> String {
-    Path::new(path)
-        .parent()
-        .map(|parent| parent.to_string_lossy().into_owned())
-        .unwrap_or_default()
-}
 
 #[cfg(test)]
 mod tests {
     use super::sort_field_from_index;
     use siderita_core::SortField;
-    use std::path::Path;
-
-    #[test]
-    fn display_name_uses_the_final_component() {
-        assert_eq!(
-            super::display_name(Path::new("/home/toni/nota.txt")),
-            "nota.txt"
-        );
-        assert_eq!(
-            super::display_name(Path::new("/home/toni/carpeta")),
-            "carpeta"
-        );
-        // No file name (root) falls back to the whole path.
-        assert_eq!(super::display_name(Path::new("/")), "/");
-    }
 
     #[test]
     fn sort_field_indices_are_stable_for_qml() {

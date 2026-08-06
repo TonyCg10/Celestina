@@ -49,7 +49,7 @@ Column {
             readonly property string mountPath: mounted ? info[5] : ""
             readonly property bool current: mounted
                     && mountPath === (root.controller
-                                      ? root.controller.currentPath : "")
+                                      ? root.controller.currentPathKey : "")
 
             width: root.width
             height: root.hostWindow.sidebarRowHeight

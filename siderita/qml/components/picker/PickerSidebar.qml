@@ -103,7 +103,7 @@ Item {
                                 : isRecent
                                 ? root.pickerController.recentActive
                                 : (placePath.length > 0
-                                   && placePath === root.pickerController.currentPath)
+                                   && placePath === root.pickerController.currentPathKey)
 
                         width: placesList.width
                         height: root.rowHeight
@@ -118,7 +118,7 @@ Item {
                             else if (isRecent)
                                 root.pickerController.openRecent()
                             else if (placePath.length > 0)
-                                root.pickerController.openLocation(placePath)
+                                root.pickerController.openKey(placePath)
                         }
 
                         Rectangle {
@@ -204,7 +204,7 @@ Item {
                             index < root.pickerController.volumeMounts.length
                             ? root.pickerController.volumeMounts[index] : ""
                         readonly property bool current: mountPoint.length > 0
-                            && mountPoint === root.pickerController.currentPath
+                            && mountPoint === root.pickerController.currentPathKey
 
                         width: column.width
                         height: root.rowHeight
@@ -288,13 +288,13 @@ Item {
                             const cut = entries[i].indexOf("\t")
                             if (cut <= 0)
                                 continue
+                            // The first field is a path key; the readable name
+                            // comes from the controller, not from cutting it up.
                             const path = entries[i].substring(0, cut)
-                            const slash = path.lastIndexOf("/")
                             rows.push({
                                 path: path,
                                 kind: entries[i].substring(cut + 1),
-                                name: slash >= 0 && slash < path.length - 1
-                                      ? path.substring(slash + 1) : path
+                                name: root.pickerController.displayLocationName(path)
                             })
                         }
                         return rows
@@ -340,7 +340,7 @@ Item {
                             index < root.pickerController.bookmarkPaths.length
                             ? root.pickerController.bookmarkPaths[index] : ""
                         readonly property bool current: bookmarkPath.length > 0
-                            && bookmarkPath === root.pickerController.currentPath
+                            && bookmarkPath === root.pickerController.currentPathKey
 
                         width: bookmarksList.width
                         height: root.rowHeight
@@ -384,7 +384,7 @@ Item {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: if (bookmarkRow.bookmarkPath.length > 0)
-                                           root.pickerController.openLocation(bookmarkRow.bookmarkPath)
+                                           root.pickerController.openKey(bookmarkRow.bookmarkPath)
                         }
                     }
                 }

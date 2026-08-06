@@ -26,7 +26,7 @@ Item {
 
     readonly property bool current: bookmarkPath.length > 0
                                     && bookmarkPath === (hostWindow.activeController
-                                                         ? hostWindow.activeController.currentPath : "")
+                                                         ? hostWindow.activeController.currentPathKey : "")
     readonly property bool dragging: listDragIndex === rowIndex
     property bool justDragged: false
     property bool dragConsumed: false
@@ -188,7 +188,7 @@ Item {
                     root.contextMenuRequested(root.rowIndex, root.bookmarkPath,
                                               point.x, point.y)
                 } else if (root.hostWindow.activeController) {
-                    root.hostWindow.activeController.openLocation(root.bookmarkPath)
+                    root.hostWindow.activeController.openKey(root.bookmarkPath)
                 }
             }
 
