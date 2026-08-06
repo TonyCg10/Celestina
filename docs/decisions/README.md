@@ -12,6 +12,7 @@ authority or replace operational rules.
 | [0005](0005-bounded-qt-bridge-crates.md) | accepted | Keep Qt bridge exceptions narrow and explicit |
 | [0006](0006-source-first-library-navigation.md) | accepted | Navigate the standalone media library by configured source |
 | [0007](0007-spanish-product-copy.md) | accepted | Product copy is Spanish; development truth stays English |
+| [0008](0008-byte-exact-paths-across-the-qt-seam.md) | accepted | A path crossing the Qt seam is percent-encoded; display text is separate |
 
 An accepted decision is superseded by another ADR, never rewritten to hide its
 historical verdict. Every ADR retains at least Context, Decision, Consequences,
