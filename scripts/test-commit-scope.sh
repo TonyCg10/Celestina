@@ -582,6 +582,56 @@ if ! printf '%s\n' 'siderita/src/main.rs' | sh "$hook" \
     fail "history scope-only replay rejected an inherited non-imperative subject"
 fi
 
+# The subject is the one git will record, not the file's first line. Git strips
+# leading blank lines and comment lines before taking it, so a template or an
+# editor banner used to make the guard judge text that never became a subject.
+expect_read_subject() {
+    # expect_read_subject <expected subject> <message body...>
+    expected=$1
+    shift
+    message=$(mktemp)
+    printf '%s\n' "$@" > "$message"
+    actual=$(python3 -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+from pathlib import Path
+import commit_scope
+print(commit_scope.read_subject(Path(sys.argv[2]), sys.argv[3]))
+' "$script_dir" "$root" "$message" 2>&1) || actual="<error: $actual>"
+    rm -f "$message"
+    if [ "$actual" != "$expected" ]; then
+        fail "read_subject gave \"$actual\", expected \"$expected\""
+    fi
+}
+
+expect_read_subject 'siderita: update the view' 'siderita: update the view'
+expect_read_subject 'siderita: update the view' '' '' 'siderita: update the view'
+expect_read_subject 'siderita: update the view' \
+    '# Please enter the commit message for your changes.' \
+    '' \
+    'siderita: update the view'
+expect_read_subject 'siderita: update the view' \
+    '' \
+    '# On branch main' \
+    'siderita: update the view' \
+    '' \
+    '# Changes to be committed:'
+
+# A message with nothing but blanks and comments has no subject, and that must
+# be said rather than silently validated as an empty one.
+message=$(mktemp)
+printf '%s\n' '' '# nothing here' > "$message"
+if python3 -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+from pathlib import Path
+import commit_scope
+commit_scope.read_subject(Path(sys.argv[2]), sys.argv[3])
+' "$script_dir" "$root" "$message" >/dev/null 2>&1; then
+    fail "read_subject accepted a message with no subject line"
+fi
+rm -f "$message"
+
 # The registry, not a copied test table, knows newly registered seams.
 expect_scope pass 'fluorita-qt: keep the render seam narrow' \
     'celestina-rs/crates/fluorita-qt/src/renderitem.cpp' \

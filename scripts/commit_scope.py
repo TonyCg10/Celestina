@@ -30,6 +30,9 @@ ARCHITECTURE_SCANNER = "scripts/architecture_scanners.py"
 LANGUAGE_SCANNER = "scripts/check-language-contract.py"
 VERSION_CONTRACT = "scripts/version_contract.py"
 REGISTRY = "docs/projects.toml"
+# git's own candidate list for `core.commentChar = auto`, in its order. The
+# first entry is also git's default comment character.
+COMMENT_CHAR_CANDIDATES = "#;@!$%^&|:"
 
 # The hook intentionally uses a finite, broad vocabulary instead of pretending
 # to solve English grammar. The first action word must be an unambiguous command
@@ -756,11 +759,50 @@ def validate_ratchet_updates(
     validate_language_index(root, language_after, staged, language_namespace)
 
 
-def read_subject(message_file: str) -> str:
+def comment_marker(root: Path, lines: list[str]) -> str:
+    """The prefix git will treat as a comment in this message.
+
+    `core.commentString` wins where it exists (git 2.45+), then
+    `core.commentChar`, then git's default `#`. The `auto` setting is git's own
+    escape hatch: it takes the first candidate that begins no line of the
+    message, so a message full of `#` headings keeps them.
+    """
+    for key in ("core.commentString", "core.commentChar"):
+        configured = (
+            git_output(root, "config", "--get", key, check=False)
+            .decode("utf-8", "surrogateescape")
+            .strip()
+        )
+        if not configured:
+            continue
+        if configured != "auto":
+            return configured
+        for candidate in COMMENT_CHAR_CANDIDATES:
+            if not any(line.startswith(candidate) for line in lines):
+                return candidate
+        return COMMENT_CHAR_CANDIDATES[0]
+    return COMMENT_CHAR_CANDIDATES[0]
+
+
+def read_subject(root: Path, message_file: str) -> str:
+    """The subject git will record, not merely the file's first line.
+
+    Git's message cleanup drops comment lines and leading blank lines before
+    the subject is taken, so a template, an editor banner or a stray newline at
+    the top used to make the guard validate a line that never became the
+    subject. It failed closed — a comment is not a valid subject — but it
+    rejected the commit while pointing at the wrong text.
+    """
     try:
-        return Path(message_file).read_text(encoding="utf-8").splitlines()[0]
-    except (OSError, IndexError, UnicodeError) as error:
+        lines = Path(message_file).read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as error:
         fail(f"could not read the commit subject: {error}")
+    marker = comment_marker(root, lines)
+    for line in lines:
+        if line.startswith(marker) or not line.strip():
+            continue
+        return line
+    fail("could not read the commit subject: the message has no subject line")
 
 
 def parse_subject(
@@ -1181,7 +1223,7 @@ def main() -> None:
         registry,
         authorities,
     ) = validate_normal_commit(
-        read_subject(args.message_file),
+        read_subject(root, args.message_file),
         paths,
         head_rules,
         index_rules,

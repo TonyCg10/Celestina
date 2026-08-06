@@ -87,6 +87,10 @@ verification_inputs = ["library/tests/*.txt"]
         (self.root / "scripts/complete-production.py").write_text(
             "orchestrator v1\n", encoding="utf-8"
         )
+        # A declared verification glob must match something: an input that
+        # matches nothing is refused, so the fixture ships one case per project.
+        (self.root / "demo/tests/case.txt").write_text("case v1\n", encoding="utf-8")
+        (self.root / "library/tests/case.txt").write_text("case v1\n", encoding="utf-8")
         (self.root / "demo/src/main.rs").write_text("fn main() {}\n", encoding="utf-8")
         (self.root / "demo/target/release/demo").write_bytes(b"release-v1\n")
         self.write_entry_script("library", "build", "v1")
@@ -486,6 +490,35 @@ esac
         (self.root / "scripts/complete-production.py").unlink()
 
         self.run_tool("check", "library", "--require-verified")
+
+    def test_verification_glob_that_matches_nothing_is_refused(self) -> None:
+        # A renamed or emptied test directory used to leave the glob matching
+        # nothing, and the verification fingerprint was sealed anyway — a
+        # project could lose its recorded verification with nothing said. It is
+        # now refused exactly like a production input that does not exist.
+        self.run_build()
+        self.run_verification()
+        (self.root / "demo/tests/case.txt").unlink()
+
+        message = "declared input does not exist: demo/tests/*.txt"
+        stale = self.run_tool("check", "demo", "--require-verified", expect=1)
+        self.assertIn(message, stale.stderr)
+        reseal = self.run_tool("run-verification", "demo", expect=1)
+        self.assertIn(message, reseal.stderr)
+
+    def test_production_glob_that_matches_nothing_is_refused_the_same_way(self) -> None:
+        self.run_build()
+        registered = self.registry.read_text(encoding="utf-8")
+        self.registry.write_text(
+            registered.replace(
+                'production_inputs = ["demo/src"]',
+                'production_inputs = ["demo/src/*.toml"]',
+            ),
+            encoding="utf-8",
+        )
+        result = self.run_tool("check", "demo", expect=1)
+        self.assertIn("declared input does not exist: demo/src/*.toml", result.stderr)
+        self.registry.write_text(registered, encoding="utf-8")
 
     def test_symlink_target_content_is_part_of_source_fingerprint(self) -> None:
         shared = self.root / "shared/value.qml"

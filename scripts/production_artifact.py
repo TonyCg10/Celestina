@@ -124,16 +124,22 @@ def lexical_repo_path(root: Path, relative: str) -> Path:
     return candidate
 
 
-def expand_patterns(
-    root: Path, patterns: Iterable[str], *, allow_empty_glob: bool = False
-) -> list[tuple[Path, str]]:
+def expand_patterns(root: Path, patterns: Iterable[str]) -> list[tuple[Path, str]]:
+    """Every declared input, expanded and required to exist.
+
+    A pattern that matches nothing is an error whether or not it contains a
+    glob. A verification glob used to be allowed to come back empty, so
+    renaming a test directory quietly removed it from the fingerprint and a
+    project could end up with no verification recorded and nothing said. An
+    input that no longer exists is a change to the contract, not a nothing.
+    """
     expanded: dict[str, Path] = {}
     for pattern in patterns:
         has_magic = glob.has_magic(pattern)
         absolute_pattern = str(lexical_repo_path(root, pattern))
         matches = sorted(glob.glob(absolute_pattern, recursive=True)) if has_magic else [absolute_pattern]
         existing = [Path(match) for match in matches if os.path.lexists(match)]
-        if not existing and not (has_magic and allow_empty_glob):
+        if not existing:
             raise ContractError(f"declared input does not exist: {pattern}")
         for path in existing:
             logical = path.absolute().relative_to(root).as_posix()
@@ -217,7 +223,6 @@ def digest_paths(
     paths: Iterable[str],
     *,
     contract_data: dict[str, Any],
-    allow_empty_glob: bool = False,
 ) -> str:
     hasher = hashlib.sha256()
     hash_bytes(hasher, "fingerprint-schema", str(FINGERPRINT_SCHEMA).encode("ascii"))
@@ -226,7 +231,7 @@ def digest_paths(
         "contract",
         json.dumps(contract_data, sort_keys=True, separators=(",", ":")).encode("utf-8"),
     )
-    for disk_path, logical in expand_patterns(root, paths, allow_empty_glob=allow_empty_glob):
+    for disk_path, logical in expand_patterns(root, paths):
         feed_path(hasher, disk_path, logical, ignore_build_outputs=True)
     return f"sha256:{hasher.hexdigest()}"
 
@@ -304,12 +309,7 @@ def verification_fingerprint(root: Path, project: dict[str, Any]) -> str:
         "activate_script": activate_script,
         "inputs": sorted(set(inputs)),
     }
-    return digest_paths(
-        root,
-        sorted(set(inputs)),
-        contract_data=contract,
-        allow_empty_glob=True,
-    )
+    return digest_paths(root, sorted(set(inputs)), contract_data=contract)
 
 
 def artifact_digest(path: Path, logical: str) -> tuple[str, int, str]:
