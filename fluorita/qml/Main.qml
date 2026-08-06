@@ -80,8 +80,37 @@ ApplicationWindow {
         window.closing = true;
     }
 
+    // The frame is dismantled only once the surface has let the backend go. The
+    // renderer frees its context while its item is still in the scene graph, so
+    // a frame that vanished first would strand a context nobody can release and
+    // leave the core to be destroyed underneath it.
     function libraryReached() {
+        window.pendingRelease = "library";
         mediaPlayer.close();
+        if (mediaPlayer.renderHandle === 0) {
+            // A track or a still never had a render surface: there is nothing
+            // to wait for, and waiting would strand the frame instead.
+            window.releaseSettled();
+        }
+    }
+
+    // Whatever is waiting for the surface to let go: empty for nothing,
+    // `library` for the return to the library, `close` for the window itself.
+    property string pendingRelease: ""
+
+    function releaseSettled() {
+        const waiting = window.pendingRelease;
+        // Stepping to the next item releases a surface too, and that is nobody's
+        // cue to take the window apart.
+        if (waiting === "") {
+            return;
+        }
+        window.pendingRelease = "";
+        if (waiting === "close") {
+            window.closeAuthorised = true;
+            window.close();
+            return;
+        }
         window.closing = false;
         window.openPath = "";
         window.openLabel = "";
@@ -179,6 +208,8 @@ ApplicationWindow {
             player: mediaPlayer
             label: window.openLabel
             ambientSource: window.openPoster
+
+            onReleased: window.releaseSettled()
         }
 
         // The card's own thumbnail, over the surface until the real picture is
@@ -327,10 +358,12 @@ ApplicationWindow {
             close.accepted = true
             return
         }
+        // Waited for, not scheduled. `Qt.callLater` closed the window on the
+        // next event-loop pass whether or not the surface had answered, so the
+        // core's destruction ran beside the scene graph's teardown.
         close.accepted = false
-        window.closeAuthorised = true
+        window.pendingRelease = "close"
         mediaPlayer.close()
-        Qt.callLater(window.close)
     }
 
     Component.onCompleted: {

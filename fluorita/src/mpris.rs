@@ -103,9 +103,23 @@ fn microseconds(duration: Duration) -> i64 {
 /// What a bus client asked for, translated into the player's own vocabulary.
 type Control = Arc<dyn Fn(PlaybackRequest) + Send + Sync>;
 
+/// A position that moved by more than this between two confirmed reports did
+/// not get there by playing: reports arrive several times a second, so the only
+/// way to cross it inside one track is a seek.
+const SEEK_JUMP: Duration = Duration::from_secs(2);
+
+/// Whether two consecutive positions of the same track describe a seek.
+fn is_seek(before: Duration, after: Duration) -> bool {
+    after.abs_diff(before) >= SEEK_JUMP
+}
+
 /// The published service. Dropping it stops publishing.
 pub struct Mpris {
     now: Arc<Mutex<NowPlaying>>,
+    /// Wakes the serving thread so it emits what changed. One pending nudge is
+    /// enough: the thread reads the latest snapshot, so a queue of them would
+    /// only make it emit the same values twice.
+    nudge: std::sync::mpsc::SyncSender<()>,
 }
 
 impl Mpris {
@@ -117,13 +131,14 @@ impl Mpris {
     pub fn start(control: Control) -> Option<Self> {
         let now = Arc::new(Mutex::new(NowPlaying::default()));
         let served = Arc::clone(&now);
+        let (nudge, woken) = std::sync::mpsc::sync_channel(1);
 
         let started = std::thread::Builder::new()
             .name("fluorita-mpris".to_owned())
-            .spawn(move || serve(&served, &control));
+            .spawn(move || serve(&served, &control, &woken));
         started.ok()?;
 
-        Some(Self { now })
+        Some(Self { now, nudge })
     }
 
     /// Publishes what the player just confirmed.
@@ -133,10 +148,46 @@ impl Mpris {
         if let Ok(mut slot) = self.now.lock() {
             *slot = now;
         }
+        // Best effort by design: a full channel already has a nudge waiting and
+        // a closed one means the service is gone. Neither may touch playback.
+        let _ = self.nudge.try_send(());
     }
 }
 
-fn serve(now: &Arc<Mutex<NowPlaying>>, control: &Control) {
+/// Emits what actually changed between two confirmed states.
+///
+/// Writing the mutex alone published nothing: `PropertiesChanged` is a signal
+/// the interface has to send, so every consumer of the spec — `playerctl`, a
+/// panel, a phone's lock screen — sat on whatever it read the first time.
+fn announce(
+    player: &zbus::blocking::object_server::InterfaceRef<Player>,
+    before: &NowPlaying,
+    after: &NowPlaying,
+) {
+    let emitter = player.signal_emitter();
+    let interface = player.get();
+
+    if before.status() != after.status() {
+        let _ = zbus::block_on(interface.playback_status_changed(emitter));
+    }
+    // The metadata map is derived from exactly these three, so comparing them
+    // avoids building it twice per report to find out nothing moved.
+    if before.path != after.path || before.title != after.title || before.duration != after.duration
+    {
+        let _ = zbus::block_on(interface.metadata_changed(emitter));
+    }
+    if (before.volume - after.volume).abs() > f64::EPSILON {
+        let _ = zbus::block_on(interface.volume_changed(emitter));
+    }
+    // `Position` is deliberately not a change-notified property in the spec:
+    // a player emitting it per frame would be a broadcast storm. A jump is the
+    // one thing consumers cannot infer, and `Seeked` is how it is told.
+    if before.path == after.path && is_seek(before.position, after.position) {
+        let _ = zbus::block_on(Player::seeked(emitter, microseconds(after.position)));
+    }
+}
+
+fn serve(now: &Arc<Mutex<NowPlaying>>, control: &Control, woken: &std::sync::mpsc::Receiver<()>) {
     let root = Root;
     let player = Player {
         now: Arc::clone(now),
@@ -154,11 +205,32 @@ fn serve(now: &Arc<Mutex<NowPlaying>>, control: &Control) {
         return;
     };
 
+    // The exported interface, kept for the process: emitting a change needs the
+    // same registration the object server answers property reads from.
+    let Ok(exported) = connection
+        .object_server()
+        .interface::<_, Player>(OBJECT_PATH)
+    else {
+        // Serving without announcing is still better than not serving; the
+        // connection below keeps the read-only view alive.
+        let _connection = connection;
+        loop {
+            std::thread::park();
+        }
+    };
+
+    let mut announced = NowPlaying::default();
+    // Ends when the player drops the service, which is the process leaving.
+    while woken.recv().is_ok() {
+        let Ok(current) = now.lock().map(|now| now.clone()) else {
+            break;
+        };
+        announce(&exported, &announced, &current);
+        announced = current;
+    }
+
     // Keep the connection — and the service — alive for the process.
     let _connection = connection;
-    loop {
-        std::thread::park();
-    }
 }
 
 /// `org.mpris.MediaPlayer2`: what the application is.
@@ -269,6 +341,15 @@ impl Player {
 
     fn open_uri(&self, _uri: &str) {}
 
+    /// The spec's own notification for a position that did not get there by
+    /// playing. Without it a panel's scrubber only ever moves when it is the
+    /// one that moved it.
+    #[zbus(signal)]
+    async fn seeked(
+        signal_emitter: &zbus::object_server::SignalEmitter<'_>,
+        position: i64,
+    ) -> zbus::Result<()>;
+
     fn next(&self) {}
 
     fn previous(&self) {}
@@ -348,7 +429,7 @@ impl Player {
 
 #[cfg(test)]
 mod tests {
-    use super::{microseconds, NowPlaying, Value, BUS_NAME, OBJECT_PATH};
+    use super::{is_seek, microseconds, NowPlaying, Value, BUS_NAME, OBJECT_PATH};
     use fluorita_core::PlaybackState;
     use std::path::PathBuf;
     use std::time::Duration;
@@ -421,6 +502,22 @@ mod tests {
             metadata.get("mpris:length"),
             Some(&Value::from(213_000_000_i64))
         );
+    }
+
+    #[test]
+    fn ordinary_progress_is_not_announced_as_a_seek() {
+        // Reports arrive several times a second, so this is what playing looks
+        // like; announcing `Seeked` for it would be a broadcast storm.
+        assert!(!is_seek(
+            Duration::from_millis(4_000),
+            Duration::from_millis(4_250)
+        ));
+    }
+
+    #[test]
+    fn a_jump_in_either_direction_is_a_seek() {
+        assert!(is_seek(Duration::from_secs(10), Duration::from_secs(90)));
+        assert!(is_seek(Duration::from_secs(90), Duration::from_secs(10)));
     }
 
     #[test]

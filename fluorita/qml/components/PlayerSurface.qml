@@ -45,6 +45,11 @@ Item {
     readonly property bool picturePresented: surface.showsVideo
         || (surface.showsImage && still.presented)
 
+    // The render context this surface owned is gone and the backend instance
+    // may be destroyed. Whoever is dismantling the window or the frame waits
+    // for this rather than for a timer.
+    signal released()
+
     Accessible.role: Accessible.Grouping
     Accessible.name: qsTr("Reproductor")
 
@@ -78,13 +83,26 @@ Item {
         anchors.fill: video.shaped ? undefined : parent
         width: video.shaped ? Math.round(video.fitted * ambient.contentAspect) : 0
         height: video.shaped ? Math.round(video.fitted) : 0
-        visible: surface.showsVideo
+        // Stays in the scene graph for as long as its renderer holds a context,
+        // and disappears from view instead by going transparent. Hiding it the
+        // moment playback stopped being confirmed removed the very item whose
+        // renderer has to free that context — on the render thread, where a
+        // hidden item is never synchronized again — and left the mpv core to be
+        // destroyed underneath it.
+        visible: surface.showsVideo || video.rendererLive
+        // Transparent rather than absent: the state and error labels below must
+        // not be covered by a rectangle that is never going to show a frame.
+        opacity: surface.showsVideo ? 1 : 0
         // The one value the surface needs from the engine: a zero handle means
         // there is nothing to render, including while a session is closing.
         handle: surface.player.renderHandle
 
         onContextCreated: surface.player.surfaceReady()
-        onContextReleased: surface.player.surfaceReleased()
+        onContextReleased: {
+            surface.player.surfaceReleased()
+            surface.released()
+        }
+        onContextFailed: surface.player.surfaceFailed()
     }
 
     ImageView {

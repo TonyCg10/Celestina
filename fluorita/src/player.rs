@@ -135,6 +135,12 @@ pub mod qobject {
         /// Called by the video item once its render context is released.
         #[qinvokable]
         fn surface_released(self: Pin<&mut FluoritaPlayer>);
+
+        /// Called by the video item when it could not build a render context.
+        /// Nothing will ever be presented, so the wait for a first frame ends
+        /// here instead of lasting for the session.
+        #[qinvokable]
+        fn surface_failed(self: Pin<&mut FluoritaPlayer>);
     }
 
     impl cxx_qt::Threading for FluoritaPlayer {}
@@ -222,12 +228,19 @@ impl qobject::FluoritaPlayer {
         if path.as_os_str().is_empty() {
             return;
         }
-        if *self.render_handle() != 0 {
-            self.as_mut().rust_mut().pending_open = Some(path);
-            self.close();
-            return;
+        match decide_open(*self.render_handle() != 0, self.closing()) {
+            OpenAction::Begin => self.begin(path),
+            OpenAction::CloseFirst => {
+                self.as_mut().rust_mut().pending_open = Some(path);
+                self.close();
+            }
+            // A close is already in flight and the handle is already zero, so
+            // the old gate — "is anything rendering?" — read this as an idle
+            // player and went straight to tearing the session down under a
+            // context that may not be free yet. Waiting is the only correct
+            // answer: `surface_released` starts what is left here.
+            OpenAction::Wait => self.as_mut().rust_mut().pending_open = Some(path),
         }
-        self.begin(path);
     }
 
     /// The half of opening that assumes nothing is rendering any more.
@@ -243,7 +256,7 @@ impl qobject::FluoritaPlayer {
             // Falls through to the refusal below.
             self.as_mut().set_state(QString::from("error"));
             self.as_mut()
-                .set_error_message(QString::from("Fluorita no reconoce este tipo de archivo"));
+                .set_error_message(QString::from(crate::copy::UNKNOWN_KIND));
             return;
         };
 
@@ -312,9 +325,8 @@ impl qobject::FluoritaPlayer {
                 }
                 None => {
                     self.as_mut().set_state(QString::from("error"));
-                    self.as_mut().set_error_message(QString::from(
-                        "No se pudo resolver la ruta de la imagen",
-                    ));
+                    self.as_mut()
+                        .set_error_message(QString::from(crate::copy::UNRESOLVED_IMAGE));
                 }
             },
             refusal => {
@@ -357,16 +369,42 @@ impl qobject::FluoritaPlayer {
     /// The handle goes first: the surface must stop rendering before anything
     /// it renders from can be destroyed.
     pub fn close(mut self: core::pin::Pin<&mut Self>) {
-        if self.worker().is_none() {
+        if self.worker().is_none() || self.closing() {
+            return;
+        }
+        // Marked before the handle is cleared, not after. A surface with no
+        // renderer answers `contextReleased` synchronously from inside the
+        // property write, and the acknowledgement would arrive at a player that
+        // did not yet know it was closing — leaving the flag set for ever.
+        self.as_mut().rust_mut().closing = true;
+        if *self.render_handle() == 0 {
+            // Nothing was ever handed to a surface — audio, which needs none —
+            // so clearing the handle would change nothing and no acknowledgement
+            // would ever come back. Settling here is what keeps a track from
+            // leaving the player permanently mid-close.
+            self.surface_released();
             return;
         }
         self.as_mut().set_render_handle(0);
-        self.as_mut().rust_mut().closing = true;
         // A surface that never had a context answers immediately; one that did
         // answers from the render thread. Either way `surface_released` runs.
     }
 
+    /// The surface could not render. Sound, position and transport are still
+    /// honest; what is not honest is a picture that will never arrive.
+    pub fn surface_failed(mut self: core::pin::Pin<&mut Self>) {
+        self.as_mut().set_state(QString::from("error"));
+        self.as_mut()
+            .set_error_message(QString::from(crate::copy::SURFACE_UNAVAILABLE));
+        self.as_mut().set_pending(false);
+    }
+
     pub fn surface_released(mut self: core::pin::Pin<&mut Self>) {
+        // Also the guard against stopping a worker twice: the flag is the one
+        // record of "this session is being closed", and a second release —
+        // which the surface may legitimately send, since the render thread and
+        // the immediate path can both answer — must not reach the worker of
+        // whatever session started in the meantime.
         if !self.closing() {
             return;
         }
@@ -519,6 +557,48 @@ impl qobject::FluoritaPlayer {
     }
 }
 
+/// What opening an item must do, given what the surface is doing right now.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OpenAction {
+    /// Nothing is rendering and nothing is being torn down: start at once.
+    Begin,
+    /// Something is rendering: hand the handle back and wait for the surface.
+    CloseFirst,
+    /// A close is already in flight: the handle is gone but the render context
+    /// may not be, so the request waits for the same acknowledgement.
+    Wait,
+}
+
+/// Kept apart from the QObject so the rule can be read and tested on its own;
+/// the pinned method it drives cannot be constructed without a Qt application.
+const fn decide_open(rendering: bool, closing: bool) -> OpenAction {
+    if closing {
+        OpenAction::Wait
+    } else if rendering {
+        OpenAction::CloseFirst
+    } else {
+        OpenAction::Begin
+    }
+}
+
+/// Stops and joins the worker when the player itself goes away.
+///
+/// Quitting with a video playing used to run the backend's destruction beside
+/// the scene graph's, because nothing joined this thread: the process simply
+/// ended and whichever teardown lost the race was the one that crashed.
+impl Drop for PlayerRust {
+    fn drop(&mut self) {
+        if let Some(sender) = self.commands.take() {
+            // A worker that already left is not an error; the join below is
+            // what makes the shutdown deterministic either way.
+            let _ = sender.send(Command::Stop);
+        }
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
+
 /// The interface's vocabulary for confirmed state. Spanish, because it is shown.
 fn state_label(state: PlaybackState) -> &'static str {
     match state {
@@ -660,8 +740,27 @@ fn publish_failure(qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaPlayer>, mes
 
 #[cfg(test)]
 mod tests {
-    use super::state_label;
+    use super::{decide_open, state_label, OpenAction};
     use fluorita_core::PlaybackState;
+
+    #[test]
+    fn an_idle_player_opens_straight_away() {
+        assert_eq!(decide_open(false, false), OpenAction::Begin);
+    }
+
+    #[test]
+    fn a_rendering_player_hands_the_surface_back_first() {
+        assert_eq!(decide_open(true, false), OpenAction::CloseFirst);
+    }
+
+    #[test]
+    fn a_close_in_flight_is_waited_for_rather_than_raced() {
+        // The handle is already zero here, which is exactly why gating on it
+        // alone let a new session start on top of a context that was still
+        // being freed — and left the acknowledgement to kill the new worker.
+        assert_eq!(decide_open(false, true), OpenAction::Wait);
+        assert_eq!(decide_open(true, true), OpenAction::Wait);
+    }
 
     #[test]
     fn every_state_has_a_word_the_interface_can_show() {

@@ -51,7 +51,8 @@ public:
         releaseContext();
     }
 
-    // Runs with the GUI thread blocked: the one safe moment to read the item.
+    // Runs with the GUI thread blocked: the one safe moment to read the item,
+    // and therefore the one safe moment to claim responsibility for a handle.
     void synchronize(QQuickFramebufferObject *object) override
     {
         auto *item = static_cast<MpvVideoItem *>(object);
@@ -60,6 +61,15 @@ public:
         if (handle != m_handle) {
             m_handle = handle;
             m_recreate = true;
+        }
+        // One claim per renderer, held from the moment a session's handle is
+        // latched until the context built from it is freed. Claiming here — and
+        // not in `createContext`, which runs after the GUI thread is released —
+        // is what stops `setHandle` from concluding that nobody will answer
+        // while this renderer is already committed to answering.
+        if (m_handle != 0 && !m_claimed) {
+            m_claimed = true;
+            item->claimRenderContext();
         }
     }
 
@@ -143,7 +153,11 @@ private:
         if (mpv_render_context_create(&m_context, mpv, params) < 0) {
             // A surface that cannot render is not a crash: the player still has
             // sound, a position and an honest state, and the item stays blank.
+            // Saying so is the difference between that and a video stuck on
+            // "opening" for ever, because the load only starts on
+            // `contextCreated` and that will never arrive now.
             m_context = nullptr;
+            QMetaObject::invokeMethod(m_item, "notifyContextFailed", Qt::QueuedConnection);
             return;
         }
         mpv_render_context_set_update_callback(m_context, onMpvUpdate, m_item);
@@ -151,19 +165,31 @@ private:
         QMetaObject::invokeMethod(m_item, "notifyContextCreated", Qt::QueuedConnection);
     }
 
+    // Frees the context, if one was built, and settles the claim either way.
+    //
+    // A claim that produced no context — creation failed — still has to be
+    // settled here, because the player is waiting on exactly one answer per
+    // session and cannot tell the two cases apart.
     void releaseContext()
     {
-        if (!m_context) {
+        if (m_context) {
+            // Freeing drops the update callback first, so no repaint request
+            // can reference a context that no longer exists.
+            mpv_render_context_free(m_context);
+            m_context = nullptr;
+        }
+        if (!m_claimed) {
             return;
         }
-        // Freeing drops the update callback first, so no repaint request can
-        // reference a context that no longer exists.
-        mpv_render_context_free(m_context);
-        m_context = nullptr;
+        m_claimed = false;
         // Tell the player, on the GUI thread, that the backend instance may now
         // be destroyed. Without this the two races: Rust drops the instance
         // while this thread still holds a context built from it.
+        //
+        // Queued *before* the claim is dropped, so the GUI thread can never
+        // observe a settled claim with no answer on its way.
         QMetaObject::invokeMethod(m_item, "notifyContextReleased", Qt::QueuedConnection);
+        m_item->settleRenderContext();
     }
 
     MpvVideoItem *m_item = nullptr;
@@ -171,6 +197,8 @@ private:
     mpv_render_context *m_context = nullptr;
     qulonglong m_handle = 0;
     bool m_recreate = false;
+    // Whether this renderer owes the player one release notification.
+    bool m_claimed = false;
 };
 
 } // namespace
@@ -199,12 +227,29 @@ void MpvVideoItem::setHandle(qulonglong handle)
     Q_EMIT handleChanged();
     update();
 
-    // A renderer only exists while the item is on a window and drawing. If
-    // there is none, nobody will ever answer, so the release is reported here
-    // instead — otherwise closing an off-screen player would wait forever.
-    if (handle == 0 && hadHandle && (!window() || !isVisible())) {
+    // Nobody may be left to answer: a player closed before its item was ever
+    // synchronized has no renderer holding anything, and waiting for a
+    // notification that cannot arrive would leave the session open for ever.
+    //
+    // What decides that is the claim count, never visibility. An item that is
+    // not drawing can still own a live render context, and reading "no
+    // renderer" from "not visible" is what let the mpv core be destroyed
+    // underneath one.
+    if (handle == 0 && hadHandle && m_claims.loadAcquire() == 0) {
         Q_EMIT contextReleased();
     }
+}
+
+void MpvVideoItem::claimRenderContext()
+{
+    m_claims.ref();
+    QMetaObject::invokeMethod(this, "notifyRendererLiveChanged", Qt::QueuedConnection);
+}
+
+void MpvVideoItem::settleRenderContext()
+{
+    m_claims.deref();
+    QMetaObject::invokeMethod(this, "notifyRendererLiveChanged", Qt::QueuedConnection);
 }
 
 void MpvVideoItem::notifyContextReleased()
@@ -215,6 +260,16 @@ void MpvVideoItem::notifyContextReleased()
 void MpvVideoItem::notifyContextCreated()
 {
     Q_EMIT contextCreated();
+}
+
+void MpvVideoItem::notifyContextFailed()
+{
+    Q_EMIT contextFailed();
+}
+
+void MpvVideoItem::notifyRendererLiveChanged()
+{
+    Q_EMIT rendererLiveChanged();
 }
 
 void MpvVideoItem::requestFrame()

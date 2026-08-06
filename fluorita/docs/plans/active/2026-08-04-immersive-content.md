@@ -89,8 +89,21 @@ is no animation to wait for.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | F6-A | `fluorita:` | done | [inventory](../../inventories/2026-08-04-immersive-content/F6-A.numstat.tsv) | 36 files, +2306/-357 | Stop showing deleted files, open and close items as a movement, act on them, navigate the folder from inside it, and light it with its own artwork — with the surface back in Spanish | [evidence](../../evidence/2026-08-04-immersive-content.md) | `VAL-FLU-IMMERSIVE` |
+| F6-B | `fluorita:` | done | [inventory](../../inventories/2026-08-04-immersive-content/F6-B.numstat.tsv) | 20 files, +878/-78 | Decide a render context's release from an explicit renderer claim instead of item visibility, so the mpv core is never destroyed under a live context; hold an activation that arrives during a close; stop and join the player on teardown; report a context that failed to build instead of leaving the file opening for ever; carry cancellation into the scan and tag probes; emit the MPRIS property and seek signals; project a watcher refresh under the scope in force and a scan failure over the library already on screen; own a touched file only from its real source; and give the accessible activation the same arguments as the pointer one | `cargo check`, `cargo test`, `cargo fmt` in `fluorita/` and for the `fluorita-*` crates — recorded in [render-context lifecycle evidence](../../evidence/2026-08-05-render-context-lifecycle.md) | `VAL-FLU-TEARDOWN` |
 
 One unit because it is one worktree: the defect and the features were found and
 fixed against each other, in the same files, and no part of it was ever going to
 be committed alone. It closes as `fluorita-milestone`; the vanished-file
 correction rides with it rather than pretending to be a separable delivery.
+
+F6-B is a corrective delivery from the suite audit in
+[`docs/evidence/2026-08-05-static-suite-audit.md`](../../../../docs/evidence/2026-08-05-static-suite-audit.md):
+findings `FLU-C1`, `FLU-A1` to `FLU-A4`, `FLU-M2` to `FLU-M6` and `FLU-B3`. Its
+spine is one invariant the code had been inferring instead of holding: the mpv
+render context is freed before the core it belongs to. Everything else in the
+unit either protects that ordering across close, reopen and exit, or stops a
+surface from claiming a state the engine never reported. It stays `active`
+because the author asked for the code and its tests without the production
+flow, so it has neither an inventory nor a version transition. `FLU-M1` — the
+lossy Qt seam for non-UTF-8 names — is deliberately outside it: Siderita has
+the same defect at the same boundary, and one shared decision should fix both.

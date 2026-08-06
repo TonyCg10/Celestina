@@ -1,4 +1,5 @@
 mod activation;
+mod copy;
 mod folders;
 mod image;
 mod library;

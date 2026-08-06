@@ -91,7 +91,12 @@ ListView {
             : qsTr("%1 — sin encontrar").arg(row.modelData.title)
         Accessible.description: qsTr("%1 · %2").arg(row.modelData.artist).arg(row.modelData.album)
         Accessible.focusable: true
-        Accessible.onPressAction: list.activated(row.modelData.path)
+        // The same four values the pointer sends; the path alone left the
+        // origin, the cover and the kind undefined.
+        Accessible.onPressAction: list.activated(row.modelData.path,
+                                                 list.originOf(row),
+                                                 row.modelData.thumbnail,
+                                                 "audio")
 
         CelestinaSurface {
             anchors.fill: parent

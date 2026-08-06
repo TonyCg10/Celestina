@@ -9,8 +9,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use celestina_core::CancellationToken;
+use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
-use fluorita_core::{Catalogue, MediaKind, SourceScope, SourceSet, XdgMediaDirs};
+use fluorita_core::{Catalogue, MediaKind, MediaSource, SourceScope, SourceSet, XdgMediaDirs};
 use fluorita_engine::backend::ArtworkJob;
 use fluorita_engine::worker::{EngineWorker, Job, JobOutcome};
 use fluorita_engine::{catalogue_store, source_store, LibraryChange, LibraryWatcher, ScanLimits};
@@ -41,6 +42,70 @@ pub(super) const ARTWORK_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// How long the watch waits before checking that its host is still there.
 pub(super) const WATCH_POLL: Duration = Duration::from_millis(500);
+
+/// The longest this thread waits for the engine without looking at its token.
+///
+/// The engine worker's own `poll` blocks for the whole budget it is given, so a
+/// scan waited 180 s and a tag probe 15 s before cancellation could even be
+/// read. The host joins this thread from the GUI, which is why adding or
+/// removing a folder mid-scan froze the interface for minutes.
+pub(super) const CANCEL_POLL: Duration = Duration::from_millis(100);
+
+/// How a bounded wait for the engine ended.
+#[derive(Debug, Eq, PartialEq)]
+pub(super) enum Waited<T> {
+    Finished(T),
+    /// The host asked this work to stop. Nothing is published for it: whatever
+    /// asked for the cancellation owns what happens next.
+    Cancelled,
+    TimedOut,
+}
+
+/// Waits for one finished job while staying answerable to cancellation.
+///
+/// Generic over the wait so the rule — check the token, then wait a slice, then
+/// check again, never past the budget — can be exercised without an engine.
+pub(super) fn await_outcome<T, F>(
+    cancellation: &CancellationToken,
+    budget: Duration,
+    chunk: Duration,
+    mut wait: F,
+) -> Waited<T>
+where
+    F: FnMut(Duration) -> Option<T>,
+{
+    let deadline = std::time::Instant::now() + budget;
+    loop {
+        if cancellation.is_cancelled() {
+            return Waited::Cancelled;
+        }
+        let now = std::time::Instant::now();
+        if now >= deadline {
+            return Waited::TimedOut;
+        }
+        let slice = chunk.min(deadline - now);
+        if let Some(outcome) = wait(slice) {
+            return Waited::Finished(outcome);
+        }
+    }
+}
+
+/// The same wait, against the real engine worker, cancelling its current job.
+fn await_job(
+    worker: &EngineWorker,
+    cancellation: &CancellationToken,
+    budget: Duration,
+) -> Waited<JobOutcome> {
+    let waited = await_outcome(cancellation, budget, CANCEL_POLL, |slice| {
+        worker.poll(slice)
+    });
+    if matches!(waited, Waited::Cancelled) {
+        // Telling the engine as well: the token this thread watches is not the
+        // one the job inside the worker holds.
+        worker.cancel_current();
+    }
+    waited
+}
 
 pub(super) fn run_artwork(
     catalogue: &Catalogue,
@@ -201,11 +266,17 @@ pub(super) fn run_scan(
     }
 
     if sources.is_empty() {
-        return publish_failure(qt_thread, &sources, scope, copy::NO_SOURCES);
+        return publish_failure(qt_thread, &catalogue, &sources, scope, copy::NO_SOURCES);
     }
 
     let Ok(worker) = EngineWorker::start() else {
-        return publish_failure(qt_thread, &sources, scope, copy::SCANNER_UNAVAILABLE);
+        return publish_failure(
+            qt_thread,
+            &catalogue,
+            &sources,
+            scope,
+            copy::SCANNER_UNAVAILABLE,
+        );
     };
     if worker
         .submit(Job::Scan {
@@ -215,14 +286,29 @@ pub(super) fn run_scan(
         })
         .is_err()
     {
-        return publish_failure(qt_thread, &sources, scope, copy::SCANNER_UNAVAILABLE);
+        return publish_failure(
+            qt_thread,
+            &catalogue,
+            &sources,
+            scope,
+            copy::SCANNER_UNAVAILABLE,
+        );
     }
 
-    let Some(JobOutcome::Scanned { result, .. }) = worker.poll(SCAN_TIMEOUT) else {
-        return publish_failure(qt_thread, &sources, scope, copy::SCAN_TIMED_OUT);
+    let scanned = match await_job(&worker, cancellation, SCAN_TIMEOUT) {
+        Waited::Finished(outcome) => outcome,
+        // A cancelled scan publishes nothing: the host either replaced this
+        // configuration or is going away, and both own what comes next.
+        Waited::Cancelled => return,
+        Waited::TimedOut => {
+            return publish_failure(qt_thread, &catalogue, &sources, scope, copy::SCAN_TIMED_OUT)
+        }
+    };
+    let JobOutcome::Scanned { result, .. } = scanned else {
+        return publish_failure(qt_thread, &catalogue, &sources, scope, copy::SCAN_FAILED);
     };
     let Ok(outcome) = result else {
-        return publish_failure(qt_thread, &sources, scope, copy::SCAN_FAILED);
+        return publish_failure(qt_thread, &catalogue, &sources, scope, copy::SCAN_FAILED);
     };
 
     let truncated = outcome.truncated;
@@ -243,7 +329,10 @@ pub(super) fn run_scan(
 
     // Tags are the expensive part, and the only reason this catalogue is worth
     // storing: what is read here is not read again unless the file changes.
-    let learned = learn_tags(&worker, &mut catalogue);
+    let learned = learn_tags(&worker, &mut catalogue, cancellation);
+    if cancellation.is_cancelled() {
+        return;
+    }
 
     // Best effort: a catalogue that could not be written is a slower next
     // launch, not a broken library, so it must not fail the scan on screen.
@@ -258,7 +347,6 @@ pub(super) fn run_scan(
     // From here the library keeps itself up to date without walking again.
     watch_library(
         &sources,
-        scope,
         catalogue,
         store.as_deref(),
         qt_thread,
@@ -275,7 +363,6 @@ pub(super) fn run_scan(
 /// see is guessing.
 pub(super) fn watch_library(
     sources: &SourceSet,
-    scope: SourceScope,
     mut catalogue: Catalogue,
     store: Option<&Path>,
     qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>,
@@ -308,7 +395,9 @@ pub(super) fn watch_library(
         let mut changed = false;
         for change in batch {
             match change {
-                LibraryChange::Touched(path) => changed |= absorb_one(&mut catalogue, &path),
+                LibraryChange::Touched(path) => {
+                    changed |= absorb_one(&mut catalogue, sources, &path);
+                }
                 LibraryChange::Removed(path) => {
                     // The watcher saw this exact file go, in a root it is
                     // watching right now, so the root plainly answers. That is
@@ -346,9 +435,18 @@ pub(super) fn watch_library(
         if let Some(path) = store {
             let _ = catalogue_store::save(path, &catalogue);
         }
-        let refreshed = project(&catalogue, sources, scope, false, "ready");
+        // Projected on the GUI thread, under the scope selected *now*. The scan
+        // that started this watch captured one when it began, and a folder the
+        // user has selected since would be overwritten by the previous one's
+        // content the next time a file moved.
+        let published = catalogue.clone();
+        let configured = sources.clone();
         if qt_thread
-            .queue(move |library| library.apply(refreshed))
+            .queue(move |library| {
+                let scope = library.rust().scope();
+                let refreshed = project(&published, &configured, scope, false, "ready");
+                library.apply(refreshed);
+            })
             .is_err()
         {
             return;
@@ -357,7 +455,7 @@ pub(super) fn watch_library(
 }
 
 /// Stats one changed path and folds it in. Returns whether anything moved.
-pub(super) fn absorb_one(catalogue: &mut Catalogue, path: &Path) -> bool {
+pub(super) fn absorb_one(catalogue: &mut Catalogue, sources: &SourceSet, path: &Path) -> bool {
     let Some(kind) = MediaKind::classify_path(path) else {
         return false;
     };
@@ -375,7 +473,7 @@ pub(super) fn absorb_one(catalogue: &mut Catalogue, path: &Path) -> bool {
     let record = fluorita_core::MediaRecord::new(
         id,
         // The root that owns it; a file under no configured root is not ours.
-        match sources_owner(catalogue, path) {
+        match sources_owner(sources, path, kind) {
             Some(source) => source,
             None => return false,
         },
@@ -395,21 +493,19 @@ pub(super) fn absorb_one(catalogue: &mut Catalogue, path: &Path) -> bool {
     summary.added + summary.replaced > 0
 }
 
-/// The source a changed file belongs to, borrowed from whatever the catalogue
-/// already knows: an incremental update has no `SourceSet` at hand, and a new
-/// file lands beside ones that do.
-pub(super) fn sources_owner(catalogue: &Catalogue, path: &Path) -> Option<fluorita_core::SourceId> {
-    let parent = path.parent()?;
-    catalogue
-        .records()
-        .find(|record| record.path().parent() == Some(parent))
-        .map(fluorita_core::MediaRecord::source)
-        .or_else(|| {
-            catalogue
-                .records()
-                .next()
-                .map(fluorita_core::MediaRecord::source)
-        })
+/// The configured root that owns a changed file, decided by the configuration
+/// itself rather than by what happens to sit near it in the catalogue.
+///
+/// Guessing from a neighbouring record fell back to the first record in the
+/// whole catalogue whenever the parent directory matched nothing — so a file
+/// created in a subfolder nobody had scanned yet was filed under an unrelated
+/// root. Roots cannot nest, so there is exactly one right answer or none.
+pub(super) fn sources_owner(
+    sources: &SourceSet,
+    path: &Path,
+    kind: MediaKind,
+) -> Option<fluorita_core::SourceId> {
+    sources.owner_of(path, kind).map(MediaSource::id)
 }
 
 /// Reads tags for audio the catalogue has never probed.
@@ -417,7 +513,11 @@ pub(super) fn sources_owner(catalogue: &Catalogue, path: &Path) -> Option<fluori
 /// Only audio, and only what has no duration yet: a video's tags are not what
 /// Gallery shows, and a track that was probed before keeps what it learned
 /// because its size and mtime say the bytes are the same.
-pub(super) fn learn_tags(worker: &EngineWorker, catalogue: &mut Catalogue) -> usize {
+pub(super) fn learn_tags(
+    worker: &EngineWorker,
+    catalogue: &mut Catalogue,
+    cancellation: &CancellationToken,
+) -> usize {
     let pending: Vec<(PathBuf, fluorita_core::MediaId)> = catalogue
         .records()
         .filter(|record| record.kind() == MediaKind::Audio)
@@ -428,6 +528,12 @@ pub(super) fn learn_tags(worker: &EngineWorker, catalogue: &mut Catalogue) -> us
 
     let mut learned = 0;
     for (path, id) in pending {
+        // Five hundred probes of up to fifteen seconds each is minutes of work
+        // the host must be able to interrupt between two of them, not only
+        // after the last.
+        if cancellation.is_cancelled() {
+            break;
+        }
         if worker
             .submit(Job::Probe {
                 generation: celestina_core::Generation::INITIAL,
@@ -438,7 +544,9 @@ pub(super) fn learn_tags(worker: &EngineWorker, catalogue: &mut Catalogue) -> us
         {
             break;
         }
-        let Some(JobOutcome::Probed { result, .. }) = worker.poll(PROBE_TIMEOUT) else {
+        let Waited::Finished(JobOutcome::Probed { result, .. }) =
+            await_job(worker, cancellation, PROBE_TIMEOUT)
+        else {
             break;
         };
         // A file that will not answer is not an error: it keeps the name-based
@@ -453,16 +561,20 @@ pub(super) fn learn_tags(worker: &EngineWorker, catalogue: &mut Catalogue) -> us
     learned
 }
 
-/// Reports a failure without losing the sidebar: the roots are still
-/// configured, and a window that dropped them would leave no way to add or
-/// remove one after a scan went wrong.
+/// Reports a failure without losing the sidebar or the library.
+///
+/// The roots stay configured, or there would be no way to add or remove one
+/// after a scan went wrong — and the catalogue that was already on screen stays
+/// with them. Projecting an empty one emptied a stored library the user was
+/// looking at, which reads as data loss for what is only a walk that failed.
 pub(super) fn publish_failure(
     qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>,
+    catalogue: &Catalogue,
     sources: &SourceSet,
     scope: SourceScope,
     message: &str,
 ) {
-    let mut snapshot = project(&Catalogue::new(), sources, scope, false, "error");
+    let mut snapshot = project(catalogue, sources, scope, false, "error");
     snapshot.summary = message.to_owned();
     let _ = qt_thread.queue(move |library| library.apply(snapshot));
 }
@@ -490,5 +602,114 @@ pub(super) fn media_directories() -> XdgMediaDirs {
         pictures: existing(&["Imágenes", "Pictures"]),
         videos: existing(&["Vídeos", "Videos"]),
         music: existing(&["Música", "Music"]),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{await_outcome, sources_owner, Waited, CANCEL_POLL};
+    use celestina_core::CancellationToken;
+    use fluorita_core::{KindSet, MediaKind, SourceSet};
+    use std::path::{Path, PathBuf};
+    use std::time::Duration;
+
+    fn two_roots() -> SourceSet {
+        let mut sources = SourceSet::new();
+        sources
+            .add(PathBuf::from("/mnt/pictures"), KindSet::all())
+            .expect("an absolute root the set has never seen");
+        sources
+            .add(PathBuf::from("/mnt/music"), KindSet::all())
+            .expect("a second root that does not nest in the first");
+        sources
+    }
+
+    #[test]
+    fn a_new_file_is_filed_under_the_root_that_contains_it() {
+        let sources = two_roots();
+        let owner = sources_owner(
+            &sources,
+            Path::new("/mnt/music/2026/track.flac"),
+            MediaKind::Audio,
+        );
+
+        let expected = sources
+            .owner_of(Path::new("/mnt/music"), MediaKind::Audio)
+            .map(fluorita_core::MediaSource::id);
+        assert_eq!(owner, expected);
+    }
+
+    #[test]
+    fn a_file_under_no_configured_root_has_no_owner() {
+        // The guess this replaced answered with the catalogue's first record,
+        // so a file nobody configured landed under an unrelated folder.
+        assert_eq!(
+            sources_owner(&two_roots(), Path::new("/tmp/loose.png"), MediaKind::Image),
+            None
+        );
+    }
+
+    #[test]
+    fn a_finished_job_is_reported_as_it_arrives() {
+        let cancellation = CancellationToken::new();
+        let mut calls = 0;
+        let waited = await_outcome(
+            &cancellation,
+            Duration::from_secs(30),
+            CANCEL_POLL,
+            |_slice| {
+                calls += 1;
+                (calls == 3).then_some("scanned")
+            },
+        );
+
+        assert_eq!(waited, Waited::Finished("scanned"));
+        assert_eq!(calls, 3);
+    }
+
+    #[test]
+    fn a_cancelled_wait_returns_without_spending_the_budget() {
+        let cancellation = CancellationToken::new();
+        cancellation.cancel();
+        let mut calls = 0;
+        // A 180 s budget, and not one wait: this is the difference between a
+        // folder change that answers at once and an interface frozen for
+        // minutes, because the host joins this thread from the GUI.
+        let waited = await_outcome::<&str, _>(
+            &cancellation,
+            Duration::from_secs(180),
+            CANCEL_POLL,
+            |_slice| {
+                calls += 1;
+                None
+            },
+        );
+
+        assert_eq!(waited, Waited::Cancelled);
+        assert_eq!(calls, 0);
+    }
+
+    #[test]
+    fn a_silent_engine_gives_the_budget_back_in_slices() {
+        let cancellation = CancellationToken::new();
+        let mut slices = Vec::new();
+        let waited = await_outcome::<&str, _>(
+            &cancellation,
+            Duration::from_millis(250),
+            Duration::from_millis(100),
+            |slice| {
+                slices.push(slice);
+                None
+            },
+        );
+
+        assert_eq!(waited, Waited::TimedOut);
+        assert!(slices.len() >= 2, "the wait was not split at all");
+        assert!(
+            slices
+                .iter()
+                .all(|slice| *slice <= Duration::from_millis(100)),
+            "a slice outran the chunk, so the token would go unread that long"
+        );
     }
 }

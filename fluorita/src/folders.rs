@@ -35,6 +35,11 @@ const REQUEST_INTERFACE: &str = "org.freedesktop.portal.Request";
 /// of holding a thread for the lifetime of the application.
 const DEADLINE: Duration = Duration::from_secs(300);
 
+/// How long one wait for a portal signal lasts. Short enough that the deadline
+/// above is noticed on a bus that has gone quiet, rather than only between two
+/// messages that may never come.
+const RECEIVE_SLICE: Duration = Duration::from_millis(500);
+
 /// What the desktop answered.
 #[derive(Debug)]
 pub enum FolderChoice {
@@ -68,7 +73,7 @@ fn request(title: &str) -> Result<FolderChoice, String> {
     // Subscribe before asking. The backend may answer before the reply to
     // `OpenFile` is even dispatched, and a listener created afterwards would
     // wait forever for a signal that already went past.
-    let mut responses = zbus::blocking::MessageIterator::for_match_rule(
+    let responses = zbus::blocking::MessageIterator::for_match_rule(
         zbus::MatchRule::builder()
             .msg_type(zbus::message::Type::Signal)
             .interface(REQUEST_INTERFACE)
@@ -80,6 +85,25 @@ fn request(title: &str) -> Result<FolderChoice, String> {
         None,
     )
     .map_err(|error| format!("cannot listen for the answer: {error}"))?;
+
+    // Signals are received on their own thread and cross as they arrive.
+    // `zbus`'s blocking iterator has no timed receive, so the deadline below
+    // could only ever be checked *between* two messages: a backend that took
+    // the request and then said nothing held this worker for the life of the
+    // process, and the host joins it, which is what stopped the application
+    // from terminating. The listener ends as soon as the answer it is carrying
+    // has nowhere to go.
+    let (signals, incoming) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .name("fluorita-portal".to_owned())
+        .spawn(move || {
+            for message in responses {
+                if signals.send(message).is_err() {
+                    return;
+                }
+            }
+        })
+        .map_err(|error| format!("cannot listen for the answer: {error}"))?;
 
     let mut options: HashMap<&str, Value<'_>> = HashMap::new();
     options.insert("directory", Value::Bool(true));
@@ -103,9 +127,19 @@ fn request(title: &str) -> Result<FolderChoice, String> {
         .map_err(|error| format!("the folder chooser answered unexpectedly: {error}"))?;
 
     let deadline = std::time::Instant::now() + DEADLINE;
-    while std::time::Instant::now() < deadline {
-        let Some(message) = responses.next() else {
-            return Err("the folder chooser stopped answering".to_owned());
+    loop {
+        let now = std::time::Instant::now();
+        if now >= deadline {
+            return Err("the folder chooser did not answer in time".to_owned());
+        }
+        let message = match incoming.recv_timeout(RECEIVE_SLICE.min(deadline - now)) {
+            Ok(message) => message,
+            // Silence is not an answer, and not a failure either: the person
+            // may still be browsing. The deadline above decides when it is.
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                return Err("the folder chooser stopped answering".to_owned())
+            }
         };
         let message = message.map_err(|error| format!("the folder chooser failed: {error}"))?;
         // Several requests can be in flight on this bus; only ours counts.
@@ -124,7 +158,6 @@ fn request(title: &str) -> Result<FolderChoice, String> {
         }
         return Ok(first_folder(&results).map_or(FolderChoice::Cancelled, FolderChoice::Chosen));
     }
-    Err("the folder chooser did not answer in time".to_owned())
 }
 
 /// The first `file://` URI of the answer, as a path.

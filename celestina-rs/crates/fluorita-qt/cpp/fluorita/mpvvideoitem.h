@@ -13,6 +13,7 @@
 // context that is being torn down.
 #pragma once
 
+#include <QtCore/QAtomicInt>
 #include <QtQuick/QQuickFramebufferObject>
 
 class QQmlApplicationEngine;
@@ -21,6 +22,12 @@ class MpvVideoItem : public QQuickFramebufferObject
 {
     Q_OBJECT
     Q_PROPERTY(qulonglong handle READ handle WRITE setHandle NOTIFY handleChanged)
+    // True while a renderer holds a render context built from a handle, or has
+    // latched one and is about to. The surface binds its own visibility to this
+    // so the item stays in the scene graph until the context is really gone:
+    // the renderer can only free it while the item is still being synchronized,
+    // and an item removed first would strand a context nobody can release.
+    Q_PROPERTY(bool rendererLive READ rendererLive NOTIFY rendererLiveChanged)
 
 public:
     explicit MpvVideoItem(QQuickItem *parent = nullptr);
@@ -29,6 +36,16 @@ public:
 
     qulonglong handle() const { return m_handle; }
     void setHandle(qulonglong handle);
+
+    bool rendererLive() const { return m_claims.loadAcquire() > 0; }
+
+    // Called by the renderer, from Qt's render thread. `claim` is taken while
+    // the GUI thread is blocked in `synchronize`, which is what makes it
+    // ordered against `setHandle`; `settle` runs after the matching release
+    // notification has been queued, so the GUI thread never observes the claim
+    // gone with no answer on its way.
+    void claimRenderContext();
+    void settleRenderContext();
 
 public Q_SLOTS:
     // Called from libmpv's update callback, which fires on the backend's own
@@ -43,8 +60,22 @@ public Q_SLOTS:
     // Its counterpart: the context exists and frames can be presented.
     void notifyContextCreated();
 
+    // The render context could not be built. Nothing will ever be presented
+    // from this handle, so the player must stop waiting for a first frame.
+    void notifyContextFailed();
+
+    // Queued from the render thread whenever `rendererLive` changes, because a
+    // property notification has to be emitted on the GUI thread.
+    void notifyRendererLiveChanged();
+
 Q_SIGNALS:
     void handleChanged();
+
+    void rendererLiveChanged();
+
+    // The surface exists but cannot render. The player turns this into an
+    // honest error rather than an "opening" that never resolves.
+    void contextFailed();
 
     // The player waits for this before *loading* anything: with this output the
     // backend has no video until a render context exists, and a file loaded
@@ -58,6 +89,10 @@ Q_SIGNALS:
 
 private:
     qulonglong m_handle = 0;
+    // Written from the render thread, read from the GUI thread: a plain `bool`
+    // would be a data race, and the whole point of this counter is that the GUI
+    // thread may trust what it reads.
+    QAtomicInt m_claims;
 };
 
 // Registers `MpvVideo` in its own QML namespace and pins the scene graph to

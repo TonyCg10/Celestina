@@ -1,0 +1,32 @@
+# F6-B exact change inventory
+
+Base revision	799c02f3e72499e1ca8b2ab381265ea985d27248
+Pathspec	fluorita/
+Pathspec	celestina-rs/crates/fluorita-core/
+Pathspec	celestina-rs/crates/fluorita-engine/
+Pathspec	celestina-rs/crates/fluorita-qt/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+35	0	9f06bf6855650fc6688494090bb2789b0ca6d7f7905c83d55753905c53d3c7ad	celestina-rs/crates/fluorita-qt/cpp/fluorita/mpvvideoitem.h
+65	10	acddf9cb4c27e8a8d0b3691ebf1b7cc1979a14d9e15bbbb23e09b6aca021a82e	celestina-rs/crates/fluorita-qt/cpp/mpvvideoitem.cpp
+1	0	80b241b2a8de332db8ff786f6384083e367c409642420f17f3b85f140374464d	docs/version-history.tsv
+1	1	9295c0f7167ddd9fc5d3bb5056ca5f97cd5c3ef4e8b9b7c67aa2130c49b0d5c6	fluorita/Cargo.lock
+1	1	8ed09be150bd1797f02813c359bf90e5e6b2aa5b2f96609c68ff5a0e4e52eea1	fluorita/Cargo.toml
+13	0	d230aa316b7bd4abdbf228babe007e4bf10ac20c5911ee59557265f19a04fddf	fluorita/STATUS.md
+26	0	8157d6ccc37dade58c13fb76188fcc02dc351702e26123ce8cbcbbff6ccbb2c4	fluorita/VALIDATION.md
+85	0	5fed092b6c3429a717fc3ba5ede46ac583490ba656310361f997c23afed2ea36	fluorita/docs/evidence/2026-08-05-render-context-lifecycle.md
+13	0	a912dc47e77cfc4322c1ff8d4565138276278d8fd96d7f4bf4d9f07afec756f1	fluorita/docs/plans/active/2026-08-04-immersive-content.md
+35	2	d7796f5d885a5783fa44cedaf5f04bef9482c5aa4c1d4ab89db6bcbee595fa36	fluorita/qml/Main.qml
+7	1	42db0e2a58fe2ab4847e55c3a392c620a6df42426d56af5b871ce37a27c13a63	fluorita/qml/components/GalleryGrid.qml
+6	1	26b59ccde9e9663bbe72ef5769cd3a7b5c58a2110dec1563938144b063daf9cf	fluorita/qml/components/MusicList.qml
+20	2	de3cc6b2b3ee947cd63bc6e811ca77f6eab27902c45fab4d9c38eff71ca4f210	fluorita/qml/components/PlayerSurface.qml
+27	0	cbcfe1e51719e3b5fa78cfa2bdecc6d8a0f33538c7c5f9bcfbbb452bd2d0ef24	fluorita/src/copy.rs
+38	5	ea97574f909f7b29a265b37d9e84fec5434dfdce48bd1a41e716b9211d21b92a	fluorita/src/folders.rs
+257	36	53310250b761df3697dcc606d8a4ccd0644286b9aac5c8258f65410885205c29	fluorita/src/library/work.rs
+1	0	d45c7bf506dd8395841a91354d15fbebfaaeb0bf4602461dc110ec4c0525b4d0	fluorita/src/main.rs
+104	7	052a8bc5ccb64a8770f66504ebea1b1624982bb2f14800abdb957b5df6fd739a	fluorita/src/mpris.rs
+111	12	6121fc9ed648711b105eda76a8a27a8c2a6f03da3f88e12e2a65986d1b5900f8	fluorita/src/player.rs
+32	0	self	fluorita/docs/inventories/2026-08-04-immersive-content/F6-B.numstat.tsv

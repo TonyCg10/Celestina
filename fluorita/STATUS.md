@@ -9,6 +9,19 @@
 
 ## Current checkout truth
 
+- Uncommitted in the checkout: `F6-B`, the corrective unit from the suite audit.
+  A render context's release is now decided by an explicit renderer claim
+  instead of by item visibility, which is what allowed the mpv core to be
+  destroyed under a live context after a stream failed; an activation arriving
+  during a close is held rather than run through the teardown; the player stops
+  and joins on `Drop`; a context that fails to build is reported instead of
+  leaving the file on "abriendo" for ever; cancellation reaches the scan and the
+  tag probes; MPRIS emits its property and seek signals; a watcher refresh
+  projects under the scope in force and a scan failure no longer empties the
+  library on screen. Compiled and unit-tested, with no inventory, no version
+  transition and no production run — the author asked for the corrections, not
+  the delivery. None of the teardown paths has been exercised on real GPU state:
+  that is `VAL-FLU-TEARDOWN`.
 - The shared core/engine implement media classification, source-scoped
   Gallery/Music projections, user-owned persistent roots, persistent
   incremental catalogue/watch, bounded metadata and artwork generation,

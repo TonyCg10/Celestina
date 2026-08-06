@@ -99,7 +99,13 @@ GridView {
             ? cell.kindWord
             : qsTr("%1 — sin encontrar").arg(cell.kindWord)
         Accessible.focusable: true
-        Accessible.onPressAction: grid.activated(cell.modelData.path)
+        // The same four values the pointer sends. Passing the path alone left
+        // the origin, the poster and the kind undefined, so an item opened with
+        // a screen reader lost its transition and its filmstrip.
+        Accessible.onPressAction: grid.activated(cell.modelData.path,
+                                                 grid.originOf(cell),
+                                                 cell.modelData.thumbnail,
+                                                 cell.modelData.kind)
 
         CelestinaSurface {
             anchors.fill: parent
