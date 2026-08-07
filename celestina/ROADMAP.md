@@ -1,7 +1,7 @@
 # Celestina implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** LVR-3
+- **Active implementation checkpoint:** UX-1
 
 This roadmap contains only work an agent can implement and verify. Real Niri,
 hardware, visual and assistive-technology checks live in
@@ -28,8 +28,9 @@ of the design when they provide the narrow capability the shell needs.
 | R7 | complete | Wallpaper, portal values and the generated Niri colours |
 | LVR-1 | complete | Correct the failures exposed by the 2026-08-04 live validation run |
 | LVR-2 | complete | Correct the failures exposed by the 2026-08-05 follow-up run |
-| LVR-3 | active | Correct late provider insertion and provider lifecycle defects exposed during the GPU-loss audit |
-| AUD-1 | planned | Correct the crash, bound, lifecycle and channel defects recorded by the 2026-08-05 static shell audit |
+| LVR-3 | complete | Correct late provider insertion and provider lifecycle defects exposed during the GPU-loss audit |
+| AUD-1 | complete | Static-audit hardening was absorbed by LVR-3-B and its follow-up corrections; residual findings remain recorded separately |
+| UX-1 | active | Give the network and Bluetooth indicators direct, truthful menus for their devices and actions |
 | R6 | conditional | First-party lock starts only if SHELL-D2 is applied |
 | R8 | complete | Reversible Noctalia removal; Polkit/dock slices remain conditional |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
@@ -37,26 +38,20 @@ of the design when they provide the narrow capability the shell needs.
 Recorded live observations and remaining author checks are status on the
 validation lane, not implementation status.
 
-## AUD-1 — Static audit hardening (planned)
+## AUD-1 — Static audit hardening (complete)
 
 **Outcome:** no session-menu verb can crash the panel, no producer text can
 freeze or stale the provider frame, an unclean helper death cannot overlap
 automatic DDC work, and a hostile peer cannot hang, grow or misdirect the
 shell's channels.
 
-This checkpoint corrects the defects recorded in the
+This checkpoint records the defects from the
 [2026-08-05 static shell audit](docs/evidence/2026-08-05-static-shell-audit.md).
-It is planned, not active: LVR-3 remains the single active checkpoint, and no
-executable check may run while the Noctalia-only GPU observation holds.
-Activating AUD-1 means closing LVR-3, moving the roadmap's active checkpoint to
-`AUD-1`, and creating its plan in `docs/plans/active/` with Plan ID
-`static-audit-hardening`, carrying the unit breakdown below into the plan's
-ledger. Every unit is corrective product work under the `celestina:` prefix —
-bug deliveries that take the next PATCH transition per delivered batch — and
-adds its focused regression in the same unit. No unit adds a capability,
-protocol field, provider or surface.
+The implementation was absorbed by `LVR-3-B` in 0.6.4 and tightened by
+`LVR-3-C` through `LVR-3-G`; the original decomposition below describes
+delivered coverage, not pending implementation.
 
-Planned units, in priority order:
+Delivered coverage:
 
 - **AUD-1-A — In-process session refusals stop crashing the panel.** Guard
   every `sendErrorReply` and `QDBusContext` access in `ShellService` behind
@@ -124,20 +119,12 @@ Planned units, in priority order:
   register/unregister churn loop leaves no residual state and a
   well-known-name item still updates.
 
-The remaining low findings in the audit record — the stranded oversized
-command id, the blocking shutdown wait, the wrapped notification id, the
-transient `GetLayout` allocation, the GUI-thread icon decode and the busless
-single-instance lapse — stay recorded there and are corrected only where a
-unit above already owns the code they touch; anything else needs its own
-authorized unit.
-
-**Implementation exit:** after the author ends the GPU hold, each delivered
-batch passes `bash scripts/check-architecture-contract.sh`, the canonical
-`celestina/scripts/complete-production.sh`, `python3 scripts/version_tool.py
-check` and `python3 scripts/check-staged-units.py` with the matching
-`docs/version-history.tsv` row. The live cases these corrections answer —
-`VAL-R1-01`, `VAL-R3`, `VAL-R4`, `VAL-R5` and the `VAL-GPU-01` observation —
-remain author validation and are not closed by any build.
+One medium residual remains explicit: after the notification helper acquires
+`org.freedesktop.Notifications`, it does not observe a later `NameLost` and
+withdraw its published state. The remaining low findings — notification-id
+wrap, transient `GetLayout` allocation, GUI-thread icon decode and the busless
+single-instance lapse — stay recorded in the audit. None is silently folded
+into UX-1; each needs a future corrective unit if prioritized.
 
 ## LVR-3 — Late provider insertion and safe provider lifecycle
 
@@ -149,15 +136,23 @@ The 0.6.2 live rerun proved that Firefox, `playerctl` and the Rust media
 provider were healthy: an isolated helper published media immediately, while
 the original host showed it only after replacing its helper. The bounded work
 is recorded in
-[the active LVR-3 plan](docs/plans/active/2026-08-05-late-provider-insertion.md).
+[the archived LVR-3 plan](docs/plans/archive/2026-08-05-late-provider-insertion.md).
 
 The separate GPU-loss audit found two confirmed PCIe device-loss boots after
 Celestina-shaped DDC activity and concrete process-lifecycle defects in the
 shell. It did not prove causation. The author authorized source and record
-corrections while every executable check remains suspended for a long
-Noctalia-only observation. The evidence boundaries are recorded in the
+corrections during a long Noctalia-only observation, then ended that hold and
+completed repeated controlled transitions without recurrence. The evidence
+boundaries are recorded in the
 [system audit](docs/evidence/2026-08-05-gpu-loss-system-audit.md) and
 [Celestina lifecycle record](docs/evidence/2026-08-05-ddc-process-lifecycle.md).
+
+LVR-3 closed on 2026-08-07 after the corrected first-generation media, tray,
+Bluetooth retention, output-triggered DDC discovery and clean
+Noctalia-to-Celestina-to-Noctalia lifecycle all passed live. The Wi-Fi reading
+remained present throughout the exercised session; a deliberate offline test
+was not safe in that network layout and remains explicitly deferred rather
+than inferred.
 
 ## LVR-2 — Live validation follow-up
 
@@ -323,6 +318,17 @@ retained and that conclusion is applied through a new bounded unit.
 
 No implementation is planned. `noctalia-greeter` is an independent greetd
 package and remains in place unless observed failures justify a replacement.
+
+## UX-1 — Network and Bluetooth indicator menus (active)
+
+**Outcome:** each panel indicator opens a keyboard- and pointer-accessible menu
+that shows bounded provider-owned state and exposes only actions whose result is
+confirmed by a later provider reading.
+
+The active implementation order, exclusions and exit checks are in
+[the UX-1 plan](docs/plans/active/2026-08-07-network-bluetooth-indicator-menus.md).
+This checkpoint does not add Wi-Fi credential handling, Bluetooth pairing,
+radio discovery policy or a second polling/runtime path.
 
 ## Beyond replacement
 

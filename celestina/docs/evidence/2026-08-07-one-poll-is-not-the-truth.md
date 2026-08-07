@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-07
 - **Scope:** `LVR-3-F`; plan
-  [late-provider-insertion](../plans/active/2026-08-05-late-provider-insertion.md);
+  [late-provider-insertion](../plans/archive/2026-08-05-late-provider-insertion.md);
   the defects recorded by the 2026-08-07 controlled transitions in
   [VALIDATION.md](../../VALIDATION.md)
 - **Environment:** the GPU safety hold ended on 2026-08-07 with `VAL-GPU-01`

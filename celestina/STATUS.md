@@ -1,18 +1,16 @@
 # Celestina status
 
 - **Updated:** 2026-08-07
-- **Implementation:** R0-R5, R7, R8's departure slice, LVR-1 and LVR-2 are
-  complete; LVR-3 is active and delivered `LVR-3-F` in celestina 0.6.8. Its
-  live rerun opened planned corrective unit `LVR-3-G` for network retention and
-  registered tray items that still do not reach the visible drawer
-- **Author validation:** the 2026-08-05 follow-up passed clipboard remediation,
-  tray/notification protocol flows, Spanish copy, startup diagnostics, portal
-  integration and output hotplug, but failed first-generation media,
-  notification-centre Escape and held-child cleanup. Version 0.6.2 corrects
-  notification Escape and held-child cleanup await their focused live rerun.
-  The 0.6.2 media rerun failed again and is now owned by LVR-3. See
-  [VALIDATION.md](VALIDATION.md) and the
-  [follow-up evidence](docs/evidence/2026-08-05-live-validation-follow-up.md)
+- **Implementation:** R0-R5, R7, R8's departure slice, LVR-1 through LVR-3 and
+  the static hardening previously drafted as `AUD-1` are complete. `UX-1` is
+  active to add direct, truthful network and Bluetooth indicator menus
+- **Author validation:** the author closed the LVR-3 phase on 2026-08-07 after
+  first-generation media, the four-item tray, Bluetooth state retention,
+  output-triggered DDC rediscovery, outside-click dismissal and a clean
+  Noctalia to Celestina to Noctalia lifecycle all passed. Wi-Fi remained visible
+  throughout the exercised session; deliberate offline testing was unsafe in
+  the live network layout and remains deferred rather than inferred. See
+  [VALIDATION.md](VALIDATION.md)
 - **Live migration:** Noctalia remains the rollback and must not be removed.
   `scripts/handover-status.sh` reports the unrecorded responsibilities, and the
   removal tool refuses while any are unbuilt, unrecorded or failed
@@ -75,22 +73,22 @@
   `~/.local`; the session was not replaced. Recorded in
   [one poll is not the truth](docs/evidence/2026-08-07-one-poll-is-not-the-truth.md).
 
-- Uncommitted in the checkout: `LVR-3-E`. The helper target gathers its sources
-  at configure time rather than naming ten of nineteen by hand. Source and text
-  only, under the hold, and not configured.
+- Delivered in celestina 0.6.7: `LVR-3-E`. The helper target gathers its sources
+  at configure time rather than naming ten of nineteen by hand. Later canonical
+  exits compiled and exercised that gathered target after the hold ended.
 
-- Uncommitted in the checkout: `LVR-3-D`. A snapshot the host would discard is
+- Delivered in celestina 0.6.6: `LVR-3-D`. A snapshot the host would discard is
   now skipped rather than treated as the end of the Niri session, so an
-  oversized frame no longer costs a reconnect loop against the compositor.
-  Source and text only, under the hold.
+  oversized frame no longer costs a reconnect loop against the compositor. It
+  is included in the verified 0.6.8 bundle.
 
-- Uncommitted in the checkout: `LVR-3-C`, repairing two defects `LVR-3-B`
+- Delivered in celestina 0.6.5: `LVR-3-C`, repairing two defects `LVR-3-B`
   introduced into the helper-restart path. The escalation timer now names the
   instance it was armed against, so it cannot kill the replacement that started
   inside the grace window; and the restart delay is decided by the handler that
   knows how the helper exited, so the spacing an unclean exit earns is applied
-  rather than lost to a race. Source and text only: under the GPU hold nothing
-  here has been compiled, tested or run.
+  rather than lost to a race. Later canonical exits and controlled shutdowns
+  exercised the complete lifecycle after the hold ended.
 
 - A C++20/Qt 6.9+ host maps one top layer-shell panel per output and owns the
   `org.celestina.Shell1` session interface.
@@ -104,9 +102,8 @@
 - The panel contains workspace/window, system, media, audio, DDC and tray
   paths. Workspace, audio, microphone, DDC, CPU/RAM and tray paths passed the
   follow-up. Version 0.6.2 gives the first helper generation a bounded fast
-  MPRIS discovery window, so a player registering just after the helper no
-  longer needs a helper restart. The focused policy regression passes; the live
-  full-shell rerun remains author validation.
+  MPRIS discovery window, and 0.6.8 replaces polling with MPRIS signals. The
+  final full-shell rerun passed without replacing the helper.
 - The launcher and clipboard-history overlays are implemented and use the same
   surface and command contracts.
 - Typed volume, mute and brightness session verbs enter through
@@ -219,17 +216,15 @@ the author reruns them against 0.6.2.
 
 ## Records
 
-- Active plan: [LVR-3 late provider insertion](docs/plans/active/2026-08-05-late-provider-insertion.md)
+- Active plan: [UX-1 network and Bluetooth indicator menus](docs/plans/active/2026-08-07-network-bluetooth-indicator-menus.md)
 - Celestina 0.6.8 is built, verified and deployed by the canonical production
   exit: 181 shell-core tests, 46 helper unit tests and six tests across three
   integration binaries, Clippy and `cargo fmt` clean, QML lint, CTest 15/15 and the
-  eight-second offscreen release smoke. The shell has not been activated and Noctalia still
-  owns the session.
-- Planned next checkpoint: `AUD-1` static audit hardening in
-  [ROADMAP.md](ROADMAP.md), from the
-  [2026-08-05 static shell audit](docs/evidence/2026-08-05-static-shell-audit.md);
-  it opens no plan and runs nothing while LVR-3 and the GPU hold remain active
-- Last completed plan: [LVR-2 live validation follow-up](docs/plans/archive/2026-08-05-live-validation-follow-up.md)
+  eight-second offscreen release smoke. The author then completed the controlled
+  live rerun and restored Noctalia, which still owns the session.
+- Current checkpoint: `UX-1` direct network and Bluetooth indicator menus;
+  implementation begins with bounded pure-domain inventory contracts
+- Last completed plan: [LVR-3 late provider insertion](docs/plans/archive/2026-08-05-late-provider-insertion.md)
 - The milestone before it: [R8 Noctalia departure](docs/plans/archive/2026-08-04-r8-noctalia-departure.md)
 - Open product questions: [discussion queue](docs/discussions/README.md)
 - Accepted product decisions: [decision index](docs/decisions/README.md)

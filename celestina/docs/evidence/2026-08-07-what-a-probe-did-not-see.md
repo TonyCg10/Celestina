@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-07
 - **Scope:** `LVR-3-G`; plan
-  [late-provider-insertion](../plans/active/2026-08-05-late-provider-insertion.md);
+  [late-provider-insertion](../plans/archive/2026-08-05-late-provider-insertion.md);
   the two cases the author's rerun of `LVR-3-F` still failed — `VAL-R1-NET` and
   `VAL-R1-TRAY` in [VALIDATION.md](../../VALIDATION.md)
 - **Environment:** Noctalia owned the session throughout. Celestina was built,

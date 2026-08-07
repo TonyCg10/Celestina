@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-06
 - **Scope:** `LVR-3-C`; plan
-  [late-provider-insertion](../plans/active/2026-08-05-late-provider-insertion.md);
+  [late-provider-insertion](../plans/archive/2026-08-05-late-provider-insertion.md);
   findings `H1` and `H2` of the
   [light monorepo audit](../../../docs/evidence/2026-08-06-light-monorepo-audit.md),
   both introduced by `LVR-3-B`

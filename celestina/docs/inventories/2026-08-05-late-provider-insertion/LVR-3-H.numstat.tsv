@@ -1,0 +1,35 @@
+# LVR-3-H exact change inventory
+
+Base revision	497d60f86faa85a2e67b0244bb4627d508e06c8a
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/docs/plans/active/2026-08-05-late-provider-insertion.md
+Pathspec	celestina/docs/plans/archive/2026-08-05-late-provider-insertion.md
+Pathspec	celestina/docs/plans/active/README.md
+Pathspec	celestina/docs/plans/archive/README.md
+Pathspec	celestina/docs/evidence/2026-08-06-helper-restart-ownership.md
+Pathspec	celestina/docs/evidence/2026-08-06-helper-sources-gathered.md
+Pathspec	celestina/docs/evidence/2026-08-06-oversized-frame-is-skipped.md
+Pathspec	celestina/docs/evidence/2026-08-07-one-poll-is-not-the-truth.md
+Pathspec	celestina/docs/evidence/2026-08-07-what-a-probe-did-not-see.md
+Pathspec	celestina/docs/evidence/2026-08-07-lvr3-archive.md
+Pathspec	celestina/docs/plans/active/2026-08-07-network-bluetooth-indicator-menus.md
+Pathspec	celestina/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-H.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+39	33	c68fe492f5b44c3738cc30e44f8a4cbb69cc59501108679476d8eb51c8b11fee	celestina/ROADMAP.md
+27	32	516df6f14c8e50539ba8785da9bbc055344f9b2fb9c8e1539119257e646881aa	celestina/STATUS.md
+0	193	deleted	celestina/docs/plans/active/2026-08-05-late-provider-insertion.md
+201	0	c1e477b3be954e10768c6ac56d5a132fe2c0d7c855b9bb2cc5fca0f74cf38d50	celestina/docs/plans/archive/2026-08-05-late-provider-insertion.md
+1	1	97422c9268ef9ca0517ade9f3b6af761da6d655247b3261fdc5298ccb6cf48ca	celestina/docs/plans/active/README.md
+1	0	774572daa9288633c78af6c3a9d0ce23b52b794baa506db04483aa4294bca5b0	celestina/docs/plans/archive/README.md
+1	1	a7865a6be4311bc6b830ff71ac5b7eaf610f42aca845429063b708c91a93c2b3	celestina/docs/evidence/2026-08-06-helper-restart-ownership.md
+1	1	93f596f6dd0b04fbca40890dd9e069293e9a564f45ce9971438afb691ed7c371	celestina/docs/evidence/2026-08-06-helper-sources-gathered.md
+1	1	247da345898eeca2a59fe67d88e62a16762681c3243382751cb0937e1a9d3713	celestina/docs/evidence/2026-08-06-oversized-frame-is-skipped.md
+1	1	94937c5f82577d19e9c28f920ad9d22cb804ac11a71d3788ca64addc415e9e46	celestina/docs/evidence/2026-08-07-one-poll-is-not-the-truth.md
+1	1	4a7ff4b6103122d1db6a68c913f3ae9c93c978e80efb0aace1388835395ded70	celestina/docs/evidence/2026-08-07-what-a-probe-did-not-see.md
+48	0	cbe521c85ba6e037fe51be228272420d0af48df1634ca5f5adb0debc4ae0d914	celestina/docs/evidence/2026-08-07-lvr3-archive.md
+95	0	b2dcc07b964f251593f93d8e68b38701601516cd8b921e2a26de77de5ceded92	celestina/docs/plans/active/2026-08-07-network-bluetooth-indicator-menus.md
+35	0	self	celestina/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-H.numstat.tsv

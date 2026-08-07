@@ -28,6 +28,11 @@ implementation unit; it does not rewrite the completed milestone.
   return-to-first-fence interval without a matching kernel error. This is
   strong negative reproduction evidence, not proof that a lower-probability
   driver or transition fault cannot recur.
+  A final 0.6.8 transition repeated first-generation media, tray takeover,
+  Bluetooth power cycling and output-triggered DDC discovery, then stopped the
+  complete transient cgroup before restoring Noctalia. Four minutes after that
+  return — well beyond the retained 82-second interval — the kernel still held
+  no matching fence, VCN, flip, PCIe or device-loss error.
 - **Interpretation:** recurrence disproves Celestina as a necessary condition;
   non-recurrence is strong evidence against the handover but does not identify
   the exact failing kernel, firmware, DDC, PCIe or hardware layer.
@@ -60,23 +65,20 @@ implementation unit; it does not rewrite the completed milestone.
 
 ## VAL-R1-01 — Integrated bar interactions
 
-- **Status:** failed
+- **Status:** passed
 - **Related implementation:** R1 (complete)
 - **Requires:** live media, audio, DDC and tray providers
 - **Procedure:** exercise artwork/transport, speaker and microphone gestures,
   DDC burst coalescing and one tray menu action with provider loss cases.
 - **Pass condition:** every action reports confirmed or failed truthfully and a
   slow/missing provider does not block or stale the rest of the bar.
-- **Result:** failed again on 2026-08-05. Audio, microphone, DDC, CPU/RAM,
-  workspaces, OSD, tray interactions and provider isolation passed. Media is
-  usable once published, including pause/resume and player disappearance and
-  return, but a full Celestina start misses an already-playing Firefox source
-  that `playerctl` sees. Restarting only `celestina-provider-adapter` makes that
-  source appear immediately.
-- **Remediation:** active `LVR-3-A` in [late provider insertion](docs/plans/active/2026-08-05-late-provider-insertion.md) owns the late provider insertion boundary.
-  The 0.6.2 full-shell rerun failed again: its original helper omitted media
-  visually, an isolated helper published it, and replacing only the original
-  helper made it appear.
+- **Result:** passed on 2026-08-07 against celestina 0.6.8. An already-present
+  MPRIS player appeared in the first helper generation without a restart;
+  title, play, pause, progress, disappearance and return followed the player.
+  Audio, microphone, DDC, CPU/RAM, workspaces, OSD, all four registered tray
+  items and provider isolation remained healthy in the same live session.
+- **Remediation:** completed by `LVR-3-A` through `LVR-3-G` in
+  [late provider insertion](docs/plans/archive/2026-08-05-late-provider-insertion.md).
 - **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ### 2026-08-07 controlled transition observations
@@ -197,7 +199,7 @@ The other three are corrected in the same delivery.
 
 ## VAL-R1-OVERLAY — Every transient surface closes on a click outside it
 
-- **Status:** pending
+- **Status:** passed
 - **Related implementation:** `LVR-3-F` (complete)
 - **Requires:** live Niri session and celestina 0.6.8
 - **Procedure:** open the launcher, the clipboard history, the notification
@@ -210,12 +212,14 @@ The other three are corrected in the same delivery.
   bounds; the indicator that opened the notification centre closes it in one
   click; focus returns to the previously active application exactly once, and
   no surface reopens, flickers or stays mapped after a dismissal.
-- **Result:** not run
+- **Result:** passed on 2026-08-07 against celestina 0.6.8. Focused overlays,
+  the tray drawer and tray-item menus closed on the first outside click without
+  losing an item, remapping the surface or requiring a second toggle.
 - **Evidence:** [the 2026-08-07 corrections](docs/evidence/2026-08-07-one-poll-is-not-the-truth.md)
 
 ## VAL-R1-NET — A slow probe does not erase a live link
 
-- **Status:** failed
+- **Status:** deferred
 - **Related implementation:** `LVR-3-F` (complete)
 - **Requires:** live Niri session, celestina 0.6.8 and a Wi-Fi link in use
 - **Procedure:** use the session normally for long enough to cross several of
@@ -224,12 +228,14 @@ The other three are corrected in the same delivery.
 - **Pass condition:** the link text never disappears while the connection is in
   use, and a real disconnection removes it within about ten seconds rather than
   persisting.
-- **Result:** failed on 2026-08-07 against celestina 0.6.8. The Wi-Fi link
-  remained connected and in use, but its panel reading still disappeared.
-  `LinkTracker` retains an unreadable observation for only three five-second
-  polls and withdraws the provider on the fourth; the corrective policy does
-  not yet survive the longer unreadable run observed live.
-- **Remediation:** implemented by `LVR-3-G` in [late provider insertion](docs/plans/active/2026-08-05-late-provider-insertion.md). The unreadable
+- **Result:** partial on the final 2026-08-07 rerun against celestina 0.6.8.
+  Wi-Fi remained the default route and its panel text stayed present throughout
+  the exercised Celestina session, including media, tray and monitor hotplug.
+  The deliberate offline half was not run: the connected Ethernet link served
+  a laptop image-mirroring path rather than Internet, so forcing NetworkManager
+  down from the test terminal was not a safe way to preserve control of the
+  session. The author closed this phase with that limitation explicit.
+- **Remediation:** implemented by `LVR-3-G` in [late provider insertion](docs/plans/archive/2026-08-05-late-provider-insertion.md). The unreadable
   hold is removed rather than raised: a probe that saw nothing can no longer
   retire a link at any repetition count, and only a poll that positively found
   no default route can — twice in a row, so about ten seconds. A route naming a
@@ -241,7 +247,7 @@ The other three are corrected in the same delivery.
 
 ## VAL-R1-DDC — Prompt brightness rediscovery on output hotplug
 
-- **Status:** pending
+- **Status:** passed
 - **Related implementation:** `LVR-3-F` (complete)
 - **Requires:** live Niri session, celestina 0.6.8, and an output that can be
   disabled and enabled
@@ -250,12 +256,16 @@ The other three are corrected in the same delivery.
 - **Pass condition:** the control appears within seconds of the panel mapping
   rather than at the 300-second refresh, only one `ddcutil` process exists at
   any moment during the transition, and no `ddcutil` survives shutdown.
-- **Result:** not run
+- **Result:** passed on 2026-08-07 against celestina 0.6.8. Enabling a disabled
+  output mapped its panel and exposed its working brightness control within
+  seconds; disabling it removed the affected surfaces. No concurrent or
+  surviving `ddcutil` process, DDC contention or matching GPU error was
+  observed.
 - **Evidence:** [one poll is not the truth](docs/evidence/2026-08-07-one-poll-is-not-the-truth.md)
 
 ## VAL-R5-BT — Bluetooth stays visible while the adapter is on
 
-- **Status:** pending
+- **Status:** passed
 - **Related implementation:** `LVR-3-F` (complete)
 - **Requires:** live Niri session, celestina 0.6.8, and an adapter that can be
   powered off and on
@@ -265,7 +275,12 @@ The other three are corrected in the same delivery.
 - **Pass condition:** a powered adapter with no connections reads as present and
   idle rather than vanishing, a connected device is counted and named, and a
   powered-off adapter says so instead of disappearing.
-- **Result:** not run
+- **Result:** passed on 2026-08-07 against celestina 0.6.8 for the retention
+  defect this case remediates. The indicator remained present with no connected
+  device, remained present while the adapter was powered off, and returned to
+  its powered state without restarting the provider. Direct device selection
+  is not an indicator action yet; the future `UX-1` checkpoint owns network and
+  Bluetooth menus rather than extending this corrective unit.
 - **Evidence:** [one poll is not the truth](docs/evidence/2026-08-07-one-poll-is-not-the-truth.md)
 
 ## VAL-R1-02 — StatusNotifierWatcher takeover
@@ -286,7 +301,7 @@ The other three are corrected in the same delivery.
 
 ## VAL-R1-TRAY — Every registered active item reaches the open drawer
 
-- **Status:** failed
+- **Status:** passed
 - **Related implementation:** `LVR-3-F` (complete)
 - **Requires:** a live Niri session, celestina 0.6.8, and Slack and Solaar
   registered as StatusNotifierItems
@@ -295,15 +310,11 @@ The other three are corrected in the same delivery.
 - **Pass condition:** every bounded active registration that answers with a
   usable item is present in the open drawer, with a name fallback when its icon
   cannot be resolved.
-- **Result:** failed on 2026-08-07. Celestina's watcher listed four active
-  registrations. Slack's Chromium item answered with its pixmap and menu;
-  Solaar answered with `battery-good`, title `Solaar` and its menu. The author
-  still reported both absent from the tray. This proves registration and
-  foreign-item properties are healthy, but does not yet isolate whether the
-  loss is in the host's published model, the drawer's collapsed/open state or
-  right-flank clipping. The next pass must observe those three boundaries
-  separately rather than modify D-Bus parsing on inference.
-- **Remediation:** implemented by `LVR-3-G` in [late provider insertion](docs/plans/active/2026-08-05-late-provider-insertion.md), which found a
+- **Result:** passed on the final 2026-08-07 rerun against celestina 0.6.8. The
+  watcher and folded count reported four active registrations, and Slack,
+  Solaar, NetworkManager and Blueman all reached the open drawer. Left-click,
+  right-click and outside-click dismissal worked without any item disappearing.
+- **Remediation:** implemented by `LVR-3-G` in [late provider insertion](docs/plans/archive/2026-08-05-late-provider-insertion.md), which found a
   real defect by walking the whole D-Bus path against a private bus instead of
   reasoning about the parts. A registry read rebuilt the registration list
   wholesale from the snapshot its reply carried, so an application registering
@@ -316,9 +327,9 @@ The other three are corrected in the same delivery.
   flank layout were checked too and hold; the folded drawer additionally now
   shows how many items are behind its chevron, which it never did. Whether this
   defect is what the author hit, or the unreadable folded state, or both, is an
-  inference this build cannot settle. No status is rewritten, nothing is
-  permanently unfolded and no application is special-cased. This case stays
-  failed until the author opens the drawer and reports what is in it.
+  inference the automated build alone could not settle. No status is rewritten,
+  nothing is permanently unfolded and no application is special-cased; the
+  final live drawer observation closes the case.
 - **Evidence:** [what a probe did not see](docs/evidence/2026-08-07-what-a-probe-did-not-see.md)
 
 ## VAL-R2-01 — Deferred launcher edge cases

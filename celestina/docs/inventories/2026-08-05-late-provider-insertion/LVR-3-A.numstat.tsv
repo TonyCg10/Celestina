@@ -1,0 +1,15 @@
+# LVR-3-A exact change inventory
+
+Base revision	497d60f86faa85a2e67b0244bb4627d508e06c8a
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-08-07-lvr3-validation-closure.md
+Pathspec	celestina/docs/plans/archive/2026-08-05-late-provider-insertion.md
+Pathspec	celestina/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-A.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+48	37	7557cd8aff3b88e267d0db1590de374b7d38305e38bf47289e531935b6c6f2e6	celestina/VALIDATION.md
+48	0	2dc82bd8907daf32d03556295f84d7db955cb71587482435616d6721d3a79fe1	celestina/docs/evidence/2026-08-07-lvr3-validation-closure.md
+201	0	c1e477b3be954e10768c6ac56d5a132fe2c0d7c855b9bb2cc5fca0f74cf38d50	celestina/docs/plans/archive/2026-08-05-late-provider-insertion.md
+15	0	self	celestina/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-A.numstat.tsv

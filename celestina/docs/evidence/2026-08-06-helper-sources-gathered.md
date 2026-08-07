@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-06
 - **Scope:** `LVR-3-E`; plan
-  [late-provider-insertion](../plans/active/2026-08-05-late-provider-insertion.md);
+  [late-provider-insertion](../plans/archive/2026-08-05-late-provider-insertion.md);
   a low finding of the
   [light monorepo audit](../../../docs/evidence/2026-08-06-light-monorepo-audit.md)
 - **Environment:** source and text only. The GPU safety hold stands, so nothing
