@@ -1,0 +1,25 @@
+# UX-1-A exact change inventory
+
+Base revision	6d23b25627a8e3a6c79033cf2b385edf01ba2d8b
+Pathspec	celestina-rs/crates/celestina-shell-core/src/bluetooth.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/inventory.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/network.rs
+Pathspec	celestina/src/provider_adapter/session.rs
+Pathspec	celestina/src/provider_adapter/tools.rs
+Pathspec	celestina/docs/plans/active/2026-08-07-network-bluetooth-indicator-menus.md
+Pathspec	celestina/docs/evidence/2026-08-07-connectivity-inventory-contract.md
+Pathspec	celestina/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-A.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+405	52	5af152c6fba3fe2def6d8522193d384166b1c5a37bff903e3335528985fc1ba5	celestina-rs/crates/celestina-shell-core/src/bluetooth.rs
+280	0	13dba47ed3d0b13512831a67c677244f44ef7ee07567ce53c4a88b802bbbd74d	celestina-rs/crates/celestina-shell-core/src/inventory.rs
+4	0	ea3e6e076af10be128298601e146348bc8c468d8c330cfc7329d0c63abd07462	celestina-rs/crates/celestina-shell-core/src/lib.rs
+759	0	c0135fdab9813ef9e8733dfe74be319858f79418aebca1b658293b01c6f20188	celestina-rs/crates/celestina-shell-core/src/network.rs
+90	45	e73a955b74633cb44c28f7de307638f157014b2e7e8e54ce533c12d54cc2d3fd	celestina/src/provider_adapter/session.rs
+100	12	d1a0d53e0f803d7101ac7b9737281b0dfc8f6e9adcc0edaabf65ab6003be6f4c	celestina/src/provider_adapter/tools.rs
+48	2	45ca1f0ff817164c92c06e350869c9b03c46a46be4b8fc1372d6a40b47690053	celestina/docs/plans/active/2026-08-07-network-bluetooth-indicator-menus.md
+62	0	d90dd7d0af18c48cd3d6be0aefca6ce36c4a7f85f55116ccc148f7a4aff12a00	celestina/docs/evidence/2026-08-07-connectivity-inventory-contract.md
+25	0	self	celestina/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-A.numstat.tsv

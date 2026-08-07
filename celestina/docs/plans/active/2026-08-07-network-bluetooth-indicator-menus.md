@@ -81,15 +81,61 @@ the requested state.
 
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
-| UX-1-A | `celestina:` | active | `celestina-rs/crates/celestina-shell-core/src/{network,bluetooth}.rs`; `celestina/src/provider_adapter/session.rs`; focused tests | pending | Publish bounded inventories while preserving the current summary contract | pending | deferred |
+| UX-1-A | `celestina:` | done | [inventory](../../inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-A.numstat.tsv) | 9 files, +1773/-111 | Publish bounded inventories while preserving the current summary contract | [evidence](../../evidence/2026-08-07-connectivity-inventory-contract.md) | deferred |
 | UX-1-B | `celestina:` | planned | aggregate provider command path; bounded tool execution; focused tests | pending | Execute only saved/known actions and confirm them from later observations | pending | deferred |
 | UX-1-C | `celestina:` | planned | panel indicators, transient menu surfaces, QML registration and contract tests | pending | Make both indicators directly interactive and dismissible | pending | `VAL-UX-1` |
 | UX-1-D | `celestina:` | planned | version, evidence, validation hand-off and exact inventory | pending | Build, verify and deploy the completed checkpoint without activation | pending | `VAL-UX-1` |
 
 ## Active unit boundary
 
-`UX-1-A` is the only authorized product unit. It owns the pure network and
+`UX-1-A` is complete. It owns the pure network and
 Bluetooth inventory types/parsers and the additive snapshot publication in the
 existing session provider. It may update `lib.rs` only to expose owned domain
 types and may add focused tests beside those paths. It does not own commands,
 QML, surfaces, versioning or production delivery yet.
+
+### Boundary refined during implementation — 2026-08-07
+
+Two paths were added to the unit after inspection showed the declared ones
+could not hold the behaviour honestly. Both are recorded here before the
+delivery inventory exists, and neither widens the unit's intent.
+
+- `celestina-shell-core/src/inventory.rs`. Both inventories need the same three
+  answers — the tool is absent, the tool did not answer, the tool answered —
+  and the same rule that an unreadable poll republishes the last list rather
+  than an empty one. Stating that twice beside two different parsers would have
+  been two owners for one invariant, so it is one module with two consumers.
+- `celestina/src/provider_adapter/tools.rs`. `run_bounded` collapsed "not
+  installed" and "did not answer" into `None`. A summary widget cannot tell
+  those apart and does not need to; a list must, because on a session without
+  the tool an empty list is permanently correct and on a session with a slow one
+  it erases what was already known. `probe_bounded*` is now the single
+  implementation and the existing `run_bounded*` entries narrow its answer, so
+  no caller has a second path and none of them changed behaviour.
+
+`UX-1-A` remains `active`. Code, tests and guards are complete; the evidence
+record and the exact inventory that its `done` state requires are not, and this
+unit alone delivers nothing a person can see.
+
+### Recorded limitation — a saved profile's SSID
+
+`nmcli connection show` cannot report the network a profile joins. Its terse
+field list is exactly `NAME,UUID,TYPE,TIMESTAMP,TIMESTAMP-REAL,AUTOCONNECT,
+AUTOCONNECT-PRIORITY,READONLY,DBUS-PATH,ACTIVE,DEVICE,STATE,ACTIVE-PATH,PORT,
+FILENAME`, verified read-only against this session's own `nmcli`, and asking for
+`802-11-wireless.ssid` there is rejected as an invalid field. The SSID is
+reachable only per profile, which would be one process per row and is refused.
+
+So `KnownNetwork.ssid` is `Option<String>` and is never inferred from `NAME`: a
+profile's label and its network are different things that agree only by
+convention. The one attribution a single bounded run supports is the active
+profile's — NetworkManager attaches one profile to a device at a time and
+`nmcli device wifi list` marks the access point in use, so that pairing is read
+rather than guessed. Every other profile keeps `ssid: None` and therefore
+`Availability::Unknown`.
+
+`Availability::OutOfRange` consequently requires both a known SSID and a scan
+that answered without it. It is reachable in the domain and tested there, and
+with today's inputs only the active profile can reach it. If UX-1-B needs
+availability for inactive profiles, the bounded way in is NetworkManager's D-Bus
+API — one call for all profiles — not a process per row.

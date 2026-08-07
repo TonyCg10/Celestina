@@ -16,12 +16,13 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use celestina_shell_core::inventory::Answer;
 use celestina_shell_core::runtime::ProviderRuntime;
 use celestina_shell_core::snapshot::{Payload, ProviderId};
-use celestina_shell_core::{bluetooth, network, power};
+use celestina_shell_core::{bluetooth, inventory, network, power};
 use serde_json::Value;
 
-use super::tools::{lock_runtime, run_bounded};
+use super::tools::{lock_runtime, probe_bounded, run_bounded};
 
 const INTERVAL: Duration = Duration::from_secs(5);
 
@@ -101,68 +102,108 @@ fn observe_network() -> network::Observation {
     network::observe_with(&route, devices.as_deref())
 }
 
+/// The saved Wi-Fi networks, annotated with the scan results the session
+/// already had.
+///
+/// `--rescan no` is load-bearing: it reports what `NetworkManager` last saw and
+/// starts no scan of its own, so a poll every five seconds neither drives the
+/// radio nor interrupts a connection. Nothing here is a write.
+///
+/// `IN-USE` is asked for because it is the one field that lets a saved profile
+/// be related to a real SSID in a single bounded run — `connection show` has no
+/// SSID field at all, and asking per profile would be one process per row.
+fn observe_known_networks() -> inventory::Reading<network::KnownNetwork> {
+    let saved = probe_bounded(
+        "nmcli",
+        &["-t", "-f", "UUID,NAME,TYPE,DEVICE", "connection", "show"],
+    );
+    let visible = probe_bounded(
+        "nmcli",
+        &[
+            "-t",
+            "-f",
+            "IN-USE,SSID,SIGNAL",
+            "device",
+            "wifi",
+            "list",
+            "--rescan",
+            "no",
+        ],
+    );
+
+    network::read_known_networks(&saved, &visible)
+}
+
+/// One poll of the Bluetooth listings.
+///
+/// `bluetoothctl show` runs once, and each device listing runs at most once —
+/// so the summary and the inventory describe the same devices rather than two
+/// answers taken moments apart. Read-only: no discovery, pairing, trust,
+/// connect or disconnect is started here.
+fn observe_bluetooth() -> Option<bluetooth::Observation> {
+    let show = probe_bounded("bluetoothctl", &["show"]);
+    // An adapter that is off has no device listing worth spawning a command
+    // for. The domain still owns what that means; this only avoids the spawn.
+    let powered = show
+        .text()
+        .and_then(bluetooth::parse_powered)
+        .unwrap_or(false);
+    let (paired, connected) = if powered {
+        (
+            probe_bounded("bluetoothctl", &["devices", "Paired"]),
+            probe_bounded("bluetoothctl", &["devices", "Connected"]),
+        )
+    } else {
+        (Answer::Unreadable, Answer::Unreadable)
+    };
+
+    bluetooth::observe(&show, &paired, &connected)
+}
+
 fn publish_network(
     runtime: &Mutex<ProviderRuntime>,
     id: &ProviderId,
     tracker: &mut network::LinkTracker,
+    known: &mut inventory::Held<network::KnownNetwork>,
 ) {
+    // The inventory is read whether or not there is a link: a session with no
+    // default route still has saved networks, and that is precisely when a
+    // person wants to see them.
+    let observed = observe_network();
+    let networks = known.observe(observe_known_networks());
     // The last confirmed link outlives any number of probes that failed to read
     // it, and is retired only by a poll that positively saw no default route.
     // Not being able to look is not the same as looking and finding nothing.
-    let Some(link) = tracker.observe(observe_network()) else {
-        // The routing table says nothing is carrying the session, twice over.
-        // The widget says so by leaving, which is the one thing it can say
-        // truthfully.
+    let link = tracker.observe(observed);
+
+    let Some(payload) = network::payload(link, networks) else {
+        // No link, and no inventory either. Nothing here is true enough to
+        // publish, and the widget says so by leaving.
         lock_runtime(runtime).withdraw(id);
         return;
     };
 
-    let mut payload = Payload::new();
-    payload.insert("kind".to_owned(), Value::from(link.kind.clone()));
-    payload.insert(
-        "connection".to_owned(),
-        Value::from(link.connection.clone()),
-    );
     if let Err(error) = lock_runtime(runtime).publish(id, payload) {
         eprintln!("celestina-provider-adapter: network: {error}");
     }
 }
 
-fn publish_bluetooth(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
-    // The adapter is asked about first and separately: an adapter that is off
-    // has no device list worth spawning a second command for, and an adapter
-    // that never answered must not be reported as having none.
-    let show = run_bounded("bluetoothctl", &["show"]);
-    let devices = if show
-        .as_deref()
-        .and_then(bluetooth::parse_powered)
-        .unwrap_or(false)
-    {
-        run_bounded("bluetoothctl", &["devices", "Connected"])
-    } else {
-        None
-    };
-
-    let Some(reading) = bluetooth::reading(show.as_deref(), devices.as_deref()) else {
-        // Nobody could read the adapter. The widget leaves rather than claiming
-        // a state it does not have.
+fn publish_bluetooth(
+    runtime: &Mutex<ProviderRuntime>,
+    id: &ProviderId,
+    known: &mut inventory::Held<bluetooth::KnownDevice>,
+) {
+    let Some(observation) = observe_bluetooth() else {
+        // Nobody could read the adapter, or it is on and its connected listing
+        // did not answer. The widget leaves rather than claiming a state it
+        // does not have.
         lock_runtime(runtime).withdraw(id);
         return;
     };
 
-    let mut payload = Payload::new();
-    payload.insert(
-        "adapter".to_owned(),
-        Value::from(reading.adapter.as_token()),
-    );
-    payload.insert(
-        "count".to_owned(),
-        Value::from(u32::try_from(reading.connected.len()).unwrap_or(u32::MAX)),
-    );
-    if let Some(first) = reading.connected.first() {
-        payload.insert("first".to_owned(), Value::from(first.clone()));
-    }
-    if let Err(error) = lock_runtime(runtime).publish(id, payload) {
+    let devices = known.observe(observation.devices.clone());
+    if let Err(error) = lock_runtime(runtime).publish(id, bluetooth::payload(&observation, devices))
+    {
         eprintln!("celestina-provider-adapter: bluetooth: {error}");
     }
 }
@@ -194,9 +235,13 @@ fn run(runtime: &Mutex<ProviderRuntime>, net: &ProviderId, bt: &ProviderId, prof
     // be in flight at once and a slow one delays the next poll rather than
     // overlapping it.
     let mut link = network::LinkTracker::new();
+    // One holder each, for the same reason: a poll that could not read a list
+    // publishes the last one that was read rather than an empty one.
+    let mut networks = inventory::Held::new();
+    let mut devices = inventory::Held::new();
     loop {
-        publish_network(runtime, net, &mut link);
-        publish_bluetooth(runtime, bt);
+        publish_network(runtime, net, &mut link, &mut networks);
+        publish_bluetooth(runtime, bt, &mut devices);
         publish_power(runtime, profile);
         thread::sleep(INTERVAL);
     }

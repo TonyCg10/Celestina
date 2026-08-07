@@ -31,6 +31,9 @@
 //!   fetched.
 //! - [`handover`] — what the old shell still does for this session, and what it
 //!   would take to stop needing it.
+//! - [`inventory`] — what a listing tool answered, the difference between a
+//!   tool that is absent and one that is merely slow, and what a panel may
+//!   show while it is not answering.
 //! - [`appearance`] — what this session looks like, in the terms the settings
 //!   portal asks in.
 //! - [`niri_colours`] — the compositor's own colours, generated from the same
@@ -60,6 +63,7 @@ pub mod clipboard;
 pub mod coalesce;
 pub mod command;
 pub mod handover;
+pub mod inventory;
 pub mod launcher;
 pub mod lines;
 pub mod media;
