@@ -276,14 +276,22 @@ int main(int argc, char *argv[])
     // The launcher and the clipboard history: two keybind-driven overlays,
     // opened and closed the same way, each loading its own QML component. See
     // `OverlayController`'s own doc for why one class serves both.
-    auto *launcher =
-        new OverlayController(&engine, providers, QStringLiteral("LauncherOverlay"), &app);
+    auto *launcher = new OverlayController(
+        &engine,
+        QStringLiteral("LauncherOverlay"),
+        providers,
+        &app
+    );
     if (!launcher->isEnabled())
         qWarning() << "Celestina is running without its launcher overlay.";
     shell->setLauncherController(launcher);
 
-    auto *clipboard =
-        new OverlayController(&engine, providers, QStringLiteral("ClipboardOverlay"), &app);
+    auto *clipboard = new OverlayController(
+        &engine,
+        QStringLiteral("ClipboardOverlay"),
+        providers,
+        &app
+    );
     if (!clipboard->isEnabled())
         qWarning() << "Celestina is running without its clipboard history overlay.";
     shell->setClipboardController(clipboard);
@@ -307,8 +315,8 @@ int main(int argc, char *argv[])
     // unread indicator or from `celestina msg notifications-toggle`.
     auto *notificationCentre = new OverlayController(
         &engine,
-        providers,
         QStringLiteral("NotificationCenter"),
+        providers,
         &app
     );
     if (!notificationCentre->isEnabled())
@@ -319,8 +327,8 @@ int main(int argc, char *argv[])
     // exist: `celestina msg control-centre-toggle`.
     auto *controlCentre = new OverlayController(
         &engine,
-        providers,
         QStringLiteral("ControlCentre"),
+        providers,
         &app
     );
     if (!controlCentre->isEnabled())
@@ -329,15 +337,13 @@ int main(int argc, char *argv[])
 
     // Ending the session: asked twice in the surface, and answered by whoever
     // owns the session rather than by this shell.
+    // The one overlay that reads no provider: it asks the session to end, so
+    // its bridge is the shell's own request channel.
     auto *sessionMenu = new OverlayController(
         &engine,
-        providers,
         QStringLiteral("SessionMenu"),
+        new SessionActions(shell, &app),
         &app
-    );
-    sessionMenu->setExtraProperties(
-        {{QStringLiteral("shellSource"),
-          QVariant::fromValue(new SessionActions(shell, &app))}}
     );
     if (!sessionMenu->isEnabled())
         qWarning() << "Celestina is running without its session menu.";

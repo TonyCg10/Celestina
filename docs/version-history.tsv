@@ -43,3 +43,4 @@ magnetita	1.0.3	bug	MAG-S1-C	Keep the handshake from spinning when a retry does 
 siderita	1.2.6	bug	SID-G7-H	Keep a cut in its own folder from ending silently
 celestina	0.6.7	bug	LVR-3-E	Convert the helper sources from a list to a glob
 siderita	1.2.7	bug	SID-G7-I	Restore the tab strip label the debt ceiling refuses to move
+celestina	0.6.8	bug	LVR-3-F	Keep transient readings from becoming panel truth

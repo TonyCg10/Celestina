@@ -1,32 +1,87 @@
 //! What the desktop is playing, and the cover it points at.
+//!
+//! MPRIS is an event source, so this listens to it rather than asking. Two
+//! match rules carry everything: names appearing and disappearing under
+//! `org.mpris.MediaPlayer2.*`, and whatever a player says at
+//! `/org/mpris/MediaPlayer2` — `PropertiesChanged` when the track or the
+//! transport moves, `Seeked` when somebody scrubs.
+//!
+//! It used to spawn `playerctl` on a timer: every 500 ms for the first ten
+//! seconds, then every five with no player and every two with one. That is a
+//! subprocess a second, all day, for a reading that changes when somebody
+//! presses a key — and it made a track take seconds to appear. Nothing here
+//! spawns anything now. The only clock left advances the progress bar between
+//! two things a player said, which is arithmetic rather than a question, and
+//! re-reads the current player occasionally so a missed signal cannot strand
+//! the panel on a stale track.
 
+use std::collections::HashMap;
 use std::io::{self, Read};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use celestina_shell_core::bounded;
+use celestina_shell_core::media::{self, Player, Track};
 use celestina_shell_core::runtime::ProviderRuntime;
 use celestina_shell_core::snapshot::{Payload, ProviderId, MAX_TEXT_UNITS};
 use magnetita_core::mpris::{self, MediaAction, PlaybackProgress};
 use serde_json::Value;
+use zbus::blocking::{Connection, MessageIterator};
+use zbus::names::BusName;
+use zbus::zvariant::OwnedValue;
+use zbus::MatchRule;
 
-use super::tools::{lock_runtime, run_bounded};
+use super::tools::lock_runtime;
 
-/// While something is playing the panel is worth updating at this rate; a
-/// position that moves faster than a person reads it is not worth a subprocess.
-const INTERVAL: Duration = Duration::from_secs(2);
-/// With no player at all there is nothing to poll for, so the helper asks less
-/// often rather than spawning `playerctl` twice a second all day.
-const IDLE_INTERVAL: Duration = Duration::from_secs(5);
-/// A player can register on the session bus just after the shell starts. The
-/// first generation probes briefly at human-startup pace before falling back
-/// to the cheap idle cadence; restarting the helper must never be what makes an
-/// already-playing source discoverable.
-const STARTUP_INTERVAL: Duration = Duration::from_millis(500);
-const STARTUP_PROBES: u8 = 20;
+/// How often the progress of a playing track is recomputed. It is a redraw, not
+/// a question: nothing leaves this process on a tick.
+const PROGRESS_TICK: Duration = Duration::from_secs(1);
+/// How often the current player is read again even though it said nothing.
+///
+/// A bounded backstop, not a poll: a player that crashes mid-signal, or a
+/// `PropertiesChanged` this process missed while it was busy, would otherwise
+/// leave the panel showing a track that ended. One `GetAll` per half minute
+/// against one player is the price of that not being possible.
+const RECONCILE: Duration = Duration::from_secs(30);
+
+const PLAYER_INTERFACE: &str = "org.mpris.MediaPlayer2.Player";
+const ROOT_INTERFACE: &str = "org.mpris.MediaPlayer2";
+const PLAYER_PATH: &str = "/org/mpris/MediaPlayer2";
+const PROPERTIES_INTERFACE: &str = "org.freedesktop.DBus.Properties";
 
 pub const NAME: &str = "media";
+
+/// Every player the session has, and the connection that hears them.
+///
+/// A module singleton for the same reason the brightness target is one: there
+/// is exactly one helper process and one media provider in it, and threading a
+/// bus connection through every provider's signature to reach this one would
+/// put media's business in all of them.
+static PLAYERS: OnceLock<Mutex<HashMap<String, Tracked>>> = OnceLock::new();
+static BUS: OnceLock<Connection> = OnceLock::new();
+static STARTED: AtomicBool = AtomicBool::new(false);
+
+/// One player, as this process last heard it, and when that was.
+///
+/// `measured` is not part of the pure reading: it is how long ago the position
+/// below was true, which only the side holding a clock can know.
+struct Tracked {
+    player: Player,
+    measured: Instant,
+}
+
+fn players() -> &'static Mutex<HashMap<String, Tracked>> {
+    PLAYERS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn lock_players() -> std::sync::MutexGuard<'static, HashMap<String, Tracked>> {
+    match players().lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
 
 pub fn spawn(runtime: &Arc<Mutex<ProviderRuntime>>) -> io::Result<()> {
     let Ok(id) = ProviderId::new(NAME) else {
@@ -35,41 +90,72 @@ pub fn spawn(runtime: &Arc<Mutex<ProviderRuntime>>) -> io::Result<()> {
     };
 
     lock_runtime(runtime).register(id.clone());
-    let runtime = Arc::clone(runtime);
+
+    let connection = match Connection::session() {
+        Ok(connection) => connection,
+        Err(error) => {
+            // No session bus is no media, and it is not a reason to fail the
+            // whole helper: every other provider still works.
+            eprintln!("celestina-provider-adapter: media: no session bus: {error}");
+            return Ok(());
+        }
+    };
+    let _ = BUS.set(connection.clone());
+
+    let events_runtime = Arc::clone(runtime);
+    let events_id = id.clone();
+    let events_connection = connection.clone();
     thread::Builder::new()
-        .name(NAME.to_owned())
-        .spawn(move || run(&runtime, &id))?;
+        .name("media-events".to_owned())
+        .spawn(move || listen(&events_connection, &events_runtime, &events_id))?;
+
+    let progress_runtime = Arc::clone(runtime);
+    thread::Builder::new()
+        .name("media-progress".to_owned())
+        .spawn(move || tick(&connection, &progress_runtime, &id))?;
     Ok(())
 }
 
-/// A transport verb on whatever the panel is currently showing. The vocabulary
-/// is the suite's own, not a second dialect.
+/// A transport verb on whatever the panel is currently showing.
+///
+/// The player is asked over its own interface. Nothing is painted here: what
+/// the panel shows next is whatever the player says in the `PropertiesChanged`
+/// that follows, exactly as before — a request that the player ignores changes
+/// nothing on screen, which is the truth.
 pub fn action(verb: &str) -> Result<(), String> {
     let action = MediaAction::parse(verb)
         .ok_or_else(|| format!("'{NAME}' does not serve the verb '{verb}'"))?;
-    let player = active_player().ok_or_else(|| "no player is running".to_owned())?;
-    let subcommand = match action {
-        MediaAction::Play => "play",
-        MediaAction::Pause => "pause",
-        MediaAction::PlayPause => "play-pause",
-        MediaAction::Stop => "stop",
-        MediaAction::Next => "next",
-        MediaAction::Previous => "previous",
+    let member = match action {
+        MediaAction::Play => "Play",
+        MediaAction::Pause => "Pause",
+        MediaAction::PlayPause => "PlayPause",
+        MediaAction::Stop => "Stop",
+        MediaAction::Next => "Next",
+        MediaAction::Previous => "Previous",
     };
 
-    run_bounded("playerctl", &["--player", &player, subcommand])
-        .map(|_| ())
-        .ok_or_else(|| format!("{player} did not accept {subcommand}"))
-}
+    let connection = BUS
+        .get()
+        .ok_or_else(|| "media has no session bus".to_owned())?;
+    let chosen = {
+        let tracked = lock_players();
+        let known: Vec<Player> = tracked.values().map(|entry| entry.player.clone()).collect();
+        media::active(&known).map(|player| player.bus_name.clone())
+    };
+    let player = chosen.ok_or_else(|| "no player is running".to_owned())?;
+    let destination =
+        BusName::try_from(player.clone()).map_err(|_| format!("'{player}' is not a bus name"))?;
 
-/// The player the session is actually listening to: playerctl lists the most
-/// recently active first, which is the one a panel should be showing.
-fn active_player() -> Option<String> {
-    run_bounded("playerctl", &["--list-all"])?
-        .lines()
-        .map(str::trim)
-        .find(|line| !line.is_empty())
-        .map(str::to_owned)
+    connection
+        .call_method(
+            Some(destination),
+            PLAYER_PATH,
+            Some(PLAYER_INTERFACE),
+            member,
+            &(),
+        )
+        .map(|_| ())
+        .map_err(|error| format!("{player} did not accept {member}: {error}"))
 }
 
 /// The cover a player points at, if the panel can show it.
@@ -102,133 +188,532 @@ fn artwork_path(url: &str) -> Option<String> {
     Some(path.to_owned())
 }
 
-/// Where the player is now, in milliseconds, read from the microseconds
-/// playerctl reports beside the metadata. Kept as integers throughout: a
-/// position is an exact count, and turning it into a float to divide would only
-/// add rounding to a number the panel shows to the second.
-fn position_ms(field: &str) -> i64 {
-    field
-        .trim()
-        .parse::<i64>()
-        .ok()
+fn text_of(value: Option<&OwnedValue>) -> String {
+    value
+        .and_then(|value| <&str>::try_from(value).ok())
+        .unwrap_or_default()
+        .to_owned()
+}
+
+/// `xesam:artist` is a list; the panel shows one line, so the first name is the
+/// artist and the rest belong to a tag editor.
+fn first_artist(value: Option<&OwnedValue>) -> String {
+    let Some(value) = value else {
+        return String::new();
+    };
+    if let Ok(names) = Vec::<String>::try_from(value.clone()) {
+        return names
+            .into_iter()
+            .find(|name| !name.is_empty())
+            .unwrap_or_default();
+    }
+    text_of(Some(value))
+}
+
+/// Microseconds as the specification counts them, in the milliseconds the
+/// suite's vocabulary uses. Anything negative or unreadable is `-1`: unknown,
+/// which is not zero.
+fn millis_of(value: Option<&OwnedValue>) -> i64 {
+    value
+        .and_then(|value| i64::try_from(value).ok())
         .filter(|microseconds| *microseconds >= 0)
         .map_or(-1, |microseconds| microseconds / 1_000)
 }
 
-fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
-    let mut startup_probes = STARTUP_PROBES;
+fn track_of(metadata: Option<&OwnedValue>) -> Track {
+    let Some(fields) =
+        metadata.and_then(|value| HashMap::<String, OwnedValue>::try_from(value.clone()).ok())
+    else {
+        return Track::default();
+    };
+
+    Track {
+        title: text_of(fields.get("xesam:title")),
+        artist: first_artist(fields.get("xesam:artist")),
+        album: text_of(fields.get("xesam:album")),
+        art_url: text_of(fields.get("mpris:artUrl")),
+        length_ms: millis_of(fields.get("mpris:length")),
+    }
+}
+
+/// Reads one player and records it. Returns false when the player did not
+/// answer, which is how a name that has gone is noticed without waiting for its
+/// `NameOwnerChanged`.
+fn read_player(connection: &Connection, bus_name: &str) -> bool {
+    let Ok(destination) = BusName::try_from(bus_name.to_owned()) else {
+        return false;
+    };
+
+    let Ok(reply) = connection.call_method(
+        Some(destination.clone()),
+        PLAYER_PATH,
+        Some(PROPERTIES_INTERFACE),
+        "GetAll",
+        &(PLAYER_INTERFACE,),
+    ) else {
+        return false;
+    };
+    let Ok(properties) = reply.body().deserialize::<HashMap<String, OwnedValue>>() else {
+        return false;
+    };
+
+    // The player's own name for itself. A player that does not offer one is not
+    // a broken player — the bus name says enough — so this never fails a read.
+    let identity = connection
+        .call_method(
+            Some(destination),
+            PLAYER_PATH,
+            Some(PROPERTIES_INTERFACE),
+            "Get",
+            &(ROOT_INTERFACE, "Identity"),
+        )
+        .ok()
+        .and_then(|reply| reply.body().deserialize::<OwnedValue>().ok())
+        .map(|value| text_of(Some(&value)))
+        .filter(|identity| !identity.is_empty())
+        .unwrap_or_else(|| media::identity_from_bus_name(bus_name));
+
+    let playing = properties
+        .get("PlaybackStatus")
+        .and_then(|value| <&str>::try_from(value).ok())
+        .is_some_and(|status| status.eq_ignore_ascii_case("Playing"));
+
+    let mut tracked = lock_players();
+    let heard = next_heard(&tracked);
+    tracked.insert(
+        bus_name.to_owned(),
+        Tracked {
+            player: Player {
+                bus_name: bus_name.to_owned(),
+                identity,
+                playing,
+                track: track_of(properties.get("Metadata")),
+                position_ms: millis_of(properties.get("Position")),
+                heard,
+            },
+            measured: Instant::now(),
+        },
+    );
+    true
+}
+
+/// One past the highest anybody has been heard. The counter is the ordering the
+/// pure choice uses; it is never a time, so it cannot go backwards.
+fn next_heard(tracked: &HashMap<String, Tracked>) -> u64 {
+    tracked
+        .values()
+        .map(|entry| entry.player.heard)
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1)
+}
+
+/// The players on the bus right now, asked once at startup. After this the
+/// answer arrives as signals.
+fn seed(connection: &Connection) -> Vec<String> {
+    let Ok(reply) = connection.call_method(
+        Some("org.freedesktop.DBus"),
+        "/org/freedesktop/DBus",
+        Some("org.freedesktop.DBus"),
+        "ListNames",
+        &(),
+    ) else {
+        return Vec::new();
+    };
+
+    reply
+        .body()
+        .deserialize::<Vec<String>>()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|name| media::is_player_name(name))
+        .collect()
+}
+
+fn add_match_rules(connection: &Connection) -> zbus::Result<()> {
+    // Names appearing and disappearing under the player namespace, and whatever
+    // a player says at its own object path. Two rules cover `PropertiesChanged`
+    // and `Seeked` between them, because both are signals from that path.
+    let names = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .interface("org.freedesktop.DBus")?
+        .member("NameOwnerChanged")?
+        .arg0ns("org.mpris.MediaPlayer2")?
+        .build();
+    let players = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .path(PLAYER_PATH)?
+        .build();
+
+    let bus = zbus::blocking::fdo::DBusProxy::new(connection)?;
+    bus.add_match_rule(names)?;
+    bus.add_match_rule(players)?;
+    Ok(())
+}
+
+/// The unique bus name behind each player. A player's own signals arrive from
+/// its unique name, never the well-known one it registered, so without this a
+/// `PropertiesChanged` could not be attributed to the player that sent it.
+fn owner_of(connection: &Connection, bus_name: &str) -> Option<String> {
+    connection
+        .call_method(
+            Some("org.freedesktop.DBus"),
+            "/org/freedesktop/DBus",
+            Some("org.freedesktop.DBus"),
+            "GetNameOwner",
+            &(bus_name,),
+        )
+        .ok()
+        .and_then(|reply| reply.body().deserialize::<String>().ok())
+}
+
+fn listen(connection: &Connection, runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
+    if let Err(error) = add_match_rules(connection) {
+        eprintln!("celestina-provider-adapter: media: {error}");
+        return;
+    }
+
+    // Every player that already exists. A shell starting while something is
+    // playing is the ordinary case, not a race to lose.
+    let mut owners: HashMap<String, String> = HashMap::new();
+    for bus_name in seed(connection) {
+        if read_player(connection, &bus_name) {
+            if let Some(owner) = owner_of(connection, &bus_name) {
+                owners.insert(owner, bus_name);
+            }
+        }
+    }
+    STARTED.store(true, Ordering::Release);
+    publish(runtime, id);
+
+    for message in MessageIterator::from(connection) {
+        let Ok(message) = message else {
+            continue;
+        };
+        let header = message.header();
+        let member = header.member().map(|member| member.as_str().to_owned());
+        let interface = header.interface().map(|name| name.as_str().to_owned());
+
+        match (interface.as_deref(), member.as_deref()) {
+            (Some("org.freedesktop.DBus"), Some("NameOwnerChanged")) => {
+                let Ok((name, _old, new)) =
+                    message.body().deserialize::<(String, String, String)>()
+                else {
+                    continue;
+                };
+                if !media::is_player_name(&name) {
+                    continue;
+                }
+
+                if new.is_empty() {
+                    lock_players().remove(&name);
+                    owners.retain(|_, player| player != &name);
+                } else {
+                    owners.insert(new, name.clone());
+                    read_player(connection, &name);
+                }
+            }
+            (Some(PROPERTIES_INTERFACE), Some("PropertiesChanged"))
+            | (Some(PLAYER_INTERFACE), Some("Seeked")) => {
+                let Some(sender) = header.sender().map(|sender| sender.as_str().to_owned()) else {
+                    continue;
+                };
+                let Some(bus_name) = owners.get(&sender).cloned() else {
+                    continue;
+                };
+                // The signal says something moved; what it moved to is read
+                // from the player rather than pieced together from the changed
+                // set, which may be partial and may name properties this panel
+                // does not show.
+                read_player(connection, &bus_name);
+            }
+            _ => continue,
+        }
+
+        publish(runtime, id);
+    }
+}
+
+/// Advances a playing track's progress, and occasionally asks the current
+/// player what it is really doing.
+fn tick(connection: &Connection, runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
+    let mut reconciled = Instant::now();
     loop {
-        let Some(player) = active_player() else {
+        thread::sleep(PROGRESS_TICK);
+        if !STARTED.load(Ordering::Acquire) {
+            continue;
+        }
+
+        let reconciled_now = if reconciled.elapsed() >= RECONCILE {
+            reconciled = Instant::now();
+            reconcile_with(|bus_name| read_player(connection, bus_name))
+        } else {
+            false
+        };
+
+        // Nothing is published while nothing plays: a paused panel redrawing
+        // once a second is a frame per second for a picture that did not move.
+        let playing = {
+            let tracked = lock_players();
+            tracked.values().any(|entry| entry.player.playing)
+        };
+        // Reconciliation publishes even when it just removed the last playing
+        // peer. Otherwise the branch above would clear the internal player but
+        // leave its previous payload in the complete provider frame forever —
+        // exactly the stale state this backstop exists to prevent.
+        if reconciled_now || playing {
+            publish(runtime, id);
+        }
+    }
+}
+
+/// Re-reads the player the panel currently prefers.
+///
+/// `true` means a player was reconciled and the provider owes a publication,
+/// including when that read failed and removed the last player. Taking the
+/// read as a closure keeps the state transition independently testable without
+/// a real bus or a thirty-second wait.
+fn reconcile_with(mut read: impl FnMut(&str) -> bool) -> bool {
+    let current = {
+        let tracked = lock_players();
+        let known: Vec<Player> = tracked.values().map(|entry| entry.player.clone()).collect();
+        media::active(&known).map(|player| player.bus_name.clone())
+    };
+    let Some(bus_name) = current else {
+        return false;
+    };
+
+    // A player that no longer answers is gone, whatever the bus has got round
+    // to saying about its name. The caller publishes the resulting state.
+    if !read(&bus_name) {
+        lock_players().remove(&bus_name);
+    }
+    true
+}
+
+/// The reading the panel shows, from whichever player the pure choice picked.
+fn publish(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
+    let (chosen, elapsed_ms) = {
+        let tracked = lock_players();
+        let known: Vec<Player> = tracked.values().map(|entry| entry.player.clone()).collect();
+        let Some(player) = media::active(&known) else {
             // No player is not a paused player: the widget goes away rather
             // than keeping the last thing that ever played. The provider stays
             // registered, so a transport command is still answered by media
             // itself — "no player is running" — instead of reading as though
             // this helper had no media provider at all.
+            drop(tracked);
             lock_runtime(runtime).withdraw(id);
-            thread::sleep(no_player_delay(&mut startup_probes));
-            continue;
+            return;
         };
-        startup_probes = 0;
 
-        // One spawn for everything: the shared format, plus the two fields the
-        // suite's vocabulary deliberately leaves out because they move on their
-        // own. The shared parser reads what it knows and ignores the rest.
-        let format = format!(
-            "{}\t{{{{position}}}}\t{{{{mpris:artUrl}}}}",
-            mpris::PLAYERCTL_FORMAT
-        );
-        if let Some(line) = run_bounded(
-            "playerctl",
-            &["--player", &player, "metadata", "--format", &format],
-        ) {
-            let state = mpris::parse_playerctl_state(&player, &line);
-            let mut appended = line.trim_end_matches(['\r', '\n']).split('\t').skip(6);
-            let position = appended.next().map_or(-1, position_ms);
-            let artwork = appended.next().and_then(artwork_path);
+        let elapsed = tracked
+            .get(&player.bus_name)
+            .map_or(0, |entry| entry.measured.elapsed().as_millis());
+        (player.clone(), i64::try_from(elapsed).unwrap_or(i64::MAX))
+    };
 
-            // A track's own text belongs to whoever is playing it and has no
-            // length any player promises. Publishing it whole would make the
-            // frame refuse itself over a title, so what the panel shows is a
-            // bounded prefix and the rest of the bar keeps updating.
-            let mut payload = Payload::new();
-            payload.insert(
-                "player".to_owned(),
-                Value::from(bounded(&state.player, MAX_TEXT_UNITS)),
-            );
-            payload.insert(
-                "title".to_owned(),
-                Value::from(bounded(&state.title, MAX_TEXT_UNITS)),
-            );
-            payload.insert(
-                "artist".to_owned(),
-                Value::from(bounded(&state.artist, MAX_TEXT_UNITS)),
-            );
-            payload.insert(
-                "nowPlaying".to_owned(),
-                Value::from(bounded(&state.now_playing, MAX_TEXT_UNITS)),
-            );
-            payload.insert("playing".to_owned(), Value::from(state.is_playing));
-            // A path is not text to cut: a shortened one names a different file
-            // or none. An artwork reference longer than a field may carry is
-            // therefore dropped, and the panel shows the track without a
-            // picture rather than losing the whole reading.
-            if let Some(artwork) =
-                artwork.filter(|path| path.encode_utf16().count() <= MAX_TEXT_UNITS)
-            {
-                payload.insert("artPath".to_owned(), Value::from(artwork));
-            }
-            match mpris::playback_progress(position, state.length) {
-                PlaybackProgress::Finite {
-                    position_ms,
-                    length_ms,
-                } => {
-                    payload.insert("progress".to_owned(), Value::from("finite"));
-                    payload.insert("positionMs".to_owned(), Value::from(position_ms));
-                    payload.insert("lengthMs".to_owned(), Value::from(length_ms));
-                }
-                PlaybackProgress::Live => {
-                    payload.insert("progress".to_owned(), Value::from("live"));
-                }
-                PlaybackProgress::Unavailable => {
-                    payload.insert("progress".to_owned(), Value::from("unavailable"));
-                }
-            }
+    let position = media::advanced_position(chosen.position_ms, chosen.playing, elapsed_ms);
+    let now_playing = media::now_playing_line(&chosen.track.artist, &chosen.track.title);
 
-            if let Err(error) = lock_runtime(runtime).publish(id, payload) {
-                eprintln!("celestina-provider-adapter: media: {error}");
-            }
+    // A track's own text belongs to whoever is playing it and has no length any
+    // player promises. Publishing it whole would make the frame refuse itself
+    // over a title, so what the panel shows is a bounded prefix and the rest of
+    // the bar keeps updating.
+    let mut payload = Payload::new();
+    payload.insert(
+        "player".to_owned(),
+        Value::from(bounded(&chosen.identity, MAX_TEXT_UNITS)),
+    );
+    payload.insert(
+        "title".to_owned(),
+        Value::from(bounded(&chosen.track.title, MAX_TEXT_UNITS)),
+    );
+    payload.insert(
+        "artist".to_owned(),
+        Value::from(bounded(&chosen.track.artist, MAX_TEXT_UNITS)),
+    );
+    payload.insert(
+        "nowPlaying".to_owned(),
+        Value::from(bounded(&now_playing, MAX_TEXT_UNITS)),
+    );
+    payload.insert("playing".to_owned(), Value::from(chosen.playing));
+    // A path is not text to cut: a shortened one names a different file or
+    // none. An artwork reference longer than a field may carry is therefore
+    // dropped, and the panel shows the track without a picture rather than
+    // losing the whole reading.
+    if let Some(artwork) = artwork_path(&chosen.track.art_url)
+        .filter(|path| path.encode_utf16().count() <= MAX_TEXT_UNITS)
+    {
+        payload.insert("artPath".to_owned(), Value::from(artwork));
+    }
+    match mpris::playback_progress(position, chosen.track.length_ms) {
+        PlaybackProgress::Finite {
+            position_ms,
+            length_ms,
+        } => {
+            payload.insert("progress".to_owned(), Value::from("finite"));
+            payload.insert("positionMs".to_owned(), Value::from(position_ms));
+            payload.insert("lengthMs".to_owned(), Value::from(length_ms));
         }
-
-        thread::sleep(INTERVAL);
-    }
-}
-
-fn no_player_delay(startup_probes: &mut u8) -> Duration {
-    if *startup_probes == 0 {
-        return IDLE_INTERVAL;
+        PlaybackProgress::Live => {
+            payload.insert("progress".to_owned(), Value::from("live"));
+        }
+        PlaybackProgress::Unavailable => {
+            payload.insert("progress".to_owned(), Value::from("unavailable"));
+        }
     }
 
-    *startup_probes -= 1;
-    STARTUP_INTERVAL
+    if let Err(error) = lock_runtime(runtime).publish(id, payload) {
+        eprintln!("celestina-provider-adapter: media: {error}");
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{artwork_path, no_player_delay, IDLE_INTERVAL, STARTUP_INTERVAL};
+    use super::{
+        artwork_path, first_artist, lock_players, millis_of, next_heard, reconcile_with, text_of,
+        track_of, Tracked,
+    };
 
+    use std::collections::HashMap;
     use std::fs;
     use std::io::Write;
     use std::path::PathBuf;
+    use std::sync::Mutex;
+    use std::time::Instant;
+
+    use celestina_shell_core::media::{Player, Track};
+    use zbus::zvariant::{OwnedValue, Value as ZValue};
 
     const PNG_HEADER: &[u8] = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR";
+    static PLAYER_STATE_TEST: Mutex<()> = Mutex::new(());
+
+    fn owned(value: ZValue<'static>) -> OwnedValue {
+        OwnedValue::try_from(value).expect("a value")
+    }
+
+    /// The metadata Firefox publishes, in the shape it publishes it: the artist
+    /// is a list, the length is microseconds, and the cover is a URL.
+    #[test]
+    fn a_players_own_metadata_becomes_the_track_the_panel_shows() {
+        let mut fields: HashMap<String, OwnedValue> = HashMap::new();
+        fields.insert("xesam:title".to_owned(), owned(ZValue::from("Nightcall")));
+        fields.insert(
+            "xesam:artist".to_owned(),
+            owned(ZValue::from(vec![
+                "Kavinsky".to_owned(),
+                "Lovefoxxx".to_owned(),
+            ])),
+        );
+        fields.insert("xesam:album".to_owned(), owned(ZValue::from("OutRun")));
+        fields.insert(
+            "mpris:length".to_owned(),
+            owned(ZValue::from(258_000_000_i64)),
+        );
+        fields.insert(
+            "mpris:artUrl".to_owned(),
+            owned(ZValue::from("https://example.invalid/cover.png")),
+        );
+
+        let metadata = owned(ZValue::from(fields));
+        let track = track_of(Some(&metadata));
+
+        assert_eq!(track.title, "Nightcall");
+        // One line means one artist; the rest belong to a tag editor.
+        assert_eq!(track.artist, "Kavinsky");
+        assert_eq!(track.album, "OutRun");
+        assert_eq!(track.length_ms, 258_000);
+        assert_eq!(track.art_url, "https://example.invalid/cover.png");
+    }
 
     #[test]
-    fn the_first_generation_retries_a_late_player_without_a_restart() {
-        let mut probes = 2;
+    fn a_player_that_says_nothing_leaves_an_empty_track_rather_than_a_wrong_one() {
+        let track = track_of(None);
 
-        assert_eq!(no_player_delay(&mut probes), STARTUP_INTERVAL);
-        assert_eq!(no_player_delay(&mut probes), STARTUP_INTERVAL);
-        assert_eq!(no_player_delay(&mut probes), IDLE_INTERVAL);
+        assert!(track.title.is_empty());
+        assert!(track.artist.is_empty());
+        // Unknown, which is not a length of zero.
+        assert_eq!(track.length_ms, -1);
+    }
+
+    #[test]
+    fn an_unreadable_number_is_unknown_rather_than_zero() {
+        assert_eq!(millis_of(None), -1);
+        assert_eq!(millis_of(Some(&owned(ZValue::from(-1_i64)))), -1);
+        assert_eq!(millis_of(Some(&owned(ZValue::from("soon")))), -1);
+        assert_eq!(millis_of(Some(&owned(ZValue::from(1_500_i64)))), 1);
+    }
+
+    #[test]
+    fn an_artist_field_of_the_wrong_shape_is_read_as_far_as_it_can_be() {
+        // Some players publish a plain string where the specification says a
+        // list. Refusing it would lose a name the panel could have shown.
+        assert_eq!(
+            first_artist(Some(&owned(ZValue::from("Kavinsky")))),
+            "Kavinsky"
+        );
+        assert_eq!(first_artist(None), "");
+        assert_eq!(
+            first_artist(Some(&owned(ZValue::from(Vec::<String>::new())))),
+            ""
+        );
+        assert_eq!(text_of(None), "");
+    }
+
+    /// The order the pure choice uses only means anything if it keeps moving.
+    #[test]
+    fn each_player_heard_from_is_ordered_after_every_earlier_one() {
+        let mut tracked: HashMap<String, Tracked> = HashMap::new();
+        assert_eq!(next_heard(&tracked), 1);
+
+        tracked.insert(
+            "org.mpris.MediaPlayer2.vlc".to_owned(),
+            Tracked {
+                player: Player {
+                    bus_name: "org.mpris.MediaPlayer2.vlc".to_owned(),
+                    identity: "vlc".to_owned(),
+                    playing: false,
+                    track: Track::default(),
+                    position_ms: -1,
+                    heard: 7,
+                },
+                measured: Instant::now(),
+            },
+        );
+        assert_eq!(next_heard(&tracked), 8);
+    }
+
+    #[test]
+    fn an_unreadable_reconciled_player_is_removed_and_owed_as_a_change() {
+        let _serial = PLAYER_STATE_TEST
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let bus_name = "org.mpris.MediaPlayer2.unreadable";
+        {
+            let mut tracked = lock_players();
+            tracked.clear();
+            tracked.insert(
+                bus_name.to_owned(),
+                Tracked {
+                    player: Player {
+                        bus_name: bus_name.to_owned(),
+                        identity: "Unreadable".to_owned(),
+                        playing: true,
+                        track: Track::default(),
+                        position_ms: 12_000,
+                        heard: 1,
+                    },
+                    measured: Instant::now(),
+                },
+            );
+        }
+
+        assert!(reconcile_with(|name| {
+            assert_eq!(name, bus_name);
+            false
+        }));
+        assert!(lock_players().is_empty());
     }
 
     /// A file under the test runner's own temporary directory, named for the

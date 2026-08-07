@@ -13,6 +13,7 @@ pragma ComponentBehavior: Bound
 
 import CelestinaStyle
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Window
 
 Window {
@@ -29,9 +30,23 @@ Window {
     // as the panel's own menu is.
     readonly property int shadowMargin: CelestinaTheme.shadowBlur
                                         + CelestinaTheme.shadowOffsetY
+    // Where the host wants this card, in the surface's own coordinates. The
+    // surface is the whole output now — that is what lets a click outside the
+    // menu reach the menu instead of whatever was behind it — so the position
+    // the surface used to carry in its margins lives here instead.
+    property int menuX: 0
+    property int menuY: 0
 
-    width: menu.width + shadowMargin * 2
-    height: menu.implicitHeight + shadowMargin * 2
+    readonly property int cardWidth: menu.width + shadowMargin * 2
+    readonly property int cardHeight: menu.implicitHeight + shadowMargin * 2
+    // A menu near an edge stays whole. Before the compositor has sized the
+    // surface these clamp to zero, which is exactly where a card-sized surface
+    // used to put it.
+    readonly property int cardX: Math.max(0, Math.min(menuX, menuWindow.width - cardWidth))
+    readonly property int cardY: Math.max(0, Math.min(menuY, menuWindow.height - cardHeight))
+
+    width: cardWidth
+    height: cardHeight
     color: CelestinaTheme.clear
     title: qsTr("Menú de la bandeja")
 
@@ -49,8 +64,12 @@ Window {
             id: menu
 
             backdropSource: scene
-            x: menuWindow.shadowMargin
-            y: menuWindow.shadowMargin
+            x: menuWindow.cardX + menuWindow.shadowMargin
+            y: menuWindow.cardY + menuWindow.shadowMargin
+            // The surface covers the output, so a press anywhere outside the
+            // card is this menu's to answer — which is what closes it in one
+            // click instead of leaving it up for the next surface to deal with.
+            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
             // This surface exists only to carry this menu, so the shared margin
             // has nothing to keep it clear of.
             margins: -1

@@ -34,14 +34,6 @@ const DDC_TIMEOUT: Duration = Duration::from_secs(20);
 /// How long the thread waits between looks at its target. Short enough that a
 /// wheel feels answered, long enough that a burst arrives as one target.
 const APPLY_DELAY: Duration = Duration::from_millis(250);
-/// Nothing but this panel and the monitor's own buttons change brightness, so a
-/// re-read exists only to notice the buttons — rarely, because it is expensive.
-const REFRESH: Duration = Duration::from_secs(300);
-/// DDC comes and goes on real hardware: the same `detect` answers with every
-/// monitor one minute and none the next, and a sleeping monitor answers
-/// nothing at all. Finding none is therefore not a verdict, so the search is
-/// retried on its own shorter interval instead of waiting out a full refresh.
-const REDETECT: Duration = Duration::from_secs(30);
 
 pub const NAME: &str = "brightness";
 
@@ -51,6 +43,20 @@ pub const NAME: &str = "brightness";
 /// command dispatch would put a slow monitor's business in every provider's
 /// signature.
 static PENDING: OnceLock<Mutex<HashMap<String, LevelChange>>> = OnceLock::new();
+/// Whether an output has appeared or gone since the worker last looked.
+///
+/// A flag rather than a queue: a burst of outputs is one rediscovery, and a
+/// request arriving while `ddcutil` is mid-conversation is simply still set
+/// when the loop comes back around. Nothing here starts a detection — only the
+/// one worker thread reads this, and it reads it between operations, so there
+/// is never a second `ddcutil` child.
+static REDETECT_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+/// Records that the set of outputs changed. Called from the command thread and
+/// answered by the worker on its own schedule; it runs nothing itself.
+pub fn request_redetect() {
+    REDETECT_REQUESTED.store(true, Ordering::Release);
+}
 
 fn pending() -> &'static Mutex<HashMap<String, LevelChange>> {
     PENDING.get_or_init(|| Mutex::new(HashMap::new()))
@@ -111,7 +117,9 @@ pub fn action(verb: &str, options: &Payload) -> Result<(), String> {
 }
 
 /// The monitors that answer DDC at all. Detection is the expensive call, so it
-/// happens once: a monitor plugged in later is picked up on the next refresh.
+/// happens once and then only when the schedule or a request says so — a
+/// monitor plugged in later is picked up because the host asked, not because
+/// this polls for it.
 fn detect(shutdown: &AtomicBool) -> Vec<DdcDisplay> {
     run_bounded_with_cancel(
         "ddcutil",
@@ -225,12 +233,11 @@ fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId, shutdown: &AtomicBool)
             }
         }
 
-        let due = if displays.is_empty() {
-            REDETECT
-        } else {
-            REFRESH
-        };
-        if refreshed.elapsed() >= due {
+        // Taken, not read: consuming the request here is what coalesces a
+        // burst into one detection and what keeps a request made during the
+        // detection below from being lost.
+        let requested = REDETECT_REQUESTED.swap(false, Ordering::AcqRel);
+        if brightness::detection_is_due(!displays.is_empty(), requested, refreshed.elapsed()) {
             displays = detect(shutdown);
             levels = displays
                 .iter()
@@ -241,5 +248,59 @@ fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId, shutdown: &AtomicBool)
         }
 
         thread::sleep(APPLY_DELAY);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{request_redetect, REDETECT_REQUESTED};
+
+    use std::sync::{atomic::Ordering, Mutex};
+
+    // Both cases deliberately exercise the process-global flag. Rust runs unit
+    // tests in parallel, so they take one test-only lock rather than making
+    // their assertions depend on which test the harness scheduled between two
+    // atomic operations.
+    static REDETECT_TEST: Mutex<()> = Mutex::new(());
+
+    /// Requests coalesce and are consumed exactly once.
+    ///
+    /// This runs no `ddcutil` and needs none: what is being proved is that a
+    /// burst of outputs is one rediscovery and that the worker's own `swap` is
+    /// what ends it. The conversation with a monitor is deliberately not
+    /// reachable from a test.
+    #[test]
+    fn a_burst_of_outputs_is_one_rediscovery() {
+        let _serial = REDETECT_TEST
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        REDETECT_REQUESTED.store(false, Ordering::Release);
+
+        request_redetect();
+        request_redetect();
+        request_redetect();
+
+        // The worker's own take.
+        assert!(REDETECT_REQUESTED.swap(false, Ordering::AcqRel));
+        // And nothing is owed a second time.
+        assert!(!REDETECT_REQUESTED.swap(false, Ordering::AcqRel));
+    }
+
+    #[test]
+    fn a_request_made_during_an_operation_survives_until_the_next_turn() {
+        let _serial = REDETECT_TEST
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        REDETECT_REQUESTED.store(false, Ordering::Release);
+
+        // The worker takes the request and starts a detection.
+        request_redetect();
+        assert!(REDETECT_REQUESTED.swap(false, Ordering::AcqRel));
+        // An output arrives while that detection is still running. Nothing
+        // starts a second one; the flag is simply still set next time round.
+        request_redetect();
+        assert!(REDETECT_REQUESTED.swap(false, Ordering::AcqRel));
+
+        REDETECT_REQUESTED.store(false, Ordering::Release);
     }
 }

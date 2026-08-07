@@ -9,39 +9,60 @@
 class OverlaySurface;
 class QQmlEngine;
 class QWindow;
-class ShellProvidersClient;
+
+// The bridge property each overlay component declares, or an empty string for a
+// component this shell does not have.
+//
+// One list rather than five call sites, because "which property does this
+// component declare" is one fact and a second copy of it is what produced
+// `SessionMenu does not have a property called providerSource`. `main()` builds
+// every controller through it and the regression compares it against the QML
+// files themselves.
+QString overlaySourceProperty(const QString &qmlComponentName);
 
 // Opens and closes one keybind-driven overlay — the launcher, the clipboard
-// history.
+// history, the notification centre, the control centre, the session menu.
 //
-// The two are identical in mechanics: one centered on-demand-keyboard surface,
+// They are identical in mechanics: one centered on-demand-keyboard surface,
 // toggled by a `celestina msg` verb, torn down on its own dismissal. They
-// differ only in which QML component they load and what that component does
-// with the provider bridge it is handed, so this class owns exactly the shared
-// part. Domain logic — searching, launching, selecting a history entry — lives
-// entirely in the QML component, which talks to `providerSource` the same way
-// every bar widget already does (see `Panel.qml`): nothing here parses a
-// provider payload or knows a launcher or a clipboard exists.
+// differ in which QML component they load and which bridge that component
+// reads, so this class owns exactly the shared part. Domain logic — searching,
+// launching, selecting a history entry, arming a session verb — lives entirely
+// in the QML component, which talks to its bridge the same way every bar widget
+// already does (see `Panel.qml`): nothing here parses a provider payload or
+// knows a launcher or a clipboard exists.
+//
+// What it does not do is hand every component the same property set. Qt refuses
+// an initial property a component does not declare and says so at runtime,
+// which is how a session menu that reads `shellSource` came to log
+// `SessionMenu does not have a property called providerSource` on every open.
+// The bridge is therefore named by whoever builds the controller, and
+// `reducedMotion` is the only property added here — it is a presentation
+// contract every one of these surfaces declares.
 class OverlayController final : public QObject
 {
     Q_OBJECT
 
 public:
+    // `source` is the bridge this component reads; which property it arrives
+    // as comes from `overlaySourceProperty`. Four of these overlays read the
+    // provider bridge as `providerSource` and the session menu reads a request
+    // channel as `shellSource`, so the owner supplies the object and the list
+    // supplies the name.
     OverlayController(
         QQmlEngine *engine,
-        ShellProvidersClient *providers,
         const QString &qmlComponentName,
+        QObject *source,
         QObject *parent = nullptr
     );
 
-    // Properties this overlay's component needs beyond the provider bridge —
-    // the session menu's own request channel, for instance. Set before the
-    // overlay is first opened; a component that does not declare one simply
-    // never receives it.
-    void setExtraProperties(const QVariantMap &properties);
+    // Exactly what this controller would hand its component, and nothing else.
+    // Exposed so a regression can compare it against what the QML file
+    // declares, before a session is the thing that finds out.
+    QVariantMap initialProperties() const;
 
     // False when the component itself failed to load — a broken QML file, not
-    // a missing provider. The overlay simply never opens; nothing crashes.
+    // a missing source. The overlay simply never opens; nothing crashes.
     bool isEnabled() const { return m_enabled; }
     bool isOpen() const;
 
@@ -54,9 +75,12 @@ private:
     QWindow *createWindow();
 
     QQmlComponent m_component;
-    QPointer<ShellProvidersClient> m_providers;
     QString m_componentName;
-    QVariantMap m_extraProperties;
+    QString m_sourceProperty;
+    // Guarded rather than owned: the bridge outlives no overlay in practice,
+    // but an overlay that opened after its source died would bind `undefined`
+    // into a `required property`.
+    QPointer<QObject> m_source;
     OverlaySurface *m_surface;
     bool m_enabled;
 };

@@ -84,6 +84,14 @@ fn perform(command: &Command, runtime: &Mutex<ProviderRuntime>) -> Result<(), St
         sysmon::NAME => sysmon::action(&command.verb),
         audio::NAME => audio::action(&command.verb, &command.options, runtime, &command.provider),
         media::NAME => media::action(&command.verb),
+        // The host saw the session's outputs change. It is not a session verb
+        // — no key binding produces it and it changes no device — so it never
+        // enters the vocabulary a binding writes; it only tells the one DDC
+        // worker that looking again is worth the cost.
+        brightness::NAME if command.verb == "outputs-changed" => {
+            brightness::request_redetect();
+            Ok(())
+        }
         brightness::NAME => brightness::action(&command.verb, &command.options),
         session::POWER if command.verb == "cycle" => {
             session::cycle_power_profile(runtime, &command.provider)

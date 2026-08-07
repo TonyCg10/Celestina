@@ -73,10 +73,16 @@ QList<TrayPixmap> readPixmaps(const QVariant &value)
 // Every call this class makes is asynchronous. A tray item is another
 // application's process — often one behind a portal proxy — and a blocking
 // call would let any of them stall the shell.
+//
+// `onError` is not optional decoration. A refused or unanswered call used to
+// leave this function silently, which meant an item the watcher lists and the
+// host never renders looked exactly like an item that was never registered —
+// with nothing in the log to tell them apart.
 void callAsync(
     QObject *context,
     const QDBusMessage &message,
-    const std::function<void(const QDBusMessage &)> &onReply
+    const std::function<void(const QDBusMessage &)> &onReply,
+    const std::function<void(const QString &)> &onError = {}
 )
 {
     QDBusPendingCall pending = QDBusConnection::sessionBus().asyncCall(message);
@@ -85,11 +91,19 @@ void callAsync(
         watcher,
         &QDBusPendingCallWatcher::finished,
         context,
-        [onReply](QDBusPendingCallWatcher *watcher) {
+        [onReply, onError](QDBusPendingCallWatcher *watcher) {
             const QDBusMessage reply = watcher->reply();
             watcher->deleteLater();
-            if (reply.type() == QDBusMessage::ReplyMessage)
+            if (reply.type() == QDBusMessage::ReplyMessage) {
                 onReply(reply);
+                return;
+            }
+            if (onError) {
+                const QString reason = reply.errorMessage().isEmpty()
+                    ? QStringLiteral("no reply")
+                    : reply.errorMessage();
+                onError(reason);
+            }
         }
     );
 }
@@ -217,35 +231,88 @@ void TrayWatcher::refreshRegistrations()
          QStringLiteral("RegisteredStatusNotifierItems")}
     );
 
-    callAsync(this, request, [this](const QDBusMessage &reply) {
-        const QStringList entries =
-            reply.arguments().value(0).value<QDBusVariant>().variant().toStringList();
+    // Only the newest read may reconcile the registry. `attach()` is re-entered
+    // whenever the watcher name changes owner — which includes this shell
+    // taking it — so without a generation the older reply arrives second and
+    // reconciles against a list that has moved on.
+    const quint64 generation = ++m_registryGeneration;
+    // What was already known when this read was *sent*. Anything learned after
+    // that — an application whose `StatusNotifierItemRegistered` arrived while
+    // the watcher was answering — is newer than the snapshot coming back, and
+    // the snapshot is not entitled to remove it.
+    //
+    // This is the loss. The reply used to rebuild the list wholesale, so an
+    // item that registered during the round trip was dropped from
+    // `m_registrations` and from `m_read` — and no second registration signal
+    // was ever coming for it, so it stayed registered with the watcher and
+    // absent from the panel for the rest of the session.
+    const QList<QPair<QString, QString>> baseline = m_registrations;
 
-        // The previous list's subscriptions go with it. Re-reading the registry
-        // happens every time a watcher appears, so leaving them would add four
-        // match rules per item to this connection on each takeover.
-        forgetItems();
-        m_read.clear();
-        for (const QString &entry : entries) {
-            // The watcher is another process and its list is as long as it
-            // likes; the panel accepts only as many items as it could show.
-            if (m_registrations.size() >= maxTrayItems)
-                break;
+    callAsync(
+        this,
+        request,
+        [this, generation, baseline](const QDBusMessage &reply) {
+            if (generation != m_registryGeneration)
+                return;
 
-            QString service;
-            QString path;
-            if (!parseTrayRegistration(entry, &service, &path)) {
-                qWarning() << "Celestina ignored an unusable tray registration.";
-                continue;
+            const QStringList entries =
+                reply.arguments().value(0).value<QDBusVariant>().variant().toStringList();
+
+            QList<QPair<QString, QString>> snapshot;
+            for (const QString &entry : entries) {
+                // The watcher is another process and its list is as long as it
+                // likes; the panel accepts only as many items as it could show.
+                if (snapshot.size() >= maxTrayItems)
+                    break;
+
+                QString service;
+                QString path;
+                if (!parseTrayRegistration(entry, &service, &path)) {
+                    qWarning() << "Celestina ignored an unusable tray registration.";
+                    continue;
+                }
+                snapshot.append({service, path});
             }
-            m_registrations.append({service, path});
-            watchItem(service, path);
-            readItem(service, path);
-        }
 
-        m_available = true;
-        publish();
-    });
+            // Gone means: known before this read, and absent from what it
+            // brought back. An item this host never had in its baseline is not
+            // something this snapshot can speak about.
+            for (const auto &known : baseline) {
+                if (!snapshot.contains(known))
+                    removeRegistration(known.first, known.second);
+            }
+
+            for (const auto &found : snapshot) {
+                if (m_registrations.contains(found))
+                    continue;
+                if (m_registrations.size() >= maxTrayItems)
+                    break;
+
+                m_registrations.append(found);
+                watchItem(found.first, found.second);
+                readItem(found.first, found.second);
+            }
+
+            m_available = true;
+            publish();
+        },
+        [](const QString &reason) {
+            qWarning().noquote()
+                << "Celestina could not read the tray registry:" << reason;
+        }
+    );
+}
+
+void TrayWatcher::removeRegistration(const QString &service, const QString &path)
+{
+    m_registrations.removeAll({service, path});
+    unwatchItem(service, path);
+    const QString key = itemKey(service, path);
+    m_read.remove(key);
+    m_iconSources.remove(key);
+    m_iconRevisions.remove(key);
+    m_readFailures.remove(key);
+    m_icons->remove(key);
 }
 
 void TrayWatcher::watchItem(const QString &service, const QString &path)
@@ -353,7 +420,10 @@ void TrayWatcher::readItem(const QString &service, const QString &path)
     );
     request.setArguments({QString::fromLatin1(itemInterface)});
 
-    callAsync(this, request, [this, service, path](const QDBusMessage &reply) {
+    callAsync(
+        this,
+        request,
+        [this, service, path](const QDBusMessage &reply) {
         // The item may have unregistered while it was answering. Its properties
         // are then the last word of something that no longer exists, and
         // inserting them would put back state that `itemUnregistered` has
@@ -372,10 +442,48 @@ void TrayWatcher::readItem(const QString &service, const QString &path)
         argument >> properties;
         const TrayItem item = readTrayItem(service, path, properties);
         const QString key = itemKey(service, path);
+        m_readFailures.remove(key);
         m_iconSources.insert(key, resolveIcon(item, properties));
         m_read.insert(key, item);
         publish();
-    });
+        },
+        [this, service, path](const QString &reason) {
+            itemUnreadable(service, path, reason);
+        }
+    );
+}
+
+void TrayWatcher::itemUnreadable(
+    const QString &service,
+    const QString &path,
+    const QString &reason
+)
+{
+    if (!m_registrations.contains({service, path}))
+        return;
+
+    const QString key = itemKey(service, path);
+    const int failures = m_readFailures.value(key) + 1;
+    m_readFailures.insert(key, failures);
+
+    // Once, because an application that has registered its item before
+    // exporting the object behind it is the ordinary race, and it resolves in
+    // milliseconds.
+    if (failures == 1) {
+        readItem(service, path);
+        return;
+    }
+    if (failures > 2)
+        return;
+
+    // It is not going to describe itself. It is still a registered control the
+    // person can click, so it is shown with the name it registered under rather
+    // than silently left out of the tray.
+    qWarning().noquote() << "Celestina could not read the tray item" << key
+                         << "and is showing it unnamed:" << reason;
+    if (!m_read.contains(key))
+        m_read.insert(key, unreadTrayItem(service, path));
+    publish();
 }
 
 void TrayWatcher::itemRegistered(const QString &entry)
@@ -404,13 +512,7 @@ void TrayWatcher::itemUnregistered(const QString &entry)
     if (!parseTrayRegistration(entry, &service, &path))
         return;
 
-    m_registrations.removeAll({service, path});
-    unwatchItem(service, path);
-    const QString key = itemKey(service, path);
-    m_read.remove(key);
-    m_iconSources.remove(key);
-    m_iconRevisions.remove(key);
-    m_icons->remove(key);
+    removeRegistration(service, path);
     publish();
 }
 
@@ -504,7 +606,19 @@ void TrayWatcher::publish()
             items.append(item.value());
     }
 
-    if (m_items.replace(items))
+    // An icon is not part of what `TrayItem` compares — it is merged into the
+    // published maps by `items()` — so an application that changed only its
+    // icon would leave the list identical and never reach a binding.
+    QHash<QString, QString> icons;
+    for (const TrayItem &item : items) {
+        const QString key = itemKey(item.service, item.path);
+        icons.insert(key, m_iconSources.value(key));
+    }
+
+    const bool listChanged = m_items.replace(items);
+    const bool iconsChanged = icons != m_publishedIcons;
+    m_publishedIcons = icons;
+    if (listChanged || iconsChanged)
         emit changed();
 }
 
@@ -518,6 +632,8 @@ void TrayWatcher::setUnavailable()
         m_icons->remove(key);
     m_iconSources.clear();
     m_iconRevisions.clear();
+    m_readFailures.clear();
+    m_publishedIcons.clear();
     const bool dropped = m_items.clear();
     if (!m_available && !dropped)
         return;

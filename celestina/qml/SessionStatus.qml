@@ -53,22 +53,55 @@ Row {
     }
 
     Text {
-        readonly property bool present: root.bluetooth !== undefined
-                                        && root.bluetooth.count !== undefined
+        id: radio
 
-        visible: present
+        // Four states arrive here and only one of them is silence. An
+        // unreadable adapter withdraws the provider, which is the absence this
+        // guard sees; a machine with no controller says so once and then has
+        // nothing to report either. What is left — on, with or without
+        // anything on it — stays on the panel, because a powered radio is a
+        // state a person needs to be able to see.
+        readonly property string adapter: root.bluetooth !== undefined
+                                          && root.bluetooth.adapter !== undefined
+                                          ? root.bluetooth.adapter : ""
+        readonly property int count: root.bluetooth !== undefined
+                                     && root.bluetooth.count !== undefined
+                                     ? root.bluetooth.count : 0
+
+        visible: adapter === "on" || adapter === "off"
         anchors.verticalCenter: parent.verticalCenter
-        // Only ever shown when something is connected, so the count is the
-        // news and the name is the detail.
-        text: present ? qsTr("bt %1").arg(root.bluetooth.count) : ""
-        color: CelestinaTheme.textMuted
+        text: {
+            if (radio.adapter === "off")
+                return qsTr("bt apagado");
+
+            if (radio.adapter !== "on")
+                return "";
+
+            // The count is the news when there is one; a powered radio with
+            // nothing on it says only that it is on.
+            return radio.count > 0 ? qsTr("bt %1").arg(radio.count) : qsTr("bt");
+        }
+        // A radio nothing is using is quieter than one carrying a device.
+        color: radio.adapter === "on" && radio.count > 0
+               ? CelestinaTheme.text : CelestinaTheme.textMuted
         font.family: CelestinaTheme.sansFamily
         font.features: CelestinaTheme.fontFeaturesTabular
         font.pixelSize: CelestinaTheme.fontCaption
         Accessible.role: Accessible.StaticText
-        Accessible.name: present
-                         ? qsTr("Bluetooth: %1 conectado").arg(root.bluetooth.first)
-                         : ""
+        Accessible.name: {
+            if (radio.adapter === "off")
+                return qsTr("Bluetooth apagado");
+
+            if (radio.adapter !== "on")
+                return "";
+
+            if (radio.count === 0)
+                return qsTr("Bluetooth encendido, sin dispositivos conectados");
+
+            return root.bluetooth.first !== undefined
+                   ? qsTr("Bluetooth: %1 conectado, %2 en total").arg(root.bluetooth.first).arg(radio.count)
+                   : qsTr("Bluetooth: %1 conectados").arg(radio.count);
+        }
     }
 
     Text {

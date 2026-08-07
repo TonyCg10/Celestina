@@ -1,0 +1,79 @@
+# LVR-3-F exact change inventory
+
+Base revision	e970db4279c28400ac54e09349228bf671c1ae72
+Pathspec	celestina-rs/crates/celestina-shell-core/src/bluetooth.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/brightness.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/media.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/evidence/2026-08-07-one-poll-is-not-the-truth.md
+Pathspec	celestina/docs/plans/active/2026-08-05-late-provider-insertion.md
+Pathspec	celestina/qml/ClipboardOverlay.qml
+Pathspec	celestina/qml/ControlCentre.qml
+Pathspec	celestina/qml/LauncherOverlay.qml
+Pathspec	celestina/qml/NotificationCenter.qml
+Pathspec	celestina/qml/PanelMenu.qml
+Pathspec	celestina/qml/SessionMenu.qml
+Pathspec	celestina/qml/SessionStatus.qml
+Pathspec	celestina/qml/TrayMenu.qml
+Pathspec	celestina/src/main.cpp
+Pathspec	celestina/src/overlaycontroller.cpp
+Pathspec	celestina/src/overlaycontroller.h
+Pathspec	celestina/src/overlaysurface.cpp
+Pathspec	celestina/src/panelmanager.cpp
+Pathspec	celestina/src/panelmanager.h
+Pathspec	celestina/src/panelmenucontroller.cpp
+Pathspec	celestina/src/panelmenusurface.cpp
+Pathspec	celestina/src/panelmenusurface.h
+Pathspec	celestina/src/provider_adapter/brightness.rs
+Pathspec	celestina/src/provider_adapter/main.rs
+Pathspec	celestina/src/provider_adapter/media.rs
+Pathspec	celestina/src/trayitems.cpp
+Pathspec	celestina/src/trayitems.h
+Pathspec	celestina/tests/media_signals.rs
+Pathspec	celestina/tests/overlaycontract_test.cpp
+Pathspec	celestina/tests/surfacemanager_test.cpp
+Pathspec	celestina/tests/tst_sessionstatus.qml
+Pathspec	docs/version-history.tsv
+Pathspec	celestina/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-F.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+119	3	2bd71e6d6d32a8c2455f3fc31025e705175db7dc133dc18e29258af757f0be2f	celestina-rs/crates/celestina-shell-core/src/bluetooth.rs
+61	0	fbbfe9ff31bd2183731c6a08bceffb673ce2cb5e8b7e0af0d6c6bc0ac47441e5	celestina-rs/crates/celestina-shell-core/src/brightness.rs
+1	0	68beabae1fab4f8e1fee20714520bc7ff6cc437ab284c3864ea916cf39297ceb	celestina-rs/crates/celestina-shell-core/src/lib.rs
+253	0	4db13c2e05d5a0d840e285f018e926a8a05a19223d5533e746b9e170702b247e	celestina-rs/crates/celestina-shell-core/src/media.rs
+1	1	8be22e8638f052cf4bcc0f2d06039dd71e3d27f5d315dfe83288b055ec431415	celestina/Cargo.lock
+1	1	e621215a3e566b0b6b8b754443e097a4783729f7217577101553b38bd6126a26	celestina/Cargo.toml
+233	0	2eec151fd15badecd2423307577ca36bfcd03f618a7ae563480f488700ae1cb0	celestina/docs/evidence/2026-08-07-one-poll-is-not-the-truth.md
+90	7	e744b529534da53424e41c4e59e3cf9ddc7ecbd3173a29cf69889b605833cd26	celestina/docs/plans/active/2026-08-05-late-provider-insertion.md
+25	1	ca2e58817812997097212188767a5b0d84b360b099b0d10872e9a943bc2d6b36	celestina/qml/ClipboardOverlay.qml
+40	3	31bfeef304825d9b386cc8bbbccf6cd5a6e5cf0b987d1ed23525be8348c208fb	celestina/qml/ControlCentre.qml
+25	1	bc8934bf7318f4b5ab7324bab8a263a5fe940d869e466bcd0ee32b97b26421d8	celestina/qml/LauncherOverlay.qml
+24	1	d8496c11010a938154efed202bfc3a5ea22bb32bcf9560c9f62dbf51a3208c2c	celestina/qml/NotificationCenter.qml
+23	4	536f5bc5fece2fb6ee9ca84a4f283d44f9e8995efcd459efa3077f5829728815	celestina/qml/PanelMenu.qml
+28	2	587e3b6c5f9c4fcb4e17096e2a0419e7dc9dd3340f9ae0abc190f7ce3a249831	celestina/qml/SessionMenu.qml
+44	11	13853ea20babb6f201a7db7a688d109a05612681879161b72c628c9cf0e91364	celestina/qml/SessionStatus.qml
+24	5	020ed4337ab75b34490333afff49796cc4d22e13297a54f7614f8684cf56b7b2	celestina/qml/TrayMenu.qml
+17	11	af07e2cf3fc1ebc1f179a96090e003599d43f06c95042e2ad4ee5d373ca0ee0b	celestina/src/main.cpp
+38	17	596ef791b093714a148d86b38df2a7d3fee26bdf59953fb9140b5f26ff6056cf	celestina/src/overlaycontroller.cpp
+42	18	41d98213b8c1284c1774e13bcc49b0e6ade035559d54e7e54bc09454db9268c3	celestina/src/overlaycontroller.h
+26	8	f5b5a8900c90ded26d2de57435cb29d86ca7deb747a74d4fff85749e548a6c74	celestina/src/overlaysurface.cpp
+37	1	06c612c5b60a3365e4e0055b1deab3b945e21b9234956ce0402f796b5a94c4ba	celestina/src/panelmanager.cpp
+8	0	67c226c8b5d1e687b4edf303afb02a831a6f41d70347e885d5c6fda0b2f08fd7	celestina/src/panelmanager.h
+26	16	b457c1621cb7e74a2dac7f0c22d94d33ac88d4085c11b969963fb120b59f16f3	celestina/src/panelmenucontroller.cpp
+19	32	54b4c0601a948e62abf8a754bdae6187d0bbae30e2d2c506ded3082fa09daac3	celestina/src/panelmenusurface.cpp
+5	5	470d5771158e30ae4c38fa2b928633a5c137ead9e5df3b3b34b8982b2cdb18cf	celestina/src/panelmenusurface.h
+76	15	bef4c1baf5de3b9896b01b9830d2a020d05246914a80cb5d9c46159bc21aa4d9	celestina/src/provider_adapter/brightness.rs
+8	0	d1e8b1736e0ba153a550f8bbf38b271914ea1bfbba3c3eecfde009ac934046f7	celestina/src/provider_adapter/main.rs
+624	139	3697a8835dd58b2768075de03f2e97bcd8626d84682c156f3ab77a1f712ac2ac	celestina/src/provider_adapter/media.rs
+24	0	9a77b0527ed611980c1ad9c8c49725b5a54ee9632eca7c8739427f2ccb115b97	celestina/src/trayitems.cpp
+11	0	d0b44d17d3d19a6a6d7849f3d9f58485268959aea34fe475c57e405fc6764c82	celestina/src/trayitems.h
+299	0	a9d06f21b6a513ac6aec7ccff04d2a769e6e320d5684a3a08b949f464d0f99c9	celestina/tests/media_signals.rs
+231	0	b6620db5075a277011712e68c03847b65773c5c71a0d12d8de4f56245703858f	celestina/tests/overlaycontract_test.cpp
+40	13	7335ba646404a34b1518ee44af6aa98cc9d64804571efd329e363ebf184b9bba	celestina/tests/surfacemanager_test.cpp
+88	0	508322fd4502eca2ed63970bee567fd5bbf2387fa9c1b58c418d3b0ea7b32e70	celestina/tests/tst_sessionstatus.qml
+1	0	42886410137b0d62ef1ca3a4767109acdd1cac16a750478b17efc4a1deafd74b	docs/version-history.tsv
+79	0	self	celestina/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-F.numstat.tsv

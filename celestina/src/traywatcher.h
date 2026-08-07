@@ -85,6 +85,12 @@ private:
     void attach();
     void refreshRegistrations();
     void readItem(const QString &service, const QString &path);
+    // Forgets one registration and everything keyed by it. Used both when the
+    // watcher says an item left and when a registry read shows one gone.
+    void removeRegistration(const QString &service, const QString &path);
+    // An item answered `GetAll` with an error, or not at all. Retried once,
+    // then published from its registration rather than dropped.
+    void itemUnreadable(const QString &service, const QString &path, const QString &reason);
     void watchItem(const QString &service, const QString &path);
     // Undoes exactly what `watchItem` subscribed to, and forgets the item's
     // owner.
@@ -116,6 +122,20 @@ private:
     // makes QML ask again.
     QHash<QString, QString> m_iconSources;
     QHash<QString, int> m_iconRevisions;
+    // The icon sources QML has already been told about. An item can change its
+    // icon without changing anything `TrayItem` compares, and `items()` merges
+    // the source in at read time, so without this such a change would never
+    // reach a binding.
+    QHash<QString, QString> m_publishedIcons;
+    // How many times each item's properties have failed to arrive. One retry,
+    // because a peer that is still exporting its object is the ordinary case
+    // and a peer that will never answer must not be asked forever.
+    QHash<QString, int> m_readFailures;
+    // Which registry read is current. Re-reading is triggered by every watcher
+    // owner change — including this shell acquiring the name itself — so two
+    // reads can be in flight, and the older one's reply would otherwise clear
+    // the newer one's items and re-issue every property read.
+    quint64 m_registryGeneration = 0;
     QSharedPointer<TrayIconCache> m_icons;
     TrayItems m_items;
     QDBusServiceWatcher *m_watcherPresence;

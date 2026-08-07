@@ -110,9 +110,33 @@ Window {
         }
     }
 
+    // A click anywhere outside the card closes this surface.
+    //
+    // The surface is the whole output, not the card: that is what makes an
+    // outside click land here at all, and it is also what makes the panel
+    // button that opened this close it in one click rather than two. While the
+    // overlay is up the button is behind it, so the click never reaches the
+    // panel, never re-enters `toggle()`, and focus returns exactly once.
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+        onPressed: overlay.dismissed()
+    }
+
     Item {
         id: scene
-        anchors.fill: parent
+
+        width: overlay.cardWidth
+        height: overlay.cardHeight
+        anchors.centerIn: parent
+
+        // Anything the card itself does not handle stops here rather than
+        // falling through to the dismissal area behind it. It is the first
+        // child, so every control declared after it is still reached first.
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+        }
 
         GlassCard {
             id: card

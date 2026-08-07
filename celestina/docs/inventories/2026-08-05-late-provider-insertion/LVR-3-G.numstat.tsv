@@ -1,0 +1,35 @@
+# LVR-3-G exact change inventory
+
+Base revision	e970db4279c28400ac54e09349228bf671c1ae72
+Pathspec	celestina-rs/crates/celestina-shell-core/src/network.rs
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-08-07-what-a-probe-did-not-see.md
+Pathspec	celestina/docs/plans/active/2026-08-05-late-provider-insertion.md
+Pathspec	celestina/qml/TrayDrawer.qml
+Pathspec	celestina/src/provider_adapter/session.rs
+Pathspec	celestina/src/traywatcher.cpp
+Pathspec	celestina/src/traywatcher.h
+Pathspec	celestina/tests/trayitems_test.cpp
+Pathspec	celestina/tests/traywatcher_test.cpp
+Pathspec	celestina/tests/tst_traydrawer.qml
+Pathspec	celestina/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-G.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+380	0	0b25abfee07446dd025234ac2e90f01a789cd59b890d3d4ea173f3201bbdd7ee	celestina-rs/crates/celestina-shell-core/src/network.rs
+55	1	9fe27732e419be5e2029409d4b9711e6b63434ce59018abf5b7a715f5db5ce15	celestina/CMakeLists.txt
+68	12	d61d4d8d3d9d8a93970338453d857580bab6b7e4db289e5e17d3ce638411fd5b	celestina/STATUS.md
+244	13	6b06a6dfaa46448b47651d609904d59a25e3c23456d075a81d22038cf0111864	celestina/VALIDATION.md
+252	0	8110091b6cba134a91904cc14aaa525a8bb4daebf864650c5ff613b70fb7bd14	celestina/docs/evidence/2026-08-07-what-a-probe-did-not-see.md
+90	7	e744b529534da53424e41c4e59e3cf9ddc7ecbd3173a29cf69889b605833cd26	celestina/docs/plans/active/2026-08-05-late-provider-insertion.md
+32	0	face719619c32b778db3638ec8a966e62011d5955fd44962cdca45e10b9b4ec6	celestina/qml/TrayDrawer.qml
+90	38	71339d01ef565ebe271d723d279390bae8db97ce7759f7e97346f8328a459119	celestina/src/provider_adapter/session.rs
+155	39	17f81a94814158448cb6614e69ec92162761bccd6d29b230cd7e1d35f1c89cd6	celestina/src/traywatcher.cpp
+20	0	b9f1a55c2f535bd6860aefbcb9494933f58c2c035afab319a6ae1fc085af6b79	celestina/src/traywatcher.h
+152	0	b520c61b763b21173299a72a7cb3ba40dd24727784af3b68c32dd6eb9a596b96	celestina/tests/trayitems_test.cpp
+417	0	31124a7504cd9f3795bb6bd28d112f78c7046a7f2843a5b3d73bd30da38d1d3c	celestina/tests/traywatcher_test.cpp
+255	0	a5d4e1ac980e7816c9c38ef9713fe32fdeb7c62640d6ad6a023f85c77af1e665	celestina/tests/tst_traydrawer.qml
+35	0	self	celestina/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-G.numstat.tsv

@@ -15,6 +15,7 @@ class TrayWatcher;
 class QGuiApplication;
 class QQmlEngine;
 class QScreen;
+class QTimer;
 
 // Owns the per-output panel lifecycle: one layer-shell surface per QScreen,
 // created on start and on hotplug, torn down when its output disappears.
@@ -67,6 +68,10 @@ private slots:
 private:
     bool ensurePanel(QScreen *screen);
     void removePanel(QScreen *screen);
+    // The set of outputs changed. Brightness lives behind DDC, which is a
+    // one-at-a-time conversation with a monitor, so this never asks twice for
+    // one burst: it restarts a short timer and the provider hears once.
+    void outputsChanged();
 
     QGuiApplication *m_application;
     QQmlComponent m_component;
@@ -79,5 +84,8 @@ private:
     QPointer<PanelMenuController> m_menu;
     QPointer<OverlayController> m_notificationCentre;
     QHash<QScreen *, QPointer<QWindow>> m_panels;
+    // Coalesces a hotplug burst into one request. Owned here because the panel
+    // manager is what already observes outputs appearing and disappearing.
+    QTimer *m_outputsSettled;
     bool m_reducedMotion;
 };

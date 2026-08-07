@@ -23,6 +23,9 @@ Window {
     signal dismissed()
 
     readonly property int cardWidth: 360
+    // The card grows with its own content; naming it is what lets the surface
+    // be the whole output while the card stays the size of what it says.
+    readonly property int cardHeight: column.implicitHeight + CelestinaTheme.spaceLg * 2
 
     // `verb` is the session channel's own vocabulary; nothing here invents a
     // name for an action.
@@ -43,7 +46,7 @@ Window {
     property string outcomeReason: ""
 
     width: cardWidth
-    height: column.implicitHeight + CelestinaTheme.spaceLg * 2
+    height: cardHeight
     color: CelestinaTheme.clear
     title: qsTr("Sesión")
 
@@ -77,10 +80,33 @@ Window {
         target: menu.shellSource
     }
 
+    // A click anywhere outside the card closes this surface.
+    //
+    // The surface is the whole output, not the card: that is what makes an
+    // outside click land here at all, and it is also what makes the panel
+    // button that opened this close it in one click rather than two. While the
+    // overlay is up the button is behind it, so the click never reaches the
+    // panel, never re-enters `toggle()`, and focus returns exactly once.
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+        onPressed: menu.dismissed()
+    }
+
     Item {
         id: scene
 
-        anchors.fill: parent
+        width: menu.cardWidth
+        height: menu.cardHeight
+        anchors.centerIn: parent
+
+        // Anything the card itself does not handle stops here rather than
+        // falling through to the dismissal area behind it. It is the first
+        // child, so every control declared after it is still reached first.
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+        }
 
         GlassCard {
             anchors.fill: parent

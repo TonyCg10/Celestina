@@ -1,8 +1,15 @@
 //! How the session is online, what is connected to it, and how it is running.
 //!
-//! Three readings that change rarely and come from four short-lived tools, so
-//! they share one slow poll rather than three fast ones. Each is its own
-//! provider, so one unreadable tool takes only its own widget away.
+//! Three readings that change rarely and come from a handful of short-lived
+//! tools, so they share one slow poll rather than three fast ones. Each is its
+//! own provider, so one unreadable tool takes only its own widget away.
+//!
+//! "Unreadable" is the word to keep hold of here. These tools are fast until
+//! they are not — `nmcli` answers in four milliseconds and occasionally in
+//! three seconds — and a poll that missed its deadline saw nothing rather than
+//! seeing that there is nothing. What each reading does about that is its own
+//! decision: the link is held for a bounded run of polls, and the adapter is
+//! not reported at all.
 
 use std::io;
 use std::sync::{Arc, Mutex};
@@ -68,53 +75,93 @@ pub fn cycle_power_profile(
     Ok(())
 }
 
-fn publish_network(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
-    let route = run_bounded("ip", &["route", "show", "default"]).unwrap_or_default();
-    let devices = run_bounded(
-        "nmcli",
-        &["-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device"],
-    );
+/// What this poll of the routing table and `NetworkManager` managed to see.
+///
+/// The route is decisive when it is absent and otherwise names the device that
+/// `nmcli` must describe. A failed route read is inconclusive; a failed device
+/// read is inconclusive only when a route actually made it necessary.
+fn observe_network() -> network::Observation {
+    // The routing table first, and on its own. It is the only one of the two
+    // that knows whether anything carries the session, and two of the three
+    // outcomes are settled by its answer alone — so requiring `nmcli` to answer
+    // before classifying anything is what let a real disconnection be held
+    // indefinitely behind a slow device list.
+    let route = network::read_route(run_bounded("ip", &["route", "show", "default"]).as_deref());
 
-    match devices
-        .map(|listing| network::parse_devices(&listing))
-        .and_then(|devices| {
-            network::active_link(
-                &devices,
-                network::parse_default_route_device(&route).as_deref(),
-            )
-        }) {
-        Some(link) => {
-            let mut payload = Payload::new();
-            payload.insert("kind".to_owned(), Value::from(link.kind));
-            payload.insert("connection".to_owned(), Value::from(link.connection));
-            if let Err(error) = lock_runtime(runtime).publish(id, payload) {
-                eprintln!("celestina-provider-adapter: network: {error}");
-            }
-        }
-        // Nothing is carrying the session: the widget says so by leaving,
-        // which is the one thing it can say truthfully.
-        None => lock_runtime(runtime).withdraw(id),
+    // And the second command runs only when the first left something to ask.
+    let devices = if network::needs_device_list(&route) {
+        run_bounded(
+            "nmcli",
+            &["-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device"],
+        )
+    } else {
+        None
+    };
+
+    network::observe_with(&route, devices.as_deref())
+}
+
+fn publish_network(
+    runtime: &Mutex<ProviderRuntime>,
+    id: &ProviderId,
+    tracker: &mut network::LinkTracker,
+) {
+    // The last confirmed link outlives any number of probes that failed to read
+    // it, and is retired only by a poll that positively saw no default route.
+    // Not being able to look is not the same as looking and finding nothing.
+    let Some(link) = tracker.observe(observe_network()) else {
+        // The routing table says nothing is carrying the session, twice over.
+        // The widget says so by leaving, which is the one thing it can say
+        // truthfully.
+        lock_runtime(runtime).withdraw(id);
+        return;
+    };
+
+    let mut payload = Payload::new();
+    payload.insert("kind".to_owned(), Value::from(link.kind.clone()));
+    payload.insert(
+        "connection".to_owned(),
+        Value::from(link.connection.clone()),
+    );
+    if let Err(error) = lock_runtime(runtime).publish(id, payload) {
+        eprintln!("celestina-provider-adapter: network: {error}");
     }
 }
 
 fn publish_bluetooth(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
-    let connected = run_bounded("bluetoothctl", &["devices", "Connected"])
-        .map(|listing| bluetooth::parse_connected(&listing))
-        .unwrap_or_default();
+    // The adapter is asked about first and separately: an adapter that is off
+    // has no device list worth spawning a second command for, and an adapter
+    // that never answered must not be reported as having none.
+    let show = run_bounded("bluetoothctl", &["show"]);
+    let devices = if show
+        .as_deref()
+        .and_then(bluetooth::parse_powered)
+        .unwrap_or(false)
+    {
+        run_bounded("bluetoothctl", &["devices", "Connected"])
+    } else {
+        None
+    };
 
-    if connected.is_empty() {
-        // A powered adapter with nothing on it is not news, and R5 is where
-        // turning it on and off belongs.
+    let Some(reading) = bluetooth::reading(show.as_deref(), devices.as_deref()) else {
+        // Nobody could read the adapter. The widget leaves rather than claiming
+        // a state it does not have.
         lock_runtime(runtime).withdraw(id);
         return;
-    }
+    };
 
     let mut payload = Payload::new();
     payload.insert(
-        "count".to_owned(),
-        Value::from(u32::try_from(connected.len()).unwrap_or(u32::MAX)),
+        "adapter".to_owned(),
+        Value::from(reading.adapter.as_token()),
     );
-    payload.insert("first".to_owned(), Value::from(connected[0].clone()));
+    payload.insert(
+        "count".to_owned(),
+        Value::from(u32::try_from(reading.connected.len()).unwrap_or(u32::MAX)),
+    );
+    if let Some(first) = reading.connected.first() {
+        payload.insert("first".to_owned(), Value::from(first.clone()));
+    }
     if let Err(error) = lock_runtime(runtime).publish(id, payload) {
         eprintln!("celestina-provider-adapter: bluetooth: {error}");
     }
@@ -142,8 +189,13 @@ fn publish_power(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
 }
 
 fn run(runtime: &Mutex<ProviderRuntime>, net: &ProviderId, bt: &ProviderId, profile: &ProviderId) {
+    // One tracker for one poll loop. Nothing else polls `nmcli`, and this
+    // thread runs its three readings in order, so no two of these commands can
+    // be in flight at once and a slow one delays the next poll rather than
+    // overlapping it.
+    let mut link = network::LinkTracker::new();
     loop {
-        publish_network(runtime, net);
+        publish_network(runtime, net, &mut link);
         publish_bluetooth(runtime, bt);
         publish_power(runtime, profile);
         thread::sleep(INTERVAL);

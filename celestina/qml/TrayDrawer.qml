@@ -9,6 +9,13 @@
 // An item whose icon resolved to nothing shows its name instead of an empty
 // slot. That is not rare: on this session one application names an icon no
 // installed theme has and publishes no pixels either.
+//
+// Folded, the drawer says how many items are behind it. It used to say nothing:
+// four registered applications and a bare chevron look exactly like no
+// applications and a bare chevron, and the count lived only in `helpText`, whose
+// visible tooltip is deliberately switched off here. A person reading the bar
+// could not tell the two apart — which is what happened on 2026-08-07, when two
+// tray items were reported missing and were in fact one click away.
 pragma ComponentBehavior: Bound
 
 import CelestinaStyle
@@ -45,6 +52,10 @@ Row {
 
         delegate: Item {
             id: entry
+
+            // Named so an offscreen regression can count what the drawer really
+            // instantiated. Nothing reads it at runtime.
+            objectName: "celestina-tray-item"
 
             required property var modelData
             readonly property bool hasIcon: modelData.iconSource !== undefined
@@ -122,7 +133,28 @@ Row {
 
     }
 
+    Text {
+        objectName: "celestina-tray-count"
+
+        anchors.verticalCenter: parent.verticalCenter
+        // Only while folded, and only when there is something to open: a badge
+        // reading zero is furniture, and repeating the count beside the icons it
+        // already shows is noise.
+        visible: !root.open && root.items.length > 0
+        text: root.items.length
+        color: CelestinaTheme.textMuted
+        font.family: CelestinaTheme.sansFamily
+        font.features: CelestinaTheme.fontFeaturesTabular
+        font.pixelSize: CelestinaTheme.fontCaption
+        // The button beside it already carries the name and the action for
+        // assistive technology; a second announcement of the same number is
+        // one the person has to listen past.
+        Accessible.ignored: true
+    }
+
     CelestinaIconButton {
+        objectName: "celestina-tray-toggle"
+
         anchors.verticalCenter: parent.verticalCenter
         iconName: root.open ? "chevron-right" : "chevron-down"
         role: CelestinaButton.Ghost

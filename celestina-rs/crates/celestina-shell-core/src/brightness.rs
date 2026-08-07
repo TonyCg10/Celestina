@@ -88,9 +88,70 @@ pub fn parse_brightness(reading: &str) -> Option<u8> {
     u8::try_from(current.min(max) * 100 / max).ok()
 }
 
+use core::time::Duration;
+
+/// Nothing but the panel and the monitor's own buttons change brightness, so a
+/// re-read exists only to notice the buttons — rarely, because it is expensive.
+pub const REFRESH: Duration = Duration::from_secs(300);
+/// DDC comes and goes on real hardware: the same `detect` answers with every
+/// monitor one minute and none the next, and a sleeping monitor answers nothing
+/// at all. Finding none is therefore not a verdict, so the search is retried on
+/// its own shorter interval instead of waiting out a full refresh.
+pub const REDETECT: Duration = Duration::from_secs(30);
+
+/// When the single DDC worker should run `detect` again.
+///
+/// The live failure this answers: Celestina started with `DP-1` disabled, the
+/// output was enabled sixteen minutes later, its panel mapped correctly, and
+/// its brightness control did not appear for the rest of the five-minute
+/// refresh. The startup detection was non-empty, so the worker was on the long
+/// interval, and nothing woke it when an output arrived.
+///
+/// The correction is not a shorter interval — DDC is expensive and the retained
+/// GPU evidence is a reason to run it less, not more — but a request the worker
+/// consumes. A request is a single flag rather than a queue precisely so a
+/// burst of outputs appearing at once is one detection, and so a request that
+/// arrives while `ddcutil` is mid-conversation is answered by the next turn of
+/// the loop rather than by a second child.
+#[must_use]
+pub fn detection_is_due(any_display_known: bool, requested: bool, since_last: Duration) -> bool {
+    if requested {
+        return true;
+    }
+
+    since_last >= if any_display_known { REFRESH } else { REDETECT }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_output_appearing_is_answered_before_the_next_refresh() {
+        // The live case: a known monitor, so the worker is on the long
+        // interval, and an output arrives seconds into it.
+        assert!(detection_is_due(true, true, Duration::from_secs(4)));
+        assert!(!detection_is_due(true, false, Duration::from_secs(4)));
+    }
+
+    #[test]
+    fn an_unasked_worker_keeps_its_own_expensive_clock() {
+        assert!(!detection_is_due(
+            true,
+            false,
+            REFRESH - Duration::from_secs(1)
+        ));
+        assert!(detection_is_due(true, false, REFRESH));
+        // Nothing found yet is not a verdict, so that search retries sooner.
+        assert!(detection_is_due(false, false, REDETECT));
+        assert!(!detection_is_due(
+            false,
+            false,
+            REDETECT - Duration::from_secs(1)
+        ));
+        // And the short interval never applies to a worker that found monitors.
+        assert!(!detection_is_due(true, false, REDETECT));
+    }
 
     const DETECT: &str = "Invalid display\n   I2C bus:          /dev/i2c-7\n\
                           \x20  DRM connector:    card1-HDMI-A-1\n\

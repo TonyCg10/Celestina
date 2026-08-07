@@ -2,11 +2,33 @@
 
 #include <QDebug>
 #include <QQmlEngine>
+#include <QScreen>
 #include <QVariantMap>
 #include <QWindow>
 
 #include "niriclient.h"
 #include "panelmenusurface.h"
+
+namespace {
+// Where the card goes inside a surface that now covers the whole output.
+//
+// The click arrives in global coordinates and the surface starts at its
+// screen's origin, so the difference is what the content can position against.
+// The line is the panel's own bottom edge rather than the cursor's row: the
+// click chooses the column, the panel chooses the line. The card is inset
+// inside its own surface by the room its shadow needs, which is why the anchor
+// is pulled back by exactly that much.
+void placeCard(QWindow *card, QWindow *panel, const QPoint &globalAnchor)
+{
+    const int inset = card->property("shadowMargin").toInt();
+    QPoint origin(globalAnchor.x() - inset, panel->geometry().bottom() + 1 - inset);
+    if (QScreen *screen = panel->screen())
+        origin -= screen->geometry().topLeft();
+
+    card->setProperty("menuX", origin.x());
+    card->setProperty("menuY", origin.y());
+}
+} // namespace
 
 PanelMenuController::PanelMenuController(
     QQmlEngine *engine,
@@ -102,16 +124,8 @@ void PanelMenuController::open(
     if (!menu)
         return;
 
-    // The card is inset inside its surface by the room its shadow needs, and
-    // the menu belongs under the panel rather than under the cursor: the click
-    // chooses the column, the panel's own edge chooses the line.
-    const int inset = menu->property("shadowMargin").toInt();
-    const QPoint anchor(
-        globalAnchor.x() - inset,
-        panel->geometry().bottom() + 1 - inset
-    );
-
-    if (!m_surface->open(menu, panel, anchor))
+    placeCard(menu, panel, globalAnchor);
+    if (!m_surface->open(menu, panel))
         delete menu;
 }
 
@@ -173,12 +187,8 @@ void PanelMenuController::trayMenuReady(
     connect(window, SIGNAL(chosen(int)), this, SLOT(trayEntryChosen(int)));
     connect(window, SIGNAL(dismissed()), this, SLOT(close()));
 
-    const int inset = window->property("shadowMargin").toInt();
-    const QPoint placement(
-        anchor.x() - inset,
-        panel->geometry().bottom() + 1 - inset
-    );
-    if (!m_surface->open(window, panel, placement)) {
+    placeCard(window, panel, anchor);
+    if (!m_surface->open(window, panel)) {
         delete window;
         return;
     }

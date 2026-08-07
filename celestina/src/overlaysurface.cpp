@@ -12,18 +12,36 @@ constexpr int cornerMargin = 16;
 // How far the readout sits above the bottom edge: out of the way of anything
 // anchored at the bottom, and low enough to read without covering content.
 constexpr int readoutMargin = 96;
+// A surface placed over everything, including what other surfaces reserved.
+constexpr int ignoreExclusiveZones = -1;
 
-LayerSurfaceSpec centeredSpec(QScreen *screen, const QSize &size)
+LayerSurfaceSpec centeredSpec(QScreen *screen)
 {
+    auto anchors = LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop);
+    anchors |= LayerShellQt::Window::AnchorBottom;
+    anchors |= LayerShellQt::Window::AnchorLeft;
+    anchors |= LayerShellQt::Window::AnchorRight;
+
     LayerSurfaceSpec spec;
     spec.scope = QStringLiteral("celestina-overlay");
     spec.screen = screen;
-    // No anchors: an unanchored layer surface with a fixed size is centered on
-    // its output by the compositor, which is exactly where a keybind opens a
-    // launcher or a clipboard history — there is no click position to anchor
-    // to the way the panel's menu has one.
-    spec.desiredSize = size;
-    spec.exclusiveZone = 0;
+    // The whole output, with the card centred inside it by the content itself.
+    //
+    // The surface used to be the size of the card, which left the shell with no
+    // way to hear a click outside one: the click went to whatever was behind,
+    // and when that was the panel button which opened the overlay, the button
+    // asked `toggle()` for a surface that was still mapped. That is the two-
+    // click close the author found. Covering the output puts the outside click
+    // where the overlay can answer it, in one click, with one focus return —
+    // and it is what every keyboard launcher on this protocol already does.
+    spec.anchors = anchors;
+    // Anchored to all four edges with no size of its own, the compositor sizes
+    // the surface to the output — which is what `0 × 0` means here.
+    spec.desiredSize = QSize(0, 0);
+    // Reserve nothing, and ignore what everything else reserved: the panel's
+    // own exclusive zone would otherwise keep this surface off the one strip
+    // whose buttons open it.
+    spec.exclusiveZone = ignoreExclusiveZones;
     spec.layer = LayerShellQt::Window::LayerOverlay;
     // The one surface kind here that must answer the keyboard on its own,
     // exactly like the panel's menu.
@@ -114,7 +132,7 @@ bool OverlaySurface::open(QWindow *content, QScreen *screen)
     LayerSurfaceSpec spec;
     switch (m_placement) {
     case Placement::Centered:
-        spec = centeredSpec(screen, content->size());
+        spec = centeredSpec(screen);
         break;
     case Placement::Corner:
         spec = cornerSpec(screen, content->size());

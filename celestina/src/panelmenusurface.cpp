@@ -1,8 +1,8 @@
 #include "panelmenusurface.h"
 
 #include <QDebug>
-#include <QRect>
 #include <QScreen>
+#include <QSize>
 
 #include "surfacemanager.h"
 
@@ -11,38 +11,32 @@ namespace {
 // makes its margins readable as "where the click was".
 constexpr int ignoreExclusiveZones = -1;
 
-LayerSurfaceSpec menuSpec(
-    QScreen *screen,
-    const QPoint &globalAnchor,
-    const QSize &size
-)
+LayerSurfaceSpec menuSpec(QScreen *screen)
 {
     auto anchors = LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop);
+    anchors |= LayerShellQt::Window::AnchorBottom;
     anchors |= LayerShellQt::Window::AnchorLeft;
-
-    QPoint origin = globalAnchor;
-    if (screen) {
-        const QRect available = screen->geometry();
-        origin -= available.topLeft();
-        // A menu anchored near an edge stays whole: the compositor is told a
-        // position the surface actually fits in, rather than being left to
-        // clamp a surface that hangs off the output.
-        origin.setX(qBound(0, origin.x(), qMax(0, available.width() - size.width())));
-        origin.setY(qBound(0, origin.y(), qMax(0, available.height() - size.height())));
-    }
+    anchors |= LayerShellQt::Window::AnchorRight;
 
     LayerSurfaceSpec spec;
     spec.scope = QStringLiteral("celestina-panel-menu");
     spec.screen = screen;
+    // The whole output, with the card placed inside it where the click was.
+    //
+    // The surface used to be the size of the menu card and positioned by its
+    // own margins, which meant a click outside the menu was somebody else's
+    // event and the menu stayed up. Covering the output is what lets the menu
+    // hear that click — the same correction the focused overlays needed, for
+    // the same reason — and the position moves from the surface's margins into
+    // the content's own coordinates.
     spec.anchors = anchors;
-    spec.margins = QMargins(origin.x(), origin.y(), 0, 0);
-    // A layer surface anchored to two adjacent edges must state its own size;
-    // leaving it to the compositor is what a 0×0 request would do.
-    spec.desiredSize = size;
+    spec.desiredSize = QSize(0, 0);
+    // Ignoring exclusive zones is what keeps a menu opened from the panel able
+    // to cover the panel it came from.
     spec.exclusiveZone = ignoreExclusiveZones;
     spec.layer = LayerShellQt::Window::LayerOverlay;
-    // The menu is the one surface here that must answer the keyboard, so it
-    // asks for focus on its own rather than inheriting the panel's refusal.
+    // The menu must answer the keyboard on its own rather than inheriting the
+    // panel's refusal.
     spec.keyboard = LayerShellQt::Window::KeyboardInteractivityOnDemand;
     spec.activateOnShow = true;
     // Unlike the panel, this surface *should* go away when the compositor
@@ -63,11 +57,7 @@ PanelMenuSurface::~PanelMenuSurface()
     close();
 }
 
-bool PanelMenuSurface::open(
-    QWindow *content,
-    QWindow *panel,
-    const QPoint &globalAnchor
-)
+bool PanelMenuSurface::open(QWindow *content, QWindow *panel)
 {
     if (!content || !panel || isOpen())
         return false;
@@ -78,10 +68,7 @@ bool PanelMenuSurface::open(
         contentVisibilityChanged(visible);
     });
 
-    if (!mapLayerSurface(
-            content,
-            menuSpec(panel->screen(), globalAnchor, content->size())
-        )) {
+    if (!mapLayerSurface(content, menuSpec(panel->screen()))) {
         qWarning() << "Celestina could not map the panel menu surface.";
         content->disconnect(this);
         m_content.clear();

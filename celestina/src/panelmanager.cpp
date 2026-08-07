@@ -24,6 +24,13 @@
 namespace {
 constexpr int panelHeight = 40;
 constexpr auto panelScope = "celestina-panel";
+// How long the outputs must stay still before the DDC worker is told they
+// changed. Enabling one monitor produces several `QScreen` events in a row and
+// a person plugging in two produces more; every one of them costs the same
+// single rediscovery, so they are worth waiting out. It is short against the
+// five-minute refresh this exists to avoid waiting for, and long against a
+// burst.
+constexpr int outputsSettleMs = 1500;
 
 LayerSurfaceSpec panelSpec(QScreen *screen)
 {
@@ -67,9 +74,29 @@ PanelManager::PanelManager(
     , m_providers(providers)
     , m_tray(tray)
     , m_menu(menu)
+    , m_outputsSettled(new QTimer(this))
     , m_reducedMotion(reducedMotion)
 {
     m_component.loadFromModule("CelestinaDesktop", "Panel");
+
+    m_outputsSettled->setSingleShot(true);
+    m_outputsSettled->setInterval(outputsSettleMs);
+    connect(m_outputsSettled, &QTimer::timeout, this, [this] {
+        if (!m_providers)
+            return;
+
+        // One request, whatever the burst was. The provider owns what it costs
+        // and when it runs; this only says that looking again is worth it.
+        m_providers->sendCommand(
+            QStringLiteral("brightness"),
+            QStringLiteral("outputs-changed")
+        );
+    });
+}
+
+void PanelManager::outputsChanged()
+{
+    m_outputsSettled->start();
 }
 
 PanelManager::~PanelManager()
@@ -120,6 +147,10 @@ bool PanelManager::start()
                     qWarning() << "Celestina kept existing panels after failing "
                                   "to map a newly added output.";
                 }
+
+                // A monitor that just arrived may have a brightness the worker
+                // has not found; it is on a five-minute clock otherwise.
+                outputsChanged();
             });
         }
     );
@@ -128,7 +159,12 @@ bool PanelManager::start()
         m_application,
         &QGuiApplication::screenRemoved,
         this,
-        [this](QScreen *screen) { removePanel(screen); }
+        [this](QScreen *screen) {
+            removePanel(screen);
+            // A monitor leaving renumbers what `ddcutil` found as much as one
+            // arriving does.
+            outputsChanged();
+        }
     );
 
     const auto screens = QGuiApplication::screens();

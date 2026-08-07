@@ -62,6 +62,7 @@ pub mod command;
 pub mod handover;
 pub mod launcher;
 pub mod lines;
+pub mod media;
 pub mod network;
 pub mod niri_colours;
 pub mod notifications;

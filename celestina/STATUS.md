@@ -1,8 +1,10 @@
 # Celestina status
 
-- **Updated:** 2026-08-05
+- **Updated:** 2026-08-07
 - **Implementation:** R0-R5, R7, R8's departure slice, LVR-1 and LVR-2 are
-  complete in celestina 0.6.2; LVR-3 is active after the live media rerun
+  complete; LVR-3 is active and delivered `LVR-3-F` in celestina 0.6.8. Its
+  live rerun opened planned corrective unit `LVR-3-G` for network retention and
+  registered tray items that still do not reach the visible drawer
 - **Author validation:** the 2026-08-05 follow-up passed clipboard remediation,
   tray/notification protocol flows, Spanish copy, startup diagnostics, portal
   integration and output hotplug, but failed first-generation media,
@@ -14,16 +16,64 @@
 - **Live migration:** Noctalia remains the rollback and must not be removed.
   `scripts/handover-status.sh` reports the unrecorded responsibilities, and the
   removal tool refuses while any are unbuilt, unrecorded or failed
-- **GPU safety hold:** two retained boots lost the Navi 48 GPU from PCIe after
-  Celestina-shaped DDC activity. Correlation is strong but causation remains
-  unresolved. The live session is now Noctalia-only; no Celestina executable,
-  provider, build, test, deployment or activation may run until the author ends
-  the long observation. LVR-3-B corrects only the confirmed Celestina process
-  defects during this hold. See the
+- **GPU safety hold: ended 2026-08-07.** `VAL-GPU-01` passed: a long
+  Noctalia-only observation and two controlled handovers, one without DDC and
+  one with DDC, hotplug, brightness and media, produced no PCIe device loss.
+  That is strong negative reproduction evidence, not proof, so every DDC
+  invariant stands — one owning worker, global serialization, coalesced
+  operations, a bounded timeout, deterministic cancellation, a killed and
+  reaped child, and no frequent polling. Builds, tests and deployment run
+  again; Noctalia still owns the session and Celestina is not activated. See
+  the
   [system audit](docs/evidence/2026-08-05-gpu-loss-system-audit.md) and
   [lifecycle record](docs/evidence/2026-08-05-ddc-process-lifecycle.md).
 
 ## Current checkout truth
+
+- Delivered together in celestina 0.6.8: `LVR-3-G`, in the same atomic batch as
+  `LVR-3-F`.
+  A network probe that saw nothing can no longer retire a link at any repetition
+  count — `UNREADABLE_HOLD` is removed rather than raised — and only a poll that
+  positively found no default route can, twice over. A route naming a device the
+  device list cannot explain is unreadable, not offline, which is what a Wi-Fi
+  card re-associating looks like.
+
+  The tray had a real defect, found by walking the whole D-Bus path against a
+  private bus rather than by reasoning about the parts. A registry read rebuilt
+  the registration list wholesale from the snapshot its reply carried, so an
+  application that registered while that read was in flight was removed by an
+  answer composed before it existed — and no second registration signal was
+  ever coming for it. The new `celestina-tray-watcher` integration test
+  reproduced the live symptom on its first run, publishing two of four with
+  Slack and Solaar missing. A registry read is now a reconciliation against the
+  registrations known when it was sent, and all four are published.
+
+  The model, the open drawer and the 1920-pixel flank layout were also checked
+  and hold. The folded drawer additionally now shows how many items are behind
+  its chevron, which it never did. Both live cases stay failed until the author
+  reruns them.
+
+- Delivered in celestina 0.6.8: `LVR-3-F`, the
+  first unit of this plan with executable evidence. Four readings stopped
+  treating one unlucky observation as the truth: Bluetooth publishes the
+  adapter's own state so a powered radio with nothing on it stays visible; the
+  network holds its last confirmed link across a bounded run of unreadable
+  polls without raising the shared 750 ms tool deadline; each overlay receives
+  only the properties it declares, so the session menu no longer logs a runtime
+  property error; and output hotplug asks the single DDC worker for one
+  coalesced rediscovery instead of waiting out the 300-second refresh. Beyond
+  those four: every transient surface — the five focused overlays, the panel's
+  context menu and a tray item's menu — now covers its own output, so a click
+  outside a card is the surface's to answer and the panel button that opened an
+  overlay is behind it rather than in front of it; a tray item that registers
+  and then fails to describe itself is retried, logged and shown under the name
+  it registered with instead of being dropped silently; and media is driven by
+  MPRIS owner and property signals over `zbus`, with `playerctl` gone from this
+  shell entirely and only a one-second progress tick and a thirty-second
+  bounded reconciliation left. The
+  canonical production exit ran and deployed the verified bytes to
+  `~/.local`; the session was not replaced. Recorded in
+  [one poll is not the truth](docs/evidence/2026-08-07-one-poll-is-not-the-truth.md).
 
 - Uncommitted in the checkout: `LVR-3-E`. The helper target gathers its sources
   at configure time rather than naming ten of nineteen by hand. Source and text
@@ -46,6 +96,11 @@
   `org.celestina.Shell1` session interface.
 - Rust helpers reduce Niri state and carry the aggregate providers through the
   pure `celestina-shell-core` contracts.
+- Media is read from the session bus rather than asked for: the helper follows
+  `org.mpris.MediaPlayer2.*` owners appearing and disappearing and whatever a
+  player says at its own object path. Nothing is spawned for it, and the only
+  clock left advances a playing track's progress between two things the player
+  said.
 - The panel contains workspace/window, system, media, audio, DDC and tray
   paths. Workspace, audio, microphone, DDC, CPU/RAM and tray paths passed the
   follow-up. Version 0.6.2 gives the first helper generation a bounded fast
@@ -165,10 +220,11 @@ the author reruns them against 0.6.2.
 ## Records
 
 - Active plan: [LVR-3 late provider insertion](docs/plans/active/2026-08-05-late-provider-insertion.md)
-- Celestina 0.6.4 is built and passes its focused Rust, C++, QML and offscreen
-  checks. Canonical verification and deployment remain pending because the
-  suite architecture guard currently rejects unrelated Siderita ratchet
-  growth; the shell has not been activated and Noctalia still owns the session.
+- Celestina 0.6.8 is built, verified and deployed by the canonical production
+  exit: 181 shell-core tests, 46 helper unit tests and six tests across three
+  integration binaries, Clippy and `cargo fmt` clean, QML lint, CTest 15/15 and the
+  eight-second offscreen release smoke. The shell has not been activated and Noctalia still
+  owns the session.
 - Planned next checkpoint: `AUD-1` static audit hardening in
   [ROADMAP.md](ROADMAP.md), from the
   [2026-08-05 static shell audit](docs/evidence/2026-08-05-static-shell-audit.md);

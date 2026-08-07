@@ -65,6 +65,17 @@ struct TrayItem {
 // Returns false for anything that is not a usable registration.
 bool parseTrayRegistration(const QString &entry, QString *service, QString *path);
 
+// What the panel can show for an item that registered and then never described
+// itself.
+//
+// `GetAll` is a call to another application's process and it can fail: the
+// object may not be exported yet, the interface may be the wrong one, the peer
+// may refuse. Dropping the item there is what makes a registration the watcher
+// lists into a control nobody can see, permanently and without a word — so an
+// item that never answered is shown with the only name this shell has for it,
+// which is the one it registered under.
+TrayItem unreadTrayItem(const QString &service, const QString &path);
+
 // Reads what `org.freedesktop.DBus.Properties.GetAll` answered for one item.
 // Absent keys are normal — `GetAll` omits a property whose getter failed — so
 // this fills in what it can and never fails for a missing field.

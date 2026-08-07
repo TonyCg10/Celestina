@@ -2,6 +2,7 @@
 
 #include <QCursor>
 #include <QDebug>
+#include <QHash>
 #include <QGuiApplication>
 #include <QQmlEngine>
 #include <QScreen>
@@ -9,21 +10,42 @@
 #include <QWindow>
 
 #include "overlaysurface.h"
-#include "shellprovidersclient.h"
+
+QString overlaySourceProperty(const QString &qmlComponentName)
+{
+    // Every one of these declares `reducedMotion` too; that one is added by the
+    // controller because it is a presentation contract rather than a bridge.
+    static const QHash<QString, QString> declared {
+        {QStringLiteral("LauncherOverlay"), QStringLiteral("providerSource")},
+        {QStringLiteral("ClipboardOverlay"), QStringLiteral("providerSource")},
+        {QStringLiteral("NotificationCenter"), QStringLiteral("providerSource")},
+        {QStringLiteral("ControlCentre"), QStringLiteral("providerSource")},
+        // The one overlay that reads no provider: it asks the session to end.
+        {QStringLiteral("SessionMenu"), QStringLiteral("shellSource")},
+    };
+    return declared.value(qmlComponentName);
+}
 
 OverlayController::OverlayController(
     QQmlEngine *engine,
-    ShellProvidersClient *providers,
     const QString &qmlComponentName,
+    QObject *source,
     QObject *parent
 )
     : QObject(parent)
     , m_component(engine)
-    , m_providers(providers)
     , m_componentName(qmlComponentName)
+    , m_sourceProperty(overlaySourceProperty(qmlComponentName))
+    , m_source(source)
     , m_surface(new OverlaySurface(OverlaySurface::Placement::Centered, this))
     , m_enabled(true)
 {
+    if (m_sourceProperty.isEmpty()) {
+        qCritical() << "Celestina has no overlay named" << m_componentName;
+        m_enabled = false;
+        return;
+    }
+
     m_component.loadFromModule("CelestinaDesktop", m_componentName);
     if (!m_component.isReady()) {
         qCritical().noquote() << "Celestina could not load its" << m_componentName
@@ -32,9 +54,16 @@ OverlayController::OverlayController(
     }
 }
 
-void OverlayController::setExtraProperties(const QVariantMap &properties)
+QVariantMap OverlayController::initialProperties() const
 {
-    m_extraProperties = properties;
+    QVariantMap properties {
+        {QStringLiteral("reducedMotion"),
+         qEnvironmentVariableIsSet("CELESTINA_REDUCED_MOTION")},
+    };
+    if (!m_sourceProperty.isEmpty())
+        properties.insert(m_sourceProperty, QVariant::fromValue(m_source.data()));
+
+    return properties;
 }
 
 bool OverlayController::isOpen() const
@@ -44,17 +73,7 @@ bool OverlayController::isOpen() const
 
 QWindow *OverlayController::createWindow()
 {
-    QVariantMap initialProperties {
-        {QStringLiteral("providerSource"), QVariant::fromValue(m_providers.data())},
-        {QStringLiteral("reducedMotion"),
-         qEnvironmentVariableIsSet("CELESTINA_REDUCED_MOTION")},
-    };
-    for (auto extra = m_extraProperties.constBegin();
-         extra != m_extraProperties.constEnd();
-         ++extra) {
-        initialProperties.insert(extra.key(), extra.value());
-    }
-    QObject *rootObject = m_component.createWithInitialProperties(initialProperties);
+    QObject *rootObject = m_component.createWithInitialProperties(initialProperties());
     if (!rootObject) {
         qCritical().noquote() << "Celestina could not create its" << m_componentName
                                << "overlay:" << m_component.errorString();
@@ -75,7 +94,9 @@ QWindow *OverlayController::createWindow()
 
 void OverlayController::open()
 {
-    if (!m_enabled || !m_providers || isOpen())
+    // A `required property` bound to a destroyed bridge is a component that
+    // fails to create, so an overlay whose source is gone does not open at all.
+    if (!m_enabled || !m_source || isOpen())
         return;
 
     QWindow *const overlay = createWindow();

@@ -9,7 +9,7 @@ implementation unit; it does not rewrite the completed milestone.
 
 ## VAL-GPU-01 — Noctalia-only GPU stability hold
 
-- **Status:** pending
+- **Status:** passed
 - **Related implementation:** LVR-3-B
 - **Requires:** Noctalia alone; unchanged kernel, monitors and existing GPU
   mitigations; no Celestina process, provider, build, test or activation
@@ -19,11 +19,15 @@ implementation unit; it does not rewrite the completed milestone.
   recurs.
 - **Pass condition:** an author-declared long observation completes without
   `device lost from bus!`, a full freeze or a green-screen terminal state.
-- **Result:** in progress from 2026-08-05. After several hours using only
-  Noctalia, the failure had not recurred. This is provisional supporting
-  evidence, not yet a completed long observation. Noctalia still has ddcutil
-  enabled, so this isolates Celestina and the handover sequence rather than DDC
-  as a whole.
+- **Result:** passed on 2026-08-07 by author declaration after a long
+  Noctalia-only observation completed without a freeze, green screen or PCIe
+  device loss. Noctalia retained its configured DDC use, so this isolates
+  Celestina and the handover sequence rather than DDC as a whole. Two later
+  controlled handovers, first with Celestina DDC disabled and then with DDC,
+  hotplug, brightness and media active, also crossed the retained crash's
+  return-to-first-fence interval without a matching kernel error. This is
+  strong negative reproduction evidence, not proof that a lower-probability
+  driver or transition fault cannot recur.
 - **Interpretation:** recurrence disproves Celestina as a necessary condition;
   non-recurrence is strong evidence against the handover but does not identify
   the exact failing kernel, firmware, DDC, PCIe or hardware layer.
@@ -75,6 +79,195 @@ implementation unit; it does not rewrite the completed milestone.
   helper made it appear.
 - **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
+### 2026-08-07 controlled transition observations
+
+- First-generation media passed with DDC disabled: the already-present Firefox
+  player appeared without restarting the provider helper, and play/pause
+  updates worked in both directions.
+- Bluetooth is powered but has no connected devices. The panel currently hides
+  the Bluetooth reading in that state; this fails the author's requirement
+  that Bluetooth remain visibly present even with zero connections.
+- The Wi-Fi text appears and disappears intermittently while the underlying
+  connection remains in use. Read-only sampling reproduced `nmcli` latency
+  spikes between 2.37 and 3.00 seconds among normal 4--5 millisecond replies.
+  The session provider applies the shared 750 millisecond tool deadline and
+  withdraws `network` after that single missed sample, so the panel disappears
+  until a later poll succeeds. This is provider sampling churn, not evidence
+  that the Wi-Fi link itself disconnected; corrective work must retain the
+  last confirmed link across transient probe failures and distinguish a real
+  offline state.
+- Solaar and Slack registered with Celestina's StatusNotifierWatcher but were
+  absent from the rendered tray.
+- Opening the session menu logged that `providerSource` was injected into a
+  `SessionMenu` component that does not declare that property. The shell stayed
+  alive, but this surface is not clean enough for further session-action tests.
+- Closing the notification centre through the same unread-count button that
+  opened it takes two clicks. The first click returns focus to the previously
+  active application as if the focused overlay had been dismissed, but leaves
+  the centre mapped; the second click closes it. The notification centre,
+  launcher, clipboard, control centre and session menu all use the same
+  `OverlayController` and focused `OverlaySurface`, so the shared dismissal and
+  toggle boundary is the corrective scope. Only the notification path is
+  confirmed by live validation: it is currently the only one of those overlays
+  with a panel button that can exercise this exact open-button/close-button
+  sequence.
+- Interaction requirement: every transient panel surface must dismiss on a
+  click outside its own bounds. This applies both to the focused overlays above
+  and to panel context menus, including menus opened by right-clicking tray
+  items. The overlay and panel-menu implementations have different controllers,
+  so corrective evidence must exercise both paths rather than infer one from
+  the other.
+- The controlled return began after 16 minutes of stable Celestina use. At
+  00:18 EDT the `celestina-transition.service` cgroup stopped cleanly: host,
+  both helpers, its inhibitor, `wlsunset`, session bus names and the transient
+  unit were all absent before Noctalia started. No Celestina `ddcutil` process
+  existed. Noctalia then reclaimed both StatusNotifierWatcher and Notifications
+  from PID 1479019 and ran its own configured DDC detection, finding HDMI-A-1
+  on bus 7 and DP-1 on bus 8. The kernel had recorded no matching GPU fence,
+  timeout, flip or PCIe-loss error at the post-transition checkpoint.
+- In the following DDC-enabled phase, Celestina started while DP-1 was
+  intentionally disabled and Firefox was paused. Enabling DP-1 later mapped its
+  panel correctly at 00:25:06 EDT, but did not add that output's brightness
+  control. The brightness worker retains a non-empty startup detection for the
+  full 300-second refresh interval; only an entirely empty detection uses the
+  30-second rediscovery interval, and output hotplug does not wake the worker.
+  Corrective work must trigger or schedule prompt DDC rediscovery when outputs
+  appear without allowing concurrent probes. Live validation must also
+  distinguish delayed recovery at the existing refresh from failure to recover
+  at all.
+- DP-1 brightness did appear at the existing refresh and then read and changed
+  the monitor correctly. Recovery therefore works but is unacceptably delayed;
+  the confirmed defect is missing prompt hotplug rediscovery, not a permanently
+  lost connector or a broken DDC control after rediscovery.
+- The combined DDC and media phase also passed: Firefox appeared, its transport
+  controls worked, and a brightness change completed correctly while media was
+  active. Discovery latency remains a quality defect even though steady-state
+  operation passed. Media currently polls every five seconds while idle and
+  every two seconds with a player; corrective work should subscribe to MPRIS
+  owner and property signals, retaining only a light active-progress timer and
+  bounded fallback reconciliation. Brightness must not compensate by polling
+  DDC more aggressively. The host already observes output hotplug, so it should
+  request one coalesced rediscovery from the single DDC worker, with global
+  serialization and the existing bounded child lifecycle intact.
+- The final return kept Firefox playing and stopped the DDC-enabled Celestina
+  instance at 00:34 EDT. Its transient cgroup, host, helpers, `ddcutil`,
+  `wlsunset`, inhibitor and bus names were all absent before Noctalia started.
+  Noctalia reclaimed StatusNotifierWatcher and Notifications from PID 1488967,
+  restored its `mpvpaper` supervisor, retained the playing MPRIS source and
+  completed its own DDC detection. No matching kernel GPU error was present at
+  the ten-second post-transition checkpoint. Noctalia and the kernel remained
+  clean through 00:36:17 EDT, 100 seconds after Noctalia started and therefore
+  beyond the approximately 82-second return-to-first-fence interval of the
+  retained crash. This disproves deterministic reproduction by one controlled
+  handover; it does not exclude a lower-probability transition or driver fault.
+
+### 2026-08-07 remediation
+
+`LVR-3-F` corrects four of the seven observations above in celestina 0.6.8. The
+observations themselves are not rewritten; these are the reruns they earn.
+
+- Bluetooth publishes the adapter's own state — absent, off, on — beside the
+  connection count, so a powered adapter with nothing on it stays on the panel
+  and an unreadable query still publishes nothing. Rerun: `VAL-R5-BT`.
+- The network reading holds the last confirmed link across up to three
+  unreadable polls, and ends it on the second confirmed-offline poll. The
+  shared 750 ms tool deadline is unchanged. Rerun: `VAL-R1-NET`.
+- Every overlay now receives only the properties it declares, so the session
+  menu opens without a runtime property error. Rerun: `VAL-R5`.
+- Output hotplug asks the single DDC worker for one coalesced rediscovery
+  instead of waiting out the 300-second refresh. Neither interval was
+  shortened and no second `ddcutil` child can exist. Rerun: `VAL-R1-DDC`.
+
+The other three are corrected in the same delivery.
+
+- Every transient surface — the five focused overlays, the panel's context menu
+  and a tray item's own menu — now covers its output, so a click outside the
+  card is the surface's own to answer and the button that opened an overlay is
+  behind it rather than in front of it. Rerun: `VAL-R1-OVERLAY`.
+- A tray item that registers and then fails to describe itself is retried once,
+  logged, and shown under the name it registered with, instead of being dropped
+  silently and permanently. Registry re-reads are also generation-tagged, so a
+  superseded reply can no longer clear the current one. The exact reason Slack
+  and Solaar were lost is still not known — read-only inspection of this
+  session's bus showed all four registered items answering `GetAll` correctly —
+  so this closes the chain that made such a loss silent rather than claiming to
+  have found the cause. Rerun: `VAL-R1-02`.
+- Media is driven by MPRIS owner and property signals. `playerctl` is gone from
+  this shell; nothing is spawned for media at all. Rerun: `VAL-R1-01`.
+
+## VAL-R1-OVERLAY — Every transient surface closes on a click outside it
+
+- **Status:** pending
+- **Related implementation:** `LVR-3-F` (complete)
+- **Requires:** live Niri session and celestina 0.6.8
+- **Procedure:** open the launcher, the clipboard history, the notification
+  centre, the control centre and the session menu in turn, and close each with
+  a single click outside its card. Then open the notification centre from the
+  panel's unread indicator and close it with a single click on that same
+  indicator. Then right-click the panel for its context menu, and right-click a
+  tray item for its own menu, closing each with one click outside.
+- **Pass condition:** every surface closes on the first click outside its
+  bounds; the indicator that opened the notification centre closes it in one
+  click; focus returns to the previously active application exactly once, and
+  no surface reopens, flickers or stays mapped after a dismissal.
+- **Result:** not run
+- **Evidence:** [the 2026-08-07 corrections](docs/evidence/2026-08-07-one-poll-is-not-the-truth.md)
+
+## VAL-R1-NET — A slow probe does not erase a live link
+
+- **Status:** failed
+- **Related implementation:** `LVR-3-F` (complete)
+- **Requires:** live Niri session, celestina 0.6.8 and a Wi-Fi link in use
+- **Procedure:** use the session normally for long enough to cross several of
+  the `nmcli` latency spikes measured on 2026-08-07, watching the panel's link
+  text; then disconnect the link deliberately and watch it go.
+- **Pass condition:** the link text never disappears while the connection is in
+  use, and a real disconnection removes it within about ten seconds rather than
+  persisting.
+- **Result:** failed on 2026-08-07 against celestina 0.6.8. The Wi-Fi link
+  remained connected and in use, but its panel reading still disappeared.
+  `LinkTracker` retains an unreadable observation for only three five-second
+  polls and withdraws the provider on the fourth; the corrective policy does
+  not yet survive the longer unreadable run observed live.
+- **Remediation:** implemented by `LVR-3-G` in [late provider insertion](docs/plans/active/2026-08-05-late-provider-insertion.md). The unreadable
+  hold is removed rather than raised: a probe that saw nothing can no longer
+  retire a link at any repetition count, and only a poll that positively found
+  no default route can — twice in a row, so about ten seconds. A route naming a
+  device the device list cannot explain is now classified as unreadable rather
+  than as a disconnection, which is what a re-associating card looks like. The
+  live rerun remains required and this case stays failed until the author runs
+  it.
+- **Evidence:** [what a probe did not see](docs/evidence/2026-08-07-what-a-probe-did-not-see.md)
+
+## VAL-R1-DDC — Prompt brightness rediscovery on output hotplug
+
+- **Status:** pending
+- **Related implementation:** `LVR-3-F` (complete)
+- **Requires:** live Niri session, celestina 0.6.8, and an output that can be
+  disabled and enabled
+- **Procedure:** start with one output disabled, enable it, and watch for that
+  monitor's brightness control. Then disable it again.
+- **Pass condition:** the control appears within seconds of the panel mapping
+  rather than at the 300-second refresh, only one `ddcutil` process exists at
+  any moment during the transition, and no `ddcutil` survives shutdown.
+- **Result:** not run
+- **Evidence:** [one poll is not the truth](docs/evidence/2026-08-07-one-poll-is-not-the-truth.md)
+
+## VAL-R5-BT — Bluetooth stays visible while the adapter is on
+
+- **Status:** pending
+- **Related implementation:** `LVR-3-F` (complete)
+- **Requires:** live Niri session, celestina 0.6.8, and an adapter that can be
+  powered off and on
+- **Procedure:** with nothing paired, read the panel and the control centre;
+  connect a device and read both again; power the adapter off and read both
+  again.
+- **Pass condition:** a powered adapter with no connections reads as present and
+  idle rather than vanishing, a connected device is counted and named, and a
+  powered-off adapter says so instead of disappearing.
+- **Result:** not run
+- **Evidence:** [one poll is not the truth](docs/evidence/2026-08-07-one-poll-is-not-the-truth.md)
+
 ## VAL-R1-02 — StatusNotifierWatcher takeover
 
 - **Status:** passed
@@ -90,6 +283,43 @@ implementation unit; it does not rewrite the completed milestone.
   restored it on restart. Noctalia reclaimed the name and tray during rollback,
   and Celestina later reacquired it without losing registrations.
 - **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
+
+## VAL-R1-TRAY — Every registered active item reaches the open drawer
+
+- **Status:** failed
+- **Related implementation:** `LVR-3-F` (complete)
+- **Requires:** a live Niri session, celestina 0.6.8, and Slack and Solaar
+  registered as StatusNotifierItems
+- **Procedure:** inspect the watcher's registry and each item's `GetAll`
+  response, then open the tray drawer and compare the rendered controls.
+- **Pass condition:** every bounded active registration that answers with a
+  usable item is present in the open drawer, with a name fallback when its icon
+  cannot be resolved.
+- **Result:** failed on 2026-08-07. Celestina's watcher listed four active
+  registrations. Slack's Chromium item answered with its pixmap and menu;
+  Solaar answered with `battery-good`, title `Solaar` and its menu. The author
+  still reported both absent from the tray. This proves registration and
+  foreign-item properties are healthy, but does not yet isolate whether the
+  loss is in the host's published model, the drawer's collapsed/open state or
+  right-flank clipping. The next pass must observe those three boundaries
+  separately rather than modify D-Bus parsing on inference.
+- **Remediation:** implemented by `LVR-3-G` in [late provider insertion](docs/plans/active/2026-08-05-late-provider-insertion.md), which found a
+  real defect by walking the whole D-Bus path against a private bus instead of
+  reasoning about the parts. A registry read rebuilt the registration list
+  wholesale from the snapshot its reply carried, so an application registering
+  while that read was in flight was removed by an answer composed before it
+  existed — permanently, because no second registration signal follows. The new
+  `celestina-tray-watcher` integration test reproduced this session's symptom on
+  its first run: four registered, two published, Slack and Solaar missing. A
+  registry read is now a reconciliation against what was known when it was sent,
+  and all four are published. The model, the open drawer and the 1920-pixel
+  flank layout were checked too and hold; the folded drawer additionally now
+  shows how many items are behind its chevron, which it never did. Whether this
+  defect is what the author hit, or the unreadable folded state, or both, is an
+  inference this build cannot settle. No status is rewritten, nothing is
+  permanently unfolded and no application is special-cased. This case stays
+  failed until the author opens the drawer and reports what is in it.
+- **Evidence:** [what a probe did not see](docs/evidence/2026-08-07-what-a-probe-did-not-see.md)
 
 ## VAL-R2-01 — Deferred launcher edge cases
 
@@ -125,7 +355,7 @@ implementation unit; it does not rewrite the completed milestone.
 
 ## VAL-R3 — Session verbs and lifecycle
 
-- **Status:** failed
+- **Status:** passed
 - **Related implementation:** R3 (complete)
 - **Requires:** R3 automated exit green plus explicit permission for each live
   mutation
@@ -133,14 +363,15 @@ implementation unit; it does not rewrite the completed milestone.
   rollback ready; confirm lock-and-suspend refuses while no provider exists.
 - **Pass condition:** each provider-confirmed state is truthful, external
   lifecycles release cleanly and the refusal path never suspends unlocked.
-- **Result:** failed on final rollback. OSD, night-light and caffeine toggles,
-  forced child death, aggregate-helper restart, DPMS/wake recovery and both
-  locker refusals behaved correctly. After Celestina exited, however, four
-  reparented `systemd-inhibit --what=idle:sleep` children remained and blocked
-  explicit suspend until terminated individually.
+- **Result:** passed on 2026-08-07. The earlier pass for OSD, night-light,
+  caffeine, forced child death, aggregate-helper restart, DPMS/wake recovery
+  and both locker refusals was retained. Two controlled Celestina shutdowns
+  then proved the 0.6.2 lifecycle remediation live: the host, both helpers,
+  `wlsunset`, `systemd-inhibit`, its held `sleep`, bus names and transient
+  cgroup all disappeared before Noctalia restarted, with no manual cleanup.
 - **Remediation:** implemented in 0.6.2 by `LVR-2-A` in [live validation follow-up](docs/plans/archive/2026-08-05-live-validation-follow-up.md); a process regression
   proves SIGTERM releases an active held child before helper exit, and the live
-  repeated lifecycle rerun remains required.
+  repeated lifecycle rerun passed on 2026-08-07.
 - **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-R4 — Notification server, toasts and handover

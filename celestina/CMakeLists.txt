@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.6.7 LANGUAGES CXX)
+project(celestina VERSION 0.6.8 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -289,6 +289,31 @@ if(BUILD_TESTING)
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     )
 
+    # The tray host end to end, against a private bus it starts itself. It
+    # claims the real watcher name, which is exactly why it may never run on
+    # the author's session bus.
+    qt_add_executable(celestina-tray-watcher-test
+        tests/traywatcher_test.cpp
+        src/traywatcher.h
+        src/traywatcher.cpp
+        src/traywatcherservice.h
+        src/traywatcherservice.cpp
+        src/trayitems.h
+        src/trayitems.cpp
+        src/trayicons.h
+        src/trayicons.cpp
+        src/traymenu.h
+        src/traymenu.cpp
+    )
+    target_include_directories(celestina-tray-watcher-test PRIVATE src)
+    target_link_libraries(celestina-tray-watcher-test PRIVATE
+        Qt6::Test Qt6::DBus Qt6::Gui
+    )
+    add_test(NAME celestina-tray-watcher COMMAND celestina-tray-watcher-test)
+    set_tests_properties(celestina-tray-watcher PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    )
+
     qt_add_executable(celestina-shell-commandline-test
         tests/shellcommandline_test.cpp
         src/shellcommandline.h
@@ -386,6 +411,35 @@ if(BUILD_TESTING)
     add_test(NAME celestina-surface-manager COMMAND celestina-surface-manager-test)
     set_tests_properties(celestina-surface-manager PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    )
+
+    # What each overlay component declares, and what a click outside its card
+    # does. It loads the QML files directly rather than the compiled module, for
+    # the same reason the surface test does: the module is the application's,
+    # and this asks about the files themselves.
+    qt_add_executable(celestina-overlay-contract-test
+        tests/overlaycontract_test.cpp
+        src/overlaycontroller.h
+        src/overlaycontroller.cpp
+        src/overlaysurface.h
+        src/overlaysurface.cpp
+        src/surfacemanager.h
+        src/surfacemanager.cpp
+    )
+    target_include_directories(celestina-overlay-contract-test PRIVATE src)
+    target_compile_definitions(celestina-overlay-contract-test PRIVATE
+        CELESTINA_STYLE_IMPORT_ROOT="${CELESTINA_STYLE_IMPORT_ROOT}"
+        CELESTINA_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml"
+    )
+    target_link_libraries(celestina-overlay-contract-test PRIVATE
+        Qt6::Test
+        Qt6::Quick
+        LayerShellQt::Interface
+    )
+    add_test(NAME celestina-overlay-contract COMMAND celestina-overlay-contract-test)
+    set_tests_properties(celestina-overlay-contract PROPERTIES
+        ENVIRONMENT
+            "QML2_IMPORT_PATH=${CELESTINA_STYLE_IMPORT_ROOT};QT_QPA_PLATFORM=offscreen"
     )
 
     qt_add_executable(celestina-output-chooser-test

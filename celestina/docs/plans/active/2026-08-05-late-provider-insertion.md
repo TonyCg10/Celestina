@@ -37,6 +37,53 @@ reappearance and every other provider reading preserved.
 - Defer every executable check, build, deployment and live validation until the
   author ends the long Noctalia-only observation.
 
+## Scope extension — 2026-08-07 controlled transitions
+
+The author ended the Noctalia-only observation on 2026-08-07 and ran two
+controlled Noctalia → Celestina → Noctalia transitions. `VAL-GPU-01` passed and
+`VAL-R1-01`'s first-generation media case passed, which is what this plan was
+opened for. The same run recorded seven further defects, and the author asked for
+them to be consolidated here rather than split across plans, because every one
+of them is the same class of fault this plan already owns: a provider or a
+surface lifecycle treating one unlucky observation as the truth.
+
+The scope therefore grows, before any of it is edited, to:
+
+- publish the Bluetooth adapter's own state so a powered adapter with nothing
+  connected stays visible, without inventing state when the query fails;
+- keep the last confirmed network link across a transient probe failure, with a
+  bounded expiry and an explicit confirmed-offline path, without raising the
+  shared tool deadline;
+- give every overlay exactly the initial properties it declares;
+- let output hotplug request one coalesced DDC rediscovery from the single
+  worker that already owns the only `ddcutil` child;
+- dismiss every transient surface on a click outside its own bounds;
+- find and correct the loss between a registered tray item and a rendered one;
+- drive media from MPRIS signals rather than a `playerctl` poll.
+
+All seven are corrected in `LVR-3-F`. Two of them are corrected by design
+rather than from a reproduction, and the difference is recorded rather than
+blurred:
+
+- **Overlay dismissal.** What Niri does with a focused `LayerOverlay` surface
+  when the panel behind it is clicked was never established, and no build can
+  establish it. The correction removes the question instead of answering it:
+  every transient surface now covers its own output, so a click outside the
+  card is inside the surface and the surface answers it. The panel button that
+  opened an overlay is behind the overlay while it is up, so it cannot receive
+  a click, cannot re-enter `toggle()`, and focus returns exactly once.
+- **The missing tray items.** Read-only inspection of this session's bus on
+  2026-08-07 showed all four registered items answering `GetAll` correctly, and
+  nothing in the host's parsing, icon resolution or drawer filtering that would
+  drop Slack and Solaar while keeping `nm-applet` and Blueman. The exact reason
+  those two were lost is therefore still not known. What *is* established by
+  reading the host is that the loss was possible and silent: a `GetAll` that
+  failed was dropped without a word, and an item with no properties was never
+  published at all. That chain is closed, and the live rerun stays required.
+
+Media keeps one primary path: the `playerctl` poll is gone, not disabled
+alongside a second route.
+
 ## Exclusions
 
 - MPRIS discovery redesign; the isolated helper already publishes correctly.
@@ -58,15 +105,36 @@ reappearance and every other provider reading preserved.
 3. Repair the two defects `LVR-3-B` introduced in that same path: address the
    escalation timer to the helper instance it was armed against, and let the
    handler that receives `exitStatus` own the restart delay (`LVR-3-C`).
+4. Classify an oversized Niri frame as skippable rather than as the end of the
+   session (`LVR-3-D`).
+5. Gather the helper target's sources instead of listing them (`LVR-3-E`).
+6. Correct every defect the 2026-08-07 controlled transitions recorded, as one
+   0.6.8 delivery (`LVR-3-F`): the Bluetooth adapter's own state, the last
+   confirmed network link, each overlay's declared properties, a coalesced DDC
+   rediscovery on output hotplug, dismissal on a click outside any transient
+   surface, a tray item that is never dropped for failing to describe itself,
+   and media driven by MPRIS signals rather than a `playerctl` timer.
+
+   One unit rather than seven because an inventory's boundaries are exclusive
+   and these changes share `session.rs`, `ControlCentre.qml`, `CMakeLists.txt`,
+   the overlay contract test and the version declarations. They are also one
+   PATCH: a single delivery answering a single validation run.
+7. Correct the two cases the author's rerun of `LVR-3-F` still failed
+   (`LVR-3-G`): a network reading that repetition alone could still retire, and
+   the tray items the author did not find. Both land in the same 0.6.8 batch —
+   the previous unit is uncommitted, so this is one PATCH from `HEAD`, not two.
 
 ## Implementation exit
 
 The registered architecture guard, project verification, the canonical
-Celestina production exit and the live transition matrix remain required, and
-all of them are suspended for the duration of the safety hold below. No
-Celestina executable, provider, build, test, deployment or activation may run
-until the author explicitly ends the Noctalia-only observation, so the
-implementation exit is reached only after that release.
+Celestina production exit and the live transition matrix remain required. They
+were suspended for the duration of the safety hold below; the author ended that
+observation on 2026-08-07 and `VAL-GPU-01` passed, so from `LVR-3-F` onward the
+exit runs normally: `bash scripts/check-architecture-contract.sh`, the project's
+registered `verify-production.sh`, `python3 scripts/version_tool.py check`,
+`python3 scripts/check-staged-units.py` and the canonical
+`celestina/scripts/complete-production.sh`. Completion updates the on-disk
+bundle; it never activates Celestina or replaces Noctalia.
 
 ## Change and commit ledger
 
@@ -77,6 +145,8 @@ implementation exit is reached only after that release.
 | LVR-3-C | `celestina:` | done | [inventory](../../inventories/2026-08-05-late-provider-insertion/LVR-3-C.numstat.tsv) | 10 files, +161/-7 | Address the escalation timer to the helper instance it was armed against, so a replacement started inside the grace window is not killed mid-`ddcutil`; and let the handler that receives `exitStatus` own the restart delay, so the spacing an unclean exit earns is actually applied — with `FailedToStart` scheduled where it is, since Qt emits no `finished()` for a process that never ran | None: the GPU safety hold forbids building, testing or running this project. Reviewed by reading and recorded in [helper restart ownership evidence](../../evidence/2026-08-06-helper-restart-ownership.md) | `VAL-R1-01`, `VAL-GPU-01` |
 | LVR-3-D | `celestina:` | done | [inventory](../../inventories/2026-08-05-late-provider-insertion/LVR-3-D.numstat.tsv) | 9 files, +129/-6 | Classify an oversized frame in the Niri adapter the way the provider helper already classifies it: report and skip it rather than end the session, so a frame the host would discard no longer tears down the compositor connection, empties the workspace strip and reconnects into the identical refusal | None: the GPU safety hold forbids building, testing or running this project. Reviewed by reading and recorded in [oversized frame evidence](../../evidence/2026-08-06-oversized-frame-is-skipped.md) | `VAL-R1-01` |
 | LVR-3-E | `celestina:` | done | [inventory](../../inventories/2026-08-05-late-provider-insertion/LVR-3-E.numstat.tsv) | 8 files, +104/-15 | Gather the helper target's sources with a configure-time glob instead of a hand-written list that had drifted to ten of nineteen files and named none of the shell core, so the dependency set stops claiming something untrue | None: the GPU safety hold forbids configuring, building, testing or running this project. Reviewed by reading and recorded in [helper sources evidence](../../evidence/2026-08-06-helper-sources-gathered.md) | `VAL-R1-01` |
+| LVR-3-F | `celestina:` | done | [inventory](../../inventories/2026-08-05-late-provider-insertion/LVR-3-F.numstat.tsv) | 36 files, +2691/-315 | Correct every defect the 2026-08-07 controlled transitions recorded, as one 0.6.8 delivery. Four readings stop treating one unlucky observation as the truth — the Bluetooth adapter's own state, the last confirmed network link, each overlay's declared properties, and a coalesced DDC rediscovery on output hotplug. Every transient surface then becomes the whole output so a click outside it is its own to answer, an item the tray registry lists is never dropped for failing to describe itself, and media is driven by MPRIS owner and property signals instead of a `playerctl` timer | 178 shell-core tests, 34 provider unit tests and six tests across three integration binaries, Clippy and `cargo fmt` clean, QML lint, CTest 14/14 with the new `celestina-overlay-contract` target, the architecture, language and documentation guards, and the canonical production exit; recorded in [the 2026-08-07 corrections](../../evidence/2026-08-07-one-poll-is-not-the-truth.md) | `VAL-R1-01`, `VAL-R1-02`, `VAL-R5` |
+| LVR-3-G | `celestina:` | done | [inventory](../../inventories/2026-08-05-late-provider-insertion/LVR-3-G.numstat.tsv) | 14 files, +2245/-110 | Read the routing table first and on its own, so a confirmed absence of a default route retires a link without waiting on `nmcli`, and state the offline streak once — consecutive, with an unreadable poll keeping the link and resetting the run. Then walk the tray's whole D-Bus path against a private bus, which reproduced the live loss on its first run and found it: a registry read rebuilt the registration list wholesale from a snapshot older than registrations it had already learned | 181 shell-core tests, 46 helper unit tests, 6 integration tests, Clippy, `cargo fmt`, QML lint, CTest 15/15 with the new `celestina-tray-watcher` target, every guard and the canonical production exit; recorded in [what a probe did not see](../../evidence/2026-08-07-what-a-probe-did-not-see.md) | `VAL-R1-NET`, `VAL-R1-TRAY` |
 
 ## Recorded trigger
 
@@ -86,9 +156,22 @@ published the exact Firefox media payload immediately. Sending SIGTERM to the
 original helper produced a clean replacement generation, after which the media
 region appeared without changing playback.
 
-## Safety hold
+## Safety hold — ended 2026-08-07
 
-The author is running Noctalia alone to determine whether removing the complete
+`VAL-GPU-01` passed on 2026-08-07: a long Noctalia-only observation and two
+controlled handovers, one without DDC and one with DDC, hotplug, brightness and
+media, all completed without `device lost from bus!`. That is strong negative
+reproduction evidence, not proof that a lower-probability driver or transition
+fault cannot recur, so the DDC invariants this plan defends are unchanged:
+one owning worker, global exclusion and serialization, coalesced operations, a
+bounded timeout, deterministic cancellation, a killed and reaped child, no
+orphans and no frequent DDC polling. `LVR-3-F`'s rediscovery request is written against every one
+of them.
+
+The hold's original terms are kept below unchanged, because the units delivered
+under it carry no automated evidence and the reason must stay legible.
+
+The author was running Noctalia alone to determine whether removing the complete
 Noctalia to Celestina to Noctalia transition removes the random GPU loss. No
 Celestina executable, provider, build, test, deployment or activation may run
 until the author explicitly ends that observation. LVR-3-B may change only

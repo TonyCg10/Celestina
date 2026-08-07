@@ -186,7 +186,7 @@ version = "0.1.0"
 
 [[package]]
 name = "celestina-shell"
-version = "0.6.7"
+version = "0.6.8"
 dependencies = [
  "celestina-core",
  "celestina-shell-core",

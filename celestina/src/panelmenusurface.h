@@ -1,7 +1,6 @@
 #pragma once
 
 #include <QObject>
-#include <QPoint>
 #include <QPointer>
 #include <QWindow>
 
@@ -25,10 +24,11 @@ public:
     explicit PanelMenuSurface(QObject *parent = nullptr);
     ~PanelMenuSurface() override;
 
-    // Adopts `content` — created, not yet shown — and maps it at
-    // `globalAnchor` on the panel's screen. Returns false without taking
-    // ownership when the surface cannot be mapped.
-    bool open(QWindow *content, QWindow *panel, const QPoint &globalAnchor);
+    // Adopts `content` — created, not yet shown — and maps it across the
+    // panel's whole screen. Where the card sits inside it is the content's own
+    // decision, made from the anchor its owner handed it. Returns false without
+    // taking ownership when the surface cannot be mapped.
+    bool open(QWindow *content, QWindow *panel);
     void close();
     bool isOpen() const { return !m_content.isNull(); }
     QWindow *window() const { return m_content.data(); }

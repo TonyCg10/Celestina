@@ -34,7 +34,7 @@ private slots:
     void theMenuContentLoadsAndFitsItsSurface();
     void theMenuSurfaceIsBigEnoughToClickEveryItem();
 
-    void anOverlaySurfaceCentersWithoutAnAnchorAndTakesFocus();
+    void anOverlaySurfaceCoversItsOutputAndTakesFocus();
     void theOverlayRefusesToOpenTwiceAndSurvivesReopening();
     void theOverlayReportsAndCleansUpAnExternalDismissal();
     void aClosedOverlayLeavesNoWindowBehind();
@@ -126,7 +126,7 @@ void SurfaceManagerTest::aMenuSurfaceTakesFocusAndItsContentSize()
     const int contentHeight = content->height();
 
     PanelMenuSurface surface;
-    QVERIFY(surface.open(content, panel, QPoint(120, 40)));
+    QVERIFY(surface.open(content, panel));
     QVERIFY(surface.isOpen());
     QCOMPARE(surface.window(), content);
     QCOMPARE(content->screen(), panel->screen());
@@ -134,8 +134,23 @@ void SurfaceManagerTest::aMenuSurfaceTakesFocusAndItsContentSize()
     // margins, so it is never a transient child of the panel.
     QCOMPARE(content->transientParent(), nullptr);
     QVERIFY(!content->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
-    // The menu describes no size: its content keeps the one it asked for.
+    // The surface covers the output, which the compositor sizes; offscreen
+    // nothing configures it, so the content keeps the size it asked for.
     QCOMPARE(content->height(), contentHeight);
+
+    // And it covers it the same way the focused overlays do, for the same
+    // reason: a click outside a menu must reach the menu. Where the card sits
+    // inside the surface is the content's own business now.
+    auto *layerWindow = LayerShellQt::Window::get(content);
+    QVERIFY(layerWindow);
+    auto expected = LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop);
+    expected |= LayerShellQt::Window::AnchorBottom;
+    expected |= LayerShellQt::Window::AnchorLeft;
+    expected |= LayerShellQt::Window::AnchorRight;
+    QCOMPARE(layerWindow->anchors(), expected);
+    QCOMPARE(layerWindow->desiredSize(), QSize(0, 0));
+    QCOMPARE(layerWindow->exclusionZone(), -1);
+    QCOMPARE(layerWindow->margins(), QMargins());
 }
 
 void SurfaceManagerTest::theMenuRefusesToOpenTwiceAndSurvivesReopening()
@@ -143,14 +158,14 @@ void SurfaceManagerTest::theMenuRefusesToOpenTwiceAndSurvivesReopening()
     QWindow *const panel = makePanel();
 
     PanelMenuSurface surface;
-    QVERIFY(surface.open(makeContent(), panel, QPoint(10, 40)));
+    QVERIFY(surface.open(makeContent(), panel));
     QWindow *const second = makeContent();
-    QVERIFY(!surface.open(second, panel, QPoint(20, 40)));
+    QVERIFY(!surface.open(second, panel));
     // A refused open never adopts the window, so its caller still owns it.
     delete second;
     surface.close();
     QVERIFY(!surface.isOpen());
-    QVERIFY(surface.open(makeContent(), panel, QPoint(30, 40)));
+    QVERIFY(surface.open(makeContent(), panel));
 }
 
 void SurfaceManagerTest::theMenuReportsAndCleansUpAnExternalDismissal()
@@ -160,7 +175,7 @@ void SurfaceManagerTest::theMenuReportsAndCleansUpAnExternalDismissal()
     PanelMenuSurface surface;
     QSignalSpy dismissed(&surface, &PanelMenuSurface::dismissed);
     QWindow *const content = makeContent();
-    QVERIFY(surface.open(content, panel, QPoint(10, 40)));
+    QVERIFY(surface.open(content, panel));
     // What a compositor dismissal looks like from this side.
     content->hide();
     QCOMPARE(dismissed.count(), 1);
@@ -176,7 +191,7 @@ void SurfaceManagerTest::aClosedMenuLeavesNoWindowBehind()
         PanelMenuSurface surface;
         QWindow *const content = makeContent();
         tracked = content;
-        QVERIFY(surface.open(content, panel, QPoint(10, 40)));
+        QVERIFY(surface.open(content, panel));
     }
     // Destruction closes, and closing deletes the adopted window.
     QTRY_VERIFY(tracked.isNull());
@@ -185,7 +200,7 @@ void SurfaceManagerTest::aClosedMenuLeavesNoWindowBehind()
         PanelMenuSurface surface;
         QWindow *const content = makeContent();
         tracked = content;
-        QVERIFY(surface.open(content, panel, QPoint(10, 40)));
+        QVERIFY(surface.open(content, panel));
         surface.close();
     }
     QTRY_VERIFY(tracked.isNull());
@@ -242,7 +257,7 @@ void SurfaceManagerTest::theMenuContentLoadsAndFitsItsSurface()
     QVERIFY(content->metaObject()->indexOfSignal("dismissed()") >= 0);
 
     PanelMenuSurface surface;
-    QVERIFY(surface.open(content, makePanel(), QPoint(10, 40)));
+    QVERIFY(surface.open(content, makePanel()));
 }
 
 // The bug this pins down: the window sized itself to the laid-out menu while
@@ -294,7 +309,7 @@ void SurfaceManagerTest::theMenuSurfaceIsBigEnoughToClickEveryItem()
 // click: there is no anchor point, so the recipe leaves `anchors` empty for
 // the compositor to read as "center this on its output" (R2's launcher and
 // clipboard history).
-void SurfaceManagerTest::anOverlaySurfaceCentersWithoutAnAnchorAndTakesFocus()
+void SurfaceManagerTest::anOverlaySurfaceCoversItsOutputAndTakesFocus()
 {
     QWindow *const content = makeContent();
     const QSize contentSize = content->size();
@@ -305,12 +320,24 @@ void SurfaceManagerTest::anOverlaySurfaceCentersWithoutAnAnchorAndTakesFocus()
     QCOMPARE(surface.window(), content);
     QCOMPARE(content->transientParent(), nullptr);
     QVERIFY(!content->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
-    // The overlay describes no size beyond its content's own.
+    // Offscreen nothing configures the surface, so the content keeps the size
+    // it asked for; on a compositor the four anchors below make it the output.
     QCOMPARE(content->size(), contentSize);
 
     auto *layerWindow = LayerShellQt::Window::get(content);
     QVERIFY(layerWindow);
-    QCOMPARE(layerWindow->anchors(), LayerShellQt::Window::Anchors());
+    // All four edges with no size of its own: the surface is the whole output,
+    // which is what puts a click outside the card inside this surface. The
+    // card is centred by the content, not by the absence of anchors.
+    auto expected = LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop);
+    expected |= LayerShellQt::Window::AnchorBottom;
+    expected |= LayerShellQt::Window::AnchorLeft;
+    expected |= LayerShellQt::Window::AnchorRight;
+    QCOMPARE(layerWindow->anchors(), expected);
+    QCOMPARE(layerWindow->desiredSize(), QSize(0, 0));
+    // And it reserves nothing while ignoring what the panel reserved, so it can
+    // cover the button that opened it.
+    QCOMPARE(layerWindow->exclusionZone(), -1);
     QCOMPARE(layerWindow->keyboardInteractivity(),
              LayerShellQt::Window::KeyboardInteractivityOnDemand);
 }

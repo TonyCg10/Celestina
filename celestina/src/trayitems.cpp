@@ -3,6 +3,8 @@
 #include <QDBusObjectPath>
 #include <QDir>
 
+#include <algorithm>
+
 namespace {
 constexpr qsizetype maxTextLength = 256;
 
@@ -78,6 +80,28 @@ bool parseTrayRegistration(const QString &entry, QString *service, QString *path
     *service = trimmed.left(separator);
     *path = trimmed.mid(separator);
     return true;
+}
+
+TrayItem unreadTrayItem(const QString &service, const QString &path)
+{
+    TrayItem item;
+    item.service = service;
+    item.path = path;
+    // Active, because the specification's default is what an item that said
+    // nothing has said: hiding it would be the very thing this exists to stop.
+    item.status = QStringLiteral("active");
+
+    // The last segment of the object path is what most applications name their
+    // item after — `indicator_solaar`, `nm_applet`. Some number theirs instead,
+    // and a bare index names nothing, so those fall back to the bus name.
+    const qsizetype lastSlash = path.lastIndexOf(u'/');
+    const QString segment = lastSlash < 0 ? QString() : path.mid(lastSlash + 1);
+    const bool named = std::any_of(segment.cbegin(), segment.cend(), [](QChar character) {
+        return character.isLetter();
+    });
+    item.id = boundedText(named ? segment : service);
+    item.title = item.id;
+    return item;
 }
 
 TrayItem readTrayItem(
