@@ -562,6 +562,55 @@ result.
 - **Result:** deferred while SHELL-D1 remains open
 - **Evidence:** none
 
+## VAL-WSG-1 — Workspace groups with a monitor switched off
+
+- **Status:** pending
+- **Related implementation:** WSG-1
+- **Requires:** the verified bundle carrying WSG-1, explicit authorization to
+  activate Celestina, Noctalia retained as the rollback owner, and the three
+  configured monitors available so the memory can be taught once
+- **Procedure:** with all three monitors connected, confirm each panel shows
+  only its own five workspaces and no capsule appears. Switch two monitors off.
+  Confirm the strip now shows the focused monitor's five plus one capsule per
+  absent monitor, each naming its output and its count. Move the focus into an
+  absent monitor's workspace by keyboard bind and confirm that group expands
+  while the previous one collapses. Click a capsule and confirm it asks for the
+  workspace that was last active on that monitor. Make a window on a collapsed
+  monitor urgent and confirm the capsule reports it. Reconnect the monitors and
+  confirm the strips return to five each. Restore Noctalia afterward.
+- **Pass condition:** no workspace is ever hidden without its group being
+  reachable in one gesture, a collapsed capsule never conceals urgency, the
+  expansion honours `CelestinaTheme.reducedMotion`, and a session that has never
+  seen more than one monitor degrades to today's flat strip rather than
+  inventing groups.
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-DIAG-1 — The diagnostic journal in a real session
+
+- **Status:** pending
+- **Related implementation:** DIAG-1
+- **Requires:** the verified 0.8.0 bundle carrying DIAG-1, which is deployed,
+  plus explicit authorization to run Celestina in the live session
+- **Procedure:** with the journal directory left in place, start the shell the
+  ordinary way and let it run. Confirm that
+  `~/.local/state/celestina/diagnostics/` contains one file per process, that all
+  three carry the same `run_id`, and that `host` lines, `niri-adapter` lines and
+  `provider-adapter` lines interleave into one sensible ordering. Exercise
+  brightness so `ddc.start`/`ddc.end` pairs appear, and confirm
+  `grep -c '"event":"ddc.overlap"'` returns zero. Copy something to the
+  clipboard, receive a notification and play a track, then search the journals
+  for that text and confirm none of it is there. Stop the shell and confirm the
+  `journal.stop` line closes each file. Finally run
+  `celestina/scripts/diagnostic-report.sh --boot 0` and confirm it starts
+  nothing, reports exactly what it read, and produces a bundle.
+- **Pass condition:** three correlated files exist, no private content appears
+  in any of them, no DDC overlap is recorded, the journal never delays or
+  disturbs the shell, and the report script collects a readable bundle without
+  starting or changing anything.
+- **Result:** not run
+- **Evidence:** none
+
 ## Closed historical observations
 
 `VAL-SHELL-R0-BASE` and `VAL-SHELL-R2-BASE` are preserved in the

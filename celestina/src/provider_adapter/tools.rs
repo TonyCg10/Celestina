@@ -12,7 +12,9 @@ use std::sync::{Mutex, MutexGuard};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use celestina_shell_core::diagnostics::{Event, Level, Value};
 use celestina_shell_core::inventory::Answer;
+use celestina_shell_core::journal;
 use celestina_shell_core::runtime::ProviderRuntime;
 
 /// A tool that cannot answer in this long is a tool the panel does without.
@@ -74,9 +76,29 @@ pub fn probe_bounded_with_cancel(
     timeout: Duration,
     cancelled: Option<&AtomicBool>,
 ) -> Answer {
+    // Every external process this helper runs passes through here, so this is
+    // where the journal watches them. The GPU has been lost from the bus while
+    // this shell was running and `ddcutil` reaches an I²C bus on that same card,
+    // so a process that started and never came back is exactly the shape of
+    // thing an investigation needs to be able to see. That is why these are
+    // `Critical`: they are flushed rather than left in a buffer a power cut
+    // would take.
+    //
+    // The arguments are recorded because they are this shell's own and entirely
+    // technical — `getvcp 10 --bus 5` is the operation, not a person's data.
+    // Arguments that come from somewhere else never reach this function; see
+    // `launch_argv`, which deliberately records none.
+    let started = Instant::now();
+    let command = command_text(program, args);
+
     if cancelled.is_some_and(|flag| flag.load(Ordering::Acquire)) {
+        journal::record(
+            process_event("process.cancelled", &command).with("before_spawn", Value::Bool(true)),
+        );
         return Answer::Unreadable;
     }
+
+    journal::record(process_event("process.spawn", &command));
 
     let mut child = match Command::new(program)
         .args(args)
@@ -89,37 +111,120 @@ pub fn probe_bounded_with_cancel(
         // The only failure this can tell apart with confidence. A permission
         // error or an exhausted process table is a session that is unwell, not
         // one without the program.
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Answer::Missing,
-        Err(_) => return Answer::Unreadable,
+        Err(error) => {
+            // The technical reason is never discarded. A spawn that failed for
+            // a reason nobody wrote down is how "the tool is missing" hides an
+            // exhausted process table.
+            journal::record(
+                process_event("process.spawn.failed", &command)
+                    .with_text("kind", &format!("{:?}", error.kind()))
+                    .with_text("error", &error.to_string()),
+            );
+            if error.kind() == io::ErrorKind::NotFound {
+                return Answer::Missing;
+            }
+            return Answer::Unreadable;
+        }
     };
+
+    let pid = u64::from(child.id());
+    journal::record(process_event("process.started", &command).with("child_pid", Value::Uint(pid)));
 
     let deadline = Instant::now() + timeout;
     loop {
         match child.try_wait() {
             Ok(Some(_)) => break,
             Ok(None) => {
-                if cancelled.is_some_and(|flag| flag.load(Ordering::Acquire))
-                    || Instant::now() >= deadline
-                {
+                let stopping = cancelled.is_some_and(|flag| flag.load(Ordering::Acquire));
+                if stopping || Instant::now() >= deadline {
+                    journal::record(
+                        process_event(
+                            if stopping {
+                                "process.cancelled"
+                            } else {
+                                "process.timeout"
+                            },
+                            &command,
+                        )
+                        .with("child_pid", Value::Uint(pid))
+                        .with("elapsed_ms", Value::Millis(elapsed_ms(started)))
+                        .with("timeout_ms", Value::Millis(millis(timeout))),
+                    );
                     stop_and_reap(&mut child);
+                    journal::record(
+                        process_event("process.reaped", &command)
+                            .with("child_pid", Value::Uint(pid))
+                            .with("killed", Value::Bool(true)),
+                    );
                     return Answer::Unreadable;
                 }
                 thread::sleep(Duration::from_millis(20));
             }
-            Err(_) => {
+            Err(error) => {
+                journal::record(
+                    process_event("process.wait.failed", &command)
+                        .with("child_pid", Value::Uint(pid))
+                        .with_text("error", &error.to_string()),
+                );
                 stop_and_reap(&mut child);
+                journal::record(
+                    process_event("process.reaped", &command)
+                        .with("child_pid", Value::Uint(pid))
+                        .with("killed", Value::Bool(true)),
+                );
                 return Answer::Unreadable;
             }
         }
     }
 
     let Ok(output) = child.wait_with_output() else {
+        journal::record(
+            process_event("process.output.failed", &command).with("child_pid", Value::Uint(pid)),
+        );
         return Answer::Unreadable;
     };
+    // The output itself is never recorded: `ddcutil detect` names monitors and
+    // a player's status names what somebody is listening to. Its size is.
+    journal::record(
+        process_event("process.exit", &command)
+            .with("child_pid", Value::Uint(pid))
+            .with(
+                "code",
+                Value::Int(i64::from(output.status.code().unwrap_or(-1))),
+            )
+            .with("ok", Value::Bool(output.status.success()))
+            .with("elapsed_ms", Value::Millis(elapsed_ms(started)))
+            .with_redacted("stdout", &String::from_utf8_lossy(&output.stdout)),
+    );
     if !output.status.success() {
         return Answer::Unreadable;
     }
     Answer::Text(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// One external invocation, as the journal names it.
+///
+/// The program and its arguments joined with spaces, bounded by the field's own
+/// limit. This is only ever called with this shell's own tool invocations.
+fn command_text(program: &str, args: &[&str]) -> String {
+    let mut text = program.to_owned();
+    for argument in args {
+        text.push(' ');
+        text.push_str(argument);
+    }
+    text
+}
+
+fn process_event(name: &str, command: &str) -> Event {
+    Event::new(Level::Critical, name).with_text("command", command)
+}
+
+fn elapsed_ms(since: Instant) -> u64 {
+    u64::try_from(since.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+fn millis(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
 fn stop_and_reap(child: &mut Child) {
@@ -150,13 +255,34 @@ pub fn launch_argv(argv: &[&str]) -> Result<(), String> {
         return Err("nothing to launch".to_owned());
     };
 
+    // Deliberately different from `probe_bounded_with_cancel`: this `argv` came
+    // out of a `.desktop` file the person chose to run, so neither the command
+    // line nor its arguments are recorded. What is recorded is that a launch
+    // happened, how many arguments it carried and whether it started — enough to
+    // place it in the timeline, and nothing about what was opened.
+    journal::record(
+        Event::new(Level::Info, "launch.request")
+            .with("argument_count", Value::Uint(arguments.len() as u64))
+            .with_redacted("argv", &argv.join(" ")),
+    );
+
     let child = Command::new(program)
         .args(arguments)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
+        .inspect_err(|error| {
+            journal::record(
+                Event::new(Level::Warn, "launch.failed")
+                    .with_text("kind", &format!("{:?}", error.kind())),
+            );
+        })
         .map_err(|error| format!("cannot start {program}: {error}"))?;
+    journal::record(
+        Event::new(Level::Info, "launch.started")
+            .with("child_pid", Value::Uint(u64::from(child.id()))),
+    );
 
     thread::Builder::new()
         .name("reaper".to_owned())
@@ -168,10 +294,194 @@ pub fn launch_argv(argv: &[&str]) -> Result<(), String> {
     Ok(())
 }
 
+/// The journal every test in this binary writes to.
+///
+/// One process, one journal, so it is installed once into a temporary directory
+/// and every test reads the same file. Tests filter by the command they ran,
+/// which is what keeps them independent while sharing it.
+#[cfg(test)]
+pub fn test_journal() -> std::path::PathBuf {
+    use celestina_shell_core::diagnostics::{Component, Identity};
+    use celestina_shell_core::journal::Journal;
+    use std::sync::OnceLock;
+
+    static DIRECTORY: OnceLock<std::path::PathBuf> = OnceLock::new();
+    DIRECTORY
+        .get_or_init(|| {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |since| since.as_nanos());
+            let path = std::env::temp_dir().join(format!("celestina-tools-journal-{nanos:x}"));
+            let identity = Identity::new("run-test", Component::new("provider-adapter"), 1, 1);
+            journal::install(Journal::open(Some(path.clone()), identity, false));
+            path
+        })
+        .clone()
+}
+
+/// Every line this binary's journal has managed to write so far.
+#[cfg(test)]
+pub fn test_journal_lines() -> Vec<serde_json::Value> {
+    // The writer is a thread; give it a moment to reach the disk before reading.
+    for _ in 0..50 {
+        thread::sleep(Duration::from_millis(20));
+        if let Some(journal) = journal::process_journal() {
+            journal.record(Event::new(Level::Trace, "journal.probe"));
+        }
+        let found = read_journal_lines();
+        if !found.is_empty() {
+            return found;
+        }
+    }
+    read_journal_lines()
+}
+
+#[cfg(test)]
+fn read_journal_lines() -> Vec<serde_json::Value> {
+    let mut all = Vec::new();
+    let Ok(entries) = std::fs::read_dir(test_journal()) else {
+        return all;
+    };
+    for entry in entries.filter_map(Result::ok) {
+        let Ok(text) = std::fs::read_to_string(entry.path()) else {
+            continue;
+        };
+        for line in text.lines().filter(|line| !line.trim().is_empty()) {
+            if let Ok(value) = serde_json::from_str(line) {
+                all.push(value);
+            }
+        }
+    }
+    all
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::Arc;
+
+    fn events_named(name: &str) -> Vec<serde_json::Value> {
+        test_journal_lines()
+            .into_iter()
+            .filter(|line| line["event"] == name)
+            .collect()
+    }
+
+    #[test]
+    fn a_bounded_process_is_recorded_from_spawn_to_exit() {
+        test_journal();
+        // A fake process, not a session tool: nothing here runs `ddcutil`,
+        // touches hardware or reaches a bus.
+        let answer = probe_bounded_with_cancel(
+            "/bin/sh",
+            &["-c", "printf journal-fixture-ok"],
+            Duration::from_secs(5),
+            None,
+        );
+        assert_eq!(answer.into_text().as_deref(), Some("journal-fixture-ok"));
+
+        let exits: Vec<serde_json::Value> = events_named("process.exit")
+            .into_iter()
+            .filter(|line| {
+                line["command"]
+                    .as_str()
+                    .is_some_and(|command| command.contains("journal-fixture-ok"))
+            })
+            .collect();
+        let exit = exits.first().expect("the exit of the fixture is recorded");
+        assert_eq!(exit["code"], 0);
+        assert_eq!(exit["ok"], true);
+        assert!(exit["child_pid"].as_u64().unwrap() > 0);
+        assert!(exit["elapsed_ms"].as_u64().is_some());
+        // The output was measured and not kept.
+        assert_eq!(exit["stdout_bytes"], "journal-fixture-ok".len());
+        assert!(exit.get("stdout").is_none());
+    }
+
+    #[test]
+    fn a_process_that_outstays_its_deadline_is_recorded_killed_and_reaped() {
+        test_journal();
+        let answer = probe_bounded_with_cancel(
+            "/bin/sh",
+            &["-c", "sleep 30 # journal-fixture-hang"],
+            Duration::from_millis(120),
+            None,
+        );
+        assert!(answer.into_text().is_none());
+
+        let mine = |name: &str| {
+            events_named(name).into_iter().any(|line| {
+                line["command"]
+                    .as_str()
+                    .is_some_and(|command| command.contains("journal-fixture-hang"))
+            })
+        };
+        assert!(mine("process.timeout"), "the timeout is recorded");
+        assert!(mine("process.reaped"), "the kill and reap are recorded");
+    }
+
+    #[test]
+    fn a_cancelled_process_says_it_was_cancelled_rather_than_timed_out() {
+        test_journal();
+        let cancelled = AtomicBool::new(true);
+
+        let answer = probe_bounded_with_cancel(
+            "/bin/sh",
+            &["-c", "true # journal-fixture-cancel"],
+            Duration::from_secs(5),
+            Some(&cancelled),
+        );
+
+        assert!(answer.into_text().is_none());
+        assert!(events_named("process.cancelled").into_iter().any(|line| {
+            line["command"]
+                .as_str()
+                .is_some_and(|command| command.contains("journal-fixture-cancel"))
+        }));
+    }
+
+    #[test]
+    fn a_spawn_failure_never_discards_its_technical_reason() {
+        test_journal();
+        let answer = probe_bounded_with_cancel(
+            "/nonexistent/journal-fixture-missing",
+            &[],
+            Duration::from_secs(1),
+            None,
+        );
+        assert!(matches!(answer, Answer::Missing));
+
+        let failure = events_named("process.spawn.failed")
+            .into_iter()
+            .find(|line| {
+                line["command"]
+                    .as_str()
+                    .is_some_and(|command| command.contains("journal-fixture-missing"))
+            })
+            .expect("a spawn that failed is recorded with why");
+        // "Missing" is a conclusion; the kind is the fact behind it, and an
+        // exhausted process table must never hide inside that conclusion.
+        assert_eq!(failure["kind"], "NotFound");
+        assert!(!failure["error"].as_str().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_launch_records_that_it_happened_and_nothing_about_what_was_opened() {
+        test_journal();
+        let secret = "/home/toni/Documents/journalfixtureprivate.pdf";
+
+        let _unused = launch_argv(&["/bin/true", secret]);
+
+        let request = events_named("launch.request")
+            .into_iter()
+            .next_back()
+            .expect("a launch is placed in the timeline");
+        assert_eq!(request["argument_count"], 1);
+        // The size is there; the path is not, and neither is the program.
+        assert!(request["argv_bytes"].as_u64().unwrap() > 0);
+        let text = serde_json::to_string(&test_journal_lines()).expect("serializable");
+        assert!(!text.contains("journalfixtureprivate"));
+    }
 
     /// A program the session does not have. The whole point of the enum: this
     /// must not look like a tool that was merely slow, because a list built on

@@ -31,6 +31,8 @@ of the design when they provide the narrow capability the shell needs.
 | LVR-3 | complete | Correct late provider insertion and provider lifecycle defects exposed during the GPU-loss audit |
 | AUD-1 | complete | Static-audit hardening was absorbed by LVR-3-B and its follow-up corrections; residual findings remain recorded separately |
 | UX-1 | complete | Give the network and Bluetooth indicators direct, truthful menus for their devices and actions |
+| WSG-1 | complete | Keep a workspace's monitor grouping legible after that monitor is switched off |
+| DIAG-1 | complete | Make the seconds before a freeze reconstructable, without recording anything private |
 | UX-2 | planned | Establish and then implement one coherent shell-wide visual and interaction language after SHELL-D5 is applied |
 | R6 | conditional | First-party lock starts only if SHELL-D2 is applied |
 | R8 | complete | Reversible Noctalia removal; Polkit/dock slices remain conditional |
@@ -330,6 +332,49 @@ The delivered implementation order, exclusions and exit checks are in
 [the UX-1 plan](docs/plans/archive/2026-08-07-network-bluetooth-indicator-menus.md).
 This checkpoint does not add Wi-Fi credential handling, Bluetooth pairing,
 radio discovery policy or a second polling/runtime path.
+
+## WSG-1 — Workspace groups survive their monitor (complete)
+
+**Outcome:** a strip carrying workspaces from more than one monitor shows the
+group that has the focus in full and every other group as one capsule, so
+switching two monitors off stops turning fifteen workspaces into fifteen equal
+pills in a row.
+
+Niri publishes the output a workspace is on and never the one it was configured
+for, so a displaced workspace is indistinguishable from a native one. The
+grouping is therefore remembered from a frame that could see it, or declared by
+the author, and an observation that cannot tell the two apart teaches nothing.
+The bounded scope, exclusions and unit boundaries are in
+[the archived WSG-1 plan](docs/plans/archive/2026-08-08-workspace-monitor-groups.md).
+It closed in celestina 0.8.0 on the
+[delivery evidence](docs/evidence/2026-08-08-workspace-monitor-groups.md): the
+canonical production exit built, verified and deployed those bytes without
+activating the session. The live capsule, its assistive route and the moment the
+memory is first taught are `VAL-WSG-1` and remain the author's to run.
+
+This checkpoint adds no token, shared component or anatomy, and does not
+pre-empt SHELL-D5. A strip whose workspaces all belong to one monitor renders
+exactly as it does today.
+
+## DIAG-1 — A journal that survives the freeze (active)
+
+**Outcome:** every Celestina process writes a structured, bounded, always-on
+JSONL journal correlated by one `run_id`, so the seconds before a physical
+freeze can be reconstructed from the disk rather than from a terminal buffer.
+
+The GPU has been lost from the PCIe bus more than once while this shell was
+running, most recently inside a **nested Niri session**. That nest separated the
+surfaces and shared everything that matters: the GPU, VCN, the DDC/I²C buses and
+the session bus. The handover is therefore not a necessary condition.
+
+**This checkpoint asserts nothing about cause.** Coincidence is not causation and
+the journal cannot establish either. What it fixes is a defect of this shell's
+own: after a reset, nobody can say what Celestina did. The bounded scope,
+exclusions, event classes and the deliberate omission of every private value are
+in [the DIAG-1 plan](docs/plans/archive/2026-08-08-diagnostic-journal.md).
+
+Nothing in this checkpoint investigates, touches or changes the GPU, DDC
+behaviour, amdgpu, the kernel, Niri, systemd, Noctalia or Wi-Fi.
 
 ## UX-2 — Shell visual and interaction language (planned)
 

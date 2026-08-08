@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.7.0 LANGUAGES CXX)
+project(celestina VERSION 0.8.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -65,6 +65,8 @@ endif()
 
 qt_add_executable(celestina
     src/main.cpp
+    src/diagnosticjournal.h
+    src/diagnosticjournal.cpp
     src/devicesclient.h
     src/devicesclient.cpp
     src/protocoldecoder.h
@@ -158,6 +160,8 @@ qt_add_qml_module(celestina
         qml/Clock.qml
         qml/OutputChooser.qml
         qml/WorkspaceStrip.qml
+        qml/WorkspacePill.qml
+        qml/WorkspaceGroupCapsule.qml
         qml/PhoneStatus.qml
         qml/PanelFlank.qml
         qml/SysMon.qml
@@ -192,6 +196,7 @@ qt_add_qml_module(celestina
 # The source tree is the fallback used by the legacy launcher. Production
 # launchers override it with the compiled module through CELESTINA_STYLE_PATH.
 target_compile_definitions(celestina PRIVATE
+    CELESTINA_VERSION="${PROJECT_VERSION}"
     CELESTINA_STYLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../celestina-style"
     CELESTINA_NIRI_ADAPTER="${NIRI_ADAPTER_BINARY}"
     CELESTINA_PROVIDER_ADAPTER="${PROVIDER_ADAPTER_BINARY}"
@@ -340,6 +345,7 @@ if(BUILD_TESTING)
         src/sessionrequests.cpp
         src/niriclient.h
         src/niriclient.cpp
+        src/diagnosticjournal.cpp
         src/protocoldecoder.h
         src/protocoldecoder.cpp
         src/workspacefocusrequests.h
@@ -398,6 +404,7 @@ if(BUILD_TESTING)
         src/overlaysurface.cpp
         src/niriclient.h
         src/niriclient.cpp
+        src/diagnosticjournal.cpp
         src/protocoldecoder.h
         src/protocoldecoder.cpp
         src/workspacefocusrequests.h
@@ -479,6 +486,7 @@ if(BUILD_TESTING)
         src/surfacemanager.cpp
         src/niriclient.h
         src/niriclient.cpp
+        src/diagnosticjournal.cpp
         src/protocoldecoder.h
         src/protocoldecoder.cpp
         src/workspacefocusrequests.h

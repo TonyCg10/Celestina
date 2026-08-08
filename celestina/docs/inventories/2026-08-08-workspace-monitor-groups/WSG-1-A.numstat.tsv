@@ -1,0 +1,27 @@
+# WSG-1-A exact change inventory
+
+Base revision	73d95b0d579fbd7155191da1422d524d909dfbdb
+Pathspec	celestina-rs/crates/celestina-shell-core/src/settings.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/workspace_groups.rs
+Pathspec	celestina/docs/evidence/2026-08-08-workspace-monitor-groups.md
+Pathspec	celestina/docs/plans/archive/2026-08-08-workspace-monitor-groups.md
+Pathspec	celestina/qml/WorkspaceGroupCapsule.qml
+Pathspec	celestina/qml/WorkspacePill.qml
+Pathspec	celestina/qml/WorkspaceStrip.qml
+Pathspec	celestina/tests/tst_workspacestrip.qml
+Pathspec	celestina/scripts/dev-session.kdl
+Pathspec	celestina/scripts/dev-session.sh
+Pathspec	celestina/docs/inventories/2026-08-08-workspace-monitor-groups/WSG-1-A.numstat.tsv
+
+added	deleted	content	path
+64	0	409f68246b0b6d933ac3c3e55da8fd88c78d6575feb3b707c778dcc8bf84f3f6	celestina-rs/crates/celestina-shell-core/src/settings.rs
+794	0	0124350dc01d2e8127c8aaeb08d59e51a7986a674d90d1cbe65ea0689df5c64c	celestina-rs/crates/celestina-shell-core/src/workspace_groups.rs
+167	0	03868a18d9c2fd012b7281e999472ddadf69c14a174434c588c99a73d4258a91	celestina/docs/evidence/2026-08-08-workspace-monitor-groups.md
+163	0	5a0e39ddbba53e1114610581d92b3201556309283fb84f7d137bc2d60f550ef0	celestina/docs/plans/archive/2026-08-08-workspace-monitor-groups.md
+103	0	0561a0250bf7022c6f54f32bcc94b98b6298171228d16d8871509b68c6f83626	celestina/qml/WorkspaceGroupCapsule.qml
+126	0	a18c0866329d00ab2d301ad7162fd2af917428be7a540116cb25f3f351e7e71d	celestina/qml/WorkspacePill.qml
+77	93	15ff355496f2ebf5c123c5be378192defed9627f65f0d89ec9dfd4a199097bc3	celestina/qml/WorkspaceStrip.qml
+87	0	62b6348bbbdee8539e6da2cbba8ee054da6b11771611afacc0b7cc9102962118	celestina/tests/tst_workspacestrip.qml
+142	0	6a434836c05b348d861dfa8cf0ac4e564cb3b7b0b37accfcb2f7ecae5c0244e4	celestina/scripts/dev-session.kdl
+132	0	c271aa159efcffeb254750d2505c502ee3e562fc7074fb7b7edca3e804b60516	celestina/scripts/dev-session.sh
+27	0	self	celestina/docs/inventories/2026-08-08-workspace-monitor-groups/WSG-1-A.numstat.tsv

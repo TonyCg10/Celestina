@@ -25,6 +25,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use celestina_shell_core::command::{parse_command, Command, Rejection, ResultFrame};
+use celestina_shell_core::diagnostics::{Event, Level, Value};
+use celestina_shell_core::journal::{self, Journal};
 use celestina_shell_core::lines::{read_bounded_line, HostLine, SharedWriter};
 use celestina_shell_core::runtime::ProviderRuntime;
 
@@ -367,6 +369,7 @@ fn run() -> io::Result<()> {
     // worker observes this flag inside each bounded DDC child, kills and reaps
     // that child, then becomes joinable. No abrupt process exit bypasses this
     // ownership chain.
+    journal::record(Event::new(Level::Critical, "helper.shutdown.start"));
     shutdown.store(true, Ordering::Release);
     if let Some(brightness_worker) = brightness_worker {
         brightness_worker.join();
@@ -378,11 +381,48 @@ fn run() -> io::Result<()> {
     if let Some(holds_worker) = holds_worker {
         holds_worker.join();
     }
+    journal::record(Event::new(Level::Critical, "helper.shutdown.end"));
     Ok(())
 }
 
 fn main() -> ExitCode {
-    match run() {
+    // Installed before anything else runs, so a helper that dies during its own
+    // startup still leaves a record of having tried. The generation is this
+    // process's own id, which is what the host correlates its restarts by.
+    journal::install(Journal::for_component(
+        "provider-adapter",
+        u64::from(process::id()),
+    ));
+    journal::record(
+        Event::new(Level::Critical, "helper.start")
+            .with_text("helper", "provider-adapter")
+            .with_text("version", env!("CARGO_PKG_VERSION"))
+            // A count, not the arguments: this helper takes none today, and a
+            // future one must not start leaking a path by growing some.
+            .with(
+                "argument_count",
+                Value::Uint(std::env::args().skip(1).count() as u64),
+            ),
+    );
+
+    let outcome = run();
+    journal::record(
+        Event::new(Level::Critical, "helper.stop")
+            .with_text("helper", "provider-adapter")
+            .with("ok", Value::Bool(outcome.is_ok()))
+            .with_text(
+                "error",
+                &outcome
+                    .as_ref()
+                    .err()
+                    .map_or(String::new(), ToString::to_string),
+            ),
+    );
+    // Deterministic and bounded: the writer is asked to drain here rather than
+    // left to process exit, but an unresponsive filesystem cannot hold exit.
+    journal::close_process_journal();
+
+    match outcome {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("celestina-provider-adapter: fatal: {error}");

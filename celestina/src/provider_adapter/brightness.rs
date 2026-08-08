@@ -19,6 +19,10 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use celestina_shell_core::brightness::{self, DdcDisplay};
+// Aliased because this module already imports `serde_json::Value` for the
+// payloads it publishes; the journal's field values are a different vocabulary.
+use celestina_shell_core::diagnostics::{Event, Level, Value as Field};
+use celestina_shell_core::journal;
 use celestina_shell_core::runtime::ProviderRuntime;
 use celestina_shell_core::session::{self, LevelChange, SessionRequest};
 use celestina_shell_core::snapshot::{Payload, ProviderId};
@@ -55,6 +59,7 @@ static REDETECT_REQUESTED: AtomicBool = AtomicBool::new(false);
 /// Records that the set of outputs changed. Called from the command thread and
 /// answered by the worker on its own schedule; it runs nothing itself.
 pub fn request_redetect() {
+    journal::record(Event::new(Level::Critical, "ddc.redetect.requested"));
     REDETECT_REQUESTED.store(true, Ordering::Release);
 }
 
@@ -120,38 +125,121 @@ pub fn action(verb: &str, options: &Payload) -> Result<(), String> {
 /// happens once and then only when the schedule or a request says so — a
 /// monitor plugged in later is picked up because the host asked, not because
 /// this polls for it.
+/// Whether a DDC conversation is open right now.
+///
+/// The invariant this shell has always claimed is that exactly one worker ever
+/// talks to `ddcutil`, so two operations can never overlap on the I²C buses of a
+/// card whose driver has been seen dropping off the `PCIe` bus. A claim nobody
+/// measures is a belief, so this measures it: an overlap is recorded as its own
+/// critical event rather than asserted, because taking the shell down would
+/// destroy the record that the overlap happened.
+static DDC_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+
+/// Runs one DDC operation, recorded from both ends.
+///
+/// These are `Critical` and therefore flushed: `ddcutil` is the one thing this
+/// shell does that reaches the graphics card's own I²C buses, so "an operation
+/// started and this file ends" is the single most useful line the journal could
+/// ever hold about the freeze.
+fn ddc_operation<T>(
+    operation: &str,
+    output: Option<&str>,
+    number: Option<u8>,
+    run: impl FnOnce() -> T,
+) -> T {
+    let describe = |name: &str| {
+        let mut event = Event::new(Level::Critical, name).with_text("operation", operation);
+        if let Some(output) = output {
+            event = event.with_text("output", output);
+        }
+        if let Some(number) = number {
+            event = event.with("display", Field::Uint(u64::from(number)));
+        }
+        event
+    };
+
+    if DDC_IN_FLIGHT.swap(true, Ordering::AcqRel) {
+        // Not a refusal: the operation still runs, because refusing here would
+        // change behaviour on the strength of an instrument. It is recorded so
+        // the claim can be checked against a real session instead of assumed.
+        journal::record_from("ddc", describe("ddc.overlap"));
+    }
+
+    journal::record_from("ddc", describe("ddc.start"));
+    let started = Instant::now();
+    let answer = run();
+    let elapsed = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    DDC_IN_FLIGHT.store(false, Ordering::Release);
+    journal::record_from(
+        "ddc",
+        describe("ddc.end").with("elapsed_ms", Field::Millis(elapsed)),
+    );
+    answer
+}
+
 fn detect(shutdown: &AtomicBool) -> Vec<DdcDisplay> {
-    run_bounded_with_cancel(
-        "ddcutil",
-        &["detect", "--brief"],
-        DDC_TIMEOUT,
-        Some(shutdown),
-    )
-    .map(|listing| brightness::parse_detect(&listing))
-    .unwrap_or_default()
+    let displays = ddc_operation("detect", None, None, || {
+        run_bounded_with_cancel(
+            "ddcutil",
+            &["detect", "--brief"],
+            DDC_TIMEOUT,
+            Some(shutdown),
+        )
+        .map(|listing| brightness::parse_detect(&listing))
+        .unwrap_or_default()
+    });
+
+    // The technical inventory the buses were found as — connector and display
+    // number only. `ddcutil detect` also prints EDID, serial numbers and the
+    // monitor's model, and none of that is recorded: it identifies hardware in
+    // somebody's room and answers no question this journal exists to answer.
+    let mut found = Event::new(Level::Critical, "ddc.detected")
+        .with("displays", Field::Uint(displays.len() as u64));
+    for display in &displays {
+        found = found.with(
+            &format!("display_{}", display.number),
+            Field::text(&display.connector),
+        );
+    }
+    journal::record_from("ddc", found);
+    displays
 }
 
 fn read(display: &DdcDisplay, shutdown: &AtomicBool) -> Option<u8> {
     let number = display.number.to_string();
-    run_bounded_with_cancel(
-        "ddcutil",
-        &["--display", &number, "getvcp", "10", "--brief"],
-        DDC_TIMEOUT,
-        Some(shutdown),
+    ddc_operation(
+        "read",
+        Some(&display.connector),
+        Some(display.number),
+        || {
+            run_bounded_with_cancel(
+                "ddcutil",
+                &["--display", &number, "getvcp", "10", "--brief"],
+                DDC_TIMEOUT,
+                Some(shutdown),
+            )
+            .and_then(|reading| brightness::parse_brightness(&reading))
+        },
     )
-    .and_then(|reading| brightness::parse_brightness(&reading))
 }
 
 fn write(display: &DdcDisplay, value: u8, shutdown: &AtomicBool) -> bool {
     let number = display.number.to_string();
     let level = value.to_string();
-    run_bounded_with_cancel(
-        "ddcutil",
-        &["--display", &number, "setvcp", "10", &level],
-        DDC_TIMEOUT,
-        Some(shutdown),
+    ddc_operation(
+        "write",
+        Some(&display.connector),
+        Some(display.number),
+        || {
+            run_bounded_with_cancel(
+                "ddcutil",
+                &["--display", &number, "setvcp", "10", &level],
+                DDC_TIMEOUT,
+                Some(shutdown),
+            )
+            .is_some()
+        },
     )
-    .is_some()
 }
 
 /// Publishes one entry per monitor that speaks DDC. A monitor that speaks it
@@ -178,6 +266,7 @@ fn publish(
 }
 
 fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId, shutdown: &AtomicBool) {
+    journal::record_from("ddc", Event::new(Level::Critical, "ddc.worker.start"));
     let mut displays = detect(shutdown);
     if shutdown.load(Ordering::Acquire) {
         return;
@@ -253,7 +342,7 @@ fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId, shutdown: &AtomicBool)
 
 #[cfg(test)]
 mod tests {
-    use super::{request_redetect, REDETECT_REQUESTED};
+    use super::{ddc_operation, request_redetect, REDETECT_REQUESTED};
 
     use std::sync::{atomic::Ordering, Mutex};
 
@@ -262,6 +351,63 @@ mod tests {
     // their assertions depend on which test the harness scheduled between two
     // atomic operations.
     static REDETECT_TEST: Mutex<()> = Mutex::new(());
+
+    /// Two DDC operations of this shell can never overlap.
+    ///
+    /// The invariant is that one worker owns `ddcutil`, and this proves the
+    /// instrument that watches it: sequential operations record no overlap, and
+    /// a deliberately nested pair does. Nothing here runs `ddcutil`, opens a bus
+    /// or touches hardware — the operation body is a closure that returns.
+    #[test]
+    fn two_ddc_operations_never_overlap_and_an_overlap_would_be_recorded() {
+        use super::super::tools::{test_journal, test_journal_lines};
+
+        test_journal();
+        let _serialize = REDETECT_TEST
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        // How the one worker actually behaves: one after another.
+        ddc_operation("read", Some("DDC-FIXTURE-A"), Some(1), || ());
+        ddc_operation("read", Some("DDC-FIXTURE-A"), Some(1), || ());
+        let overlaps = |connector: &str| {
+            test_journal_lines()
+                .into_iter()
+                .filter(|line| line["event"] == "ddc.overlap")
+                .filter(|line| line["output"] == connector)
+                .count()
+        };
+        assert_eq!(overlaps("DDC-FIXTURE-A"), 0);
+
+        // And what a second owner would look like if one ever appeared.
+        ddc_operation("read", Some("DDC-FIXTURE-B"), Some(2), || {
+            ddc_operation("write", Some("DDC-FIXTURE-B"), Some(2), || ());
+        });
+        assert_eq!(overlaps("DDC-FIXTURE-B"), 1);
+
+        // Both ends of every operation are on the disk, which is what makes
+        // "started and never finished" readable after a freeze.
+        let starts = test_journal_lines()
+            .into_iter()
+            .filter(|line| line["event"] == "ddc.start")
+            .filter(|line| {
+                line["output"]
+                    .as_str()
+                    .is_some_and(|o| o.starts_with("DDC-FIXTURE"))
+            })
+            .count();
+        let ends = test_journal_lines()
+            .into_iter()
+            .filter(|line| line["event"] == "ddc.end")
+            .filter(|line| {
+                line["output"]
+                    .as_str()
+                    .is_some_and(|o| o.starts_with("DDC-FIXTURE"))
+            })
+            .count();
+        assert_eq!(starts, 4);
+        assert_eq!(ends, 4);
+    }
 
     /// Requests coalesce and are consumed exactly once.
     ///

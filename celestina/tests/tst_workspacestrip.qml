@@ -15,12 +15,39 @@ TestCase {
             "index": index,
             "label": label,
             "output": "DP-1",
+            // What a strip with nothing to collapse looks like, and what the
+            // host fills in for a helper that predates grouping: every
+            // workspace at home on the output it is on, every group open.
+            "home": "DP-1",
+            "groupExpanded": true,
+            "groupFocus": false,
             "active": active,
             "focused": active,
             "urgent": false,
             "activeWindowTitle": "",
             "requestState": requestState
         };
+    }
+
+    // The author's displaced session in miniature: three monitors' workspaces
+    // all arriving on the survivor, with the adapter naming the home of each
+    // and opening exactly one group.
+    function displaced(openHome, urgentHome) {
+        const homes = ["DP-1", "HDMI-A-1", "DP-2"];
+        const list = [];
+        for (let slot = 0; slot < homes.length; ++slot) {
+            for (let step = 1; step <= 3; ++step) {
+                const index = slot * 3 + step;
+                const entry = testCase.workspace(index, String(index), false, "");
+                entry.home = homes[slot];
+                entry.groupExpanded = homes[slot] === openHome;
+                // The one a closed group's capsule asks for.
+                entry.groupFocus = step === 1;
+                entry.urgent = homes[slot] === urgentHome && step === 2;
+                list.push(entry);
+            }
+        }
+        return list;
     }
 
     // Three on this output, and one on another that must never take part.
@@ -97,5 +124,65 @@ TestCase {
         strip.workspaces = [];
         strip.step(1);
         compare(requests.count, 0);
+    }
+
+    // Every monitor connected: one home, one group, and the strip the panel has
+    // always drawn. This is the case that must stay untouched.
+    function test_one_monitors_workspaces_are_one_open_group() {
+        compare(strip.workspaceGroups.length, 1);
+        verify(!strip.grouped);
+        verify(strip.workspaceGroups[0].expanded);
+        compare(strip.workspaceGroups[0].workspaces.length, 3);
+    }
+
+    function test_a_displaced_strip_folds_into_one_group_per_monitor() {
+        strip.workspaces = testCase.displaced("HDMI-A-1", "");
+
+        compare(strip.workspaceGroups.length, 3);
+        verify(strip.grouped);
+        // The compositor's own order, so the strip does not rearrange itself
+        // between frames for a reason nobody can see.
+        compare(strip.workspaceGroups.map((group) => {
+            return group.key;
+        }), ["DP-1", "HDMI-A-1", "DP-2"]);
+        compare(strip.workspaceGroups.filter((group) => {
+            return group.expanded;
+        }).length, 1);
+        compare(strip.workspaceGroups[1].expanded, true);
+    }
+
+    function test_a_closed_group_still_reports_urgency() {
+        strip.workspaces = testCase.displaced("HDMI-A-1", "DP-2");
+
+        const closed = strip.workspaceGroups[2];
+        verify(!closed.expanded);
+        // The whole risk of folding: a capsule that swallowed this would hide
+        // the one thing the person needs to know about that monitor.
+        verify(closed.urgent);
+    }
+
+    function test_a_closed_group_names_the_workspace_it_would_ask_for() {
+        strip.workspaces = testCase.displaced("HDMI-A-1", "");
+
+        compare(strip.workspaceGroups[2].focusTarget.index, 7);
+    }
+
+    // A producer that predates grouping sends no `home`, and the host defaults
+    // `groupExpanded` to true. Both have to come out as today's flat strip
+    // rather than as a strip of capsules nobody can open.
+    function test_a_helper_that_never_heard_of_homes_draws_a_flat_strip() {
+        const list = testCase.board(2, -1).filter((entry) => {
+            return entry.output === "DP-1";
+        });
+        for (let index = 0; index < list.length; ++index) {
+            delete list[index].home;
+            delete list[index].groupExpanded;
+            delete list[index].groupFocus;
+        }
+        strip.workspaces = list;
+
+        compare(strip.workspaceGroups.length, 1);
+        verify(strip.workspaceGroups[0].expanded);
+        verify(!strip.grouped);
     }
 }

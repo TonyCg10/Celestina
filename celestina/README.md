@@ -246,6 +246,7 @@ decided, this session still needs Noctalia for them, and the report says so.
 
 ## Project documents
 
+- [The diagnostic journal](docs/diagnostics.md)
 - [Current status](STATUS.md)
 - [Implementation roadmap](ROADMAP.md)
 - [Author validation](VALIDATION.md)

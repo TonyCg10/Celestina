@@ -1,0 +1,142 @@
+// Niri configuration for the nested development session only.
+//
+// It is deliberately not the author's live configuration. That one declares the
+// three real outputs and spawns the live session's own programs — including
+// Noctalia, which owns the session this nest runs inside. Reusing it would start
+// a second copy of the running shell inside the window.
+//
+// Nothing here is applied to the live session: `dev-session.sh` passes this file
+// with `--config` and never writes to `$XDG_CONFIG_HOME/niri`.
+
+// The nested backend presents exactly one output, named `winit`, and there is no
+// way to ask it for a second one: niri 26.04 has no virtual-output action and no
+// reachable headless backend. Its mode is the window's size and cannot be set
+// from here — the host compositor sizes the window, so a `mode` line would be
+// decoration that quietly does nothing.
+//
+// `scale` does apply, and it is the reason this block exists: a panel that must
+// be proven at scale 1 and scale 2 needs the scale to be a value the harness
+// sets, not whatever the host monitor happened to have.
+output "winit" {
+    scale 1
+    backdrop-color "#101820"
+}
+
+// ── The three monitors, on paper ─────────────────────────────────────────────
+//
+// None of these is connected inside the nest, and niri accepts configuration for
+// an output that is not there. They exist here so the workspace assignments
+// below are the ones the live session really uses, with the real names and the
+// real geometry, rather than a layout invented for the test.
+//
+// Be exact about what this does and does not buy, because it is less than it
+// looks. The workspaces below keep their names and their configured order, so a
+// strip of fifteen named workspaces is real and testable. The ownership is not:
+// every workspace materializes on `winit`, and `niri msg workspaces` reports the
+// output a workspace is actually on, never the one it was configured for. So the
+// three names below shape this file, and nothing downstream can read them.
+//
+// The shell therefore still sees one output and maps one panel. Per-output panel
+// behaviour, workspace filtering by output, hotplug and two-panel geometry
+// cannot be tested in here at all, and a test that appears to pass in here has
+// proved nothing about them.
+output "HDMI-A-1" {
+    mode "1920x1080@74.97"
+    scale 1
+    position x=0 y=120
+}
+
+output "DP-1" {
+    mode "3840x2160@165.06"
+    scale 1.5
+    position x=1920 y=0
+}
+
+output "DP-2" {
+    mode "1920x1080@119.98"
+    scale 1
+    position x=4480 y=250
+}
+
+// ── Static workspaces, mirroring the live session ────────────────────────────
+// Five per monitor, named exactly as the live configuration names them.
+//
+// Declaration order is the resulting order, but only in a nest that starts with
+// this file. Niri's live config reload prepends each workspace it adds, so
+// editing this list while the nest runs leaves it reversed — verified, not
+// assumed. After changing anything here, restart the nest rather than trusting
+// the reload.
+workspace "1" { open-on-output "HDMI-A-1"; }
+workspace "2" { open-on-output "HDMI-A-1"; }
+workspace "3" { open-on-output "HDMI-A-1"; }
+workspace "4" { open-on-output "HDMI-A-1"; }
+workspace "5" { open-on-output "HDMI-A-1"; }
+
+workspace "6" { open-on-output "DP-1"; }
+workspace "7" { open-on-output "DP-1"; }
+workspace "8" { open-on-output "DP-1"; }
+workspace "9" { open-on-output "DP-1"; }
+workspace "10" { open-on-output "DP-1"; }
+
+workspace "11" { open-on-output "DP-2"; }
+workspace "12" { open-on-output "DP-2"; }
+workspace "13" { open-on-output "DP-2"; }
+workspace "14" { open-on-output "DP-2"; }
+workspace "15" { open-on-output "DP-2"; }
+
+input {
+    keyboard {
+        xkb {
+            layout "es"
+        }
+    }
+    // The pointer belongs to the host session until it is deliberately given to
+    // the nest, so a stray movement cannot land a click on the real desktop.
+    focus-follows-mouse
+}
+
+// Startup help would cover the panel this session exists to look at.
+hotkey-overlay {
+    skip-at-startup
+}
+
+prefer-no-csd
+
+binds {
+    // Enough to drive the nest and nothing more. The shell under test brings its
+    // own bindings through `org.celestina.Shell1`; these are the compositor's.
+    Mod+Shift+Slash { show-hotkey-overlay; }
+    Mod+Return { spawn "alacritty"; }
+    Mod+Q { close-window; }
+    Mod+Left { focus-column-left; }
+    Mod+Right { focus-column-right; }
+
+    // Ten of the fifteen reach a number key; the rest are walked to. Both routes
+    // matter for the panel, because a workspace strip has to survive a jump as
+    // well as a step.
+    Mod+1 { focus-workspace 1; }
+    Mod+2 { focus-workspace 2; }
+    Mod+3 { focus-workspace 3; }
+    Mod+4 { focus-workspace 4; }
+    Mod+5 { focus-workspace 5; }
+    Mod+6 { focus-workspace 6; }
+    Mod+7 { focus-workspace 7; }
+    Mod+8 { focus-workspace 8; }
+    Mod+9 { focus-workspace 9; }
+    Mod+0 { focus-workspace 10; }
+    Mod+Down { focus-workspace-down; }
+    Mod+Up { focus-workspace-up; }
+
+    Mod+Shift+1 { move-window-to-workspace 1; }
+    Mod+Shift+2 { move-window-to-workspace 2; }
+    Mod+Shift+3 { move-window-to-workspace 3; }
+    Mod+Shift+4 { move-window-to-workspace 4; }
+    Mod+Shift+5 { move-window-to-workspace 5; }
+    Mod+Shift+6 { move-window-to-workspace 6; }
+    Mod+Shift+7 { move-window-to-workspace 7; }
+    Mod+Shift+8 { move-window-to-workspace 8; }
+    Mod+Shift+9 { move-window-to-workspace 9; }
+    Mod+Shift+0 { move-window-to-workspace 10; }
+
+    Mod+Shift+E { quit skip-confirmation=true; }
+}

@@ -35,6 +35,48 @@ Item {
         }
         return result;
     }
+    // The same workspaces folded by the monitor each belongs to. A fold, not a
+    // decision: `home`, `groupExpanded` and `groupFocus` are all published by
+    // the adapter, which is the process that links the core owning what a home
+    // is and which group opens. This file only puts equal homes side by side.
+    //
+    // A session with every monitor connected produces exactly one group, which
+    // renders as the plain row it always was — no capsule, no chrome, nothing
+    // to explain.
+    readonly property var workspaceGroups: {
+        const groups = [];
+        const byKey = ({});
+        const list = root.outputWorkspaces;
+        for (let index = 0; index < list.length; ++index) {
+            const workspace = list[index];
+            const key = workspace.home !== undefined && workspace.home.length > 0 ? workspace.home : workspace.output;
+            let group = byKey[key];
+            if (group === undefined) {
+                group = {
+                    "key": key,
+                    "expanded": true,
+                    "workspaces": [],
+                    "urgent": false,
+                    "focusTarget": null
+                };
+                byKey[key] = group;
+                groups.push(group);
+            }
+            // A group is open when the adapter said its workspaces are. An older
+            // helper sends no such field and the host defaults it to true, which
+            // is how a producer that predates grouping keeps drawing a flat row.
+            group.workspaces.push(workspace);
+            group.expanded = group.expanded && workspace.groupExpanded !== false;
+            // Urgency must survive the collapse. A capsule that hid a workspace
+            // asking for attention would be the fold telling a lie.
+            group.urgent = group.urgent || workspace.urgent === true;
+            if (group.focusTarget === null || workspace.groupFocus === true)
+                group.focusTarget = workspace;
+
+        }
+        return groups;
+    }
+    readonly property bool grouped: workspaceGroups.length > 1
     // Where a step starts from: the newest request still in flight, so a burst
     // of wheel steps advances instead of asking for the same workspace twice,
     // and otherwise what the compositor says is active.
@@ -125,112 +167,54 @@ Item {
         visible: root.niriAvailable
 
         Repeater {
-            model: root.outputWorkspaces
+            model: root.workspaceGroups
 
-            delegate: Item {
-                id: workspaceItem
+            delegate: Row {
+                id: groupRow
 
                 required property var modelData
-                readonly property string requestState: modelData.requestState
-                readonly property string stateDescription: {
-                    if (requestState === "pending")
-                        return qsTr("cambio solicitado");
 
-                    if (requestState === "failed")
-                        return qsTr("el cambio falló");
+                spacing: CelestinaTheme.spaceXs
 
-                    if (requestState === "confirmed")
-                        return qsTr("cambio confirmado");
+                // An open group is its workspaces. There is no separate
+                // "grouped" appearance for them: a strip with one group draws
+                // this and only this, which is what it drew before groups
+                // existed.
+                Repeater {
+                    model: groupRow.modelData.expanded ? groupRow.modelData.workspaces : []
 
-                    return "";
-                }
+                    delegate: WorkspacePill {
+                        required property var modelData
 
-                width: Math.max(24, workspaceLabel.implicitWidth + 12)
-                height: 26
-                Accessible.role: Accessible.Button
-                Accessible.name: {
-                    let state = modelData.active ? qsTr("activo") : qsTr("inactivo");
-                    if (modelData.urgent)
-                        state += ", " + qsTr("requiere atención");
-
-                    return qsTr("Espacio %1, %2").arg(modelData.label).arg(state);
-                }
-                // The panel surface refuses keyboard focus by design, so this
-                // action is the assistive route to it; the compositor's own
-                // binds remain the keyboard route to switching workspace.
-                Accessible.description: stateDescription
-                Accessible.onPressAction: root.focusRequested(modelData.output, modelData.index)
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: CelestinaTheme.radiusPill
-                    color: {
-                        if (workspaceItem.requestState === "failed")
-                            return CelestinaTheme.dangerFill;
-
-                        if (workspaceItem.modelData.active)
-                            return CelestinaTheme.surfaceSelected;
-
-                        return focusArea.containsMouse ? CelestinaTheme.surfaceHover : CelestinaTheme.clear;
+                        workspace: modelData
+                        onFocusRequested: (output, index) => root.focusRequested(output, index)
+                        onMenuRequested: (globalX, globalY) => root.menuRequested(globalX, globalY, root.outputWorkspaces)
                     }
-                    border.width: {
-                        if (workspaceItem.requestState.length > 0 || workspaceItem.modelData.focused)
-                            return CelestinaTheme.borderHairline;
 
-                        return 0;
-                    }
-                    border.color: {
-                        if (workspaceItem.requestState === "failed")
-                            return CelestinaTheme.dangerBorder;
-
-                        if (workspaceItem.requestState === "confirmed")
-                            return CelestinaTheme.accentLink;
-
-                        return CelestinaTheme.accentSoftBorder;
-                    }
                 }
 
-                Text {
-                    id: workspaceLabel
+                // The closed shape of the same group. `Row` leaves an invisible
+                // child out of its layout, so an open group is not padded by the
+                // capsule it is not showing.
+                //
+                // Deliberately not animated. The strip changes shape when the
+                // focus moves between monitors, which is the same instant change
+                // every other panel state makes, and an animated reflow here
+                // would be motion `CelestinaTheme.reducedMotion` then has to
+                // undo. There is nothing to honour because there is nothing
+                // moving.
+                WorkspaceGroupCapsule {
+                    visible: !groupRow.modelData.expanded
+                    outputName: groupRow.modelData.key
+                    count: groupRow.modelData.workspaces.length
+                    urgent: groupRow.modelData.urgent
+                    onFocusRequested: {
+                        const target = groupRow.modelData.focusTarget;
+                        if (target)
+                            root.focusRequested(target.output, target.index);
 
-                    anchors.centerIn: parent
-                    text: workspaceItem.modelData.label
-                    textFormat: Text.PlainText
-                    color: workspaceItem.modelData.active ? CelestinaTheme.accentLink : CelestinaTheme.textMuted
-                    // A request in flight is not a result: the label stays
-                    // readable but visibly unsettled until Niri answers.
-                    opacity: workspaceItem.requestState === "pending" ? CelestinaTheme.mutedContentOpacity : 1
-                    font.family: CelestinaTheme.sansFamily
-                    font.features: CelestinaTheme.fontFeaturesTabular
-                    font.pixelSize: CelestinaTheme.fontCaption
-                    font.weight: workspaceItem.modelData.active ? CelestinaTheme.weightDemiBold : CelestinaTheme.weightRegular
-                }
-
-                Rectangle {
-                    anchors.top: parent.top
-                    anchors.right: parent.right
-                    width: 5
-                    height: 5
-                    radius: CelestinaTheme.radiusPill
-                    visible: workspaceItem.modelData.urgent
-                    color: CelestinaTheme.danger
-                }
-
-                MouseArea {
-                    id: focusArea
-
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: (mouse) => {
-                        if (mouse.button === Qt.RightButton) {
-                            const anchor = workspaceItem.mapToGlobal(0, workspaceItem.height);
-                            root.menuRequested(anchor.x, anchor.y, root.outputWorkspaces);
-                            return;
-                        }
-                        root.focusRequested(workspaceItem.modelData.output, workspaceItem.modelData.index);
                     }
+                    onMenuRequested: (globalX, globalY) => root.menuRequested(globalX, globalY, root.outputWorkspaces)
                 }
 
             }

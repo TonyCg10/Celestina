@@ -1,5 +1,7 @@
 #include "niriclient.h"
 
+#include "diagnosticjournal.h"
+
 #include <cmath>
 
 #include <utility>
@@ -140,6 +142,17 @@ void NiriClient::startAdapter()
     // arrives from an older one answers nothing here.
     ++m_generation;
     m_process.start();
+    // The helper's own journal carries its `run_id` from the environment the
+    // host exported before this call; this line is the host's side of the same
+    // moment, so a helper that never got far enough to write anything is still
+    // placed in the timeline.
+    DiagnosticJournal::instance().record(
+        CELESTINA_JOURNAL(Critical, "helper.spawn")
+            .text(QStringLiteral("helper"), QStringLiteral("niri-adapter"))
+            .text(QStringLiteral("program"), m_process.program())
+            .unsigned_number(QStringLiteral("child_pid"), static_cast<quint64>(m_process.processId()))
+            .unsigned_number(QStringLiteral("helper_generation"), static_cast<quint64>(m_generation))
+    );
 }
 
 void NiriClient::scheduleRestart()
@@ -149,6 +162,11 @@ void NiriClient::scheduleRestart()
 
     const int delay = m_restartDelayMs;
     m_restartDelayMs = qMin(maximumRestartDelayMs, m_restartDelayMs * 2);
+    DiagnosticJournal::instance().record(
+        CELESTINA_JOURNAL(Critical, "helper.backoff")
+            .text(QStringLiteral("helper"), QStringLiteral("niri-adapter"))
+            .millis(QStringLiteral("delay_ms"), static_cast<quint64>(delay))
+    );
     qInfo() << "Celestina will restart its Niri adapter in" << delay << "ms";
     m_restartTimer.start(delay);
 }
@@ -184,6 +202,14 @@ void NiriClient::adapterStopped(int exitCode, QProcess::ExitStatus exitStatus)
     readStandardError();
     m_decoder.reset();
     setUnavailable();
+    DiagnosticJournal::instance().record(
+        CELESTINA_JOURNAL(Critical, "helper.exit")
+            .text(QStringLiteral("helper"), QStringLiteral("niri-adapter"))
+            .number(QStringLiteral("code"), exitCode)
+            .flag(QStringLiteral("crashed"), exitStatus == QProcess::CrashExit)
+            .flag(QStringLiteral("expected"), m_stopping)
+            .unsigned_number(QStringLiteral("helper_generation"), static_cast<quint64>(m_generation))
+    );
     if (!m_stopping) {
         qWarning() << "Celestina Niri adapter stopped with code" << exitCode
                    << "and status" << exitStatus;
@@ -193,6 +219,14 @@ void NiriClient::adapterStopped(int exitCode, QProcess::ExitStatus exitStatus)
 
 void NiriClient::adapterError(QProcess::ProcessError error)
 {
+    // The technical reason is never discarded: "the helper is gone" without a
+    // reason is how a failed spawn and a killed process look the same.
+    DiagnosticJournal::instance().record(
+        CELESTINA_JOURNAL(Critical, "helper.error")
+            .text(QStringLiteral("helper"), QStringLiteral("niri-adapter"))
+            .number(QStringLiteral("qt_error"), static_cast<qint64>(error))
+            .text(QStringLiteral("reason"), m_process.errorString())
+    );
     qWarning().noquote()
         << (error == QProcess::FailedToStart
                 ? "Celestina could not start its Niri adapter:"
@@ -274,6 +308,34 @@ bool NiriClient::applySnapshot(const QJsonObject &root)
             QStringLiteral("active_window_title")
         );
         const QString output = boundedString(outputValue, maxLabelLength);
+        // Which monitor the workspace belongs to, which stops matching `output`
+        // the moment that monitor is switched off. Optional on the wire on
+        // purpose: a helper that predates this field is still a valid producer,
+        // and a workspace with no home groups by the output it is on, which is
+        // exactly what the strip did before homes existed. An oversized or
+        // non-string value degrades the same way rather than rejecting a frame
+        // whose every other field is sound.
+        const QJsonValue homeValue = workspace.value(QStringLiteral("home"));
+        const QString home =
+            homeValue.isString()
+                && homeValue.toString().size() <= maxLabelLength
+                && !homeValue.toString().isEmpty()
+            ? boundedString(homeValue, maxLabelLength)
+            : output;
+        // What the strip does with this workspace's monitor group. Optional for
+        // the same reason `home` is, and its absent default is what a strip with
+        // nothing to collapse looks like: the group open, no capsule to click.
+        // An unknown or non-string value degrades to that same default rather
+        // than discarding a frame whose every other field is sound — a helper
+        // that learns a fourth state later must not blank this one's panel.
+        //
+        // Split into two flags here because that is what a surface consumes;
+        // the single wire value exists because being a capsule's target only
+        // means anything while there is a capsule.
+        const QString groupState = workspace.value(QStringLiteral("group")).toString();
+        const bool groupExpanded = groupState != QStringLiteral("collapsed")
+            && groupState != QStringLiteral("collapsed-target");
+        const bool groupFocus = groupState == QStringLiteral("collapsed-target");
         const double numericIndex = indexValue.toDouble();
         if (!isDecimalIdentifier(idValue)
             || !outputValue.isString() || !labelValue.isString()
@@ -298,6 +360,9 @@ bool NiriClient::applySnapshot(const QJsonObject &root)
             boundedString(labelValue, maxLabelLength)
         );
         item.insert(QStringLiteral("output"), output);
+        item.insert(QStringLiteral("home"), home);
+        item.insert(QStringLiteral("groupExpanded"), groupExpanded);
+        item.insert(QStringLiteral("groupFocus"), groupFocus);
         item.insert(
             QStringLiteral("active"),
             activeValue.toBool()

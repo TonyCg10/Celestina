@@ -45,3 +45,4 @@ celestina	0.6.7	bug	LVR-3-E	Convert the helper sources from a list to a glob
 siderita	1.2.7	bug	SID-G7-I	Restore the tab strip label the debt ceiling refuses to move
 celestina	0.6.8	bug	LVR-3-F	Keep transient readings from becoming panel truth
 celestina	0.7.0	milestone	UX-1-D	Add direct network and Bluetooth indicator menus
+celestina	0.8.0	milestone	WSG-1-D	Keep displaced workspace groups legible on one monitor

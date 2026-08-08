@@ -1,0 +1,57 @@
+# DIAG-1-A exact change inventory
+
+Base revision	73d95b0d579fbd7155191da1422d524d909dfbdb
+Pathspec	celestina-rs/crates/celestina-shell-core/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/diagnostics.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/journal.rs
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/README.md
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/plans/active/README.md
+Pathspec	celestina/docs/diagnostics.md
+Pathspec	celestina/docs/evidence/2026-08-08-diagnostic-journal.md
+Pathspec	celestina/docs/plans/archive/2026-08-08-diagnostic-journal.md
+Pathspec	celestina/scripts/diagnostic-report.sh
+Pathspec	celestina/src/diagnosticjournal.cpp
+Pathspec	celestina/src/diagnosticjournal.h
+Pathspec	celestina/src/main.cpp
+Pathspec	celestina/src/niri_adapter.rs
+Pathspec	celestina/src/niriclient.cpp
+Pathspec	celestina/src/provider_adapter/brightness.rs
+Pathspec	celestina/src/provider_adapter/main.rs
+Pathspec	celestina/src/provider_adapter/tools.rs
+Pathspec	celestina/src/shellprovidersclient.cpp
+Pathspec	docs/version-history.tsv
+Pathspec	celestina/docs/inventories/2026-08-08-diagnostic-journal/DIAG-1-A.numstat.tsv
+
+added	deleted	content	path
+6	0	cba1e91daca1f4dc6f7d7670638051660669ae685ed301bb51f7d599133d1128	celestina-rs/crates/celestina-shell-core/src/lib.rs
+876	0	c70fe33dd6e8f956e47d5288738e76d8fd08b85d64aa65537199c0ff4921abee	celestina-rs/crates/celestina-shell-core/src/diagnostics.rs
+883	0	771ff1728a302852340b1ef471e13f4f55d2a72e172e5ae7d7d6569b76cfb6a1	celestina-rs/crates/celestina-shell-core/src/journal.rs
+9	1	36f94449377a1a5ddbed3b6bc14432e14372fc903b85093f24607da997fee4f8	celestina/CMakeLists.txt
+1	1	2bc48b41cdefe0ee251503764fd6234db99ef2086d1932ffb642c41a81ae7a8d	celestina/Cargo.lock
+1	1	23d412a0dcb13ac0305a88e12afe85aa3ea8da05cdb1b2150da91024fc7e2f99	celestina/Cargo.toml
+1	0	6ca33502018ecb433f35765b15aab9b86d1f3db047dbd5e526bcacc3b16a1373	celestina/README.md
+45	0	62bf4ca26749c9b37a8a84674f8b3e2f68eae2ca9899ad5b47e0afac27d5e00e	celestina/ROADMAP.md
+32	2	70ae7bc7eca8edd23fe16f79a78a312c227bffa64a760c4b1e74b0af49e7827d	celestina/STATUS.md
+49	0	8cb45a3602f42bc1c35c4aecd1c32f1b81d887e890a76b60dc73565bad386ac2	celestina/VALIDATION.md
+3	1	55272a43ad5748916413a9613db3531974a3cca54993ef9266856f3ebf282ef0	celestina/docs/plans/active/README.md
+300	0	0e925e4be975852a2ccf05719619f72f7d152229e4d0950b3a460de214e5e486	celestina/docs/diagnostics.md
+193	0	4e7f649678b76e00e63e20e509e946e9025105b8cde22c309bb9c69dce34006f	celestina/docs/evidence/2026-08-08-diagnostic-journal.md
+153	0	0b1befce17cbeb2e77327a0a8b80da3282edcc21e7488ad470e1a15893d9393a	celestina/docs/plans/archive/2026-08-08-diagnostic-journal.md
+190	0	72054076e848b9c9d8727e4963aec31642818c0fb4882131a96a8a148816d52e	celestina/scripts/diagnostic-report.sh
+515	0	02b06f0fbd20271ad86f8214db9d870224390c131b4ac215e43095ee8ba3ce53	celestina/src/diagnosticjournal.cpp
+159	0	3c2acc0757ae43739f81297ccb26ec7affcd3031c8833f9fb77684987cebf773	celestina/src/diagnosticjournal.h
+60	0	93e61bfa5ba22023e1af1c014e41e2dbbd1b6d37e9e07e0b00763b736dad3f17	celestina/src/main.cpp
+508	16	f54c4ec183df0680688488e5036a771b78d237c728f621b62e98428c13c4179c	celestina/src/niri_adapter.rs
+65	0	9d492949f73796fadb4b14c4a101bd8c280e005ce8997faf2a7292e5f8f4da4c	celestina/src/niriclient.cpp
+167	21	e06a1c06d932f8127b9da730277d1cf23540938e1f7f7e4e356fadf6fd82c290	celestina/src/provider_adapter/brightness.rs
+41	1	6c55ea78518e728ad27320784921e9a2605801e721c73daab481561a2cd6c00f	celestina/src/provider_adapter/main.rs
+316	6	0dfb3f4274a206c370736982bdcb14d3c615127c3de1057ed163e64f836e6f9c	celestina/src/provider_adapter/tools.rs
+51	2	1b559322db09d8b53f64a1a46e29aba179c7df02b40d66ae0fc8fa32339258c8	celestina/src/shellprovidersclient.cpp
+1	0	3e119f0f276613d948ece42529b23c1f2cb46454d98bd9c42ad3bb926cd846a9	docs/version-history.tsv
+57	0	self	celestina/docs/inventories/2026-08-08-diagnostic-journal/DIAG-1-A.numstat.tsv

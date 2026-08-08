@@ -18,6 +18,8 @@
 //! comes back — so the rules are testable without a temporary directory, and
 //! the durable write itself stays with the runtime that can actually fsync.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::notifications::MAX_ICON_CHARS;
@@ -88,6 +90,17 @@ pub struct Settings {
     pub weather: Option<Location>,
     /// The icon name shown beside the weather, when the provider offers one.
     pub weather_icon: String,
+    /// Which monitor a workspace belongs to, said by the person rather than
+    /// observed. Empty for every session that never needed to correct what the
+    /// shell learned by watching.
+    ///
+    /// This is the repair route for a memory that recorded a layout the person
+    /// has since changed: the observed memory lives in the shell's state
+    /// directory and is not meant to be hand-edited, while this is a preference
+    /// and outranks it. See
+    /// [`crate::workspace_groups`], which owns what a home means and what may
+    /// teach one.
+    pub workspace_homes: BTreeMap<String, String>,
 }
 
 impl Default for Settings {
@@ -100,6 +113,7 @@ impl Default for Settings {
             level_step: 5,
             weather: None,
             weather_icon: String::new(),
+            workspace_homes: BTreeMap::new(),
         }
     }
 }
@@ -120,6 +134,15 @@ impl Settings {
             .weather
             .and_then(|place| Location::new(place.latitude, place.longitude, &place.label));
         self.weather_icon = crate::bounded(self.weather_icon.trim(), MAX_ICON_CHARS);
+        // Bounded by the module that owns what a home is, so a hand-edited
+        // declaration obeys the same limits an observed one does.
+        let mut homes = crate::workspace_groups::Homes::new();
+        homes.set_declarations(
+            self.workspace_homes
+                .iter()
+                .map(|(label, output)| (label.as_str(), output.as_str())),
+        );
+        self.workspace_homes = homes.declarations().clone();
         self
     }
 
@@ -256,6 +279,47 @@ mod tests {
         assert!(!settings.caffeine);
         assert!(!settings.night_light);
         assert_eq!(settings.weather, None);
+    }
+
+    #[test]
+    fn a_declared_workspace_home_survives_a_round_trip_and_is_bounded() {
+        let long = "x".repeat(crate::workspace_groups::MAX_NAME_CHARS * 2);
+        let settings = Settings {
+            workspace_homes: BTreeMap::from([
+                ("7".to_owned(), "DP-1".to_owned()),
+                (long.clone(), long.clone()),
+                // Neither half of this names anything, so it declares nothing.
+                (String::new(), "DP-2".to_owned()),
+            ]),
+            ..Settings::default()
+        };
+
+        let bytes = settings.to_bytes().expect("the settings serialize");
+        let read = Settings::from_bytes(&bytes).expect("a readable file");
+
+        assert_eq!(read.workspace_homes.len(), 2);
+        assert_eq!(
+            read.workspace_homes.get("7").map(String::as_str),
+            Some("DP-1")
+        );
+        let truncated = "x".repeat(crate::workspace_groups::MAX_NAME_CHARS);
+        assert_eq!(
+            read.workspace_homes.get(&truncated).map(String::as_str),
+            Some(truncated.as_str())
+        );
+    }
+
+    #[test]
+    fn a_settings_file_that_predates_workspace_homes_still_reads() {
+        // Every previous session's file. It must keep working rather than
+        // becoming unreadable because a field was added after it was written.
+        let old =
+            br#"{"schema":1,"quiet":true,"caffeine":false,"nightLight":false,"level_step":5}"#;
+
+        let read = Settings::from_bytes(old).expect("an older file is still ours");
+
+        assert!(read.quiet);
+        assert!(read.workspace_homes.is_empty());
     }
 
     #[test]

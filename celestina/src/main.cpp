@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 
@@ -17,6 +18,7 @@
 #include <QVariantMap>
 
 #include "devicesclient.h"
+#include "diagnosticjournal.h"
 #include "niriclient.h"
 #include "osdcontroller.h"
 #include "overlaycontroller.h"
@@ -167,6 +169,52 @@ int main(int argc, char *argv[])
     app.setOrganizationName("Celestina");
     app.setQuitOnLastWindowClosed(false);
 
+    // The journal opens before anything else does, so a host that fails during
+    // its own startup still leaves a record of having tried. The `run_id` is
+    // generated here and exported now, before any helper exists, so every
+    // process of this invocation writes lines that merge into one ordering.
+    DiagnosticJournal::instance().open(QStringLiteral("host"));
+    DiagnosticJournal::exportRunId();
+    {
+        // Arguments by class, never by value. A path or a session token passed
+        // on a command line is not something this file may keep.
+        const QStringList arguments = app.arguments().mid(1);
+        DiagnosticJournal::Record start(
+            DiagnosticJournal::Level::Critical,
+            QStringLiteral("host.start")
+        );
+        start.text(QStringLiteral("version"), QStringLiteral(CELESTINA_VERSION))
+            .text(
+                QStringLiteral("mode"),
+                arguments.contains(QStringLiteral("--pick-output"))
+                    ? QStringLiteral("pick-output")
+                    : QStringLiteral("panel")
+            )
+            .text(QStringLiteral("platform"), app.platformName())
+            .number(QStringLiteral("argument_count"), arguments.size())
+            .flag(
+                QStringLiteral("has_unrecognized_arguments"),
+                std::any_of(
+                    arguments.cbegin(),
+                    arguments.cend(),
+                    [](const QString &argument) {
+                        return argument != QStringLiteral("--pick-output");
+                    }
+                )
+            );
+        DiagnosticJournal::instance().record(start);
+    }
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, [] {
+        DiagnosticJournal::Record stop(
+            DiagnosticJournal::Level::Critical,
+            QStringLiteral("host.shutdown")
+        );
+        DiagnosticJournal::instance().record(stop);
+        // Bounded and deterministic: the writer is asked to drain here rather
+        // than abandoned, but an unresponsive filesystem cannot hold exit.
+        DiagnosticJournal::instance().close();
+    });
+
     QQmlEngine engine;
 
     // Make CelestinaStyle importable from the explicit production module, or
@@ -226,13 +274,25 @@ int main(int argc, char *argv[])
     auto *shell = new ShellService(nullptr, &app);
     switch (shell->attach(QDBusConnection::sessionBus())) {
     case ShellService::Attachment::NameTaken:
+        DiagnosticJournal::instance().record(
+            CELESTINA_JOURNAL(Critical, "dbus.name.refused")
+                .text(QStringLiteral("name"), ShellService::serviceName())
+        );
         qCritical() << "Celestina is already running this session; deferring to "
                        "the shell that owns"
                     << ShellService::serviceName();
         return EXIT_FAILURE;
     case ShellService::Attachment::NoBus:
+        DiagnosticJournal::instance().record(
+            CELESTINA_JOURNAL(Warn, "dbus.absent")
+                .text(QStringLiteral("name"), ShellService::serviceName())
+        );
         break;
     case ShellService::Attachment::Owned:
+        DiagnosticJournal::instance().record(
+            CELESTINA_JOURNAL(Critical, "dbus.name.acquired")
+                .text(QStringLiteral("name"), ShellService::serviceName())
+        );
         qInfo() << "Celestina owns" << ShellService::serviceName()
                 << "at" << ShellService::objectPath();
         break;

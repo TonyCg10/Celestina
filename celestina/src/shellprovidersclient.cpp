@@ -1,4 +1,5 @@
 #include "shellprovidersclient.h"
+#include "diagnosticjournal.h"
 
 #include <QDebug>
 #include <QGuiApplication>
@@ -61,20 +62,43 @@ ShellProvidersClient::~ShellProvidersClient()
 {
     m_stopping = true;
     m_restartTimer.stop();
-    if (m_process.state() == QProcess::NotRunning)
+    if (m_process.state() == QProcess::NotRunning) {
+        DiagnosticJournal::instance().record(
+            CELESTINA_JOURNAL(Critical, "provider-helper.shutdown")
+                .unsigned_number(QStringLiteral("generation"), m_helperGeneration)
+                .text(QStringLiteral("state"), QStringLiteral("already-stopped"))
+        );
         return;
+    }
 
     // Closing stdin is the helper's own shutdown signal: it drains its queue,
     // joins its worker and leaves. Terminating is the fallback for a helper
     // that does not.
     m_process.closeWriteChannel();
-    if (m_process.waitForFinished(gracefulShutdownMs))
+    if (m_process.waitForFinished(gracefulShutdownMs)) {
+        DiagnosticJournal::instance().record(
+            CELESTINA_JOURNAL(Critical, "provider-helper.shutdown")
+                .unsigned_number(QStringLiteral("generation"), m_helperGeneration)
+                .text(QStringLiteral("state"), QStringLiteral("graceful"))
+        );
         return;
+    }
 
     m_process.terminate();
     if (!m_process.waitForFinished(gracefulShutdownMs)) {
         m_process.kill();
         m_process.waitForFinished(250);
+        DiagnosticJournal::instance().record(
+            CELESTINA_JOURNAL(Critical, "provider-helper.shutdown")
+                .unsigned_number(QStringLiteral("generation"), m_helperGeneration)
+                .text(QStringLiteral("state"), QStringLiteral("killed"))
+        );
+    } else {
+        DiagnosticJournal::instance().record(
+            CELESTINA_JOURNAL(Critical, "provider-helper.shutdown")
+                .unsigned_number(QStringLiteral("generation"), m_helperGeneration)
+                .text(QStringLiteral("state"), QStringLiteral("terminated"))
+        );
     }
 }
 
@@ -90,6 +114,10 @@ void ShellProvidersClient::startHelper()
     // A new instance, and therefore not the one any pending escalation was
     // armed against.
     ++m_helperGeneration;
+    DiagnosticJournal::instance().record(
+        CELESTINA_JOURNAL(Critical, "provider-helper.spawn")
+            .unsigned_number(QStringLiteral("generation"), m_helperGeneration)
+    );
     m_process.start();
 }
 
@@ -109,6 +137,12 @@ void ShellProvidersClient::scheduleRestart()
     const int delay = m_uncleanExit
         ? qMax(m_restartDelayMs, abandonedChildLifetimeMs)
         : m_restartDelayMs;
+    DiagnosticJournal::instance().record(
+        CELESTINA_JOURNAL(Critical, "provider-helper.backoff")
+            .unsigned_number(QStringLiteral("generation"), m_helperGeneration)
+            .millis(QStringLiteral("delay_ms"), static_cast<quint64>(delay))
+            .flag(QStringLiteral("unclean_exit"), m_uncleanExit)
+    );
     m_restartDelayMs = qMin(maximumRestartDelayMs, m_restartDelayMs * 2);
     qInfo() << "Celestina will restart its provider helper in" << delay << "ms";
     m_restartTimer.start(delay);
@@ -146,6 +180,13 @@ void ShellProvidersClient::helperStopped(int exitCode, QProcess::ExitStatus exit
     readStandardError();
     m_decoder.reset();
     setUnavailable();
+    DiagnosticJournal::instance().record(
+        CELESTINA_JOURNAL(Critical, "provider-helper.exit")
+            .unsigned_number(QStringLiteral("generation"), m_helperGeneration)
+            .number(QStringLiteral("exit_code"), exitCode)
+            .flag(QStringLiteral("normal_exit"), exitStatus == QProcess::NormalExit)
+            .flag(QStringLiteral("stopping"), m_stopping)
+    );
     if (!m_stopping) {
         qWarning() << "Celestina's provider helper stopped with code" << exitCode
                    << "and status" << exitStatus;
@@ -163,6 +204,14 @@ void ShellProvidersClient::helperError(QProcess::ProcessError error)
                 ? "Celestina could not start its provider helper:"
                 : "Celestina lost its provider helper:")
         << m_process.errorString();
+    DiagnosticJournal::instance().record(
+        CELESTINA_JOURNAL(Critical, "provider-helper.error")
+            .unsigned_number(QStringLiteral("generation"), m_helperGeneration)
+            .number(QStringLiteral("process_error"), static_cast<qint64>(error))
+            .text(QStringLiteral("kind"), error == QProcess::FailedToStart
+                    ? QStringLiteral("failed-to-start")
+                    : QStringLiteral("runtime"))
+    );
     m_decoder.reset();
     setUnavailable();
     if (m_stopping)

@@ -23,7 +23,13 @@ use std::thread;
 use std::time::Duration;
 
 use celestina_shell_core::bounded;
+// Aliased: `niri_ipc::Event` is the compositor's event and is already the
+// `Event` this file means everywhere else.
+use celestina_shell_core::diagnostics::{Event as Record, Level, Value as Field};
+use celestina_shell_core::journal::{self, Journal};
 use celestina_shell_core::lines::{read_bounded_line, HostLine, SharedWriter, WriteError};
+use celestina_shell_core::settings::Settings;
+use celestina_shell_core::workspace_groups::{self, Homes, Workspace as CoreWorkspace};
 use niri_ipc::socket::Socket;
 use niri_ipc::state::{EventStreamState, EventStreamStatePart};
 use niri_ipc::{Action, Event, Request, Response, WorkspaceReferenceArg};
@@ -56,6 +62,24 @@ const MAX_WORKSPACES: usize = 512;
 /// land in the middle of a snapshot line.
 type AdapterWriter = Arc<SharedWriter<BufWriter<Stdout>>>;
 
+/// How a strip is treating the monitor group a workspace belongs to.
+///
+/// [`Self::Expanded`] is the ordinary case and the wire default: a strip whose
+/// workspaces all belong to one monitor has one group, opens it, and draws the
+/// plain row it drew before grouping existed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum GroupState {
+    /// Its workspaces are shown.
+    Expanded,
+    /// Its workspaces are behind a capsule.
+    Collapsed,
+    /// Behind a capsule, and this is the workspace that capsule asks for: the
+    /// one that was active on that monitor, or the group's first if none was.
+    /// Exactly one workspace of a collapsed group carries it.
+    CollapsedTarget,
+}
+
 #[derive(Debug, PartialEq, Serialize)]
 struct WorkspaceSnapshot {
     /// Niri's stable workspace id, carried as a decimal string: it is a `u64`
@@ -66,6 +90,25 @@ struct WorkspaceSnapshot {
     index: u8,
     label: String,
     output: String,
+    /// Which monitor this workspace belongs to, which is only the same as
+    /// `output` while that monitor is connected. Niri moves a workspace to a
+    /// surviving output when its own goes away and then stops saying where it
+    /// came from, so the panel would otherwise have no way to keep three
+    /// monitors' worth of workspaces apart. Remembered or declared rather than
+    /// read — see [`celestina_shell_core::workspace_groups`].
+    ///
+    /// Always present and never empty: when nothing is known it is `output`,
+    /// which is the honest answer and the one that groups a strip exactly as it
+    /// grouped before this field existed.
+    home: String,
+    /// What the strip showing this workspace does with its monitor group.
+    ///
+    /// Grouping itself is a fold over [`Self::home`], but *which* group opens is
+    /// policy, and it is decided here — by the process that links the core that
+    /// owns it — so no surface has to reimplement it. One value rather than two
+    /// booleans because the two facts are not independent: being the workspace a
+    /// capsule asks for only means anything while that capsule exists.
+    group: GroupState,
     active: bool,
     focused: bool,
     urgent: bool,
@@ -196,7 +239,147 @@ impl Error for AdapterError {
     }
 }
 
-fn shell_snapshot(state: &EventStreamState) -> ShellSnapshot {
+/// Where the learned homes live. State rather than configuration: this is what
+/// the shell observed, not what the person chose, and a person who deletes it
+/// loses nothing they wrote.
+fn homes_path() -> Option<std::path::PathBuf> {
+    celestina_core::xdg::state_home().map(|dir| dir.join("celestina").join("workspace-homes.json"))
+}
+
+/// The persisted memory, or an empty one.
+///
+/// Every failure here returns an empty memory rather than propagating: a
+/// missing, unreadable, oversized or corrupt file means the strip groups by the
+/// output each workspace is on, which is exactly how it behaved before this
+/// existed. A shell that refused to start over its own cache would be worse than
+/// one that forgot.
+fn load_homes() -> Homes {
+    let Some(path) = homes_path() else {
+        return Homes::new();
+    };
+    // Read bounded rather than whole: the size limit and every parsing rule
+    // belong to the core that owns what a memory is, so this reads bytes and
+    // decides nothing about them.
+    let Ok(file) = std::fs::File::open(&path) else {
+        return Homes::new();
+    };
+    let ceiling = u64::try_from(workspace_groups::MAX_FILE_BYTES).unwrap_or(u64::MAX);
+    let mut bytes = Vec::new();
+    if io::Read::read_to_end(&mut io::Read::take(file, ceiling + 1), &mut bytes).is_err() {
+        return Homes::new();
+    }
+
+    Homes::from_bytes(&bytes).unwrap_or_default()
+}
+
+/// Writes the memory atomically. A failure is reported and dropped: losing what
+/// was learned costs the next session one multi-output frame to learn it again,
+/// and is not worth interrupting an event stream for.
+fn save_homes(homes: &Homes) {
+    let Some(path) = homes_path() else {
+        return;
+    };
+    let Ok(bytes) = homes.to_bytes() else {
+        return;
+    };
+    if let Err(error) = celestina_core::atomic_file::replace(&path, &bytes) {
+        eprintln!("celestina-niri-adapter: could not persist workspace homes: {error}");
+    }
+}
+
+/// The person's own declarations, read from the shell's settings file.
+///
+/// Read-only and best-effort. The settings file belongs to the aggregate
+/// provider helper, which is the only process that writes it; this one consumes
+/// the single field that answers a question only it can act on, through the same
+/// [`celestina_shell_core::settings`] schema, so there is no second idea of what
+/// the file contains. A missing, unreadable or older file simply declares
+/// nothing, which leaves the strip on what it learned by watching.
+fn load_declarations(homes: &mut Homes) {
+    let Some(path) = celestina_core::xdg::config_home() else {
+        return;
+    };
+    let Ok(bytes) = std::fs::read(path.join("celestina").join("settings.json")) else {
+        return;
+    };
+    let Some(settings) = Settings::from_bytes(&bytes) else {
+        return;
+    };
+
+    homes.set_declarations(
+        settings
+            .workspace_homes
+            .iter()
+            .map(|(label, output)| (label.as_str(), output.as_str())),
+    );
+}
+
+/// Marks which monitor group is open, and which workspace each closed one asks
+/// for, once every home is known.
+///
+/// Grouped **per output**, because the shell draws one strip per physical
+/// monitor and each strip shows only the workspaces that are on it. A session
+/// with all three monitors connected therefore has one group per strip and every
+/// workspace comes back expanded, which is the case that must look untouched.
+///
+/// The decision itself is [`celestina_shell_core::workspace_groups::group`]. It
+/// is made here rather than in the surface so that one implementation answers
+/// it: a strip folds equal `home` values together and renders what this said.
+fn publish_grouping(workspaces: &mut [WorkspaceSnapshot], homes: &Homes) {
+    let outputs: Vec<String> = {
+        let mut seen: Vec<String> = Vec::new();
+        for workspace in workspaces.iter() {
+            if !seen.contains(&workspace.output) {
+                seen.push(workspace.output.clone());
+            }
+        }
+        seen
+    };
+
+    for output in outputs {
+        let strip: Vec<CoreWorkspace> = workspaces
+            .iter()
+            .filter(|workspace| workspace.output == output)
+            .map(|workspace| {
+                CoreWorkspace::new(
+                    // Grouping keys on the home, so the core is handed the home
+                    // as the placement it should group by. The label stays the
+                    // identity, which is what `focus_target` is matched on.
+                    &workspace.label,
+                    &workspace.home,
+                    workspace.active,
+                    workspace.urgent,
+                    workspace.active_window_title.is_some(),
+                )
+            })
+            .collect();
+
+        for group in workspace_groups::group(&strip, homes) {
+            let target = group
+                .focus_target()
+                .map(|workspace| workspace.label.clone());
+            for workspace in workspaces
+                .iter_mut()
+                .filter(|workspace| workspace.output == output && workspace.home == group.key)
+            {
+                workspace.group = if group.expanded {
+                    GroupState::Expanded
+                } else if target.as_deref() == Some(workspace.label.as_str()) {
+                    GroupState::CollapsedTarget
+                } else {
+                    GroupState::Collapsed
+                };
+            }
+        }
+    }
+}
+
+/// Reduces the compositor's state to the strip's snapshot, teaching the memory
+/// whatever this frame is in a position to teach.
+///
+/// Returns whether anything new was learned, so the caller writes the file when
+/// there is something to write rather than on every compositor event.
+fn shell_snapshot(state: &EventStreamState, homes: &mut Homes) -> (ShellSnapshot, bool) {
     let mut workspaces = state
         .workspaces
         .workspaces
@@ -223,6 +406,11 @@ fn shell_snapshot(state: &EventStreamState) -> ShellSnapshot {
                         |name| bounded(name, MAX_LABEL_UNITS),
                     ),
                 output: bounded(&output, MAX_LABEL_UNITS),
+                // Filled in below, once the whole frame is known: a home cannot
+                // be decided from one workspace, because whether this frame may
+                // teach anything at all depends on how many outputs it carries.
+                home: String::new(),
+                group: GroupState::Expanded,
                 active: workspace.is_active,
                 focused: workspace.is_focused,
                 urgent: workspace.is_urgent,
@@ -244,17 +432,48 @@ fn shell_snapshot(state: &EventStreamState) -> ShellSnapshot {
     // next rather than a reshuffling list.
     workspaces.truncate(MAX_WORKSPACES);
 
-    ShellSnapshot {
-        kind: "snapshot",
-        workspaces,
+    // Learn from the truncated strip rather than the whole compositor state, so
+    // the memory only ever records workspaces the panel could actually show.
+    let observed = workspaces
+        .iter()
+        .map(|workspace| {
+            CoreWorkspace::new(
+                &workspace.label,
+                &workspace.output,
+                workspace.active,
+                workspace.urgent,
+                workspace.active_window_title.is_some(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let learned = homes.learn(&observed);
+
+    for workspace in &mut workspaces {
+        workspace.home = homes
+            .home_of(&workspace.label)
+            .unwrap_or(&workspace.output)
+            .to_owned();
     }
+    publish_grouping(&mut workspaces, homes);
+
+    (
+        ShellSnapshot {
+            kind: "snapshot",
+            workspaces,
+        },
+        learned,
+    )
 }
 
 fn emit_json<T: Serialize>(writer: &AdapterWriter, value: &T) -> Result<(), AdapterError> {
     writer.emit(value).map_err(AdapterError::Emit)
 }
 
-fn stream_session(writer: &AdapterWriter, emitted_snapshot: &mut bool) -> Result<(), AdapterError> {
+fn stream_session(
+    writer: &AdapterWriter,
+    emitted_snapshot: &mut bool,
+    homes: &mut Homes,
+) -> Result<(), AdapterError> {
     let mut socket = Socket::connect().map_err(AdapterError::Connect)?;
     let reply = socket
         .send(Request::EventStream)
@@ -286,7 +505,13 @@ fn stream_session(writer: &AdapterWriter, emitted_snapshot: &mut bool) -> Result
         state.apply(event);
 
         if have_workspaces && have_windows {
-            let snapshot = shell_snapshot(&state);
+            let (snapshot, learned) = shell_snapshot(&state, homes);
+            // Persisted on learning rather than on publication: a frame that
+            // taught nothing leaves the file alone, so an ordinary session of
+            // switching workspaces never touches the disk.
+            if learned {
+                save_homes(homes);
+            }
             if last_snapshot.as_ref() != Some(&snapshot) {
                 // A frame the host would discard whole is skipped, not treated
                 // as the end of the session. Ending it here would tear down the
@@ -316,14 +541,37 @@ fn stream_session(writer: &AdapterWriter, emitted_snapshot: &mut bool) -> Result
 
 fn stream_forever(writer: &AdapterWriter) -> Result<(), AdapterError> {
     let mut last_error: Option<String> = None;
+    // Loaded once and carried across reconnections. A compositor that went away
+    // and came back has not forgotten which monitor a workspace belongs to, and
+    // neither should this.
+    let mut homes = load_homes();
+    // Read once beside the memory, and again on every reconnection, which is
+    // the cheap moment this helper already has. A declaration edited by hand
+    // therefore takes effect at the next shell start rather than instantly; the
+    // alternative is watching a file the other helper owns, which would be a
+    // second idea of who owns settings for a repair that is made once.
+    load_declarations(&mut homes);
 
+    let mut attempt: u64 = 0;
     loop {
         let mut emitted_snapshot = false;
-        let error = match stream_session(writer, &mut emitted_snapshot) {
+        attempt += 1;
+        journal::record(
+            Record::new(Level::Info, "niri.connect.attempt").with("attempt", Field::Uint(attempt)),
+        );
+        let error = match stream_session(writer, &mut emitted_snapshot, &mut homes) {
             Ok(()) => AdapterError::Rejected("event stream ended without an error".into()),
             Err(error) => error,
         };
         let reason = error.to_string();
+        // A compositor that went away is adjacent to everything this journal is
+        // trying to place: the same card drives the outputs Niri is describing.
+        journal::record(
+            Record::new(Level::Critical, "niri.disconnected")
+                .with("attempt", Field::Uint(attempt))
+                .with("published_snapshot", Field::Bool(emitted_snapshot))
+                .with_text("reason", &reason),
+        );
 
         if emitted_snapshot || last_error.as_deref() != Some(reason.as_str()) {
             eprintln!("celestina-niri-adapter: {reason}");
@@ -366,6 +614,38 @@ fn parse_command(line: &[u8]) -> Result<HostCommand, Rejection> {
 /// goes through here, so "accepted" means the same thing for all of them: Niri
 /// took it, not that the session already looks different.
 fn perform(action: Action) -> Result<(), String> {
+    // The action's kind, not its payload. A `FocusWorkspace` names a workspace
+    // id the host already published; nothing here carries a window title.
+    let kind = match &action {
+        Action::FocusWorkspace { .. } => "focus-workspace",
+        Action::Screenshot { .. } => "screenshot",
+        Action::PowerOffMonitors { .. } => "power-off-monitors",
+        Action::Quit { .. } => "quit",
+        _ => "other",
+    };
+    // Critical: `power-off-monitors` and `quit` are the two things this shell
+    // asks for that change what the graphics card is doing.
+    journal::record_from(
+        "niri-actions",
+        Record::new(Level::Critical, "niri.action.start").with_text("action", kind),
+    );
+    let started = std::time::Instant::now();
+    let answer = perform_inner(action);
+    journal::record_from(
+        "niri-actions",
+        Record::new(Level::Critical, "niri.action.end")
+            .with_text("action", kind)
+            .with("ok", Field::Bool(answer.is_ok()))
+            .with(
+                "elapsed_ms",
+                Field::Millis(u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)),
+            )
+            .with_text("error", answer.as_ref().err().map_or("", String::as_str)),
+    );
+    answer
+}
+
+fn perform_inner(action: Action) -> Result<(), String> {
     let mut socket =
         Socket::connect().map_err(|error| format!("cannot connect to Niri: {error}"))?;
     let reply = socket
@@ -512,6 +792,16 @@ fn run() -> Result<(), AdapterError> {
             if worker.join().is_err() {
                 eprintln!("celestina-niri-adapter: the request worker panicked");
             }
+            journal::record(
+                Record::new(Level::Critical, "helper.stop")
+                    .with_text("helper", "niri-adapter")
+                    .with_text("reason", "host-input-closed")
+                    .with("ok", Field::Bool(true)),
+            );
+            // `process::exit` deliberately bypasses Rust destructors. Close
+            // the process journal first so the ordinary host shutdown keeps
+            // its final correlated event instead of abandoning the writer.
+            journal::close_process_journal();
             process::exit(0);
         })
         .map_err(AdapterError::Spawn)?;
@@ -520,7 +810,36 @@ fn run() -> Result<(), AdapterError> {
 }
 
 fn main() -> ExitCode {
-    match run() {
+    journal::install(Journal::for_component(
+        "niri-adapter",
+        u64::from(process::id()),
+    ));
+    journal::record(
+        Record::new(Level::Critical, "helper.start")
+            .with_text("helper", "niri-adapter")
+            .with_text("version", env!("CARGO_PKG_VERSION"))
+            .with(
+                "argument_count",
+                Field::Uint(std::env::args().skip(1).count() as u64),
+            ),
+    );
+
+    let outcome = run();
+    journal::record(
+        Record::new(Level::Critical, "helper.stop")
+            .with_text("helper", "niri-adapter")
+            .with("ok", Field::Bool(outcome.is_ok()))
+            .with_text(
+                "error",
+                &outcome
+                    .as_ref()
+                    .err()
+                    .map_or(String::new(), ToString::to_string),
+            ),
+    );
+    journal::close_process_journal();
+
+    match outcome {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("celestina-niri-adapter: fatal: {error}");
@@ -540,6 +859,179 @@ mod tests {
         state.apply(event);
     }
 
+    /// A snapshot taken against a memory that knows nothing, which is what every
+    /// case below except the grouping ones is about. A workspace with no known
+    /// home reports the output it is on, so these keep asserting the contract
+    /// they asserted before homes existed.
+    fn snapshot_of(state: &EventStreamState) -> ShellSnapshot {
+        shell_snapshot(state, &mut Homes::new()).0
+    }
+
+    /// Two monitors, one named workspace each, and no windows anywhere.
+    fn two_outputs(state: &mut EventStreamState) {
+        apply_json(
+            state,
+            r#"{"WorkspacesChanged":{"workspaces":[{"id":3,"idx":1,"name":"left","output":"HDMI-A-1","is_urgent":false,"is_active":true,"is_focused":true,"active_window_id":null},{"id":4,"idx":1,"name":"right","output":"DP-1","is_urgent":false,"is_active":true,"is_focused":false,"active_window_id":null}]}}"#,
+        );
+        apply_json(state, r#"{"WindowsChanged":{"windows":[]}}"#);
+    }
+
+    /// The same two workspaces after `DP-1` was switched off: the compositor has
+    /// moved `right` onto the survivor and no longer says where it came from.
+    fn displaced_onto_one(state: &mut EventStreamState) {
+        apply_json(
+            state,
+            r#"{"WorkspacesChanged":{"workspaces":[{"id":3,"idx":1,"name":"left","output":"HDMI-A-1","is_urgent":false,"is_active":true,"is_focused":true,"active_window_id":null},{"id":4,"idx":2,"name":"right","output":"HDMI-A-1","is_urgent":false,"is_active":false,"is_focused":false,"active_window_id":null}]}}"#,
+        );
+        apply_json(state, r#"{"WindowsChanged":{"windows":[]}}"#);
+    }
+
+    fn home_of<'a>(snapshot: &'a ShellSnapshot, label: &str) -> &'a str {
+        &snapshot
+            .workspaces
+            .iter()
+            .find(|workspace| workspace.label == label)
+            .expect("the fixture publishes this workspace")
+            .home
+    }
+
+    #[test]
+    fn a_workspace_with_no_known_home_reports_the_output_it_is_on() {
+        let mut state = EventStreamState::default();
+        displaced_onto_one(&mut state);
+
+        // Nothing has ever seen two outputs, so there is nothing to know and the
+        // field says exactly what the strip already knew.
+        let snapshot = snapshot_of(&state);
+
+        assert_eq!(home_of(&snapshot, "left"), "HDMI-A-1");
+        assert_eq!(home_of(&snapshot, "right"), "HDMI-A-1");
+    }
+
+    #[test]
+    fn a_two_output_frame_learns_and_publishes_both_homes() {
+        let mut state = EventStreamState::default();
+        two_outputs(&mut state);
+        let mut homes = Homes::new();
+
+        let (snapshot, learned) = shell_snapshot(&state, &mut homes);
+
+        assert!(learned);
+        assert_eq!(home_of(&snapshot, "left"), "HDMI-A-1");
+        assert_eq!(home_of(&snapshot, "right"), "DP-1");
+    }
+
+    #[test]
+    fn a_displaced_workspace_keeps_the_home_it_was_taught() {
+        let mut state = EventStreamState::default();
+        two_outputs(&mut state);
+        let mut homes = Homes::new();
+        shell_snapshot(&state, &mut homes);
+
+        // The monitor goes away. This is the frame that would overwrite the
+        // memory if the memory let it, and the whole feature rests on it not.
+        let mut displaced = EventStreamState::default();
+        displaced_onto_one(&mut displaced);
+        let (snapshot, learned) = shell_snapshot(&displaced, &mut homes);
+
+        assert!(!learned);
+        assert_eq!(home_of(&snapshot, "right"), "DP-1");
+        assert_eq!(home_of(&snapshot, "left"), "HDMI-A-1");
+    }
+
+    #[test]
+    fn a_single_output_frame_teaches_the_memory_nothing() {
+        let mut state = EventStreamState::default();
+        displaced_onto_one(&mut state);
+        let mut homes = Homes::new();
+
+        let (_, learned) = shell_snapshot(&state, &mut homes);
+
+        assert!(!learned);
+        assert!(homes.is_empty());
+    }
+
+    /// The author's own displaced case, small enough to assert on: two monitors
+    /// taught, then one switched off so both workspaces arrive on the survivor.
+    fn taught_then_displaced() -> ShellSnapshot {
+        let mut learning = EventStreamState::default();
+        two_outputs(&mut learning);
+        let mut homes = Homes::new();
+        shell_snapshot(&learning, &mut homes);
+
+        let mut state = EventStreamState::default();
+        displaced_onto_one(&mut state);
+        shell_snapshot(&state, &mut homes).0
+    }
+
+    fn workspace<'a>(snapshot: &'a ShellSnapshot, label: &str) -> &'a WorkspaceSnapshot {
+        snapshot
+            .workspaces
+            .iter()
+            .find(|workspace| workspace.label == label)
+            .expect("the fixture publishes this workspace")
+    }
+
+    #[test]
+    fn a_strip_of_one_monitor_publishes_every_workspace_expanded() {
+        let mut state = EventStreamState::default();
+        two_outputs(&mut state);
+
+        // Two outputs, one workspace each: each strip has a single group, so
+        // there is nothing to collapse and the surface draws what it always
+        // drew.
+        let snapshot = snapshot_of(&state);
+
+        assert!(snapshot
+            .workspaces
+            .iter()
+            .all(|workspace| workspace.group == GroupState::Expanded));
+    }
+
+    #[test]
+    fn a_displaced_strip_opens_only_the_group_holding_the_focus() {
+        let snapshot = taught_then_displaced();
+
+        // `left` is the active one in the displaced fixture, so its group opens
+        // and the monitor that went away arrives closed rather than as five more
+        // equal pills.
+        assert_eq!(workspace(&snapshot, "left").group, GroupState::Expanded);
+        assert_ne!(workspace(&snapshot, "right").group, GroupState::Expanded);
+    }
+
+    #[test]
+    fn a_closed_group_names_the_workspace_its_capsule_asks_for() {
+        let snapshot = taught_then_displaced();
+
+        // Nothing on `DP-1` is active any more, so the capsule asks for that
+        // group's first workspace rather than for nothing.
+        assert_eq!(
+            workspace(&snapshot, "right").group,
+            GroupState::CollapsedTarget
+        );
+    }
+
+    #[test]
+    fn a_declared_home_regroups_a_strip_that_had_learned_otherwise() {
+        let mut learning = EventStreamState::default();
+        two_outputs(&mut learning);
+        let mut homes = Homes::new();
+        shell_snapshot(&learning, &mut homes);
+
+        // The person moved that workspace in their Niri configuration and says
+        // so in the shell's settings; the observation underneath is overruled
+        // without anybody having to find and delete it.
+        homes.set_declarations([("right", "HDMI-A-1")]);
+        let mut state = EventStreamState::default();
+        displaced_onto_one(&mut state);
+        let snapshot = shell_snapshot(&state, &mut homes).0;
+
+        assert_eq!(home_of(&snapshot, "right"), "HDMI-A-1");
+        // One group now, so the strip is flat again and nothing is collapsed.
+        assert_eq!(workspace(&snapshot, "right").group, GroupState::Expanded);
+        assert_eq!(workspace(&snapshot, "left").group, GroupState::Expanded);
+    }
+
     #[test]
     fn snapshot_is_sorted_and_joins_the_active_window() {
         let mut state = EventStreamState::default();
@@ -552,7 +1044,7 @@ mod tests {
             r#"{"WindowsChanged":{"windows":[{"id":42,"title":"Niri docs","app_id":"zen","pid":100,"workspace_id":3,"is_focused":true,"is_floating":false,"is_urgent":false,"layout":{"pos_in_scrolling_layout":[1,1],"tile_size":[800.0,600.0],"window_size":[800,600],"tile_pos_in_workspace_view":null,"window_offset_in_tile":[0.0,0.0]},"focus_timestamp":null}]}}"#,
         );
 
-        let snapshot = shell_snapshot(&state);
+        let snapshot = snapshot_of(&state);
         assert_eq!(snapshot.workspaces.len(), 2);
         assert_eq!(snapshot.workspaces[0].label, "web");
         assert_eq!(
@@ -573,13 +1065,13 @@ mod tests {
             &mut state,
             r#"{"WindowsChanged":{"windows":[{"id":42,"title":"Terminal","app_id":"kitty","pid":100,"workspace_id":3,"is_focused":true,"is_floating":false,"is_urgent":false,"layout":{"pos_in_scrolling_layout":[1,1],"tile_size":[800.0,600.0],"window_size":[800,600],"tile_pos_in_workspace_view":null,"window_offset_in_tile":[0.0,0.0]},"focus_timestamp":null}]}}"#,
         );
-        let before = shell_snapshot(&state);
+        let before = snapshot_of(&state);
 
         apply_json(
             &mut state,
             r#"{"WindowOpenedOrChanged":{"window":{"id":42,"title":"Editor","app_id":"kitty","pid":100,"workspace_id":3,"is_focused":true,"is_floating":false,"is_urgent":false,"layout":{"pos_in_scrolling_layout":[1,1],"tile_size":[800.0,600.0],"window_size":[800,600],"tile_pos_in_workspace_view":null,"window_offset_in_tile":[0.0,0.0]},"focus_timestamp":null}}}"#,
         );
-        let after = shell_snapshot(&state);
+        let after = snapshot_of(&state);
 
         assert_ne!(before, after);
         assert_eq!(
@@ -596,7 +1088,7 @@ mod tests {
             r#"{"WorkspacesChanged":{"workspaces":[{"id":3,"idx":1,"name":"detached","output":null,"is_urgent":false,"is_active":true,"is_focused":true,"active_window_id":null}]}}"#,
         );
 
-        assert!(shell_snapshot(&state).workspaces.is_empty());
+        assert!(snapshot_of(&state).workspaces.is_empty());
     }
 
     #[test]
@@ -607,7 +1099,7 @@ mod tests {
             r#"{"WorkspacesChanged":{"workspaces":[{"id":18446744073709551615,"idx":1,"name":"big","output":"DP-1","is_urgent":false,"is_active":true,"is_focused":true,"active_window_id":null}]}}"#,
         );
 
-        let snapshot = shell_snapshot(&state);
+        let snapshot = snapshot_of(&state);
         assert_eq!(snapshot.workspaces[0].id, "18446744073709551615");
         let encoded = serde_json::to_string(&snapshot).expect("the snapshot serializes");
         // A JSON number would reach the host's double-typed parser rounded.
@@ -638,7 +1130,7 @@ mod tests {
             ),
         );
 
-        let snapshot = shell_snapshot(&state);
+        let snapshot = snapshot_of(&state);
         let workspace = &snapshot.workspaces[0];
         assert_eq!(workspace.label.chars().count(), MAX_LABEL_UNITS);
         assert_eq!(workspace.output.chars().count(), MAX_LABEL_UNITS);
@@ -671,7 +1163,7 @@ mod tests {
             &format!(r#"{{"WorkspacesChanged":{{"workspaces":[{workspaces}]}}}}"#),
         );
 
-        let snapshot = shell_snapshot(&state);
+        let snapshot = snapshot_of(&state);
         assert_eq!(snapshot.workspaces.len(), MAX_WORKSPACES);
         // The kept prefix is the sorted one, so the same workspaces survive
         // every event instead of a set that depends on map iteration order.

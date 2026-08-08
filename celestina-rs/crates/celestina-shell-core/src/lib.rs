@@ -53,6 +53,9 @@
 //!   level at.
 //! - [`sysmon`] — what `/proc` says about CPU and memory, and what counts as a
 //!   load worth noticing.
+//! - [`workspace_groups`] — which monitor a workspace belongs to once that
+//!   monitor is off and the compositor has stopped saying so, and the rule that
+//!   keeps a displaced observation from overwriting the answer.
 //! - [`runtime`] — the aggregate those three add up to: which providers a
 //!   helper carries, what they last said, and when the host is told.
 //!
@@ -69,8 +72,10 @@ pub mod clipboard;
 pub mod coalesce;
 pub mod command;
 pub mod connectivity;
+pub mod diagnostics;
 pub mod handover;
 pub mod inventory;
+pub mod journal;
 pub mod launcher;
 pub mod lines;
 pub mod media;
@@ -86,6 +91,7 @@ pub mod snapshot;
 pub mod sysmon;
 pub mod wallpaper;
 pub mod weather;
+pub mod workspace_groups;
 
 /// Truncates hostile or accidental text to a bounded prefix.
 ///

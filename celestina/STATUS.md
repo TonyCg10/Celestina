@@ -1,8 +1,9 @@
 # Celestina status
 
 - **Updated:** 2026-08-08
-- **Implementation:** R0-R5, R7, R8's departure slice, LVR-1 through LVR-3 and
-  the static hardening previously drafted as `AUD-1` and `UX-1` are complete
+- **Implementation:** R0-R5, R7, R8's departure slice, LVR-1 through LVR-3, the
+  static hardening previously drafted as `AUD-1`, `UX-1` and `WSG-1` are
+  complete
 - **Design direction:** `UX-2` is planned but has no active implementation
   unit. `SHELL-D5` is open for iterative visual and interaction exploration;
   no code or version change is authorized by that discussion
@@ -29,6 +30,35 @@
   [lifecycle record](docs/evidence/2026-08-05-ddc-process-lifecycle.md).
 
 ## Current checkout truth
+
+- **Delivered in celestina 0.8.0 — `DIAG-1`.** Every Celestina process now writes a
+  structured, bounded, always-on JSONL journal under
+  `$XDG_STATE_HOME/celestina/diagnostics/`, correlated by one `run_id` the host
+  generates and exports before it spawns either helper. It records classes of
+  event, technical identities and timings — never clipboard content,
+  notification bodies, media metadata, window titles, launched commands or
+  secrets. `scripts/diagnostic-report.sh` collects it read-only after a reset.
+  The format, privacy rules and the limits of what it can prove are in
+  [docs/diagnostics.md](docs/diagnostics.md). The canonical production exit
+  built, verified and deployed 0.8.0 without activating the live session.
+  `VAL-DIAG-1` is the next author-owned check.
+
+
+- Delivered in celestina 0.8.0: `WSG-1`. A workspace now carries the monitor it
+  belongs to, not only the one it is on. Niri publishes the second and never the
+  first, so the home is remembered from a frame that could see more than one
+  output — or declared by the author in the shell's settings — and a frame that
+  cannot tell a displaced workspace from a native one teaches nothing. A strip
+  carrying more than one monitor's workspaces opens the group holding the focus
+  and shows every other as one capsule naming its monitor, its count and its
+  urgency; a capsule click is an ordinary focus request and the group opens
+  because the focus arrived. A strip of one group renders exactly as it did
+  before. A missing, corrupt, oversized or future-schema memory file degrades to
+  that same flat strip rather than failing. The canonical production exit built,
+  verified and deployed 0.8.0 without activating the session. `VAL-WSG-1` — the
+  live capsule, its assistive route and the moment the memory is first taught —
+  is not run.
+
 
 - Delivered in celestina 0.7.0: `UX-1`. Network and Bluetooth retain truthful
   panel summaries while each now opens its own dismissible menu. Saved network
