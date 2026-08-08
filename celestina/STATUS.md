@@ -1,9 +1,8 @@
 # Celestina status
 
-- **Updated:** 2026-08-07
+- **Updated:** 2026-08-08
 - **Implementation:** R0-R5, R7, R8's departure slice, LVR-1 through LVR-3 and
-  the static hardening previously drafted as `AUD-1` are complete. `UX-1` is
-  active to add direct, truthful network and Bluetooth indicator menus
+  the static hardening previously drafted as `AUD-1` and `UX-1` are complete
 - **Author validation:** the author closed the LVR-3 phase on 2026-08-07 after
   first-generation media, the four-item tray, Bluetooth state retention,
   output-triggered DDC rediscovery, outside-click dismissal and a clean
@@ -27,6 +26,22 @@
   [lifecycle record](docs/evidence/2026-08-05-ddc-process-lifecycle.md).
 
 ## Current checkout truth
+
+- Delivered in celestina 0.7.0: `UX-1`. Network and Bluetooth retain truthful
+  panel summaries while each now opens its own dismissible menu. Saved network
+  profiles and known Bluetooth devices use provider-owned stable identities;
+  actions remain pending after tool acceptance and settle only from a later
+  observation. The durable host ledger survives menu destruction, keeps failed
+  targets visible even if their row disappears and distinguishes these
+  confirmed actions from the control centre's immediate requests. The canonical
+  production exit built, verified and deployed 0.7.0. `VAL-UX-1` passed in the
+  live Niri session on 2026-08-08. Follow-up work remains for opener-relative
+  a deliberate shell-wide visual-usability pass. The menu surface now follows
+  the compositor's real exclusive-zone placement and keeps the invoking
+  control's horizontal anchor. Directly changing from one open menu to another
+  still required two clicks in the last live observation and is not claimed as
+  fixed. A clock/date calendar-and-weather menu with location management is a
+  separate product extension beyond UX-1.
 
 - Delivered together in celestina 0.6.8: `LVR-3-G`, in the same atomic batch as
   `LVR-3-F`.
@@ -216,14 +231,15 @@ the author reruns them against 0.6.2.
 
 ## Records
 
-- Active plan: [UX-1 network and Bluetooth indicator menus](docs/plans/active/2026-08-07-network-bluetooth-indicator-menus.md)
+- Completed plan:
+  [UX-1 network and Bluetooth indicator menus](docs/plans/archive/2026-08-07-network-bluetooth-indicator-menus.md)
 - Celestina 0.6.8 is built, verified and deployed by the canonical production
   exit: 181 shell-core tests, 46 helper unit tests and six tests across three
   integration binaries, Clippy and `cargo fmt` clean, QML lint, CTest 15/15 and the
   eight-second offscreen release smoke. The author then completed the controlled
   live rerun and restored Noctalia, which still owns the session.
-- Current checkpoint: `UX-1` direct network and Bluetooth indicator menus;
-  implementation begins with bounded pure-domain inventory contracts
+- Current checkpoint: none. Conditional lock, Polkit and dock work still
+  requires the corresponding open discussion to be applied first
 - Last completed plan: [LVR-3 late provider insertion](docs/plans/archive/2026-08-05-late-provider-insertion.md)
 - The milestone before it: [R8 Noctalia departure](docs/plans/archive/2026-08-04-r8-noctalia-departure.md)
 - Open product questions: [discussion queue](docs/discussions/README.md)

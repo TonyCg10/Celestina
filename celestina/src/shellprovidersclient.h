@@ -8,6 +8,7 @@
 
 #include "protocoldecoder.h"
 #include "providerstates.h"
+#include "requestledger.h"
 
 // The panel's one bridge to the aggregate provider helper.
 //
@@ -22,12 +23,17 @@
 // class is deliberately limited to process lifecycle, bounded validation and Qt
 // marshaling — every rule about what a provider value means lives in
 // `celestina-shell-core`.
-class ShellProvidersClient final : public QObject
+class ShellProvidersClient final : public QObject, public RequestSink
 {
     Q_OBJECT
     Q_PROPERTY(bool available READ available NOTIFY changed)
     Q_PROPERTY(QVariantMap providers READ providers NOTIFY changed)
     Q_PROPERTY(qulonglong revision READ revision NOTIFY changed)
+    // What became of the requests surfaces made. It belongs here because a
+    // request's life is exactly this bridge's life — one helper generation —
+    // and because the surface that made it may be destroyed by the very click
+    // that made it. `CONSTANT`: the object is this client's for its whole life.
+    Q_PROPERTY(RequestLedger *requests READ requests CONSTANT)
 
 public:
     explicit ShellProvidersClient(QObject *parent = nullptr);
@@ -36,6 +42,7 @@ public:
     bool available() const { return m_available; }
     QVariantMap providers() const { return m_states.providers(); }
     qulonglong revision() const { return m_states.revision(); }
+    RequestLedger *requests() const { return m_requests; }
 
     // Asks a provider to do something. Returns 0 when the request could not
     // even be sent; otherwise the id its result will carry. Acceptance is not
@@ -45,6 +52,17 @@ public:
         const QString &verb,
         const QVariantMap &options = QVariantMap()
     );
+
+    // `RequestSink`. The ledger sends through this rather than through the
+    // invokable above, so nothing it does depends on QML being present.
+    quint64 sendRequest(
+        const QString &provider,
+        const QString &verb,
+        const QVariantMap &options
+    ) override
+    {
+        return sendCommand(provider, verb, options);
+    }
 
 signals:
     void changed();
@@ -70,6 +88,7 @@ private:
     QTimer m_restartTimer;
     ProtocolDecoder m_decoder;
     ProviderStates m_states;
+    RequestLedger *m_requests;
     // Ids are never reused, so a result from a previous helper process can
     // never answer a request made to the current one.
     quint64 m_lastRequestId = 0;

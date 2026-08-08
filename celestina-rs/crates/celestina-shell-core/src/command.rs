@@ -75,6 +75,19 @@ impl<'a> ResultFrame<'a> {
         }
     }
 
+    /// The request's effect was observed. Sent later than [`Self::accepted`]
+    /// and for the same id: acceptance said the helper ran it, this says the
+    /// machine actually changed.
+    #[must_use]
+    pub fn confirmed(id: &'a str) -> Self {
+        Self {
+            kind: "result",
+            id,
+            state: "confirmed",
+            reason: None,
+        }
+    }
+
     #[must_use]
     pub fn failed(id: &'a str, reason: &str) -> Self {
         Self {
@@ -82,6 +95,50 @@ impl<'a> ResultFrame<'a> {
             id,
             state: "failed",
             reason: Some(bounded(reason, MAX_REASON_CHARS)),
+        }
+    }
+}
+
+/// What became of a request the helper already accepted.
+///
+/// Owned rather than borrowed because it outlives the command: the provider
+/// that observes the effect is not the code that ran the tool, and may be a
+/// thread and several seconds away from it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Outcome {
+    pub id: String,
+    pub confirmed: bool,
+    /// Why not, when it was not. Fixed or bounded text only.
+    pub reason: Option<String>,
+}
+
+impl Outcome {
+    #[must_use]
+    pub fn confirmed(id: String) -> Self {
+        Self {
+            id,
+            confirmed: true,
+            reason: None,
+        }
+    }
+
+    #[must_use]
+    pub fn failed(id: String, reason: &str) -> Self {
+        Self {
+            id,
+            confirmed: false,
+            reason: Some(bounded(reason, MAX_REASON_CHARS)),
+        }
+    }
+
+    /// The frame that reports it. The same result system as every other
+    /// answer, so a host has one place to read a request's fate.
+    #[must_use]
+    pub fn frame(&self) -> ResultFrame<'_> {
+        match &self.reason {
+            Some(reason) if !self.confirmed => ResultFrame::failed(&self.id, reason),
+            _ if self.confirmed => ResultFrame::confirmed(&self.id),
+            _ => ResultFrame::failed(&self.id, "the request did not take effect"),
         }
     }
 }
@@ -218,6 +275,39 @@ mod tests {
         let rejection = unknown_provider(&command);
         assert_eq!(rejection.id.as_deref(), Some("7"));
         assert!(rejection.reason.contains("sysmon"));
+    }
+
+    /// The three states of one request, and the promise that acceptance is not
+    /// arrival. `accepted` and `failed` keep their exact meaning; `confirmed`
+    /// is the later frame that says the machine really changed.
+    #[test]
+    fn a_request_is_accepted_first_and_confirmed_only_afterwards() {
+        assert_eq!(ResultFrame::accepted("7").state, "accepted");
+        assert_eq!(ResultFrame::confirmed("7").state, "confirmed");
+        assert_eq!(ResultFrame::confirmed("7").reason, None);
+        assert_eq!(ResultFrame::confirmed("7").kind, "result");
+
+        // And an outcome reports itself through that same result system.
+        assert_eq!(
+            Outcome::confirmed("7".to_owned()).frame(),
+            ResultFrame::confirmed("7")
+        );
+        let failed = Outcome::failed("7".to_owned(), "it never took effect");
+        assert_eq!(failed.frame().state, "failed");
+        assert_eq!(
+            failed.frame().reason.as_deref(),
+            Some("it never took effect")
+        );
+    }
+
+    #[test]
+    fn an_outcomes_reason_is_bounded_like_any_other() {
+        let outcome = Outcome::failed("7".to_owned(), &"z".repeat(MAX_REASON_CHARS + 40));
+
+        assert_eq!(
+            outcome.reason.as_ref().map(|reason| reason.chars().count()),
+            Some(MAX_REASON_CHARS)
+        );
     }
 
     #[test]

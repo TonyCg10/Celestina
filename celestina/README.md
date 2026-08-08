@@ -63,6 +63,18 @@ scripts/activate-production.sh
 Run it only when that live mutation is intended. `scripts/run.sh` remains a
 human compatibility wrapper; it is not the verification entry point.
 
+For rapid visual iterations against a live Niri session, use:
+
+```sh
+scripts/dev-restart.sh
+```
+
+It incrementally rebuilds CelestinaStyle and the shell, gracefully replaces
+only the Celestina process that owns the session bus name, and runs the
+build-tree bytes in the foreground. Press Ctrl-C to stop it. This development
+loop does not verify or deploy an artifact and never replaces the required
+`scripts/complete-production.sh` exit before a bug fix or milestone closes.
+
 ## Session command client
 
 The already-built host also acts as a transient client:

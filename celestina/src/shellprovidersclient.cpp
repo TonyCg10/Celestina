@@ -27,6 +27,7 @@ constexpr int abandonedChildLifetimeMs = 20 * 1000;
 
 ShellProvidersClient::ShellProvidersClient(QObject *parent)
     : QObject(parent)
+    , m_requests(new RequestLedger(this, this))
 {
     m_process.setProgram(qEnvironmentVariable(
         "CELESTINA_PROVIDER_ADAPTER_PATH",
@@ -239,6 +240,9 @@ void ShellProvidersClient::applyLine(const QByteArray &line)
             qWarning().noquote()
                 << "Celestina's provider request failed:" << message.reason;
         }
+        // The ledger first, with the id at full width: it is what a surface
+        // reads, and it must be settled before anything re-renders from it.
+        m_requests->result(requestId, message.state, message.reason);
         emit commandResult(requestId, message.state, message.reason);
         return;
     }
@@ -286,6 +290,12 @@ void ShellProvidersClient::applyLine(const QByteArray &line)
 
 void ShellProvidersClient::setUnavailable()
 {
+    // The helper that accepted them is gone and a replacement has run none of
+    // them, so nothing that was waiting may keep waiting. Done before the
+    // snapshot is cleared, so a surface rebuilding from `changed()` already
+    // sees the requests answered rather than still spinning.
+    m_requests->generationLost();
+
     const bool dropped = m_states.clear();
     if (!m_available && !dropped)
         return;

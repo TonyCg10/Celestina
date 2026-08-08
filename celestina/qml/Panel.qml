@@ -25,6 +25,7 @@ Window {
     signal contextMenuRequested(int globalX, int globalY, var workspaces)
     signal trayMenuRequested(string service, string path, int globalX, int globalY)
     signal notificationCentreRequested()
+    signal indicatorMenuRequested(string kind, int globalX, int globalY)
 
     // A provider key may be inserted by a later frame of the same helper
     // generation, so every lookup goes through the one access point that makes
@@ -132,6 +133,7 @@ Window {
             bluetooth: panel.provider("bluetooth")
             power: panel.provider("power")
             onProfileCycleRequested: panel.providerSource.sendCommand("power", "cycle")
+            onIndicatorMenuRequested: (kind, globalX, globalY) => panel.indicatorMenuRequested(kind, globalX, globalY)
         }
 
         AudioLevel {

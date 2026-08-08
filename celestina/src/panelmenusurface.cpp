@@ -7,9 +7,11 @@
 #include "surfacemanager.h"
 
 namespace {
-// A menu placed in raw screen coordinates: ignoring exclusive zones is what
-// makes its margins readable as "where the click was".
-constexpr int ignoreExclusiveZones = -1;
+// A menu is not itself exclusive, but it must respect every exclusive surface
+// the compositor placed before it. Its configured top edge then follows the
+// real bottom of a stacked or resized top panel without inventing a global
+// position Wayland never exposes.
+constexpr int respectExclusiveZones = 0;
 
 LayerSurfaceSpec menuSpec(QScreen *screen)
 {
@@ -31,9 +33,7 @@ LayerSurfaceSpec menuSpec(QScreen *screen)
     // the content's own coordinates.
     spec.anchors = anchors;
     spec.desiredSize = QSize(0, 0);
-    // Ignoring exclusive zones is what keeps a menu opened from the panel able
-    // to cover the panel it came from.
-    spec.exclusiveZone = ignoreExclusiveZones;
+    spec.exclusiveZone = respectExclusiveZones;
     spec.layer = LayerShellQt::Window::LayerOverlay;
     // The menu must answer the keyboard on its own rather than inheriting the
     // panel's refusal.

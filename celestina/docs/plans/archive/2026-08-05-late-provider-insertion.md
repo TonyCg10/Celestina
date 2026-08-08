@@ -4,8 +4,8 @@
 - **Plan ID:** late-provider-insertion
 - **Status:** done
 - **Closed:** 2026-08-07
-- **Successor:** `UX-1` is active in
-  [`../active/2026-08-07-network-bluetooth-indicator-menus.md`](../active/2026-08-07-network-bluetooth-indicator-menus.md)
+- **Successor:** `UX-1` is complete in
+  [`2026-08-07-network-bluetooth-indicator-menus.md`](2026-08-07-network-bluetooth-indicator-menus.md)
 - **Authorization:** the author requested the confirmed media defect be fixed,
   authorized the Celestina-side corrections found by the read-only GPU loss
   audit, ended the safety hold, completed the controlled transitions and

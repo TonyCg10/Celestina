@@ -1,0 +1,33 @@
+# UX-1-D exact change inventory
+
+Base revision	f6f54beb1a086d96e05af7b355e7d9d64db2b018
+Pathspec	docs/version-history.tsv
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/plans/active/2026-08-07-network-bluetooth-indicator-menus.md
+Pathspec	celestina/docs/plans/active/README.md
+Pathspec	celestina/docs/plans/archive/2026-08-05-late-provider-insertion.md
+Pathspec	celestina/docs/plans/archive/README.md
+Pathspec	celestina/docs/plans/archive/2026-08-07-network-bluetooth-indicator-menus.md
+Pathspec	celestina/docs/evidence/2026-08-08-ux-1-delivery.md
+Pathspec	celestina/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-D.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	59f71757fa8a34357ac45c49c966ed30becc4468212d2132b875e2e2ad273e86	docs/version-history.tsv
+1	1	f51ed8ed45a018724a7704c79a80b95dab6c8f60c86167f0a37e538afada2830	celestina/Cargo.lock
+1	1	93a246562f035f50bfabcad1039ae16124a74657db4ac0de54e9069208d65452	celestina/Cargo.toml
+6	6	a79f8fc5ffa90d41dceb8885174a948154921b60807a3213fad4fe6acbde2561	celestina/ROADMAP.md
+22	6	c62603587a7e36af3c1eb4d3b7d4fb4964eafc07473bd68be277f94820921b8b	celestina/STATUS.md
+45	0	d1686f06a0fe7182f0e3deb90c064096766fc797d00b23989497c15557dae263	celestina/VALIDATION.md
+0	141	deleted	celestina/docs/plans/active/2026-08-07-network-bluetooth-indicator-menus.md
+1	2	f028d3b51259683927b4c5590dc1bd6f571ab3999c94a43c53b36c520ceb342b	celestina/docs/plans/active/README.md
+2	2	0ce996037026bddff105cd3732a64adc23a2bbbbd5bd37590d99680a7badff97	celestina/docs/plans/archive/2026-08-05-late-provider-insertion.md
+1	0	6fa206dfb54f5bb39f8081588837f5d666cef65ec78ec96dae7b6c26511d1aff	celestina/docs/plans/archive/README.md
+345	0	325c1bedfba60e0ad196f9e7463bbe7370c727dc2c3d30182e4960ddff992f85	celestina/docs/plans/archive/2026-08-07-network-bluetooth-indicator-menus.md
+53	0	ba766a71bdf0fc0f761a48dc57a8b78758174357d2f65ca3c4c9f912426e45ad	celestina/docs/evidence/2026-08-08-ux-1-delivery.md
+33	0	self	celestina/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-D.numstat.tsv

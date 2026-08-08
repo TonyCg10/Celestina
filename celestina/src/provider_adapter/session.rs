@@ -12,25 +12,41 @@
 //! not reported at all.
 
 use std::io;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use celestina_shell_core::command::Outcome;
+use celestina_shell_core::connectivity::{self, Action, Expected};
 use celestina_shell_core::inventory::Answer;
+use celestina_shell_core::pending::{Awaiting, Pending, Settled};
 use celestina_shell_core::runtime::ProviderRuntime;
 use celestina_shell_core::snapshot::{Payload, ProviderId};
 use celestina_shell_core::{bluetooth, inventory, network, power};
 use serde_json::Value;
 
-use super::tools::{lock_runtime, probe_bounded, run_bounded};
+use super::tools::{lock_runtime, probe_bounded, probe_bounded_with_cancel, run_bounded};
 
 const INTERVAL: Duration = Duration::from_secs(5);
+
+/// What an action's own tool is given before it is killed.
+///
+/// Longer than the reading deadline because these are conversations, not
+/// queries: `bluetoothctl connect` negotiates with a device across a radio and
+/// `nmcli connection up` waits on an association. Still bounded, still killed
+/// and reaped, and still not on the Qt thread.
+const ACTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub const NETWORK: &str = "network";
 pub const BLUETOOTH: &str = "bluetooth";
 pub const POWER: &str = "power";
 
-pub fn spawn(runtime: &Arc<Mutex<ProviderRuntime>>) -> io::Result<()> {
+pub fn spawn(runtime: &Arc<Mutex<ProviderRuntime>>, shutdown: &Arc<AtomicBool>) -> io::Result<()> {
+    // Recorded before the thread starts, so an action's child is killed and
+    // reaped as soon as the helper is stopping.
+    let _ = STOPPING.set(Arc::clone(shutdown));
+
     let (Ok(net), Ok(bt), Ok(profile)) = (
         ProviderId::new(NETWORK),
         ProviderId::new(BLUETOOTH),
@@ -51,6 +67,207 @@ pub fn spawn(runtime: &Arc<Mutex<ProviderRuntime>>) -> io::Result<()> {
         .name("session".to_owned())
         .spawn(move || run(&runtime, &net, &bt, &profile))?;
     Ok(())
+}
+
+/// What the command worker and the polling thread both need, and the one lock
+/// they meet under.
+///
+/// The poll writes the inventories and reads the ledger; the worker reads the
+/// inventories to validate an identity and writes the ledger. Neither ever
+/// holds this across a process, so a ten-second `bluetoothctl` cannot block a
+/// poll from settling something else.
+#[derive(Default)]
+struct Connectivity {
+    /// The last conclusive rows each provider published. The only identities a
+    /// request may name.
+    networks: Vec<network::KnownNetwork>,
+    devices: Vec<bluetooth::KnownDevice>,
+    waiting: Pending<Expected>,
+    /// Set by `refresh`, cleared by the poll that honours it.
+    look_again: bool,
+}
+
+/// The shared state, plus the condition the poll waits on so `refresh` can
+/// wake it without shortening the interval for anyone else.
+struct Shared {
+    state: Mutex<Connectivity>,
+    woken: Condvar,
+}
+
+static SHARED: OnceLock<Shared> = OnceLock::new();
+/// The helper's shutdown flag, so an action's child is killed and reaped when
+/// the process is stopping rather than outliving it.
+static STOPPING: OnceLock<Arc<AtomicBool>> = OnceLock::new();
+
+fn shared() -> &'static Shared {
+    SHARED.get_or_init(|| Shared {
+        state: Mutex::new(Connectivity::default()),
+        woken: Condvar::new(),
+    })
+}
+
+/// A poisoned lock still owns usable state; recovering it keeps the panel fed
+/// rather than taking the helper down with the thread that panicked.
+fn lock_state() -> std::sync::MutexGuard<'static, Connectivity> {
+    match shared().state.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+fn stopping() -> bool {
+    STOPPING
+        .get()
+        .is_some_and(|flag| flag.load(Ordering::Acquire))
+}
+
+/// The monotonic stamp the ledger's deadlines are measured against.
+///
+/// Its own clock rather than the helper's, because nothing here is compared
+/// with a snapshot's timestamps — only with itself.
+fn now_ms() -> u64 {
+    static STARTED: OnceLock<Instant> = OnceLock::new();
+    u64::try_from(STARTED.get_or_init(Instant::now).elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+/// Carries out one validated action.
+///
+/// Every argument is a separate word handed to `execve`; nothing is a shell
+/// line and nothing is concatenated. `nmcli`'s `uuid` keyword and the
+/// leading-dash refusal in the domain are what keep an identity from being read
+/// as an option.
+fn action_command(action: &Action) -> Option<(&'static str, Vec<&str>)> {
+    match action {
+        Action::Refresh => None,
+        Action::ActivateSaved { uuid } => Some(("nmcli", vec!["connection", "up", "uuid", uuid])),
+        Action::SetPowered(powered) => Some((
+            "bluetoothctl",
+            vec!["power", if *powered { "on" } else { "off" }],
+        )),
+        Action::ConnectKnown { address } => Some(("bluetoothctl", vec!["connect", address])),
+        Action::DisconnectKnown { address } => Some(("bluetoothctl", vec!["disconnect", address])),
+    }
+}
+
+fn carry_out(action: &Action) -> Result<(), String> {
+    // Refresh changes nothing on the machine: its later poll is the operation.
+    let Some((program, args)) = action_command(action) else {
+        return Ok(());
+    };
+    let answer = run_action(program, &args);
+
+    match answer {
+        Answer::Text(_) => Ok(()),
+        Answer::Missing => Err("the tool this action needs is not installed".to_owned()),
+        // The tool's own output is not repeated: it is another program's text
+        // and this reason crosses the protocol.
+        Answer::Unreadable => Err("the tool refused the request or did not finish".to_owned()),
+    }
+}
+
+fn run_action(program: &str, args: &[&str]) -> Answer {
+    match STOPPING.get() {
+        Some(flag) => probe_bounded_with_cancel(program, args, ACTION_TIMEOUT, Some(flag)),
+        None => probe_bounded_with_cancel(program, args, ACTION_TIMEOUT, None),
+    }
+}
+
+/// Records a settled request for the writer to report.
+fn report(runtime: &Mutex<ProviderRuntime>, settled: &Settled) {
+    let outcome = if settled.ended.is_confirmed() {
+        Outcome::confirmed(settled.id.clone())
+    } else {
+        Outcome::failed(
+            settled.id.clone(),
+            settled
+                .ended
+                .reason()
+                .unwrap_or("the request did not take effect"),
+        )
+    };
+    lock_runtime(runtime).settle(outcome);
+}
+
+/// Serves one connectivity verb.
+///
+/// The order is the contract: validate the identity against the last confirmed
+/// inventory, record what the request is waiting to see, and only then run
+/// anything. A request that cannot be recorded is never carried out, so nothing
+/// changes the machine without something waiting to check that it did.
+pub fn action(
+    provider: &ProviderId,
+    verb: &str,
+    options: &Payload,
+    request_id: &str,
+    runtime: &Mutex<ProviderRuntime>,
+) -> Result<(), String> {
+    let mut state = lock_state();
+    let parsed = if provider.as_str() == NETWORK {
+        connectivity::read_network_action(verb, options, &state.networks)
+    } else {
+        connectivity::read_bluetooth_action(verb, options, &state.devices)
+    }?;
+
+    // Two refreshes cannot be in flight: the second would be answered by the
+    // same observation as the first, which is not an answer to it.
+    if parsed == Action::Refresh
+        && state
+            .waiting
+            .awaits_matching(provider, |expected| *expected == Expected::Observation)
+    {
+        return Err("this provider is already waiting on a request".to_owned());
+    }
+
+    let superseded = state
+        .waiting
+        .reserve_matching(
+            Awaiting {
+                id: request_id.to_owned(),
+                provider: provider.clone(),
+                expected: parsed.expects(),
+                // Replaced when the worker arms this reservation after
+                // writing `accepted`; time spent in the tool is not charged
+                // against the confirmation window.
+                deadline_ms: 0,
+            },
+            connectivity::same_target,
+        )
+        .map_err(|refused| refused.reason().to_owned())?;
+    drop(state);
+
+    if let Some(superseded) = superseded {
+        report(runtime, &superseded);
+    }
+    if let Err(reason) = carry_out(&parsed) {
+        // The tool never ran, or refused. Nothing will ever confirm this, and
+        // the worker is about to report the failure against this same id — so
+        // the entry is dropped rather than answering twice when it expires.
+        lock_state().waiting.forget(provider, request_id);
+        return Err(reason);
+    }
+    Ok(())
+}
+
+/// Makes a successfully carried request observable after `accepted` was sent.
+pub fn arm(provider: &ProviderId, request_id: &str) {
+    if provider.as_str() != NETWORK && provider.as_str() != BLUETOOTH {
+        return;
+    }
+    let mut state = lock_state();
+    let deadline_ms = now_ms().saturating_add(connectivity::CONFIRMATION_WINDOW_MS);
+    if !state.waiting.arm(provider, request_id, deadline_ms) {
+        return;
+    }
+    state.look_again = true;
+    drop(state);
+    shared().woken.notify_all();
+}
+
+/// Removes a reservation whose `accepted` frame could not be written.
+pub fn discard(provider: &ProviderId, request_id: &str) {
+    if provider.as_str() == NETWORK || provider.as_str() == BLUETOOTH {
+        let _ = lock_state().waiting.forget(provider, request_id);
+    }
 }
 
 /// Asks the daemon for the next profile it offers. A click is a request here
@@ -176,6 +393,20 @@ fn publish_network(
     // Not being able to look is not the same as looking and finding nothing.
     let link = tracker.observe(observed);
 
+    // The rows this poll confirmed become the only identities a request may
+    // name, and the evidence every waiting request is judged against.
+    let settled = {
+        let mut state = lock_state();
+        state.networks = networks.rows().unwrap_or_default().to_vec();
+        let rows = state.networks.clone();
+        state
+            .waiting
+            .settle(id, |expected| connectivity::judge_network(expected, &rows))
+    };
+    for one in &settled {
+        report(runtime, one);
+    }
+
     let Some(payload) = network::payload(link, networks) else {
         // No link, and no inventory either. Nothing here is true enough to
         // publish, and the widget says so by leaving.
@@ -202,6 +433,19 @@ fn publish_bluetooth(
     };
 
     let devices = known.observe(observation.devices.clone());
+
+    let settled = {
+        let mut state = lock_state();
+        state.devices = devices.rows().unwrap_or_default().to_vec();
+        let rows = state.devices.clone();
+        state.waiting.settle(id, |expected| {
+            connectivity::judge_bluetooth(expected, observation.adapter, &rows)
+        })
+    };
+    for one in &settled {
+        report(runtime, one);
+    }
+
     if let Err(error) = lock_runtime(runtime).publish(id, bluetooth::payload(&observation, devices))
     {
         eprintln!("celestina-provider-adapter: bluetooth: {error}");
@@ -239,10 +483,247 @@ fn run(runtime: &Mutex<ProviderRuntime>, net: &ProviderId, bt: &ProviderId, prof
     // publishes the last one that was read rather than an empty one.
     let mut networks = inventory::Held::new();
     let mut devices = inventory::Held::new();
-    loop {
+
+    while !stopping() {
         publish_network(runtime, net, &mut link, &mut networks);
         publish_bluetooth(runtime, bt, &mut devices);
         publish_power(runtime, profile);
-        thread::sleep(INTERVAL);
+
+        // A request that nothing confirmed or contradicted still gets an
+        // answer, so a menu entry never stays pending for ever.
+        let expired = lock_state().waiting.expire(now_ms());
+        for one in &expired {
+            report(runtime, one);
+        }
+
+        wait_for_next_poll();
+    }
+
+    // Whatever was still waiting is answered rather than dying silently with
+    // the process. A new helper has run none of these, so none of them may
+    // survive it either.
+    let cancelled = lock_state().waiting.cancel_all();
+    for one in &cancelled {
+        report(runtime, one);
+    }
+}
+
+/// Sleeps until the next poll, or until a `refresh` asks for one sooner.
+///
+/// The interval is unchanged: this waits the same five seconds and is woken
+/// early only by an explicit request. One thread owns the wait, so two
+/// refreshes cannot produce two polls — the second is coalesced into the one
+/// the first is already about to run.
+fn wait_for_next_poll() {
+    let shared = shared();
+    let mut state = lock_state();
+    if std::mem::take(&mut state.look_again) {
+        // Something asked while this poll was running. Go round again now
+        // rather than waiting out an interval that has already been overtaken.
+        return;
+    }
+
+    let (mut state, _timeout) = shared
+        .woken
+        .wait_timeout(state, INTERVAL)
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    state.look_again = false;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use celestina_shell_core::connectivity::{ACTIVATE_SAVED, ID_OPTION, REFRESH};
+
+    /// The connectivity state is process-wide, so these run one at a time.
+    static SESSION_TEST: Mutex<()> = Mutex::new(());
+
+    fn fresh() -> std::sync::MutexGuard<'static, ()> {
+        let guard = SESSION_TEST
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut state = lock_state();
+        *state = Connectivity::default();
+        guard
+    }
+
+    fn runtime_with(providers: &[&str]) -> Mutex<ProviderRuntime> {
+        let mut runtime = ProviderRuntime::new(1);
+        for name in providers {
+            if let Ok(id) = ProviderId::new(name) {
+                runtime.register(id);
+            }
+        }
+        Mutex::new(runtime)
+    }
+
+    fn network_id() -> ProviderId {
+        ProviderId::new(NETWORK).expect("a valid provider name")
+    }
+
+    fn options(pairs: &[(&str, Value)]) -> Payload {
+        pairs
+            .iter()
+            .map(|(key, value)| ((*key).to_owned(), value.clone()))
+            .collect()
+    }
+
+    /// `refresh` changes nothing on the machine, so it is the one verb that
+    /// can be exercised end to end without touching connectivity.
+    #[test]
+    fn a_refresh_asks_the_poll_to_look_again_and_waits_for_it() {
+        let _serialized = fresh();
+        let runtime = runtime_with(&[NETWORK]);
+
+        assert_eq!(
+            action(&network_id(), REFRESH, &Payload::new(), "1", &runtime),
+            Ok(())
+        );
+        let state = lock_state();
+        // It is reserved but cannot be observed before the command worker has
+        // actually written `accepted`.
+        assert!(!state.look_again);
+        assert!(state.waiting.awaits(&network_id()));
+        assert_eq!(state.waiting.len(), 1);
+        drop(state);
+
+        // Nothing has been confirmed yet: acceptance is not arrival.
+        assert!(lock_runtime(&runtime).take_outcomes().is_empty());
+        arm(&network_id(), "1");
+        assert!(lock_state().look_again);
+    }
+
+    /// Two refreshes cannot overlap. The second would be answered by the same
+    /// observation as the first, which is not an answer to it.
+    #[test]
+    fn a_second_refresh_is_refused_while_the_first_is_still_waiting() {
+        let _serialized = fresh();
+        let runtime = runtime_with(&[NETWORK]);
+
+        action(&network_id(), REFRESH, &Payload::new(), "1", &runtime).expect("accepted");
+        let refusal = action(&network_id(), REFRESH, &Payload::new(), "2", &runtime)
+            .expect_err("the second is refused");
+
+        assert!(refusal.contains("already waiting"));
+        assert_eq!(lock_state().waiting.len(), 1);
+    }
+
+    /// The observation settles it, and only then.
+    #[test]
+    fn the_next_observation_confirms_a_waiting_refresh() {
+        let _serialized = fresh();
+        let runtime = runtime_with(&[NETWORK]);
+        action(&network_id(), REFRESH, &Payload::new(), "1", &runtime).expect("accepted");
+        arm(&network_id(), "1");
+
+        let settled = lock_state().waiting.settle(&network_id(), |expected| {
+            connectivity::judge_network(expected, &[])
+        });
+        for one in &settled {
+            report(&runtime, one);
+        }
+
+        let outcomes = lock_runtime(&runtime).take_outcomes();
+        assert_eq!(outcomes.len(), 1);
+        assert_eq!(outcomes[0].id, "1");
+        assert!(outcomes[0].confirmed);
+        assert!(lock_state().waiting.is_empty());
+    }
+
+    /// An identity that is not in the last confirmed inventory is refused
+    /// before any program is chosen, so nothing is recorded and nothing runs.
+    #[test]
+    fn an_unknown_identity_is_refused_without_running_anything() {
+        let _serialized = fresh();
+        let runtime = runtime_with(&[NETWORK]);
+
+        let refusal = action(
+            &network_id(),
+            ACTIVATE_SAVED,
+            &options(&[(ID_OPTION, Value::from("9f1c-9"))]),
+            "1",
+            &runtime,
+        )
+        .expect_err("refused");
+
+        assert!(refusal.contains("last confirmed inventory"));
+        // Nothing is waiting, so nothing will be confirmed or expire later.
+        assert!(lock_state().waiting.is_empty());
+        assert!(!lock_state().look_again);
+    }
+
+    /// A helper that stops answers everything it was holding, and a new one
+    /// inherits none of it.
+    #[test]
+    fn shutdown_answers_every_request_still_waiting() {
+        let _serialized = fresh();
+        let runtime = runtime_with(&[NETWORK]);
+        action(&network_id(), REFRESH, &Payload::new(), "1", &runtime).expect("accepted");
+        arm(&network_id(), "1");
+
+        let cancelled = lock_state().waiting.cancel_all();
+        for one in &cancelled {
+            report(&runtime, one);
+        }
+
+        let outcomes = lock_runtime(&runtime).take_outcomes();
+        assert_eq!(outcomes.len(), 1);
+        assert!(!outcomes[0].confirmed);
+        assert_eq!(
+            outcomes[0].reason.as_deref(),
+            Some("the helper stopped before the request took effect")
+        );
+        assert!(lock_state().waiting.is_empty());
+    }
+
+    /// A request nothing ever confirms still gets an answer.
+    #[test]
+    fn a_request_that_never_takes_effect_expires_with_a_failure() {
+        let _serialized = fresh();
+        let runtime = runtime_with(&[NETWORK]);
+        action(&network_id(), REFRESH, &Payload::new(), "1", &runtime).expect("accepted");
+        arm(&network_id(), "1");
+
+        let expired = lock_state()
+            .waiting
+            .expire(now_ms().saturating_add(connectivity::CONFIRMATION_WINDOW_MS + 1));
+        for one in &expired {
+            report(&runtime, one);
+        }
+
+        let outcomes = lock_runtime(&runtime).take_outcomes();
+        assert_eq!(outcomes.len(), 1);
+        assert!(!outcomes[0].confirmed);
+        assert_eq!(
+            outcomes[0].reason.as_deref(),
+            Some("the request was accepted but never took effect")
+        );
+    }
+
+    #[test]
+    fn every_action_has_one_exact_argument_vector() {
+        let uuid = "9f1c-1".to_owned();
+        let address = "AA:BB:CC:DD:EE:01".to_owned();
+
+        assert_eq!(action_command(&Action::Refresh), None);
+        assert_eq!(
+            action_command(&Action::ActivateSaved { uuid }),
+            Some(("nmcli", vec!["connection", "up", "uuid", "9f1c-1"]))
+        );
+        assert_eq!(
+            action_command(&Action::SetPowered(false)),
+            Some(("bluetoothctl", vec!["power", "off"]))
+        );
+        assert_eq!(
+            action_command(&Action::ConnectKnown {
+                address: address.clone(),
+            }),
+            Some(("bluetoothctl", vec!["connect", "AA:BB:CC:DD:EE:01"]))
+        );
+        assert_eq!(
+            action_command(&Action::DisconnectKnown { address }),
+            Some(("bluetoothctl", vec!["disconnect", "AA:BB:CC:DD:EE:01"]))
+        );
     }
 }

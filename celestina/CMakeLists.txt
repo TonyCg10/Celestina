@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.6.8 LANGUAGES CXX)
+project(celestina VERSION 0.7.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -97,6 +97,8 @@ qt_add_executable(celestina
     src/shellclient.cpp
     src/providerstates.h
     src/providerstates.cpp
+    src/requestledger.h
+    src/requestledger.cpp
     src/shellprovidersclient.h
     src/shellprovidersclient.cpp
     src/surfacemanager.h
@@ -164,7 +166,10 @@ qt_add_qml_module(celestina
         qml/SessionStatus.qml
         qml/BrightnessLevel.qml
         qml/TrayDrawer.qml
+        qml/AnchoredMenu.qml
         qml/TrayMenu.qml
+        qml/NetworkMenu.qml
+        qml/BluetoothMenu.qml
         qml/CaptureButton.qml
         qml/PanelMenu.qml
         qml/LauncherOverlay.qml
@@ -347,6 +352,8 @@ if(BUILD_TESTING)
         src/surfacemanager.cpp
         src/shellprovidersclient.h
         src/shellprovidersclient.cpp
+        src/requestledger.h
+        src/requestledger.cpp
         src/providerstates.h
         src/providerstates.cpp
     )
@@ -375,6 +382,8 @@ if(BUILD_TESTING)
         src/wallpapermanager.cpp
         src/shellprovidersclient.h
         src/shellprovidersclient.cpp
+        src/requestledger.h
+        src/requestledger.cpp
         src/providerstates.h
         src/providerstates.cpp
         src/protocoldecoder.h
@@ -438,6 +447,56 @@ if(BUILD_TESTING)
     )
     add_test(NAME celestina-overlay-contract COMMAND celestina-overlay-contract-test)
     set_tests_properties(celestina-overlay-contract PROPERTIES
+        ENVIRONMENT
+            "QML2_IMPORT_PATH=${CELESTINA_STYLE_IMPORT_ROOT};QT_QPA_PLATFORM=offscreen"
+    )
+
+    # What each connectivity menu is handed, and what a click or Escape does to
+    # it. It loads the QML files directly for the same reason the overlay
+    # contract test does: the module is the application's, and this asks about
+    # the files themselves.
+    # The two request contracts, and what happens to a request whose surface is
+    # destroyed before it is answered. Driven through the ledger's own sink, so
+    # no helper process and no window are involved.
+    qt_add_executable(celestina-request-ledger-test
+        tests/requestledger_test.cpp
+        src/requestledger.h
+        src/requestledger.cpp
+    )
+    target_include_directories(celestina-request-ledger-test PRIVATE src)
+    target_link_libraries(celestina-request-ledger-test PRIVATE Qt6::Test)
+    add_test(NAME celestina-request-ledger COMMAND celestina-request-ledger-test)
+
+    qt_add_executable(celestina-indicator-menu-test
+        tests/indicatormenu_test.cpp
+        src/requestledger.h
+        src/requestledger.cpp
+        src/panelmenucontroller.h
+        src/panelmenucontroller.cpp
+        src/panelmenusurface.h
+        src/panelmenusurface.cpp
+        src/surfacemanager.h
+        src/surfacemanager.cpp
+        src/niriclient.h
+        src/niriclient.cpp
+        src/protocoldecoder.h
+        src/protocoldecoder.cpp
+        src/workspacefocusrequests.h
+        src/workspacefocusrequests.cpp
+    )
+    target_include_directories(celestina-indicator-menu-test PRIVATE src)
+    target_compile_definitions(celestina-indicator-menu-test PRIVATE
+        CELESTINA_STYLE_IMPORT_ROOT="${CELESTINA_STYLE_IMPORT_ROOT}"
+        CELESTINA_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml"
+        CELESTINA_NIRI_ADAPTER="${NIRI_ADAPTER_BINARY}"
+    )
+    target_link_libraries(celestina-indicator-menu-test PRIVATE
+        Qt6::Test
+        Qt6::Quick
+        LayerShellQt::Interface
+    )
+    add_test(NAME celestina-indicator-menu COMMAND celestina-indicator-menu-test)
+    set_tests_properties(celestina-indicator-menu PROPERTIES
         ENVIRONMENT
             "QML2_IMPORT_PATH=${CELESTINA_STYLE_IMPORT_ROOT};QT_QPA_PLATFORM=offscreen"
     )

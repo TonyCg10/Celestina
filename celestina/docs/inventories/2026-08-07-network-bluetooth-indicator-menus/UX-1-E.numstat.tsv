@@ -1,0 +1,29 @@
+# UX-1-E exact change inventory
+
+Base revision	f6f54beb1a086d96e05af7b355e7d9d64db2b018
+Pathspec	celestina/README.md
+Pathspec	celestina/docs/evidence/2026-08-08-menu-anchor-correction.md
+Pathspec	celestina/docs/plans/archive/2026-08-07-network-bluetooth-indicator-menus.md
+Pathspec	celestina/qml/AnchoredMenu.qml
+Pathspec	celestina/scripts/dev-restart.sh
+Pathspec	celestina/src/panelmenucontroller.cpp
+Pathspec	celestina/src/panelmenucontroller.h
+Pathspec	celestina/src/panelmenusurface.cpp
+Pathspec	celestina/tests/indicatormenu_test.cpp
+Pathspec	celestina/tests/surfacemanager_test.cpp
+Pathspec	celestina/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-E.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+12	0	a6254d9ae3c3755dd5fb680c9f158aeb41b4610b99fe11991c25df436988aacf	celestina/README.md
+55	0	35c47ca15259b0b9b629f579e10d4abf915cbbe2b0cc236ff2583567c2716a08	celestina/docs/evidence/2026-08-08-menu-anchor-correction.md
+345	0	325c1bedfba60e0ad196f9e7463bbe7370c727dc2c3d30182e4960ddff992f85	celestina/docs/plans/archive/2026-08-07-network-bluetooth-indicator-menus.md
+107	0	d0a9100d6ac75de1dd3442b26dd107b60ffb1dac9df814d5ddf665c343b61f3a	celestina/qml/AnchoredMenu.qml
+76	0	6db6a56ca3e6db4b08987b4493f58530be1b429da232d4b44f1c84ebcf9d9746	celestina/scripts/dev-restart.sh
+109	11	ea034e5bc1937b6dd9037f5601582fd174cbaa3bcfeda6bd2f2cfa810da12c34	celestina/src/panelmenucontroller.cpp
+43	0	e24d008a89a691eb60244db17621ab07b71ac137c424434bd29caa96593e908d	celestina/src/panelmenucontroller.h
+6	6	97464eb21afac54ab5162f08921d353ec5d6a0575c4966b53e47af618f66b133	celestina/src/panelmenusurface.cpp
+773	0	2e30dd0da245f0d408a797e4e18909a9416ff0ad997e2973f7a263a2a9e044e4	celestina/tests/indicatormenu_test.cpp
+22	1	49743aeaabb9ab925d4b613e176677731a547b577e5865cbb0fa9ae4a2db8dac	celestina/tests/surfacemanager_test.cpp
+29	0	self	celestina/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-E.numstat.tsv

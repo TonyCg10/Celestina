@@ -1,7 +1,7 @@
 # Celestina implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** UX-1
+- **Status:** idle
+- **Active implementation checkpoint:** none
 
 This roadmap contains only work an agent can implement and verify. Real Niri,
 hardware, visual and assistive-technology checks live in
@@ -30,7 +30,7 @@ of the design when they provide the narrow capability the shell needs.
 | LVR-2 | complete | Correct the failures exposed by the 2026-08-05 follow-up run |
 | LVR-3 | complete | Correct late provider insertion and provider lifecycle defects exposed during the GPU-loss audit |
 | AUD-1 | complete | Static-audit hardening was absorbed by LVR-3-B and its follow-up corrections; residual findings remain recorded separately |
-| UX-1 | active | Give the network and Bluetooth indicators direct, truthful menus for their devices and actions |
+| UX-1 | complete | Give the network and Bluetooth indicators direct, truthful menus for their devices and actions |
 | R6 | conditional | First-party lock starts only if SHELL-D2 is applied |
 | R8 | complete | Reversible Noctalia removal; Polkit/dock slices remain conditional |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
@@ -319,14 +319,14 @@ retained and that conclusion is applied through a new bounded unit.
 No implementation is planned. `noctalia-greeter` is an independent greetd
 package and remains in place unless observed failures justify a replacement.
 
-## UX-1 — Network and Bluetooth indicator menus (active)
+## UX-1 — Network and Bluetooth indicator menus (complete)
 
 **Outcome:** each panel indicator opens a keyboard- and pointer-accessible menu
 that shows bounded provider-owned state and exposes only actions whose result is
 confirmed by a later provider reading.
 
-The active implementation order, exclusions and exit checks are in
-[the UX-1 plan](docs/plans/active/2026-08-07-network-bluetooth-indicator-menus.md).
+The delivered implementation order, exclusions and exit checks are in
+[the UX-1 plan](docs/plans/archive/2026-08-07-network-bluetooth-indicator-menus.md).
 This checkpoint does not add Wi-Fi credential handling, Bluetooth pairing,
 radio discovery policy or a second polling/runtime path.
 

@@ -14,3 +14,4 @@ unit and inventory.
 - [Live validation remediation](2026-08-04-live-validation-remediation.md) — closed 2026-08-05
 - [Live validation follow-up](2026-08-05-live-validation-follow-up.md) — closed 2026-08-05
 - [LVR-3 late provider insertion](2026-08-05-late-provider-insertion.md) — closed 2026-08-07
+- [UX-1 network and Bluetooth indicator menus](2026-08-07-network-bluetooth-indicator-menus.md) — closed 2026-08-08

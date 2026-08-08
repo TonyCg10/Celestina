@@ -484,6 +484,51 @@ The other three are corrected in the same delivery.
   control centre, session menu and panel copy.
 - **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
+## VAL-UX-1 — Network and Bluetooth indicator menus
+
+- **Status:** passed
+- **Related implementation:** UX-1 (complete in celestina 0.7.0)
+- **Requires:** the verified 0.7.0 bundle, explicit authorization to activate
+  Celestina and Noctalia retained as the rollback owner
+- **Procedure:** with Celestina intentionally active, open the network and
+  Bluetooth menus from their panel indicators. For each menu, confirm one-click
+  opening and closing, Escape and outside-click dismissal, placement on both
+  output scales, readable focus restoration, truthful current/empty/list states
+  and a refresh that reaches a terminal result. Exercise only a saved network
+  activation that is safe for the author's unusual Ethernet/Wi-Fi layout; do
+  not disconnect Wi-Fi merely to manufacture an offline state. On Bluetooth,
+  switch the adapter and connect or disconnect one already-known device only
+  when doing so is safe. Reopen after each request and confirm pending, success
+  or failure survived the first menu's destruction. Restore Noctalia afterward.
+- **Pass condition:** every offered action names only a published stable target,
+  never paints requested state as confirmed, reaches a terminal result, keeps a
+  failure visible even if its target row disappears, and all four dismissal
+  paths leave focus and the session usable.
+- **Result:** passed on 2026-08-08. Both indicators remained present, opened
+  their menus and exposed truthful current state and usable actions; dismissal,
+  multimedia and brightness remained functional in the live Niri session. The
+  author accepted the functional checkpoint while identifying three follow-up
+  product needs that do not rewrite UX-1: transient cards appear anchored to a
+  fixed output height instead of the invoking control, the menus need a
+  deliberate iconography and visual-usability pass, and the clock/date region
+  needs a separate calendar-and-weather menu with location management.
+- **Evidence:** [UX-1 delivery](docs/evidence/2026-08-08-ux-1-delivery.md)
+
+**2026-08-08 placement follow-up.**
+
+The menu card stopped using the top edge that an unstacked 40-pixel panel would
+have occupied and instead followed the compositor's real exclusive-zone
+placement while retaining the invoking control's horizontal anchor. The author
+confirmed that this removed the fixed-height defect, then requested a smaller
+visual gap. The final automated correction lets only the card's shadow occupy
+that gap. A later attempt to change directly from one open menu to another still
+required two clicks in the live compositor; `modal: false` has automated
+coverage but no author-confirmed live pass, so the interaction remains an
+explicit input to the next visual-design checkpoint rather than a claimed UX-1
+result.
+
+- **Evidence:** [menu anchor correction](docs/evidence/2026-08-08-menu-anchor-correction.md)
+
 ## VAL-R8 — Living without Noctalia
 
 - **Status:** deferred

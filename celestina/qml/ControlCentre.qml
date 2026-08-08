@@ -44,12 +44,6 @@ Window {
     readonly property int levelStep: centre.settings && centre.settings.levelStep !== undefined
                                      ? centre.settings.levelStep : 5
 
-    // The last outcome for each verb, so a control can say what happened to the
-    // request it made rather than pretending it worked. Keyed by verb because
-    // that is what a control is about; a newer request for the same verb
-    // replaces the older one's report.
-    property var outcomes: ({})
-    property var awaiting: ({})
 
     width: cardWidth
     height: cardHeight
@@ -61,46 +55,34 @@ Window {
         firstControl.forceActiveFocus();
     }
 
+    // The request ledger lives on the bridge, so one owner reports every
+    // surface's requests and none of them is lost when its window closes.
+    readonly property var ledger: centre.providerSource
+                                  ? centre.providerSource.requests : null
+
+    // `immediate` is the contract every verb here has always had: the helper
+    // answering `accepted` is the whole answer. Nothing sends these a later
+    // `confirmed`, so waiting for one would leave a control saying it is
+    // asking for ever — which is exactly what the connectivity contract would
+    // have done to them.
     function send(provider, verb, options) {
-        if (!centre.providerSource)
-            return;
-        const id = centre.providerSource.sendCommand(provider, verb, options === undefined ? {} : options);
-        if (id === 0) {
-            // A request that could not even be sent is a failure now, not a
-            // pending one that will never resolve.
-            const failed = centre.outcomes;
-            failed[verb] = {"state": "failed", "reason": qsTr("el shell no pudo enviarlo")};
-            centre.outcomes = failed;
-            return;
-        }
-        const pending = centre.outcomes;
-        pending[verb] = {"state": "pending", "reason": ""};
-        centre.outcomes = pending;
-        const waiting = centre.awaiting;
-        waiting[id] = verb;
-        centre.awaiting = waiting;
+        if (centre.ledger)
+            centre.ledger.send(provider, verb, options === undefined ? {} : options, verb, "immediate");
     }
 
-    function outcomeOf(verb) {
-        return centre.outcomes[verb] === undefined ? null : centre.outcomes[verb];
+    // A verb is unique within its own provider, which is exactly how the
+    // ledger keys it — so a lookup names both, like the send did.
+    function outcomeOf(provider, verb) {
+        if (!centre.ledger || centre.ledger.revision < 0)
+            return null;
+
+        const known = centre.ledger.stateOf(provider, verb);
+        return known.state === undefined ? null : known;
     }
 
-    Connections {
-        function onCommandResult(requestId, state, reason) {
-            const verb = centre.awaiting[requestId];
-            if (verb === undefined)
-                return;
-            const next = centre.outcomes;
-            next[verb] = {"state": state, "reason": reason};
-            centre.outcomes = next;
-            if (state !== "pending") {
-                const waiting = centre.awaiting;
-                delete waiting[requestId];
-                centre.awaiting = waiting;
-            }
-        }
-
-        target: centre.providerSource
+    function isPending(provider, verb) {
+        return centre.ledger !== null && centre.ledger.revision >= 0
+               && centre.ledger.isPending(provider, verb);
     }
 
     component ControlRow: Item {
@@ -110,8 +92,13 @@ Window {
         // What the provider says, in the person's words. Empty when the
         // provider is not reporting at all.
         required property string reading
+        // A row names the provider as well as the verb, because the ledger
+        // keys a request by both and a lookup that knew only half of it would
+        // read another provider's request of the same name.
+        property string provider: ""
         property string verb: ""
-        property var outcome: row.verb.length > 0 ? centre.outcomeOf(row.verb) : null
+        property var outcome: row.verb.length > 0
+                              ? centre.outcomeOf(row.provider, row.verb) : null
         default property alias control: holder.data
 
         width: parent ? parent.width : 0
@@ -140,13 +127,23 @@ Window {
                 // The provider's own reading, and only then what happened to
                 // the last request about it.
                 text: {
-                    const outcome = row.outcome;
-                    if (outcome && outcome.state === "pending")
+                    // `accepted` is still waiting: the helper ran a tool and
+                    // nothing has observed an effect yet.
+                    if (row.verb.length > 0 && centre.isPending(row.provider, row.verb))
                         return qsTr("%1 · preguntando…").arg(row.reading);
+
+                    const outcome = row.outcome;
                     if (outcome && outcome.state === "failed") {
-                        return outcome.reason.length > 0
-                               ? qsTr("%1 · falló: %2").arg(row.reading).arg(outcome.reason)
-                               : qsTr("%1 · falló").arg(row.reading);
+                        // The helper's own reason is English by contract and is
+                        // logged rather than shown. What reaches the surface is
+                        // this shell's own sentence, chosen from a typed cause.
+                        if (outcome.cause === "unsent")
+                            return qsTr("%1 · falló: el shell no pudo enviarlo").arg(row.reading);
+
+                        if (outcome.cause === "generation-lost")
+                            return qsTr("%1 · falló: el asistente se reinició").arg(row.reading);
+
+                        return qsTr("%1 · falló").arg(row.reading);
                     }
                     return row.reading;
                 }
@@ -227,6 +224,7 @@ Window {
                              ? (centre.audio.muted ? qsTr("%1 %, silenciado").arg(centre.audio.volume)
                                                    : qsTr("%1 %").arg(centre.audio.volume))
                              : qsTr("sin dispositivo legible")
+                    provider: "audio"
                     verb: "mute-toggle"
 
                     Row {
@@ -266,6 +264,7 @@ Window {
                     reading: centre.nightLight === undefined
                              ? qsTr("sin proveedor")
                              : (centre.nightLight.active ? qsTr("encendida") : qsTr("apagada"))
+                    provider: "night-light"
                     verb: "night-light-toggle"
 
                     CelestinaSwitch {
@@ -285,6 +284,7 @@ Window {
                     reading: centre.caffeine === undefined
                              ? qsTr("sin proveedor")
                              : (centre.caffeine.active ? qsTr("encendida") : qsTr("apagada"))
+                    provider: "caffeine"
                     verb: "caffeine-toggle"
 
                     CelestinaSwitch {
@@ -305,6 +305,7 @@ Window {
                              ? qsTr("otro programa sirve las notificaciones")
                              : (centre.notifications.quiet ? qsTr("silenciadas")
                                                            : qsTr("permitidas"))
+                    provider: "notifications"
                     verb: "quiet-toggle"
 
                     CelestinaSwitch {
@@ -324,6 +325,7 @@ Window {
                     label: qsTr("Perfil de energía")
                     reading: centre.power && centre.power.active !== undefined
                              ? centre.power.active : qsTr("sin demonio")
+                    provider: "power"
                     verb: "cycle"
 
                     CelestinaButton {

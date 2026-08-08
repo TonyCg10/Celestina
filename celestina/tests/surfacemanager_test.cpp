@@ -31,6 +31,7 @@ private slots:
     void theMenuReportsAndCleansUpAnExternalDismissal();
     void aClosedMenuLeavesNoWindowBehind();
     void theMenuIsOnUnlessTheEnvironmentTurnsItOff();
+    void aMenuKeepsTheInvokingControlsAnchor();
     void theMenuContentLoadsAndFitsItsSurface();
     void theMenuSurfaceIsBigEnoughToClickEveryItem();
 
@@ -149,7 +150,9 @@ void SurfaceManagerTest::aMenuSurfaceTakesFocusAndItsContentSize()
     expected |= LayerShellQt::Window::AnchorRight;
     QCOMPARE(layerWindow->anchors(), expected);
     QCOMPARE(layerWindow->desiredSize(), QSize(0, 0));
-    QCOMPARE(layerWindow->exclusionZone(), -1);
+    // Zero reserves nothing for the menu itself while still asking the
+    // compositor to place it after existing exclusive surfaces.
+    QCOMPARE(layerWindow->exclusionZone(), 0);
     QCOMPARE(layerWindow->margins(), QMargins());
 }
 
@@ -224,6 +227,24 @@ void SurfaceManagerTest::theMenuIsOnUnlessTheEnvironmentTurnsItOff()
     qputenv("CELESTINA_PANEL_MENU", "perhaps");
     QVERIFY(PanelMenuController::enabledByEnvironment());
     qunsetenv("CELESTINA_PANEL_MENU");
+}
+
+void SurfaceManagerTest::aMenuKeepsTheInvokingControlsAnchor()
+{
+    const QPoint outputOrigin(1920, 120);
+    const int shadowMargin = 18;
+
+    QCOMPARE(
+        panelMenuOrigin(QPoint(2380, 164), outputOrigin, shadowMargin),
+        QPoint(442, -18)
+    );
+    // Horizontal movement follows the invoking control. A nominal global Y
+    // cannot move the card because Wayland does not expose the compositor's
+    // actual stacked-panel Y; the menu surface's exclusive-zone-aware top does.
+    QCOMPARE(
+        panelMenuOrigin(QPoint(2512, 197), outputOrigin, shadowMargin),
+        QPoint(574, -18)
+    );
 }
 
 // The real menu file, loaded from source the way the host loads it: this is

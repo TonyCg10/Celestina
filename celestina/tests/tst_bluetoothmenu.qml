@@ -1,0 +1,164 @@
+import QtQuick
+import QtTest
+import "../qml" as Desktop
+
+// Request lifecycle — sending, waiting, confirming, failing, generation loss —
+// is not tested here any more. It cannot be: activating a row destroys this
+// window, so a case that keeps the object alive and hand-delivers a result is
+// testing something the product never does. It lives on the durable ledger and
+// on the real menu lifecycle instead:
+// `requestledger_test.cpp` and `indicatormenu_test.cpp`.
+
+// What the Bluetooth menu shows, and what it refuses to show.
+//
+// Constructed offscreen: this proves the reading and request rules, never the
+// appearance. Nothing here starts discovery, pairs, forgets or trusts anything,
+// because the menu has no way to ask for those at all.
+TestCase {
+    id: testCase
+
+    name: "BluetoothMenu"
+
+    QtObject {
+        id: fakeSource
+
+        property bool available: true
+        property var providers: ({})
+        property int revision: 0
+        property var sent: []
+        property int nextId: 1
+
+        signal changed()
+        signal commandResult(int requestId, string state, string reason)
+
+        function publish(next) {
+            fakeSource.providers = next;
+            fakeSource.revision = fakeSource.revision + 1;
+            fakeSource.changed();
+        }
+
+        function sendCommand(provider, verb, options) {
+            fakeSource.sent.push({
+                "provider": provider, "verb": verb, "options": options
+            });
+            return fakeSource.nextId++;
+        }
+    }
+
+    Desktop.BluetoothMenu {
+        id: menu
+
+        providerSource: fakeSource
+        reducedMotion: true
+    }
+
+    readonly property var known: [
+        {
+            "id": "5C:DC:49:0D:D1:62", "name": "S25 Ultra",
+            "connected": false, "paired": true
+        },
+        {
+            "id": "AA:BB:CC:DD:EE:01", "name": "WH-1000XM4",
+            "connected": true, "paired": true
+        }
+    ]
+
+    function publishPowered(devices, listState) {
+        fakeSource.publish({
+            "bluetooth": {
+                "adapter": "on",
+                "count": 1,
+                "first": "WH-1000XM4",
+                "devicesState": listState === undefined ? "fresh" : listState,
+                "devices": devices === undefined ? testCase.known : devices
+            }
+        });
+    }
+
+    function entriesOfKind(kind) {
+        const found = [];
+        for (let index = 0; index < menu.entries.length; ++index) {
+            if (menu.entries[index].kind === kind)
+                found.push(menu.entries[index]);
+        }
+        return found;
+    }
+
+    function init() {
+        fakeSource.sent = [];
+        fakeSource.nextId = 1;
+        fakeSource.available = true;
+        testCase.publishPowered();
+    }
+
+    // The policy UX-1-A closed: a powered adapter with nothing on it is a state
+    // a person needs to see, and the menu says so rather than going blank.
+    function test_a_powered_adapter_with_no_devices_still_shows_itself() {
+        testCase.publishPowered([]);
+
+        compare(menu.adapter, "on");
+        compare(menu.powered, true);
+        compare(menu.switchable, true);
+        compare(menu.adapterLine, qsTr("Bluetooth encendido"));
+        compare(menu.listLine, qsTr("No hay dispositivos conocidos"));
+        // The switch is there, and so is the refresh.
+        compare(testCase.entriesOfKind("adapter").length, 1);
+        compare(testCase.entriesOfKind("refresh").length, 1);
+        compare(testCase.entriesOfKind("device").length, 0);
+    }
+
+    function test_an_adapter_that_is_off_is_not_one_that_is_missing() {
+        fakeSource.publish({"bluetooth": {"adapter": "off", "count": 0}});
+        compare(menu.adapterLine, qsTr("Bluetooth apagado"));
+        compare(menu.switchable, true);
+        compare(menu.powered, false);
+        // A radio that is off has nothing on it, and says nothing about
+        // devices rather than claiming there are none.
+        compare(menu.listLine, "");
+        compare(testCase.entriesOfKind("device").length, 0);
+
+        fakeSource.publish({"bluetooth": {"adapter": "absent", "count": 0}});
+        compare(menu.adapterLine, qsTr("Este equipo no tiene Bluetooth"));
+        // Nothing to switch on a machine with no controller.
+        compare(menu.switchable, false);
+
+        fakeSource.publish({});
+        compare(menu.adapter, "");
+        compare(menu.adapterLine, qsTr("Sin información de Bluetooth"));
+        compare(menu.switchable, false);
+    }
+
+    function test_every_list_state_has_its_own_spanish_sentence() {
+        const said = {};
+        const states = ["fresh", "held", "unavailable", "pending"];
+        for (let index = 0; index < states.length; ++index) {
+            testCase.publishPowered(testCase.known, states[index]);
+            verify(menu.listLine.length > 0);
+            verify(said[menu.listLine] === undefined, menu.listLine);
+            said[menu.listLine] = true;
+        }
+
+        testCase.publishPowered(testCase.known, "unavailable");
+        compare(menu.listLine, qsTr("No se puede consultar: falta bluetoothctl"));
+        testCase.publishPowered(testCase.known, "held");
+        compare(menu.listLine, qsTr("Dispositivos conocidos (lectura anterior)"));
+    }
+
+    function test_a_device_row_carries_the_state_bluez_confirmed() {
+        const devices = testCase.entriesOfKind("device");
+        compare(devices.length, 2);
+        compare(devices[0].row.name, "S25 Ultra");
+        compare(devices[0].row.connected, false);
+        compare(devices[1].row.connected, true);
+    }
+
+
+
+
+
+
+
+
+
+
+}

@@ -96,6 +96,16 @@ fn perform(command: &Command, runtime: &Mutex<ProviderRuntime>) -> Result<(), St
         session::POWER if command.verb == "cycle" => {
             session::cycle_power_profile(runtime, &command.provider)
         }
+        // Both connectivity indicators share one action path: the verbs differ
+        // but the rule does not — validate against the last confirmed
+        // inventory, record what must be observed, then run the tool.
+        session::NETWORK | session::BLUETOOTH => session::action(
+            &command.provider,
+            &command.verb,
+            &command.options,
+            &command.id,
+            runtime,
+        ),
         provider @ (sessionholds::NIGHT_LIGHT | sessionholds::CAFFEINE) => sessionholds::action(
             provider,
             &command.verb,
@@ -155,11 +165,14 @@ fn run_commands(
 
         // Acceptance is only that the helper carried it out; what it did to the
         // machine shows up in that provider's next value, if anywhere.
-        let frame = match perform(&command, runtime) {
-            Ok(()) => ResultFrame::accepted(&command.id),
-            Err(reason) => ResultFrame::failed(&command.id, &reason),
+        let (frame, accepted) = match perform(&command, runtime) {
+            Ok(()) => (ResultFrame::accepted(&command.id), true),
+            Err(reason) => (ResultFrame::failed(&command.id, &reason), false),
         };
         if let Err(error) = writer.emit(&frame) {
+            if accepted {
+                session::discard(&command.provider, &command.id);
+            }
             eprintln!("celestina-provider-adapter: {error}");
             // Only a lost pipe ends this worker. A frame that could not be
             // built is one answer missing, not a reason to stop answering.
@@ -167,6 +180,10 @@ fn run_commands(
                 shutdown.store(true, Ordering::Release);
                 return;
             }
+        } else if accepted {
+            // Connectivity reservations cannot be observed until this exact
+            // `accepted` frame is already on the pipe.
+            session::arm(&command.provider, &command.id);
         }
     }
 }
@@ -274,7 +291,7 @@ fn run() -> io::Result<()> {
     } else {
         Some(brightness::spawn(&runtime, &shutdown)?)
     };
-    session::spawn(&runtime)?;
+    session::spawn(&runtime, &shutdown)?;
     // Declared before the holds thread starts and therefore dropped after it
     // has been joined: whatever this helper is holding is given back however
     // `run` ends, including the initialization failures below.
@@ -314,6 +331,21 @@ fn run() -> io::Result<()> {
     // so it knows the helper is alive and carrying nothing.
     while !shutdown.load(Ordering::Acquire) {
         let now = clock.now_ms();
+        let mut state = lock_runtime(&runtime);
+        // What became of requests already accepted. A provider observes the
+        // effect on its own thread; this is the one place that writes.
+        let outcomes = state.take_outcomes();
+        drop(state);
+        for outcome in &outcomes {
+            if let Err(error) = writer.emit(&outcome.frame()) {
+                eprintln!("celestina-provider-adapter: {error}");
+                if error.is_fatal() {
+                    shutdown.store(true, Ordering::Release);
+                    break;
+                }
+            }
+        }
+
         let mut state = lock_runtime(&runtime);
         if state.due(now) {
             if let Err(error) = writer.emit(&state.take_frame(now)) {

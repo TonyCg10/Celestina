@@ -2,6 +2,11 @@ import QtQuick
 import QtTest
 import "../qml" as Desktop
 
+// The life of a request is not tested here any more: it belongs to the durable
+// ledger on the bridge, and a fake source cannot stand in for it. The control
+// centre's own contract — `accepted` finishes an immediate verb — is driven
+// against the real ledger in `indicatormenu_test.cpp`.
+
 // What the control centre shows, and what it refuses to show. Constructed
 // offscreen: this proves the reading rules, never the appearance.
 TestCase {
@@ -14,6 +19,9 @@ TestCase {
     QtObject {
         id: fakeSource
 
+        // The real bridge reports whether the helper is there at all, and says
+        // so through the same signal every frame arrives on.
+        property bool available: true
         property var providers: ({})
         // The host's snapshot revision. Every surface reads it before a
         // provider key so that a key inserted into an existing map still
@@ -27,7 +35,10 @@ TestCase {
         function publish(next) {
             fakeSource.providers = next;
             fakeSource.revision = fakeSource.revision + 1;
+            fakeSource.changed();
         }
+
+        signal changed()
 
         signal commandResult(int requestId, string state, string reason)
 
@@ -47,8 +58,6 @@ TestCase {
     function init() {
         fakeSource.sent = [];
         fakeSource.nextId = 1;
-        centre.outcomes = ({});
-        centre.awaiting = ({});
         fakeSource.providers = {
             "audio": {"volume": 40, "muted": false},
             "night-light": {"active": false},
@@ -89,30 +98,9 @@ TestCase {
         compare(centre.levelStep, 5);
     }
 
-    function test_a_request_is_pending_until_something_answers() {
-        centre.send("audio", "mute-toggle", {});
-        compare(centre.outcomeOf("mute-toggle").state, "pending");
 
-        fakeSource.commandResult(1, "confirmed", "");
-        compare(centre.outcomeOf("mute-toggle").state, "confirmed");
-    }
 
-    function test_a_failure_keeps_its_reason() {
-        centre.send("night-light", "night-light-toggle", {});
-        fakeSource.commandResult(1, "failed", "cannot start wlsunset");
 
-        const outcome = centre.outcomeOf("night-light-toggle");
-        compare(outcome.state, "failed");
-        compare(outcome.reason, "cannot start wlsunset");
-    }
-
-    function test_an_answer_to_another_request_is_ignored() {
-        centre.send("audio", "mute-toggle", {});
-        // A result for an id this surface never asked about must not rewrite
-        // any control's state.
-        fakeSource.commandResult(99, "failed", "somebody else's problem");
-        compare(centre.outcomeOf("mute-toggle").state, "pending");
-    }
 
     function test_a_provider_that_is_not_there_reads_as_absent() {
         fakeSource.providers = {};

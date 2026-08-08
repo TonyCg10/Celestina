@@ -14,8 +14,15 @@
 use std::collections::BTreeSet;
 
 use crate::coalesce::Coalescer;
-use crate::command::{unknown_provider, Command, Rejection};
+use crate::command::{unknown_provider, Command, Outcome, Rejection};
 use crate::snapshot::{Payload, ProviderId, ProviderSnapshots, SnapshotError, SnapshotFrame};
+
+/// How many request outcomes may be waiting to be written.
+///
+/// The ledger that produces them is bounded too, so this only has to survive a
+/// host that has stopped reading; past it the oldest answer is dropped rather
+/// than the queue growing without end.
+pub const MAX_OUTCOMES: usize = 64;
 
 #[derive(Debug)]
 pub struct ProviderRuntime {
@@ -25,6 +32,10 @@ pub struct ProviderRuntime {
     /// a provider that is starting up carries no value yet but is already the
     /// right recipient for a command.
     sources: BTreeSet<ProviderId>,
+    /// Answers a provider owes for requests it already accepted. The provider
+    /// that observes an effect is not the thread that writes to the host, so
+    /// this is where the two meet.
+    outcomes: Vec<Outcome>,
 }
 
 impl ProviderRuntime {
@@ -34,7 +45,26 @@ impl ProviderRuntime {
             snapshots: ProviderSnapshots::new(generation),
             coalescer: Coalescer::default(),
             sources: BTreeSet::new(),
+            outcomes: Vec::new(),
         }
+    }
+
+    /// Records what became of an accepted request, for the writer to report.
+    ///
+    /// Bounded: past [`MAX_OUTCOMES`] the oldest is dropped, because a host
+    /// that is not reading its answers is not made healthier by keeping more
+    /// of them.
+    pub fn settle(&mut self, outcome: Outcome) {
+        if self.outcomes.len() >= MAX_OUTCOMES {
+            self.outcomes.remove(0);
+        }
+        self.outcomes.push(outcome);
+    }
+
+    /// The answers owed, in the order they were settled. Taking them clears
+    /// them: an answer is written once.
+    pub fn take_outcomes(&mut self) -> Vec<Outcome> {
+        std::mem::take(&mut self.outcomes)
     }
 
     /// Announces a provider this helper carries.
@@ -120,7 +150,7 @@ impl ProviderRuntime {
 mod tests {
     use super::*;
 
-    use crate::command::parse_command;
+    use crate::command::{parse_command, Outcome};
     use serde_json::Value;
 
     fn id(raw: &str) -> ProviderId {
@@ -228,6 +258,42 @@ mod tests {
 
         runtime.register(id("sysmon"));
         assert!(runtime.refuse_unknown(&command).is_none());
+    }
+
+    /// The answers a provider owes for requests it already accepted. They
+    /// travel beside the snapshots rather than through them: a confirmation is
+    /// about one request, not about what a widget shows.
+    #[test]
+    fn an_accepted_requests_answer_waits_here_until_it_is_written() {
+        let mut runtime = ProviderRuntime::new(1);
+        assert!(runtime.take_outcomes().is_empty());
+
+        runtime.settle(Outcome::confirmed("1".to_owned()));
+        runtime.settle(Outcome::failed("2".to_owned(), "it never took effect"));
+
+        let outcomes = runtime.take_outcomes();
+        assert_eq!(outcomes.len(), 2);
+        assert!(outcomes[0].confirmed);
+        assert_eq!(outcomes[0].frame().state, "confirmed");
+        assert!(!outcomes[1].confirmed);
+        assert_eq!(outcomes[1].frame().state, "failed");
+
+        // Written once: taking them clears them.
+        assert!(runtime.take_outcomes().is_empty());
+    }
+
+    /// A host that stopped reading its answers does not get an unbounded queue
+    /// of them kept on its behalf.
+    #[test]
+    fn the_answers_owed_are_bounded_and_the_oldest_goes_first() {
+        let mut runtime = ProviderRuntime::new(1);
+        for index in 0..MAX_OUTCOMES + 3 {
+            runtime.settle(Outcome::confirmed(index.to_string()));
+        }
+
+        let outcomes = runtime.take_outcomes();
+        assert_eq!(outcomes.len(), MAX_OUTCOMES);
+        assert_eq!(outcomes[0].id, "3");
     }
 
     #[test]

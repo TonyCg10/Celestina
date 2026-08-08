@@ -1,0 +1,51 @@
+# UX-1-C exact change inventory
+
+Base revision	f6f54beb1a086d96e05af7b355e7d9d64db2b018
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/docs/evidence/2026-08-07-two-menus-that-do-not-lie.md
+Pathspec	celestina/docs/plans/archive/2026-08-07-network-bluetooth-indicator-menus.md
+Pathspec	celestina/qml/BluetoothMenu.qml
+Pathspec	celestina/qml/ControlCentre.qml
+Pathspec	celestina/qml/NetworkMenu.qml
+Pathspec	celestina/qml/Panel.qml
+Pathspec	celestina/qml/PanelMenu.qml
+Pathspec	celestina/qml/SessionStatus.qml
+Pathspec	celestina/qml/TrayMenu.qml
+Pathspec	celestina/src/panelmanager.cpp
+Pathspec	celestina/src/panelmanager.h
+Pathspec	celestina/src/requestledger.cpp
+Pathspec	celestina/src/requestledger.h
+Pathspec	celestina/src/shellprovidersclient.cpp
+Pathspec	celestina/src/shellprovidersclient.h
+Pathspec	celestina/tests/requestledger_test.cpp
+Pathspec	celestina/tests/tst_bluetoothmenu.qml
+Pathspec	celestina/tests/tst_controlcentre.qml
+Pathspec	celestina/tests/tst_networkmenu.qml
+Pathspec	celestina/tests/tst_sessionindicators.qml
+Pathspec	celestina/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-C.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+60	1	da1ab1f51e8f80b24dbbf5b2502a7ac506b811a0fd70fcbd2d945d8089e1402f	celestina/CMakeLists.txt
+185	0	0a15c9a4996be00b634fc8027547a25e5d08239bc186efa17ef40d3db4532ff1	celestina/docs/evidence/2026-08-07-two-menus-that-do-not-lie.md
+345	0	325c1bedfba60e0ad196f9e7463bbe7370c727dc2c3d30182e4960ddff992f85	celestina/docs/plans/archive/2026-08-07-network-bluetooth-indicator-menus.md
+290	0	afdccb3e42ca0c8ce56204a0bd5aac4ebe4bce4de6fe4153d71485cd8c5ddaf0	celestina/qml/BluetoothMenu.qml
+49	47	2530f5abc2ffdd3cd17e0d643bfff22e517fb19843b75d3d80072ff948cfd8d9	celestina/qml/ControlCentre.qml
+237	0	4ad63b6509be6f02ee4820d0a8724580c446470154e18fd12a625b5719d1a4b5	celestina/qml/NetworkMenu.qml
+2	0	31b066a82539210f588807e3047f23cfcfd81cbf3fee2dc81e367b4b5733dbc4	celestina/qml/Panel.qml
+14	82	ebca462094fcd700c76d62a8e0a900ec26e0898c819f7d71f2eb17b068e4648c	celestina/qml/PanelMenu.qml
+130	36	10157ae9085f55be9ce6cc0736b02f7506ae8d20efeebd57537e2474b2470c45	celestina/qml/SessionStatus.qml
+20	75	99ed083157f3df085a8153dfe252646d5525b89ac9aba89b5a4f815fd289ba93	celestina/qml/TrayMenu.qml
+15	0	96d04bb305bd87461d1a7349d4d767e25d22ad5a4567339ae49fb5231ddcf267	celestina/src/panelmanager.cpp
+3	0	e1ca160bf9b968db8c905ccd958f38f1feb1d7e7eef4323bcb6d47f895063612	celestina/src/panelmanager.h
+196	0	aba336e9339edba40f754cee29b4fd58315ba86771953009c1d67a1b0ea8d820	celestina/src/requestledger.cpp
+140	0	ab37fbfc277914fdb18144be93dcc8a0e70fa9c77c03741376e53f28f903be55	celestina/src/requestledger.h
+10	0	a550144b7da6cc0d4901e42329e70be21819da631aff840d1221c4ca71a637d8	celestina/src/shellprovidersclient.cpp
+20	1	d3f83e26313943e9f8f5bc071c5adbf4e903377e048f2424ba0a7d2c522e0f99	celestina/src/shellprovidersclient.h
+404	0	8a46ad7839e8027be456d0208b676f70ca519377c4d33c38592186ec9eec2c1a	celestina/tests/requestledger_test.cpp
+164	0	f5c03963c667b451b56e9eaf8c48379d30f80cac22bf49e22c61d0119eb6e48a	celestina/tests/tst_bluetoothmenu.qml
+11	23	d98c6db921de23949b212624ef0bab68be5f0dacc580c340940191955494ff0b	celestina/tests/tst_controlcentre.qml
+179	0	40c3f288034c29131a727a75e3c6431d92766e93d81e0f7633326dbf77655a94	celestina/tests/tst_networkmenu.qml
+210	0	5a9988c7e2fe2a9b8cb7be8d2d73336dcca810c0f01f4aeac2124b024009ea80	celestina/tests/tst_sessionindicators.qml
+51	0	self	celestina/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-C.numstat.tsv

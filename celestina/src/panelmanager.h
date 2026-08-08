@@ -57,6 +57,9 @@ private slots:
     // The notification centre is an overlay the host owns; a panel only asks
     // for it.
     void notificationCentreRequested();
+    // A connectivity indicator's own menu, asked for from the panel that shows
+    // it. The manager knows which window asked and what bridge to hand it.
+    void indicatorMenuRequested(const QString &kind, int globalX, int globalY);
     // A tray item's own menu, asked for from the panel that shows it.
     void trayMenuRequested(
         const QString &service,

@@ -10,8 +10,14 @@
 //!   a line.
 //! - [`snapshot`] — the provider envelope: who published what, in which
 //!   generation, with the bounds that keep a helper's output finite.
-//! - [`command`] — the host's typed, bounded requests and the rejections that
-//!   answer the ones a helper cannot serve.
+//! - [`command`] — the host's typed, bounded requests, the rejections that
+//!   answer the ones a helper cannot serve, and what became of the ones it
+//!   accepted.
+//! - [`connectivity`] — what the network and Bluetooth indicators may be asked
+//!   to do, which identities may be acted on, and what the machine must show
+//!   before a request counts as done.
+//! - [`pending`] — requests already carried out and still waiting to be
+//!   confirmed by a later observation.
 //! - [`coalesce`] — how often a changing provider is allowed to reach the GUI
 //!   thread.
 //! - [`clipboard`] — what counts as clipboard history worth keeping.
@@ -62,6 +68,7 @@ pub mod calendar;
 pub mod clipboard;
 pub mod coalesce;
 pub mod command;
+pub mod connectivity;
 pub mod handover;
 pub mod inventory;
 pub mod launcher;
@@ -70,6 +77,7 @@ pub mod media;
 pub mod network;
 pub mod niri_colours;
 pub mod notifications;
+pub mod pending;
 pub mod power;
 pub mod runtime;
 pub mod session;

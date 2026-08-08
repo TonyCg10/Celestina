@@ -1,0 +1,27 @@
+# UX-1-B exact change inventory
+
+Base revision	f6f54beb1a086d96e05af7b355e7d9d64db2b018
+Pathspec	celestina-rs/crates/celestina-shell-core/src/command.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/connectivity.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/pending.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/runtime.rs
+Pathspec	celestina/src/provider_adapter/main.rs
+Pathspec	celestina/src/provider_adapter/session.rs
+Pathspec	celestina/docs/plans/archive/2026-08-07-network-bluetooth-indicator-menus.md
+Pathspec	celestina/docs/evidence/2026-08-07-confirmed-connectivity-actions.md
+Pathspec	celestina/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-B.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+90	0	22a38037a49e0e569397ab70abda291e69200d98d8dbc7845cd2401f061db7f8	celestina-rs/crates/celestina-shell-core/src/command.rs
+633	0	70dd9e6061c16c8c565b7e05f5b4001992fac51b7d25c4d166f6ff76fe954161	celestina-rs/crates/celestina-shell-core/src/connectivity.rs
+10	2	6c8a2f0d396a354a19365f2cc02a0e11e6a48720e130918067be5bfd9555daa2	celestina-rs/crates/celestina-shell-core/src/lib.rs
+539	0	912fe33719eb13ceceba87400808c22fd728271875993ca87e1fc8c809977823	celestina-rs/crates/celestina-shell-core/src/pending.rs
+68	2	dcfe55c599b11ea84a16f8095cb2af11cb6877c89a9282c201cc7b3ef92a94db	celestina-rs/crates/celestina-shell-core/src/runtime.rs
+36	4	fa064ded3f52b4f10c1558fd15a436a7cba1ddc79971e8c78685689b32da9008	celestina/src/provider_adapter/main.rs
+487	6	b049312d7938c2f81afb2ee61970db704360559da8ed555f9f26b0f6c32cc90c	celestina/src/provider_adapter/session.rs
+345	0	325c1bedfba60e0ad196f9e7463bbe7370c727dc2c3d30182e4960ddff992f85	celestina/docs/plans/archive/2026-08-07-network-bluetooth-indicator-menus.md
+56	0	a1f62fa5a34ae10d2a0022fcc21ed19870901672274191d777ea66c51cc3176b	celestina/docs/evidence/2026-08-07-confirmed-connectivity-actions.md
+27	0	self	celestina/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-B.numstat.tsv

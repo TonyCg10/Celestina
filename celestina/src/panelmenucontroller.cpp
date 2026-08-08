@@ -12,23 +12,34 @@
 namespace {
 // Where the card goes inside a surface that now covers the whole output.
 //
-// The click arrives in global coordinates and the surface starts at its
-// screen's origin, so the difference is what the content can position against.
-// The line is the panel's own bottom edge rather than the cursor's row: the
-// click chooses the column, the panel chooses the line. The card is inset
-// inside its own surface by the room its shadow needs, which is why the anchor
-// is pulled back by exactly that much.
+// The click supplies the control's horizontal global anchor. Vertically, a
+// layer-shell client cannot know where the compositor finally placed a stacked
+// panel. The menu surface therefore respects exclusive zones and its own top
+// edge is already the panel's real bottom edge. The card is inset inside that
+// surface by the room its shadow needs.
 void placeCard(QWindow *card, QWindow *panel, const QPoint &globalAnchor)
 {
     const int inset = card->property("shadowMargin").toInt();
-    QPoint origin(globalAnchor.x() - inset, panel->geometry().bottom() + 1 - inset);
-    if (QScreen *screen = panel->screen())
-        origin -= screen->geometry().topLeft();
+    const QScreen *const screen = panel->screen();
+    const QPoint outputOrigin = screen ? screen->geometry().topLeft() : QPoint();
+    const QPoint origin = panelMenuOrigin(globalAnchor, outputOrigin, inset);
 
     card->setProperty("menuX", origin.x());
     card->setProperty("menuY", origin.y());
 }
 } // namespace
+
+QPoint panelMenuOrigin(
+    const QPoint &globalAnchor,
+    const QPoint &outputOrigin,
+    int shadowMargin
+)
+{
+    return QPoint(
+        globalAnchor.x() - outputOrigin.x() - shadowMargin,
+        -shadowMargin
+    );
+}
 
 PanelMenuController::PanelMenuController(
     QQmlEngine *engine,
@@ -38,6 +49,8 @@ PanelMenuController::PanelMenuController(
     : QObject(parent)
     , m_component(engine)
     , m_trayComponent(engine)
+    , m_networkComponent(engine)
+    , m_bluetoothComponent(engine)
     , m_niri(niri)
     , m_surface(new PanelMenuSurface(this))
     , m_enabled(enabledByEnvironment())
@@ -46,6 +59,17 @@ PanelMenuController::PanelMenuController(
         return;
 
     m_trayComponent.loadFromModule("CelestinaDesktop", "TrayMenu");
+    // An indicator menu that will not load leaves its indicator inert rather
+    // than opening an empty surface; the panel keeps working either way.
+    m_networkComponent.loadFromModule("CelestinaDesktop", "NetworkMenu");
+    m_bluetoothComponent.loadFromModule("CelestinaDesktop", "BluetoothMenu");
+    for (const QQmlComponent *indicator : {&m_networkComponent, &m_bluetoothComponent}) {
+        if (!indicator->isReady()) {
+            qCritical().noquote()
+                << "Celestina could not load an indicator menu:"
+                << indicator->errorString();
+        }
+    }
     m_component.loadFromModule("CelestinaDesktop", "PanelMenu");
     if (!m_component.isReady()) {
         qCritical().noquote()
@@ -95,7 +119,7 @@ QWindow *PanelMenuController::createMenuWindow(const QVariant &workspaces)
     // The menu's signals are QML-declared, so they are reached by name; the
     // controller — not the delegate — is what talks to the provider.
     connect(window, SIGNAL(activated(QString, int)), this, SLOT(activate(QString, int)));
-    connect(window, SIGNAL(dismissed()), this, SLOT(close()));
+    connect(window, SIGNAL(dismissed()), this, SLOT(menuDismissed()));
     return window;
 }
 
@@ -127,6 +151,71 @@ void PanelMenuController::open(
     placeCard(menu, panel, globalAnchor);
     if (!m_surface->open(menu, panel))
         delete menu;
+}
+
+QString indicatorMenuComponent(const QString &kind)
+{
+    if (kind == QStringLiteral("network"))
+        return QStringLiteral("NetworkMenu");
+    if (kind == QStringLiteral("bluetooth"))
+        return QStringLiteral("BluetoothMenu");
+
+    return QString();
+}
+
+void PanelMenuController::toggleIndicatorMenu(
+    QWindow *panel,
+    const QPoint &globalAnchor,
+    const QString &kind,
+    QObject *providerSource
+)
+{
+    if (!m_enabled || !panel || !providerSource)
+        return;
+    if (indicatorMenuComponent(kind).isEmpty()) {
+        qWarning() << "Celestina has no indicator menu named" << kind;
+        return;
+    }
+
+    // The same indicator again is a request to put it away. In a live session
+    // the click never gets this far — the open surface covers the output and
+    // answers it first — but a host that reopened here would resurrect the
+    // defect where the first click did nothing visible and only the second
+    // closed the menu.
+    const bool sameAgain = (m_openIndicator == kind);
+    close();
+    if (sameAgain)
+        return;
+
+    QQmlComponent &component = kind == QStringLiteral("network")
+        ? m_networkComponent
+        : m_bluetoothComponent;
+    if (!component.isReady())
+        return;
+
+    QObject *rootObject = component.createWithInitialProperties(QVariantMap {
+        {QStringLiteral("providerSource"), QVariant::fromValue(providerSource)},
+        {QStringLiteral("reducedMotion"),
+         qEnvironmentVariableIsSet("CELESTINA_REDUCED_MOTION")},
+    });
+    auto *window = qobject_cast<QWindow *>(rootObject);
+    if (!window) {
+        qCritical().noquote()
+            << "Celestina could not create the" << kind
+            << "menu:" << component.errorString();
+        delete rootObject;
+        return;
+    }
+
+    connect(window, SIGNAL(dismissed()), this, SLOT(menuDismissed()));
+
+    placeCard(window, panel, globalAnchor);
+    if (!m_surface->open(window, panel)) {
+        delete window;
+        return;
+    }
+
+    m_openIndicator = kind;
 }
 
 void PanelMenuController::requestTrayMenu(
@@ -185,7 +274,7 @@ void PanelMenuController::trayMenuReady(
     }
 
     connect(window, SIGNAL(chosen(int)), this, SLOT(trayEntryChosen(int)));
-    connect(window, SIGNAL(dismissed()), this, SLOT(close()));
+    connect(window, SIGNAL(dismissed()), this, SLOT(menuDismissed()));
 
     placeCard(window, panel, anchor);
     if (!m_surface->open(window, panel)) {
@@ -208,6 +297,14 @@ void PanelMenuController::trayEntryChosen(int entryId)
     close();
 }
 
+void PanelMenuController::menuDismissed()
+{
+    if (sender() != m_surface->window())
+        return;
+
+    close();
+}
+
 void PanelMenuController::close()
 {
     // Whatever was asked for is no longer wanted. A pending target that
@@ -218,5 +315,6 @@ void PanelMenuController::close()
     m_pendingPanel = nullptr;
     m_openService.clear();
     m_openPath.clear();
+    m_openIndicator.clear();
     m_surface->close();
 }

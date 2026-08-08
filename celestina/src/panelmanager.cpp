@@ -234,6 +234,12 @@ bool PanelManager::ensurePanel(QScreen *screen)
             this,
             SLOT(trayMenuRequested(QString, QString, int, int))
         );
+        connect(
+            window,
+            SIGNAL(indicatorMenuRequested(QString, int, int)),
+            this,
+            SLOT(indicatorMenuRequested(QString, int, int))
+        );
     }
 
     connect(
@@ -287,6 +293,15 @@ void PanelManager::panelMenuRequested(
         return;
 
     m_menu->open(panel, QPoint(globalX, globalY), workspaces);
+}
+
+void PanelManager::indicatorMenuRequested(const QString &kind, int globalX, int globalY)
+{
+    auto *panel = qobject_cast<QWindow *>(sender());
+    if (!panel || !m_menu || !m_providers)
+        return;
+
+    m_menu->toggleIndicatorMenu(panel, QPoint(globalX, globalY), kind, m_providers);
 }
 
 void PanelManager::trayMenuRequested(
