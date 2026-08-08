@@ -49,7 +49,9 @@ public:
 
 public slots:
     // `workspaces` is the panel's own list for that output, as shown.
-    void open(
+    // The map a collapsed capsule opens: the same recipe as the panel menu,
+    // with a board of window tiles instead of a list of rows.
+    void openWorkspaceMap(
         QWindow *panel,
         const QPoint &globalAnchor,
         const QVariant &workspaces
@@ -102,14 +104,14 @@ private slots:
     void menuDismissed();
     // A menu item is the same request a click on the strip makes.
     void activate(const QString &output, int index);
+    void activateWindow(const QString &windowId);
 
 private:
-    QWindow *createMenuWindow(const QVariant &workspaces);
 
-    QQmlComponent m_component;
     QQmlComponent m_trayComponent;
     QQmlComponent m_networkComponent;
     QQmlComponent m_bluetoothComponent;
+    QQmlComponent m_workspaceMapComponent;
     QPointer<NiriClient> m_niri;
     // The menu that was asked for and has not answered yet: where to put it,
     // and whose it is.

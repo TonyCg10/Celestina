@@ -106,7 +106,7 @@ binds {
     // Enough to drive the nest and nothing more. The shell under test brings its
     // own bindings through `org.celestina.Shell1`; these are the compositor's.
     Mod+Shift+Slash { show-hotkey-overlay; }
-    Mod+Return { spawn "alacritty"; }
+    Mod+Return { spawn "kitty"; }
     Mod+Q { close-window; }
     Mod+Left { focus-column-left; }
     Mod+Right { focus-column-right; }

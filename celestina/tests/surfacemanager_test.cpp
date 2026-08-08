@@ -1,4 +1,5 @@
 #include <QtTest>
+#include <QSignalSpy>
 
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -34,6 +35,8 @@ private slots:
     void aMenuKeepsTheInvokingControlsAnchor();
     void theMenuContentLoadsAndFitsItsSurface();
     void theMenuSurfaceIsBigEnoughToClickEveryItem();
+    void theMapListsEveryWindowAndWalksThemWithTheKeyboard();
+    void theMapSurvivesAWorkspaceWithNoMapAtAll();
 
     void anOverlaySurfaceCoversItsOutputAndTakesFocus();
     void theOverlayRefusesToOpenTwiceAndSurvivesReopening();
@@ -53,6 +56,13 @@ private:
         return panel;
     }
 
+public:
+    static QVariantMap workspaceRow(int index)
+    {
+        return workspace(index, QString::number(index), false);
+    }
+
+private:
     static QVariantMap workspace(int index, const QString &label, bool active)
     {
         return QVariantMap {
@@ -64,6 +74,9 @@ private:
             {QStringLiteral("urgent"), false},
             {QStringLiteral("activeWindowTitle"), QString()},
             {QStringLiteral("requestState"), QString()},
+            // A workspace whose helper published no map at all: the card must
+            // still build, because an older helper is a valid producer.
+            {QStringLiteral("map"), QVariantMap {}},
         };
     }
 
@@ -247,9 +260,57 @@ void SurfaceManagerTest::aMenuKeepsTheInvokingControlsAnchor()
     );
 }
 
-// The real menu file, loaded from source the way the host loads it: this is
-// what proves its imports, the shared GlassContextMenu and the window contract
+
+// One published window, in the shape the host decodes onto a workspace.
+static QVariantMap mapWindow(const QString &id, const QString &title, const QString &appId)
+{
+    return QVariantMap {
+        {QStringLiteral("id"), id},
+        {QStringLiteral("title"), title},
+        {QStringLiteral("appId"), appId},
+        {QStringLiteral("heightShare"), 1.0},
+        {QStringLiteral("focused"), false},
+        {QStringLiteral("floating"), false},
+        {QStringLiteral("urgent"), false},
+    };
+}
+
+// A workspace holding two windows in two columns, plus one floating.
+static QVariantMap workspaceHolding(int index)
+{
+    QVariantMap first;
+    first.insert(QStringLiteral("widthShare"), 0.5);
+    first.insert(
+        QStringLiteral("windows"),
+        QVariantList {mapWindow(QStringLiteral("11"), QStringLiteral("Left"), QStringLiteral("kitty"))}
+    );
+    QVariantMap second;
+    second.insert(QStringLiteral("widthShare"), 0.5);
+    second.insert(
+        QStringLiteral("windows"),
+        QVariantList {mapWindow(QStringLiteral("12"), QStringLiteral("Right"), QStringLiteral("kitty"))}
+    );
+
+    QVariantMap map;
+    map.insert(QStringLiteral("columns"), QVariantList {first, second});
+    map.insert(
+        QStringLiteral("floating"),
+        QVariantList {mapWindow(QStringLiteral("13"), QStringLiteral("Floater"), QStringLiteral("kitty"))}
+    );
+    map.insert(QStringLiteral("hidden"), 0);
+
+    QVariantMap workspace = SurfaceManagerTest::workspaceRow(index);
+    workspace.insert(QStringLiteral("map"), map);
+    return workspace;
+}
+
+// The real card, loaded from source the way the host loads it: this is what
+// proves its imports, the shared glass components and the window contract
 // actually resolve, and that the content the surface adopts is a window.
+//
+// It is the workspace map rather than the panel's old workspace menu because
+// that menu no longer exists — the right button that opened it now opens this,
+// and it offers everything the menu did plus what a list could not say.
 void SurfaceManagerTest::theMenuContentLoadsAndFitsItsSurface()
 {
     QQmlEngine engine;
@@ -257,7 +318,7 @@ void SurfaceManagerTest::theMenuContentLoadsAndFitsItsSurface()
 
     QQmlComponent component(
         &engine,
-        QUrl::fromLocalFile(QStringLiteral(CELESTINA_QML_DIR "/PanelMenu.qml"))
+        QUrl::fromLocalFile(QStringLiteral(CELESTINA_QML_DIR "/WorkspaceMap.qml"))
     );
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
 
@@ -276,23 +337,32 @@ void SurfaceManagerTest::theMenuContentLoadsAndFitsItsSurface()
     QVERIFY(content);
     QVERIFY(content->metaObject()->indexOfSignal("activated(QString,int)") >= 0);
     QVERIFY(content->metaObject()->indexOfSignal("dismissed()") >= 0);
+    // The host connects to these by name, so a signature that drifted would
+    // fail silently at runtime: the click would reach QML, emit, and land
+    // nowhere. This is what makes that impossible to ship unnoticed.
+    QVERIFY2(
+        content->metaObject()->indexOfSignal("windowActivated(QString)") >= 0,
+        "the map must expose windowActivated(QString) for the host to connect"
+    );
 
     PanelMenuSurface surface;
     QVERIFY(surface.open(content, makePanel()));
 }
 
-// The bug this pins down: the window sized itself to the laid-out menu while
-// the menu fitted itself to the window, so both shrank one margin per pass
-// until the surface was a sliver — and every click in that sliver landed on
-// the first item. A menu must be at least as wide as its card and tall enough
-// for every row it offers.
+// The bug this pins down: the window sized itself to the laid-out content while
+// the content fitted itself to the window, so both shrank one margin per pass
+// until the surface was a sliver — and every click in that sliver landed on the
+// first item. `AnchoredCard` answers it by taking its measures from the consumer
+// rather than from its children, and this is what holds that answer in place: a
+// card must be wide enough to carry its content and tall enough for every board
+// it offers.
 void SurfaceManagerTest::theMenuSurfaceIsBigEnoughToClickEveryItem()
 {
     QQmlEngine engine;
     engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
     QQmlComponent component(
         &engine,
-        QUrl::fromLocalFile(QStringLiteral(CELESTINA_QML_DIR "/PanelMenu.qml"))
+        QUrl::fromLocalFile(QStringLiteral(CELESTINA_QML_DIR "/WorkspaceMap.qml"))
     );
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
 
@@ -310,12 +380,12 @@ void SurfaceManagerTest::theMenuSurfaceIsBigEnoughToClickEveryItem()
 
     const int inset = content->property("shadowMargin").toInt();
     QVERIFY(inset > 0);
-    // Four rows of a real control, plus the shadow room on both sides. The
+    // Four workspaces' worth of boards, plus the shadow room on both sides. The
     // exact metrics belong to the shared style; the floor here is that the
-    // surface cannot collapse below one usable row per workspace.
+    // surface cannot collapse below one usable board per workspace.
     QVERIFY2(
         content->height() >= 4 * 24 + inset * 2,
-        qPrintable(QStringLiteral("menu height %1").arg(content->height()))
+        qPrintable(QStringLiteral("card height %1").arg(content->height()))
     );
     QVERIFY(content->width() > inset * 2);
 
@@ -324,6 +394,83 @@ void SurfaceManagerTest::theMenuSurfaceIsBigEnoughToClickEveryItem()
     const QSize mapped = content->size();
     QTest::qWait(200);
     QCOMPARE(content->size(), mapped);
+}
+
+
+// What the map is for: every window on a workspace is reachable, and reachable
+// by keyboard as well as by pointer. The panel surface refuses the keyboard, but
+// this card does not — it is opened deliberately and answers arrows and Return.
+void SurfaceManagerTest::theMapListsEveryWindowAndWalksThemWithTheKeyboard()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+    QQmlComponent component(
+        &engine,
+        QUrl::fromLocalFile(QStringLiteral(CELESTINA_QML_DIR "/WorkspaceMap.qml"))
+    );
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+
+    QObject *root = component.createWithInitialProperties({
+        {QStringLiteral("reducedMotion"), true},
+        {QStringLiteral("workspaces"), QVariantList {workspaceHolding(1)}},
+    });
+    QVERIFY2(root, qPrintable(component.errorString()));
+
+    // One workspace row plus its three windows — the two tiled and the floating
+    // one, which is kept apart in the fold but is still somewhere to go.
+    const QVariantList targets = root->property("targets").toList();
+    QCOMPARE(targets.size(), 4);
+
+    // No ring before a key is pressed: a card opened by pointer must not paint
+    // a focus nobody asked for.
+    QCOMPARE(root->property("cursor").toInt(), -1);
+    QVERIFY(root->property("currentKey").toString().isEmpty());
+
+    QMetaObject::invokeMethod(root, "step", Q_ARG(QVariant, 1));
+    QCOMPARE(root->property("currentKey").toString(), QStringLiteral("workspace:1"));
+    QMetaObject::invokeMethod(root, "step", Q_ARG(QVariant, 1));
+    QCOMPARE(root->property("currentKey").toString(), QStringLiteral("window:11"));
+
+    // And it wraps rather than stopping dead at either end.
+    QMetaObject::invokeMethod(root, "step", Q_ARG(QVariant, -1));
+    QMetaObject::invokeMethod(root, "step", Q_ARG(QVariant, -1));
+    QCOMPARE(root->property("currentKey").toString(), QStringLiteral("window:13"));
+
+    // Return on a window asks for that window, not for the workspace under it.
+    QSignalSpy windows(root, SIGNAL(windowActivated(QString)));
+    QMetaObject::invokeMethod(root, "activateCursor");
+    QCOMPARE(windows.size(), 1);
+    QCOMPARE(windows.first().first().toString(), QStringLiteral("13"));
+
+    delete root;
+}
+
+// A helper that predates the map publishes no such field, and the host defaults
+// it to an empty one. The card must still build and still be dismissible: an
+// older producer is a valid producer, not a crash.
+void SurfaceManagerTest::theMapSurvivesAWorkspaceWithNoMapAtAll()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+    QQmlComponent component(
+        &engine,
+        QUrl::fromLocalFile(QStringLiteral(CELESTINA_QML_DIR "/WorkspaceMap.qml"))
+    );
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+
+    QVariantMap bare = workspaceRow(2);
+    bare.remove(QStringLiteral("map"));
+    QObject *root = component.createWithInitialProperties({
+        {QStringLiteral("reducedMotion"), true},
+        {QStringLiteral("workspaces"), QVariantList {bare}},
+    });
+    QVERIFY2(root, qPrintable(component.errorString()));
+
+    // The workspace itself is still somewhere to go; there is simply nothing
+    // known to be on it.
+    QCOMPARE(root->property("targets").toList().size(), 1);
+
+    delete root;
 }
 
 // Unlike the panel's menu, an overlay is opened from a keybind rather than a

@@ -24,7 +24,34 @@ Item {
     // it adds no action that is only reachable through it: every workspace it
     // offers is the press action of its own pill, and of the compositor's
     // binds.
-    signal menuRequested(int globalX, int globalY, var workspaces)
+    // What a workspace or a whole monitor group holds, asked for by the right
+    // button. The strip supplies the workspaces because it is the only thing
+    // that knows which ones a capsule folded; the host owns the surface that
+    // answers.
+    signal mapRequested(int globalX, int globalY, var workspaces)
+
+    // The monitor group the person opened by clicking its capsule, or the empty
+    // string while nobody has chosen one.
+    //
+    // Expansion used to follow the focus alone, which meant a strip could only
+    // ever show the group you were already in — the one you least need to look
+    // at. A left click on a capsule is now a request to see a group's
+    // workspaces, and it outranks the published state until the focus lands
+    // somewhere else, at which point the compositor's answer is the truer one
+    // again and the choice is dropped.
+    property string chosenGroup: ""
+
+    readonly property string focusedGroup: {
+        const list = root.outputWorkspaces;
+        for (let index = 0; index < list.length; ++index) {
+            if (list[index].active === true)
+                return list[index].home !== undefined && list[index].home.length > 0
+                       ? list[index].home : list[index].output;
+
+        }
+        return "";
+    }
+    onFocusedGroupChanged: root.chosenGroup = ""
 
     readonly property var outputWorkspaces: {
         const result = [];
@@ -67,6 +94,12 @@ Item {
             // is how a producer that predates grouping keeps drawing a flat row.
             group.workspaces.push(workspace);
             group.expanded = group.expanded && workspace.groupExpanded !== false;
+            // A group the person opened is open whatever the adapter published,
+            // and opening one closes every other: two expanded groups is the
+            // long row this whole fold exists to prevent.
+            if (root.chosenGroup.length > 0)
+                group.expanded = group.key === root.chosenGroup;
+
             // Urgency must survive the collapse. A capsule that hid a workspace
             // asking for attention would be the fold telling a lie.
             group.urgent = group.urgent || workspace.urgent === true;
@@ -188,7 +221,10 @@ Item {
 
                         workspace: modelData
                         onFocusRequested: (output, index) => root.focusRequested(output, index)
-                        onMenuRequested: (globalX, globalY) => root.menuRequested(globalX, globalY, root.outputWorkspaces)
+                        // One workspace's own map: what this pill holds, without
+                        // going to it. The left button still focuses it.
+                        onMapRequested: (globalX, globalY) => root.mapRequested(
+                            globalX, globalY, [modelData])
                     }
 
                 }
@@ -208,13 +244,9 @@ Item {
                     outputName: groupRow.modelData.key
                     count: groupRow.modelData.workspaces.length
                     urgent: groupRow.modelData.urgent
-                    onFocusRequested: {
-                        const target = groupRow.modelData.focusTarget;
-                        if (target)
-                            root.focusRequested(target.output, target.index);
-
-                    }
-                    onMenuRequested: (globalX, globalY) => root.menuRequested(globalX, globalY, root.outputWorkspaces)
+                    onExpandRequested: root.chosenGroup = groupRow.modelData.key
+                    onMapRequested: (globalX, globalY) => root.mapRequested(
+                        globalX, globalY, groupRow.modelData.workspaces)
                 }
 
             }

@@ -47,10 +47,10 @@ PanelMenuController::PanelMenuController(
     QObject *parent
 )
     : QObject(parent)
-    , m_component(engine)
     , m_trayComponent(engine)
     , m_networkComponent(engine)
     , m_bluetoothComponent(engine)
+    , m_workspaceMapComponent(engine)
     , m_niri(niri)
     , m_surface(new PanelMenuSurface(this))
     , m_enabled(enabledByEnvironment())
@@ -70,12 +70,13 @@ PanelMenuController::PanelMenuController(
                 << indicator->errorString();
         }
     }
-    m_component.loadFromModule("CelestinaDesktop", "PanelMenu");
-    if (!m_component.isReady()) {
+    // A map that will not load leaves its capsule inert rather than opening an
+    // empty surface, exactly as an indicator menu does.
+    m_workspaceMapComponent.loadFromModule("CelestinaDesktop", "WorkspaceMap");
+    if (!m_workspaceMapComponent.isReady()) {
         qCritical().noquote()
-            << "Celestina could not load the panel menu:"
-            << m_component.errorString();
-        m_enabled = false;
+            << "Celestina could not load the workspace map:"
+            << m_workspaceMapComponent.errorString();
     }
 }
 
@@ -93,34 +94,14 @@ bool PanelMenuController::enabledByEnvironment()
     return true;
 }
 
-QWindow *PanelMenuController::createMenuWindow(const QVariant &workspaces)
+void PanelMenuController::activateWindow(const QString &windowId)
 {
-    const QVariantMap initialProperties {
-        {QStringLiteral("workspaces"), workspaces},
-        {QStringLiteral("reducedMotion"),
-         qEnvironmentVariableIsSet("CELESTINA_REDUCED_MOTION")},
-    };
-    QObject *rootObject =
-        m_component.createWithInitialProperties(initialProperties);
-    if (!rootObject) {
-        qCritical().noquote()
-            << "Celestina could not create the panel menu:"
-            << m_component.errorString();
-        return nullptr;
-    }
+    if (m_niri)
+        m_niri->requestWindowFocus(windowId);
 
-    auto *window = qobject_cast<QWindow *>(rootObject);
-    if (!window) {
-        qCritical() << "Celestina's panel menu component is not a window.";
-        delete rootObject;
-        return nullptr;
-    }
-
-    // The menu's signals are QML-declared, so they are reached by name; the
-    // controller — not the delegate — is what talks to the provider.
-    connect(window, SIGNAL(activated(QString, int)), this, SLOT(activate(QString, int)));
-    connect(window, SIGNAL(dismissed()), this, SLOT(menuDismissed()));
-    return window;
+    // The map has said everything it can say: the answer to this request is the
+    // session moving, and it arrives on screen rather than on any control here.
+    close();
 }
 
 void PanelMenuController::activate(const QString &output, int index)
@@ -133,24 +114,43 @@ void PanelMenuController::activate(const QString &output, int index)
     close();
 }
 
-void PanelMenuController::open(
+void PanelMenuController::openWorkspaceMap(
     QWindow *panel,
     const QPoint &globalAnchor,
     const QVariant &workspaces
 )
 {
-    if (!m_enabled || !panel || !m_niri)
+    if (!m_enabled || !panel || !m_niri || !m_workspaceMapComponent.isReady())
         return;
 
     close();
 
-    QWindow *const menu = createMenuWindow(workspaces);
-    if (!menu)
+    const QVariantMap initialProperties {
+        {QStringLiteral("workspaces"), workspaces},
+        {QStringLiteral("reducedMotion"),
+         qEnvironmentVariableIsSet("CELESTINA_REDUCED_MOTION")},
+    };
+    QObject *rootObject =
+        m_workspaceMapComponent.createWithInitialProperties(initialProperties);
+    auto *card = qobject_cast<QWindow *>(rootObject);
+    if (!card) {
+        qCritical().noquote()
+            << "Celestina could not create the workspace map:"
+            << m_workspaceMapComponent.errorString();
+        delete rootObject;
         return;
+    }
 
-    placeCard(menu, panel, globalAnchor);
-    if (!m_surface->open(menu, panel))
-        delete menu;
+    // The same two signals the panel menu declares, so the surface that answers
+    // a capsule and the one that answers a right click are interchangeable to
+    // this controller.
+    connect(card, SIGNAL(activated(QString, int)), this, SLOT(activate(QString, int)));
+    connect(card, SIGNAL(windowActivated(QString)), this, SLOT(activateWindow(QString)));
+    connect(card, SIGNAL(dismissed()), this, SLOT(menuDismissed()));
+
+    placeCard(card, panel, globalAnchor);
+    if (!m_surface->open(card, panel))
+        delete card;
 }
 
 QString indicatorMenuComponent(const QString &kind)

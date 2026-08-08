@@ -56,6 +56,8 @@
 //! - [`workspace_groups`] — which monitor a workspace belongs to once that
 //!   monitor is off and the compositor has stopped saying so, and the rule that
 //!   keeps a displaced observation from overwriting the answer.
+//! - [`workspace_map`] — what a workspace holds, folded into the columns and
+//!   rows it really has, as shares rather than pixels.
 //! - [`runtime`] — the aggregate those three add up to: which providers a
 //!   helper carries, what they last said, and when the host is told.
 //!
@@ -92,6 +94,7 @@ pub mod sysmon;
 pub mod wallpaper;
 pub mod weather;
 pub mod workspace_groups;
+pub mod workspace_map;
 
 /// Truncates hostile or accidental text to a bounded prefix.
 ///

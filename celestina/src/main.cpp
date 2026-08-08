@@ -30,6 +30,7 @@
 #include "sessionactions.h"
 #include "shellservice.h"
 #include "surfacemanager.h"
+#include "appiconprovider.h"
 #include "trayiconprovider.h"
 #include "wallpapermanager.h"
 #include "traywatcher.h"
@@ -312,6 +313,9 @@ int main(int argc, char *argv[])
     // cache; the engine owns the provider, so neither of them owns the cache.
     auto trayIcons = QSharedPointer<TrayIconCache>::create();
     engine.addImageProvider(QStringLiteral("tray"), new TrayIconProvider(trayIcons));
+    // Another application's own icon, for the surfaces that name applications
+    // rather than tray items. It resolves and caches its own lookups.
+    engine.addImageProvider(QStringLiteral("appicon"), new AppIconProvider());
     auto *tray = new TrayWatcher(trayIcons, &app);
 
     // The session's background: one surface per output, on the layer

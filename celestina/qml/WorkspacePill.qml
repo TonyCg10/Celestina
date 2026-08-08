@@ -19,7 +19,11 @@ Item {
     // and only the next compositor snapshot decides what this shows.
     signal focusRequested(string output, int index)
     // A secondary click asks the strip for the panel's context menu here.
-    signal menuRequested(int globalX, int globalY)
+    // The right button opens this workspace's own map — what it holds, without
+    // going to it. It replaces the panel's list-of-workspaces menu that used to
+    // live on this gesture: that menu offered the workspaces this strip already
+    // shows, and the map answers the question the strip cannot.
+    signal mapRequested(int globalX, int globalY)
 
     readonly property string requestState: workspace.requestState
     readonly property string stateDescription: {
@@ -116,7 +120,7 @@ Item {
         onClicked: (mouse) => {
             if (mouse.button === Qt.RightButton) {
                 const anchor = pill.mapToGlobal(0, pill.height);
-                pill.menuRequested(anchor.x, anchor.y);
+                pill.mapRequested(anchor.x, anchor.y);
                 return;
             }
             pill.focusRequested(pill.workspace.output, pill.workspace.index);

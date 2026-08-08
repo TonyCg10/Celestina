@@ -26,15 +26,22 @@ Item {
     required property int count
     // Whether anything inside is asking for attention.
     required property bool urgent
-    signal focusRequested()
-    signal menuRequested(int globalX, int globalY)
+    // A left click opens this group *in the strip*: a capsule is a container,
+    // not a destination, so the gesture that would focus a workspace instead
+    // shows the workspaces to choose from. Expansion is therefore something a
+    // person does rather than something that follows the focus.
+    signal expandRequested()
+    // The right button asks for the map of everything this capsule folded.
+    signal mapRequested(int globalX, int globalY)
 
     implicitWidth: Math.max(34, capsuleRow.implicitWidth + 14)
     implicitHeight: 26
     Accessible.role: Accessible.Button
     Accessible.name: urgent ? qsTr("%1, %2 espacios, requiere atención").arg(outputName).arg(count) : qsTr("%1, %2 espacios").arg(outputName).arg(count)
-    Accessible.description: qsTr("Abre este monitor en la tira")
-    Accessible.onPressAction: capsule.focusRequested()
+    Accessible.description: qsTr("Muestra los espacios de este monitor")
+    // The same action the pointer's primary button takes, so assistive
+    // technology is not offered a second, different meaning for one control.
+    Accessible.onPressAction: capsule.expandRequested()
 
     Rectangle {
         anchors.fill: parent
@@ -93,10 +100,10 @@ Item {
         onClicked: (mouse) => {
             if (mouse.button === Qt.RightButton) {
                 const anchor = capsule.mapToGlobal(0, capsule.height);
-                capsule.menuRequested(anchor.x, anchor.y);
+                capsule.mapRequested(anchor.x, anchor.y);
                 return;
             }
-            capsule.focusRequested();
+            capsule.expandRequested();
         }
     }
 

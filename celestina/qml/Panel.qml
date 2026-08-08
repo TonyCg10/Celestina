@@ -22,7 +22,7 @@ Window {
     // move by the same amount under the same gesture.
     readonly property int levelStep: 5
     // Forwarded to the host, which owns every surface this window does not.
-    signal contextMenuRequested(int globalX, int globalY, var workspaces)
+    signal workspaceMapRequested(int globalX, int globalY, var workspaces)
     signal trayMenuRequested(string service, string path, int globalX, int globalY)
     signal notificationCentreRequested()
     signal indicatorMenuRequested(string kind, int globalX, int globalY)
@@ -82,7 +82,7 @@ Window {
             // The strip reports the gesture; the provider owns the protocol and
             // answers through `workspaces`, never through this call's return.
             onFocusRequested: (output, index) => panel.niriProvider.requestWorkspaceFocus(output, index)
-            onMenuRequested: (globalX, globalY, workspaces) => panel.contextMenuRequested(globalX, globalY, workspaces)
+            onMapRequested: (globalX, globalY, workspaces) => panel.workspaceMapRequested(globalX, globalY, workspaces)
         }
 
         SysMon {

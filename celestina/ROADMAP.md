@@ -1,7 +1,7 @@
 # Celestina implementation roadmap
 
-- **Status:** planned
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** WMAP-1
 
 This roadmap contains only work an agent can implement and verify. Real Niri,
 hardware, visual and assistive-technology checks live in
@@ -33,6 +33,7 @@ of the design when they provide the narrow capability the shell needs.
 | UX-1 | complete | Give the network and Bluetooth indicators direct, truthful menus for their devices and actions |
 | WSG-1 | complete | Keep a workspace's monitor grouping legible after that monitor is switched off |
 | DIAG-1 | complete | Make the seconds before a freeze reconstructable, without recording anything private |
+| WMAP-1 | active | Show what a workspace holds, as its real layout, without focusing it |
 | UX-2 | planned | Establish and then implement one coherent shell-wide visual and interaction language after SHELL-D5 is applied |
 | R6 | conditional | First-party lock starts only if SHELL-D2 is applied |
 | R8 | complete | Reversible Noctalia removal; Polkit/dock slices remain conditional |
@@ -375,6 +376,24 @@ in [the DIAG-1 plan](docs/plans/archive/2026-08-08-diagnostic-journal.md).
 
 Nothing in this checkpoint investigates, touches or changes the GPU, DDC
 behaviour, amdgpu, the kernel, Niri, systemd, Noctalia or Wi-Fi.
+
+## WMAP-1 — The workspace window map (active)
+
+**Outcome:** a collapsed capsule stops being opaque. Clicking it opens a card
+showing that monitor group's workspaces as the layouts they really are — real
+columns, real rows, real proportions — with each window's icon, title and
+application id, so the person can see what is in a workspace without focusing
+it. A pill keeps its one-gesture focus and offers the same map on hover.
+
+There are no window previews and none are proposed. Wayland gives a client no
+access to another client's buffers, Niri composites its own overview inside the
+compositor, and its IPC exposes no window pixels — checked against the command
+surface rather than assumed. What the compositor does publish is each window's
+column, row and tile size, which is a truthful map rather than a stale picture.
+
+The bounded scope, exclusions, settled interaction decisions and the recorded
+risk in the hover route are in
+[the WMAP-1 plan](docs/plans/active/2026-08-08-workspace-window-map.md).
 
 ## UX-2 — Shell visual and interaction language (planned)
 

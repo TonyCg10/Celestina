@@ -53,7 +53,7 @@ public:
 private slots:
     // The panel's QML root asks for a context menu at a screen point; the
     // manager knows which window asked and hands both to the menu controller.
-    void panelMenuRequested(int globalX, int globalY, const QVariant &workspaces);
+    void workspaceMapRequested(int globalX, int globalY, const QVariant &workspaces);
     // The notification centre is an overlay the host owns; a panel only asks
     // for it.
     void notificationCentreRequested();

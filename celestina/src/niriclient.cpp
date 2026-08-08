@@ -32,6 +32,12 @@ constexpr qint64 pendingRequestTimeoutMs =
 constexpr qsizetype maxWorkspaceCount = 512;
 constexpr qsizetype maxLabelLength = 128;
 constexpr qsizetype maxTitleLength = 512;
+// `celestina_shell_core::workspace_map`'s own `MAX_WINDOWS` and `MAX_COLUMNS`,
+// which is the module that folds a workspace's layout. A frame carrying more
+// than these was not produced by a helper this host trusts, so the excess is
+// dropped rather than rendered — the same posture the workspace count takes.
+constexpr qsizetype maxWindowsPerWorkspace = 64;
+constexpr qsizetype maxColumnsPerWorkspace = 12;
 // Workspace ids and request ids both travel as opaque `u64` decimals in text
 // form, because JSON numbers would reach this parser as doubles. Twenty digits
 // is the widest such value that exists.
@@ -57,6 +63,123 @@ bool isDecimalIdentifier(const QJsonValue &value)
             return false;
     }
     return true;
+}
+
+// What a workspace holds, for the map that draws it without focusing it.
+//
+// Optional and forgiving on purpose, unlike the workspace fields above. A
+// workspace's identity is what the strip is; its map is what one surface may
+// show, so a helper that predates the field, or a row this host cannot read,
+// costs an empty map rather than the whole snapshot. Every string arrives
+// bounded and is rendered as characters, never as markup.
+//
+// The arrangement itself is not recomputed here. The helper folds it through
+// `celestina_shell_core::workspace_map`, and a second fold on this side would be
+// a second owner for a rule that already has one — this only checks that what
+// arrived is usable and passes it on.
+QVariantMap decodeWindow(const QJsonObject &window)
+{
+    // A share reaches a layout as a multiplier. One that is not finite and
+    // inside the unit interval would make a surface silently fail to draw, so
+    // it is repaired here rather than trusted.
+    const double rawShare = window.value(QStringLiteral("height_share")).toDouble();
+    const double share = std::isfinite(rawShare) && rawShare > 0 && rawShare <= 1
+        ? rawShare
+        : 0.0;
+
+    QVariantMap item;
+    item.insert(
+        QStringLiteral("id"),
+        boundedString(window.value(QStringLiteral("id")), maxIdentifierLength)
+    );
+    item.insert(
+        QStringLiteral("title"),
+        boundedString(window.value(QStringLiteral("title")), maxTitleLength)
+    );
+    item.insert(
+        QStringLiteral("appId"),
+        boundedString(window.value(QStringLiteral("app_id")), maxLabelLength)
+    );
+    item.insert(QStringLiteral("heightShare"), share);
+    item.insert(
+        QStringLiteral("focused"),
+        window.value(QStringLiteral("focused")).toBool()
+    );
+    item.insert(
+        QStringLiteral("floating"),
+        window.value(QStringLiteral("floating")).toBool()
+    );
+    item.insert(
+        QStringLiteral("urgent"),
+        window.value(QStringLiteral("urgent")).toBool()
+    );
+    return item;
+}
+
+QVariantList decodeWindows(const QJsonValue &value, qsizetype limit)
+{
+    QVariantList windows;
+    if (!value.isArray())
+        return windows;
+
+    const QJsonArray rows = value.toArray();
+    for (const QJsonValue &row : rows) {
+        if (windows.size() >= limit)
+            break;
+        if (row.isObject())
+            windows.append(decodeWindow(row.toObject()));
+    }
+    return windows;
+}
+
+QVariantMap decodeWorkspaceMap(const QJsonValue &value)
+{
+    QVariantMap map;
+    QVariantList columns;
+    QVariantList floating;
+    int hidden = 0;
+
+    if (value.isObject()) {
+        const QJsonObject source = value.toObject();
+        const QJsonArray sourceColumns =
+            source.value(QStringLiteral("columns")).toArray();
+        qsizetype remaining = maxWindowsPerWorkspace;
+        for (const QJsonValue &row : sourceColumns) {
+            if (columns.size() >= maxColumnsPerWorkspace || remaining <= 0)
+                break;
+            if (!row.isObject())
+                continue;
+
+            const QJsonObject sourceColumn = row.toObject();
+            const double rawShare =
+                sourceColumn.value(QStringLiteral("width_share")).toDouble();
+            const QVariantList windows = decodeWindows(
+                sourceColumn.value(QStringLiteral("windows")), remaining
+            );
+            remaining -= windows.size();
+
+            QVariantMap column;
+            column.insert(
+                QStringLiteral("widthShare"),
+                std::isfinite(rawShare) && rawShare > 0 && rawShare <= 1 ? rawShare : 0.0
+            );
+            column.insert(QStringLiteral("windows"), windows);
+            columns.append(column);
+        }
+
+        floating = decodeWindows(
+            source.value(QStringLiteral("floating")), std::max<qsizetype>(remaining, 0)
+        );
+
+        const double rawHidden = source.value(QStringLiteral("hidden")).toDouble();
+        if (std::isfinite(rawHidden) && rawHidden > 0)
+            hidden = static_cast<int>(std::min(rawHidden, 65535.0));
+    }
+
+    map.insert(QStringLiteral("columns"), columns);
+    map.insert(QStringLiteral("floating"), floating);
+    map.insert(QStringLiteral("hidden"), hidden);
+    return map;
 }
 
 // The ids whose deadline has passed. They are collected before anything is
@@ -361,6 +484,10 @@ bool NiriClient::applySnapshot(const QJsonObject &root)
         );
         item.insert(QStringLiteral("output"), output);
         item.insert(QStringLiteral("home"), home);
+        item.insert(
+            QStringLiteral("map"),
+            decodeWorkspaceMap(workspace.value(QStringLiteral("map")))
+        );
         item.insert(QStringLiteral("groupExpanded"), groupExpanded);
         item.insert(QStringLiteral("groupFocus"), groupFocus);
         item.insert(
@@ -514,6 +641,66 @@ qulonglong NiriClient::requestWorkspaceFocus(const QString &output, int index)
         emit changed();
     scheduleRequestOutcomes();
     return sent ? requestId : 0;
+}
+
+// Focusing one window rather than the workspace it sits on.
+//
+// Unlike a workspace focus this is not tracked as a pending request. A workspace
+// pill has to show what became of a click because the pill is what the person is
+// looking at; a window chosen from a map closes the map, and the answer arrives
+// as the session moving. There is nothing left on screen for an outcome to be
+// reported to, so inventing a ledger entry would be bookkeeping nobody reads.
+bool NiriClient::requestWindowFocus(const QString &windowId)
+{
+    if (!m_available || m_process.state() != QProcess::Running)
+        return false;
+
+    // The panel may only ask for what the compositor last reported. A window
+    // that closed while the map was open is a stale click, not a request.
+    bool known = false;
+    for (const QVariant &value : std::as_const(m_snapshot)) {
+        const QVariantList windows =
+            value.toMap().value(QStringLiteral("map")).toMap()
+                .value(QStringLiteral("columns")).toList();
+        for (const QVariant &column : windows) {
+            const QVariantList rows =
+                column.toMap().value(QStringLiteral("windows")).toList();
+            for (const QVariant &row : rows) {
+                if (row.toMap().value(QStringLiteral("id")).toString() == windowId) {
+                    known = true;
+                    break;
+                }
+            }
+        }
+        const QVariantList floating =
+            value.toMap().value(QStringLiteral("map")).toMap()
+                .value(QStringLiteral("floating")).toList();
+        for (const QVariant &row : floating) {
+            if (row.toMap().value(QStringLiteral("id")).toString() == windowId)
+                known = true;
+        }
+        if (known)
+            break;
+    }
+    if (!known)
+        return false;
+
+    const quint64 requestId = m_lastRequestId + 1;
+    m_lastRequestId = requestId;
+
+    const QJsonObject command {
+        {QStringLiteral("kind"), QStringLiteral("focus-window")},
+        {QStringLiteral("id"), QString::number(requestId)},
+        {QStringLiteral("window"), windowId},
+    };
+    const QByteArray line =
+        QJsonDocument(command).toJson(QJsonDocument::Compact) + '\n';
+
+    const bool sent = m_process.write(line) == line.size();
+    if (!sent)
+        qWarning() << "Celestina could not send a window focus request.";
+
+    return sent;
 }
 
 void NiriClient::expireRequests()

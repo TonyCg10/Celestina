@@ -40,6 +40,9 @@ public:
     // of a request that is pending, and whose life is reported through
     // `workspaces()` and `focusRequestChanged`.
     Q_INVOKABLE qulonglong requestWorkspaceFocus(const QString &output, int index);
+    // Focus one window by the id a snapshot published. Not a tracked request:
+    // see the implementation for why a map has nothing to report an outcome to.
+    Q_INVOKABLE bool requestWindowFocus(const QString &windowId);
     // Asks Niri to open its own screenshot UI. Unlike a workspace focus there
     // is nothing later to confirm it against — the compositor takes over the
     // screen — so the panel reports only that the request could not be made.

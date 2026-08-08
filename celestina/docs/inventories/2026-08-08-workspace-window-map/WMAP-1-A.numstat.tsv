@@ -1,0 +1,46 @@
+# WMAP-1-A exact change inventory
+
+Base revision	e11e933becf9fc38659910958644504e1c0725c4
+Pathspec	celestina/
+Pathspec	celestina-rs/crates/celestina-shell-core/src/
+Pathspec	docs/version-history.tsv
+Pathspec	celestina/docs/inventories/2026-08-08-workspace-window-map/WMAP-1-A.numstat.tsv
+
+Plan	celestina/docs/plans/active/2026-08-08-workspace-window-map.md
+Evidence	celestina/docs/evidence/2026-08-08-workspace-window-map.md
+
+added	deleted	content	path
+3	0	3c2434e6089777b8954a128f0e8216f0349f6e39e70396d6a77cd648a805d9b0	celestina-rs/crates/celestina-shell-core/src/lib.rs
+514	0	4f292791c03cff2593b06003843e75dae8990852d7f943c6b83b7d0366f6ecf2	celestina-rs/crates/celestina-shell-core/src/workspace_map.rs
+7	2	b178ff920348b12f940029e995f9d1369e503274ac80edd456a6d4b95faa81ff	celestina/CMakeLists.txt
+1	1	7ea04b1acec65a4a1a494eb9090abcac1da505535bccccb1b0c1e251a5d15116	celestina/Cargo.lock
+1	1	4371f725aa707babe6732d1ef8238ea22201883b854981f5003a741fbd5f3c07	celestina/Cargo.toml
+21	2	1d2f7e5f68056be397a566c90eba52fb0e608c69f7f2689169e91fca4e31dcbe	celestina/ROADMAP.md
+29	1	74d1a9cae9a04ad9384a87c9207d8ccf2681509c3352c52b11ce184fd450be67	celestina/VALIDATION.md
+155	0	cdb00d51d0797a78390a34fcd512083e336c60d465155636aca86932156423d5	celestina/docs/evidence/2026-08-08-workspace-window-map.md
+402	0	f45f7aad286674bc5191685c387763400c7216f36b78d0bc056269823fe0ebac	celestina/docs/plans/active/2026-08-08-workspace-window-map.md
+2	2	68c46ca477a743249efe299e5ddbcdd7aad2c2f800efb5064283f22760e8c92d	celestina/docs/plans/active/README.md
+95	0	869790652948ee8fdf88a28952b089d24a6104d061dc5295fd0b0bba669966ce	celestina/qml/AnchoredCard.qml
+39	88	f1ae2538f1405dfd8cd9800394d42ec92dcc2416f0e157873a3af405ad639710	celestina/qml/AnchoredMenu.qml
+2	2	92afbc3efbce6185c07b71d39321c378093234efedeac7813bba470f36e8c2d8	celestina/qml/Panel.qml
+0	40	deleted	celestina/qml/PanelMenu.qml
+13	6	c394b8d920ef2361a24d16c87ce18219e188dad1525cb48b37892aafdf61d40e	celestina/qml/WorkspaceGroupCapsule.qml
+189	0	fede26b9af6b2dafbc8cb006b47f2787c1dbff1db56ec392f85d76af805f6011	celestina/qml/WorkspaceMap.qml
+194	0	122b1ae0d84bc4c9f2d86850f87ebac04d4dec95ebe490a9927307c0383f43d7	celestina/qml/WorkspaceMapBoard.qml
+173	0	c8115f08110126541adde1b66e71de9fedcb690f6f1fe6ce4bf1a89cb42039e3	celestina/qml/WorkspaceMapTile.qml
+6	2	e0284b3596aea9e57bc820b55a7d4334f7740618c30f5e8d26b5ccdb2597ea09	celestina/qml/WorkspacePill.qml
+41	9	3eb74c825a720fb8a48f1b75dfb73ff1495aa3a8dea0618b1827fa68e1d35bf8	celestina/qml/WorkspaceStrip.qml
+1	1	9b5085e68fb3435341cdbade99bfd991db7adbfbb5c2520658c736076e26de83	celestina/scripts/dev-session.kdl
+80	0	8da2f6f78843085903026cd45480344602b0c14a54656424b692680bd9dd4c6e	celestina/src/appiconprovider.cpp
+40	0	70e41d130d56993acf409ec83d88cefadbf62dc3bdc23b4686daf640103db082	celestina/src/appiconprovider.h
+4	0	991ab7999eb2d7908fca0e933e38513aba819e6a2e13b194be3f07f883b63fa9	celestina/src/main.cpp
+319	0	8ee44a5136eeec958c08c28f073648c98c4f3443a04504740cd9ffcfbd9d07e1	celestina/src/niri_adapter.rs
+187	0	10e5486c9c316ab179d3f4789cf7dff20e523de0372faaa465cf8adfff6a7dd8	celestina/src/niriclient.cpp
+3	0	bbd6da0e17ad1e2b12de6d175239baf6b7c3a0d5adc56f5a0b1b64946cae0d4e	celestina/src/niriclient.h
+4	4	5094c7cbcb985371464c92177764aa5a80cd2999d0375d8478a71be226a6826b	celestina/src/panelmanager.cpp
+1	1	9fc32d6ba19f7f133efd6de2d4c4d0963cd27907fbcede20ab7dedaedfea81f3	celestina/src/panelmanager.h
+39	39	b8803c72afe9f75634822755a31e6238738e2361730d120766643b4bfaf96a57	celestina/src/panelmenucontroller.cpp
+5	3	70bac126bba9c03f3d2a3526725a3c3d073f4cdbcdc954aac51d315e232931fe	celestina/src/panelmenucontroller.h
+159	12	6d55c502ca19168498279e2bf1cd2c6a56c0b8789c0196a9622daf1e69abe39a	celestina/tests/surfacemanager_test.cpp
+1	0	b5f8c3ac56b5a0dea3e6362b550580ff8d50f3d0593f79d8c3fd2eec4058d50f	docs/version-history.tsv
+46	0	self	celestina/docs/inventories/2026-08-08-workspace-window-map/WMAP-1-A.numstat.tsv

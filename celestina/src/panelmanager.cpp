@@ -224,9 +224,9 @@ bool PanelManager::ensurePanel(QScreen *screen)
     if (m_menu) {
         connect(
             window,
-            SIGNAL(contextMenuRequested(int, int, QVariant)),
+            SIGNAL(workspaceMapRequested(int, int, QVariant)),
             this,
-            SLOT(panelMenuRequested(int, int, QVariant))
+            SLOT(workspaceMapRequested(int, int, QVariant))
         );
         connect(
             window,
@@ -282,7 +282,7 @@ bool PanelManager::ensurePanel(QScreen *screen)
     return true;
 }
 
-void PanelManager::panelMenuRequested(
+void PanelManager::workspaceMapRequested(
     int globalX,
     int globalY,
     const QVariant &workspaces
@@ -292,7 +292,7 @@ void PanelManager::panelMenuRequested(
     if (!panel || !m_menu)
         return;
 
-    m_menu->open(panel, QPoint(globalX, globalY), workspaces);
+    m_menu->openWorkspaceMap(panel, QPoint(globalX, globalY), workspaces);
 }
 
 void PanelManager::indicatorMenuRequested(const QString &kind, int globalX, int globalY)

@@ -30,6 +30,7 @@ use celestina_shell_core::journal::{self, Journal};
 use celestina_shell_core::lines::{read_bounded_line, HostLine, SharedWriter, WriteError};
 use celestina_shell_core::settings::Settings;
 use celestina_shell_core::workspace_groups::{self, Homes, Workspace as CoreWorkspace};
+use celestina_shell_core::workspace_map;
 use niri_ipc::socket::Socket;
 use niri_ipc::state::{EventStreamState, EventStreamStatePart};
 use niri_ipc::{Action, Event, Request, Response, WorkspaceReferenceArg};
@@ -57,6 +58,10 @@ const MAX_REASON_CHARS: usize = 200;
 const MAX_LABEL_UNITS: usize = 128;
 const MAX_TITLE_UNITS: usize = 512;
 const MAX_WORKSPACES: usize = 512;
+// How many windows and columns one workspace publishes is
+// `celestina_shell_core::workspace_map`'s to say, not this file's: it is the
+// module that folds them, and a second constant here would be a second owner
+// for the same bound quietly disagreeing with the first.
 
 /// Every frame leaves through this one writer, so a request result can never
 /// land in the middle of a snapshot line.
@@ -78,6 +83,74 @@ enum GroupState {
     /// one that was active on that monitor, or the group's first if none was.
     /// Exactly one workspace of a collapsed group carries it.
     CollapsedTarget,
+}
+
+/// Enough of a window to draw where it is, and nothing about what it contains.
+///
+/// There are no pixels here and there is no way to get them: Wayland gives a
+/// client no access to another client's buffers, and Niri composites its own
+/// overview inside the compositor. What the compositor does publish is where a
+/// window sits and how big it is, which is what makes a truthful map possible
+/// without a picture.
+#[derive(Debug, PartialEq, Serialize)]
+struct WindowSnapshot {
+    /// The compositor's own id, as a decimal string. It is what a surface sends
+    /// back to focus this window rather than the workspace it sits on, and it
+    /// travels as text for the same reason a workspace id does: JSON numbers
+    /// reach the Qt host as doubles and this is a `u64`.
+    id: String,
+    /// Whatever the client set. Bounded like every other producer string, and
+    /// rendered as characters rather than markup on the far side.
+    title: String,
+    /// The application's own id. The closest thing to a description this
+    /// protocol has, and the key an icon would later be looked up by.
+    app_id: String,
+    /// Where the window sits in the scrolling layout, as Niri counts it. Zero
+    /// means it is not in that layout at all — a floating window has no column,
+    /// and the surface reads `floating` rather than inventing a position for it.
+    column: u16,
+    row: u16,
+    /// This window's share of its column's height, between 0 and 1, computed by
+    /// [`celestina_shell_core::workspace_map`]. The surface multiplies it by
+    /// whatever room it has.
+    ///
+    /// A share rather than a measure, so no surface ever receives a pixel count
+    /// it might be tempted to use as one, and none of them has to decide what an
+    /// impossible size means. Never `NaN`: the frames either side of one would
+    /// compare unequal for ever and republish the snapshot on every compositor
+    /// event.
+    height_share: f64,
+    focused: bool,
+    floating: bool,
+    urgent: bool,
+}
+
+/// One column of a workspace's layout.
+#[derive(Debug, PartialEq, Serialize)]
+struct ColumnSnapshot {
+    /// This column's share of the map's width, between 0 and 1. The shares of a
+    /// map always sum to 1.
+    width_share: f64,
+    /// Its windows, top to bottom.
+    windows: Vec<WindowSnapshot>,
+}
+
+/// What a workspace holds, folded into the arrangement it really has.
+///
+/// The fold is [`celestina_shell_core::workspace_map`] and it happens here
+/// rather than in a surface, so the rule has one owner: two surfaces grouping
+/// the same windows separately could show the same session two ways.
+#[derive(Debug, Default, PartialEq, Serialize)]
+struct MapSnapshot {
+    /// The scrolling layout, left to right.
+    columns: Vec<ColumnSnapshot>,
+    /// Windows with no place in that layout. They sit over the arrangement
+    /// rather than in it.
+    floating: Vec<WindowSnapshot>,
+    /// How many windows the bounds dropped. A surface that shows four of nine
+    /// must be able to say so; showing four silently is the map lying about the
+    /// one thing it exists to answer.
+    hidden: usize,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -113,6 +186,10 @@ struct WorkspaceSnapshot {
     focused: bool,
     urgent: bool,
     active_window_title: Option<String>,
+    /// What this workspace holds, folded into the columns and rows it really
+    /// has. Additive: a host that predates this field ignores it and keeps the
+    /// snapshot it always had.
+    map: MapSnapshot,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -164,6 +241,9 @@ impl<'a> RequestFrame<'a> {
 enum HostCommand {
     /// Focus the workspace whose Niri id the host read from a snapshot.
     FocusWorkspace { id: String, workspace: String },
+    /// Focus one window by the id a snapshot published. A workspace focus moves
+    /// to a place; this moves to a thing, which is what a map of windows is for.
+    FocusWindow { id: String, window: String },
     /// Open Niri's own screenshot UI. The shell asks the compositor to
     /// capture; it never captures anything itself.
     Screenshot { id: String },
@@ -178,6 +258,7 @@ impl HostCommand {
     fn id(&self) -> &str {
         match self {
             Self::FocusWorkspace { id, .. }
+            | Self::FocusWindow { id, .. }
             | Self::Screenshot { id }
             | Self::PowerOffMonitors { id }
             | Self::Quit { id } => id,
@@ -377,6 +458,91 @@ fn publish_grouping(workspaces: &mut [WorkspaceSnapshot], homes: &Homes) {
 /// Reduces the compositor's state to the strip's snapshot, teaching the memory
 /// whatever this frame is in a position to teach.
 ///
+/// What one workspace holds, folded into the arrangement it really has.
+///
+/// Every decision about that arrangement — which column a window is in, what
+/// order the rows go in, what share of the space each takes and what an
+/// unusable measure means — belongs to
+/// [`celestina_shell_core::workspace_map`]. This function's whole job is to
+/// carry the compositor's types across to it and its answer back out, so the
+/// rule has exactly one owner and a second consumer cannot get a different
+/// arrangement from the same session.
+fn folded_map(state: &EventStreamState, workspace_id: u64) -> MapSnapshot {
+    let windows = state
+        .windows
+        .windows
+        .values()
+        .filter(|window| window.workspace_id == Some(workspace_id))
+        .map(|window| {
+            let (column, row) =
+                window
+                    .layout
+                    .pos_in_scrolling_layout
+                    .map_or((0, 0), |(column, row)| {
+                        (
+                            u16::try_from(column).unwrap_or(u16::MAX),
+                            u16::try_from(row).unwrap_or(u16::MAX),
+                        )
+                    });
+
+            workspace_map::Window::new(
+                &window.id.to_string(),
+                window.title.as_deref().unwrap_or_default(),
+                window.app_id.as_deref().unwrap_or_default(),
+                column,
+                row,
+            )
+            .sized(window.layout.tile_size.0, window.layout.tile_size.1)
+            .with_states(window.is_focused, window.is_floating, window.is_urgent)
+        })
+        .collect::<Vec<_>>();
+
+    let folded = workspace_map::map(&windows);
+    MapSnapshot {
+        columns: folded
+            .columns
+            .into_iter()
+            .map(|column| ColumnSnapshot {
+                width_share: column.width_share,
+                windows: column
+                    .tiles
+                    .into_iter()
+                    .map(|tile| published(&tile))
+                    .collect(),
+            })
+            .collect(),
+        floating: folded
+            .floating
+            .into_iter()
+            .map(|window| {
+                published(&workspace_map::Tile {
+                    window,
+                    // A floating window is not stacked against siblings, so it has
+                    // no share of a column to report. One is the honest answer: it
+                    // occupies all of whatever room the surface gives it.
+                    height_share: 1.0,
+                })
+            })
+            .collect(),
+        hidden: folded.hidden,
+    }
+}
+
+/// One folded tile, in the shape the wire carries.
+fn published(tile: &workspace_map::Tile) -> WindowSnapshot {
+    WindowSnapshot {
+        id: tile.window.id.clone(),
+        title: bounded(&tile.window.title, MAX_TITLE_UNITS),
+        app_id: bounded(&tile.window.app_id, MAX_LABEL_UNITS),
+        column: tile.window.column,
+        row: tile.window.row,
+        height_share: tile.height_share,
+        focused: tile.window.focused,
+        floating: tile.window.floating,
+        urgent: tile.window.urgent,
+    }
+}
+
 /// Returns whether anything new was learned, so the caller writes the file when
 /// there is something to write rather than on every compositor event.
 fn shell_snapshot(state: &EventStreamState, homes: &mut Homes) -> (ShellSnapshot, bool) {
@@ -417,6 +583,7 @@ fn shell_snapshot(state: &EventStreamState, homes: &mut Homes) -> (ShellSnapshot
                 active_window_title: active_window
                     .and_then(|window| window.title.as_deref())
                     .map(|title| bounded(title, MAX_TITLE_UNITS)),
+                map: folded_map(state, workspace.id),
             })
         })
         .collect::<Vec<_>>();
@@ -669,6 +836,19 @@ fn focus_workspace(workspace: &str) -> Result<(), String> {
     })
 }
 
+/// Focuses one window by the id a snapshot published.
+///
+/// The id is parsed rather than forwarded: it arrives as text from the host and
+/// the compositor takes a number, so a value that is not one is refused here
+/// with a visible failure instead of being handed on.
+fn focus_window(window: &str) -> Result<(), String> {
+    let id = window
+        .parse::<u64>()
+        .map_err(|_| "the request names an invalid window id".to_owned())?;
+
+    perform(Action::FocusWindow { id })
+}
+
 /// Asks Niri to start its own screenshot UI, which saves where the session's
 /// `screenshot-path` already points. Capture belongs to the compositor: the
 /// shell asks for it and reimplements none of it.
@@ -688,6 +868,7 @@ fn run_commands(receiver: &Receiver<HostCommand>, writer: &AdapterWriter) {
     while let Ok(command) = receiver.recv() {
         let outcome = match &command {
             HostCommand::FocusWorkspace { workspace, .. } => focus_workspace(workspace),
+            HostCommand::FocusWindow { window, .. } => focus_window(window),
             HostCommand::Screenshot { .. } => screenshot(),
             HostCommand::PowerOffMonitors { .. } => perform(Action::PowerOffMonitors {}),
             // The confirmation prompt is skipped because the shell already
@@ -893,6 +1074,144 @@ mod tests {
             .find(|workspace| workspace.label == label)
             .expect("the fixture publishes this workspace")
             .home
+    }
+
+    /// One workspace, and whatever windows the caller describes on it.
+    fn workspace_holding(windows: &str) -> EventStreamState {
+        let mut state = EventStreamState::default();
+        apply_json(
+            &mut state,
+            r#"{"WorkspacesChanged":{"workspaces":[{"id":3,"idx":1,"name":"one","output":"DP-1","is_urgent":false,"is_active":true,"is_focused":true,"active_window_id":null}]}}"#,
+        );
+        apply_json(
+            &mut state,
+            &format!(r#"{{"WindowsChanged":{{"windows":[{windows}]}}}}"#),
+        );
+        state
+    }
+
+    /// One window's JSON, with the layout fields the map is drawn from.
+    fn window_json(id: u64, title: &str, place: &str, size: &str, floating: bool) -> String {
+        format!(
+            r#"{{"id":{id},"title":"{title}","app_id":"app","pid":100,"workspace_id":3,"is_focused":false,"is_floating":{floating},"is_urgent":false,"layout":{{"pos_in_scrolling_layout":{place},"tile_size":{size},"window_size":[800,600],"tile_pos_in_workspace_view":null,"window_offset_in_tile":[0.0,0.0]}},"focus_timestamp":null}}"#
+        )
+    }
+
+    #[test]
+    fn a_workspace_publishes_the_columns_its_windows_are_in() {
+        let state = workspace_holding(
+            &[
+                window_json(1, "second column", "[2,1]", "[800.0,600.0]", false),
+                window_json(2, "first column lower", "[1,2]", "[800.0,300.0]", false),
+                window_json(3, "first column upper", "[1,1]", "[800.0,300.0]", false),
+            ]
+            .join(","),
+        );
+
+        let snapshot = snapshot_of(&state);
+        let map = &snapshot.workspaces[0].map;
+
+        // The arrangement itself is the core's rule; what is proved here is that
+        // the adapter carries the compositor's windows to it and its answer out.
+        assert_eq!(map.columns.len(), 2);
+        assert_eq!(map.columns[0].windows.len(), 2);
+        assert_eq!(map.columns[0].windows[0].title, "first column upper");
+        assert_eq!(map.columns[1].windows[0].title, "second column");
+    }
+
+    #[test]
+    fn a_floating_window_is_published_outside_the_layout() {
+        let state = workspace_holding(
+            &[
+                window_json(1, "floating", "null", "[400.0,300.0]", true),
+                window_json(2, "tiled", "[1,1]", "[800.0,600.0]", false),
+            ]
+            .join(","),
+        );
+
+        let snapshot = snapshot_of(&state);
+        let map = &snapshot.workspaces[0].map;
+
+        assert_eq!(map.columns.len(), 1);
+        assert_eq!(map.columns[0].windows[0].title, "tiled");
+        assert_eq!(map.floating.len(), 1);
+        assert_eq!(map.floating[0].title, "floating");
+    }
+
+    #[test]
+    fn an_impossible_measure_never_reaches_the_wire_as_a_share() {
+        let state = workspace_holding(&window_json(
+            1,
+            "impossible",
+            "[1,1]",
+            "[-5.0,600.0]",
+            false,
+        ));
+
+        let snapshot = snapshot_of(&state);
+        let map = &snapshot.workspaces[0].map;
+
+        // A share that is not finite and positive reaches a layout as a surface
+        // that silently fails to draw, so no input may produce one.
+        assert!(map.columns[0].width_share.is_finite());
+        assert!(map.columns[0].width_share > 0.0);
+        assert!(map.columns[0].windows[0].height_share.is_finite());
+        assert!(map.columns[0].windows[0].height_share > 0.0);
+    }
+
+    #[test]
+    fn a_hostile_window_title_is_bounded_before_it_is_published() {
+        let title = "T".repeat(MAX_TITLE_UNITS + 200);
+        let state = workspace_holding(&window_json(1, &title, "[1,1]", "[800.0,600.0]", false));
+
+        let snapshot = snapshot_of(&state);
+
+        assert_eq!(
+            snapshot.workspaces[0].map.columns[0].windows[0]
+                .title
+                .chars()
+                .count(),
+            MAX_TITLE_UNITS
+        );
+    }
+
+    #[test]
+    fn a_workspace_past_the_bounds_says_how_much_it_is_hiding() {
+        let windows: Vec<String> = (1..=workspace_map::MAX_WINDOWS + 4)
+            .map(|index| {
+                window_json(
+                    index as u64,
+                    &format!("window {index}"),
+                    &format!("[{index},1]"),
+                    "[800.0,600.0]",
+                    false,
+                )
+            })
+            .collect();
+        let state = workspace_holding(&windows.join(","));
+
+        let snapshot = snapshot_of(&state);
+        let map = &snapshot.workspaces[0].map;
+
+        // Not silently four of nine: whatever the bounds dropped is counted, so
+        // the surface can say it is not showing everything.
+        assert!(map.hidden > 0);
+        assert_eq!(
+            map.columns.len() + map.hidden,
+            workspace_map::MAX_WINDOWS + 4
+        );
+    }
+
+    #[test]
+    fn a_workspace_holding_nothing_publishes_an_empty_map() {
+        let state = workspace_holding("");
+
+        let snapshot = snapshot_of(&state);
+        let map = &snapshot.workspaces[0].map;
+
+        assert!(map.columns.is_empty());
+        assert!(map.floating.is_empty());
+        assert_eq!(map.hidden, 0);
     }
 
     #[test]

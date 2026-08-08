@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.8.0 LANGUAGES CXX)
+project(celestina VERSION 0.9.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -121,6 +121,8 @@ qt_add_executable(celestina
     src/trayicons.cpp
     src/trayiconprovider.h
     src/trayiconprovider.cpp
+    src/appiconprovider.h
+    src/appiconprovider.cpp
     src/traymenu.h
     src/traymenu.cpp
     src/traywatcherservice.h
@@ -162,6 +164,9 @@ qt_add_qml_module(celestina
         qml/WorkspaceStrip.qml
         qml/WorkspacePill.qml
         qml/WorkspaceGroupCapsule.qml
+        qml/WorkspaceMap.qml
+        qml/WorkspaceMapBoard.qml
+        qml/WorkspaceMapTile.qml
         qml/PhoneStatus.qml
         qml/PanelFlank.qml
         qml/SysMon.qml
@@ -170,12 +175,12 @@ qt_add_qml_module(celestina
         qml/SessionStatus.qml
         qml/BrightnessLevel.qml
         qml/TrayDrawer.qml
+        qml/AnchoredCard.qml
         qml/AnchoredMenu.qml
         qml/TrayMenu.qml
         qml/NetworkMenu.qml
         qml/BluetoothMenu.qml
         qml/CaptureButton.qml
-        qml/PanelMenu.qml
         qml/LauncherOverlay.qml
         qml/ClipboardOverlay.qml
         qml/ClipboardEntryRow.qml

@@ -590,7 +590,7 @@ result.
 
 - **Status:** pending
 - **Related implementation:** DIAG-1
-- **Requires:** the verified 0.8.0 bundle carrying DIAG-1, which is deployed,
+- **Requires:** the verified 0.8.1 bundle carrying DIAG-1, which is deployed,
   plus explicit authorization to run Celestina in the live session
 - **Procedure:** with the journal directory left in place, start the shell the
   ordinary way and let it run. Confirm that
@@ -608,6 +608,34 @@ result.
   in any of them, no DDC overlap is recorded, the journal never delays or
   disturbs the shell, and the report script collects a readable bundle without
   starting or changing anything.
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-WMAP-1 — The workspace window map
+
+- **Status:** pending
+- **Related implementation:** WMAP-1
+- **Requires:** the verified bundle carrying WMAP-1, explicit authorization to
+  activate Celestina, Noctalia retained as the rollback owner, and at least one
+  monitor switched off so a capsule exists to open
+- **Procedure:** with windows open across several workspaces on an absent
+  monitor, right-click its capsule. Confirm the card opens anchored to it and
+  lists every window of every workspace the capsule folded, each with its
+  application's icon, title and application id. Right-click a single workspace
+  and confirm the same card lists only its windows. Confirm a focused and an
+  urgent window are distinguishable, and that a workspace with no windows says so
+  rather than appearing broken. Click a window row and confirm the session goes
+  to that window, not merely to its workspace; click a workspace row and confirm
+  it goes to the workspace. Walk the card with the arrow keys and confirm the
+  visible focus is legible and that Return takes the row it is on. Dismiss by
+  outside click and by Escape, and confirm focus returns. Confirm a left click on
+  a workspace still goes there in one gesture, and that a left click on a capsule
+  expands its group in the strip. Repeat on both output scales. Restore Noctalia
+  afterward.
+- **Pass condition:** no window is listed that is not there and none is missing,
+  a window whose application no theme knows still shows its name, the card never
+  traps the pointer or the keyboard, both dismissal paths restore focus, and the
+  hover and press feedback honours `CelestinaTheme.reducedMotion`.
 - **Result:** not run
 - **Evidence:** none
 
