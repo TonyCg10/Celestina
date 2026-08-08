@@ -3,6 +3,9 @@
 - **Updated:** 2026-08-08
 - **Implementation:** R0-R5, R7, R8's departure slice, LVR-1 through LVR-3 and
   the static hardening previously drafted as `AUD-1` and `UX-1` are complete
+- **Design direction:** `UX-2` is planned but has no active implementation
+  unit. `SHELL-D5` is open for iterative visual and interaction exploration;
+  no code or version change is authorized by that discussion
 - **Author validation:** the author closed the LVR-3 phase on 2026-08-07 after
   first-generation media, the four-item tray, Bluetooth state retention,
   output-triggered DDC rediscovery, outside-click dismissal and a clean
@@ -238,8 +241,9 @@ the author reruns them against 0.6.2.
   integration binaries, Clippy and `cargo fmt` clean, QML lint, CTest 15/15 and the
   eight-second offscreen release smoke. The author then completed the controlled
   live rerun and restored Noctalia, which still owns the session.
-- Current checkpoint: none. Conditional lock, Polkit and dock work still
-  requires the corresponding open discussion to be applied first
+- Current checkpoint: no active implementation. `UX-2` visual-design
+  exploration is planned under `SHELL-D5`; conditional lock, Polkit and dock
+  work still requires its own open discussion to be applied first
 - Last completed plan: [LVR-3 late provider insertion](docs/plans/archive/2026-08-05-late-provider-insertion.md)
 - The milestone before it: [R8 Noctalia departure](docs/plans/archive/2026-08-04-r8-noctalia-departure.md)
 - Open product questions: [discussion queue](docs/discussions/README.md)

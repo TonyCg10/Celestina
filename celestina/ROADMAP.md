@@ -1,6 +1,6 @@
 # Celestina implementation roadmap
 
-- **Status:** idle
+- **Status:** planned
 - **Active implementation checkpoint:** none
 
 This roadmap contains only work an agent can implement and verify. Real Niri,
@@ -31,6 +31,7 @@ of the design when they provide the narrow capability the shell needs.
 | LVR-3 | complete | Correct late provider insertion and provider lifecycle defects exposed during the GPU-loss audit |
 | AUD-1 | complete | Static-audit hardening was absorbed by LVR-3-B and its follow-up corrections; residual findings remain recorded separately |
 | UX-1 | complete | Give the network and Bluetooth indicators direct, truthful menus for their devices and actions |
+| UX-2 | planned | Establish and then implement one coherent shell-wide visual and interaction language after SHELL-D5 is applied |
 | R6 | conditional | First-party lock starts only if SHELL-D2 is applied |
 | R8 | complete | Reversible Noctalia removal; Polkit/dock slices remain conditional |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
@@ -329,6 +330,33 @@ The delivered implementation order, exclusions and exit checks are in
 [the UX-1 plan](docs/plans/archive/2026-08-07-network-bluetooth-indicator-menus.md).
 This checkpoint does not add Wi-Fi credential handling, Bluetooth pairing,
 radio discovery policy or a second polling/runtime path.
+
+## UX-2 — Shell visual and interaction language (planned)
+
+**Outcome:** the panel, overlays, context menus and future clock/date surface
+read as one deliberate shell: clear hierarchy, purposeful iconography,
+consistent geometry and motion, and predictable dismissal and menu-switching
+behavior at every supported output scale.
+
+Implementation is not active. [SHELL-D5](docs/discussions/2026-08-08-shell-visual-design.md)
+owns the open product questions and must be applied through an accepted decision
+before a UX-2 implementation plan exists. Until then no QML, style token,
+provider, surface or product version change belongs to this checkpoint.
+
+The discussion begins from observed needs rather than a predetermined mockup:
+
+- visual hierarchy, iconography, density and spacing across every existing
+  panel region, overlay and left- or right-click menu;
+- one-click replacement of an already-open transient menu, outside-click and
+  Escape dismissal, opener-relative placement and focus restoration;
+- a clock/date surface combining richer calendar information, weather details
+  and explicit location management without guessing the person's location;
+- coherent empty, pending, failed, disabled, selected and focused states;
+- reduced motion, contrast, assistive semantics and both current output scales.
+
+Functional provider behavior already delivered by UX-1 is not redesigned by
+assumption. Lock, Polkit and dock decisions remain under SHELL-D1 through
+SHELL-D4.
 
 ## Beyond replacement
 
