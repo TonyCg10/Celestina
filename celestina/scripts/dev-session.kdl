@@ -102,6 +102,19 @@ hotkey-overlay {
 
 prefer-no-csd
 
+// PANEL-1 reference profile. Niri owns blur intensity globally; a client can
+// request finite regions but cannot choose their strength. The first 3-pass,
+// offset-5 candidate still preserved individual branches inside a 28 px pill;
+// this reference profile spends one additional pass and widens the sampling
+// enough to read as glass rather than as transparent paint. The live-session
+// equivalent remains opt-in documentation.
+blur {
+    passes 4
+    offset 6
+    noise 0.02
+    saturation 1.2
+}
+
 binds {
     // Enough to drive the nest and nothing more. The shell under test brings its
     // own bindings through `org.celestina.Shell1`; these are the compositor's.

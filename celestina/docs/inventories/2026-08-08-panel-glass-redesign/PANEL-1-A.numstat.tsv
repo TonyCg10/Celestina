@@ -1,0 +1,92 @@
+# PANEL-1-A exact change inventory
+
+Base revision	ad27fdadd0f0e5bb88832f798aa31c73c680188e
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-08-08-panel-glass-baseline.md
+Pathspec	celestina/docs/inventories/2026-08-08-panel-glass-redesign/PANEL-1-A.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-08-08-panel-glass-redesign.md
+Pathspec	celestina/qml/AudioLevel.qml
+Pathspec	celestina/qml/BrightnessLevel.qml
+Pathspec	celestina/qml/CaptureButton.qml
+Pathspec	celestina/qml/Clock.qml
+Pathspec	celestina/qml/MediaMini.qml
+Pathspec	celestina/qml/NotificationIndicator.qml
+Pathspec	celestina/qml/Panel.qml
+Pathspec	celestina/qml/PanelActionButton.qml
+Pathspec	celestina/qml/PanelFlank.qml
+Pathspec	celestina/qml/PanelPill.qml
+Pathspec	celestina/qml/PhoneStatus.qml
+Pathspec	celestina/qml/SessionStatus.qml
+Pathspec	celestina/qml/SysMon.qml
+Pathspec	celestina/qml/TrayDrawer.qml
+Pathspec	celestina/qml/WorkspaceGroupCapsule.qml
+Pathspec	celestina/qml/WorkspacePill.qml
+Pathspec	celestina/qml/WorkspaceStrip.qml
+Pathspec	celestina/scripts/dev-session.kdl
+Pathspec	celestina/src/main.cpp
+Pathspec	celestina/src/panelblurcontroller.cpp
+Pathspec	celestina/src/panelblurcontroller.h
+Pathspec	celestina/src/panelmanager.cpp
+Pathspec	celestina/src/panelmanager.h
+Pathspec	celestina/src/traywatcher.cpp
+Pathspec	celestina/src/traywatcher.h
+Pathspec	celestina/tests/tst_audiolevel.qml
+Pathspec	celestina/tests/tst_brightnesslevel.qml
+Pathspec	celestina/tests/tst_notifications.qml
+Pathspec	celestina/tests/tst_panelactionbutton.qml
+Pathspec	celestina/tests/tst_panelflank.qml
+Pathspec	celestina/tests/tst_sessionstatus.qml
+Pathspec	celestina/tests/tst_traydrawer.qml
+Pathspec	celestina/tests/tst_workspacestrip.qml
+Pathspec	docs/version-history.tsv
+
+Plan	celestina/docs/plans/active/2026-08-08-panel-glass-redesign.md
+Evidence	celestina/docs/evidence/2026-08-08-panel-glass-baseline.md
+
+added	deleted	content	path
+5	14	e471924e7aa513c97749c4cfbeb5fdb3651546829514ef606dbe1239938842bd	celestina/CMakeLists.txt
+1	1	abf8418e8e357ad5aeea453e92bf166020e8d217b7e4e28ea42cf1235dbc9bfb	celestina/Cargo.lock
+1	1	3a43fc84077922ec7af4ece0cf95bd4675ec345659e4b57076b0786f19475cd9	celestina/Cargo.toml
+13	0	64a9d9488693924a47210bf107441dfbaf86f21f0532c81456e85e30d3f2f81a	celestina/STATUS.md
+8	2	b501b9aeca702b980098cb0d68d92c010b1b0c3f06cdec8f302dddb8894c5b28	celestina/VALIDATION.md
+86	0	d08c0979ae67e6eb5c0a2ae1ea367097e910307b508b733f66b50988a431a5d6	celestina/docs/evidence/2026-08-08-panel-glass-baseline.md
+8	7	b81d64ee53517dddf9b97c56a2a0422e9eae1f1fc313044b08733fc7969fd090	celestina/docs/plans/active/2026-08-08-panel-glass-redesign.md
+21	27	12a112e1177711b4984469e5542ff2ae0663d5c494a8413ae3407d7ebf32395c	celestina/qml/AudioLevel.qml
+25	43	74f6fa572db55c5342a2f487797a3b60d37e5527dfc002a4155b7d9b9f08a32e	celestina/qml/BrightnessLevel.qml
+1	0	d821dbc4d078214c5e515885de33f2aaa78dfc13b913655b444059901c9e98de	celestina/qml/CaptureButton.qml
+1	1	639dfb58bbe7190de094a061e95133c18b61e05273a618a4aaeb669abe36f65e	celestina/qml/Clock.qml
+2	5	33d137f629c89bbcf1015b53a3f9f2ae3c842f7a96d18ed0f5f840d1c13064da	celestina/qml/MediaMini.qml
+23	25	b838248810fd1b495436ce3415562e704cdf1ceaa5a84a3a0a2069277082c885	celestina/qml/NotificationIndicator.qml
+285	36	ad6fe5abfa765247fc2d1366ccdebe0412cea9709a242c01271fb1539ea98462	celestina/qml/Panel.qml
+22	0	b2d702be4df85236107ce3d6f27e754a2c0ddf84a9aade99845adc55c7324b50	celestina/qml/PanelActionButton.qml
+5	0	0892529344ce9c630e76111903259b03f1e22661e75f4532e8a7f20cba6e8119	celestina/qml/PanelFlank.qml
+74	0	31c88791dd9a6011bf5e7620a71afb1129f3c31bd0518e5503f15c2de5fc8865	celestina/qml/PanelPill.qml
+45	49	f18b18550013b7514bf541898cb75f45c098d26a3cca370836331d50ca1ce7fd	celestina/qml/PhoneStatus.qml
+37	42	b4d55f393e44575ec71b3605db449405c50a51fe5d587a80c2807a602245f152	celestina/qml/SessionStatus.qml
+35	22	ad58c965adaef2592083d9f757300c2fb47649262562215a9ab3e7a0beebc8d2	celestina/qml/SysMon.qml
+7	4	896a43d2293d521cf32eab921c2ee16fca3eb18bd9a4a3d98269fdece0609b9f	celestina/qml/TrayDrawer.qml
+18	52	d0f4ad82d7c8c124f27ca3858d57359faa8af25be1956a9fde8a042114a8b70a	celestina/qml/WorkspaceGroupCapsule.qml
+24	32	06b008ac973c41a42f0359730f7128330e8f5ac9fe1f2c5df14df622cefc4c36	celestina/qml/WorkspacePill.qml
+25	79	bdb58803cb04570f312a458949f4d999f8b8023e73d5165929e28e07b8df0a10	celestina/qml/WorkspaceStrip.qml
+13	0	e5dd88b7da573b71c2c5ff5201c933fabc3f7ed035312889d7aeaef0657cb9bd	celestina/scripts/dev-session.kdl
+3	0	41f294be350b4a1021368d7fa41260bec66a5af57fe3baa57f29d24947b761c5	celestina/src/main.cpp
+88	4	23d6ffa12987037b795348848b7029a493847c143b854b562693fa91f41cb953	celestina/src/panelblurcontroller.cpp
+12	0	44923e733e0c2e224e5b3db16a3593489722b92a95faf0a80739b211e39b3fb6	celestina/src/panelblurcontroller.h
+105	1	f6db295fc02452b5f8e584e51481d8fbcf33c292bae08595970463b51fad6937	celestina/src/panelmanager.cpp
+9	0	a8876f0f9b9d9bafe50bd46e976ce47923241c0320a99f2646fa231dc97259e6	celestina/src/panelmanager.h
+62	4	1844338b31b9525a6886657314598b91ea087f7a0cfc3f77991a86ea1f0b2643	celestina/src/traywatcher.cpp
+5	0	262b3af6494b7b8494a4f15c693f464a3f6c5566c1f3a1e7516e9da9a9b9df13	celestina/src/traywatcher.h
+2	0	55efc7e18e1307d781e3f030297a4ee4840b8c8485a470e194484ce4bdc29c9b	celestina/tests/tst_audiolevel.qml
+43	0	c7b85ae2db096e2f0e7e7d33c14277adc02acda5645c392aac3b9f44ed7a52b8	celestina/tests/tst_brightnesslevel.qml
+5	2	7c62f12a6094207a77a81aa118c2b7c516104b2550fe65a3f57127845cc336ab	celestina/tests/tst_notifications.qml
+33	0	7acba60b096f82282fc28ab59439914b8e5cad0379d2f26f5a4d8308890c6dbc	celestina/tests/tst_panelactionbutton.qml
+9	12	cbdb4b18e071155a16b0146674dfac54dfc44b8c16b92e74c37a389daf50dee0	celestina/tests/tst_panelflank.qml
+16	0	b2087eb43f9ccfd56e94054ae783203e5c2a0e6920ebb91463c09cef9a0907c9	celestina/tests/tst_sessionstatus.qml
+56	0	1ade08873278efdc0afa8d0c0b8ea8460c0b5334a158e9d0657358d18621a6e2	celestina/tests/tst_traydrawer.qml
+18	7	a08eec48533cf765f02c66d2dc4e1868769a409dff973ac9822895478e1c1da4	celestina/tests/tst_workspacestrip.qml
+1	0	4b5bdc91d0e19f7a3037efecf3e846a14aa87bcc803443915a7c1595a5b8e601	docs/version-history.tsv
+92	0	self	celestina/docs/inventories/2026-08-08-panel-glass-redesign/PANEL-1-A.numstat.tsv

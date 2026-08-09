@@ -48,6 +48,10 @@ TestCase {
         return status.children[1];
     }
 
+    function profile() {
+        return status.children[2];
+    }
+
     function test_a_powered_adapter_with_nothing_on_it_stays_visible() {
         status.bluetooth = testCase.on(0);
 
@@ -84,5 +88,17 @@ TestCase {
 
         compare(radio().visible, false);
         compare(radio().Accessible.name, "");
+    }
+
+    function test_power_profiles_are_glyphs_with_accessible_names() {
+        status.power = {"active": "performance", "count": 3};
+        compare(profile().iconName, "zap");
+        verify(profile().helpText.indexOf("rendimiento") >= 0);
+
+        status.power = {"active": "balanced", "count": 3};
+        compare(profile().iconName, "gauge");
+
+        status.power = {"active": "power-saver", "count": 3};
+        compare(profile().iconName, "leaf");
     }
 }

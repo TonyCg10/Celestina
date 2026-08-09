@@ -104,13 +104,14 @@ both horizontal ends, while a soft shadow fades into the desktop below.
 
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
-| PANEL-1-A | `celestina:` | active | `qml/Panel.qml`, `qml/PanelPill.qml`, panel flanks/readings and action buttons, `src/panelblurcontroller.*`, `src/panelmanager.*`, tray startup/presentation reconciliation, nested-session config, tests and this plan; exact `CelestinaIcons` glyph additions are a separately delivered style dependency | pending | Replace the hard panel plate with a soft shadow and borderless real compositor-glass capsules, reduce workspace and status readings to positional colour/icon semantics without discarding monitor grouping or CPU/memory values, expose the existing overlays, and keep the tray populated and visible across host restarts | pending | `VAL-PANEL-1` |
+| PANEL-1-A | `celestina:` | done | [inventory](../../inventories/2026-08-08-panel-glass-redesign/PANEL-1-A.numstat.tsv) | 42 files, +1344/-472 | Replace the hard panel plate with a soft shadow and borderless real compositor-glass capsules, reduce workspace and status readings to positional colour/icon semantics without discarding monitor grouping or CPU/memory values, expose the existing overlays, and keep the tray populated and visible across host restarts | [evidence](../../evidence/2026-08-08-panel-glass-baseline.md) | `VAL-PANEL-1` partial |
+| PANEL-1-B | `celestina:` | active | panel presentation and the exact tests, records and version transition required by the next author-selected bounded visual slice | pending | Continue the panel-only visual iteration from the delivered 0.10.0 baseline without absorbing menus, overlays, clock/weather or provider behaviour | pending | `VAL-PANEL-1` |
 
 ## Active unit boundary
 
-`PANEL-1-A` is the only open unit. It may change presentation, blur-region
-ownership, typed overlay entry points, the tray host's bounded startup and
-presentation reconciliation, and the visual harness named above. It does not absorb the
-unrelated wallpaper-provider edit already present in the worktree or provider
-logic. The icon catalogue additions are owned and verified by CelestinaStyle
-and must not be included in this unit's eventual inventory or commit.
+`PANEL-1-B` is the only open unit. It may continue the panel-only presentation
+iteration from the delivered `PANEL-1-A` baseline after the author selects the
+next bounded slice. It does not absorb menu or overlay redesign, clock/weather,
+provider behaviour, or the unrelated wallpaper-provider edit already present
+in the worktree. The icon catalogue dependency was delivered independently by
+CelestinaStyle 1.2.0 and is not part of either Celestina inventory.

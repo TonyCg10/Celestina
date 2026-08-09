@@ -1,5 +1,7 @@
 #include "traywatcher.h"
 
+#include "diagnosticjournal.h"
+
 #include <QCoreApplication>
 #include <QDBusArgument>
 #include <QDBusConnection>
@@ -11,6 +13,7 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QIcon>
+#include <QTimer>
 #include <QUrl>
 
 namespace {
@@ -44,6 +47,7 @@ QString itemKey(const QString &service, const QString &path)
 // The panel draws a tray icon at about this size; the choice of published
 // pixmap and the size a theme is asked for both follow from it.
 constexpr int drawnIconSize = 18;
+constexpr int settledRegistryRefreshMs = 1000;
 
 /// Demarshals `a(iiay)` — the sizes an item published, each with its own
 /// pixels. QtDBus hands nested containers back lazily, so this is where the
@@ -118,6 +122,7 @@ TrayWatcher::TrayWatcher(QSharedPointer<TrayIconCache> icons, QObject *parent)
           QDBusServiceWatcher::WatchForOwnerChange,
           this
       ))
+    , m_registryRefresh(new QTimer(this))
 {
     m_registry = new TrayWatcherService(TrayWatcherService::wellKnownName(), this);
 
@@ -127,6 +132,9 @@ TrayWatcher::TrayWatcher(QSharedPointer<TrayIconCache> icons, QObject *parent)
         this,
         &TrayWatcher::watcherOwnerChanged
     );
+    m_registryRefresh->setSingleShot(true);
+    m_registryRefresh->setInterval(settledRegistryRefreshMs);
+    connect(m_registryRefresh, &QTimer::timeout, this, &TrayWatcher::refreshRegistrations);
 
     // Foreign icons only: without this Qt can resolve none of them.
     configureForeignIconThemes();
@@ -171,6 +179,11 @@ void TrayWatcher::attach()
         }
     }
 
+    DiagnosticJournal::instance().record(
+        CELESTINA_JOURNAL(Debug, "tray.attach")
+            .flag(QStringLiteral("host_registered"), m_hostRegistered)
+    );
+
     bus.connect(
         QString::fromLatin1(watcherService),
         QString::fromLatin1(watcherPath),
@@ -189,6 +202,12 @@ void TrayWatcher::attach()
     );
 
     refreshRegistrations();
+    // Registering as a host and reading an existing foreign registry are two
+    // asynchronous conversations. Reconcile once more after both have had a
+    // chance to settle: otherwise a premature empty/error reply is the only
+    // snapshot this process ever sees, because already registered items emit
+    // no new registration signal merely for a new host.
+    m_registryRefresh->start();
 }
 
 void TrayWatcher::watcherOwnerChanged(
@@ -252,11 +271,23 @@ void TrayWatcher::refreshRegistrations()
         this,
         request,
         [this, generation, baseline](const QDBusMessage &reply) {
-            if (generation != m_registryGeneration)
+            if (generation != m_registryGeneration) {
+                DiagnosticJournal::instance().record(
+                    CELESTINA_JOURNAL(Debug, "tray.registry.stale")
+                        .unsigned_number(QStringLiteral("request_generation"), generation)
+                        .unsigned_number(
+                            QStringLiteral("current_request_generation"),
+                            m_registryGeneration
+                        )
+                );
                 return;
+            }
 
-            const QStringList entries =
-                reply.arguments().value(0).value<QDBusVariant>().variant().toStringList();
+            const QVariant replyValue = reply.arguments().value(0);
+            const QVariant registryValue = replyValue.canConvert<QDBusVariant>()
+                ? replyValue.value<QDBusVariant>().variant()
+                : replyValue;
+            const QStringList entries = registryValue.toStringList();
 
             QList<QPair<QString, QString>> snapshot;
             for (const QString &entry : entries) {
@@ -273,6 +304,14 @@ void TrayWatcher::refreshRegistrations()
                 }
                 snapshot.append({service, path});
             }
+
+            DiagnosticJournal::instance().record(
+                CELESTINA_JOURNAL(Debug, "tray.registry.reply")
+                    .unsigned_number(QStringLiteral("request_generation"), generation)
+                    .number(QStringLiteral("entry_count"), entries.size())
+                    .number(QStringLiteral("accepted_count"), snapshot.size())
+                    .number(QStringLiteral("baseline_count"), baseline.size())
+            );
 
             // Gone means: known before this read, and absent from what it
             // brought back. An item this host never had in its baseline is not
@@ -296,9 +335,14 @@ void TrayWatcher::refreshRegistrations()
             m_available = true;
             publish();
         },
-        [](const QString &reason) {
+        [this, generation](const QString &reason) {
             qWarning().noquote()
                 << "Celestina could not read the tray registry:" << reason;
+            DiagnosticJournal::instance().record(
+                CELESTINA_JOURNAL(Warn, "tray.registry.error")
+                    .unsigned_number(QStringLiteral("request_generation"), generation)
+                    .text(QStringLiteral("reason"), reason)
+            );
         }
     );
 }
@@ -445,6 +489,12 @@ void TrayWatcher::readItem(const QString &service, const QString &path)
         m_readFailures.remove(key);
         m_iconSources.insert(key, resolveIcon(item, properties));
         m_read.insert(key, item);
+        DiagnosticJournal::instance().record(
+            CELESTINA_JOURNAL(Debug, "tray.item.read")
+                .number(QStringLiteral("property_count"), properties.size())
+                .number(QStringLiteral("read_count"), m_read.size())
+                .number(QStringLiteral("registration_count"), m_registrations.size())
+        );
         publish();
         },
         [this, service, path](const QString &reason) {
@@ -618,6 +668,14 @@ void TrayWatcher::publish()
     const bool listChanged = m_items.replace(items);
     const bool iconsChanged = icons != m_publishedIcons;
     m_publishedIcons = icons;
+    DiagnosticJournal::instance().record(
+        CELESTINA_JOURNAL(Debug, "tray.publish")
+            .number(QStringLiteral("registration_count"), m_registrations.size())
+            .number(QStringLiteral("read_count"), m_read.size())
+            .number(QStringLiteral("published_count"), items.size())
+            .flag(QStringLiteral("list_changed"), listChanged)
+            .flag(QStringLiteral("icons_changed"), iconsChanged)
+    );
     if (listChanged || iconsChanged)
         emit changed();
 }

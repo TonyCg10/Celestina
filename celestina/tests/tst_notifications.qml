@@ -53,11 +53,12 @@ TestCase {
         centre.hide();
     }
 
-    function test_nothing_to_say_is_nothing_to_show() {
+    function test_the_history_entry_point_remains_when_nothing_is_waiting() {
         indicator.reading = {"unread": 0, "quiet": false};
         verify(indicator.serving);
         verify(!indicator.worthShowing);
-        compare(indicator.implicitWidth, 0);
+        verify(indicator.implicitWidth > 0);
+        compare(findChild(indicator, "celestina-notification-icon").name, "bell");
     }
 
     function test_a_count_appears_only_when_there_is_one() {
@@ -72,12 +73,14 @@ TestCase {
         indicator.reading = {"unread": 0, "quiet": true};
         verify(indicator.quiet);
         verify(indicator.worthShowing);
+        compare(findChild(indicator, "celestina-notification-icon").name, "bell-off");
     }
 
     function test_no_server_is_not_the_same_as_nothing_waiting() {
         indicator.reading = undefined;
         verify(!indicator.serving);
         verify(!indicator.worthShowing);
+        verify(indicator.implicitWidth > 0);
 
         // The centre says so in words rather than showing an empty list.
         verify(!centre.serving);

@@ -13,6 +13,7 @@
 #include "traywatcherservice.h"
 
 class QDBusServiceWatcher;
+class QTimer;
 
 // The panel's StatusNotifierItem host.
 //
@@ -139,6 +140,10 @@ private:
     QSharedPointer<TrayIconCache> m_icons;
     TrayItems m_items;
     QDBusServiceWatcher *m_watcherPresence;
+    // A restarted host reads the foreign registry once immediately and once
+    // after host registration has settled. The second bounded reconciliation
+    // recovers a premature empty/error snapshot without polling forever.
+    QTimer *m_registryRefresh;
     // The registry itself, started only when nobody else is being it. Noctalia
     // owns the name today, so this stays dormant until it leaves.
     TrayWatcherService *m_registry;

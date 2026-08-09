@@ -25,6 +25,8 @@ import QtQuick.Controls
 Row {
     id: root
 
+    objectName: "celestina-tray-drawer"
+
     // The tray host's items. `var` is necessary: QML has no typed map-list.
     required property var items
     property bool open: false
@@ -93,9 +95,9 @@ Row {
                 text: entry.modelData.title
                 // Another application's own title, shown as characters.
                 textFormat: Text.PlainText
-                color: CelestinaTheme.textMuted
+                color: CelestinaTheme.text
                 font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontCaption
+                font.pixelSize: CelestinaTheme.fontTitle
                 elide: Text.ElideRight
                 width: Math.min(implicitWidth, 90)
             }
@@ -142,10 +144,10 @@ Row {
         // already shows is noise.
         visible: !root.open && root.items.length > 0
         text: root.items.length
-        color: CelestinaTheme.textMuted
+        color: CelestinaTheme.text
         font.family: CelestinaTheme.sansFamily
         font.features: CelestinaTheme.fontFeaturesTabular
-        font.pixelSize: CelestinaTheme.fontCaption
+        font.pixelSize: CelestinaTheme.fontTitle
         // The button beside it already carries the name and the action for
         // assistive technology; a second announcement of the same number is
         // one the person has to listen past.
@@ -157,6 +159,7 @@ Row {
 
         anchors.verticalCenter: parent.verticalCenter
         iconName: root.open ? "chevron-right" : "chevron-down"
+        iconSize: CelestinaTheme.iconSm
         role: CelestinaButton.Ghost
         // `helpText` still names the button for AT-SPI (`CelestinaIconButton`
         // ties `Accessible.name` to it); the visible tooltip it also drives is

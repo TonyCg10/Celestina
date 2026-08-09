@@ -38,8 +38,13 @@ Item {
     Row {
         id: row
 
+        // PANEL-1 — the flank clips, and the outermost pill overhangs its
+        // reading by a few pixels, so without this inset the first and last
+        // piece of glass were sliced down their outer edge.
         anchors.left: root.trailing ? undefined : parent.left
+        anchors.leftMargin: root.trailing ? 0 : CelestinaTheme.spaceSm
         anchors.right: root.trailing ? parent.right : undefined
+        anchors.rightMargin: root.trailing ? CelestinaTheme.spaceSm : 0
         anchors.verticalCenter: parent.verticalCenter
         spacing: CelestinaTheme.space2xl
     }

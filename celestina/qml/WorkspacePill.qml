@@ -26,6 +26,8 @@ Item {
     signal mapRequested(int globalX, int globalY)
 
     readonly property string requestState: workspace.requestState
+    readonly property bool occupied: workspace.activeWindowTitle !== undefined
+                                     && workspace.activeWindowTitle.length > 0
     readonly property string stateDescription: {
         if (requestState === "pending")
             return qsTr("cambio solicitado");
@@ -39,7 +41,7 @@ Item {
         return "";
     }
 
-    implicitWidth: Math.max(24, workspaceLabel.implicitWidth + 12)
+    implicitWidth: 18
     implicitHeight: 26
     Accessible.role: Accessible.Button
     Accessible.name: {
@@ -56,53 +58,43 @@ Item {
     Accessible.onPressAction: pill.focusRequested(pill.workspace.output, pill.workspace.index)
 
     Rectangle {
-        anchors.fill: parent
-        radius: CelestinaTheme.radiusPill
+        id: stateMark
+        objectName: "celestina-workspace-state"
+
+        anchors.centerIn: parent
+        width: pill.workspace.focused ? 12 : 10
+        height: width
+        radius: width / 2
         color: {
-            if (pill.requestState === "failed")
-                return CelestinaTheme.dangerFill;
+            if (pill.requestState === "failed" || pill.workspace.urgent)
+                return CelestinaTheme.danger;
 
-            if (pill.workspace.active)
-                return CelestinaTheme.surfaceSelected;
+            if (pill.workspace.focused)
+                return CelestinaTheme.accentLink;
 
-            return focusArea.containsMouse ? CelestinaTheme.surfaceHover : CelestinaTheme.clear;
+            if (pill.occupied)
+                return CelestinaTheme.text;
+
+            return CelestinaTheme.textMuted;
         }
-        border.width: {
-            if (pill.requestState.length > 0 || pill.workspace.focused)
-                return CelestinaTheme.borderHairline;
-
-            return 0;
-        }
+        opacity: pill.requestState === "pending"
+                 ? CelestinaTheme.mutedContentOpacity
+                 : focusArea.containsMouse && !pill.workspace.focused ? 0.82 : 1
+        border.width: pill.workspace.focused ? CelestinaTheme.borderHairline : 0
         border.color: {
             if (pill.requestState === "failed")
                 return CelestinaTheme.dangerBorder;
 
             if (pill.requestState === "confirmed")
-                return CelestinaTheme.accentLink;
+                return CelestinaTheme.text;
 
             return CelestinaTheme.accentSoftBorder;
         }
     }
 
-    Text {
-        id: workspaceLabel
-
-        anchors.centerIn: parent
-        text: pill.workspace.label
-        textFormat: Text.PlainText
-        color: pill.workspace.active ? CelestinaTheme.accentLink : CelestinaTheme.textMuted
-        // A request in flight is not a result: the label stays readable but
-        // visibly unsettled until Niri answers.
-        opacity: pill.requestState === "pending" ? CelestinaTheme.mutedContentOpacity : 1
-        font.family: CelestinaTheme.sansFamily
-        font.features: CelestinaTheme.fontFeaturesTabular
-        font.pixelSize: CelestinaTheme.fontCaption
-        font.weight: pill.workspace.active ? CelestinaTheme.weightDemiBold : CelestinaTheme.weightRegular
-    }
-
     Rectangle {
-        anchors.top: parent.top
-        anchors.right: parent.right
+        anchors.top: stateMark.top
+        anchors.right: stateMark.right
         width: 5
         height: 5
         radius: CelestinaTheme.radiusPill

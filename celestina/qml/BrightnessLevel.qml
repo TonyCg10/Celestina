@@ -1,9 +1,9 @@
 // This output's monitor brightness, over DDC.
 //
-// It draws a small gauge rather than a percentage: the panel already shows a
-// number for volume a few pixels away, and two bare percentages side by side
-// say nothing about which is which. The number appears on hover, where it is
-// asked for.
+// The sun remains present even when this output offers no DDC brightness. A
+// missing provider must not reflow the whole status row or make the control's
+// meaning depend on a bare percentage. The exact reading remains available to
+// assistive technology whenever the monitor answered.
 //
 // Three states, deliberately distinct. No entry at all means this monitor does
 // not speak DDC and has no brightness to offer. A null entry means it does and
@@ -26,22 +26,27 @@ Item {
     readonly property bool known: offered && reading[outputName] !== null
     readonly property int level: known ? reading[outputName] : 0
 
-    implicitWidth: offered ? (hover.hovered ? value.implicitWidth : gauge.width) : 0
+    implicitWidth: CelestinaTheme.iconSm
     implicitHeight: 26
-    visible: offered
+    visible: true
     Accessible.role: Accessible.Button
     Accessible.name: known ? qsTr("Brillo de %1: %2 %").arg(outputName).arg(level)
-                           : qsTr("Brillo de %1: desconocido").arg(outputName)
-    Accessible.onScrollUpAction: root.stepRequested(1)
-    Accessible.onScrollDownAction: root.stepRequested(-1)
-
-    HoverHandler {
-        id: hover
+                           : offered
+                             ? qsTr("Brillo de %1: desconocido").arg(outputName)
+                             : qsTr("Brillo no disponible para %1").arg(outputName)
+    Accessible.onScrollUpAction: {
+        if (root.offered)
+            root.stepRequested(1);
+    }
+    Accessible.onScrollDownAction: {
+        if (root.offered)
+            root.stepRequested(-1);
     }
 
     WheelHandler {
         property real steps: 0
 
+        enabled: root.offered
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         onWheel: (event) => {
             steps += event.angleDelta.y / 120;
@@ -56,37 +61,14 @@ Item {
         }
     }
 
-    Rectangle {
-        id: gauge
-
-        anchors.verticalCenter: parent.verticalCenter
-        width: 28
-        height: 4
-        radius: height / 2
-        visible: !hover.hovered
-        color: CelestinaTheme.surfaceSelected
-
-        Rectangle {
-            width: parent.width * (root.known ? root.level / 100 : 0)
-            height: parent.height
-            radius: parent.radius
-            color: CelestinaTheme.textMuted
-        }
-
-    }
-
-    Text {
-        id: value
-
-        anchors.verticalCenter: parent.verticalCenter
-        visible: hover.hovered
-        // An unknown brightness says so rather than showing a number the
-        // monitor never gave.
-        text: root.known ? qsTr("%1 %").arg(root.level) : qsTr("— %")
-        color: CelestinaTheme.textMuted
-        font.family: CelestinaTheme.sansFamily
-        font.features: CelestinaTheme.fontFeaturesTabular
-        font.pixelSize: CelestinaTheme.fontCaption
+    CelestinaIcon {
+        objectName: "celestina-brightness-icon"
+        anchors.centerIn: parent
+        width: CelestinaTheme.iconSm
+        height: CelestinaTheme.iconSm
+        name: "sun"
+        tone: CelestinaIcon.Primary
+        Accessible.ignored: true
     }
 
 }

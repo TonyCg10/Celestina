@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.9.0 LANGUAGES CXX)
+project(celestina VERSION 0.10.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -130,17 +130,6 @@ qt_add_executable(celestina
 )
 add_dependencies(celestina celestina-helpers)
 
-# The panel's status icons come from the shared Lucide set. The shell imports
-# CelestinaStyle at runtime (source), so its qrc-bundled icons are not reachable
-# here — instead the two the panel needs are compiled straight into the shell
-# from the canonical files, with an explicit alias so the `..` path does not leak
-# into the resource name.
-set_source_files_properties(../celestina-style/icons/phone.svg PROPERTIES QT_RESOURCE_ALIAS phone.svg)
-set_source_files_properties(../celestina-style/icons/battery-charging.svg PROPERTIES QT_RESOURCE_ALIAS battery-charging.svg)
-set_source_files_properties(../celestina-style/icons/scissors.svg PROPERTIES QT_RESOURCE_ALIAS scissors.svg)
-set_source_files_properties(../celestina-style/icons/chevron-down.svg PROPERTIES QT_RESOURCE_ALIAS chevron-down.svg)
-set_source_files_properties(../celestina-style/icons/chevron-right.svg PROPERTIES QT_RESOURCE_ALIAS chevron-right.svg)
-
 # The source directory is named for the repository while its QML URI is
 # CelestinaStyle. Give qmllint the same URI-shaped symlink main.cpp provisions
 # at runtime, so unresolved imports can never turn the lint target into a pass.
@@ -169,6 +158,8 @@ qt_add_qml_module(celestina
         qml/WorkspaceMapTile.qml
         qml/PhoneStatus.qml
         qml/PanelFlank.qml
+        qml/PanelPill.qml
+        qml/PanelActionButton.qml
         qml/SysMon.qml
         qml/MediaMini.qml
         qml/AudioLevel.qml
@@ -194,8 +185,6 @@ qt_add_qml_module(celestina
         qml/Wallpaper.qml
     RESOURCES
         qml/ProviderReading.js
-        ../celestina-style/icons/phone.svg
-        ../celestina-style/icons/battery-charging.svg
 )
 
 # The source tree is the fallback used by the legacy launcher. Production
@@ -309,6 +298,8 @@ if(BUILD_TESTING)
     # the author's session bus.
     qt_add_executable(celestina-tray-watcher-test
         tests/traywatcher_test.cpp
+        src/diagnosticjournal.h
+        src/diagnosticjournal.cpp
         src/traywatcher.h
         src/traywatcher.cpp
         src/traywatcherservice.h

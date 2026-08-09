@@ -1,5 +1,6 @@
 #include "panelmanager.h"
 
+#include "diagnosticjournal.h"
 #include "overlaycontroller.h"
 
 #include <QDebug>
@@ -23,6 +24,13 @@
 
 namespace {
 constexpr int panelHeight = 40;
+// PANEL-1. The surface is taller than the bar so the scrim has
+// room to finish fading. A 40 px surface has to complete its falloff in 40 px
+// and then stops dead, which is the hard edge the gradient was meant to remove:
+// the shape was right and the canvas ran out. The exclusive zone stays at the
+// bar's own height, so nothing else on screen moves, and the extra band is
+// transparent and input-transparent.
+constexpr int panelSurfaceHeight = 112;
 constexpr auto panelScope = "celestina-panel";
 // How long the outputs must stay still before the DDC worker is told they
 // changed. Enabling one monitor produces several `QScreen` events in a row and
@@ -43,7 +51,7 @@ LayerSurfaceSpec panelSpec(QScreen *screen)
     spec.screen = screen;
     spec.anchors = anchors;
     // Full width, fixed height: the compositor owns the axis the panel spans.
-    spec.desiredSize = QSize(0, panelHeight);
+    spec.desiredSize = QSize(0, panelSurfaceHeight);
     spec.exclusiveZone = panelHeight;
     spec.layer = LayerShellQt::Window::LayerTop;
     spec.keyboard = LayerShellQt::Window::KeyboardInteractivityNone;
@@ -115,10 +123,43 @@ void PanelManager::setNotificationCentre(OverlayController *centre)
     m_notificationCentre = centre;
 }
 
+void PanelManager::setControlCentre(OverlayController *centre)
+{
+    m_controlCentre = centre;
+}
+
+void PanelManager::setClipboard(OverlayController *clipboard)
+{
+    m_clipboard = clipboard;
+}
+
+void PanelManager::setSessionMenu(OverlayController *menu)
+{
+    m_sessionMenu = menu;
+}
+
 void PanelManager::notificationCentreRequested()
 {
     if (m_notificationCentre)
         m_notificationCentre->toggle();
+}
+
+void PanelManager::controlCentreRequested()
+{
+    if (m_controlCentre)
+        m_controlCentre->toggle();
+}
+
+void PanelManager::clipboardRequested()
+{
+    if (m_clipboard)
+        m_clipboard->toggle();
+}
+
+void PanelManager::sessionMenuRequested()
+{
+    if (m_sessionMenu)
+        m_sessionMenu->toggle();
 }
 
 bool PanelManager::start()
@@ -219,6 +260,17 @@ bool PanelManager::ensurePanel(QScreen *screen)
         QStringLiteral("celestina-panel-%1").arg(screen->name())
     );
 
+    // PANEL-1. The surface is taller than the bar, so without this
+    // the panel would take pointer input over a band of screen where nothing is
+    // drawn and an application is visible: the scrim would silently eat clicks
+    // meant for a window. The input region is the bar itself, and it is
+    // reapplied on resize because the compositor owns the width.
+    const auto maskToBar = [window]() {
+        window->setMask(QRegion(0, 0, window->width(), panelHeight));
+    };
+    connect(window, &QWindow::widthChanged, window, maskToBar);
+    maskToBar();
+
     // The panel window asks; the host decides whether any surface answers.
     // The signal is QML-declared, so it is connected by name.
     if (m_menu) {
@@ -248,6 +300,58 @@ bool PanelManager::ensurePanel(QScreen *screen)
         this,
         SLOT(notificationCentreRequested())
     );
+    connect(
+        window,
+        SIGNAL(controlCentreRequested()),
+        this,
+        SLOT(controlCentreRequested())
+    );
+    connect(
+        window,
+        SIGNAL(clipboardRequested()),
+        this,
+        SLOT(clipboardRequested())
+    );
+    connect(
+        window,
+        SIGNAL(sessionMenuRequested()),
+        this,
+        SLOT(sessionMenuRequested())
+    );
+
+    // The tray crosses C++, Qt's property notifier and a QML layout before it
+    // becomes pixels. Record the last seam as well as the D-Bus seam so a
+    // future disappearance says whether the model failed to arrive or merely
+    // became zero-sized/hidden in presentation. Counts and geometry are
+    // technical state; no application titles enter the diagnostic journal.
+    if (m_tray) {
+        const QString panelOutput = screen->name();
+        const auto recordTrayPresentation = [window, panelOutput]() {
+            QObject *drawer = window->findChild<QObject *>(
+                QStringLiteral("celestina-tray-drawer")
+            );
+            auto record = CELESTINA_JOURNAL(Debug, "tray.presentation")
+                              .text(QStringLiteral("output"), panelOutput)
+                              .flag(QStringLiteral("drawer_found"), drawer != nullptr);
+            if (drawer) {
+                record.number(
+                    QStringLiteral("item_count"),
+                    drawer->property("items").toList().size()
+                );
+                record.flag(QStringLiteral("visible"), drawer->property("visible").toBool());
+                record.number(QStringLiteral("width"), drawer->property("width").toLongLong());
+                record.number(
+                    QStringLiteral("implicit_width"),
+                    drawer->property("implicitWidth").toLongLong()
+                );
+            }
+            DiagnosticJournal::instance().record(record);
+        };
+        connect(m_tray, &TrayWatcher::changed, window, [window, recordTrayPresentation]() {
+            QTimer::singleShot(0, window, recordTrayPresentation);
+        });
+        QTimer::singleShot(0, window, recordTrayPresentation);
+    }
 
     m_panels.insert(screen, window);
     QObject::connect(

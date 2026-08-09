@@ -26,6 +26,7 @@ CelestinaIconButton {
     }
 
     iconName: "scissors"
+    iconSize: CelestinaTheme.iconSm
     role: failed ? CelestinaButton.Destructive : CelestinaButton.Ghost
     // `helpText` still names the button for AT-SPI; the hover tooltip it also
     // drives is switched off — on a 40 px panel it lands over neighboring

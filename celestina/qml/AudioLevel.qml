@@ -1,9 +1,8 @@
 // What the session is playing through, and whether it is silenced.
 //
-// It reads as text rather than a glyph on purpose: the suite's icon catalogue
-// is closed and vendored, and inventing a speaker for it would put
-// non-canonical artwork into a set that is canonical everywhere else. A number
-// beside CPU and RAM is also the language this panel already speaks.
+// Speaker and microphone use the suite's canonical glyphs. Their exact values
+// remain in accessible names; the panel itself needs only the active/muted
+// shapes.
 //
 // Volume and the microphone are two separate controls, side by side in one
 // row, each with its own click area — they used to share one full-width
@@ -82,7 +81,7 @@ Item {
         Item {
             id: volumeTile
 
-            width: volumeText.implicitWidth
+            width: volumeIcon.width
             height: 26
             Accessible.role: Accessible.Button
             Accessible.name: root.spokenVolume
@@ -90,18 +89,16 @@ Item {
             Accessible.onScrollUpAction: root.stepRequested(1)
             Accessible.onScrollDownAction: root.stepRequested(-1)
 
-            Text {
-                id: volumeText
+            CelestinaIcon {
+                id: volumeIcon
+                objectName: "celestina-volume-icon"
 
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.hasReading ? qsTr("%1 %").arg(root.reading.volume) : ""
-                // A muted device still remembers its level, so the number stays
-                // and says it is not being heard.
-                color: root.muted ? CelestinaTheme.textMuted : CelestinaTheme.text
-                font.strikeout: root.muted
-                font.family: CelestinaTheme.sansFamily
-                font.features: CelestinaTheme.fontFeaturesTabular
-                font.pixelSize: CelestinaTheme.fontCaption
+                anchors.centerIn: parent
+                width: CelestinaTheme.iconSm
+                height: CelestinaTheme.iconSm
+                name: root.muted ? "media-volume-muted" : "media-volume"
+                tone: CelestinaIcon.Primary
+                Accessible.ignored: true
             }
 
             MouseArea {
@@ -123,24 +120,21 @@ Item {
             id: micTile
 
             visible: root.hasMic
-            width: micText.implicitWidth
+            width: micIcon.width
             height: 26
             Accessible.role: Accessible.Button
             Accessible.name: root.spokenMic
             Accessible.onPressAction: root.micMuteToggled()
 
-            Text {
-                id: micText
+            CelestinaIcon {
+                id: micIcon
 
                 anchors.verticalCenter: parent.verticalCenter
-                text: qsTr("micro")
-                // Muted reads exactly like a muted volume — struck through and
-                // in the danger colour; live is the same quiet grey the volume
-                // number uses, present but not asking for attention.
-                color: root.micMuted ? CelestinaTheme.danger : CelestinaTheme.textMuted
-                font.strikeout: root.micMuted
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontCaption
+                width: CelestinaTheme.iconSm
+                height: CelestinaTheme.iconSm
+                name: root.micMuted ? "mic-off" : "mic"
+                tone: CelestinaIcon.Primary
+                Accessible.ignored: true
             }
 
             MouseArea {

@@ -49,6 +49,9 @@ public:
     // Wired in after construction, once main() has built the overlay. A shell
     // without it keeps every panel and only that request goes unanswered.
     void setNotificationCentre(OverlayController *centre);
+    void setControlCentre(OverlayController *centre);
+    void setClipboard(OverlayController *clipboard);
+    void setSessionMenu(OverlayController *menu);
 
 private slots:
     // The panel's QML root asks for a context menu at a screen point; the
@@ -57,6 +60,9 @@ private slots:
     // The notification centre is an overlay the host owns; a panel only asks
     // for it.
     void notificationCentreRequested();
+    void controlCentreRequested();
+    void clipboardRequested();
+    void sessionMenuRequested();
     // A connectivity indicator's own menu, asked for from the panel that shows
     // it. The manager knows which window asked and what bridge to hand it.
     void indicatorMenuRequested(const QString &kind, int globalX, int globalY);
@@ -86,6 +92,9 @@ private:
     // the panel's request to it and owns no menu state of its own.
     QPointer<PanelMenuController> m_menu;
     QPointer<OverlayController> m_notificationCentre;
+    QPointer<OverlayController> m_controlCentre;
+    QPointer<OverlayController> m_clipboard;
+    QPointer<OverlayController> m_sessionMenu;
     QHash<QScreen *, QPointer<QWindow>> m_panels;
     // Coalesces a hotplug burst into one request. Owned here because the panel
     // manager is what already observes outputs appearing and disappearing.

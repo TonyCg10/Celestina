@@ -32,6 +32,19 @@
 
 ## Current checkout truth
 
+- **Delivered in celestina 0.10.0 — `PANEL-1-A`.** The first borderless-glass
+  panel baseline removes the hard full-width plate, keeps its soft wallpaper
+  shadow, and places each content group on a finite compositor-blur capsule.
+  Workspaces retain per-monitor grouping as positional state marks; status and
+  action readings use the canonical 1.2.0 glyph catalogue; CPU and memory keep
+  their percentages; the phone omits its device name; and the existing control
+  centre, clipboard, notifications and session surfaces have permanent panel
+  entry points. Tray registration is reconciled after startup and its wrapper
+  follows the item model, so four published items remain visible after a host
+  restart. The canonical production exit built, verified and deployed 0.10.0
+  without activating the session. `PANEL-1-B` remains active for further visual
+  iteration, and `VAL-PANEL-1` is partial rather than passed at both scales.
+
 - **Delivered in celestina 0.8.0 — `DIAG-1`.** Every Celestina process now writes a
   structured, bounded, always-on JSONL journal under
   `$XDG_STATE_HOME/celestina/diagnostics/`, correlated by one `run_id` the host

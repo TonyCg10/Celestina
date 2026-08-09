@@ -449,6 +449,9 @@ int main(int argc, char *argv[])
         reducedMotionRequested()
     );
     panels.setNotificationCentre(notificationCentre);
+    panels.setControlCentre(controlCentre);
+    panels.setClipboard(clipboard);
+    panels.setSessionMenu(sessionMenu);
     if (!panels.start())
         return EXIT_FAILURE;
 

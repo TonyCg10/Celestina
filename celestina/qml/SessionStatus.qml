@@ -34,6 +34,9 @@ Row {
         "power-saver": qsTr("ahorro")
     })
 
+    // PANEL-1 — a Row aligns its children at the top, so three readings of
+    // three different heights sat at three heights. One height each.
+    height: CelestinaTheme.controlHeightXs
     spacing: CelestinaTheme.spaceMd
 
     // A reading that can be opened.
@@ -52,6 +55,7 @@ Row {
 
         required property string kind
         required property string reading
+        required property string iconName
 
         function askForMenu() {
             const at = control.mapToGlobal(0, control.height);
@@ -59,8 +63,8 @@ Row {
         }
 
         anchors.verticalCenter: parent ? parent.verticalCenter : undefined
-        implicitWidth: label.implicitWidth
-        implicitHeight: label.implicitHeight
+        implicitWidth: CelestinaTheme.iconSm
+        implicitHeight: parent ? parent.height : CelestinaTheme.iconSm
         padding: 0
         activeFocusOnTab: true
         text: control.reading
@@ -73,15 +77,20 @@ Row {
         Keys.onReturnPressed: control.askForMenu()
         Keys.onEnterPressed: control.askForMenu()
 
-        contentItem: Text {
-            id: label
+        contentItem: Item {
+            implicitWidth: glyph.width
+            implicitHeight: glyph.height
 
-            text: control.reading
-            color: CelestinaTheme.textMuted
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontCaption
-            elide: Text.ElideRight
-            verticalAlignment: Text.AlignVCenter
+            CelestinaIcon {
+                id: glyph
+
+                anchors.centerIn: parent
+                width: CelestinaTheme.iconSm
+                height: CelestinaTheme.iconSm
+                name: control.iconName
+                tone: CelestinaIcon.Primary
+                Accessible.ignored: true
+            }
         }
 
         background: Item {
@@ -121,6 +130,7 @@ Row {
         // an unreadable session, and there is nothing truthful to offer then.
         visible: root.network !== undefined
         kind: "network"
+        iconName: "wifi"
         // The kind of link is what a glance needs; its name is what tells two
         // networks apart, so the accessible name carries both. With no link the
         // entry says so plainly rather than naming a connection it does not
@@ -158,6 +168,7 @@ Row {
         objectName: "celestina-bluetooth-indicator"
         visible: adapter === "on" || adapter === "off"
         kind: "bluetooth"
+        iconName: "bluetooth"
         reading: {
             if (radio.adapter === "off")
                 return qsTr("bt apagado");
@@ -168,17 +179,6 @@ Row {
             // The count is the news when there is one; a powered radio with
             // nothing on it says only that it is on.
             return radio.count > 0 ? qsTr("bt %1").arg(radio.count) : qsTr("bt");
-        }
-        // A radio nothing is using is quieter than one carrying a device.
-        contentItem: Text {
-            text: radio.reading
-            color: radio.adapter === "on" && radio.count > 0
-                   ? CelestinaTheme.text : CelestinaTheme.textMuted
-            font.family: CelestinaTheme.sansFamily
-            font.features: CelestinaTheme.fontFeaturesTabular
-            font.pixelSize: CelestinaTheme.fontCaption
-            elide: Text.ElideRight
-            verticalAlignment: Text.AlignVCenter
         }
         Accessible.name: {
             if (radio.adapter === "off")
@@ -198,37 +198,32 @@ Row {
         Accessible.onPressAction: radio.askForMenu()
     }
 
-    Text {
+    CelestinaIconButton {
         id: profile
 
         readonly property bool present: root.power !== undefined
                                         && root.power.active !== undefined
         // A daemon offering one profile has nothing to cycle through.
         readonly property bool cyclable: present && root.power.count > 1
+        readonly property string profileName: present
+                ? (root.profileNames[root.power.active] !== undefined
+                   ? root.profileNames[root.power.active] : root.power.active)
+                : ""
 
         visible: present
-        anchors.verticalCenter: parent.verticalCenter
-        text: present
-              ? (root.profileNames[root.power.active] !== undefined
-                 ? root.profileNames[root.power.active] : root.power.active)
-              : ""
-        color: present && root.power.active === "performance"
-               ? CelestinaTheme.accentLink : CelestinaTheme.textMuted
-        font.family: CelestinaTheme.sansFamily
-        font.pixelSize: CelestinaTheme.fontCaption
-        Accessible.role: cyclable ? Accessible.Button : Accessible.StaticText
-        Accessible.name: present ? qsTr("Perfil de energía: %1").arg(text) : ""
+        height: parent.height
+        iconName: present && root.power.active === "performance"
+                  ? "zap"
+                  : present && root.power.active === "power-saver" ? "leaf" : "gauge"
+        iconSize: CelestinaTheme.iconSm
+        role: CelestinaButton.Ghost
+        helpText: present ? qsTr("Perfil de energía: %1").arg(profileName) : ""
         Accessible.description: cyclable ? qsTr("Cambia al siguiente perfil") : ""
-        Accessible.onPressAction: root.profileCycleRequested()
-
-        MouseArea {
-            anchors.fill: parent
-            enabled: profile.cyclable
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.profileCycleRequested()
+        ToolTip.visible: false
+        onClicked: {
+            if (profile.cyclable)
+                root.profileCycleRequested();
         }
-
     }
 
 }

@@ -30,15 +30,8 @@ Item {
     // answers.
     signal mapRequested(int globalX, int globalY, var workspaces)
 
-    // The monitor group the person opened by clicking its capsule, or the empty
-    // string while nobody has chosen one.
-    //
-    // Expansion used to follow the focus alone, which meant a strip could only
-    // ever show the group you were already in — the one you least need to look
-    // at. A left click on a capsule is now a request to see a group's
-    // workspaces, and it outranks the published state until the focus lands
-    // somewhere else, at which point the compositor's answer is the truer one
-    // again and the choice is dropped.
+    // A closed monitor capsule can be opened for direct workspace selection.
+    // The compositor's next focused-group answer clears that temporary choice.
     property string chosenGroup: ""
 
     readonly property string focusedGroup: {
@@ -62,14 +55,10 @@ Item {
         }
         return result;
     }
-    // The same workspaces folded by the monitor each belongs to. A fold, not a
-    // decision: `home`, `groupExpanded` and `groupFocus` are all published by
-    // the adapter, which is the process that links the core owning what a home
-    // is and which group opens. This file only puts equal homes side by side.
-    //
-    // A session with every monitor connected produces exactly one group, which
-    // renders as the plain row it always was — no capsule, no chrome, nothing
-    // to explain.
+    // Fold workspaces by their monitor home. Exactly one group stays expanded;
+    // the others retain the compact monitor capsule the panel used before the
+    // visual redesign. Labels leave both shapes, but their positional grouping
+    // and interaction do not.
     readonly property var workspaceGroups: {
         const groups = [];
         const byKey = ({});
@@ -89,25 +78,31 @@ Item {
                 byKey[key] = group;
                 groups.push(group);
             }
-            // A group is open when the adapter said its workspaces are. An older
-            // helper sends no such field and the host defaults it to true, which
-            // is how a producer that predates grouping keeps drawing a flat row.
             group.workspaces.push(workspace);
             group.expanded = group.expanded && workspace.groupExpanded !== false;
-            // A group the person opened is open whatever the adapter published,
-            // and opening one closes every other: two expanded groups is the
-            // long row this whole fold exists to prevent.
             if (root.chosenGroup.length > 0)
                 group.expanded = group.key === root.chosenGroup;
 
-            // Urgency must survive the collapse. A capsule that hid a workspace
-            // asking for attention would be the fold telling a lie.
             group.urgent = group.urgent || workspace.urgent === true;
             if (group.focusTarget === null || workspace.groupFocus === true)
                 group.focusTarget = workspace;
-
         }
-        return groups;
+
+        // Niri's nested backend adds one empty spare workspace on its synthetic
+        // `winit` output. It is neither a configured workspace nor a useful
+        // monitor group, and the same rule removes any equivalent unoccupied,
+        // inactive singleton spare without special-casing that backend name.
+        return groups.filter((group) => {
+            if (groups.length <= 1 || group.key !== root.outputName
+                || group.workspaces.length !== 1) {
+                return true;
+            }
+            const workspace = group.workspaces[0];
+            return workspace.active === true || workspace.focused === true
+                   || workspace.urgent === true
+                   || (workspace.activeWindowTitle !== undefined
+                       && workspace.activeWindowTitle.length > 0);
+        });
     }
     readonly property bool grouped: workspaceGroups.length > 1
     // Where a step starts from: the newest request still in flight, so a burst
@@ -129,15 +124,6 @@ Item {
 
         return active;
     }
-    readonly property string activeWindowTitle: {
-        for (let index = 0; index < outputWorkspaces.length; ++index) {
-            if (outputWorkspaces[index].active)
-                return outputWorkspaces[index].activeWindowTitle;
-
-        }
-        return "";
-    }
-
     // One step along this output's workspaces, wrapping at either end. Like a
     // click it is only a request; the pills report what the compositor answers.
     function step(direction) {
@@ -150,7 +136,7 @@ Item {
         root.focusRequested(next.output, next.index);
     }
 
-    implicitWidth: workspaceRow.implicitWidth + titleSpacer.width + windowTitle.implicitWidth
+    implicitWidth: workspaceRow.implicitWidth
     implicitHeight: 28
     Accessible.role: Accessible.List
     Accessible.name: qsTr("Espacios de trabajo de %1").arg(outputName)
@@ -186,9 +172,9 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         visible: !root.niriAvailable
         text: qsTr("Niri no disponible")
-        color: CelestinaTheme.textMuted
+        color: CelestinaTheme.text
         font.family: CelestinaTheme.sansFamily
-        font.pixelSize: CelestinaTheme.fontCaption
+        font.pixelSize: CelestinaTheme.fontTitle
     }
 
     Row {
@@ -209,10 +195,6 @@ Item {
 
                 spacing: CelestinaTheme.spaceXs
 
-                // An open group is its workspaces. There is no separate
-                // "grouped" appearance for them: a strip with one group draws
-                // this and only this, which is what it drew before groups
-                // existed.
                 Repeater {
                     model: groupRow.modelData.expanded ? groupRow.modelData.workspaces : []
 
@@ -221,24 +203,12 @@ Item {
 
                         workspace: modelData
                         onFocusRequested: (output, index) => root.focusRequested(output, index)
-                        // One workspace's own map: what this pill holds, without
-                        // going to it. The left button still focuses it.
                         onMapRequested: (globalX, globalY) => root.mapRequested(
                             globalX, globalY, [modelData])
                     }
 
                 }
 
-                // The closed shape of the same group. `Row` leaves an invisible
-                // child out of its layout, so an open group is not padded by the
-                // capsule it is not showing.
-                //
-                // Deliberately not animated. The strip changes shape when the
-                // focus moves between monitors, which is the same instant change
-                // every other panel state makes, and an animated reflow here
-                // would be motion `CelestinaTheme.reducedMotion` then has to
-                // undo. There is nothing to honour because there is nothing
-                // moving.
                 WorkspaceGroupCapsule {
                     visible: !groupRow.modelData.expanded
                     outputName: groupRow.modelData.key
@@ -253,30 +223,6 @@ Item {
 
         }
 
-    }
-
-    Item {
-        id: titleSpacer
-
-        anchors.left: workspaceRow.right
-        width: windowTitle.visible ? CelestinaTheme.spaceMd : 0
-    }
-
-    Text {
-        id: windowTitle
-
-        anchors.left: titleSpacer.right
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        visible: root.niriAvailable && root.activeWindowTitle.length > 0
-        text: root.activeWindowTitle
-        // A window's title is whatever its client set it to, so it is shown as
-        // characters rather than guessed at as markup.
-        textFormat: Text.PlainText
-        color: CelestinaTheme.textMuted
-        font.family: CelestinaTheme.sansFamily
-        font.pixelSize: CelestinaTheme.fontCaption
-        elide: Text.ElideRight
     }
 
 }

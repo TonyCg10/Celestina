@@ -3,11 +3,10 @@ import QtTest
 import CelestinaStyle
 import "../qml" as Desktop
 
-// The live failure: the media widget never appeared on either panel. Not a data
-// problem — the provider published a valid player — but a layout one. The
-// workspace strip grows with the focused window's title and was allowed to
-// claim the whole flank; the flank clips, so everything after the strip left
-// the bar without a word.
+// The media widget once vanished because the workspace strip grew with the
+// focused window's title until the flank clipped everything after it. The
+// redesigned strip carries only fixed-size workspace marks, so client titles
+// cannot affect panel geometry at all.
 TestCase {
     id: testCase
 
@@ -78,18 +77,16 @@ TestCase {
         verify(media.implicitWidth > 0);
     }
 
-    function test_a_long_window_title_never_pushes_the_media_widget_off_the_bar() {
+    function test_an_active_window_title_cannot_change_strip_geometry() {
+        const compactWidth = strip.implicitWidth;
         strip.workspaces = testCase.workspaces(testCase.longTitle);
         wait(0);
 
-        // The strip wants more than the flank has...
-        verify(strip.implicitWidth > flank.width,
-               "the fixture must actually overflow the flank");
-        // ...and is held to what its neighbours do not need.
+        compare(strip.implicitWidth, compactWidth);
         verify(strip.width <= flank.width - flank.reservedWidth + 1);
 
-        // Which is the whole point: the media widget still fits inside the
-        // flank rather than being clipped out of existence.
+        // The media widget still fits inside the flank rather than being
+        // clipped out of existence.
         verify(media.hasPlayer);
         verify(media.implicitWidth > 0);
         verify(strip.width + flank.reservedWidth <= flank.width + 1);

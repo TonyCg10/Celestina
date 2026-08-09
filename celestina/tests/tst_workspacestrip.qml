@@ -1,5 +1,6 @@
 import QtQuick
 import QtTest
+import CelestinaStyle
 import "../qml" as Desktop
 
 // The strip's gesture arithmetic: where a step starts from, and where it lands.
@@ -126,8 +127,6 @@ TestCase {
         compare(requests.count, 0);
     }
 
-    // Every monitor connected: one home, one group, and the strip the panel has
-    // always drawn. This is the case that must stay untouched.
     function test_one_monitors_workspaces_are_one_open_group() {
         compare(strip.workspaceGroups.length, 1);
         verify(!strip.grouped);
@@ -156,8 +155,6 @@ TestCase {
 
         const closed = strip.workspaceGroups[2];
         verify(!closed.expanded);
-        // The whole risk of folding: a capsule that swallowed this would hide
-        // the one thing the person needs to know about that monitor.
         verify(closed.urgent);
     }
 
@@ -167,9 +164,8 @@ TestCase {
         compare(strip.workspaceGroups[2].focusTarget.index, 7);
     }
 
-    // A producer that predates grouping sends no `home`, and the host defaults
-    // `groupExpanded` to true. Both have to come out as today's flat strip
-    // rather than as a strip of capsules nobody can open.
+    // A producer that predates grouping sends no `home`. It remains one flat
+    // group rather than inventing output labels the producer never supplied.
     function test_a_helper_that_never_heard_of_homes_draws_a_flat_strip() {
         const list = testCase.board(2, -1).filter((entry) => {
             return entry.output === "DP-1";
@@ -184,5 +180,20 @@ TestCase {
         compare(strip.workspaceGroups.length, 1);
         verify(strip.workspaceGroups[0].expanded);
         verify(!strip.grouped);
+    }
+
+    function test_an_inactive_empty_singleton_spare_is_not_a_monitor_group() {
+        const list = testCase.displaced("HDMI-A-1", "").filter((workspace) => {
+            return workspace.home !== "DP-1";
+        });
+        const spare = testCase.workspace(16, "16", false, "");
+        spare.home = "DP-1";
+        spare.groupExpanded = false;
+        list.push(spare);
+        strip.workspaces = list;
+
+        compare(strip.workspaceGroups.length, 2);
+        compare(strip.workspaceGroups.map((group) => group.key),
+                ["HDMI-A-1", "DP-2"]);
     }
 }

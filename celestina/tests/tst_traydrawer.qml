@@ -62,6 +62,7 @@ TestCase {
         "iconSource": "image://tray/%3A1.26993%2Forg%2Fblueman%2Fsni/1"
     })
     readonly property var session: [slack, solaar, applet, blueman]
+    property var lateItems: []
 
     function entriesOf(drawer) {
         const found = [];
@@ -82,6 +83,24 @@ TestCase {
             id: drawer
 
             items: testCase.session
+        }
+    }
+
+    // The panel's real wrapper starts before D-Bus has answered. Its own
+    // visibility must follow the independent model, never the child's
+    // effective visibility, or the initially hidden parent prevents the child
+    // from becoming visible when the late items arrive.
+    Item {
+        id: lateWrapper
+
+        implicitWidth: lateDrawer.implicitWidth
+        implicitHeight: lateDrawer.implicitHeight
+        visible: testCase.lateItems.length > 0
+
+        Desktop.TrayDrawer {
+            id: lateDrawer
+
+            items: testCase.lateItems
         }
     }
 
@@ -142,8 +161,33 @@ TestCase {
                 reading: ({"unread": 3, "quiet": false})
             }
 
+            Desktop.PanelActionButton {
+                blurAvailable: true
+                iconName: "settings"
+                helpText: qsTr("Abrir el centro de control")
+            }
+
+            Desktop.PanelActionButton {
+                blurAvailable: true
+                iconName: "clipboard-paste"
+                helpText: qsTr("Abrir el historial del portapapeles")
+            }
+
+            Desktop.PanelActionButton {
+                blurAvailable: true
+                iconName: "power"
+                helpText: qsTr("Abrir el menú de sesión")
+            }
+
             Desktop.CaptureButton {
                 anchors.verticalCenter: parent.verticalCenter
+            }
+
+            Desktop.PhoneStatus {
+                blurAvailable: true
+                connected: true
+                battery: 49
+                charging: false
             }
         }
     }
@@ -192,6 +236,18 @@ TestCase {
         const count = findChild(drawer, "celestina-tray-count");
         verify(!count.visible);
         drawer.items = testCase.session;
+    }
+
+    function test_late_items_make_the_panel_wrapper_visible() {
+        testCase.lateItems = [];
+        verify(!lateWrapper.visible);
+
+        testCase.lateItems = testCase.session;
+        wait(0);
+        verify(lateWrapper.visible);
+        verify(lateDrawer.visible);
+
+        testCase.lateItems = [];
     }
 
     // An item that does ask for attention is shown folded, and only that one.

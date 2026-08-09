@@ -653,8 +653,14 @@ result.
   borderless capsules, the full-width bar is a fading shadow rather than a hard
   plate, no capsule is clipped, and a late geometry change receives the same
   blur without briefly blurring the whole surface.
-- **Result:** not run against an author-accepted PANEL-1 candidate
-- **Evidence:** none
+- **Result:** the author accepted the `PANEL-1-A` nested-session baseline after
+  iterative review: the hard plate was gone, the full-width shadow remained,
+  capsules showed compositor blur without borders, the phone capsule retained
+  both ends, monitor groups remained distinct, the status/action glyphs were
+  readable and the four-item tray returned after its visibility correction.
+  This did not cover a separate scale-1 and scale-2 matrix, so the checkpoint is
+  partial and stays open with `PANEL-1-B`.
+- **Evidence:** [PANEL-1-A delivery](docs/evidence/2026-08-08-panel-glass-baseline.md)
 
 ## Closed historical observations
 

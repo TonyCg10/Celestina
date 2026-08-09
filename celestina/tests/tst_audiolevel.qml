@@ -32,11 +32,13 @@ TestCase {
     function test_a_reading_is_shown_as_whole_percent() {
         verify(level.hasReading);
         compare(level.spokenVolume, "Volumen 40 %");
+        compare(findChild(level, "celestina-volume-icon").name, "media-volume");
     }
 
     function test_a_muted_device_says_so_and_keeps_its_level() {
         level.reading = ({"volume": 40, "muted": true});
         compare(level.spokenVolume, "Volumen silenciado, 40 %");
+        compare(findChild(level, "celestina-volume-icon").name, "media-volume-muted");
     }
 
     function test_an_absent_reading_never_reaches_into_it() {

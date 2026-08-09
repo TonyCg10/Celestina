@@ -1,14 +1,9 @@
 // How many notifications are waiting, and whether they are being held back.
 //
-// The panel's flank reserved this place for R4. It shows a number only when
-// there is one to show: a permanent badge reading zero is furniture, not
-// information. Do-not-disturb is the exception — that state is always visible,
-// because a person who silenced their session needs to be able to tell.
-//
-// It reads as text rather than a glyph for the same reason `AudioLevel` does:
-// the suite's icon catalogue is closed and vendored, it has no bell, and
-// inventing one would put non-canonical artwork into a set that is canonical
-// everywhere else.
+// The bell is a permanent entry point to notification history. A count appears
+// only when there is one to show, while the crossed bell carries quiet mode.
+// Whether Celestina currently owns the notification server changes the content
+// of the centre, not whether the person can reach that centre.
 pragma ComponentBehavior: Bound
 
 import CelestinaStyle
@@ -33,12 +28,14 @@ Item {
     readonly property bool worthShowing: root.serving
                                          && (root.unread > 0 || root.quiet)
 
-    implicitWidth: worthShowing ? content.implicitWidth : 0
+    implicitWidth: content.implicitWidth
     implicitHeight: 26
-    visible: worthShowing
+    visible: true
 
     Accessible.role: Accessible.Button
-    Accessible.name: root.quiet
+    Accessible.name: !root.serving
+            ? qsTr("Notificaciones no disponibles")
+            : root.quiet
             ? qsTr("Notificaciones silenciadas, %1 sin leer").arg(root.unread)
             : qsTr("%1 notificaciones sin leer").arg(root.unread)
     Accessible.onPressAction: root.historyRequested()
@@ -49,28 +46,28 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         spacing: CelestinaTheme.spaceXs
 
+        CelestinaIcon {
+            objectName: "celestina-notification-icon"
+            anchors.verticalCenter: parent.verticalCenter
+            width: CelestinaTheme.iconSm
+            height: CelestinaTheme.iconSm
+            name: root.quiet ? "bell-off" : "bell"
+            tone: CelestinaIcon.Primary
+            Accessible.ignored: true
+        }
+
         Text {
             anchors.verticalCenter: parent.verticalCenter
             visible: root.unread > 0
             text: root.unread
             // Silenced still counts: the number is what is waiting, not what
             // interrupted.
-            color: root.quiet ? CelestinaTheme.textMuted : CelestinaTheme.text
+            color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
             font.features: CelestinaTheme.fontFeaturesTabular
-            font.pixelSize: CelestinaTheme.fontCaption
+            font.pixelSize: CelestinaTheme.fontTitle
         }
 
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
-            // The word appears only while the session is silenced: the rest of
-            // the time the number needs no caption.
-            visible: root.quiet
-            text: qsTr("silenciadas")
-            color: CelestinaTheme.textMuted
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontCaption
-        }
     }
 
     MouseArea {
@@ -80,7 +77,8 @@ Item {
         cursorShape: Qt.PointingHandCursor
         onClicked: (mouse) => {
             if (mouse.button === Qt.RightButton) {
-                root.quietToggled();
+                if (root.serving)
+                    root.quietToggled();
                 return;
             }
             root.historyRequested();

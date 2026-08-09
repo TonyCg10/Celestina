@@ -3,6 +3,8 @@
 // It shows what it has and nothing else: before the second sample there is no
 // rate yet, and when the provider goes away its value goes with it, so this
 // widget simply disappears rather than freezing on a number from a minute ago.
+pragma ComponentBehavior: Bound
+
 import CelestinaStyle
 import QtQuick
 
@@ -18,16 +20,6 @@ Item {
 
     readonly property bool hasReading: reading !== undefined && reading.cpu !== undefined
 
-    function loadColor(load) {
-        if (load === "critical")
-            return CelestinaTheme.danger;
-
-        if (load === "elevated")
-            return CelestinaTheme.warning;
-
-        return CelestinaTheme.textMuted;
-    }
-
     implicitWidth: hasReading ? readings.implicitWidth : 0
     implicitHeight: 26
     visible: hasReading
@@ -38,26 +30,47 @@ Item {
     Accessible.description: qsTr("Abre el monitor del sistema")
     Accessible.onPressAction: root.monitorRequested()
 
+    component Metric: Row {
+        required property string iconName
+        required property string value
+
+        spacing: CelestinaTheme.spaceXs
+
+        CelestinaIcon {
+            anchors.verticalCenter: parent.verticalCenter
+            width: CelestinaTheme.iconSm
+            height: CelestinaTheme.iconSm
+            name: parent.iconName
+            tone: CelestinaIcon.Primary
+            Accessible.ignored: true
+        }
+
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: parent.value
+            color: CelestinaTheme.text
+            font.family: CelestinaTheme.sansFamily
+            font.features: CelestinaTheme.fontFeaturesTabular
+            font.pixelSize: CelestinaTheme.fontTitle
+        }
+    }
+
     Row {
         id: readings
 
         anchors.verticalCenter: parent.verticalCenter
         spacing: CelestinaTheme.spaceMd
 
-        Text {
-            text: root.hasReading ? qsTr("CPU %1 %").arg(root.reading.cpu) : ""
-            color: root.loadColor(root.hasReading ? root.reading.cpuLoad : "")
-            font.family: CelestinaTheme.sansFamily
-            font.features: CelestinaTheme.fontFeaturesTabular
-            font.pixelSize: CelestinaTheme.fontCaption
+        Metric {
+            objectName: "celestina-cpu-icon"
+            iconName: "cpu"
+            value: root.hasReading ? qsTr("%1 %").arg(root.reading.cpu) : ""
         }
 
-        Text {
-            text: root.hasReading ? qsTr("RAM %1 %").arg(root.reading.ram) : ""
-            color: root.loadColor(root.hasReading ? root.reading.ramLoad : "")
-            font.family: CelestinaTheme.sansFamily
-            font.features: CelestinaTheme.fontFeaturesTabular
-            font.pixelSize: CelestinaTheme.fontCaption
+        Metric {
+            objectName: "celestina-memory-icon"
+            iconName: "memory-stick"
+            value: root.hasReading ? qsTr("%1 %").arg(root.reading.ram) : ""
         }
 
     }

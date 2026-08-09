@@ -1,74 +1,70 @@
 import CelestinaStyle
 import QtQuick
-import QtQuick.Layouts
 
-RowLayout {
-    id: root
+// PANEL-1. A plain root lets a glass pill sit behind this
+// reading. As a bare `RowLayout` every child of this file was a cell of that
+// row, so the pill was laid out beside the battery instead of underneath the
+// whole thing.
+Item {
+    id: phoneRoot
 
     required property bool connected
-    required property string phoneName
+    required property bool blurAvailable
     required property int battery
     required property bool charging
 
-    spacing: 6
-    visible: connected
+    implicitWidth: layout.implicitWidth
+    implicitHeight: layout.implicitHeight
+    visible: phoneRoot.connected
     Accessible.role: Accessible.StaticText
-    Accessible.name: battery >= 0
-                     ? qsTr("%1, batería %2 por ciento%3")
-                         .arg(phoneName)
-                         .arg(battery)
-                         .arg(charging ? qsTr(", cargando") : "")
-                     : phoneName
+    Accessible.name: phoneRoot.battery >= 0
+                     ? qsTr("Teléfono, batería %1 por ciento%2")
+                         .arg(phoneRoot.battery)
+                         .arg(phoneRoot.charging ? qsTr(", cargando") : "")
+                     : qsTr("Teléfono conectado")
 
-    Image {
-        Layout.preferredWidth: 15
-        Layout.preferredHeight: 15
-        source: "qrc:/qt/qml/CelestinaDesktop/phone.svg"
-        sourceSize: Qt.size(15, 15)
-        smooth: true
-        Accessible.ignored: true
-    }
+    Row {
+        id: layout
 
-    Text {
-        Layout.fillWidth: true
-        Layout.minimumWidth: 0
-        Layout.alignment: Qt.AlignVCenter
-        text: root.phoneName
-        // The name the paired device reports for itself, shown as characters.
-        textFormat: Text.PlainText
-        color: CelestinaTheme.text
-        font.family: CelestinaTheme.sansFamily
-        font.pixelSize: CelestinaTheme.fontBody
-        elide: Text.ElideRight
-        Accessible.ignored: true
-    }
+        anchors.centerIn: parent
+        spacing: CelestinaTheme.spaceXs
 
-    RowLayout {
-        Layout.preferredWidth: implicitWidth
-        Layout.alignment: Qt.AlignVCenter
-        spacing: 3
-        visible: root.battery >= 0
+        CelestinaIcon {
+            anchors.verticalCenter: parent.verticalCenter
+            width: CelestinaTheme.iconSm
+            height: CelestinaTheme.iconSm
+            name: "phone"
+            tone: CelestinaIcon.Primary
+            Accessible.ignored: true
+        }
 
-        Image {
-            Layout.preferredWidth: 15
-            Layout.preferredHeight: 15
-            visible: root.charging
-            source: "qrc:/qt/qml/CelestinaDesktop/battery-charging.svg"
-            sourceSize: Qt.size(15, 15)
-            smooth: true
+        CelestinaIcon {
+            anchors.verticalCenter: parent.verticalCenter
+            width: visible ? CelestinaTheme.iconSm : 0
+            height: CelestinaTheme.iconSm
+            visible: phoneRoot.battery >= 0 && phoneRoot.charging
+            name: "battery-charging"
+            tone: CelestinaIcon.Primary
             Accessible.ignored: true
         }
 
         Text {
-            Layout.alignment: Qt.AlignVCenter
-            text: root.battery + " %"
-            color: root.battery <= 15 ? CelestinaTheme.danger : root.battery <= 30 ? CelestinaTheme.warning : CelestinaTheme.textMuted
+            anchors.verticalCenter: parent.verticalCenter
+            visible: phoneRoot.battery >= 0
+            text: phoneRoot.battery + " %"
+            color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
             font.features: CelestinaTheme.fontFeaturesTabular
-            font.pixelSize: CelestinaTheme.fontBody
+            font.pixelSize: CelestinaTheme.fontTitle
             Accessible.ignored: true
         }
-
     }
+
+    PanelPill {
+        blurAvailable: phoneRoot.blurAvailable
+        onBlurRegionChanged: phoneRoot.blurRegionChanged()
+    }
+
+    signal blurRegionChanged()
 
 }
