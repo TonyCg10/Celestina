@@ -1,0 +1,52 @@
+# STYLE-G7-E exact change inventory
+
+Base revision	310978f07f564b105188c3a14b03a86a14fa7642
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaIcons.qml
+Pathspec	celestina-style/STATUS.md
+Pathspec	celestina-style/docs/evidence/2026-08-08-panel-status-glyphs.md
+Pathspec	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-E.numstat.tsv
+Pathspec	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Pathspec	celestina-style/icons.qrc
+Pathspec	celestina-style/icons/bell-off.svg
+Pathspec	celestina-style/icons/bell.svg
+Pathspec	celestina-style/icons/bluetooth.svg
+Pathspec	celestina-style/icons/cpu.svg
+Pathspec	celestina-style/icons/gauge.svg
+Pathspec	celestina-style/icons/leaf.svg
+Pathspec	celestina-style/icons/memory-stick.svg
+Pathspec	celestina-style/icons/mic-off.svg
+Pathspec	celestina-style/icons/mic.svg
+Pathspec	celestina-style/icons/power.svg
+Pathspec	celestina-style/icons/sun.svg
+Pathspec	celestina-style/icons/wifi.svg
+Pathspec	celestina-style/icons/zap.svg
+Pathspec	celestina-style/tests/tst_iconcatalog.qml
+Pathspec	docs/version-history.tsv
+
+Plan	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Evidence	celestina-style/docs/evidence/2026-08-08-panel-status-glyphs.md
+
+added	deleted	content	path
+14	1	a070fd1767a4674272eddfeedb8ea27c7aba187ba8a203a3f9caf4bf00a6f9ac	celestina-style/CMakeLists.txt
+14	1	866309e01743002ba8e6a6c9850714e276cebb46a51db40886d8f4528a490a9c	celestina-style/CelestinaIcons.qml
+8	3	b178b834f0d06c0eabd9ce5d87f06925d11c46b99034b6828fa81944d7efaa43	celestina-style/STATUS.md
+55	0	a1b2d559da31dc56a8ed6d00f258197438f97419f995ae1b76fca6c2338d3d75	celestina-style/docs/evidence/2026-08-08-panel-status-glyphs.md
+12	0	ee24fb77cdb5233696a35b7f44651420af06714619de16e6c6648f15e2ba8d4a	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+13	0	66fade5c9b4bb1c6d71d0f500465b21bd8f8a2dc68d4827e1c05ea29f460bc49	celestina-style/icons.qrc
+16	0	0c1fc1f3db650bb537e7921bf04d9e77cff5c1147fc32a7278c6ed9c79c18b3b	celestina-style/icons/bell-off.svg
+14	0	1923d33f066e843b21f8ded53114601fb107b660c493ced406e07c9044ec56a6	celestina-style/icons/bell.svg
+13	0	5a5b1961ae0c3516c7fe67083d6b2d3776204ab81f3b83f5d65b7f1559e865c7	celestina-style/icons/bluetooth.svg
+26	0	5e416e057fde472eaf4fe017ce72a6b018fe3cdbe22ce755d6f82142503086e5	celestina-style/icons/cpu.svg
+14	0	97501593d2d1d206267c3a40fe198bdae3a4b4f4db6b1ae6fb8cfef7003fb73e	celestina-style/icons/gauge.svg
+14	0	3bb4a220d4ab72ede4d6b4dfcb284a3b173adbc67ca44ac914c80f4f87029adb	celestina-style/icons/leaf.svg
+23	0	532ccdbd67cf84dbb84e00e5a05e55868c3761b9ca971da655d8f185a321de8f	celestina-style/icons/memory-stick.svg
+18	0	61c74a5ca4858fc63ba05276f1e6155a860b70f38cdfe958c4570e9e23bd899f	celestina-style/icons/mic-off.svg
+15	0	6212c09ee1a22506e6d0f5301254acb233dda7218238908ecda09f7e0ca30ca6	celestina-style/icons/mic.svg
+14	0	24e8358e9aa9a9dbe8bbda401d51e829119d4d5fbcbf1fad7eec532495eeabec	celestina-style/icons/power.svg
+21	0	7b159e5f32f22ca517ad29e58799cf7126690653f68607bd370eb87047e82127	celestina-style/icons/sun.svg
+16	0	25de7285f77496de35fb79022e09786203e386306a9ad6a19913749a9c8f939f	celestina-style/icons/wifi.svg
+13	0	c4452f6adbfbe7aa54f0afe6dd4048ec5f4fb391a16c354f5942879fee4f2695	celestina-style/icons/zap.svg
+5	0	6e9caae0ba40d783a192ba40fc3ed7f32b6d0821ed15728280c916fbea80ca5e	celestina-style/tests/tst_iconcatalog.qml
+1	0	ba3c02247c4869892b8d85bca99705ee81c1c11d66c3fbf6ad0061f7fa99ce14	docs/version-history.tsv
+52	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-E.numstat.tsv

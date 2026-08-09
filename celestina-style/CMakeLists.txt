@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina-style VERSION 1.1.2 LANGUAGES CXX)
+project(celestina-style VERSION 1.2.0 LANGUAGES CXX)
 
 include(CTest)
 
@@ -74,6 +74,7 @@ qt_add_qml_module(celestina-style
         icons/user-trash.svg
         icons/star.svg
         icons/star-outline.svg
+        icons/sun.svg
         icons/phone.svg
         icons/battery-charging.svg
         icons/settings.svg
@@ -85,10 +86,17 @@ qt_add_qml_module(celestina-style
         icons/media-skip-forward.svg
         icons/media-volume.svg
         icons/media-volume-muted.svg
+        icons/memory-stick.svg
+        icons/mic.svg
+        icons/mic-off.svg
+        icons/power.svg
         icons/app-window.svg
         icons/arrow-down.svg
         icons/arrow-right.svg
+        icons/bell.svg
+        icons/bell-off.svg
         icons/binary.svg
+        icons/bluetooth.svg
         icons/bookmark-plus.svg
         icons/check.svg
         icons/chevron-down.svg
@@ -98,6 +106,7 @@ qt_add_qml_module(celestina-style
         icons/clock-arrow-up.svg
         icons/cloud.svg
         icons/copy.svg
+        icons/cpu.svg
         icons/eraser.svg
         icons/file-archive.svg
         icons/file-braces.svg
@@ -117,10 +126,12 @@ qt_add_qml_module(celestina-style
         icons/folder-plus.svg
         icons/folder-sync.svg
         icons/gamepad-2.svg
+        icons/gauge.svg
         icons/hard-drive.svg
         icons/image.svg
         icons/info.svg
         icons/layout-template.svg
+        icons/leaf.svg
         icons/list-x.svg
         icons/mail.svg
         icons/monitor.svg
@@ -133,6 +144,8 @@ qt_add_qml_module(celestina-style
         icons/terminal.svg
         icons/type.svg
         icons/unplug.svg
+        icons/wifi.svg
+        icons/zap.svg
         icons/glass-noise.png
         fonts/InterVariable.ttf
 )

@@ -49,6 +49,11 @@ TestCase {
         compare(CelestinaIcons.resolve("folder-nowhere", ""), "folder")
         compare(CelestinaIcons.resolve("", ""), "")
         verify(CelestinaIcons.available["search"] === true)
+        for (const name of ["wifi", "bluetooth", "cpu", "memory-stick", "mic", "mic-off",
+                            "bell", "bell-off", "power", "sun", "gauge", "leaf", "zap"]) {
+            compare(CelestinaIcons.resolve(name, ""), name)
+            verify(CelestinaIcons.source(name, "").endsWith(name + ".svg"))
+        }
     }
 
     // Both tables are still enumerable objects: the guard is on the prototype,

@@ -1,8 +1,9 @@
 # CelestinaStyle status
 
-- **Updated:** 2026-08-04
-- **Implementation:** the shared source contract is live at 1.1 with the two
-  reading controls published; `STYLE-G7` is the active checkpoint and
+- **Updated:** 2026-08-08
+- **Implementation:** the shared source contract is live at 1.2.0 with the two
+  reading controls and the panel's finite status-glyph set published;
+  `STYLE-G7` is the active checkpoint and
   `STYLE-M1` remains planned with no execution plan
 - **Author validation:** previous real-session review exists, with focused
   follow-ups pending in [VALIDATION.md](VALIDATION.md)
@@ -23,6 +24,10 @@
   silently raise the minimum.
 - Tokens, glass, semantic surfaces, controls, Lucide icons, Inter Variable,
   content icons and host-controlled reduced motion are implemented.
+- The semantic Lucide catalogue includes the finite network, Bluetooth,
+  resource, notification, power-profile, brightness and session glyphs used by
+  Celestina's accepted panel baseline. The shell still owns their state,
+  accessibility copy and interaction.
 - The installed/versioned module is not current delivery architecture. It
   remains gated on a consumer outside this repository.
 

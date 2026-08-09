@@ -19,6 +19,7 @@
     <file alias="user-trash.svg">icons/user-trash.svg</file>
     <file alias="star.svg">icons/star.svg</file>
     <file alias="star-outline.svg">icons/star-outline.svg</file>
+    <file alias="sun.svg">icons/sun.svg</file>
     <file alias="phone.svg">icons/phone.svg</file>
     <file alias="battery-charging.svg">icons/battery-charging.svg</file>
     <file alias="settings.svg">icons/settings.svg</file>
@@ -30,10 +31,17 @@
     <file alias="media-skip-forward.svg">icons/media-skip-forward.svg</file>
     <file alias="media-volume.svg">icons/media-volume.svg</file>
     <file alias="media-volume-muted.svg">icons/media-volume-muted.svg</file>
+    <file alias="memory-stick.svg">icons/memory-stick.svg</file>
+    <file alias="mic.svg">icons/mic.svg</file>
+    <file alias="mic-off.svg">icons/mic-off.svg</file>
+    <file alias="power.svg">icons/power.svg</file>
     <file alias="app-window.svg">icons/app-window.svg</file>
     <file alias="arrow-down.svg">icons/arrow-down.svg</file>
     <file alias="arrow-right.svg">icons/arrow-right.svg</file>
+    <file alias="bell.svg">icons/bell.svg</file>
+    <file alias="bell-off.svg">icons/bell-off.svg</file>
     <file alias="binary.svg">icons/binary.svg</file>
+    <file alias="bluetooth.svg">icons/bluetooth.svg</file>
     <file alias="bookmark-plus.svg">icons/bookmark-plus.svg</file>
     <file alias="check.svg">icons/check.svg</file>
     <file alias="chevron-down.svg">icons/chevron-down.svg</file>
@@ -43,6 +51,7 @@
     <file alias="clock-arrow-up.svg">icons/clock-arrow-up.svg</file>
     <file alias="cloud.svg">icons/cloud.svg</file>
     <file alias="copy.svg">icons/copy.svg</file>
+    <file alias="cpu.svg">icons/cpu.svg</file>
     <file alias="eraser.svg">icons/eraser.svg</file>
     <file alias="file-archive.svg">icons/file-archive.svg</file>
     <file alias="file-braces.svg">icons/file-braces.svg</file>
@@ -62,10 +71,12 @@
     <file alias="folder-plus.svg">icons/folder-plus.svg</file>
     <file alias="folder-sync.svg">icons/folder-sync.svg</file>
     <file alias="gamepad-2.svg">icons/gamepad-2.svg</file>
+    <file alias="gauge.svg">icons/gauge.svg</file>
     <file alias="hard-drive.svg">icons/hard-drive.svg</file>
     <file alias="image.svg">icons/image.svg</file>
     <file alias="info.svg">icons/info.svg</file>
     <file alias="layout-template.svg">icons/layout-template.svg</file>
+    <file alias="leaf.svg">icons/leaf.svg</file>
     <file alias="list-x.svg">icons/list-x.svg</file>
     <file alias="mail.svg">icons/mail.svg</file>
     <file alias="monitor.svg">icons/monitor.svg</file>
@@ -78,6 +89,8 @@
     <file alias="terminal.svg">icons/terminal.svg</file>
     <file alias="type.svg">icons/type.svg</file>
     <file alias="unplug.svg">icons/unplug.svg</file>
+    <file alias="wifi.svg">icons/wifi.svg</file>
+    <file alias="zap.svg">icons/zap.svg</file>
     <file alias="glass-noise.png">icons/glass-noise.png</file>
   </qresource>
 </RCC>

@@ -47,3 +47,4 @@ celestina	0.6.8	bug	LVR-3-F	Keep transient readings from becoming panel truth
 celestina	0.7.0	milestone	UX-1-D	Add direct network and Bluetooth indicator menus
 celestina	0.8.0	milestone	WSG-1-D	Keep displaced workspace groups legible on one monitor
 celestina	0.9.0	milestone	WMAP-1-A	Add a workspace map that goes to one window
+celestina-style	1.2.0	milestone	STYLE-G7-E	Add the panel status glyphs
