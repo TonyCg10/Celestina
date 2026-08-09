@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-08-08
 - **Plan ID:** workspace-window-map
-- **Status:** active
+- **Status:** done
+- **Closed:** 2026-08-08
+- **Successor:** [PANEL-1 — borderless glass panel](../active/2026-08-08-panel-glass-redesign.md)
 - **Scope:** celestina
 - **Implementation checkpoint:** WMAP-1
 - **Predecessor:** [WSG-1 — workspace groups survive their monitor](../archive/2026-08-08-workspace-monitor-groups.md)
@@ -119,11 +121,13 @@ thumbnail would go stale.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | WMAP-1-A | `celestina:` | done | [inventory](../../inventories/2026-08-08-workspace-window-map/WMAP-1-A.numstat.tsv) | 34 files, +2776/-216 | Show what a workspace holds and let a person go to one window | [evidence](../../evidence/2026-08-08-workspace-window-map.md) | `VAL-WMAP-1` |
+| WMAP-1-B | `celestina:` | done | [inventory](../../inventories/2026-08-08-workspace-window-map/WMAP-1-B.numstat.tsv) | 14 files, +711/-416 | Archive the delivered map plan and open the bounded borderless-glass panel successor | [evidence](../../evidence/2026-08-08-panel-checkpoint-transition.md) | None |
 
 ## Active unit boundary
 
-No unit is open. `WMAP-1-A` is delivered and inventoried. Anything found from
-here is a new unit rather than a widening of this one.
+No unit is open. `WMAP-1-A` is delivered and inventoried, and `WMAP-1-B`
+records the administrative archive and successor transition. Anything found
+from here is a new unit rather than a widening of either one.
 
 ### Why one unit and not the five the build order names
 

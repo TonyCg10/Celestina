@@ -1,7 +1,7 @@
 # Celestina implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** WMAP-1
+- **Active implementation checkpoint:** PANEL-1
 
 This roadmap contains only work an agent can implement and verify. Real Niri,
 hardware, visual and assistive-technology checks live in
@@ -33,7 +33,8 @@ of the design when they provide the narrow capability the shell needs.
 | UX-1 | complete | Give the network and Bluetooth indicators direct, truthful menus for their devices and actions |
 | WSG-1 | complete | Keep a workspace's monitor grouping legible after that monitor is switched off |
 | DIAG-1 | complete | Make the seconds before a freeze reconstructable, without recording anything private |
-| WMAP-1 | active | Show what a workspace holds, as its real layout, without focusing it |
+| WMAP-1 | complete | Show what a workspace holds, as its real layout, without focusing it |
+| PANEL-1 | active | Replace the hard panel plate with a shadow and borderless compositor-glass capsules |
 | UX-2 | planned | Establish and then implement one coherent shell-wide visual and interaction language after SHELL-D5 is applied |
 | R6 | conditional | First-party lock starts only if SHELL-D2 is applied |
 | R8 | complete | Reversible Noctalia removal; Polkit/dock slices remain conditional |
@@ -377,7 +378,7 @@ in [the DIAG-1 plan](docs/plans/archive/2026-08-08-diagnostic-journal.md).
 Nothing in this checkpoint investigates, touches or changes the GPU, DDC
 behaviour, amdgpu, the kernel, Niri, systemd, Noctalia or Wi-Fi.
 
-## WMAP-1 — The workspace window map (active)
+## WMAP-1 — The workspace window map (complete)
 
 **Outcome:** a collapsed capsule stops being opaque. Clicking it opens a card
 showing that monitor group's workspaces as the layouts they really are — real
@@ -393,7 +394,18 @@ column, row and tile size, which is a truthful map rather than a stale picture.
 
 The bounded scope, exclusions, settled interaction decisions and the recorded
 risk in the hover route are in
-[the WMAP-1 plan](docs/plans/active/2026-08-08-workspace-window-map.md).
+[the WMAP-1 plan](docs/plans/archive/2026-08-08-workspace-window-map.md).
+
+## PANEL-1 — Borderless glass panel (active)
+
+**Outcome:** the panel has no hard full-width plate. A soft shadow fades into
+the wallpaper and each content group sits on a borderless capsule whose finite
+region visibly uses Niri's compositor blur; the phone capsule remains whole.
+
+The author selected this bounded panel direction from live screenshots. It does
+not apply the rest of UX-2 or authorize menu, overlay, clock/weather or provider
+work. Scope, order and evidence are in
+[the PANEL-1 plan](docs/plans/active/2026-08-08-panel-glass-redesign.md).
 
 ## UX-2 — Shell visual and interaction language (planned)
 

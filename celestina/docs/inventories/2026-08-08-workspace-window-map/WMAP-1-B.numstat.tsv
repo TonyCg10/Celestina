@@ -1,0 +1,36 @@
+# WMAP-1-B exact change inventory
+
+Base revision	d56178cecb498b5820a3c9e47b42e3ec5a96e9f5
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/decisions/0002-borderless-glass-panel.md
+Pathspec	celestina/docs/decisions/README.md
+Pathspec	celestina/docs/discussions/2026-08-08-shell-visual-design.md
+Pathspec	celestina/docs/evidence/2026-08-08-panel-checkpoint-transition.md
+Pathspec	celestina/docs/evidence/2026-08-08-workspace-window-map.md
+Pathspec	celestina/docs/plans/active/2026-08-08-panel-glass-redesign.md
+Pathspec	celestina/docs/plans/active/2026-08-08-workspace-window-map.md
+Pathspec	celestina/docs/plans/active/README.md
+Pathspec	celestina/docs/plans/archive/2026-08-08-workspace-window-map.md
+Pathspec	celestina/docs/plans/archive/README.md
+Pathspec	celestina/docs/inventories/2026-08-08-workspace-window-map/WMAP-1-B.numstat.tsv
+
+Plan	celestina/docs/plans/archive/2026-08-08-workspace-window-map.md
+Evidence	celestina/docs/evidence/2026-08-08-panel-checkpoint-transition.md
+
+added	deleted	content	path
+16	4	6bdec372746887643303df17678a51d34bd7b7e6921acb94679f5c603b1515fb	celestina/ROADMAP.md
+8	6	1b48311c6277186dfe38b7f85b35d5ad2255147ac3223fdd6ce4b1477c3ae119	celestina/STATUS.md
+17	0	1dd94b1134817f69226dba409da3dbe26f26c91a95e1022871d6d0c8e46d3b5d	celestina/VALIDATION.md
+48	0	ff5e4284fa027e81392ce6ccfc95d9014d2816aec6e62ddb28e9210f24eea0f9	celestina/docs/decisions/0002-borderless-glass-panel.md
+1	0	ba9fb90d14fc6d3688e7f2bb9a73cc22beab871cfc43775cf672cbd030505ed9	celestina/docs/decisions/README.md
+11	1	010afc7e4f05a0dea2e645024a69d2f048ba03f8f22e704e8c3ef5f594ed37d0	celestina/docs/discussions/2026-08-08-shell-visual-design.md
+47	0	100fc6f5b74218ba99b1d69c37501841141a86aea4aae7b6b1f53d69d25888c5	celestina/docs/evidence/2026-08-08-panel-checkpoint-transition.md
+1	1	505aa5d3c7a0d09ea7e7c7f255c7c1f5da4da2b4de6c3601a489406477d634b9	celestina/docs/evidence/2026-08-08-workspace-window-map.md
+116	0	df0057e251c44d2c7edd146dd4db9e05ea0b2ae7552762019589572ace8a8539	celestina/docs/plans/active/2026-08-08-panel-glass-redesign.md
+0	402	deleted	celestina/docs/plans/active/2026-08-08-workspace-window-map.md
+3	2	ddafc29c94cbb5e5145683e0ed24795bc871551af4e2787ea94040a272fdee87	celestina/docs/plans/active/README.md
+406	0	b677fe8d0065be14160903627c9c68c7ddc55b4f0ce73cf7f62fcbd45424431c	celestina/docs/plans/archive/2026-08-08-workspace-window-map.md
+1	0	d815636dd327765d36dfbfb70656fd0de781848ad2e86ae76c24744abacd2aba	celestina/docs/plans/archive/README.md
+36	0	self	celestina/docs/inventories/2026-08-08-workspace-window-map/WMAP-1-B.numstat.tsv

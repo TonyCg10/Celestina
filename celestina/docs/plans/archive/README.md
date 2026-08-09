@@ -15,3 +15,4 @@ unit and inventory.
 - [Live validation follow-up](2026-08-05-live-validation-follow-up.md) — closed 2026-08-05
 - [LVR-3 late provider insertion](2026-08-05-late-provider-insertion.md) — closed 2026-08-07
 - [UX-1 network and Bluetooth indicator menus](2026-08-07-network-bluetooth-indicator-menus.md) — closed 2026-08-08
+- [WMAP-1 workspace window map](2026-08-08-workspace-window-map.md) — closed 2026-08-08

@@ -6,7 +6,7 @@
 - **Environment:** Linux 7.1.6 (CachyOS), Rust 2021 workspace, Qt 6.9, CMake
   Release, offscreen Qt platform for the tests. One nested Niri session was used
   to look at the surface; Noctalia continued to own the live session throughout.
-- **Plan:** [the workspace window map](../plans/active/2026-08-08-workspace-window-map.md)
+- **Plan:** [the workspace window map](../plans/archive/2026-08-08-workspace-window-map.md)
 - **Author validation:** `VAL-WMAP-1`, not run
 
 ## What this answers

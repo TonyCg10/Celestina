@@ -108,9 +108,19 @@ anatomy cannot serve representative network, Bluetooth, notification and
 clock/date states without special-case styling, or if the denser and more
 spacious directions do not produce a clear author preference.
 
+## Applied panel slice
+
+On 2026-08-08 the author selected one bounded direction for the panel itself:
+no hard full-width plate, a soft shadow fading into the wallpaper, and
+borderless compositor-blur capsules behind content groups. That slice is
+accepted in [ADR 0002](../decisions/0002-borderless-glass-panel.md) and executed
+by `PANEL-1`. It does not decide the menu, overlay, iconography, clock/weather or
+shared-state questions below.
+
 ## Conclusion
 
-Pending. This discussion is ready to apply only when one direction records:
+Pending beyond the applied panel slice. The broader discussion is ready to
+apply only when one direction records:
 
 - a surface hierarchy and component anatomy;
 - iconography, typography, spacing, color and motion rules;

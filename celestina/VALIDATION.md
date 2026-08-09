@@ -639,6 +639,23 @@ result.
 - **Result:** not run
 - **Evidence:** none
 
+## VAL-PANEL-1 — Borderless glass panel
+
+- **Status:** pending
+- **Related implementation:** PANEL-1
+- **Requires:** the incremental or verified PANEL-1 bundle inside a real Niri
+  compositor, a detailed wallpaper and the nested reference blur profile
+- **Procedure:** inspect the panel at scale 1 and scale 2. Compare wallpaper
+  detail immediately outside a capsule with the same detail inside it; inspect
+  every capsule edge and both ends of the phone reading. Add and remove a late
+  provider so its capsule geometry changes after startup.
+- **Pass condition:** wallpaper detail is visibly dispersed only inside the
+  borderless capsules, the full-width bar is a fading shadow rather than a hard
+  plate, no capsule is clipped, and a late geometry change receives the same
+  blur without briefly blurring the whole surface.
+- **Result:** not run against an author-accepted PANEL-1 candidate
+- **Evidence:** none
+
 ## Closed historical observations
 
 `VAL-SHELL-R0-BASE` and `VAL-SHELL-R2-BASE` are preserved in the
