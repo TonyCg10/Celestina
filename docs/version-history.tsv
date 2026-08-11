@@ -49,3 +49,4 @@ celestina	0.8.0	milestone	WSG-1-D	Keep displaced workspace groups legible on one
 celestina	0.9.0	milestone	WMAP-1-A	Add a workspace map that goes to one window
 celestina-style	1.2.0	milestone	STYLE-G7-E	Add the panel status glyphs
 celestina	0.10.0	milestone	PANEL-1-A	Add the borderless glass panel baseline
+celestina-style	1.3.0	milestone	STYLE-G7-F	Extend the shared shell glass and icon vocabulary

@@ -3,13 +3,11 @@ import QtQuick.Effects
 import QtQuick.Shapes
 
 // ─── GlassSurface ─────────────────────────────────────────────────────────────
-// Frosted-glass surface that blurs the real content behind it. The consumer
-// injects `backdropSource` (the item to sample); capture is bounded to this
-// surface's rectangle. `liveCapture` decides whether the blur tracks what is
-// behind it frame by frame or is snapshotted once when shown; a one-shot
-// capture is cheaper but freezes, so it reads as a blurred screenshot the
-// moment anything behind it moves. Nothing renders while hidden either way.
-// Falls back to a translucent tint if it cannot capture.
+// Frosted-glass surface over either an in-scene item or an external backdrop
+// already supplied by the compositor. InSceneCapture bounds ShaderEffectSource
+// to this surface. ExternalBackdrop never starts a QML capture — another
+// Wayland client is not part of this scene — and renders the same material over
+// the host-provided blur or fallback instead.
 //
 // Recipe (One UI 8.5, DESIGN §6.5): bounded capture → pyramid blur → *slight
 // desaturation* + tint/dim → a thin dark outline for definition → the lit
@@ -25,7 +23,23 @@ Item {
         Strong
     }
 
-    required property Item backdropSource
+    enum BackdropMode {
+        InSceneCapture,
+        ExternalBackdrop
+    }
+
+    enum MaterialRole {
+        StandardMaterial,
+        ContentSurface,
+        ContextualVeil
+    }
+
+    // Required by InSceneCapture and deliberately unused by ExternalBackdrop.
+    // Keeping null as a truthful fallback lets one public type cover both
+    // backends without forcing a compositor host to inject a fake scene item.
+    property Item backdropSource: null
+    property int backdropMode: GlassSurface.InSceneCapture
+    property bool externalBackdropReady: false
     property bool captureEnabled: true
     // One-shot snapshot on show (false) vs continuous re-capture while shown
     // (true). Live costs a small per-frame render, but it is what makes the
@@ -40,19 +54,43 @@ Item {
     // Modals (L3) use a scrim behind, never a shadow, so they stay at 0.
     property int elevation: 0
     property int density: GlassSurface.Regular
+    // The default is intentionally pixel-compatible with the pre-role public
+    // material. ContentSurface and ContextualVeil are opt-in semantic jobs;
+    // they never change capture, compositor ownership, geometry or elevation.
+    property int materialRole: GlassSurface.StandardMaterial
     default property alias contentData: foreground.data
 
-    readonly property color materialTint: density === GlassSurface.Strong
-                                                ? CelestinaTheme.glassTintStrong
-                                                : CelestinaTheme.glassTint
+    // Consumers may supply a semantic, state-derived tint while the component
+    // remains the sole owner of material ordering, noise, outline and lit edge.
+    property color materialTint:
+            materialRole === GlassSurface.ContentSurface
+            ? CelestinaTheme.canvas
+            : materialRole === GlassSurface.ContextualVeil
+              ? CelestinaTheme.glassHighlight
+              : density === GlassSurface.Strong
+                ? CelestinaTheme.glassTintStrong
+                : CelestinaTheme.glassTint
+    property real materialOpacity: 1
+    readonly property real materialStrength:
+            materialRole === GlassSurface.ContentSurface
+            ? CelestinaTheme.glassContentSurfaceStrength
+            : materialRole === GlassSurface.ContextualVeil
+              ? CelestinaTheme.glassContextualVeilStrength
+              : 1
 
-    readonly property bool active: captureEnabled
-                                   && backdropSource !== null
-                                   && width > 0
-                                   && height > 0
+    readonly property bool captureActive:
+            backdropMode === GlassSurface.InSceneCapture
+            && captureEnabled
+            && backdropSource !== null
+            && width > 0
+            && height > 0
+    readonly property bool active:
+            backdropMode === GlassSurface.ExternalBackdrop
+            ? externalBackdropReady && width > 0 && height > 0
+            : captureActive
 
     function refreshBackdrop() {
-        if (!active)
+        if (!captureActive)
             return
 
         const point = sampleLayer.mapToItem(backdropSource, 0, 0)
@@ -61,8 +99,8 @@ Item {
         capture.scheduleUpdate()
     }
 
-    onActiveChanged: {
-        if (active)
+    onCaptureActiveChanged: {
+        if (captureActive)
             refreshBackdrop()
         else
             capture.sourceRect = Qt.rect(0, 0, 0, 0)
@@ -83,7 +121,7 @@ Item {
     // transition. This is event-driven and leaves the GUI thread idle at rest.
     Connections {
         target: root.backdropSource
-        enabled: root.backdropSource !== null
+        enabled: root.captureActive
 
         function onXChanged() { root.refreshBackdrop() }
         function onYChanged() { root.refreshBackdrop() }
@@ -100,6 +138,7 @@ Item {
     // an analytic SDF (Qt 6.9+) — far cheaper than a MultiEffect shadow and it
     // extends past the rect, which is why the root must not clip.
     RectangularShadow {
+        objectName: "celestina-glass-shadow"
         anchors.fill: body
         visible: root.elevation > 0
         radius: root.cornerRadius
@@ -119,7 +158,9 @@ Item {
         Rectangle {
             anchors.fill: parent
             radius: root.cornerRadius
-            color: CelestinaTheme.surfaceStrong
+            color: root.backdropMode === GlassSurface.ExternalBackdrop
+                   ? CelestinaTheme.clear
+                   : CelestinaTheme.surfaceStrong
         }
 
         Item {
@@ -128,12 +169,12 @@ Item {
             y: -root.sampleMargin
             width: root.width + root.sampleMargin * 2
             height: root.height + root.sampleMargin * 2
-            visible: root.active
+            visible: root.captureActive
 
             ShaderEffectSource {
                 id: capture
                 anchors.fill: parent
-                sourceItem: root.active ? root.backdropSource : null
+                sourceItem: root.captureActive ? root.backdropSource : null
                 sourceRect: Qt.rect(0, 0, 0, 0)
                 textureSize: Qt.size(
                     Math.max(1, Math.ceil(width * root.sampleScale)),
@@ -164,7 +205,7 @@ Item {
             MultiEffect {
                 anchors.fill: parent
                 source: capture
-                visible: root.active
+                visible: root.captureActive
                 blurEnabled: true
                 blur: CelestinaTheme.glassBlur
                 blurMax: CelestinaTheme.glassBlurMax
@@ -179,21 +220,26 @@ Item {
         }
 
         Rectangle {
+            objectName: "celestina-glass-material-tint"
             anchors.fill: parent
             radius: root.cornerRadius
             color: root.active ? root.materialTint : CelestinaTheme.surfaceStrong
+            opacity: root.active
+                     ? root.materialOpacity * root.materialStrength
+                     : 1
         }
 
         // Fine noise dither over the blur — breaks the banding the downsample
         // pyramid leaves. Tiled at a low opacity; the body clip keeps it inside.
         Image {
+            objectName: "celestina-glass-noise"
             anchors.fill: parent
             visible: root.active
             source: Qt.resolvedUrl(".").toString().startsWith("file:")
                     ? Qt.resolvedUrl("icons/glass-noise.png")
                     : "qrc:/qt/qml/CelestinaStyle/icons/glass-noise.png"
             fillMode: Image.Tile
-            opacity: CelestinaTheme.glassNoiseOpacity
+            opacity: CelestinaTheme.glassNoiseOpacity * root.materialStrength
             smooth: false
         }
 
@@ -201,11 +247,16 @@ Item {
         // light backdrop where the lit glow alone would wash out. One UI's glass
         // wears both: a dark hairline and the lit top edge.
         Rectangle {
+            objectName: "celestina-glass-outline"
             anchors.fill: parent
             radius: root.cornerRadius
             color: CelestinaTheme.clear
             border.width: CelestinaTheme.borderHairline
-            border.color: CelestinaTheme.glassOutline
+            border.color: root.active
+                          ? CelestinaTheme.multiplyAlpha(
+                                CelestinaTheme.glassOutline,
+                                root.materialStrength)
+                          : CelestinaTheme.glassOutline
         }
 
         // The lit glass edge: a rounded-rect gradient stroke, brightest along the
@@ -215,6 +266,7 @@ Item {
         // an odd-even fill — with a vertical gradient. Replaces the CPU Canvas,
         // which re-rastered the whole edge on every resize (DESIGN §6.5).
         Shape {
+            objectName: "celestina-glass-lit-edge"
             anchors.fill: parent
             visible: root.active
             preferredRendererType: Shape.CurveRenderer
@@ -229,19 +281,23 @@ Item {
                     y2: root.height
                     GradientStop {
                         position: 0
-                        color: CelestinaTheme.glassBorder
+                        color: CelestinaTheme.multiplyAlpha(
+                                   CelestinaTheme.glassBorder,
+                                   root.materialStrength)
                     }
                     GradientStop {
                         position: CelestinaTheme.glassEdgeMidPosition
                         color: CelestinaTheme.multiplyAlpha(
                                    CelestinaTheme.glassBorder,
-                                   CelestinaTheme.glassEdgeMidOpacity)
+                                   CelestinaTheme.glassEdgeMidOpacity
+                                   * root.materialStrength)
                     }
                     GradientStop {
                         position: CelestinaTheme.glassEdgeLowPosition
                         color: CelestinaTheme.multiplyAlpha(
                                    CelestinaTheme.glassBorder,
-                                   CelestinaTheme.glassEdgeLowOpacity)
+                                   CelestinaTheme.glassEdgeLowOpacity
+                                   * root.materialStrength)
                     }
                     GradientStop {
                         position: 1

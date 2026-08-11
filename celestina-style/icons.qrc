@@ -53,6 +53,8 @@
     <file alias="copy.svg">icons/copy.svg</file>
     <file alias="cpu.svg">icons/cpu.svg</file>
     <file alias="eraser.svg">icons/eraser.svg</file>
+    <file alias="eye.svg">icons/eye.svg</file>
+    <file alias="eye-off.svg">icons/eye-off.svg</file>
     <file alias="file-archive.svg">icons/file-archive.svg</file>
     <file alias="file-braces.svg">icons/file-braces.svg</file>
     <file alias="file-code.svg">icons/file-code.svg</file>
@@ -82,11 +84,14 @@
     <file alias="monitor.svg">icons/monitor.svg</file>
     <file alias="paintbrush.svg">icons/paintbrush.svg</file>
     <file alias="pencil.svg">icons/pencil.svg</file>
+    <file alias="pin.svg">icons/pin.svg</file>
     <file alias="printer.svg">icons/printer.svg</file>
     <file alias="rotate-ccw.svg">icons/rotate-ccw.svg</file>
     <file alias="scissors.svg">icons/scissors.svg</file>
     <file alias="share-2.svg">icons/share-2.svg</file>
+    <file alias="system-tray.svg">icons/system-tray.svg</file>
     <file alias="terminal.svg">icons/terminal.svg</file>
+    <file alias="toolbox.svg">icons/toolbox.svg</file>
     <file alias="type.svg">icons/type.svg</file>
     <file alias="unplug.svg">icons/unplug.svg</file>
     <file alias="wifi.svg">icons/wifi.svg</file>

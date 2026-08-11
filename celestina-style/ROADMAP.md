@@ -8,7 +8,7 @@
 `STYLE-M1` remains the next settled maintenance checkpoint after `STYLE-G7`
 and has no active execution plan.
 
-## STYLE-G7 — Shared reading controls
+## STYLE-G7 — Shared reading controls and demonstrated visual primitives
 
 The falsifiable problem: two applications need the same two reading controls —
 a scroll position and a line-number column — and the sharing contract admits a
@@ -20,6 +20,15 @@ The tangible outcome is `CelestinaScrollBar` and `CelestinaLineGutter` in the
 canonical module, registered in `qmldir` and the QML module, built from semantic
 `CelestinaTheme` tokens rather than from a re-skinned `QtQuick.Controls`
 template, and consumed through the canonical path by both applications.
+
+Later demonstrated consumers extend the same active checkpoint without moving
+application policy into Style. Celestina's compositor-backed contextual
+sections require `GlassSurface` to render the canonical material over an
+external backdrop while the shell retains protocol and region ownership. Its
+reference-backed follow-up adds opt-in semantic roles: a dense matte
+`ContentSurface` shared by menu cards and panel capsules, and a nearly
+transparent `ContextualVeil` for the menu carrier. Existing consumers retain
+the compatible default material.
 
 The plan is
 [Shared reading controls](docs/plans/active/2026-08-04-shared-reading-controls.md).

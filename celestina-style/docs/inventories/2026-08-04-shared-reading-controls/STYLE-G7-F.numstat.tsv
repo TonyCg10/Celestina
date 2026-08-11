@@ -1,0 +1,55 @@
+# STYLE-G7-F exact change inventory
+
+Base revision	c575a48140438b793061502dfb68d12884fa6c3f
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaIcons.qml
+Pathspec	celestina-style/CelestinaTheme.qml
+Pathspec	celestina-style/DESIGN.md
+Pathspec	celestina-style/GlassSurface.qml
+Pathspec	celestina-style/README.md
+Pathspec	celestina-style/ROADMAP.md
+Pathspec	celestina-style/STATUS.md
+Pathspec	celestina-style/VALIDATION.md
+Pathspec	celestina-style/docs/evidence/2026-08-11-external-backdrop-glass.md
+Pathspec	celestina-style/docs/evidence/2026-08-11-semantic-glass-material-roles.md
+Pathspec	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Pathspec	celestina-style/icons.qrc
+Pathspec	celestina-style/icons/eye-off.svg
+Pathspec	celestina-style/icons/eye.svg
+Pathspec	celestina-style/icons/pin.svg
+Pathspec	celestina-style/icons/system-tray.svg
+Pathspec	celestina-style/icons/toolbox.svg
+Pathspec	celestina-style/scripts/sync-lucide-icons.sh
+Pathspec	celestina-style/tests/tst_glasssurface.qml
+Pathspec	celestina-style/tests/tst_iconcatalog.qml
+Pathspec	docs/version-history.tsv
+Pathspec	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-F.numstat.tsv
+
+Plan	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Evidence	celestina-style/docs/evidence/2026-08-11-external-backdrop-glass.md
+Evidence	celestina-style/docs/evidence/2026-08-11-semantic-glass-material-roles.md
+
+added	deleted	content	path
+6	1	108a0ca7fd7f6a7de2b6284992e47ee252617e3336549e9b44ae2bae66f2bc66	celestina-style/CMakeLists.txt
+5	0	cef901c70c5840636d97d6024b95ac27e590346ab523739c473b71e47c422a4b	celestina-style/CelestinaIcons.qml
+7	0	0be92907b3f10413ff195ec1750b2dd6e2234d51a0be72c1a264b566657ea26d	celestina-style/CelestinaTheme.qml
+44	12	97abf4996697a4c650d7206da1c7b559c5886428fce81084d3212745dc4014c1	celestina-style/DESIGN.md
+84	28	4fa67a0610fd653b03e5c6e1ff7f360f5c308b783df819d72adf4ca7525cee78	celestina-style/GlassSurface.qml
+1	1	066f8063023cc964a761a87d5673a201a89079f8d4cd817f322db2453e38f414	celestina-style/README.md
+10	1	5f4eb4aaa5a1db9fee6d73ccd92e159ec2dcc128a9429339a4ed016eb22b40b2	celestina-style/ROADMAP.md
+27	4	e0b8770b42035ccb587c3a2a47c72abdebb790f504cffc0d33a78b9c7c267241	celestina-style/STATUS.md
+18	8	f91149973903aceb576fa2d5689041f498b64a0f851f920ab6c770c1bb35e5f8	celestina-style/VALIDATION.md
+51	0	b0be56261e49d77bfb3b12785d407817e91ae77ac9da90d605bb0cabdb771c20	celestina-style/docs/evidence/2026-08-11-external-backdrop-glass.md
+76	0	df3978da2d9410d39352ffcac190a7a3a68b2bad927f07b03fe6a79142ee159e	celestina-style/docs/evidence/2026-08-11-semantic-glass-material-roles.md
+57	10	0cffefe0f070c66315dcd8c9b18a63655cf89cba0ee88d61927324a91e8a0c5d	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+5	0	9d29a27f8d0f9f4bf08da3f691f7fefb10b2ea951504c83c9e61b783ecc14d39	celestina-style/icons.qrc
+16	0	bebb85a820410a26f94f6dd96566525494a8d5217c8ed3af060cc442c6ec5d7c	celestina-style/icons/eye-off.svg
+14	0	823ebbfcb1e7c694688ac7b73029537fd00d343efd6c1397b3bead98f40bbbc1	celestina-style/icons/eye.svg
+14	0	1d56fd43b397b0aafd7f60ca71cba3f13a339e101f8f72adfb08956c318e97d2	celestina-style/icons/pin.svg
+14	0	c1bb64c3065854aad075a3626bbc788bdc6cc33c3aed34801f647a2cfa53d66f	celestina-style/icons/system-tray.svg
+16	0	f520e654c64ea252e404456fd346c5877fdc0caaa45d586de2589f7e4abaeafc	celestina-style/icons/toolbox.svg
+6	3	34f0fa8d8c5a78e21a2132d20cda87f53c5e0da76f41e7754b12917d369f2676	celestina-style/scripts/sync-lucide-icons.sh
+156	0	23d415de78c91ff9b3291cad9f30794a307c48032a7121426ed0eaf8487a2a22	celestina-style/tests/tst_glasssurface.qml
+7	1	05b68dae95277c86e93c67b154aa8fbc1e0bed163e3a224d54b8970ad7565b77	celestina-style/tests/tst_iconcatalog.qml
+1	0	854cf9efff2920f094f621f3d306c61a2dc7c0d59f7310ccd20d154dc155fc0f	docs/version-history.tsv
+55	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-F.numstat.tsv

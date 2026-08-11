@@ -1,9 +1,11 @@
 # CelestinaStyle status
 
-- **Updated:** 2026-08-08
-- **Implementation:** the shared source contract is live at 1.2.0 with the two
-  reading controls and the panel's finite status-glyph set published;
-  `STYLE-G7` is the active checkpoint and
+- **Updated:** 2026-08-11
+- **Implementation:** the shared source contract is delivered at 1.3.0 with the
+  two reading controls, the demonstrated shell glyphs, one additive
+  `GlassSurface.ExternalBackdrop` mode and compatible opt-in `ContentSurface`
+  and `ContextualVeil` roles; `STYLE-G7-F` records that cumulative prototype
+  snapshot, `STYLE-G7` remains active for the next demonstrated design need and
   `STYLE-M1` remains planned with no execution plan
 - **Author validation:** previous real-session review exists, with focused
   follow-ups pending in [VALIDATION.md](VALIDATION.md)
@@ -28,6 +30,21 @@
   resource, notification, power-profile, brightness and session glyphs used by
   Celestina's accepted panel baseline. The shell still owns their state,
   accessibility copy and interaction.
+- The verified 1.3.0 extension adds only `toolbox`, `pin`, `eye`, `eye-off` and
+  `system-tray`. `toolbox` maps to Lucide's literal tool case rather than its
+  briefcase; `system-tray` maps to the bounded inbox anatomy instead of the
+  launcher grid or generic application window. All tray and wallpaper behavior
+  remains local to Celestina.
+- The same 1.3.0 delivery keeps `InSceneCapture` as the compatible default and adds
+  an explicit external-backdrop path. That path never activates
+  `ShaderEffectSource`; it renders the same tint, noise, outline, lit edge and
+  readable fallback above a compositor effect owned by the consuming host.
+- The same 1.3.0 delivery leaves the default material pixel-compatible. Celestina
+  alone opts its information-bearing menu cards and panel capsules into one
+  `ContentSurface`, while its contextual carrier uses `ContextualVeil`.
+  Strength applies to tint, noise, outline and lit edge together; both roles
+  are shadowless, never capture another Wayland client and preserve one
+  compositor region for the complete menu.
 - The installed/versioned module is not current delivery architecture. It
   remains gated on a consumer outside this repository.
 
@@ -52,6 +69,12 @@ the canonical compiled module passed its contract guards, `all_qmllint`, CTest
 1/1 and an eight-second compiled-module smoke; all registered consumers were
 also verified through their own production entries. Exact commands and limits
 are in the suite [evidence](../docs/evidence/2026-08-03-repository-governance.md).
+The external-backdrop prototype passed the same production guard, lint, QtTest
+and gallery smoke on 2026-08-11; exact commands and limits are in the
+[external-backdrop evidence](docs/evidence/2026-08-11-external-backdrop-glass.md).
+The final 1.3.0 snapshot passed the same canonical production workflow and its
+focused semantic-role construction tests; exact results are recorded in
+[semantic glass material roles](docs/evidence/2026-08-11-semantic-glass-material-roles.md).
 Compositor and AT results belong only to [VALIDATION.md](VALIDATION.md).
 
 ## Records

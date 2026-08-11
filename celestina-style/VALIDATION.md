@@ -7,15 +7,25 @@ perception, input devices or assistive-technology stack. It does not block
 ## VAL-STYLE-01 — Compositor glass and content-icon review
 
 - **Status:** pending
-- **Related implementation:** completed S2/S5 glass and content-icon work
+- **Related implementation:** completed S2/S5 glass and the cumulative
+  `STYLE-G7-F` prototype snapshot
 - **Requires:** verified production artifacts on the real Niri/Wayland session
-- **Procedure:** inspect regular/strong in-scene glass, the shell's compositor
-  glass and fallback, then folder/file icons at 20, 24, 48 and 128 logical px
-  over representative light and dark content
-- **Pass condition:** blur is visibly real where advertised, fallback remains
-  readable, no sharp wallpaper leaks through the panel region and icons retain
-  recognisable shape/ink contrast at every size
-- **Result:** not run against the latest tint and content-icon values
+- **Procedure:** inspect regular/strong in-scene glass, then the shell's nearly
+  transparent external-backdrop carrier, dense matte contextual cards, matching
+  panel capsules and fallback; confirm the carrier remains one blur region and
+  neither shell role paints a shadow. Inspect folder/file icons at 20, 24, 48
+  and 128 logical px over representative light and dark content
+- **Pass condition:** blur is visibly real where advertised, the contextual
+  field remains subordinate to the denser content/panel material, fallback
+  remains readable, no shadow or sharp wallpaper leak appears around a shell
+  surface and icons retain recognisable shape/ink contrast at every size
+- **Result:** the final `STYLE-G7-F` consumer cycle ran at scale 1 in the
+  existing nested Niri session. Its dark wallpaper retained fixed light/white
+  foregrounds over dense dark matte contextual cards and matching panel
+  capsules; the outer contextual field remained visibly subordinate and no
+  elevation shadow was observed. This is focused agent evidence, not the
+  still-pending author review of every menu, output scale and content icon at
+  every listed size
 - **Evidence:** attach dated captures and note output scale/compositor state
 
 ## VAL-STYLE-02 — Keyboard focus and reduced motion

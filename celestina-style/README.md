@@ -21,7 +21,7 @@ the shell.
 | `CelestinaTheme.qml` | Semantic colour pairs, typography, radii, anatomy, motion and `reducedMotion` |
 | `CelestinaIcons.qml`, `CelestinaIconShapes.qml` | Closed Lucide UI names and generated Phosphor content shapes |
 | `CelestinaSurface.qml`, `CelestinaBackdrop.qml` | Canonical opaque L0/L1 composition |
-| `Glass*.qml` | In-scene floating/modal glass with explicit backdrop ownership |
+| `Glass*.qml` | Canonical floating/modal material over an explicit in-scene capture or compositor backdrop, with opt-in dense-content and contextual-veil roles |
 | `CelestinaButton.qml`, `CelestinaIconButton.qml`, `CelestinaTextField.qml`, `CelestinaSlider.qml`, `CelestinaSwitch.qml` | Shared interactive controls and focus/accessibility contracts |
 | `CelestinaModalLayer.qml`, `CelestinaInputShield.qml`, `CelestinaFocusRing.qml` | Modal lifecycle, pointer floor and keyboard-focus presentation |
 | `CelestinaFolderIcon.qml`, `CelestinaFileIcon.qml` | Token-derived filled content icons |

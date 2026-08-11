@@ -18,7 +18,8 @@ icons=(
     battery-charging:battery-charging binary:binary bookmark-plus:bookmark-plus
     check:check chevron-down:chevron-down chevron-right:chevron-right
     circle-alert:circle-alert clipboard-paste:clipboard-paste
-    clock-arrow-up:clock-arrow-up cloud:cloud copy:copy eraser:eraser file:file
+    clock-arrow-up:clock-arrow-up cloud:cloud copy:copy eraser:eraser
+    eye:eye eye-off:eye-off file:file
     file-archive:file-archive file-braces:file-braces file-code:file-code
     file-image:file-image file-music:file-music file-plus:file-plus
     file-text:file-text file-video-camera:file-video-camera files:files film:film
@@ -31,9 +32,11 @@ icons=(
     media-pause:pause media-play:play media-skip-back:skip-back
     media-skip-forward:skip-forward media-volume:volume-2
     media-volume-muted:volume-x monitor:monitor music:music
-    paintbrush:paintbrush pencil:pencil phone:smartphone plus:plus printer:printer
+    paintbrush:paintbrush pencil:pencil phone:smartphone pin:pin plus:plus printer:printer
     rotate-ccw:rotate-ccw scissors:scissors search:search settings:sliders-horizontal
-    share-2:share-2 star:star star-outline:star symlink:link-2 terminal:terminal
+    share-2:share-2 star:star star-outline:star symlink:link-2
+    system-tray:inbox terminal:terminal
+    toolbox:tool-case
     type:type unplug:unplug user-trash:trash-2 view-details:table-properties
     view-grid:layout-grid view-list:list view-refresh:refresh-cw
     view-sort-ascending:arrow-up-narrow-wide

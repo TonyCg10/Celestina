@@ -79,6 +79,14 @@ implemented.
 - Glass: backdrop blur, slight desaturation and dim, tint, restrained noise, a
   thin dark outline and a top-edge inner glow. It is frosted/matte, not an
   Apple-style refractive lens.
+- Samsung's current visual-depth guidance treats blur and dim as restrained
+  hierarchy tools rather than decoration to apply everywhere. Celestina follows
+  that boundary with two opt-in shell roles: dense matte material only for
+  information-bearing content cards and panel capsules, and a nearly
+  transparent veil for the contextual carrier. The numeric strengths are a
+  measured adaptation of the author's reference crop, not published Samsung
+  constants. See [Samsung visual depth](https://developer.samsung.com/one-ui/structure/visual-depth.html)
+  and [Samsung basic layout](https://developer.samsung.com/one-ui/layout/basic.html).
 - Depth uses blur paired with dim, dim alone or a soft low-opacity shadow.
   Never combine modal dim and a depth shadow on the same surface.
 - Default motion curve: cubic-bezier `(0.22, 0.25, 0, 1)`; expressive variants
@@ -93,9 +101,14 @@ The compiled module requires Qt 6.9. The author's Qt 6.11/Niri 26.04
 environment established an upper capability observation, not the portable
 floor.
 
-- The panel may request real compositor glass through
-  `ext-background-effect-v1`. Application windows cannot sample other clients;
-  they use bounded in-scene capture instead.
+- A layer-shell host may request real compositor glass through
+  `ext-background-effect-v1` and render `GlassSurface.ExternalBackdrop` above
+  that result. `GlassSurface` owns the shared tint, noise, outline, lit edge and
+  fallback; the host remains the sole owner of the compositor effect and its
+  region.
+- Application windows cannot sample other clients. They use bounded in-scene
+  capture instead; an external-backdrop surface must never invent a
+  `ShaderEffectSource` for another Wayland client.
 - In-scene glass uses `ShaderEffectSource`/`MultiEffect` with a bounded
   `sourceRect`, downsampled pyramid blur and explicit update scheduling. Keep
   `blurMax` at or below 32 and use noise to dither banding.
@@ -159,7 +172,8 @@ and its own accepted checkpoint.
 | L1 | Grouped/content card | Opaque semantic surface, whitespace and one quiet outline; no shadow |
 | L2 | Menu, tooltip, tab pills, toast | Regular glass plus soft shadow |
 | L3 | Dialog/modal | Strong glass plus scrim; no simultaneous depth shadow |
-| Panel | Layer-shell bar | Compositor glass over wallpaper, with an in-scene/translucent fallback |
+| Shell content card / panel capsule | Layer-shell surface | One host-owned compositor blur region, or one region shared by the complete menu, with dense shadowless `ContentSurface` material |
+| Contextual menu carrier | Layer-shell surface | The same single host-owned compositor blur region with a nearly transparent shadowless `ContextualVeil` and a readable fallback |
 
 `CelestinaSurface` owns L0/L1 fill, ink, radius and quiet outline. Consumers
 choose a semantic role (`Canvas`, `Panel`, `Grouped`, `Content`, `Tonal`,
@@ -167,16 +181,34 @@ choose a semantic role (`Canvas`, `Panel`, `Grouped`, `Content`, `Tonal`,
 remains valid for masks, thumbnails, progress and tiny indicators, not as a
 parallel public styling API.
 
-Compositor glass has separate tint and fallback roles because wallpaper is
-hostile input. They are checked after compositing over black and white. A real
-session is still required to prove that blur itself is active.
+Compositor glass has separate tint and fallback roles because the scene below
+it is hostile input. They are checked after compositing over black and white.
+One host region may support several `GlassSurface.ContentSurface` sections;
+those sections and panel capsules use the same dense matte material without
+multiplying compositor regions or capturing their own window. The menu's
+`ContextualVeil` attenuates tint, noise, outline and lit edge together so the
+outer field remains only an organizing trace. Both shell roles have zero
+elevation; the general-purpose default material remains compatible for every
+other suite consumer. A real session is still required to prove that blur
+itself is active.
 
 ### 5.3 Glass
 
-The accepted order is bounded capture (approximately 0.5× texture), pyramid
-blur, slight desaturation and scheme-tuned dim, Regular/Strong tint, ±1–2/255
-noise, 1 px exterior outline and restrained top-edge glow. Failure to capture
-degrades to a readable translucent tint.
+For `InSceneCapture`, the accepted order is bounded capture (approximately
+0.5× texture), pyramid blur, slight desaturation and scheme-tuned dim,
+Regular/Strong tint, ±1–2/255 noise, 1 px exterior outline and restrained
+top-edge glow. `ExternalBackdrop` omits only the capture and blur passes because
+the compositor supplies them; it retains the same material ordering. Failure
+to capture or supply an external backdrop degrades to a readable translucent
+tint.
+
+`StandardMaterial` preserves that existing full-strength recipe.
+`ContentSurface` applies the reference-derived `0.64` strength to the complete
+decorative stack and pairs its neutral material polarity with the host's
+foreground polarity. `ContextualVeil` applies `0.12` to the same stack; because
+its normal highlight tint is itself translucent, the usual visible tint is
+approximately two percent. These values describe Celestina's adaptation of the
+supplied One UI 8.5 image, not a claim about Samsung's private implementation.
 
 The surface recaptures on its own size change. A movable host explicitly rearms
 on show or position change. Wheel/pointer ownership and lifecycle remain the
@@ -252,7 +284,7 @@ compatibility policy changes that contract.
 | `CelestinaModalLayer` | Scrim, input shielding, focus containment/restoration and modal accessibility floor |
 | `CelestinaFolderIcon` | Filled in-tree folder shape with semantic tone and contrast-safe internal ink |
 | `CelestinaFileIcon` | Filled semantic file-type shape with stroke fallback |
-| `GlassSurface` | Bounded Regular/Strong in-scene glass, explicit backdrop and readable fallback |
+| `GlassSurface` | Regular/Strong material over bounded in-scene capture or an explicit compositor-supplied backdrop, with a readable fallback |
 | `GlassCard` | Glass surface with shared card anatomy/elevation, no application state |
 | `GlassContextMenu` | Floating menu container with focus/input ownership and event-driven recapture |
 | `GlassMenuItem` | Keyboard/pointer-operable menu row with role/name/state and semantic ink |

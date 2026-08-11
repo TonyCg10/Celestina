@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina-style VERSION 1.2.0 LANGUAGES CXX)
+project(celestina-style VERSION 1.3.0 LANGUAGES CXX)
 
 include(CTest)
 
@@ -108,6 +108,8 @@ qt_add_qml_module(celestina-style
         icons/copy.svg
         icons/cpu.svg
         icons/eraser.svg
+        icons/eye.svg
+        icons/eye-off.svg
         icons/file-archive.svg
         icons/file-braces.svg
         icons/file-code.svg
@@ -137,11 +139,14 @@ qt_add_qml_module(celestina-style
         icons/monitor.svg
         icons/paintbrush.svg
         icons/pencil.svg
+        icons/pin.svg
         icons/printer.svg
         icons/rotate-ccw.svg
         icons/scissors.svg
         icons/share-2.svg
+        icons/system-tray.svg
         icons/terminal.svg
+        icons/toolbox.svg
         icons/type.svg
         icons/unplug.svg
         icons/wifi.svg

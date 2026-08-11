@@ -762,6 +762,13 @@ QtObject {
     readonly property real glassEdgeLowPosition: 0.70
     readonly property real glassEdgeMidOpacity: 0.45
     readonly property real glassEdgeLowOpacity: 0.15
+    // Opt-in semantic strengths for compositor-backed shell surfaces. Samsung
+    // does not publish numeric One UI 8.5 glass opacities; the content value is
+    // measured from the supplied reference crop (roughly 0.63 neutral dim),
+    // while the veil remains only an organizing trace. GlassSurface applies
+    // each value to tint, noise, outline and lit edge as one material.
+    readonly property real glassContentSurfaceStrength: 0.64
+    readonly property real glassContextualVeilStrength: 0.12
 
     // ── Elevation (scalars) ──────────────────────────────────────────────────
     // The L2 drop shadow (RectangularShadow) under floating layers. Soft, large

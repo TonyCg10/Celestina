@@ -50,10 +50,16 @@ TestCase {
         compare(CelestinaIcons.resolve("", ""), "")
         verify(CelestinaIcons.available["search"] === true)
         for (const name of ["wifi", "bluetooth", "cpu", "memory-stick", "mic", "mic-off",
-                            "bell", "bell-off", "power", "sun", "gauge", "leaf", "zap"]) {
+                            "bell", "bell-off", "power", "sun", "gauge", "leaf", "zap",
+                            "toolbox", "system-tray", "pin", "eye", "eye-off"]) {
             compare(CelestinaIcons.resolve(name, ""), name)
             verify(CelestinaIcons.source(name, "").endsWith(name + ".svg"))
         }
+        // The semantic toolbox slot must remain independent from the folder
+        // family: its vendored asset is Lucide's literal tool case.
+        compare(CelestinaIcons.resolve("toolbox", "folder"), "toolbox")
+        compare(CelestinaIcons.resolve("system-tray", "view-grid"),
+                "system-tray")
     }
 
     // Both tables are still enumerable objects: the guard is on the prototype,
