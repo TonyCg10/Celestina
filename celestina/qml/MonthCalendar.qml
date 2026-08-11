@@ -13,6 +13,8 @@ import QtQuick
 Column {
     id: root
 
+    required property BackdropInk ink
+
     // Which month is shown. Today's, until somebody steps away from it.
     property date shown: new Date()
     readonly property date today: new Date()
@@ -24,6 +26,8 @@ Column {
     readonly property int leadingBlanks: (new Date(root.shownYear, root.shownMonth, 1).getDay() + 6) % 7
     readonly property bool showingThisMonth: root.shownYear === root.today.getFullYear()
                                              && root.shownMonth === root.today.getMonth()
+    property int dayCellHeight: CelestinaTheme.space2xl
+    readonly property var displayLocale: Qt.locale("es_ES")
 
     readonly property var weekdayNames: [qsTr("lu"), qsTr("ma"), qsTr("mi"),
                                          qsTr("ju"), qsTr("vi"), qsTr("sá"), qsTr("do")]
@@ -34,11 +38,20 @@ Column {
         root.shown = new Date(root.shownYear, root.shownMonth + months, 1);
     }
 
+    function monthTitle() {
+        const month = root.displayLocale.standaloneMonthName(root.shownMonth);
+        const capitalized = month.length > 0
+                            ? month.charAt(0).toUpperCase() + month.slice(1)
+                            : month;
+        return capitalized + " " + root.shownYear;
+    }
+
     Row {
         width: parent.width
         spacing: CelestinaTheme.spaceSm
 
-        CelestinaButton {
+        BackdropButton {
+            ink: root.ink
             text: qsTr("‹")
             helpText: qsTr("El mes anterior")
             onClicked: root.step(-1)
@@ -48,15 +61,16 @@ Column {
             anchors.verticalCenter: parent.verticalCenter
             width: parent.width - CelestinaTheme.space3xl * 2 - parent.spacing * 2
             horizontalAlignment: Text.AlignHCenter
-            text: Qt.locale().standaloneMonthName(root.shownMonth) + " " + root.shownYear
-            color: CelestinaTheme.text
+            text: root.monthTitle()
+            color: root.ink.primary
             elide: Text.ElideRight
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontBody
             font.weight: CelestinaTheme.weightDemiBold
         }
 
-        CelestinaButton {
+        BackdropButton {
+            ink: root.ink
             text: qsTr("›")
             helpText: qsTr("El mes siguiente")
             onClicked: root.step(1)
@@ -79,7 +93,7 @@ Column {
                 width: (grid.width - grid.spacing * 6) / 7
                 horizontalAlignment: Text.AlignHCenter
                 text: modelData
-                color: CelestinaTheme.textMuted
+                color: root.ink.muted
                 font.family: CelestinaTheme.sansFamily
                 font.pixelSize: CelestinaTheme.fontCaption
             }
@@ -90,7 +104,7 @@ Column {
 
             delegate: Item {
                 width: (grid.width - grid.spacing * 6) / 7
-                height: CelestinaTheme.space2xl
+                height: root.dayCellHeight
             }
         }
 
@@ -106,7 +120,7 @@ Column {
                                                 && cell.day === root.today.getDate()
 
                 width: (grid.width - grid.spacing * 6) / 7
-                height: CelestinaTheme.space2xl
+                height: root.dayCellHeight
 
                 Accessible.role: Accessible.StaticText
                 Accessible.name: cell.isToday ? qsTr("%1, hoy").arg(cell.day) : String(cell.day)
@@ -123,7 +137,7 @@ Column {
                 Text {
                     anchors.centerIn: parent
                     text: cell.day
-                    color: cell.isToday ? CelestinaTheme.accentInk : CelestinaTheme.text
+                    color: cell.isToday ? CelestinaTheme.accentInk : root.ink.primary
                     font.family: CelestinaTheme.sansFamily
                     font.features: CelestinaTheme.fontFeaturesTabular
                     font.pixelSize: CelestinaTheme.fontCaption

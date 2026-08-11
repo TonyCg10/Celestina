@@ -103,16 +103,31 @@ hotkey-overlay {
 prefer-no-csd
 
 // PANEL-1 reference profile. Niri owns blur intensity globally; a client can
-// request finite regions but cannot choose their strength. The first 3-pass,
-// offset-5 candidate still preserved individual branches inside a 28 px pill;
-// this reference profile spends one additional pass and widens the sampling
-// enough to read as glass rather than as transparent paint. The live-session
-// equivalent remains opt-in documentation.
+// request finite regions but cannot choose their strength. The previous
+// 4-pass, offset-6 candidate erased too much wallpaper structure once the
+// menu material became transparent. This deliberately slight sample keeps the
+// backdrop recognizable. The live-session equivalent remains opt-in
+// documentation.
 blur {
-    passes 4
-    offset 6
-    noise 0.02
-    saturation 1.2
+    passes 2
+    offset 2
+    noise 0.01
+    saturation 0.9
+}
+
+// Niri 26.04 enables xray automatically whenever a background effect is
+// active. Xray deliberately reuses the blurred wallpaper and ignores windows
+// below the surface. Celestina's ext-background-effect request can describe
+// the finite glass shape but cannot override that compositor policy, so the
+// reference session disables xray only for Celestina's interactive glass
+// layers. Wallpaper, toast and OSD surfaces stay outside this visual-language
+// unit.
+layer-rule {
+    match namespace="^celestina-(panel|panel-menu|panel-child-menu|overlay)$"
+
+    background-effect {
+        xray false
+    }
 }
 
 binds {

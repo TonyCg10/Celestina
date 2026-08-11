@@ -14,6 +14,7 @@ pragma ComponentBehavior: Bound
 
 import CelestinaStyle
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Window
 
 Window {
@@ -141,10 +142,16 @@ Window {
                         CelestinaIconButton {
                             id: dismissButton
 
+                            objectName: "celestina-toast-dismiss"
                             iconName: "x"
                             // Dismissing is this person having dealt with it,
                             // which is not what a timeout means.
                             helpText: qsTr("Descartar esta notificación")
+                            // Toast actions are the one direct style-control
+                            // exception outside the shell's BackdropButton
+                            // family. Keep the AT-SPI name without a hover card.
+                            ToolTip.visible: false
+                            ToolTip.text: ""
                             onClicked: stack.dismiss(card.modelData.id)
                         }
                     }

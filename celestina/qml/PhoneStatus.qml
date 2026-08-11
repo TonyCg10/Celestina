@@ -12,6 +12,7 @@ Item {
     required property bool blurAvailable
     required property int battery
     required property bool charging
+    required property BackdropInk ink
 
     implicitWidth: layout.implicitWidth
     implicitHeight: layout.implicitHeight
@@ -35,6 +36,7 @@ Item {
             height: CelestinaTheme.iconSm
             name: "phone"
             tone: CelestinaIcon.Primary
+            tintOverride: phoneRoot.ink.primary
             Accessible.ignored: true
         }
 
@@ -45,6 +47,7 @@ Item {
             visible: phoneRoot.battery >= 0 && phoneRoot.charging
             name: "battery-charging"
             tone: CelestinaIcon.Primary
+            tintOverride: phoneRoot.ink.primary
             Accessible.ignored: true
         }
 
@@ -52,7 +55,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             visible: phoneRoot.battery >= 0
             text: phoneRoot.battery + " %"
-            color: CelestinaTheme.text
+            color: phoneRoot.ink.primary
             font.family: CelestinaTheme.sansFamily
             font.features: CelestinaTheme.fontFeaturesTabular
             font.pixelSize: CelestinaTheme.fontTitle
@@ -62,6 +65,7 @@ Item {
 
     PanelPill {
         blurAvailable: phoneRoot.blurAvailable
+        ink: phoneRoot.ink
         onBlurRegionChanged: phoneRoot.blurRegionChanged()
     }
 

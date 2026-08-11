@@ -19,6 +19,7 @@
 //! the durable write itself stays with the runtime that can actually fsync.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
@@ -28,11 +29,74 @@ use crate::session::MAX_LEVEL;
 /// The schema version written into the file. A file from the future is not
 /// read: an older shell guessing at a newer schema would be inventing the
 /// person's preferences.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 3;
 /// A place name is a label, not an address. It is shown, never resolved.
 pub const MAX_PLACE_CHARS: usize = 64;
 /// The whole file, as a guard against a corrupted or hostile settings path.
-pub const MAX_FILE_BYTES: usize = 8 * 1024;
+pub const MAX_FILE_BYTES: usize = 64 * 1024;
+/// A tray host accepts at most 64 live items. Preferences may outlive those
+/// items, so a new explicit choice replaces one existing entry at this bound.
+pub const MAX_TRAY_ITEM_MODES: usize = 64;
+/// SHA-256 written as lowercase hexadecimal by the Qt tray adapter.
+pub const TRAY_PREFERENCE_KEY_CHARS: usize = 64;
+/// The selected wallpaper library is carried through the same bounded text
+/// channel as every other provider field. It is an absolute local path, not a
+/// URI; the Qt boundary performs URL-to-path conversion before it reaches the
+/// settings owner.
+pub const MAX_WALLPAPER_DIRECTORY_UNITS: usize = crate::snapshot::MAX_TEXT_UNITS;
+
+/// Whether a wallpaper-library directory is safe to persist as a preference.
+///
+/// This is deliberately syntax-only. The non-Qt wallpaper worker owns the
+/// filesystem check and may report a temporarily unavailable mounted folder;
+/// settings own only whether the value is bounded and unambiguous on disk.
+#[must_use]
+pub fn wallpaper_directory_is_valid(directory: &str) -> bool {
+    !directory.is_empty()
+        && directory.encode_utf16().count() <= MAX_WALLPAPER_DIRECTORY_UNITS
+        && !directory.contains('\0')
+        && Path::new(directory).is_absolute()
+}
+
+/// Where one tray item belongs when it is present.
+///
+/// Absence from [`Settings::tray_items`] is the ordinary visible state. The
+/// two stored values are deliberately exclusive: hiding an item also unpins
+/// it, and pinning it also makes it visible.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TrayItemMode {
+    Pinned,
+    Hidden,
+}
+
+impl TrayItemMode {
+    #[must_use]
+    pub const fn token(self) -> &'static str {
+        match self {
+            Self::Pinned => "pinned",
+            Self::Hidden => "hidden",
+        }
+    }
+
+    #[must_use]
+    pub fn from_token(raw: &str) -> Option<Self> {
+        match raw {
+            "pinned" => Some(Self::Pinned),
+            "hidden" => Some(Self::Hidden),
+            _ => None,
+        }
+    }
+}
+
+/// Whether a preference key is one the tray adapter could have produced.
+#[must_use]
+pub fn tray_preference_key_is_valid(key: &str) -> bool {
+    key.len() == TRAY_PREFERENCE_KEY_CHARS
+        && key
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
 
 /// Where the weather reading is for. Coordinates rather than a place lookup:
 /// this shell sends one pair of numbers to one service and nothing else, and a
@@ -101,6 +165,15 @@ pub struct Settings {
     /// [`crate::workspace_groups`], which owns what a home means and what may
     /// teach one.
     pub workspace_homes: BTreeMap<String, String>,
+    /// Per-item tray placement, keyed by the stable fingerprint exported by
+    /// the StatusNotifierItem adapter. Live D-Bus service/path identities are
+    /// intentionally not persisted because unique bus names change whenever
+    /// an application restarts.
+    pub tray_items: BTreeMap<String, TrayItemMode>,
+    /// The person's wallpaper library. The directory survives a shell restart;
+    /// its inventory does not, because files may be added, removed or replaced
+    /// while the shell is away and must be observed again.
+    pub wallpaper_directory: Option<String>,
 }
 
 impl Default for Settings {
@@ -114,6 +187,8 @@ impl Default for Settings {
             weather: None,
             weather_icon: String::new(),
             workspace_homes: BTreeMap::new(),
+            tray_items: BTreeMap::new(),
+            wallpaper_directory: None,
         }
     }
 }
@@ -143,6 +218,15 @@ impl Settings {
                 .map(|(label, output)| (label.as_str(), output.as_str())),
         );
         self.workspace_homes = homes.declarations().clone();
+        self.tray_items = self
+            .tray_items
+            .into_iter()
+            .filter(|(key, _)| tray_preference_key_is_valid(key))
+            .take(MAX_TRAY_ITEM_MODES)
+            .collect();
+        self.wallpaper_directory = self
+            .wallpaper_directory
+            .filter(|directory| wallpaper_directory_is_valid(directory));
         self
     }
 
@@ -279,6 +363,75 @@ mod tests {
         assert!(!settings.caffeine);
         assert!(!settings.night_light);
         assert_eq!(settings.weather, None);
+        assert!(settings.tray_items.is_empty());
+        assert_eq!(settings.wallpaper_directory, None);
+    }
+
+    fn tray_key(index: usize) -> String {
+        format!("{index:0width$x}", width = TRAY_PREFERENCE_KEY_CHARS)
+    }
+
+    #[test]
+    fn tray_item_modes_survive_a_round_trip_and_remain_exclusive() {
+        let pinned = tray_key(1);
+        let hidden = tray_key(2);
+        let settings = Settings {
+            tray_items: BTreeMap::from([
+                (pinned.clone(), TrayItemMode::Pinned),
+                (hidden.clone(), TrayItemMode::Hidden),
+            ]),
+            ..Settings::default()
+        };
+
+        let bytes = settings.to_bytes().expect("settings serialize");
+        let read = Settings::from_bytes(&bytes).expect("settings read back");
+
+        assert_eq!(read.tray_items.get(&pinned), Some(&TrayItemMode::Pinned));
+        assert_eq!(read.tray_items.get(&hidden), Some(&TrayItemMode::Hidden));
+        assert!(String::from_utf8(bytes)
+            .expect("settings are UTF-8")
+            .contains("\"pinned\""));
+    }
+
+    #[test]
+    fn tray_item_modes_drop_foreign_keys_and_are_bounded() {
+        let mut tray_items = BTreeMap::new();
+        tray_items.insert("not-a-fingerprint".to_owned(), TrayItemMode::Pinned);
+        for index in 0..(MAX_TRAY_ITEM_MODES + 4) {
+            tray_items.insert(tray_key(index), TrayItemMode::Hidden);
+        }
+        let settings = Settings {
+            tray_items,
+            ..Settings::default()
+        };
+
+        let bytes = settings.to_bytes().expect("settings serialize");
+        let read = Settings::from_bytes(&bytes).expect("settings read back");
+
+        assert_eq!(read.tray_items.len(), MAX_TRAY_ITEM_MODES);
+        assert!(!read.tray_items.contains_key("not-a-fingerprint"));
+        assert!(read
+            .tray_items
+            .keys()
+            .all(|key| tray_preference_key_is_valid(key)));
+    }
+
+    #[test]
+    fn tray_mode_tokens_are_the_persisted_protocol_vocabulary() {
+        assert_eq!(TrayItemMode::Pinned.token(), "pinned");
+        assert_eq!(TrayItemMode::Hidden.token(), "hidden");
+        assert_eq!(
+            TrayItemMode::from_token("pinned"),
+            Some(TrayItemMode::Pinned)
+        );
+        assert_eq!(
+            TrayItemMode::from_token("hidden"),
+            Some(TrayItemMode::Hidden)
+        );
+        assert_eq!(TrayItemMode::from_token("visible"), None);
+        assert!(!tray_preference_key_is_valid(
+            &"A".repeat(TRAY_PREFERENCE_KEY_CHARS)
+        ));
     }
 
     #[test]
@@ -310,16 +463,114 @@ mod tests {
     }
 
     #[test]
-    fn a_settings_file_that_predates_workspace_homes_still_reads() {
+    fn older_settings_files_migrate_to_v3() {
         // Every previous session's file. It must keep working rather than
-        // becoming unreadable because a field was added after it was written.
-        let old =
-            br#"{"schema":1,"quiet":true,"caffeine":false,"nightLight":false,"level_step":5}"#;
+        // becoming unreadable because tray placement and then the wallpaper
+        // library were added. The next durable write protects both fields from
+        // an older binary.
+        let v1 = br#"{
+            "schema": 1,
+            "quiet": true,
+            "caffeine": false,
+            "night_light": true,
+            "level_step": 5,
+            "workspace_homes": {"7": "DP-1"}
+        }"#;
+        let v2 = br#"{
+            "schema": 2,
+            "quiet": false,
+            "tray_items": {}
+        }"#;
 
-        let read = Settings::from_bytes(old).expect("an older file is still ours");
+        let read = Settings::from_bytes(v1).expect("a v1 file is still ours");
+        let read_v2 = Settings::from_bytes(v2).expect("a v2 file is still ours");
 
+        assert_eq!(read.schema, SCHEMA_VERSION);
+        assert_eq!(read_v2.schema, SCHEMA_VERSION);
         assert!(read.quiet);
-        assert!(read.workspace_homes.is_empty());
+        assert!(read.night_light);
+        assert_eq!(
+            read.workspace_homes.get("7").map(String::as_str),
+            Some("DP-1")
+        );
+        assert!(read.tray_items.is_empty());
+        assert_eq!(read.wallpaper_directory, None);
+        assert_eq!(read_v2.wallpaper_directory, None);
+
+        let migrated = read.to_bytes().expect("the migrated settings serialize");
+        assert!(String::from_utf8(migrated.clone())
+            .expect("settings are UTF-8")
+            .contains("\"schema\": 3"));
+        assert_eq!(Settings::from_bytes(&migrated), Some(read));
+    }
+
+    #[test]
+    fn wallpaper_directory_is_absolute_bounded_and_durable_before_adoption() {
+        let chosen = "/home/person/Pictures/Wallpapers".to_owned();
+        assert!(wallpaper_directory_is_valid(&chosen));
+        assert!(!wallpaper_directory_is_valid("Pictures/Wallpapers"));
+        assert!(!wallpaper_directory_is_valid("/tmp/a\0b"));
+        assert!(!wallpaper_directory_is_valid(&format!(
+            "/{}",
+            "x".repeat(MAX_WALLPAPER_DIRECTORY_UNITS)
+        )));
+
+        let mut store = Store::new(Settings::default());
+        let pending = store.stage(|settings| {
+            settings.wallpaper_directory = Some(chosen.clone());
+        });
+        assert_eq!(store.current().wallpaper_directory, None);
+        assert!(!store.apply(pending.clone(), WriteOutcome::Failed));
+        assert_eq!(store.current().wallpaper_directory, None);
+        assert!(store.apply(pending, WriteOutcome::Durable));
+        assert_eq!(
+            store.current().wallpaper_directory.as_deref(),
+            Some(chosen.as_str())
+        );
+
+        let bytes = store.current().to_bytes().expect("settings serialize");
+        assert_eq!(
+            Settings::from_bytes(&bytes).and_then(|settings| settings.wallpaper_directory),
+            Some(chosen)
+        );
+    }
+
+    #[test]
+    fn the_largest_legal_settings_state_fits_and_reads_back() {
+        let workspace_homes = (0..crate::workspace_groups::MAX_HOMES)
+            .map(|index| {
+                (
+                    format!(
+                        "{index:0width$x}",
+                        width = crate::workspace_groups::MAX_NAME_CHARS
+                    ),
+                    format!(
+                        "output-{index:0width$}",
+                        width = crate::workspace_groups::MAX_NAME_CHARS - 7
+                    ),
+                )
+            })
+            .collect();
+        let tray_items = (0..MAX_TRAY_ITEM_MODES)
+            .map(|index| (tray_key(index), TrayItemMode::Hidden))
+            .collect();
+        let settings = Settings {
+            weather: Location::new(90.0, 180.0, &"w".repeat(MAX_PLACE_CHARS)),
+            weather_icon: "i".repeat(MAX_ICON_CHARS),
+            workspace_homes,
+            tray_items,
+            wallpaper_directory: Some(format!(
+                "/{}",
+                "w".repeat(MAX_WALLPAPER_DIRECTORY_UNITS - 1)
+            )),
+            ..Settings::default()
+        };
+
+        let bytes = settings.to_bytes().expect("maximum settings serialize");
+
+        assert!(bytes.len() > 8 * 1024);
+        assert!(bytes.len() <= MAX_FILE_BYTES);
+        assert_eq!(Settings::from_bytes(&bytes), Some(settings));
     }
 
     #[test]

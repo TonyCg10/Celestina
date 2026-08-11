@@ -20,6 +20,7 @@ Item {
 
     // One window's published row: id, title, appId, focused, floating, urgent.
     required property var window
+    required property BackdropInk ink
     property bool current: false
     signal activated()
 
@@ -50,16 +51,16 @@ Item {
         radius: CelestinaTheme.radiusSm
         color: {
             if (pointer.pressed)
-                return CelestinaTheme.surfaceSelected;
+                return root.ink.selectedFill;
 
             if (pointer.containsMouse || root.current)
-                return CelestinaTheme.surfaceHover;
+                return root.ink.hoverFill;
 
             return CelestinaTheme.clear;
         }
         border.width: root.urgent || root.current
                       ? CelestinaTheme.borderHairline : 0
-        border.color: root.urgent ? CelestinaTheme.danger : CelestinaTheme.focusRing
+        border.color: root.urgent ? root.ink.danger : root.ink.focus
 
         Behavior on color {
             enabled: !CelestinaTheme.reducedMotion
@@ -89,9 +90,11 @@ Item {
             // tiles, rather than the circle this used to draw.
             radius: CelestinaTheme.radiusSm
             color: root.urgent
-                   ? CelestinaTheme.withAlpha(CelestinaTheme.danger, 0.22)
-                   : (root.focused ? CelestinaTheme.accentSoft
-                                   : CelestinaTheme.controlFill)
+                   ? CelestinaTheme.withAlpha(
+                         root.ink.danger,
+                         CelestinaTheme.decorationOpacitySoft / 3)
+                   : (root.focused ? root.ink.accentFill
+                                   : root.ink.controlFill)
 
             Image {
                 id: icon
@@ -117,7 +120,7 @@ Item {
                 text: (root.appId.length > 0 ? root.appId : root.title)
                       .charAt(0).toUpperCase()
                 textFormat: Text.PlainText
-                color: CelestinaTheme.textMuted
+                color: root.ink.muted
                 font.family: CelestinaTheme.sansFamily
                 font.pixelSize: CelestinaTheme.fontRowSecondary
                 font.weight: CelestinaTheme.weightDemiBold
@@ -136,7 +139,7 @@ Item {
                 // A window's title is whatever its client set it to, so it is
                 // shown as characters rather than guessed at as markup.
                 textFormat: Text.PlainText
-                color: CelestinaTheme.text
+                color: root.ink.primary
                 font.family: CelestinaTheme.sansFamily
                 font.pixelSize: CelestinaTheme.fontRowSecondary
                 font.weight: root.focused ? CelestinaTheme.weightDemiBold
@@ -150,7 +153,7 @@ Item {
                 visible: root.appId.length > 0
                 text: root.appId
                 textFormat: Text.PlainText
-                color: CelestinaTheme.textFaint
+                color: root.ink.faint
                 font.family: CelestinaTheme.sansFamily
                 font.pixelSize: CelestinaTheme.fontMini
                 elide: Text.ElideRight

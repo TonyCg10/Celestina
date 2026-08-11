@@ -163,6 +163,12 @@ int main(int argc, char *argv[])
         return runShellMessage(app.arguments().mid(2));
     }
 
+    // A folder choice belongs to the session's standard portal route. Respect
+    // an explicit platform theme, but otherwise give Qt's dialog backend that
+    // route before the GUI application chooses its platform integrations.
+    if (!qEnvironmentVariableIsSet("QT_QPA_PLATFORMTHEME"))
+        qputenv("QT_QPA_PLATFORMTHEME", QByteArrayLiteral("xdgdesktopportal"));
+
     QGuiApplication app(argc, argv);
     app.setApplicationName("celestina");
     app.setApplicationDisplayName("Celestina Desktop");
@@ -333,13 +339,17 @@ int main(int argc, char *argv[])
 
     // The panel's context menu is part of the panel; `CELESTINA_PANEL_MENU=0`
     // is the way back if it ever misbehaves on a session.
-    auto *menu = new PanelMenuController(&engine, niri, &app);
+    auto *menu = new PanelMenuController(
+        &engine,
+        niri,
+        &app
+    );
     if (!menu->isEnabled())
         qInfo() << "Celestina is running without the panel context menu.";
 
-    // The launcher and the clipboard history: two keybind-driven overlays,
-    // opened and closed the same way, each loading its own QML component. See
-    // `OverlayController`'s own doc for why one class serves both.
+    // The launcher and the clipboard history share one overlay lifecycle. A
+    // keybind or session command centres them; a permanent panel opener may
+    // additionally hand the same controller a real opener rectangle.
     auto *launcher = new OverlayController(
         &engine,
         QStringLiteral("LauncherOverlay"),
@@ -429,6 +439,18 @@ int main(int argc, char *argv[])
         &TrayWatcher::triggerMenuEntry
     );
     QObject::connect(
+        menu,
+        &PanelMenuController::trayItemActivated,
+        tray,
+        &TrayWatcher::activate
+    );
+    QObject::connect(
+        menu,
+        &PanelMenuController::trayItemSecondaryActivated,
+        tray,
+        &TrayWatcher::secondaryActivate
+    );
+    QObject::connect(
         tray,
         &TrayWatcher::menuReady,
         menu,
@@ -448,6 +470,7 @@ int main(int argc, char *argv[])
         menu,
         reducedMotionRequested()
     );
+    panels.setLauncher(launcher);
     panels.setNotificationCentre(notificationCentre);
     panels.setControlCentre(controlCentre);
     panels.setClipboard(clipboard);

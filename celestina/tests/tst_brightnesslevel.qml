@@ -9,9 +9,14 @@ TestCase {
 
     name: "BrightnessLevel"
 
+    Desktop.BackdropInk {
+        id: testInk
+    }
+
     Desktop.BrightnessLevel {
         id: brightness
 
+        ink: testInk
         outputName: "DP-1"
         reading: undefined
     }

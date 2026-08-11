@@ -1,5 +1,7 @@
 #include <QtTest>
 
+#include <QTemporaryDir>
+
 #include "trayicons.h"
 
 class TrayIconsTest final : public QObject
@@ -8,6 +10,8 @@ class TrayIconsTest final : public QObject
 
 private slots:
     void readsTheSessionsIconThemeName();
+    void keepsQtPrimaryAndUsesGtkAsTheForeignFallback();
+    void resolvesAFlatApplicationThemePathWithoutGuessing();
     void refusesTrayPixmapsItCannotTrust();
     void picksTheSizeClosestToWhatIsDrawn();
     void convertsFromTheSpecificationsByteOrder();
@@ -31,6 +35,76 @@ void TrayIconsTest::readsTheSessionsIconThemeName()
     QVERIFY(parseGtkIconThemeName(QStringLiteral("gtk-icon-theme-name=../../etc\n")).isEmpty());
     QVERIFY(parseGtkIconThemeName(QStringLiteral("gtk-icon-theme-name=\n")).isEmpty());
     QVERIFY(parseGtkIconThemeName(QString()).isEmpty());
+}
+
+void TrayIconsTest::keepsQtPrimaryAndUsesGtkAsTheForeignFallback()
+{
+    QCOMPARE(
+        trayFallbackThemeName(
+            QStringLiteral("breeze-dark"),
+            QStringLiteral("Adwaita")
+        ),
+        QStringLiteral("Adwaita")
+    );
+
+    // When GTK already is the primary theme, its own inheritance reaches
+    // hicolor. An absent GTK declaration has the same deterministic floor.
+    QCOMPARE(
+        trayFallbackThemeName(
+            QStringLiteral("Adwaita"),
+            QStringLiteral("Adwaita")
+        ),
+        QStringLiteral("hicolor")
+    );
+    QCOMPARE(
+        trayFallbackThemeName(QStringLiteral("breeze-dark"), QString()),
+        QStringLiteral("hicolor")
+    );
+    QCOMPARE(
+        trayFallbackThemeName(QString(), QStringLiteral("Adwaita")),
+        QStringLiteral("Adwaita")
+    );
+}
+
+void TrayIconsTest::resolvesAFlatApplicationThemePathWithoutGuessing()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    QImage source(32, 16, QImage::Format_ARGB32_Premultiplied);
+    source.fill(QColor(17, 83, 149, 255));
+    QVERIFY(source.save(directory.filePath(QStringLiteral("steam_tray_mono.png"))));
+
+    const QImage resolved = loadTrayIconFromFlatThemePath(
+        directory.path(),
+        QStringLiteral("steam_tray_mono"),
+        18
+    );
+    QCOMPARE(resolved.size(), QSize(18, 9));
+    QCOMPARE(resolved.pixelColor(9, 4), QColor(17, 83, 149, 255));
+
+    // The SNI name is the only lookup key. A title-like guess and a path escape
+    // both resolve to nothing even though a usable image exists nearby.
+    QVERIFY(loadTrayIconFromFlatThemePath(
+                directory.path(),
+                QStringLiteral("Steam"),
+                18
+            ).isNull());
+    QVERIFY(loadTrayIconFromFlatThemePath(
+                directory.path(),
+                QStringLiteral("../steam_tray_mono"),
+                18
+            ).isNull());
+    QVERIFY(loadTrayIconFromFlatThemePath(
+                directory.path(),
+                directory.filePath(QStringLiteral("steam_tray_mono.png")),
+                18
+            ).isNull());
+    QVERIFY(loadTrayIconFromFlatThemePath(
+                directory.path(),
+                QStringLiteral("steam_tray_mono"),
+                513
+            ).isNull());
 }
 
 void TrayIconsTest::refusesTrayPixmapsItCannotTrust()

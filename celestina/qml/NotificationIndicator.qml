@@ -9,14 +9,15 @@ pragma ComponentBehavior: Bound
 import CelestinaStyle
 import QtQuick
 
-Item {
+PanelMenuButton {
     id: root
 
     // The `notifications` provider's fields, or `undefined` when this shell is
     // not the session's notification server.
     required property var reading
 
-    signal historyRequested()
+    signal historyRequested(int globalX, int globalY,
+                            int openerWidth, int openerHeight)
     signal quietToggled()
 
     readonly property bool serving: reading !== undefined
@@ -29,7 +30,7 @@ Item {
                                          && (root.unread > 0 || root.quiet)
 
     implicitWidth: content.implicitWidth
-    implicitHeight: 26
+    implicitHeight: CelestinaTheme.controlHeightXs
     visible: true
 
     Accessible.role: Accessible.Button
@@ -38,12 +39,13 @@ Item {
             : root.quiet
             ? qsTr("Notificaciones silenciadas, %1 sin leer").arg(root.unread)
             : qsTr("%1 notificaciones sin leer").arg(root.unread)
-    Accessible.onPressAction: root.historyRequested()
+    Accessible.onPressAction: root.requestMenu()
+    onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
+        root.historyRequested(globalX, globalY, openerWidth, openerHeight)
 
-    Row {
+    contentItem: Row {
         id: content
 
-        anchors.verticalCenter: parent.verticalCenter
         spacing: CelestinaTheme.spaceXs
 
         CelestinaIcon {
@@ -53,6 +55,7 @@ Item {
             height: CelestinaTheme.iconSm
             name: root.quiet ? "bell-off" : "bell"
             tone: CelestinaIcon.Primary
+            tintOverride: root.ink.primary
             Accessible.ignored: true
         }
 
@@ -62,7 +65,7 @@ Item {
             text: root.unread
             // Silenced still counts: the number is what is waiting, not what
             // interrupted.
-            color: CelestinaTheme.text
+            color: root.ink.primary
             font.family: CelestinaTheme.sansFamily
             font.features: CelestinaTheme.fontFeaturesTabular
             font.pixelSize: CelestinaTheme.fontTitle
@@ -70,18 +73,11 @@ Item {
 
     }
 
-    MouseArea {
-        anchors.fill: parent
-        hoverEnabled: true
-        acceptedButtons: Qt.LeftButton | Qt.RightButton
-        cursorShape: Qt.PointingHandCursor
-        onClicked: (mouse) => {
-            if (mouse.button === Qt.RightButton) {
-                if (root.serving)
-                    root.quietToggled();
-                return;
-            }
-            root.historyRequested();
+    TapHandler {
+        acceptedButtons: Qt.RightButton
+        onTapped: {
+            if (root.serving)
+                root.quietToggled();
         }
     }
 }

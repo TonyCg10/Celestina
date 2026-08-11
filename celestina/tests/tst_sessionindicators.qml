@@ -1,3 +1,4 @@
+import CelestinaStyle
 import QtQuick
 import QtTest
 import "../qml" as Desktop
@@ -21,13 +22,17 @@ TestCase {
 
     property var requested: []
 
+    Desktop.BackdropInk {
+        id: testInk
+    }
+
     Desktop.SessionStatus {
         id: status
 
+        ink: testInk
         anchors.centerIn: parent
         network: undefined
         bluetooth: undefined
-        power: undefined
         onIndicatorMenuRequested: (kind, globalX, globalY) => {
             testCase.requested.push(kind);
         }
@@ -37,7 +42,6 @@ TestCase {
         testCase.requested = [];
         status.network = undefined;
         status.bluetooth = undefined;
-        status.power = undefined;
     }
 
     function networkIndicator() {
@@ -153,6 +157,23 @@ TestCase {
         compare(testCase.requested, ["network", "bluetooth"]);
     }
 
+    function test_each_menu_opener_reports_a_real_press() {
+        status.network = {"networksState": "fresh", "networks": []};
+        status.bluetooth = {"adapter": "on", "count": 0};
+        waitForRendering(status);
+
+        const controls = [testCase.networkIndicator(),
+                          testCase.bluetoothIndicator()];
+        for (let index = 0; index < controls.length; ++index) {
+            mousePress(controls[index]);
+            verify(controls[index].down);
+            tryCompare(controls[index].background, "color",
+                       CelestinaTheme.surfaceStrong);
+            mouseRelease(controls[index]);
+            verify(!controls[index].down);
+        }
+    }
+
     // And so does Enter, and so does Space — really pressed, on a control that
     // really has the focus.
     function test_enter_and_space_open_the_menu() {
@@ -183,8 +204,7 @@ TestCase {
         waitForRendering(status);
 
         const link = testCase.networkIndicator();
-        const ring = findChild(link, "celestina-indicator-focus");
-        verify(ring);
+        verify(link.background);
 
         // Focus starts elsewhere, so each reason below is really applied
         // rather than being a no-op on an item that already had it.
@@ -194,7 +214,6 @@ TestCase {
         link.forceActiveFocus(Qt.TabFocusReason);
         verify(link.activeFocus);
         verify(link.visualFocus);
-        compare(ring.shown, link.visualFocus);
 
         // Reached by a click: focused, and not shown to be. Focus moves away
         // first so the reason is really re-applied rather than left over.
@@ -203,8 +222,5 @@ TestCase {
         link.forceActiveFocus(Qt.MouseFocusReason);
         verify(link.activeFocus);
         verify(!link.visualFocus);
-        // The ring follows visual focus, not the plain kind — which is the
-        // whole distinction, and the reason it is not bound to `activeFocus`.
-        compare(ring.shown, link.visualFocus);
     }
 }

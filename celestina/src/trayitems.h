@@ -36,6 +36,11 @@ struct TrayItem {
     QString path;
 
     QString id;
+    // A restart-stable fingerprint of the application's real `Id`. Empty when
+    // the peer never supplied an Id: the synthesized display fallback is not a
+    // durable identity and must not become a preference. Live activation
+    // continues to use service/path, never this fingerprint.
+    QString preferenceKey;
     // `Title` when the item gave one, its `Id` otherwise — never empty, because
     // an item with no name is one the user cannot tell from another.
     QString title;
@@ -57,6 +62,12 @@ struct TrayItem {
 
     bool operator==(const TrayItem &other) const;
 };
+
+// Produces the opaque preference identity exported to QML. The SNI `Id` is the
+// protocol field required to remain consistent between sessions; live D-Bus
+// service names and object paths are deliberately absent. Empty input means
+// there is no stable preference identity to promise.
+QString trayPreferenceKey(const QString &id);
 
 // Splits a watcher's registration string, which is a bus name with the object
 // path appended — `:1.19/org/ayatana/NotificationItem/nm_applet`. An entry with

@@ -2,15 +2,19 @@
 
 #include <QQmlComponent>
 #include <QQmlEngine>
+#include <QColor>
+#include <QMap>
+#include <QQuickItem>
+#include <QQuickWindow>
 #include <QStringList>
 #include <QUrl>
-#include <QQuickWindow>
 #include <QSignalSpy>
 #include <QVariantMap>
 
 #include <memory>
 
 #include "overlaycontroller.h"
+#include "panelpopupplacement.h"
 
 namespace {
 // Collects what Qt says while a component is created. Qt does not fail a
@@ -47,8 +51,12 @@ class OverlayContractTest final : public QObject
 
 private slots:
     void everyOverlayDeclaresTheBridgeTheListNamesForIt();
+    void everyInteractiveOverlayUsesOneVeloGlassField();
     void aPropertyTheComponentDoesNotDeclareIsVisibleAsAFailure();
     void aComponentThisShellDoesNotHaveNamesNoBridge();
+    void aPanelOpenedOverlayFollowsOnlyItsButton();
+    void everyPanelOpenedOverlayUsesTheSamePlacement();
+    void sessionCardGrowthDoesNotResizeItsOutputSurface();
     void aClickOutsideTheCardDismissesEveryOverlay();
     void aClickOnTheCardDismissesNothing();
 
@@ -102,6 +110,8 @@ void OverlayContractTest::everyOverlayDeclaresTheBridgeTheListNamesForIt()
         const QVariantMap properties {
             {QStringLiteral("reducedMotion"), true},
             {bridge, QVariant::fromValue<QObject *>(nullptr)},
+            {QStringLiteral("anchoredFromPanel"), true},
+            {QStringLiteral("openerRect"), QRect(900, 6, 28, 28)},
         };
 
         QStringList messages;
@@ -118,6 +128,209 @@ void OverlayContractTest::everyOverlayDeclaresTheBridgeTheListNamesForIt()
         );
         delete root;
     }
+}
+
+void OverlayContractTest::everyInteractiveOverlayUsesOneVeloGlassField()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+
+    for (const QString &component : overlays()) {
+        QQmlComponent overlay(&engine, sourceFor(component));
+        QVERIFY2(overlay.isReady(), qPrintable(overlay.errorString()));
+
+        std::unique_ptr<QObject> root(overlay.createWithInitialProperties({
+            {QStringLiteral("reducedMotion"), true},
+            {overlaySourceProperty(component), QVariant::fromValue<QObject *>(nullptr)},
+        }));
+        QVERIFY2(root, qPrintable(component));
+        QVERIFY2(
+            root->metaObject()->indexOfProperty("glassRegions") >= 0,
+            qPrintable(component)
+        );
+        const QList<QObject *> outerGlass = root->findChildren<QObject *>(
+            QStringLiteral("celestina-compositor-glass-region")
+        );
+        QCOMPARE(outerGlass.size(), 1);
+        QObject *const bodyMaterial = root->findChild<QObject *>(
+            QStringLiteral("celestina-menu-body-tint")
+        );
+        QVERIFY2(bodyMaterial, qPrintable(component));
+        QCOMPARE(bodyMaterial->property("backdropMode").toInt(), 1);
+        QCOMPARE(bodyMaterial->property("externalBackdropReady").toBool(), true);
+        QCOMPARE(bodyMaterial->property("captureActive").toBool(), false);
+        QCOMPARE(bodyMaterial->property("elevation").toInt(), 0);
+        const QList<QObject *> sections = root->findChildren<QObject *>(
+            QStringLiteral("celestina-menu-section")
+        );
+        QVERIFY2(!sections.isEmpty(), qPrintable(component));
+        const int sectionRole = sections.constFirst()
+                                    ->property("materialRole").toInt();
+        const qreal sectionStrength = sections.constFirst()
+                                          ->property("materialStrength").toReal();
+        const QColor sectionTint = sections.constFirst()
+                                       ->property("materialTint").value<QColor>();
+        QVERIFY2(
+            bodyMaterial->property("materialRole").toInt() != sectionRole,
+            qPrintable(component)
+        );
+        QVERIFY2(
+            bodyMaterial->property("materialStrength").toReal()
+                < sectionStrength,
+            qPrintable(component)
+        );
+        for (QObject *const section : sections) {
+            QVERIFY2(
+                section->metaObject()->indexOfProperty("captureActive") >= 0,
+                qPrintable(component)
+            );
+            QCOMPARE(section->property("backdropMode").toInt(), 1);
+            QCOMPARE(section->property("externalBackdropReady").toBool(), true);
+            QCOMPARE(section->property("captureActive").toBool(), false);
+            QCOMPARE(section->property("elevation").toInt(), 0);
+            QCOMPARE(section->property("materialRole").toInt(), sectionRole);
+            QCOMPARE(
+                section->property("materialStrength").toReal(), sectionStrength
+            );
+            QCOMPARE(
+                section->property("materialTint").value<QColor>(), sectionTint
+            );
+            QCOMPARE(
+                section->findChildren<QObject *>(
+                    QStringLiteral("celestina-compositor-glass-region")
+                ).size(),
+                0
+            );
+        }
+        QCOMPARE(
+            root->findChildren<QObject *>(
+                QStringLiteral("celestina-menu-header")
+            ).size(),
+            1
+        );
+
+        const QMap<QString, int> expectedSections {
+            {QStringLiteral("LauncherOverlay"), 3},
+            {QStringLiteral("ClipboardOverlay"), 2},
+            {QStringLiteral("NotificationCenter"), 2},
+            {QStringLiteral("ControlCentre"), 4},
+            {QStringLiteral("SessionMenu"), 2},
+        };
+        QCOMPARE(sections.size(), expectedSections.value(component));
+    }
+}
+
+void OverlayContractTest::everyPanelOpenedOverlayUsesTheSamePlacement()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+
+    constexpr int testOutputWidth = 1280;
+    // Keep the synthetic output taller than every overlay. Bottom-edge
+    // clamping is covered separately; this case isolates the opener gap.
+    constexpr int testOutputHeight = 1600;
+    const QRect opener(1000, 5, 28, 28);
+    for (const QString &component : {
+             QStringLiteral("LauncherOverlay"),
+             QStringLiteral("ClipboardOverlay"),
+             QStringLiteral("NotificationCenter"),
+             QStringLiteral("ControlCentre"),
+             QStringLiteral("SessionMenu"),
+         }) {
+        QQmlComponent overlay(&engine, sourceFor(component));
+        QVERIFY2(overlay.isReady(), qPrintable(overlay.errorString()));
+
+        std::unique_ptr<QObject> root(overlay.createWithInitialProperties({
+            {QStringLiteral("reducedMotion"), true},
+            {overlaySourceProperty(component), QVariant::fromValue<QObject *>(nullptr)},
+            {QStringLiteral("anchoredFromPanel"), true},
+            {QStringLiteral("openerRect"), opener},
+        }));
+        auto *window = qobject_cast<QQuickWindow *>(root.get());
+        QVERIFY2(window, qPrintable(component));
+        window->resize(testOutputWidth, testOutputHeight);
+
+        QCOMPARE(window->property("cardY").toInt(), opener.bottom() + 1 + 8);
+
+        const int cardWidth = window->property("cardWidth").toInt();
+        const qreal centred = opener.x() + opener.width() / 2.0
+                              - cardWidth / 2.0;
+        const int expectedX = qRound(qBound(
+            qreal(0),
+            centred,
+            qreal(testOutputWidth - cardWidth)
+        ));
+        QCOMPARE(window->property("cardX").toInt(), expectedX);
+
+        QQuickItem *const body = window->findChild<QQuickItem *>(
+            QStringLiteral("celestina-compositor-glass-region")
+        );
+        QVERIFY2(body, qPrintable(component));
+        const QPointF bodyOrigin = body->mapToItem(window->contentItem(), 0, 0);
+        QCOMPARE(qRound(bodyOrigin.x()), window->property("cardX").toInt());
+        QCOMPARE(qRound(bodyOrigin.y()), window->property("cardY").toInt());
+
+        // With no opener the same reusable placement falls back to the centre.
+        window->setProperty("anchoredFromPanel", false);
+        QCOMPARE(
+            window->property("cardX").toInt(),
+            (testOutputWidth - cardWidth) / 2
+        );
+    }
+}
+
+void OverlayContractTest::sessionCardGrowthDoesNotResizeItsOutputSurface()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+
+    QQmlComponent overlay(&engine, sourceFor(QStringLiteral("SessionMenu")));
+    QVERIFY2(overlay.isReady(), qPrintable(overlay.errorString()));
+
+    const QRect opener(1000, 5, 28, 28);
+    std::unique_ptr<QObject> root(overlay.createWithInitialProperties({
+        {QStringLiteral("reducedMotion"), true},
+        {QStringLiteral("shellSource"), QVariant::fromValue<QObject *>(nullptr)},
+        {QStringLiteral("anchoredFromPanel"), true},
+        {QStringLiteral("openerRect"), opener},
+    }));
+    auto *window = qobject_cast<QQuickWindow *>(root.get());
+    QVERIFY(window);
+
+    // The content-sized geometry is used only to bootstrap the Window before
+    // layer-shell configures it as an output-sized input surface.
+    const int bootstrapCardHeight = window->property("cardHeight").toInt();
+    QVERIFY(bootstrapCardHeight > 0);
+    QCOMPARE(window->height(), bootstrapCardHeight);
+
+    constexpr int outputWidth = 1280;
+    constexpr int outputHeight = 1600;
+    window->resize(outputWidth, outputHeight);
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    // Repeater delegates are polished once the card is exposed. Their first
+    // real implicit height must grow the card without taking the output-sized
+    // input surface back with it.
+    QTRY_VERIFY(window->property("cardHeight").toInt() > bootstrapCardHeight);
+    const int expectedY = opener.bottom() + 1
+                          + window->property("anchorGap").toInt();
+    QCOMPARE(window->property("cardY").toInt(), expectedY);
+
+    // Later dynamic refusal copy must still leave the visual card independent
+    // from the full-output Window. A live height binding here would collapse
+    // that Window, after which placement would clamp the card over the panel.
+    window->setProperty("outcomeVerb", QStringLiteral("power-off"));
+    window->setProperty("outcomeState", QStringLiteral("failed"));
+    window->setProperty(
+        "outcomeReason",
+        QStringLiteral(
+            "the session manager returned a deliberately long diagnostic "
+            "that must wrap onto several lines inside the card"
+        )
+    );
+    QCoreApplication::processEvents();
+    QCOMPARE(window->height(), outputHeight);
+    QCOMPARE(window->property("cardY").toInt(), expectedY);
 }
 
 // The case above only means something if it can fail. This is the exact
@@ -150,6 +363,21 @@ void OverlayContractTest::aComponentThisShellDoesNotHaveNamesNoBridge()
 {
     QVERIFY(overlaySourceProperty(QStringLiteral("Panel")).isEmpty());
     QVERIFY(overlaySourceProperty(QString()).isEmpty());
+}
+
+void OverlayContractTest::aPanelOpenedOverlayFollowsOnlyItsButton()
+{
+    const QPoint outputOrigin(1920, 120);
+    const QRect opener(2260, 128, 30, 30);
+
+    const QRect local = panelPopupOpenerOnOutput(opener, outputOrigin);
+    QCOMPARE(local.x(), opener.x() - outputOrigin.x());
+    QCOMPARE(local.y(), opener.y() - outputOrigin.y());
+    QCOMPARE(local.size(), opener.size());
+
+    // The menu follows the real 30 px button and one floating gap, independently
+    // of the panel surface's own extent.
+    QCOMPARE(panelPopupBodyOrigin(local, 530, 8).y(), 46);
 }
 
 

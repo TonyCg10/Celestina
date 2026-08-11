@@ -10,6 +10,7 @@ Item {
 
     required property bool niriAvailable
     required property string outputName
+    required property BackdropInk ink
     // A QVariantList of maps from NiriClient. Each entry guarantees:
     // index, label, output, active, focused, urgent, activeWindowTitle and
     // requestState. `var` is necessary because QML has no typed map-list.
@@ -172,7 +173,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         visible: !root.niriAvailable
         text: qsTr("Niri no disponible")
-        color: CelestinaTheme.text
+        color: root.ink.primary
         font.family: CelestinaTheme.sansFamily
         font.pixelSize: CelestinaTheme.fontTitle
     }
@@ -202,6 +203,7 @@ Item {
                         required property var modelData
 
                         workspace: modelData
+                        ink: root.ink
                         onFocusRequested: (output, index) => root.focusRequested(output, index)
                         onMapRequested: (globalX, globalY) => root.mapRequested(
                             globalX, globalY, [modelData])
@@ -214,6 +216,7 @@ Item {
                     outputName: groupRow.modelData.key
                     count: groupRow.modelData.workspaces.length
                     urgent: groupRow.modelData.urgent
+                    ink: root.ink
                     onExpandRequested: root.chosenGroup = groupRow.modelData.key
                     onMapRequested: (globalX, globalY) => root.mapRequested(
                         globalX, globalY, groupRow.modelData.workspaces)

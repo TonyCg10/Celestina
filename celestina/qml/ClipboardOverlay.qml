@@ -16,11 +16,23 @@ Window {
 
     required property var providerSource
     required property bool reducedMotion
+    property alias anchoredFromPanel: placement.anchoredFromPanel
+    property alias openerRect: placement.openerRect
+    property alias compositorBlurAvailable: card.compositorBlurAvailable
+    property alias glassRects: card.glassRects
+    property alias glassRegions: card.glassRegions
 
     signal dismissed()
 
+    BackdropInk {
+        id: backdropInk
+    }
+
     readonly property int cardWidth: 460
     readonly property int cardHeight: 420
+    readonly property int anchorGap: placement.anchorGap
+    readonly property real cardX: placement.x
+    readonly property real cardY: placement.y
 
     readonly property var clipboardState: ProviderReading.read(overlay.providerSource, "clipboard")
     readonly property bool offered: clipboardState !== undefined
@@ -39,6 +51,21 @@ Window {
     Component.onCompleted: {
         CelestinaTheme.reducedMotion = reducedMotion;
         overlay.takeFocus();
+    }
+
+    onVisibleChanged: {
+        if (visible)
+            Qt.callLater(card.reveal);
+    }
+
+    PanelPopupPlacement {
+        id: placement
+
+        surfaceWidth: overlay.width
+        surfaceHeight: overlay.height
+        contentWidth: overlay.cardWidth
+        contentHeight: overlay.cardHeight
+        edgeInset: 0
     }
 
     // The list owns the keyboard while it exists, and it stops existing when
@@ -96,52 +123,44 @@ Window {
 
         width: overlay.cardWidth
         height: overlay.cardHeight
-        anchors.centerIn: parent
+        x: overlay.cardX
+        y: overlay.cardY
 
-        // Anything the card itself does not handle stops here rather than
-        // falling through to the dismissal area behind it. It is the first
-        // child, so every control declared after it is still reached first.
-        MouseArea {
-            anchors.fill: parent
-            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-        }
-
-        GlassCard {
+        SoftOverlayCard {
             id: card
 
+            ink: backdropInk
             // Escape closes the overlay whether or not the list is there to
             // hear it.
             focus: overlay.entries.length === 0
             Keys.onEscapePressed: overlay.dismissed()
             anchors.fill: parent
-            backdropSource: scene
-            Accessible.role: Accessible.Dialog
-            Accessible.name: qsTr("Historial del portapapeles")
+            reducedMotion: overlay.reducedMotion
+            accessibleName: qsTr("Historial del portapapeles")
 
             Column {
                 anchors.fill: parent
-                anchors.margins: CelestinaTheme.spaceLg
-                spacing: CelestinaTheme.spaceMd
+                anchors.margins: CelestinaTheme.spaceMd
+                spacing: CelestinaTheme.spaceSm
 
-                Row {
-                    id: headerRow
-
+                MenuHeader {
                     width: parent.width
-                    spacing: CelestinaTheme.spaceSm
-
-                    Text {
-                        width: parent.width - clearButton.width - parent.spacing
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: qsTr("Historial del portapapeles")
-                        color: CelestinaTheme.text
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontRowTitle
-                        font.weight: CelestinaTheme.weightDemiBold
-                        elide: Text.ElideRight
+                    ink: backdropInk
+                    title: qsTr("Portapapeles")
+                    subtitle: {
+                        if (!overlay.offered)
+                            return qsTr("No disponible");
+                        if (overlay.truncated) {
+                            return qsTr("%n entrada(s), lista parcial", "",
+                                        overlay.entries.length);
+                        }
+                        return qsTr("%n entrada(s)", "", overlay.entries.length);
                     }
+                    iconName: "clipboard-paste"
 
-                    CelestinaButton {
+                    BackdropButton {
                         id: clearButton
+                        ink: backdropInk
                         text: qsTr("Vaciar")
                         role: CelestinaButton.Destructive
                         enabled: overlay.entries.length > 0
@@ -149,80 +168,81 @@ Window {
                     }
                 }
 
-                Text {
+                Item {
                     width: parent.width
-                    visible: !overlay.offered
-                    text: qsTr("El historial del portapapeles no está disponible")
-                    color: CelestinaTheme.textMuted
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontBody
-                }
+                    height: parent.height - y
 
-                Text {
-                    width: parent.width
-                    visible: overlay.offered && overlay.entries.length === 0
-                    text: qsTr("El portapapeles está vacío")
-                    color: CelestinaTheme.textMuted
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontBody
-                }
+                    MenuSection { ink: backdropInk }
 
-                ListView {
-                    id: entryList
-
-                    width: parent.width
-                    height: parent.height - headerRow.height - parent.spacing
-                    clip: true
-                    spacing: 2
-                    visible: overlay.entries.length > 0
-                    model: overlay.entries
-                    currentIndex: overlay.currentIndex
-                    onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
-                    Accessible.role: Accessible.List
-                    Accessible.name: qsTr("Entradas del historial")
-
-                    // Only one focusable widget besides the clear button, the
-                    // same single-cursor keyboard model `OpenWithDialog` uses:
-                    // arrows move the highlight, Enter re-selects it, Delete
-                    // removes it, Escape closes the overlay.
-                    Keys.onPressed: function(event) {
-                        if (event.key === Qt.Key_Escape) {
-                            overlay.dismissed();
-                        } else if (event.key === Qt.Key_Down) {
-                            if (overlay.entries.length > 0)
-                                overlay.currentIndex =
-                                        Math.min(overlay.entries.length - 1,
-                                                 overlay.currentIndex + 1);
-                        } else if (event.key === Qt.Key_Up) {
-                            if (overlay.entries.length > 0)
-                                overlay.currentIndex = Math.max(0, overlay.currentIndex - 1);
-                        } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                            overlay.select(overlay.currentIndex);
-                        } else if (event.key === Qt.Key_Delete
-                                   || event.key === Qt.Key_Backspace) {
-                            overlay.remove(overlay.currentIndex);
-                        } else {
-                            return;
-                        }
-                        event.accepted = true;
+                    Text {
+                        anchors.fill: parent
+                        anchors.margins: CelestinaTheme.spaceLg
+                        visible: !overlay.offered || overlay.entries.length === 0
+                        text: !overlay.offered
+                              ? qsTr("El historial del portapapeles no está disponible")
+                              : qsTr("El portapapeles está vacío")
+                        color: backdropInk.muted
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: CelestinaTheme.fontBody
+                        wrapMode: Text.WordWrap
                     }
 
-                    delegate: ClipboardEntryRow {
-                        required property int index
-                        required property var modelData
+                    ListView {
+                        id: entryList
 
-                        width: ListView.view.width
-                        entry: modelData
-                        current: overlay.currentIndex === index
-                        // What a click means belongs to the overlay: the row
-                        // reports, and the provider decides.
-                        onSelected: {
-                            overlay.currentIndex = index;
-                            overlay.select(index);
+                        anchors.fill: parent
+                        anchors.margins: CelestinaTheme.spaceSm
+                        clip: true
+                        spacing: CelestinaTheme.spaceXs
+                        visible: overlay.entries.length > 0
+                        model: overlay.entries
+                        currentIndex: overlay.currentIndex
+                        onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
+                        Accessible.role: Accessible.List
+                        Accessible.name: qsTr("Entradas del historial")
+
+                        // One cursor owns the list: arrows move, Enter selects,
+                        // Delete removes and Escape dismisses.
+                        Keys.onPressed: function(event) {
+                            if (event.key === Qt.Key_Escape) {
+                                overlay.dismissed();
+                            } else if (event.key === Qt.Key_Down) {
+                                if (overlay.entries.length > 0)
+                                    overlay.currentIndex = Math.min(
+                                        overlay.entries.length - 1,
+                                        overlay.currentIndex + 1);
+                            } else if (event.key === Qt.Key_Up) {
+                                if (overlay.entries.length > 0)
+                                    overlay.currentIndex = Math.max(
+                                        0, overlay.currentIndex - 1);
+                            } else if (event.key === Qt.Key_Return
+                                       || event.key === Qt.Key_Enter) {
+                                overlay.select(overlay.currentIndex);
+                            } else if (event.key === Qt.Key_Delete
+                                       || event.key === Qt.Key_Backspace) {
+                                overlay.remove(overlay.currentIndex);
+                            } else {
+                                return;
+                            }
+                            event.accepted = true;
                         }
-                        onRemoved: {
-                            overlay.currentIndex = index;
-                            overlay.remove(index);
+
+                        delegate: ClipboardEntryRow {
+                            required property int index
+                            required property var modelData
+
+                            width: ListView.view.width
+                            entry: modelData
+                            current: overlay.currentIndex === index
+                            ink: backdropInk
+                            onSelected: {
+                                overlay.currentIndex = index;
+                                overlay.select(index);
+                            }
+                            onRemoved: {
+                                overlay.currentIndex = index;
+                                overlay.remove(index);
+                            }
                         }
                     }
                 }

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.10.0 LANGUAGES CXX)
+project(celestina VERSION 0.11.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,9 +10,11 @@ set(CMAKE_AUTOMOC ON)
 find_package(Qt6 6.9 REQUIRED COMPONENTS Quick QuickControls2 DBus)
 find_package(LayerShellQt 6.6 REQUIRED)
 # KWindowEffects::enableBlurBehind asks the compositor (niri's
-# ext-background-effect) to blur the wallpaper behind the panel — the panel's
-# glass. KF ≥ 6.19 speaks the new protocol, so that is the declared minimum:
-# an older KF6 builds and silently never reports the effect as available.
+# ext-background-effect) to blur the scene behind the requested finite glass
+# region. Whether that scene is the wallpaper-only xray cache or the complete
+# composition remains compositor policy. KF >= 6.19 speaks the protocol, so
+# that is the declared minimum: an older KF6 builds and silently never reports
+# the effect as available.
 find_package(KF6WindowSystem 6.19 REQUIRED)
 qt_standard_project_setup(REQUIRES 6.9)
 
@@ -79,6 +81,8 @@ qt_add_executable(celestina
     src/panelmanager.cpp
     src/wallpapermanager.h
     src/wallpapermanager.cpp
+    src/wallpaperidentity.h
+    src/wallpaperidentity.cpp
     src/workspacefocusrequests.h
     src/workspacefocusrequests.cpp
     src/sessionrequests.h
@@ -107,6 +111,7 @@ qt_add_executable(celestina
     src/surfacemanager.cpp
     src/panelmenusurface.h
     src/panelmenusurface.cpp
+    src/panelpopupplacement.h
     src/panelmenucontroller.h
     src/panelmenucontroller.cpp
     src/overlaysurface.h
@@ -158,7 +163,17 @@ qt_add_qml_module(celestina
         qml/WorkspaceMapTile.qml
         qml/PhoneStatus.qml
         qml/PanelFlank.qml
+        qml/BackdropInk.qml
+        qml/BackdropButton.qml
+        qml/BackdropIconButton.qml
+        qml/BackdropTextField.qml
+        qml/CompositorGlassRegion.qml
         qml/PanelPill.qml
+        qml/PanelCluster.qml
+        qml/PanelPopupPlacement.qml
+        qml/PanelMenuButton.qml
+        qml/MenuSection.qml
+        qml/MenuHeader.qml
         qml/PanelActionButton.qml
         qml/SysMon.qml
         qml/MediaMini.qml
@@ -168,10 +183,18 @@ qt_add_qml_module(celestina
         qml/TrayDrawer.qml
         qml/AnchoredCard.qml
         qml/AnchoredMenu.qml
+        qml/SoftMenuRow.qml
+        qml/SoftMenuField.qml
+        qml/SoftOverlayCard.qml
+        qml/SoftMenu.qml
+        qml/TrayItemsMenu.qml
         qml/TrayMenu.qml
         qml/NetworkMenu.qml
         qml/BluetoothMenu.qml
+        qml/PerformanceMenu.qml
         qml/CaptureButton.qml
+        qml/CaptureMenu.qml
+        qml/WallpaperMenu.qml
         qml/LauncherOverlay.qml
         qml/ClipboardOverlay.qml
         qml/ClipboardEntryRow.qml
@@ -350,6 +373,8 @@ if(BUILD_TESTING)
         src/overlaycontroller.cpp
         src/overlaysurface.h
         src/overlaysurface.cpp
+        src/panelblurcontroller.h
+        src/panelblurcontroller.cpp
         src/surfacemanager.h
         src/surfacemanager.cpp
         src/shellprovidersclient.h
@@ -369,6 +394,7 @@ if(BUILD_TESTING)
         Qt6::DBus
         Qt6::Quick
         LayerShellQt::Interface
+        KF6::WindowSystem
     )
     add_test(NAME celestina-shell-service COMMAND celestina-shell-service-test)
     set_tests_properties(celestina-shell-service PROPERTIES
@@ -382,6 +408,8 @@ if(BUILD_TESTING)
         tests/surfacemanager_test.cpp
         src/wallpapermanager.h
         src/wallpapermanager.cpp
+        src/wallpaperidentity.h
+        src/wallpaperidentity.cpp
         src/shellprovidersclient.h
         src/shellprovidersclient.cpp
         src/requestledger.h
@@ -394,6 +422,8 @@ if(BUILD_TESTING)
         src/surfacemanager.cpp
         src/panelmenusurface.h
         src/panelmenusurface.cpp
+        src/panelblurcontroller.h
+        src/panelblurcontroller.cpp
         src/panelmenucontroller.h
         src/panelmenucontroller.cpp
         src/overlaysurface.h
@@ -419,6 +449,7 @@ if(BUILD_TESTING)
         Qt6::Test
         Qt6::Quick
         LayerShellQt::Interface
+        KF6::WindowSystem
     )
     add_test(NAME celestina-surface-manager COMMAND celestina-surface-manager-test)
     set_tests_properties(celestina-surface-manager PROPERTIES
@@ -435,6 +466,8 @@ if(BUILD_TESTING)
         src/overlaycontroller.cpp
         src/overlaysurface.h
         src/overlaysurface.cpp
+        src/panelblurcontroller.h
+        src/panelblurcontroller.cpp
         src/surfacemanager.h
         src/surfacemanager.cpp
     )
@@ -447,6 +480,7 @@ if(BUILD_TESTING)
         Qt6::Test
         Qt6::Quick
         LayerShellQt::Interface
+        KF6::WindowSystem
     )
     add_test(NAME celestina-overlay-contract COMMAND celestina-overlay-contract-test)
     set_tests_properties(celestina-overlay-contract PROPERTIES
@@ -478,6 +512,8 @@ if(BUILD_TESTING)
         src/panelmenucontroller.cpp
         src/panelmenusurface.h
         src/panelmenusurface.cpp
+        src/panelblurcontroller.h
+        src/panelblurcontroller.cpp
         src/surfacemanager.h
         src/surfacemanager.cpp
         src/niriclient.h
@@ -498,6 +534,7 @@ if(BUILD_TESTING)
         Qt6::Test
         Qt6::Quick
         LayerShellQt::Interface
+        KF6::WindowSystem
     )
     add_test(NAME celestina-indicator-menu COMMAND celestina-indicator-menu-test)
     set_tests_properties(celestina-indicator-menu PROPERTIES

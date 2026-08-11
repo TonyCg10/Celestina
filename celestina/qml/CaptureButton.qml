@@ -1,20 +1,15 @@
-// The panel's screenshot button.
+// The panel entry point for the shell's extensible toolbox menu.
 //
-// It asks the compositor to open its own screenshot UI, which saves where the
-// session's `screenshot-path` already points. Nothing here captures anything:
-// a shell that reimplemented capture would be a second, worse screenshot tool.
-//
-// There is nothing to confirm afterwards — Niri takes over the screen and the
-// panel cannot see what happened next — so the only thing it reports is a
-// request it could not make.
+// The button owns only opener geometry and short-lived failure feedback. The
+// real `CaptureMenu` owns the capture action, while Niri remains the sole owner
+// of screenshot behavior and its configured destination.
+pragma ComponentBehavior: Bound
+
 import CelestinaStyle
 import QtQuick
-import QtQuick.Controls
 
-CelestinaIconButton {
+PanelActionButton {
     id: root
-
-    signal captureRequested()
 
     // Shown only while a refusal is fresh; the rest of the time the button has
     // nothing to say about captures it cannot observe.
@@ -25,16 +20,13 @@ CelestinaIconButton {
         failureHold.restart();
     }
 
-    iconName: "scissors"
+    iconName: "toolbox"
     iconSize: CelestinaTheme.iconSm
     role: failed ? CelestinaButton.Destructive : CelestinaButton.Ghost
-    // `helpText` still names the button for AT-SPI; the hover tooltip it also
-    // drives is switched off — on a 40 px panel it lands over neighboring
-    // widgets and can swallow their clicks (same fix as `TrayDrawer`).
+    // `helpText` names the button for AT-SPI. BackdropButton suppresses the
+    // corresponding hover card for every shell-local control.
     helpText: failed ? qsTr("No se pudo pedir la captura")
-                     : qsTr("Captura de pantalla")
-    ToolTip.visible: false
-    onClicked: root.captureRequested()
+                     : qsTr("Caja de herramientas")
 
     Timer {
         id: failureHold

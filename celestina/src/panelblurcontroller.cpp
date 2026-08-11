@@ -3,6 +3,7 @@
 #include <QDebug>
 #include <QRegion>
 #include <QVariant>
+#include <QVariantMap>
 #include <QWindow>
 
 #include <KWindowEffects>
@@ -12,6 +13,72 @@ constexpr int fastProbeDelayMs = 16;
 constexpr int fastProbeCount = 60;
 constexpr int fallbackProbeDelayMs = 2000;
 constexpr int enabledProbeDelayMs = 5000;
+}
+
+QRegion roundedGlassRegion(const QRect &rect, int requestedRadius)
+{
+    if (rect.width() <= 0 || rect.height() <= 0)
+        return {};
+
+    const int radius = qBound(
+        0,
+        requestedRadius,
+        qMin(rect.width(), rect.height()) / 2
+    );
+    if (radius == 0)
+        return QRegion(rect);
+
+    const int diameter = radius * 2;
+    QRegion region(QRect(
+        rect.x() + radius,
+        rect.y(),
+        qMax(0, rect.width() - diameter),
+        rect.height()
+    ));
+    region += QRegion(QRect(
+        rect.x(),
+        rect.y() + radius,
+        rect.width(),
+        qMax(0, rect.height() - diameter)
+    ));
+    region += QRegion(
+        QRect(rect.x(), rect.y(), diameter, diameter),
+        QRegion::Ellipse
+    );
+    region += QRegion(
+        QRect(rect.right() - diameter + 1, rect.y(), diameter, diameter),
+        QRegion::Ellipse
+    );
+    region += QRegion(
+        QRect(rect.x(), rect.bottom() - diameter + 1, diameter, diameter),
+        QRegion::Ellipse
+    );
+    region += QRegion(
+        QRect(
+            rect.right() - diameter + 1,
+            rect.bottom() - diameter + 1,
+            diameter,
+            diameter
+        ),
+        QRegion::Ellipse
+    );
+    return region;
+}
+
+bool blurProbeCanUseEffect(
+    bool alreadyArmed,
+    bool surfaceVisible,
+    bool surfaceExposed,
+    bool surfaceSized,
+    bool effectAvailable,
+    bool glassPresent
+)
+{
+    return surfaceVisible
+        && surfaceSized
+        && effectAvailable
+        && glassPresent
+        && (surfaceExposed || alreadyArmed);
 }
 
 PanelBlurController::PanelBlurController(QWindow *window, QObject *parent)
@@ -27,14 +94,16 @@ PanelBlurController::PanelBlurController(QWindow *window, QObject *parent)
 // `enableBlurBehind` takes a *region*, and a region is a set of pixels: each one
 // is blurred or it is not. There is no gradient blur in the protocol, so every
 // blurred area has a hard boundary somewhere. The bar cannot have one — its
-// whole point is to have no edge, and a blurred band ending in mid-wallpaper is
-// as visible as a fill ending there. A pill can, because it already *is* an
-// edge: it has a radius and an outline, and the blur stops where the pill stops.
+// whole point is to have no edge, and a blurred band ending in the middle of
+// the composed scene is as visible as a fill ending there. A pill can, because
+// it already *is* an edge: it has a radius and an outline, and the blur stops
+// where the pill stops.
 //
-// So the blur follows the glass rather than the surface. An empty region simply
-// blurs nothing, which is the honest state of a bar whose readings have all
-// withdrawn.
-QRegion PanelBlurController::pillRegion() const
+// So the computed region follows the glass rather than the surface. No
+// published glass returns an empty region, but the caller must withdraw the
+// effect instead of passing that value to `enableBlurBehind`, which interprets
+// an empty region as the complete surface.
+QRegion PanelBlurController::glassRegion() const
 {
     QRegion region;
     if (!m_window)
@@ -44,31 +113,24 @@ QRegion PanelBlurController::pillRegion() const
     // guesses at that tree were wrong, and the failure mode is the worst kind:
     // an empty region is not "blur nothing" to `enableBlurBehind`, it is "blur
     // the whole window".
-    const QVariantList rects = m_window->property("glassRects").toList();
-    for (const QVariant &value : rects) {
-        const QRectF published = value.toRectF();
+    QVariantList regions = m_window->property("glassRegions").toList();
+    const bool shapesAreTyped = !regions.isEmpty();
+    if (!shapesAreTyped)
+        regions = m_window->property("glassRects").toList();
+
+    for (const QVariant &value : regions) {
+        const QVariantMap shape = shapesAreTyped ? value.toMap() : QVariantMap{};
+        const QRectF published = shapesAreTyped
+            ? shape.value(QStringLiteral("rect")).toRectF()
+            : value.toRectF();
         if (published.width() <= 0 || published.height() <= 0)
             continue;
 
         const QRect rect = published.toAlignedRect();
-        const int diameter = qMin(rect.width(), rect.height());
-        const int radius = diameter / 2;
-        const int capY = rect.y() + (rect.height() - diameter) / 2;
-
-        // Two round caps and their centre match a QML pill. An ellipse over
-        // the complete wide rectangle flattens the ends and blurs outside the
-        // radius the visible surface actually draws.
-        region += QRegion(QRect(rect.x(), capY, diameter, diameter), QRegion::Ellipse);
-        region += QRegion(
-            QRect(rect.right() - diameter + 1, capY, diameter, diameter),
-            QRegion::Ellipse
-        );
-        region += QRegion(QRect(
-            rect.x() + radius,
-            rect.y(),
-            qMax(0, rect.width() - radius * 2),
-            rect.height()
-        ));
+        const int radius = shapesAreTyped
+            ? qRound(shape.value(QStringLiteral("radius")).toReal())
+            : qMin(rect.width(), rect.height()) / 2;
+        region += roundedGlassRegion(rect, radius);
     }
     return region;
 }
@@ -98,10 +160,10 @@ void PanelBlurController::start()
         }
     );
     if (!QObject::connect(
-            m_window.data(), SIGNAL(glassRectsChanged()),
-            this, SLOT(glassRectsChanged())
+            m_window.data(), SIGNAL(glassRegionsChanged()),
+            this, SLOT(glassRegionsChanged())
         )) {
-        qWarning() << "Celestina panel has no glassRectsChanged signal on"
+        qWarning() << "Celestina surface has no glassRegionsChanged signal on"
                    << m_window->objectName();
     }
 
@@ -118,7 +180,7 @@ void PanelBlurController::geometryChanged()
     probe();
 }
 
-void PanelBlurController::glassRectsChanged()
+void PanelBlurController::glassRegionsChanged()
 {
     m_fastAttemptsRemaining = fastProbeCount;
     m_probeTimer.stop();
@@ -130,19 +192,26 @@ void PanelBlurController::probe()
     if (!m_window)
         return;
 
-    const bool surfaceReady = m_window->isVisible()
-        && m_window->isExposed()
-        && !m_window->size().isEmpty();
+    const bool surfaceVisible = m_window->isVisible();
+    const bool surfaceExposed = m_window->isExposed();
+    const bool surfaceSized = !m_window->size().isEmpty();
     const bool effectAvailable = KWindowEffects::isEffectAvailable(
         KWindowEffects::BlurBehind
     );
 
     // An empty region does not mean "blur nothing": `enableBlurBehind` reads it
-    // as the whole window, so a pill lookup that found nothing blurred all 112
-    // pixels of the surface and drew the widest hard edge yet. The absence of
+    // as the whole window, so a pill lookup that found nothing blurred the
+    // complete panel surface and drew a hard full-width edge. The absence of
     // glass has to withdraw the effect rather than ask for it with no shape.
-    const QRegion glass = pillRegion();
-    if (surfaceReady && effectAvailable && !glass.isEmpty()) {
+    const QRegion glass = glassRegion();
+    if (blurProbeCanUseEffect(
+            m_state == State::Enabled,
+            surfaceVisible,
+            surfaceExposed,
+            surfaceSized,
+            effectAvailable,
+            !glass.isEmpty()
+        )) {
         if (m_state != State::Enabled
             || m_armedSize != m_window->size()
             || m_armedRegion != glass) {
@@ -159,8 +228,8 @@ void PanelBlurController::probe()
             qInfo() << "Celestina compositor blur armed on"
                     << m_window->objectName() << "at" << m_armedSize
                     << "for"
-                    << m_window->property("glassRects").toList().size()
-                    << "pill(s) in" << glass.rectCount() << "region fragment(s)";
+                    << m_window->property("glassRegions").toList().size()
+                    << "shape(s) in" << glass.rectCount() << "region fragment(s)";
         }
         m_state = State::Enabled;
         setAvailable(true);
@@ -168,9 +237,14 @@ void PanelBlurController::probe()
         return;
     }
 
-    if (m_state == State::Enabled && m_window->isExposed()) {
-        KWindowEffects::enableBlurBehind(m_window.data(), false);
-        m_window->requestUpdate();
+    if (m_state == State::Enabled) {
+        if (m_window->isExposed()) {
+            KWindowEffects::enableBlurBehind(m_window.data(), false);
+            m_window->requestUpdate();
+        }
+        // Any failed prerequisite revokes the confirmed arm before retries.
+        // Only the guarded branch above may use an unexposed surface.
+        m_state = State::Pending;
     }
     m_armedSize = {};
     m_armedRegion = {};

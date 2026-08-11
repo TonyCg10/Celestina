@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QPoint>
 #include <QPointer>
 #include <QWindow>
 
@@ -21,14 +22,33 @@ class PanelMenuSurface final : public QObject
     Q_OBJECT
 
 public:
+    enum class Coverage {
+        // The ordinary panel menu owns the complete output so its outside
+        // click cannot leak through to the panel or an application below it.
+        Output,
+        // A child menu is bounded to its card. Its still-mapped output-sized
+        // parent remains the outside-click barrier and can receive another
+        // tray-row request without first destroying the inventory.
+        Card,
+    };
+
     explicit PanelMenuSurface(QObject *parent = nullptr);
     ~PanelMenuSurface() override;
 
-    // Adopts `content` — created, not yet shown — and maps it across the
-    // panel's whole screen. Where the card sits inside it is the content's own
-    // decision, made from the anchor its owner handed it. Returns false without
-    // taking ownership when the surface cannot be mapped.
-    bool open(QWindow *content, QWindow *panel);
+    // Adopts `content` — created, not yet shown — and maps it either across the
+    // panel's whole screen or as one bounded card. With output coverage, where
+    // the card sits inside it is the content's own decision, made from the
+    // anchor its owner handed it. Returns false without taking ownership when
+    // the surface cannot be mapped.
+    // `outputPosition` is used only by `Card` coverage and is expressed in the
+    // panel output's local coordinates. Output coverage retains the content's
+    // own card-placement contract.
+    bool open(
+        QWindow *content,
+        QWindow *panel,
+        Coverage coverage = Coverage::Output,
+        const QPoint &outputPosition = QPoint()
+    );
     void close();
     bool isOpen() const { return !m_content.isNull(); }
     QWindow *window() const { return m_content.data(); }

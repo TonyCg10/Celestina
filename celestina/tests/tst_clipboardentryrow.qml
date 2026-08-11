@@ -23,6 +23,10 @@ TestCase {
     property int selections: 0
     property int removals: 0
 
+    Desktop.BackdropInk {
+        id: testInk
+    }
+
     Component {
         id: rowWindow
 
@@ -37,6 +41,7 @@ TestCase {
                 id: content
 
                 anchors.fill: parent
+                ink: testInk
                 entry: ({"index": 0, "preview": "una entrada"})
                 current: true
                 onSelected: testCase.selections += 1

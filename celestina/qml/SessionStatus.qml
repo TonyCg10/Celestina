@@ -1,8 +1,8 @@
-// How the session is online, what is connected to it, and how it is running.
+// How the session is connected.
 //
-// Three readings sharing one row. The first two open their own menus; the power
-// profile is a request like any other — the panel paints what the daemon
-// reports next, never the profile it asked for.
+// Network and Bluetooth share one compact row and open their own menus. Power
+// profiles already have their complete state and action in ControlCentre, so
+// the panel does not duplicate that control here.
 //
 // The network entry stays on the bar whenever the provider is publishing
 // anything at all, not only when a link is confirmed. A session with no default
@@ -13,29 +13,24 @@ pragma ComponentBehavior: Bound
 
 import CelestinaStyle
 import QtQuick
-import QtQuick.Controls
 
 Row {
     id: root
 
-    // The `network`, `bluetooth` and `power` providers, or `undefined` when a
-    // provider has nothing to publish. `var` is necessary: QML has no typed map.
+    // The `network` and `bluetooth` providers, or `undefined` when a provider
+    // has nothing to publish. `var` is necessary: QML has no typed map.
     required property var network
     required property var bluetooth
-    required property var power
-    signal profileCycleRequested()
+    required property BackdropInk ink
     // Each indicator asks for its own menu at the point it was clicked. The
     // panel forwards it; the host owns every surface this row does not.
-    signal indicatorMenuRequested(string kind, int globalX, int globalY)
+    signal indicatorMenuRequested(string kind, int globalX, int globalY,
+                                  int openerWidth, int openerHeight)
 
-    readonly property var profileNames: ({
-        "performance": qsTr("rendimiento"),
-        "balanced": qsTr("equilibrado"),
-        "power-saver": qsTr("ahorro")
-    })
+    readonly property bool hasVisibleIndicator: link.visible || radio.visible
 
-    // PANEL-1 — a Row aligns its children at the top, so three readings of
-    // three different heights sat at three heights. One height each.
+    // PANEL-1 — a Row aligns its children at the top, so readings of different
+    // heights sat at different heights. One height each.
     height: CelestinaTheme.controlHeightXs
     spacing: CelestinaTheme.spaceMd
 
@@ -50,32 +45,25 @@ Row {
     // it `KeyboardInteractivityNone`), so on a live session nothing tabs here.
     // That is the panel's decision, not this control's: wherever a surface does
     // admit the keyboard, this works, and the offscreen cases drive it there.
-    component Indicator: AbstractButton {
+    component Indicator: PanelMenuButton {
         id: control
 
         required property string kind
         required property string reading
         required property string iconName
 
-        function askForMenu() {
-            const at = control.mapToGlobal(0, control.height);
-            root.indicatorMenuRequested(control.kind, at.x, at.y);
-        }
+        ink: root.ink
 
         anchors.verticalCenter: parent ? parent.verticalCenter : undefined
         implicitWidth: CelestinaTheme.iconSm
         implicitHeight: parent ? parent.height : CelestinaTheme.iconSm
-        padding: 0
-        activeFocusOnTab: true
         text: control.reading
         Accessible.role: Accessible.Button
-        // `AbstractButton` already reports `Accessible.pressed`; the name,
-        // description and action are this control's to say.
-        onClicked: control.askForMenu()
-        // Space is `AbstractButton`'s own, and produces `clicked`. Return and
-        // Enter are not, so they are named here rather than left out.
-        Keys.onReturnPressed: control.askForMenu()
-        Keys.onEnterPressed: control.askForMenu()
+        // `PanelMenuButton` owns pressed, hover, focus and opener geometry;
+        // this row contributes only which menu that rectangle names.
+        onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
+            root.indicatorMenuRequested(control.kind, globalX, globalY,
+                                        openerWidth, openerHeight)
 
         contentItem: Item {
             implicitWidth: glyph.width
@@ -89,25 +77,9 @@ Row {
                 height: CelestinaTheme.iconSm
                 name: control.iconName
                 tone: CelestinaIcon.Primary
+                tintOverride: control.ink.primary
                 Accessible.ignored: true
             }
-        }
-
-        background: Item {
-            CelestinaFocusRing {
-                objectName: "celestina-indicator-focus"
-                target: control
-                cornerRadius: CelestinaTheme.radiusSm
-                shown: control.visualFocus
-            }
-
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            acceptedButtons: Qt.NoButton
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
         }
 
     }
@@ -146,7 +118,7 @@ Row {
                          ? qsTr("Conectado por %1 a %2").arg(root.network.kind).arg(root.network.connection)
                          : qsTr("Sin conexión de red")
         Accessible.description: qsTr("Abre el menú de red")
-        Accessible.onPressAction: link.askForMenu()
+        Accessible.onPressAction: link.requestMenu()
     }
 
     Indicator {
@@ -195,35 +167,7 @@ Row {
                    : qsTr("Bluetooth: %1 conectados").arg(radio.count);
         }
         Accessible.description: qsTr("Abre el menú de Bluetooth")
-        Accessible.onPressAction: radio.askForMenu()
-    }
-
-    CelestinaIconButton {
-        id: profile
-
-        readonly property bool present: root.power !== undefined
-                                        && root.power.active !== undefined
-        // A daemon offering one profile has nothing to cycle through.
-        readonly property bool cyclable: present && root.power.count > 1
-        readonly property string profileName: present
-                ? (root.profileNames[root.power.active] !== undefined
-                   ? root.profileNames[root.power.active] : root.power.active)
-                : ""
-
-        visible: present
-        height: parent.height
-        iconName: present && root.power.active === "performance"
-                  ? "zap"
-                  : present && root.power.active === "power-saver" ? "leaf" : "gauge"
-        iconSize: CelestinaTheme.iconSm
-        role: CelestinaButton.Ghost
-        helpText: present ? qsTr("Perfil de energía: %1").arg(profileName) : ""
-        Accessible.description: cyclable ? qsTr("Cambia al siguiente perfil") : ""
-        ToolTip.visible: false
-        onClicked: {
-            if (profile.cyclable)
-                root.profileCycleRequested();
-        }
+        Accessible.onPressAction: radio.requestMenu()
     }
 
 }

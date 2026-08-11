@@ -20,6 +20,7 @@ Item {
 
     // One workspace's published row.
     required property var workspace
+    required property BackdropInk ink
     // Whether this board is the workspace the session is on.
     property bool current: false
     // Which row the keyboard is on, across the whole card. A key rather than an
@@ -87,10 +88,10 @@ Item {
                 anchors.fill: parent
                 radius: CelestinaTheme.radiusSm
                 border.width: parent.keyboardHere ? CelestinaTheme.borderFocus : 0
-                border.color: CelestinaTheme.focusRing
+                border.color: root.ink.focus
                 color: headerPointer.pressed
-                       ? CelestinaTheme.surfaceSelected
-                       : (headerPointer.containsMouse ? CelestinaTheme.surfaceHover
+                       ? root.ink.selectedFill
+                       : (headerPointer.containsMouse ? root.ink.hoverFill
                                                       : CelestinaTheme.clear)
 
                 Behavior on color {
@@ -114,7 +115,7 @@ Item {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.label
-                    color: root.current ? CelestinaTheme.accentLink : CelestinaTheme.text
+                    color: root.current ? root.ink.accent : root.ink.primary
                     font.family: CelestinaTheme.sansFamily
                     font.pixelSize: CelestinaTheme.fontRowTitle
                     font.weight: CelestinaTheme.weightDemiBold
@@ -126,7 +127,7 @@ Item {
                     text: root.holdsNothing
                           ? qsTr("vacío")
                           : qsTr("%n ventana(s)", "", root.rows.length)
-                    color: CelestinaTheme.textFaint
+                    color: root.ink.faint
                     font.family: CelestinaTheme.sansFamily
                     font.pixelSize: CelestinaTheme.fontMini
                 }
@@ -155,6 +156,7 @@ Item {
 
                 width: content.width
                 window: modelData
+                ink: root.ink
                 current: root.currentKey === "window:" + modelData.id
                 onActivated: root.windowActivated(
                     modelData.id !== undefined ? modelData.id : "")
@@ -169,7 +171,7 @@ Item {
             visible: root.holdsNothing
             leftPadding: CelestinaTheme.spaceSm
             text: qsTr("No hay ninguna ventana aquí.")
-            color: CelestinaTheme.textFaint
+            color: root.ink.faint
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontRowSecondary
             wrapMode: Text.WordWrap
@@ -183,7 +185,7 @@ Item {
             visible: root.hidden > 0
             leftPadding: CelestinaTheme.spaceSm
             text: qsTr("y %n más sin mostrar", "", root.hidden)
-            color: CelestinaTheme.textFaint
+            color: root.ink.faint
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontMini
             elide: Text.ElideRight

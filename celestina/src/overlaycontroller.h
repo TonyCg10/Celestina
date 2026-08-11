@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QQmlComponent>
+#include <QRect>
 #include <QString>
 #include <QVariantMap>
 
@@ -20,11 +21,12 @@ class QWindow;
 // files themselves.
 QString overlaySourceProperty(const QString &qmlComponentName);
 
-// Opens and closes one keybind-driven overlay — the launcher, the clipboard
-// history, the notification centre, the control centre, the session menu.
+// Opens and closes one overlay — the launcher, the clipboard history, the
+// notification centre, the control centre, the session menu.
 //
-// They are identical in mechanics: one centered on-demand-keyboard surface,
-// toggled by a `celestina msg` verb, torn down on its own dismissal. They
+// They are identical in mechanics: one on-demand-keyboard surface, centred
+// for a `celestina msg`/keybind request or anchored for a panel request, and
+// torn down on its own dismissal. They
 // differ in which QML component they load and which bridge that component
 // reads, so this class owns exactly the shared part. Domain logic — searching,
 // launching, selecting a history entry, arming a session verb — lives entirely
@@ -70,9 +72,19 @@ public slots:
     void open();
     void close();
     void toggle();
+    // The same overlay opened from a panel control rather than a keybind. The
+    // opener's rectangle travels with it so the surface can grow out of the
+    // control instead of appearing beside it; an empty rectangle means there was
+    // no control, which is what a keybind is.
+    void toggleFrom(QWindow *panel, const QRect &globalOpener);
 
 private:
     QWindow *createWindow();
+
+    // Where the surface should grow from, while a panel-opened toggle is in
+    // flight. Empty for a keybind, which has no origin on screen.
+    QRect m_opener;
+    QPointer<QWindow> m_openerPanel;
 
     QQmlComponent m_component;
     QString m_componentName;

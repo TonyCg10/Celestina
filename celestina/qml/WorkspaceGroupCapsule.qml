@@ -11,6 +11,7 @@ Item {
     // The monitor this group belongs to; assistive context, not visible text.
     required property string outputName
     required property int count
+    required property BackdropInk ink
     // Whether anything inside is asking for attention.
     required property bool urgent
     signal expandRequested()
@@ -27,11 +28,23 @@ Item {
     Accessible.onPressAction: capsule.expandRequested()
 
     Rectangle {
+        id: feedback
+        objectName: "celestina-workspace-group-feedback"
         anchors.fill: parent
         radius: CelestinaTheme.radiusPill
-        color: pressArea.containsMouse ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
+        color: pressArea.pressed ? capsule.ink.pressedFill
+                                 : pressArea.containsMouse
+                                   ? capsule.ink.hoverFill
+                                   : CelestinaTheme.clear
         border.width: CelestinaTheme.borderHairline
-        border.color: capsule.urgent ? CelestinaTheme.dangerBorder : CelestinaTheme.accentSoftBorder
+        border.color: capsule.urgent ? capsule.ink.danger : capsule.ink.focus
+
+        Behavior on color {
+            ColorAnimation {
+                duration: CelestinaTheme.reducedMotion
+                          ? 0 : CelestinaTheme.motionFast
+            }
+        }
     }
 
     Text {
@@ -39,7 +52,7 @@ Item {
 
         anchors.centerIn: parent
         text: capsule.count
-        color: CelestinaTheme.text
+        color: capsule.ink.primary
         font.family: CelestinaTheme.sansFamily
         font.features: CelestinaTheme.fontFeaturesTabular
         font.pixelSize: CelestinaTheme.fontTitle
@@ -53,11 +66,12 @@ Item {
         height: 5
         radius: CelestinaTheme.radiusPill
         visible: capsule.urgent
-        color: CelestinaTheme.danger
+        color: capsule.ink.danger
     }
 
     MouseArea {
         id: pressArea
+        objectName: "celestina-workspace-group-pointer"
 
         anchors.fill: parent
         hoverEnabled: true

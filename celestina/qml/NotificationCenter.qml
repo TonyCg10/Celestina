@@ -20,8 +20,17 @@ Window {
 
     required property var providerSource
     required property bool reducedMotion
+    property alias anchoredFromPanel: placement.anchoredFromPanel
+    property alias openerRect: placement.openerRect
+    property alias compositorBlurAvailable: card.compositorBlurAvailable
+    property alias glassRects: card.glassRects
+    property alias glassRegions: card.glassRegions
 
     signal dismissed()
+
+    BackdropInk {
+        id: backdropInk
+    }
 
     Shortcut {
         sequence: "Escape"
@@ -31,6 +40,9 @@ Window {
 
     readonly property int cardWidth: 460
     readonly property int cardHeight: 520
+    readonly property int anchorGap: placement.anchorGap
+    readonly property real cardX: placement.x
+    readonly property real cardY: placement.y
 
     readonly property var state: ProviderReading.read(centre.providerSource, "notifications")
     // `undefined` means this shell is not the session's notification server —
@@ -61,6 +73,14 @@ Window {
         return mine;
     }
 
+    function accessibleNameFor(entry) {
+        // Producer strings are concatenated as data. Feeding one producer's
+        // percent tokens back through another `.arg()` pass would let it
+        // rewrite placeholders in the shell-owned sentence.
+        return entry.app + ": " + entry.summary
+               + (entry.body.length > 0 ? ". " + entry.body : "");
+    }
+
     property int currentIndex: entries.length > 0 ? 0 : -1
 
     width: cardWidth
@@ -71,6 +91,21 @@ Window {
     Component.onCompleted: {
         CelestinaTheme.reducedMotion = centre.reducedMotion;
         list.forceActiveFocus();
+    }
+
+    onVisibleChanged: {
+        if (visible)
+            Qt.callLater(card.reveal);
+    }
+
+    PanelPopupPlacement {
+        id: placement
+
+        surfaceWidth: centre.width
+        surfaceHeight: centre.height
+        contentWidth: centre.cardWidth
+        contentHeight: centre.cardHeight
+        edgeInset: 0
     }
 
     onEntriesChanged: {
@@ -121,47 +156,44 @@ Window {
 
         width: centre.cardWidth
         height: centre.cardHeight
-        anchors.centerIn: parent
+        x: centre.cardX
+        y: centre.cardY
 
-        // Anything the card itself does not handle stops here rather than
-        // falling through to the dismissal area behind it. It is the first
-        // child, so every control declared after it is still reached first.
-        MouseArea {
-            anchors.fill: parent
-            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-        }
+        SoftOverlayCard {
+            id: card
 
-        GlassCard {
+            ink: backdropInk
             anchors.fill: parent
-            backdropSource: scene
-            Accessible.role: Accessible.Dialog
-            Accessible.name: qsTr("Notificaciones")
+            reducedMotion: centre.reducedMotion
+            accessibleName: qsTr("Notificaciones")
 
             Column {
                 anchors.fill: parent
-                anchors.margins: CelestinaTheme.spaceLg
-                spacing: CelestinaTheme.spaceMd
+                anchors.margins: CelestinaTheme.spaceMd
+                spacing: CelestinaTheme.spaceSm
 
-                Row {
+                MenuHeader {
                     width: parent.width
-                    spacing: CelestinaTheme.spaceSm
-
-                    Text {
-                        width: parent.width - quietButton.width - clearButton.width
-                               - parent.spacing * 2
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: centre.quiet ? qsTr("Notificaciones — silenciadas")
-                                           : qsTr("Notificaciones")
-                        color: CelestinaTheme.text
-                        elide: Text.ElideRight
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontRowTitle
-                        font.weight: CelestinaTheme.weightDemiBold
+                    ink: backdropInk
+                    title: qsTr("Notificaciones")
+                    subtitle: {
+                        if (!centre.serving)
+                            return qsTr("Servidor externo");
+                        if (centre.quiet)
+                            return qsTr("%n elemento(s), silenciadas", "",
+                                        centre.entries.length);
+                        if (centre.truncated) {
+                            return qsTr("%n elemento(s), historial parcial", "",
+                                        centre.entries.length);
+                        }
+                        return qsTr("%n elemento(s)", "", centre.entries.length);
                     }
+                    iconName: centre.quiet ? "bell-off" : "bell"
 
-                    CelestinaButton {
+                    BackdropButton {
                         id: quietButton
 
+                        ink: backdropInk
                         text: centre.quiet ? qsTr("Permitir") : qsTr("Silenciar")
                         role: centre.quiet ? CelestinaButton.Selected
                                            : CelestinaButton.Tonal
@@ -169,9 +201,10 @@ Window {
                         onClicked: centre.send("quiet-toggle", {})
                     }
 
-                    CelestinaButton {
+                    BackdropButton {
                         id: clearButton
 
+                        ink: backdropInk
                         text: qsTr("Vaciar")
                         role: CelestinaButton.Destructive
                         enabled: centre.past.length > 0
@@ -180,13 +213,20 @@ Window {
                     }
                 }
 
-                ListView {
-                    id: list
-
+                Item {
                     width: parent.width
                     height: parent.height - y
+
+                    MenuSection { ink: backdropInk }
+
+                    ListView {
+                    id: list
+
+                    anchors.fill: parent
+                    anchors.margins: CelestinaTheme.spaceSm
                     clip: true
                     spacing: CelestinaTheme.spaceXs
+                    visible: centre.serving && centre.entries.length > 0
                     model: centre.entries
                     currentIndex: centre.currentIndex
                     keyNavigationEnabled: true
@@ -222,28 +262,54 @@ Window {
                         implicitHeight: rowBody.implicitHeight + CelestinaTheme.spaceMd
 
                         Accessible.role: Accessible.ListItem
-                        // Chained because QML's `arg` substitutes one value per
-                        // call, unlike its C++ namesake. A producer that puts a
-                        // `%2` in its own app name can garble this sentence but
-                        // cannot reach past it.
-                        Accessible.name: qsTr("%1: %2. %3")
-                            .arg(row.modelData.app)
-                            .arg(row.modelData.summary)
-                            .arg(row.modelData.body)
+                        Accessible.name: centre.accessibleNameFor(row.modelData)
                         Accessible.selected: row.selected
 
                         Rectangle {
                             anchors.fill: parent
                             radius: CelestinaTheme.radiusSm
-                            color: row.selected ? CelestinaTheme.surfaceSelected
-                                                : CelestinaTheme.clear
+                            color: rowPointer.pressed ? backdropInk.selectedFill
+                                   : row.selected ? backdropInk.selectedRestFill
+                                   : rowPointer.containsMouse
+                                     ? backdropInk.hoverFill
+                                     : CelestinaTheme.clear
+                        }
+
+                        CelestinaIcon {
+                            id: rowIcon
+
+                            anchors.left: parent.left
+                            anchors.leftMargin: CelestinaTheme.spaceSm
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: CelestinaTheme.iconSm
+                            height: width
+                            name: row.live ? "bell" : "clock-arrow-up"
+                            fallbackName: "bell"
+                            tintOverride: row.live ? backdropInk.primary
+                                                   : backdropInk.muted
+                            Accessible.ignored: true
+                        }
+
+                        Text {
+                            id: stateLabel
+
+                            anchors.right: parent.right
+                            anchors.rightMargin: CelestinaTheme.spaceSm
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: row.live ? qsTr("ahora") : qsTr("historial")
+                            color: backdropInk.faint
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontMini
+                            font.weight: CelestinaTheme.weightDemiBold
                         }
 
                         Column {
                             id: rowBody
 
-                            width: parent.width - CelestinaTheme.spaceMd
-                            x: CelestinaTheme.spaceSm
+                            anchors.left: rowIcon.right
+                            anchors.leftMargin: CelestinaTheme.spaceSm
+                            anchors.right: stateLabel.left
+                            anchors.rightMargin: CelestinaTheme.spaceSm
                             y: CelestinaTheme.spaceXs
                             spacing: 2
 
@@ -261,7 +327,7 @@ Window {
                                 // shell would fetch on the producer's behalf.
                                 // The server never advertises `body-markup`.
                                 textFormat: Text.PlainText
-                                color: CelestinaTheme.textMuted
+                                color: backdropInk.muted
                                 elide: Text.ElideRight
                                 font.family: CelestinaTheme.sansFamily
                                 font.pixelSize: CelestinaTheme.fontCaption
@@ -271,8 +337,8 @@ Window {
                                 width: parent.width
                                 text: row.modelData.summary
                                 textFormat: Text.PlainText
-                                color: row.live ? CelestinaTheme.text
-                                                : CelestinaTheme.textMuted
+                                color: row.live ? backdropInk.primary
+                                                : backdropInk.muted
                                 elide: Text.ElideRight
                                 font.family: CelestinaTheme.sansFamily
                                 font.pixelSize: CelestinaTheme.fontBody
@@ -286,7 +352,7 @@ Window {
                                 visible: row.modelData.body.length > 0
                                 text: row.modelData.body
                                 textFormat: Text.PlainText
-                                color: CelestinaTheme.textMuted
+                                color: backdropInk.muted
                                 wrapMode: Text.WordWrap
                                 maximumLineCount: 2
                                 elide: Text.ElideRight
@@ -296,7 +362,10 @@ Window {
                         }
 
                         MouseArea {
+                            id: rowPointer
+
                             anchors.fill: parent
+                            hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: centre.currentIndex = row.index
                         }
@@ -304,18 +373,17 @@ Window {
                 }
 
                 Text {
-                    width: parent.width
+                    anchors.fill: parent
+                    anchors.margins: CelestinaTheme.spaceLg
                     visible: !centre.serving || centre.entries.length === 0
-                             || centre.truncated
                     text: !centre.serving
                           ? qsTr("Otro programa es el servidor de notificaciones de esta sesión, así que este shell no tiene nada que mostrar.")
-                          : centre.entries.length === 0
-                            ? qsTr("No se ha dicho nada últimamente.")
-                            : qsTr("Las notificaciones más antiguas no se conservan.")
-                    color: CelestinaTheme.textMuted
+                          : qsTr("No se ha dicho nada últimamente.")
+                    color: backdropInk.muted
                     wrapMode: Text.WordWrap
                     font.family: CelestinaTheme.sansFamily
                     font.pixelSize: CelestinaTheme.fontCaption
+                }
                 }
             }
         }

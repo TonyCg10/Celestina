@@ -21,7 +21,9 @@ use std::sync::{Arc, Mutex, OnceLock};
 use celestina_core::atomic_file;
 use celestina_core::xdg;
 use celestina_shell_core::runtime::ProviderRuntime;
-use celestina_shell_core::settings::{Settings, Store, WriteOutcome};
+use celestina_shell_core::settings::{
+    tray_preference_key_is_valid, Settings, Store, TrayItemMode, WriteOutcome, MAX_TRAY_ITEM_MODES,
+};
 use celestina_shell_core::snapshot::{Payload, ProviderId};
 use serde_json::Value;
 
@@ -81,7 +83,78 @@ fn payload_of(settings: &Settings) -> Payload {
         payload.insert("weatherLatitude".to_owned(), Value::from(place.latitude));
         payload.insert("weatherLongitude".to_owned(), Value::from(place.longitude));
     }
+    payload.insert(
+        "trayItems".to_owned(),
+        Value::Array(
+            settings
+                .tray_items
+                .iter()
+                .map(|(key, mode)| {
+                    Value::Object(
+                        [
+                            ("key".to_owned(), Value::from(key.clone())),
+                            ("mode".to_owned(), Value::from(mode.token())),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    )
+                })
+                .collect(),
+        ),
+    );
+    if let Some(directory) = &settings.wallpaper_directory {
+        payload.insert(
+            "wallpaperDirectory".to_owned(),
+            Value::from(directory.clone()),
+        );
+    }
     payload
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RequestedTrayItemMode {
+    Visible,
+    Stored(TrayItemMode),
+}
+
+fn tray_item_mode_request(options: &Payload) -> Result<(String, RequestedTrayItemMode), String> {
+    let key = options
+        .get("key")
+        .and_then(Value::as_str)
+        .filter(|key| tray_preference_key_is_valid(key))
+        .ok_or_else(|| format!("'{NAME}' needs a valid tray preference 'key'"))?;
+    let mode = options
+        .get("mode")
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("'{NAME}' needs a tray item 'mode'"))?;
+    let requested = if mode == "visible" {
+        RequestedTrayItemMode::Visible
+    } else {
+        TrayItemMode::from_token(mode)
+            .map(RequestedTrayItemMode::Stored)
+            .ok_or_else(|| format!("'{NAME}' cannot use the tray item mode '{mode}'"))?
+    };
+    Ok((key.to_owned(), requested))
+}
+
+fn apply_tray_item_mode(settings: &mut Settings, key: String, requested: RequestedTrayItemMode) {
+    match requested {
+        RequestedTrayItemMode::Visible => {
+            settings.tray_items.remove(&key);
+        }
+        RequestedTrayItemMode::Stored(mode) => {
+            // Preferences can outlive the applications that created them. Once
+            // the bounded map is full, the current choice must still win: evict
+            // the lexicographically first existing fingerprint so replacement
+            // is deterministic without pretending the map records recency.
+            if !settings.tray_items.contains_key(&key)
+                && settings.tray_items.len() >= MAX_TRAY_ITEM_MODES
+            {
+                settings.tray_items.pop_first();
+            }
+            settings.tray_items.insert(key, mode);
+        }
+    }
 }
 
 fn publish() {
@@ -181,6 +254,10 @@ pub fn action(verb: &str, options: &Payload) -> Result<(), String> {
         "weather-clear" => {
             remember(|settings| settings.weather = None)?;
         }
+        "tray-item-mode" => {
+            let (key, requested) = tray_item_mode_request(options)?;
+            remember(move |settings| apply_tray_item_mode(settings, key, requested))?;
+        }
         _ => return Err(format!("'{NAME}' does not serve the verb '{verb}'")),
     }
     Ok(())
@@ -206,18 +283,140 @@ mod tests {
         assert!(!payload.contains_key("weatherLatitude"));
         assert!(!payload.contains_key("weatherLongitude"));
         assert!(!payload.contains_key("weatherLabel"));
+        assert_eq!(payload.get("trayItems"), Some(&Value::Array(Vec::new())));
+        assert!(!payload.contains_key("wallpaperDirectory"));
     }
 
     #[test]
     fn what_is_published_is_what_the_person_chose() {
+        let pinned = "1".repeat(64);
+        let hidden = "2".repeat(64);
         let settings = Settings {
             quiet: true,
             level_step: 10,
+            wallpaper_directory: Some("/home/person/Pictures/Wallpapers".to_owned()),
+            tray_items: [
+                (pinned.clone(), TrayItemMode::Pinned),
+                (hidden.clone(), TrayItemMode::Hidden),
+            ]
+            .into_iter()
+            .collect(),
             ..Settings::default()
         };
         let payload = payload_of(&settings);
 
         assert_eq!(payload.get("quiet"), Some(&Value::from(true)));
         assert_eq!(payload.get("levelStep"), Some(&Value::from(10u8)));
+        assert_eq!(
+            payload.get("wallpaperDirectory"),
+            Some(&Value::from("/home/person/Pictures/Wallpapers"))
+        );
+        assert_eq!(
+            payload.get("trayItems"),
+            Some(&Value::Array(vec![
+                Value::Object(
+                    [
+                        ("key".to_owned(), Value::from(pinned)),
+                        ("mode".to_owned(), Value::from("pinned")),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+                Value::Object(
+                    [
+                        ("key".to_owned(), Value::from(hidden)),
+                        ("mode".to_owned(), Value::from("hidden")),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+            ]))
+        );
+    }
+
+    #[test]
+    fn tray_item_mode_requests_accept_only_host_keys_and_known_modes() {
+        let key = "a".repeat(64);
+        let options = |mode: &str| {
+            [
+                ("key".to_owned(), Value::from(key.clone())),
+                ("mode".to_owned(), Value::from(mode)),
+            ]
+            .into_iter()
+            .collect()
+        };
+
+        assert_eq!(
+            tray_item_mode_request(&options("visible")),
+            Ok((key.clone(), RequestedTrayItemMode::Visible))
+        );
+        assert_eq!(
+            tray_item_mode_request(&options("pinned")),
+            Ok((
+                key.clone(),
+                RequestedTrayItemMode::Stored(TrayItemMode::Pinned)
+            ))
+        );
+        assert_eq!(
+            tray_item_mode_request(&options("hidden")),
+            Ok((
+                key.clone(),
+                RequestedTrayItemMode::Stored(TrayItemMode::Hidden)
+            ))
+        );
+        assert!(tray_item_mode_request(&options("floating")).is_err());
+
+        let invalid = [
+            ("key".to_owned(), Value::from(":1.42/item")),
+            ("mode".to_owned(), Value::from("pinned")),
+        ]
+        .into_iter()
+        .collect();
+        assert!(tray_item_mode_request(&invalid).is_err());
+    }
+
+    #[test]
+    fn a_new_tray_choice_replaces_one_deterministic_old_choice_at_capacity() {
+        let mut settings = Settings {
+            tray_items: (0..MAX_TRAY_ITEM_MODES)
+                .map(|index| (format!("{index:064x}"), TrayItemMode::Pinned))
+                .collect(),
+            ..Settings::default()
+        };
+        let replaced = settings
+            .tray_items
+            .first_key_value()
+            .map(|(key, _)| key.clone())
+            .expect("the bounded map is full");
+        let newcomer = "f".repeat(64);
+
+        apply_tray_item_mode(
+            &mut settings,
+            newcomer.clone(),
+            RequestedTrayItemMode::Stored(TrayItemMode::Hidden),
+        );
+
+        assert_eq!(settings.tray_items.len(), MAX_TRAY_ITEM_MODES);
+        assert!(!settings.tray_items.contains_key(&replaced));
+        assert_eq!(
+            settings.tray_items.get(&newcomer),
+            Some(&TrayItemMode::Hidden)
+        );
+
+        // Updating the same item consumes no second slot, and ordinary visible
+        // state removes its stored override again.
+        apply_tray_item_mode(
+            &mut settings,
+            newcomer.clone(),
+            RequestedTrayItemMode::Stored(TrayItemMode::Pinned),
+        );
+        assert_eq!(settings.tray_items.len(), MAX_TRAY_ITEM_MODES);
+        apply_tray_item_mode(
+            &mut settings,
+            newcomer.clone(),
+            RequestedTrayItemMode::Visible,
+        );
+        assert!(!settings.tray_items.contains_key(&newcomer));
+        assert_eq!(settings.tray_items.len(), MAX_TRAY_ITEM_MODES - 1);
     }
 }

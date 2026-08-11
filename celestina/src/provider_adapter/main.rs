@@ -120,7 +120,7 @@ fn perform(command: &Command, runtime: &Mutex<ProviderRuntime>) -> Result<(), St
         }
         clipboard::NAME => clipboard::action(&command.verb, &command.options),
         settings::NAME => settings::action(&command.verb, &command.options),
-        wallpaper::NAME => {
+        wallpaper::NAME | wallpaper::GALLERY_NAME => {
             wallpaper::action(&command.verb, &command.options, runtime, &command.provider)
         }
         notifications::NAME => {

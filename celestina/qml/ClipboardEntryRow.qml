@@ -22,22 +22,26 @@ Item {
     // The entry's fields, as the clipboard provider published them.
     required property var entry
     required property bool current
+    required property BackdropInk ink
 
     signal selected()
     signal removed()
 
-    implicitHeight: 34
+    implicitHeight: CelestinaTheme.controlHeight
     Accessible.role: Accessible.ListItem
     Accessible.name: row.entry.preview
     Accessible.selected: row.current
+    Accessible.onPressAction: row.selected()
 
     Rectangle {
         anchors.fill: parent
         radius: CelestinaTheme.radiusSm
-        color: row.current
-               ? CelestinaTheme.badgeAccentFill
+        color: rowMouse.pressed
+               ? row.ink.selectedFill
+               : row.current
+               ? row.ink.selectedRestFill
                : rowMouse.containsMouse
-                 ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
+                 ? row.ink.hoverFill : CelestinaTheme.clear
     }
 
     // Clicks only, and it stops where the button starts. Overlapping them does
@@ -63,16 +67,32 @@ Item {
         }
     }
 
-    Text {
-        x: CelestinaTheme.spaceSm
+    CelestinaIcon {
+        id: leadingIcon
+
+        anchors.left: parent.left
+        anchors.leftMargin: CelestinaTheme.spaceSm
         anchors.verticalCenter: parent.verticalCenter
-        width: parent.width - CelestinaTheme.spaceSm * 2 - removeButton.width
+        width: CelestinaTheme.iconSm
+        height: width
+        name: "copy"
+        fallbackName: "clipboard-paste"
+        tintOverride: row.current ? row.ink.accent : row.ink.muted
+        Accessible.ignored: true
+    }
+
+    Text {
+        anchors.left: leadingIcon.right
+        anchors.leftMargin: CelestinaTheme.spaceSm
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.right: removeButton.left
+        anchors.rightMargin: CelestinaTheme.spaceXs
         text: row.entry.preview
         // Copied text is shown as the characters that were copied. Rendering it
         // as markup would turn copying a snippet of HTML into a link, or into
         // an image this shell would fetch.
         textFormat: Text.PlainText
-        color: row.current ? CelestinaTheme.accent : CelestinaTheme.text
+        color: row.current ? row.ink.accent : row.ink.primary
         font.family: CelestinaTheme.sansFamily
         font.pixelSize: CelestinaTheme.fontRowSecondary
         elide: Text.ElideRight
@@ -81,13 +101,14 @@ Item {
     // Deleting used to be reachable only by the Delete key or a right-click,
     // neither of which a person can see. This is the same action with a shape
     // on screen; the keyboard and context-menu paths are unchanged.
-    CelestinaIconButton {
+    BackdropIconButton {
         id: removeButton
 
-        anchors.right: parent.right
+        anchors.right: row.right
         anchors.rightMargin: CelestinaTheme.spaceXs
-        anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenter: row.verticalCenter
         iconName: "x"
+        ink: row.ink
         // Shown on the row the keyboard is on and on the row under the
         // pointer. `hovered` is part of that test because the pointer moving
         // onto the button takes the hover away from the area underneath, and a
@@ -95,8 +116,8 @@ Item {
         // The row's area stops short of this button, so its `containsMouse`
         // is false while the pointer is here — the button's own `hovered` is
         // what keeps it on screen as you reach for it.
-        visible: row.current || rowMouse.containsMouse || hovered
-        activeFocusOnTab: visible
+        visible: row.current || rowMouse.containsMouse || removeButton.hovered
+        activeFocusOnTab: removeButton.visible
         Accessible.name: qsTr("Quitar «%1» del historial").arg(row.entry.preview)
         helpText: qsTr("Quitar esta entrada del historial")
         onClicked: row.removed()

@@ -14,6 +14,7 @@ Item {
     // The `media` provider's fields, or `undefined` when nothing is playing.
     // `var` is necessary because QML has no typed map.
     required property var reading
+    required property BackdropInk ink
     // A click is a request: the host asks the player, and the next value says
     // what the player did.
     signal toggleRequested()
@@ -81,7 +82,7 @@ Item {
         // A track's title belongs to whatever is playing it. It is shown as the
         // characters it is; `AutoText` would guess some of them were markup.
         textFormat: Text.PlainText
-        color: CelestinaTheme.text
+        color: root.ink.primary
         font.family: CelestinaTheme.sansFamily
         font.pixelSize: CelestinaTheme.fontTitle
         elide: Text.ElideRight
@@ -99,7 +100,7 @@ Item {
         height: CelestinaTheme.borderHairline * 2
         radius: height / 2
         visible: root.finite
-        color: CelestinaTheme.surfaceSelected
+        color: root.ink.selectedFill
 
         Rectangle {
             // Guarded in the expression, not only by `visible`: a binding is
@@ -110,7 +111,7 @@ Item {
                    : 0
             height: parent.height
             radius: parent.radius
-            color: CelestinaTheme.accentLink
+            color: root.ink.accent
         }
 
     }

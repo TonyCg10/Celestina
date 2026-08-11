@@ -1,26 +1,22 @@
-// The system tray: other applications' controls, kept out of the way.
+// The compact system-tray opener in the panel.
 //
-// It is a drawer because the lived bar has one — a handful of icons that are
-// almost never acted on should not spend the day occupying the panel. Two
-// things are always visible regardless: an item asking for attention, which is
-// the whole point of that status, and the toggle itself when there is anything
-// to open.
+// A handful of foreign controls should not expand inside the 40 px bar. Items
+// asking for attention and items explicitly pinned by the person stay visible
+// here; the complete live inventory opens on the panel's contextual menu
+// surface. An individual item's own D-Bus menu is a separate surface and still
+// comes from right-clicking that item.
 //
-// An item whose icon resolved to nothing shows its name instead of an empty
-// slot. That is not rare: on this session one application names an icon no
-// installed theme has and publishes no pixels either.
+// A pinned or attention item whose foreign icon cannot be resolved keeps a
+// fixed-size application glyph. Its full title remains the accessible name;
+// an icon failure must never turn one compact bar slot into a text column.
 //
-// Folded, the drawer says how many items are behind it. It used to say nothing:
-// four registered applications and a bare chevron look exactly like no
-// applications and a bare chevron, and the count lived only in `helpText`, whose
-// visible tooltip is deliberately switched off here. A person reading the bar
-// could not tell the two apart — which is what happened on 2026-08-07, when two
-// tray items were reported missing and were in fact one click away.
+// The opener deliberately carries no visible count. Its accessible name keeps
+// the complete inventory size, while its distinct inventory glyph communicates
+// that more items live behind it without spending a text column in the bar.
 pragma ComponentBehavior: Bound
 
 import CelestinaStyle
 import QtQuick
-import QtQuick.Controls
 
 Row {
     id: root
@@ -29,146 +25,249 @@ Row {
 
     // The tray host's items. `var` is necessary: QML has no typed map-list.
     required property var items
-    property bool open: false
+    // Flat durable settings rows: {key, mode}, where absence means ordinary
+    // visibility. The provider owns bounds and persistence.
+    required property var preferences
+    required property BackdropInk ink
     signal activated(string service, string path, int globalX, int globalY)
     signal secondaryActivated(string service, string path, int globalX, int globalY)
     // A right-click asks the host for this item's own menu.
     signal menuRequested(string service, string path, int globalX, int globalY)
+    signal drawerRequested(int globalX, int globalY,
+                           int openerWidth, int openerHeight)
 
-    readonly property var attention: {
+    readonly property var preferenceModes: {
+        const modes = Object.create(null);
+        for (let index = 0; index < root.preferences.length; ++index) {
+            const row = root.preferences[index];
+            if (row.key !== undefined && row.mode !== undefined)
+                modes[row.key] = row.mode;
+        }
+        return modes;
+    }
+
+    function modeFor(item) {
+        const key = item.preferenceKey !== undefined ? item.preferenceKey : "";
+        return key.length > 0 && root.preferenceModes[key] !== undefined
+               ? root.preferenceModes[key] : "visible";
+    }
+
+    readonly property var shown: {
+        const pinned = [];
         const urgent = [];
         for (let index = 0; index < items.length; ++index) {
-            if (items[index].status === "attention")
-                urgent.push(items[index]);
-
+            const item = items[index];
+            const mode = root.modeFor(item);
+            if (mode === "hidden")
+                continue;
+            if (mode === "pinned")
+                pinned.push(item);
+            else if (item.status === "attention")
+                urgent.push(item);
         }
-        return urgent;
+        return pinned.concat(urgent);
     }
-    readonly property var shown: open ? items : attention
 
     spacing: CelestinaTheme.spaceSm
     visible: items.length > 0
 
-    Repeater {
-        model: root.shown
+    PanelMenuButton {
+        id: trayButton
 
-        delegate: Item {
-            id: entry
-
-            // Named so an offscreen regression can count what the drawer really
-            // instantiated. Nothing reads it at runtime.
-            objectName: "celestina-tray-item"
-
-            required property var modelData
-            readonly property bool hasIcon: modelData.iconSource !== undefined
-                                            && modelData.iconSource.length > 0
-
-            width: hasIcon ? 18 : nameLabel.implicitWidth
-            height: 18
-            anchors.verticalCenter: parent.verticalCenter
-            Accessible.role: Accessible.Button
-            Accessible.name: modelData.title
-            Accessible.description: modelData.status === "attention"
-                                    ? qsTr("Requiere atención") : ""
-            Accessible.onPressAction: root.activated(modelData.service, modelData.path, 0, 0)
-
-            Image {
-                anchors.fill: parent
-                visible: entry.hasIcon
-                source: entry.hasIcon ? entry.modelData.iconSource : ""
-                // The host already resolved this to the size it is drawn at;
-                // asking for the same size keeps it from being resampled twice.
-                sourceSize.width: 18
-                sourceSize.height: 18
-                fillMode: Image.PreserveAspectFit
-                asynchronous: true
-                smooth: true
-            }
-
-            Text {
-                id: nameLabel
-
-                anchors.verticalCenter: parent.verticalCenter
-                visible: !entry.hasIcon
-                // An application whose icon nothing can resolve is still one
-                // the user should be able to reach.
-                text: entry.modelData.title
-                // Another application's own title, shown as characters.
-                textFormat: Text.PlainText
-                color: CelestinaTheme.text
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontTitle
-                elide: Text.ElideRight
-                width: Math.min(implicitWidth, 90)
-            }
-
-            Rectangle {
-                anchors.top: parent.top
-                anchors.right: parent.right
-                width: 5
-                height: 5
-                radius: CelestinaTheme.radiusPill
-                visible: entry.modelData.status === "attention"
-                color: CelestinaTheme.danger
-            }
-
-            MouseArea {
-                anchors.fill: parent
-                hoverEnabled: true
-                acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
-                cursorShape: Qt.PointingHandCursor
-                onClicked: (mouse) => {
-                    const at = entry.mapToGlobal(0, entry.height);
-                    if (mouse.button === Qt.RightButton) {
-                        root.menuRequested(entry.modelData.service, entry.modelData.path, at.x, at.y);
-                        return;
-                    }
-                    if (mouse.button === Qt.MiddleButton) {
-                        root.secondaryActivated(entry.modelData.service, entry.modelData.path, at.x, at.y);
-                        return;
-                    }
-                    root.activated(entry.modelData.service, entry.modelData.path, at.x, at.y);
-                }
-            }
-
-        }
-
-    }
-
-    Text {
-        objectName: "celestina-tray-count"
-
-        anchors.verticalCenter: parent.verticalCenter
-        // Only while folded, and only when there is something to open: a badge
-        // reading zero is furniture, and repeating the count beside the icons it
-        // already shows is noise.
-        visible: !root.open && root.items.length > 0
-        text: root.items.length
-        color: CelestinaTheme.text
-        font.family: CelestinaTheme.sansFamily
-        font.features: CelestinaTheme.fontFeaturesTabular
-        font.pixelSize: CelestinaTheme.fontTitle
-        // The button beside it already carries the name and the action for
-        // assistive technology; a second announcement of the same number is
-        // one the person has to listen past.
-        Accessible.ignored: true
-    }
-
-    CelestinaIconButton {
         objectName: "celestina-tray-toggle"
 
         anchors.verticalCenter: parent.verticalCenter
-        iconName: root.open ? "chevron-right" : "chevron-down"
-        iconSize: CelestinaTheme.iconSm
+        implicitWidth: implicitHeight
+        ink: root.ink
         role: CelestinaButton.Ghost
-        // `helpText` still names the button for AT-SPI (`CelestinaIconButton`
-        // ties `Accessible.name` to it); the visible tooltip it also drives is
-        // switched off here — a hover popup over a 40 px panel was landing on
-        // top of the tray icons right next to it and swallowing their clicks.
-        helpText: root.open ? qsTr("Ocultar la bandeja")
-                            : qsTr("Mostrar la bandeja (%1)").arg(root.items.length)
-        ToolTip.visible: false
-        onClicked: root.open = !root.open
+        helpText: qsTr("Abrir la bandeja (%1)").arg(root.items.length)
+        Accessible.name: helpText
+
+        contentItem: Item {
+            implicitWidth: CelestinaTheme.iconSm
+            implicitHeight: CelestinaTheme.iconSm
+
+            CelestinaIcon {
+                objectName: "celestina-tray-toggle-icon"
+
+                anchors.centerIn: parent
+                width: Math.max(1, Math.min(CelestinaTheme.iconSm,
+                                            parent.width, parent.height))
+                height: width
+                name: "system-tray"
+                fallbackName: "system-tray"
+                tintOverride: root.ink.primary
+                Accessible.ignored: true
+            }
+        }
+
+        onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
+            root.drawerRequested(globalX, globalY, openerWidth, openerHeight)
     }
 
+    Row {
+        id: shownItems
+
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: CelestinaTheme.spaceSm
+
+        Repeater {
+            model: root.shown
+
+            delegate: Item {
+                id: entry
+
+                // Named so an offscreen regression can count what the drawer
+                // really instantiated. Nothing reads it at runtime.
+                objectName: "celestina-tray-item"
+
+                required property var modelData
+                readonly property bool hasIconSource: modelData.iconSource !== undefined
+                                                      && modelData.iconSource.length > 0
+                readonly property bool iconReady: entry.hasIconSource
+                                                  && trayIcon.status === Image.Ready
+
+                function anchorPoint() {
+                    return entry.mapToGlobal(0, entry.height);
+                }
+
+                function activatePrimary() {
+                    const at = entry.anchorPoint();
+                    root.activated(entry.modelData.service,
+                                   entry.modelData.path, at.x, at.y);
+                }
+
+                function requestContextMenu() {
+                    const at = entry.anchorPoint();
+                    root.menuRequested(entry.modelData.service,
+                                       entry.modelData.path, at.x, at.y);
+                }
+
+                width: CelestinaTheme.iconSm
+                height: CelestinaTheme.iconSm
+                anchors.verticalCenter: parent.verticalCenter
+                activeFocusOnTab: true
+                Accessible.role: Accessible.Button
+                Accessible.name: modelData.title
+                Accessible.description: modelData.status === "attention"
+                                        ? qsTr("Requiere atención") : ""
+                Accessible.onPressAction: entry.activatePrimary()
+                Keys.onReturnPressed: function(event) {
+                    entry.activatePrimary();
+                    event.accepted = true;
+                }
+                Keys.onEnterPressed: function(event) {
+                    entry.activatePrimary();
+                    event.accepted = true;
+                }
+                Keys.onSpacePressed: function(event) {
+                    entry.activatePrimary();
+                    event.accepted = true;
+                }
+                Keys.onMenuPressed: function(event) {
+                    entry.requestContextMenu();
+                    event.accepted = true;
+                }
+                Keys.onPressed: function(event) {
+                    if (event.key !== Qt.Key_F10
+                        || !(event.modifiers & Qt.ShiftModifier)) {
+                        return;
+                    }
+                    entry.requestContextMenu();
+                    event.accepted = true;
+                }
+
+                Rectangle {
+                    objectName: "celestina-tray-item-feedback"
+                    anchors.fill: parent
+                    radius: CelestinaTheme.radiusSm
+                    color: entryPointer.pressed ? root.ink.pressedFill
+                                                 : entryPointer.containsMouse
+                                                   ? root.ink.controlFill
+                                                   : CelestinaTheme.clear
+
+                    Behavior on color {
+                        ColorAnimation {
+                            duration: CelestinaTheme.reducedMotion
+                                      ? 0 : CelestinaTheme.motionFast
+                        }
+                    }
+                }
+
+                Image {
+                    id: trayIcon
+
+                    objectName: "celestina-tray-item-image"
+                    anchors.fill: parent
+                    visible: entry.iconReady
+                    source: entry.hasIconSource ? entry.modelData.iconSource : ""
+                    // The host already resolved this to the size it is drawn
+                    // at; the same size avoids a second resample.
+                    sourceSize.width: CelestinaTheme.iconSm
+                    sourceSize.height: CelestinaTheme.iconSm
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    smooth: true
+                }
+
+                CelestinaIcon {
+                    objectName: "celestina-tray-item-fallback-icon"
+
+                    anchors.fill: parent
+                    visible: !entry.iconReady
+                    name: "app-window"
+                    fallbackName: "app-window"
+                    tintOverride: root.ink.primary
+                    Accessible.ignored: true
+                }
+
+                Rectangle {
+                    objectName: "celestina-tray-item-focus"
+                    anchors.fill: parent
+                    anchors.margins: -CelestinaTheme.borderFocus
+                    radius: CelestinaTheme.radiusSm + CelestinaTheme.borderFocus
+                    color: CelestinaTheme.clear
+                    border.width: CelestinaTheme.borderFocus
+                    border.color: root.ink.focus
+                    visible: entry.activeFocus
+                    z: 1000
+                    Accessible.ignored: true
+                }
+
+                Rectangle {
+                    anchors.top: parent.top
+                    anchors.right: parent.right
+                    width: 5
+                    height: 5
+                    radius: CelestinaTheme.radiusPill
+                    visible: entry.modelData.status === "attention"
+                    color: root.ink.danger
+                }
+
+                MouseArea {
+                    id: entryPointer
+                    objectName: "celestina-tray-item-pointer"
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: (mouse) => {
+                        const at = entry.mapToGlobal(0, entry.height);
+                        if (mouse.button === Qt.RightButton) {
+                            entry.requestContextMenu();
+                            return;
+                        }
+                        if (mouse.button === Qt.MiddleButton) {
+                            root.secondaryActivated(entry.modelData.service,
+                                                    entry.modelData.path,
+                                                    at.x, at.y);
+                            return;
+                        }
+                        entry.activatePrimary();
+                    }
+                }
+            }
+        }
+    }
 }

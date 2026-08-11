@@ -11,7 +11,8 @@ are replaced in reversible phases.
   active window and confirmed focus requests.
 - Clock, phone, CPU/RAM, media, audio/microphone, network, Bluetooth, power
   profile, per-monitor DDC brightness and screenshot request surfaces.
-- StatusNotifierItem host, DBusMenu rendering and a watcher service that takes
+- StatusNotifierItem host, DBusMenu rendering, a stable icon-grid inventory
+  with visible/hidden and panel-pin controls, and a watcher service that takes
   over only when no other watcher owns the session name.
 - Keyboard launcher over desktop entries and a shell-owned clipboard-history
   overlay.
@@ -117,11 +118,42 @@ The client exits 0 on `confirmed` and non-zero on `failed` or on no answer, and
 prints the final state on stdout — so a verb can be tried from a terminal
 before it is ever bound to a key.
 
-## Optional session key bindings
+## Optional Niri integration
 
 Celestina never edits a Niri configuration. Nothing below is applied by
 installing, building or running the shell: it is a block to copy into
 `~/.config/niri/config.kdl` by hand, and deleting it is the whole rollback.
+
+### Blur the composed scene
+
+Niri 26.04 [automatically enables `xray`](https://niri-wm.github.io/niri/Window-Effects.html)
+whenever a background effect such as blur is active. Xray is the efficient
+wallpaper-only path: it deliberately ignores application windows below the
+layer surface. Celestina can request the exact finite blur shape through
+`ext-background-effect`, but that protocol does not let the client override
+Niri's xray policy.
+
+Add this rule when Celestina's panel and interactive glass should blur the real
+composed application content below them. The rule deliberately does not match
+the wallpaper, toast or OSD surfaces:
+
+```kdl
+layer-rule {
+    match namespace="^celestina-(panel|panel-menu|panel-child-menu|overlay)$"
+
+    background-effect {
+        xray false
+    }
+}
+```
+
+Non-xray effects require Niri to recompute the scene below the glass and are
+therefore more expensive. Niri 26.04 also documents them as experimental: the
+effect can disappear during window open/close animations and while a tiled
+window is being dragged. Removing this rule restores the wallpaper-only xray
+path.
+
+### Session key bindings
 
 Each verb needs the tool that carries it, and refuses in one sentence when it
 is missing rather than reporting a change that did not happen:
@@ -169,11 +201,15 @@ handover is checked, and removing either one changes nothing about the other.
 Three things the shell offers and never applies. Each is generated into
 `$XDG_DATA_HOME/celestina/generated/` and referenced by you, or not.
 
-**Wallpaper.** Put images in `$XDG_DATA_HOME/celestina/wallpapers`, named for
-the output they belong to — `DP-1.png`, `HDMI-A-1.jpg` — or `default.png` for
-every screen without one of its own. An output with no image paints a plain
-fallback rather than another screen's picture. Nothing to configure: the shell
-picks the file up within a few seconds.
+**Wallpaper.** The panel's wallpaper menu lets you choose a local folder at
+runtime. Its supported images are shown as a thumbnail gallery, in deterministic
+pages when the folder exceeds one bounded provider payload; every accepted
+image remains selectable for the output whose panel opened the menu. The shell
+atomically imports that choice into `$XDG_DATA_HOME/celestina/wallpapers` under
+the output's name. Files placed there manually still work — `DP-1.png`,
+`HDMI-A-1.jpg`, or `default.png` for every screen without its own image. An
+output with no image paints a plain fallback rather than another screen's
+picture, and changed files are picked up within a few seconds.
 
 **Niri colours.** `niri-colours.kdl` holds the focus ring and backdrop
 generated from the sealed theme, so the compositor's borders match the panel's.

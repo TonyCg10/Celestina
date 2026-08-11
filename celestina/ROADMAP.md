@@ -34,7 +34,7 @@ of the design when they provide the narrow capability the shell needs.
 | WSG-1 | complete | Keep a workspace's monitor grouping legible after that monitor is switched off |
 | DIAG-1 | complete | Make the seconds before a freeze reconstructable, without recording anything private |
 | WMAP-1 | complete | Show what a workspace holds, as its real layout, without focusing it |
-| PANEL-1 | active | Replace the hard panel plate with a shadow and borderless compositor-glass capsules |
+| PANEL-1 | active | Replace the hard panel plate with borderless compositor glass and route contextual content through the canonical shared glass material |
 | UX-2 | planned | Establish and then implement one coherent shell-wide visual and interaction language after SHELL-D5 is applied |
 | R6 | conditional | First-party lock starts only if SHELL-D2 is applied |
 | R8 | complete | Reversible Noctalia removal; Polkit/dock slices remain conditional |
@@ -398,13 +398,15 @@ risk in the hover route are in
 
 ## PANEL-1 — Borderless glass panel (active)
 
-**Outcome:** the panel has no hard full-width plate. A soft shadow fades into
-the wallpaper and each content group sits on a borderless capsule whose finite
-region visibly uses Niri's compositor blur; the phone capsule remains whole.
+**Outcome:** the panel has no hard full-width plate or shadow. Each content
+group sits on a borderless capsule whose finite region visibly uses Niri's
+compositor blur and the same dense dark matte material as contextual content
+cards. Both keep one fixed light/white foreground; the phone capsule remains
+whole and menu carriers stay nearly transparent.
 
 The author selected this bounded panel direction from live screenshots. It does
-not apply the rest of UX-2 or authorize menu, overlay, clock/weather or provider
-work. Scope, order and evidence are in
+not apply the rest of UX-2; menu, overlay and provider work is limited to the
+exact corrections declared in the active plan. Scope, order and evidence are in
 [the PANEL-1 plan](docs/plans/active/2026-08-08-panel-glass-redesign.md).
 
 ## UX-2 — Shell visual and interaction language (planned)

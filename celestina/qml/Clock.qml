@@ -4,6 +4,8 @@ import QtQuick
 Item {
     id: root
 
+    required property BackdropInk ink
+
     // The lived format: time with seconds, the month, then the weekday and day.
     // The panel's language is Spanish by construction, so the month and weekday
     // names are asked for in it rather than inherited from whatever locale the
@@ -39,7 +41,7 @@ Item {
         id: clockText
 
         text: root.timeString
-        color: CelestinaTheme.text
+        color: root.ink.primary
         font.family: CelestinaTheme.monoFamily
         font.features: CelestinaTheme.fontFeaturesTabular
         font.pixelSize: CelestinaTheme.fontTitle

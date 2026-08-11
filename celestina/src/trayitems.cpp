@@ -1,5 +1,6 @@
 #include "trayitems.h"
 
+#include <QCryptographicHash>
 #include <QDBusObjectPath>
 #include <QDir>
 
@@ -53,9 +54,20 @@ QString readObjectPath(const QVariant &value)
 bool TrayItem::operator==(const TrayItem &other) const
 {
     return service == other.service && path == other.path && id == other.id
+        && preferenceKey == other.preferenceKey
         && title == other.title && status == other.status
         && iconName == other.iconName && iconThemePath == other.iconThemePath
         && hasPixmap == other.hasPixmap && menuPath == other.menuPath;
+}
+
+QString trayPreferenceKey(const QString &id)
+{
+    if (id.trimmed().isEmpty())
+        return {};
+
+    return QString::fromLatin1(
+        QCryptographicHash::hash(id.toUtf8(), QCryptographicHash::Sha256).toHex()
+    );
 }
 
 bool parseTrayRegistration(const QString &entry, QString *service, QString *path)
@@ -114,6 +126,7 @@ TrayItem readTrayItem(
     item.service = service;
     item.path = path;
     item.id = boundedText(properties.value(QStringLiteral("Id")));
+    item.preferenceKey = trayPreferenceKey(item.id);
     item.status = readStatus(properties.value(QStringLiteral("Status")));
     item.iconName = boundedText(properties.value(QStringLiteral("IconName")));
     item.hasPixmap = hasPixmapData(properties.value(QStringLiteral("IconPixmap")));
@@ -166,6 +179,7 @@ QVariantList TrayItems::toVariantList() const
             {QStringLiteral("service"), item.service},
             {QStringLiteral("path"), item.path},
             {QStringLiteral("id"), item.id},
+            {QStringLiteral("preferenceKey"), item.preferenceKey},
             {QStringLiteral("title"), item.title},
             {QStringLiteral("status"), item.status},
             {QStringLiteral("iconName"), item.iconName},

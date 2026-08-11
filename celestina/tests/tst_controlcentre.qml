@@ -14,6 +14,31 @@ TestCase {
 
     name: "ControlCentre"
 
+    QtObject {
+        id: fakeLedger
+
+        property int revision: 0
+
+        function send(provider, verb, options, target, policy) {
+            fakeSource.sent.push({
+                "provider": provider,
+                "verb": verb,
+                "options": options,
+                "target": target,
+                "policy": policy
+            });
+            return fakeSource.nextId++;
+        }
+
+        function stateOf(provider, verb) {
+            return {};
+        }
+
+        function isPending(provider, verb) {
+            return false;
+        }
+    }
+
     // A provider source that records what was asked for and answers with an
     // id, so a request's life can be driven from the test.
     QtObject {
@@ -29,6 +54,7 @@ TestCase {
         property int revision: 0
         property var sent: []
         property int nextId: 1
+        property var requests: fakeLedger
 
         // Publishes a provider set the way a helper frame does: one revision
         // per frame, whether or not the set of keys changed.
@@ -63,6 +89,7 @@ TestCase {
             "night-light": {"active": false},
             "caffeine": {"active": false},
             "notifications": {"quiet": false, "unread": 0},
+            "power": {"active": "performance", "count": 3},
             "settings": {"levelStep": 5}
         };
     }
@@ -101,6 +128,38 @@ TestCase {
 
 
 
+
+    function findByHelpText(item, helpText) {
+        if (item.helpText !== undefined && item.helpText === helpText)
+            return item;
+
+        if (item.children === undefined)
+            return null;
+
+        for (let index = 0; index < item.children.length; ++index) {
+            const found = testCase.findByHelpText(item.children[index], helpText);
+            if (found)
+                return found;
+        }
+
+        return null;
+    }
+
+    function test_power_stays_in_the_control_centre_and_cycles_through_its_ledger() {
+        compare(centre.power.active, "performance");
+
+        const button = testCase.findByHelpText(
+            centre.contentItem,
+            qsTr("Cambiar al siguiente perfil que ofrece el demonio"));
+        verify(button, "the power profile action remains in ControlCentre");
+        button.click();
+
+        compare(fakeSource.sent.length, 1);
+        compare(fakeSource.sent[0].provider, "power");
+        compare(fakeSource.sent[0].verb, "cycle");
+        compare(fakeSource.sent[0].target, "cycle");
+        compare(fakeSource.sent[0].policy, "immediate");
+    }
 
     function test_a_provider_that_is_not_there_reads_as_absent() {
         fakeSource.providers = {};

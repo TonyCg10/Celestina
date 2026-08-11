@@ -2,7 +2,9 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QIcon>
+#include <QImageReader>
 #include <QMutexLocker>
 #include <QStandardPaths>
 #include <QtEndian>
@@ -11,6 +13,26 @@ namespace {
 // A tray icon is drawn at panel height. Anything an application publishes far
 // above that is a waste to convert, and far below it is what to grow from.
 constexpr int maxPixmapPixels = 512 * 512;
+constexpr qsizetype maxFlatThemeIconNameLength = 256;
+constexpr qint64 maxFlatThemeIconFileBytes = 4 * 1024 * 1024;
+
+QString configuredGtkIconThemeName()
+{
+    for (const QString &config :
+         QStandardPaths::standardLocations(QStandardPaths::GenericConfigLocation)) {
+        for (const auto *version : {"/gtk-4.0/settings.ini", "/gtk-3.0/settings.ini"}) {
+            QFile settings(config + QString::fromLatin1(version));
+            if (!settings.open(QIODevice::ReadOnly | QIODevice::Text))
+                continue;
+
+            const QString name =
+                parseGtkIconThemeName(QString::fromUtf8(settings.readAll()));
+            if (!name.isEmpty())
+                return name;
+        }
+    }
+    return {};
+}
 } // namespace
 
 void configureForeignIconThemes()
@@ -25,28 +47,18 @@ void configureForeignIconThemes()
     paths.removeDuplicates();
     QIcon::setThemeSearchPaths(paths);
 
-    // Every application is required to install here, whatever theme the session
-    // prefers, so it is the floor rather than a guess.
-    QIcon::setFallbackThemeName(QStringLiteral("hicolor"));
+    const QString gtkTheme = configuredGtkIconThemeName();
+    if (QIcon::themeName().isEmpty() && !gtkTheme.isEmpty())
+        QIcon::setThemeName(gtkTheme);
 
-    if (!QIcon::themeName().isEmpty())
-        return;
-
-    for (const QString &config :
-         QStandardPaths::standardLocations(QStandardPaths::GenericConfigLocation)) {
-        for (const auto *version : {"/gtk-4.0/settings.ini", "/gtk-3.0/settings.ini"}) {
-            QFile settings(config + QString::fromLatin1(version));
-            if (!settings.open(QIODevice::ReadOnly | QIODevice::Text))
-                continue;
-
-            const QString name =
-                parseGtkIconThemeName(QString::fromUtf8(settings.readAll()));
-            if (!name.isEmpty()) {
-                QIcon::setThemeName(name);
-                return;
-            }
-        }
-    }
+    // A Qt platform theme and the GTK settings can legitimately name different
+    // installed themes in one session. StatusNotifierItems may come from either
+    // toolkit, so retain Qt's theme as primary and let the declared GTK theme
+    // answer only when it could not. `Adwaita`, for example, inherits
+    // `AdwaitaLegacy` and `hicolor`, preserving the specification's floor.
+    QIcon::setFallbackThemeName(
+        trayFallbackThemeName(QIcon::themeName(), gtkTheme)
+    );
 }
 
 QString parseGtkIconThemeName(const QString &settingsIni)
@@ -71,6 +83,94 @@ QString parseGtkIconThemeName(const QString &settingsIni)
         return name;
     }
     return QString();
+}
+
+QString trayFallbackThemeName(
+    const QString &primaryTheme,
+    const QString &gtkTheme
+)
+{
+    if (!gtkTheme.isEmpty() && gtkTheme != primaryTheme)
+        return gtkTheme;
+    return QStringLiteral("hicolor");
+}
+
+QImage loadTrayIconFromFlatThemePath(
+    const QString &directory,
+    const QString &iconName,
+    int preferredSize
+)
+{
+    if (preferredSize <= 0
+        || qint64(preferredSize) * preferredSize > maxPixmapPixels
+        || iconName.isEmpty()
+        || iconName.size() > maxFlatThemeIconNameLength
+        || iconName == QStringLiteral(".") || iconName == QStringLiteral("..")
+        || iconName.contains(u'/') || iconName.contains(u'\\')) {
+        return {};
+    }
+
+    const QFileInfo directoryInfo(directory);
+    const QString canonicalDirectory = directoryInfo.canonicalFilePath();
+    if (canonicalDirectory.isEmpty() || !directoryInfo.isDir())
+        return {};
+
+    static const QStringList extensions {
+        QStringLiteral(".png"),
+        QStringLiteral(".svg"),
+        QStringLiteral(".svgz"),
+        QStringLiteral(".xpm"),
+    };
+    QStringList candidates;
+    const QString lowerName = iconName.toLower();
+    for (const QString &extension : extensions) {
+        if (lowerName.endsWith(extension)) {
+            candidates.append(iconName);
+            break;
+        }
+    }
+    if (candidates.isEmpty()) {
+        for (const QString &extension : extensions)
+            candidates.append(iconName + extension);
+    }
+
+    const QDir iconDirectory(canonicalDirectory);
+    for (const QString &candidateName : candidates) {
+        const QFileInfo candidateInfo(iconDirectory.filePath(candidateName));
+        if (!candidateInfo.isFile() || candidateInfo.size() <= 0
+            || candidateInfo.size() > maxFlatThemeIconFileBytes) {
+            continue;
+        }
+
+        const QString canonicalCandidate = candidateInfo.canonicalFilePath();
+        if (canonicalCandidate.isEmpty()
+            || QFileInfo(canonicalCandidate).absolutePath() != canonicalDirectory) {
+            continue;
+        }
+
+        QImageReader reader(canonicalCandidate);
+        reader.setAutoTransform(true);
+        const QSize sourceSize = reader.size();
+        if (!sourceSize.isValid() || sourceSize.isEmpty()
+            || qint64(sourceSize.width()) * sourceSize.height() > maxPixmapPixels) {
+            continue;
+        }
+        reader.setScaledSize(
+            sourceSize.scaled(
+                QSize(preferredSize, preferredSize),
+                Qt::KeepAspectRatio
+            )
+        );
+        QImage image = reader.read();
+        if (image.isNull()
+            || qint64(image.width()) * image.height() > maxPixmapPixels) {
+            continue;
+        }
+
+        return image;
+    }
+
+    return {};
 }
 
 QImage bestTrayPixmap(const QList<TrayPixmap> &pixmaps, int preferredSize)

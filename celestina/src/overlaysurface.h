@@ -6,19 +6,12 @@
 
 class QScreen;
 
-// A centered, on-demand-keyboard overlay surface: the shell's third surface
-// kind, after the panel and its menu.
-//
-// Unlike `PanelMenuSurface` it has no panel to anchor under — the launcher and
-// the clipboard history are opened from a keybind, not a click, so there is no
-// window position to sit below. Leaving `LayerSurfaceSpec::anchors` empty is
-// what tells the compositor to center the surface on its output instead,
-// per wlr-layer-shell; the mapping and dismiss-on-hide mechanics are otherwise
-// exactly `PanelMenuSurface`'s, which is why this is a second small class
-// rather than a third copy of them — see `surfacemanager.h`'s own note that
-// later surfaces describe themselves through the same `LayerSurfaceSpec`
-// recipe instead of copying a consumer that solves a different placement
-// problem.
+// An on-demand-keyboard overlay surface: the shell's third surface kind, after
+// the panel and its menu. Interactive overlays cover their output so outside
+// clicks belong to them; their QML content centres the card for keybind/command
+// requests or follows a panel opener when one exists. Mapping and dismiss-on-
+// hide mechanics remain separate from `PanelMenuSurface` because these focused
+// overlays own a different content and input lifecycle.
 class OverlaySurface final : public QObject
 {
     Q_OBJECT
@@ -49,9 +42,8 @@ public:
     OverlaySurface(Placement placement, QObject *parent = nullptr);
     ~OverlaySurface() override;
 
-    // Adopts `content` — created, not yet shown — and maps it centered on
-    // `screen`. Returns false without taking ownership when the surface
-    // cannot be mapped.
+    // Adopts `content` — created, not yet shown — and maps it on `screen`.
+    // Returns false without taking ownership when the surface cannot be mapped.
     bool open(QWindow *content, QScreen *screen);
     void close();
     bool isOpen() const { return !m_content.isNull(); }

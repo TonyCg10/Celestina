@@ -24,6 +24,7 @@ TestCase {
 
         property bool available: true
         property var providers: ({})
+        property var requests: null
         property int revision: 0
         property var sent: []
         property int nextId: 1
@@ -48,6 +49,7 @@ TestCase {
     Desktop.BluetoothMenu {
         id: menu
 
+        outputName: "test-output"
         providerSource: fakeSource
         reducedMotion: true
     }
@@ -89,6 +91,24 @@ TestCase {
         fakeSource.nextId = 1;
         fakeSource.available = true;
         testCase.publishPowered();
+    }
+
+    function test_the_inventory_has_deliberate_vertical_rhythm() {
+        compare(menu.itemSpacing, 8);
+        compare(menu.headerBodyGap, 12);
+        compare(menu.rowVerticalInset, 4);
+
+        const header = menu.menu.itemAt(0);
+        const firstBodyRow = menu.menu.itemAt(1);
+        verify(header);
+        verify(firstBodyRow);
+        compare(header.headerTrailingGap, 12);
+        compare(header.visualHeight, menu.headerRowHeight);
+        compare(header.implicitHeight - header.visualHeight,
+                menu.headerBodyGap);
+        compare(firstBodyRow.verticalInset, 4);
+        compare(firstBodyRow.implicitHeight - firstBodyRow.visualHeight,
+                menu.itemSpacing);
     }
 
     // The policy UX-1-A closed: a powered adapter with nothing on it is a state

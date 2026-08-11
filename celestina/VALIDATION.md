@@ -644,23 +644,201 @@ result.
 - **Status:** pending
 - **Related implementation:** PANEL-1
 - **Requires:** the incremental or verified PANEL-1 bundle inside a real Niri
-  compositor, a detailed wallpaper and the nested reference blur profile
+  compositor, a detailed wallpaper, a visually distinct application window and
+  the nested reference blur profile
 - **Procedure:** inspect the panel at scale 1 and scale 2. Compare wallpaper
   detail immediately outside a capsule with the same detail inside it; inspect
   every capsule edge and both ends of the phone reading. Add and remove a late
-  provider so its capsule geometry changes after startup.
-- **Pass condition:** wallpaper detail is visibly dispersed only inside the
-  borderless capsules, the full-width bar is a fading shadow rather than a hard
-  plate, no capsule is clipped, and a late geometry change receives the same
-  blur without briefly blurring the whole surface.
+  provider so its capsule geometry changes after startup. Open network,
+  Bluetooth, tray, workspace map, control centre, clipboard, notification
+  centre, session, launcher, performance, toolbox and wallpaper. Confirm each
+  reads as one Velo object with a nearly transparent shadowless outer field,
+  dense dark matte internal cards that match the panel capsules, fixed
+  light/white foregrounds, and no shadow on either material, that the
+  panel-opened surfaces sit beneath and near their actual opener, and that the
+  centred launcher does not acquire a false panel anchor.
+  Arm and disarm one session action and make sure its changing copy neither
+  moves the card onto the panel nor shrinks the outside-click surface. In the
+  tray inventory, pin one item, hide another and use the selector beside
+  `Aplicaciones` to alternate between visible and hidden icon grids. Confirm
+  that only the eye glyphs are painted, their accessible names still announce
+  the mode and count, foreign application artwork is legible at the enlarged
+  size, the card and its top stay fixed, producer titles are not painted, the
+  last tile remains reachable by scrolling and keyboard, and the hidden tile
+  can be restored. Confirm the pin appears directly beside the opener and that
+  opening either item's foreign menu leaves the inventory visible. Exercise a
+  foreign menu taller than the output with the wheel, draggable scroll bar and
+  arrow keys; reach its final action, then press Escape and confirm only the
+  child closes. Hover every compact shell action that carries an assistive name
+  and confirm its hover feedback remains but no tooltip is painted. In the
+  wallpaper menu choose a local folder, confirm its supported images appear as
+  thumbnails, traverse every page when it contains more than 64 accepted
+  images, click one bright and one dark image without reopening the menu, and
+  confirm that only the invoking output's wallpaper changes immediately. The
+  foreground must remain light/white and the content material dark for both
+  images. Place the launcher so one half crosses a uniform application window
+  and the other half crosses the wallpaper. With the documented Celestina layer
+  rule active, confirm each half blurs the scene actually below it rather than
+  both halves reusing the wallpaper. Repeat above one bright and one dark
+  application, confirm the same fixed foreground/material pair remains legible,
+  then move a tiled window and open/close the surface to record Niri's
+  documented experimental non-xray artifacts and the practical GPU cost.
+- **Pass condition:** composed backdrop detail is visibly dispersed only inside
+  the borderless capsules, the full-width bar and menu cards add no exterior
+  shadow or hard plate, the outer contextual field remains visibly lighter than
+  its content cards, those cards and panel capsules read as one dense matte
+  dark material with one fixed light/white foreground on bright and dark
+  wallpapers, no capsule is clipped, and a late geometry change receives the
+  same blur without briefly blurring the whole surface. Every interactive menu
+  uses the same material hierarchy without changing its keyboard, Escape,
+  outside-click, two-step destructive or provider-command semantics. Tray
+  preferences survive reconstruction without painting hidden tiles in the
+  visible mode or changing the inventory geometry, both tray surfaces coexist,
+  an overflowing foreign menu keeps every action reachable without adding a
+  false keyboard row, no shell tooltip obscures adjacent controls, and every
+  accepted wallpaper remains reachable from a user-chosen folder rather than a
+  fixed source path. Interactive glass disperses the application or wallpaper
+  actually composed below each pixel instead of showing the wallpaper-only xray
+  cache over an application, and the fixed light/white foreground remains
+  readable over the dense dark material in the tested bright/dark application
+  matrix.
 - **Result:** the author accepted the `PANEL-1-A` nested-session baseline after
   iterative review: the hard plate was gone, the full-width shadow remained,
   capsules showed compositor blur without borders, the phone capsule retained
   both ends, monitor groups remained distinct, the status/action glyphs were
   readable and the four-item tray returned after its visibility correction.
   This did not cover a separate scale-1 and scale-2 matrix, so the checkpoint is
-  partial and stays open with `PANEL-1-B`.
-- **Evidence:** [PANEL-1-A delivery](docs/evidence/2026-08-08-panel-glass-baseline.md)
+  partial and stays open with `PANEL-1-B`. On 2026-08-10 an agent-run nested
+  scale-1 comparison exercised the final rebuilt adaptive foreground without
+  replacing the host session: the requested dark wallpaper used light ink, the
+  previous bright wallpaper changed the panel and an already-open control centre
+  to dark ink, and restoring the dark wallpaper changed both back. The temporary
+  selector was removed. Automated coverage also replaces bytes at one unchanged
+  path and requires their new revision to reach `Image.Ready` before its ink is
+  admitted. This is live implementation evidence but not author acceptance of
+  the remaining menu, scale or multi-output matrix. A later agent-run scale-1
+  cycle rebuilt only the nested Celestina host, inspected the compact semantic
+  panel groups, and kept the corrected compositor blur armed for more than 30
+  seconds and through a whole-output capture. Contextual hierarchy, placement,
+  keyboard/dismissal lifecycle and the new performance/capture actions passed
+  focused integration tests; scripted nested pointer opening of those two new
+  menus and author perceptual acceptance remain pending. The latest extension
+  passed the canonical production exit (17 of 17 CTest cases) and was deployed
+  without activation. A targeted restart replaced only Celestina in the
+  already-running nested `wayland-2` session, kept host Noctalia alive and
+  produced `/tmp/celestina-contextual-tools-live.png` with the count-free tray,
+  toolbox and wallpaper openers. That cycle's shell PID was 846641; nested Niri
+  PID 633476, host Niri PID 1224 and Noctalia PID 1276 were preserved. Automated
+  tests cover durable pin/hide/restore,
+  simultaneous tray parent/child surfaces, folder-chooser hand-off, bounded
+  catalogue scanning, stale catalogue/file rejection and atomic per-output
+  import. The native portal folder chooser and those tray gestures have not been
+  clicked in the nested compositor; its parallel portal connection emitted an
+  application-id ownership warning, so those remain explicit author-run checks
+  rather than a claimed live pass. The `PANEL-1-C` corrective reload then
+  replaced only the host inside the same recorded `wayland-2` nest: shell PID
+  926222 and adapters 927209/927210 own socket
+  `/run/user/1000/niri.wayland-2.865247.sock`, while nested Niri PID 865247,
+  host Niri PID 1224 and Noctalia PID 1276 remained alive. The panel remapped,
+  rearmed seven blur shapes and emitted no QML construction or binding error.
+  Automated coverage now requires one fixed visible/hidden icon grid, disjoint
+  pin and visibility hit targets, focus restoration only after the requested
+  durable mode, exact theme/pixmap icon fallback and navigation across every
+  64-item page of a bounded catalogue. Real pointer gestures and visual
+  acceptance of that corrected menu remain pending. The D prototype then passed
+  its production exit and deployed without activation: Rust shell
+  core passed 333 cases, the provider adapter passed 80, the QML QuickTest
+  runner passed 200 and CTest passed 17 of 17. Focused coverage requires the two
+  eye controls to retain mode/count names, both foreign and fallback grid art to
+  measure 23 pixels, inherited and direct-toast tooltips to stay empty and
+  hidden under hover, and a 64-action foreign menu to retain its requested top
+  while its bounded viewport reaches the final action by scroll mapping and
+  arrow key. The first registered `PANEL-1-D` restart verified old owner PID
+  926222 on `wayland-2` and socket
+  `/run/user/1000/niri.wayland-2.865247.sock`, then replaced only that host with
+  PID 992071 and adapters 992276/992277. After the final opener-relative
+  overflow correction, the final registered restart verified that owner on the
+  same nested display and socket, then replaced only it with PID 1018620 and
+  adapters 1018811/1018812. Nested Niri PID 865247, host Niri PID 1224 and
+  Noctalia PID 1276 remained alive; the final captured startup stream has no QML
+  construction or binding error. That reload proves construction and
+  isolation, not perceptual acceptance: real hover, wheel/drag and the complete
+  author visual matrix remain pending. `PANEL-1-E` then reproduced the reported
+  wallpaper-only blur with a uniform teal application beneath a launcher that
+  crossed the application's right edge. Niri 26.04's automatic xray path was
+  the cause; QML contained no wallpaper copy inside the menu. An initial live
+  reload changed the over-application sample from wallpaper-like
+  `srgb(42,47,43)` to `srgb(24,106,116)`, but a later surface reconstruction
+  returned to the wallpaper. That changing-config sequence was rejected as
+  non-durable evidence. The final control restarted only the nested compositor
+  from the stable exact namespace rule, leaving host Niri PID 1224 and Noctalia
+  PID 1276 untouched. With nested Niri PID 1102853, launcher pixel `(186,291)`
+  above the teal application was `srgb(31,106,115)` beside the uncovered
+  `(16,56)` reference `srgb(0,91,102)`, while `(686,291)` in the same glass
+  above the wallpaper was `srgb(33,39,33)`.
+  `/tmp/celestina-non-xray-clean-start.png` records that
+  split. Closing and reopening the launcher produced the same samples in
+  `/tmp/celestina-non-xray-clean-reopen.png`. Restarting only Celestina then
+  created PID 1106789 and adapters 1107007/1107009 without replacing Niri; the
+  same samples remained in
+  `/tmp/celestina-non-xray-after-celestina-restart.png`. A second registered
+  Celestina-only restart created PID 1110628 and adapters 1110890/1110891,
+  again without reloading Niri. The launcher remained namespace
+  `celestina-overlay`, and
+  `/tmp/celestina-blur-control-launcher-clean-after-restart.png` retained the
+  same values at those three coordinates. After the canonical production exit,
+  a final nested-only restart loaded the verified bytes as current PID 1127567
+  with adapters 1127828/1127829. The launcher retained its namespace and the
+  same samples in `/tmp/celestina-blur-control-launcher-production-final.png`.
+  Only the launcher namespace
+  `celestina-overlay` was sampled live; the panel, primary-menu and child-menu
+  namespaces share the exact validated matcher but were not separately
+  sampled. The current process reports `wayland-2` and
+  `/run/user/1000/niri.wayland-2.1102853.sock`; nested
+  Niri remained PID 1102853. The live host Niri config was not edited. This is
+  controlled scale-1 implementation evidence, not the still-pending author
+  bright/dark app, motion, GPU-cost or full menu matrix. On 2026-08-11 the
+  `PANEL-1-F` final nested-only restart replaced shell PID 1214100 with PID
+  1224284 and adapters 1224469/1224470 on `wayland-2` and
+  `/run/user/1000/niri.wayland-2.1144687.sock`. Nested Niri PID 1144687, host
+  Niri PID 1224 and Noctalia PID 1276 remained alive. The session command
+  `control-centre-toggle` returned `confirmed`; the opened overlay armed one
+  compositor shape with 30 region fragments, and the observed stream contained
+  no QML construction, required-property or binding error. This proves live
+  construction, one-region ownership and session isolation.
+  `/tmp/celestina-shared-glass-menu.png` records the opened card without the
+  surrounding desktop: wallpaper structure remains visible through the light
+  carrier and its denser sections. It is agent-run visual evidence, not author
+  acceptance of the shared material. The G prototype production exit then
+  passed all registered Rust, QML and C++ verification, including CTest 17/17,
+  and deployed its candidate without activating the host session. Its registered
+  nested-only restart replaced PID 1224284 with PID 1336218 and adapters
+  1336400/1336401 while nested Niri PID 1144687, host Niri PID 1224 and
+  Noctalia PID 1276 remained intact. Opening Control Centre returned
+  `confirmed` and retained one compositor shape with 30 region fragments. In
+  `/tmp/celestina-oneui-content-glass.png`, the bright wallpaper selects dark
+  ink over dense light matte content cards while the outer contextual field
+  remains nearly transparent; `/tmp/celestina-oneui-panel-glass.png` records
+  the matching panel capsules. No elevation shadow or QML construction/binding
+  error was observed. This remains agent-run scale-1 evidence rather than the
+  complete author-owned visual matrix. The author then retracted adaptive
+  foreground selection. The H prototype removed that complete computation and
+  transport path, and the cumulative 0.11.0 snapshot passed the canonical
+  production exit with CTest 17/17
+  and deployed without activating the host session. Its nested-only restart
+  replaced shell PID 1349330 with PID 1424970 and adapters 1425141/1425145,
+  while nested Niri PID 1349248, host Niri PID 1224 and Noctalia PID 1276
+  remained intact. Opening Control Centre returned `confirmed` and
+  `/tmp/celestina-fixed-white-ink.png` records the fixed white foreground over
+  dense dark content material and the near-transparent carrier on the current
+  dark wallpaper. This is implementation evidence at scale 1; author review on
+  a bright wallpaper and the remaining surface matrix stays pending.
+- **Evidence:** [PANEL-1-A delivery](docs/evidence/2026-08-08-panel-glass-baseline.md),
+  [PANEL-1-B adaptive ink nested comparison](docs/evidence/2026-08-10-panel-adaptive-ink-nested.md),
+  [PANEL-1-B contextual hierarchy and grouping](docs/evidence/2026-08-10-contextual-menu-hierarchy-nested.md),
+  [PANEL-1-F shared menu glass](docs/evidence/2026-08-11-contextual-menu-shared-glass.md),
+  [PANEL-1-G content glass](docs/evidence/2026-08-11-one-ui-content-glass.md),
+  [PANEL-1-H fixed white shell ink](docs/evidence/2026-08-11-fixed-white-shell-ink.md)
 
 ## Closed historical observations
 

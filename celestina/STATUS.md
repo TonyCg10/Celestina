@@ -1,13 +1,14 @@
 # Celestina status
 
-- **Updated:** 2026-08-08
+- **Updated:** 2026-08-11
 - **Implementation:** R0-R5, R7, R8's departure slice, LVR-1 through LVR-3, the
   static hardening previously drafted as `AUD-1`, `UX-1` and `WSG-1` are
   complete
 - **Design direction:** `PANEL-1` is active for the author-selected borderless
-  glass bar: a soft full-width shadow and real compositor-blur capsules behind
-  content. The rest of `UX-2` remains planned under the still-open `SHELL-D5`
-  discussion
+  glass bar: no full-width shadow, real compositor-blur capsules, dense dark
+  content material with a fixed light/white foreground, and nearly transparent
+  contextual carriers. The rest of `UX-2` remains planned under the still-open
+  `SHELL-D5` discussion
 - **Author validation:** the author closed the LVR-3 phase on 2026-08-07 after
   first-generation media, the four-item tray, Bluetooth state retention,
   output-triggered DDC rediscovery, outside-click dismissal and a clean
@@ -32,6 +33,20 @@
 
 ## Current checkout truth
 
+- **Delivered prototype snapshot — `PANEL-1-B`.** Celestina 0.11.0 records the
+  cumulative uncommitted B-H sequence as one milestone delivery. It includes
+  the contextual menu hierarchy, panel grouping, tray and wallpaper tools,
+  non-xray compositor profile, canonical shared glass and the final fixed
+  light/white foreground over dense dark content cards and panel capsules. The
+  retracted contrast analysis, appearance publication, host adapter and QML
+  polarity inputs are absent rather than dormant. The wallpaper gallery,
+  per-output selection, same-path image reload and atomic import remain. The
+  canonical production exit passed and deployed the verified bundle without
+  activation; a nested-only restart confirmed the fixed-white instance while
+  leaving host Niri and Noctalia intact. The earlier B-H labels below preserve
+  prototype chronology, not separate published versions. `PANEL-1` remains
+  active and `PANEL-1-I` is reserved for the next author-selected design pass.
+
 - **Delivered in celestina 0.10.0 — `PANEL-1-A`.** The first borderless-glass
   panel baseline removes the hard full-width plate, keeps its soft wallpaper
   shadow, and places each content group on a finite compositor-blur capsule.
@@ -42,8 +57,128 @@
   entry points. Tray registration is reconciled after startup and its wrapper
   follows the item model, so four published items remain visible after a host
   restart. The canonical production exit built, verified and deployed 0.10.0
-  without activating the session. `PANEL-1-B` remains active for further visual
-  iteration, and `VAL-PANEL-1` is partial rather than passed at both scales.
+  without activating the session. `PANEL-1-B` now applies the bounded Velo
+  candidate to every existing interactive shell menu: network, Bluetooth and
+  tray preserve their real Qt `Menu` lifecycle, while workspace map, control
+  centre, clipboard, notification centre, session and launcher preserve their
+  custom overlay focus and dismissal models. Every surface publishes one light
+  compositor-glass body and uses denser tint-only sections rather than a stack
+  of resting row pills. A bounded worker now samples each output's exact ready
+  wallpaper and selects a surface-local light or dark foreground by WCAG
+  contrast without changing the global theme. The host admits that result only
+  when output, source, file revision, inventory generation and crop geometry
+  match the exact image request that reached `Image.Ready`; all exposed text
+  foregrounds stay on the two measured candidates. Loading, stale, failed and
+  no-blur paths keep the established light-ink/dark-fallback pair. Panel-opened
+  cards follow the real opener; launcher stays centred. Session confirmation
+  text can no longer resize its full-output input surface and jump the power
+  menu over the bar. Automated construction, geometry, blur-region,
+  interaction and contrast checks pass. An agent-run nested scale-1 comparison
+  switched the panel and an open control centre from light ink on the dark
+  requested wallpaper to dark ink on the previous bright wallpaper, then back
+  again without restart; the requested wallpaper was restored. The same unit
+  presents capture as `Caja de herramientas`, adds a folder-backed wallpaper
+  gallery beside it, removes the tray's visible count, and persists bounded
+  pin/hide choices. The corrective C prototype replaces the rejected expanding
+  hidden list with one fixed four-column icon grid and adjacent visible/hidden
+  selectors. It reserves three rows in either mode, scrolls overflow,
+  never paints producer names, and restores focus only after the exact durable
+  key and requested mode are confirmed; unrelated tray activity cannot consume
+  that pending transition. Pinned items render beside the compact opener. The
+  opener and inventory heading use the semantic system-tray glyph. Exact icon
+  names resolve through the Qt theme and its installed GTK fallback chain, so
+  Solaar's published `battery-good` resolves without an application heuristic;
+  applications such as Slack that publish only a pixmap retain that artwork.
+  Every unresolved foreign icon stays a fixed-size glyph rather than producer
+  text. A foreign tray menu uses a child surface so the inventory stays mapped.
+  The D prototype replaces the two painted selector labels with accessible
+  eye and eye-off glyphs, grows only the application artwork inside each fixed
+  grid tile from 19 to 23 pixels, and suppresses every shell hover tooltip at
+  its local button boundary without removing hover feedback or assistive names.
+  Foreign D-Bus menus are now capped to the logical output space remaining
+  below their real request before the carrier adopts its size, so an overflowing
+  real Qt Menu stays anchored, exposes a draggable scroll route and keeps every
+  action reachable by arrow key. Escape still closes only that child while the
+  tray inventory remains mapped.
+  Wallpaper selection persists a user-chosen folder, rejects a scan beyond the
+  512-entry safety bound instead of publishing a partial catalogue, and exposes
+  every accepted image through deterministic pages of at most 64 thumbnails.
+  The menu reports total and page navigation rather than a terminal limited-
+  gallery label, and a catalogue/id click changes only the invoking output; no
+  source path is embedded in the panel. The canonical production exit built,
+  verified and deployed its candidate without host-session activation. The
+  E prototype identifies Niri 26.04's automatic xray policy as the reason those
+  finite blur regions showed the wallpaper even above an application. The
+  registered nested profile now sets `xray false` only for the panel, primary
+  menu, tray-child menu and interactive overlay namespaces; live-session
+  documentation exposes the identical block as a manual opt-in. The first
+  live-reload comparison changed an over-application
+  sample from wallpaper-like `srgb(42,47,43)` to `srgb(24,106,116)`, but a
+  later reconstruction returned to the wallpaper and that sequence was not
+  accepted as durable evidence. The final controlled cycle started nested Niri
+  PID 1102853 from one stable exact rule, opened a uniform teal application and
+  crossed its edge with the launcher. In
+  `/tmp/celestina-non-xray-clean-start.png`, pixel `(186,291)` in the glass
+  above the application is `srgb(31,106,115)`, close to the uncovered
+  `(16,56)` reference `srgb(0,91,102)`, while `(686,291)` in the same glass
+  above the wallpaper is `srgb(33,39,33)`. Closing and reopening the
+  launcher preserved those values in
+  `/tmp/celestina-non-xray-clean-reopen.png`. A first Celestina-only restart
+  produced PID 1106789 and adapters 1107007/1107009 and preserved them in
+  `/tmp/celestina-non-xray-after-celestina-restart.png`. A second registered
+  Celestina-only restart, without a Niri reload, produced PID 1110628 and
+  adapters 1110890/1110891. In
+  `/tmp/celestina-blur-control-launcher-clean-after-restart.png`, those same
+  three coordinates retained the same three values. After the canonical
+  production exit, the final nested-only restart loaded the verified bytes as
+  current PID 1127567 with adapters 1127828/1127829. The same values remain at
+  the same coordinates in
+  `/tmp/celestina-blur-control-launcher-production-final.png`. This live colour
+  split was sampled on the launcher namespace `celestina-overlay`; the other
+  exact namespaces share the validated matcher but were not separately sampled.
+  Nested Niri stayed PID 1102853 and host Niri PID 1224 plus Noctalia PID 1276
+  remained intact. The author's live Niri configuration was not edited. The
+  earlier `/tmp/celestina-contextual-tools-live.png` records the recapped
+  panel. The author-owned all-menu, scale-2, multi-output, native folder chooser
+  and real tray gesture review is still pending. That includes visual
+  acceptance of the eye controls and larger artwork, hover confirmation across
+  the shell, and a
+  real wheel/drag pass through an overflowing foreign menu. Non-xray blur is
+  more expensive and experimental in Niri 26.04; motion/drag behavior and text
+  contrast over arbitrary application content remain author-run checks because
+  Wayland does not expose those pixels to Celestina's wallpaper-derived ink
+  analysis. The F prototype removes the last shell-local menu
+  material recipe: both the very light outer veil and every denser content
+  section now use CelestinaStyle's `GlassSurface.ExternalBackdrop`.
+  `CompositorGlassRegion` remains only the shell-owned KWindowEffects geometry
+  and fallback adapter, so each menu still publishes exactly one blur region
+  and no QML capture attempts to read another Wayland client. The final
+  canonical exit passed and deployed without host-session activation. A
+  nested-only restart replaced the old shell with PID 1224284 and adapters
+  1224469/1224470 on `wayland-2`; nested Niri PID 1144687, host Niri PID 1224
+  and Noctalia PID 1276 remained intact. Opening Control Centre through the
+  session command confirmed one 30-fragment compositor shape and emitted no QML
+  construction or binding error. Visual acceptance of the material remains in
+  the author-owned matrix. The G prototype narrows the
+  reference-backed treatment to the two requested information surfaces:
+  contextual content cards and panel capsules now share CelestinaStyle's
+  dense matte `ContentSurface`, while the contextual carrier uses the much
+  lighter `ContextualVeil`. Both roles have zero elevation, use no QML capture
+  and leave the menu at one compositor region. The content material polarity
+  follows the same measured foreground decision, so the established bright and
+  dark wallpaper pairing is preserved. Other suite glass keeps its compatible
+  default material. The canonical production exit passed all Rust unit and
+  integration suites, QML lint and QuickTests, CTest 17/17 and the release
+  smoke, then deployed without host-session activation. A nested-only restart
+  replaced PID 1224284 with PID 1336218 and adapters 1336400/1336401 on the
+  unchanged `wayland-2` nest; nested Niri 1144687, host Niri 1224 and Noctalia
+  1276 remained intact. The live bright-backdrop capture confirms dark ink over
+  matching dense light cards/capsules and a nearly transparent outer field.
+  Toasts, OSD, output
+  sharing and new clock/weather behavior remain outside the Velo redesign. The
+  rejected earlier fields remain recorded, and this is not yet an accepted
+  suite-wide UX-2 language. `VAL-PANEL-1` is partial rather than passed at both
+  scales.
 
 - **Delivered in celestina 0.8.0 — `DIAG-1`.** Every Celestina process now writes a
   structured, bounded, always-on JSONL journal under

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import QtTest
 import "../qml" as Desktop
 
@@ -90,5 +91,24 @@ TestCase {
         // all, and asking for actions must not throw.
         fakeSource.providers = {};
         compare(centre.actionsFor(5).length, 0);
+    }
+
+    function test_toast_dismiss_keeps_its_name_without_a_hover_tooltip() {
+        stack.show();
+        tryCompare(stack, "visible", true);
+        tryVerify(function() {
+            return findChild(stack.contentItem,
+                             "celestina-toast-dismiss") !== null;
+        });
+        const dismiss = findChild(stack.contentItem,
+                                  "celestina-toast-dismiss");
+        verify(dismiss);
+        verify(dismiss.helpText.length > 0);
+        compare(dismiss.Accessible.name, dismiss.helpText);
+        mouseMove(dismiss, dismiss.width / 2, dismiss.height / 2);
+        tryCompare(dismiss, "hovered", true);
+        compare(dismiss.ToolTip.text, "");
+        compare(dismiss.ToolTip.visible, false);
+        stack.hide();
     }
 }

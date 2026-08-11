@@ -14,10 +14,13 @@ import CelestinaStyle
 import QtQuick
 import "ProviderReading.js" as ProviderReading
 
-AnchoredMenu {
+SoftMenu {
     id: root
 
     required property var providerSource
+    itemSpacing: CelestinaTheme.spaceSm
+    headerBodyGap: CelestinaTheme.spaceMd
+    rowVerticalInset: CelestinaTheme.spaceXs
 
     readonly property var bluetooth: ProviderReading.read(root.providerSource, "bluetooth")
     // `on`, `off`, `absent`, or empty while nothing has been published — an
@@ -81,10 +84,14 @@ AnchoredMenu {
     // the refresh. A `Menu` has exactly one, and mixing static children with an
     // `Instantiator` would leave their order to insertion arithmetic.
     readonly property var entries: {
-        const built = [{"kind": "adapter", "text": ""}];
+        const built = [
+            {"kind": "header", "text": qsTr("Bluetooth"),
+             "subtitle": root.adapterLine},
+            {"kind": "adapter", "text": ""}
+        ];
         const represented = {"set-powered": true, "refresh": true};
         if (root.listLine.length > 0)
-            built.push({"kind": "note", "text": root.listLine});
+            built.push({"kind": "section", "text": root.listLine});
 
         if (root.powered) {
             for (let index = 0; index < root.rows.length; ++index) {
@@ -106,7 +113,7 @@ AnchoredMenu {
         return built;
     }
 
-    title: qsTr("Menú de Bluetooth")
+    title: qsTr("Bluetooth")
 
     // The sentence beside a row. The ledger reports a typed cause; the Spanish
     // is decided here, and the helper's English reasons stay in the log.
@@ -176,11 +183,20 @@ AnchoredMenu {
         onObjectAdded: (index, object) => root.menu.insertItem(index, object)
         onObjectRemoved: (index, object) => root.menu.removeItem(object)
 
-        delegate: GlassMenuItem {
+        delegate: SoftMenuRow {
             id: entry
 
             required property var modelData
 
+            ink: root.ink
+            headerTrailingGap: entry.isHeader
+                               ? root.headerBodyGap
+                               : 0
+            verticalInset: root.rowVerticalInset
+            trailingGap: entry.isHeader ? 0 : root.itemSpacing
+
+            readonly property bool isHeader: entry.modelData.kind === "header"
+            readonly property bool isSection: entry.modelData.kind === "section"
             readonly property bool isAdapter: entry.modelData.kind === "adapter"
             readonly property bool isDevice: entry.modelData.kind === "device"
             readonly property bool isRefresh: entry.modelData.kind === "refresh"
@@ -202,30 +218,74 @@ AnchoredMenu {
             readonly property bool connected: entry.isDevice && entry.row.connected === true
 
             text: {
+                if (entry.isHeader || entry.isSection)
+                    return entry.modelData.text;
+
                 if (entry.isAdapter)
-                    return root.adapterLine + root.noteFor(entry.key);
+                    return qsTr("Adaptador");
 
                 if (entry.isRefresh)
-                    return qsTr("Actualizar") + root.noteFor(entry.key);
+                    return qsTr("Actualizar");
 
                 if (entry.isDevice)
-                    return entry.row.name + root.noteFor(entry.key);
+                    return entry.row.name;
 
                 if (entry.isFailure)
-                    return qsTr("No se pudo completar una acción anterior · descartar");
+                    return qsTr("No se pudo completar una acción anterior");
 
                 return entry.modelData.text;
+            }
+            header: entry.isHeader
+            sectionLabel: entry.isSection
+            subtitle: entry.isHeader ? entry.modelData.subtitle : ""
+            iconName: {
+                if (entry.isHeader || entry.isDevice)
+                    return "bluetooth";
+                if (entry.isAdapter)
+                    return "power";
+                if (entry.isRefresh)
+                    return "view-refresh";
+                if (entry.isFailure)
+                    return "circle-alert";
+                return "";
             }
             // Both the switch and a device show a state the provider confirmed,
             // never the one that was requested.
             choice: entry.isAdapter || entry.isDevice
             current: entry.isAdapter ? root.powered : entry.connected
-            enabled: {
+            note: {
+                if (entry.isFailure)
+                    return qsTr("descartar");
+                const request = root.noteFor(entry.key);
+                if (request.length > 0)
+                    return request.replace(" — ", "");
+                if (entry.isAdapter) {
+                    if (!root.switchable)
+                        return qsTr("no disponible");
+                    return root.powered ? qsTr("encendido") : qsTr("apagado");
+                }
+                if (entry.isDevice)
+                    return entry.connected ? qsTr("conectado") : qsTr("disponible");
+                return "";
+            }
+            noteColor: entry.isFailure ? root.ink.danger
+                                       : (entry.waiting ? root.ink.warning
+                                                        : root.ink.faint)
+            dot: entry.isFailure ? root.ink.danger
+                 : entry.waiting ? root.ink.warning
+                 : (entry.current ? root.ink.accent : CelestinaTheme.clear)
+            actionable: {
+                if (entry.isHeader || entry.isSection)
+                    return false;
+
                 if (entry.isAdapter)
                     return root.switchable && !entry.waiting;
 
                 if (entry.isRefresh)
                     return !entry.waiting;
+
+                if (entry.isFailure)
+                    return true;
 
                 // A device whose own request is in flight cannot be asked for
                 // the opposite at the same time, and neither can one while the

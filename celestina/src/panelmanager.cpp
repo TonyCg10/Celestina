@@ -24,13 +24,6 @@
 
 namespace {
 constexpr int panelHeight = 40;
-// PANEL-1. The surface is taller than the bar so the scrim has
-// room to finish fading. A 40 px surface has to complete its falloff in 40 px
-// and then stops dead, which is the hard edge the gradient was meant to remove:
-// the shape was right and the canvas ran out. The exclusive zone stays at the
-// bar's own height, so nothing else on screen moves, and the extra band is
-// transparent and input-transparent.
-constexpr int panelSurfaceHeight = 112;
 constexpr auto panelScope = "celestina-panel";
 // How long the outputs must stay still before the DDC worker is told they
 // changed. Enabling one monitor produces several `QScreen` events in a row and
@@ -51,7 +44,7 @@ LayerSurfaceSpec panelSpec(QScreen *screen)
     spec.screen = screen;
     spec.anchors = anchors;
     // Full width, fixed height: the compositor owns the axis the panel spans.
-    spec.desiredSize = QSize(0, panelSurfaceHeight);
+    spec.desiredSize = QSize(0, panelHeight);
     spec.exclusiveZone = panelHeight;
     spec.layer = LayerShellQt::Window::LayerTop;
     spec.keyboard = LayerShellQt::Window::KeyboardInteractivityNone;
@@ -123,6 +116,11 @@ void PanelManager::setNotificationCentre(OverlayController *centre)
     m_notificationCentre = centre;
 }
 
+void PanelManager::setLauncher(OverlayController *launcher)
+{
+    m_launcher = launcher;
+}
+
 void PanelManager::setControlCentre(OverlayController *centre)
 {
     m_controlCentre = centre;
@@ -138,28 +136,107 @@ void PanelManager::setSessionMenu(OverlayController *menu)
     m_sessionMenu = menu;
 }
 
-void PanelManager::notificationCentreRequested()
+void PanelManager::togglePanelOverlay(
+    OverlayController *controller,
+    QWindow *panel,
+    int globalX,
+    int globalY,
+    int openerWidth,
+    int openerHeight
+)
 {
-    if (m_notificationCentre)
-        m_notificationCentre->toggle();
+    if (!controller || !panel)
+        return;
+
+    controller->toggleFrom(
+        panel,
+        QRect(globalX, globalY, openerWidth, openerHeight)
+    );
 }
 
-void PanelManager::controlCentreRequested()
+void PanelManager::notificationCentreRequested(
+    int globalX,
+    int globalY,
+    int openerWidth,
+    int openerHeight
+)
 {
-    if (m_controlCentre)
-        m_controlCentre->toggle();
+    togglePanelOverlay(
+        m_notificationCentre,
+        qobject_cast<QWindow *>(sender()),
+        globalX,
+        globalY,
+        openerWidth,
+        openerHeight
+    );
 }
 
-void PanelManager::clipboardRequested()
+void PanelManager::launcherRequested(
+    int globalX,
+    int globalY,
+    int openerWidth,
+    int openerHeight
+)
 {
-    if (m_clipboard)
-        m_clipboard->toggle();
+    togglePanelOverlay(
+        m_launcher,
+        qobject_cast<QWindow *>(sender()),
+        globalX,
+        globalY,
+        openerWidth,
+        openerHeight
+    );
 }
 
-void PanelManager::sessionMenuRequested()
+void PanelManager::controlCentreRequested(
+    int globalX,
+    int globalY,
+    int openerWidth,
+    int openerHeight
+)
 {
-    if (m_sessionMenu)
-        m_sessionMenu->toggle();
+    togglePanelOverlay(
+        m_controlCentre,
+        qobject_cast<QWindow *>(sender()),
+        globalX,
+        globalY,
+        openerWidth,
+        openerHeight
+    );
+}
+
+void PanelManager::clipboardRequested(
+    int globalX,
+    int globalY,
+    int openerWidth,
+    int openerHeight
+)
+{
+    togglePanelOverlay(
+        m_clipboard,
+        qobject_cast<QWindow *>(sender()),
+        globalX,
+        globalY,
+        openerWidth,
+        openerHeight
+    );
+}
+
+void PanelManager::sessionMenuRequested(
+    int globalX,
+    int globalY,
+    int openerWidth,
+    int openerHeight
+)
+{
+    togglePanelOverlay(
+        m_sessionMenu,
+        qobject_cast<QWindow *>(sender()),
+        globalX,
+        globalY,
+        openerWidth,
+        openerHeight
+    );
 }
 
 bool PanelManager::start()
@@ -259,18 +336,6 @@ bool PanelManager::ensurePanel(QScreen *screen)
     window->setObjectName(
         QStringLiteral("celestina-panel-%1").arg(screen->name())
     );
-
-    // PANEL-1. The surface is taller than the bar, so without this
-    // the panel would take pointer input over a band of screen where nothing is
-    // drawn and an application is visible: the scrim would silently eat clicks
-    // meant for a window. The input region is the bar itself, and it is
-    // reapplied on resize because the compositor owns the width.
-    const auto maskToBar = [window]() {
-        window->setMask(QRegion(0, 0, window->width(), panelHeight));
-    };
-    connect(window, &QWindow::widthChanged, window, maskToBar);
-    maskToBar();
-
     // The panel window asks; the host decides whether any surface answers.
     // The signal is QML-declared, so it is connected by name.
     if (m_menu) {
@@ -288,35 +353,53 @@ bool PanelManager::ensurePanel(QScreen *screen)
         );
         connect(
             window,
-            SIGNAL(indicatorMenuRequested(QString, int, int)),
+            SIGNAL(trayDrawerRequested(int, int, int, int)),
             this,
-            SLOT(indicatorMenuRequested(QString, int, int))
+            SLOT(trayDrawerRequested(int, int, int, int))
+        );
+        connect(
+            window,
+            SIGNAL(indicatorMenuRequested(QString, int, int, int, int)),
+            this,
+            SLOT(indicatorMenuRequested(QString, int, int, int, int))
         );
     }
 
     connect(
         window,
-        SIGNAL(notificationCentreRequested()),
+        SIGNAL(launcherRequested(int, int, int, int)),
         this,
-        SLOT(notificationCentreRequested())
+        SLOT(launcherRequested(int, int, int, int))
     );
     connect(
         window,
-        SIGNAL(controlCentreRequested()),
+        SIGNAL(notificationCentreRequested(int, int, int, int)),
         this,
-        SLOT(controlCentreRequested())
+        SLOT(notificationCentreRequested(int, int, int, int))
     );
     connect(
         window,
-        SIGNAL(clipboardRequested()),
+        SIGNAL(controlCentreRequested(int, int, int, int)),
         this,
-        SLOT(clipboardRequested())
+        SLOT(controlCentreRequested(int, int, int, int))
     );
     connect(
         window,
-        SIGNAL(sessionMenuRequested()),
+        SIGNAL(clipboardRequested(int, int, int, int)),
         this,
-        SLOT(sessionMenuRequested())
+        SLOT(clipboardRequested(int, int, int, int))
+    );
+    connect(
+        window,
+        SIGNAL(sessionMenuRequested(int, int, int, int)),
+        this,
+        SLOT(sessionMenuRequested(int, int, int, int))
+    );
+    connect(
+        window,
+        SIGNAL(wallpaperFolderSelected(QUrl)),
+        this,
+        SLOT(wallpaperFolderSelected(QUrl))
     );
 
     // The tray crosses C++, Qt's property notifier and a QML layout before it
@@ -386,6 +469,46 @@ bool PanelManager::ensurePanel(QScreen *screen)
     return true;
 }
 
+void PanelManager::trayDrawerRequested(
+    int globalX,
+    int globalY,
+    int openerWidth,
+    int openerHeight
+)
+{
+    auto *panel = qobject_cast<QWindow *>(sender());
+    if (!panel || !m_menu || !m_tray)
+        return;
+
+    m_menu->toggleTrayItemsMenu(
+        panel,
+        QRect(globalX, globalY, openerWidth, openerHeight),
+        m_tray,
+        m_providers
+    );
+}
+
+void PanelManager::wallpaperFolderSelected(const QUrl &source)
+{
+    auto *panel = qobject_cast<QWindow *>(sender());
+    if (!panel || !m_providers || !source.isLocalFile())
+        return;
+
+    const QString path = source.toLocalFile();
+    if (path.isEmpty())
+        return;
+
+    m_providers->requests()->send(
+        QStringLiteral("wallpaper-gallery"),
+        QStringLiteral("set-folder"),
+        QVariantMap {
+            {QStringLiteral("source"), path},
+        },
+        QStringLiteral("folder"),
+        RequestLedger::ImmediatePolicy
+    );
+}
+
 void PanelManager::workspaceMapRequested(
     int globalX,
     int globalY,
@@ -399,13 +522,24 @@ void PanelManager::workspaceMapRequested(
     m_menu->openWorkspaceMap(panel, QPoint(globalX, globalY), workspaces);
 }
 
-void PanelManager::indicatorMenuRequested(const QString &kind, int globalX, int globalY)
+void PanelManager::indicatorMenuRequested(
+    const QString &kind,
+    int globalX,
+    int globalY,
+    int openerWidth,
+    int openerHeight
+)
 {
     auto *panel = qobject_cast<QWindow *>(sender());
     if (!panel || !m_menu || !m_providers)
         return;
 
-    m_menu->toggleIndicatorMenu(panel, QPoint(globalX, globalY), kind, m_providers);
+    m_menu->toggleIndicatorMenu(
+        panel,
+        QRect(globalX, globalY, openerWidth, openerHeight),
+        kind,
+        m_providers
+    );
 }
 
 void PanelManager::trayMenuRequested(

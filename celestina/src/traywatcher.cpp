@@ -592,13 +592,25 @@ QString TrayWatcher::resolveIcon(const TrayItem &item, const QVariantMap &proper
     QImage image;
 
     if (!item.iconName.isEmpty()) {
+        // `IconThemePath` is also used by real peers as a flat directory. That
+        // is not a QIcon theme root, so try its exact, bounded basename first.
+        // Steam's `steam_tray_mono.png` is one such item in this session.
+        if (!item.iconThemePath.isEmpty()) {
+            image = loadTrayIconFromFlatThemePath(
+                item.iconThemePath,
+                item.iconName,
+                drawnIconSize
+            );
+        }
+
         // An application that ships its own theme says where; that directory is
         // searched first and only for this lookup.
         QStringList paths = QIcon::themeSearchPaths();
         if (!item.iconThemePath.isEmpty() && !paths.contains(item.iconThemePath)) {
             QIcon::setThemeSearchPaths(QStringList {item.iconThemePath} + paths);
         }
-        const QIcon themed = QIcon::fromTheme(item.iconName);
+        const QIcon themed = image.isNull()
+            ? QIcon::fromTheme(item.iconName) : QIcon();
         QIcon::setThemeSearchPaths(paths);
 
         if (!themed.isNull())

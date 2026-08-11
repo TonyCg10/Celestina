@@ -19,13 +19,26 @@ Window {
 
     required property var shellSource
     required property bool reducedMotion
+    property alias anchoredFromPanel: placement.anchoredFromPanel
+    property alias openerRect: placement.openerRect
+    property alias compositorBlurAvailable: card.compositorBlurAvailable
+    property alias glassRects: card.glassRects
+    property alias glassRegions: card.glassRegions
 
     signal dismissed()
+
+    BackdropInk {
+        id: backdropInk
+    }
 
     readonly property int cardWidth: 360
     // The card grows with its own content; naming it is what lets the surface
     // be the whole output while the card stays the size of what it says.
-    readonly property int cardHeight: column.implicitHeight + CelestinaTheme.spaceLg * 2
+    readonly property int cardHeight: contentColumn.implicitHeight
+                                      + CelestinaTheme.spaceMd * 2
+    readonly property int anchorGap: placement.anchorGap
+    readonly property real cardX: placement.x
+    readonly property real cardY: placement.y
 
     // `verb` is the session channel's own vocabulary; nothing here invents a
     // name for an action.
@@ -45,14 +58,32 @@ Window {
     property string outcomeState: ""
     property string outcomeReason: ""
 
-    width: cardWidth
-    height: cardHeight
     color: CelestinaTheme.clear
     title: qsTr("Sesión")
 
     Component.onCompleted: {
+        // These are bootstrap dimensions, not bindings. Once layer-shell gives
+        // this Window the output size, confirmation or outcome copy may grow
+        // the card without shrinking the input surface back around it.
+        menu.width = menu.cardWidth;
+        menu.height = menu.cardHeight;
         CelestinaTheme.reducedMotion = menu.reducedMotion;
         column.forceActiveFocus();
+    }
+
+    PanelPopupPlacement {
+        id: placement
+
+        surfaceWidth: menu.width
+        surfaceHeight: menu.height
+        contentWidth: menu.cardWidth
+        contentHeight: menu.cardHeight
+        edgeInset: 0
+    }
+
+    onVisibleChanged: {
+        if (visible)
+            Qt.callLater(card.reveal);
     }
 
     function press(verb) {
@@ -67,6 +98,19 @@ Window {
         menu.outcomeReason = "";
         if (menu.shellSource)
             menu.shellSource.send(verb);
+    }
+
+    function iconFor(verb) {
+        switch (verb) {
+        case "log-out":
+            return "unplug";
+        case "reboot":
+            return "rotate-ccw";
+        case "power-off":
+            return "power";
+        default:
+            return "media-pause";
+        }
     }
 
     Connections {
@@ -93,96 +137,160 @@ Window {
         onPressed: menu.dismissed()
     }
 
-    Item {
-        id: scene
+    SoftOverlayCard {
+        id: card
 
+        ink: backdropInk
         width: menu.cardWidth
         height: menu.cardHeight
-        anchors.centerIn: parent
+        x: menu.cardX
+        y: menu.cardY
+        reducedMotion: menu.reducedMotion
+        accessibleName: qsTr("Sesión")
 
-        // Anything the card itself does not handle stops here rather than
-        // falling through to the dismissal area behind it. It is the first
-        // child, so every control declared after it is still reached first.
-        MouseArea {
+        Column {
+            id: contentColumn
+
             anchors.fill: parent
-            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-        }
+            anchors.margins: CelestinaTheme.spaceMd
+            spacing: CelestinaTheme.spaceSm
 
-        GlassCard {
-            anchors.fill: parent
-            backdropSource: scene
-            Accessible.role: Accessible.Dialog
-            Accessible.name: qsTr("Sesión")
+            MenuHeader {
+                width: parent.width
+                ink: backdropInk
+                title: qsTr("Sesión")
+                subtitle: qsTr("Acciones del sistema")
+                iconName: "power"
+            }
 
-            Column {
-                id: column
+            Item {
+                width: parent.width
+                implicitHeight: column.implicitHeight + CelestinaTheme.spaceXs * 2
 
-                anchors.fill: parent
-                anchors.margins: CelestinaTheme.spaceLg
-                spacing: CelestinaTheme.spaceXs
-                focus: true
+                MenuSection { ink: backdropInk }
 
-                Keys.onEscapePressed: {
-                    // Escape disarms before it dismisses: leaving an armed
-                    // action behind would be leaving a loaded control.
-                    if (menu.armed.length > 0) {
-                        menu.armed = "";
-                        return;
-                    }
-                    menu.dismissed();
-                }
+                Column {
+                    id: column
 
-                Repeater {
-                    model: menu.actions
+                    anchors.fill: parent
+                    anchors.margins: CelestinaTheme.spaceXs
+                    spacing: CelestinaTheme.spaceXs
+                    focus: true
 
-                    delegate: Column {
-                        id: entry
-
-                        required property var modelData
-
-                        readonly property bool isArmed: menu.armed === entry.modelData.verb
-
-                        width: column.width
-                        spacing: 1
-
-                        CelestinaButton {
-                            width: entry.width
-                            text: entry.isArmed
-                                  ? qsTr("%1 — pulsa otra vez").arg(entry.modelData.label)
-                                  : entry.modelData.label
-                            role: entry.isArmed ? CelestinaButton.Destructive
-                                                : CelestinaButton.Tonal
-                            Accessible.name: entry.isArmed
-                                    ? qsTr("%1. %2 Pulsa otra vez para confirmar.")
-                                      .arg(entry.modelData.label)
-                                      .arg(entry.modelData.warning)
-                                    : entry.modelData.label
-                            onClicked: menu.press(entry.modelData.verb)
+                    Keys.onEscapePressed: {
+                        // Escape disarms before it dismisses: leaving an armed
+                        // action behind would be leaving a loaded control.
+                        if (menu.armed.length > 0) {
+                            menu.armed = "";
+                            return;
                         }
+                        menu.dismissed();
+                    }
 
-                        Text {
-                            width: entry.width
-                            visible: entry.isArmed
-                                     || menu.outcomeVerb === entry.modelData.verb
-                            text: {
-                                if (entry.isArmed)
-                                    return entry.modelData.warning;
-                                if (menu.outcomeState === "pending")
-                                    return qsTr("preguntando…");
-                                if (menu.outcomeState === "failed") {
-                                    return menu.outcomeReason.length > 0
-                                           ? qsTr("rechazado: %1").arg(menu.outcomeReason)
-                                           : qsTr("rechazado");
+                    Repeater {
+                        model: menu.actions
+
+                        delegate: Column {
+                            id: entry
+
+                            required property var modelData
+
+                            readonly property bool isArmed: menu.armed
+                                                              === entry.modelData.verb
+
+                            width: column.width
+                            spacing: 1
+
+                            BackdropButton {
+                                id: actionButton
+
+                                width: entry.width
+                                implicitHeight: CelestinaTheme.controlHeightLg
+                                ink: backdropInk
+                                text: entry.modelData.label
+                                role: entry.isArmed ? CelestinaButton.Destructive
+                                                    : CelestinaButton.Ghost
+                                Accessible.name: entry.isArmed
+                                        ? qsTr("%1. %2 Pulsa otra vez para confirmar.")
+                                          .arg(entry.modelData.label)
+                                          .arg(entry.modelData.warning)
+                                        : entry.modelData.label
+                                onClicked: menu.press(entry.modelData.verb)
+
+                                contentItem: Item {
+                                    CelestinaIcon {
+                                        id: actionIcon
+
+                                        anchors.left: parent.left
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: CelestinaTheme.iconSm
+                                        height: width
+                                        name: menu.iconFor(entry.modelData.verb)
+                                        fallbackName: "power"
+                                        tintOverride: entry.isArmed
+                                                      ? CelestinaTheme.dangerFillInk
+                                                      : backdropInk.primary
+                                        Accessible.ignored: true
+                                    }
+
+                                    Text {
+                                        anchors.left: actionIcon.right
+                                        anchors.leftMargin: CelestinaTheme.spaceMd
+                                        anchors.right: actionState.left
+                                        anchors.rightMargin: CelestinaTheme.spaceSm
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: entry.isArmed
+                                              ? qsTr("%1 — pulsa otra vez")
+                                                .arg(entry.modelData.label)
+                                              : entry.modelData.label
+                                        textFormat: Text.PlainText
+                                        color: entry.isArmed
+                                               ? CelestinaTheme.dangerFillInk
+                                               : backdropInk.primary
+                                        font.family: CelestinaTheme.sansFamily
+                                        font.pixelSize: CelestinaTheme.fontBody
+                                        font.weight: CelestinaTheme.weightDemiBold
+                                        elide: Text.ElideRight
+                                    }
+
+                                    CelestinaIcon {
+                                        id: actionState
+
+                                        anchors.right: parent.right
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: CelestinaTheme.iconSm
+                                        height: width
+                                        name: entry.isArmed ? "circle-alert" : "go-next"
+                                        fallbackName: "go-next"
+                                        tintOverride: entry.isArmed
+                                                      ? CelestinaTheme.dangerFillInk
+                                                      : backdropInk.muted
+                                        Accessible.ignored: true
+                                    }
                                 }
-                                return qsTr("el gestor de sesión lo aceptó");
                             }
-                            color: menu.outcomeState === "failed"
-                                   && menu.outcomeVerb === entry.modelData.verb
-                                   ? CelestinaTheme.danger : CelestinaTheme.textMuted
-                            wrapMode: Text.WordWrap
-                            font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: CelestinaTheme.fontCaption
-                            bottomPadding: CelestinaTheme.spaceXs
+
+                            Text {
+                                width: entry.width
+                                visible: entry.isArmed
+                                         || menu.outcomeVerb === entry.modelData.verb
+                                text: {
+                                    if (entry.isArmed)
+                                        return entry.modelData.warning;
+                                    if (menu.outcomeState === "pending")
+                                        return qsTr("preguntando…");
+                                    if (menu.outcomeState === "failed")
+                                        return qsTr("el gestor de sesión rechazó la solicitud");
+                                    return qsTr("el gestor de sesión lo aceptó");
+                                }
+                                color: menu.outcomeState === "failed"
+                                       && menu.outcomeVerb === entry.modelData.verb
+                                       ? backdropInk.danger : backdropInk.muted
+                                wrapMode: Text.WordWrap
+                                font.family: CelestinaTheme.sansFamily
+                                font.pixelSize: CelestinaTheme.fontCaption
+                                bottomPadding: CelestinaTheme.spaceXs
+                            }
                         }
                     }
                 }

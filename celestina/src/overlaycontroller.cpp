@@ -10,6 +10,7 @@
 #include <QWindow>
 
 #include "overlaysurface.h"
+#include "panelpopupplacement.h"
 
 QString overlaySourceProperty(const QString &qmlComponentName)
 {
@@ -71,9 +72,30 @@ bool OverlayController::isOpen() const
     return m_surface->isOpen();
 }
 
+void OverlayController::toggleFrom(QWindow *panel, const QRect &globalOpener)
+{
+    // The opener is remembered for the next window this controller builds, then
+    // spent: a keybind that follows a click must not inherit the click's origin.
+    m_opener = globalOpener;
+    m_openerPanel = panel;
+    toggle();
+    m_opener = QRect();
+    m_openerPanel = nullptr;
+}
+
 QWindow *OverlayController::createWindow()
 {
-    QObject *rootObject = m_component.createWithInitialProperties(initialProperties());
+    QVariantMap properties = initialProperties();
+    if (!m_opener.isEmpty() && m_openerPanel && m_openerPanel->screen()) {
+        const QPoint outputOrigin = m_openerPanel->screen()->geometry().topLeft();
+        properties.insert(QStringLiteral("anchoredFromPanel"), true);
+        properties.insert(
+            QStringLiteral("openerRect"),
+            panelPopupOpenerOnOutput(m_opener, outputOrigin)
+        );
+    }
+
+    QObject *rootObject = m_component.createWithInitialProperties(properties);
     if (!rootObject) {
         qCritical().noquote() << "Celestina could not create its" << m_componentName
                                << "overlay:" << m_component.errorString();
@@ -99,17 +121,19 @@ void OverlayController::open()
     if (!m_enabled || !m_source || isOpen())
         return;
 
-    QWindow *const overlay = createWindow();
-    if (!overlay)
-        return;
-
     // A keybind names no click position; the overlay follows the pointer's
     // output the way a launcher is expected to, and falls back to the primary
     // screen when the pointer sits nowhere a screen claims (a session with no
     // outputs left).
-    QScreen *screen = QGuiApplication::screenAt(QCursor::pos());
+    QScreen *screen = m_openerPanel ? m_openerPanel->screen() : nullptr;
+    if (!screen)
+        screen = QGuiApplication::screenAt(QCursor::pos());
     if (!screen)
         screen = QGuiApplication::primaryScreen();
+
+    QWindow *const overlay = createWindow();
+    if (!overlay)
+        return;
 
     if (!m_surface->open(overlay, screen))
         delete overlay;

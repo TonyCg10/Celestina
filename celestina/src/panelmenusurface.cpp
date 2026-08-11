@@ -1,27 +1,33 @@
 #include "panelmenusurface.h"
 
 #include <QDebug>
+#include <QMargins>
 #include <QScreen>
 #include <QSize>
 
 #include "surfacemanager.h"
+#include "panelblurcontroller.h"
 
 namespace {
-// A menu is not itself exclusive, but it must respect every exclusive surface
-// the compositor placed before it. Its configured top edge then follows the
-// real bottom of a stacked or resized top panel without inventing a global
-// position Wayland never exposes.
-constexpr int respectExclusiveZones = 0;
+// The card receives the opener's real output-local rectangle, including its
+// vertical coordinate. Covering the output is what lets the animation begin at
+// that rectangle instead of at a guessed panel edge.
+constexpr int ignoreExclusiveZones = -1;
 
-LayerSurfaceSpec menuSpec(QScreen *screen)
+LayerSurfaceSpec menuSpec(
+    QScreen *screen,
+    PanelMenuSurface::Coverage coverage,
+    const QSize &contentSize,
+    const QPoint &requestedPosition
+)
 {
     auto anchors = LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop);
-    anchors |= LayerShellQt::Window::AnchorBottom;
     anchors |= LayerShellQt::Window::AnchorLeft;
-    anchors |= LayerShellQt::Window::AnchorRight;
 
     LayerSurfaceSpec spec;
-    spec.scope = QStringLiteral("celestina-panel-menu");
+    spec.scope = coverage == PanelMenuSurface::Coverage::Output
+        ? QStringLiteral("celestina-panel-menu")
+        : QStringLiteral("celestina-panel-child-menu");
     spec.screen = screen;
     // The whole output, with the card placed inside it where the click was.
     //
@@ -31,9 +37,23 @@ LayerSurfaceSpec menuSpec(QScreen *screen)
     // hear that click — the same correction the focused overlays needed, for
     // the same reason — and the position moves from the surface's margins into
     // the content's own coordinates.
+    if (coverage == PanelMenuSurface::Coverage::Output) {
+        anchors |= LayerShellQt::Window::AnchorBottom;
+        anchors |= LayerShellQt::Window::AnchorRight;
+        spec.desiredSize = QSize(0, 0);
+    } else {
+        const QSize outputSize = screen ? screen->geometry().size() : QSize();
+        const int maximumX = qMax(0, outputSize.width() - contentSize.width());
+        const int maximumY = qMax(0, outputSize.height() - contentSize.height());
+        const QPoint position(
+            qBound(0, requestedPosition.x(), maximumX),
+            qBound(0, requestedPosition.y(), maximumY)
+        );
+        spec.desiredSize = contentSize;
+        spec.margins = QMargins(position.x(), position.y(), 0, 0);
+    }
     spec.anchors = anchors;
-    spec.desiredSize = QSize(0, 0);
-    spec.exclusiveZone = respectExclusiveZones;
+    spec.exclusiveZone = ignoreExclusiveZones;
     spec.layer = LayerShellQt::Window::LayerOverlay;
     // The menu must answer the keyboard on its own rather than inheriting the
     // panel's refusal.
@@ -57,10 +77,20 @@ PanelMenuSurface::~PanelMenuSurface()
     close();
 }
 
-bool PanelMenuSurface::open(QWindow *content, QWindow *panel)
+bool PanelMenuSurface::open(
+    QWindow *content,
+    QWindow *panel,
+    Coverage coverage,
+    const QPoint &outputPosition
+)
 {
     if (!content || !panel || isOpen())
         return false;
+    if (coverage == Coverage::Card
+        && (content->width() <= 0 || content->height() <= 0)) {
+        qWarning() << "Celestina refused a card-sized panel menu without size.";
+        return false;
+    }
 
     content->setParent(nullptr);
     m_content = content;
@@ -68,11 +98,19 @@ bool PanelMenuSurface::open(QWindow *content, QWindow *panel)
         contentVisibilityChanged(visible);
     });
 
-    if (!mapLayerSurface(content, menuSpec(panel->screen()))) {
+    if (!mapLayerSurface(
+            content,
+            menuSpec(panel->screen(), coverage, content->size(), outputPosition)
+        )) {
         qWarning() << "Celestina could not map the panel menu surface.";
         content->disconnect(this);
         m_content.clear();
         return false;
+    }
+
+    if (content->metaObject()->indexOfProperty("glassRects") >= 0) {
+        auto *blur = new PanelBlurController(content, content);
+        blur->start();
     }
 
     return true;

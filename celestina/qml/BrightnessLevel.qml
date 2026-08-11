@@ -19,6 +19,7 @@ Item {
     // DDC, keyed by output name. `var` is necessary: QML has no typed map.
     required property var reading
     required property string outputName
+    required property BackdropInk ink
     signal stepRequested(int direction)
 
     readonly property bool offered: reading !== undefined
@@ -68,6 +69,7 @@ Item {
         height: CelestinaTheme.iconSm
         name: "sun"
         tone: CelestinaIcon.Primary
+        tintOverride: root.ink.primary
         Accessible.ignored: true
     }
 

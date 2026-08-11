@@ -10,10 +10,10 @@
 // Turning another application's icon into something this panel can draw.
 //
 // A tray item offers its icon two ways and honours neither reliably. It may
-// name one from an icon theme — which this session proves can name an icon that
-// exists in *no* installed theme — or it may publish raw pixels, in a byte
-// order that is not this machine's. Both paths end here, and either may end in
-// nothing, which the drawer shows as the item's name instead of an empty gap.
+// name one from an icon theme the active Qt theme does not inherit, or it may
+// publish raw pixels in a byte order that is not this machine's. Both paths end
+// here, and either may end in nothing, which the presentation replaces with a
+// fixed generic application glyph rather than inventing an application name.
 
 /// One size an item published: `a(iiay)` is a list of these.
 struct TrayPixmap {
@@ -28,10 +28,9 @@ struct TrayPixmap {
 /// foreign icon named by another application can be found at all.
 ///
 /// Without this Qt resolves nothing: a shell with no platform theme has an
-/// empty theme name and one search path into its own resources. `hicolor` is
-/// set as the fallback because that is where the specification requires every
-/// application to install, and on this session it is where two of the four
-/// tray icons actually live.
+/// empty theme name and one search path into its own resources. A separately
+/// declared GTK theme is retained as the fallback for foreign applications;
+/// otherwise `hicolor` remains the specification's deterministic floor.
 void configureForeignIconThemes();
 
 /// The icon theme the session tells its applications to use, read from a GTK
@@ -40,6 +39,26 @@ void configureForeignIconThemes();
 /// The shell reads it for one reason: foreign icons. Nothing about this suite's
 /// own look comes from a desktop theme.
 QString parseGtkIconThemeName(const QString &settingsIni);
+
+/// Chooses the secondary theme for foreign SNI names. Qt's active theme stays
+/// authoritative; a separately declared GTK theme is a protocol-compatible
+/// fallback because tray peers may have been launched through either toolkit.
+/// No application title, id or executable name participates in this choice.
+QString trayFallbackThemeName(
+    const QString &primaryTheme,
+    const QString &gtkTheme
+);
+
+/// Resolves the specification's application-supplied `IconThemePath` when it
+/// is a flat directory containing `IconName` directly. Some real peers publish
+/// exactly that shape rather than a freedesktop theme root with `index.theme`.
+/// The icon name must be one basename, the canonical file must stay inside the
+/// supplied directory, and both file and decoded dimensions are bounded.
+QImage loadTrayIconFromFlatThemePath(
+    const QString &directory,
+    const QString &iconName,
+    int preferredSize
+);
 
 /// Picks the size closest to what will be drawn and converts it, byte-swapping
 /// on a little-endian machine. Returns a null image when nothing usable was

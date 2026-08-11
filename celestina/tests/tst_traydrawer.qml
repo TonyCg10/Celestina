@@ -11,11 +11,10 @@ import "../qml" as Desktop
 // file. So each is checked separately rather than assumed:
 //
 //   1. the model loses an item — covered by `trayitems_test.cpp`;
-//   2. the folded drawer shows only what asks for attention, which is what it
-//      is for, and none of the four did;
-//   3. the open drawer fails to instantiate all four;
-//   4. the right flank clips them, which is exactly how the media widget
-//      vanished from the left flank once before (`tst_panelflank.qml`).
+//   2. the compact opener shows only what asks for attention, while the full
+//      inventory belongs to a separate contextual menu;
+//   3. the right flank clips the compact opener, which is exactly how the media
+//      widget vanished from the left flank once before (`tst_panelflank.qml`).
 //
 // The shapes below are the ones this session really publishes, captured
 // read-only from the bus on 2026-08-07.
@@ -34,6 +33,7 @@ TestCase {
     readonly property var slack: ({
         "service": ":1.83", "path": "/org/chromium/StatusNotifierItem/1",
         "id": "Slack_status_icon_1", "title": "Slack_status_icon_1",
+        "preferenceKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "status": "active", "iconName": "", "iconThemePath": "",
         "hasPixmap": true, "hasMenu": true,
         "iconSource": "image://tray/%3A1.83%2Forg%2Fchromium%2FStatusNotifierItem%2F1/1"
@@ -44,12 +44,14 @@ TestCase {
     readonly property var solaar: ({
         "service": ":1.32", "path": "/org/ayatana/NotificationItem/indicator_solaar",
         "id": "indicator-solaar", "title": "Solaar", "status": "active",
+        "preferenceKey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "iconName": "battery-good", "iconThemePath": "",
         "hasPixmap": false, "hasMenu": true, "iconSource": ""
     })
     readonly property var applet: ({
         "service": ":1.22", "path": "/org/ayatana/NotificationItem/nm_applet",
         "id": "nm-applet", "title": "Red", "status": "active",
+        "preferenceKey": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         "iconName": "nm-signal-100", "iconThemePath": "",
         "hasPixmap": false, "hasMenu": true,
         "iconSource": "image://tray/%3A1.22%2Forg%2Fayatana%2FNotificationItem%2Fnm_applet/1"
@@ -57,6 +59,7 @@ TestCase {
     readonly property var blueman: ({
         "service": ":1.26993", "path": "/org/blueman/sni",
         "id": "blueman", "title": "blueman", "status": "active",
+        "preferenceKey": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
         "iconName": "blueman-active", "iconThemePath": "",
         "hasPixmap": false, "hasMenu": true,
         "iconSource": "image://tray/%3A1.26993%2Forg%2Fblueman%2Fsni/1"
@@ -64,13 +67,47 @@ TestCase {
     readonly property var session: [slack, solaar, applet, blueman]
     property var lateItems: []
 
+    Desktop.BackdropInk {
+        id: testInk
+    }
+
     function entriesOf(drawer) {
         const found = [];
-        for (let index = 0; index < drawer.children.length; ++index) {
-            if (drawer.children[index].objectName === "celestina-tray-item")
-                found.push(drawer.children[index]);
+        function visit(node) {
+            for (let index = 0; index < node.children.length; ++index) {
+                const child = node.children[index];
+                if (child.objectName === "celestina-tray-item")
+                    found.push(child);
+                visit(child);
+            }
         }
+        visit(drawer);
         return found;
+    }
+
+    function glassRegions(item) {
+        const found = [];
+
+        function visit(node) {
+            if (node.objectName === "celestina-compositor-glass-region")
+                found.push(node);
+
+            for (let index = 0; index < node.children.length; ++index)
+                visit(node.children[index]);
+        }
+
+        visit(item);
+        return found;
+    }
+
+    function visibleGlassRegions(item) {
+        const regions = testCase.glassRegions(item);
+        const visible = [];
+        for (let index = 0; index < regions.length; ++index) {
+            if (regions[index].visible)
+                visible.push(regions[index]);
+        }
+        return visible;
     }
 
     Item {
@@ -82,8 +119,31 @@ TestCase {
         Desktop.TrayDrawer {
             id: drawer
 
+            ink: testInk
             items: testCase.session
+            preferences: []
         }
+    }
+
+    SignalSpy {
+        id: drawerRequests
+
+        target: drawer
+        signalName: "drawerRequested"
+    }
+
+    SignalSpy {
+        id: trayActivations
+
+        target: drawer
+        signalName: "activated"
+    }
+
+    SignalSpy {
+        id: trayItemMenus
+
+        target: drawer
+        signalName: "menuRequested"
     }
 
     // The panel's real wrapper starts before D-Bus has answered. Its own
@@ -100,7 +160,9 @@ TestCase {
         Desktop.TrayDrawer {
             id: lateDrawer
 
+            ink: testInk
             items: testCase.lateItems
+            preferences: []
         }
     }
 
@@ -115,6 +177,7 @@ TestCase {
         Desktop.Clock {
             id: clock
 
+            ink: testInk
             anchors.centerIn: parent
         }
 
@@ -133,57 +196,114 @@ TestCase {
             Desktop.TrayDrawer {
                 id: flankTray
 
+                ink: testInk
                 anchors.verticalCenter: parent.verticalCenter
                 items: testCase.session
+                preferences: []
             }
 
-            Desktop.SessionStatus {
-                anchors.verticalCenter: parent.verticalCenter
-                network: ({"kind": "wifi", "connection": "Tonys 1"})
-                bluetooth: ({"adapter": "on", "count": 1, "first": "S25 Ultra de Antonio"})
-                power: ({"active": "performance", "count": 3})
-            }
+            Desktop.PanelCluster {
+                id: connectivityCluster
 
-            Desktop.AudioLevel {
-                anchors.verticalCenter: parent.verticalCenter
-                reading: ({"volume": 42, "muted": false, "micMuted": false,
-                           "hasInput": true})
-            }
-
-            Desktop.BrightnessLevel {
-                anchors.verticalCenter: parent.verticalCenter
-                outputName: "DP-1"
-                reading: ({"DP-1": 65, "HDMI-A-1": 80})
-            }
-
-            Desktop.NotificationIndicator {
-                anchors.verticalCenter: parent.verticalCenter
-                reading: ({"unread": 3, "quiet": false})
-            }
-
-            Desktop.PanelActionButton {
                 blurAvailable: true
-                iconName: "settings"
-                helpText: qsTr("Abrir el centro de control")
+                ink: testInk
+                spacing: CelestinaTheme.spaceMd
+
+                Desktop.SessionStatus {
+                    ink: testInk
+                    network: ({"kind": "wifi", "connection": "Tonys 1"})
+                    bluetooth: ({"adapter": "on", "count": 1,
+                                 "first": "S25 Ultra de Antonio"})
+                }
             }
 
-            Desktop.PanelActionButton {
+            Desktop.PanelCluster {
+                id: levelCluster
+
                 blurAvailable: true
-                iconName: "clipboard-paste"
-                helpText: qsTr("Abrir el historial del portapapeles")
+                ink: testInk
+                spacing: CelestinaTheme.spaceMd
+
+                Desktop.AudioLevel {
+                    ink: testInk
+                    height: CelestinaTheme.controlHeightXs
+                    reading: ({"volume": 42, "muted": false,
+                               "micMuted": false, "micVolume": 70})
+                }
+
+                Desktop.BrightnessLevel {
+                    ink: testInk
+                    height: CelestinaTheme.controlHeightXs
+                    outputName: "DP-1"
+                    reading: ({"DP-1": 65, "HDMI-A-1": 80})
+                }
             }
 
-            Desktop.PanelActionButton {
+            Desktop.PanelCluster {
+                id: utilityCluster
+
                 blurAvailable: true
-                iconName: "power"
-                helpText: qsTr("Abrir el menú de sesión")
-            }
+                ink: testInk
+                spacing: CelestinaTheme.spaceXs
 
-            Desktop.CaptureButton {
-                anchors.verticalCenter: parent.verticalCenter
+                Desktop.NotificationIndicator {
+                    ink: testInk
+                    height: CelestinaTheme.controlHeightXs
+                    reading: ({"unread": 3, "quiet": false})
+                }
+
+                Desktop.PanelActionButton {
+                    id: launcherButton
+
+                    ink: testInk
+                    blurAvailable: true
+                    ownsGlass: false
+                    iconName: "app-window"
+                    helpText: qsTr("Abrir el buscador de aplicaciones")
+                }
+
+                Desktop.PanelActionButton {
+                    id: controlCentreButton
+
+                    ink: testInk
+                    blurAvailable: true
+                    ownsGlass: false
+                    iconName: "settings"
+                    helpText: qsTr("Abrir el centro de control")
+                }
+
+                Desktop.PanelActionButton {
+                    id: clipboardButton
+
+                    ink: testInk
+                    blurAvailable: true
+                    ownsGlass: false
+                    iconName: "clipboard-paste"
+                    helpText: qsTr("Abrir el historial del portapapeles")
+                }
+
+                Desktop.PanelActionButton {
+                    id: sessionButton
+
+                    ink: testInk
+                    blurAvailable: true
+                    ownsGlass: false
+                    iconName: "power"
+                    helpText: qsTr("Abrir el menú de sesión")
+                }
+
+                Desktop.SysMon {
+                    id: performanceButton
+
+                    ink: testInk
+                    blurAvailable: true
+                    ownsGlass: false
+                    reading: ({"cpu": 6, "ram": 24})
+                }
             }
 
             Desktop.PhoneStatus {
+                ink: testInk
                 blurAvailable: true
                 connected: true
                 battery: 49
@@ -192,11 +312,24 @@ TestCase {
         }
     }
 
-    // 1. The drawer folded is the drawer doing its job: nothing here asks for
-    //    attention, so nothing here is shown. The toggle stays, and it is the
-    //    only thing that says how many are behind it.
-    function test_a_folded_drawer_shows_only_attention_and_keeps_its_count() {
-        drawer.open = false;
+    function init() {
+        panel.visible = true;
+        drawer.items = testCase.session;
+        drawer.preferences = [];
+        flankTray.preferences = [];
+        drawerRequests.clear();
+        trayActivations.clear();
+        trayItemMenus.clear();
+    }
+
+    function cleanup() {
+        panel.visible = true;
+    }
+
+    // 1. The compact opener does its job: nothing here asks for attention, so
+    //    no foreign icon spends space in the bar. The inventory button remains
+    //    and carries the count only in its accessible name.
+    function test_the_compact_opener_has_no_visible_count() {
         compare(testCase.entriesOf(drawer).length, 0);
 
         const toggle = findChild(drawer, "celestina-tray-toggle");
@@ -204,37 +337,40 @@ TestCase {
         verify(toggle.visible, "the toggle is visible");
         verify(toggle.width > 0, "the toggle has width: " + toggle.width);
         // The count is in the control's own name, which is what a screen reader
-        // reads and what the tooltip would show.
+        // reads; the shell deliberately paints no hover tooltip.
         verify(toggle.helpText.indexOf("4") >= 0, "the toggle names the count: " + toggle.helpText);
+        const glyph = findChild(toggle, "celestina-tray-toggle-icon");
+        verify(glyph);
+        compare(glyph.name, "system-tray");
+        compare(glyph.width, CelestinaTheme.iconSm);
+        compare(glyph.height, CelestinaTheme.iconSm);
+        verify(glyph.width < toggle.width,
+               "the inventory glyph stays inside the compact button");
         // The row itself is present, so the toggle can be reached at all.
-        verify(drawer.visible, "the drawer row is visible");
+        verify(drawer.visible, "the tray opener row is visible");
 
-        // And the bar says how many are behind it. Four registered applications
-        // and a bare chevron used to look exactly like none: the count was only
-        // in `helpText`, whose visible tooltip this control switches off.
         const count = findChild(drawer, "celestina-tray-count");
-        verify(count, "the drawer has a count");
-        verify(count.visible, "the count is visible while folded");
-        compare(count.text, "4");
+        compare(count, null, "the count must not consume visible bar space");
     }
 
-    // Opened, the count is noise: the icons it counts are right there.
-    function test_an_open_drawer_does_not_repeat_the_count_beside_the_icons() {
-        drawer.open = true;
-        const count = findChild(drawer, "celestina-tray-count");
-        verify(count);
-        verify(!count.visible);
-        drawer.open = false;
-        verify(count.visible);
+    function test_the_button_requests_a_contextual_menu_at_its_real_rectangle() {
+        drawerRequests.clear();
+        const toggle = findChild(drawer, "celestina-tray-toggle");
+        verify(toggle);
+        toggle.click();
+        compare(drawerRequests.count, 1);
+        const arguments = drawerRequests.signalArguments[0];
+        compare(arguments[2], toggle.width);
+        compare(arguments[3], toggle.height);
+        const expected = toggle.mapToGlobal(0, 0);
+        compare(arguments[0], Math.round(expected.x));
+        compare(arguments[1], Math.round(expected.y));
     }
 
     // An empty tray is not a tray with a zero on it.
     function test_an_empty_tray_shows_nothing_at_all() {
-        drawer.open = false;
         drawer.items = [];
         verify(!drawer.visible);
-        const count = findChild(drawer, "celestina-tray-count");
-        verify(!count.visible);
         drawer.items = testCase.session;
     }
 
@@ -250,9 +386,8 @@ TestCase {
         testCase.lateItems = [];
     }
 
-    // An item that does ask for attention is shown folded, and only that one.
-    function test_a_folded_drawer_still_shows_what_asks_for_attention() {
-        drawer.open = false;
+    // An item that does ask for attention is shown, and only that one.
+    function test_the_compact_opener_still_shows_what_asks_for_attention() {
         const urgent = JSON.parse(JSON.stringify(testCase.solaar));
         urgent.status = "attention";
         drawer.items = [testCase.slack, urgent, testCase.applet, testCase.blueman];
@@ -264,48 +399,163 @@ TestCase {
         drawer.items = testCase.session;
     }
 
-    // 2. Opened, every registered item is instantiated — including the two the
-    //    author did not see.
-    function test_an_open_drawer_instantiates_every_registered_item() {
-        drawer.open = true;
+    function test_pinned_items_follow_the_opener_and_hidden_items_never_leak() {
+        const urgentSolaar = JSON.parse(JSON.stringify(testCase.solaar));
+        urgentSolaar.status = "attention";
+        drawer.items = [testCase.slack, urgentSolaar, testCase.applet];
+        drawer.preferences = [
+            {"key": testCase.slack.preferenceKey, "mode": "pinned"},
+            {"key": testCase.solaar.preferenceKey, "mode": "hidden"}
+        ];
+        wait(0);
+
+        const toggle = findChild(drawer, "celestina-tray-toggle");
         const shown = testCase.entriesOf(drawer);
-        compare(shown.length, 4);
-
-        const titles = shown.map((entry) => entry.modelData.title);
-        verify(titles.indexOf("Slack_status_icon_1") >= 0);
-        verify(titles.indexOf("Solaar") >= 0);
-        verify(titles.indexOf("Red") >= 0);
-        verify(titles.indexOf("blueman") >= 0);
-
-        // Every one of them is something the person can actually reach: an
-        // entry with no width is an entry that is not there.
-        for (let index = 0; index < shown.length; ++index) {
-            verify(shown[index].width > 0);
-            verify(shown[index].height > 0);
-        }
-        drawer.open = false;
+        compare(shown.length, 1);
+        compare(shown[0].modelData.service, testCase.slack.service);
+        const itemOnDrawer = shown[0].mapToItem(drawer, 0, 0);
+        verify(itemOnDrawer.x > toggle.x,
+               "a pinned item belongs immediately to the opener's right: item "
+               + itemOnDrawer.x + ", opener " + toggle.x);
     }
 
-    // 3. And the flank has room for them. `PanelFlank` clips, and the tray is
-    //    the innermost widget of the trailing flank — so if the row ever
-    //    overflows, the tray is the first thing to leave the bar without a
-    //    word. That is precisely how the media widget disappeared once before.
-    function test_the_open_drawer_is_not_clipped_off_a_1920_output() {
-        flankTray.open = true;
+    function test_attention_does_not_duplicate_a_pin() {
+        const urgentPinned = JSON.parse(JSON.stringify(testCase.slack));
+        urgentPinned.status = "attention";
+        drawer.items = [urgentPinned];
+        drawer.preferences = [
+            {"key": testCase.slack.preferenceKey, "mode": "pinned"}
+        ];
+
+        const shown = testCase.entriesOf(drawer);
+        compare(shown.length, 1);
+        compare(shown[0].modelData.path, testCase.slack.path);
+    }
+
+    function test_missing_and_failed_icons_use_a_fixed_catalogue_fallback() {
+        const longUrgent = JSON.parse(JSON.stringify(testCase.solaar));
+        longUrgent.status = "attention";
+        longUrgent.title = "A tray application with a deliberately long title";
+        drawer.items = [longUrgent];
+        wait(0);
+
+        let entry = testCase.entriesOf(drawer)[0];
+        let fallback = findChild(entry, "celestina-tray-item-fallback-icon");
+        verify(fallback);
+        verify(fallback.visible);
+        compare(fallback.name, "app-window");
+        compare(entry.width, CelestinaTheme.iconSm);
+        compare(entry.height, CelestinaTheme.iconSm);
+        compare(findChild(entry, "celestina-tray-item-title"), null);
+        compare(entry.Accessible.name, longUrgent.title);
+
+        const brokenUrgent = JSON.parse(JSON.stringify(testCase.slack));
+        brokenUrgent.status = "attention";
+        brokenUrgent.title = "Icono roto";
+        brokenUrgent.iconSource = "file:///celestina-test/no-such-tray-icon.png";
+        drawer.items = [brokenUrgent];
+        wait(0);
+
+        entry = testCase.entriesOf(drawer)[0];
+        const image = findChild(entry, "celestina-tray-item-image");
+        fallback = findChild(entry, "celestina-tray-item-fallback-icon");
+        verify(image);
+        verify(fallback);
+        tryCompare(image, "status", Image.Error);
+        tryCompare(fallback, "visible", true);
+        compare(fallback.name, "app-window");
+        compare(entry.width, CelestinaTheme.iconSm);
+        compare(entry.height, CelestinaTheme.iconSm);
+        compare(entry.Accessible.name, brokenUrgent.title);
+    }
+
+    function test_pinned_and_urgent_items_are_keyboard_operable() {
+        panel.visible = false;
+        const urgent = JSON.parse(JSON.stringify(testCase.solaar));
+        urgent.status = "attention";
+        drawer.items = [urgent];
+        waitForRendering(drawer);
+
+        const entry = testCase.entriesOf(drawer)[0];
+        const focusRing = findChild(entry, "celestina-tray-item-focus");
+        verify(entry);
+        verify(entry.activeFocusOnTab);
+        verify(focusRing);
+        entry.forceActiveFocus(Qt.TabFocusReason);
+        tryCompare(entry, "activeFocus", true);
+        tryCompare(focusRing, "visible", true);
+
+        keyClick(Qt.Key_Return);
+        keyClick(Qt.Key_Enter);
+        keyClick(Qt.Key_Space);
+        compare(trayActivations.count, 3);
+        for (let index = 0; index < trayActivations.count; ++index) {
+            compare(trayActivations.signalArguments[index][0], urgent.service);
+            compare(trayActivations.signalArguments[index][1], urgent.path);
+        }
+
+        keyClick(Qt.Key_Menu);
+        keyClick(Qt.Key_F10, Qt.ShiftModifier);
+        compare(trayItemMenus.count, 2);
+        for (let index = 0; index < trayItemMenus.count; ++index) {
+            compare(trayItemMenus.signalArguments[index][0], urgent.service);
+            compare(trayItemMenus.signalArguments[index][1], urgent.path);
+        }
+    }
+
+    function test_a_tray_item_menu_press_is_not_silent() {
+        // `panel` occupies the same synthetic screen coordinates as `host` and
+        // is declared later, so hide that independent fixture while sending a
+        // real window event to this drawer.
+        panel.visible = false;
+        const urgent = JSON.parse(JSON.stringify(testCase.slack));
+        urgent.status = "attention";
+        drawer.items = [urgent];
+        waitForRendering(drawer);
+        const entry = testCase.entriesOf(drawer)[0];
+        const pointer = findChild(entry, "celestina-tray-item-pointer");
+        const feedback = findChild(entry, "celestina-tray-item-feedback");
+        verify(pointer);
+        verify(feedback);
+
+        mousePress(pointer, pointer.width / 2, pointer.height / 2,
+                   Qt.RightButton);
+        verify(pointer.pressed);
+        tryCompare(feedback, "color", CelestinaTheme.surfaceStrong);
+        mouseRelease(pointer, pointer.width / 2, pointer.height / 2,
+                     Qt.RightButton);
+        verify(!pointer.pressed);
+        drawer.items = testCase.session;
+        panel.visible = true;
+    }
+
+    // 2. The contextual inventory never widens the panel. The real flank still
+    //    has room for the launcher and every existing permanent action.
+    function test_requesting_the_inventory_does_not_expand_or_clip_the_flank() {
         wait(0);
 
         verify(rightFlank.width > 0);
-        compare(testCase.entriesOf(flankTray).length, 4);
+        compare(connectivityCluster.spacing, CelestinaTheme.spaceMd);
+        compare(levelCluster.spacing, CelestinaTheme.spaceMd);
+        compare(utilityCluster.spacing, CelestinaTheme.spaceXs);
+        compare(testCase.visibleGlassRegions(connectivityCluster).length, 1);
+        compare(testCase.visibleGlassRegions(levelCluster).length, 1);
+        compare(testCase.visibleGlassRegions(utilityCluster).length, 1);
+        verify(!launcherButton.ownsGlass);
+        verify(!controlCentreButton.ownsGlass);
+        verify(!clipboardButton.ownsGlass);
+        verify(!sessionButton.ownsGlass);
+        verify(!performanceButton.ownsGlass);
+        compare(testCase.entriesOf(flankTray).length, 0);
         verify(rightFlank.contentWidth <= rightFlank.width);
 
-        // And each entry is inside the flank rather than merely instantiated
-        // behind its clip.
-        const shown = testCase.entriesOf(flankTray);
-        for (let index = 0; index < shown.length; ++index) {
-            const at = shown[index].mapToItem(rightFlank, 0, 0);
-            verify(at.x >= 0);
-            verify(at.x + shown[index].width <= rightFlank.width);
-        }
-        flankTray.open = false;
+        const before = flankTray.implicitWidth;
+        const toggle = findChild(flankTray, "celestina-tray-toggle");
+        verify(toggle);
+        toggle.click();
+        wait(0);
+        compare(flankTray.implicitWidth, before);
+        compare(testCase.entriesOf(flankTray).length, 0);
+        verify(rightFlank.contentWidth <= rightFlank.width);
     }
 }

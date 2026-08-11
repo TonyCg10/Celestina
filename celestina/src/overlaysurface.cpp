@@ -4,6 +4,7 @@
 #include <QScreen>
 
 #include "surfacemanager.h"
+#include "panelblurcontroller.h"
 
 namespace {
 // How far a corner surface sits from the edges, clear of the panel's own
@@ -146,6 +147,11 @@ bool OverlaySurface::open(QWindow *content, QScreen *screen)
         content->disconnect(this);
         m_content.clear();
         return false;
+    }
+
+    if (content->metaObject()->indexOfProperty("glassRects") >= 0) {
+        auto *blur = new PanelBlurController(content, content);
+        blur->start();
     }
 
     return true;

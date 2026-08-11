@@ -20,20 +20,71 @@ Window {
     // The absolute path chosen for this output, or an empty string when the
     // provider says there is nothing to show here.
     required property string source
+    // The same identity as a correctly escaped local URL. C++ owns path-to-URL
+    // conversion so spaces and fragment characters remain filename data.
+    required property url sourceUrl
+    // The provider's exact file identity and output inventory generation. They
+    // form part of the Image URL so replacing bytes at the same path cannot
+    // leave Qt showing an older successful request.
+    required property string sourceRevision
+    required property double sourceGeneration
+    required property int sourceWidth
+    required property int sourceHeight
     required property string outputName
     required property bool reducedMotion
+
+    // Captured only when the current Image request reaches Ready. Requested
+    // identity is never treated as displayed identity merely because a
+    // property changed.
+    property string readySource: ""
+    property string readyRevision: ""
+    property double readyGeneration: 0
+    property int readySourceWidth: 0
+    property int readySourceHeight: 0
+
+    readonly property url imageSource: wallpaper.sourceUrl.toString().length > 0
+                                       ? wallpaper.sourceUrl.toString()
+                                         + "#celestina-revision="
+                                         + encodeURIComponent(wallpaper.sourceRevision)
+                                         + "&celestina-generation="
+                                         + wallpaper.sourceGeneration.toFixed(0)
+                                         + "&celestina-geometry="
+                                         + wallpaper.sourceWidth + "x"
+                                         + wallpaper.sourceHeight
+                                       : ""
 
     // A path this session cannot decode is the same as no path: the fallback
     // is painted rather than a broken-image placeholder or an empty frame.
     property bool decodable: true
-    readonly property bool showingImage: wallpaper.source.length > 0 && wallpaper.decodable
+    readonly property bool showingImage: wallpaper.source.length > 0
+                                         && wallpaper.decodable
+                                         && image.status === Image.Ready
+                                         && wallpaper.readySource === wallpaper.source
+                                         && wallpaper.readyRevision === wallpaper.sourceRevision
+                                         && wallpaper.readyGeneration === wallpaper.sourceGeneration
+                                         && wallpaper.readySourceWidth === wallpaper.sourceWidth
+                                         && wallpaper.readySourceHeight === wallpaper.sourceHeight
 
     color: CelestinaTheme.compositorGlassFallback
     title: qsTr("Fondo de Celestina")
 
     Component.onCompleted: CelestinaTheme.reducedMotion = wallpaper.reducedMotion
 
-    onSourceChanged: wallpaper.decodable = true
+    function invalidateReadyImage() {
+        wallpaper.decodable = true;
+        wallpaper.readySource = "";
+        wallpaper.readyRevision = "";
+        wallpaper.readyGeneration = 0;
+        wallpaper.readySourceWidth = 0;
+        wallpaper.readySourceHeight = 0;
+    }
+
+    onSourceChanged: wallpaper.invalidateReadyImage()
+    onSourceUrlChanged: wallpaper.invalidateReadyImage()
+    onSourceRevisionChanged: wallpaper.invalidateReadyImage()
+    onSourceGenerationChanged: wallpaper.invalidateReadyImage()
+    onSourceWidthChanged: wallpaper.invalidateReadyImage()
+    onSourceHeightChanged: wallpaper.invalidateReadyImage()
 
     // The description belongs to an Item, not to this Window: Qt attaches
     // `Accessible` only to something deriving from Item or Action, and a live
@@ -55,7 +106,7 @@ Window {
 
             anchors.fill: parent
             visible: wallpaper.showingImage
-            source: wallpaper.source.length > 0 ? "file://" + wallpaper.source : ""
+            source: wallpaper.imageSource
             fillMode: Image.PreserveAspectCrop
             // A wallpaper is decoded once and looked at for hours; doing it off the
             // GUI thread keeps a large photograph from stalling the panel with it.
@@ -64,12 +115,24 @@ Window {
             // Reading the file at the screen's own size rather than at the
             // photograph's: a 6000-pixel image would otherwise cost its full
             // decoded size in memory on every output showing it.
-            sourceSize.width: wallpaper.width
-            sourceSize.height: wallpaper.height
+            sourceSize.width: wallpaper.sourceWidth > 0
+                              ? wallpaper.sourceWidth : wallpaper.width
+            sourceSize.height: wallpaper.sourceHeight > 0
+                               ? wallpaper.sourceHeight : wallpaper.height
 
             onStatusChanged: {
-                if (status === Image.Error)
+                if (status === Image.Error) {
+                    wallpaper.invalidateReadyImage();
                     wallpaper.decodable = false;
+                } else if (status === Image.Ready
+                           && image.source.toString()
+                              === wallpaper.imageSource.toString()) {
+                    wallpaper.readySource = wallpaper.source;
+                    wallpaper.readyRevision = wallpaper.sourceRevision;
+                    wallpaper.readyGeneration = wallpaper.sourceGeneration;
+                    wallpaper.readySourceWidth = wallpaper.sourceWidth;
+                    wallpaper.readySourceHeight = wallpaper.sourceHeight;
+                }
             }
 
             // Appearing is worth a fade; reduced motion keeps the image and drops

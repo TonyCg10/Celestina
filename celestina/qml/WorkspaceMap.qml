@@ -18,11 +18,21 @@ AnchoredCard {
 
     // The workspaces this card shows: one monitor group, or a single workspace.
     required property var workspaces
+    // The window publishes the Velo field to `PanelMenuSurface`. The surface
+    // owns the compositor effect; this card only names the one rounded region
+    // it wants blurred and receives the availability result through the alias.
+    property alias compositorBlurAvailable: card.compositorBlurAvailable
+    property alias glassRects: card.glassRects
+    property alias glassRegions: card.glassRegions
     // The host connects to these by name. Going to a workspace and going to one
     // window are different requests to the compositor, so they are two signals
     // rather than one the controller has to disambiguate.
     signal activated(string output, int index)
     signal windowActivated(string windowId)
+
+    BackdropInk {
+        id: backdropInk
+    }
 
     // One workspace and a whole group are drawn the same way. They were not, and
     // the difference bought nothing: a lone workspace on bare glass was harder
@@ -35,6 +45,8 @@ AnchoredCard {
     readonly property int perRow: Math.min(3, Math.max(1, root.workspaces.length))
     readonly property int rows: Math.ceil(root.workspaces.length / root.perRow)
     readonly property int frame: CelestinaTheme.spaceLg * 2
+    readonly property int headerHeight: CelestinaTheme.rowHeight
+                                        + CelestinaTheme.borderFocus
 
     // Every place the keyboard can land, in the order it lands on them: each
     // workspace's own row, then that workspace's windows, board after board.
@@ -108,6 +120,9 @@ AnchoredCard {
                   + (root.perRow - 1) * CelestinaTheme.spaceMd + root.frame
     contentHeight: root.rows * boardHeight
                    + (root.rows - 1) * CelestinaTheme.spaceMd + root.frame
+                   + root.headerHeight + CelestinaTheme.spaceSm
+
+    onReady: card.reveal()
 
     // Declared before the card so the card sits above it.
     //
@@ -139,49 +154,72 @@ AnchoredCard {
 
     }
 
-    GlassCard {
-        x: root.cardX + root.shadowMargin
-        y: root.cardY + root.shadowMargin
+    SoftOverlayCard {
+        id: card
+
+        ink: backdropInk
+        x: root.cardX
+        y: root.cardY
         width: root.contentWidth
         height: root.contentHeight
-        backdropSource: root.backdrop
-    }
+        reducedMotion: root.reducedMotion
+        accessibleName: qsTr("Espacios de trabajo")
 
-    Item {
-        x: root.cardX + root.shadowMargin
-        y: root.cardY + root.shadowMargin
-        width: root.contentWidth
-        height: root.contentHeight
-        Accessible.role: Accessible.Dialog
-        Accessible.name: qsTr("Espacios de trabajo")
-
-        Grid {
+        Column {
             anchors.fill: parent
-            anchors.margins: CelestinaTheme.spaceLg
-            columns: root.perRow
-            columnSpacing: CelestinaTheme.spaceMd
-            rowSpacing: CelestinaTheme.spaceMd
+            anchors.margins: CelestinaTheme.spaceMd
+            spacing: CelestinaTheme.spaceSm
 
-            Repeater {
-                model: root.workspaces
-
-                delegate: WorkspaceMapBoard {
-                    required property var modelData
-
-                    width: root.boardWidth
-                    height: root.boardHeight
-                    workspace: modelData
-                    current: modelData.active === true
-                    currentKey: root.currentKey
-                    onActivated: root.activated(
-                        modelData.output !== undefined ? modelData.output : "",
-                        modelData.index !== undefined ? modelData.index : 0
-                    )
-                    onWindowActivated: (windowId) => root.windowActivated(windowId)
-                }
-
+            MenuHeader {
+                width: parent.width
+                ink: backdropInk
+                title: qsTr("Espacios de trabajo")
+                subtitle: qsTr("%n espacio(s)", "", root.workspaces.length)
+                iconName: "view-grid"
             }
 
+            Item {
+                width: parent.width
+                height: parent.height - y
+
+                MenuSection { ink: backdropInk }
+
+                Grid {
+                    anchors.fill: parent
+                    anchors.margins: CelestinaTheme.spaceXs
+                    columns: root.perRow
+                    columnSpacing: CelestinaTheme.spaceMd
+                    rowSpacing: CelestinaTheme.spaceMd
+
+                    Repeater {
+                        model: root.workspaces
+
+                        delegate: Item {
+                            id: boardGroup
+
+                            required property var modelData
+
+                            width: root.boardWidth
+                            height: root.boardHeight
+
+                            WorkspaceMapBoard {
+                                anchors.fill: parent
+                                workspace: boardGroup.modelData
+                                ink: backdropInk
+                                current: boardGroup.modelData.active === true
+                                currentKey: root.currentKey
+                                onActivated: root.activated(
+                                    boardGroup.modelData.output !== undefined
+                                    ? boardGroup.modelData.output : "",
+                                    boardGroup.modelData.index !== undefined
+                                    ? boardGroup.modelData.index : 0
+                                )
+                                onWindowActivated: (windowId) => root.windowActivated(windowId)
+                            }
+                        }
+                    }
+                }
+            }
         }
 
     }

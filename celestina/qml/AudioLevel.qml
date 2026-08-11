@@ -19,6 +19,7 @@ Item {
     // The `audio` provider's fields, or `undefined` when no default device can
     // be read. `var` is necessary because QML has no typed map.
     required property var reading
+    required property BackdropInk ink
     signal muteToggled()
     signal micMuteToggled()
     signal mixerRequested()
@@ -98,6 +99,7 @@ Item {
                 height: CelestinaTheme.iconSm
                 name: root.muted ? "media-volume-muted" : "media-volume"
                 tone: CelestinaIcon.Primary
+                tintOverride: root.ink.primary
                 Accessible.ignored: true
             }
 
@@ -134,6 +136,7 @@ Item {
                 height: CelestinaTheme.iconSm
                 name: root.micMuted ? "mic-off" : "mic"
                 tone: CelestinaIcon.Primary
+                tintOverride: root.ink.primary
                 Accessible.ignored: true
             }
 

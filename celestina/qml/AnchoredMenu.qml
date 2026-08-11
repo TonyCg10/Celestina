@@ -2,10 +2,10 @@
 //
 // Four menus are drawn this way — the panel's own, a tray item's, and the two
 // connectivity indicators'. What they share with every other anchored surface —
-// the shadow inset, the clamp that keeps a card whole against an edge, and the
-// `shadowMargin`/`menuX`/`menuY` contract the host writes through — lives in
-// `AnchoredCard`. What is left here is what makes this a *menu*: the popup
-// itself, its lifecycle, and the `menu` handle a consumer feeds items through.
+// the clamp that keeps a card whole against an edge and the `menuX`/`menuY`
+// contract the host writes through — lives in `AnchoredCard`. What is left here
+// is what makes this a *menu*: the popup itself, its lifecycle, and the `menu`
+// handle a consumer feeds items through.
 //
 // `GlassContextMenu` supplies Escape, arrow keys, focus, and motion that already
 // honours `reducedMotion`.
@@ -23,12 +23,25 @@ AnchoredCard {
     // a `Menu` a model.
     readonly property alias menu: menu
 
-    // Height comes from what the menu's content *implies*, never from the menu's
-    // own laid-out height, for the reason `AnchoredCard` records. Width comes
-    // from the menu, because the shared component fixes it to a token rather
-    // than deriving it from anything here.
+    // Height comes from the complete item model plus Menu padding, never from
+    // the ListView's laid-out viewport, for the reason `AnchoredCard` records.
+    // Reading ListView.contentHeight still lets Qt briefly feed the explicit
+    // viewport height back through its implicit-height calculation while the
+    // popup opens. Summing the rows' implicit measures keeps the two axes of
+    // responsibility independent: rows own natural height; the card owns the
+    // bounded viewport. Width comes from the menu's fixed token.
+    readonly property int naturalMenuHeight: {
+        let measured = menu.topPadding + menu.bottomPadding;
+        for (let index = 0; index < menu.count; ++index) {
+            const item = menu.itemAt(index);
+            if (!item)
+                continue;
+            measured += item.implicitHeight;
+        }
+        return Math.ceil(measured);
+    }
     contentWidth: menu.width
-    contentHeight: menu.implicitHeight
+    contentHeight: root.naturalMenuHeight
 
     // Opened from the card's own signal rather than from a second
     // `Component.onCompleted`, which would replace the base file's handler.
@@ -45,8 +58,12 @@ AnchoredCard {
         // strip reach a different indicator and replace this menu in the same
         // gesture.
         modal: false
-        x: root.cardX + root.shadowMargin
-        y: root.cardY + root.shadowMargin
+        x: root.cardX
+        y: root.cardY
+        // `implicitHeight` remains the complete model height used by
+        // AnchoredCard. `height` is the visible viewport and may be capped for a
+        // panel-relative dynamic menu; Menu's ListView keeps the rest reachable.
+        height: root.cardHeight
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         // The shared margin keeps a menu clear of the edges of the window it
         // pops up in. This surface exists only to carry this menu, so that clamp

@@ -3,6 +3,7 @@
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQmlProperty>
+#include <QColor>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QSignalSpy>
@@ -58,13 +59,19 @@ public:
         emit changed();
     }
 
-    quint64 sendRequest(const QString &provider, const QString &verb, const QVariantMap &) override
+    quint64 sendRequest(
+        const QString &provider,
+        const QString &verb,
+        const QVariantMap &options
+    ) override
     {
         sent.append(provider + u'/' + verb);
+        sentOptions.append(options);
         return ++m_lastId;
     }
 
     QStringList sent;
+    QList<QVariantMap> sentOptions;
 
 signals:
     void changed();
@@ -88,8 +95,8 @@ constexpr int outputHeight = 1080;
 constexpr int indicatorRow = 20;
 } // namespace
 
-// What the two connectivity menus are handed, and what a click or a key does to
-// them.
+// What the panel-owned contextual menus are handed, and what a click or a key
+// does to them.
 //
 // This proves the contract inside the window, not the surface around it.
 // Whether the compositor delivers a click at the indicator to this window at
@@ -108,11 +115,15 @@ private slots:
     void aClickOnTheCardDismissesNothing();
     void escapeDismissesTheMenu();
     void aCardAskedForBeyondTheOutputStaysWhole();
+    void aSoftMenuKeepsOneOuterGlassCard();
+    void theTrayMenuUsesTheSameVeloCarrier();
     void theWholeMenuIsReachableFromTheKeyboard();
     void everyRowNamesItselfAndItsState();
+    void wallpaperPagesStayOnOneBoundedCatalogue();
     void activatingARowClosesTheMenuAndOutlivesItsWindow();
     void aReopenedMenuShowsWhatHappenedWhileItWasClosed();
     void aFailureOutlivesTheRowThatWouldHaveShownIt();
+    void aBluetoothFailureCanBeDismissed();
     void aNetworkResultLeavesBluetoothAlone();
     void theControlCentreStopsAskingWhenTheHelperAccepts();
 
@@ -122,7 +133,26 @@ private:
     // session.
     static QStringList kinds()
     {
-        return {QStringLiteral("network"), QStringLiteral("bluetooth")};
+        return {
+            QStringLiteral("network"),
+            QStringLiteral("bluetooth"),
+            QStringLiteral("performance"),
+            QStringLiteral("capture"),
+            QStringLiteral("wallpaper"),
+        };
+    }
+
+    // Linear contextual actions keep Qt Quick Menu as their lifecycle owner.
+    // Wallpaper is deliberately a custom card because its bounded thumbnail
+    // grid is spatial content, not a list of interchangeable menu rows.
+    static QStringList softMenuKinds()
+    {
+        return {
+            QStringLiteral("network"),
+            QStringLiteral("bluetooth"),
+            QStringLiteral("performance"),
+            QStringLiteral("capture"),
+        };
     }
 
     static QUrl sourceFor(const QString &component)
@@ -156,10 +186,17 @@ private:
             return nullptr;
         }
 
-        owner.reset(menu.createWithInitialProperties({
+        QVariantMap initialProperties {
             {QStringLiteral("reducedMotion"), true},
-            {QStringLiteral("providerSource"), QVariant::fromValue<QObject *>(nullptr)},
-        }));
+            {QStringLiteral("outputName"), QStringLiteral("test-output")},
+        };
+        if (kind != QStringLiteral("capture")) {
+            initialProperties.insert(
+                QStringLiteral("providerSource"),
+                QVariant::fromValue<QObject *>(nullptr)
+            );
+        }
+        owner.reset(menu.createWithInitialProperties(initialProperties));
         auto *window = qobject_cast<QQuickWindow *>(owner.get());
         if (!window)
             return nullptr;
@@ -184,6 +221,18 @@ void IndicatorMenuTest::everyIndicatorKindNamesTheComponentThatDrawsIt()
         indicatorMenuComponent(QStringLiteral("bluetooth")),
         QStringLiteral("BluetoothMenu")
     );
+    QCOMPARE(
+        indicatorMenuComponent(QStringLiteral("performance")),
+        QStringLiteral("PerformanceMenu")
+    );
+    QCOMPARE(
+        indicatorMenuComponent(QStringLiteral("capture")),
+        QStringLiteral("CaptureMenu")
+    );
+    QCOMPARE(
+        indicatorMenuComponent(QStringLiteral("wallpaper")),
+        QStringLiteral("WallpaperMenu")
+    );
     // A kind this shell does not have opens nothing rather than something else.
     QVERIFY(indicatorMenuComponent(QStringLiteral("power")).isEmpty());
     QVERIFY(indicatorMenuComponent(QString()).isEmpty());
@@ -205,10 +254,14 @@ void IndicatorMenuTest::eachMenuDeclaresExactlyWhatTheHostHandsIt()
         captured = &messages;
         QtMessageHandler previous = qInstallMessageHandler(collect);
         // Exactly what `toggleIndicatorMenu` passes, and nothing else.
-        QObject *const root = menu.createWithInitialProperties({
+        QVariantMap initialProperties {
             {QStringLiteral("providerSource"), QVariant::fromValue<QObject *>(nullptr)},
             {QStringLiteral("reducedMotion"), true},
-        });
+            {QStringLiteral("outputName"), QStringLiteral("test-output")},
+        };
+        if (kind == QStringLiteral("capture"))
+            initialProperties.remove(QStringLiteral("providerSource"));
+        QObject *const root = menu.createWithInitialProperties(initialProperties);
         qInstallMessageHandler(previous);
         captured = nullptr;
 
@@ -236,6 +289,7 @@ void IndicatorMenuTest::aPropertyTheComponentDoesNotDeclareIsVisibleAsAFailure()
     QObject *const root = menu.createWithInitialProperties({
         {QStringLiteral("providerSource"), QVariant::fromValue<QObject *>(nullptr)},
         {QStringLiteral("reducedMotion"), true},
+        {QStringLiteral("outputName"), QStringLiteral("test-output")},
         {QStringLiteral("shellSource"), QVariant::fromValue<QObject *>(nullptr)},
     });
     qInstallMessageHandler(previous);
@@ -258,6 +312,9 @@ void IndicatorMenuTest::aClickWhereTheIndicatorIsDismissesTheMenu()
         std::unique_ptr<QObject> owner;
         QQuickWindow *const window = openMenu(engine, kind, owner);
         QVERIFY2(window, qPrintable(kind));
+        QVERIFY(!window->findChild<QObject *>(
+            QStringLiteral("celestina-menu-exterior-shadow")
+        ));
 
         QSignalSpy dismissed(window, SIGNAL(dismissed()));
         QVERIFY(dismissed.isValid());
@@ -284,7 +341,6 @@ void IndicatorMenuTest::aClickOnTheCardDismissesNothing()
 
         const int cardX = window->property("cardX").toInt();
         const int cardY = window->property("cardY").toInt();
-        const int inset = window->property("shadowMargin").toInt();
         const int cardWidth = window->property("cardWidth").toInt();
         QVERIFY(cardWidth > 0);
         // Just inside the card's own edge, in its padding rather than on a row,
@@ -293,7 +349,7 @@ void IndicatorMenuTest::aClickOnTheCardDismissesNothing()
             window,
             Qt::LeftButton,
             {},
-            QPoint(cardX + cardWidth - inset - 2, cardY + inset + 2)
+            QPoint(cardX + cardWidth - 2, cardY + 2)
         );
         // Long enough for a closing transition to have finished if one had
         // started, so this is silence rather than a race won by the assertion.
@@ -334,29 +390,243 @@ void IndicatorMenuTest::aCardAskedForBeyondTheOutputStaysWhole()
 
         const int cardWidth = window->property("cardWidth").toInt();
         const int cardHeight = window->property("cardHeight").toInt();
-        const int shadowMargin = window->property("shadowMargin").toInt();
         QVERIFY(cardWidth > 0);
         QVERIFY(cardHeight > 0);
-        QVERIFY(shadowMargin > 0);
+        QCOMPARE(cardWidth, window->property("contentWidth").toInt());
+        QCOMPARE(cardHeight, window->property("contentHeight").toInt());
 
         // Asked for past the right edge, and past the bottom.
         window->setProperty("menuX", outputWidth + 500);
         window->setProperty("menuY", outputHeight + 500);
         QCOMPARE(
             window->property("cardX").toInt(),
-            outputWidth - cardWidth + shadowMargin
+            outputWidth - cardWidth
         );
         QCOMPARE(
             window->property("cardY").toInt(),
-            outputHeight - cardHeight + shadowMargin
+            outputHeight - cardHeight
         );
 
-        // At the other edges only the transparent shadow may leave the
-        // surface; the visible menu itself still starts at zero.
+        // At the other edges the complete visible menu starts at zero.
         window->setProperty("menuX", -400);
         window->setProperty("menuY", -400);
-        QCOMPARE(window->property("cardX").toInt(), -shadowMargin);
-        QCOMPARE(window->property("cardY").toInt(), -shadowMargin);
+        QCOMPARE(window->property("cardX").toInt(), 0);
+        QCOMPARE(window->property("cardY").toInt(), 0);
+    }
+}
+
+void IndicatorMenuTest::aSoftMenuKeepsOneOuterGlassCard()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+
+    for (const QString &kind : softMenuKinds()) {
+        std::unique_ptr<QObject> owner;
+        QQuickWindow *const window = openMenu(engine, kind, owner);
+        QVERIFY2(window, qPrintable(kind));
+
+        const int anchorGap = window->property("anchorGap").toInt();
+        const QRect opener(1540, 12, 28, 28);
+        QVERIFY(anchorGap > 0);
+        // Distance is the semantic floating gap between the opener and body.
+        window->setProperty(
+            "menuY", opener.y() + opener.height() + anchorGap
+        );
+
+        window->setProperty("compositorBlurAvailable", true);
+
+        QObject *const menu = window->property("menu").value<QObject *>();
+        QVERIFY(menu);
+        QCOMPARE(menu->property("x").toInt(), window->property("cardX").toInt());
+        QCOMPARE(
+            menu->property("y").toInt(),
+            window->property("cardY").toInt()
+        );
+        // The whole menu contributes one compositor-glass region. Its rows are
+        // denser visual divisions, not independent compositor samples.
+        QTRY_COMPARE(window->property("glassRects").toList().size(), 1);
+        const QRectF menuBounds(
+            menu->property("x").toReal(),
+            menu->property("y").toReal(),
+            menu->property("width").toReal(),
+            menu->property("height").toReal()
+        );
+        const QRectF published = window->property("glassRects").toList()
+                                     .constFirst().toRectF();
+        QCOMPARE(published, menuBounds);
+        QTRY_COMPARE(window->property("glassRegions").toList().size(), 1);
+        const QVariantMap publishedShape = window->property("glassRegions")
+                                               .toList().constFirst().toMap();
+        QCOMPARE(publishedShape.value(QStringLiteral("rect")).toRectF(), menuBounds);
+        QCOMPARE(publishedShape.value(QStringLiteral("radius")).toInt(), 20);
+
+        const QList<QObject *> groupedFields = window->findChildren<QObject *>(
+            QStringLiteral("celestina-menu-section")
+        );
+        QCOMPARE(groupedFields.size(), 2);
+        const int sectionRole = groupedFields.constFirst()
+                                    ->property("materialRole").toInt();
+        const qreal sectionStrength = groupedFields.constFirst()
+                                          ->property("materialStrength").toReal();
+        const QColor sectionTint = groupedFields.constFirst()
+                                       ->property("materialTint").value<QColor>();
+        for (QObject *const section : groupedFields) {
+            QVERIFY(section->metaObject()->indexOfProperty("backdropSource") >= 0);
+            QVERIFY(section->metaObject()->indexOfProperty("captureActive") >= 0);
+            QVERIFY(section->metaObject()->indexOfProperty("density") >= 0);
+            QVERIFY(section->metaObject()->indexOfProperty("cornerRadius") >= 0);
+            QCOMPARE(section->property("backdropMode").toInt(), 1);
+            QCOMPARE(section->property("externalBackdropReady").toBool(), true);
+            QCOMPARE(section->property("captureEnabled").toBool(), false);
+            QCOMPARE(section->property("captureActive").toBool(), false);
+            QCOMPARE(section->property("elevation").toInt(), 0);
+            QCOMPARE(section->property("materialRole").toInt(), sectionRole);
+            QCOMPARE(
+                section->property("materialStrength").toReal(), sectionStrength
+            );
+            QCOMPARE(
+                section->property("materialTint").value<QColor>(), sectionTint
+            );
+            QCOMPARE(
+                section->findChildren<QObject *>(
+                    QStringLiteral("celestina-compositor-glass-region")
+                ).size(),
+                0
+            );
+        }
+        QVERIFY(window->findChild<QObject *>(
+            QStringLiteral("celestina-menu-header")
+        ));
+        QVERIFY(!window->findChild<QObject *>(
+            QStringLiteral("celestina-menu-exterior-shadow")
+        ));
+
+        // The compositor owns the one blur sample. The shared GlassSurface
+        // renderer adds the denser content material without starting a QML
+        // capture or publishing another compositor region. Offscreen still
+        // cannot claim how Niri renders the final sample.
+        QObject *const bodyTint = window->findChild<QObject *>(
+            QStringLiteral("celestina-menu-body-tint")
+        );
+        QVERIFY(bodyTint);
+        QVERIFY(bodyTint->property("visible").toBool());
+        QCOMPARE(bodyTint->property("backdropMode").toInt(), 1);
+        QCOMPARE(bodyTint->property("externalBackdropReady").toBool(), true);
+        QCOMPARE(bodyTint->property("captureEnabled").toBool(), false);
+        QCOMPARE(bodyTint->property("captureActive").toBool(), false);
+        QCOMPARE(bodyTint->property("elevation").toInt(), 0);
+        QVERIFY(bodyTint->property("materialRole").toInt() != sectionRole);
+        QVERIFY(
+            bodyTint->property("materialStrength").toReal() < sectionStrength
+        );
+        const QColor bodyColor = bodyTint->property("materialTint").value<QColor>();
+        const QColor sectionColor = sectionTint;
+        QVERIFY(bodyColor.isValid());
+        QVERIFY(sectionColor.isValid());
+        QVERIFY(bodyColor.lightnessF() > 0.9);
+        QVERIFY(sectionColor.lightnessF() < 0.1);
+        const qreal bodyDensity = bodyColor.alphaF()
+                                  * bodyTint->property("materialOpacity").toReal()
+                                  * bodyTint->property("materialStrength").toReal();
+        const qreal sectionDensity = sectionColor.alphaF()
+                                     * groupedFields.constFirst()
+                                           ->property("materialOpacity").toReal()
+                                     * sectionStrength;
+        const qreal compositeDensity = bodyDensity + sectionDensity
+                                       - bodyDensity * sectionDensity;
+        QVERIFY(bodyDensity < 0.04);
+        QVERIFY(sectionDensity > 0.55);
+        QVERIFY(sectionDensity < 0.70);
+        QVERIFY(compositeDensity < 0.72);
+        QVERIFY(bodyDensity < sectionDensity);
+
+        QObject *const hiddenMenuBackground = menu->property("background")
+                                                   .value<QObject *>();
+        QVERIFY(hiddenMenuBackground);
+        QCOMPARE(hiddenMenuBackground->property("visible").toBool(), false);
+        QCOMPARE(hiddenMenuBackground->property("elevation").toInt(), 0);
+
+        QQuickItem *firstRow = nullptr;
+        QMetaObject::invokeMethod(
+            menu, "itemAt", Q_RETURN_ARG(QQuickItem *, firstRow), Q_ARG(int, 0)
+        );
+        QVERIFY(firstRow);
+        QCOMPARE(
+            firstRow->findChildren<QObject *>(
+                QStringLiteral("celestina-menu-section")
+            ).size(),
+            1
+        );
+    }
+}
+
+void IndicatorMenuTest::theTrayMenuUsesTheSameVeloCarrier()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+
+    QQmlComponent component(&engine, sourceFor(QStringLiteral("TrayMenu")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    const QVariantMap entry {
+        {QStringLiteral("id"), 7},
+        {QStringLiteral("label"), QStringLiteral("Open")},
+        {QStringLiteral("enabled"), true},
+        {QStringLiteral("separator"), false},
+        {QStringLiteral("depth"), 0},
+        {QStringLiteral("toggleType"), QString()},
+        {QStringLiteral("toggleState"), 0},
+    };
+    std::unique_ptr<QObject> owner(component.createWithInitialProperties({
+        {QStringLiteral("reducedMotion"), true},
+        {QStringLiteral("outputName"), QStringLiteral("test-output")},
+        {QStringLiteral("entries"), QVariantList {entry}},
+    }));
+    auto *window = qobject_cast<QQuickWindow *>(owner.get());
+    QVERIFY2(window, qPrintable(component.errorString()));
+    window->resize(outputWidth, outputHeight);
+    window->setProperty("menuX", 1600);
+    window->setProperty("menuY", 40);
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+
+    QCOMPARE(
+        window->findChildren<QObject *>(
+            QStringLiteral("celestina-compositor-glass-region")
+        ).size(),
+        1
+    );
+    QVERIFY(window->findChild<QObject *>(
+        QStringLiteral("celestina-menu-header")
+    ));
+    QCOMPARE(window->property("itemSpacing").toInt(), 8);
+    QCOMPARE(window->property("headerBodyGap").toInt(), 12);
+    QCOMPARE(window->property("rowVerticalInset").toInt(), 4);
+    QCOMPARE(
+        window->findChildren<QObject *>(
+            QStringLiteral("celestina-menu-section")
+        ).size(),
+        2
+    );
+    QTRY_COMPARE(window->property("glassRegions").toList().size(), 1);
+    QObject *const bodyMaterial = window->findChild<QObject *>(
+        QStringLiteral("celestina-menu-body-tint")
+    );
+    QVERIFY(bodyMaterial);
+    const QList<QObject *> sections = window->findChildren<QObject *>(
+        QStringLiteral("celestina-menu-section")
+    );
+    QVERIFY(!sections.isEmpty());
+    const qreal sectionStrength = sections.constFirst()
+                                      ->property("materialStrength").toReal();
+    QVERIFY(
+        bodyMaterial->property("materialStrength").toReal() < sectionStrength
+    );
+    for (QObject *const section : sections) {
+        QCOMPARE(section->property("captureActive").toBool(), false);
+        QCOMPARE(section->property("elevation").toInt(), 0);
+        QCOMPARE(
+            section->property("materialStrength").toReal(), sectionStrength
+        );
     }
 }
 
@@ -368,7 +638,7 @@ void IndicatorMenuTest::theWholeMenuIsReachableFromTheKeyboard()
     QQmlEngine engine;
     engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
 
-    for (const QString &kind : kinds()) {
+    for (const QString &kind : softMenuKinds()) {
         std::unique_ptr<QObject> owner;
         QQuickWindow *const window = openMenu(engine, kind, owner);
         QVERIFY2(window, qPrintable(kind));
@@ -377,7 +647,7 @@ void IndicatorMenuTest::theWholeMenuIsReachableFromTheKeyboard()
         QVERIFY(menu);
         QVERIFY(!menu->property("modal").toBool());
         const int count = menu->property("count").toInt();
-        // Every menu has at least a line about its state and a refresh row.
+        // Every menu has semantic context and at least one enabled action.
         QVERIFY2(count >= 2, qPrintable(kind + QStringLiteral(": %1").arg(count)));
 
         // Arrowing down moves the highlight onto a row that can be activated,
@@ -415,7 +685,7 @@ void IndicatorMenuTest::everyRowNamesItselfAndItsState()
     QQmlEngine engine;
     engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
 
-    for (const QString &kind : kinds()) {
+    for (const QString &kind : softMenuKinds()) {
         std::unique_ptr<QObject> owner;
         QQuickWindow *const window = openMenu(engine, kind, owner);
         QVERIFY2(window, qPrintable(kind));
@@ -470,6 +740,7 @@ QQuickWindow *openAgainst(
 
     owner.reset(menu.createWithInitialProperties({
         {QStringLiteral("reducedMotion"), true},
+        {QStringLiteral("outputName"), QStringLiteral("test-output")},
         {QStringLiteral("providerSource"), QVariant::fromValue<QObject *>(bridge)},
     }));
     auto *window = qobject_cast<QQuickWindow *>(owner.get());
@@ -495,6 +766,71 @@ QQuickItem *lastRow(QObject *menu)
     return row;
 }
 } // namespace
+
+void IndicatorMenuTest::wallpaperPagesStayOnOneBoundedCatalogue()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+    FakeBridge bridge;
+    const QVariantMap image {
+        {QStringLiteral("id"), QStringLiteral("wallpaper-000.png")},
+        {QStringLiteral("name"), QStringLiteral("wallpaper-000.png")},
+        {QStringLiteral("previewUrl"), QStringLiteral("file:///pictures/wallpaper-000.png")},
+        {QStringLiteral("revision"), QStringLiteral("10:1")},
+    };
+    bridge.publish({
+        {QStringLiteral("wallpaper-gallery"),
+         QVariantMap {
+             {QStringLiteral("state"), QStringLiteral("ready")},
+             {QStringLiteral("folder"), QStringLiteral("/pictures")},
+             {QStringLiteral("folderUrl"), QStringLiteral("file:///pictures")},
+             {QStringLiteral("catalogue"), QStringLiteral("7")},
+             {QStringLiteral("page"), 1},
+             {QStringLiteral("pageCount"), 2},
+             {QStringLiteral("total"), 65},
+             {QStringLiteral("hasPrevious"), false},
+             {QStringLiteral("hasNext"), true},
+             {QStringLiteral("images"), QVariantList {image}},
+             {QStringLiteral("truncated"), true},
+             {QStringLiteral("skipped"), 0},
+         }},
+    });
+
+    std::unique_ptr<QObject> owner;
+    QQuickWindow *const window = openAgainst(
+        engine, QStringLiteral("wallpaper"), &bridge, owner
+    );
+    QVERIFY(window);
+    QCOMPARE(window->property("page").toInt(), 1);
+    QCOMPARE(window->property("pageCount").toInt(), 2);
+    QCOMPARE(window->property("totalImages").toInt(), 65);
+    QVERIFY(window->findChild<QObject *>(
+        QStringLiteral("celestina-wallpaper-previous-page")
+    ));
+    QVERIFY(window->findChild<QObject *>(
+        QStringLiteral("celestina-wallpaper-next-page")
+    ));
+
+    QVariant summary;
+    QVERIFY(QMetaObject::invokeMethod(
+        window, "folderSummary", Q_RETURN_ARG(QVariant, summary)
+    ));
+    QVERIFY(!summary.toString().contains(QStringLiteral("limitada")));
+    QVERIFY(QMetaObject::invokeMethod(window, "nextPage"));
+    QTRY_COMPARE(
+        bridge.sent,
+        QStringList {QStringLiteral("wallpaper-gallery/set-page")}
+    );
+    QCOMPARE(bridge.sentOptions.size(), 1);
+    QCOMPARE(
+        bridge.sentOptions.constFirst().value(QStringLiteral("catalogue")).toString(),
+        QStringLiteral("7")
+    );
+    QCOMPARE(
+        bridge.sentOptions.constFirst().value(QStringLiteral("page")).toInt(),
+        2
+    );
+}
 
 // The defect this unit was reopened for. A menu row is a `MenuItem`: activating
 // one closes its `Menu`, the surface is dismissed and the host destroys the
@@ -651,7 +987,7 @@ void IndicatorMenuTest::aFailureOutlivesTheRowThatWouldHaveShownIt()
         QMetaObject::invokeMethod(
             menu, "itemAt", Q_RETURN_ARG(QQuickItem *, row), Q_ARG(int, index)
         );
-        if (row && row->property("text").toString().contains(QStringLiteral("descartar"))) {
+        if (row && row->property("note").toString().contains(QStringLiteral("descartar"))) {
             failure = row;
             break;
         }
@@ -666,6 +1002,65 @@ void IndicatorMenuTest::aFailureOutlivesTheRowThatWouldHaveShownIt()
     // isolates which durable target this new row dismisses.
     QVERIFY(QMetaObject::invokeMethod(failure, "triggered"));
     QTRY_COMPARE(bridge.requests()->failures(QStringLiteral("network")).size(), 0);
+}
+
+void IndicatorMenuTest::aBluetoothFailureCanBeDismissed()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+    FakeBridge bridge;
+    bridge.publish({
+        {QStringLiteral("bluetooth"),
+         QVariantMap {
+             {QStringLiteral("adapter"), QStringLiteral("on")},
+             {QStringLiteral("devicesState"), QStringLiteral("fresh")},
+             {QStringLiteral("devices"), QVariantList {}},
+         }},
+    });
+
+    bridge.requests()->send(
+        QStringLiteral("bluetooth"), QStringLiteral("connect-known"),
+        {{QStringLiteral("id"), QStringLiteral("gone-device")}},
+        QStringLiteral("device:gone-device"), RequestLedger::ConfirmedPolicy
+    );
+    QTest::ignoreMessage(
+        QtWarningMsg,
+        "Celestina's provider request failed: the device disappeared"
+    );
+    bridge.requests()->result(
+        1, QStringLiteral("failed"), QStringLiteral("the device disappeared")
+    );
+
+    std::unique_ptr<QObject> owner;
+    QQuickWindow *const window = openAgainst(
+        engine, QStringLiteral("bluetooth"), &bridge, owner
+    );
+    QVERIFY(window);
+    QObject *const menu = window->property("menu").value<QObject *>();
+    QVERIFY(menu);
+
+    QQuickItem *failure = nullptr;
+    const int count = menu->property("count").toInt();
+    for (int index = 0; index < count; ++index) {
+        QQuickItem *row = nullptr;
+        QMetaObject::invokeMethod(
+            menu, "itemAt", Q_RETURN_ARG(QQuickItem *, row), Q_ARG(int, index)
+        );
+        if (row && row->property("note").toString().contains(
+                       QStringLiteral("descartar")
+                   )) {
+            failure = row;
+            break;
+        }
+    }
+    QVERIFY(failure);
+    QVERIFY(failure->property("enabled").toBool());
+    QCOMPARE(bridge.requests()->failures(QStringLiteral("bluetooth")).size(), 1);
+
+    QVERIFY(QMetaObject::invokeMethod(failure, "triggered"));
+    QTRY_COMPARE(
+        bridge.requests()->failures(QStringLiteral("bluetooth")).size(), 0
+    );
 }
 
 // One ledger, two providers, and neither answers for the other.
@@ -729,9 +1124,71 @@ void IndicatorMenuTest::theControlCentreStopsAskingWhenTheHelperAccepts()
 
     std::unique_ptr<QObject> root(centre.createWithInitialProperties({
         {QStringLiteral("reducedMotion"), true},
+        {QStringLiteral("outputName"), QStringLiteral("test-output")},
         {QStringLiteral("providerSource"), QVariant::fromValue<QObject *>(&bridge)},
     }));
     QVERIFY(root);
+    auto *const centreWindow = qobject_cast<QQuickWindow *>(root.get());
+    QVERIFY(centreWindow);
+    centreWindow->resize(outputWidth, outputHeight);
+    const QRect opener(900, 12, 30, 30);
+    centreWindow->setProperty("anchoredFromPanel", true);
+    centreWindow->setProperty("openerRect", opener);
+    QCOMPARE(
+        centreWindow->property("cardY").toInt(),
+        opener.y() + opener.height()
+            + centreWindow->property("anchorGap").toInt()
+    );
+    QVERIFY(
+        centreWindow->property("cardY").toInt()
+            + centreWindow->property("cardHeight").toInt()
+        <= outputHeight
+    );
+    QObject *const calendar = root->findChild<QObject *>(
+        QStringLiteral("celestina-control-centre-calendar")
+    );
+    QVERIFY(calendar);
+    const QList<QObject *> calendarGlass = calendar->findChildren<QObject *>(
+        QStringLiteral("celestina-compositor-glass-region")
+    );
+    QCOMPARE(calendarGlass.size(), 0);
+    const QList<QObject *> calendarSections = calendar->findChildren<QObject *>(
+        QStringLiteral("celestina-menu-section")
+    );
+    QCOMPARE(calendarSections.size(), 1);
+    QVERIFY(calendar->property("height").toReal() > 30.0);
+    QCOMPARE(
+        calendarSections.constFirst()->property("height").toReal(),
+        calendar->property("height").toReal()
+    );
+    QVERIFY(
+        calendarSections.constFirst()->property("radius").toReal()
+        < calendar->property("height").toReal() / 2.0
+    );
+    const QList<QObject *> centreGlass = root->findChildren<QObject *>(
+        QStringLiteral("celestina-compositor-glass-region")
+    );
+    QCOMPARE(centreGlass.size(), 1);
+    QCOMPARE(centreWindow->property("cardWidth").toInt(), 530);
+    QCOMPARE(centreWindow->property("cardHeight").toInt(), 732);
+    QTRY_COMPARE(centreWindow->property("glassRegions").toList().size(), 1);
+    QCOMPARE(
+        centreWindow->property("glassRegions").toList()
+            .constFirst().toMap().value(QStringLiteral("radius")).toInt(),
+        20
+    );
+    QVERIFY(root->findChild<QObject *>(
+        QStringLiteral("celestina-control-centre-quick-controls")
+    ));
+    QVERIFY(root->findChild<QObject *>(
+        QStringLiteral("celestina-control-centre-connectivity")
+    ));
+    QCOMPARE(
+        root->findChildren<QObject *>(
+            QStringLiteral("celestina-menu-section")
+        ).size(),
+        4
+    );
 
     QMetaObject::invokeMethod(
         root.get(), "send",

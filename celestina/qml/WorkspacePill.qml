@@ -15,6 +15,7 @@ Item {
     // active, focused, urgent and requestState. `var` is necessary because QML
     // has no typed map-list.
     required property var workspace
+    required property BackdropInk ink
     // A click is a request. The pill asks; whoever owns the provider sends it,
     // and only the next compositor snapshot decides what this shows.
     signal focusRequested(string output, int index)
@@ -64,31 +65,41 @@ Item {
         anchors.centerIn: parent
         width: pill.workspace.focused ? 12 : 10
         height: width
+        scale: focusArea.pressed ? 0.82 : 1
         radius: width / 2
         color: {
             if (pill.requestState === "failed" || pill.workspace.urgent)
-                return CelestinaTheme.danger;
+                return pill.ink.danger;
 
             if (pill.workspace.focused)
-                return CelestinaTheme.accentLink;
+                return pill.ink.accent;
 
             if (pill.occupied)
-                return CelestinaTheme.text;
+                return pill.ink.primary;
 
-            return CelestinaTheme.textMuted;
+            return pill.ink.muted;
         }
         opacity: pill.requestState === "pending"
                  ? CelestinaTheme.mutedContentOpacity
+                 : focusArea.pressed ? CelestinaTheme.disabledContentOpacity
                  : focusArea.containsMouse && !pill.workspace.focused ? 0.82 : 1
         border.width: pill.workspace.focused ? CelestinaTheme.borderHairline : 0
         border.color: {
             if (pill.requestState === "failed")
-                return CelestinaTheme.dangerBorder;
+                return pill.ink.danger;
 
             if (pill.requestState === "confirmed")
-                return CelestinaTheme.text;
+                return pill.ink.primary;
 
-            return CelestinaTheme.accentSoftBorder;
+            return pill.ink.focus;
+        }
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: CelestinaTheme.reducedMotion
+                          ? 0 : CelestinaTheme.motionFast
+                easing.type: CelestinaTheme.easeStandard
+            }
         }
     }
 
@@ -99,11 +110,12 @@ Item {
         height: 5
         radius: CelestinaTheme.radiusPill
         visible: pill.workspace.urgent
-        color: CelestinaTheme.danger
+        color: pill.ink.danger
     }
 
     MouseArea {
         id: focusArea
+        objectName: "celestina-workspace-pointer"
 
         anchors.fill: parent
         hoverEnabled: true

@@ -1,8 +1,7 @@
 // The desktop-entry launcher: `Mod+Space`, a search field and a keyboard-driven
-// list of results, in its own compositor surface — the same
-// `OverlayController`/`OverlaySurface` mechanics as the panel's menu, but
-// centered rather than anchored, and answering the keyboard the whole time it
-// is open rather than only until a click.
+// list of results, in its own compositor surface. A keybind or command keeps it
+// centred; the permanent panel button gives the same OverlayController a real
+// opener rectangle. It answers the keyboard for its complete open lifetime.
 //
 // Every provider verb this component sends — `query`, `launch`, `web-search`
 // — goes straight to `providerSource`, exactly the way every bar widget
@@ -23,11 +22,23 @@ Window {
 
     required property var providerSource
     required property bool reducedMotion
+    property alias anchoredFromPanel: placement.anchoredFromPanel
+    property alias openerRect: placement.openerRect
+    property alias compositorBlurAvailable: card.compositorBlurAvailable
+    property alias glassRects: card.glassRects
+    property alias glassRegions: card.glassRegions
 
     signal dismissed()
 
+    BackdropInk {
+        id: backdropInk
+    }
+
     readonly property int cardWidth: 620
     readonly property int cardHeight: 440
+    readonly property int anchorGap: placement.anchorGap
+    readonly property real cardX: placement.x
+    readonly property real cardY: placement.y
 
     readonly property var launcherState: ProviderReading.read(overlay.providerSource, "launcher")
     readonly property bool ready: launcherState !== undefined
@@ -58,6 +69,21 @@ Window {
         searchField.forceActiveFocus();
     }
 
+    onVisibleChanged: {
+        if (visible)
+            Qt.callLater(card.reveal);
+    }
+
+    PanelPopupPlacement {
+        id: placement
+
+        surfaceWidth: overlay.width
+        surfaceHeight: overlay.height
+        contentWidth: overlay.cardWidth
+        contentHeight: overlay.cardHeight
+        edgeInset: 0
+    }
+
     // Not `onHitsChanged`: `hits` is a `var` sliced out of `providerSource`'s
     // aggregate `providers` map, which changes reference every time *any* bar
     // provider republishes — CPU, audio, whatever's next — even when the
@@ -82,8 +108,9 @@ Window {
             if (state === "accepted") {
                 overlay.dismissed();
             } else {
-                overlay.errorText = reason.length > 0
-                        ? reason : qsTr("No se pudo iniciar la aplicación");
+                // Provider reasons are English diagnostics by contract. The
+                // surface owns product copy and never paints those bytes.
+                overlay.errorText = qsTr("No se pudo iniciar la aplicación");
             }
         }
     }
@@ -128,118 +155,148 @@ Window {
 
         width: overlay.cardWidth
         height: overlay.cardHeight
-        anchors.centerIn: parent
+        x: overlay.cardX
+        y: overlay.cardY
 
-        // Anything the card itself does not handle stops here rather than
-        // falling through to the dismissal area behind it. It is the first
-        // child, so every control declared after it is still reached first.
-        MouseArea {
-            anchors.fill: parent
-            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-        }
-
-        GlassCard {
+        SoftOverlayCard {
             id: card
+            ink: backdropInk
             anchors.fill: parent
-            backdropSource: scene
-            Accessible.role: Accessible.Dialog
-            Accessible.name: qsTr("Buscador de aplicaciones")
+            reducedMotion: overlay.reducedMotion
+            accessibleName: qsTr("Buscador de aplicaciones")
 
             Item {
                 anchors.fill: parent
-                anchors.margins: CelestinaTheme.spaceLg
+                anchors.margins: CelestinaTheme.spaceMd
 
-                // Everything above the list lays itself out top-down and only
-                // takes the height it needs; the list gets the rest. Doing
-                // this by anchors rather than one `Column` including the list
-                // means the list's height never has to be computed by hand
-                // from its siblings — two of which (the error line, the
-                // "still indexing" line) can be visible at once while typing
-                // during the narrow startup window.
-                Column {
-                    id: status
+                MenuHeader {
+                    id: launcherHeader
 
                     anchors.top: parent.top
                     anchors.left: parent.left
                     anchors.right: parent.right
-                    spacing: CelestinaTheme.spaceMd
-
-                    CelestinaTextField {
-                        id: searchField
-
-                        width: parent.width
-                        shape: CelestinaTextField.Search
-                        placeholderText: qsTr("Buscar aplicaciones…")
-                        Accessible.name: qsTr("Buscar aplicaciones")
-                        onTextChanged: overlay.sendQuery(text)
-
-                        Keys.onPressed: function(event) {
-                            if (event.key === Qt.Key_Escape) {
-                                overlay.dismissed();
-                            } else if (event.key === Qt.Key_Down) {
-                                if (overlay.rowCount > 0)
-                                    overlay.currentIndex = Math.min(
-                                            overlay.rowCount - 1, overlay.currentIndex + 1);
-                            } else if (event.key === Qt.Key_Up) {
-                                if (overlay.rowCount > 0)
-                                    overlay.currentIndex = Math.max(0, overlay.currentIndex - 1);
-                            } else if (event.key === Qt.Key_Return
-                                       || event.key === Qt.Key_Enter) {
-                                overlay.activateCurrent();
-                            } else {
-                                return;
-                            }
-                            event.accepted = true;
+                    ink: backdropInk
+                    title: qsTr("Aplicaciones")
+                    subtitle: {
+                        if (!overlay.ready)
+                            return qsTr("Preparando el índice");
+                        if (overlay.truncated) {
+                            return qsTr("%n resultado(s), lista parcial", "",
+                                        overlay.rowCount);
                         }
+                        return qsTr("%n resultado(s)", "", overlay.rowCount);
                     }
+                    iconName: "app-window"
+                }
 
-                    Text {
-                        width: parent.width
-                        visible: overlay.errorText.length > 0
-                        text: overlay.errorText
-                        color: CelestinaTheme.dangerFillInk
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontCaption
-                        wrapMode: Text.Wrap
-                    }
+                Item {
+                    id: searchSection
 
-                    Text {
-                        width: parent.width
-                        visible: overlay.ready && overlay.rowCount === 0
-                        text: qsTr("Sin resultados")
-                        color: CelestinaTheme.textMuted
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontBody
-                    }
+                    anchors.top: launcherHeader.bottom
+                    anchors.topMargin: CelestinaTheme.spaceSm
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: status.implicitHeight + CelestinaTheme.spaceMd * 2
 
-                    Text {
-                        width: parent.width
-                        visible: !overlay.ready
-                        text: qsTr("Preparando el índice de aplicaciones…")
-                        color: CelestinaTheme.textMuted
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontBody
+                    MenuSection { ink: backdropInk }
+
+                    // Everything above the list lays itself out top-down and
+                    // takes only the height it needs. The results section gets
+                    // the remainder without coupling its size to optional
+                    // status lines.
+                    Column {
+                        id: status
+
+                        anchors.fill: parent
+                        anchors.margins: CelestinaTheme.spaceMd
+                        spacing: CelestinaTheme.spaceMd
+
+                        BackdropTextField {
+                            id: searchField
+
+                            width: parent.width
+                            ink: backdropInk
+                            shape: CelestinaTextField.Search
+                            color: backdropInk.primary
+                            placeholderTextColor: backdropInk.muted
+                            placeholderText: qsTr("Buscar aplicaciones…")
+                            Accessible.name: qsTr("Buscar aplicaciones")
+                            onTextChanged: overlay.sendQuery(text)
+
+                            Keys.onPressed: function(event) {
+                                if (event.key === Qt.Key_Escape) {
+                                    overlay.dismissed();
+                                } else if (event.key === Qt.Key_Down) {
+                                    if (overlay.rowCount > 0)
+                                        overlay.currentIndex = Math.min(
+                                            overlay.rowCount - 1, overlay.currentIndex + 1);
+                                } else if (event.key === Qt.Key_Up) {
+                                    if (overlay.rowCount > 0)
+                                        overlay.currentIndex = Math.max(0, overlay.currentIndex - 1);
+                                } else if (event.key === Qt.Key_Return
+                                           || event.key === Qt.Key_Enter) {
+                                    overlay.activateCurrent();
+                                } else {
+                                    return;
+                                }
+                                event.accepted = true;
+                            }
+                        }
+
+                        Text {
+                            width: parent.width
+                            visible: overlay.errorText.length > 0
+                            text: overlay.errorText
+                            color: backdropInk.danger
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontCaption
+                            wrapMode: Text.Wrap
+                        }
+
+                        Text {
+                            width: parent.width
+                            visible: overlay.ready && overlay.rowCount === 0
+                            text: qsTr("Sin resultados")
+                            color: backdropInk.muted
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontBody
+                        }
+
+                        Text {
+                            width: parent.width
+                            visible: !overlay.ready
+                            text: qsTr("Preparando el índice de aplicaciones…")
+                            color: backdropInk.muted
+                            font.family: CelestinaTheme.sansFamily
+                            font.pixelSize: CelestinaTheme.fontBody
+                        }
                     }
                 }
 
-                ListView {
-                    id: resultList
-
-                    anchors.top: status.bottom
-                    anchors.topMargin: CelestinaTheme.spaceMd
+                Item {
+                    anchors.top: searchSection.bottom
+                    anchors.topMargin: CelestinaTheme.spaceSm
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
-                    clip: true
-                    spacing: 2
-                    visible: overlay.rowCount > 0
-                    model: overlay.rowCount
-                    currentIndex: overlay.currentIndex
-                    onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
-                    Accessible.role: Accessible.List
-                    Accessible.name: qsTr("Resultados de la búsqueda")
 
-                    delegate: Item {
+                    MenuSection { ink: backdropInk }
+
+                    ListView {
+                        id: resultList
+
+                        anchors.fill: parent
+                        anchors.margins: CelestinaTheme.spaceSm
+                        clip: true
+                        spacing: 2
+                        visible: overlay.rowCount > 0
+                        model: overlay.rowCount
+                        currentIndex: overlay.currentIndex
+                        onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
+                        Accessible.role: Accessible.List
+                        Accessible.name: qsTr("Resultados de la búsqueda")
+
+                        delegate: Item {
                         id: row
 
                         required property int index
@@ -257,20 +314,57 @@ Window {
                                 ? qsTr("Buscar «%1» en la Web").arg(overlay.queryText)
                                 : entry.name
                         Accessible.selected: row.current
+                        Accessible.onPressAction: {
+                            overlay.currentIndex = row.index;
+                            overlay.activateCurrent();
+                        }
 
                         Rectangle {
                             anchors.fill: parent
                             radius: CelestinaTheme.radiusSm
-                            color: row.current
-                                   ? CelestinaTheme.badgeAccentFill
+                            color: rowMouse.pressed
+                                   ? backdropInk.selectedFill
+                                   : row.current
+                                   ? backdropInk.selectedRestFill
                                    : rowMouse.containsMouse
-                                     ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
+                                     ? backdropInk.hoverFill : CelestinaTheme.clear
+                        }
+
+                        CelestinaIcon {
+                            id: resultIcon
+
+                            anchors.left: parent.left
+                            anchors.leftMargin: CelestinaTheme.spaceSm
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: CelestinaTheme.iconSm
+                            height: width
+                            name: row.isWebSearch ? "search" : "app-window"
+                            fallbackName: "app-window"
+                            tintOverride: row.current ? backdropInk.accent
+                                                      : backdropInk.muted
+                            Accessible.ignored: true
+                        }
+
+                        CelestinaIcon {
+                            id: resultAction
+
+                            anchors.right: parent.right
+                            anchors.rightMargin: CelestinaTheme.spaceSm
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: CelestinaTheme.iconSm
+                            height: width
+                            name: "go-next"
+                            fallbackName: "go-next"
+                            tintOverride: backdropInk.faint
+                            Accessible.ignored: true
                         }
 
                         Column {
-                            x: CelestinaTheme.spaceSm
+                            anchors.left: resultIcon.right
+                            anchors.leftMargin: CelestinaTheme.spaceSm
+                            anchors.right: resultAction.left
+                            anchors.rightMargin: CelestinaTheme.spaceSm
                             anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width - CelestinaTheme.spaceSm * 2
 
                             Text {
                                 width: parent.width
@@ -281,7 +375,8 @@ Window {
                                 // package installed it; its name is shown as
                                 // characters, not interpreted.
                                 textFormat: Text.PlainText
-                                color: row.current ? CelestinaTheme.accent : CelestinaTheme.text
+                                color: row.current ? backdropInk.accent
+                                                   : backdropInk.primary
                                 font.family: CelestinaTheme.sansFamily
                                 font.pixelSize: CelestinaTheme.fontRowSecondary
                                 elide: Text.ElideRight
@@ -291,7 +386,7 @@ Window {
                                 visible: text.length > 0
                                 text: row.subtitle
                                 textFormat: Text.PlainText
-                                color: CelestinaTheme.textMuted
+                                color: backdropInk.muted
                                 font.family: CelestinaTheme.sansFamily
                                 font.pixelSize: CelestinaTheme.fontMini
                                 elide: Text.ElideRight
@@ -306,6 +401,7 @@ Window {
                                 overlay.currentIndex = row.index;
                                 overlay.activateCurrent();
                             }
+                        }
                         }
                     }
                 }

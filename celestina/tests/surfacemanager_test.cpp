@@ -3,16 +3,152 @@
 
 #include <QQmlComponent>
 #include <QQmlEngine>
+#include <QCoreApplication>
+#include <QImage>
+#include <QQuickItem>
+#include <QQuickWindow>
 #include <QScreen>
+#include <QTemporaryDir>
 #include <QUrl>
+#include <QVariantList>
 #include <QVariantMap>
 #include <QWindow>
 
 #include "overlaysurface.h"
+#include "panelblurcontroller.h"
 #include "panelmenucontroller.h"
+#include "panelpopupplacement.h"
 #include "panelmenusurface.h"
 #include "surfacemanager.h"
+#include "wallpaperidentity.h"
 #include "wallpapermanager.h"
+
+namespace {
+class FakeTraySource final : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(QVariantList items READ items NOTIFY changed)
+
+public:
+    QVariantList items() const
+    {
+        return QVariantList {
+            QVariantMap {
+                {QStringLiteral("service"), QStringLiteral(":1.83")},
+                {QStringLiteral("path"),
+                 QStringLiteral("/org/chromium/StatusNotifierItem/1")},
+                {QStringLiteral("title"), QStringLiteral("Slack")},
+                {QStringLiteral("status"), QStringLiteral("active")},
+                {QStringLiteral("iconSource"), QString()},
+            },
+        };
+    }
+
+signals:
+    void changed();
+};
+
+class FakeTrayProviderSource final : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(QVariantMap providers READ providers CONSTANT)
+    Q_PROPERTY(qulonglong revision READ revision CONSTANT)
+    Q_PROPERTY(QObject *requests READ requests CONSTANT)
+
+public:
+    QVariantMap providers() const
+    {
+        return QVariantMap {
+            {QStringLiteral("settings"),
+             QVariantMap {{QStringLiteral("trayItems"), QVariantList()}}},
+        };
+    }
+
+    qulonglong revision() const { return 1; }
+    QObject *requests() const { return nullptr; }
+};
+
+class FakePanelWindow final : public QWindow
+{
+    Q_OBJECT
+
+public:
+    Q_INVOKABLE void openWallpaperFolderPicker()
+    {
+        m_wallpaperFolderPickerOpened = true;
+        emit wallpaperFolderPickerOpened();
+    }
+
+    bool hasOpenedWallpaperFolderPicker() const
+    {
+        return m_wallpaperFolderPickerOpened;
+    }
+
+signals:
+    void wallpaperFolderPickerOpened();
+
+private:
+    bool m_wallpaperFolderPickerOpened = false;
+};
+
+QWindow *windowWithProperty(const char *propertyName)
+{
+    for (QWindow *const window : QGuiApplication::topLevelWindows()) {
+        if (window->property(propertyName).isValid())
+            return window;
+    }
+
+    return nullptr;
+}
+
+QVariantList trayEntries(int count = 1)
+{
+    QVariantList entries;
+    entries.reserve(count);
+    for (int index = 0; index < count; ++index) {
+        entries.append(QVariantMap {
+            {QStringLiteral("id"), 7 + index},
+            {QStringLiteral("label"),
+             QStringLiteral("Action %1").arg(index + 1)},
+            {QStringLiteral("enabled"), true},
+            {QStringLiteral("separator"), false},
+            {QStringLiteral("depth"), 0},
+            {QStringLiteral("iconName"), QString()},
+            {QStringLiteral("toggleType"), QString()},
+            {QStringLiteral("toggleState"), 0},
+        });
+    }
+    return entries;
+}
+
+void registerPanelMenuTypesFromSource()
+{
+    static bool registered = false;
+    if (registered)
+        return;
+    registered = true;
+
+    const QUrl root = QUrl::fromLocalFile(QStringLiteral(CELESTINA_QML_DIR "/"));
+    for (const QString &name : {
+             QStringLiteral("TrayMenu"),
+             QStringLiteral("TrayItemsMenu"),
+             QStringLiteral("NetworkMenu"),
+             QStringLiteral("BluetoothMenu"),
+             QStringLiteral("PerformanceMenu"),
+             QStringLiteral("CaptureMenu"),
+             QStringLiteral("WallpaperMenu"),
+             QStringLiteral("WorkspaceMap"),
+         }) {
+        qmlRegisterType(
+            root.resolved(QUrl(name + QStringLiteral(".qml"))),
+            "CelestinaDesktop",
+            1,
+            0,
+            name.toUtf8().constData()
+        );
+    }
+}
+} // namespace
 
 // Surface *mechanics* only. A platform without a compositor still creates,
 // configures, shows, hides and destroys windows, so the shared recipe's window
@@ -28,11 +164,19 @@ private slots:
     void theRecipeRefusesNothingToMap();
     void aPanelSurfaceKeepsItsHeightAndRefusesFocus();
     void aMenuSurfaceTakesFocusAndItsContentSize();
+    void aCardMenuUsesABoundedLayerSurface();
+    void aParentAndTrayChildCanStayMappedTogether();
     void theMenuRefusesToOpenTwiceAndSurvivesReopening();
     void theMenuReportsAndCleansUpAnExternalDismissal();
     void aClosedMenuLeavesNoWindowBehind();
     void theMenuIsOnUnlessTheEnvironmentTurnsItOff();
     void aMenuKeepsTheInvokingControlsAnchor();
+    void aTrayChildStaysAdjacentAndInsideTheOutput();
+    void anOverflowingTrayMenuUsesABoundedScrollableViewport();
+    void trayInventoryAndForeignMenuHaveIndependentLifecycles();
+    void wallpaperMenuHandsTheFolderChooserBackToThePermanentPanel();
+    void aTallGlassCardKeepsItsRoundedRectangle();
+    void anArmedBlurSurvivesLayerShellExposureLoss();
     void theMenuContentLoadsAndFitsItsSurface();
     void theMenuSurfaceIsBigEnoughToClickEveryItem();
     void theMapListsEveryWindowAndWalksThemWithTheKeyboard();
@@ -42,10 +186,12 @@ private slots:
     void theOverlayRefusesToOpenTwiceAndSurvivesReopening();
     void theOverlayReportsAndCleansUpAnExternalDismissal();
     void aClosedOverlayLeavesNoWindowBehind();
-    void theLauncherAndClipboardOverlaysLoadAndMap();
+    void thePanelOverlayPrototypeLoadsAndMaps();
     void aCornerSurfaceSitsUnderThePanelAndRefusesFocus();
     void aReadoutSurfaceSitsLowAndCentredSoItNeverCoversAToast();
     void aWallpaperCoversItsOutputAndReservesNothing();
+    void wallpaperIdentityRejectsMalformedOrDuplicateRows();
+    void wallpaperRevisionChangesTheQmlImageRequest();
 
 private:
     QWindow *makePanel()
@@ -163,10 +309,76 @@ void SurfaceManagerTest::aMenuSurfaceTakesFocusAndItsContentSize()
     expected |= LayerShellQt::Window::AnchorRight;
     QCOMPARE(layerWindow->anchors(), expected);
     QCOMPARE(layerWindow->desiredSize(), QSize(0, 0));
-    // Zero reserves nothing for the menu itself while still asking the
-    // compositor to place it after existing exclusive surfaces.
-    QCOMPARE(layerWindow->exclusionZone(), 0);
+    // The opener's real vertical coordinate is meaningful only in output
+    // space, so the prototype covers the panel strip instead of beginning
+    // below a guessed exclusive edge. It still reserves nothing.
+    QCOMPARE(layerWindow->exclusionZone(), -1);
     QCOMPARE(layerWindow->margins(), QMargins());
+}
+
+void SurfaceManagerTest::aCardMenuUsesABoundedLayerSurface()
+{
+    QWindow *const panel = makePanel();
+    QWindow *const content = makeContent();
+    const QSize contentSize = content->size();
+    const QSize outputSize = panel->screen()->geometry().size();
+    const QPoint requested(outputSize.width() + 100, outputSize.height() + 100);
+
+    PanelMenuSurface surface;
+    QVERIFY(surface.open(
+        content,
+        panel,
+        PanelMenuSurface::Coverage::Card,
+        requested
+    ));
+
+    auto *const layerWindow = LayerShellQt::Window::get(content);
+    QVERIFY(layerWindow);
+    auto expected = LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop);
+    expected |= LayerShellQt::Window::AnchorLeft;
+    QCOMPARE(layerWindow->anchors(), expected);
+    QCOMPARE(layerWindow->desiredSize(), contentSize);
+    QCOMPARE(
+        layerWindow->margins(),
+        QMargins(
+            qMax(0, outputSize.width() - contentSize.width()),
+            qMax(0, outputSize.height() - contentSize.height()),
+            0,
+            0
+        )
+    );
+    QCOMPARE(layerWindow->exclusionZone(), -1);
+    QVERIFY(!content->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
+}
+
+void SurfaceManagerTest::aParentAndTrayChildCanStayMappedTogether()
+{
+    QWindow *const panel = makePanel();
+    QPointer<QWindow> parentContent = makeContent();
+    QPointer<QWindow> childContent = makeContent();
+
+    PanelMenuSurface parent;
+    PanelMenuSurface child;
+    QVERIFY(parent.open(parentContent, panel));
+    QVERIFY(child.open(
+        childContent,
+        panel,
+        PanelMenuSurface::Coverage::Card,
+        QPoint(300, 120)
+    ));
+    QVERIFY(parent.isOpen());
+    QVERIFY(child.isOpen());
+    QCOMPARE(parent.window(), parentContent.data());
+    QCOMPARE(child.window(), childContent.data());
+
+    child.close();
+    QVERIFY(parent.isOpen());
+    QVERIFY(!child.isOpen());
+    QTRY_VERIFY(childContent.isNull());
+
+    parent.close();
+    QVERIFY(!parent.isOpen());
+    QTRY_VERIFY(parentContent.isNull());
 }
 
 void SurfaceManagerTest::theMenuRefusesToOpenTwiceAndSurvivesReopening()
@@ -245,19 +457,499 @@ void SurfaceManagerTest::theMenuIsOnUnlessTheEnvironmentTurnsItOff()
 void SurfaceManagerTest::aMenuKeepsTheInvokingControlsAnchor()
 {
     const QPoint outputOrigin(1920, 120);
-    const int shadowMargin = 18;
+    const QRect first = panelPopupOpenerOnOutput(
+        QRect(2380, 128, 30, 30), outputOrigin
+    );
+    QCOMPARE(first, QRect(460, 8, 30, 30));
+    QCOMPARE(panelPopupBodyOrigin(first, 320, 8), QPoint(314, 46));
+
+    // Both axes follow the invoking control inside the full-output surface; a
+    // stacked or resized panel therefore supplies geometry rather than a
+    // guessed height.
+    const QRect second = panelPopupOpenerOnOutput(
+        QRect(2512, 260, 30, 30), outputOrigin
+    );
+    QCOMPARE(second, QRect(592, 140, 30, 30));
+    QCOMPARE(panelPopupBodyOrigin(second, 320, 8), QPoint(446, 178));
+}
+
+void SurfaceManagerTest::aTrayChildStaysAdjacentAndInsideTheOutput()
+{
+    const QSize output(1920, 1080);
+    const QSize child(320, 460);
 
     QCOMPARE(
-        panelMenuOrigin(QPoint(2380, 164), outputOrigin, shadowMargin),
-        QPoint(442, -18)
+        adjacentTrayMenuOrigin(
+            QRect(1500, 48, 380, 620),
+            QPoint(1540, 220),
+            child,
+            output,
+            8
+        ),
+        QPoint(1172, 220)
     );
-    // Horizontal movement follows the invoking control. A nominal global Y
-    // cannot move the card because Wayland does not expose the compositor's
-    // actual stacked-panel Y; the menu surface's exclusive-zone-aware top does.
     QCOMPARE(
-        panelMenuOrigin(QPoint(2512, 197), outputOrigin, shadowMargin),
-        QPoint(574, -18)
+        adjacentTrayMenuOrigin(
+            QRect(40, 48, 380, 620),
+            QPoint(80, 900),
+            child,
+            output,
+            8
+        ),
+        QPoint(428, 620)
     );
+
+    // If neither side can contain it, the side with more room wins and the
+    // complete child is still clamped to the output.
+    QCOMPARE(
+        adjacentTrayMenuOrigin(
+            QRect(300, 48, 400, 620),
+            QPoint(500, -20),
+            QSize(760, 400),
+            QSize(1000, 700),
+            8
+        ),
+        QPoint(240, 0)
+    );
+}
+
+void SurfaceManagerTest::anOverflowingTrayMenuUsesABoundedScrollableViewport()
+{
+    qunsetenv("CELESTINA_PANEL_MENU");
+    registerPanelMenuTypesFromSource();
+    QQmlEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath());
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+    FakeTraySource tray;
+    FakeTrayProviderSource providers;
+    PanelMenuController controller(&engine, nullptr, nullptr);
+    QWindow *const panel = makePanel();
+
+    controller.toggleTrayItemsMenu(
+        panel,
+        QRect(700, 6, 28, 28),
+        &tray,
+        &providers
+    );
+    QPointer<QWindow> inventory = windowWithProperty("traySource");
+    QVERIFY(inventory);
+    const QScreen *const screen = panel->screen();
+    QVERIFY(screen);
+
+    const QString service = QStringLiteral(":1.83");
+    const QString path = QStringLiteral("/org/chromium/StatusNotifierItem/1");
+    constexpr int requestedGlobalX = 620;
+    const int requestedTop = screen->geometry().height() / 4;
+    const int requestedGlobalY = screen->geometry().top() + requestedTop;
+    QVERIFY(QMetaObject::invokeMethod(
+        inventory,
+        "itemMenuRequested",
+        Q_ARG(QString, service),
+        Q_ARG(QString, path),
+        Q_ARG(int, requestedGlobalX),
+        Q_ARG(int, requestedGlobalY)
+    ));
+    controller.trayMenuReady(service, path, trayEntries(64));
+
+    QPointer<QWindow> child = windowWithProperty("entries");
+    QVERIFY(child);
+    const int availableHeight = screen->geometry().height() - requestedTop;
+    QCOMPARE(
+        child->property("maximumContentHeight").toInt(),
+        availableHeight
+    );
+    QVERIFY(
+        child->property("naturalMenuHeight").toInt()
+        > child->property("cardHeight").toInt()
+    );
+    QCOMPARE(
+        child->property("cardHeight").toInt(),
+        availableHeight
+    );
+    auto *const childLayer = LayerShellQt::Window::get(child);
+    QVERIFY(childLayer);
+    QCOMPARE(childLayer->margins().top(), requestedTop);
+
+    QObject *const menu = child->property("menu").value<QObject *>();
+    QVERIFY(menu);
+    auto *const viewport = qobject_cast<QQuickItem *>(
+        menu->property("contentItem").value<QObject *>()
+    );
+    QVERIFY(viewport);
+    QTRY_VERIFY(
+        viewport->property("contentHeight").toReal() > viewport->height()
+    );
+
+    QObject *const scrollBar = child->findChild<QObject *>(
+        QStringLiteral("celestina-tray-menu-scrollbar")
+    );
+    QVERIFY(scrollBar);
+    auto *const scrollBarItem = qobject_cast<QQuickItem *>(scrollBar);
+    QVERIFY(scrollBarItem);
+    QTRY_VERIFY(scrollBar->property("visible").toBool());
+    QVERIFY(scrollBar->property("contentTravel").toReal() > 0.0);
+    QCOMPARE(scrollBarItem->window(), child.data());
+    QCOMPARE(scrollBarItem->parentItem(), viewport->parentItem());
+    QVERIFY(QMetaObject::invokeMethod(
+        scrollBar,
+        "scrollToHandle",
+        Q_ARG(QVariant, scrollBar->property("handleTravel"))
+    ));
+    QTRY_VERIFY(viewport->property("contentY").toReal() > 0.0);
+
+    // The same bounded viewport remains a real Menu: arrow keys reach the last
+    // foreign action and move the viewport rather than losing that action
+    // below the output.
+    viewport->setProperty("contentY", 0.0);
+    menu->setProperty("currentIndex", -1);
+    child->requestActivate();
+    QVERIFY(QMetaObject::invokeMethod(
+        menu,
+        "forceActiveFocus",
+        Q_ARG(Qt::FocusReason, Qt::PopupFocusReason)
+    ));
+    QCOMPARE(menu->property("count").toInt(), 66);
+    const int lastIndex = 65;
+    for (int step = 0;
+         step <= menu->property("count").toInt()
+         && menu->property("currentIndex").toInt() != lastIndex;
+         ++step) {
+        QTest::keyClick(child, Qt::Key_Down);
+    }
+    QTRY_COMPARE(menu->property("currentIndex").toInt(), lastIndex);
+    QTRY_VERIFY(viewport->property("contentY").toReal() > 0.0);
+
+    // Scrolling the child changes neither carrier identity nor the mapped
+    // inventory behind it. Escape closes only that foreign child and restores
+    // the still-mapped parent hierarchy.
+    QVERIFY(inventory);
+    QVERIFY(inventory->isVisible());
+    QCOMPARE(controller.openIndicator(), QStringLiteral("tray-items"));
+    QTest::keyClick(child, Qt::Key_Escape);
+    QTRY_VERIFY(child.isNull());
+    QVERIFY(inventory);
+    QVERIFY(inventory->isVisible());
+    QCOMPARE(controller.openIndicator(), QStringLiteral("tray-items"));
+
+    // A request at the last output pixel moves up only enough to retain the
+    // header, section label and one real action. It never becomes a one-pixel
+    // viewport after Menu padding.
+    const int edgeGlobalY = screen->geometry().bottom();
+    QVERIFY(QMetaObject::invokeMethod(
+        inventory,
+        "itemMenuRequested",
+        Q_ARG(QString, service),
+        Q_ARG(QString, path),
+        Q_ARG(int, requestedGlobalX),
+        Q_ARG(int, edgeGlobalY)
+    ));
+    controller.trayMenuReady(service, path, trayEntries(64));
+
+    QPointer<QWindow> edgeChild = windowWithProperty("entries");
+    QVERIFY(edgeChild);
+    const int minimumViewportHeight =
+        edgeChild->property("minimumMenuViewportHeight").toInt();
+    QVERIFY(minimumViewportHeight > 1);
+    QCOMPARE(
+        edgeChild->property("maximumContentHeight").toInt(),
+        minimumViewportHeight
+    );
+    QCOMPARE(edgeChild->property("cardHeight").toInt(), minimumViewportHeight);
+    auto *const edgeLayer = LayerShellQt::Window::get(edgeChild);
+    QVERIFY(edgeLayer);
+    QCOMPARE(
+        edgeLayer->margins().top(),
+        screen->geometry().height() - minimumViewportHeight
+    );
+    controller.close();
+    QTRY_VERIFY(edgeChild.isNull());
+    QTRY_VERIFY(inventory.isNull());
+}
+
+void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
+{
+    qunsetenv("CELESTINA_PANEL_MENU");
+    registerPanelMenuTypesFromSource();
+    QQmlEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath());
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+    FakeTraySource tray;
+    FakeTrayProviderSource providers;
+    PanelMenuController controller(&engine, nullptr, nullptr);
+    QWindow *const panel = makePanel();
+
+    const QRect inventoryOpener(700, 6, 28, 28);
+    controller.toggleTrayItemsMenu(
+        panel,
+        inventoryOpener,
+        &tray,
+        &providers
+    );
+    QCOMPARE(controller.openIndicator(), QStringLiteral("tray-items"));
+    QPointer<QWindow> inventory = windowWithProperty("traySource");
+    QVERIFY(inventory);
+    QVERIFY(inventory->isVisible());
+    const QScreen *const inventoryScreen = panel->screen();
+    QVERIFY(inventoryScreen);
+    const QRect localInventoryOpener = panelPopupOpenerOnOutput(
+        inventoryOpener,
+        inventoryScreen->geometry().topLeft()
+    );
+    const QPoint inventoryOrigin = panelPopupBodyOrigin(
+        localInventoryOpener,
+        inventory->property("contentWidth").toInt(),
+        inventory->property("anchorGap").toInt()
+    );
+    QCOMPARE(inventory->property("menuY").toInt(), inventoryOrigin.y());
+    QCOMPARE(inventory->property("cardY").toInt(), inventoryOrigin.y());
+    QCOMPARE(inventory->property("preserveRequestedTop").toBool(), true);
+    QCOMPARE(
+        inventory->property("maximumContentHeight").toInt(),
+        inventoryScreen->geometry().height() - inventoryOrigin.y()
+    );
+
+    QSignalSpy needed(&controller, &PanelMenuController::trayMenuNeeded);
+    const QString service = QStringLiteral(":1.83");
+    const QString path = QStringLiteral("/org/chromium/StatusNotifierItem/1");
+    QVERIFY(QMetaObject::invokeMethod(
+        inventory,
+        "itemMenuRequested",
+        Q_ARG(QString, service),
+        Q_ARG(QString, path),
+        Q_ARG(int, 620),
+        Q_ARG(int, 220)
+    ));
+    QCOMPARE(needed.size(), 1);
+    QVERIFY(inventory->isVisible());
+    QCOMPARE(controller.openIndicator(), QStringLiteral("tray-items"));
+
+    // The peer's reply has no request token. A repeated click on this exact
+    // still-pending item is therefore coalesced instead of becoming an
+    // indistinguishable second request.
+    QVERIFY(QMetaObject::invokeMethod(
+        inventory,
+        "itemMenuRequested",
+        Q_ARG(QString, service),
+        Q_ARG(QString, path),
+        Q_ARG(int, 620),
+        Q_ARG(int, 220)
+    ));
+    QCOMPARE(needed.size(), 1);
+
+    controller.trayMenuReady(service, path, trayEntries());
+    QPointer<QWindow> child = windowWithProperty("entries");
+    QVERIFY(child);
+    QVERIFY(child->isVisible());
+    QVERIFY(inventory->isVisible());
+    QCOMPARE(controller.openIndicator(), QStringLiteral("tray-items"));
+
+    auto *childLayer = LayerShellQt::Window::get(child);
+    QVERIFY(childLayer);
+    auto cardAnchors = LayerShellQt::Window::Anchors(
+        LayerShellQt::Window::AnchorTop
+    );
+    cardAnchors |= LayerShellQt::Window::AnchorLeft;
+    QCOMPARE(childLayer->anchors(), cardAnchors);
+    QVERIFY(child->width() > 0);
+    QVERIFY(child->height() > 0);
+    QCOMPARE(childLayer->desiredSize(), child->size());
+    const QRect inventoryCard(
+        inventory->property("cardX").toInt(),
+        inventory->property("cardY").toInt(),
+        inventory->property("cardWidth").toInt(),
+        inventory->property("cardHeight").toInt()
+    );
+    const QRect childCard(
+        childLayer->margins().left(),
+        childLayer->margins().top(),
+        child->width(),
+        child->height()
+    );
+    QVERIFY(!inventoryCard.intersects(childCard));
+
+    // Asking another item retires only the child. The inventory remains the
+    // exact parent while the replacement D-Bus answer is pending.
+    const QString replacementService = QStringLiteral(":1.85");
+    const QString replacementPath = QStringLiteral("/replacement");
+    QVERIFY(QMetaObject::invokeMethod(
+        inventory,
+        "itemMenuRequested",
+        Q_ARG(QString, replacementService),
+        Q_ARG(QString, replacementPath),
+        Q_ARG(int, 620),
+        Q_ARG(int, 300)
+    ));
+    QCOMPARE(needed.size(), 2);
+    QTRY_VERIFY(child.isNull());
+    QVERIFY(inventory);
+    QVERIFY(inventory->isVisible());
+    QCOMPARE(controller.openIndicator(), QStringLiteral("tray-items"));
+
+    controller.trayMenuReady(
+        replacementService,
+        replacementPath,
+        trayEntries()
+    );
+    child = windowWithProperty("entries");
+    QVERIFY(child);
+
+    QSignalSpy chosen(&controller, &PanelMenuController::trayEntryTriggered);
+    QVERIFY(QMetaObject::invokeMethod(child, "chosen", Q_ARG(int, 7)));
+    QCOMPARE(chosen.size(), 1);
+    QCOMPARE(chosen.constFirst().at(0).toString(), replacementService);
+    QCOMPARE(chosen.constFirst().at(1).toString(), replacementPath);
+    QCOMPARE(chosen.constFirst().at(2).toInt(), 7);
+    QTRY_VERIFY(child.isNull());
+    QVERIFY(inventory);
+    QVERIFY(inventory->isVisible());
+    QCOMPARE(controller.openIndicator(), QStringLiteral("tray-items"));
+
+    // An empty reply consumes the exact pending request. A duplicate populated
+    // reply for that same target must not open a child later.
+    const QString emptyService = QStringLiteral(":1.84");
+    const QString emptyPath = QStringLiteral("/empty");
+    QVERIFY(QMetaObject::invokeMethod(
+        inventory,
+        "itemMenuRequested",
+        Q_ARG(QString, emptyService),
+        Q_ARG(QString, emptyPath),
+        Q_ARG(int, 620),
+        Q_ARG(int, 260)
+    ));
+    controller.trayMenuReady(emptyService, emptyPath, QVariantList());
+    controller.trayMenuReady(emptyService, emptyPath, trayEntries());
+    QCoreApplication::processEvents();
+    QVERIFY(!windowWithProperty("entries"));
+    QVERIFY(inventory);
+
+    // Closing the parent while a child is mapped closes the complete menu
+    // hierarchy, not only the inventory carrier.
+    const QString cascadeService = QStringLiteral(":1.87");
+    const QString cascadePath = QStringLiteral("/cascade");
+    QVERIFY(QMetaObject::invokeMethod(
+        inventory,
+        "itemMenuRequested",
+        Q_ARG(QString, cascadeService),
+        Q_ARG(QString, cascadePath),
+        Q_ARG(int, 620),
+        Q_ARG(int, 300)
+    ));
+    controller.trayMenuReady(cascadeService, cascadePath, trayEntries());
+    child = windowWithProperty("entries");
+    QVERIFY(child);
+    controller.close();
+    QTRY_VERIFY(child.isNull());
+    QTRY_VERIFY(inventory.isNull());
+
+    controller.toggleTrayItemsMenu(
+        panel,
+        QRect(700, 6, 28, 28),
+        &tray,
+        &providers
+    );
+    inventory = windowWithProperty("traySource");
+    QVERIFY(inventory);
+
+    const QString lateService = QStringLiteral(":1.86");
+    const QString latePath = QStringLiteral("/late");
+    QVERIFY(QMetaObject::invokeMethod(
+        inventory,
+        "itemMenuRequested",
+        Q_ARG(QString, lateService),
+        Q_ARG(QString, latePath),
+        Q_ARG(int, 620),
+        Q_ARG(int, 340)
+    ));
+    controller.close();
+    QTRY_VERIFY(inventory.isNull());
+    controller.trayMenuReady(lateService, latePath, trayEntries());
+    QCoreApplication::processEvents();
+    QVERIFY(!windowWithProperty("entries"));
+
+    // A direct bar request has no inventory parent and retains the established
+    // full-output outside-click carrier.
+    const int beforeDirectRequest = needed.size();
+    controller.requestTrayMenu(panel, QPoint(700, 40), service, path);
+    controller.requestTrayMenu(panel, QPoint(700, 40), service, path);
+    QCOMPARE(needed.size(), beforeDirectRequest + 1);
+    controller.trayMenuReady(service, path, trayEntries());
+    child = windowWithProperty("entries");
+    QVERIFY(child);
+    childLayer = LayerShellQt::Window::get(child);
+    QVERIFY(childLayer);
+    auto outputAnchors = LayerShellQt::Window::Anchors(
+        LayerShellQt::Window::AnchorTop
+    );
+    outputAnchors |= LayerShellQt::Window::AnchorBottom;
+    outputAnchors |= LayerShellQt::Window::AnchorLeft;
+    outputAnchors |= LayerShellQt::Window::AnchorRight;
+    QCOMPARE(childLayer->anchors(), outputAnchors);
+    QCOMPARE(childLayer->desiredSize(), QSize(0, 0));
+
+    controller.close();
+    QTRY_VERIFY(child.isNull());
+}
+
+void SurfaceManagerTest::wallpaperMenuHandsTheFolderChooserBackToThePermanentPanel()
+{
+    qunsetenv("CELESTINA_PANEL_MENU");
+    registerPanelMenuTypesFromSource();
+    QQmlEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath());
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+    FakeTrayProviderSource providers;
+    PanelMenuController controller(&engine, nullptr, nullptr);
+    FakePanelWindow panel;
+    panel.setGeometry(0, 0, 800, 40);
+
+    controller.toggleIndicatorMenu(
+        &panel,
+        QRect(720, 6, 28, 28),
+        QStringLiteral("wallpaper"),
+        &providers
+    );
+    QCOMPARE(controller.openIndicator(), QStringLiteral("wallpaper"));
+
+    QWindow *const menu = windowWithProperty("providerSource");
+    QVERIFY(menu);
+    QSignalSpy chooser(&panel, &FakePanelWindow::wallpaperFolderPickerOpened);
+    QVERIFY(QMetaObject::invokeMethod(menu, "chooseRequested"));
+
+    QTRY_COMPARE(chooser.count(), 1);
+    QVERIFY(panel.hasOpenedWallpaperFolderPicker());
+    QVERIFY(controller.openIndicator().isEmpty());
+}
+
+void SurfaceManagerTest::aTallGlassCardKeepsItsRoundedRectangle()
+{
+    const QRect card(40, 60, 530, 732);
+    const QRegion glass = roundedGlassRegion(card, 20);
+
+    QCOMPARE(glass.boundingRect(), card);
+    QVERIFY(glass.contains(QPoint(card.center().x(), card.top())));
+    QVERIFY(glass.contains(QPoint(card.center().x(), card.bottom())));
+    QVERIFY(glass.contains(QPoint(card.left(), card.center().y())));
+    QVERIFY(glass.contains(QPoint(card.right(), card.center().y())));
+    QVERIFY(!glass.contains(card.topLeft()));
+    QVERIFY(!glass.contains(card.bottomRight()));
+}
+
+void SurfaceManagerTest::anArmedBlurSurvivesLayerShellExposureLoss()
+{
+    // Initial setup still waits for an exposed native surface.
+    QVERIFY(blurProbeCanUseEffect(false, true, true, true, true, true));
+    QVERIFY(!blurProbeCanUseEffect(false, true, false, true, true, true));
+
+    // After a confirmed arm, a layer-shell exposure report may drop while the
+    // same visible surface continues rendering. Keep both its effect and any
+    // changed region current rather than switching QML to the opaque fallback.
+    QVERIFY(blurProbeCanUseEffect(true, true, false, true, true, true));
+
+    // Real lifecycle and capability losses retain the existing fallback.
+    QVERIFY(!blurProbeCanUseEffect(true, false, false, true, true, true));
+    QVERIFY(!blurProbeCanUseEffect(true, true, false, false, true, true));
+    QVERIFY(!blurProbeCanUseEffect(true, true, false, true, false, true));
+    QVERIFY(!blurProbeCanUseEffect(true, true, false, true, true, false));
 }
 
 
@@ -324,6 +1016,7 @@ void SurfaceManagerTest::theMenuContentLoadsAndFitsItsSurface()
 
     const QVariantMap properties {
         {QStringLiteral("reducedMotion"), true},
+        {QStringLiteral("outputName"), QStringLiteral("test-output")},
         {QStringLiteral("workspaces"),
          QVariantList {
              workspace(1, QStringLiteral("web"), true),
@@ -343,6 +1036,48 @@ void SurfaceManagerTest::theMenuContentLoadsAndFitsItsSurface()
     QVERIFY2(
         content->metaObject()->indexOfSignal("windowActivated(QString)") >= 0,
         "the map must expose windowActivated(QString) for the host to connect"
+    );
+    QVERIFY(content->metaObject()->indexOfProperty("glassRegions") >= 0);
+    const QList<QObject *> outerGlass = content->findChildren<QObject *>(
+        QStringLiteral("celestina-compositor-glass-region")
+    );
+    QCOMPARE(outerGlass.size(), 1);
+    QObject *const bodyMaterial = content->findChild<QObject *>(
+        QStringLiteral("celestina-menu-body-tint")
+    );
+    QVERIFY(bodyMaterial);
+    QCOMPARE(bodyMaterial->property("backdropMode").toInt(), 1);
+    QCOMPARE(bodyMaterial->property("externalBackdropReady").toBool(), true);
+    QCOMPARE(bodyMaterial->property("captureActive").toBool(), false);
+    QCOMPARE(bodyMaterial->property("elevation").toInt(), 0);
+    auto *const quickWindow = qobject_cast<QQuickWindow *>(content);
+    auto *const body = qobject_cast<QQuickItem *>(outerGlass.constFirst());
+    QVERIFY(quickWindow);
+    QVERIFY(body);
+    const QPointF bodyOrigin = body->mapToItem(quickWindow->contentItem(), 0, 0);
+    QCOMPARE(qRound(bodyOrigin.x()), content->property("cardX").toInt());
+    QCOMPARE(qRound(bodyOrigin.y()), content->property("cardY").toInt());
+    const QList<QObject *> sections = content->findChildren<QObject *>(
+        QStringLiteral("celestina-menu-section")
+    );
+    QTRY_COMPARE(sections.size(), 2);
+    for (QObject *const section : sections) {
+        QVERIFY(section->metaObject()->indexOfProperty("captureActive") >= 0);
+        QCOMPARE(section->property("backdropMode").toInt(), 1);
+        QCOMPARE(section->property("externalBackdropReady").toBool(), true);
+        QCOMPARE(section->property("captureActive").toBool(), false);
+        QCOMPARE(
+            section->findChildren<QObject *>(
+                QStringLiteral("celestina-compositor-glass-region")
+            ).size(),
+            0
+        );
+    }
+    QCOMPARE(
+        content->findChildren<QObject *>(
+            QStringLiteral("celestina-menu-header")
+        ).size(),
+        1
     );
 
     PanelMenuSurface surface;
@@ -372,22 +1107,24 @@ void SurfaceManagerTest::theMenuSurfaceIsBigEnoughToClickEveryItem()
 
     QObject *root = component.createWithInitialProperties({
         {QStringLiteral("reducedMotion"), true},
+        {QStringLiteral("outputName"), QStringLiteral("test-output")},
         {QStringLiteral("workspaces"), workspaces},
     });
     QVERIFY2(root, qPrintable(component.errorString()));
     auto *content = qobject_cast<QWindow *>(root);
     QVERIFY(content);
 
-    const int inset = content->property("shadowMargin").toInt();
-    QVERIFY(inset > 0);
-    // Four workspaces' worth of boards, plus the shadow room on both sides. The
-    // exact metrics belong to the shared style; the floor here is that the
-    // surface cannot collapse below one usable board per workspace.
+    const int cardWidth = content->property("cardWidth").toInt();
+    const int cardHeight = content->property("cardHeight").toInt();
+    QCOMPARE(cardWidth, content->property("contentWidth").toInt());
+    QCOMPARE(cardHeight, content->property("contentHeight").toInt());
+    // The floor here is that the surface cannot collapse below one usable
+    // board per workspace.
     QVERIFY2(
-        content->height() >= 4 * 24 + inset * 2,
+        content->height() >= 4 * 24,
         qPrintable(QStringLiteral("card height %1").arg(content->height()))
     );
-    QVERIFY(content->width() > inset * 2);
+    QVERIFY(content->width() > 0);
 
     // And it stays that size once the menu has opened and laid itself out.
     content->show();
@@ -412,6 +1149,7 @@ void SurfaceManagerTest::theMapListsEveryWindowAndWalksThemWithTheKeyboard()
 
     QObject *root = component.createWithInitialProperties({
         {QStringLiteral("reducedMotion"), true},
+        {QStringLiteral("outputName"), QStringLiteral("test-output")},
         {QStringLiteral("workspaces"), QVariantList {workspaceHolding(1)}},
     });
     QVERIFY2(root, qPrintable(component.errorString()));
@@ -462,6 +1200,7 @@ void SurfaceManagerTest::theMapSurvivesAWorkspaceWithNoMapAtAll()
     bare.remove(QStringLiteral("map"));
     QObject *root = component.createWithInitialProperties({
         {QStringLiteral("reducedMotion"), true},
+        {QStringLiteral("outputName"), QStringLiteral("test-output")},
         {QStringLiteral("workspaces"), QVariantList {bare}},
     });
     QVERIFY2(root, qPrintable(component.errorString()));
@@ -582,6 +1321,119 @@ void SurfaceManagerTest::aWallpaperCoversItsOutputAndReservesNothing()
     content->deleteLater();
 }
 
+void SurfaceManagerTest::wallpaperIdentityRejectsMalformedOrDuplicateRows()
+{
+    const auto providersWithRow = [](const QVariantMap &row) {
+        return QVariantMap {
+            {QStringLiteral("wallpaper-identity"),
+             QVariantMap {
+                 {QStringLiteral("outputs"), QVariantList {row}},
+             }},
+        };
+    };
+    const QVariantMap valid {
+        {QStringLiteral("output"), QStringLiteral("DP-1")},
+        {QStringLiteral("source"), QStringLiteral("/wallpapers/bright.png")},
+        {QStringLiteral("revision"), QStringLiteral("320:900")},
+        {QStringLiteral("generation"), 7.0},
+        {QStringLiteral("width"), 1920.0},
+        {QStringLiteral("height"), 1080.0},
+    };
+
+    QVERIFY(wallpaperIdentityForOutput(
+        providersWithRow(valid), QStringLiteral("DP-1"), QSize(1920, 1080)
+    ));
+
+    for (const auto &[field, replacement] : {
+             std::pair {QStringLiteral("revision"), QVariant(QString())},
+             std::pair {QStringLiteral("generation"), QVariant(QStringLiteral("7"))},
+             std::pair {QStringLiteral("generation"), QVariant(0.0)},
+             std::pair {QStringLiteral("width"), QVariant(1919.0)},
+             std::pair {QStringLiteral("source"), QVariant(QString())},
+         }) {
+        QVariantMap malformed = valid;
+        malformed.insert(field, replacement);
+        QVERIFY2(
+            !wallpaperIdentityForOutput(
+                providersWithRow(malformed),
+                QStringLiteral("DP-1"),
+                QSize(1920, 1080)
+            ),
+            qPrintable(field)
+        );
+    }
+
+    const QVariantMap duplicateProviders {
+        {QStringLiteral("wallpaper-identity"),
+         QVariantMap {
+             {QStringLiteral("outputs"), QVariantList {valid, valid}},
+         }},
+    };
+    QVERIFY(!wallpaperIdentityForOutput(
+        duplicateProviders, QStringLiteral("DP-1"), QSize(1920, 1080)
+    ));
+}
+
+void SurfaceManagerTest::wallpaperRevisionChangesTheQmlImageRequest()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString imagePath = directory.filePath(QStringLiteral("same image #1.png"));
+    QImage image(8, 8, QImage::Format_RGBA8888);
+    image.fill(Qt::black);
+    QVERIFY(image.save(imagePath));
+
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+    QQmlComponent component(
+        &engine,
+        QUrl::fromLocalFile(
+            QStringLiteral(CELESTINA_QML_DIR "/Wallpaper.qml")
+        )
+    );
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+
+    std::unique_ptr<QObject> root(component.createWithInitialProperties({
+        {QStringLiteral("source"), imagePath},
+        {QStringLiteral("sourceUrl"), QUrl::fromLocalFile(imagePath)},
+        {QStringLiteral("sourceRevision"), QStringLiteral("640:1")},
+        {QStringLiteral("sourceGeneration"), 4.0},
+        {QStringLiteral("sourceWidth"), 1920},
+        {QStringLiteral("sourceHeight"), 1080},
+        {QStringLiteral("outputName"), QStringLiteral("DP-1")},
+        {QStringLiteral("reducedMotion"), true},
+    }));
+    QVERIFY2(root, qPrintable(component.errorString()));
+    QTRY_VERIFY_WITH_TIMEOUT(root->property("showingImage").toBool(), 2000);
+    QCOMPARE(root->property("readyRevision").toString(), QStringLiteral("640:1"));
+
+    const QUrl firstRequest = root->property("imageSource").toUrl();
+    QCOMPARE(firstRequest.toLocalFile(), imagePath);
+    QVERIFY(firstRequest.toEncoded().contains("same%20image%20%231.png"));
+    QCOMPARE(
+        firstRequest.fragment(),
+        QStringLiteral(
+            "celestina-revision=640%3A1&celestina-generation=4&"
+            "celestina-geometry=1920x1080"
+        )
+    );
+    image.fill(Qt::white);
+    QVERIFY(image.save(imagePath));
+    root->setProperty("sourceRevision", QStringLiteral("640:2"));
+    const QUrl secondRequest = root->property("imageSource").toUrl();
+    QVERIFY(firstRequest != secondRequest);
+    QCOMPARE(secondRequest.toLocalFile(), imagePath);
+    QVERIFY(secondRequest.fragment().contains(
+        QStringLiteral("celestina-revision=640%3A2")
+    ));
+    QTRY_COMPARE_WITH_TIMEOUT(
+        root->property("readyRevision").toString(),
+        QStringLiteral("640:2"),
+        2000
+    );
+    QVERIFY(root->property("showingImage").toBool());
+}
+
 void SurfaceManagerTest::theOverlayRefusesToOpenTwiceAndSurvivesReopening()
 {
     OverlaySurface surface(OverlaySurface::Placement::Centered);
@@ -636,7 +1488,7 @@ void SurfaceManagerTest::aClosedOverlayLeavesNoWindowBehind()
 // boundary `theMenuContentLoadsAndFitsItsSurface` already draws for the menu.
 // `providerSource` is left null, exercising the same "provider unavailable"
 // path a real session hits while its helper is still starting.
-void SurfaceManagerTest::theLauncherAndClipboardOverlaysLoadAndMap()
+void SurfaceManagerTest::thePanelOverlayPrototypeLoadsAndMaps()
 {
     QQmlEngine engine;
     engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
@@ -644,6 +1496,7 @@ void SurfaceManagerTest::theLauncherAndClipboardOverlaysLoadAndMap()
     for (const QString &fileName : {
              QStringLiteral("LauncherOverlay.qml"),
              QStringLiteral("ClipboardOverlay.qml"),
+             QStringLiteral("ControlCentre.qml"),
          }) {
         QQmlComponent component(
             &engine,
@@ -651,11 +1504,22 @@ void SurfaceManagerTest::theLauncherAndClipboardOverlaysLoadAndMap()
         );
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
 
-        QObject *root = component.createWithInitialProperties({
+        QVariantMap properties {
             {QStringLiteral("reducedMotion"), true},
             {QStringLiteral("providerSource"), QVariant::fromValue<QObject *>(nullptr)},
-        });
+        };
+        const bool panelPrototype = fileName == QStringLiteral("ControlCentre.qml");
+        if (panelPrototype) {
+            properties.insert(QStringLiteral("anchoredFromPanel"), true);
+            properties.insert(QStringLiteral("openerRect"), QRect(712, 6, 28, 28));
+        }
+        QObject *root = component.createWithInitialProperties(properties);
         QVERIFY2(root, qPrintable(component.errorString()));
+
+        if (panelPrototype) {
+            QVERIFY(root->property("anchoredFromPanel").toBool());
+            QCOMPARE(root->property("openerRect").toRect(), QRect(712, 6, 28, 28));
+        }
 
         auto *content = qobject_cast<QWindow *>(root);
         QVERIFY2(content, qPrintable(fileName));

@@ -1,3 +1,4 @@
+import CelestinaStyle
 import QtQuick
 import QtTest
 import "../qml" as Desktop
@@ -9,6 +10,14 @@ TestCase {
     id: testCase
 
     name: "Notifications"
+    when: windowShown
+    visible: true
+    width: 640
+    height: 560
+
+    Desktop.BackdropInk {
+        id: testInk
+    }
 
     function entry(id, app, summary, actions) {
         return {
@@ -25,6 +34,7 @@ TestCase {
     Desktop.NotificationIndicator {
         id: indicator
 
+        ink: testInk
         reading: undefined
     }
 
@@ -40,6 +50,20 @@ TestCase {
 
         target: centre
         signalName: "dismissed"
+    }
+
+    SignalSpy {
+        id: historySpy
+
+        target: indicator
+        signalName: "historyRequested"
+    }
+
+    SignalSpy {
+        id: quietSpy
+
+        target: indicator
+        signalName: "quietToggled"
     }
 
     function test_escape_dismisses_the_centre_at_the_window_boundary() {
@@ -59,6 +83,33 @@ TestCase {
         verify(!indicator.worthShowing);
         verify(indicator.implicitWidth > 0);
         compare(findChild(indicator, "celestina-notification-icon").name, "bell");
+    }
+
+    function test_the_indicator_shows_press_and_reports_its_geometry() {
+        indicator.reading = {"unread": 1, "quiet": false};
+        historySpy.clear();
+
+        mousePress(indicator);
+        verify(indicator.down);
+        tryCompare(indicator.background, "color",
+                   CelestinaTheme.surfaceStrong);
+        mouseRelease(indicator);
+
+        verify(!indicator.down);
+        compare(historySpy.count, 1);
+        compare(historySpy.signalArguments[0][2], Math.round(indicator.width));
+        compare(historySpy.signalArguments[0][3], Math.round(indicator.height));
+    }
+
+    function test_secondary_click_keeps_its_quiet_action() {
+        indicator.reading = {"unread": 0, "quiet": false};
+        quietSpy.clear();
+        historySpy.clear();
+
+        mouseClick(indicator, indicator.width / 2, indicator.height / 2,
+                   Qt.RightButton);
+        compare(quietSpy.count, 1);
+        compare(historySpy.count, 0);
     }
 
     function test_a_count_appears_only_when_there_is_one() {

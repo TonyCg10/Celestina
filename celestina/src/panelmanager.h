@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QQmlComponent>
+#include <QUrl>
 #include <QVariant>
 #include <QWindow>
 
@@ -48,6 +49,7 @@ public:
 
     // Wired in after construction, once main() has built the overlay. A shell
     // without it keeps every panel and only that request goes unanswered.
+    void setLauncher(OverlayController *launcher);
     void setNotificationCentre(OverlayController *centre);
     void setControlCentre(OverlayController *centre);
     void setClipboard(OverlayController *clipboard);
@@ -57,15 +59,57 @@ private slots:
     // The panel's QML root asks for a context menu at a screen point; the
     // manager knows which window asked and hands both to the menu controller.
     void workspaceMapRequested(int globalX, int globalY, const QVariant &workspaces);
+    // The compact tray control opens the live item inventory as a contextual
+    // menu; an item's own D-Bus menu remains the separate request below.
+    void trayDrawerRequested(
+        int globalX,
+        int globalY,
+        int openerWidth,
+        int openerHeight
+    );
     // The notification centre is an overlay the host owns; a panel only asks
     // for it.
-    void notificationCentreRequested();
-    void controlCentreRequested();
-    void clipboardRequested();
-    void sessionMenuRequested();
-    // A connectivity indicator's own menu, asked for from the panel that shows
+    void notificationCentreRequested(
+        int globalX,
+        int globalY,
+        int openerWidth,
+        int openerHeight
+    );
+    void launcherRequested(
+        int globalX,
+        int globalY,
+        int openerWidth,
+        int openerHeight
+    );
+    // The soft-menu prototype follows this panel control rather than centring
+    // itself on whichever output currently holds the pointer.
+    void controlCentreRequested(
+        int globalX,
+        int globalY,
+        int openerWidth,
+        int openerHeight
+    );
+    void clipboardRequested(
+        int globalX,
+        int globalY,
+        int openerWidth,
+        int openerHeight
+    );
+    void sessionMenuRequested(
+        int globalX,
+        int globalY,
+        int openerWidth,
+        int openerHeight
+    );
+    // A panel control's contextual menu, asked for from the panel that shows
     // it. The manager knows which window asked and what bridge to hand it.
-    void indicatorMenuRequested(const QString &kind, int globalX, int globalY);
+    void indicatorMenuRequested(
+        const QString &kind,
+        int globalX,
+        int globalY,
+        int openerWidth,
+        int openerHeight
+    );
     // A tray item's own menu, asked for from the panel that shows it.
     void trayMenuRequested(
         const QString &service,
@@ -73,10 +117,22 @@ private slots:
         int globalX,
         int globalY
     );
+    // A native folder dialog returns a URL. The manager accepts only a local
+    // path; the worker owns every filesystem, scan and image rule after that
+    // boundary.
+    void wallpaperFolderSelected(const QUrl &source);
 
 private:
     bool ensurePanel(QScreen *screen);
     void removePanel(QScreen *screen);
+    void togglePanelOverlay(
+        OverlayController *controller,
+        QWindow *panel,
+        int globalX,
+        int globalY,
+        int openerWidth,
+        int openerHeight
+    );
     // The set of outputs changed. Brightness lives behind DDC, which is a
     // one-at-a-time conversation with a monitor, so this never asks twice for
     // one burst: it restarts a short timer and the provider hears once.
@@ -91,6 +147,7 @@ private:
     // Disposable until R0-E picks a popup surface: the manager only forwards
     // the panel's request to it and owns no menu state of its own.
     QPointer<PanelMenuController> m_menu;
+    QPointer<OverlayController> m_launcher;
     QPointer<OverlayController> m_notificationCentre;
     QPointer<OverlayController> m_controlCentre;
     QPointer<OverlayController> m_clipboard;

@@ -117,6 +117,98 @@ accepted in [ADR 0002](../decisions/0002-borderless-glass-panel.md) and executed
 by `PANEL-1`. It does not decide the menu, overlay, iconography, clock/weather or
 shared-state questions below.
 
+## Experimental soft-menu slice
+
+On 2026-08-09 the author first requested an opener-morph experiment and rejected
+its central illusion after seeing it: two separate Wayland surfaces did not
+read as one object transforming. That falsifies the dynamic-island version and
+preserves it here rather than silently rewriting the proposal.
+
+The revised experiment carries the bar's actual anatomy instead. A menu opens
+near and immediately beneath its real panel control, follows the control's
+horizontal order, and scales up in place. It has no card plate or rectangular
+edge: a broad analytic shadow overlaps the panel falloff, while its lines and
+coherent content groups occupy the same borderless, finite compositor-blur
+pills as the bar. Network and control centre are the complete comparison set:
+one compact dynamic list and one larger mixed-control surface.
+
+The first live revision was close but incomplete. Starting the analytic field
+at the menu's top left the panel's local vertical falloff visibly separate from
+the menu shadow, and limiting pills to actionable rows left the connection
+summary, section heading and active profile floating loose. The next revision
+uses the real opener rectangle to extend one shadow field back through the
+panel, independent of a fixed panel height or output origin, and gives every
+menu line the same glass anatomy. Whether that overlap actually reads as one
+field remains an author visual result, not an inference from its geometry.
+
+That second view exposed an implementation trap rather than rejecting the
+direction: `RectangularShadow` paints the interior of its source, and with no
+card body above it the supposed shadow became a translucent plate over both
+the panel controls and the menu pills. The third revision keeps only hollow
+left, right and bottom falloffs, extends the side falloffs through the opener,
+contains menu pills rather than reusing their panel overhang, and softens the
+panel shadow plus no-blur pill tint. This preserves a visible ambient edge while
+testing the intended glass instead of a nearly opaque fallback.
+
+The third live view rejected that tuning as well. A falloff placed wholly
+outside the field was too weak to organize it, and lowering the bar/fallback
+density exposed the nested blur profile's `saturation 1.2`: the detailed yellow
+wallpaper became a stack of saturated bars rather than soft glass. The next
+comparison keeps the transparent successful-blur rule from ADR 0002, places the
+perimeter falloff inside only the content-free margin, restores a moderate bar
+shadow and lowers saturation in the nested reference profile. A tint over the
+successful blur remains rejected unless this controlled profile still cannot
+produce readable glass.
+
+The fourth view showed that moving the falloff inward only as far as the empty
+content margin still preserved the wrong model. It made every gap and the whole
+calendar expose undimmed wallpaper, while the isolated rows became a bright
+ladder with no common depth beneath them. The calendar additionally received a
+fixed-height panel pill inside a tall container, which produced one unrelated
+bar through its middle week. The next comparison restores one continuous soft
+shadow as the bottommost menu layer, keeps every real pill above it, clips only
+the shadow spill that could cross into the separate panel surface, and renders
+the calendar as structured content without a row pill.
+
+That still left the menu field visibly overlapping the bar. The author ended
+the attempted joined-shadow direction: these are separate surfaces and should
+now read as separate objects. The next comparison places the complete menu and
+its top shadow below the panel with explicit opener-relative clearance. The
+calendar is not left bare; it gets one glass card matching the pills' material
+and finite compositor region, but with a card radius and its real content
+height rather than pill geometry.
+
+The first standalone view was still too high because the opener ended above
+the panel surface's full shadow geometry; the bottom menu shadow also ended at
+the surface boundary. The calendar material was correct but its silhouette was
+still too pill-like, and nine full-width rows left avoidable empty horizontal
+space. The next comparison floors placement below the real panel surface,
+allocates the shadow's complete render bounds, uses a small card radius for the
+calendar/weather group, and pairs night-light/caffeine, DND/power and
+network/Bluetooth while keeping volume full width.
+
+That view settled placement and compact grouping but not material hierarchy.
+The author replaced the independent-pill direction with one very light outer
+glass card divided by denser internal glass sections. The shadow remains, but
+only outside the card; an explicit bottom gradient is required because the
+analytic rectangular effect still appeared cut at the content boundary in the
+live compositor. Network/Bluetooth and control centre share this material
+experiment, while their commands and content remain unchanged.
+
+The implementation must keep commands and content intact, retain outside-click
+and Escape dismissal, jump directly to the final state under reduced motion,
+and avoid inventing a fixed panel position, height or output scale.
+
+On 2026-08-10 the author accepted the material direction as the basis for a
+bounded shell-menu comparison and explicitly expanded the prototype to every
+existing interactive menu: network, Bluetooth, tray, workspace map, control
+centre, notifications, clipboard, session and launcher. This is a visual
+migration only. The real `Menu` carriers keep their native lifecycle; custom
+overlays keep their own keyboard, focus, command and dismissal semantics; a
+launcher without a panel opener remains centred. Toasts, OSD, the standalone
+output-sharing chooser and new clock/weather behaviour remain outside this
+slice.
+
 ## Conclusion
 
 Pending beyond the applied panel slice. The broader discussion is ready to
@@ -130,5 +222,7 @@ apply only when one direction records:
 - representative accepted states at scale 1 and scale 2;
 - explicit exclusions and a bounded implementation order.
 
-Applying it requires a decision record and a separate UX-2 implementation plan.
-Until both exist, UX-2 remains planned and no visual code is authorized.
+Applying the full language requires a decision record and a separate UX-2
+implementation plan. Until both exist, UX-2 remains planned. Only the bounded
+soft-menu prototype recorded above is authorized as evidence-producing
+visual code.

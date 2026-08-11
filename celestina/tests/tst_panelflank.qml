@@ -17,6 +17,10 @@ TestCase {
         "enough to fill the whole flank and then some, which is what the live " +
         "session had when the media widget vanished"
 
+    Desktop.BackdropInk {
+        id: testInk
+    }
+
     function workspaces(title) {
         return [{
             "index": 1, "label": "1", "output": "DP-1", "active": true,
@@ -39,7 +43,7 @@ TestCase {
             anchors.verticalCenter: parent.verticalCenter
             // The same expression Panel.qml uses, so this regression measures
             // the shipped rule rather than a copy of it.
-            reservedWidth: flank.roomFor(sysMon) + flank.roomFor(media)
+            reservedWidth: flank.roomFor(captureButton) + flank.roomFor(media)
 
             Desktop.WorkspaceStrip {
                 id: strip
@@ -47,19 +51,22 @@ TestCase {
                 width: Math.min(implicitWidth,
                                 Math.max(0, flank.width - flank.reservedWidth))
                 niriAvailable: true
+                ink: testInk
                 outputName: "DP-1"
                 workspaces: testCase.workspaces("")
             }
 
-            Desktop.SysMon {
-                id: sysMon
+            Desktop.CaptureButton {
+                id: captureButton
 
-                reading: ({"cpu": 12, "memory": 34, "load": "calm"})
+                ink: testInk
+                blurAvailable: true
             }
 
             Desktop.MediaMini {
                 id: media
 
+                ink: testInk
                 reading: ({
                     "nowPlaying": "Lofi Girl - lofi hip hop radio",
                     "playing": true,
@@ -73,6 +80,8 @@ TestCase {
     // offscreen run does not do; what this is about is whether the widget has
     // width to occupy in the row.
     function test_a_valid_player_has_width() {
+        verify(captureButton.ownsGlass);
+        verify(captureButton.implicitWidth > 0);
         verify(media.hasPlayer);
         verify(media.implicitWidth > 0);
     }
@@ -92,7 +101,7 @@ TestCase {
         verify(strip.width + flank.reservedWidth <= flank.width + 1);
     }
 
-    function test_an_absent_widget_reserves_nothing() {
+    function test_an_absent_media_widget_reserves_nothing() {
         const withMedia = flank.reservedWidth;
         media.reading = undefined;
         wait(0);

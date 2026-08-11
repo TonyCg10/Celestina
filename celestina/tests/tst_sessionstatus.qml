@@ -18,6 +18,10 @@ TestCase {
     name: "SessionStatus"
     when: windowShown
 
+    Desktop.BackdropInk {
+        id: testInk
+    }
+
     function on(count, first) {
         const reading = {"adapter": "on", "count": count};
         if (first !== undefined)
@@ -36,20 +40,15 @@ TestCase {
         Desktop.SessionStatus {
             id: status
 
+            ink: testInk
             anchors.verticalCenter: parent.verticalCenter
             network: undefined
             bluetooth: undefined
-            power: undefined
         }
     }
 
-    // The row's second child: the link, the radio, the power profile.
     function radio() {
-        return status.children[1];
-    }
-
-    function profile() {
-        return status.children[2];
+        return findChild(status, "celestina-bluetooth-indicator");
     }
 
     function test_a_powered_adapter_with_nothing_on_it_stays_visible() {
@@ -90,15 +89,9 @@ TestCase {
         compare(radio().Accessible.name, "");
     }
 
-    function test_power_profiles_are_glyphs_with_accessible_names() {
-        status.power = {"active": "performance", "count": 3};
-        compare(profile().iconName, "zap");
-        verify(profile().helpText.indexOf("rendimiento") >= 0);
-
-        status.power = {"active": "balanced", "count": 3};
-        compare(profile().iconName, "gauge");
-
-        status.power = {"active": "power-saver", "count": 3};
-        compare(profile().iconName, "leaf");
+    function test_the_row_contains_only_the_two_connectivity_controls() {
+        compare(status.children.length, 2);
+        verify(findChild(status, "celestina-network-indicator"));
+        verify(findChild(status, "celestina-bluetooth-indicator"));
     }
 }

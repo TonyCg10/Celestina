@@ -15,6 +15,8 @@ private slots:
     void readsARegistrationWithAndWithoutAPath();
     void refusesARegistrationItCannotUse();
     void readsAWellBehavedItem();
+    void preferenceIdentitySurvivesLiveRegistrationChangesWithoutReplacingLiveIdentity();
+    void anItemWithoutARealIdHasNoPersistentPreferenceIdentity();
     void anItemWithNoUsableIconStillHasAName();
     void everyStatusOutsideTheSpecificationIsShownAnyway();
     void refusesAnIconThemeItCannotResolve();
@@ -76,6 +78,7 @@ void TrayItemsTest::readsAWellBehavedItem()
     );
 
     QCOMPARE(item.id, QStringLiteral("nm-applet"));
+    QCOMPARE(item.preferenceKey.size(), 64);
     QCOMPARE(item.title, QStringLiteral("Red"));
     QCOMPARE(item.status, QStringLiteral("active"));
     QCOMPARE(item.iconName, QStringLiteral("nm-signal-75"));
@@ -84,6 +87,62 @@ void TrayItemsTest::readsAWellBehavedItem()
     // `ItemIsMenu` is absent from this item entirely, and reading it must not
     // have invented anything.
     QVERIFY(item.iconThemePath.isEmpty());
+}
+
+void TrayItemsTest::preferenceIdentitySurvivesLiveRegistrationChangesWithoutReplacingLiveIdentity()
+{
+    const QVariantMap properties {
+        {QStringLiteral("Id"), QStringLiteral("Slack_status_icon_1")},
+        {QStringLiteral("Title"), QStringLiteral("Slack")},
+        {QStringLiteral("Status"), QStringLiteral("Active")},
+    };
+    const QString beforePath = QStringLiteral("/org/chromium/StatusNotifierItem/1");
+    const QString afterPath = QStringLiteral("/org/chromium/StatusNotifierItem/4");
+    const TrayItem before = readTrayItem(QStringLiteral(":1.83"), beforePath, properties);
+    const TrayItem after = readTrayItem(QStringLiteral(":1.204"), afterPath, properties);
+
+    QVERIFY(!before.preferenceKey.isEmpty());
+    QCOMPARE(before.preferenceKey, after.preferenceKey);
+    QCOMPARE(before.preferenceKey, trayPreferenceKey(before.id));
+    QVERIFY(before.preferenceKey != trayPreferenceKey(QStringLiteral("another-app")));
+
+    // Preferences follow the stable fingerprint, but actions retain the live
+    // bus identity belonging to this exact registration.
+    QCOMPARE(before.service, QStringLiteral(":1.83"));
+    QCOMPARE(after.service, QStringLiteral(":1.204"));
+    QCOMPARE(before.path, beforePath);
+    QCOMPARE(after.path, afterPath);
+
+    TrayItems items;
+    QVERIFY(items.replace({after}));
+    const QVariantMap published = items.toVariantList().constFirst().toMap();
+    QCOMPARE(
+        published.value(QStringLiteral("preferenceKey")).toString(),
+        after.preferenceKey
+    );
+    QCOMPARE(published.value(QStringLiteral("service")).toString(), after.service);
+    QCOMPARE(published.value(QStringLiteral("path")).toString(), after.path);
+}
+
+void TrayItemsTest::anItemWithoutARealIdHasNoPersistentPreferenceIdentity()
+{
+    const TrayItem missing = readTrayItem(
+        QStringLiteral(":1.90"),
+        QStringLiteral("/StatusNotifierItem"),
+        QVariantMap {{QStringLiteral("Title"), QStringLiteral("Unnamed peer")}}
+    );
+    QVERIFY(missing.id.isEmpty());
+    QVERIFY(missing.preferenceKey.isEmpty());
+    QVERIFY(trayPreferenceKey(QString()).isEmpty());
+
+    // `unreadTrayItem` synthesizes an Id only so the row has a label. That
+    // fallback may contain a unique bus name and is not a durable identity.
+    const TrayItem unread = unreadTrayItem(
+        QStringLiteral(":1.91"),
+        QStringLiteral("/org/chromium/StatusNotifierItem/1")
+    );
+    QVERIFY(!unread.id.isEmpty());
+    QVERIFY(unread.preferenceKey.isEmpty());
 }
 
 void TrayItemsTest::anItemWithNoUsableIconStillHasAName()

@@ -27,6 +27,13 @@ pub const MAX_NAME_CHARS: usize = 255;
 /// depends on an optional decoder would work on one machine and not the next.
 const SHOWABLE: [&str; 5] = ["png", "jpg", "jpeg", "webp", "avif"];
 
+fn extension_of(name: &str) -> Option<&'static str> {
+    let (_, extension) = name.rsplit_once('.')?;
+    SHOWABLE
+        .into_iter()
+        .find(|showable| extension.eq_ignore_ascii_case(showable))
+}
+
 /// Whether a file name is one this shell can show.
 ///
 /// Extension only: reading the file to find out would mean opening every entry
@@ -37,12 +44,40 @@ pub fn is_showable(name: &str) -> bool {
     if name.is_empty() || name.chars().count() > MAX_NAME_CHARS || name.starts_with('.') {
         return false;
     }
-    name.rsplit_once('.').is_some_and(|(stem, extension)| {
-        !stem.is_empty()
-            && SHOWABLE
-                .iter()
-                .any(|showable| extension.eq_ignore_ascii_case(showable))
-    })
+    name.rsplit_once('.')
+        .is_some_and(|(stem, _)| !stem.is_empty() && extension_of(name).is_some())
+}
+
+/// Builds the managed file name used when a source image is imported for an
+/// output.
+///
+/// Output names arrive from the compositor rather than the filesystem. This
+/// rule keeps them as the exact matching stem while refusing separators,
+/// hidden names and names that would exceed the filesystem boundary. The
+/// source contributes only a supported, normalized extension; none of its
+/// directories or original stem enter the managed path.
+#[must_use]
+pub fn imported_name(output: &str, source_name: &str) -> Option<String> {
+    if output.is_empty()
+        || output.starts_with('.')
+        || output
+            .chars()
+            .any(|character| matches!(character, '/' | '\\' | '\0'))
+    {
+        return None;
+    }
+    let extension = extension_of(source_name)?;
+    let name = format!("{output}.{extension}");
+    (name.chars().count() <= MAX_NAME_CHARS).then_some(name)
+}
+
+/// Whether a showable managed image belongs exactly to `output`.
+///
+/// This is shared by selection and replacement cleanup so importing `DP-1`
+/// can never retire `DP-10` or a session-wide `default` image.
+#[must_use]
+pub fn belongs_to_output(output: &str, name: &str) -> bool {
+    is_showable(name) && stem_of(name) == output
 }
 
 /// What an output should be showing.
@@ -75,7 +110,7 @@ pub fn choose(output: &str, available: &[String]) -> Choice {
     if let Some(named) = available
         .iter()
         .filter(showable)
-        .filter(|name| stem_of(name) == output)
+        .filter(|name| belongs_to_output(output, name))
         .min()
     {
         return Choice::Image(bounded(named, MAX_NAME_CHARS));
@@ -184,5 +219,38 @@ mod tests {
         // Connector names are case-sensitive; matching loosely would be
         // guessing which screen the author meant.
         assert_eq!(choose("DP-1", &available), Choice::Fallback);
+    }
+
+    #[test]
+    fn an_import_uses_only_the_exact_output_and_normalized_extension() {
+        assert_eq!(
+            imported_name("DP-1", "holiday.JPEG"),
+            Some("DP-1.jpeg".to_owned())
+        );
+        assert_eq!(
+            imported_name("HDMI-A-1", "anything.PNG"),
+            Some("HDMI-A-1.png".to_owned())
+        );
+    }
+
+    #[test]
+    fn an_import_name_cannot_escape_or_disappear_from_the_managed_directory() {
+        assert_eq!(imported_name("../DP-1", "photo.png"), None);
+        assert_eq!(imported_name("DP-1/other", "photo.png"), None);
+        assert_eq!(imported_name("DP-1\\other", "photo.png"), None);
+        assert_eq!(imported_name(".DP-1", "photo.png"), None);
+        assert_eq!(imported_name("DP-1", "photo.svg"), None);
+
+        let too_long = "x".repeat(MAX_NAME_CHARS);
+        assert_eq!(imported_name(&too_long, "photo.png"), None);
+    }
+
+    #[test]
+    fn replacement_cleanup_matches_only_the_exact_output_stem() {
+        assert!(belongs_to_output("DP-1", "DP-1.png"));
+        assert!(belongs_to_output("DP-1", "DP-1.JPEG"));
+        assert!(!belongs_to_output("DP-1", "DP-10.png"));
+        assert!(!belongs_to_output("DP-1", "default.png"));
+        assert!(!belongs_to_output("DP-1", "DP-1.svg"));
     }
 }

@@ -17,9 +17,14 @@ TestCase {
 
     name: "AudioLevel"
 
+    Desktop.BackdropInk {
+        id: testInk
+    }
+
     Desktop.AudioLevel {
         id: level
 
+        ink: testInk
         reading: ({"volume": 40, "muted": false, "micVolume": 70, "micMuted": false})
     }
 

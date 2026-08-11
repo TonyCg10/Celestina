@@ -1,5 +1,6 @@
 import CelestinaStyle
 import QtQuick
+import QtQuick.Dialogs
 import QtQuick.Window
 import "ProviderReading.js" as ProviderReading
 
@@ -23,12 +24,29 @@ Window {
     readonly property int levelStep: 5
     // Forwarded to the host, which owns every surface this window does not.
     signal workspaceMapRequested(int globalX, int globalY, var workspaces)
+    signal trayDrawerRequested(int globalX, int globalY,
+                               int openerWidth, int openerHeight)
     signal trayMenuRequested(string service, string path, int globalX, int globalY)
-    signal notificationCentreRequested()
-    signal controlCentreRequested()
-    signal clipboardRequested()
-    signal sessionMenuRequested()
-    signal indicatorMenuRequested(string kind, int globalX, int globalY)
+    signal launcherRequested(int globalX, int globalY,
+                             int openerWidth, int openerHeight)
+    signal notificationCentreRequested(int globalX, int globalY,
+                                       int openerWidth, int openerHeight)
+    signal controlCentreRequested(int globalX, int globalY,
+                                  int openerWidth, int openerHeight)
+    signal clipboardRequested(int globalX, int globalY,
+                              int openerWidth, int openerHeight)
+    signal sessionMenuRequested(int globalX, int globalY,
+                                int openerWidth, int openerHeight)
+    signal indicatorMenuRequested(string kind, int globalX, int globalY,
+                                  int openerWidth, int openerHeight)
+    // The standard chooser owns folder selection. The host receives the
+    // complete URL and is the only layer that turns it into a local filesystem
+    // path; the gallery provider owns scanning and image validation after that.
+    signal wallpaperFolderSelected(url source)
+
+    BackdropInk {
+        id: backdropInk
+    }
 
     // A provider key may be inserted by a later frame of the same helper
     // generation, so every lookup goes through the one access point that makes
@@ -38,18 +56,32 @@ Window {
         return ProviderReading.read(panel.providerSource, name);
     }
 
+    readonly property var settingsReading: panel.provider("settings")
+    readonly property var trayPreferences: panel.settingsReading !== undefined
+                                           && panel.settingsReading.trayItems !== undefined
+                                           ? panel.settingsReading.trayItems : []
+    readonly property var wallpaperGalleryReading:
+        panel.provider("wallpaper-gallery")
+
+    function openWallpaperFolderPicker() {
+        if (panel.wallpaperGalleryReading !== undefined
+            && panel.wallpaperGalleryReading.folderUrl !== undefined
+            && panel.wallpaperGalleryReading.folderUrl.length > 0) {
+            wallpaperPicker.currentFolder =
+                panel.wallpaperGalleryReading.folderUrl;
+        }
+        wallpaperPicker.open();
+    }
+
     width: Screen.width
-    // PANEL-1 — the surface is taller than the bar; `bar` is the bar.
+    // PANEL-1 — the surface is exactly the visible bar. There is no
+    // transparent shadow canvas below it.
     readonly property int barHeight: 40
-    height: 112
+    height: barHeight
     visible: false
-    // PANEL-1 replaces the flat tint with a
-    // scrim that fades into the wallpaper, which is the macOS-style bar the
-    // author asked to see. It deliberately breaks the contrast contract: the
-    // flat tint was 90-96% opaque precisely so the guard could prove 4.5:1 over
-    // black *and* white, and nothing that fades to transparent can make that
-    // claim without measuring the wallpaper first. Perceptual validation must
-    // therefore include bright and dark wallpaper regions.
+    // The bar has no full-width paint or shadow. Readability comes from each
+    // finite compositor-glass capsule and its explicit no-blur fallback, so
+    // perceptual validation still has to cover bright and dark wallpaper.
     color: CelestinaTheme.clear
     title: qsTr("Panel de Celestina")
     flags: Qt.FramelessWindowHint | Qt.WindowDoesNotAcceptFocus
@@ -68,22 +100,28 @@ Window {
     // an empty region is not "blur nothing", it is "blur everything". The pills
     // know where they are; this asks them.
     property var glassRects: []
+    property var glassRegions: []
 
     function collectGlass() {
-        const found = [];
+        const foundRects = [];
+        const foundRegions = [];
         const walk = function(item) {
             for (let index = 0; index < item.children.length; ++index) {
                 const child = item.children[index];
-                if (child.objectName === "celestina-panel-pill" && child.visible
+                if (child.objectName === "celestina-compositor-glass-region"
+                    && child.visible
                     && child.width > 0 && child.height > 0) {
                     const at = child.mapToItem(null, 0, 0);
-                    found.push(Qt.rect(at.x, at.y, child.width, child.height));
+                    const rect = Qt.rect(at.x, at.y, child.width, child.height);
+                    foundRects.push(rect);
+                    foundRegions.push({"rect": rect, "radius": child.radius});
                 }
                 walk(child);
             }
         };
         walk(panel.contentItem);
-        panel.glassRects = found;
+        panel.glassRects = foundRects;
+        panel.glassRegions = foundRegions;
     }
 
     function scheduleGlassCollection() {
@@ -102,8 +140,8 @@ Window {
 
     onWidthChanged: panel.scheduleGlassCollection()
 
-    // Where the bar's own content lives: the top band, the part that reserves
-    // screen. Everything below it is scrim and nothing else.
+    // Where the bar's content lives; this is also the complete window and the
+    // exact strip reserved from application windows.
     Item {
         id: bar
 
@@ -111,32 +149,6 @@ Window {
         anchors.right: parent.right
         anchors.top: parent.top
         height: panel.barHeight
-    }
-
-    // The bar as a shadow over the content rather than a surface on top of it.
-    //
-    // The falloff runs well past the bar because a scrim that has to finish
-    // inside the bar's own height cannot be soft: it ends where the surface
-    // ends, and a ramp cut off mid-slope reads as an edge however gentle its
-    // gradient was. Many stops rather than three, easing out rather than
-    // straight, so there is no point along it where the rate of change jumps.
-    Rectangle {
-        anchors.fill: parent
-
-        gradient: Gradient {
-            // The shadow remains a first-class part of the bar: dense behind
-            // the readings, then progressively absent without a terminal edge.
-            // Capsule fill and stroke stay clear, so this depth does not replace
-            // the compositor's independently shaped blur regions.
-            GradientStop { position: 0.00; color: CelestinaTheme.withAlpha(CelestinaTheme.canvas, 0.82) }
-            GradientStop { position: 0.14; color: CelestinaTheme.withAlpha(CelestinaTheme.canvas, 0.72) }
-            GradientStop { position: 0.30; color: CelestinaTheme.withAlpha(CelestinaTheme.canvas, 0.52) }
-            GradientStop { position: 0.48; color: CelestinaTheme.withAlpha(CelestinaTheme.canvas, 0.30) }
-            GradientStop { position: 0.68; color: CelestinaTheme.withAlpha(CelestinaTheme.canvas, 0.13) }
-            GradientStop { position: 0.85; color: CelestinaTheme.withAlpha(CelestinaTheme.canvas, 0.04) }
-            GradientStop { position: 1.00; color: CelestinaTheme.withAlpha(CelestinaTheme.canvas, 0.00) }
-        }
-
     }
 
     // Three regions, and only the middle one is anchored to the screen: the
@@ -155,7 +167,7 @@ Window {
         // the window being shown: what matters here is whether a widget has
         // anything to occupy. An absent one is zero wide and reserves nothing,
         // its gap included.
-        reservedWidth: leftFlank.roomFor(sysMon) + leftFlank.roomFor(media)
+        reservedWidth: leftFlank.roomFor(toolCluster) + leftFlank.roomFor(media)
 
         WorkspaceStrip {
 
@@ -174,6 +186,7 @@ Window {
             niriAvailable: panel.niriProvider.available
             outputName: panel.outputName
             workspaces: panel.niriProvider.workspaces
+            ink: backdropInk
             // The strip reports the gesture; the provider owns the protocol and
             // answers through `workspaces`, never through this call's return.
             onFocusRequested: (output, index) => panel.niriProvider.requestWorkspaceFocus(output, index)
@@ -181,26 +194,55 @@ Window {
 
             PanelPill {
                 blurAvailable: panel.compositorBlurAvailable
+                ink: backdropInk
                 onBlurRegionChanged: panel.scheduleGlassCollection()
             }
 
         }
 
-        SysMon {
+        PanelCluster {
+            id: toolCluster
 
-            // PANEL-1 — one height for every reading, so the row aligns them.
+            spacing: CelestinaTheme.spaceXs
+            blurAvailable: panel.compositorBlurAvailable
+            ink: backdropInk
+            onBlurRegionChanged: panel.scheduleGlassCollection()
 
-            height: CelestinaTheme.controlHeightXs
-            id: sysMon
+            CaptureButton {
+                id: captureButton
 
-            reading: panel.provider("sysmon")
-            onMonitorRequested: panel.providerSource.sendCommand("sysmon", "open-monitor")
-
-            PanelPill {
+                height: CelestinaTheme.controlHeightXs
                 blurAvailable: panel.compositorBlurAvailable
-                onBlurRegionChanged: panel.scheduleGlassCollection()
+                ownsGlass: false
+                ink: backdropInk
+                onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
+                    panel.indicatorMenuRequested("capture", globalX, globalY,
+                                                 openerWidth, openerHeight)
+
+                // The provider reports only what it could not do; a capture
+                // the compositor took over is not observable by this panel.
+                Connections {
+                    function onScreenshotFailed(reason) {
+                        captureButton.reportFailure();
+                    }
+
+                    target: panel.niriProvider
+                }
             }
 
+            PanelActionButton {
+                id: wallpaperButton
+
+                objectName: "celestina-wallpaper-button"
+                blurAvailable: panel.compositorBlurAvailable
+                ownsGlass: false
+                iconName: "image"
+                ink: backdropInk
+                helpText: qsTr("Cambiar el fondo de pantalla")
+                onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
+                    panel.indicatorMenuRequested("wallpaper", globalX, globalY,
+                                                 openerWidth, openerHeight)
+            }
         }
 
         MediaMini {
@@ -213,10 +255,12 @@ Window {
 
             anchors.verticalCenter: parent.verticalCenter
             reading: panel.provider("media")
+            ink: backdropInk
             onToggleRequested: panel.providerSource.sendCommand("media", "PlayPause")
 
             PanelPill {
                 blurAvailable: panel.compositorBlurAvailable
+                ink: backdropInk
                 onBlurRegionChanged: panel.scheduleGlassCollection()
             }
 
@@ -227,10 +271,13 @@ Window {
     Clock {
         id: clock
 
+        ink: backdropInk
+
         anchors.centerIn: bar
 
         PanelPill {
             blurAvailable: panel.compositorBlurAvailable
+            ink: backdropInk
             onBlurRegionChanged: panel.scheduleGlassCollection()
         }
 
@@ -274,171 +321,161 @@ Window {
 
                 anchors.verticalCenter: parent.verticalCenter
                 items: panel.traySource.items
+                preferences: panel.trayPreferences
+                ink: backdropInk
                 onActivated: (service, path, globalX, globalY) => panel.traySource.activate(service, path, globalX, globalY)
                 onSecondaryActivated: (service, path, globalX, globalY) => panel.traySource.secondaryActivate(service, path, globalX, globalY)
                 onMenuRequested: (service, path, globalX, globalY) => panel.trayMenuRequested(service, path, globalX, globalY)
+                onDrawerRequested: (globalX, globalY, openerWidth, openerHeight) =>
+                    panel.trayDrawerRequested(globalX, globalY,
+                                              openerWidth, openerHeight)
 
             }
 
             PanelPill {
                 blurAvailable: panel.compositorBlurAvailable
+                ink: backdropInk
                 onBlurRegionChanged: panel.scheduleGlassCollection()
             }
 
         }
 
-        // PANEL-1 — this reading lays out its own children, so a pill
+        PanelCluster {
+            id: connectivityCluster
 
-        // placed inside it became a cell of that row instead of a floor
-
-        // under it. The wrapper gives the glass somewhere to sit that the
-
-        // layout does not own, and reports the same size to the flank.
-
-        Item {
-
-            height: CelestinaTheme.controlHeightXs
-            implicitWidth: sessionstatusBody.implicitWidth
-
-            implicitHeight: sessionstatusBody.implicitHeight
-
-            visible: sessionstatusBody.visible
+            blurAvailable: panel.compositorBlurAvailable
+            ink: backdropInk
+            hasContent: sessionstatusBody.hasVisibleIndicator
+            onBlurRegionChanged: panel.scheduleGlassCollection()
 
             SessionStatus {
-
                 id: sessionstatusBody
 
-                anchors.verticalCenter: parent.verticalCenter
                 network: panel.provider("network")
                 bluetooth: panel.provider("bluetooth")
-                power: panel.provider("power")
-                onProfileCycleRequested: panel.providerSource.sendCommand("power", "cycle")
-                onIndicatorMenuRequested: (kind, globalX, globalY) => panel.indicatorMenuRequested(kind, globalX, globalY)
-
+                ink: backdropInk
+                onIndicatorMenuRequested: (kind, globalX, globalY, openerWidth, openerHeight) =>
+                    panel.indicatorMenuRequested(kind, globalX, globalY,
+                                                 openerWidth, openerHeight)
             }
-
-            PanelPill {
-                blurAvailable: panel.compositorBlurAvailable
-                onBlurRegionChanged: panel.scheduleGlassCollection()
-            }
-
         }
 
-        AudioLevel {
+        PanelCluster {
+            id: levelCluster
 
-            // PANEL-1 — one height for every reading, so the row aligns them.
-
-            height: CelestinaTheme.controlHeightXs
-            anchors.verticalCenter: parent.verticalCenter
-            reading: panel.provider("audio")
-            onMuteToggled: panel.providerSource.sendCommand("audio", "mute-toggle")
-            onMicMuteToggled: panel.providerSource.sendCommand("audio", "mic-mute-toggle")
-            onMixerRequested: panel.providerSource.sendCommand("audio", "open-mixer")
-            onStepRequested: (direction) => panel.providerSource.sendCommand(
-                "audio", "volume-step", {"by": direction > 0 ? panel.levelStep : -panel.levelStep})
-
-            PanelPill {
-                blurAvailable: panel.compositorBlurAvailable
-                onBlurRegionChanged: panel.scheduleGlassCollection()
-            }
-
-        }
-
-        BrightnessLevel {
-
-            // PANEL-1 — one height for every reading, so the row aligns them.
-
-            height: CelestinaTheme.controlHeightXs
-            anchors.verticalCenter: parent.verticalCenter
-            reading: panel.provider("brightness")
-            outputName: panel.outputName
-            // The step names its own monitor: one helper serves every panel,
-            // and each panel speaks only for the output it is mapped on.
-            onStepRequested: (direction) => panel.providerSource.sendCommand(
-                "brightness", "brightness-step", {
-                    "by": direction > 0 ? panel.levelStep : -panel.levelStep,
-                    "output": panel.outputName
-                })
-
-            PanelPill {
-                blurAvailable: panel.compositorBlurAvailable
-                onBlurRegionChanged: panel.scheduleGlassCollection()
-            }
-
-        }
-
-        NotificationIndicator {
-
-            // PANEL-1 — one height for every reading, so the row aligns them.
-
-            height: CelestinaTheme.controlHeightXs
-            anchors.verticalCenter: parent.verticalCenter
-            reading: panel.provider("notifications")
-            // The panel asks; the host owns the surface that answers, exactly
-            // as it does for the menus.
-            onHistoryRequested: panel.notificationCentreRequested()
-            onQuietToggled: panel.providerSource.sendCommand(
-                "notifications", "quiet-toggle")
-
-            PanelPill {
-                blurAvailable: panel.compositorBlurAvailable
-                onBlurRegionChanged: panel.scheduleGlassCollection()
-            }
-
-        }
-
-        PanelActionButton {
-            objectName: "celestina-control-centre-button"
             blurAvailable: panel.compositorBlurAvailable
-            iconName: "settings"
-            helpText: qsTr("Abrir el centro de control")
-            onClicked: panel.controlCentreRequested()
+            ink: backdropInk
             onBlurRegionChanged: panel.scheduleGlassCollection()
-        }
 
-        PanelActionButton {
-            objectName: "celestina-clipboard-button"
-            blurAvailable: panel.compositorBlurAvailable
-            iconName: "clipboard-paste"
-            helpText: qsTr("Abrir el historial del portapapeles")
-            onClicked: panel.clipboardRequested()
-            onBlurRegionChanged: panel.scheduleGlassCollection()
-        }
-
-        PanelActionButton {
-            objectName: "celestina-session-menu-button"
-            blurAvailable: panel.compositorBlurAvailable
-            iconName: "power"
-            helpText: qsTr("Abrir el menú de sesión")
-            onClicked: panel.sessionMenuRequested()
-            onBlurRegionChanged: panel.scheduleGlassCollection()
-        }
-
-        CaptureButton {
-
-            // PANEL-1 — one height for every reading, so the row aligns them.
-
-            height: CelestinaTheme.controlHeightXs
-            id: captureButton
-
-            anchors.verticalCenter: parent.verticalCenter
-            onCaptureRequested: panel.niriProvider.requestScreenshot()
-
-            // The provider reports only what it could not do; a capture the
-            // compositor took over is not something this panel can observe.
-            Connections {
-                function onScreenshotFailed(reason) {
-                    captureButton.reportFailure();
-                }
-
-                target: panel.niriProvider
+            AudioLevel {
+                height: CelestinaTheme.controlHeightXs
+                reading: panel.provider("audio")
+                ink: backdropInk
+                onMuteToggled: panel.providerSource.sendCommand("audio", "mute-toggle")
+                onMicMuteToggled: panel.providerSource.sendCommand("audio", "mic-mute-toggle")
+                onMixerRequested: panel.providerSource.sendCommand("audio", "open-mixer")
+                onStepRequested: (direction) => panel.providerSource.sendCommand(
+                    "audio", "volume-step", {"by": direction > 0 ? panel.levelStep : -panel.levelStep})
             }
 
-            PanelPill {
+            BrightnessLevel {
+                height: CelestinaTheme.controlHeightXs
+                reading: panel.provider("brightness")
+                outputName: panel.outputName
+                ink: backdropInk
+                // The step names its own monitor: one helper serves every
+                // panel, and each panel speaks only for its mapped output.
+                onStepRequested: (direction) => panel.providerSource.sendCommand(
+                    "brightness", "brightness-step", {
+                        "by": direction > 0 ? panel.levelStep : -panel.levelStep,
+                        "output": panel.outputName
+                    })
+            }
+        }
+
+        PanelCluster {
+            id: utilityCluster
+
+            // Compact buttons already reserve their complete pointer target;
+            // four pixels between targets leave a clear icon rhythm without
+            // recreating the former 24-pixel gaps inside one semantic group.
+            spacing: CelestinaTheme.spaceXs
+            blurAvailable: panel.compositorBlurAvailable
+            ink: backdropInk
+            onBlurRegionChanged: panel.scheduleGlassCollection()
+
+            NotificationIndicator {
+                height: CelestinaTheme.controlHeightXs
+                reading: panel.provider("notifications")
+                ink: backdropInk
+                // The panel asks; the host owns the surface that answers,
+                // exactly as it does for the menus.
+                onHistoryRequested: (globalX, globalY, openerWidth, openerHeight) =>
+                    panel.notificationCentreRequested(globalX, globalY,
+                                                       openerWidth, openerHeight)
+                onQuietToggled: panel.providerSource.sendCommand(
+                    "notifications", "quiet-toggle")
+            }
+
+            PanelActionButton {
+                objectName: "celestina-launcher-button"
                 blurAvailable: panel.compositorBlurAvailable
-                onBlurRegionChanged: panel.scheduleGlassCollection()
+                ownsGlass: false
+                iconName: "app-window"
+                ink: backdropInk
+                helpText: qsTr("Abrir el buscador de aplicaciones")
+                onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
+                    panel.launcherRequested(globalX, globalY,
+                                            openerWidth, openerHeight)
             }
 
+            PanelActionButton {
+                id: controlCentreButton
+
+                objectName: "celestina-control-centre-button"
+                blurAvailable: panel.compositorBlurAvailable
+                ownsGlass: false
+                iconName: "settings"
+                ink: backdropInk
+                helpText: qsTr("Abrir el centro de control")
+                onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
+                    panel.controlCentreRequested(globalX, globalY,
+                                                 openerWidth, openerHeight)
+            }
+
+            PanelActionButton {
+                objectName: "celestina-clipboard-button"
+                blurAvailable: panel.compositorBlurAvailable
+                ownsGlass: false
+                iconName: "clipboard-paste"
+                ink: backdropInk
+                helpText: qsTr("Abrir el historial del portapapeles")
+                onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
+                    panel.clipboardRequested(globalX, globalY,
+                                             openerWidth, openerHeight)
+            }
+
+            PanelActionButton {
+                objectName: "celestina-session-menu-button"
+                blurAvailable: panel.compositorBlurAvailable
+                ownsGlass: false
+                iconName: "power"
+                ink: backdropInk
+                helpText: qsTr("Abrir el menú de sesión")
+                onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
+                    panel.sessionMenuRequested(globalX, globalY,
+                                               openerWidth, openerHeight)
+            }
+
+            SysMon {
+                reading: panel.provider("sysmon")
+                ink: backdropInk
+                blurAvailable: panel.compositorBlurAvailable
+                ownsGlass: false
+                onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
+                    panel.indicatorMenuRequested("performance", globalX, globalY,
+                                                 openerWidth, openerHeight)
+            }
         }
 
         PhoneStatus {
@@ -451,7 +488,21 @@ Window {
             connected: panel.phoneProvider.phoneConnected
             battery: panel.phoneProvider.phoneBattery
             charging: panel.phoneProvider.phoneCharging
+            ink: backdropInk
             onBlurRegionChanged: panel.scheduleGlassCollection()
+        }
+    }
+
+    FolderDialog {
+        id: wallpaperPicker
+
+        title: qsTr("Elegir carpeta de fondos")
+        onAccepted: {
+            panel.wallpaperFolderSelected(wallpaperPicker.selectedFolder);
+            // The chooser temporarily retires the contextual surface. Reopen
+            // the same anchored gallery immediately so its loading state and
+            // then its thumbnails are visible without a second panel click.
+            Qt.callLater(wallpaperButton.requestMenu);
         }
     }
 

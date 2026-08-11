@@ -11,6 +11,10 @@ TestCase {
 
     name: "WorkspaceStrip"
 
+    Desktop.BackdropInk {
+        id: testInk
+    }
+
     function workspace(index, label, active, requestState) {
         return {
             "index": index,
@@ -68,6 +72,7 @@ TestCase {
         id: strip
 
         niriAvailable: true
+        ink: testInk
         outputName: "DP-1"
         workspaces: testCase.board(2, -1)
     }

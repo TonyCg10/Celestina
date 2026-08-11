@@ -15,10 +15,13 @@ import CelestinaStyle
 import QtQuick
 import "ProviderReading.js" as ProviderReading
 
-AnchoredMenu {
+SoftMenu {
     id: root
 
     required property var providerSource
+    itemSpacing: CelestinaTheme.spaceSm
+    headerBodyGap: CelestinaTheme.spaceMd
+    rowVerticalInset: CelestinaTheme.spaceXs
 
     readonly property var network: ProviderReading.read(root.providerSource, "network")
     // The bounded inventory, or an empty list while there is none. The
@@ -77,8 +80,9 @@ AnchoredMenu {
     // arithmetic. Every entry says what it is; the delegate reads that.
     readonly property var entries: {
         const built = [
-            {"kind": "note", "text": root.linkLine},
-            {"kind": "note", "text": root.listLine}
+            {"kind": "header", "text": qsTr("Red"),
+             "subtitle": root.linkLine},
+            {"kind": "section", "text": root.listLine}
         ];
         const represented = {"refresh": true};
         for (let index = 0; index < root.rows.length; ++index)
@@ -103,7 +107,10 @@ AnchoredMenu {
         return built;
     }
 
-    title: qsTr("Menú de red")
+    title: qsTr("Red")
+
+    // PROTOTYPE — SHELL-D5. One light outer glass card contains denser rows;
+    // actions and provider truth remain exactly the same as the flat menu.
 
     // The sentence beside a row. The ledger reports a typed cause; the Spanish
     // is decided here, because copy is the surface's business and the helper's
@@ -160,73 +167,103 @@ AnchoredMenu {
         onObjectAdded: (index, object) => root.menu.insertItem(index, object)
         onObjectRemoved: (index, object) => root.menu.removeItem(object)
 
-        delegate: GlassMenuItem {
+        delegate: SoftMenuRow {
             id: entry
 
             required property var modelData
 
+            ink: root.ink
+            headerTrailingGap: entry.isHeader
+                               ? root.headerBodyGap
+                               : 0
+            verticalInset: root.rowVerticalInset
+            trailingGap: entry.isHeader ? 0 : root.itemSpacing
+
+            readonly property bool isHeader: entry.modelData.kind === "header"
+            readonly property bool isSection: entry.modelData.kind === "section"
             readonly property bool isProfile: entry.modelData.kind === "profile"
             readonly property bool isRefresh: entry.modelData.kind === "refresh"
             readonly property bool isFailure: entry.modelData.kind === "failure"
-            readonly property var row: entry.isProfile ? entry.modelData.row : null
+            readonly property var profile: entry.isProfile ? entry.modelData.row : null
             readonly property string key: entry.isProfile
-                                          ? "activate-saved:" + entry.row.id
+                                          ? "activate-saved:" + entry.profile.id
                                           : (entry.isFailure
                                              ? entry.modelData.failure.target
                                              : "refresh")
             readonly property bool waiting: (entry.isProfile || entry.isRefresh)
                                             && root.requestsPending(entry.key)
-            readonly property bool active: entry.isProfile && entry.row.active === true
+            readonly property bool active: entry.isProfile && entry.profile.active === true
 
             text: {
+                if (entry.isHeader || entry.isSection)
+                    return entry.modelData.text;
+
                 if (entry.isRefresh)
-                    return qsTr("Actualizar") + root.noteFor("refresh");
+                    return qsTr("Actualizar");
 
                 if (entry.isProfile)
-                    return entry.row.name + root.noteFor(entry.key);
+                    return entry.profile.name;
 
                 if (entry.isFailure)
-                    return qsTr("No se pudo completar una acción anterior · descartar");
+                    return qsTr("No se pudo completar una acción anterior");
 
                 return entry.modelData.text;
             }
-            // Marks which profile the session is really on, and says so to
-            // assistive technology as a mutually-exclusive state.
+            header: entry.isHeader
+            sectionLabel: entry.isSection
+            subtitle: entry.isHeader ? entry.modelData.subtitle : ""
+            iconName: {
+                if (entry.isHeader || entry.isProfile)
+                    return "wifi";
+                if (entry.isRefresh)
+                    return "view-refresh";
+                if (entry.isFailure)
+                    return "circle-alert";
+                return "";
+            }
+            // A note is a line to read; the rest are things to do. Glass marks
+            // the difference the flat list made with wording alone.
+            actionable: !entry.isHeader && !entry.isSection
+                        && (entry.isRefresh ? !entry.waiting
+                                           : (entry.isFailure
+                                              || (entry.isProfile
+                                                  && !entry.active && !entry.waiting)))
             choice: entry.isProfile
             current: entry.active
-            // A note is a line to read, not a thing to do. The profile the
-            // session is already on has nothing to ask for, and a row whose own
-            // request is in flight must not be asked again — that is the
-            // contradictory interaction the helper would refuse anyway.
-            enabled: entry.isRefresh
-                     ? !entry.waiting
-                     : entry.isProfile && !entry.active && !entry.waiting
-            Accessible.name: {
-                if (entry.isRefresh)
-                    return qsTr("Actualizar la lista de redes");
+            note: {
+                if (entry.active)
+                    return qsTr("activa");
 
-                if (!entry.isProfile)
-                    return entry.isFailure
-                           ? qsTr("Descartar el aviso de una acción de red fallida")
-                           : entry.modelData.text;
+                if (entry.waiting)
+                    return qsTr("solicitando…");
+
+                if (entry.isFailure)
+                    return qsTr("descartar");
+
+                return "";
+            }
+            noteColor: entry.isFailure ? root.ink.danger
+                                       : (entry.waiting ? root.ink.warning
+                                                        : root.ink.faint)
+            dot: {
+                if (entry.isFailure)
+                    return root.ink.danger;
+
+                if (entry.waiting)
+                    return root.ink.warning;
 
                 if (entry.active)
-                    return qsTr("%1, red activa").arg(entry.row.name);
+                    return root.ink.accent;
 
-                return entry.waiting
-                       ? qsTr("%1, conectando").arg(entry.row.name)
-                       : qsTr("Conectar a %1").arg(entry.row.name);
+                return CelestinaTheme.clear;
             }
-            Accessible.description: entry.isProfile && !entry.active
-                                    ? qsTr("Activa este perfil guardado")
-                                    : ""
             onTriggered: {
                 if (entry.isRefresh) {
                     root.refresh();
                     return;
                 }
                 if (entry.isProfile)
-                    root.activate(entry.row.id);
+                    root.activate(entry.profile.id);
                 else if (entry.isFailure && root.ledger)
                     root.ledger.forget("network", entry.key);
             }
