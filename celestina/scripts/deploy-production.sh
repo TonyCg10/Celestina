@@ -4,6 +4,7 @@ set -eu
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 suite_root=$(CDPATH= cd -- "$project_root/.." && pwd)
 . "$suite_root/scripts/production-common.sh"
+. "$project_root/scripts/session-interlock.sh"
 
 prefix=${HOME}/.local
 while [ "$#" -gt 0 ]; do
@@ -23,6 +24,8 @@ while [ "$#" -gt 0 ]; do
     esac
     shift
 done
+
+celestina_refuse_if_running "$project_root" "$prefix"
 
 production_require_verified "$suite_root" celestina
 bundle=$prefix/libexec/celestina

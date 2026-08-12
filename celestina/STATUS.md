@@ -48,7 +48,29 @@
 
 ## Current checkout truth
 
-- **Current milestone prototype — `PANEL-1-P`.** The falling drop now keeps
+- **Current milestone prototype — `PANEL-1-Q`.** Building and deploying now
+  refuse to run while a Celestina shell is executing the files they would
+  rewrite. A third GPU loss was recorded on 2026-08-12 with the same shape as
+  the first two: a development nest was live, `deploy-production.sh` replaced
+  the installed bundle underneath it, its helper channel broke, the host
+  restarted the provider adapter seven times inside 1.5 seconds, and the seven
+  resulting `ddcutil detect` children contended for one I²C bus
+  (`Max wait time 0 milliseconds exceeded after 2 flock() calls`) six seconds
+  before `amdgpu: device lost from bus!`. `PANEL-1-M`'s smoke gate held — the
+  smoke runs in a scratch state home and none of those seven journals were
+  there — so the exposure it did not cover was build and deploy rewriting the
+  files a real session already had open, which until now was governed only by
+  the author and the assistant remembering. `session-interlock.sh` reads
+  `/proc/PID/exe` rather than command lines, so an unrelated process that merely
+  mentions the build tree cannot abort a release, and it counts a binary that
+  has already been replaced (`" (deleted)"`) as live, which is precisely the
+  dangerous state. Four cases are exercised: nothing running, a live host, a
+  host whose binary was already swapped underneath it, and release resuming
+  once the session is closed. The same hard reboot left eleven empty objects in
+  the Git store — all unreachable, no committed history lost — repaired before
+  this delivery.
+
+- **Previous milestone prototype — `PANEL-1-P`.** The falling drop now keeps
   its blur for the whole fall instead of only after landing: the compositor
   region was debounced to the settle timer, which only ever described the
   landed shape, so `SoftMenuField` republishes it synchronously on every

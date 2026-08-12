@@ -974,3 +974,63 @@ the compositor region already describes the momentary shape. The provider's
 own test suite passes 11/11, including a new case that fixes the level of
 every routine and anomalous event across all five pollers plus `ddcutil` by
 name and by absolute path.
+
+
+## PANEL-1-Q boundary
+
+A third GPU loss was recorded on 2026-08-12, and its journal has the same
+shape as the two before it. A development nest was live from 17:08 (its host
+recording `output: "winit"`). After a version bump, the production pipeline
+ran and `deploy-production.sh` overwrote `~/.local/libexec/celestina/*` while
+that session was executing it. The helper channel broke, the host restarted
+its provider adapter seven times inside 1.5 seconds — PIDs 248493 through
+248849, every one recording `version 0.14.2` — and each restart opened the
+graphics card's I²C buses through `ddcutil detect`. They contended:
+`Max wait time 0 milliseconds exceeded after 2 flock() calls` on `/dev/i2c-7`
+at 17:15:24, then `amdgpu: device lost from bus!` at 17:15:30.
+
+`PANEL-1-M`'s gate held and is not at fault. The smoke runs its shell in a
+scratch `XDG_STATE_HOME`, and none of those seven provider journals were
+written there — the smoke never reached the hardware. What `PANEL-1-M` fixed
+was one half of the exposure: a shell it starts itself. The other half is
+build and deploy rewriting files a *real* session already has open, and that
+half was governed by nothing executable at all. It has now failed twice, once
+through the build tree the nest runs from and once through the installed
+bundle, which is the evidence that a rule kept only in a person's memory is
+not a control. A state check is also only true at the instant it is made: this
+delivery did check for a live nest, and then acted on that answer minutes
+later. A check meant to govern a later action belongs inside it.
+
+`session-interlock.sh` is that rule with a latch. `build-production.sh` and
+`deploy-production.sh` both call it before writing anything, and it refuses
+while any process is executing `build/celestina*` or the bundle's
+`celestina*`. Both roots are checked because both have caused a loss: the nest
+runs straight out of the build tree, an installed session runs from the
+bundle.
+
+The test is `/proc/PID/exe`, not the command line, and the distinction is the
+design. A command line is text, and the build tree's path is text that an
+editor, a grep or this very file's path can contain; an interlock that stops a
+release because a search was open is an interlock that gets commented out, and
+then protects nothing. `/proc/PID/exe` is the kernel's own answer to what a
+process is running. It also stays correct after the binary has been unlinked
+and replaced, reading back as `"/path/to/celestina (deleted)"` — the state a
+half-completed deploy leaves behind, and the one most urgent to catch. That
+suffix is stripped with a quoted pattern, because unquoted `(deleted)` is a
+glob group rather than two literal brackets in some of the shells this file is
+sourced from; written unquoted it stripped nothing, matched nothing, and let
+exactly the dangerous case through. That defect was found by testing the case
+rather than by reading the line.
+
+Four cases are exercised end to end: nothing running permits the release, a
+live host refuses it, a host whose binary has already been swapped underneath
+it still refuses it, and closing the session permits it again — the last one
+because an interlock that cannot be satisfied is one that gets removed.
+
+The hard reboot left eleven zero-length files in `.git/objects`, written but
+never synced. Every one was checked against `git rev-list --objects --all`
+before anything was removed: all eleven were unreachable, and no committed
+history was lost. They were the blobs of this delivery's own staged files, and
+they blocked re-staging because Git treats an object file that exists as an
+object it has already written. Removing them and re-adding restored the index,
+which `git fsck` then reported clean.
