@@ -9,6 +9,7 @@ pragma ComponentBehavior: Bound
 
 import CelestinaStyle
 import QtQuick
+import QtQuick.Window
 import "ProviderReading.js" as ProviderReading
 
 AnchoredCard {
@@ -338,8 +339,8 @@ AnchoredCard {
                                 anchors.margins: CelestinaTheme.spaceXs
                                 height: 72
                                 source: thumbnail.modelData.previewUrl
-                                sourceSize.width: 180
-                                sourceSize.height: 108
+                                sourceSize.width: 180 * Screen.devicePixelRatio
+                                sourceSize.height: 108 * Screen.devicePixelRatio
                                 asynchronous: true
                                 cache: true
                                 fillMode: Image.PreserveAspectCrop

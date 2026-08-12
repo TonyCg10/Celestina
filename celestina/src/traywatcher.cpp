@@ -44,9 +44,20 @@ QString itemKey(const QString &service, const QString &path)
     return service + path;
 }
 
-// The panel draws a tray icon at about this size; the choice of published
-// pixmap and the size a theme is asked for both follow from it.
-constexpr int drawnIconSize = 18;
+// What a tray icon is rasterized to once, here, before any surface draws it.
+//
+// It is deliberately far larger than the ~18 logical pixels the panel draws,
+// because this is the only rasterization there is: a themed SVG is rendered at
+// exactly this size and an application's own pixmaps are chosen against it,
+// and every consumer afterwards can only scale what it is given. At 18 the
+// panel handed a 1.5-scaled output an image smaller than the physical area it
+// filled, and the inventory grid — which draws the same icon larger still —
+// magnified it further. Both read as pixelated while an unscaled output did
+// not, which is exactly what the author reported.
+//
+// 64 covers the panel at every supported scale and the inventory grid with
+// room to spare; the cost is 16 KiB per tray item.
+constexpr int drawnIconSize = 64;
 constexpr int settledRegistryRefreshMs = 1000;
 
 /// Demarshals `a(iiay)` — the sizes an item published, each with its own

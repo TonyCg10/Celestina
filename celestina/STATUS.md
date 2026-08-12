@@ -1,6 +1,6 @@
 # Celestina status
 
-- **Updated:** 2026-08-11
+- **Updated:** 2026-08-12
 - **Implementation:** R0-R5, R7, R8's departure slice, LVR-1 through LVR-3, the
   static hardening previously drafted as `AUD-1`, `UX-1` and `WSG-1` are
   complete
@@ -48,7 +48,61 @@
 
 ## Current checkout truth
 
-- **Current milestone prototype — `PANEL-1-I`.** Celestina 0.12.0 with
+- **Current milestone prototype — `PANEL-1-K` and `PANEL-1-L`.** The bar's own
+  reading capsules now reach the screen's top edge instead of floating inside
+  the veil: each keeps its rounded bottom and loses the gap above it, and the
+  centred clock alone is held by an elastic skin that is widest where the edge
+  grips it and draws in over the whole side. Flanked capsules keep straight
+  sides so no neighbour is overlapped and no gap on the bar was widened. Three
+  rejected silhouettes — squared, a shallow outward lip, and pinched narrower
+  at the edge — are recorded in the geometry so they are not tried again.
+  What the shell draws is now the same physical size on every output. One
+  bounded, stepped factor per screen comes from that output's real density
+  and is applied as a scene scale, so every layout number inside — the
+  40-pixel bar, the capsules at y=5, the attachment seam — is unchanged and
+  only the last step to real pixels differs. The density the tokens were drawn
+  against maps to 1.0, so the author's 27" panel does not move; both LG panels
+  resolve to 1.15. An output publishing no believable physical size stays at
+  1.0. Raster fidelity is corrected at its source: the tray host rasterizes a
+  foreign icon at 64 pixels rather than 18, and every raster consumer asks for
+  its source at the density it will be drawn at. Glyph strokes and the bar's
+  reading weights thicken without any size token changing. `PerformanceMenu`,
+  `NetworkMenu` and `BluetoothMenu` no longer rebuild their complete row list
+  on every provider tick — the defect that left `Rendimiento` permanently
+  clipped — and `PerformanceMenu`'s readings are now the way into the system
+  monitor. The complete CTest suite passes 18/18. The scene scale reaches the
+  panel only; contextual surfaces still draw unscaled, and the author-run
+  visual pass remains pending in
+  [per-output sizing and raster fidelity](docs/evidence/2026-08-12-output-sizing-and-raster-fidelity.md).
+
+- **Current milestone prototype — `PANEL-1-J`.** The settled droplet gains its
+  opening motion and nothing else. `membraneOutline` takes one bounded
+  progress input, so every frame of an opening attached surface is a real
+  droplet outline rather than a scale or fade of the settled one, in both
+  orientations. Below 1 the body opens out of its own mouth in span and extent
+  together while the neck thins under flight tension; at exactly 1 the result
+  is the settled geometry byte for byte, so the motion cannot move where a
+  surface ends up. Above 1 is the elastic recoil: the membrane hauls the
+  settled body 14 pixels back toward its seam and thins its neck before
+  letting it settle, bounded in pixels and against the travel so it can never
+  swing a tall surface or pull a body into its own mouth. The mouth stays
+  welded to the seam and the neck keeps a hard floor at every frame, so the
+  drop is always under tension and never pinches off. The carried content
+  rides inside the drop: the geometry publishes the momentary body as a
+  frame-space rectangle, and the content is translated and clipped to it
+  rather than scaled, so rows emerge from the seam with the glass and nothing
+  is reflowed. Reduced motion resolves the settled geometry immediately and
+  starts no animation. Placement, the attachment lease, compositor-region
+  publication, focus, Escape, outside-click and every floating route are
+  untouched. The focused selection passes 4/4, the offscreen QuickTest runner
+  226/226, and registered production completion passes with CTest 17/17 and
+  the release smoke before deploying the verified bundle to `~/.local` without
+  session activation. Two earlier curves and one monotone author-rejected
+  revision are recorded as superseded in the
+  [droplet fall evidence](docs/evidence/2026-08-12-droplet-tension-fall.md).
+  The author-run nested-Niri pass remains pending.
+
+- **Settled shape the motion above opens — `PANEL-1-I`.** Celestina 0.12.0 with
   CelestinaStyle 1.4.0 replaces the top-edge droplet experiment with one
   marginless `ContextualVeil` backdrop across the complete 40-pixel panel. The
   panel publishes one finite compositor-blur region. Its information groups are
@@ -111,7 +165,32 @@
   release smoke before deploying the verified bundle to `~/.local` without
   activating a session. The author-run nested-Niri visual matrix remains
   pending.
-  `STYLE-G7-J` and `PANEL-1-I` remain `active` without inventories or commits.
+  `PANEL-1-I`'s bytes shipped in `a97eb55` as celestina 0.12.0; its row stays
+  `active` because no immutable inventory was taken at that delivery and one
+  cannot be written afterwards. `STYLE-G7-J` remains `active` likewise.
+
+- **Current design iteration — `PANEL-1-J`.** The author accepted the settled
+  droplet and asked for its motion. An attached surface is now born as a drop
+  at its own seam and falls into place: the same `membraneOutline` takes one
+  bounded progress value, so every frame is a real droplet outline rather
+  than a scale or fade of the settled one. The body's lateral span and its
+  extent from the seam open together out of the mouth, and flight tension
+  peaks mid-fall to thin the neck before it relaxes on landing. Two
+  invariants hold at every sampled frame: the mouth is settled geometry and
+  is never scaled, so the seam contact never moves, and the neck keeps a hard
+  floor measured against its resting width, so the drop is always under
+  tension and never pinches off. Progress 1 returns exactly the geometry
+  `PANEL-1-I` verified, so the motion cannot change where a surface ends up.
+  The carried content now sits in one layer above the glass instead of beside
+  it and reveals as the body arrives, so no row is painted outside the drop
+  carrying it. The fall is two tokened halves — an accelerating release then
+  a decelerating settle — and reduced motion resolves the settled geometry
+  with no animation at all. Placement, the attachment lease,
+  compositor-region publication, focus, Escape, outside-click and every
+  floating route are untouched. Focused selection 4/4, offscreen QuickTest
+  223/223, registered production completion with CTest 17/17 and the release
+  smoke, deployed to `~/.local` and reporting current without activation. The
+  author-run nested-Niri pass is pending and `PANEL-1-J` is not committed.
   The preceding droplet verification is preserved as superseded evidence and
   does not verify this composition. The 768p regression fixture keeps a
   732-pixel Control Centre attached at y=72 and its blur polygon disjoint from

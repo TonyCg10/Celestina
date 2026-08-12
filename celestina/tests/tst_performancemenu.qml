@@ -106,19 +106,38 @@ TestCase {
         compare(entriesOfKind("unavailable").length, 1);
     }
 
-    function test_the_existing_monitor_action_uses_the_provider_and_closes() {
-        const monitor = rowOfKind("monitor");
-        verify(monitor);
+    function test_a_reading_is_its_own_way_into_the_monitor() {
+        // The separate tools section is gone: the thing being measured opens
+        // the monitor that measures it, so there is no trailing section and
+        // no row whose only purpose is to be a link.
+        compare(entriesOfKind("section").length, 1);
+        compare(entriesOfKind("monitor").length, 0);
+
+        const reading = rowOfKind("metric");
+        verify(reading);
+        verify(reading.actionable);
         verify(performanceMenu.menu.visible);
 
         // Physical pointer and keyboard delivery for every contextual menu is
         // covered by IndicatorMenuTest. Invoke the row's activation contract
         // here so this case isolates the exact provider command and teardown.
-        monitor.triggered();
+        reading.triggered();
 
         compare(fakeSource.sent.length, 1);
         compare(fakeSource.sent[0].provider, "sysmon");
         compare(fakeSource.sent[0].verb, "open-monitor");
         tryCompare(performanceMenu.menu, "visible", false);
+    }
+
+    function test_an_unavailable_reading_opens_nothing() {
+        fakeSource.publish({});
+
+        const unavailable = rowOfKind("unavailable");
+        verify(unavailable);
+        // There is nothing being measured, so there is nothing to click into.
+        verify(!unavailable.actionable);
+        unavailable.triggered();
+        compare(fakeSource.sent.length, 0);
+        verify(performanceMenu.menu.visible);
     }
 }

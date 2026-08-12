@@ -426,6 +426,27 @@ not apply the rest of UX-2; menu, overlay and provider work is limited to the
 exact corrections declared in the active plan. Scope, order and evidence are in
 [the PANEL-1 plan](docs/plans/active/2026-08-08-panel-glass-redesign.md).
 
+`PANEL-1-K` welds the bar's own reading capsules to the screen's top edge,
+with the centred clock alone held by a visibly elastic skin and every flanked
+capsule keeping straight sides so nothing overlaps and no gap widens.
+`PANEL-1-L` then makes what the shell draws the same physical size on every
+output — one bounded factor per screen from its real density, applied as a
+scene scale so no token or layout number moves — and stops the shell degrading
+what it draws: a tray icon is rasterized once at a size that survives any
+scale, every raster is asked for at the density it will be drawn at, glyph
+strokes and panel reading weights thicken without any size changing, and three
+provider-driven menus stop rebuilding their complete row list on every reading
+tick.
+
+`PANEL-1-J` gives that settled droplet its opening motion. One bounded
+progress value drives the same geometry source: the body opens out of its own
+mouth, the neck thins under flight tension, and an elastic recoil hauls the
+landed body back toward its seam before letting it settle. The mouth stays
+welded to the seam and the neck keeps a hard floor at every frame, so the drop
+never detaches, and the carried content rides inside the drop rather than
+waiting at the resting place. Reduced motion resolves the settled geometry
+immediately.
+
 `PANEL-1-I` gives the panel one finite region and gives only the contextual
 membrane its matched painted path and sampled polygon. A real panel request
 transports the clicked control and its exact glyph anchor separately; the body
@@ -459,8 +480,18 @@ strange hourglass on 2026-08-11; it is superseded by the current droplet
 contract, whose narrow mouth is the only geometry touching the bar seam.
 The droplet revision passes its focused selection 4/4 and offscreen QuickTest
 runner 211/211; its registered production completion and author screenshot
-review are recorded in the milestone evidence. The immutable delivery record,
-commit and author-run nested-Niri scale matrix remain pending.
+review are recorded in the milestone evidence. Those bytes shipped in
+`a97eb55` as celestina 0.12.0.
+
+`PANEL-1-J` then gives that settled droplet its motion: an attached surface
+is born as a drop at its own seam and falls into place from one bounded
+progress value on the same geometry source. The body's span and extent open
+together out of the mouth while flight tension thins the neck and relaxes it
+on landing; the mouth never scales and the neck keeps a hard floor, so the
+drop is always under tension and never pinches off. Progress 1 is exactly the
+settled geometry, content reveals as the body arrives, and reduced motion
+resolves that settled shape with no animation. The author-run nested-Niri
+scale matrix remains pending for both.
 On 768p
 the tall Control Centre keeps its complete membrane and a blur region disjoint
 from the panel;

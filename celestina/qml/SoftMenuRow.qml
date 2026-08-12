@@ -8,6 +8,7 @@ pragma ComponentBehavior: Bound
 
 import CelestinaStyle
 import QtQuick
+import QtQuick.Window
 
 GlassMenuItem {
     id: row
@@ -144,7 +145,9 @@ GlassMenuItem {
                 visible: row.externalIconReady
                 source: row.iconSource
                 sourceSize.width: CelestinaTheme.iconSm
+                                  * Screen.devicePixelRatio
                 sourceSize.height: CelestinaTheme.iconSm
+                                   * Screen.devicePixelRatio
                 fillMode: Image.PreserveAspectFit
                 asynchronous: true
                 smooth: true

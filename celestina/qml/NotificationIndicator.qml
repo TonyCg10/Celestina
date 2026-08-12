@@ -71,6 +71,7 @@ PanelMenuButton {
             font.family: CelestinaTheme.sansFamily
             font.features: CelestinaTheme.fontFeaturesTabular
             font.pixelSize: CelestinaTheme.fontTitle
+            font.weight: CelestinaTheme.weightDemiBold
         }
 
     }

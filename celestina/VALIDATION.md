@@ -698,7 +698,16 @@ result.
   floating rounded field. Right-click a workspace dot and a collapsed
   monitor dot and confirm the workspace map hangs from the bar with the same
   droplet beneath the exact invoking dot, and that the collapsed monitor
-  group is a single larger dot without a visible count. Open a foreign tray child menu from the mapped inventory
+  group is a single larger dot without a visible count.
+  Then watch the opening itself on a panel-opened menu, an overlay and a
+  sideways child menu: each must be born as a drop at its own seam and fall
+  into place. The stretched middle must be legible rather than a flash, the
+  neck must never appear to separate from the seam, no row may appear outside
+  the glass carrying it, and every surface must land exactly where it lands
+  without the motion. Note whether the blur arrival reads as a pop, since the
+  region is published once from the landed shape. Repeat with reduced motion,
+  which must open with no animation at all.
+  Open a foreign tray child menu from the mapped inventory
   on both sides of the output and confirm the same droplet grows sideways out
   of the parent card's facing edge at the invoking tile's height, with the
   mouth following that tile. Scroll an overflowing foreign menu and confirm

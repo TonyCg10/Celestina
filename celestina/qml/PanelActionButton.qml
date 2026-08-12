@@ -9,6 +9,8 @@ PanelMenuButton {
     id: root
 
     required property bool blurAvailable
+    // Non-zero only from a real bar; see PanelPill.
+    property real barHeight: 0
     required property string iconName
     property string fallbackIcon: iconName
     property int iconSize: CelestinaTheme.iconSm
@@ -39,6 +41,7 @@ PanelMenuButton {
     }
 
     PanelPill {
+        barHeight: root.barHeight
         id: ownPill
 
         visible: root.ownsGlass

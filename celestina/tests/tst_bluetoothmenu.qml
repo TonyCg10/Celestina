@@ -165,11 +165,40 @@ TestCase {
     }
 
     function test_a_device_row_carries_the_state_bluez_confirmed() {
+        // The entry list carries identity only; the live device behind each
+        // identity is looked up, so a reading tick moves state without
+        // recreating the row that shows it.
         const devices = testCase.entriesOfKind("device");
         compare(devices.length, 2);
-        compare(devices[0].row.name, "S25 Ultra");
-        compare(devices[0].row.connected, false);
-        compare(devices[1].row.connected, true);
+        compare(menu.deviceById(devices[0].id).name, "S25 Ultra");
+        compare(menu.deviceById(devices[0].id).connected, false);
+        compare(menu.deviceById(devices[1].id).connected, true);
+    }
+
+    function test_a_reading_tick_moves_state_without_rebuilding_rows() {
+        const before = [];
+        for (let index = 0; index < menu.menu.count; ++index)
+            before.push(menu.menu.itemAt(index));
+        verify(before.length > 0);
+        const signature = menu.entrySignature;
+
+        // Republish the same inventory with one device's state flipped, the
+        // way a provider tick does. The rows must be the same objects.
+        const flipped = [
+            {"id": testCase.known[0].id, "name": testCase.known[0].name,
+             "connected": true},
+            {"id": testCase.known[1].id, "name": testCase.known[1].name,
+             "connected": testCase.known[1].connected}
+        ];
+        testCase.publishPowered(flipped, "fresh");
+
+        compare(menu.entrySignature, signature);
+        compare(menu.menu.count, before.length);
+        for (let index = 0; index < before.length; ++index) {
+            verify(menu.menu.itemAt(index) === before[index],
+                   "row " + index + " was recreated by a reading tick");
+        }
+        compare(menu.deviceById(testCase.known[0].id).connected, true);
     }
 
 

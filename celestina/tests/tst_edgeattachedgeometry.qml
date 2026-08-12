@@ -207,6 +207,142 @@ TestCase {
             verify(fromLeft.polygon[index].x >= -0.001);
     }
 
+    function progressed(progress) {
+        return EdgeAttachedGeometry.topAttachedMembrane(
+            760, 456, 70, 36, 620, 420, 371, 18,
+            CelestinaTheme.radiusMd, progress);
+    }
+
+    function test_a_settled_progress_is_the_unanimated_geometry() {
+        // The fall may never change where a surface ends up: progress 1 and
+        // an omitted progress must produce the same bytes.
+        const settled = membrane(371, 18, 70, 620, 36, 420);
+        const explicit = progressed(1);
+        compare(explicit.path, settled.path);
+        compare(explicit.edgePath, settled.edgePath);
+        compare(explicit.polygon.length, settled.polygon.length);
+        near(explicit.waistWidth, settled.waistWidth);
+        verify(explicit.flightTension < 0.001);
+    }
+
+    function test_the_body_falls_whole_from_the_seam() {
+        const settled = progressed(1);
+        let previousY = -1;
+        for (let step = 0; step <= 10; ++step) {
+            const shape = progressed(step / 10);
+            // The mouth is settled geometry at every frame: the seam contact
+            // never scales or moves with the fall.
+            near(shape.mouthLeft, settled.mouthLeft);
+            near(shape.mouthRight, settled.mouthRight);
+            near(shape.waistCenter, settled.waistCenter);
+            // The body keeps its complete size and only falls away from the
+            // seam: no frame grows, scales or reflows the card.
+            near(shape.openLeft, settled.bodyLeft);
+            near(shape.openRight, settled.bodyRight);
+            near(shape.openDepth, settled.openDepth);
+            verify(shape.openRect.y > previousY);
+            previousY = shape.openRect.y;
+        }
+        // It hangs at the seam when born and rests at the settled travel.
+        const born = progressed(0);
+        verify(born.openRect.y <= 1.001);
+        near(settled.openRect.y, 36);
+    }
+
+    function test_the_falling_neck_is_under_tension_but_never_detaches() {
+        const settled = progressed(1);
+        let thinnest = settled.waistWidth;
+        for (let step = 0; step <= 20; ++step) {
+            const shape = progressed(step / 20);
+            // Flight tension may only thin the neck, never widen it past its
+            // resting width, and never below the floor that keeps the drop
+            // in one piece.
+            verify(shape.waistWidth <= settled.waistWidth + 0.001);
+            verify(shape.waistWidth >= shape.waistFloor - 0.001);
+            verify(shape.waistWidth > 0);
+            // The outline stays one closed drop: the neck never reaches the
+            // mouth edges, so no frame can pinch it apart.
+            verify(shape.waistCenter - shape.waistWidth / 2 > shape.mouthLeft);
+            verify(shape.waistCenter + shape.waistWidth / 2 < shape.mouthRight);
+            verify(shape.path.length > 0);
+            thinnest = Math.min(thinnest, shape.waistWidth);
+        }
+        // Mid-fall is visibly thinner than rest: the drop reads as stretched.
+        verify(thinnest < settled.waistWidth);
+        near(progressed(0.5).flightTension, 1);
+        compare(progressed(0).flightTension, 0);
+    }
+
+    function test_the_body_rect_is_what_the_outline_encloses() {
+        // The carried content rides inside the drop, so the rectangle the
+        // shell translates it to must be the momentary body and nothing else.
+        const settled = progressed(1);
+        compare(settled.openRect.x, 70);
+        compare(settled.openRect.y, 36);
+        compare(settled.openRect.width, 620);
+        compare(settled.openRect.height, 420);
+
+        for (let step = 0; step <= 10; ++step) {
+            const shape = progressed(step / 10);
+            near(shape.openRect.x, shape.openLeft);
+            near(shape.openRect.width, shape.openRight - shape.openLeft);
+            near(shape.openRect.height, shape.openDepth);
+            // The full-sized body never crosses its own seam.
+            verify(shape.openRect.y > 0);
+            // And never changes size while it falls.
+            near(shape.openRect.width, settled.openRect.width);
+            near(shape.openRect.height, settled.openRect.height);
+        }
+    }
+
+    function test_the_fall_bounces_past_rest_and_is_drawn_back() {
+        const settled = progressed(1);
+        // Past 1 the body has been carried below its resting place by its own
+        // weight. It keeps its full size — only its distance from the seam
+        // gives.
+        const carried = progressed(1.05);
+        verify(carried.recoil > 0);
+        verify(carried.recoilTravel > 0);
+        verify(carried.openRect.y > settled.openRect.y);
+        near(carried.openRect.width, settled.openRect.width);
+        near(carried.openRect.height, settled.openRect.height);
+        // A bouncing membrane is taut, so the neck is thinner than at rest.
+        verify(carried.waistWidth < settled.waistWidth);
+        verify(carried.waistWidth >= carried.waistFloor - 0.001);
+        // The mouth still does not move, so the drop stays welded to the bar
+        // while it springs.
+        near(carried.mouthLeft, settled.mouthLeft);
+        near(carried.mouthRight, settled.mouthRight);
+
+        // The bounce is bounded twice: an arbitrarily large overshoot can
+        // neither swing the surface nor read as a jump on a short connector.
+        const extreme = progressed(3);
+        verify(extreme.recoilTravel <= 9.001);
+        verify(extreme.openRect.y <= settled.openRect.y + 9.001);
+        verify(extreme.openRect.y <= settled.openRect.y + 36 * 0.3 + 0.001);
+    }
+
+    function test_a_side_attached_child_falls_with_the_same_progress() {
+        const born = EdgeAttachedGeometry.sideAttachedMembrane(
+            380, 700, 0, 20, 356, 640, 180, 24,
+            CelestinaTheme.radiusMd, true, 0);
+        const settled = EdgeAttachedGeometry.sideAttachedMembrane(
+            380, 700, 0, 20, 356, 640, 180, 24,
+            CelestinaTheme.radiusMd, true, 1);
+        verify(born.path.length > 0);
+        near(born.mouthLeft, settled.mouthLeft);
+        near(born.mouthRight, settled.mouthRight);
+        // The full-sized child hangs at the parent's edge and falls away
+        // from it sideways; its size never changes.
+        near(born.openRect.width, settled.openRect.width);
+        near(born.openRect.height, settled.openRect.height);
+        verify(born.openRect.x > settled.openRect.x);
+        verify(born.waistWidth >= born.waistFloor - 0.001);
+        // The seam stays on the parent's edge for the whole fall.
+        compare(born.polygon[0].x, 380);
+        compare(born.polygon[1].x, 380);
+    }
+
     function test_droplet_tangents_cling_to_the_bar_and_land_flat() {
         const shape = membrane(371, 18, 70, 620, 36, 420);
         // Meniscus: the first curve command leaves the mouth with a

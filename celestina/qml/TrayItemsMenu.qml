@@ -8,6 +8,7 @@ pragma ComponentBehavior: Bound
 
 import CelestinaStyle
 import QtQuick
+import QtQuick.Window
 import "ProviderReading.js" as ProviderReading
 
 SoftMenu {
@@ -606,7 +607,9 @@ SoftMenu {
                                         visible: tile.externalIconReady
                                         source: tile.iconSource
                                         sourceSize.width: root.inventoryIconSize
+                                                          * Screen.devicePixelRatio
                                         sourceSize.height: root.inventoryIconSize
+                                                           * Screen.devicePixelRatio
                                         fillMode: Image.PreserveAspectFit
                                         asynchronous: true
                                         smooth: true

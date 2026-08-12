@@ -76,6 +76,49 @@ TestCase {
         return found;
     }
 
+    function test_a_reading_tick_moves_state_without_rebuilding_rows() {
+        // The aggregate publishes on every tick, so a menu whose row list is
+        // rebuilt from readings tore down and recreated every row about once
+        // a second. That is what left a contextual card measured against a
+        // menu mid-rebuild and permanently clipped. Identity is the proof.
+        const before = [];
+        for (let index = 0; index < menu.menu.count; ++index)
+            before.push(menu.menu.itemAt(index));
+        verify(before.length > 0);
+        const signature = menu.entrySignature;
+
+        // The same saved networks, with the live link and signal moved.
+        fakeSource.publish({
+            "network": {
+                "kind": "wifi",
+                "connection": "Tonys 5G",
+                "networksState": "fresh",
+                "networks": [
+                    {
+                        "id": "9f1c-1", "name": "Tonys 1", "active": false,
+                        "availability": "in-range", "signal": 41,
+                        "ssid": "Tonys 1"
+                    },
+                    {
+                        "id": "9f1c-2", "name": "Tonys 5G", "active": true,
+                        "availability": "in-range", "signal": 90,
+                        "ssid": "Tonys 5G"
+                    }
+                ]
+            }
+        });
+
+        compare(menu.entrySignature, signature);
+        compare(menu.menu.count, before.length);
+        for (let index = 0; index < before.length; ++index) {
+            verify(menu.menu.itemAt(index) === before[index],
+                   "row " + index + " was recreated by a reading tick");
+        }
+        // And the moved state really reached those same rows.
+        compare(menu.profileById("9f1c-2").active, true);
+        compare(menu.linkLine, qsTr("Conectado por Wi-Fi: Tonys 5G"));
+    }
+
     function init() {
         fakeSource.sent = [];
         fakeSource.nextId = 1;

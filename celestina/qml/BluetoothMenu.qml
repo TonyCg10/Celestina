@@ -83,19 +83,23 @@ SoftMenu {
     // One ordered stream: the switch, a line about the list, the devices, and
     // the refresh. A `Menu` has exactly one, and mixing static children with an
     // `Instantiator` would leave their order to insertion arithmetic.
-    readonly property var entries: {
+    // Which rows exist, named by identity alone. No value a provider tick can
+    // move belongs in here: the aggregate publishes on every tick, so a list
+    // rebuilt from readings tore down and recreated every row about once a
+    // second. Battery levels and connection state are read live by the rows
+    // instead, so a tick moves labels and never rebuilds the menu.
+    function buildEntries() {
         const built = [
-            {"kind": "header", "text": qsTr("Bluetooth"),
-             "subtitle": root.adapterLine},
-            {"kind": "adapter", "text": ""}
+            {"kind": "header"},
+            {"kind": "adapter"}
         ];
         const represented = {"set-powered": true, "refresh": true};
         if (root.listLine.length > 0)
-            built.push({"kind": "section", "text": root.listLine});
+            built.push({"kind": "section"});
 
         if (root.powered) {
             for (let index = 0; index < root.rows.length; ++index) {
-                built.push({"kind": "device", "row": root.rows[index]});
+                built.push({"kind": "device", "id": root.rows[index].id});
                 represented["device:" + root.rows[index].id] = true;
             }
         }
@@ -106,11 +110,43 @@ SoftMenu {
             const failed = root.ledger.failures("bluetooth");
             for (let index = 0; index < failed.length; ++index) {
                 if (represented[failed[index].target] !== true)
-                    built.push({"kind": "failure", "failure": failed[index]});
+                    built.push({"kind": "failure", "target": failed[index].target});
             }
         }
-        built.push({"kind": "refresh", "text": ""});
+        built.push({"kind": "refresh"});
         return built;
+    }
+
+    // The list's shape as a comparable value. It is recomputed on every tick
+    // and almost always identical, so the rows below are rebuilt only when a
+    // device really appears, disappears, the adapter is switched or a failure
+    // has to be reported.
+    readonly property string entrySignature: {
+        const built = root.buildEntries();
+        let signature = "";
+        for (let index = 0; index < built.length; ++index) {
+            const item = built[index];
+            signature += item.kind + "\u0000"
+                         + (item.id !== undefined ? item.id : "")
+                         + (item.target !== undefined ? item.target : "")
+                         + "\u001f";
+        }
+        return signature;
+    }
+    property var entries: []
+    // A change handler makes the signature eager, so this also seeds the
+    // first list. `Component.onCompleted` would silently replace the one
+    // `AnchoredCard` uses to raise `ready`, which is what opens the menu.
+    onEntrySignatureChanged: root.entries = root.buildEntries()
+
+    // The live row behind an identity, or null while BlueZ no longer
+    // publishes it and the structural rebuild has not run yet.
+    function deviceById(id) {
+        for (let index = 0; index < root.rows.length; ++index) {
+            if (root.rows[index].id === id)
+                return root.rows[index];
+        }
+        return null;
     }
 
     title: qsTr("Bluetooth")
@@ -201,25 +237,32 @@ SoftMenu {
             readonly property bool isDevice: entry.modelData.kind === "device"
             readonly property bool isRefresh: entry.modelData.kind === "refresh"
             readonly property bool isFailure: entry.modelData.kind === "failure"
-            readonly property var row: entry.isDevice ? entry.modelData.row : null
+            readonly property var row: entry.isDevice
+                                       ? root.deviceById(entry.modelData.id)
+                                       : null
             readonly property string key: {
                 if (entry.isAdapter)
                     return "set-powered";
 
                 if (entry.isDevice)
-                    return "device:" + entry.row.id;
+                    return "device:" + entry.modelData.id;
 
                 if (entry.isFailure)
-                    return entry.modelData.failure.target;
+                    return entry.modelData.target;
 
                 return "refresh";
             }
             readonly property bool waiting: root.requestsPending(entry.key)
-            readonly property bool connected: entry.isDevice && entry.row.connected === true
+            readonly property bool connected: entry.isDevice
+                                              && entry.row !== null
+                                              && entry.row.connected === true
 
             text: {
-                if (entry.isHeader || entry.isSection)
-                    return entry.modelData.text;
+                if (entry.isHeader)
+                    return qsTr("Bluetooth");
+
+                if (entry.isSection)
+                    return root.listLine;
 
                 if (entry.isAdapter)
                     return qsTr("Adaptador");
@@ -228,16 +271,16 @@ SoftMenu {
                     return qsTr("Actualizar");
 
                 if (entry.isDevice)
-                    return entry.row.name;
+                    return entry.row !== null ? entry.row.name : "";
 
                 if (entry.isFailure)
                     return qsTr("No se pudo completar una acción anterior");
 
-                return entry.modelData.text;
+                return "";
             }
             header: entry.isHeader
             sectionLabel: entry.isSection
-            subtitle: entry.isHeader ? entry.modelData.subtitle : ""
+            subtitle: entry.isHeader ? root.adapterLine : ""
             iconName: {
                 if (entry.isHeader || entry.isDevice)
                     return "bluetooth";
@@ -307,7 +350,10 @@ SoftMenu {
                 if (!entry.isDevice)
                     return entry.isFailure
                            ? qsTr("Descartar el aviso de una acción de Bluetooth fallida")
-                           : entry.modelData.text;
+                           : "";
+
+                if (entry.row === null)
+                    return "";
 
                 if (entry.waiting) {
                     return entry.connected
@@ -339,7 +385,7 @@ SoftMenu {
                     return;
                 }
                 if (entry.isDevice)
-                    root.toggleDevice(entry.row.id, entry.connected);
+                    root.toggleDevice(entry.modelData.id, entry.connected);
                 else if (entry.isFailure && root.ledger)
                     root.ledger.forget("bluetooth", entry.key);
             }

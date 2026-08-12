@@ -13,6 +13,8 @@ Item {
     required property int battery
     required property bool charging
     required property BackdropInk ink
+    // Non-zero only from a real bar; see PanelPill.
+    property real barHeight: 0
 
     implicitWidth: layout.implicitWidth
     implicitHeight: layout.implicitHeight
@@ -59,11 +61,13 @@ Item {
             font.family: CelestinaTheme.sansFamily
             font.features: CelestinaTheme.fontFeaturesTabular
             font.pixelSize: CelestinaTheme.fontTitle
+            font.weight: CelestinaTheme.weightDemiBold
             Accessible.ignored: true
         }
     }
 
     PanelPill {
+        barHeight: phoneRoot.barHeight
         blurAvailable: phoneRoot.blurAvailable
         ink: phoneRoot.ink
     }

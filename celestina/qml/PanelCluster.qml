@@ -12,6 +12,8 @@ Item {
 
     required property bool blurAvailable
     required property BackdropInk ink
+    // Non-zero only from a real bar; see PanelPill.
+    property real barHeight: 0
     property int spacing: CelestinaTheme.spaceMd
     default property alias controls: controls.data
     // A caller with late data may bind this to the model-backed presence bit
@@ -31,6 +33,7 @@ Item {
     }
 
     PanelPill {
+        barHeight: root.barHeight
         id: pill
 
         visible: root.hasContent

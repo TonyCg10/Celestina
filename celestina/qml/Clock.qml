@@ -45,7 +45,7 @@ Item {
         font.family: CelestinaTheme.monoFamily
         font.features: CelestinaTheme.fontFeaturesTabular
         font.pixelSize: CelestinaTheme.fontTitle
-        font.weight: CelestinaTheme.weightMedium
+        font.weight: CelestinaTheme.weightDemiBold
     }
 
 }

@@ -7,6 +7,7 @@
 // keeping the last thing that ever played.
 import CelestinaStyle
 import QtQuick
+import QtQuick.Window
 
 Item {
     id: root
@@ -55,8 +56,8 @@ Item {
         source: root.artPath.length > 0 ? "file://" + root.artPath : ""
         // The decode is bounded to what is drawn: a checked signature says a
         // file starts like an image, not that it is a sane size to expand.
-        sourceSize.width: 40
-        sourceSize.height: 40
+        sourceSize.width: 40 * Screen.devicePixelRatio
+        sourceSize.height: 40 * Screen.devicePixelRatio
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
         cache: false
@@ -85,6 +86,7 @@ Item {
         color: root.ink.primary
         font.family: CelestinaTheme.sansFamily
         font.pixelSize: CelestinaTheme.fontTitle
+        font.weight: CelestinaTheme.weightDemiBold
         elide: Text.ElideRight
     }
 

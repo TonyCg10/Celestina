@@ -14,6 +14,7 @@ pragma ComponentBehavior: Bound
 
 import CelestinaStyle
 import QtQuick
+import QtQuick.Window
 
 Item {
     id: root
@@ -107,7 +108,9 @@ Item {
                 source: root.appId.length > 0
                         ? "image://appicon/" + encodeURIComponent(root.appId) : ""
                 sourceSize.width: CelestinaTheme.iconSm
+                                  * Screen.devicePixelRatio
                 sourceSize.height: CelestinaTheme.iconSm
+                                   * Screen.devicePixelRatio
                 width: CelestinaTheme.iconSm
                 height: CelestinaTheme.iconSm
                 fillMode: Image.PreserveAspectFit

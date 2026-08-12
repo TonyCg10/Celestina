@@ -15,7 +15,10 @@ Item {
 
     required property bool reducedMotion
     required property BackdropInk ink
-    default property alias contentData: content.data
+    // The carried content is a sibling layer above the glass rather than a
+    // peer of it, so a falling drop can reveal what it carries without
+    // fading the drop itself.
+    default property alias contentData: body.data
 
     property bool animateReveal: true
     property bool revealed: false
@@ -63,6 +66,57 @@ Item {
             root.sideAttachmentRequested
             || (root.topAttachmentRequested
                 && root.surfacePosition.y > root.attachmentStartY)
+    // PANEL-1-J. An attached surface is born as a drop at its own seam and
+    // falls into place. Progress is the geometry's own input, not a transform
+    // over a finished shape: every frame is a real droplet outline, and 1 is
+    // exactly the settled geometry, so the motion cannot move where a surface
+    // ends up. Reduced motion never leaves the settled value.
+    readonly property bool fallsIntoPlace: root.edgeAttachmentRequested
+                                           && !root.reducedMotion
+    property real attachmentProgress: root.fallsIntoPlace ? 0 : 1
+    // What the drop is carrying rides inside it. The body rectangle comes
+    // from the same geometry as the outline, so the content is bounded by the
+    // exact drop that holds it and travels with it — including through the
+    // recoil — instead of waiting at the resting place for the glass to
+    // arrive. Its own layout never changes: it is translated and clipped, so
+    // no row is ever stretched or reflowed by the motion.
+    readonly property rect attachmentBodyRect: root.edgeShapeActive
+            ? Qt.rect(root.edgePaneX + root.edgeSilhouette.openRect.x,
+                      root.edgePaneY + root.edgeSilhouette.openRect.y,
+                      root.edgeSilhouette.openRect.width,
+                      root.edgeSilhouette.openRect.height)
+            : Qt.rect(0, 0, root.width, root.height)
+    // Only while the drop is still moving: a settled body is exactly its own
+    // card, so clipping it would cost a render pass and buy nothing.
+    readonly property bool attachmentClipsContent: root.fallsIntoPlace
+            && (dropFall.running || root.attachmentProgress < 1)
+    // The content rides the drop on every route — carried by the body window
+    // on overlays, translated with the popup for real menus — so the fade is
+    // not a reveal. It is a short one at each end: in across the first fifth
+    // of the fall so the card does not pop into existence at the bar, and out
+    // when the surface is dismissed so it does not vanish mid-air. A slow
+    // fade-in here read, in the author's recording, as content appearing at
+    // the destination instead of falling with its card.
+    //
+    // The glass and everything it carries share this one value, so the popup
+    // that a real Menu keeps outside the field fades in step with it.
+    readonly property real attachmentFadeIn: root.fallsIntoPlace
+            ? Math.max(0, Math.min(1, root.attachmentProgress / 0.2))
+            : 1
+    property real retireOpacity: 1
+    readonly property real attachmentContentOpacity: root.attachmentFadeIn
+                                                     * root.retireOpacity
+
+    // A dismissed surface is destroyed by its host, so the fade has to happen
+    // before that: `SoftMenu` starts it on the popup's `aboutToHide`, which
+    // runs while the exit transition still has the window alive.
+    function retire() {
+        if (root.reducedMotion) {
+            root.retireOpacity = 0;
+            return;
+        }
+        retireFade.start();
+    }
     // The panel lives below the overlay layer. Start this window's material at
     // the continuous bar backdrop's lower edge. The overlay supplies only the
     // exposed connector and body; it never repaints or reblurs the bar or the
@@ -99,7 +153,8 @@ Item {
                   root.attachmentAnchorRect.y - root.surfacePosition.y,
                   root.attachmentAnchorRect.height,
                   CelestinaTheme.radiusMd,
-                  root.attachmentSideRight)
+                  root.attachmentSideRight,
+                  root.attachmentProgress)
             : root.edgeShapeActive
             ? EdgeAttachedGeometry.topAttachedMembrane(
                   root.edgePaneWidth, root.edgePaneHeight,
@@ -107,9 +162,11 @@ Item {
                   root.width, root.height,
                   root.attachmentAnchorLeftAtBody - root.edgePaneX,
                   root.attachmentAnchorRect.width,
-                  CelestinaTheme.radiusMd)
+                  CelestinaTheme.radiusMd,
+                  root.attachmentProgress)
             : ({"path": "", "edgePath": "", "polygon": [],
-                "tension": 0, "waistWidth": 0, "waistCenter": 0})
+                "tension": 0, "waistWidth": 0, "waistCenter": 0,
+                "openRect": {"x": 0, "y": 0, "width": 0, "height": 0}})
     readonly property real attachmentTension: root.edgeSilhouette.tension
     readonly property real attachmentWaistWidth: root.edgeSilhouette.waistWidth
     // Convert the silhouette's pane-local result back into this field's local
@@ -120,7 +177,22 @@ Item {
 
     function reveal() {
         root.revealed = true;
+        root.beginDropFall();
         root.scheduleGlassCollection();
+    }
+
+    // Idempotent: a route that reveals twice replays nothing, and a settled
+    // surface never falls again. A surface that does not fall resolves to its
+    // settled geometry instead of waiting for an animation that never runs.
+    function beginDropFall() {
+        if (!root.fallsIntoPlace) {
+            root.attachmentProgress = 1;
+            return;
+        }
+        if (dropFall.running || root.attachmentProgress >= 1)
+            return;
+
+        dropFall.start();
     }
 
     function collectGlass() {
@@ -165,6 +237,55 @@ Item {
     onYChanged: root.scheduleGlassCollection()
     onSurfacePositionChanged: root.scheduleGlassCollection()
 
+    // The fall is two tokened parts: it decelerates from its very first frame
+    // — the way every other motion in this shell moves — gliding a little
+    // past its resting place as the membrane takes its weight, and is then
+    // drawn back up to rest over a short recovery. It spanned the complete
+    // `motionCeiling` until the author asked for a little more pace; the
+    // recovery is what gave that back, because it is the part with the least
+    // distance to cover.
+    //
+    // The card now falls whole from the bar, so the full range is the right
+    // one to travel: at 0 the complete, full-sized body hangs at the seam and
+    // the connector's own 20..36-pixel travel is the entire distance — the
+    // motion is inherently small. The morphing variants that needed a partial
+    // range to stay subtle (growing out of the mouth, the affine ride) were
+    // all rejected by the author; so were a flat monotone curve, an
+    // `easeEmphasized` spring snap, and an accelerating `easeExit` opening
+    // that read as mechanical.
+    SequentialAnimation {
+        id: dropFall
+        objectName: "celestina-attachment-drop-fall"
+
+        NumberAnimation {
+            target: root
+            property: "attachmentProgress"
+            from: 0
+            to: 1.05
+            duration: CelestinaTheme.motionNormal
+            easing.type: CelestinaTheme.easeStandard
+        }
+
+        NumberAnimation {
+            target: root
+            property: "attachmentProgress"
+            to: 1
+            duration: CelestinaTheme.motionFast
+            easing.type: CelestinaTheme.easeStandard
+        }
+    }
+
+    NumberAnimation {
+        id: retireFade
+        objectName: "celestina-attachment-retire-fade"
+
+        target: root
+        property: "retireOpacity"
+        to: 0
+        duration: CelestinaTheme.motionFast
+        easing.type: CelestinaTheme.easeExit
+    }
+
     Timer {
         id: glassSettle
 
@@ -193,7 +314,9 @@ Item {
         scale: root.edgeAttachmentRequested
                || !root.animateReveal || root.revealed || root.reducedMotion
                ? 1 : 0.92
-        opacity: !root.animateReveal || root.revealed || root.reducedMotion ? 1 : 0
+        // The whole surface, glass included, carries the fade at both ends.
+        opacity: (!root.animateReveal || root.revealed || root.reducedMotion
+                  ? 1 : 0) * root.attachmentContentOpacity
 
         CompositorGlassRegion {
             x: root.edgePaneX
@@ -231,6 +354,32 @@ Item {
             silhouettePath: root.edgeSilhouette.path
             silhouetteEdgePath: root.edgeSilhouette.edgePath
             elevation: 0
+        }
+
+        // Everything the surface carries, riding inside the drop. The window
+        // is the momentary body and the content keeps its settled layout at
+        // that window's origin, so rows emerge from the seam with the glass
+        // instead of appearing at the resting place once it arrives. An
+        // inside press is still stopped here while it is falling, so the
+        // motion never leaks a click through to whatever an overlay uses to
+        // dismiss itself.
+        Item {
+            id: bodyWindow
+            objectName: "celestina-soft-menu-body-window"
+
+            x: root.attachmentBodyRect.x
+            y: root.attachmentBodyRect.y
+            width: root.attachmentBodyRect.width
+            height: root.attachmentBodyRect.height
+            clip: root.attachmentClipsContent
+
+            Item {
+                id: body
+                objectName: "celestina-soft-menu-body"
+
+                width: root.width
+                height: root.height
+            }
         }
 
         Behavior on scale {

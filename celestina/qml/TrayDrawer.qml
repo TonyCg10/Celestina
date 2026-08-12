@@ -17,6 +17,7 @@ pragma ComponentBehavior: Bound
 
 import CelestinaStyle
 import QtQuick
+import QtQuick.Window
 
 Row {
     id: root
@@ -206,7 +207,9 @@ Row {
                     // The host already resolved this to the size it is drawn
                     // at; the same size avoids a second resample.
                     sourceSize.width: CelestinaTheme.iconSm
+                                      * Screen.devicePixelRatio
                     sourceSize.height: CelestinaTheme.iconSm
+                                       * Screen.devicePixelRatio
                     fillMode: Image.PreserveAspectFit
                     asynchronous: true
                     smooth: true

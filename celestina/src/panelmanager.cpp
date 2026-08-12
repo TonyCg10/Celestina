@@ -1,5 +1,7 @@
 #include "panelmanager.h"
 
+#include "shellscale.h"
+
 #include "diagnosticjournal.h"
 #include "overlaycontroller.h"
 
@@ -286,6 +288,9 @@ bool PanelManager::ensurePanel(QScreen *screen)
     const QVariantMap initialProperties {
         {QStringLiteral("outputName"), screen->name()},
         {QStringLiteral("reducedMotion"), m_reducedMotion},
+        // How much larger this output needs the shell drawn so it measures the
+        // same as on every other one; see shellscale.h.
+        {QStringLiteral("shellScale"), shellScaleForScreen(screen)},
         {QStringLiteral("niriProvider"), QVariant::fromValue(m_niri.data())},
         {QStringLiteral("phoneProvider"), QVariant::fromValue(m_phone.data())},
         {QStringLiteral("providerSource"), QVariant::fromValue(m_providers.data())},

@@ -775,6 +775,26 @@ void IndicatorMenuTest::theWholeMenuIsReachableFromTheKeyboard()
         // Every menu has semantic context and at least one enabled action.
         QVERIFY2(count >= 2, qPrintable(kind + QStringLiteral(": %1").arg(count)));
 
+        // Except the performance menu with no provider behind it. Its action
+        // is opening the monitor by clicking a reading, so with nothing being
+        // measured there is deliberately nothing to act on. It still names
+        // itself and its absent reading; that part is covered above and by
+        // PerformanceMenu's own cases. This is the one kind whose actions are
+        // all data, so it is named here rather than weakening the rule.
+        if (kind == QStringLiteral("performance")) {
+            QVERIFY(!window->property("hasReading").toBool());
+            for (int index = 0; index < count; ++index) {
+                QQuickItem *row = nullptr;
+                QMetaObject::invokeMethod(
+                    menu, "itemAt", Q_RETURN_ARG(QQuickItem *, row),
+                    Q_ARG(int, index)
+                );
+                QVERIFY(row);
+                QVERIFY2(!row->property("enabled").toBool(), qPrintable(kind));
+            }
+            continue;
+        }
+
         // Arrowing down moves the highlight onto a row that can be activated,
         // and never onto one that cannot.
         QTest::keyClick(window, Qt::Key_Down);

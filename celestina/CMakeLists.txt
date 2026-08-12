@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.12.0 LANGUAGES CXX)
+project(celestina VERSION 0.13.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -81,6 +81,8 @@ qt_add_executable(celestina
     src/panelattachmentlease.cpp
     src/panelmanager.h
     src/panelmanager.cpp
+    src/shellscale.h
+    src/shellscale.cpp
     src/wallpapermanager.h
     src/wallpapermanager.cpp
     src/wallpaperidentity.h
@@ -286,6 +288,15 @@ if(BUILD_TESTING)
     target_include_directories(celestina-tray-items-test PRIVATE src)
     target_link_libraries(celestina-tray-items-test PRIVATE Qt6::Test Qt6::DBus)
     add_test(NAME celestina-tray-items COMMAND celestina-tray-items-test)
+
+    qt_add_executable(celestina-shell-scale-test
+        tests/shellscale_test.cpp
+        src/shellscale.h
+        src/shellscale.cpp
+    )
+    target_include_directories(celestina-shell-scale-test PRIVATE src)
+    target_link_libraries(celestina-shell-scale-test PRIVATE Qt6::Test Qt6::Gui)
+    add_test(NAME celestina-shell-scale COMMAND celestina-shell-scale-test)
 
     qt_add_executable(celestina-tray-icons-test
         tests/trayicons_test.cpp

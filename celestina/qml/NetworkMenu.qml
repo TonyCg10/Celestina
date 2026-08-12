@@ -78,16 +78,21 @@ SoftMenu {
     // One ordered stream, because a `Menu` has exactly one and mixing static
     // children with an `Instantiator` would leave their order to insertion
     // arithmetic. Every entry says what it is; the delegate reads that.
-    readonly property var entries: {
+    // Which rows exist, named by identity alone. No value a provider tick can
+    // move belongs in here: the aggregate publishes on every tick, so a list
+    // rebuilt from readings tore down and recreated every row about once a
+    // second. That is what left `Rendimiento` measured against a menu in the
+    // middle of being replaced, and permanently clipped. Text, state and
+    // notes are read live by the rows instead.
+    function buildEntries() {
         const built = [
-            {"kind": "header", "text": qsTr("Red"),
-             "subtitle": root.linkLine},
-            {"kind": "section", "text": root.listLine}
+            {"kind": "header"},
+            {"kind": "section"}
         ];
         const represented = {"refresh": true};
         for (let index = 0; index < root.rows.length; ++index)
         {
-            built.push({"kind": "profile", "row": root.rows[index]});
+            built.push({"kind": "profile", "id": root.rows[index].id});
             represented["activate-saved:" + root.rows[index].id] = true;
         }
 
@@ -99,12 +104,43 @@ SoftMenu {
             const failed = root.ledger.failures("network");
             for (let index = 0; index < failed.length; ++index) {
                 if (represented[failed[index].target] !== true)
-                    built.push({"kind": "failure", "failure": failed[index]});
+                    built.push({"kind": "failure", "target": failed[index].target});
             }
         }
 
-        built.push({"kind": "refresh", "text": ""});
+        built.push({"kind": "refresh"});
         return built;
+    }
+
+    // The list's shape as a comparable value. It is recomputed on every tick
+    // and almost always identical, so the rows below are rebuilt only when a
+    // network really appears, disappears or gains a failure to report.
+    readonly property string entrySignature: {
+        const built = root.buildEntries();
+        let signature = "";
+        for (let index = 0; index < built.length; ++index) {
+            const item = built[index];
+            signature += item.kind + "\u0000"
+                         + (item.id !== undefined ? item.id : "")
+                         + (item.target !== undefined ? item.target : "")
+                         + "\u001f";
+        }
+        return signature;
+    }
+    property var entries: []
+    // A change handler makes the signature eager, so this also seeds the
+    // first list. `Component.onCompleted` would silently replace the one
+    // `AnchoredCard` uses to raise `ready`, which is what opens the menu.
+    onEntrySignatureChanged: root.entries = root.buildEntries()
+
+    // The live row behind an identity, or null while the provider no longer
+    // publishes it and the structural rebuild has not run yet.
+    function profileById(id) {
+        for (let index = 0; index < root.rows.length; ++index) {
+            if (root.rows[index].id === id)
+                return root.rows[index];
+        }
+        return null;
     }
 
     title: qsTr("Red")
@@ -184,34 +220,41 @@ SoftMenu {
             readonly property bool isProfile: entry.modelData.kind === "profile"
             readonly property bool isRefresh: entry.modelData.kind === "refresh"
             readonly property bool isFailure: entry.modelData.kind === "failure"
-            readonly property var profile: entry.isProfile ? entry.modelData.row : null
+            readonly property var profile: entry.isProfile
+                                           ? root.profileById(entry.modelData.id)
+                                           : null
             readonly property string key: entry.isProfile
-                                          ? "activate-saved:" + entry.profile.id
+                                          ? "activate-saved:" + entry.modelData.id
                                           : (entry.isFailure
-                                             ? entry.modelData.failure.target
+                                             ? entry.modelData.target
                                              : "refresh")
             readonly property bool waiting: (entry.isProfile || entry.isRefresh)
                                             && root.requestsPending(entry.key)
-            readonly property bool active: entry.isProfile && entry.profile.active === true
+            readonly property bool active: entry.isProfile
+                                           && entry.profile !== null
+                                           && entry.profile.active === true
 
             text: {
-                if (entry.isHeader || entry.isSection)
-                    return entry.modelData.text;
+                if (entry.isHeader)
+                    return qsTr("Red");
+
+                if (entry.isSection)
+                    return root.listLine;
 
                 if (entry.isRefresh)
                     return qsTr("Actualizar");
 
                 if (entry.isProfile)
-                    return entry.profile.name;
+                    return entry.profile !== null ? entry.profile.name : "";
 
                 if (entry.isFailure)
                     return qsTr("No se pudo completar una acción anterior");
 
-                return entry.modelData.text;
+                return "";
             }
             header: entry.isHeader
             sectionLabel: entry.isSection
-            subtitle: entry.isHeader ? entry.modelData.subtitle : ""
+            subtitle: entry.isHeader ? root.linkLine : ""
             iconName: {
                 if (entry.isHeader || entry.isProfile)
                     return "wifi";
@@ -227,6 +270,7 @@ SoftMenu {
                         && (entry.isRefresh ? !entry.waiting
                                            : (entry.isFailure
                                               || (entry.isProfile
+                                                  && entry.profile !== null
                                                   && !entry.active && !entry.waiting)))
             choice: entry.isProfile
             current: entry.active
@@ -263,7 +307,7 @@ SoftMenu {
                     return;
                 }
                 if (entry.isProfile)
-                    root.activate(entry.profile.id);
+                    root.activate(entry.modelData.id);
                 else if (entry.isFailure && root.ledger)
                     root.ledger.forget("network", entry.key);
             }

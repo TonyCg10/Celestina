@@ -187,6 +187,16 @@ floating rounded surfaces.
     suppress contextual edge treatment that reads as an exterior shadow, and
     retain floating geometry for command, keybind, workspace and foreign child
     routes.
+11. Give the settled droplet its motion. One bounded progress value drives the
+    same geometry source, so an opening attached surface grows out of its seam
+    instead of appearing at full size: the body emerges from the mouth, its
+    extent and lateral span open together, and the neck thins under flight
+    tension before relaxing to its resting width. The mouth stays welded to
+    the seam and the neck keeps a hard floor at every frame, so the drop is
+    always under tension and never pinches off. Content reveals only as the
+    body arrives, reduced motion resolves the settled geometry immediately,
+    and no floating route, compositor-region, placement or lease contract
+    changes.
 
 ## Implementation exit
 
@@ -232,6 +242,9 @@ floating rounded surfaces.
 |---|---|---|---|---|---|---|---|
 | PANEL-1-A | `celestina:` | done | [inventory](../../inventories/2026-08-08-panel-glass-redesign/PANEL-1-A.numstat.tsv) | 42 files, +1344/-472 | Replace the hard panel plate with a soft shadow and borderless real compositor-glass capsules, reduce workspace and status readings to positional colour/icon semantics without discarding monitor grouping or CPU/memory values, expose the existing overlays, and keep the tray populated and visible across host restarts | [evidence](../../evidence/2026-08-08-panel-glass-baseline.md) | `VAL-PANEL-1` partial |
 | PANEL-1-I | `celestina:` | active | `CMakeLists.txt`; `qml/EdgeAttachedGeometry.js`; `qml/Panel.qml`; `qml/PanelFlank.qml`; `qml/PanelPill.qml`; `qml/PanelCluster.qml`; `qml/PanelActionButton.qml`; `qml/PanelMenuButton.qml`; panel opener controls; `qml/PanelPopupPlacement.qml`; `qml/CompositorGlassRegion.qml`; `qml/SoftMenuField.qml`; `qml/SoftMenu.qml`; `qml/SoftOverlayCard.qml`; `qml/AnchoredCard.qml`; panel-opened overlay/menu composition; `src/panelattachmentlease.{h,cpp}`; `src/panelmanager.{h,cpp}`; `src/panelblurcontroller.{h,cpp}`; `src/panelmenucontroller.{h,cpp}`; `src/overlaycontroller.{h,cpp}`; focused QML/C++ tests; Celestina version/status/roadmap/validation/evidence and the root version history | — | Replace the narrow central connector with one tension-shaped `ContextualVeil` membrane that spans the complete contextual width at both the panel edge and menu landing, narrows through a fluid body-proportional waist whose centre follows the exact clicked icon without collapsing to icon width, and keeps that opener's hover circle visible only while its own surface remains open; require matched tangent magnitude and direction through the waist so the short 20..36-pixel travel reads as one rounded liquid deformation rather than straight hourglass flanks, keep the clicked control rectangle separate for placement and leave the owning panel capsule and all dense content cards completely unchanged while preserving disjoint panel/menu blur regions, one finite compositor region per surface and every floating-route, provider, focus, Escape, outside-click and reduced-motion contract | [continuous bar veil and membrane evidence](../../evidence/2026-08-11-edge-attached-shell-prototype.md) | `VAL-PANEL-1` |
+| PANEL-1-L | `celestina:` | active | `src/shellscale.{h,cpp}`; `src/panelmanager.cpp`; `src/traywatcher.cpp`; `qml/Panel.qml`; `qml/PanelPill.qml`; raster-icon consumers; `qml/PerformanceMenu.qml`; `qml/NetworkMenu.qml`; `qml/BluetoothMenu.qml`; `CMakeLists.txt`; focused C++/QML tests; Celestina status/roadmap/validation/evidence | — | Make what the shell draws the same physical size on every output and stop it degrading what it draws: derive one bounded per-output scale from the output's real density and apply it as a scene scale so no token or layout number moves, rasterize a tray icon once at a size that survives any scale, ask for every raster at the density it will be drawn at, thicken glyph strokes and panel reading weights, and stop three provider-driven menus rebuilding their complete row list on every reading tick | [per-output sizing and raster fidelity evidence](../../evidence/2026-08-12-output-sizing-and-raster-fidelity.md) | `VAL-PANEL-1` |
+| PANEL-1-K | `celestina:` | active | `qml/EdgeAttachedGeometry.js`; `qml/PanelPill.qml`; `qml/PanelCluster.qml`; `qml/PanelActionButton.qml`; `qml/PhoneStatus.qml`; `qml/Panel.qml` | — | Weld the panel's reading capsules to the screen's top edge instead of floating them inside the bar, with the centred clock held by a visibly elastic skin and every flanked capsule keeping straight sides so no neighbour is overlapped and no gap on the bar is widened | [droplet fall evidence](../../evidence/2026-08-12-droplet-tension-fall.md) | `VAL-PANEL-1` |
+| PANEL-1-J | `celestina:` | active | `qml/EdgeAttachedGeometry.js`; `qml/SoftMenuField.qml`; focused QML/C++ attachment tests; Celestina status/roadmap/validation/evidence | — | Give the settled droplet its opening motion from one bounded progress value on the same geometry source: the body emerges from its seam mouth in extent and lateral span together while the neck thins under flight tension and relaxes to its resting width, the mouth stays welded to the seam and the neck keeps a hard floor so the drop never pinches off, content reveals only as the body arrives, and reduced motion resolves the settled geometry immediately without changing any floating-route, compositor-region, placement, lease or dismissal contract | [droplet fall evidence](../../evidence/2026-08-12-droplet-tension-fall.md) | `VAL-PANEL-1` |
 | PANEL-1-B | `celestina:` | done | [inventory](../../inventories/2026-08-08-panel-glass-redesign/PANEL-1-B.numstat.tsv) | 124 files, +15180/-1843 | Deliver the current contextual shell prototype snapshot with grouped panel controls, complete menu hierarchy, durable tray and wallpaper tools, real composed-scene blur, canonical dense content glass, nearly transparent carriers and fixed light/white foregrounds | [contextual hierarchy evidence](../../evidence/2026-08-10-contextual-menu-hierarchy-nested.md); [shared glass evidence](../../evidence/2026-08-11-contextual-menu-shared-glass.md); [content glass evidence](../../evidence/2026-08-11-one-ui-content-glass.md); [fixed ink evidence](../../evidence/2026-08-11-fixed-white-shell-ink.md) | `VAL-PANEL-1` partial prototype |
 
 ## Active unit boundary
@@ -668,5 +681,116 @@ membrane. The revised contract remains in the same active unit. Its focused
 selection passes 4/4 and its offscreen QuickTest runner passes 211/211.
 Registered production completion passes CTest 17/17 and the eight-second
 release smoke, and the verified bundle is deployed to `~/.local` and reports
-current without session activation. Nested-Niri scale validation, the
-immutable inventory and commit remain pending; `PANEL-1-I` stays `active`.
+current without session activation.
+
+Those bytes shipped in `a97eb55` as celestina 0.12.0, together with the
+sideways child membrane, the attached workspace map, the single collapsed
+monitor dot and the contained foreign-menu scroll. No immutable inventory was
+taken at that delivery, and an inventory's base revision must be the head
+before its own commit, so one cannot be written for it afterwards. The row
+therefore stays `active` rather than claiming a closure it cannot evidence:
+the version history and the linked evidence are what record that delivery.
+Nested-Niri scale validation also remains pending.
+
+## PANEL-1-J boundary
+
+`PANEL-1-I` settled the droplet's resting shape. The author accepted it and
+asked for its motion next: a contextual surface must fall out of the place it
+is born from, reading as a drop under tension that stretches but never
+detaches. `PANEL-1-J` is that motion and nothing else. It adds no material,
+no token and no second geometry source: the same
+`membraneOutline` gains one bounded progress input, so every frame of the
+opening is a real droplet outline rather than a scale or a fade of the
+settled one.
+
+Progress runs `0..1` on the same eased reveal the shell already owns. At `0`
+the body is collapsed into its own mouth at the seam; at `1` it is exactly
+the settled geometry `PANEL-1-I` verified, so the animation cannot change
+where a menu ends up. Between them the body's extent from the seam and its
+lateral span open together out of the mouth, which keeps the emerging shape a
+drop instead of an unrolling ribbon. Flight tension peaks mid-fall and thins
+the neck below its resting width, then relaxes as the body lands.
+
+Two invariants make it a drop that does not detach, and both hold at every
+sampled frame rather than only at the ends. The mouth stays welded to the
+seam: its span is never scaled away and the seam row keeps exactly the same
+narrow glyph-centred contact the settled contract requires. The neck keeps a
+hard floor, so no progress value, tension term or body size can pinch the
+outline into two pieces.
+
+Content is not part of the falling glass. The dense cards reveal only as the
+body arrives, so no text is ever painted over a body that has not reached it
+and nothing inside the menu is distorted by the motion. Reduced motion
+resolves progress to `1` immediately, which is what keeps every existing
+offscreen contract reading the settled geometry unchanged. Placement, the
+attachment lease, compositor-region publication, focus, Escape, outside-click
+and every floating route are untouched: this unit may only change what the
+opening looks like between the click and the settled surface.
+
+
+## PANEL-1-K boundary
+
+`PANEL-1-I` and `PANEL-1-J` settled how a contextual surface joins the bar and
+how it arrives. This unit asks the same question of the bar's own readings: a
+capsule floating inside the veil is a plate with things on it, and the author
+selected a reading held by the screen's edge instead.
+
+Every panel capsule therefore reaches the top edge and squares off nowhere —
+it keeps its rounded bottom and loses the gap above it. The centred clock is
+additionally held by an elastic skin: its outline is widest where the edge
+grips it and draws in over the whole side, one continuous stretch rather than
+a lip at the top. Only the clock takes that, because only the clock has open
+space either side; a flanked capsule that widened at the edge overlapped its
+neighbour, and widening the bar's gaps to make room would have moved every
+reading on the bar to decorate one.
+
+Four silhouettes were tried and three rejected on sight, which the geometry
+records so they are not walked again: squared at the edge read as a box pushed
+against the screen; the same outward curve confined to a shallow lip read as a
+bucket; pinching *narrower* at the edge was correct physics for a drop falling
+off a ceiling and wrong here, because a reading is held by the bar rather than
+dripping from it. The accepted shape spreads at the grip and draws in over the
+entire height.
+
+The capsule's body and the reading inside it do not move: the flare is painted
+beyond the body, so text and icons keep the axis and the spacing they had.
+
+## PANEL-1-L boundary
+
+Two defects with one cause, and one design gap the author named while they
+were being fixed.
+
+A logical pixel is not a length. The shell's tokens are logical pixels, so the
+same 40-token bar measures 12.50 mm on the author's 27" 1080p panel and
+10.94 mm on their 32" 4K panel at scale 1.5 — 13 % smaller on the larger
+monitor, which is also the one viewed from further away. `shellscale.{h,cpp}`
+turns each output's real density into one bounded, stepped factor;
+`QScreen::physicalDotsPerInch` already divides the compositor's scale out, so
+the factor is that number over the density the tokens were drawn against. It
+is applied as a scene scale per window, which is what keeps every measurement
+inside — the 40-pixel bar, the capsules at y=5, the seam a menu attaches to —
+exactly the number the design states, with only the last step to real pixels
+differing per monitor. An output that publishes no believable physical size is
+left at 1.0 rather than resized from a number that cannot be trusted.
+
+Raster fidelity was two separate bugs. `CelestinaIcon` asked for its SVG at
+the item's logical size, so on any scaled output the compositor was handed a
+pixmap smaller than the area it filled. Worse, `traywatcher` rasterized every
+foreign tray icon once at 18 pixels: that is the only rasterization there is,
+and no consumer can recover detail that was never generated. Six further
+raster paths — the panel tray, the inventory grid, menu rows, the workspace
+map, album art, wallpaper thumbnails — asked for their sources in logical
+pixels too. An application that publishes only a small pixmap and has no
+themed icon is still the best available and remains soft; that limit is not
+ours to fix.
+
+Weight is not size. The author asked for thicker text and glyphs at unchanged
+dimensions, so the vendored catalogue's stroke width rises and the bar's own
+readings take the demi-bold weight, rather than any token growing.
+
+Finally, `PerformanceMenu` rebuilt its complete entry list on every provider
+reading, which tore down and recreated every row about once a second; the card
+was then measured against a menu mid-rebuild and stayed clipped for as long as
+it was open. `NetworkMenu` and `BluetoothMenu` had the same shape. Their row
+lists now carry identity only, and every moving value is read live by the row
+that shows it, so a tick moves labels and rebuilds nothing.
