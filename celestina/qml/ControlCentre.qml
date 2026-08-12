@@ -61,8 +61,15 @@ Window {
                                      ? centre.settings.levelStep : 5
 
 
-    width: cardWidth
-    height: cardHeight
+    // How much larger this output needs the shell drawn; see shellscale.h. The
+    // host supplies it and divides the geometry it hands this overlay by it, so
+    // every number here is already in unscaled units.
+    property real shellScale: 1.0
+    readonly property real surfaceWidth: centre.width / centre.shellScale
+    readonly property real surfaceHeight: centre.height / centre.shellScale
+
+    width: Math.round(cardWidth * shellScale)
+    height: Math.round(cardHeight * shellScale)
     color: CelestinaTheme.clear
     title: qsTr("Centro de control")
 
@@ -74,8 +81,8 @@ Window {
     PanelPopupPlacement {
         id: placement
 
-        surfaceWidth: centre.width
-        surfaceHeight: centre.height
+        surfaceWidth: centre.surfaceWidth
+        surfaceHeight: centre.surfaceHeight
         contentWidth: centre.cardWidth
         contentHeight: centre.cardHeight
         edgeInset: 0
@@ -243,13 +250,34 @@ Window {
     // button that opened this close it in one click rather than two. While the
     // overlay is up the button is behind it, so the click never reaches the
     // panel, never re-enters `toggle()`, and focus returns exactly once.
+    // Everything this overlay draws, in unscaled units, scaled once on its way
+    // to the output. The two visual children below name this as their parent
+    // instead of being nested inside it: their order, and so their stacking,
+    // stays exactly as it reads.
+    Item {
+        id: shellScene
+        objectName: "celestina-shell-scene"
+
+        width: centre.surfaceWidth
+        height: centre.surfaceHeight
+        transformOrigin: Item.TopLeft
+        scale: centre.shellScale
+    }
+
     MouseArea {
+        parent: shellScene
+        // Below the card, said rather than implied. These two are reparented
+        // instead of nested, and the order bindings are evaluated in is not
+        // the order they are written in — which put this catch-all on top of
+        // the card and made a click inside it dismiss the overlay.
+        z: -1
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
         onPressed: centre.dismissed()
     }
 
     SoftOverlayCard {
+        parent: shellScene
         id: scene
 
         ink: backdropInk

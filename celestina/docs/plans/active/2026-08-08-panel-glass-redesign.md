@@ -242,6 +242,7 @@ floating rounded surfaces.
 |---|---|---|---|---|---|---|---|
 | PANEL-1-A | `celestina:` | done | [inventory](../../inventories/2026-08-08-panel-glass-redesign/PANEL-1-A.numstat.tsv) | 42 files, +1344/-472 | Replace the hard panel plate with a soft shadow and borderless real compositor-glass capsules, reduce workspace and status readings to positional colour/icon semantics without discarding monitor grouping or CPU/memory values, expose the existing overlays, and keep the tray populated and visible across host restarts | [evidence](../../evidence/2026-08-08-panel-glass-baseline.md) | `VAL-PANEL-1` partial |
 | PANEL-1-I | `celestina:` | active | `CMakeLists.txt`; `qml/EdgeAttachedGeometry.js`; `qml/Panel.qml`; `qml/PanelFlank.qml`; `qml/PanelPill.qml`; `qml/PanelCluster.qml`; `qml/PanelActionButton.qml`; `qml/PanelMenuButton.qml`; panel opener controls; `qml/PanelPopupPlacement.qml`; `qml/CompositorGlassRegion.qml`; `qml/SoftMenuField.qml`; `qml/SoftMenu.qml`; `qml/SoftOverlayCard.qml`; `qml/AnchoredCard.qml`; panel-opened overlay/menu composition; `src/panelattachmentlease.{h,cpp}`; `src/panelmanager.{h,cpp}`; `src/panelblurcontroller.{h,cpp}`; `src/panelmenucontroller.{h,cpp}`; `src/overlaycontroller.{h,cpp}`; focused QML/C++ tests; Celestina version/status/roadmap/validation/evidence and the root version history | — | Replace the narrow central connector with one tension-shaped `ContextualVeil` membrane that spans the complete contextual width at both the panel edge and menu landing, narrows through a fluid body-proportional waist whose centre follows the exact clicked icon without collapsing to icon width, and keeps that opener's hover circle visible only while its own surface remains open; require matched tangent magnitude and direction through the waist so the short 20..36-pixel travel reads as one rounded liquid deformation rather than straight hourglass flanks, keep the clicked control rectangle separate for placement and leave the owning panel capsule and all dense content cards completely unchanged while preserving disjoint panel/menu blur regions, one finite compositor region per surface and every floating-route, provider, focus, Escape, outside-click and reduced-motion contract | [continuous bar veil and membrane evidence](../../evidence/2026-08-11-edge-attached-shell-prototype.md) | `VAL-PANEL-1` |
+| PANEL-1-N | `celestina:` | active | `qml/EdgeAttachedGeometry.js`; `qml/Panel.qml`; `qml/AnchoredCard.qml`; `qml/SoftMenuField.qml`; the five overlay roots; `src/shellscale.{h,cpp}`; `src/panelmenucontroller.cpp`; `src/overlaycontroller.cpp`; `CMakeLists.txt`; focused C++ tests | — | Draw contextual surfaces at their output's size too, not only the panel: scale each menu and overlay scene by the same per-output factor and divide the geometry they are handed by it, publish blur regions from mapped bounds so a scaled surface stops asking for a region smaller than it paints, and let an author name the factor when a density cannot answer for them | [per-output sizing and raster fidelity evidence](../../evidence/2026-08-12-output-sizing-and-raster-fidelity.md) | `VAL-PANEL-1` |
 | PANEL-1-M | `celestina:` | active | `src/provider_adapter/brightness.rs`; `scripts/smoke-production.sh`; `VALIDATION.md` | — | Stop the canonical verification workflow from reaching the graphics card: gate DDC behind `CELESTINA_DDC` so an automated run starts, registers and publishes exactly as a session does while opening no I²C bus, and set that gate in the release smoke, whose purpose was only ever to prove the host and compiled module load | [per-output sizing and raster fidelity evidence](../../evidence/2026-08-12-output-sizing-and-raster-fidelity.md) | `VAL-GPU-01` |
 | PANEL-1-L | `celestina:` | active | `src/shellscale.{h,cpp}`; `src/panelmanager.cpp`; `src/traywatcher.cpp`; `qml/Panel.qml`; `qml/PanelPill.qml`; raster-icon consumers; `qml/PerformanceMenu.qml`; `qml/NetworkMenu.qml`; `qml/BluetoothMenu.qml`; `CMakeLists.txt`; focused C++/QML tests; Celestina status/roadmap/validation/evidence | — | Make what the shell draws the same physical size on every output and stop it degrading what it draws: derive one bounded per-output scale from the output's real density and apply it as a scene scale so no token or layout number moves, rasterize a tray icon once at a size that survives any scale, ask for every raster at the density it will be drawn at, thicken glyph strokes and panel reading weights, and stop three provider-driven menus rebuilding their complete row list on every reading tick | [per-output sizing and raster fidelity evidence](../../evidence/2026-08-12-output-sizing-and-raster-fidelity.md) | `VAL-PANEL-1` |
 | PANEL-1-K | `celestina:` | active | `qml/EdgeAttachedGeometry.js`; `qml/PanelPill.qml`; `qml/PanelCluster.qml`; `qml/PanelActionButton.qml`; `qml/PhoneStatus.qml`; `qml/Panel.qml` | — | Weld the panel's reading capsules to the screen's top edge instead of floating them inside the bar, with the centred clock held by a visibly elastic skin and every flanked capsule keeping straight sides so no neighbour is overlapped and no gap on the bar is widened | [droplet fall evidence](../../evidence/2026-08-12-droplet-tension-fall.md) | `VAL-PANEL-1` |
@@ -834,3 +835,45 @@ This does not weaken the smoke, and it does not fix DDC. Nothing here
 coordinates between a Celestina helper and another shell's own detection, which
 is the shape both losses had; that remains the author's open question under
 `VAL-GPU-01`.
+
+
+## PANEL-1-N boundary
+
+`PANEL-1-L` sized the panel per output and said so plainly: the scene scale
+reached the panel only, so on a denser monitor the bar was right and every menu
+and overlay it opened was proportionally small. This finishes that.
+
+The mechanism is the panel's, unchanged: one scaled scene per window, with
+everything inside it in the shell's own units. `AnchoredCard` carries it for
+every menu; the five overlay roots carry it individually because each owns its
+own window. The two visual children of an overlay — the outside-click layer
+and the card — are reparented into that scene rather than nested inside it, so
+their declaration order is untouched and the diff stays readable. That trick
+has one cost, and it bit: the order bindings are evaluated in is not the order
+they are written in, so the dismiss layer landed on top of the card and a click
+inside the card dismissed the overlay. Its depth is now stated rather than
+implied.
+
+The geometry an attached surface is handed — the opener, the icon inside it,
+the bar's lower edge — arrives in output pixels because that is what the
+panel's geometry is measured in. It is divided once, in the two controllers,
+so no QML reading it has to know a scale exists.
+
+Publishing blur regions was wrong the moment anything was scaled, and had
+shipped that way: the origin came back mapped and the size did not, so on a
+1.15 output the panel asked the compositor to blur a region a third narrower
+than the bar it painted. Both collectors now derive the rectangle from two
+mapped corners, which cannot disagree with each other.
+
+`CELESTINA_SHELL_SCALE` lets the author name the factor. It was declared as a
+missing extension point in `PANEL-1-L` and is delivered here because the tests
+needed exactly the same thing: the offscreen platform reports a density of its
+own, which silently rewrote every geometry contract that had been stated in
+output pixels. Pinning it in the test environment keeps those contracts about
+the shell's layout, and one new case exercises a real 1.15 factor end to end so
+the conversion itself is not left unproven.
+
+A named number is bounded like a derived one but deliberately not stepped: the
+step exists to stop two similar monitors disagreeing by a fraction, not to
+round an instruction. An unreadable or absurd request leaves the derived factor
+alone rather than resizing the shell to nothing.

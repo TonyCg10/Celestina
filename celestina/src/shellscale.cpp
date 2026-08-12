@@ -1,5 +1,6 @@
 #include "shellscale.h"
 
+#include <QByteArray>
 #include <QScreen>
 #include <QtGlobal>
 
@@ -28,6 +29,16 @@ constexpr double scaleStep = 0.05;
 // millimetres; neither is a density this may divide by.
 constexpr double minimumSensibleDotsPerInch = 40.0;
 constexpr double maximumSensibleDotsPerInch = 400.0;
+
+// The author's own answer, when the derived one is wrong for them.
+//
+// A density is the best automatic proxy for how large something looks, and it
+// is not the whole of it: a television at sofa distance and a monitor at
+// arm's length can share a density and want very different sizes, and an
+// output whose EDID simply lies cannot be argued with. This is also what lets
+// an automated run pin the size, so a contract about where a menu lands is not
+// quietly rewritten by whatever density the test platform reports.
+const char *const scaleOverrideVariable = "CELESTINA_SHELL_SCALE";
 } // namespace
 
 double shellScaleForDensity(double density)
@@ -45,8 +56,31 @@ double shellScaleForDensity(double density)
     return qBound(minimumScale, stepped, maximumScale);
 }
 
+double shellScaleOverride(const char *requested)
+{
+    if (!requested)
+        return 0.0;
+
+    bool readable = false;
+    const double asked = QByteArray(requested).trimmed().toDouble(&readable);
+    if (!readable || !std::isfinite(asked) || asked <= 0.0) {
+        // An unreadable request is not an instruction to resize the shell to
+        // nothing; the derived factor stands.
+        return 0.0;
+    }
+
+    // Bounded like every derived factor, and deliberately not stepped: an
+    // author naming a number means that number.
+    return qBound(minimumScale, asked, maximumScale);
+}
+
 double shellScaleForScreen(const QScreen *screen)
 {
+    const double overridden =
+        shellScaleOverride(qgetenv(scaleOverrideVariable).constData());
+    if (overridden > 0.0)
+        return overridden;
+
     // `physicalDotsPerInch` divides the output's logical width by its real
     // width, so the compositor's own scale is already accounted for and only
     // the panel's density is left.

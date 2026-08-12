@@ -527,6 +527,25 @@ function sideAttachedMembrane(frameWidth, frameHeight,
     return shape;
 }
 
+// An item's own bounds in the coordinates of the window that carries it.
+//
+// Mapping the origin and then publishing the item's own width and height is
+// wrong the moment anything between the item and the window is scaled: the
+// origin comes back in real pixels and the size does not. That mismatch is not
+// hypothetical — it shipped, and on a 1.15-scaled output it left a third of
+// the bar's width and the last pixels of its height outside the region the
+// compositor was asked to blur. Two mapped corners cannot disagree with each
+// other.
+function mapRect(item) {
+    if (!item)
+        return Qt.rect(0, 0, 0, 0);
+
+    const near = item.mapToItem(null, 0, 0);
+    const far = item.mapToItem(null, item.width, item.height);
+    return Qt.rect(Math.min(near.x, far.x), Math.min(near.y, far.y),
+                   Math.abs(far.x - near.x), Math.abs(far.y - near.y));
+}
+
 function mapPolygon(item, polygon) {
     const mapped = [];
     if (!item || !polygon)

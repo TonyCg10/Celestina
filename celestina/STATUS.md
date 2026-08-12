@@ -48,6 +48,30 @@
 
 ## Current checkout truth
 
+- **Current milestone prototype — `PANEL-1-M` and `PANEL-1-N`.** The canonical
+  verification workflow no longer reaches the graphics card. `complete-production.sh`
+  ends in a smoke that starts the real host with the real provider adapter, and
+  that adapter probed DDC on the same I²C buses the running desktop uses; two
+  GPU losses on 2026-08-12 had concurrent `ddcutil` children on one bus
+  immediately before the machine went down. `CELESTINA_DDC` gates it and the
+  smoke sets it to `0`: the helper still starts, registers and publishes as it
+  does in a session, and opens no bus. Verified on the real binary — the
+  journal records `ddc.disabled`, no `ddc.start`, `ddc.detected` or `ddc.end`,
+  and the smoke runs with no `ddcutil` line at all.
+  Contextual surfaces are now sized per output too, which `PANEL-1-L` had
+  explicitly left undone: every menu and overlay scales its own scene by the
+  same factor as the panel, and the opener, icon anchor and attachment seam
+  they are handed are divided by it once in the two controllers. That also
+  fixes a defect `PANEL-1-L` shipped: blur regions were published from a mapped
+  origin and an unmapped size, so on a 1.15 output the panel asked to blur a
+  region a third narrower than the bar it painted; both collectors now derive
+  the rectangle from two mapped corners. `CELESTINA_SHELL_SCALE` lets the
+  author name the factor when a density cannot answer for them, and pins it in
+  the test environment — the offscreen platform reports a density of its own,
+  which had been silently rewriting geometry contracts stated in output pixels.
+  The complete CTest suite passes 18/18, including one case that exercises a
+  real 1.15 factor end to end. The author-run visual pass remains pending.
+
 - **Current milestone prototype — `PANEL-1-K` and `PANEL-1-L`.** The bar's own
   reading capsules now reach the screen's top edge instead of floating inside
   the veil: each keeps its rounded bottom and loses the gap above it, and the

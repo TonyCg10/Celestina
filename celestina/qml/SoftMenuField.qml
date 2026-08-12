@@ -207,8 +207,7 @@ Item {
                 if (child.objectName === "celestina-compositor-glass-region"
                     && child.visible
                     && child.width > 0 && child.height > 0) {
-                    const at = child.mapToItem(null, 0, 0);
-                    const rect = Qt.rect(at.x, at.y, child.width, child.height);
+                    const rect = EdgeAttachedGeometry.mapRect(child);
                     foundRects.push(rect);
                     foundRegions.push({
                         "rect": rect,

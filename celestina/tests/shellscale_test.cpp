@@ -19,6 +19,7 @@ private slots:
     void anUnbelievableReadingChangesNothing();
     void aPlausibleExtremeIsBoundedRatherThanObeyed();
     void factorsSettleOnAStepSoSimilarMonitorsAgree();
+    void aNamedNumberWinsOverTheDerivedOne();
 };
 
 namespace {
@@ -95,6 +96,30 @@ void ShellScaleTest::factorsSettleOnAStepSoSimilarMonitorsAgree()
     }
 }
 
-QTEST_APPLESS_MAIN(ShellScaleTest)
+void ShellScaleTest::aNamedNumberWinsOverTheDerivedOne()
+{
+    // Density is the best automatic proxy for how large something looks and
+    // not the whole of it: no monitor publishes how far away it is being read
+    // from, and some publish a physical size that is simply wrong. An author
+    // naming a number is answering a question the EDID cannot.
+    QCOMPARE(shellScaleOverride("1.3"), 1.3);
+    QCOMPARE(shellScaleOverride(" 1.3 "), 1.3);
+    // Named, so taken as named: the step exists to stop two similar monitors
+    // disagreeing by a fraction, not to round an instruction.
+    QCOMPARE(shellScaleOverride("1.32"), 1.32);
+    // Bounded like every derived factor.
+    QCOMPARE(shellScaleOverride("9"), 1.75);
+    QCOMPARE(shellScaleOverride("0.1"), 0.85);
 
+    // Zero means "nothing was asked for", so the derived factor stands. An
+    // unreadable or absurd request must never resize the shell to nothing.
+    QCOMPARE(shellScaleOverride(nullptr), 0.0);
+    QCOMPARE(shellScaleOverride(""), 0.0);
+    QCOMPARE(shellScaleOverride("   "), 0.0);
+    QCOMPARE(shellScaleOverride("large"), 0.0);
+    QCOMPARE(shellScaleOverride("0"), 0.0);
+    QCOMPARE(shellScaleOverride("-2"), 0.0);
+}
+
+QTEST_APPLESS_MAIN(ShellScaleTest)
 #include "shellscale_test.moc"

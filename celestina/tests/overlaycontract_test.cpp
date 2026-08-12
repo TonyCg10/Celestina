@@ -58,6 +58,7 @@ private slots:
     void aPanelOpenedOverlayFollowsOnlyItsButton();
     void everyPanelOpenedOverlayUsesTheSamePlacement();
     void anAttachedOverlayNeverReblursThePanelRows();
+    void aScaledOutputDrawsLargerWithoutMovingAnythingItStates();
     void sessionCardGrowthDoesNotResizeItsOutputSurface();
     void aClickOutsideTheCardDismissesEveryOverlay();
     void aClickOnTheCardDismissesNothing();
@@ -468,6 +469,85 @@ void OverlayContractTest::everyPanelOpenedOverlayUsesTheSamePlacement()
             < attachedGapsByWidth.value(530));
     QVERIFY(attachedGapsByWidth.value(530)
             < attachedGapsByWidth.value(620));
+}
+
+void OverlayContractTest::aScaledOutputDrawsLargerWithoutMovingAnythingItStates()
+{
+    // A denser output draws the same surface larger. What must not change is
+    // anything the design states: the card is the same number of units wide,
+    // it still centres on its opener and its membrane still starts at the
+    // bar's own edge. Only the last step to real pixels differs, so the whole
+    // scene is scaled and every number inside it is left alone.
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+
+    QQmlComponent overlay(&engine, sourceFor(QStringLiteral("ControlCentre")));
+    QVERIFY2(overlay.isReady(), qPrintable(overlay.errorString()));
+
+    constexpr double scale = 1.15;
+    constexpr int outputWidth = 2560;
+    constexpr int outputHeight = 1440;
+    // What the host divides by that factor before handing it over: a 46-pixel
+    // bar and a 34-pixel control on this output are the shell's own 40 and 30.
+    const QRectF opener(900 / scale, 5 / scale, 34 / scale, 34 / scale);
+    const QRectF anchor(906 / scale, 11 / scale, 21 / scale, 21 / scale);
+    const qreal seam = 46 / scale;
+
+    std::unique_ptr<QObject> root(overlay.createWithInitialProperties({
+        {QStringLiteral("reducedMotion"), true},
+        {QStringLiteral("providerSource"), QVariant::fromValue<QObject *>(nullptr)},
+        {QStringLiteral("shellScale"), scale},
+        {QStringLiteral("anchoredFromPanel"), true},
+        {QStringLiteral("openerRect"), opener},
+        {QStringLiteral("attachmentAnchorRect"), anchor},
+        {QStringLiteral("attachmentStartY"), seam},
+    }));
+    auto *window = qobject_cast<QQuickWindow *>(root.get());
+    QVERIFY(window);
+    window->resize(outputWidth, outputHeight);
+
+    // The surface the card is placed inside is the output in the shell's own
+    // units, not in output pixels.
+    QCOMPARE(qRound(window->property("surfaceWidth").toReal()),
+             qRound(outputWidth / scale));
+    QCOMPARE(qRound(window->property("surfaceHeight").toReal()),
+             qRound(outputHeight / scale));
+
+    // The card keeps the width the design gives it, and still centres on the
+    // control that opened it — both in those same units. The width is checked
+    // against the same component drawn unscaled rather than against a number
+    // written here, because the claim is that scaling does not change it.
+    std::unique_ptr<QObject> unscaledRoot(overlay.createWithInitialProperties({
+        {QStringLiteral("reducedMotion"), true},
+        {QStringLiteral("providerSource"), QVariant::fromValue<QObject *>(nullptr)},
+    }));
+    QVERIFY(unscaledRoot);
+    const int cardWidth = window->property("cardWidth").toInt();
+    QVERIFY(cardWidth > 0);
+    QCOMPARE(cardWidth, unscaledRoot->property("cardWidth").toInt());
+    QCOMPARE(window->property("cardX").toInt(),
+             qRound(opener.x() + opener.width() / 2 - cardWidth / 2.0));
+    QCOMPARE(window->property("cardY").toInt(),
+             qRound(seam) + window->property("anchorGap").toInt());
+
+    // And the scene really is scaled, so all of that reaches the output
+    // larger. Its own size stays in unscaled units, which is what keeps the
+    // numbers above meaningful.
+    QQuickItem *const scene = window->findChild<QQuickItem *>(
+        QStringLiteral("celestina-shell-scene")
+    );
+    QVERIFY(scene);
+    QCOMPARE(scene->scale(), scale);
+    QCOMPARE(qRound(scene->width()), qRound(outputWidth / scale));
+
+    // The blur region is published in real window pixels, so it must come back
+    // scaled even though everything that produced it was not.
+    QTRY_COMPARE(window->property("glassRegions").toList().size(), 1);
+    const QRectF published = window->property("glassRegions")
+                                 .toList().constFirst().toMap()
+                                 .value(QStringLiteral("rect")).toRectF();
+    QCOMPARE(qRound(published.top()), qRound(seam * scale));
+    QVERIFY(published.width() > cardWidth);
 }
 
 void OverlayContractTest::anAttachedOverlayNeverReblursThePanelRows()

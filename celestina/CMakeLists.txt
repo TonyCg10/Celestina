@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.13.1 LANGUAGES CXX)
+project(celestina VERSION 0.14.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -327,7 +327,7 @@ if(BUILD_TESTING)
     target_link_libraries(celestina-tray-watcher-service-test PRIVATE Qt6::Test Qt6::DBus)
     add_test(NAME celestina-tray-watcher-service COMMAND celestina-tray-watcher-service-test)
     set_tests_properties(celestina-tray-watcher-service PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;CELESTINA_SHELL_SCALE=1"
     )
 
     # The tray host end to end, against a private bus it starts itself. It
@@ -354,7 +354,7 @@ if(BUILD_TESTING)
     )
     add_test(NAME celestina-tray-watcher COMMAND celestina-tray-watcher-test)
     set_tests_properties(celestina-tray-watcher PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;CELESTINA_SHELL_SCALE=1"
     )
 
     qt_add_executable(celestina-shell-commandline-test
@@ -385,6 +385,8 @@ if(BUILD_TESTING)
         src/workspacefocusrequests.cpp
         src/overlaycontroller.h
         src/overlaycontroller.cpp
+        src/shellscale.h
+        src/shellscale.cpp
         src/panelattachmentlease.h
         src/panelattachmentlease.cpp
         src/overlaysurface.h
@@ -414,7 +416,7 @@ if(BUILD_TESTING)
     )
     add_test(NAME celestina-shell-service COMMAND celestina-shell-service-test)
     set_tests_properties(celestina-shell-service PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;CELESTINA_SHELL_SCALE=1"
     )
 
     # The shared layer-surface recipe and the menu surface that shares it; it
@@ -442,6 +444,8 @@ if(BUILD_TESTING)
         src/panelblurcontroller.cpp
         src/panelmenucontroller.h
         src/panelmenucontroller.cpp
+        src/shellscale.h
+        src/shellscale.cpp
         src/panelattachmentlease.h
         src/panelattachmentlease.cpp
         src/overlaysurface.h
@@ -471,7 +475,7 @@ if(BUILD_TESTING)
     )
     add_test(NAME celestina-surface-manager COMMAND celestina-surface-manager-test)
     set_tests_properties(celestina-surface-manager PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;CELESTINA_SHELL_SCALE=1"
     )
 
     # What each overlay component declares, and what a click outside its card
@@ -482,6 +486,8 @@ if(BUILD_TESTING)
         tests/overlaycontract_test.cpp
         src/overlaycontroller.h
         src/overlaycontroller.cpp
+        src/shellscale.h
+        src/shellscale.cpp
         src/panelattachmentlease.h
         src/panelattachmentlease.cpp
         src/overlaysurface.h
@@ -505,7 +511,7 @@ if(BUILD_TESTING)
     add_test(NAME celestina-overlay-contract COMMAND celestina-overlay-contract-test)
     set_tests_properties(celestina-overlay-contract PROPERTIES
         ENVIRONMENT
-            "QML2_IMPORT_PATH=${CELESTINA_STYLE_IMPORT_ROOT};QT_QPA_PLATFORM=offscreen"
+            "QML2_IMPORT_PATH=${CELESTINA_STYLE_IMPORT_ROOT};QT_QPA_PLATFORM=offscreen;CELESTINA_SHELL_SCALE=1"
     )
 
     # What each connectivity menu is handed, and what a click or Escape does to
@@ -530,6 +536,8 @@ if(BUILD_TESTING)
         src/requestledger.cpp
         src/panelmenucontroller.h
         src/panelmenucontroller.cpp
+        src/shellscale.h
+        src/shellscale.cpp
         src/panelattachmentlease.h
         src/panelattachmentlease.cpp
         src/panelmenusurface.h
@@ -561,7 +569,7 @@ if(BUILD_TESTING)
     add_test(NAME celestina-indicator-menu COMMAND celestina-indicator-menu-test)
     set_tests_properties(celestina-indicator-menu PROPERTIES
         ENVIRONMENT
-            "QML2_IMPORT_PATH=${CELESTINA_STYLE_IMPORT_ROOT};QT_QPA_PLATFORM=offscreen"
+            "QML2_IMPORT_PATH=${CELESTINA_STYLE_IMPORT_ROOT};QT_QPA_PLATFORM=offscreen;CELESTINA_SHELL_SCALE=1"
     )
 
     qt_add_executable(celestina-output-chooser-test
@@ -574,6 +582,6 @@ if(BUILD_TESTING)
     add_test(NAME celestina-output-chooser COMMAND celestina-output-chooser-test)
     set_tests_properties(celestina-output-chooser PROPERTIES
         ENVIRONMENT
-            "QML2_IMPORT_PATH=${CELESTINA_STYLE_IMPORT_ROOT};QT_QPA_PLATFORM=offscreen"
+            "QML2_IMPORT_PATH=${CELESTINA_STYLE_IMPORT_ROOT};QT_QPA_PLATFORM=offscreen;CELESTINA_SHELL_SCALE=1"
     )
 endif()

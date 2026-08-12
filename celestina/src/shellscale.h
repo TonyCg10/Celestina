@@ -26,4 +26,9 @@ class QScreen;
 // counts as an unbelievable reading — and a QScreen cannot be constructed to
 // state it in a test.
 double shellScaleForDensity(double dotsPerInch);
+// The author's own answer, read from `CELESTINA_SHELL_SCALE`, or zero when
+// nothing readable was asked for. Density is the best automatic proxy for how
+// large something looks and not the whole of it — viewing distance is not
+// published by any monitor — so a named number wins over a derived one.
+double shellScaleOverride(const char *requested);
 double shellScaleForScreen(const QScreen *screen);

@@ -98,9 +98,22 @@ Window {
     signal ready()
     signal dismissed()
 
-    width: cardWidth
-           + (attachedToMenuSide ? Math.max(0, sideAttachmentGap) : 0)
-    height: cardHeight
+    // How much larger this output needs the shell drawn; see shellscale.h. The
+    // host supplies it and also divides the geometry it hands this card by it,
+    // so every number below — the card, the opener it centres on, the seam a
+    // membrane starts at — is already in these unscaled units and only the
+    // last step to real pixels differs per monitor.
+    property real shellScale: 1.0
+    // The surface in those same units. A card-covering menu is sized from
+    // here; an output-covering one is resized by the compositor and reads its
+    // real size back through the same division.
+    readonly property real surfaceWidth: root.width / root.shellScale
+    readonly property real surfaceHeight: root.height / root.shellScale
+
+    width: Math.round((cardWidth
+           + (attachedToMenuSide ? Math.max(0, sideAttachmentGap) : 0))
+           * shellScale)
+    height: Math.round(cardHeight * shellScale)
     color: CelestinaTheme.clear
 
     Component.onCompleted: {
@@ -111,8 +124,8 @@ Window {
     PanelPopupPlacement {
         id: placement
 
-        surfaceWidth: root.width
-        surfaceHeight: root.height
+        surfaceWidth: root.surfaceWidth
+        surfaceHeight: root.surfaceHeight
         contentWidth: root.cardWidth
         contentHeight: root.cardHeight
         fallbackX: root.menuX
@@ -121,10 +134,19 @@ Window {
         preserveRequestedTop: root.preserveRequestedTop
     }
 
+    // Everything this card draws, in unscaled units, scaled once on its way to
+    // the output. Scaling here rather than resizing every token keeps the
+    // layout numbers the design states — and `CelestinaTheme` is a singleton
+    // shared by every simultaneously mapped surface, so it could not carry a
+    // per-output size even if that were wanted.
     Item {
         id: scene
+        objectName: "celestina-shell-scene"
 
-        anchors.fill: parent
+        width: root.surfaceWidth
+        height: root.surfaceHeight
+        transformOrigin: Item.TopLeft
+        scale: root.shellScale
     }
 
 }

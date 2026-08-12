@@ -11,6 +11,7 @@
 
 #include "overlaysurface.h"
 #include "panelpopupplacement.h"
+#include "shellscale.h"
 
 QString overlaySourceProperty(const QString &qmlComponentName)
 {
@@ -97,24 +98,37 @@ QWindow *OverlayController::createWindow()
 {
     QVariantMap properties = initialProperties();
     if (!m_opener.isEmpty() && m_openerPanel && m_openerPanel->screen()) {
-        const QPointF outputOrigin =
-            m_openerPanel->screen()->geometry().topLeft();
+        const QScreen *const screen = m_openerPanel->screen();
+        const QPointF outputOrigin = screen->geometry().topLeft();
+        // An overlay is drawn at the size its output asks for, exactly as the
+        // panel it comes from is; see shellscale.h. Everything below arrives
+        // in output pixels and is divided once here, so the QML lays out in
+        // the unscaled units its tokens are written in.
+        const double shellScale = shellScaleForScreen(screen);
+        const auto inShellUnits = [shellScale](const QRectF &rect) {
+            return shellScale > 0
+                ? QRectF(rect.x() / shellScale, rect.y() / shellScale,
+                         rect.width() / shellScale, rect.height() / shellScale)
+                : rect;
+        };
         const QRectF openerOnOutput =
             panelPopupOpenerOnOutput(m_opener, outputOrigin);
         const QRectF attachmentAnchorOnOutput =
             panelPopupOpenerOnOutput(m_attachmentAnchor, outputOrigin);
         properties.insert(QStringLiteral("anchoredFromPanel"), true);
-        properties.insert(QStringLiteral("openerRect"), openerOnOutput);
+        properties.insert(
+            QStringLiteral("openerRect"), inShellUnits(openerOnOutput));
         properties.insert(
             QStringLiteral("attachmentAnchorRect"),
-            attachmentAnchorOnOutput
+            inShellUnits(attachmentAnchorOnOutput)
         );
         // The panel is a top-anchored, edge-to-edge surface whose height is
         // exactly the continuous backdrop. Menus attach to that lower edge,
         // not to the variable-height control rectangle inside it.
         properties.insert(
             QStringLiteral("attachmentStartY"),
-            qMax(0, m_openerPanel->height())
+            shellScale > 0 ? qMax(0, m_openerPanel->height()) / shellScale
+                           : qMax(0, m_openerPanel->height())
         );
     }
 
@@ -163,6 +177,12 @@ void OverlayController::open()
     QWindow *const overlay = createWindow();
     if (!overlay)
         return;
+
+    // The output is only known here for a keybind route, which names no click
+    // and follows the pointer. `createWindow` already divided any opener
+    // geometry by this same factor, because that route has a panel and so
+    // resolves to this very screen.
+    overlay->setProperty("shellScale", shellScaleForScreen(screen));
 
     if (!m_surface->open(overlay, screen)) {
         delete overlay;

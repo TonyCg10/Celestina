@@ -10,6 +10,7 @@
 #include "niriclient.h"
 #include "panelpopupplacement.h"
 #include "panelmenusurface.h"
+#include "shellscale.h"
 
 namespace {
 // Where the card goes inside a surface that now covers the whole output.
@@ -35,10 +36,21 @@ void placeCard(QWindow *card, QWindow *panel, const QPoint &globalBodyOrigin)
 
 QVariantMap menuOutputProperties(QWindow *panel)
 {
-    const QString output = panel && panel->screen() ? panel->screen()->name() : QString();
+    const QScreen *const screen = panel ? panel->screen() : nullptr;
     return QVariantMap {
-        {QStringLiteral("outputName"), output},
+        {QStringLiteral("outputName"), screen ? screen->name() : QString()},
+        // Every contextual surface is drawn at the size its output asks for,
+        // exactly as the panel it comes from is; see shellscale.h. The
+        // geometry handed to it below is divided by this, so the QML lays out
+        // in the unscaled units its tokens are written in.
+        {QStringLiteral("shellScale"), shellScaleForScreen(screen)},
     };
+}
+
+/// The factor a surface on this panel's output draws at.
+double menuShellScale(QWindow *panel)
+{
+    return shellScaleForScreen(panel ? panel->screen() : nullptr);
 }
 
 QRectF openerOnOutput(QWindow *panel, const QRectF &globalOpener)
@@ -53,23 +65,41 @@ QRectF openerOnOutput(QWindow *panel, const QRectF &globalOpener)
     );
 }
 
+/// Output pixels into the units the surface lays out in.
+QRectF inShellUnits(const QRectF &rect, double scale)
+{
+    if (scale <= 0)
+        return rect;
+
+    return QRectF(rect.x() / scale, rect.y() / scale,
+                  rect.width() / scale, rect.height() / scale);
+}
+
 void addPanelOpenerProperties(
     QVariantMap &properties,
     const QRectF &opener,
     const QRectF &attachmentAnchor,
-    int attachmentStartY
+    int attachmentStartY,
+    double shellScale
 )
 {
     if (opener.isEmpty())
         return;
 
+    // The opener, the icon inside it and the bar's lower edge all arrive in
+    // output pixels because that is what the panel's own geometry is measured
+    // in. The surface lays out in unscaled units, so they are converted once
+    // here rather than at every place the QML reads them.
     properties.insert(QStringLiteral("anchoredFromPanel"), true);
-    properties.insert(QStringLiteral("openerRect"), opener);
     properties.insert(
-        QStringLiteral("attachmentAnchorRect"), attachmentAnchor);
+        QStringLiteral("openerRect"), inShellUnits(opener, shellScale));
+    properties.insert(
+        QStringLiteral("attachmentAnchorRect"),
+        inShellUnits(attachmentAnchor, shellScale));
     properties.insert(
         QStringLiteral("attachmentStartY"),
-        qMax(0, attachmentStartY)
+        shellScale > 0 ? qMax(0, attachmentStartY) / shellScale
+                       : qMax(0, attachmentStartY)
     );
 }
 
@@ -273,7 +303,8 @@ void PanelMenuController::openWorkspaceMap(
         initialProperties,
         localOpener,
         localAttachmentAnchor,
-        attachmentStartY);
+        attachmentStartY,
+        menuShellScale(panel));
     initialProperties.insert(menuOutputProperties(panel));
     QObject *rootObject =
         m_workspaceMapComponent.createWithInitialProperties(initialProperties);
@@ -378,7 +409,8 @@ void PanelMenuController::toggleIndicatorMenu(
         initialProperties,
         localOpener,
         localAttachmentAnchor,
-        attachmentStartY);
+        attachmentStartY,
+        menuShellScale(panel));
     if (needsProvider) {
         initialProperties.insert(
             QStringLiteral("providerSource"),
@@ -492,7 +524,8 @@ void PanelMenuController::toggleTrayItemsMenu(
         initialProperties,
         localOpener,
         localAttachmentAnchor,
-        attachmentStartY);
+        attachmentStartY,
+        menuShellScale(panel));
     initialProperties.insert(menuOutputProperties(panel));
     QObject *rootObject =
         m_trayItemsComponent.createWithInitialProperties(initialProperties);

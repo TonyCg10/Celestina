@@ -426,6 +426,15 @@ not apply the rest of UX-2; menu, overlay and provider work is limited to the
 exact corrections declared in the active plan. Scope, order and evidence are in
 [the PANEL-1 plan](docs/plans/active/2026-08-08-panel-glass-redesign.md).
 
+`PANEL-1-M` stops the canonical verification workflow reaching the graphics
+card: DDC is gated by `CELESTINA_DDC` and the release smoke sets it to `0`,
+after two GPU losses whose journals both end in concurrent `ddcutil` children
+on one I²C bus. `PANEL-1-N` then finishes per-output sizing — every menu and
+overlay scales its own scene like the panel, the geometry they are handed is
+divided once in the controllers, blur regions are published from mapped bounds
+rather than a mapped origin with an unmapped size, and `CELESTINA_SHELL_SCALE`
+lets the author name the factor.
+
 `PANEL-1-K` welds the bar's own reading capsules to the screen's top edge,
 with the centred clock alone held by a visibly elastic skin and every flanked
 capsule keeping straight sides so nothing overlaps and no gap widens.

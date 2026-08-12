@@ -132,15 +132,24 @@ An application that publishes only a small pixmap and has no themed icon
 remains soft when magnified. That is the best source available and is not
 ours to fix.
 
-The scene scale is applied to the panel only. Menus and overlays are separate
-windows and still draw at the unscaled size, so on a denser output the bar is
-correct and its contextual surfaces are proportionally small. The author saw
-and accepted this state; extending it to the contextual surfaces is the
-obvious next step and is not claimed here.
+The scene scale reached the panel only when this was first written; menus and
+overlays drew unscaled, so on a denser output the bar was right and its
+contextual surfaces were proportionally small. `PANEL-1-N` closes that: every
+menu and overlay scales its own scene by the same factor, the geometry they are
+handed is divided by it in the two controllers, and one case exercises a real
+1.15 factor end to end.
 
-The per-output manual override the policy allows for — a television at sofa
-distance, or a monitor whose EDID lies — is a declared extension point and is
-not implemented.
+That unit also corrects a defect this one shipped. Blur regions were published
+by mapping the origin and using the item's own size, which disagree the moment
+anything between the item and the window is scaled: on a 1.15 output the panel
+asked the compositor to blur a region a third narrower and six pixels shorter
+than the bar it painted. Both collectors now derive the rectangle from two
+mapped corners.
+
+`CELESTINA_SHELL_SCALE` delivers the manual override this record listed as
+missing — a television at sofa distance, or a monitor whose EDID lies. It is
+also what the tests needed: the offscreen platform reports a density of its
+own, which silently rewrote every geometry contract stated in output pixels.
 
 Nothing in this record is an author visual pass. `VAL-PANEL-1` remains
 pending, and the nested session cannot substitute for it here: `winit`

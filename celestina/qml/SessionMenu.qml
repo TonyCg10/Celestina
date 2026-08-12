@@ -60,6 +60,14 @@ Window {
     property string outcomeState: ""
     property string outcomeReason: ""
 
+
+    // How much larger this output needs the shell drawn; see shellscale.h. The
+    // host supplies it and divides the geometry it hands this overlay by it, so
+    // every number here is already in unscaled units.
+    property real shellScale: 1.0
+    readonly property real surfaceWidth: menu.width / menu.shellScale
+    readonly property real surfaceHeight: menu.height / menu.shellScale
+
     color: CelestinaTheme.clear
     title: qsTr("Sesión")
 
@@ -67,8 +75,8 @@ Window {
         // These are bootstrap dimensions, not bindings. Once layer-shell gives
         // this Window the output size, confirmation or outcome copy may grow
         // the card without shrinking the input surface back around it.
-        menu.width = menu.cardWidth;
-        menu.height = menu.cardHeight;
+        menu.width = Math.round(menu.cardWidth * menu.shellScale);
+        menu.height = Math.round(menu.cardHeight * menu.shellScale);
         CelestinaTheme.reducedMotion = menu.reducedMotion;
         column.forceActiveFocus();
     }
@@ -76,8 +84,8 @@ Window {
     PanelPopupPlacement {
         id: placement
 
-        surfaceWidth: menu.width
-        surfaceHeight: menu.height
+        surfaceWidth: menu.surfaceWidth
+        surfaceHeight: menu.surfaceHeight
         contentWidth: menu.cardWidth
         contentHeight: menu.cardHeight
         edgeInset: 0
@@ -133,13 +141,34 @@ Window {
     // button that opened this close it in one click rather than two. While the
     // overlay is up the button is behind it, so the click never reaches the
     // panel, never re-enters `toggle()`, and focus returns exactly once.
+    // Everything this overlay draws, in unscaled units, scaled once on its way
+    // to the output. The two visual children below name this as their parent
+    // instead of being nested inside it: their order, and so their stacking,
+    // stays exactly as it reads.
+    Item {
+        id: shellScene
+        objectName: "celestina-shell-scene"
+
+        width: menu.surfaceWidth
+        height: menu.surfaceHeight
+        transformOrigin: Item.TopLeft
+        scale: menu.shellScale
+    }
+
     MouseArea {
+        parent: shellScene
+        // Below the card, said rather than implied. These two are reparented
+        // instead of nested, and the order bindings are evaluated in is not
+        // the order they are written in — which put this catch-all on top of
+        // the card and made a click inside it dismiss the overlay.
+        z: -1
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
         onPressed: menu.dismissed()
     }
 
     SoftOverlayCard {
+        parent: shellScene
         id: card
 
         ink: backdropInk

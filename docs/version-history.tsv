@@ -56,3 +56,4 @@ celestina	0.12.0	milestone	PANEL-1-I	Add the edge-attached shell prototype
 celestina-style	1.5.0	milestone	STYLE-G7-K	Fix icon rasterization and thicken the glyph strokes
 celestina	0.13.0	milestone	PANEL-1-L	Fix per-output sizing, raster fidelity and tick-rebuilt menus
 celestina	0.13.1	bug	PANEL-1-M	Fix the release smoke reaching the graphics card over DDC
+celestina	0.14.0	milestone	PANEL-1-N	Fix contextual surfaces ignoring per-output size and scaled blur
