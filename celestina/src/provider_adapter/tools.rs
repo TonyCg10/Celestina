@@ -186,7 +186,7 @@ pub fn probe_bounded_with_cancel(
     // The output itself is never recorded: `ddcutil detect` names monitors and
     // a player's status names what somebody is listening to. Its size is.
     journal::record(
-        process_event("process.exit", &command)
+        process_exit_event(&command, output.status.success())
             .with("child_pid", Value::Uint(pid))
             .with(
                 "code",
@@ -215,8 +215,56 @@ fn command_text(program: &str, args: &[&str]) -> String {
     text
 }
 
+/// Programs that reach the graphics card, and so keep the flushed level.
+///
+/// The reason these events are `Critical` is the GPU: the card has been lost
+/// from the bus while this shell was running, and a child that started and
+/// never came back is the shape an investigation needs to survive a power cut.
+/// That argument is about `ddcutil` and the I²C buses it opens. It was never
+/// about `wpctl`.
+const GPU_ADJACENT_PROGRAMS: [&str; 1] = ["ddcutil"];
+
+fn reaches_the_graphics_card(command: &str) -> bool {
+    let program = command.split(' ').next().unwrap_or(command);
+    // Compared on the file name so an absolute path is the same program.
+    let name = program.rsplit('/').next().unwrap_or(program);
+    GPU_ADJACENT_PROGRAMS.contains(&name)
+}
+
+/// The ordinary lifecycle of a child that cannot touch the card.
+///
+/// Recorded, and not flushed. `Critical` means `write` plus `flush` plus
+/// `sync_data` for every line, and the audio provider polls by spawning
+/// `wpctl` every two seconds — three flushed events each. Measured on the
+/// author's idle session that was 290 KB/s reaching the disk for a file
+/// growing 2.3 KB/s: roughly 126 times amplification, about 25 GB a day of
+/// writes for poll bookkeeping. The events still reach the file in order; they
+/// simply travel in the buffer the sink already has.
+/// Deliberately not `process.reaped`: that one is only ever recorded after a
+/// timeout or a broken wait, which is the overlap `AUD-1-C` exists to make
+/// visible, and it is rare enough to deserve the disk.
+const ROUTINE_LIFECYCLE: [&str; 3] = ["process.spawn", "process.started", "process.exit"];
+
 fn process_event(name: &str, command: &str) -> Event {
-    Event::new(Level::Critical, name).with_text("command", command)
+    // Anything that is not the ordinary lifecycle is an anomaly — a spawn that
+    // failed, a timeout, a kill, a wait that broke — and those are rare and
+    // worth the disk. So is every event about a GPU-adjacent child.
+    let level = if ROUTINE_LIFECYCLE.contains(&name) && !reaches_the_graphics_card(command) {
+        Level::Info
+    } else {
+        Level::Critical
+    };
+    Event::new(level, name).with_text("command", command)
+}
+
+/// A child that ended badly is an anomaly whatever it was, so it keeps the
+/// flushed level even when the ordinary exit beside it does not.
+fn process_exit_event(command: &str, ok: bool) -> Event {
+    if ok {
+        process_event("process.exit", command)
+    } else {
+        Event::new(Level::Critical, "process.exit").with_text("command", command)
+    }
 }
 
 fn elapsed_ms(since: Instant) -> u64 {
@@ -365,6 +413,70 @@ mod tests {
             .into_iter()
             .filter(|line| line["event"] == name)
             .collect()
+    }
+
+    /// What a routine poll costs the disk, and what still survives a power cut.
+    ///
+    /// `Critical` is `write` + `flush` + `sync_data` per line. The audio
+    /// provider polls by spawning `wpctl` every two seconds, so recording its
+    /// ordinary lifecycle at that level put 290 KB/s on the author's idle SSD
+    /// for a journal file growing 2.3 KB/s — about 25 GB a day of poll
+    /// bookkeeping. Nothing here stops being recorded; the ordinary lines
+    /// simply travel in the sink's buffer.
+    #[test]
+    fn only_the_gpu_and_the_anomalies_are_worth_an_fsync() {
+        // A poll that succeeds is recorded without reaching for the disk.
+        for name in ["process.spawn", "process.started", "process.exit"] {
+            assert_eq!(
+                process_event(name, "wpctl get-volume @DEFAULT_AUDIO_SINK@").level(),
+                Level::Info,
+                "{name} of a routine tool must not flush"
+            );
+        }
+
+        // The reason the level exists at all: a child that can take the
+        // graphics card down with it, whatever it is doing.
+        for name in ["process.spawn", "process.started", "process.exit"] {
+            assert_eq!(
+                process_event(name, "ddcutil detect --brief").level(),
+                Level::Critical,
+                "{name} of a DDC child must survive a power cut"
+            );
+            assert_eq!(
+                process_event(name, "/usr/bin/ddcutil getvcp 10").level(),
+                Level::Critical,
+                "an absolute path is the same program"
+            );
+        }
+
+        // Every anomaly keeps the disk, for any program: these are rare, and
+        // each one is the line an investigation would need.
+        for name in [
+            "process.spawn.failed",
+            "process.timeout",
+            "process.cancelled",
+            "process.wait.failed",
+            "process.output.failed",
+            // Only ever recorded after a timeout or a broken wait — the
+            // overlap `AUD-1-C` exists to make visible.
+            "process.reaped",
+        ] {
+            assert_eq!(
+                process_event(name, "wpctl get-volume @DEFAULT_AUDIO_SINK@").level(),
+                Level::Critical,
+                "{name} is not routine"
+            );
+        }
+
+        // And an ordinary-looking exit that failed is an anomaly too.
+        assert_eq!(
+            process_exit_event("wpctl get-volume @DEFAULT_AUDIO_SINK@", true).level(),
+            Level::Info
+        );
+        assert_eq!(
+            process_exit_event("wpctl get-volume @DEFAULT_AUDIO_SINK@", false).level(),
+            Level::Critical
+        );
     }
 
     #[test]

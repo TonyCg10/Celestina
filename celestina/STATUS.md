@@ -48,7 +48,32 @@
 
 ## Current checkout truth
 
-- **Current milestone prototype — `PANEL-1-O`.** The per-output factor is
+- **Current milestone prototype — `PANEL-1-P`.** The falling drop now keeps
+  its blur for the whole fall instead of only after landing: the compositor
+  region was debounced to the settle timer, which only ever described the
+  landed shape, so `SoftMenuField` republishes it synchronously on every
+  `attachmentProgress` frame while the fall is active, deduplicated in
+  `PanelBlurController` so a static menu costs nothing extra. A follow-on
+  performance audit measured the provider adapter writing ~290 KB/s to the
+  SSD at idle — 126× its own journal file's growth — because every routine
+  poll subprocess (`wpctl`, `nmcli`, `bluetoothctl`, `powerprofilesctl`,
+  `ip`) logged at the `Critical` level reserved for GPU-loss forensics, which
+  flushes and fsyncs per line. The level now follows what the child can
+  reach: `ddcutil` and every anomaly (a failed spawn, a timeout, a broken
+  wait, a kill-and-reap, a failed exit) keep `Critical`; an ordinary
+  spawn/started/exit of anything else drops to `Info` and still gets
+  recorded, just without the disk cost. Measured after the change: 0 B/s of
+  `write_bytes` over 45 seconds where there had been 289,724 B/s, with 594
+  info and 23 critical lines recorded in that window — nothing stopped being
+  logged. The audit also chased and closed a false lead in its own first
+  pass — the provider's 143 MiB RSS was suspected as a wallpaper-decode leak,
+  disproved by the journal recording no wallpaper event at all in that run,
+  and confirmed stable by direct measurement (4 KB drift across 100 seconds
+  and 250 subprocess spawns) — recorded as sizing, not a defect, with the
+  true allocation site left unidentified rather than guessed at. See the
+  [performance audit](docs/evidence/2026-08-12-shell-performance-audit.md).
+
+- **Previous milestone prototype — `PANEL-1-O`.** The per-output factor is
   derived from a monitor's physical diagonal rather than its density, after
   the author checked `PANEL-1-N`'s density model live and it was wrong on
   their own hardware. Their 24" and 32" panels are 1.6 dpi apart —

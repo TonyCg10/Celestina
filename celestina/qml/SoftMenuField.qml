@@ -236,6 +236,21 @@ Item {
     onYChanged: root.scheduleGlassCollection()
     onSurfacePositionChanged: root.scheduleGlassCollection()
 
+    // The compositor region follows the falling drop frame by frame. The
+    // settle debounce below exists for reveals whose geometry is briefly
+    // wrong mid-animation; during the fall every frame's geometry is exact —
+    // the outline and its sampled polygon come from the same function — and
+    // debouncing it swallowed every frame and delivered only the landed
+    // shape, so the whole opening played over an unblurred backdrop and the
+    // blur arrived as a pop at the end. ext-background-effect is
+    // double-buffered and the blur controller re-arms only when the region
+    // really changed, so publishing per frame costs one region update on a
+    // frame that is being committed anyway.
+    onAttachmentProgressChanged: {
+        if (root.edgeShapeActive)
+            root.collectGlass();
+    }
+
     // The fall is two tokened parts: it decelerates from its very first frame
     // — the way every other motion in this shell moves — gliding a little
     // past its resting place as the membrane takes its weight, and is then

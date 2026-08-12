@@ -307,11 +307,17 @@ void PanelBlurController::probe()
             m_window->requestUpdate();
             m_armedSize = m_window->size();
             m_armedRegion = glass;
-            qInfo() << "Celestina compositor blur armed on"
-                    << m_window->objectName() << "at" << m_armedSize
-                    << "for"
-                    << m_window->property("glassRegions").toList().size()
-                    << "shape(s) in" << glass.rectCount() << "region fragment(s)";
+            // Only the transition is news. A falling membrane re-arms its
+            // region on every animation frame now, and logging each one would
+            // print dozens of identical lines per opened menu.
+            if (m_state != State::Enabled) {
+                qInfo() << "Celestina compositor blur armed on"
+                        << m_window->objectName() << "at" << m_armedSize
+                        << "for"
+                        << m_window->property("glassRegions").toList().size()
+                        << "shape(s) in" << glass.rectCount()
+                        << "region fragment(s)";
+            }
         }
         m_state = State::Enabled;
         setAvailable(true);

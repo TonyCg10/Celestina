@@ -918,3 +918,59 @@ one case that states the density measurement directly: `std::abs(lg24Dpi -
 lg32Dpi) < 2.0` alongside `shellScaleForOutput` giving them different answers.
 `CELESTINA_SHELL_SCALE` is unchanged; naming a number still wins over any
 derived one.
+
+
+## PANEL-1-P boundary
+
+The falling drop's blur only ever described the shape it was going to land
+on, because the compositor region was collected by the same debounced timer
+that settles glass after any ordinary resize, and a ~300-500ms fall never sat
+still long enough for that timer to fire mid-flight. The author watched this
+live: the menu fell without blur and the blur simply appeared once it
+stopped. `SoftMenuField` now calls `collectGlass()` synchronously on every
+`attachmentProgress` change while `edgeShapeActive` is true, so the region
+tracks the frame instead of the settle. `PanelBlurController` still
+deduplicates on the C++ side, so a menu that never falls — or has already
+landed — pays nothing extra, and its "blur armed" log line only fires on the
+first arm rather than once per frame.
+
+A live performance audit followed, read-only against the nested session's
+`/proc` state with no interaction injected. Its most severe finding was the
+diagnostics journal: the provider adapter was writing ~290 KB/s to the SSD at
+idle, ~126× its own journal file's actual growth, because every poll
+subprocess — `wpctl`, `nmcli`, `bluetoothctl`, `powerprofilesctl`, `ip` —
+logged three lifecycle events per spawn at `Level::Critical`, and `Critical`
+flushes and fsyncs per line by design, for the freeze-forensics case DIAG-1
+exists for. That design intent was never about a poll that succeeds tens of
+thousands of times a day. The level now follows what the child can actually
+touch: `ddcutil` keeps `Critical` for its whole lifecycle, because it is the
+one program that reaches the I²C buses a lost GPU is found on; every anomaly
+for any program — a failed spawn, a timeout, a cancellation, a broken wait,
+a kill-and-reap, a failed exit — keeps `Critical` too; only the ordinary
+spawn/started/exit of a program that cannot reach the card drops to `Info`,
+which still writes the line, just without the synchronous flush. Measured on
+a fresh nest under the same idle conditions: 0 B/s of `write_bytes` over 45
+seconds against 289,724 B/s before, with 594 info and 23 critical lines
+recorded in that window — nothing stopped being recorded, only its cost did.
+
+The same audit first attributed the provider's stable 143 MiB RSS to
+wallpaper decoding never being released. That was checked, not assumed, and
+was wrong: the journal from that run recorded no wallpaper event at all, so
+the suspected path never executed. Direct measurement — RSS sampled across
+100 seconds and 250 subprocess spawns — moved 4 KB, which is not a leak by
+any definition this suite uses. The audit was corrected to say so, and the
+true allocation site is left unidentified rather than guessed at: an
+allocation fixed without knowing its owner is how a real bound gets removed
+by accident. The audit's remaining findings — the full scope of
+poll-by-subprocess (five pollers, ~1.4 children/s sustained), a proposed
+memory ceiling for `VAL-SHELL-02`, and the nest's own unrelated DDC contact —
+are recorded as open questions for the author's judgement, not defects this
+unit fixes; replacing polling with native subscriptions (PipeWire, D-Bus
+signals) is scoped as its own project rather than folded into this one.
+
+The complete CTest suite passes 18/18, including a new case that sets
+`attachmentProgress` mid-fall without waiting for any debounce and asserts
+the compositor region already describes the momentary shape. The provider's
+own test suite passes 11/11, including a new case that fixes the level of
+every routine and anomalous event across all five pollers plus `ddcutil` by
+name and by absolute path.

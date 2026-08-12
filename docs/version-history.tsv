@@ -58,3 +58,4 @@ celestina	0.13.0	milestone	PANEL-1-L	Fix per-output sizing, raster fidelity and 
 celestina	0.13.1	bug	PANEL-1-M	Fix the release smoke reaching the graphics card over DDC
 celestina	0.14.0	milestone	PANEL-1-N	Fix contextual surfaces ignoring per-output size and scaled blur
 celestina	0.14.1	bug	PANEL-1-O	Fix the per-output factor derived from density instead of size
+celestina	0.14.2	bug	PANEL-1-P	Fix the falling drop losing its blur and the journal's write amplification

@@ -101,8 +101,13 @@ correlate is exactly what `VAL-GPU-01` cannot answer from non-recurrence.
   with commands and sampling conditions recorded.
 - **Pass condition:** every measurement uses the recorded protocol and remains
   at or below its predeclared numeric ceiling; any exceeded ceiling fails.
-- **Result:** deferred until numeric resource ceilings are accepted
-- **Evidence:** none
+- **Result:** deferred until numeric resource ceilings are accepted. A first
+  measured baseline exists from the nested session on 2026-08-12 — host
+  278.9 MiB PSS / 0.13 % idle CPU, provider adapter 138 MiB / 290 KB/s of idle
+  journal writes — with proposed ceilings and ranked findings recorded in the
+  [shell performance audit](docs/evidence/2026-08-12-shell-performance-audit.md).
+  Accepting or amending those numbers is what closes this case's precondition.
+- **Evidence:** [shell performance audit](docs/evidence/2026-08-12-shell-performance-audit.md)
 
 ## VAL-R1-01 — Integrated bar interactions
 

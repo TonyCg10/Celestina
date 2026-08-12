@@ -132,6 +132,36 @@ TestCase {
         field.destroy();
     }
 
+    function test_the_blur_region_follows_the_falling_drop() {
+        const field = testCase.fieldWith(false);
+        verify(field);
+
+        // Mid-fall, without waiting for any debounce: setting progress must
+        // publish the momentary polygon in the same turn, because a region
+        // that only arrives from the settle timer is a region that only ever
+        // described the landed shape — the blur-less opening the author saw.
+        field.attachmentProgress = 0.4;
+        compare(field.glassRegions.length, 1);
+        const midFall = field.glassRegions[0].polygon;
+        verify(midFall.length > 3);
+
+        field.attachmentProgress = 1;
+        compare(field.glassRegions.length, 1);
+        const landed = field.glassRegions[0].polygon;
+
+        // The two publications describe different drops: the body falls at
+        // full size, so mid-fall it still hangs above its resting place and
+        // its lowest sample sits higher than the landed card's bottom.
+        function bottom(points) {
+            let lowest = points[0].y;
+            for (let index = 1; index < points.length; ++index)
+                lowest = Math.max(lowest, points[index].y);
+            return lowest;
+        }
+        verify(bottom(midFall) < bottom(landed));
+        field.destroy();
+    }
+
     function test_a_settled_surface_never_falls_again() {
         const field = testCase.fieldWith(false);
         verify(field);

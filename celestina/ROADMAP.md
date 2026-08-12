@@ -426,6 +426,12 @@ not apply the rest of UX-2; menu, overlay and provider work is limited to the
 exact corrections declared in the active plan. Scope, order and evidence are in
 [the PANEL-1 plan](docs/plans/active/2026-08-08-panel-glass-redesign.md).
 
+`PANEL-1-P` keeps the falling drop's blur alive for the whole fall instead of
+only after it lands, and narrows the diagnostics journal's `Critical` level to
+what can actually reach the graphics card plus genuine anomalies, after a
+performance audit measured routine poll bookkeeping writing ~290 KB/s to the
+SSD at idle for no operational reason.
+
 `PANEL-1-O` corrects the per-output factor to derive from a monitor's
 physical diagonal rather than its density, floors it at the reference so a
 smaller screen is never shrunk, and refuses the density Qt fabricates when a
