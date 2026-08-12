@@ -1,7 +1,7 @@
 # CelestinaStyle status
 
-- **Updated:** 2026-08-11
-- **Implementation:** the shared source contract has a 1.4.0 milestone
+- **Updated:** 2026-08-12
+- **Implementation:** the shared source contract has a 1.5.0 milestone
   prototype with the two reading controls, demonstrated shell glyphs, additive
   `GlassSurface.ExternalBackdrop` mode, compatible opt-in `ContentSurface` and
   `ContextualVeil` roles, and one opt-in vector silhouette for an
@@ -47,6 +47,17 @@
   `ContextualVeil` attenuates tint and noise while suppressing outline and
   lit-edge layers entirely. Both roles are shadowless, never capture another
   Wayland client and preserve one compositor region for the complete menu.
+- The 1.5.0 milestone corrects the shared icon vocabulary in two ways, neither
+  of them a size change. `CelestinaIcon` asked for its vendored SVG at the
+  item's logical size; `IconImage` renders that SVG once at exactly the size
+  requested, so on any output above 1.0 scale the compositor received a pixmap
+  smaller than the physical area it filled — the pixelation the author saw on a
+  fractionally scaled monitor and never on an integer-scaled one. The requested
+  size now follows the screen's real device pixel ratio. Separately, the
+  catalogue's stroke width rises from 2 to 2.5 across all 96 icons, because the
+  author asked for thicker glyphs at unchanged dimensions: this is weight, not
+  scale, and it reaches every consumer in the suite because the catalogue is
+  shared. Recorded under `STYLE-G7-K`.
 - The 1.4.0 milestone prototype leaves that rounded default unchanged and adds
   `GlassSurface.silhouettePath` only for an explicitly shaped external
   backdrop. The path paints the same semantic tint and edge vocabulary without

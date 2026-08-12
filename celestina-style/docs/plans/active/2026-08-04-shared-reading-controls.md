@@ -129,6 +129,7 @@ stable symbols are authoritative; line counts are a hand-off aid and may drift.
 
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
+| STYLE-G7-K | `celestina-style:` | active | `CelestinaIcon.qml`; the vendored Lucide catalogue | — | Draw the shared glyphs at the weight the author asked for without changing any icon size, and rasterize every vendored icon at the density it will really be drawn at so a scaled output receives a pixmap the size of the area it fills rather than a smaller one stretched | [per-output sizing and raster fidelity](../../../../celestina/docs/evidence/2026-08-12-output-sizing-and-raster-fidelity.md) | `VAL-PANEL-1` in Celestina |
 | STYLE-G7-J | `celestina-style:` | active | `GlassSurface.qml`; `CelestinaTheme.qml`; `DESIGN.md`; `VALIDATION.md`; focused glass tests; style version/status/roadmap/evidence and the root version history | — | Keep rounded `GlassSurface` defaults pixel-compatible while retaining one opt-in ExternalBackdrop silhouette and open edge-stroke path for Celestina's bar-edge `ContextualVeil` membrane; keep that role genuinely shadow- and edge-halo-free, retain only the demonstrated vertical attachment-gap bounds, and leave the droplet mouth, meniscus, hanging neck, tangent landing, tension geometry and opener feedback entirely with the shell without adding Style tokens or an API that mutates dense content surfaces | [continuous veil and membrane evidence](../../evidence/2026-08-11-edge-attached-glass-silhouette.md) | `VAL-PANEL-1` in Celestina |
 | STYLE-G7-F | `celestina-style:` | done | [inventory](../../inventories/2026-08-04-shared-reading-controls/STYLE-G7-F.numstat.tsv) | 23 files, +690/-69 | Deliver the demonstrated toolbox, pin, visibility and system-tray glyphs together with external-backdrop, dense content-surface and contextual-veil roles as one compatible shared-style prototype snapshot | [external-backdrop evidence](../../evidence/2026-08-11-external-backdrop-glass.md); [semantic-role evidence](../../evidence/2026-08-11-semantic-glass-material-roles.md) | `VAL-PANEL-1` in Celestina |
 | STYLE-G7-E | `celestina-style:` | done | [inventory](../../inventories/2026-08-04-shared-reading-controls/STYLE-G7-E.numstat.tsv) | 22 files, +391/-5 | Add the finite first-party status glyphs required by Celestina's accepted panel baseline without adding shell state or workflows to the shared module | [evidence](../../evidence/2026-08-08-panel-status-glyphs.md) | `VAL-PANEL-1` in Celestina |
@@ -245,3 +246,23 @@ passes the full Rust suites, CTest 17/17 and its eight-second release smoke,
 then reports the deployed artifacts current and verified without activating a
 session. The immutable inventory, commit and author-visible validation remain
 pending; `STYLE-G7-J` stays `active`.
+
+
+## STYLE-G7-K boundary
+
+Two corrections to the shared icon vocabulary, both reported from the author's
+own monitors and neither of them a size change.
+
+`CelestinaIcon` asked for its vendored SVG at the item's logical size.
+`IconImage` renders that SVG once, at exactly the size requested, so on any
+output above 1.0 scale the compositor was handed a pixmap smaller than the
+physical area it filled — which is what read as pixelated on a fractionally
+scaled monitor while an integer-scaled one never showed it. The requested size
+now follows the screen's real device pixel ratio. `Screen` is only valid once
+an item belongs to a window, and 1.0 before that is the same density QML
+itself assumes rather than a guess this module introduces.
+
+The catalogue's stroke width rises from 2 to 2.5 across all 96 icons. The
+author asked for thicker glyphs at unchanged dimensions, so this is weight and
+not scale: no icon token moved, and every consumer in the suite receives the
+same change because the catalogue is shared.

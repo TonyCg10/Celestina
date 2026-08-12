@@ -53,3 +53,4 @@ celestina-style	1.3.0	milestone	STYLE-G7-F	Extend the shared shell glass and ico
 celestina	0.11.0	milestone	PANEL-1-B	Add the contextual shell prototype snapshot
 celestina-style	1.4.0	milestone	STYLE-G7-J	Add an opt-in edge-attached glass silhouette
 celestina	0.12.0	milestone	PANEL-1-I	Add the edge-attached shell prototype
+celestina-style	1.5.0	milestone	STYLE-G7-K	Fix icon rasterization and thicken the glyph strokes
