@@ -67,6 +67,24 @@ TestCase {
             captureEnabled: false
             materialRole: GlassSurface.ContextualVeil
         }
+
+        GlassSurface {
+            id: silhouetteGlass
+
+            x: 280
+            width: 72
+            height: 80
+            backdropMode: GlassSurface.ExternalBackdrop
+            externalBackdropReady: true
+            captureEnabled: false
+            elevation: 0
+            silhouettePath: "M 24 0 L 48 0 C 48 12 60 14 60 24 "
+                            + "L 60 68 Q 60 80 48 80 L 24 80 "
+                            + "Q 12 80 12 68 L 12 24 C 12 14 24 12 24 0 Z"
+            silhouetteEdgePath: "M 48 0 C 48 12 60 14 60 24 "
+                                + "L 60 68 Q 60 80 48 80 L 24 80 "
+                                + "Q 12 80 12 68 L 12 24 C 12 14 24 12 24 0"
+        }
     }
 
     function init() {
@@ -74,6 +92,7 @@ TestCase {
         externalGlass.externalBackdropReady = true
         contentGlass.externalBackdropReady = true
         contextualGlass.externalBackdropReady = true
+        silhouetteGlass.materialRole = GlassSurface.StandardMaterial
     }
 
     function test_in_scene_mode_owns_the_capture() {
@@ -128,6 +147,8 @@ TestCase {
         compare(contextualGlass.materialStrength,
                 CelestinaTheme.glassContextualVeilStrength)
         verify(contextualGlass.materialStrength < contentGlass.materialStrength)
+        verify(contentGlass.materialEdgesVisible)
+        verify(!contextualGlass.materialEdgesVisible)
 
         compare(contentGlass.captureActive, false)
         compare(contextualGlass.captureActive, false)
@@ -145,6 +166,7 @@ TestCase {
         verify(contentTint)
         verify(contextualTint)
         verify(contextualNoise)
+        verify(contextualNoise.visible)
         compare(contentTint.opacity,
                 CelestinaTheme.glassContentSurfaceStrength)
         compare(contextualTint.opacity,
@@ -152,5 +174,55 @@ TestCase {
         compare(contextualNoise.opacity,
                 CelestinaTheme.glassNoiseOpacity
                 * CelestinaTheme.glassContextualVeilStrength)
+        verify(findByObjectName(
+                   contentGlass, "celestina-glass-outline").visible)
+        verify(findByObjectName(
+                   contentGlass, "celestina-glass-lit-edge").visible)
+        verify(!findByObjectName(
+                   contextualGlass, "celestina-glass-outline").visible)
+        verify(!findByObjectName(
+                   contextualGlass, "celestina-glass-lit-edge").visible)
+    }
+
+    function test_silhouette_is_opt_in_and_keeps_the_semantic_material() {
+        compare(capturedGlass.silhouettePath, "")
+        verify(!capturedGlass.usesSilhouette)
+        verify(silhouetteGlass.usesSilhouette)
+        compare(silhouetteGlass.effectiveSilhouetteEdgePath,
+                silhouetteGlass.silhouetteEdgePath)
+        verify(findByObjectName(
+                   silhouetteGlass,
+                   "celestina-glass-silhouette-base").visible)
+        const silhouetteTint = findByObjectName(
+            silhouetteGlass, "celestina-glass-silhouette-material-tint")
+        verify(silhouetteTint.visible)
+        compare(silhouetteTint.opacity, silhouetteGlass.materialStrength)
+        verify(findByObjectName(
+                   silhouetteGlass,
+                   "celestina-glass-silhouette-outline").visible)
+        verify(findByObjectName(
+                   silhouetteGlass,
+                   "celestina-glass-silhouette-lit-edge").visible)
+        verify(!findByObjectName(
+                   silhouetteGlass,
+                   "celestina-glass-outline").visible)
+        verify(!findByObjectName(
+                   silhouetteGlass,
+                   "celestina-glass-lit-edge").visible)
+        verify(!findByObjectName(
+                   silhouetteGlass,
+                   "celestina-glass-shadow").visible)
+
+        silhouetteGlass.materialRole = GlassSurface.ContextualVeil
+        verify(!silhouetteGlass.materialEdgesVisible)
+        verify(silhouetteTint.visible)
+        compare(silhouetteTint.opacity,
+                CelestinaTheme.glassContextualVeilStrength)
+        verify(!findByObjectName(
+                   silhouetteGlass,
+                   "celestina-glass-silhouette-outline").visible)
+        verify(!findByObjectName(
+                   silhouetteGlass,
+                   "celestina-glass-silhouette-lit-edge").visible)
     }
 }

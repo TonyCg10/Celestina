@@ -173,7 +173,7 @@ and its own accepted checkpoint.
 | L2 | Menu, tooltip, tab pills, toast | Regular glass plus soft shadow |
 | L3 | Dialog/modal | Strong glass plus scrim; no simultaneous depth shadow |
 | Shell content card / panel capsule | Layer-shell surface | One host-owned compositor blur region, or one region shared by the complete menu, with dense shadowless `ContentSurface` material |
-| Contextual menu carrier | Layer-shell surface | The same single host-owned compositor blur region with a nearly transparent shadowless `ContextualVeil` and a readable fallback |
+| Contextual menu carrier | Layer-shell surface | The same single host-owned compositor blur region with a nearly transparent `ContextualVeil`; no shadow, outline, lit edge or apparent edge halo, plus a readable fallback |
 
 `CelestinaSurface` owns L0/L1 fill, ink, radius and quiet outline. Consumers
 choose a semantic role (`Canvas`, `Panel`, `Grouped`, `Content`, `Tonal`,
@@ -186,11 +186,15 @@ it is hostile input. They are checked after compositing over black and white.
 One host region may support several `GlassSurface.ContentSurface` sections;
 those sections and panel capsules use the same dense matte material without
 multiplying compositor regions or capturing their own window. The menu's
-`ContextualVeil` attenuates tint, noise, outline and lit edge together so the
-outer field remains only an organizing trace. Both shell roles have zero
-elevation; the general-purpose default material remains compatible for every
-other suite consumer. A real session is still required to prove that blur
-itself is active.
+`ContextualVeil` attenuates tint and noise but suppresses outline and lit-edge
+layers entirely, including on an opt-in silhouette, so the outer field remains
+only an organizing trace without an apparent border or halo. Both shell roles
+have zero elevation; the general-purpose default material remains compatible
+for every other suite consumer. `ContextualVeil` suppresses its outline and
+lit edge by semantic role without changing tint, noise or compositor
+ownership. Dense `ContentSurface` cards and panel capsules do not change
+silhouette or material when a contextual surface attaches. A real session is
+still required to prove that blur itself is active.
 
 ### 5.3 Glass
 
@@ -198,17 +202,37 @@ For `InSceneCapture`, the accepted order is bounded capture (approximately
 0.5× texture), pyramid blur, slight desaturation and scheme-tuned dim,
 Regular/Strong tint, ±1–2/255 noise, 1 px exterior outline and restrained
 top-edge glow. `ExternalBackdrop` omits only the capture and blur passes because
-the compositor supplies them; it retains the same material ordering. Failure
-to capture or supply an external backdrop degrades to a readable translucent
-tint.
+the compositor supplies them; it retains the same material ordering before a
+semantic role applies its narrower layer policy. Failure to capture or supply
+an external backdrop degrades to a readable translucent tint.
 
 `StandardMaterial` preserves that existing full-strength recipe.
 `ContentSurface` applies the reference-derived `0.64` strength to the complete
 decorative stack and pairs its neutral material polarity with the host's
-foreground polarity. `ContextualVeil` applies `0.12` to the same stack; because
-its normal highlight tint is itself translucent, the usual visible tint is
-approximately two percent. These values describe Celestina's adaptation of the
-supplied One UI 8.5 image, not a claim about Samsung's private implementation.
+foreground polarity. `ContextualVeil` applies `0.12` to tint and noise only and
+disables outline and lit-edge layers; because its normal highlight tint is
+itself translucent, the usual visible tint is approximately two percent. These
+values describe Celestina's adaptation of the supplied One UI 8.5 image, not a
+claim about Samsung's private implementation.
+
+An opt-in contextual membrane keeps its vertical travel proportional to the
+stable width of the menu it carries: ratio `0.06` within the inclusive range
+20..36. Style owns that shared spacing and the generic silhouette renderer,
+not the membrane's screen geometry. The host shapes the membrane as one drop
+falling out of the bar: its only seam contact is a narrow icon-proportional
+mouth centred on the exact clicked glyph and clamped inside the body's flat
+top span, a meniscus clings to the bar with horizontal tangents, the hanging
+neck thins with tension and the swell lands tangent on the body's top edge
+inside its ordinary rounded corners, so the connection
+reads as one soft drop rather than an hourglass. The matching
+compositor polygon comes from the same real panel, opener and output placement;
+menu height and model changes do not alter that geometry. All neck widths,
+curve controls and tension calculations remain shell-local geometry, not Style
+tokens or API. The clicked control independently remains the placement
+authority. Keeping that opener's ordinary hover feedback visible while its
+surface is open is shell-local lifecycle policy and adds no Style API. The
+membrane uses `ContextualVeil` alone: no dense material or density transition
+bridges the panel and menu windows.
 
 The surface recaptures on its own size change. A movable host explicitly rearms
 on show or position change. Wheel/pointer ownership and lifecycle remain the

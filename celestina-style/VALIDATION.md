@@ -7,25 +7,58 @@ perception, input devices or assistive-technology stack. It does not block
 ## VAL-STYLE-01 — Compositor glass and content-icon review
 
 - **Status:** pending
-- **Related implementation:** completed S2/S5 glass and the cumulative
-  `STYLE-G7-F` prototype snapshot
+- **Related implementation:** completed S2/S5 glass, the cumulative
+  `STYLE-G7-F` prototype snapshot and active `STYLE-G7-J`
 - **Requires:** verified production artifacts on the real Niri/Wayland session
 - **Procedure:** inspect regular/strong in-scene glass, then the shell's nearly
   transparent external-backdrop carrier, dense matte contextual cards, matching
   panel capsules and fallback; confirm the carrier remains one blur region and
-  neither shell role paints a shadow. Inspect folder/file icons at 20, 24, 48
-  and 128 logical px over representative light and dark content
+  its bar, body and membrane paint no shadow, outline, lit edge or apparent
+  edge halo. Compare attached menus at real widths 328, 360, 424, 460, 530 and
+  620 and confirm vertical travel grows to its bounds. For clicked glyphs of
+  different widths and positions, confirm the membrane's only seam contact is
+  one narrow droplet mouth centred on the exact clicked glyph, clinging to
+  the bar with a meniscus on both sides, and that its swell lands tangent on
+  the body's flat top edge inside ordinary rounded top corners; confirm the
+  mouth clamps enough to remain inside that flat span near either output
+  edge, and that the hanging neck thins with tension without ever reading as
+  an hourglass suspended between two wide edges. Confirm the clicked control still places
+  the menu, keeps only its ordinary hover-circle feedback while that menu
+  remains open, and releases it on dismissal. Every panel capsule and dense
+  content card must remain geometrically and materially unchanged, and the
+  membrane must be solely `ContextualVeil` with no dense bridge. The neck
+  width, curves and opener feedback are shell behavior, not new Style tokens
+  or API. Inspect folder/file icons at 20, 24, 48 and 128
+  logical px over representative light and dark content
 - **Pass condition:** blur is visibly real where advertised, the contextual
   field remains subordinate to the denser content/panel material, fallback
-  remains readable, no shadow or sharp wallpaper leak appears around a shell
-  surface and icons retain recognisable shape/ink contrast at every size
+  remains readable, no shadow, border halo or sharp wallpaper leak appears
+  around the contextual carrier, no panel capsule changes when a menu attaches,
+  no dense material enters the membrane, the tension proportions remain
+  legible at every tested width and icons retain recognisable shape/ink
+  contrast at every size
 - **Result:** the final `STYLE-G7-F` consumer cycle ran at scale 1 in the
   existing nested Niri session. Its dark wallpaper retained fixed light/white
   foregrounds over dense dark matte contextual cards and matching panel
   capsules; the outer contextual field remained visibly subordinate and no
   elevation shadow was observed. This is focused agent evidence, not the
   still-pending author review of every menu, output scale and content icon at
-  every listed size
+  every listed size. The later whole-capsule/open-edge/dense-bridge,
+  glyph-mouth, body-wide icon-scaled and fluid body-proportional-waist
+  iterations are explicitly superseded — the last was rejected live by the
+  author on 2026-08-11 as a strange hourglass — and supply no author
+  validation for the current droplet mouth, meniscus, tangent landing,
+  persistent opener feedback or immutable-capsule contract. The
+  body-wide icon-scaled revision's Celestina focal QuickTest 210/210, canonical
+  Style verification and registered Celestina completion verify only that
+  previous geometry. For the current droplet revision, canonical
+  Style verification passes production-common 29/29, the architecture,
+  contrast and QML visual guards, `qmllint` with only the pre-existing
+  `CelestinaLineGutter` warnings, CTest 1/1 and the eight-second smoke.
+  Registered Celestina completion passes the full Rust suites, CTest 17/17 and
+  its eight-second release smoke, then reports the deployed artifacts current
+  and verified without activating a session. Automated evidence cannot replace
+  this still-pending perceptual result
 - **Evidence:** attach dated captures and note output scale/compositor state
 
 ## VAL-STYLE-02 — Keyboard focus and reduced motion

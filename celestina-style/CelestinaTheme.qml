@@ -661,6 +661,7 @@ QtObject {
     // One UI's generous rounding: radius scales down with element size.
     // radiusButton/radiusInput are ready for CelestinaButton/TextField to adopt in
     // S4 (the button-emphasis + input-anatomy work); S1 leaves them defined.
+    readonly property int radiusNone: 0      // edge-to-edge surfaces with no exposed corner
     readonly property int radiusSm: 12       // controls, chips, glyph tiles, rows, banners
     readonly property int radiusXs: 3        // selection marquee / tiny indicators
     readonly property int radiusMd: 20       // glass menus / floating surfaces
@@ -798,6 +799,12 @@ QtObject {
     readonly property int compMenuWidth: 232
     readonly property int compMenuPadding: 6
     readonly property int compMenuMargins: 24
+    // Edge-attached glass scales only its vertical travel from the stable menu
+    // width. The owner span, body landing and elastic tension depend on real
+    // shell placement geometry and deliberately remain with that host.
+    readonly property real compEdgeAttachmentGapRatio: 0.06
+    readonly property int compEdgeAttachmentGapMin: 20
+    readonly property int compEdgeAttachmentGapMax: 36
     // Shared inset/gap for chrome floating inside a rounded content surface.
     // Keeping these semantic avoids each screen rebuilding the same 12/8 map.
     readonly property int compFloatingInset: spaceMd

@@ -1,11 +1,12 @@
 # CelestinaStyle status
 
 - **Updated:** 2026-08-11
-- **Implementation:** the shared source contract is delivered at 1.3.0 with the
-  two reading controls, the demonstrated shell glyphs, one additive
-  `GlassSurface.ExternalBackdrop` mode and compatible opt-in `ContentSurface`
-  and `ContextualVeil` roles; `STYLE-G7-F` records that cumulative prototype
-  snapshot, `STYLE-G7` remains active for the next demonstrated design need and
+- **Implementation:** the shared source contract has a 1.4.0 milestone
+  prototype with the two reading controls, demonstrated shell glyphs, additive
+  `GlassSurface.ExternalBackdrop` mode, compatible opt-in `ContentSurface` and
+  `ContextualVeil` roles, and one opt-in vector silhouette for an
+  external-backdrop material; `STYLE-G7-J` remains `active` until its immutable
+  delivery record and commit exist, `STYLE-G7` stays active and
   `STYLE-M1` remains planned with no execution plan
 - **Author validation:** previous real-session review exists, with focused
   follow-ups pending in [VALIDATION.md](VALIDATION.md)
@@ -42,9 +43,35 @@
 - The same 1.3.0 delivery leaves the default material pixel-compatible. Celestina
   alone opts its information-bearing menu cards and panel capsules into one
   `ContentSurface`, while its contextual carrier uses `ContextualVeil`.
-  Strength applies to tint, noise, outline and lit edge together; both roles
-  are shadowless, never capture another Wayland client and preserve one
-  compositor region for the complete menu.
+  `ContentSurface` applies strength to the complete decorative stack;
+  `ContextualVeil` attenuates tint and noise while suppressing outline and
+  lit-edge layers entirely. Both roles are shadowless, never capture another
+  Wayland client and preserve one compositor region for the complete menu.
+- The 1.4.0 milestone prototype leaves that rounded default unchanged and adds
+  `GlassSurface.silhouettePath` only for an explicitly shaped external
+  backdrop. The path paints the same semantic tint and edge vocabulary without
+  a rectangular shaped-surface shadow, while the optional
+  `silhouetteEdgePath` can omit an edge that must remain visually open. The
+  semantic `ContextualVeil` role suppresses both outline and lit edge on
+  rounded and shaped paths without adding a mutable content-surface switch. The
+  current Celestina composition reuses the existing `ContextualVeil` role for
+  one continuous panel backdrop and keeps its inset `ContentSurface` capsules
+  on the ordinary rounded path at all times. Only the contextual membrane uses
+  the generic shaped path, and it uses `ContextualVeil` alone. Style retains
+  only proportional vertical travel; Celestina owns the droplet membrane: one
+  narrow icon-proportional mouth clinging to the bar seam with a meniscus,
+  centred on the clicked glyph and clamped inside the body's flat top span, a
+  hanging neck that tension only thins, and a concave swell landing tangent
+  on the body's top edge inside its ordinary rounded corners.
+  Celestina also owns the panel region, derived polygon, live anchor tracking,
+  placement and opener policy. None of those ratios, curve controls or tension
+  calculations adds a Style token or API. The shell likewise owns the tokened
+  state that keeps only the opener's ordinary hover feedback visible while its
+  surface is open; this introduces no Style property or component contract.
+  There is no dense bridge or cross-window material transition. The veil
+  suppresses rounded and shaped outline/lit-edge layers so neither body leaves
+  an apparent edge halo; no compositor or shell layout policy enters this
+  module.
 - The installed/versioned module is not current delivery architecture. It
   remains gated on a consumer outside this repository.
 
@@ -75,6 +102,26 @@ and gallery smoke on 2026-08-11; exact commands and limits are in the
 The final 1.3.0 snapshot passed the same canonical production workflow and its
 focused semantic-role construction tests; exact results are recorded in
 [semantic glass material roles](docs/evidence/2026-08-11-semantic-glass-material-roles.md).
+The preceding droplet-pill, fixed-anatomy, narrow proportional-connector,
+whole-capsule/dense-bridge, glyph-mouth, body-wide icon-scaled and fluid
+body-proportional-waist experiments
+remain as explicitly superseded prototype evidence. The glyph-mouth revision's
+focused consumer CTest 4/4 and QuickTest 208/208 do not verify either later
+geometry. The body-wide icon-scaled revision's focal QuickTest 210/210,
+canonical Style verification with 29 production-common fixtures and CTest 1/1,
+and registered Celestina completion with CTest 17/17 verify that superseded
+revision only. The fluid body-proportional-waist revision verified cleanly at
+211/211 but the author rejected its live hourglass read on 2026-08-11; it
+does not verify the current droplet mouth, neck and tangent landing. For the
+current revision, canonical Style verification passes
+production-common 29/29, the architecture, contrast and QML visual guards,
+`qmllint` with only the pre-existing `CelestinaLineGutter` warnings, CTest 1/1
+and the eight-second smoke. Registered Celestina completion passes the full
+Rust suites, CTest 17/17 and its eight-second release smoke, then reports the
+deployed artifacts current and verified without activating a session.
+Author-visible consumer validation remains pending. The exact compatibility
+and evidence boundary is recorded in
+[edge-attached glass silhouette](docs/evidence/2026-08-11-edge-attached-glass-silhouette.md).
 Compositor and AT results belong only to [VALIDATION.md](VALIDATION.md).
 
 ## Records

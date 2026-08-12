@@ -30,6 +30,42 @@ reference-backed follow-up adds opt-in semantic roles: a dense matte
 transparent `ContextualVeil` for the menu carrier. Existing consumers retain
 the compatible default material.
 
+Celestina's next demonstrated prototype adds one reusable presentation need:
+an `ExternalBackdrop` material can accept an opt-in vector silhouette and paint
+the same tint into a shaped membrane. Style owns that generic renderer,
+including an optional open stroke path, and keeps the rounded default
+compatible. A compatible opt-in edge-decoration switch lets that shaped veil
+omit both outline and lit edge without changing its material. Celestina reuses
+the existing `ContextualVeil` role for one
+continuous edge-to-edge panel backdrop and ordinary rounded `ContentSurface`
+for its inset capsules at all times; the veil suppresses outline and lit-edge
+layers on rounded and shaped paths, so no apparent edge halo remains. Style
+retains only proportional vertical travel. Celestina owns the droplet
+membrane: a narrow icon-proportional mouth clinging to the bar seam with a
+meniscus, centred on the exact clicked glyph and clamped inside the body's
+flat top span, a hanging neck that tension only thins, and a concave swell
+landing tangent on the body's top edge inside its ordinary rounded corners.
+Celestina also owns the derived path, sampled finite
+compositor polygon, live glyph tracking, independent opener placement and menu
+lifecycle. These ratios, curve controls and tension calculations remain shell
+geometry and introduce no Style token or API. The shell-local lease also keeps
+only that opener's ordinary hover feedback visible without adding a Style API.
+Neither the capsule nor any dense content surface changes, and no dense bridge
+enters the membrane. The 1.4.0 candidate is recorded under `STYLE-G7-J`. The
+whole-capsule, glyph-mouth, body-wide icon-scaled and fluid
+body-proportional-waist iterations passed their
+recorded automated workflows but are explicitly superseded — the last one was
+rejected live by the author on 2026-08-11 as a strange hourglass. None of
+them verifies the current droplet mouth, neck and tangent landing. For the
+current revision, canonical Style
+verification passes production-common 29/29, the architecture, contrast and QML
+visual guards, `qmllint` with only the pre-existing `CelestinaLineGutter`
+warnings, CTest 1/1 and the eight-second smoke. Registered Celestina completion
+passes the full Rust suites, CTest 17/17 and its eight-second release smoke,
+then reports the deployment current and verified without session activation.
+The immutable delivery record, commit and author-visible consumer validation
+remain pending.
+
 The plan is
 [Shared reading controls](docs/plans/active/2026-08-04-shared-reading-controls.md).
 It excludes any further gutter content — diff or breakpoint markers, folding, a

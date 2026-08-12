@@ -11,9 +11,10 @@ import QtQuick.Shapes
 //
 // Recipe (One UI 8.5, DESIGN §6.5): bounded capture → pyramid blur → *slight
 // desaturation* + tint/dim → a thin dark outline for definition → the lit
-// top-edge glow. `elevation > 0` adds the L2 drop shadow (a floating layer
-// stops pasting and starts floating). The shadow lives outside the clipped
-// body, so the root itself does not clip.
+// top-edge glow. ContextualVeil deliberately stops before those edge layers:
+// it is a carrier, not another outlined card. `elevation > 0` adds the L2 drop
+// shadow (a floating layer stops pasting and starts floating). The shadow lives
+// outside the clipped body, so the root itself does not clip.
 // ──────────────────────────────────────────────────────────────────────────────
 Item {
     id: root
@@ -47,6 +48,18 @@ Item {
     // opened, so anything the user can scroll, hover or drag under wants it.
     property bool liveCapture: false
     property real cornerRadius: CelestinaTheme.radiusMd
+    // Optional vector silhouette for ExternalBackdrop surfaces that grow into
+    // a screen edge. Empty preserves the historical rounded rectangle
+    // byte-for-byte. The host still owns compositor geometry; this path changes
+    // only how this component paints its canonical semantic material.
+    property string silhouettePath: ""
+    // A screen-edge silhouette can omit its upper mouth from the painted
+    // strokes so the pane appears to continue beyond the viewport instead of
+    // wearing a hairline cap at y=0. Empty reuses the complete silhouette.
+    property string silhouetteEdgePath: ""
+    readonly property bool usesSilhouette: silhouettePath.length > 0
+    readonly property string effectiveSilhouetteEdgePath:
+            silhouetteEdgePath.length > 0 ? silhouetteEdgePath : silhouettePath
     property int sampleMargin: CelestinaTheme.glassSampleMargin
     property real sampleScale: CelestinaTheme.glassSampleScale
     // Elevation level (DESIGN §6.4): 0 = flush (grouped card, separation by
@@ -77,11 +90,18 @@ Item {
             : materialRole === GlassSurface.ContextualVeil
               ? CelestinaTheme.glassContextualVeilStrength
               : 1
+    // A contextual carrier must not acquire a second card boundary. At its low
+    // material strength even a hairline outline reads as an exterior shadow,
+    // especially around a narrow connector. Dense and default glass retain the
+    // complete dark-outline plus lit-edge recipe.
+    readonly property bool materialEdgesVisible:
+            materialRole !== GlassSurface.ContextualVeil
 
     readonly property bool captureActive:
             backdropMode === GlassSurface.InSceneCapture
             && captureEnabled
             && backdropSource !== null
+            && !usesSilhouette
             && width > 0
             && height > 0
     readonly property bool active:
@@ -140,7 +160,10 @@ Item {
     RectangularShadow {
         objectName: "celestina-glass-shadow"
         anchors.fill: body
-        visible: root.elevation > 0
+        // A shaped pane has no analytic rectangular shadow. Current shell edge
+        // surfaces are deliberately flush (elevation 0); a later reusable
+        // shaped-elevation job needs its own bounded vector shadow contract.
+        visible: root.elevation > 0 && !root.usesSilhouette
         radius: root.cornerRadius
         blur: CelestinaTheme.shadowBlur
         spread: CelestinaTheme.shadowSpread
@@ -153,10 +176,11 @@ Item {
     Item {
         id: body
         anchors.fill: parent
-        clip: true
+        clip: !root.usesSilhouette
 
         Rectangle {
             anchors.fill: parent
+            visible: !root.usesSilhouette
             radius: root.cornerRadius
             color: root.backdropMode === GlassSurface.ExternalBackdrop
                    ? CelestinaTheme.clear
@@ -197,7 +221,7 @@ Item {
                     y: root.sampleMargin
                     width: root.width
                     height: root.height
-                    radius: root.cornerRadius
+                    radius: root.usesSilhouette ? 0 : root.cornerRadius
                     color: CelestinaTheme.opaqueMask
                 }
             }
@@ -222,6 +246,7 @@ Item {
         Rectangle {
             objectName: "celestina-glass-material-tint"
             anchors.fill: parent
+            visible: !root.usesSilhouette
             radius: root.cornerRadius
             color: root.active ? root.materialTint : CelestinaTheme.surfaceStrong
             opacity: root.active
@@ -234,13 +259,44 @@ Item {
         Image {
             objectName: "celestina-glass-noise"
             anchors.fill: parent
-            visible: root.active
+            visible: root.active && !root.usesSilhouette
             source: Qt.resolvedUrl(".").toString().startsWith("file:")
                     ? Qt.resolvedUrl("icons/glass-noise.png")
                     : "qrc:/qt/qml/CelestinaStyle/icons/glass-noise.png"
             fillMode: Image.Tile
             opacity: CelestinaTheme.glassNoiseOpacity * root.materialStrength
             smooth: false
+        }
+
+        Shape {
+            objectName: "celestina-glass-silhouette-base"
+            anchors.fill: parent
+            visible: root.usesSilhouette
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                strokeWidth: 0
+                fillColor: root.backdropMode === GlassSurface.ExternalBackdrop
+                           ? CelestinaTheme.clear
+                           : CelestinaTheme.surfaceStrong
+                PathSvg { path: root.silhouettePath }
+            }
+        }
+
+        Shape {
+            objectName: "celestina-glass-silhouette-material-tint"
+            anchors.fill: parent
+            visible: root.usesSilhouette
+            opacity: root.active
+                     ? root.materialOpacity * root.materialStrength
+                     : 1
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                strokeWidth: 0
+                fillColor: root.active
+                           ? root.materialTint
+                           : CelestinaTheme.surfaceStrong
+                PathSvg { path: root.silhouettePath }
+            }
         }
 
         // A thin dark outline (dark outside) — gives the pane an edge against a
@@ -250,6 +306,7 @@ Item {
             objectName: "celestina-glass-outline"
             anchors.fill: parent
             radius: root.cornerRadius
+            visible: root.materialEdgesVisible && !root.usesSilhouette
             color: CelestinaTheme.clear
             border.width: CelestinaTheme.borderHairline
             border.color: root.active
@@ -268,7 +325,8 @@ Item {
         Shape {
             objectName: "celestina-glass-lit-edge"
             anchors.fill: parent
-            visible: root.active
+            visible: root.active && root.materialEdgesVisible
+                     && !root.usesSilhouette
             preferredRendererType: Shape.CurveRenderer
             ShapePath {
                 fillRule: ShapePath.OddEvenFill
@@ -319,6 +377,44 @@ Item {
                     radius: Math.max(0, root.cornerRadius
                                         - CelestinaTheme.glassEdgeWidth)
                 }
+            }
+        }
+
+        // The opt-in silhouette keeps the same dark definition and lit-glass
+        // vocabulary. A generic path cannot derive a mathematically inset ring
+        // without changing the host's geometry, so these strokes are clipped
+        // with the material and remain entirely inside its finite silhouette.
+        Shape {
+            objectName: "celestina-glass-silhouette-outline"
+            anchors.fill: parent
+            visible: root.materialEdgesVisible && root.usesSilhouette
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                strokeWidth: CelestinaTheme.borderHairline * 2
+                strokeColor: root.active
+                             ? CelestinaTheme.multiplyAlpha(
+                                   CelestinaTheme.glassOutline,
+                                   root.materialStrength)
+                             : CelestinaTheme.glassOutline
+                fillColor: CelestinaTheme.clear
+                PathSvg { path: root.effectiveSilhouetteEdgePath }
+            }
+        }
+
+        Shape {
+            objectName: "celestina-glass-silhouette-lit-edge"
+            anchors.fill: parent
+            visible: root.active && root.materialEdgesVisible
+                     && root.usesSilhouette
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                strokeWidth: CelestinaTheme.glassEdgeWidth * 2
+                strokeColor: CelestinaTheme.multiplyAlpha(
+                                 CelestinaTheme.glassBorder,
+                                 CelestinaTheme.glassEdgeLowOpacity
+                                 * root.materialStrength)
+                fillColor: CelestinaTheme.clear
+                PathSvg { path: root.effectiveSilhouetteEdgePath }
             }
         }
 
