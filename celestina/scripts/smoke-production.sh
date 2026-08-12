@@ -16,12 +16,19 @@ else
     production_library_path=$style_build
 fi
 
+# `ddcutil` is the only thing a provider helper does that reaches real
+# hardware — the graphics card's own I²C buses, which the desktop this runs
+# inside is already using. Two GPU losses have been recorded with concurrent
+# `ddcutil` children on one bus, and this smoke only ever existed to prove the
+# release host and the compiled module load and stay up. It gets the helper it
+# would get in a session, minus the one call that can take the machine down.
 XDG_CONFIG_HOME=$scratch/config \
 XDG_DATA_HOME=$scratch/data \
 XDG_CACHE_HOME=$scratch/cache \
 XDG_STATE_HOME=$scratch/state \
 XDG_RUNTIME_DIR=$scratch/run \
 DBUS_SESSION_BUS_ADDRESS=unix:path=$scratch/run/no-session-bus \
+CELESTINA_DDC=0 \
 QT_QPA_PLATFORM=offscreen \
 QT_ASSUME_STDERR_HAS_CONSOLE=1 \
 CELESTINA_STYLE_PATH=$style_build/CelestinaStyle \

@@ -35,8 +35,49 @@ implementation unit; it does not rewrite the completed milestone.
   no matching fence, VCN, flip, PCIe or device-loss error.
 - **Interpretation:** recurrence disproves Celestina as a necessary condition;
   non-recurrence is strong evidence against the handover but does not identify
-  the exact failing kernel, firmware, DDC, PCIe or hardware layer.
+  the exact failing kernel, firmware, DDC, PCIe or hardware layer. This hold
+  covers the *session*; two later losses caused by automation are recorded
+  below and do not bear on it.
 - **Evidence:** [GPU loss system audit](docs/evidence/2026-08-05-gpu-loss-system-audit.md)
+
+### 2026-08-12 — two losses caused by automation, not by the session
+
+Both were caused by an agent running the canonical production workflow while
+the author's own desktop was live, and neither is evidence against the hold
+above: the session itself was never the trigger.
+
+The common factor is `ddcutil`. `complete-production.sh` ends in an
+eight-second smoke that starts the real release host with the real provider
+adapter, and that adapter probes DDC on the graphics card's own I²C buses —
+the same buses Noctalia is already using. At 00:54 the first loss followed a
+build that relinked the running nest's binary, producing a helper restart
+storm and two concurrent `ddcutil` children on `busno=8`, then
+`Fence fallback timer expired on ring gfx_0.0.0` and
+`amdgpu: device lost from bus!`. At 14:05:33 the second followed a *second*,
+purely cosmetic production run made only to refresh an artifact manifest: that
+boot holds 35 `ddcutil` lines concentrated at 14:05, ending in
+`Max wait time 0 milliseconds exceeded after 2 flock() calls` and
+`flock() for /dev/i2c-8 failed on 2 calls`.
+
+`PANEL-1-M` removes the cause rather than the symptom: DDC is now gated by
+`CELESTINA_DDC`, and the smoke sets it to `0`. The helper still starts,
+registers and publishes exactly as it does in a session; it simply opens no
+bus, which is the same state a machine whose monitors do not speak DDC/CI
+already produces. Verified on the real helper binary: with the gate closed the
+journal records `ddc.disabled` and no `ddc.start`, `ddc.detected` or
+`ddc.end`, and no `ddcutil` child is spawned.
+
+This does not weaken the smoke. Its purpose is to prove the release host and
+the compiled style module load and stay up for eight seconds with no QML
+errors, and it already runs with no session bus at all, so every other
+provider is degraded there by design. DDC was the one path still reaching real
+hardware.
+
+What remains for the author: DDC itself is still unproven against the freeze.
+The invariant that one worker owns `ddcutil` holds inside a single helper, but
+nothing coordinates between a Celestina helper and Noctalia's own detection,
+and both losses had two children on one bus. Whether that is the cause or a
+correlate is exactly what `VAL-GPU-01` cannot answer from non-recurrence.
 
 ## VAL-SHELL-01 — Request failure and compositor recovery
 

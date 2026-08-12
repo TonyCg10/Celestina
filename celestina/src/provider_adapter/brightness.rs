@@ -35,6 +35,53 @@ use super::worker::Worker;
 /// second and the near-ten-second first call, and still bounded: a monitor that
 /// never answers must not hold the thread forever.
 const DDC_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// Turns DDC off for this process.
+///
+/// `ddcutil` is the one thing this shell does that reaches the graphics card's
+/// own I²C buses, and it is the only part of a provider helper that touches
+/// real hardware rather than a session service. Automated runs need the helper
+/// to start, register and publish exactly as it does in a session — but a run
+/// that is only proving the host loads has no business opening a bus that the
+/// desktop the author is sitting in front of is already using. Two GPU losses
+/// have been recorded with concurrent `ddcutil` children on one bus.
+///
+/// Reading the name of the thing rather than a negation, `0` or `false` turns
+/// it off, exactly as `CELESTINA_PANEL_MENU` does for the panel's menu.
+const DDC_ENABLED_VAR: &str = "CELESTINA_DDC";
+
+/// Whether a value from the environment asks for DDC to be off.
+///
+/// Absent means on: a session that says nothing gets the hardware it always
+/// had. An unreadable value also means on, because a typo must not silently
+/// remove a working control.
+fn ddc_requested(value: Option<&str>) -> bool {
+    match value.map(|value| value.trim().to_ascii_lowercase()) {
+        None => true,
+        Some(value) if value.is_empty() => true,
+        Some(value) => !matches!(value.as_str(), "0" | "false"),
+    }
+}
+
+/// Read once: the answer cannot change while this helper runs, and re-reading
+/// it inside the worker loop would put a `getenv` in the DDC path.
+fn ddc_is_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        let enabled = ddc_requested(std::env::var(DDC_ENABLED_VAR).ok().as_deref());
+        if !enabled {
+            // Critical like every other DDC line: a journal that shows no DDC
+            // activity must say whether that is because nothing happened or
+            // because it was switched off.
+            journal::record_from(
+                "ddc",
+                Event::new(Level::Critical, "ddc.disabled").with_text("variable", DDC_ENABLED_VAR),
+            );
+        }
+        enabled
+    })
+}
+
 /// How long the thread waits between looks at its target. Short enough that a
 /// wheel feels answered, long enough that a burst arrives as one target.
 const APPLY_DELAY: Duration = Duration::from_millis(250);
@@ -178,6 +225,14 @@ fn ddc_operation<T>(
 }
 
 fn detect(shutdown: &AtomicBool) -> Vec<DdcDisplay> {
+    // No bus is opened and no child is spawned. The empty list is the same
+    // answer a machine whose monitors do not speak DDC/CI already gives, so
+    // every path after this one is the supported one rather than a new state
+    // invented for automation.
+    if !ddc_is_enabled() {
+        return Vec::new();
+    }
+
     let displays = ddc_operation("detect", None, None, || {
         run_bounded_with_cancel(
             "ddcutil",
@@ -342,7 +397,7 @@ fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId, shutdown: &AtomicBool)
 
 #[cfg(test)]
 mod tests {
-    use super::{ddc_operation, request_redetect, REDETECT_REQUESTED};
+    use super::{ddc_operation, ddc_requested, request_redetect, REDETECT_REQUESTED};
 
     use std::sync::{atomic::Ordering, Mutex};
 
@@ -351,6 +406,29 @@ mod tests {
     // their assertions depend on which test the harness scheduled between two
     // atomic operations.
     static REDETECT_TEST: Mutex<()> = Mutex::new(());
+
+    /// DDC is on unless something readable asks for it to be off.
+    ///
+    /// The default matters more than the switch: a session that says nothing
+    /// must keep the hardware control it has always had, and a typo must not
+    /// silently remove it either. Only an explicit, readable refusal counts.
+    #[test]
+    fn only_a_readable_refusal_turns_ddc_off() {
+        assert!(ddc_requested(None));
+        assert!(ddc_requested(Some("")));
+        assert!(ddc_requested(Some("   ")));
+        assert!(ddc_requested(Some("1")));
+        assert!(ddc_requested(Some("true")));
+        // Unreadable is not a refusal.
+        assert!(ddc_requested(Some("perhaps")));
+        assert!(ddc_requested(Some("00")));
+
+        assert!(!ddc_requested(Some("0")));
+        assert!(!ddc_requested(Some("false")));
+        // Case and surrounding blanks are the shape a shell script produces.
+        assert!(!ddc_requested(Some("FALSE")));
+        assert!(!ddc_requested(Some(" 0 ")));
+    }
 
     /// Two DDC operations of this shell can never overlap.
     ///

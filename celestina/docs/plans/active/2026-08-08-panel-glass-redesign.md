@@ -242,6 +242,7 @@ floating rounded surfaces.
 |---|---|---|---|---|---|---|---|
 | PANEL-1-A | `celestina:` | done | [inventory](../../inventories/2026-08-08-panel-glass-redesign/PANEL-1-A.numstat.tsv) | 42 files, +1344/-472 | Replace the hard panel plate with a soft shadow and borderless real compositor-glass capsules, reduce workspace and status readings to positional colour/icon semantics without discarding monitor grouping or CPU/memory values, expose the existing overlays, and keep the tray populated and visible across host restarts | [evidence](../../evidence/2026-08-08-panel-glass-baseline.md) | `VAL-PANEL-1` partial |
 | PANEL-1-I | `celestina:` | active | `CMakeLists.txt`; `qml/EdgeAttachedGeometry.js`; `qml/Panel.qml`; `qml/PanelFlank.qml`; `qml/PanelPill.qml`; `qml/PanelCluster.qml`; `qml/PanelActionButton.qml`; `qml/PanelMenuButton.qml`; panel opener controls; `qml/PanelPopupPlacement.qml`; `qml/CompositorGlassRegion.qml`; `qml/SoftMenuField.qml`; `qml/SoftMenu.qml`; `qml/SoftOverlayCard.qml`; `qml/AnchoredCard.qml`; panel-opened overlay/menu composition; `src/panelattachmentlease.{h,cpp}`; `src/panelmanager.{h,cpp}`; `src/panelblurcontroller.{h,cpp}`; `src/panelmenucontroller.{h,cpp}`; `src/overlaycontroller.{h,cpp}`; focused QML/C++ tests; Celestina version/status/roadmap/validation/evidence and the root version history | — | Replace the narrow central connector with one tension-shaped `ContextualVeil` membrane that spans the complete contextual width at both the panel edge and menu landing, narrows through a fluid body-proportional waist whose centre follows the exact clicked icon without collapsing to icon width, and keeps that opener's hover circle visible only while its own surface remains open; require matched tangent magnitude and direction through the waist so the short 20..36-pixel travel reads as one rounded liquid deformation rather than straight hourglass flanks, keep the clicked control rectangle separate for placement and leave the owning panel capsule and all dense content cards completely unchanged while preserving disjoint panel/menu blur regions, one finite compositor region per surface and every floating-route, provider, focus, Escape, outside-click and reduced-motion contract | [continuous bar veil and membrane evidence](../../evidence/2026-08-11-edge-attached-shell-prototype.md) | `VAL-PANEL-1` |
+| PANEL-1-M | `celestina:` | active | `src/provider_adapter/brightness.rs`; `scripts/smoke-production.sh`; `VALIDATION.md` | — | Stop the canonical verification workflow from reaching the graphics card: gate DDC behind `CELESTINA_DDC` so an automated run starts, registers and publishes exactly as a session does while opening no I²C bus, and set that gate in the release smoke, whose purpose was only ever to prove the host and compiled module load | [per-output sizing and raster fidelity evidence](../../evidence/2026-08-12-output-sizing-and-raster-fidelity.md) | `VAL-GPU-01` |
 | PANEL-1-L | `celestina:` | active | `src/shellscale.{h,cpp}`; `src/panelmanager.cpp`; `src/traywatcher.cpp`; `qml/Panel.qml`; `qml/PanelPill.qml`; raster-icon consumers; `qml/PerformanceMenu.qml`; `qml/NetworkMenu.qml`; `qml/BluetoothMenu.qml`; `CMakeLists.txt`; focused C++/QML tests; Celestina status/roadmap/validation/evidence | — | Make what the shell draws the same physical size on every output and stop it degrading what it draws: derive one bounded per-output scale from the output's real density and apply it as a scene scale so no token or layout number moves, rasterize a tray icon once at a size that survives any scale, ask for every raster at the density it will be drawn at, thicken glyph strokes and panel reading weights, and stop three provider-driven menus rebuilding their complete row list on every reading tick | [per-output sizing and raster fidelity evidence](../../evidence/2026-08-12-output-sizing-and-raster-fidelity.md) | `VAL-PANEL-1` |
 | PANEL-1-K | `celestina:` | active | `qml/EdgeAttachedGeometry.js`; `qml/PanelPill.qml`; `qml/PanelCluster.qml`; `qml/PanelActionButton.qml`; `qml/PhoneStatus.qml`; `qml/Panel.qml` | — | Weld the panel's reading capsules to the screen's top edge instead of floating them inside the bar, with the centred clock held by a visibly elastic skin and every flanked capsule keeping straight sides so no neighbour is overlapped and no gap on the bar is widened | [droplet fall evidence](../../evidence/2026-08-12-droplet-tension-fall.md) | `VAL-PANEL-1` |
 | PANEL-1-J | `celestina:` | active | `qml/EdgeAttachedGeometry.js`; `qml/SoftMenuField.qml`; focused QML/C++ attachment tests; Celestina status/roadmap/validation/evidence | — | Give the settled droplet its opening motion from one bounded progress value on the same geometry source: the body emerges from its seam mouth in extent and lateral span together while the neck thins under flight tension and relaxes to its resting width, the mouth stays welded to the seam and the neck keeps a hard floor so the drop never pinches off, content reveals only as the body arrives, and reduced motion resolves the settled geometry immediately without changing any floating-route, compositor-region, placement, lease or dismissal contract | [droplet fall evidence](../../evidence/2026-08-12-droplet-tension-fall.md) | `VAL-PANEL-1` |
@@ -794,3 +795,42 @@ was then measured against a menu mid-rebuild and stayed clipped for as long as
 it was open. `NetworkMenu` and `BluetoothMenu` had the same shape. Their row
 lists now carry identity only, and every moving value is read live by the row
 that shows it, so a tick moves labels and rebuilds nothing.
+
+
+## PANEL-1-M boundary
+
+Two GPU losses on 2026-08-12 were caused by an agent running the canonical
+production workflow against the author's live desktop, and both had concurrent
+`ddcutil` children on one I²C bus immediately before the machine went down.
+
+The cause is structural rather than accidental. `complete-production.sh` ends
+in an eight-second smoke that starts the *real* release host with the *real*
+provider adapter, and that adapter probes DDC on the graphics card's own I²C
+buses — the buses the running desktop is already using. Everything else in
+that smoke is already degraded by design: it runs offscreen, against a session
+bus address that does not exist, in a scratch XDG tree. DDC was the single path
+still reaching hardware, and nothing about proving that the host and the
+compiled style module load requires it.
+
+`CELESTINA_DDC` turns it off, reading the name of the thing rather than a
+negation, exactly as `CELESTINA_PANEL_MENU` does. Absent means on, and an
+unreadable value also means on: a typo must not silently remove a working
+hardware control from a session. Only `0` or `false`, trimmed and
+case-insensitive, count as a refusal.
+
+The gate sits at `detect`, which is the only entry point: `run` derives its
+display list from it, and every read and write is per-display, so an empty
+list makes a `ddcutil` child unreachable rather than merely unlikely. The
+empty list is also not a new state — it is exactly what a machine whose
+monitors do not speak DDC/CI already produces, so every path after the gate is
+one the shell already supports.
+
+The switch is recorded. A journal that shows no DDC activity must be able to
+say whether that is because nothing happened or because it was disabled, so a
+closed gate emits one `ddc.disabled` line at the same `Critical` level as
+every other DDC event.
+
+This does not weaken the smoke, and it does not fix DDC. Nothing here
+coordinates between a Celestina helper and another shell's own detection, which
+is the shape both losses had; that remains the author's open question under
+`VAL-GPU-01`.
