@@ -3,11 +3,14 @@
 #include <QObject>
 #include <QPoint>
 #include <QRect>
+#include <QRectF>
 #include <QPointer>
 #include <QQmlComponent>
 #include <QSize>
 #include <QVariant>
 #include <QWindow>
+
+#include "panelattachmentlease.h"
 
 class NiriClient;
 class PanelMenuSurface;
@@ -60,7 +63,8 @@ public slots:
     // with a board of window tiles instead of a list of rows.
     void openWorkspaceMap(
         QWindow *panel,
-        const QPoint &globalAnchor,
+        const QRectF &globalOpener,
+        const QRectF &globalAttachmentAnchor,
         const QVariant &workspaces
     );
     // A tray menu is a conversation with the application that owns it. The
@@ -82,7 +86,8 @@ public slots:
     // the second click, which is the defect this shell has had once already.
     void toggleIndicatorMenu(
         QWindow *panel,
-        const QRect &globalOpener,
+        const QRectF &globalOpener,
+        const QRectF &globalAttachmentAnchor,
         const QString &kind,
         QObject *providerSource
     );
@@ -90,7 +95,8 @@ public slots:
     // which asks one foreign application for its own D-Bus menu.
     void toggleTrayItemsMenu(
         QWindow *panel,
-        const QRect &globalOpener,
+        const QRectF &globalOpener,
+        const QRectF &globalAttachmentAnchor,
         QObject *traySource,
         QObject *providerSource
     );
@@ -142,7 +148,9 @@ private slots:
         const QString &service,
         const QString &path,
         int globalX,
-        int globalY
+        int globalY,
+        int globalWidth,
+        int globalHeight
     );
     // A retiring window may emit its QML close signal after its successor is
     // already mapped. Only the currently adopted window may close the surface.
@@ -162,7 +170,7 @@ private slots:
 private:
     void beginTrayMenuRequest(
         QWindow *panel,
-        const QPoint &globalAnchor,
+        const QRect &globalAnchor,
         const QString &service,
         const QString &path,
         QWindow *parentMenu
@@ -184,7 +192,9 @@ private:
     // and whose it is.
     QPointer<QWindow> m_pendingPanel;
     QPointer<QWindow> m_pendingParentMenu;
-    QPoint m_pendingAnchor;
+    // The invoking control's complete global rectangle. A point-only route
+    // arrives as a zero-sized rectangle and never attaches a membrane.
+    QRect m_pendingAnchor;
     QString m_pendingService;
     QString m_pendingPath;
     bool m_pendingKeepsTrayItems = false;
@@ -206,6 +216,7 @@ private:
     // from the tray inventory owner because only the wallpaper gallery needs
     // to call back into its permanent folder chooser.
     QPointer<QWindow> m_openIndicatorPanel;
+    PanelAttachmentLease m_attachmentLease;
     PanelMenuSurface *m_surface;
     PanelMenuSurface *m_trayChildSurface;
     bool m_enabled;

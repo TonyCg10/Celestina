@@ -3,8 +3,9 @@ import QtTest
 import CelestinaStyle
 import "../qml" as Desktop
 
-// A permanent panel entry point must remain a real button and must contribute
-// its glass region without owning the overlay it opens.
+// A permanent panel entry point must remain a real button and may contribute
+// its dense capsule without owning either the shared bar blur or the overlay
+// it opens.
 TestCase {
     id: testCase
 
@@ -90,15 +91,24 @@ TestCase {
         button.click();
         compare(clicks.count, 1);
         compare(menus.count, 1);
-        compare(menus.signalArguments[0][2], button.width);
-        compare(menus.signalArguments[0][3], button.height);
+        const openerRect = menus.signalArguments[0][0];
+        const anchorRect = menus.signalArguments[0][1];
+        compare(openerRect.width, button.width);
+        compare(openerRect.height, button.height);
+        compare(anchorRect, button.attachmentAnchorGlobalRectNow());
+        compare(anchorRect.width, 18);
+        compare(anchorRect.height, 18);
+        compare(anchorRect.x,
+                openerRect.x + (openerRect.width - anchorRect.width) / 2);
+        compare(anchorRect.y,
+                openerRect.y + (openerRect.height - anchorRect.height) / 2);
+        verify(button.isPanelAttachmentSource);
     }
 
-    function test_standalone_and_grouped_buttons_have_distinct_glass_ownership() {
+    function test_owned_and_delegated_buttons_keep_distinct_material_visibility() {
         compare(button.ownsGlass, true);
         const standaloneRegions = testCase.glassRegions(button);
-        compare(standaloneRegions.length, 1);
-        verify(standaloneRegions[0].visible);
+        compare(standaloneRegions.length, 0);
         const standaloneMaterial = testCase.material(button);
         verify(standaloneMaterial);
         verify(standaloneMaterial.visible);
@@ -110,11 +120,14 @@ TestCase {
         compare(standaloneMaterial.materialTint,
                 testInk.contentMaterialTint);
         compare(standaloneMaterial.elevation, 0);
+        verify(!standaloneMaterial.usesSilhouette);
+        compare(standaloneMaterial.silhouettePath, "");
+        compare(standaloneMaterial.silhouetteEdgePath, "");
+        verify(standaloneMaterial.materialEdgesVisible);
 
         compare(groupedButton.ownsGlass, false);
         const groupedRegions = testCase.glassRegions(groupedButton);
-        compare(groupedRegions.length, 1);
-        verify(!groupedRegions[0].visible);
+        compare(groupedRegions.length, 0);
         const groupedMaterial = testCase.material(groupedButton);
         verify(groupedMaterial);
         verify(!groupedMaterial.visible);

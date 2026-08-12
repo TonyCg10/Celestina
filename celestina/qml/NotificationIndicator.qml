@@ -16,8 +16,7 @@ PanelMenuButton {
     // not the session's notification server.
     required property var reading
 
-    signal historyRequested(int globalX, int globalY,
-                            int openerWidth, int openerHeight)
+    signal historyRequested(rect openerRect, rect attachmentAnchorRect)
     signal quietToggled()
 
     readonly property bool serving: reading !== undefined
@@ -32,6 +31,7 @@ PanelMenuButton {
     implicitWidth: content.implicitWidth
     implicitHeight: CelestinaTheme.controlHeightXs
     visible: true
+    attachmentAnchor: notificationGlyph
 
     Accessible.role: Accessible.Button
     Accessible.name: !root.serving
@@ -40,8 +40,8 @@ PanelMenuButton {
             ? qsTr("Notificaciones silenciadas, %1 sin leer").arg(root.unread)
             : qsTr("%1 notificaciones sin leer").arg(root.unread)
     Accessible.onPressAction: root.requestMenu()
-    onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
-        root.historyRequested(globalX, globalY, openerWidth, openerHeight)
+    onMenuRequested: (openerRect, attachmentAnchorRect) =>
+        root.historyRequested(openerRect, attachmentAnchorRect)
 
     contentItem: Row {
         id: content
@@ -49,6 +49,8 @@ PanelMenuButton {
         spacing: CelestinaTheme.spaceXs
 
         CelestinaIcon {
+            id: notificationGlyph
+
             objectName: "celestina-notification-icon"
             anchors.verticalCenter: parent.verticalCenter
             width: CelestinaTheme.iconSm

@@ -1,13 +1,9 @@
 // PANEL-1. The piece of glass one reading sits on.
 //
-// The bar itself has no full-width paint, which lets it disappear into the
-// wallpaper — and takes away any shared contrast floor. On a bright picture
-// the panel's own text once fell to 4.2:1 and its quiet text to 1.1:1.
-//
-// A pill gives the compositor blur somewhere finite to stop, then places the
-// canonical dense content material over that result. The material is matte and
-// shadowless: it establishes the requested information-bearing surface without
-// recreating a full-width panel plate or attempting an in-scene capture.
+// The complete bar now owns one compositor backdrop from edge to edge. A pill
+// therefore paints only the canonical dense content material over that shared
+// sample; it does not publish a second blur region. The material is matte and
+// shadowless and the capsule remains inset from every screen edge.
 //
 // It is a *background*, not a wrapper: it paints behind the widget it is placed
 // in and takes no part in the layout, so no flank changes width and nothing on
@@ -19,26 +15,30 @@ pragma ComponentBehavior: Bound
 import CelestinaStyle
 import QtQuick
 
-CompositorGlassRegion {
+Item {
     id: pill
 
     required property BackdropInk ink
+    required property bool blurAvailable
     // Panel readings use a small flank overhang; menu fields own their complete
     // rounded region and do not use this panel-specific extension.
     property int horizontalOverhang: CelestinaTheme.spaceSm
-
+    readonly property real restingWidth:
+            (parent ? parent.width : 0) + pill.horizontalOverhang * 2
+    readonly property real restingHeight: CelestinaTheme.controlHeightXs
+    readonly property real restingX: -pill.horizontalOverhang
+    readonly property real restingY:
+            parent ? (parent.height - pill.restingHeight) / 2 : 0
     // Behind the reading it belongs to. A child is drawn above its parent's own
     // content unless it says otherwise, and this one is a floor.
-    anchors.centerIn: parent
+    anchors.horizontalCenter: parent ? parent.horizontalCenter : undefined
+    z: -1
     // Tight on purpose, and tighter than it looks: the parents clip, so an
     // overhang wider than the room the row leaves is simply cut off — which is
     // what sliced the phone's glass in half at the first attempt.
-    width: parent.width + pill.horizontalOverhang * 2
-    height: CelestinaTheme.controlHeightXs
-    radius: CelestinaTheme.radiusPill
-    // GlassSurface owns the fallback so a missing compositor sample receives
-    // one readable floor instead of this region and the material painting two.
-    fallbackColor: CelestinaTheme.clear
+    y: pill.restingY
+    width: pill.restingWidth
+    height: pill.restingHeight
 
     GlassSurface {
         anchors.fill: parent
@@ -49,7 +49,7 @@ CompositorGlassRegion {
         captureEnabled: false
         materialRole: GlassSurface.ContentSurface
         materialTint: pill.ink.contentMaterialTint
-        cornerRadius: pill.radius
+        cornerRadius: CelestinaTheme.radiusPill
         elevation: 0
     }
 }

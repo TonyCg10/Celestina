@@ -2,6 +2,7 @@ import CelestinaStyle
 import QtQuick
 import QtQuick.Dialogs
 import QtQuick.Window
+import "EdgeAttachedGeometry.js" as EdgeAttachedGeometry
 import "ProviderReading.js" as ProviderReading
 
 Window {
@@ -23,22 +24,17 @@ Window {
     // move by the same amount under the same gesture.
     readonly property int levelStep: 5
     // Forwarded to the host, which owns every surface this window does not.
-    signal workspaceMapRequested(int globalX, int globalY, var workspaces)
-    signal trayDrawerRequested(int globalX, int globalY,
-                               int openerWidth, int openerHeight)
+    signal workspaceMapRequested(rect openerRect, rect attachmentAnchorRect, var workspaces)
+    signal trayDrawerRequested(rect openerRect, rect attachmentAnchorRect)
     signal trayMenuRequested(string service, string path, int globalX, int globalY)
-    signal launcherRequested(int globalX, int globalY,
-                             int openerWidth, int openerHeight)
-    signal notificationCentreRequested(int globalX, int globalY,
-                                       int openerWidth, int openerHeight)
-    signal controlCentreRequested(int globalX, int globalY,
-                                  int openerWidth, int openerHeight)
-    signal clipboardRequested(int globalX, int globalY,
-                              int openerWidth, int openerHeight)
-    signal sessionMenuRequested(int globalX, int globalY,
-                                int openerWidth, int openerHeight)
-    signal indicatorMenuRequested(string kind, int globalX, int globalY,
-                                  int openerWidth, int openerHeight)
+    signal launcherRequested(rect openerRect, rect attachmentAnchorRect)
+    signal notificationCentreRequested(rect openerRect,
+                                       rect attachmentAnchorRect)
+    signal controlCentreRequested(rect openerRect, rect attachmentAnchorRect)
+    signal clipboardRequested(rect openerRect, rect attachmentAnchorRect)
+    signal sessionMenuRequested(rect openerRect, rect attachmentAnchorRect)
+    signal indicatorMenuRequested(string kind, rect openerRect,
+                                  rect attachmentAnchorRect)
     // The standard chooser owns folder selection. The host receives the
     // complete URL and is the only layer that turns it into a local filesystem
     // path; the gallery provider owns scanning and image validation after that.
@@ -79,9 +75,8 @@ Window {
     readonly property int barHeight: 40
     height: barHeight
     visible: false
-    // The bar has no full-width paint or shadow. Readability comes from each
-    // finite compositor-glass capsule and its explicit no-blur fallback, so
-    // perceptual validation still has to cover bright and dark wallpaper.
+    // The bar has one nearly transparent, shadowless contextual backdrop from
+    // edge to edge. Dense content capsules remain inset above it.
     color: CelestinaTheme.clear
     title: qsTr("Panel de Celestina")
     flags: Qt.FramelessWindowHint | Qt.WindowDoesNotAcceptFocus
@@ -91,14 +86,14 @@ Window {
         glassSettle.restart();
     }
 
-    // PANEL-1 — the rectangles the compositor should blur, in window
-    // coordinates, collected from the pills themselves.
+    // PANEL-1 — the finite region the compositor should blur, in window
+    // coordinates, collected from the continuous bar backdrop.
     //
     // Published from here rather than found from C++: an item declared in a QML
     // `Window` sits in an object tree whose shape is Qt's business, and walking
     // it guessed wrong twice — first finding nothing under the content item, and
-    // an empty region is not "blur nothing", it is "blur everything". The pills
-    // know where they are; this asks them.
+    // an empty region is not "blur nothing", it is "blur everything". The QML
+    // backdrop knows its exact geometry; this asks it.
     property var glassRects: []
     property var glassRegions: []
 
@@ -114,7 +109,12 @@ Window {
                     const at = child.mapToItem(null, 0, 0);
                     const rect = Qt.rect(at.x, at.y, child.width, child.height);
                     foundRects.push(rect);
-                    foundRegions.push({"rect": rect, "radius": child.radius});
+                    foundRegions.push({
+                        "rect": rect,
+                        "radius": child.radius,
+                        "polygon": EdgeAttachedGeometry.mapPolygon(
+                            child, child.polygon)
+                    });
                 }
                 walk(child);
             }
@@ -149,6 +149,35 @@ Window {
         anchors.right: parent.right
         anchors.top: parent.top
         height: panel.barHeight
+        readonly property var materialSilhouette:
+                EdgeAttachedGeometry.openBottomRectangle(width, height)
+
+        CompositorGlassRegion {
+            id: barBackdropRegion
+
+            anchors.fill: parent
+            blurAvailable: panel.compositorBlurAvailable
+            fallbackColor: CelestinaTheme.glassTint
+            radius: CelestinaTheme.radiusNone
+            onBlurRegionChanged: panel.scheduleGlassCollection()
+
+            GlassSurface {
+                anchors.fill: parent
+                objectName: "celestina-panel-backdrop-material"
+                backdropMode: GlassSurface.ExternalBackdrop
+                // Exactly as in a contextual menu, either the compositor or
+                // CompositorGlassRegion's declared fallback supplies the
+                // external sample beneath this very light material.
+                externalBackdropReady: true
+                captureEnabled: false
+                materialRole: GlassSurface.ContextualVeil
+                materialTint: backdropInk.materialTint
+                cornerRadius: CelestinaTheme.radiusNone
+                silhouettePath: bar.materialSilhouette.path
+                silhouetteEdgePath: bar.materialSilhouette.edgePath
+                elevation: 0
+            }
+        }
     }
 
     // Three regions, and only the middle one is anchored to the screen: the
@@ -162,6 +191,7 @@ Window {
         anchors.right: clock.left
         anchors.rightMargin: CelestinaTheme.space2xl
         anchors.verticalCenter: bar.verticalCenter
+        height: panel.barHeight
         // What the strip must leave for the widgets that follow it. Measured
         // by their own width rather than by `visible`, which also depends on
         // the window being shown: what matters here is whether a widget has
@@ -190,12 +220,11 @@ Window {
             // The strip reports the gesture; the provider owns the protocol and
             // answers through `workspaces`, never through this call's return.
             onFocusRequested: (output, index) => panel.niriProvider.requestWorkspaceFocus(output, index)
-            onMapRequested: (globalX, globalY, workspaces) => panel.workspaceMapRequested(globalX, globalY, workspaces)
+            onMapRequested: (openerRect, anchorRect, workspaces) => panel.workspaceMapRequested(openerRect, anchorRect, workspaces)
 
             PanelPill {
                 blurAvailable: panel.compositorBlurAvailable
                 ink: backdropInk
-                onBlurRegionChanged: panel.scheduleGlassCollection()
             }
 
         }
@@ -206,7 +235,6 @@ Window {
             spacing: CelestinaTheme.spaceXs
             blurAvailable: panel.compositorBlurAvailable
             ink: backdropInk
-            onBlurRegionChanged: panel.scheduleGlassCollection()
 
             CaptureButton {
                 id: captureButton
@@ -215,9 +243,9 @@ Window {
                 blurAvailable: panel.compositorBlurAvailable
                 ownsGlass: false
                 ink: backdropInk
-                onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
-                    panel.indicatorMenuRequested("capture", globalX, globalY,
-                                                 openerWidth, openerHeight)
+                onMenuRequested: (openerRect, attachmentAnchorRect) =>
+                    panel.indicatorMenuRequested("capture", openerRect,
+                                                 attachmentAnchorRect)
 
                 // The provider reports only what it could not do; a capture
                 // the compositor took over is not observable by this panel.
@@ -239,9 +267,9 @@ Window {
                 iconName: "image"
                 ink: backdropInk
                 helpText: qsTr("Cambiar el fondo de pantalla")
-                onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
-                    panel.indicatorMenuRequested("wallpaper", globalX, globalY,
-                                                 openerWidth, openerHeight)
+                onMenuRequested: (openerRect, attachmentAnchorRect) =>
+                    panel.indicatorMenuRequested("wallpaper", openerRect,
+                                                 attachmentAnchorRect)
             }
         }
 
@@ -261,7 +289,6 @@ Window {
             PanelPill {
                 blurAvailable: panel.compositorBlurAvailable
                 ink: backdropInk
-                onBlurRegionChanged: panel.scheduleGlassCollection()
             }
 
         }
@@ -278,7 +305,6 @@ Window {
         PanelPill {
             blurAvailable: panel.compositorBlurAvailable
             ink: backdropInk
-            onBlurRegionChanged: panel.scheduleGlassCollection()
         }
 
     }
@@ -291,6 +317,7 @@ Window {
         anchors.left: clock.right
         anchors.leftMargin: CelestinaTheme.space2xl
         anchors.verticalCenter: bar.verticalCenter
+        height: panel.barHeight
         trailing: true
 
         // PANEL-1 — this reading lays out its own children, so a pill
@@ -302,6 +329,7 @@ Window {
         // layout does not own, and reports the same size to the flank.
 
         Item {
+            id: trayWrapper
 
             height: CelestinaTheme.controlHeightXs
             implicitWidth: traydrawerBody.implicitWidth
@@ -326,16 +354,16 @@ Window {
                 onActivated: (service, path, globalX, globalY) => panel.traySource.activate(service, path, globalX, globalY)
                 onSecondaryActivated: (service, path, globalX, globalY) => panel.traySource.secondaryActivate(service, path, globalX, globalY)
                 onMenuRequested: (service, path, globalX, globalY) => panel.trayMenuRequested(service, path, globalX, globalY)
-                onDrawerRequested: (globalX, globalY, openerWidth, openerHeight) =>
-                    panel.trayDrawerRequested(globalX, globalY,
-                                              openerWidth, openerHeight)
+                onDrawerRequested: (openerRect, attachmentAnchorRect) =>
+                    panel.trayDrawerRequested(openerRect, attachmentAnchorRect)
 
             }
 
             PanelPill {
+                id: trayPill
+
                 blurAvailable: panel.compositorBlurAvailable
                 ink: backdropInk
-                onBlurRegionChanged: panel.scheduleGlassCollection()
             }
 
         }
@@ -346,7 +374,6 @@ Window {
             blurAvailable: panel.compositorBlurAvailable
             ink: backdropInk
             hasContent: sessionstatusBody.hasVisibleIndicator
-            onBlurRegionChanged: panel.scheduleGlassCollection()
 
             SessionStatus {
                 id: sessionstatusBody
@@ -354,9 +381,10 @@ Window {
                 network: panel.provider("network")
                 bluetooth: panel.provider("bluetooth")
                 ink: backdropInk
-                onIndicatorMenuRequested: (kind, globalX, globalY, openerWidth, openerHeight) =>
-                    panel.indicatorMenuRequested(kind, globalX, globalY,
-                                                 openerWidth, openerHeight)
+                onIndicatorMenuRequested: (kind, openerRect,
+                                           attachmentAnchorRect) =>
+                    panel.indicatorMenuRequested(kind, openerRect,
+                                                 attachmentAnchorRect)
             }
         }
 
@@ -365,7 +393,6 @@ Window {
 
             blurAvailable: panel.compositorBlurAvailable
             ink: backdropInk
-            onBlurRegionChanged: panel.scheduleGlassCollection()
 
             AudioLevel {
                 height: CelestinaTheme.controlHeightXs
@@ -402,7 +429,6 @@ Window {
             spacing: CelestinaTheme.spaceXs
             blurAvailable: panel.compositorBlurAvailable
             ink: backdropInk
-            onBlurRegionChanged: panel.scheduleGlassCollection()
 
             NotificationIndicator {
                 height: CelestinaTheme.controlHeightXs
@@ -410,9 +436,9 @@ Window {
                 ink: backdropInk
                 // The panel asks; the host owns the surface that answers,
                 // exactly as it does for the menus.
-                onHistoryRequested: (globalX, globalY, openerWidth, openerHeight) =>
-                    panel.notificationCentreRequested(globalX, globalY,
-                                                       openerWidth, openerHeight)
+                onHistoryRequested: (openerRect, attachmentAnchorRect) =>
+                    panel.notificationCentreRequested(openerRect,
+                                                       attachmentAnchorRect)
                 onQuietToggled: panel.providerSource.sendCommand(
                     "notifications", "quiet-toggle")
             }
@@ -424,9 +450,8 @@ Window {
                 iconName: "app-window"
                 ink: backdropInk
                 helpText: qsTr("Abrir el buscador de aplicaciones")
-                onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
-                    panel.launcherRequested(globalX, globalY,
-                                            openerWidth, openerHeight)
+                onMenuRequested: (openerRect, attachmentAnchorRect) =>
+                    panel.launcherRequested(openerRect, attachmentAnchorRect)
             }
 
             PanelActionButton {
@@ -438,9 +463,9 @@ Window {
                 iconName: "settings"
                 ink: backdropInk
                 helpText: qsTr("Abrir el centro de control")
-                onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
-                    panel.controlCentreRequested(globalX, globalY,
-                                                 openerWidth, openerHeight)
+                onMenuRequested: (openerRect, attachmentAnchorRect) =>
+                    panel.controlCentreRequested(openerRect,
+                                                 attachmentAnchorRect)
             }
 
             PanelActionButton {
@@ -450,9 +475,8 @@ Window {
                 iconName: "clipboard-paste"
                 ink: backdropInk
                 helpText: qsTr("Abrir el historial del portapapeles")
-                onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
-                    panel.clipboardRequested(globalX, globalY,
-                                             openerWidth, openerHeight)
+                onMenuRequested: (openerRect, attachmentAnchorRect) =>
+                    panel.clipboardRequested(openerRect, attachmentAnchorRect)
             }
 
             PanelActionButton {
@@ -462,9 +486,9 @@ Window {
                 iconName: "power"
                 ink: backdropInk
                 helpText: qsTr("Abrir el menú de sesión")
-                onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
-                    panel.sessionMenuRequested(globalX, globalY,
-                                               openerWidth, openerHeight)
+                onMenuRequested: (openerRect, attachmentAnchorRect) =>
+                    panel.sessionMenuRequested(openerRect,
+                                               attachmentAnchorRect)
             }
 
             SysMon {
@@ -472,9 +496,9 @@ Window {
                 ink: backdropInk
                 blurAvailable: panel.compositorBlurAvailable
                 ownsGlass: false
-                onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
-                    panel.indicatorMenuRequested("performance", globalX, globalY,
-                                                 openerWidth, openerHeight)
+                onMenuRequested: (openerRect, attachmentAnchorRect) =>
+                    panel.indicatorMenuRequested("performance", openerRect,
+                                                 attachmentAnchorRect)
             }
         }
 
@@ -489,7 +513,6 @@ Window {
             battery: panel.phoneProvider.phoneBattery
             charging: panel.phoneProvider.phoneCharging
             ink: backdropInk
-            onBlurRegionChanged: panel.scheduleGlassCollection()
         }
     }
 

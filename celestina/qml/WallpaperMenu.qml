@@ -204,6 +204,11 @@ AnchoredCard {
         reducedMotion: root.reducedMotion
         ink: backdropInk
         accessibleName: qsTr("Fondos de pantalla")
+        attachedToTop: root.anchoredFromPanel
+        openerRect: root.openerRect
+        attachmentAnchorRect: root.attachmentAnchorRect
+        attachmentStartY: root.attachmentStartY
+        surfacePosition: Qt.point(root.cardX, root.cardY)
 
         Column {
             anchors.fill: parent

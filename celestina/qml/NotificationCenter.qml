@@ -22,6 +22,8 @@ Window {
     required property bool reducedMotion
     property alias anchoredFromPanel: placement.anchoredFromPanel
     property alias openerRect: placement.openerRect
+    property alias attachmentAnchorRect: placement.attachmentAnchorRect
+    property alias attachmentStartY: placement.attachmentStartY
     property alias compositorBlurAvailable: card.compositorBlurAvailable
     property alias glassRects: card.glassRects
     property alias glassRegions: card.glassRegions
@@ -166,6 +168,11 @@ Window {
             anchors.fill: parent
             reducedMotion: centre.reducedMotion
             accessibleName: qsTr("Notificaciones")
+            attachedToTop: centre.anchoredFromPanel
+            openerRect: centre.openerRect
+            attachmentAnchorRect: centre.attachmentAnchorRect
+            attachmentStartY: centre.attachmentStartY
+            surfacePosition: Qt.point(centre.cardX, centre.cardY)
 
             Column {
                 anchors.fill: parent

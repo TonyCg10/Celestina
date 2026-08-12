@@ -24,7 +24,30 @@ Item {
     // going to it. It replaces the panel's list-of-workspaces menu that used to
     // live on this gesture: that menu offered the workspaces this strip already
     // shows, and the map answers the question the strip cannot.
-    signal mapRequested(int globalX, int globalY)
+    signal mapRequested(rect openerRect, rect attachmentAnchorRect)
+
+    // The semantic attachment-source contract the panel lease resolves: the
+    // pill is the placement opener and its state dot is the exact glyph the
+    // contextual droplet's mouth follows.
+    readonly property bool isPanelAttachmentSource: true
+    readonly property Item attachmentAnchor: stateMark
+    // Set only by the tokened attachment lease that owns the currently mapped
+    // contextual surface; the dot keeps its hover emphasis until that exact
+    // surface retires.
+    property bool menuOpen: false
+
+    function globalRect(item) {
+        const topLeft = item.mapToGlobal(0, 0);
+        const bottomRight = item.mapToGlobal(item.width, item.height);
+        return Qt.rect(Math.min(topLeft.x, bottomRight.x),
+                       Math.min(topLeft.y, bottomRight.y),
+                       Math.abs(bottomRight.x - topLeft.x),
+                       Math.abs(bottomRight.y - topLeft.y));
+    }
+
+    function attachmentAnchorGlobalRectNow() {
+        return pill.globalRect(pill.attachmentAnchor);
+    }
 
     readonly property string requestState: workspace.requestState
     readonly property bool occupied: workspace.activeWindowTitle !== undefined
@@ -82,7 +105,8 @@ Item {
         opacity: pill.requestState === "pending"
                  ? CelestinaTheme.mutedContentOpacity
                  : focusArea.pressed ? CelestinaTheme.disabledContentOpacity
-                 : focusArea.containsMouse && !pill.workspace.focused ? 0.82 : 1
+                 : (focusArea.containsMouse || pill.menuOpen)
+                   && !pill.workspace.focused ? 0.82 : 1
         border.width: pill.workspace.focused ? CelestinaTheme.borderHairline : 0
         border.color: {
             if (pill.requestState === "failed")
@@ -123,8 +147,8 @@ Item {
         cursorShape: Qt.PointingHandCursor
         onClicked: (mouse) => {
             if (mouse.button === Qt.RightButton) {
-                const anchor = pill.mapToGlobal(0, pill.height);
-                pill.mapRequested(anchor.x, anchor.y);
+                pill.mapRequested(pill.globalRect(pill),
+                                  pill.attachmentAnchorGlobalRectNow());
                 return;
             }
             pill.focusRequested(pill.workspace.output, pill.workspace.index);

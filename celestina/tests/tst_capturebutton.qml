@@ -47,10 +47,19 @@ TestCase {
         compare(menuSpy.count, 1);
         const arguments = menuSpy.signalArguments[0];
         const expected = button.mapToGlobal(0, 0);
-        compare(arguments[0], expected.x);
-        compare(arguments[1], expected.y);
-        compare(arguments[2], button.width);
-        compare(arguments[3], button.height);
+        compare(arguments[0].x, expected.x);
+        compare(arguments[0].y, expected.y);
+        compare(arguments[0].width, button.width);
+        compare(arguments[0].height, button.height);
+        const anchor = arguments[1];
+        compare(anchor, button.attachmentAnchorGlobalRectNow());
+        compare(anchor.width, 18);
+        compare(anchor.height, 18);
+        compare(anchor.x,
+                arguments[0].x + (arguments[0].width - anchor.width) / 2);
+        compare(anchor.y,
+                arguments[0].y + (arguments[0].height - anchor.height) / 2);
+        verify(button.isPanelAttachmentSource);
     }
 
     function test_a_refusal_keeps_the_existing_bounded_feedback() {

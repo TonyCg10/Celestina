@@ -64,17 +64,32 @@ TestCase {
                      Qt.RightButton);
     }
 
-    function test_group_press_uses_the_pressed_surface() {
+    function test_group_press_changes_the_group_mark() {
         const pointer = findChild(group, "celestina-workspace-group-pointer");
-        const feedback = findChild(group, "celestina-workspace-group-feedback");
+        const mark = findChild(group, "celestina-workspace-group-mark");
         verify(pointer);
-        verify(feedback);
+        verify(mark);
+        // The collapsed monitor is one dot, larger than the workspace dots
+        // beside it, with no visible count or bordered capsule.
+        verify(mark.width > 12);
+        verify(!findChild(group, "celestina-workspace-group-feedback"));
 
         mousePress(group, group.width / 2, group.height / 2,
                    Qt.RightButton);
         verify(pointer.pressed);
-        tryCompare(feedback, "color", CelestinaTheme.surfaceStrong);
+        tryCompare(mark, "scale", 0.82);
         mouseRelease(group, group.width / 2, group.height / 2,
                      Qt.RightButton);
+    }
+
+    function test_both_controls_publish_the_attachment_source_contract() {
+        verify(workspace.isPanelAttachmentSource);
+        verify(group.isPanelAttachmentSource);
+        verify(workspace.attachmentAnchor);
+        verify(group.attachmentAnchor);
+        const pillRect = workspace.attachmentAnchorGlobalRectNow();
+        const groupRect = group.attachmentAnchorGlobalRectNow();
+        verify(pillRect.width > 0 && pillRect.height > 0);
+        verify(groupRect.width > pillRect.width);
     }
 }

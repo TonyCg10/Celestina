@@ -3,9 +3,11 @@
 #include <QObject>
 #include <QPointer>
 #include <QQmlComponent>
-#include <QRect>
+#include <QRectF>
 #include <QString>
 #include <QVariantMap>
+
+#include "panelattachmentlease.h"
 
 class OverlaySurface;
 class QQmlEngine;
@@ -76,15 +78,26 @@ public slots:
     // opener's rectangle travels with it so the surface can grow out of the
     // control instead of appearing beside it; an empty rectangle means there was
     // no control, which is what a keybind is.
-    void toggleFrom(QWindow *panel, const QRect &globalOpener);
+    void toggleFrom(
+        QWindow *panel,
+        const QRectF &globalOpener,
+        const QRectF &globalAttachmentAnchor
+    );
+
+private slots:
+    // A retired QML window may finish its close transition after a successor
+    // is mapped. Only the window still adopted by the surface may close it.
+    void overlayDismissed();
 
 private:
     QWindow *createWindow();
 
     // Where the surface should grow from, while a panel-opened toggle is in
     // flight. Empty for a keybind, which has no origin on screen.
-    QRect m_opener;
+    QRectF m_opener;
+    QRectF m_attachmentAnchor;
     QPointer<QWindow> m_openerPanel;
+    PanelAttachmentLease m_attachmentLease;
 
     QQmlComponent m_component;
     QString m_componentName;

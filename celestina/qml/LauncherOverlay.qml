@@ -24,6 +24,8 @@ Window {
     required property bool reducedMotion
     property alias anchoredFromPanel: placement.anchoredFromPanel
     property alias openerRect: placement.openerRect
+    property alias attachmentAnchorRect: placement.attachmentAnchorRect
+    property alias attachmentStartY: placement.attachmentStartY
     property alias compositorBlurAvailable: card.compositorBlurAvailable
     property alias glassRects: card.glassRects
     property alias glassRegions: card.glassRegions
@@ -164,6 +166,11 @@ Window {
             anchors.fill: parent
             reducedMotion: overlay.reducedMotion
             accessibleName: qsTr("Buscador de aplicaciones")
+            attachedToTop: overlay.anchoredFromPanel
+            openerRect: overlay.openerRect
+            attachmentAnchorRect: overlay.attachmentAnchorRect
+            attachmentStartY: overlay.attachmentStartY
+            surfacePosition: Qt.point(overlay.cardX, overlay.cardY)
 
             Item {
                 anchors.fill: parent

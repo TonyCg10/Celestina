@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.11.0 LANGUAGES CXX)
+project(celestina VERSION 0.12.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -77,6 +77,8 @@ qt_add_executable(celestina
     src/niriclient.cpp
     src/panelblurcontroller.h
     src/panelblurcontroller.cpp
+    src/panelattachmentlease.h
+    src/panelattachmentlease.cpp
     src/panelmanager.h
     src/panelmanager.cpp
     src/wallpapermanager.h
@@ -207,6 +209,7 @@ qt_add_qml_module(celestina
         qml/MonthCalendar.qml
         qml/Wallpaper.qml
     RESOURCES
+        qml/EdgeAttachedGeometry.js
         qml/ProviderReading.js
 )
 
@@ -371,6 +374,8 @@ if(BUILD_TESTING)
         src/workspacefocusrequests.cpp
         src/overlaycontroller.h
         src/overlaycontroller.cpp
+        src/panelattachmentlease.h
+        src/panelattachmentlease.cpp
         src/overlaysurface.h
         src/overlaysurface.cpp
         src/panelblurcontroller.h
@@ -426,6 +431,8 @@ if(BUILD_TESTING)
         src/panelblurcontroller.cpp
         src/panelmenucontroller.h
         src/panelmenucontroller.cpp
+        src/panelattachmentlease.h
+        src/panelattachmentlease.cpp
         src/overlaysurface.h
         src/overlaysurface.cpp
         src/niriclient.h
@@ -464,6 +471,8 @@ if(BUILD_TESTING)
         tests/overlaycontract_test.cpp
         src/overlaycontroller.h
         src/overlaycontroller.cpp
+        src/panelattachmentlease.h
+        src/panelattachmentlease.cpp
         src/overlaysurface.h
         src/overlaysurface.cpp
         src/panelblurcontroller.h
@@ -510,6 +519,8 @@ if(BUILD_TESTING)
         src/requestledger.cpp
         src/panelmenucontroller.h
         src/panelmenucontroller.cpp
+        src/panelattachmentlease.h
+        src/panelattachmentlease.cpp
         src/panelmenusurface.h
         src/panelmenusurface.cpp
         src/panelblurcontroller.h

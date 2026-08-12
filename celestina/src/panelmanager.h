@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QQmlComponent>
+#include <QRectF>
 #include <QUrl>
 #include <QVariant>
 #include <QWindow>
@@ -58,57 +59,47 @@ public:
 private slots:
     // The panel's QML root asks for a context menu at a screen point; the
     // manager knows which window asked and hands both to the menu controller.
-    void workspaceMapRequested(int globalX, int globalY, const QVariant &workspaces);
+    void workspaceMapRequested(
+        const QRectF &globalOpener,
+        const QRectF &globalAttachmentAnchor,
+        const QVariant &workspaces
+    );
     // The compact tray control opens the live item inventory as a contextual
     // menu; an item's own D-Bus menu remains the separate request below.
     void trayDrawerRequested(
-        int globalX,
-        int globalY,
-        int openerWidth,
-        int openerHeight
+        const QRectF &globalOpener,
+        const QRectF &globalAttachmentAnchor
     );
     // The notification centre is an overlay the host owns; a panel only asks
     // for it.
     void notificationCentreRequested(
-        int globalX,
-        int globalY,
-        int openerWidth,
-        int openerHeight
+        const QRectF &globalOpener,
+        const QRectF &globalAttachmentAnchor
     );
     void launcherRequested(
-        int globalX,
-        int globalY,
-        int openerWidth,
-        int openerHeight
+        const QRectF &globalOpener,
+        const QRectF &globalAttachmentAnchor
     );
     // The soft-menu prototype follows this panel control rather than centring
     // itself on whichever output currently holds the pointer.
     void controlCentreRequested(
-        int globalX,
-        int globalY,
-        int openerWidth,
-        int openerHeight
+        const QRectF &globalOpener,
+        const QRectF &globalAttachmentAnchor
     );
     void clipboardRequested(
-        int globalX,
-        int globalY,
-        int openerWidth,
-        int openerHeight
+        const QRectF &globalOpener,
+        const QRectF &globalAttachmentAnchor
     );
     void sessionMenuRequested(
-        int globalX,
-        int globalY,
-        int openerWidth,
-        int openerHeight
+        const QRectF &globalOpener,
+        const QRectF &globalAttachmentAnchor
     );
     // A panel control's contextual menu, asked for from the panel that shows
     // it. The manager knows which window asked and what bridge to hand it.
     void indicatorMenuRequested(
         const QString &kind,
-        int globalX,
-        int globalY,
-        int openerWidth,
-        int openerHeight
+        const QRectF &globalOpener,
+        const QRectF &globalAttachmentAnchor
     );
     // A tray item's own menu, asked for from the panel that shows it.
     void trayMenuRequested(
@@ -128,10 +119,8 @@ private:
     void togglePanelOverlay(
         OverlayController *controller,
         QWindow *panel,
-        int globalX,
-        int globalY,
-        int openerWidth,
-        int openerHeight
+        const QRectF &globalOpener,
+        const QRectF &globalAttachmentAnchor
     );
     // The set of outputs changed. Brightness lives behind DDC, which is a
     // one-at-a-time conversation with a monitor, so this never asks twice for

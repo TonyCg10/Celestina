@@ -11,6 +11,7 @@
 #include <QUrl>
 #include <QVariantMap>
 
+#include <limits>
 #include <memory>
 
 #include "panelmenucontroller.h"
@@ -116,6 +117,7 @@ private slots:
     void escapeDismissesTheMenu();
     void aCardAskedForBeyondTheOutputStaysWhole();
     void aSoftMenuKeepsOneOuterGlassCard();
+    void eachPanelIndicatorMenuSpansItsOuterVeilAndTargetsTheIcon();
     void theTrayMenuUsesTheSameVeloCarrier();
     void theWholeMenuIsReachableFromTheKeyboard();
     void everyRowNamesItselfAndItsState();
@@ -258,6 +260,10 @@ void IndicatorMenuTest::eachMenuDeclaresExactlyWhatTheHostHandsIt()
             {QStringLiteral("providerSource"), QVariant::fromValue<QObject *>(nullptr)},
             {QStringLiteral("reducedMotion"), true},
             {QStringLiteral("outputName"), QStringLiteral("test-output")},
+            {QStringLiteral("anchoredFromPanel"), true},
+            {QStringLiteral("openerRect"), QRect(900, 6, 28, 28)},
+            {QStringLiteral("attachmentAnchorRect"), QRect(905, 11, 18, 18)},
+            {QStringLiteral("attachmentStartY"), 40},
         };
         if (kind == QStringLiteral("capture"))
             initialProperties.remove(QStringLiteral("providerSource"));
@@ -459,6 +465,9 @@ void IndicatorMenuTest::aSoftMenuKeepsOneOuterGlassCard()
                                                .toList().constFirst().toMap();
         QCOMPARE(publishedShape.value(QStringLiteral("rect")).toRectF(), menuBounds);
         QCOMPARE(publishedShape.value(QStringLiteral("radius")).toInt(), 20);
+        QVERIFY(
+            publishedShape.value(QStringLiteral("polygon")).toList().isEmpty()
+        );
 
         const QList<QObject *> groupedFields = window->findChildren<QObject *>(
             QStringLiteral("celestina-menu-section")
@@ -557,6 +566,122 @@ void IndicatorMenuTest::aSoftMenuKeepsOneOuterGlassCard()
             ).size(),
             1
         );
+    }
+}
+
+void IndicatorMenuTest::eachPanelIndicatorMenuSpansItsOuterVeilAndTargetsTheIcon()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+
+    constexpr int attachmentStartY = 40;
+    const QRect opener(1540, 6, 28, 28);
+    const QRect attachmentAnchor(1545, 11, 18, 18);
+    for (const QString &kind : kinds()) {
+        const QString component = indicatorMenuComponent(kind);
+        QQmlComponent menu(&engine, sourceFor(component));
+        QVERIFY2(menu.isReady(), qPrintable(menu.errorString()));
+
+        QVariantMap properties {
+            {QStringLiteral("reducedMotion"), true},
+            {QStringLiteral("outputName"), QStringLiteral("test-output")},
+            {QStringLiteral("providerSource"), QVariant::fromValue<QObject *>(nullptr)},
+            {QStringLiteral("anchoredFromPanel"), true},
+            {QStringLiteral("openerRect"), opener},
+            {QStringLiteral("attachmentAnchorRect"), attachmentAnchor},
+            {QStringLiteral("attachmentStartY"), attachmentStartY},
+        };
+        if (kind == QStringLiteral("capture"))
+            properties.remove(QStringLiteral("providerSource"));
+
+        std::unique_ptr<QObject> owner(menu.createWithInitialProperties(properties));
+        auto *const window = qobject_cast<QQuickWindow *>(owner.get());
+        QVERIFY2(window, qPrintable(component));
+        window->resize(outputWidth, outputHeight);
+        window->show();
+        QVERIFY2(QTest::qWaitForWindowExposed(window), qPrintable(component));
+
+        QCOMPARE(window->property("openerRect").toRect(), opener);
+        QCOMPARE(
+            window->property("attachmentAnchorRect").toRect(),
+            attachmentAnchor
+        );
+        QCOMPARE(
+            window->property("cardY").toInt(),
+            attachmentStartY + window->property("anchorGap").toInt()
+        );
+
+        QObject *const field = window->findChild<QObject *>(
+            QStringLiteral("celestina-soft-menu-field")
+        );
+        QVERIFY2(field, qPrintable(component));
+        QVERIFY(field->property("edgeAttachmentRequested").toBool());
+        QVERIFY(field->property("edgeShapeActive").toBool());
+        QCOMPARE(
+            field->property("attachmentAnchorRect").toRect(),
+            attachmentAnchor
+        );
+
+        QTRY_COMPARE(window->property("glassRegions").toList().size(), 1);
+        const QVariantMap shape = window->property("glassRegions")
+                                      .toList().constFirst().toMap();
+        QCOMPARE(
+            qRound(shape.value(QStringLiteral("rect")).toRectF().top()),
+            attachmentStartY
+        );
+        const QVariantList polygon =
+            shape.value(QStringLiteral("polygon")).toList();
+        QVERIFY2(polygon.size() >= 3, qPrintable(component));
+
+        qreal top = std::numeric_limits<qreal>::max();
+        for (const QVariant &value : polygon)
+            top = qMin(top, value.toPointF().y());
+        qreal upperLeft = std::numeric_limits<qreal>::max();
+        qreal upperRight = std::numeric_limits<qreal>::lowest();
+        for (const QVariant &value : polygon) {
+            const QPointF point = value.toPointF();
+            if (qAbs(point.y() - top) < 0.001) {
+                upperLeft = qMin(upperLeft, point.x());
+                upperRight = qMax(upperRight, point.x());
+            }
+        }
+        QCOMPARE(qRound(top), attachmentStartY);
+        // Only the narrow droplet mouth touches the seam row; it stays
+        // centred on the clicked glyph instead of spanning the body.
+        QVERIFY(upperRight - upperLeft
+                < window->property("cardWidth").toInt() * 0.25);
+        QCOMPARE(qRound((upperLeft + upperRight) / 2),
+                 attachmentAnchor.x() + attachmentAnchor.width() / 2);
+        QCOMPARE(
+            qRound(window->property("cardX").toReal()
+                   + field->property("attachmentWaistCenterAtBody").toReal()),
+            attachmentAnchor.x() + attachmentAnchor.width() / 2
+        );
+
+        QObject *const veil = window->findChild<QObject *>(
+            QStringLiteral("celestina-menu-body-tint")
+        );
+        QVERIFY2(veil, qPrintable(component));
+        QCOMPARE(veil->property("materialRole").toInt(), 2);
+        QCOMPARE(veil->property("elevation").toInt(), 0);
+        QVERIFY(veil->property("usesSilhouette").toBool());
+        QVERIFY(!veil->property("materialEdgesVisible").toBool());
+        QVERIFY2(
+            !window->findChild<QObject *>(
+                QStringLiteral("celestina-attachment-material-bridge")
+            ),
+            qPrintable(component)
+        );
+
+        const QList<QObject *> sections = window->findChildren<QObject *>(
+            QStringLiteral("celestina-menu-section")
+        );
+        QVERIFY2(!sections.isEmpty(), qPrintable(component));
+        for (QObject *const section : sections) {
+            QVERIFY2(!section->property("usesSilhouette").toBool(),
+                     qPrintable(component));
+            QCOMPARE(section->property("elevation").toInt(), 0);
+        }
     }
 }
 
@@ -1132,12 +1257,18 @@ void IndicatorMenuTest::theControlCentreStopsAskingWhenTheHelperAccepts()
     QVERIFY(centreWindow);
     centreWindow->resize(outputWidth, outputHeight);
     const QRect opener(900, 12, 30, 30);
+    const QRect attachmentAnchor(906, 18, 18, 18);
     centreWindow->setProperty("anchoredFromPanel", true);
     centreWindow->setProperty("openerRect", opener);
+    centreWindow->setProperty("attachmentAnchorRect", attachmentAnchor);
+    centreWindow->setProperty("attachmentStartY", 40);
+    QCOMPARE(
+        centreWindow->property("attachmentAnchorRect").toRect(),
+        attachmentAnchor
+    );
     QCOMPARE(
         centreWindow->property("cardY").toInt(),
-        opener.y() + opener.height()
-            + centreWindow->property("anchorGap").toInt()
+        40 + centreWindow->property("anchorGap").toInt()
     );
     QVERIFY(
         centreWindow->property("cardY").toInt()
@@ -1172,10 +1303,20 @@ void IndicatorMenuTest::theControlCentreStopsAskingWhenTheHelperAccepts()
     QCOMPARE(centreWindow->property("cardWidth").toInt(), 530);
     QCOMPARE(centreWindow->property("cardHeight").toInt(), 732);
     QTRY_COMPARE(centreWindow->property("glassRegions").toList().size(), 1);
+    const QVariantMap centreShape = centreWindow->property("glassRegions")
+                                        .toList().constFirst().toMap();
+    QCOMPARE(centreShape.value(QStringLiteral("radius")).toInt(), 20);
+    const QVariantList centrePolygon =
+        centreShape.value(QStringLiteral("polygon")).toList();
+    QVERIFY(centrePolygon.size() >= 3);
+    qreal minimumY = std::numeric_limits<qreal>::max();
+    for (const QVariant &point : centrePolygon)
+        minimumY = qMin(minimumY, point.toPointF().y());
+    const int attachmentSeamY = 40;
+    QCOMPARE(qRound(minimumY), attachmentSeamY);
     QCOMPARE(
-        centreWindow->property("glassRegions").toList()
-            .constFirst().toMap().value(QStringLiteral("radius")).toInt(),
-        20
+        qRound(centreShape.value(QStringLiteral("rect")).toRectF().top()),
+        attachmentSeamY
     );
     QVERIFY(root->findChild<QObject *>(
         QStringLiteral("celestina-control-centre-quick-controls")

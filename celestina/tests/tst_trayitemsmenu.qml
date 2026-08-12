@@ -302,6 +302,8 @@ TestCase {
         compare(itemMenus.signalArguments[0][1], testCase.slack.path);
         verify(itemMenus.signalArguments[0][2] >= 0);
         verify(itemMenus.signalArguments[0][3] >= 0);
+        verify(itemMenus.signalArguments[0][4] > 0);
+        verify(itemMenus.signalArguments[0][5] > 0);
         // The request is for the independent child carrier; the inventory does
         // not dismiss itself first.
         compare(trayMenu.menu.visible, true);

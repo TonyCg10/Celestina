@@ -32,6 +32,9 @@ Item {
     default property alias widgets: row.data
     readonly property real contentWidth: row.implicitWidth
 
+    // The shared backdrop owns the complete 40-pixel bar. The flank follows
+    // only its centred controls, keeping every ordinary capsule on one
+    // vertical baseline regardless of the child's own implicit text height.
     implicitHeight: row.implicitHeight
     clip: true
 

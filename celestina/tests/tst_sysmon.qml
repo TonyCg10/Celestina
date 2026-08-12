@@ -48,8 +48,18 @@ TestCase {
         performance.click();
 
         compare(menus.count, 1);
-        compare(menus.signalArguments[0][2], performance.width);
-        compare(menus.signalArguments[0][3], performance.height);
+        const openerRect = menus.signalArguments[0][0];
+        const anchorRect = menus.signalArguments[0][1];
+        compare(openerRect.width, performance.width);
+        compare(openerRect.height, performance.height);
+        compare(anchorRect, performance.attachmentAnchorGlobalRectNow());
+        compare(anchorRect.width, 18);
+        compare(anchorRect.height, 18);
+        compare(anchorRect.x,
+                openerRect.x + (openerRect.width - anchorRect.width) / 2);
+        compare(anchorRect.y,
+                openerRect.y + (openerRect.height - anchorRect.height) / 2);
+        verify(performance.isPanelAttachmentSource);
     }
 
     function test_an_incomplete_reading_is_not_presented_as_current() {

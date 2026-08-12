@@ -66,9 +66,6 @@ Item {
     PanelPill {
         blurAvailable: phoneRoot.blurAvailable
         ink: phoneRoot.ink
-        onBlurRegionChanged: phoneRoot.blurRegionChanged()
     }
-
-    signal blurRegionChanged()
 
 }

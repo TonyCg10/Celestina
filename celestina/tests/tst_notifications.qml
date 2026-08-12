@@ -97,8 +97,19 @@ TestCase {
 
         verify(!indicator.down);
         compare(historySpy.count, 1);
-        compare(historySpy.signalArguments[0][2], Math.round(indicator.width));
-        compare(historySpy.signalArguments[0][3], Math.round(indicator.height));
+        const openerRect = historySpy.signalArguments[0][0];
+        const anchorRect = historySpy.signalArguments[0][1];
+        compare(openerRect.width, indicator.width);
+        compare(openerRect.height, indicator.height);
+        compare(anchorRect, indicator.attachmentAnchorGlobalRectNow());
+        compare(anchorRect.width, 18);
+        compare(anchorRect.height, 18);
+        const glyph = findChild(indicator, "celestina-notification-icon");
+        verify(glyph);
+        const glyphAt = glyph.mapToGlobal(0, 0);
+        compare(anchorRect.x, glyphAt.x);
+        compare(anchorRect.y, glyphAt.y);
+        verify(indicator.isPanelAttachmentSource);
     }
 
     function test_secondary_click_keeps_its_quiet_action() {

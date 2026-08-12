@@ -21,6 +21,8 @@ Window {
     required property bool reducedMotion
     property alias anchoredFromPanel: placement.anchoredFromPanel
     property alias openerRect: placement.openerRect
+    property alias attachmentAnchorRect: placement.attachmentAnchorRect
+    property alias attachmentStartY: placement.attachmentStartY
     property alias compositorBlurAvailable: card.compositorBlurAvailable
     property alias glassRects: card.glassRects
     property alias glassRegions: card.glassRegions
@@ -147,6 +149,11 @@ Window {
         y: menu.cardY
         reducedMotion: menu.reducedMotion
         accessibleName: qsTr("Sesión")
+        attachedToTop: menu.anchoredFromPanel
+        openerRect: menu.openerRect
+        attachmentAnchorRect: menu.attachmentAnchorRect
+        attachmentStartY: menu.attachmentStartY
+        surfacePosition: Qt.point(menu.cardX, menu.cardY)
 
         Column {
             id: contentColumn

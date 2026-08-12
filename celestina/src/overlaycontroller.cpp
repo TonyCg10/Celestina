@@ -41,6 +41,10 @@ OverlayController::OverlayController(
     , m_surface(new OverlaySurface(OverlaySurface::Placement::Centered, this))
     , m_enabled(true)
 {
+    connect(m_surface, &OverlaySurface::dismissed, this, [this]() {
+        m_attachmentLease.release();
+    });
+
     if (m_sourceProperty.isEmpty()) {
         qCritical() << "Celestina has no overlay named" << m_componentName;
         m_enabled = false;
@@ -72,14 +76,20 @@ bool OverlayController::isOpen() const
     return m_surface->isOpen();
 }
 
-void OverlayController::toggleFrom(QWindow *panel, const QRect &globalOpener)
+void OverlayController::toggleFrom(
+    QWindow *panel,
+    const QRectF &globalOpener,
+    const QRectF &globalAttachmentAnchor
+)
 {
     // The opener is remembered for the next window this controller builds, then
     // spent: a keybind that follows a click must not inherit the click's origin.
     m_opener = globalOpener;
+    m_attachmentAnchor = globalAttachmentAnchor;
     m_openerPanel = panel;
     toggle();
-    m_opener = QRect();
+    m_opener = QRectF();
+    m_attachmentAnchor = QRectF();
     m_openerPanel = nullptr;
 }
 
@@ -87,11 +97,24 @@ QWindow *OverlayController::createWindow()
 {
     QVariantMap properties = initialProperties();
     if (!m_opener.isEmpty() && m_openerPanel && m_openerPanel->screen()) {
-        const QPoint outputOrigin = m_openerPanel->screen()->geometry().topLeft();
+        const QPointF outputOrigin =
+            m_openerPanel->screen()->geometry().topLeft();
+        const QRectF openerOnOutput =
+            panelPopupOpenerOnOutput(m_opener, outputOrigin);
+        const QRectF attachmentAnchorOnOutput =
+            panelPopupOpenerOnOutput(m_attachmentAnchor, outputOrigin);
         properties.insert(QStringLiteral("anchoredFromPanel"), true);
+        properties.insert(QStringLiteral("openerRect"), openerOnOutput);
         properties.insert(
-            QStringLiteral("openerRect"),
-            panelPopupOpenerOnOutput(m_opener, outputOrigin)
+            QStringLiteral("attachmentAnchorRect"),
+            attachmentAnchorOnOutput
+        );
+        // The panel is a top-anchored, edge-to-edge surface whose height is
+        // exactly the continuous backdrop. Menus attach to that lower edge,
+        // not to the variable-height control rectangle inside it.
+        properties.insert(
+            QStringLiteral("attachmentStartY"),
+            qMax(0, m_openerPanel->height())
         );
     }
 
@@ -110,8 +133,14 @@ QWindow *OverlayController::createWindow()
     }
 
     // QML-declared, so it is reached by name rather than a generated header.
-    connect(window, SIGNAL(dismissed()), this, SLOT(close()));
+    connect(window, SIGNAL(dismissed()), this, SLOT(overlayDismissed()));
     return window;
+}
+
+void OverlayController::overlayDismissed()
+{
+    if (sender() == m_surface->window())
+        close();
 }
 
 void OverlayController::open()
@@ -135,13 +164,18 @@ void OverlayController::open()
     if (!overlay)
         return;
 
-    if (!m_surface->open(overlay, screen))
+    if (!m_surface->open(overlay, screen)) {
         delete overlay;
+        return;
+    }
+
+    m_attachmentLease.acquire(m_openerPanel, overlay, m_attachmentAnchor);
 }
 
 void OverlayController::close()
 {
     m_surface->close();
+    m_attachmentLease.release();
 }
 
 void OverlayController::toggle()

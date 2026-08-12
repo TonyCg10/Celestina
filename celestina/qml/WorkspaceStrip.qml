@@ -29,7 +29,7 @@ Item {
     // button. The strip supplies the workspaces because it is the only thing
     // that knows which ones a capsule folded; the host owns the surface that
     // answers.
-    signal mapRequested(int globalX, int globalY, var workspaces)
+    signal mapRequested(rect openerRect, rect attachmentAnchorRect, var workspaces)
 
     // A closed monitor capsule can be opened for direct workspace selection.
     // The compositor's next focused-group answer clears that temporary choice.
@@ -205,8 +205,8 @@ Item {
                         workspace: modelData
                         ink: root.ink
                         onFocusRequested: (output, index) => root.focusRequested(output, index)
-                        onMapRequested: (globalX, globalY) => root.mapRequested(
-                            globalX, globalY, [modelData])
+                        onMapRequested: (openerRect, anchorRect) => root.mapRequested(
+                            openerRect, anchorRect, [modelData])
                     }
 
                 }
@@ -218,8 +218,8 @@ Item {
                     urgent: groupRow.modelData.urgent
                     ink: root.ink
                     onExpandRequested: root.chosenGroup = groupRow.modelData.key
-                    onMapRequested: (globalX, globalY) => root.mapRequested(
-                        globalX, globalY, groupRow.modelData.workspaces)
+                    onMapRequested: (openerRect, anchorRect) => root.mapRequested(
+                        openerRect, anchorRect, groupRow.modelData.workspaces)
                 }
 
             }

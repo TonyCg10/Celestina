@@ -1,6 +1,9 @@
 #include "panelblurcontroller.h"
 
 #include <QDebug>
+#include <QMetaType>
+#include <QPointF>
+#include <QPolygon>
 #include <QRegion>
 #include <QVariant>
 #include <QVariantMap>
@@ -8,11 +11,68 @@
 
 #include <KWindowEffects>
 
+#include <cmath>
+#include <limits>
+
 namespace {
 constexpr int fastProbeDelayMs = 16;
 constexpr int fastProbeCount = 60;
 constexpr int fallbackProbeDelayMs = 2000;
 constexpr int enabledProbeDelayMs = 5000;
+constexpr qsizetype maximumGlassPolygonPoints = 4096;
+
+bool publishedPoint(const QVariant &value, QPoint *point)
+{
+    QPointF published;
+    if (value.metaType().id() == QMetaType::QPointF
+        || value.metaType().id() == QMetaType::QPoint) {
+        published = value.toPointF();
+    } else {
+        const QVariantMap coordinates = value.toMap();
+        bool xValid = false;
+        bool yValid = false;
+        const qreal x = coordinates.value(QStringLiteral("x")).toDouble(&xValid);
+        const qreal y = coordinates.value(QStringLiteral("y")).toDouble(&yValid);
+        if (!xValid || !yValid)
+            return false;
+        published = QPointF(x, y);
+    }
+
+    const qreal roundedX = std::round(published.x());
+    const qreal roundedY = std::round(published.y());
+    constexpr qreal minimumCoordinate = std::numeric_limits<int>::lowest();
+    constexpr qreal maximumCoordinate = std::numeric_limits<int>::max();
+    if (!std::isfinite(roundedX) || !std::isfinite(roundedY)
+        || roundedX < minimumCoordinate
+        || roundedX > maximumCoordinate
+        || roundedY < minimumCoordinate
+        || roundedY > maximumCoordinate) {
+        return false;
+    }
+
+    *point = QPoint(static_cast<int>(roundedX), static_cast<int>(roundedY));
+    return true;
+}
+
+QRegion publishedPolygonRegion(const QVariant &value)
+{
+    const QVariantList publishedPoints = value.toList();
+    if (publishedPoints.size() < 3
+        || publishedPoints.size() > maximumGlassPolygonPoints) {
+        return {};
+    }
+
+    QPolygon polygon;
+    polygon.reserve(publishedPoints.size());
+    for (const QVariant &published : publishedPoints) {
+        QPoint point;
+        if (!publishedPoint(published, &point))
+            return {};
+        polygon.append(point);
+    }
+
+    return QRegion(polygon, Qt::WindingFill);
+}
 }
 
 QRegion roundedGlassRegion(const QRect &rect, int requestedRadius)
@@ -65,6 +125,45 @@ QRegion roundedGlassRegion(const QRect &rect, int requestedRadius)
     return region;
 }
 
+QRegion glassRegionFromPublishedShapes(
+    const QVariantList &typedShapes,
+    const QVariantList &legacyRects
+)
+{
+    QRegion region;
+    const bool shapesAreTyped = !typedShapes.isEmpty();
+    const QVariantList &publishedShapes = shapesAreTyped
+        ? typedShapes
+        : legacyRects;
+
+    for (const QVariant &value : publishedShapes) {
+        const QVariantMap shape = shapesAreTyped ? value.toMap() : QVariantMap{};
+        if (shapesAreTyped) {
+            const QRegion polygon = publishedPolygonRegion(
+                shape.value(QStringLiteral("polygon"))
+            );
+            if (!polygon.isEmpty()) {
+                region += polygon;
+                continue;
+            }
+        }
+
+        const QRectF published = shapesAreTyped
+            ? shape.value(QStringLiteral("rect")).toRectF()
+            : value.toRectF();
+        if (published.width() <= 0 || published.height() <= 0)
+            continue;
+
+        const QRect rect = published.toAlignedRect();
+        const int radius = shapesAreTyped
+            ? qRound(shape.value(QStringLiteral("radius")).toReal())
+            : qMin(rect.width(), rect.height()) / 2;
+        region += roundedGlassRegion(rect, radius);
+    }
+
+    return region;
+}
+
 bool blurProbeCanUseEffect(
     bool alreadyArmed,
     bool surfaceVisible,
@@ -89,15 +188,14 @@ PanelBlurController::PanelBlurController(QWindow *window, QObject *parent)
     QObject::connect(&m_probeTimer, &QTimer::timeout, this, [this] { probe(); });
 }
 
-// PANEL-1. The pills, and nothing else.
+// PANEL-1. The finite glass declared by the surface, and nothing else.
 //
 // `enableBlurBehind` takes a *region*, and a region is a set of pixels: each one
 // is blurred or it is not. There is no gradient blur in the protocol, so every
-// blurred area has a hard boundary somewhere. The bar cannot have one — its
-// whole point is to have no edge, and a blurred band ending in the middle of
-// the composed scene is as visible as a fill ending there. A pill can, because
-// it already *is* an edge: it has a radius and an outline, and the blur stops
-// where the pill stops.
+// blurred area has a hard boundary somewhere. The current panel deliberately
+// declares its complete 40-pixel edge-to-edge backdrop as one rectangle; its
+// denser pills are paint-only sections above that same compositor sample.
+// Menus declare their own bounded body or connector polygon.
 //
 // So the computed region follows the glass rather than the surface. No
 // published glass returns an empty region, but the caller must withdraw the
@@ -113,26 +211,10 @@ QRegion PanelBlurController::glassRegion() const
     // guesses at that tree were wrong, and the failure mode is the worst kind:
     // an empty region is not "blur nothing" to `enableBlurBehind`, it is "blur
     // the whole window".
-    QVariantList regions = m_window->property("glassRegions").toList();
-    const bool shapesAreTyped = !regions.isEmpty();
-    if (!shapesAreTyped)
-        regions = m_window->property("glassRects").toList();
-
-    for (const QVariant &value : regions) {
-        const QVariantMap shape = shapesAreTyped ? value.toMap() : QVariantMap{};
-        const QRectF published = shapesAreTyped
-            ? shape.value(QStringLiteral("rect")).toRectF()
-            : value.toRectF();
-        if (published.width() <= 0 || published.height() <= 0)
-            continue;
-
-        const QRect rect = published.toAlignedRect();
-        const int radius = shapesAreTyped
-            ? qRound(shape.value(QStringLiteral("radius")).toReal())
-            : qMin(rect.width(), rect.height()) / 2;
-        region += roundedGlassRegion(rect, radius);
-    }
-    return region;
+    return glassRegionFromPublishedShapes(
+        m_window->property("glassRegions").toList(),
+        m_window->property("glassRects").toList()
+    );
 }
 
 void PanelBlurController::start()

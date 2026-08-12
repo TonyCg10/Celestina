@@ -77,6 +77,14 @@ AnchoredMenu {
         ink: root.ink
         animateReveal: false
         compositorBlurAvailable: root.compositorBlurAvailable
+        attachedToTop: root.anchoredFromPanel
+        openerRect: root.openerRect
+        attachmentAnchorRect: root.attachmentAnchorRect
+        attachmentStartY: root.attachmentStartY
+        attachedToSide: root.attachedToMenuSide
+        attachmentSideRight: root.attachmentSideRight
+        sideAttachmentGap: root.sideAttachmentGap
+        surfacePosition: Qt.point(root.cardX, root.cardY)
 
         // The first non-focusable row paints the heading section. The body is
         // the second continuous group behind the remaining rows; no row adds a

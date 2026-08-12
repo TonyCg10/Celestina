@@ -6,6 +6,7 @@
 #include <QRegion>
 #include <QSize>
 #include <QTimer>
+#include <QVariantList>
 
 class QWindow;
 
@@ -13,6 +14,16 @@ class QWindow;
 // explicit because a tall menu is not a pill and its shape cannot be inferred
 // from its aspect ratio.
 QRegion roundedGlassRegion(const QRect &rect, int radius);
+
+// Convert the geometry published by QML into one finite compositor region.
+// Typed shapes may provide a sampled `polygon` (QPointF values in window
+// coordinates); a valid polygon takes precedence over its rounded-rectangle
+// fallback. The legacy `glassRects` list is consulted only when no typed shape
+// is published.
+QRegion glassRegionFromPublishedShapes(
+    const QVariantList &typedShapes,
+    const QVariantList &legacyRects = {}
+);
 
 // A first arm needs an exposed Wayland surface. Once that arm succeeded,
 // layer-shell may keep rendering while Qt temporarily reports `isExposed()`
@@ -27,7 +38,8 @@ bool blurProbeCanUseEffect(
 );
 
 // Owns the compositor-blur lifecycle for one layer-shell window that publishes
-// finite rounded rectangles through `glassRegions`.
+// finite rectangles, rounded rectangles or sampled polygons through
+// `glassRegions`.
 //
 // This remains manual C++ because KWindowEffects' Wayland surface integration
 // is not available through CXX-Qt. The controller is deliberately limited to

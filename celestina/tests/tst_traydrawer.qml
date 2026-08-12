@@ -191,6 +191,7 @@ TestCase {
             anchors.left: clock.right
             anchors.leftMargin: CelestinaTheme.space2xl
             anchors.verticalCenter: parent.verticalCenter
+            height: panel.height
             trailing: true
 
             Desktop.TrayDrawer {
@@ -360,11 +361,21 @@ TestCase {
         toggle.click();
         compare(drawerRequests.count, 1);
         const arguments = drawerRequests.signalArguments[0];
-        compare(arguments[2], toggle.width);
-        compare(arguments[3], toggle.height);
         const expected = toggle.mapToGlobal(0, 0);
-        compare(arguments[0], Math.round(expected.x));
-        compare(arguments[1], Math.round(expected.y));
+        compare(arguments[0].x, expected.x);
+        compare(arguments[0].y, expected.y);
+        compare(arguments[0].width, toggle.width);
+        compare(arguments[0].height, toggle.height);
+        const anchor = arguments[1];
+        compare(anchor, toggle.attachmentAnchorGlobalRectNow());
+        compare(anchor.width, 18);
+        compare(anchor.height, 18);
+        const glyph = findChild(toggle, "celestina-tray-toggle-icon");
+        verify(glyph);
+        const glyphAt = glyph.mapToGlobal(0, 0);
+        compare(anchor.x, glyphAt.x);
+        compare(anchor.y, glyphAt.y);
+        verify(toggle.isPanelAttachmentSource);
     }
 
     // An empty tray is not a tray with a zero on it.
@@ -538,9 +549,11 @@ TestCase {
         compare(connectivityCluster.spacing, CelestinaTheme.spaceMd);
         compare(levelCluster.spacing, CelestinaTheme.spaceMd);
         compare(utilityCluster.spacing, CelestinaTheme.spaceXs);
-        compare(testCase.visibleGlassRegions(connectivityCluster).length, 1);
-        compare(testCase.visibleGlassRegions(levelCluster).length, 1);
-        compare(testCase.visibleGlassRegions(utilityCluster).length, 1);
+        // The clusters paint denser material only; the real Panel supplies one
+        // continuous edge-to-edge compositor region behind every cluster.
+        compare(testCase.visibleGlassRegions(connectivityCluster).length, 0);
+        compare(testCase.visibleGlassRegions(levelCluster).length, 0);
+        compare(testCase.visibleGlassRegions(utilityCluster).length, 0);
         verify(!launcherButton.ownsGlass);
         verify(!controlCentreButton.ownsGlass);
         verify(!clipboardButton.ownsGlass);

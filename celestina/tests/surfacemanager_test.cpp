@@ -14,7 +14,10 @@
 #include <QVariantMap>
 #include <QWindow>
 
+#include <limits>
+
 #include "overlaysurface.h"
+#include "panelattachmentlease.h"
 #include "panelblurcontroller.h"
 #include "panelmenucontroller.h"
 #include "panelpopupplacement.h"
@@ -68,7 +71,7 @@ public:
     QObject *requests() const { return nullptr; }
 };
 
-class FakePanelWindow final : public QWindow
+class FakePanelWindow final : public QQuickWindow
 {
     Q_OBJECT
 
@@ -89,6 +92,63 @@ signals:
 
 private:
     bool m_wallpaperFolderPickerOpened = false;
+};
+
+class SemanticAttachmentSource final : public QQuickItem
+{
+    Q_OBJECT
+    Q_PROPERTY(
+        bool isPanelAttachmentSource
+        READ isPanelAttachmentSource
+        CONSTANT
+    )
+    Q_PROPERTY(QQuickItem *attachmentAnchor READ attachmentAnchor CONSTANT)
+    Q_PROPERTY(bool menuOpen READ menuOpen WRITE setMenuOpen NOTIFY menuOpenChanged)
+
+public:
+    explicit SemanticAttachmentSource(QQuickItem *parent = nullptr)
+        : QQuickItem(parent)
+        , m_anchor(new QQuickItem(this))
+    {
+        m_anchor->setSize(QSizeF(18, 18));
+    }
+
+    bool isPanelAttachmentSource() const { return true; }
+    QQuickItem *attachmentAnchor() const { return m_anchor; }
+    bool menuOpen() const { return m_menuOpen; }
+
+    void setMenuOpen(bool open)
+    {
+        if (m_menuOpen == open)
+            return;
+        m_menuOpen = open;
+        emit menuOpenChanged();
+    }
+
+    Q_INVOKABLE QRectF attachmentAnchorGlobalRectNow() const
+    {
+        return QRectF(
+            m_anchor->mapToGlobal(QPointF(0, 0)),
+            QSizeF(m_anchor->width(), m_anchor->height())
+        );
+    }
+
+    void placeAnchor(const QPointF &position)
+    {
+        m_anchor->setPosition(position);
+    }
+
+    void resizeAnchor(const QSizeF &size)
+    {
+        m_anchor->setSize(size);
+    }
+
+signals:
+    void menuOpenChanged();
+
+private:
+    QQuickItem *m_anchor;
+    bool m_menuOpen = false;
 };
 
 QWindow *windowWithProperty(const char *propertyName)
@@ -171,11 +231,19 @@ private slots:
     void aClosedMenuLeavesNoWindowBehind();
     void theMenuIsOnUnlessTheEnvironmentTurnsItOff();
     void aMenuKeepsTheInvokingControlsAnchor();
+    void aRetiredAttachmentLeaseCannotClearItsSuccessor();
+    void aLiveAttachmentLeaseFollowsItsAnchorAndAncestors();
+    void anAmbiguousAttachmentSourceLeavesTheSurfaceFloating();
+    void aFailedAttachmentLeasePublishesNothing();
     void aTrayChildStaysAdjacentAndInsideTheOutput();
     void anOverflowingTrayMenuUsesABoundedScrollableViewport();
     void trayInventoryAndForeignMenuHaveIndependentLifecycles();
     void wallpaperMenuHandsTheFolderChooserBackToThePermanentPanel();
+    void aFullWidthBarShapeRemainsFinite();
     void aTallGlassCardKeepsItsRoundedRectangle();
+    void aPublishedPolygonOverridesItsRoundedBoundingRect();
+    void anInvalidPolygonFallsBackToRoundedGlass();
+    void emptyPublishedGlassNeverBecomesFullWindowBlur();
     void anArmedBlurSurvivesLayerShellExposureLoss();
     void theMenuContentLoadsAndFitsItsSurface();
     void theMenuSurfaceIsBigEnoughToClickEveryItem();
@@ -196,7 +264,7 @@ private slots:
 private:
     QWindow *makePanel()
     {
-        auto *panel = new QWindow;
+        auto *panel = new QQuickWindow;
         panel->setGeometry(0, 0, 800, 40);
         m_owned.append(panel);
         return panel;
@@ -461,7 +529,8 @@ void SurfaceManagerTest::aMenuKeepsTheInvokingControlsAnchor()
         QRect(2380, 128, 30, 30), outputOrigin
     );
     QCOMPARE(first, QRect(460, 8, 30, 30));
-    QCOMPARE(panelPopupBodyOrigin(first, 320, 8), QPoint(314, 46));
+    QCOMPARE(panelPopupBodyOrigin(first, 320, 8), QPoint(315, 46));
+    QCOMPARE(panelPopupBodyOrigin(first, 320, 24, 40), QPoint(315, 64));
 
     // Both axes follow the invoking control inside the full-output surface; a
     // stacked or resized panel therefore supplies geometry rather than a
@@ -470,7 +539,247 @@ void SurfaceManagerTest::aMenuKeepsTheInvokingControlsAnchor()
         QRect(2512, 260, 30, 30), outputOrigin
     );
     QCOMPARE(second, QRect(592, 140, 30, 30));
-    QCOMPARE(panelPopupBodyOrigin(second, 320, 8), QPoint(446, 178));
+    QCOMPARE(panelPopupBodyOrigin(second, 320, 8), QPoint(447, 178));
+}
+
+void SurfaceManagerTest::aRetiredAttachmentLeaseCannotClearItsSuccessor()
+{
+    QQuickWindow panel;
+    panel.setGeometry(0, 0, 800, 40);
+    panel.show();
+    SemanticAttachmentSource source(panel.contentItem());
+    source.setPosition(QPointF(620.5, 5));
+    source.setSize(QSizeF(180, 30));
+    source.placeAnchor(QPointF(70, 6));
+    QWindow firstSurface;
+    firstSurface.setScreen(panel.screen());
+    QWindow successorSurface;
+    successorSurface.setScreen(panel.screen());
+    const QRectF anchor = source.attachmentAnchorGlobalRectNow();
+    PanelAttachmentLease first;
+    PanelAttachmentLease successor;
+
+    QVERIFY(first.acquire(&panel, &firstSurface, anchor));
+    QVERIFY(source.menuOpen());
+    const QScreen *const screen = panel.screen();
+    const QPointF outputOrigin =
+        screen ? QPointF(screen->geometry().topLeft()) : QPointF();
+    const QRectF anchorOnOutput = anchor.translated(-outputOrigin);
+    const QString firstToken =
+        firstSurface.property(
+            "_celestinaAttachmentAnchorLeaseToken").toString();
+    QVERIFY(!firstToken.isEmpty());
+    QCOMPARE(
+        source.property(
+            "_celestinaPanelMenuFeedbackLeaseToken").toString(),
+        firstToken
+    );
+    QCOMPARE(
+        firstSurface.property("attachmentAnchorRect").toRectF(),
+        anchorOnOutput
+    );
+
+    // Independent controllers own independent contextual surfaces. Their
+    // tokens therefore live on those surfaces rather than in shared panel
+    // state, even when both began at the same icon rectangle.
+    QVERIFY(successor.acquire(&panel, &successorSurface, anchor));
+    QVERIFY(source.menuOpen());
+    const QString successorToken =
+        successorSurface.property(
+            "_celestinaAttachmentAnchorLeaseToken").toString();
+    QVERIFY(!successorToken.isEmpty());
+    QVERIFY(successorToken != firstToken);
+    QCOMPARE(
+        source.property(
+            "_celestinaPanelMenuFeedbackLeaseToken").toString(),
+        successorToken
+    );
+    QCOMPARE(
+        successorSurface.property("attachmentAnchorRect").toRectF(),
+        anchorOnOutput
+    );
+
+    first.release();
+    QVERIFY(source.menuOpen());
+    QCOMPARE(
+        source.property(
+            "_celestinaPanelMenuFeedbackLeaseToken").toString(),
+        successorToken
+    );
+    QVERIFY(firstSurface.property("attachmentAnchorRect").toRectF().isEmpty());
+    QVERIFY(firstSurface.property(
+        "_celestinaAttachmentAnchorLeaseToken").toString().isEmpty());
+    QCOMPARE(
+        successorSurface.property("attachmentAnchorRect").toRectF(),
+        anchorOnOutput
+    );
+    QCOMPARE(
+        successorSurface.property(
+            "_celestinaAttachmentAnchorLeaseToken").toString(),
+        successorToken
+    );
+
+    successor.release();
+    QVERIFY(!source.menuOpen());
+    QVERIFY(source.property(
+        "_celestinaPanelMenuFeedbackLeaseToken").toString().isEmpty());
+    QVERIFY(successorSurface.property("attachmentAnchorRect").toRectF().isEmpty());
+    QVERIFY(successorSurface.property(
+        "_celestinaAttachmentAnchorLeaseToken").toString().isEmpty());
+}
+
+void SurfaceManagerTest::aLiveAttachmentLeaseFollowsItsAnchorAndAncestors()
+{
+    QQuickWindow panel;
+    panel.setGeometry(120, 80, 500, 40);
+    panel.show();
+    auto *const ancestor = new QQuickItem(panel.contentItem());
+    ancestor->setPosition(QPointF(30, 5));
+    auto *const source = new SemanticAttachmentSource(ancestor);
+    source->setPosition(QPointF(10, 0));
+    source->setSize(QSizeF(80, 30));
+    source->placeAnchor(QPointF(31, 6));
+    ancestor->setVisible(false);
+
+    QQuickWindow surface;
+    surface.setScreen(panel.screen());
+    const auto globalAnchorRect = [source]() {
+        return source->attachmentAnchorGlobalRectNow();
+    };
+    const auto outputLocalRect = [&panel](const QRectF &globalRect) {
+        const QScreen *const screen = panel.screen();
+        const QPointF origin =
+            screen ? QPointF(screen->geometry().topLeft()) : QPointF();
+        return globalRect.translated(-origin);
+    };
+
+    PanelAttachmentLease lease;
+    const QRectF initial = globalAnchorRect();
+    const QRectF toleratedSnapshot = initial.translated(QPointF(0.5, 0.5));
+    QVERIFY(lease.acquire(&panel, &surface, toleratedSnapshot));
+    QVERIFY(source->menuOpen());
+    const QString token = surface.property(
+        "_celestinaAttachmentAnchorLeaseToken").toString();
+    QVERIFY(!token.isEmpty());
+    QVERIFY(surface.property("attachmentAnchorRect").toRectF().isEmpty());
+    QVERIFY(lease.isActive());
+
+    // A hidden source keeps its identity without briefly painting the stale
+    // click snapshot. Once visible, the surface receives the source's current
+    // canonical icon rectangle rather than the tolerated snapshot.
+    ancestor->setVisible(true);
+    QTRY_COMPARE(
+        surface.property("attachmentAnchorRect").toRectF(),
+        outputLocalRect(initial)
+    );
+    QCOMPARE(
+        surface.property("attachmentAnchorRect").toRectF(),
+        outputLocalRect(initial)
+    );
+
+    source->attachmentAnchor()->setX(39);
+    source->resizeAnchor(QSizeF(20, 18));
+    const QRectF movedInsideSource = globalAnchorRect();
+    QTRY_COMPARE(
+        surface.property("attachmentAnchorRect").toRectF(),
+        outputLocalRect(movedInsideSource)
+    );
+
+    ancestor->setPosition(QPointF(62, 7));
+    const QRectF movedWithAncestor = globalAnchorRect();
+    QTRY_COMPARE(
+        surface.property("attachmentAnchorRect").toRectF(),
+        outputLocalRect(movedWithAncestor)
+    );
+
+    ancestor->setVisible(false);
+    QTRY_VERIFY(
+        surface.property("attachmentAnchorRect").toRectF().isEmpty()
+    );
+    QVERIFY(lease.isActive());
+    QVERIFY(source->menuOpen());
+    QCOMPARE(surface.property(
+        "_celestinaAttachmentAnchorLeaseToken").toString(), token);
+    ancestor->setVisible(true);
+    QTRY_COMPARE(
+        surface.property("attachmentAnchorRect").toRectF(),
+        outputLocalRect(movedWithAncestor)
+    );
+    QVERIFY(source->menuOpen());
+
+    auto *const secondAncestor = new QQuickItem(panel.contentItem());
+    secondAncestor->setPosition(QPointF(74, 9));
+    source->setParent(secondAncestor);
+    source->setParentItem(secondAncestor);
+    const QRectF movedWithReparent = globalAnchorRect();
+    QTRY_COMPARE(
+        surface.property("attachmentAnchorRect").toRectF(),
+        outputLocalRect(movedWithReparent)
+    );
+
+    secondAncestor->setX(91);
+    const QRectF reparentedPosition = globalAnchorRect();
+    QTRY_COMPARE(
+        surface.property("attachmentAnchorRect").toRectF(),
+        outputLocalRect(reparentedPosition)
+    );
+
+    // Losing the source also destroys its declared child anchor. The lease
+    // retires its surface token instead of leaving a frozen connector.
+    delete source;
+    QTRY_VERIFY(
+        surface.property("attachmentAnchorRect").toRectF().isEmpty()
+    );
+    QVERIFY(surface.property(
+        "_celestinaAttachmentAnchorLeaseToken").toString().isEmpty());
+    QVERIFY(!lease.isActive());
+    lease.release();
+}
+
+void SurfaceManagerTest::anAmbiguousAttachmentSourceLeavesTheSurfaceFloating()
+{
+    QQuickWindow panel;
+    panel.setGeometry(0, 0, 800, 40);
+    panel.show();
+    SemanticAttachmentSource first(panel.contentItem());
+    SemanticAttachmentSource duplicate(panel.contentItem());
+    for (SemanticAttachmentSource *const source : {&first, &duplicate}) {
+        source->setPosition(QPointF(620, 5));
+        source->setSize(QSizeF(140, 30));
+        source->placeAnchor(QPointF(61, 6));
+    }
+
+    QQuickWindow surface;
+    surface.setScreen(panel.screen());
+    const QRectF snapshot = first.attachmentAnchorGlobalRectNow();
+    surface.setProperty("attachmentAnchorRect", snapshot);
+    PanelAttachmentLease lease;
+
+    QVERIFY(!lease.acquire(&panel, &surface, snapshot));
+    QVERIFY(!first.menuOpen());
+    QVERIFY(!duplicate.menuOpen());
+    QVERIFY(!lease.isActive());
+    QVERIFY(surface.property("attachmentAnchorRect").toRectF().isEmpty());
+    QVERIFY(surface.property(
+        "_celestinaAttachmentAnchorLeaseToken").toString().isEmpty());
+}
+
+void SurfaceManagerTest::aFailedAttachmentLeasePublishesNothing()
+{
+    QQuickWindow panel;
+    panel.setGeometry(0, 0, 800, 40);
+    panel.show();
+    QWindow surface;
+    surface.setScreen(panel.screen());
+    const QRectF snapshot(640, 11, 18, 18);
+    surface.setProperty("attachmentAnchorRect", snapshot);
+    PanelAttachmentLease lease;
+
+    QVERIFY(!lease.acquire(&panel, &surface, snapshot));
+    QVERIFY(!lease.isActive());
+    QVERIFY(surface.property("attachmentAnchorRect").toRectF().isEmpty());
+    QVERIFY(surface.property(
+        "_celestinaAttachmentAnchorLeaseToken").toString().isEmpty());
 }
 
 void SurfaceManagerTest::aTrayChildStaysAdjacentAndInsideTheOutput()
@@ -528,6 +837,7 @@ void SurfaceManagerTest::anOverflowingTrayMenuUsesABoundedScrollableViewport()
     controller.toggleTrayItemsMenu(
         panel,
         QRect(700, 6, 28, 28),
+        QRect(676, 5, 76, 30),
         &tray,
         &providers
     );
@@ -547,7 +857,9 @@ void SurfaceManagerTest::anOverflowingTrayMenuUsesABoundedScrollableViewport()
         Q_ARG(QString, service),
         Q_ARG(QString, path),
         Q_ARG(int, requestedGlobalX),
-        Q_ARG(int, requestedGlobalY)
+        Q_ARG(int, requestedGlobalY),
+        Q_ARG(int, 48),
+        Q_ARG(int, 48)
     ));
     controller.trayMenuReady(service, path, trayEntries(64));
 
@@ -568,7 +880,10 @@ void SurfaceManagerTest::anOverflowingTrayMenuUsesABoundedScrollableViewport()
     );
     auto *const childLayer = LayerShellQt::Window::get(child);
     QVERIFY(childLayer);
-    QCOMPARE(childLayer->margins().top(), requestedTop);
+    // The side-attached child rises so the invoking tile's centre stays
+    // inside the membrane's flat lateral span instead of at the body corner.
+    QCOMPARE(childLayer->margins().top(),
+             requestedTop + QRect(0, 0, 48, 48).center().y() - 72);
 
     QObject *const menu = child->property("menu").value<QObject *>();
     QVERIFY(menu);
@@ -580,21 +895,27 @@ void SurfaceManagerTest::anOverflowingTrayMenuUsesABoundedScrollableViewport()
         viewport->property("contentHeight").toReal() > viewport->height()
     );
 
-    QObject *const scrollBar = child->findChild<QObject *>(
+    // No separate scroll bar remains. The clipped viewport itself scrolls,
+    // and the pinned heading beside it never enters the scrolled content, so
+    // a scrolled row can no longer be painted over the lighter header field.
+    QVERIFY(!child->findChild<QObject *>(
         QStringLiteral("celestina-tray-menu-scrollbar")
-    );
-    QVERIFY(scrollBar);
-    auto *const scrollBarItem = qobject_cast<QQuickItem *>(scrollBar);
-    QVERIFY(scrollBarItem);
-    QTRY_VERIFY(scrollBar->property("visible").toBool());
-    QVERIFY(scrollBar->property("contentTravel").toReal() > 0.0);
-    QCOMPARE(scrollBarItem->window(), child.data());
-    QCOMPARE(scrollBarItem->parentItem(), viewport->parentItem());
-    QVERIFY(QMetaObject::invokeMethod(
-        scrollBar,
-        "scrollToHandle",
-        Q_ARG(QVariant, scrollBar->property("handleTravel"))
     ));
+    QVERIFY(viewport->property("clip").toBool());
+    QObject *const heading = child->findChild<QObject *>(
+        QStringLiteral("celestina-tray-menu-heading")
+    );
+    QVERIFY(heading);
+    auto *const headingItem = qobject_cast<QQuickItem *>(heading);
+    QVERIFY(headingItem);
+    QCOMPARE(headingItem->window(), child.data());
+    QCOMPARE(headingItem->parentItem(), viewport->parentItem());
+    QVERIFY(headingItem->height() > 0);
+    // The raised top padding keeps the scrolled rows strictly below that
+    // pinned heading.
+    QVERIFY(menu->property("topPadding").toReal()
+            >= headingItem->height());
+    viewport->setProperty("contentY", 40.0);
     QTRY_VERIFY(viewport->property("contentY").toReal() > 0.0);
 
     // The same bounded viewport remains a real Menu: arrow keys reach the last
@@ -608,8 +929,8 @@ void SurfaceManagerTest::anOverflowingTrayMenuUsesABoundedScrollableViewport()
         "forceActiveFocus",
         Q_ARG(Qt::FocusReason, Qt::PopupFocusReason)
     ));
-    QCOMPARE(menu->property("count").toInt(), 66);
-    const int lastIndex = 65;
+    QCOMPARE(menu->property("count").toInt(), 64);
+    const int lastIndex = 63;
     for (int step = 0;
          step <= menu->property("count").toInt()
          && menu->property("currentIndex").toInt() != lastIndex;
@@ -641,7 +962,9 @@ void SurfaceManagerTest::anOverflowingTrayMenuUsesABoundedScrollableViewport()
         Q_ARG(QString, service),
         Q_ARG(QString, path),
         Q_ARG(int, requestedGlobalX),
-        Q_ARG(int, edgeGlobalY)
+        Q_ARG(int, edgeGlobalY),
+        Q_ARG(int, 48),
+        Q_ARG(int, 48)
     ));
     controller.trayMenuReady(service, path, trayEntries(64));
 
@@ -677,28 +1000,60 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
     FakeTrayProviderSource providers;
     PanelMenuController controller(&engine, nullptr, nullptr);
     QWindow *const panel = makePanel();
+    panel->show();
+    auto *const quickPanel = qobject_cast<QQuickWindow *>(panel);
+    QVERIFY(quickPanel);
+    auto *const inventorySource =
+        new SemanticAttachmentSource(quickPanel->contentItem());
+    inventorySource->setPosition(QPointF(660, 5));
+    inventorySource->setSize(QSizeF(120, 30));
+    inventorySource->placeAnchor(QPointF(41, 6));
 
-    const QRect inventoryOpener(700, 6, 28, 28);
+    const QPointF panelGlobal = panel->position();
+    const QRectF inventoryOpener(
+        panelGlobal + QPointF(700, 6),
+        QSizeF(28, 28)
+    );
+    const QRectF inventoryAnchor =
+        inventorySource->attachmentAnchorGlobalRectNow();
     controller.toggleTrayItemsMenu(
         panel,
         inventoryOpener,
+        inventoryAnchor,
         &tray,
         &providers
     );
+    QVERIFY(inventorySource->menuOpen());
     QCOMPARE(controller.openIndicator(), QStringLiteral("tray-items"));
     QPointer<QWindow> inventory = windowWithProperty("traySource");
     QVERIFY(inventory);
     QVERIFY(inventory->isVisible());
     const QScreen *const inventoryScreen = panel->screen();
     QVERIFY(inventoryScreen);
-    const QRect localInventoryOpener = panelPopupOpenerOnOutput(
+    const QRectF localInventoryOpener = panelPopupOpenerOnOutput(
         inventoryOpener,
-        inventoryScreen->geometry().topLeft()
+        QPointF(inventoryScreen->geometry().topLeft())
     );
+    const QRectF localInventoryAnchor = panelPopupOpenerOnOutput(
+        inventoryAnchor,
+        QPointF(inventoryScreen->geometry().topLeft())
+    );
+    QVERIFY(inventory->property("anchoredFromPanel").toBool());
+    QCOMPARE(
+        inventory->property("openerRect").toRectF(),
+        localInventoryOpener
+    );
+    QCOMPARE(
+        inventory->property("attachmentAnchorRect").toRectF(),
+        localInventoryAnchor
+    );
+    QCOMPARE(inventory->property("attachmentStartY").toInt(), panel->height());
+    QCOMPARE(inventory->property("anchorGap").toInt(), 20);
     const QPoint inventoryOrigin = panelPopupBodyOrigin(
         localInventoryOpener,
         inventory->property("contentWidth").toInt(),
-        inventory->property("anchorGap").toInt()
+        inventory->property("anchorGap").toInt(),
+        panel->height()
     );
     QCOMPARE(inventory->property("menuY").toInt(), inventoryOrigin.y());
     QCOMPARE(inventory->property("cardY").toInt(), inventoryOrigin.y());
@@ -717,7 +1072,9 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
         Q_ARG(QString, service),
         Q_ARG(QString, path),
         Q_ARG(int, 620),
-        Q_ARG(int, 220)
+        Q_ARG(int, 220),
+        Q_ARG(int, 48),
+        Q_ARG(int, 48)
     ));
     QCOMPARE(needed.size(), 1);
     QVERIFY(inventory->isVisible());
@@ -732,7 +1089,9 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
         Q_ARG(QString, service),
         Q_ARG(QString, path),
         Q_ARG(int, 620),
-        Q_ARG(int, 220)
+        Q_ARG(int, 220),
+        Q_ARG(int, 48),
+        Q_ARG(int, 48)
     ));
     QCOMPARE(needed.size(), 1);
 
@@ -740,7 +1099,10 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
     QPointer<QWindow> child = windowWithProperty("entries");
     QVERIFY(child);
     QVERIFY(child->isVisible());
+    QVERIFY(!child->property("anchoredFromPanel").toBool());
+    QVERIFY(child->property("openerRect").toRect().isEmpty());
     QVERIFY(inventory->isVisible());
+    QVERIFY(inventorySource->menuOpen());
     QCOMPARE(controller.openIndicator(), QStringLiteral("tray-items"));
 
     auto *childLayer = LayerShellQt::Window::get(child);
@@ -777,12 +1139,15 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
         Q_ARG(QString, replacementService),
         Q_ARG(QString, replacementPath),
         Q_ARG(int, 620),
-        Q_ARG(int, 300)
+        Q_ARG(int, 300),
+        Q_ARG(int, 48),
+        Q_ARG(int, 48)
     ));
     QCOMPARE(needed.size(), 2);
     QTRY_VERIFY(child.isNull());
     QVERIFY(inventory);
     QVERIFY(inventory->isVisible());
+    QVERIFY(inventorySource->menuOpen());
     QCOMPARE(controller.openIndicator(), QStringLiteral("tray-items"));
 
     controller.trayMenuReady(
@@ -814,7 +1179,9 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
         Q_ARG(QString, emptyService),
         Q_ARG(QString, emptyPath),
         Q_ARG(int, 620),
-        Q_ARG(int, 260)
+        Q_ARG(int, 260),
+        Q_ARG(int, 48),
+        Q_ARG(int, 48)
     ));
     controller.trayMenuReady(emptyService, emptyPath, QVariantList());
     controller.trayMenuReady(emptyService, emptyPath, trayEntries());
@@ -832,21 +1199,30 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
         Q_ARG(QString, cascadeService),
         Q_ARG(QString, cascadePath),
         Q_ARG(int, 620),
-        Q_ARG(int, 300)
+        Q_ARG(int, 300),
+        Q_ARG(int, 48),
+        Q_ARG(int, 48)
     ));
     controller.trayMenuReady(cascadeService, cascadePath, trayEntries());
     child = windowWithProperty("entries");
     QVERIFY(child);
-    controller.close();
+    // Compositor/QML withdrawal follows the surface's dismissed path rather
+    // than the controller's explicit close path. It must retire the complete
+    // hierarchy and the panel-side lease just the same.
+    inventory->hide();
     QTRY_VERIFY(child.isNull());
     QTRY_VERIFY(inventory.isNull());
+    QTRY_VERIFY(!inventorySource->menuOpen());
+    QVERIFY(controller.openIndicator().isEmpty());
 
     controller.toggleTrayItemsMenu(
         panel,
-        QRect(700, 6, 28, 28),
+        inventoryOpener,
+        inventoryAnchor,
         &tray,
         &providers
     );
+    QVERIFY(inventorySource->menuOpen());
     inventory = windowWithProperty("traySource");
     QVERIFY(inventory);
 
@@ -858,7 +1234,9 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
         Q_ARG(QString, lateService),
         Q_ARG(QString, latePath),
         Q_ARG(int, 620),
-        Q_ARG(int, 340)
+        Q_ARG(int, 340),
+        Q_ARG(int, 48),
+        Q_ARG(int, 48)
     ));
     controller.close();
     QTRY_VERIFY(inventory.isNull());
@@ -877,6 +1255,8 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
     QVERIFY(child);
     childLayer = LayerShellQt::Window::get(child);
     QVERIFY(childLayer);
+    QVERIFY(!child->property("anchoredFromPanel").toBool());
+    QVERIFY(child->property("openerRect").toRect().isEmpty());
     auto outputAnchors = LayerShellQt::Window::Anchors(
         LayerShellQt::Window::AnchorTop
     );
@@ -888,6 +1268,7 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
 
     controller.close();
     QTRY_VERIFY(child.isNull());
+    QTRY_VERIFY(!inventorySource->menuOpen());
 }
 
 void SurfaceManagerTest::wallpaperMenuHandsTheFolderChooserBackToThePermanentPanel()
@@ -901,22 +1282,55 @@ void SurfaceManagerTest::wallpaperMenuHandsTheFolderChooserBackToThePermanentPan
     PanelMenuController controller(&engine, nullptr, nullptr);
     FakePanelWindow panel;
     panel.setGeometry(0, 0, 800, 40);
+    panel.show();
+    SemanticAttachmentSource source(panel.contentItem());
+    source.setPosition(QPointF(690, 5));
+    source.setSize(QSizeF(100, 30));
+    source.placeAnchor(QPointF(35, 6));
+    const QPointF panelGlobal = panel.position();
+    const QRectF openerRect(
+        panelGlobal + QPointF(720, 6),
+        QSizeF(28, 28)
+    );
+    const QRectF anchorRect = source.attachmentAnchorGlobalRectNow();
 
     controller.toggleIndicatorMenu(
         &panel,
-        QRect(720, 6, 28, 28),
+        openerRect,
+        anchorRect,
         QStringLiteral("wallpaper"),
         &providers
     );
+    QVERIFY(source.menuOpen());
     QCOMPARE(controller.openIndicator(), QStringLiteral("wallpaper"));
 
     QWindow *const menu = windowWithProperty("providerSource");
     QVERIFY(menu);
+    const QScreen *const screen = panel.screen();
+    QVERIFY(screen);
+    QVERIFY(menu->property("anchoredFromPanel").toBool());
+    QCOMPARE(menu->property("attachmentStartY").toInt(), panel.height());
+    QCOMPARE(menu->property("anchorGap").toInt(), 25);
+    QCOMPARE(
+        menu->property("openerRect").toRectF(),
+        panelPopupOpenerOnOutput(
+            openerRect,
+            QPointF(screen->geometry().topLeft())
+        )
+    );
+    QCOMPARE(
+        menu->property("attachmentAnchorRect").toRectF(),
+        panelPopupOpenerOnOutput(
+            anchorRect,
+            QPointF(screen->geometry().topLeft())
+        )
+    );
     QSignalSpy chooser(&panel, &FakePanelWindow::wallpaperFolderPickerOpened);
     QVERIFY(QMetaObject::invokeMethod(menu, "chooseRequested"));
 
     QTRY_COMPARE(chooser.count(), 1);
     QVERIFY(panel.hasOpenedWallpaperFolderPicker());
+    QVERIFY(!source.menuOpen());
     QVERIFY(controller.openIndicator().isEmpty());
 }
 
@@ -932,6 +1346,81 @@ void SurfaceManagerTest::aTallGlassCardKeepsItsRoundedRectangle()
     QVERIFY(glass.contains(QPoint(card.right(), card.center().y())));
     QVERIFY(!glass.contains(card.topLeft()));
     QVERIFY(!glass.contains(card.bottomRight()));
+}
+
+void SurfaceManagerTest::aFullWidthBarShapeRemainsFinite()
+{
+    const QRect bar(0, 0, 1920, 40);
+    const QVariantMap shape {
+        {QStringLiteral("rect"), bar},
+        {QStringLiteral("radius"), 0},
+        {QStringLiteral("polygon"), QVariantList()},
+    };
+
+    const QRegion glass = glassRegionFromPublishedShapes(QVariantList {shape});
+    QCOMPARE(glass, QRegion(bar));
+    QCOMPARE(glass.boundingRect(), bar);
+    QVERIFY(!glass.contains(QPoint(0, 40)));
+}
+
+void SurfaceManagerTest::aPublishedPolygonOverridesItsRoundedBoundingRect()
+{
+    const QVariantList silhouette {
+        QPointF(40, 0),
+        QPointF(100, 0),
+        QPointF(92, 8),
+        QPointF(88, 16),
+        QPointF(88, 36),
+        QPointF(52, 36),
+        QPointF(52, 16),
+        QPointF(48, 8),
+    };
+    const QVariantMap shape {
+        {QStringLiteral("rect"), QRectF(0, 0, 140, 40)},
+        {QStringLiteral("radius"), 20},
+        {QStringLiteral("polygon"), silhouette},
+    };
+
+    const QRegion glass = glassRegionFromPublishedShapes(QVariantList {shape});
+
+    QVERIFY(!glass.isEmpty());
+    QVERIFY(glass.contains(QPoint(70, 2)));
+    QVERIFY(glass.contains(QPoint(70, 30)));
+    QVERIFY(!glass.contains(QPoint(5, 20)));
+    QVERIFY(!glass.contains(QPoint(120, 20)));
+}
+
+void SurfaceManagerTest::anInvalidPolygonFallsBackToRoundedGlass()
+{
+    const QRectF card(40, 60, 530, 732);
+    const QVariantMap malformedPoint {
+        {QStringLiteral("x"), 50},
+        {QStringLiteral("y"), std::numeric_limits<qreal>::infinity()},
+    };
+    const QVariantMap shape {
+        {QStringLiteral("rect"), card},
+        {QStringLiteral("radius"), 20},
+        {QStringLiteral("polygon"), QVariantList {
+             QPointF(40, 60), malformedPoint, QPointF(570, 792),
+         }},
+    };
+
+    const QRegion glass = glassRegionFromPublishedShapes(QVariantList {shape});
+
+    QCOMPARE(glass, roundedGlassRegion(card.toRect(), 20));
+}
+
+void SurfaceManagerTest::emptyPublishedGlassNeverBecomesFullWindowBlur()
+{
+    QVERIFY(glassRegionFromPublishedShapes({}, {}).isEmpty());
+
+    const QVariantMap shape {
+        {QStringLiteral("polygon"), QVariantList {
+             QPointF(10, 10), QPointF(10, 10), QPointF(10, 10),
+         }},
+    };
+    QVERIFY(glassRegionFromPublishedShapes(QVariantList {shape}).isEmpty());
+    QVERIFY(!blurProbeCanUseEffect(true, true, false, true, true, false));
 }
 
 void SurfaceManagerTest::anArmedBlurSurvivesLayerShellExposureLoss()
@@ -1028,6 +1517,8 @@ void SurfaceManagerTest::theMenuContentLoadsAndFitsItsSurface()
 
     auto *content = qobject_cast<QWindow *>(root);
     QVERIFY(content);
+    QVERIFY(!content->property("anchoredFromPanel").toBool());
+    QVERIFY(content->property("openerRect").toRect().isEmpty());
     QVERIFY(content->metaObject()->indexOfSignal("activated(QString,int)") >= 0);
     QVERIFY(content->metaObject()->indexOfSignal("dismissed()") >= 0);
     // The host connects to these by name, so a signature that drifted would
@@ -1512,6 +2003,7 @@ void SurfaceManagerTest::thePanelOverlayPrototypeLoadsAndMaps()
         if (panelPrototype) {
             properties.insert(QStringLiteral("anchoredFromPanel"), true);
             properties.insert(QStringLiteral("openerRect"), QRect(712, 6, 28, 28));
+            properties.insert(QStringLiteral("attachmentStartY"), 40);
         }
         QObject *root = component.createWithInitialProperties(properties);
         QVERIFY2(root, qPrintable(component.errorString()));
@@ -1519,6 +2011,7 @@ void SurfaceManagerTest::thePanelOverlayPrototypeLoadsAndMaps()
         if (panelPrototype) {
             QVERIFY(root->property("anchoredFromPanel").toBool());
             QCOMPARE(root->property("openerRect").toRect(), QRect(712, 6, 28, 28));
+            QCOMPARE(root->property("attachmentStartY").toInt(), 40);
         }
 
         auto *content = qobject_cast<QWindow *>(root);

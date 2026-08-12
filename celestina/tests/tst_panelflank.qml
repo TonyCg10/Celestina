@@ -41,6 +41,7 @@ TestCase {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
+            height: host.height
             // The same expression Panel.qml uses, so this regression measures
             // the shipped rule rather than a copy of it.
             reservedWidth: flank.roomFor(captureButton) + flank.roomFor(media)
@@ -74,12 +75,34 @@ TestCase {
                 })
             }
         }
+
+        // Clock text is shorter than a 30-pixel control. Its paint-only pill
+        // must still land on the same y=5 baseline as every flank capsule.
+        Item {
+            id: clockLike
+
+            anchors.centerIn: parent
+            width: 120
+            height: 20
+
+            Desktop.PanelPill {
+                id: clockPill
+
+                blurAvailable: true
+                ink: testInk
+            }
+        }
     }
 
     // `visible` also depends on the test's own window being shown, which an
     // offscreen run does not do; what this is about is whether the widget has
     // width to occupy in the row.
     function test_a_valid_player_has_width() {
+        compare(flank.implicitHeight, CelestinaTheme.controlHeightXs);
+        compare(flank.height, host.height);
+        compare(flank.y, 0);
+        compare(clockPill.mapToItem(host, 0, 0).y,
+                (host.height - CelestinaTheme.controlHeightXs) / 2);
         verify(captureButton.ownsGlass);
         verify(captureButton.implicitWidth > 0);
         verify(media.hasPlayer);

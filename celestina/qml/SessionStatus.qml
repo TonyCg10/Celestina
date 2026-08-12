@@ -24,8 +24,8 @@ Row {
     required property BackdropInk ink
     // Each indicator asks for its own menu at the point it was clicked. The
     // panel forwards it; the host owns every surface this row does not.
-    signal indicatorMenuRequested(string kind, int globalX, int globalY,
-                                  int openerWidth, int openerHeight)
+    signal indicatorMenuRequested(string kind, rect openerRect,
+                                  rect attachmentAnchorRect)
 
     readonly property bool hasVisibleIndicator: link.visible || radio.visible
 
@@ -53,6 +53,7 @@ Row {
         required property string iconName
 
         ink: root.ink
+        attachmentAnchor: glyph
 
         anchors.verticalCenter: parent ? parent.verticalCenter : undefined
         implicitWidth: CelestinaTheme.iconSm
@@ -61,9 +62,9 @@ Row {
         Accessible.role: Accessible.Button
         // `PanelMenuButton` owns pressed, hover, focus and opener geometry;
         // this row contributes only which menu that rectangle names.
-        onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
-            root.indicatorMenuRequested(control.kind, globalX, globalY,
-                                        openerWidth, openerHeight)
+        onMenuRequested: (openerRect, attachmentAnchorRect) =>
+            root.indicatorMenuRequested(control.kind, openerRect,
+                                        attachmentAnchorRect)
 
         contentItem: Item {
             implicitWidth: glyph.width

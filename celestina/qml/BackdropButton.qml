@@ -11,6 +11,12 @@ CelestinaButton {
     id: control
 
     required property BackdropInk ink
+    // A transient surface may keep its opener identifiable after the pointer
+    // leaves the panel. This reuses the exact hover layer; it does not invent a
+    // selected role or alter the button's geometry.
+    property bool holdHoverFeedback: false
+    readonly property bool hoverFeedbackActive:
+            control.hovered || control.holdHoverFeedback
 
     // Shell controls keep their concise names for AT-SPI, but never paint
     // hover cards above the compact panel or its transient surfaces. Override
@@ -50,22 +56,22 @@ CelestinaButton {
                      : control.ink.controlFill;
             if (control.role === CelestinaButton.Primary)
                 return control.down ? CelestinaTheme.accentPressed
-                     : control.hovered ? CelestinaTheme.accentHover
+                     : control.hoverFeedbackActive ? CelestinaTheme.accentHover
                      : CelestinaTheme.accent;
             if (control.role === CelestinaButton.Destructive)
                 return control.down ? CelestinaTheme.danger
-                     : control.hovered ? CelestinaTheme.dangerBorder
+                     : control.hoverFeedbackActive ? CelestinaTheme.dangerBorder
                      : CelestinaTheme.dangerFill;
             if (control.role === CelestinaButton.Selected)
                 return control.down ? control.ink.selectedFill
-                     : control.hovered ? control.ink.accentFill
+                     : control.hoverFeedbackActive ? control.ink.accentFill
                      : control.ink.selectedRestFill;
             if (control.role === CelestinaButton.Ghost)
                 return control.down ? control.ink.pressedFill
-                     : control.hovered ? control.ink.controlFill
+                     : control.hoverFeedbackActive ? control.ink.controlFill
                      : CelestinaTheme.clear;
             return control.down ? control.ink.pressedFill
-                 : control.hovered ? control.ink.hoverFill
+                 : control.hoverFeedbackActive ? control.ink.hoverFill
                  : control.ink.controlFill;
         }
         border.width: 0

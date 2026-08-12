@@ -646,17 +646,73 @@ result.
 - **Requires:** the incremental or verified PANEL-1 bundle inside a real Niri
   compositor, a detailed wallpaper, a visually distinct application window and
   the nested reference blur profile
-- **Procedure:** inspect the panel at scale 1 and scale 2. Compare wallpaper
-  detail immediately outside a capsule with the same detail inside it; inspect
-  every capsule edge and both ends of the phone reading. Add and remove a late
-  provider so its capsule geometry changes after startup. Open network,
-  Bluetooth, tray, workspace map, control centre, clipboard, notification
-  centre, session, launcher, performance, toolbox and wallpaper. Confirm each
-  reads as one Velo object with a nearly transparent shadowless outer field,
-  dense dark matte internal cards that match the panel capsules, fixed
-  light/white foregrounds, and no shadow on either material, that the
-  panel-opened surfaces sit beneath and near their actual opener, and that the
-  centred launcher does not acquire a false panel anchor.
+- **Procedure:** inspect the panel at scale 1 and scale 2. Confirm one nearly
+  transparent, shadowless `ContextualVeil` covers the complete 40-pixel panel
+  edge-to-edge with no outer margin, gap or hard plate. Compare composed detail
+  immediately below the bar with the same application or wallpaper detail
+  inside it, and confirm blur remains continuous across exactly one finite
+  panel region. Inspect every information group and both ends of the phone
+  reading: each must remain an ordinary rounded `ContentSurface` capsule at
+  output-local y=5 with height 30, and no capsule may introduce its own
+  compositor region or a local blur discontinuity. Add and remove a late
+  provider and confirm the one panel region remains the complete 40-pixel bar.
+  Open network, Bluetooth, tray, workspace map, control centre, clipboard,
+  notification centre, session, launcher, performance, toolbox and wallpaper.
+  Confirm each menu keeps a nearly transparent shadowless outer field, dense
+  dark matte internal cards that match the panel capsules, fixed light/white
+  foregrounds and no shadow on either material. Confirm the bar, menu body and
+  membrane expose no outline, lit edge or apparent edge halo. Confirm
+  panel-opened surfaces sit beneath and near their actual clicked opener, while
+  a command-opened centred launcher does not acquire a false panel anchor. For
+  each surface opened by a real panel control, identify both the clicked
+  control and its exact glyph anchor. The body must remain placed from the
+  clicked control, but the membrane must begin at the bar's lower edge
+  (`attachmentStartY == barHeight`) as one narrow droplet mouth centred under
+  the glyph — never a body-wide seam — cling to the bar with a meniscus on
+  both sides, narrow to its neck just below the bar and swell until it lands
+  tangent on the body's flat top edge inside its ordinary rounded top
+  corners. The mouth must clamp only enough to stay inside that flat span.
+  The invoking control must retain the same
+  circle it shows on hover
+  while its own surface remains open. The owning `PanelPill` and every
+  `ContentSurface` must keep the same rounded silhouette, y=5/height=30 geometry
+  and dense material while the menu is open. The membrane itself must remain only the
+  light `ContextualVeil`: no dense fill, transition layer, shadow, closed
+  capsule stroke or dark cap may bridge the two Wayland surfaces. Closing by
+  Escape, outside click or the surface's own action must leave those rounded
+  capsules unchanged.
+  Compare real menu widths 328, 360, 424, 460, 530 and 620 and confirm vertical
+  travel is respectively 20, 22, 25, 28, 32 and 36 pixels. Compare glyph
+  anchors of different widths, two controls at different positions inside the
+  same group, and a menu clamped near each output edge. The hanging neck
+  must visibly thin or preserve its icon-relative width as travel,
+  icon/body reference-scale spread or horizontal displacement increases. It
+  must remain a liquid icon-scaled neck — never an icon-thin thread and never
+  a body-proportional band — and the meniscus, neck and swelling lower lobe
+  must stay rounded, with no hourglass flank or visible pinch where the
+  curves meet. In every
+  case the painted membrane and real blur boundary must coincide from the
+  mouth through the neck to the landing. Change model-driven content height and
+  confirm it does not change the width-derived vertical travel.
+  Open the same available route by command or keybind and confirm it remains a
+  floating rounded field. Right-click a workspace dot and a collapsed
+  monitor dot and confirm the workspace map hangs from the bar with the same
+  droplet beneath the exact invoking dot, and that the collapsed monitor
+  group is a single larger dot without a visible count. Open a foreign tray child menu from the mapped inventory
+  on both sides of the output and confirm the same droplet grows sideways out
+  of the parent card's facing edge at the invoking tile's height, with the
+  mouth following that tile. Scroll an overflowing foreign menu and confirm
+  its header card and section label stay pinned, no row is painted above the
+  dark body section, and no separate scroll bar appears while wheel, keyboard
+  and drag still scroll the rows. On a cold opening, step through
+  the first frames and confirm the membrane remains aligned while placement
+  moves from its bootstrap value to the final card position; only opacity may
+  reveal that surface, and its blur must not arrive noticeably after opacity
+  has finished. On a sufficiently high output, confirm the control centre has
+  enough membrane travel. On a 768-pixel output, confirm the 732-pixel card
+  keeps its body origin at y=72 and never paints or blurs over the 40-pixel
+  panel; record the expected 36-pixel bottom clipping as a prototype limit
+  rather than accepting that low-height interaction path as complete.
   Arm and disarm one session action and make sure its changing copy neither
   moves the card onto the panel nor shrinks the outside-click surface. In the
   tray inventory, pin one item, hide another and use the selector beside
@@ -665,7 +721,11 @@ result.
   the mode and count, foreign application artwork is legible at the enlarged
   size, the card and its top stay fixed, producer titles are not painted, the
   last tile remains reachable by scrolling and keyboard, and the hidden tile
-  can be restored. Confirm the pin appears directly beside the opener and that
+  can be restored. While that menu stays open, change pin/hide state so the
+  panel tray capsule moves or changes width; confirm the clicked tray glyph and
+  membrane waist update together while the capsule itself remains unchanged,
+  and that the membrane never detaches against a stale rectangle. Confirm the
+  pin appears directly beside the opener and that
   opening either item's foreign menu leaves the inventory visible. Exercise a
   foreign menu taller than the output with the wheel, draggable scroll bar and
   arrow keys; reach its final action, then press Escape and confirm only the
@@ -683,15 +743,35 @@ result.
   application, confirm the same fixed foreground/material pair remains legible,
   then move a tiled window and open/close the surface to record Niri's
   documented experimental non-xray artifacts and the practical GPU cost.
-- **Pass condition:** composed backdrop detail is visibly dispersed only inside
-  the borderless capsules, the full-width bar and menu cards add no exterior
-  shadow or hard plate, the outer contextual field remains visibly lighter than
-  its content cards, those cards and panel capsules read as one dense matte
-  dark material with one fixed light/white foreground on bright and dark
-  wallpapers, no capsule is clipped, and a late geometry change receives the
-  same blur without briefly blurring the whole surface. Every interactive menu
-  uses the same material hierarchy without changing its keyboard, Escape,
-  outside-click, two-step destructive or provider-command semantics. Tray
+- **Pass condition:** composed backdrop detail is visibly dispersed throughout
+  one finite edge-to-edge panel region and remains sharp immediately below the
+  40-pixel bar. The bar has no exterior margin, shadow or hard plate. Its
+  ordinary rounded capsules stay at y=5 with height 30, retain both ends and add
+  no compositor regions; the outer contextual field remains visibly lighter
+  than its content cards, and those cards and panel capsules read as one dense
+  matte dark material with one fixed light/white foreground on bright and dark
+  wallpapers. A late geometry change preserves that same single panel region
+  without briefly blurring outside it. The contextual bar, body and membrane
+  expose no outline, lit edge or apparent halo. Every panel-opened primary
+  membrane begins at `barHeight`, spans the complete contextual body at both
+  outer edges, and changes its broad body-proportional, glyph-centred or
+  body-edge-clamped waist with real tension while retaining rounded shoulders,
+  a longer lower lobe and a continuous unpinched join. The body still follows
+  the clicked control, which retains its ordinary hover circle only while its
+  own surface is open.
+  Every `PanelPill` and
+  `ContentSurface` remains rounded, fixed at its resting geometry and
+  materially unchanged; the membrane is only `ContextualVeil`, with no dense
+  bridge or transition layer. Live glyph-anchor changes move or resize the
+  membrane waist without changing the capsule. The membrane never repaints or
+  reblurs the bar;
+  its vertical travel matches every real-width row and remains independent of
+  content height. It stays aligned
+  throughout bootstrap and reveal, while command/keybind, workspace and foreign
+  child routes retain their floating geometry. Every
+  interactive menu uses the same material hierarchy without changing its
+  keyboard, Escape, outside-click, two-step destructive or provider-command
+  semantics. Tray
   preferences survive reconstruction without painting hidden tiles in the
   visible mode or changing the inventory geometry, both tray surfaces coexist,
   an overflowing foreign menu keeps every action reachable without adding a
@@ -701,7 +781,9 @@ result.
   actually composed below each pixel instead of showing the wallpaper-only xray
   cache over an application, and the fixed light/white foreground remains
   readable over the dense dark material in the tested bright/dark application
-  matrix.
+  matrix. On 768p the tall card keeps its membrane and never overlaps the
+  panel blur; its 36-pixel bottom clipping is a recorded prototype limit rather
+  than acceptance of complete low-height interaction.
 - **Result:** the author accepted the `PANEL-1-A` nested-session baseline after
   iterative review: the hard plate was gone, the full-width shadow remained,
   capsules showed compositor blur without borders, the phone capsule retained
@@ -832,13 +914,54 @@ result.
   `/tmp/celestina-fixed-white-ink.png` records the fixed white foreground over
   dense dark content material and the near-transparent carrier on the current
   dark wallpaper. This is implementation evidence at scale 1; author review on
-  a bright wallpaper and the remaining surface matrix stays pending.
+  a bright wallpaper and the remaining surface matrix stays pending. The
+  first `PANEL-1-I` droplet experiment then passed focused Style construction
+  7/7, shell QuickTest 198/198, three affected C++ tests 3/3, QML lint and the
+  canonical production workflow. Its offscreen preview showed the intended
+  droplet anatomy, and the workflow deployed the verified test bundle without
+  activation or live-session replacement. That experiment is now superseded
+  within the same active and uncommitted unit. It does not verify the current
+  continuous panel veil, single panel blur region, ordinary y=5/height=30
+  capsules or bar-bottom connector alignment. The next whole-capsule iteration
+  opened the active `PanelPill`, used its complete width as the mouth and
+  painted a dense-to-veil bridge. Its architecture contract and canonical
+  Style build and verification passed. The focused
+  Celestina surface-manager, overlay-contract, indicator-menu and complete
+  QuickTest selection passes 4/4 with 208/208 QuickTest cases. Its
+  surface-manager regressions covered live width and ancestor movement,
+  hide/restore, internal reparenting, successor tokens, destruction and
+  ambiguous-owner floating fallback. The registered Celestina completion
+  passes its Rust suites, QML lint, CTest 17/17 and release smoke, deploys the
+  verified bundle to the normal test prefix and reports every installed
+  artifact current without activating a session. The earlier restricted run
+  could not bind the tray-watcher fixture's private D-Bus socket in `/tmp`;
+  the registered unrestricted runs pass that test. That whole-capsule result is
+  now superseded. The following glyph-mouth correction kept capsules unchanged
+  and made the membrane veil-only. Its focused CTest selection passed 4/4, its
+  complete offscreen QuickTest runner passed 208/208, and its architecture,
+  canonical Style and registered Celestina production checks passed before
+  deployment without activation. That glyph-mouth geometry is also superseded:
+  neither earlier result verifies the current droplet membrane or persistent
+  opener circle. The next body-wide
+  revision passed 210/210 but its 9..11-pixel waist read as a straight
+  hourglass in the author-provided screenshot and is superseded too, and the
+  fluid body-proportional-waist correction that followed passed 211/211 with
+  full registered completion but was rejected live by the author on
+  2026-08-11 as a strange hourglass. The current droplet revision — narrow
+  glyph-centred mouth, meniscus, tangent body landing and restored rounded
+  body-top corners — passes its focused selection 4/4 and
+  complete offscreen QuickTest runner 211/211. Registered production completion
+  passes CTest 17/17 and the eight-second release smoke.
+  The verified bundle is deployed to `~/.local` and reports current without
+  activating a session. The author-run nested-Niri perceptual pass remains
+  pending in this active prototype record.
 - **Evidence:** [PANEL-1-A delivery](docs/evidence/2026-08-08-panel-glass-baseline.md),
   [PANEL-1-B adaptive ink nested comparison](docs/evidence/2026-08-10-panel-adaptive-ink-nested.md),
   [PANEL-1-B contextual hierarchy and grouping](docs/evidence/2026-08-10-contextual-menu-hierarchy-nested.md),
   [PANEL-1-F shared menu glass](docs/evidence/2026-08-11-contextual-menu-shared-glass.md),
   [PANEL-1-G content glass](docs/evidence/2026-08-11-one-ui-content-glass.md),
-  [PANEL-1-H fixed white shell ink](docs/evidence/2026-08-11-fixed-white-shell-ink.md)
+  [PANEL-1-H fixed white shell ink](docs/evidence/2026-08-11-fixed-white-shell-ink.md),
+  [PANEL-1-I continuous bar veil and contextual connectors](docs/evidence/2026-08-11-edge-attached-shell-prototype.md)
 
 ## Closed historical observations
 

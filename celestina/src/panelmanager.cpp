@@ -139,103 +139,78 @@ void PanelManager::setSessionMenu(OverlayController *menu)
 void PanelManager::togglePanelOverlay(
     OverlayController *controller,
     QWindow *panel,
-    int globalX,
-    int globalY,
-    int openerWidth,
-    int openerHeight
+    const QRectF &globalOpener,
+    const QRectF &globalAttachmentAnchor
 )
 {
     if (!controller || !panel)
         return;
 
-    controller->toggleFrom(
-        panel,
-        QRect(globalX, globalY, openerWidth, openerHeight)
-    );
+    controller->toggleFrom(panel, globalOpener, globalAttachmentAnchor);
 }
 
 void PanelManager::notificationCentreRequested(
-    int globalX,
-    int globalY,
-    int openerWidth,
-    int openerHeight
+    const QRectF &globalOpener,
+    const QRectF &globalAttachmentAnchor
 )
 {
     togglePanelOverlay(
         m_notificationCentre,
         qobject_cast<QWindow *>(sender()),
-        globalX,
-        globalY,
-        openerWidth,
-        openerHeight
+        globalOpener,
+        globalAttachmentAnchor
     );
 }
 
 void PanelManager::launcherRequested(
-    int globalX,
-    int globalY,
-    int openerWidth,
-    int openerHeight
+    const QRectF &globalOpener,
+    const QRectF &globalAttachmentAnchor
 )
 {
     togglePanelOverlay(
         m_launcher,
         qobject_cast<QWindow *>(sender()),
-        globalX,
-        globalY,
-        openerWidth,
-        openerHeight
+        globalOpener,
+        globalAttachmentAnchor
     );
 }
 
 void PanelManager::controlCentreRequested(
-    int globalX,
-    int globalY,
-    int openerWidth,
-    int openerHeight
+    const QRectF &globalOpener,
+    const QRectF &globalAttachmentAnchor
 )
 {
     togglePanelOverlay(
         m_controlCentre,
         qobject_cast<QWindow *>(sender()),
-        globalX,
-        globalY,
-        openerWidth,
-        openerHeight
+        globalOpener,
+        globalAttachmentAnchor
     );
 }
 
 void PanelManager::clipboardRequested(
-    int globalX,
-    int globalY,
-    int openerWidth,
-    int openerHeight
+    const QRectF &globalOpener,
+    const QRectF &globalAttachmentAnchor
 )
 {
     togglePanelOverlay(
         m_clipboard,
         qobject_cast<QWindow *>(sender()),
-        globalX,
-        globalY,
-        openerWidth,
-        openerHeight
+        globalOpener,
+        globalAttachmentAnchor
     );
 }
 
 void PanelManager::sessionMenuRequested(
-    int globalX,
-    int globalY,
-    int openerWidth,
-    int openerHeight
+    const QRectF &globalOpener,
+    const QRectF &globalAttachmentAnchor
 )
 {
     togglePanelOverlay(
         m_sessionMenu,
         qobject_cast<QWindow *>(sender()),
-        globalX,
-        globalY,
-        openerWidth,
-        openerHeight
+        globalOpener,
+        globalAttachmentAnchor
     );
 }
 
@@ -341,9 +316,9 @@ bool PanelManager::ensurePanel(QScreen *screen)
     if (m_menu) {
         connect(
             window,
-            SIGNAL(workspaceMapRequested(int, int, QVariant)),
+            SIGNAL(workspaceMapRequested(QRectF, QRectF, QVariant)),
             this,
-            SLOT(workspaceMapRequested(int, int, QVariant))
+            SLOT(workspaceMapRequested(QRectF, QRectF, QVariant))
         );
         connect(
             window,
@@ -353,47 +328,47 @@ bool PanelManager::ensurePanel(QScreen *screen)
         );
         connect(
             window,
-            SIGNAL(trayDrawerRequested(int, int, int, int)),
+            SIGNAL(trayDrawerRequested(QRectF, QRectF)),
             this,
-            SLOT(trayDrawerRequested(int, int, int, int))
+            SLOT(trayDrawerRequested(QRectF, QRectF))
         );
         connect(
             window,
-            SIGNAL(indicatorMenuRequested(QString, int, int, int, int)),
+            SIGNAL(indicatorMenuRequested(QString, QRectF, QRectF)),
             this,
-            SLOT(indicatorMenuRequested(QString, int, int, int, int))
+            SLOT(indicatorMenuRequested(QString, QRectF, QRectF))
         );
     }
 
     connect(
         window,
-        SIGNAL(launcherRequested(int, int, int, int)),
+        SIGNAL(launcherRequested(QRectF, QRectF)),
         this,
-        SLOT(launcherRequested(int, int, int, int))
+        SLOT(launcherRequested(QRectF, QRectF))
     );
     connect(
         window,
-        SIGNAL(notificationCentreRequested(int, int, int, int)),
+        SIGNAL(notificationCentreRequested(QRectF, QRectF)),
         this,
-        SLOT(notificationCentreRequested(int, int, int, int))
+        SLOT(notificationCentreRequested(QRectF, QRectF))
     );
     connect(
         window,
-        SIGNAL(controlCentreRequested(int, int, int, int)),
+        SIGNAL(controlCentreRequested(QRectF, QRectF)),
         this,
-        SLOT(controlCentreRequested(int, int, int, int))
+        SLOT(controlCentreRequested(QRectF, QRectF))
     );
     connect(
         window,
-        SIGNAL(clipboardRequested(int, int, int, int)),
+        SIGNAL(clipboardRequested(QRectF, QRectF)),
         this,
-        SLOT(clipboardRequested(int, int, int, int))
+        SLOT(clipboardRequested(QRectF, QRectF))
     );
     connect(
         window,
-        SIGNAL(sessionMenuRequested(int, int, int, int)),
+        SIGNAL(sessionMenuRequested(QRectF, QRectF)),
         this,
-        SLOT(sessionMenuRequested(int, int, int, int))
+        SLOT(sessionMenuRequested(QRectF, QRectF))
     );
     connect(
         window,
@@ -470,10 +445,8 @@ bool PanelManager::ensurePanel(QScreen *screen)
 }
 
 void PanelManager::trayDrawerRequested(
-    int globalX,
-    int globalY,
-    int openerWidth,
-    int openerHeight
+    const QRectF &globalOpener,
+    const QRectF &globalAttachmentAnchor
 )
 {
     auto *panel = qobject_cast<QWindow *>(sender());
@@ -482,7 +455,8 @@ void PanelManager::trayDrawerRequested(
 
     m_menu->toggleTrayItemsMenu(
         panel,
-        QRect(globalX, globalY, openerWidth, openerHeight),
+        globalOpener,
+        globalAttachmentAnchor,
         m_tray,
         m_providers
     );
@@ -510,8 +484,8 @@ void PanelManager::wallpaperFolderSelected(const QUrl &source)
 }
 
 void PanelManager::workspaceMapRequested(
-    int globalX,
-    int globalY,
+    const QRectF &globalOpener,
+    const QRectF &globalAttachmentAnchor,
     const QVariant &workspaces
 )
 {
@@ -519,15 +493,14 @@ void PanelManager::workspaceMapRequested(
     if (!panel || !m_menu)
         return;
 
-    m_menu->openWorkspaceMap(panel, QPoint(globalX, globalY), workspaces);
+    m_menu->openWorkspaceMap(
+        panel, globalOpener, globalAttachmentAnchor, workspaces);
 }
 
 void PanelManager::indicatorMenuRequested(
     const QString &kind,
-    int globalX,
-    int globalY,
-    int openerWidth,
-    int openerHeight
+    const QRectF &globalOpener,
+    const QRectF &globalAttachmentAnchor
 )
 {
     auto *panel = qobject_cast<QWindow *>(sender());
@@ -536,7 +509,8 @@ void PanelManager::indicatorMenuRequested(
 
     m_menu->toggleIndicatorMenu(
         panel,
-        QRect(globalX, globalY, openerWidth, openerHeight),
+        globalOpener,
+        globalAttachmentAnchor,
         kind,
         m_providers
     );

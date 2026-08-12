@@ -41,6 +41,38 @@ QVariantMap menuOutputProperties(QWindow *panel)
     };
 }
 
+QRectF openerOnOutput(QWindow *panel, const QRectF &globalOpener)
+{
+    const QScreen *const screen = panel ? panel->screen() : nullptr;
+    if (!screen || globalOpener.isEmpty())
+        return QRectF();
+
+    return panelPopupOpenerOnOutput(
+        globalOpener,
+        QPointF(screen->geometry().topLeft())
+    );
+}
+
+void addPanelOpenerProperties(
+    QVariantMap &properties,
+    const QRectF &opener,
+    const QRectF &attachmentAnchor,
+    int attachmentStartY
+)
+{
+    if (opener.isEmpty())
+        return;
+
+    properties.insert(QStringLiteral("anchoredFromPanel"), true);
+    properties.insert(QStringLiteral("openerRect"), opener);
+    properties.insert(
+        QStringLiteral("attachmentAnchorRect"), attachmentAnchor);
+    properties.insert(
+        QStringLiteral("attachmentStartY"),
+        qMax(0, attachmentStartY)
+    );
+}
+
 void capCardHeightBelowAnchor(
     QWindow *card,
     QWindow *panel,
@@ -216,7 +248,8 @@ void PanelMenuController::activate(const QString &output, int index)
 
 void PanelMenuController::openWorkspaceMap(
     QWindow *panel,
-    const QPoint &globalAnchor,
+    const QRectF &globalOpener,
+    const QRectF &globalAttachmentAnchor,
     const QVariant &workspaces
 )
 {
@@ -230,6 +263,17 @@ void PanelMenuController::openWorkspaceMap(
         {QStringLiteral("reducedMotion"),
          qEnvironmentVariableIsSet("CELESTINA_REDUCED_MOTION")},
     };
+    // The invoking workspace dot is a real panel control: the map attaches
+    // with the same droplet membrane as every other panel-opened surface.
+    const QRectF localOpener = openerOnOutput(panel, globalOpener);
+    const QRectF localAttachmentAnchor =
+        openerOnOutput(panel, globalAttachmentAnchor);
+    const int attachmentStartY = qMax(0, panel->height());
+    addPanelOpenerProperties(
+        initialProperties,
+        localOpener,
+        localAttachmentAnchor,
+        attachmentStartY);
     initialProperties.insert(menuOutputProperties(panel));
     QObject *rootObject =
         m_workspaceMapComponent.createWithInitialProperties(initialProperties);
@@ -249,9 +293,20 @@ void PanelMenuController::openWorkspaceMap(
     connect(card, SIGNAL(windowActivated(QString)), this, SLOT(activateWindow(QString)));
     connect(card, SIGNAL(dismissed()), this, SLOT(menuDismissed()));
 
-    placeCard(card, panel, globalAnchor);
-    if (!m_surface->open(card, panel))
+    placeCardOnOutput(
+        card,
+        panelPopupBodyOrigin(
+            localOpener,
+            card->property("contentWidth").toInt(),
+            card->property("anchorGap").toInt(),
+            attachmentStartY
+        )
+    );
+    if (!m_surface->open(card, panel)) {
         delete card;
+        return;
+    }
+    m_attachmentLease.acquire(panel, card, globalAttachmentAnchor);
 }
 
 QString indicatorMenuComponent(const QString &kind)
@@ -272,7 +327,8 @@ QString indicatorMenuComponent(const QString &kind)
 
 void PanelMenuController::toggleIndicatorMenu(
     QWindow *panel,
-    const QRect &globalOpener,
+    const QRectF &globalOpener,
+    const QRectF &globalAttachmentAnchor,
     const QString &kind,
     QObject *providerSource
 )
@@ -314,6 +370,15 @@ void PanelMenuController::toggleIndicatorMenu(
         {QStringLiteral("reducedMotion"),
          qEnvironmentVariableIsSet("CELESTINA_REDUCED_MOTION")},
     };
+    const QRectF localOpener = openerOnOutput(panel, globalOpener);
+    const QRectF localAttachmentAnchor =
+        openerOnOutput(panel, globalAttachmentAnchor);
+    const int attachmentStartY = qMax(0, panel->height());
+    addPanelOpenerProperties(
+        initialProperties,
+        localOpener,
+        localAttachmentAnchor,
+        attachmentStartY);
     if (needsProvider) {
         initialProperties.insert(
             QStringLiteral("providerSource"),
@@ -350,14 +415,10 @@ void PanelMenuController::toggleIndicatorMenu(
 
     const int contentWidth = window->property("contentWidth").toInt();
     const int anchorGap = window->property("anchorGap").toInt();
-    const QScreen *const screen = panel->screen();
-    const QPoint outputOrigin = screen ? screen->geometry().topLeft() : QPoint();
-    const QRect localOpener = panelPopupOpenerOnOutput(
-        globalOpener, outputOrigin
-    );
     placeCardOnOutput(
         window,
-        panelPopupBodyOrigin(localOpener, contentWidth, anchorGap)
+        panelPopupBodyOrigin(
+            localOpener, contentWidth, anchorGap, attachmentStartY)
     );
     if (!m_surface->open(window, panel)) {
         delete window;
@@ -366,6 +427,7 @@ void PanelMenuController::toggleIndicatorMenu(
 
     m_openMenuKind = kind;
     m_openIndicatorPanel = panel;
+    m_attachmentLease.acquire(panel, window, globalAttachmentAnchor);
 }
 
 void PanelMenuController::captureScreenshot()
@@ -399,7 +461,8 @@ void PanelMenuController::chooseWallpaperFolder()
 
 void PanelMenuController::toggleTrayItemsMenu(
     QWindow *panel,
-    const QRect &globalOpener,
+    const QRectF &globalOpener,
+    const QRectF &globalAttachmentAnchor,
     QObject *traySource,
     QObject *providerSource
 )
@@ -421,6 +484,15 @@ void PanelMenuController::toggleTrayItemsMenu(
         {QStringLiteral("reducedMotion"),
          qEnvironmentVariableIsSet("CELESTINA_REDUCED_MOTION")},
     };
+    const QRectF localOpener = openerOnOutput(panel, globalOpener);
+    const QRectF localAttachmentAnchor =
+        openerOnOutput(panel, globalAttachmentAnchor);
+    const int attachmentStartY = qMax(0, panel->height());
+    addPanelOpenerProperties(
+        initialProperties,
+        localOpener,
+        localAttachmentAnchor,
+        attachmentStartY);
     initialProperties.insert(menuOutputProperties(panel));
     QObject *rootObject =
         m_trayItemsComponent.createWithInitialProperties(initialProperties);
@@ -447,21 +519,20 @@ void PanelMenuController::toggleTrayItemsMenu(
     );
     connect(
         window,
-        SIGNAL(itemMenuRequested(QString, QString, int, int)),
+        SIGNAL(itemMenuRequested(QString, QString, int, int, int, int)),
         this,
-        SLOT(requestTrayItemMenu(QString, QString, int, int))
+        SLOT(requestTrayItemMenu(QString, QString, int, int, int, int))
     );
     connect(window, SIGNAL(dismissed()), this, SLOT(menuDismissed()));
 
     const int contentWidth = window->property("contentWidth").toInt();
     const int anchorGap = window->property("anchorGap").toInt();
     const QScreen *const screen = panel->screen();
-    const QPoint outputOrigin = screen ? screen->geometry().topLeft() : QPoint();
-    const QRect localOpener = panelPopupOpenerOnOutput(globalOpener, outputOrigin);
     const QPoint bodyOrigin = panelPopupBodyOrigin(
         localOpener,
         contentWidth,
-        anchorGap
+        anchorGap,
+        attachmentStartY
     );
     placeCardOnOutput(window, bodyOrigin);
     if (screen) {
@@ -481,6 +552,7 @@ void PanelMenuController::toggleTrayItemsMenu(
 
     m_openMenuKind = QLatin1String(trayItemsKind);
     m_openPanel = panel;
+    m_attachmentLease.acquire(panel, window, globalAttachmentAnchor);
 }
 
 void PanelMenuController::activateTrayItem(
@@ -515,7 +587,9 @@ void PanelMenuController::requestTrayItemMenu(
     const QString &service,
     const QString &path,
     int globalX,
-    int globalY
+    int globalY,
+    int globalWidth,
+    int globalHeight
 )
 {
     constexpr auto trayItemsKind = "tray-items";
@@ -540,7 +614,7 @@ void PanelMenuController::requestTrayItemMenu(
     closeTrayChild(false);
     beginTrayMenuRequest(
         m_openPanel,
-        QPoint(globalX, globalY),
+        QRect(globalX, globalY, qMax(0, globalWidth), qMax(0, globalHeight)),
         service,
         path,
         parentMenu
@@ -569,12 +643,13 @@ void PanelMenuController::requestTrayMenu(
     // no inventory is its parent, so it keeps the established full-output
     // outside-click surface.
     close();
-    beginTrayMenuRequest(panel, globalAnchor, service, path, nullptr);
+    beginTrayMenuRequest(
+        panel, QRect(globalAnchor, QSize()), service, path, nullptr);
 }
 
 void PanelMenuController::beginTrayMenuRequest(
     QWindow *panel,
-    const QPoint &globalAnchor,
+    const QRect &globalAnchor,
     const QString &service,
     const QString &path,
     QWindow *parentMenu
@@ -617,7 +692,7 @@ void PanelMenuController::trayMenuReady(
     const QPointer<QWindow> panel = m_pendingPanel;
     const QPointer<QWindow> parentMenu = m_pendingParentMenu;
     const bool keepTrayItems = m_pendingKeepsTrayItems;
-    const QPoint anchor = m_pendingAnchor;
+    const QRect anchor = m_pendingAnchor;
     clearPendingTrayMenu();
 
     // An empty layout is still the answer that spends the request. Keeping its
@@ -653,7 +728,7 @@ void PanelMenuController::trayMenuReady(
     // Both the standalone foreign menu and the child beside the tray
     // inventory use the same bounded viewport. Set it before reading the
     // window size because card-sized layer surfaces adopt that exact measure.
-    capCardHeightBelowAnchor(window, panel, anchor);
+    capCardHeightBelowAnchor(window, panel, anchor.topLeft());
 
     PanelMenuSurface::Coverage coverage = PanelMenuSurface::Coverage::Output;
     QPoint childSurfaceOrigin;
@@ -667,19 +742,50 @@ void PanelMenuController::trayMenuReady(
             parentMenu->property("cardWidth").toInt(),
             parentMenu->property("cardHeight").toInt()
         );
+        // The child grows a sideways droplet membrane out of the edge facing
+        // its parent. Widen the window with the transparent membrane strip
+        // first: the surface adopts the widened size and sits flush against
+        // the parent card, so the seam coincides with the parent's edge and
+        // the strip itself is the membrane's horizontal travel.
+        const bool sideAttachment = anchor.width() > 0 && anchor.height() > 0;
+        window->setProperty("attachedToMenuSide", sideAttachment);
+        const int strip = qMax(
+            0, window->width() - window->property("cardWidth").toInt());
+        const QRect outputAnchor = anchor.translated(-outputOrigin);
+        // Keep the invoking tile's centre inside the membrane's flat lateral
+        // span rather than at the very corner of the child body.
+        const QPoint requestedOrigin(
+            outputAnchor.left(),
+            sideAttachment
+                ? outputAnchor.center().y() - 72
+                : outputAnchor.top()
+        );
         childSurfaceOrigin = adjacentTrayMenuOrigin(
             parentCard,
-            anchor - outputOrigin,
+            requestedOrigin,
             window->size(),
             outputSize,
-            window->property("anchorGap").toInt()
+            sideAttachment ? 0 : window->property("anchorGap").toInt()
         );
-        // Card position belongs to the layer surface in this mode. Inside that
-        // bounded surface the QML card begins at its own origin.
-        placeCardOnOutput(window, QPoint());
+        const bool seamAtRight =
+            childSurfaceOrigin.x() + window->width() / 2
+            < parentCard.center().x();
+        if (sideAttachment) {
+            window->setProperty("attachmentSideRight", seamAtRight);
+            window->setProperty(
+                "attachmentAnchorRect",
+                outputAnchor.translated(-childSurfaceOrigin)
+            );
+        }
+        // Card position belongs to the layer surface in this mode. Inside
+        // that bounded surface the QML card begins beside the membrane strip.
+        placeCardOnOutput(
+            window,
+            QPoint(sideAttachment && !seamAtRight ? strip : 0, 0)
+        );
         coverage = PanelMenuSurface::Coverage::Card;
     } else {
-        placeCard(window, panel, anchor);
+        placeCard(window, panel, anchor.topLeft());
     }
 
     // QML construction is synchronous but may execute arbitrary completion
@@ -777,4 +883,5 @@ void PanelMenuController::close()
     m_openPanel = nullptr;
     m_openIndicatorPanel = nullptr;
     m_surface->close();
+    m_attachmentLease.release();
 }

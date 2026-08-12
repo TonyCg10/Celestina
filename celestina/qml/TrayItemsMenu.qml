@@ -84,8 +84,11 @@ SoftMenu {
     signal activated(string service, string path, int globalX, int globalY)
     signal secondaryActivated(string service, string path,
                               int globalX, int globalY)
+    // The complete global rectangle of the invoking tile, not only a point:
+    // the child menu's sideways droplet membrane centres its mouth on it.
     signal itemMenuRequested(string service, string path,
-                             int globalX, int globalY)
+                             int globalX, int globalY,
+                             int globalWidth, int globalHeight)
 
     title: qsTr("Bandeja del sistema")
     headerBodyGap: CelestinaTheme.spaceMd
@@ -162,8 +165,15 @@ SoftMenu {
         const item = root.itemAtModeIndex(index);
         if (!item || root.inventoryMode === "hidden")
             return;
-        const at = root.actionPointFor(tile);
-        root.itemMenuRequested(item.service, item.path, at.x, at.y);
+        if (tile) {
+            const at = tile.mapToGlobal(0, 0);
+            root.itemMenuRequested(item.service, item.path,
+                                   Math.round(at.x), Math.round(at.y),
+                                   Math.round(tile.width),
+                                   Math.round(tile.height));
+            return;
+        }
+        root.itemMenuRequested(item.service, item.path, 0, 0, 0, 0);
     }
 
     function resetInventoryView() {

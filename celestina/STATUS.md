@@ -5,10 +5,25 @@
   static hardening previously drafted as `AUD-1`, `UX-1` and `WSG-1` are
   complete
 - **Design direction:** `PANEL-1` is active for the author-selected borderless
-  glass bar: no full-width shadow, real compositor-blur capsules, dense dark
-  content material with a fixed light/white foreground, and nearly transparent
-  contextual carriers. The rest of `UX-2` remains planned under the still-open
-  `SHELL-D5` discussion
+  glass bar: one nearly transparent, shadowless `ContextualVeil` reaches
+  edge-to-edge with no outer margin and owns one real compositor-blur region.
+  Ordinary rounded `ContentSurface` capsules remain inset inside it with fixed
+  light/white foregrounds and no compositor region of their own. A
+  panel-opened primary carrier starts a droplet-shaped `ContextualVeil`
+  membrane at the bar's lower edge. One narrow icon-proportional mouth clings
+  to the seam with a horizontal-tangent meniscus, centred beneath the exact
+  glyph and clamped inside the body's flat top span. It narrows to a neck just
+  below the bar and swells concavely until it lands tangent on the body's top
+  edge, which keeps its ordinary rounded corners outside the swell. Its
+  tension uses travel, icon/body reference scales and horizontal displacement
+  and only thins the neck. The
+  clicked control remains the independent placement and interaction opener and
+  keeps its ordinary hover circle while its own surface remains open. Neither
+  its `PanelPill` nor any `ContentSurface` changes shape, geometry or material,
+  and no dense bridge or cross-window fill transition is painted. The glyph
+  anchor is tracked live to reposition the waist. Routes without a real panel
+  opener and glyph anchor remain floating. The rest of `UX-2`
+  remains planned under the still-open `SHELL-D5` discussion
 - **Author validation:** the author closed the LVR-3 phase on 2026-08-07 after
   first-generation media, the four-item tray, Bluetooth state retention,
   output-triggered DDC rediscovery, outside-click dismissal and a clean
@@ -33,6 +48,76 @@
 
 ## Current checkout truth
 
+- **Current milestone prototype — `PANEL-1-I`.** Celestina 0.12.0 with
+  CelestinaStyle 1.4.0 replaces the top-edge droplet experiment with one
+  marginless `ContextualVeil` backdrop across the complete 40-pixel panel. The
+  panel publishes one finite compositor-blur region. Its information groups are
+  ordinary rounded `ContentSurface` capsules at output-local y=5 with height
+  30; they paint no compositor region of their own. A primary menu or overlay
+  opened from the panel receives the clicked control for placement, its exact
+  glyph as a separate attachment anchor and
+  `attachmentStartY == barHeight`. The overlay's elastic membrane is solely
+  `ContextualVeil`, shaped as one drop falling out of the bar: a narrow
+  icon-proportional mouth clings to the seam with a horizontal-tangent
+  meniscus, centred beneath the glyph and clamped inside the body's flat top
+  span, narrows to its neck just below the bar and swells concavely until it
+  lands tangent on the body's top edge. The body keeps its ordinary rounded
+  top corners outside the swell, so no body-wide edge and no waist between two
+  wide ends can read as an hourglass. Vertical travel, icon/body reference
+  scales and horizontal displacement determine its tension, which only thins
+  the neck. A tokened tracker
+  republishes the live glyph rectangle when tray/provider layout changes, and
+  the invoking control retains its ordinary hover circle only while its own
+  surface owns that lease.
+  A foreign tray child menu born from a row of the mapped inventory now uses
+  the same droplet sideways: its card-sized surface sits flush against the
+  parent card, the membrane strip inside that window is its horizontal
+  travel, and the mouth clings to the edge facing the parent at the invoking
+  tile's height — toward whichever side the child was born on. Point-only
+  routes still float. The foreign menu's own viewport is also contained: the
+  header card and section label are pinned beside the viewport instead of
+  scrolling with it, the raised top padding plus a clipped ListView keep
+  scrolled rows strictly inside the dark body section, and the separate
+  scroll bar is removed in favour of direct wheel/keyboard/drag scrolling.
+  `PanelPill` and `ContentSurface` remain ordinary rounded surfaces throughout;
+  no capsule opens, stretches or contributes a dense bridge. The painted path
+  and finite compositor polygon share the same geometry; the panel remains one
+  disjoint y=0..39 blur region and the menu starts at y=40. The veil paints no
+  outline, lit edge or apparent halo.
+  Command and keybind routes remain floating rounded surfaces. The workspace
+  map is now a real panel-attached droplet: each workspace dot and the
+  collapsed monitor dot publish the semantic attachment-source contract, the
+  right click transports their control and dot rectangles, and the map hangs
+  from the bar beneath the exact invoking dot with the live lease. The
+  collapsed monitor group itself dropped its bordered, numbered capsule and
+  is one dot, larger than the workspace dots beside it; its count stays in
+  the accessible name. Provider, focus, Escape,
+  outside-click, destructive-confirmation, reduced-motion and parent/child menu
+  contracts are unchanged. The immediately preceding whole-capsule revision
+  passed QML lint, the focused selection 4/4 with 208/208 QuickTest cases, the
+  architecture and Style checks, and Celestina's registered completion with
+  CTest 17/17 before deployment without activation. That evidence is
+  superseded for attachment geometry. The later glyph-mouth revision passed
+  its focused CTest selection 4/4, offscreen QuickTest 208/208, architecture
+  and canonical production checks, then deployed without activation; it too is
+  now explicit superseded evidence. The first body-wide revision also remains
+  superseded: its icon-scaled 9..11-pixel waist read as a straight hourglass in
+  the author-provided screenshot. The fluid body-proportional-waist revision
+  that followed verified cleanly but the author rejected its live read as a
+  strange hourglass on 2026-08-11: any waist between two body-wide edges keeps
+  the hourglass identity. The current droplet revision passes the focused
+  selection 4/4 and complete offscreen QuickTest runner 211/211, and its
+  registered production completion passes CTest 17/17 with the eight-second
+  release smoke before deploying the verified bundle to `~/.local` without
+  activating a session. The author-run nested-Niri visual matrix remains
+  pending.
+  `STYLE-G7-J` and `PANEL-1-I` remain `active` without inventories or commits.
+  The preceding droplet verification is preserved as superseded evidence and
+  does not verify this composition. The 768p regression fixture keeps a
+  732-pixel Control Centre attached at y=72 and its blur polygon disjoint from
+  the panel; the last 36 pixels are clipped instead of moving the card over the
+  bar. Reachable low-height overflow remains outside this prototype.
+
 - **Delivered prototype snapshot — `PANEL-1-B`.** Celestina 0.11.0 records the
   cumulative uncommitted B-H sequence as one milestone delivery. It includes
   the contextual menu hierarchy, panel grouping, tray and wallpaper tools,
@@ -45,7 +130,7 @@
   activation; a nested-only restart confirmed the fixed-white instance while
   leaving host Niri and Noctalia intact. The earlier B-H labels below preserve
   prototype chronology, not separate published versions. `PANEL-1` remains
-  active and `PANEL-1-I` is reserved for the next author-selected design pass.
+  active; `PANEL-1-I` is the current author-selected prototype above.
 
 - **Delivered in celestina 0.10.0 — `PANEL-1-A`.** The first borderless-glass
   panel baseline removes the hard full-width plate, keeps its soft wallpaper
@@ -374,6 +459,19 @@ suite [architecture standard](../docs/standards/architecture.md).
 
 ## Evidence boundary
 
+The preceding whole-capsule, glyph-mouth and both body-wide-edge revisions
+retain their architecture, focused, canonical and deployment results only as
+explicit superseded history. They do not verify the current droplet membrane:
+its narrow glyph-centred mouth on the bar seam, meniscus and tangent body
+landing, restored rounded body-top corners or persistent opener circle. The
+current focused selection passes 4/4 and its offscreen QuickTest runner passes
+211/211. Registered production completion passes, including CTest 17/17 and
+the eight-second release smoke. The verified `~/.local` deployment reports
+current; no session was activated. Only the nested-Niri perceptual boundary remains pending and is
+recorded in the
+[edge-attached shell evidence](docs/evidence/2026-08-11-edge-attached-shell-prototype.md).
+Automated production and offscreen evidence does not replace `VAL-PANEL-1`.
+
 The canonical release bundle was built and verified on 2026-08-03: Rust tests,
 direct QML lint, CTest 11/11, an eight-second offscreen smoke of the release host
 with the compiled style module, and dynamic-library checks passed. Exact
@@ -420,10 +518,19 @@ the author reruns them against 0.6.2.
   integration binaries, Clippy and `cargo fmt` clean, QML lint, CTest 15/15 and the
   eight-second offscreen release smoke. The author then completed the controlled
   live rerun and restored Noctalia, which still owns the session.
-- Current checkpoint: `PANEL-1`, limited to the panel shadow, borderless glass
-  capsules, dynamic blur regions and the phone/flank geometry they require.
-  `UX-2` beyond the panel, conditional lock, Polkit and dock work remain outside
-  it
+- Current checkpoint: `PANEL-1`, now prototyping one edge-to-edge
+  `ContextualVeil` panel with a single finite blur region, ordinary inset
+  rounded capsules, and a droplet contextual membrane that starts at
+  `barHeight` as one narrow glyph-centred mouth, narrows to its neck just
+  below the bar and swells tangent onto the menu body's flat top edge inside
+  its ordinary rounded corners. The clicked control remains the body placement authority,
+  keeps its hover circle while its own menu is open, and never changes its
+  capsule or any dense content card. The membrane is only `ContextualVeil`, with no dense
+  bridge, and live glyph tracking keeps its waist aligned through tray/provider
+  layout changes. The
+  carrier exposes no outline, lit edge or apparent halo. Command/keybind,
+  workspace and foreign child surfaces remain floating. `UX-2` beyond this
+  bounded prototype, conditional lock, Polkit and dock work remain outside it
 - Last completed plan: [LVR-3 late provider insertion](docs/plans/archive/2026-08-05-late-provider-insertion.md)
 - The milestone before it: [R8 Noctalia departure](docs/plans/archive/2026-08-04-r8-noctalia-departure.md)
 - Open product questions: [discussion queue](docs/discussions/README.md)

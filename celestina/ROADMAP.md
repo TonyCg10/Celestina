@@ -398,16 +398,74 @@ risk in the hover route are in
 
 ## PANEL-1 — Borderless glass panel (active)
 
-**Outcome:** the panel has no hard full-width plate or shadow. Each content
-group sits on a borderless capsule whose finite region visibly uses Niri's
-compositor blur and the same dense dark matte material as contextual content
-cards. Both keep one fixed light/white foreground; the phone capsule remains
-whole and menu carriers stay nearly transparent.
+**Outcome:** the panel has no hard full-width plate or shadow. One nearly
+transparent `ContextualVeil` reaches edge-to-edge without outer margins and
+owns one finite Niri compositor-blur region for the complete 40-pixel bar.
+Information groups remain ordinary rounded `ContentSurface` capsules inset at
+y=5 with height 30. They share the dense dark matte material and fixed
+light/white foreground of contextual content cards but publish no compositor
+region of their own. A panel-opened primary carrier uses the clicked control for
+placement and the exact glyph inside it as the droplet membrane's mouth target.
+The membrane is only the nearly transparent `ContextualVeil`, shaped as a drop
+falling out of the bar: one narrow icon-proportional mouth clings to the bar
+seam with a horizontal-tangent meniscus, narrows to its neck just below the
+bar and swells concavely until it lands tangent on the menu body's flat top
+edge, which keeps its ordinary rounded corners outside the swell. Travel,
+icon/body reference scales and horizontal displacement determine its tension,
+which only thins the neck. The opener keeps its ordinary hover circle while
+its own surface remains open. Its `PanelPill` and
+every dense `ContentSurface` remain ordinary rounded surfaces with unchanged
+geometry and material. No capsule opens into the menu and no dense bridge
+crosses the surface boundary. Live glyph-anchor tracking keeps the waist aligned when
+tray/provider layout changes. The membrane neither repaints nor reblurs the
+bar, and the veil exposes no outline, lit edge, apparent halo or elevation
+shadow.
 
 The author selected this bounded panel direction from live screenshots. It does
 not apply the rest of UX-2; menu, overlay and provider work is limited to the
 exact corrections declared in the active plan. Scope, order and evidence are in
 [the PANEL-1 plan](docs/plans/active/2026-08-08-panel-glass-redesign.md).
+
+`PANEL-1-I` gives the panel one finite region and gives only the contextual
+membrane its matched painted path and sampled polygon. A real panel request
+transports the clicked control and its exact glyph anchor separately; the body
+follows the former while the membrane waist follows the latter. Its origin
+remains independently fixed at `attachmentStartY == barHeight`. A tokened
+tracker prevents an older retiring surface from clearing its successor and
+remeasures live glyph geometry through the panel's global coordinate space
+while that anchor or its ancestors move or resize, then publishes only the
+output-local rectangle to the attached surface. It never mutates the panel or
+changes the opener's capsule; the invoking control alone retains its normal
+hover-circle fill for the lifetime of its surface lease.
+Command and keybind routes keep their rounded floating geometry. The
+workspace map now attaches with the same droplet from the exact workspace or
+monitor dot that opened it, and the collapsed monitor group is one larger
+dot without its former numbered capsule. A foreign tray child born from a row of the mapped
+inventory now attaches the same droplet sideways: its surface sits flush
+against the parent card, the membrane strip inside the child window is the
+horizontal travel, and the mouth follows the invoking tile on the edge facing
+the parent. The foreign menu's scrolled rows stay clipped inside its dark
+body section beneath a pinned header, with no separate scroll bar. The immediately preceding whole-capsule
+revision built and linted cleanly; its focused selection passed 4/4 with
+208/208 QuickTest cases, the architecture and Style checks passed, and
+Celestina's registered completion passed CTest 17/17 plus its release smoke
+before deployment without session activation. That revision, the later
+glyph-mouth revision with the same verified counts, and the earlier droplet and
+narrow-connector runs are superseded. The first body-wide revision is also
+superseded because its icon-scaled 9..11-pixel waist read as a straight
+hourglass. The body-wide-edge, fluid body-proportional-waist revision that
+followed it verified cleanly but the author rejected its live read as a
+strange hourglass on 2026-08-11; it is superseded by the current droplet
+contract, whose narrow mouth is the only geometry touching the bar seam.
+The droplet revision passes its focused selection 4/4 and offscreen QuickTest
+runner 211/211; its registered production completion and author screenshot
+review are recorded in the milestone evidence. The immutable delivery record,
+commit and author-run nested-Niri scale matrix remain pending.
+On 768p
+the tall Control Centre keeps its complete membrane and a blur region disjoint
+from the panel;
+the output clips its last 36 pixels.
+Reachable low-height overflow is not claimed by this prototype.
 
 ## UX-2 — Shell visual and interaction language (planned)
 

@@ -23,6 +23,8 @@ Window {
     required property bool reducedMotion
     property alias anchoredFromPanel: placement.anchoredFromPanel
     property alias openerRect: placement.openerRect
+    property alias attachmentAnchorRect: placement.attachmentAnchorRect
+    property alias attachmentStartY: placement.attachmentStartY
     property alias compositorBlurAvailable: scene.compositorBlurAvailable
     property alias glassRects: scene.glassRects
     property alias glassRegions: scene.glassRegions
@@ -257,6 +259,11 @@ Window {
         height: centre.cardHeight
         reducedMotion: centre.reducedMotion
         accessibleName: qsTr("Centro de control")
+        attachedToTop: centre.anchoredFromPanel
+        openerRect: centre.openerRect
+        attachmentAnchorRect: centre.attachmentAnchorRect
+        attachmentStartY: centre.attachmentStartY
+        surfacePosition: Qt.point(centre.cardX, centre.cardY)
 
         Column {
                 id: contentColumn

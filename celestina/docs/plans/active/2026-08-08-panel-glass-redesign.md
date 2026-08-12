@@ -13,28 +13,46 @@
 ## Hypothesis
 
 A transparent layer surface can read as a bar without becoming a solid strip:
-finite compositor-blur capsules give each content group enough visual
-separation without a full-width shadow. The blur remains visible only if the
-QML drawn above it stops covering it with opaque tint, strokes or exterior
-halos, and it represents the real desktop only when the compositor does not
-replace that scene with a wallpaper-only xray cache.
+one nearly transparent, edge-to-edge compositor veil can disperse the scene
+while ordinary inset content capsules supply hierarchy without their own blur
+regions or a full-width shadow. The blur remains visible only if the QML drawn
+above it stops covering it with opaque tint, strokes or exterior halos, and it
+represents the real desktop only when the compositor does not replace that
+scene with a wallpaper-only xray cache.
 
 ## Tangible outcome
 
-The panel has no hard full-width background. Its content sits on borderless
-capsules that visibly disperse the composed scene below them—application
-content where a window intersects the glass and wallpaper elsewhere—including
-the phone capsule at both horizontal ends, while the bar itself adds no shadow
-over the desktop. Panel capsules and contextual content cards use one dense
-dark matte material with a fixed light/white foreground; the contextual outer
-carrier remains nearly transparent.
+The panel has no hard full-width background or shadow. One nearly transparent
+`ContextualVeil` reaches edge-to-edge with no outer margin and owns one finite
+compositor-blur region across the complete 40-pixel bar. Its content sits on
+ordinary rounded `ContentSurface` capsules inset at output-local y=5 with
+height 30. Those capsules use the same dense dark matte material and fixed
+light/white foreground as contextual content cards, but they paint no
+compositor region of their own. The veil suppresses outline and lit-edge layers
+for both rounded and shaped paths, so no apparent border or edge halo surrounds
+the bar, contextual body or connector.
+
+A primary menu or overlay opened by a real panel control receives both the
+clicked control and its exact icon anchor, plus a separate
+`attachmentStartY == barHeight`. The control continues to place the body. A
+shaped membrane made only from the nearly transparent `ContextualVeil` starts
+at the panel's lower edge as one narrow droplet mouth centred or
+flat-span-clamped beneath the icon, hangs through its neck and swells until
+it lands tangent on the body's top edge without repainting or reblurring the
+bar. The invoking control keeps its normal hover circle while that surface is
+open. The dense panel capsule and every content card remain ordinary, rounded
+and geometrically unchanged. Routes without both real rectangles remain
+floating rounded surfaces.
 
 ## Scope
 
-- The panel surface, shadow removal and content grouping.
-- One local capsule component and its readable no-blur fallback.
-- Finite compositor blur regions, dynamic geometry updates, withdrawal and
-  protocol commit/flush behaviour.
+- The panel surface, shadow removal, edge-to-edge contextual veil and content
+  grouping.
+- One local ordinary rounded capsule component with no compositor region of its
+  own and its readable no-blur fallback.
+- One finite panel compositor blur region, plus finite contextual-surface
+  regions, dynamic geometry updates, withdrawal and protocol commit/flush
+  behaviour.
 - Flank sizing and phone geometry needed to keep the outer capsule whole.
 - One consistent panel-reading type/ink scale and the status-glyph consumers
   needed to replace network, Bluetooth and audio labels while pairing CPU and
@@ -52,8 +70,27 @@ carrier remains nearly transparent.
   transient-row presentation.
 - One additive `GlassSurface` external-backdrop mode in CelestinaStyle so every
   contextual content group uses the suite glass material without attempting an
-  impossible cross-client QML capture. The shell retains KWindowEffects, one
-  finite outer region, fixed light/white ink and fallback ownership.
+  impossible cross-client QML capture, plus one opt-in vector silhouette for
+  the bar-edge membrane. Style owns the halo-free veil role, generic silhouette
+  renderer and bounded vertical travel; the shell retains KWindowEffects, both
+  real rectangles, tension geometry, the continuous panel region, the
+  membrane's sampled finite polygon, fixed light/white ink and fallback
+  ownership.
+- Exact opener and glyph-anchor propagation for panel-opened primary menus and
+  overlays. Command
+  and keybind routes, point-opened workspace menus and foreign child menus stay
+  floating and retain their established placement and lifecycle. An attached
+  overlay aligns its body to the real clicked control but begins its membrane
+  at `attachmentStartY == barHeight` as one narrow droplet mouth targeted by
+  the exact glyph anchor, and lands it tangent on the body's flat top edge
+  inside its ordinary rounded corners. It never republishes or reblurs the
+  panel; the shell derives the icon-proportional neck width from tension over
+  travel, icon/body reference scales and centre
+  displacement, with the glyph centring the mouth inside the body's flat span.
+  Model-driven content height remains irrelevant. The opener
+  keeps its ordinary hover circle only while its surface is open; its
+  `PanelPill` and every dense content surface remain geometrically and
+  materially unchanged.
 - Icon-only power-profile, volume and brightness readings, with their full
   values retained in accessible names.
 - A delayed tray-registry reconciliation and model-driven wrapper visibility so
@@ -99,11 +136,15 @@ carrier remains nearly transparent.
 - Foreign tray-item activation, secondary activation, D-Bus menu contents and
   watcher ownership. Shell-owned pin/hide presentation preferences and the
   parent/child menu carrier are the only tray semantic extension.
-- Any shared-style change beyond the exact status glyphs and the demonstrated
-  external-backdrop `GlassSurface` mode consumed by this shell; the fixed
-  foreground mapping remains shell-local and derives from existing semantic
-  theme roles.
+- Any shared-style change beyond the exact status glyphs, the demonstrated
+  external-backdrop `GlassSurface` mode and its opt-in edge silhouette consumed
+  by this shell; the fixed foreground mapping remains shell-local and derives
+  from existing semantic theme roles.
 - Editing the author's live Niri configuration or replacing the live shell.
+- Reachable overflow for a tall card on a 768-pixel output. This prototype
+  preserves the connector and keeps its blur disjoint from the panel, so the
+  output clips the Control Centre's last 36 pixels instead of moving it upward;
+  a scrollable low-height anatomy is a later unit if the author requires it.
 - The unrelated pending wallpaper-provider correction in this worktree.
 
 ## Build Order
@@ -131,21 +172,55 @@ carrier remains nearly transparent.
 9. Add construction and geometry regressions, run the canonical exit only after
    the author accepts the visual direction, and document the optional live
    compositor profile without applying it.
+10. Replace the shaped panel-pill segments with one edge-to-edge
+    `ContextualVeil` backdrop and exactly one finite panel region. Keep each
+    information group as an ordinary rounded `ContentSurface` capsule at y=5
+    with height 30 and no region of its own. Propagate the clicked control and
+    its exact glyph anchor separately. Derive one `ContextualVeil` membrane's
+    matched fill and sampled polygon from `attachmentStartY == barHeight`, the
+    icon/body reference scales and a narrow droplet mouth centred or
+    flat-span-clamped beneath the glyph. Keep the seam contact to that mouth
+    alone, land the swell tangent on the body's flat top edge inside its
+    ordinary rounded corners, and retain the invoking control's hover circle
+    for the lifetime of its own surface.
+    Keep every capsule and dense content surface on its ordinary rounded path,
+    suppress contextual edge treatment that reads as an exterior shadow, and
+    retain floating geometry for command, keybind, workspace and foreign child
+    routes.
 
 ## Implementation exit
 
-- A busy composed backdrop loses recognizable detail inside every capsule while
-  staying sharp immediately outside it; application colour remains represented
-  where a window lies below the glass and wallpaper remains represented where
-  it does not.
-- No capsule has a visible border or opaque successful-blur fill, and the phone
-  capsule retains both round ends.
+- A busy composed backdrop loses recognizable detail throughout the one
+  edge-to-edge panel region while staying sharp immediately below the 40-pixel
+  bar; application colour remains represented where a window lies below the
+  glass and wallpaper remains represented where it does not.
+- The bar and contextual carrier add no hard plate, outer margin, shadow or
+  edge halo. Every information capsule
+  is an ordinary rounded `ContentSurface` at y=5 with height 30, has no
+  compositor region of its own and retains its complete rounded ends.
 - Panel capsules and contextual content cards keep the fixed light/white
   foreground over one dense dark matte material on every wallpaper; the
   contextual carrier remains nearly transparent and never changes that
   polarity.
-- Provider insertion, removal and width changes rearm the finite region without
-  blurring outside the 40-pixel panel surface.
+- Provider insertion, removal and width changes preserve the single finite
+  panel region without blurring outside the 40-pixel panel surface.
+- The contextual membrane's painted silhouette and finite compositor polygon
+  derive from the same geometry and begin at `barHeight`. Its only seam
+  contact is the narrow droplet mouth centred beneath the exact clicked glyph
+  and clamped inside the body's flat top span; its icon-proportional neck
+  thins monotonically as travel, reference-scale difference
+  or centre displacement increases, and its swell lands tangent on the body's
+  top edge inside ordinary rounded corners. The clicked control remains the placement
+  authority and keeps its hover circle while its own surface remains open; its
+  capsule and every dense content card remain unchanged. The membrane is only
+  `ContextualVeil`, with no
+  dense bridge or added blur region. The overlay does not repaint or reblur the
+  bar, and routes without both a real panel opener and glyph anchor remain
+  floating.
+- Attached, floating and reduced-motion routes retain their established reveal
+  contracts.
+- Focus, Escape, outside-click, provider-command, destructive-confirmation and
+  parent/foreign-child semantics remain unchanged.
 - Build, QML lint, focused surface tests, the architecture guard and the
   canonical production exit pass before delivery.
 - Scale 1 and scale 2 author screenshots are recorded separately as
@@ -156,7 +231,7 @@ carrier remains nearly transparent.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | PANEL-1-A | `celestina:` | done | [inventory](../../inventories/2026-08-08-panel-glass-redesign/PANEL-1-A.numstat.tsv) | 42 files, +1344/-472 | Replace the hard panel plate with a soft shadow and borderless real compositor-glass capsules, reduce workspace and status readings to positional colour/icon semantics without discarding monitor grouping or CPU/memory values, expose the existing overlays, and keep the tray populated and visible across host restarts | [evidence](../../evidence/2026-08-08-panel-glass-baseline.md) | `VAL-PANEL-1` partial |
-| PANEL-1-I | `celestina:` | planned | exact panel and contextual-surface paths selected by the next author design pass, declared before editing | — | Continue the still-open PANEL-1 visual design from the delivered prototype snapshot without reopening retired adaptive contrast or changing provider semantics | canonical Celestina completion plus focused interaction and nested-session evidence | `VAL-PANEL-1` |
+| PANEL-1-I | `celestina:` | active | `CMakeLists.txt`; `qml/EdgeAttachedGeometry.js`; `qml/Panel.qml`; `qml/PanelFlank.qml`; `qml/PanelPill.qml`; `qml/PanelCluster.qml`; `qml/PanelActionButton.qml`; `qml/PanelMenuButton.qml`; panel opener controls; `qml/PanelPopupPlacement.qml`; `qml/CompositorGlassRegion.qml`; `qml/SoftMenuField.qml`; `qml/SoftMenu.qml`; `qml/SoftOverlayCard.qml`; `qml/AnchoredCard.qml`; panel-opened overlay/menu composition; `src/panelattachmentlease.{h,cpp}`; `src/panelmanager.{h,cpp}`; `src/panelblurcontroller.{h,cpp}`; `src/panelmenucontroller.{h,cpp}`; `src/overlaycontroller.{h,cpp}`; focused QML/C++ tests; Celestina version/status/roadmap/validation/evidence and the root version history | — | Replace the narrow central connector with one tension-shaped `ContextualVeil` membrane that spans the complete contextual width at both the panel edge and menu landing, narrows through a fluid body-proportional waist whose centre follows the exact clicked icon without collapsing to icon width, and keeps that opener's hover circle visible only while its own surface remains open; require matched tangent magnitude and direction through the waist so the short 20..36-pixel travel reads as one rounded liquid deformation rather than straight hourglass flanks, keep the clicked control rectangle separate for placement and leave the owning panel capsule and all dense content cards completely unchanged while preserving disjoint panel/menu blur regions, one finite compositor region per surface and every floating-route, provider, focus, Escape, outside-click and reduced-motion contract | [continuous bar veil and membrane evidence](../../evidence/2026-08-11-edge-attached-shell-prototype.md) | `VAL-PANEL-1` |
 | PANEL-1-B | `celestina:` | done | [inventory](../../inventories/2026-08-08-panel-glass-redesign/PANEL-1-B.numstat.tsv) | 124 files, +15180/-1843 | Deliver the current contextual shell prototype snapshot with grouped panel controls, complete menu hierarchy, durable tray and wallpaper tools, real composed-scene blur, canonical dense content glass, nearly transparent carriers and fixed light/white foregrounds | [contextual hierarchy evidence](../../evidence/2026-08-10-contextual-menu-hierarchy-nested.md); [shared glass evidence](../../evidence/2026-08-11-contextual-menu-shared-glass.md); [content glass evidence](../../evidence/2026-08-11-one-ui-content-glass.md); [fixed ink evidence](../../evidence/2026-08-11-fixed-white-shell-ink.md) | `VAL-PANEL-1` partial prototype |
 
 ## Active unit boundary
@@ -492,3 +567,106 @@ prototype was committed and the same QML, host and documentation files changed
 through several comparisons. One cumulative inventory therefore describes the
 real final tree without inventing overlapping immutable units. `PANEL-1-I`
 continues the design milestone after this snapshot.
+
+## PANEL-1-I boundary
+
+The current author-requested revision replaces the fluid body-wide waist
+membrane, not the continuous bar composition. On 2026-08-11 the author
+rejected that revision's live read as a strange hourglass and asked for a
+soft drop falling out of the bar. A panel request still carries two explicit
+rectangles: the clicked control remains the placement and interaction opener,
+while the exact glyph inside it centres the droplet's narrow mouth on the bar
+seam. The membrane no longer spans the body at the seam at all; one
+shell-local tension calculation over anchor width, body width, connector
+travel and horizontal displacement thins only the hanging neck. One geometry
+source emits both the painted path and the sampled compositor polygon.
+
+The calculation is falsifiable. Let `i` be `max(1, anchorWidth)`, the icon
+reference scale, and `b` be `max(1, bodyWidth)`, the body reference scale.
+Normalized stretch is `travel / sqrt(i * b)`, spread is
+`log(max(i, b) / min(i, b)) / log(48)`, and displacement is
+`abs(bodyCenter - anchorCenter) / b`, each clamped to 0..1. Tension is
+`clamp(0.42 * stretch + 0.43 * spread + 0.35 * displacement, 0, 1)`.
+The neck width is icon-proportional — `clamp(anchorWidth * lerp(2.3, 1.7,
+tension), 22, 48)`, additionally bounded by one third of the body — so it can
+neither collapse to an icon-thin thread nor grow into a body-proportional
+band. The mouth adds a travel-proportional meniscus flare, half the travel
+clamped to 8..18 pixels, on each side, and its centre is clamped so the
+complete mouth stays inside the body's flat top span between the rounded
+corners; within that span it equals the glyph centre exactly. The neck sits
+at 34 percent of the travel, leaving the longer swelling lobe below. The
+landing run spreads `clamp(bodyWidth * 0.18 + travel * 1.5, 48, 140)` pixels
+beyond the neck on each side. Each side uses two cubics: the meniscus holds a
+horizontal tangent at the seam and a vertical tangent at the neck, and the
+swell holds that vertical tangent at the neck and a horizontal tangent at the
+body landing, so the outline is G1-continuous from the bar to the body with
+no pinched corner.
+
+The membrane is `ContextualVeil` from its narrow glyph-centred mouth through
+the hanging neck to its tangent landing on the body's flat top edge; the body
+keeps its ordinary rounded top corners outside the swell. It contains no
+`ContentSurface`
+contribution, dense-to-veil gradient, shadow or edge decoration. Every
+`PanelPill` and `ContentSurface` remains on its ordinary rounded path with the
+same bounds and material before, during and after the opening. The menu region
+begins at `barHeight`, so panel and menu blur remain disjoint without changing
+or extending a panel capsule.
+
+The 0.12.0 milestone prototype supersedes the earlier top-edge droplet and
+narrow central-connector experiments within this same active and uncommitted
+unit. It also supersedes the immediately preceding whole-capsule iteration,
+which opened the owning `PanelPill` to the panel edge and painted a dense-to-
+veil bridge. That rejected geometry remains chronology rather than current
+instruction. The current composition gives the complete panel one marginless,
+nearly transparent `ContextualVeil` backdrop and one finite compositor region.
+Panel information groups remain ordinary rounded `ContentSurface` capsules at
+output-local y=5 with height 30 and add no compositor region. The veil
+suppresses outline and lit-edge layers on the membrane, so the bar, menu body
+and membrane expose no apparent border or edge halo. CelestinaStyle owns the
+semantic material, generic opt-in silhouette renderer and bounded vertical
+travel, while Celestina owns real anchor/body geometry, tension, placement and
+compositor regions.
+
+Panel controls publish exact clicked-opener and glyph-anchor rectangles. A
+panel-opened primary surface places its body from the former and starts its
+membrane at `attachmentStartY == barHeight`. Only the narrow mouth touches
+that seam; the glyph centres it, and its neck width follows the tension
+calculation above. Content height cannot change this
+geometry after construction. While the surface remains open, the attachment
+tracker follows the real glyph and its visual ancestors
+through the panel's global coordinate space, then publishes only its output-
+local rectangle to the contextual surface. Tray pin/hide changes and provider-
+driven flank movement therefore reposition the mouth instead of leaving it at
+a stale opening snapshot. The exact opener also keeps its ordinary hover-circle
+fill while that surface owns the active lease; dismissal, replacement, failed
+construction or source destruction clears it without selecting the surrounding
+capsule. It neither mutates the panel material nor repaints or reblurs the bar.
+Command and keybind routes
+deliberately remain floating. The workspace strip's dots and the collapsed
+monitor dot publish the same semantic attachment-source contract as
+`PanelMenuButton`; a right click transports their control and dot rectangles
+and the workspace map attaches with the same droplet and live lease as every
+indicator menu. The collapsed monitor group is one dot, larger than the
+workspace dots, with its count only in the accessible name. A foreign tray child menu born from a row of
+the mapped inventory attaches the same droplet sideways: the host widens the
+child's card-sized surface with the width-proportional membrane strip,
+places it flush against the parent card so the seam coincides with the
+parent's edge, and passes the invoking tile's complete rectangle; the mouth
+then follows that tile on whichever edge faces the parent. The foreign
+menu's header card and section label are pinned beside its viewport, the
+raised top padding and clipped ListView keep scrolled rows inside the dark
+body section, and the separate scroll bar is removed. No provider, action,
+focus, Escape, outside-click, reduced-motion or parent/child menu contract
+changes with that composition.
+
+The preceding top-edge droplet-pill, fixed-anatomy, whole-capsule,
+icon-scaled body-wide and fluid body-wide experiments' focused and production
+results remain recorded as superseded history. They do not verify the narrow
+glyph-centred mouth, meniscus, tangent body landing, restored rounded
+body-top corners, persistent opener feedback, immutable capsules or veil-only
+membrane. The revised contract remains in the same active unit. Its focused
+selection passes 4/4 and its offscreen QuickTest runner passes 211/211.
+Registered production completion passes CTest 17/17 and the eight-second
+release smoke, and the verified bundle is deployed to `~/.local` and reports
+current without session activation. Nested-Niri scale validation, the
+immutable inventory and commit remain pending; `PANEL-1-I` stays `active`.

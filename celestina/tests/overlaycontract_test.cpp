@@ -11,6 +11,7 @@
 #include <QSignalSpy>
 #include <QVariantMap>
 
+#include <limits>
 #include <memory>
 
 #include "overlaycontroller.h"
@@ -56,6 +57,7 @@ private slots:
     void aComponentThisShellDoesNotHaveNamesNoBridge();
     void aPanelOpenedOverlayFollowsOnlyItsButton();
     void everyPanelOpenedOverlayUsesTheSamePlacement();
+    void anAttachedOverlayNeverReblursThePanelRows();
     void sessionCardGrowthDoesNotResizeItsOutputSurface();
     void aClickOutsideTheCardDismissesEveryOverlay();
     void aClickOnTheCardDismissesNothing();
@@ -112,6 +114,8 @@ void OverlayContractTest::everyOverlayDeclaresTheBridgeTheListNamesForIt()
             {bridge, QVariant::fromValue<QObject *>(nullptr)},
             {QStringLiteral("anchoredFromPanel"), true},
             {QStringLiteral("openerRect"), QRect(900, 6, 28, 28)},
+            {QStringLiteral("attachmentAnchorRect"), QRect(905, 11, 18, 18)},
+            {QStringLiteral("attachmentStartY"), 40},
         };
 
         QStringList messages;
@@ -229,7 +233,10 @@ void OverlayContractTest::everyPanelOpenedOverlayUsesTheSamePlacement()
     // Keep the synthetic output taller than every overlay. Bottom-edge
     // clamping is covered separately; this case isolates the opener gap.
     constexpr int testOutputHeight = 1600;
+    constexpr int attachmentStartY = 40;
     const QRect opener(1000, 5, 28, 28);
+    const QRect attachmentAnchor(1005, 10, 18, 18);
+    QMap<int, int> attachedGapsByWidth;
     for (const QString &component : {
              QStringLiteral("LauncherOverlay"),
              QStringLiteral("ClipboardOverlay"),
@@ -245,14 +252,31 @@ void OverlayContractTest::everyPanelOpenedOverlayUsesTheSamePlacement()
             {overlaySourceProperty(component), QVariant::fromValue<QObject *>(nullptr)},
             {QStringLiteral("anchoredFromPanel"), true},
             {QStringLiteral("openerRect"), opener},
+            {QStringLiteral("attachmentAnchorRect"), attachmentAnchor},
+            {QStringLiteral("attachmentStartY"), attachmentStartY},
         }));
         auto *window = qobject_cast<QQuickWindow *>(root.get());
         QVERIFY2(window, qPrintable(component));
         window->resize(testOutputWidth, testOutputHeight);
 
-        QCOMPARE(window->property("cardY").toInt(), opener.bottom() + 1 + 8);
+        const int attachedGap = window->property("anchorGap").toInt();
+        QVERIFY(attachedGap > 8);
+        attachedGapsByWidth.insert(
+            window->property("cardWidth").toInt(), attachedGap
+        );
+        QCOMPARE(
+            window->property("cardY").toInt(),
+            attachmentStartY + attachedGap
+        );
 
         const int cardWidth = window->property("cardWidth").toInt();
+        const QMap<int, int> expectedGapByWidth {
+            {360, 22},
+            {460, 28},
+            {530, 32},
+            {620, 36},
+        };
+        QCOMPARE(attachedGap, expectedGapByWidth.value(cardWidth));
         const qreal centred = opener.x() + opener.width() / 2.0
                               - cardWidth / 2.0;
         const int expectedX = qRound(qBound(
@@ -261,22 +285,282 @@ void OverlayContractTest::everyPanelOpenedOverlayUsesTheSamePlacement()
             qreal(testOutputWidth - cardWidth)
         ));
         QCOMPARE(window->property("cardX").toInt(), expectedX);
+        QCOMPARE(
+            window->property("attachmentAnchorRect").toRect(),
+            attachmentAnchor
+        );
 
         QQuickItem *const body = window->findChild<QQuickItem *>(
             QStringLiteral("celestina-compositor-glass-region")
         );
         QVERIFY2(body, qPrintable(component));
         const QPointF bodyOrigin = body->mapToItem(window->contentItem(), 0, 0);
+        const int attachmentSeamY = attachmentStartY;
         QCOMPARE(qRound(bodyOrigin.x()), window->property("cardX").toInt());
-        QCOMPARE(qRound(bodyOrigin.y()), window->property("cardY").toInt());
+        QCOMPARE(qRound(bodyOrigin.y()), attachmentSeamY);
+        QCOMPARE(
+            qRound(body->height()),
+            window->property("cardY").toInt()
+                - attachmentSeamY
+                + window->property("cardHeight").toInt()
+        );
+        QVERIFY(body->property("usesSilhouette").toBool());
+        QVERIFY(!body->property("silhouettePath").toString().isEmpty());
+        const QVariantList attachedPolygon = body->property("polygon").toList();
+        QVERIFY(attachedPolygon.size() >= 3);
+
+        qreal topY = std::numeric_limits<qreal>::max();
+        for (const QVariant &value : attachedPolygon)
+            topY = qMin(topY, value.toPointF().y());
+        qreal upperLeft = std::numeric_limits<qreal>::max();
+        qreal upperRight = std::numeric_limits<qreal>::lowest();
+        qreal landingLeft = std::numeric_limits<qreal>::max();
+        qreal landingRight = std::numeric_limits<qreal>::lowest();
+        for (const QVariant &value : attachedPolygon) {
+            const QPointF point = value.toPointF();
+            if (qAbs(point.y() - topY) < 0.001) {
+                upperLeft = qMin(upperLeft, point.x());
+                upperRight = qMax(upperRight, point.x());
+            }
+            if (qAbs(point.y() - attachedGap) < 0.001) {
+                landingLeft = qMin(landingLeft, point.x());
+                landingRight = qMax(landingRight, point.x());
+            }
+        }
+        // The seam is one narrow droplet mouth centred on the clicked glyph,
+        // not a body-wide edge. The swell lands tangent on the body's flat
+        // top span, inside the rounded corners that begin at radiusMd.
+        const qreal mouthWidth = upperRight - upperLeft;
+        QVERIFY(mouthWidth >= attachmentAnchor.width());
+        QVERIFY(mouthWidth < cardWidth * 0.25);
+        QCOMPARE(
+            qRound(bodyOrigin.x() + (upperLeft + upperRight) / 2),
+            attachmentAnchor.x() + attachmentAnchor.width() / 2
+        );
+        QVERIFY(qRound(bodyOrigin.x() + landingLeft)
+                > window->property("cardX").toInt());
+        QVERIFY(qRound(bodyOrigin.x() + landingRight)
+                < window->property("cardX").toInt() + cardWidth);
+        QVERIFY(landingRight - landingLeft > mouthWidth);
+
+        QQuickItem *const field = window->findChild<QQuickItem *>(
+            QStringLiteral("celestina-soft-menu-field")
+        );
+        QVERIFY2(field, qPrintable(component));
+        QVERIFY(field->property("edgeAttachmentRequested").toBool());
+        QVERIFY(field->property("edgeShapeActive").toBool());
+        QCOMPARE(
+            field->property("attachmentAnchorRect").toRect(),
+            attachmentAnchor
+        );
+        QVERIFY(field->property("attachmentWaistWidth").toReal() > 0);
+        QCOMPARE(
+            qRound(window->property("cardX").toReal()
+                   + field->property("attachmentWaistCenterAtBody").toReal()),
+            attachmentAnchor.x() + attachmentAnchor.width() / 2
+        );
+        QObject *const bodyMaterial = window->findChild<QObject *>(
+            QStringLiteral("celestina-menu-body-tint")
+        );
+        QVERIFY2(bodyMaterial, qPrintable(component));
+        // MaterialRole.ContextualVeil is the third declared role. The membrane
+        // is only the outer background; no ContentSurface continuation may be
+        // painted between the panel and the menu cards.
+        QCOMPARE(bodyMaterial->property("materialRole").toInt(), 2);
+        QCOMPARE(bodyMaterial->property("elevation").toInt(), 0);
+        QVERIFY(!bodyMaterial->property("materialEdgesVisible").toBool());
+        QVERIFY(bodyMaterial->property("usesSilhouette").toBool());
+        QVERIFY2(
+            !window->findChild<QObject *>(
+                QStringLiteral("celestina-attachment-material-bridge")
+            ),
+            qPrintable(component)
+        );
+
+        QQuickItem *const revealedContent = window->findChild<QQuickItem *>(
+            QStringLiteral("celestina-soft-menu-content")
+        );
+        QVERIFY2(revealedContent, qPrintable(component));
+        QCOMPARE(revealedContent->scale(), 1.0);
+
+        const QList<QObject *> attachedSections = window->findChildren<QObject *>(
+            QStringLiteral("celestina-menu-section")
+        );
+        QVERIFY2(!attachedSections.isEmpty(), qPrintable(component));
+        QList<QRectF> sectionGeometry;
+        QList<int> sectionRoles;
+        QList<qreal> sectionStrengths;
+        QList<QColor> sectionTints;
+        for (QObject *const section : attachedSections) {
+            auto *const item = qobject_cast<QQuickItem *>(section);
+            QVERIFY2(item, qPrintable(component));
+            sectionGeometry.append(
+                QRectF(item->x(), item->y(), item->width(), item->height())
+            );
+            sectionRoles.append(section->property("materialRole").toInt());
+            sectionStrengths.append(
+                section->property("materialStrength").toReal()
+            );
+            sectionTints.append(
+                section->property("materialTint").value<QColor>()
+            );
+            QVERIFY2(!section->property("usesSilhouette").toBool(),
+                     qPrintable(component));
+        }
 
         // With no opener the same reusable placement falls back to the centre.
         window->setProperty("anchoredFromPanel", false);
+        QCoreApplication::processEvents();
+        const int floatingGap = window->property("anchorGap").toInt();
         QCOMPARE(
             window->property("cardX").toInt(),
             (testOutputWidth - cardWidth) / 2
         );
+        const QPointF floatingOrigin = body->mapToItem(
+            window->contentItem(), 0, 0
+        );
+        QCOMPARE(
+            qRound(floatingOrigin.y()),
+            window->property("cardY").toInt()
+        );
+        QVERIFY(!body->property("usesSilhouette").toBool());
+        QVERIFY(body->property("polygon").toList().isEmpty());
+        QCOMPARE(revealedContent->scale(), 1.0);
+
+        const QList<QObject *> floatingSections = window->findChildren<QObject *>(
+            QStringLiteral("celestina-menu-section")
+        );
+        QCOMPARE(floatingSections.size(), attachedSections.size());
+        for (qsizetype index = 0; index < floatingSections.size(); ++index) {
+            QObject *const section = floatingSections.at(index);
+            auto *const item = qobject_cast<QQuickItem *>(section);
+            QVERIFY2(item, qPrintable(component));
+            QCOMPARE(
+                QRectF(item->x(), item->y(), item->width(), item->height()),
+                sectionGeometry.at(index)
+            );
+            QCOMPARE(section->property("materialRole").toInt(),
+                     sectionRoles.at(index));
+            QCOMPARE(section->property("materialStrength").toReal(),
+                     sectionStrengths.at(index));
+            QCOMPARE(section->property("materialTint").value<QColor>(),
+                     sectionTints.at(index));
+            QVERIFY2(!section->property("usesSilhouette").toBool(),
+                     qPrintable(component));
+        }
+
+        // A compatibility caller that names an opener but not the continuous
+        // bar edge retains the historical compact gap and floating shape.
+        window->setProperty("anchoredFromPanel", true);
+        window->setProperty("attachmentStartY", -1);
+        QCOMPARE(
+            window->property("anchorGap").toInt(),
+            floatingGap
+        );
+        QVERIFY(!field->property("edgeAttachmentRequested").toBool());
     }
+
+    // Connector length follows the stable card width. It must not follow
+    // model-driven height, which can change while a menu is already visible.
+    QVERIFY(attachedGapsByWidth.value(360)
+            < attachedGapsByWidth.value(460));
+    QVERIFY(attachedGapsByWidth.value(460)
+            < attachedGapsByWidth.value(530));
+    QVERIFY(attachedGapsByWidth.value(530)
+            < attachedGapsByWidth.value(620));
+}
+
+void OverlayContractTest::anAttachedOverlayNeverReblursThePanelRows()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+
+    QQmlComponent overlay(&engine, sourceFor(QStringLiteral("ControlCentre")));
+    QVERIFY2(overlay.isReady(), qPrintable(overlay.errorString()));
+
+    constexpr int outputWidth = 1280;
+    constexpr int outputHeight = 768;
+    constexpr int attachmentStartY = 40;
+    const QRect opener(900, 5, 30, 30);
+    const QRect attachmentAnchor(906, 11, 18, 18);
+    std::unique_ptr<QObject> root(overlay.createWithInitialProperties({
+        {QStringLiteral("reducedMotion"), true},
+        {QStringLiteral("providerSource"), QVariant::fromValue<QObject *>(nullptr)},
+        {QStringLiteral("anchoredFromPanel"), true},
+        {QStringLiteral("openerRect"), opener},
+        {QStringLiteral("attachmentAnchorRect"), attachmentAnchor},
+        {QStringLiteral("attachmentStartY"), attachmentStartY},
+    }));
+    auto *window = qobject_cast<QQuickWindow *>(root.get());
+    QVERIFY(window);
+    window->resize(outputWidth, outputHeight);
+
+    const int bodyY = attachmentStartY
+                      + window->property("anchorGap").toInt();
+    QCOMPARE(window->property("anchorGap").toInt(), 32);
+    QCOMPARE(bodyY, 72);
+    QCOMPARE(window->property("cardY").toInt(), bodyY);
+    QVERIFY(window->property("cardY").toInt() > attachmentStartY);
+    QObject *const field = window->findChild<QObject *>(
+        QStringLiteral("celestina-soft-menu-field")
+    );
+    QVERIFY(field);
+
+    QTRY_COMPARE(window->property("glassRegions").toList().size(), 1);
+    QVariantMap published = window->property("glassRegions")
+                                .toList().constFirst().toMap();
+    QCOMPARE(qRound(published.value(QStringLiteral("rect")).toRectF().top()),
+             attachmentStartY);
+    const QVariantList polygon =
+        published.value(QStringLiteral("polygon")).toList();
+    QVERIFY(polygon.size() >= 3);
+    qreal minimumY = std::numeric_limits<qreal>::max();
+    for (const QVariant &point : polygon)
+        minimumY = qMin(minimumY, point.toPointF().y());
+    QCOMPARE(qRound(minimumY), attachmentStartY);
+    qreal upperLeft = std::numeric_limits<qreal>::max();
+    qreal upperRight = std::numeric_limits<qreal>::lowest();
+    for (const QVariant &value : polygon) {
+        const QPointF point = value.toPointF();
+        if (qAbs(point.y() - minimumY) < 0.001) {
+            upperLeft = qMin(upperLeft, point.x());
+            upperRight = qMax(upperRight, point.x());
+        }
+    }
+    // The published seam row carries only the narrow droplet mouth centred
+    // on the clicked glyph; the panel rows beside it are never re-covered.
+    QVERIFY(upperRight - upperLeft
+            < window->property("cardWidth").toInt() * 0.25);
+    QCOMPARE(qRound((upperLeft + upperRight) / 2),
+             attachmentAnchor.x() + attachmentAnchor.width() / 2);
+    QCOMPARE(
+        qRound(window->property("cardX").toReal()
+               + field->property("attachmentWaistCenterAtBody").toReal()),
+        attachmentAnchor.x() + attachmentAnchor.width() / 2
+    );
+
+    // Moving the complete field leaves its local polygon unchanged. Its
+    // published window coordinates and icon-targeted waist must nevertheless
+    // follow the opener and anchor together.
+    const QRectF firstRect =
+        published.value(QStringLiteral("rect")).toRectF();
+    window->setProperty("openerRect", opener.translated(-100, 0));
+    window->setProperty(
+        "attachmentAnchorRect", attachmentAnchor.translated(-100, 0)
+    );
+    QTRY_COMPARE(window->property("cardX").toInt(),
+                 qRound(opener.x() - 100 + opener.width() / 2.0
+                        - window->property("cardWidth").toInt() / 2.0));
+    QTRY_VERIFY(
+        qRound(window->property("glassRegions").toList().constFirst().toMap()
+                   .value(QStringLiteral("rect")).toRectF().left())
+        == qRound(firstRect.left()) - 100
+    );
+    QTRY_COMPARE(
+        qRound(window->property("cardX").toReal()
+               + field->property("attachmentWaistCenterAtBody").toReal()),
+        attachmentAnchor.x() - 100 + attachmentAnchor.width() / 2
+    );
 }
 
 void OverlayContractTest::sessionCardGrowthDoesNotResizeItsOutputSurface()
@@ -288,11 +572,15 @@ void OverlayContractTest::sessionCardGrowthDoesNotResizeItsOutputSurface()
     QVERIFY2(overlay.isReady(), qPrintable(overlay.errorString()));
 
     const QRect opener(1000, 5, 28, 28);
+    const QRect attachmentAnchor(1005, 10, 18, 18);
+    constexpr int attachmentStartY = 40;
     std::unique_ptr<QObject> root(overlay.createWithInitialProperties({
         {QStringLiteral("reducedMotion"), true},
         {QStringLiteral("shellSource"), QVariant::fromValue<QObject *>(nullptr)},
         {QStringLiteral("anchoredFromPanel"), true},
         {QStringLiteral("openerRect"), opener},
+        {QStringLiteral("attachmentAnchorRect"), attachmentAnchor},
+        {QStringLiteral("attachmentStartY"), attachmentStartY},
     }));
     auto *window = qobject_cast<QQuickWindow *>(root.get());
     QVERIFY(window);
@@ -312,7 +600,7 @@ void OverlayContractTest::sessionCardGrowthDoesNotResizeItsOutputSurface()
     // real implicit height must grow the card without taking the output-sized
     // input surface back with it.
     QTRY_VERIFY(window->property("cardHeight").toInt() > bootstrapCardHeight);
-    const int expectedY = opener.bottom() + 1
+    const int expectedY = attachmentStartY
                           + window->property("anchorGap").toInt();
     QCOMPARE(window->property("cardY").toInt(), expectedY);
 
@@ -375,9 +663,12 @@ void OverlayContractTest::aPanelOpenedOverlayFollowsOnlyItsButton()
     QCOMPARE(local.y(), opener.y() - outputOrigin.y());
     QCOMPARE(local.size(), opener.size());
 
-    // The menu follows the real 30 px button and one floating gap, independently
-    // of the panel surface's own extent.
+    // Compatibility callers without a panel edge retain opener-relative
+    // placement.
     QCOMPARE(panelPopupBodyOrigin(local, 530, 8).y(), 46);
+    // A real panel route measures the connector from the lower edge of the
+    // continuous bar backdrop, independently of the opener's own height.
+    QCOMPARE(panelPopupBodyOrigin(local, 530, 24, 40).y(), 64);
 }
 
 

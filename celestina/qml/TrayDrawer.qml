@@ -33,8 +33,7 @@ Row {
     signal secondaryActivated(string service, string path, int globalX, int globalY)
     // A right-click asks the host for this item's own menu.
     signal menuRequested(string service, string path, int globalX, int globalY)
-    signal drawerRequested(int globalX, int globalY,
-                           int openerWidth, int openerHeight)
+    signal drawerRequested(rect openerRect, rect attachmentAnchorRect)
 
     readonly property var preferenceModes: {
         const modes = Object.create(null);
@@ -79,6 +78,7 @@ Row {
         anchors.verticalCenter: parent.verticalCenter
         implicitWidth: implicitHeight
         ink: root.ink
+        attachmentAnchor: trayGlyph
         role: CelestinaButton.Ghost
         helpText: qsTr("Abrir la bandeja (%1)").arg(root.items.length)
         Accessible.name: helpText
@@ -88,6 +88,8 @@ Row {
             implicitHeight: CelestinaTheme.iconSm
 
             CelestinaIcon {
+                id: trayGlyph
+
                 objectName: "celestina-tray-toggle-icon"
 
                 anchors.centerIn: parent
@@ -101,8 +103,8 @@ Row {
             }
         }
 
-        onMenuRequested: (globalX, globalY, openerWidth, openerHeight) =>
-            root.drawerRequested(globalX, globalY, openerWidth, openerHeight)
+        onMenuRequested: (openerRect, attachmentAnchorRect) =>
+            root.drawerRequested(openerRect, attachmentAnchorRect)
     }
 
     Row {

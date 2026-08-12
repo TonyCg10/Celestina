@@ -30,14 +30,13 @@ SoftMenu {
     // GlassContextMenu's content item is Qt's real ListView. The controller
     // caps this card to the output while AnchoredMenu retains the complete
     // natural row height, so the ListView owns wheel and keyboard scrolling.
-    // This bar only makes that existing viewport visible and draggable.
     readonly property Flickable menuViewport: root.menu.contentItem as Flickable
     // Header, section label and one real application action are the smallest
     // useful view. A request at the output's last pixel may move upward enough
     // to keep these visible rather than creating a one-pixel viewport.
     readonly property int minimumMenuViewportHeight: {
         let measured = root.menu.topPadding + root.menu.bottomPadding;
-        const visibleRows = Math.min(root.menu.count, 3);
+        const visibleRows = Math.min(root.menu.count, 1);
         for (let index = 0; index < visibleRows; ++index) {
             const item = root.menu.itemAt(index);
             if (item)
@@ -45,28 +44,64 @@ SoftMenu {
         }
         return Math.max(1, Math.ceil(measured));
     }
-    CelestinaScrollBar {
-        objectName: "celestina-tray-menu-scrollbar"
-        // Menu treats visual children of its ListView as model entries. Keep
-        // the affordance beside that viewport in the popup item instead, so it
-        // cannot enter the application's arrow-key order.
+
+    // The header card and section label do not scroll: they live beside the
+    // viewport in the popup item, and the real Menu holds only the
+    // application's rows. The raised top padding keeps that viewport strictly
+    // inside the dark body section, and the clip below stops a scrolled row
+    // from being painted over the lighter header field above it. No separate
+    // scroll bar: the wheel, keyboard and drag reach the ListView directly.
+    Column {
+        id: pinnedHeading
+        objectName: "celestina-tray-menu-heading"
+
         parent: root.menuViewport ? root.menuViewport.parent : null
-        x: root.menuViewport
-           ? root.menuViewport.x + root.menuViewport.width - width : 0
-        y: root.menuViewport ? root.menuViewport.y : 0
-        width: CelestinaTheme.spaceSm
-        height: root.menuViewport ? root.menuViewport.height : 0
-        surface: root.menuViewport
+        x: root.menuViewport ? root.menuViewport.x : 0
+        y: CelestinaTheme.compMenuPadding
+        width: root.menuViewport ? root.menuViewport.width : 0
         z: 10
-        Accessible.name: qsTr("Desplazamiento vertical")
+
+        SoftMenuRow {
+            ink: root.ink
+            width: pinnedHeading.width
+            header: true
+            actionable: false
+            text: qsTr("Menú de la bandeja")
+            subtitle: qsTr("%n acción(es)", "", root.entries.length)
+            iconName: "app-window"
+            fallbackIcon: "app-window"
+        }
+
+        Item {
+            width: 1
+            height: root.headerBodyGap
+        }
+
+        SoftMenuRow {
+            ink: root.ink
+            width: pinnedHeading.width
+            sectionLabel: true
+            actionable: false
+            text: qsTr("Acciones")
+            verticalInset: root.rowVerticalInset
+        }
+    }
+
+    Binding {
+        target: root.menu
+        property: "topPadding"
+        value: CelestinaTheme.compMenuPadding + pinnedHeading.height
+    }
+
+    Binding {
+        target: root.menuViewport
+        property: "clip"
+        value: true
+        when: root.menuViewport !== null
     }
 
     readonly property var displayEntries: {
-        const built = [
-            {"kind": "header", "text": qsTr("Menú de la bandeja"),
-             "subtitle": qsTr("%n acción(es)", "", root.entries.length)},
-            {"kind": "section", "text": qsTr("Acciones")}
-        ];
+        const built = [];
         for (let index = 0; index < root.entries.length; ++index)
             built.push({"kind": "external", "row": root.entries[index]});
         return built;

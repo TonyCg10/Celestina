@@ -33,13 +33,21 @@ TestCase {
         anchors.centerIn: parent
         network: undefined
         bluetooth: undefined
-        onIndicatorMenuRequested: (kind, globalX, globalY) => {
+        onIndicatorMenuRequested: (kind, openerRect, attachmentAnchorRect) => {
             testCase.requested.push(kind);
         }
     }
 
+    SignalSpy {
+        id: menuRequests
+
+        target: status
+        signalName: "indicatorMenuRequested"
+    }
+
     function init() {
         testCase.requested = [];
+        menuRequests.clear();
         status.network = undefined;
         status.bluetooth = undefined;
     }
@@ -155,6 +163,36 @@ TestCase {
         mouseClick(testCase.networkIndicator());
         mouseClick(testCase.bluetoothIndicator());
         compare(testCase.requested, ["network", "bluetooth"]);
+    }
+
+    function test_each_opener_publishes_its_own_icon_anchor() {
+        status.network = {"networksState": "fresh", "networks": []};
+        status.bluetooth = {"adapter": "on", "count": 0};
+        waitForRendering(status);
+        const controls = [testCase.networkIndicator(),
+                          testCase.bluetoothIndicator()];
+        mouseClick(controls[0]);
+        mouseClick(controls[1]);
+        compare(menuRequests.count, 2);
+        for (let index = 0; index < menuRequests.count; ++index) {
+            const openerRect = menuRequests.signalArguments[index][1];
+            const anchorRect = menuRequests.signalArguments[index][2];
+            compare(anchorRect,
+                    controls[index].attachmentAnchorGlobalRectNow());
+            compare(anchorRect.width, 18);
+            compare(anchorRect.height, 18);
+            compare(anchorRect.x,
+                    openerRect.x
+                    + (openerRect.width - anchorRect.width) / 2);
+            compare(anchorRect.y,
+                    openerRect.y
+                    + (openerRect.height - anchorRect.height) / 2);
+            verify(controls[index].isPanelAttachmentSource);
+        }
+        verify(menuRequests.signalArguments[0][1].x
+               !== menuRequests.signalArguments[1][1].x);
+        verify(menuRequests.signalArguments[0][2].x
+               !== menuRequests.signalArguments[1][2].x);
     }
 
     function test_each_menu_opener_reports_a_real_press() {

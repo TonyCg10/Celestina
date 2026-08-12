@@ -1,7 +1,7 @@
 // One semantic group on the panel, with compact internal rhythm and exactly
-// one compositor-glass region. The outer PanelFlank keeps the larger gap
-// between unrelated groups; controls inside this row use the same spacing as
-// the Wi-Fi and Bluetooth pair.
+// one dense content capsule. The panel backdrop owns the sole compositor-glass
+// region; controls inside this row use the same spacing as the Wi-Fi and
+// Bluetooth pair.
 pragma ComponentBehavior: Bound
 
 import CelestinaStyle
@@ -18,7 +18,6 @@ Item {
     // rather than to effective child visibility. The natural row width is the
     // safe default for groups whose controls are permanent.
     property bool hasContent: controls.implicitWidth > 0
-    signal blurRegionChanged()
 
     implicitWidth: root.hasContent ? controls.implicitWidth : 0
     implicitHeight: CelestinaTheme.controlHeightXs
@@ -32,9 +31,10 @@ Item {
     }
 
     PanelPill {
+        id: pill
+
         visible: root.hasContent
         blurAvailable: root.blurAvailable
         ink: root.ink
-        onBlurRegionChanged: root.blurRegionChanged()
     }
 }

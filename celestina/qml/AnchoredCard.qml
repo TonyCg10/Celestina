@@ -24,6 +24,7 @@ pragma ComponentBehavior: Bound
 import CelestinaStyle
 import QtQuick
 import QtQuick.Window
+import "EdgeAttachedGeometry.js" as EdgeAttachedGeometry
 
 Window {
     id: root
@@ -42,11 +43,35 @@ Window {
     // controller and scrolls inside that viewport instead of moving its top.
     property int maximumContentHeight: 0
     property bool preserveRequestedTop: false
+    // A real panel opener is optional. Panel-owned controls publish both its
+    // exact output-local control rectangle and its icon anchor; point-only
+    // routes such as workspace and foreign tray menus leave this false and
+    // retain the established floating card.
+    property alias anchoredFromPanel: placement.anchoredFromPanel
+    property alias openerRect: placement.openerRect
+    property alias attachmentAnchorRect: placement.attachmentAnchorRect
+    property alias attachmentStartY: placement.attachmentStartY
+    // A child menu born from a row of another menu keeps floating placement
+    // but attaches its membrane sideways. The host places this card-sized
+    // surface flush against the parent card and reserves the gap inside this
+    // window; the card body sits beside that transparent strip.
+    property bool attachedToMenuSide: false
+    property bool attachmentSideRight: false
+    // The membrane's horizontal travel reuses the same width-proportional
+    // rule as the panel attachment gap, so parent-to-child distance and
+    // bar-to-menu distance follow one vocabulary.
+    readonly property int sideAttachmentGap: attachedToMenuSide
+            ? Math.round(EdgeAttachedGeometry.proportionalMetric(
+                  cardWidth,
+                  CelestinaTheme.compEdgeAttachmentGapRatio,
+                  CelestinaTheme.compEdgeAttachmentGapMin,
+                  CelestinaTheme.compEdgeAttachmentGapMax))
+            : 0
     // What a glass card samples to blur. Named rather than reached for, so a
     // consumer never has to know the id of an item inside this file.
     readonly property Item backdrop: scene
 
-    readonly property int anchorGap: CelestinaTheme.compFloatingGap
+    readonly property int anchorGap: placement.anchorGap
     // Where the host wants this card, in the surface's own coordinates. Named
     // `menuX`/`menuY` because that is what the host writes; renaming them would
     // be renaming an inter-object contract for tidiness.
@@ -74,6 +99,7 @@ Window {
     signal dismissed()
 
     width: cardWidth
+           + (attachedToMenuSide ? Math.max(0, sideAttachmentGap) : 0)
     height: cardHeight
     color: CelestinaTheme.clear
 
