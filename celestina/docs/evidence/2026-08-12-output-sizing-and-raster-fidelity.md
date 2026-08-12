@@ -155,3 +155,27 @@ Nothing in this record is an author visual pass. `VAL-PANEL-1` remains
 pending, and the nested session cannot substitute for it here: `winit`
 publishes no physical size, so it resolves to 1.0 and never exercises the
 scaled path at all.
+
+
+## PANEL-1-O addendum — corrected live, on the author's own monitors
+
+`PANEL-1-N`'s density-based factor was checked live and was wrong in two ways,
+both found by the author comparing the nest against a real desktop rather than
+by inspecting the arithmetic.
+
+Density could not separate two of the author's monitors: their 24" 1080p panel
+measures 91.73 dpi and their 32" 4K panel measures 93.34 dpi, 1.6 dpi apart.
+They confirmed 1.00 on the first and 1.15 on the second live. The factor is now
+derived from physical diagonal instead — 24.0" against 31.5" is a real
+difference — floored at 1.0 so a smaller monitor is never shrunk below the
+reference (the 24" resolves to 0.88 by size alone, which the author rejected).
+
+Separately, a nested Niri without a physical size produced exactly 100.00 dpi
+from Qt's fabricated fallback, which resolved to a real factor and drew the
+nested shell a quarter larger than the session beside it. Both of Qt's known
+fallback densities, 96 and 100, are now refused to a hair's width.
+
+`shellscale_test.cpp` was rewritten around the author's three monitors and
+their own judgement on each, including a case stating the density measurement
+directly: the two monitors are within 2 dpi of each other and still resolve to
+different factors. CTest 18/18. `CELESTINA_SHELL_SCALE` is unchanged.

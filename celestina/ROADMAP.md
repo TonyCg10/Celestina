@@ -426,6 +426,12 @@ not apply the rest of UX-2; menu, overlay and provider work is limited to the
 exact corrections declared in the active plan. Scope, order and evidence are in
 [the PANEL-1 plan](docs/plans/active/2026-08-08-panel-glass-redesign.md).
 
+`PANEL-1-O` corrects the per-output factor to derive from a monitor's
+physical diagonal rather than its density, floors it at the reference so a
+smaller screen is never shrunk, and refuses the density Qt fabricates when a
+compositor publishes no physical size — found live on the author's own three
+monitors, where density could not separate two of them.
+
 `PANEL-1-M` stops the canonical verification workflow reaching the graphics
 card: DDC is gated by `CELESTINA_DDC` and the release smoke sets it to `0`,
 after two GPU losses whose journals both end in concurrent `ddcutil` children

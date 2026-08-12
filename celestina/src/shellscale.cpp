@@ -2,21 +2,25 @@
 
 #include <QByteArray>
 #include <QScreen>
+#include <QSizeF>
 #include <QtGlobal>
 
 #include <cmath>
 
 namespace {
-// The density the shell's tokens were drawn against: the author's 27" 1080p
-// panel, 600 mm wide, which is the output they describe as correctly sized.
-// Every other output is expressed relative to it, so that monitor keeps its
-// present appearance exactly and only the ones that differ move.
-constexpr double referenceDotsPerInch = 81.3;
+// The monitor the shell's sizes were drawn against: the author's 27" panel,
+// 600 x 340 mm, which they describe as correctly sized. Every other output is
+// expressed relative to it, so that one keeps its present appearance exactly
+// and only the monitors that differ move.
+const double referenceDiagonalMillimetres = std::hypot(600.0, 340.0);
 
-// Below the lower bound a shell would shrink past legibility on a very coarse
-// output; above the upper one it would eat a small screen. Both are refusals
-// to act on an implausible reading, not opinions about taste.
-constexpr double minimumScale = 0.85;
+// Never smaller than the reference. Scaling down with size was tried against
+// the author's own monitors and rejected: their 24" panel resolves to 0.88 by
+// size alone and they asked for 1.00. A smaller screen is not read from
+// proportionally closer, because a desk has a front edge.
+constexpr double minimumScale = 1.0;
+// Above this a shell would eat the screen it is meant to stay out of. It is a
+// refusal to act on an extreme reading, not an opinion about taste.
 constexpr double maximumScale = 1.75;
 
 // Sizes settle on a step rather than on whatever a millimetre reading happens
@@ -24,34 +28,63 @@ constexpr double maximumScale = 1.75;
 // and every derived metric stays reproducible.
 constexpr double scaleStep = 0.05;
 
-// A physical size no real desktop monitor has. Televisions and virtual
-// outputs frequently report zero, and some report a diagonal of a few
-// millimetres; neither is a density this may divide by.
-constexpr double minimumSensibleDotsPerInch = 40.0;
-constexpr double maximumSensibleDotsPerInch = 400.0;
+// A diagonal no desktop monitor has. Televisions and virtual outputs
+// frequently report zero, and some report a few millimetres.
+constexpr double minimumSensibleDiagonal = 250.0;   // about 10"
+constexpr double maximumSensibleDiagonal = 1600.0;  // about 63"
+
+// The densities Qt invents when the compositor publishes no physical size.
+//
+// This is not a range check — the size Qt fabricates is perfectly plausible,
+// which is exactly why the first version of this file walked into it. A nested
+// Niri publishes no size for its `winit` output, Qt filled in 481.6 x 253.5 mm
+// for a 1896-pixel-wide screen, and that is 100.00 dpi to the last digit
+// because it was computed backwards from 100. The shell then "measured" a
+// factor and drew itself a quarter larger than the session beside it.
+//
+// A fabricated density is exact by construction; a real EDID reports whole
+// millimetres and essentially never lands on one of these to within a hair.
+// Treating them as no reading at all costs a genuine 96 or 100 dpi monitor its
+// adjustment, which is the safe direction: it keeps the size it already had
+// rather than being resized from a number nobody measured.
+constexpr double qtFallbackDotsPerInch[] = {96.0, 100.0};
+constexpr double fabricatedDensityEpsilon = 0.01;
+
+bool looksFabricated(double density)
+{
+    if (!std::isfinite(density))
+        return true;
+
+    for (const double fallback : qtFallbackDotsPerInch) {
+        if (std::abs(density - fallback) < fabricatedDensityEpsilon)
+            return true;
+    }
+    return false;
+}
 
 // The author's own answer, when the derived one is wrong for them.
 //
-// A density is the best automatic proxy for how large something looks, and it
-// is not the whole of it: a television at sofa distance and a monitor at
-// arm's length can share a density and want very different sizes, and an
-// output whose EDID simply lies cannot be argued with. This is also what lets
-// an automated run pin the size, so a contract about where a menu lands is not
-// quietly rewritten by whatever density the test platform reports.
+// Physical size is the best automatic proxy for how large something should
+// look, and it is not the whole of it: a television at sofa distance and a
+// monitor at arm's length can share a diagonal and want very different sizes.
+// This is also what lets an automated run pin the size, so a contract about
+// where a menu lands is not quietly rewritten by whatever the test platform
+// reports.
 const char *const scaleOverrideVariable = "CELESTINA_SHELL_SCALE";
 } // namespace
 
-double shellScaleForDensity(double density)
+double shellScaleForOutput(double diagonalMillimetres, double dotsPerInch)
 {
-    if (!std::isfinite(density)
-        || density < minimumSensibleDotsPerInch
-        || density > maximumSensibleDotsPerInch) {
+    if (!std::isfinite(diagonalMillimetres)
+        || diagonalMillimetres < minimumSensibleDiagonal
+        || diagonalMillimetres > maximumSensibleDiagonal
+        || looksFabricated(dotsPerInch)) {
         // Nothing reliable was published, so the shell keeps the size it has
         // rather than resizing itself from a number it cannot believe.
         return 1.0;
     }
 
-    const double exact = density / referenceDotsPerInch;
+    const double exact = diagonalMillimetres / referenceDiagonalMillimetres;
     const double stepped = std::round(exact / scaleStep) * scaleStep;
     return qBound(minimumScale, stepped, maximumScale);
 }
@@ -81,8 +114,12 @@ double shellScaleForScreen(const QScreen *screen)
     if (overridden > 0.0)
         return overridden;
 
-    // `physicalDotsPerInch` divides the output's logical width by its real
-    // width, so the compositor's own scale is already accounted for and only
-    // the panel's density is left.
-    return screen ? shellScaleForDensity(screen->physicalDotsPerInch()) : 1.0;
+    if (!screen)
+        return 1.0;
+
+    const QSizeF size = screen->physicalSize();
+    return shellScaleForOutput(
+        std::hypot(size.width(), size.height()),
+        screen->physicalDotsPerInch()
+    );
 }

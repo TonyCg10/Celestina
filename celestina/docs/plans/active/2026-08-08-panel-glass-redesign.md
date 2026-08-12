@@ -242,6 +242,7 @@ floating rounded surfaces.
 |---|---|---|---|---|---|---|---|
 | PANEL-1-A | `celestina:` | done | [inventory](../../inventories/2026-08-08-panel-glass-redesign/PANEL-1-A.numstat.tsv) | 42 files, +1344/-472 | Replace the hard panel plate with a soft shadow and borderless real compositor-glass capsules, reduce workspace and status readings to positional colour/icon semantics without discarding monitor grouping or CPU/memory values, expose the existing overlays, and keep the tray populated and visible across host restarts | [evidence](../../evidence/2026-08-08-panel-glass-baseline.md) | `VAL-PANEL-1` partial |
 | PANEL-1-I | `celestina:` | active | `CMakeLists.txt`; `qml/EdgeAttachedGeometry.js`; `qml/Panel.qml`; `qml/PanelFlank.qml`; `qml/PanelPill.qml`; `qml/PanelCluster.qml`; `qml/PanelActionButton.qml`; `qml/PanelMenuButton.qml`; panel opener controls; `qml/PanelPopupPlacement.qml`; `qml/CompositorGlassRegion.qml`; `qml/SoftMenuField.qml`; `qml/SoftMenu.qml`; `qml/SoftOverlayCard.qml`; `qml/AnchoredCard.qml`; panel-opened overlay/menu composition; `src/panelattachmentlease.{h,cpp}`; `src/panelmanager.{h,cpp}`; `src/panelblurcontroller.{h,cpp}`; `src/panelmenucontroller.{h,cpp}`; `src/overlaycontroller.{h,cpp}`; focused QML/C++ tests; Celestina version/status/roadmap/validation/evidence and the root version history | — | Replace the narrow central connector with one tension-shaped `ContextualVeil` membrane that spans the complete contextual width at both the panel edge and menu landing, narrows through a fluid body-proportional waist whose centre follows the exact clicked icon without collapsing to icon width, and keeps that opener's hover circle visible only while its own surface remains open; require matched tangent magnitude and direction through the waist so the short 20..36-pixel travel reads as one rounded liquid deformation rather than straight hourglass flanks, keep the clicked control rectangle separate for placement and leave the owning panel capsule and all dense content cards completely unchanged while preserving disjoint panel/menu blur regions, one finite compositor region per surface and every floating-route, provider, focus, Escape, outside-click and reduced-motion contract | [continuous bar veil and membrane evidence](../../evidence/2026-08-11-edge-attached-shell-prototype.md) | `VAL-PANEL-1` |
+| PANEL-1-O | `celestina:` | active | `src/shellscale.{h,cpp}`; `tests/shellscale_test.cpp` | — | Correct the per-output scale to derive from a monitor's physical diagonal rather than its density, after the author's own three monitors showed density cannot separate two of them, floor it at the reference so a smaller screen is never shrunk, and refuse the density Qt fabricates when a compositor publishes no physical size at all | [per-output sizing and raster fidelity evidence](../../evidence/2026-08-12-output-sizing-and-raster-fidelity.md) | `VAL-PANEL-1` |
 | PANEL-1-N | `celestina:` | active | `qml/EdgeAttachedGeometry.js`; `qml/Panel.qml`; `qml/AnchoredCard.qml`; `qml/SoftMenuField.qml`; the five overlay roots; `src/shellscale.{h,cpp}`; `src/panelmenucontroller.cpp`; `src/overlaycontroller.cpp`; `CMakeLists.txt`; focused C++ tests | — | Draw contextual surfaces at their output's size too, not only the panel: scale each menu and overlay scene by the same per-output factor and divide the geometry they are handed by it, publish blur regions from mapped bounds so a scaled surface stops asking for a region smaller than it paints, and let an author name the factor when a density cannot answer for them | [per-output sizing and raster fidelity evidence](../../evidence/2026-08-12-output-sizing-and-raster-fidelity.md) | `VAL-PANEL-1` |
 | PANEL-1-M | `celestina:` | active | `src/provider_adapter/brightness.rs`; `scripts/smoke-production.sh`; `VALIDATION.md` | — | Stop the canonical verification workflow from reaching the graphics card: gate DDC behind `CELESTINA_DDC` so an automated run starts, registers and publishes exactly as a session does while opening no I²C bus, and set that gate in the release smoke, whose purpose was only ever to prove the host and compiled module load | [per-output sizing and raster fidelity evidence](../../evidence/2026-08-12-output-sizing-and-raster-fidelity.md) | `VAL-GPU-01` |
 | PANEL-1-L | `celestina:` | active | `src/shellscale.{h,cpp}`; `src/panelmanager.cpp`; `src/traywatcher.cpp`; `qml/Panel.qml`; `qml/PanelPill.qml`; raster-icon consumers; `qml/PerformanceMenu.qml`; `qml/NetworkMenu.qml`; `qml/BluetoothMenu.qml`; `CMakeLists.txt`; focused C++/QML tests; Celestina status/roadmap/validation/evidence | — | Make what the shell draws the same physical size on every output and stop it degrading what it draws: derive one bounded per-output scale from the output's real density and apply it as a scene scale so no token or layout number moves, rasterize a tray icon once at a size that survives any scale, ask for every raster at the density it will be drawn at, thicken glyph strokes and panel reading weights, and stop three provider-driven menus rebuilding their complete row list on every reading tick | [per-output sizing and raster fidelity evidence](../../evidence/2026-08-12-output-sizing-and-raster-fidelity.md) | `VAL-PANEL-1` |
@@ -877,3 +878,43 @@ A named number is bounded like a derived one but deliberately not stepped: the
 step exists to stop two similar monitors disagreeing by a fraction, not to
 round an instruction. An unreadable or absurd request leaves the derived factor
 alone rather than resizing the shell to nothing.
+
+
+## PANEL-1-O boundary
+
+`PANEL-1-L` derived the per-output factor from density. The author checked it
+live on their own three monitors and it was wrong in two ways, both found by
+comparison against a real desktop rather than by inspecting the arithmetic.
+
+Density cannot separate two of the author's monitors. Their 24" 1080p panel
+measures 91.73 dpi and their 32" 4K panel measures 93.34 dpi — 1.6 dpi apart,
+indistinguishable by any density rule — and the author asked for 1.00 on the
+first and confirmed 1.15 on the second. Their diagonals are 24.0" and 31.5",
+which is a real difference and the one the model now corrects by: physical
+size is the proxy for viewing distance, which no monitor publishes, and a
+larger screen sits further back and needs the shell drawn larger to subtend
+the same angle.
+
+Correcting by size alone is not enough on its own, and the author caught this
+too: their 24" panel resolves to 0.88 by size relative to the 27" reference,
+and they asked for 1.00. A smaller monitor is not read from proportionally
+closer — a desk has a front edge — so the factor now floors at 1.0. Nothing
+ever shrinks the shell below the reference monitor's own size.
+
+The density-fabrication defect from `PANEL-1-L` carries over unchanged in
+kind, corrected in the new arithmetic: Qt invents a physical size when a
+compositor publishes none, and the density computed from it is exact enough to
+tell apart from a real EDID's whole millimetres. A nested Niri produces
+exactly 100.00 dpi for its `winit` output this way, which resolved to a real
+factor and drew the nested shell a quarter larger than the session beside it —
+the exact defect the author reported live, traced to its cause in the nest
+rather than assumed from the arithmetic. Both of Qt's fallback densities, 96
+and 100, are now refused to a hair's width; a real monitor landing near one
+keeps its own reading.
+
+The complete CTest suite passes 18/18. The new cases hold the author's own
+three monitors and their own judgement on each as the specification, including
+one case that states the density measurement directly: `std::abs(lg24Dpi -
+lg32Dpi) < 2.0` alongside `shellScaleForOutput` giving them different answers.
+`CELESTINA_SHELL_SCALE` is unchanged; naming a number still wins over any
+derived one.

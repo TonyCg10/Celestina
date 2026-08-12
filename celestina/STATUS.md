@@ -48,6 +48,23 @@
 
 ## Current checkout truth
 
+- **Current milestone prototype — `PANEL-1-O`.** The per-output factor is
+  derived from a monitor's physical diagonal rather than its density, after
+  the author checked `PANEL-1-N`'s density model live and it was wrong on
+  their own hardware. Their 24" and 32" panels are 1.6 dpi apart —
+  indistinguishable by density — and they confirmed 1.00 on the first and 1.15
+  on the second; their diagonals differ enough to separate them. The factor
+  floors at 1.0 rather than shrinking a smaller monitor, because the author's
+  24" resolves to 0.88 by size alone and they asked for 1.00: a smaller screen
+  is not read from proportionally closer. Qt's fabricated densities (96 and
+  100, produced when a compositor publishes no physical size) are refused to a
+  hair's width, which is what a nested Niri without a physical size had been
+  triggering — the shell measured 100.00 dpi exactly and drew itself a quarter
+  larger than the session beside it, reproduced live and traced to the nest
+  rather than assumed. `CELESTINA_SHELL_SCALE` is unchanged. The complete
+  CTest suite passes 18/18, with cases holding the author's three monitors and
+  their own judgement on each as the specification.
+
 - **Current milestone prototype — `PANEL-1-M` and `PANEL-1-N`.** The canonical
   verification workflow no longer reaches the graphics card. `complete-production.sh`
   ends in a smoke that starts the real host with the real provider adapter, and
