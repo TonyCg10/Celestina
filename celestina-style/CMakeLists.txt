@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina-style VERSION 1.5.0 LANGUAGES CXX)
+project(celestina-style VERSION 1.6.0 LANGUAGES CXX)
 
 include(CTest)
 
@@ -62,6 +62,9 @@ qt_add_qml_module(celestina-style
         icons/view-sort-ascending.svg
         icons/view-sort-descending.svg
         icons/plus.svg
+        # The pair `plus` had been missing: a stepper needs both directions, and
+        # a control that can only be raised is not a control.
+        icons/minus.svg
         icons/view-grid.svg
         icons/view-list.svg
         icons/view-details.svg

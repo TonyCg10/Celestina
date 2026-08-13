@@ -49,9 +49,13 @@ TestCase {
         compare(CelestinaIcons.resolve("folder-nowhere", ""), "folder")
         compare(CelestinaIcons.resolve("", ""), "")
         verify(CelestinaIcons.available["search"] === true)
+        // `plus` and `minus` are named together on purpose: they are one
+        // stepper, and a catalogue that carries only the raising half leaves
+        // every consumer of it unable to lower anything.
         for (const name of ["wifi", "bluetooth", "cpu", "memory-stick", "mic", "mic-off",
                             "bell", "bell-off", "power", "sun", "gauge", "leaf", "zap",
-                            "toolbox", "system-tray", "pin", "eye", "eye-off"]) {
+                            "toolbox", "system-tray", "pin", "eye", "eye-off",
+                            "plus", "minus"]) {
             compare(CelestinaIcons.resolve(name, ""), name)
             verify(CelestinaIcons.source(name, "").endsWith(name + ".svg"))
         }

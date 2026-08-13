@@ -86,6 +86,7 @@ QtObject {
         "memory-stick": true,
         "mic": true,
         "mic-off": true,
+        "minus": true,
         "monitor": true,
         "music": true,
         "paintbrush": true,

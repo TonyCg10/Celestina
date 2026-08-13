@@ -52,7 +52,9 @@ geometry and introduce no Style token or API. The shell-local lease also keeps
 only that opener's ordinary hover feedback visible without adding a Style API.
 Neither the capsule nor any dense content surface changes, and no dense bridge
 enters the membrane. The 1.4.0 candidate is recorded under `STYLE-G7-J`, and
-`STYLE-G7-K` follows it with the 1.5.0 icon corrections: glyphs drawn at the
+`STYLE-G7-L` adds the `minus` glyph so the catalogue carries both halves of a
+stepper, which the shell's brightness and volume rows consume.
+`STYLE-G7-K` follows `STYLE-G7-J` with the 1.5.0 icon corrections: glyphs drawn at the
 weight the author asked for without changing any size, and every vendored
 icon rasterized at the density it will really be drawn at. The
 whole-capsule, glyph-mouth, body-wide icon-scaled and fluid

@@ -7,6 +7,7 @@
     <file alias="view-sort-ascending.svg">icons/view-sort-ascending.svg</file>
     <file alias="view-sort-descending.svg">icons/view-sort-descending.svg</file>
     <file alias="plus.svg">icons/plus.svg</file>
+    <file alias="minus.svg">icons/minus.svg</file>
     <file alias="view-grid.svg">icons/view-grid.svg</file>
     <file alias="view-list.svg">icons/view-list.svg</file>
     <file alias="view-details.svg">icons/view-details.svg</file>

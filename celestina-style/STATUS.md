@@ -47,6 +47,13 @@
   `ContextualVeil` attenuates tint and noise while suppressing outline and
   lit-edge layers entirely. Both roles are shadowless, never capture another
   Wayland client and preserve one compositor region for the complete menu.
+- The 1.5.1 delivery adds one glyph, `minus`, and its catalogue entry. The
+  catalogue carried `plus` and not its pair, so a consumer building a stepper
+  had a raise with no lower — which is what the shell's per-monitor brightness
+  and per-application volume rows needed. The icon is the vendored Lucide
+  shape at the catalogue's own 2.5 stroke width, and the case that covers it
+  names the two together, because a catalogue that can only raise leaves every
+  consumer of it unable to lower anything. Recorded under `STYLE-G7-L`.
 - The 1.5.0 milestone corrects the shared icon vocabulary in two ways, neither
   of them a size change. `CelestinaIcon` asked for its vendored SVG at the
   item's logical size; `IconImage` renders that SVG once at exactly the size
