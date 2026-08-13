@@ -1,5 +1,7 @@
 #include "overlaycontroller.h"
 
+#include "quietplacement.h"
+
 #include <QCursor>
 #include <QDebug>
 #include <QHash>
@@ -39,7 +41,11 @@ OverlayController::OverlayController(
     , m_componentName(qmlComponentName)
     , m_sourceProperty(overlaySourceProperty(qmlComponentName))
     , m_source(source)
-    , m_surface(new OverlaySurface(OverlaySurface::Placement::Centered, this))
+    , m_surface(new OverlaySurface(
+          OverlaySurface::Placement::Centered,
+          QStringLiteral("celestina-overlay"),
+          this
+      ))
     , m_enabled(true)
 {
     connect(m_surface, &OverlaySurface::dismissed, this, [this]() {
@@ -70,6 +76,11 @@ QVariantMap OverlayController::initialProperties() const
         properties.insert(m_sourceProperty, QVariant::fromValue(m_source.data()));
 
     return properties;
+}
+
+QRectF OverlayController::openCardRectOnOutput(QScreen *screen) const
+{
+    return quietOpenCardRect(m_surface->window(), screen);
 }
 
 bool OverlayController::isOpen() const
@@ -190,6 +201,7 @@ void OverlayController::open()
     }
 
     m_attachmentLease.acquire(m_openerPanel, overlay, m_attachmentAnchor);
+    emit contextualSurfaceOpened();
 }
 
 void OverlayController::close()

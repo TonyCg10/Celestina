@@ -50,6 +50,13 @@ public:
 
     // Wired in after construction, once main() has built the overlay. A shell
     // without it keeps every panel and only that request goes unanswered.
+    // The mapped panel on one output, or null: the quiet surfaces resolve
+    // their membrane anchors from the real bar rather than remembering one.
+    QWindow *panelWindowFor(QScreen *screen) const
+    {
+        return m_panels.value(screen).data();
+    }
+
     void setLauncher(OverlayController *launcher);
     void setNotificationCentre(OverlayController *centre);
     void setControlCentre(OverlayController *centre);

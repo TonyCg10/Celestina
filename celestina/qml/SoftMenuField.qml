@@ -210,8 +210,49 @@ Item {
     property bool surfacePresented: false
     property bool fallQueued: false
 
+    // The wait above has a race a card created inside its window loses: at
+    // `Component.onCompleted` the `Window.window` attachment can still be
+    // null, and by the time the Connections below retargets, the mapped
+    // window's first — and, for a static scene, only — frames have already
+    // swapped. Nothing else ever renders, the signal never comes, and the
+    // queued fall holds the content at opacity zero forever. So queuing a
+    // fall asks the window for one more frame, and so does the window
+    // attachment resolving, whichever happens last.
+    // `var`, not `Window`: the test harness hosts fields in a QQuickView,
+    // which is a window but not the QML Window type.
+    readonly property var hostWindow: root.Window.window
+    onHostWindowChanged: root.nudgePresentation()
+
+    function nudgePresentation() {
+        if (!root.surfacePresented || root.fallQueued)
+            presentationFallback.restart();
+        if (!root.surfacePresented && root.fallQueued && root.hostWindow)
+            root.hostWindow.requestUpdate();
+    }
+
+    // The last resort under the nudge: measured on the nested session, a
+    // quiet surface's window can present without its `frameSwapped` ever
+    // reaching this field, and a fall that waits forever is a surface that
+    // stays at opacity zero while its blur region announces where it should
+    // have been. If no frame has been seen shortly after queuing, the fall
+    // runs anyway: at worst its first frames play while the compositor is
+    // still mapping, which is the small cost the wait existed to avoid — and
+    // strictly better than never being seen at all.
+    Timer {
+        id: presentationFallback
+
+        interval: CelestinaTheme.motionNormal
+        onTriggered: {
+            if (!root.fallQueued)
+                return;
+            root.fallQueued = false;
+            root.surfacePresented = true;
+            dropFall.start();
+        }
+    }
+
     Connections {
-        target: root.Window.window
+        target: root.hostWindow
 
         function onFrameSwapped() {
             if (root.surfacePresented)
@@ -232,6 +273,7 @@ Item {
         root.attachmentProgress = 0;
         if (!root.surfacePresented) {
             root.fallQueued = true;
+            root.nudgePresentation();
             return;
         }
         dropFall.start();

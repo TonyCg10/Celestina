@@ -1,5 +1,7 @@
 #include "panelmenucontroller.h"
 
+#include "quietplacement.h"
+
 #include "diagnosticjournal.h"
 
 #include <QDebug>
@@ -371,6 +373,16 @@ void PanelMenuController::openWorkspaceMap(
     m_attachmentLease.acquire(panel, card, globalAttachmentAnchor);
 }
 
+QRectF PanelMenuController::openCardRectOnOutput(QScreen *screen) const
+{
+    const QRectF card = quietOpenCardRect(
+        m_surface ? m_surface->window() : nullptr, screen);
+    if (!card.isEmpty())
+        return card;
+    return quietOpenCardRect(
+        m_trayChildSurface ? m_trayChildSurface->window() : nullptr, screen);
+}
+
 QString indicatorMenuComponent(const QString &kind)
 {
     if (kind == QStringLiteral("network"))
@@ -506,6 +518,7 @@ void PanelMenuController::toggleIndicatorMenu(
     }
 
     m_openMenuKind = kind;
+    emit contextualSurfaceOpened();
     m_openIndicatorPanel = panel;
     m_attachmentLease.acquire(panel, window, globalAttachmentAnchor);
 }
@@ -632,6 +645,7 @@ void PanelMenuController::toggleTrayItemsMenu(
     }
 
     m_openMenuKind = QLatin1String(trayItemsKind);
+    emit contextualSurfaceOpened();
     m_openPanel = panel;
     m_attachmentLease.acquire(panel, window, globalAttachmentAnchor);
 }

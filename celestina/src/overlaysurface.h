@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QPointer>
+#include <QString>
 #include <QWindow>
 
 class QScreen;
@@ -28,23 +29,41 @@ public:
         // clipboard history.
         Centered,
         // Anchored under the panel in the top-right corner and never focused:
-        // the toast stack, which is where this session's notifications belong
-        // and where the panel's own unread indicator points.
+        // the floating fallback for a reading whose panel has no icon to
+        // attach to.
         Corner,
-        // Low and centred, never focused: a value readout tied to a key press.
-        // It is deliberately not in the corner — a volume key pressed while a
-        // notification is up must not paint over it.
-        Readout,
+        // Touching the top and right edges, ignoring every exclusive zone, and
+        // never focused: the quiet surfaces that grow a membrane out of the
+        // bar — the on-screen display and the toast stack, each under its own
+        // panel icon. The window reaches the real top edge because the
+        // membrane's mouth lives at the panel's lower seam, which sits inside
+        // the strip the panel reserved.
+        AttachedTopRight,
+        // The corner diagonally opposite the panel's, never focused: where the
+        // on-screen display retreats to when something interactive already
+        // occupies the top-right zone.
+        BottomRight,
+        // Low and centred, never focused: where the toast stack retreats to in
+        // that same case — deliberately not the same corner the display
+        // retreated to, so the two fallbacks cannot paint over each other.
+        BottomCentre,
     };
 
     // Both arguments are explicit: a surface's placement is a decision its
-    // owner makes, not a default it can drift into.
-    OverlaySurface(Placement placement, QObject *parent = nullptr);
+    // owner makes, not a default it can drift into. `scope` names the layer
+    // surface for the compositor's rules; the quiet placements share their
+    // mechanics across two controllers, so the name cannot be derived from the
+    // placement any more.
+    OverlaySurface(Placement placement, const QString &scope, QObject *parent = nullptr);
     ~OverlaySurface() override;
 
     // Adopts `content` — created, not yet shown — and maps it on `screen`.
     // Returns false without taking ownership when the surface cannot be mapped.
+    // `placement` overrides the constructed default for this one mapping: the
+    // same controller opens attached when its panel offers an icon and falls
+    // back to a corner when the zone is taken.
     bool open(QWindow *content, QScreen *screen);
+    bool open(QWindow *content, QScreen *screen, Placement placement);
     void close();
     bool isOpen() const { return !m_content.isNull(); }
     QWindow *window() const { return m_content.data(); }
@@ -57,4 +76,5 @@ private:
 
     QPointer<QWindow> m_content;
     Placement m_placement;
+    QString m_scope;
 };

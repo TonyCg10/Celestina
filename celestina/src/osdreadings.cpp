@@ -27,11 +27,9 @@ void OsdReadings::forget()
     m_brightnessKnown = false;
 }
 
-std::optional<OsdReadings::Reading> OsdReadings::apply(
-    const QVariantMap &providers
-)
+QList<OsdReadings::Reading> OsdReadings::apply(const QVariantMap &providers)
 {
-    std::optional<Reading> reading;
+    QList<Reading> readings;
 
     const QVariantMap audio = providers.value(QStringLiteral("audio")).toMap();
     if (!audio.isEmpty()) {
@@ -44,22 +42,26 @@ std::optional<OsdReadings::Reading> OsdReadings::apply(
         };
 
         if (m_audio.known) {
+            // Independently, not as alternatives: the speaker and the
+            // microphone changing together are two facts, and each gets its
+            // own card.
             if (published.volume != m_audio.volume
                 || published.muted != m_audio.muted) {
-                reading = Reading {
+                readings.append(Reading {
                     QStringLiteral("volume"),
                     published.volume,
                     published.muted,
                     QString(),
-                };
-            } else if (published.micVolume != m_audio.micVolume
-                       || published.micMuted != m_audio.micMuted) {
-                reading = Reading {
+                });
+            }
+            if (published.micVolume != m_audio.micVolume
+                || published.micMuted != m_audio.micMuted) {
+                readings.append(Reading {
                     QStringLiteral("microphone"),
                     published.micVolume,
                     published.micMuted,
                     QString(),
-                };
+                });
             }
         }
         m_audio = published;
@@ -103,8 +105,43 @@ std::optional<OsdReadings::Reading> OsdReadings::apply(
 
     m_brightness = levels;
     m_brightnessKnown = !levels.isEmpty();
-    if (!reading)
-        reading = monitor;
+    if (monitor)
+        readings.append(*monitor);
 
-    return reading;
+    return readings;
+}
+
+QVariantList OsdReadings::merged(
+    const QVariantList &readings,
+    const Reading &reading
+)
+{
+    QVariantList result {
+        QVariantMap {
+            {QStringLiteral("kind"), reading.kind},
+            {QStringLiteral("percent"), reading.percent},
+            {QStringLiteral("muted"), reading.muted},
+            {QStringLiteral("label"), reading.label},
+        },
+    };
+    for (const QVariant &entry : readings) {
+        if (entry.toMap().value(QStringLiteral("kind")).toString() != reading.kind)
+            result.append(entry);
+    }
+    return result;
+}
+
+QVariantList OsdReadings::without(
+    const QVariantList &readings,
+    const QStringList &kinds
+)
+{
+    QVariantList result;
+    for (const QVariant &entry : readings) {
+        if (!kinds.contains(
+                entry.toMap().value(QStringLiteral("kind")).toString())) {
+            result.append(entry);
+        }
+    }
+    return result;
 }

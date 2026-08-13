@@ -3,14 +3,25 @@
 #include <QObject>
 #include <QPointer>
 #include <QQmlComponent>
+#include <QRectF>
 #include <QVariantList>
+#include <QVariantMap>
+
+#include <functional>
 
 class OverlaySurface;
+class PanelManager;
 class QQmlEngine;
+class QScreen;
 class ShellProvidersClient;
 class QWindow;
 
-// The corner where this session's notifications appear.
+// Where this session's notifications appear: at the top right, attached to
+// the bar by the same drop membrane the menus use, with the mouth on the
+// panel's own notification bell. When something interactive already occupies
+// that zone the stack retreats to the bottom centre — deliberately not the
+// same corner the on-screen display retreats to, so the two fallbacks cannot
+// paint over each other.
 //
 // Nothing here decides how long a toast lives or what it says: the helper's
 // server owns every one of those rules and publishes what is currently worth
@@ -39,14 +50,44 @@ public:
     bool isEnabled() const { return m_enabled; }
     bool isVisible() const;
 
+    // Wired in after construction. A stack without them keeps the floating
+    // corner it has always had.
+    void setPanels(PanelManager *panels) { m_panels = panels; }
+    void setZoneProbe(std::function<QList<QRectF>(QScreen *)> probe)
+    {
+        m_zoneProbe = std::move(probe);
+    }
+    // Whether the notification centre is on screen. A toast raised while the
+    // whole list is already open would announce what is being looked at —
+    // the same rule that keeps a level's display quiet while its own menu
+    // is up.
+    void setCentreProbe(std::function<bool()> probe)
+    {
+        m_centreProbe = std::move(probe);
+    }
+
+    // Where the open stack's cards sit, for the display's own probe.
+    QRectF openCardRectOnOutput(QScreen *screen) const;
+
 private:
     void providersChanged();
     void show(const QVariantList &toasts, const QVariantList &actions);
     void hide();
-    QWindow *createWindow(const QVariantList &toasts, const QVariantList &actions);
+    QWindow *createWindow(
+        const QVariantList &toasts,
+        const QVariantList &actions,
+        const QVariantMap &placementProperties
+    );
+    void applyInputMask(QWindow *window);
 
     QQmlComponent m_component;
     QPointer<ShellProvidersClient> m_providers;
     OverlaySurface *m_surface;
+    QPointer<PanelManager> m_panels;
+    std::function<QList<QRectF>(QScreen *)> m_zoneProbe;
+    std::function<bool()> m_centreProbe;
+    QRectF m_openCard;
+    QPointer<QScreen> m_openScreen;
+    bool m_openAttached = false;
     bool m_enabled;
 };

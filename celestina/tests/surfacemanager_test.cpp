@@ -269,7 +269,8 @@ private slots:
     void aClosedOverlayLeavesNoWindowBehind();
     void thePanelOverlayPrototypeLoadsAndMaps();
     void aCornerSurfaceSitsUnderThePanelAndRefusesFocus();
-    void aReadoutSurfaceSitsLowAndCentredSoItNeverCoversAToast();
+    void anAttachedQuietSurfaceTouchesTheBarAndRefusesFocus();
+    void theQuietFallbacksLandInDifferentPlaces();
     void aWallpaperCoversItsOutputAndReservesNothing();
     void wallpaperIdentityRejectsMalformedOrDuplicateRows();
     void wallpaperRevisionChangesTheQmlImageRequest();
@@ -1871,7 +1872,10 @@ void SurfaceManagerTest::anOverlaySurfaceCoversItsOutputAndTakesFocus()
     QWindow *const content = makeContent();
     const QSize contentSize = content->size();
 
-    OverlaySurface surface(OverlaySurface::Placement::Centered);
+    OverlaySurface surface(
+        OverlaySurface::Placement::Centered,
+        QStringLiteral("celestina-overlay")
+    );
     QVERIFY(surface.open(content, nullptr));
     QVERIFY(surface.isOpen());
     QCOMPARE(surface.window(), content);
@@ -1907,7 +1911,10 @@ void SurfaceManagerTest::aCornerSurfaceSitsUnderThePanelAndRefusesFocus()
     QWindow *const content = makeContent();
     const QSize contentSize = content->size();
 
-    OverlaySurface surface(OverlaySurface::Placement::Corner);
+    OverlaySurface surface(
+        OverlaySurface::Placement::Corner,
+        QStringLiteral("celestina-osd")
+    );
     QVERIFY(surface.open(content, nullptr));
     QCOMPARE(content->size(), contentSize);
     QVERIFY(content->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
@@ -1922,25 +1929,69 @@ void SurfaceManagerTest::aCornerSurfaceSitsUnderThePanelAndRefusesFocus()
     QCOMPARE(layerWindow->exclusionZone(), 0);
 }
 
-// The readout deliberately does not share that corner: a volume key pressed
-// while a notification is up must not paint over it.
-void SurfaceManagerTest::aReadoutSurfaceSitsLowAndCentredSoItNeverCoversAToast()
+// The quiet surfaces default to the top right, attached to the bar: the
+// window touches the top edge and ignores every exclusive zone, because the
+// membrane's mouth lives at the panel's lower seam inside the strip the panel
+// reserved. It still never takes focus or the keyboard.
+void SurfaceManagerTest::anAttachedQuietSurfaceTouchesTheBarAndRefusesFocus()
 {
     QWindow *const content = makeContent();
 
-    OverlaySurface surface(OverlaySurface::Placement::Readout);
-    QVERIFY(surface.open(content, nullptr));
+    OverlaySurface surface(
+        OverlaySurface::Placement::Corner,
+        QStringLiteral("celestina-osd")
+    );
+    QVERIFY(surface.open(
+        content, nullptr, OverlaySurface::Placement::AttachedTopRight));
     QVERIFY(content->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
 
     auto *layerWindow = LayerShellQt::Window::get(content);
     QVERIFY(layerWindow);
+    auto expected = LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop);
+    expected |= LayerShellQt::Window::AnchorRight;
+    QCOMPARE(layerWindow->anchors(), expected);
+    QCOMPARE(layerWindow->exclusionZone(), -1);
+    QCOMPARE(layerWindow->keyboardInteractivity(),
+             LayerShellQt::Window::KeyboardInteractivityNone);
+}
+
+// The two fallbacks are different places on purpose: when the top-right zone
+// is taken, the display retreats to the bottom-right corner and the toasts to
+// the bottom centre, so the two retreats cannot paint over each other.
+void SurfaceManagerTest::theQuietFallbacksLandInDifferentPlaces()
+{
+    QWindow *const displayContent = makeContent();
+    OverlaySurface display(
+        OverlaySurface::Placement::Corner,
+        QStringLiteral("celestina-osd")
+    );
+    QVERIFY(display.open(
+        displayContent, nullptr, OverlaySurface::Placement::BottomRight));
+    auto *displayLayer = LayerShellQt::Window::get(displayContent);
+    QVERIFY(displayLayer);
+    auto displayAnchors =
+        LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorBottom);
+    displayAnchors |= LayerShellQt::Window::AnchorRight;
+    QCOMPARE(displayLayer->anchors(), displayAnchors);
+    QCOMPARE(displayLayer->keyboardInteractivity(),
+             LayerShellQt::Window::KeyboardInteractivityNone);
+
+    QWindow *const toastContent = makeContent();
+    OverlaySurface toasts(
+        OverlaySurface::Placement::Corner,
+        QStringLiteral("celestina-toasts")
+    );
+    QVERIFY(toasts.open(
+        toastContent, nullptr, OverlaySurface::Placement::BottomCentre));
+    auto *toastLayer = LayerShellQt::Window::get(toastContent);
+    QVERIFY(toastLayer);
     // Anchored to the bottom only: one anchor with no opposing pair is what
     // centres it horizontally.
     QCOMPARE(
-        layerWindow->anchors(),
+        toastLayer->anchors(),
         LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorBottom)
     );
-    QCOMPARE(layerWindow->keyboardInteractivity(),
+    QCOMPARE(toastLayer->keyboardInteractivity(),
              LayerShellQt::Window::KeyboardInteractivityNone);
 }
 
@@ -2086,7 +2137,10 @@ void SurfaceManagerTest::wallpaperRevisionChangesTheQmlImageRequest()
 
 void SurfaceManagerTest::theOverlayRefusesToOpenTwiceAndSurvivesReopening()
 {
-    OverlaySurface surface(OverlaySurface::Placement::Centered);
+    OverlaySurface surface(
+        OverlaySurface::Placement::Centered,
+        QStringLiteral("celestina-overlay")
+    );
     QVERIFY(surface.open(makeContent(), nullptr));
     QWindow *const second = makeContent();
     QVERIFY(!surface.open(second, nullptr));
@@ -2099,7 +2153,10 @@ void SurfaceManagerTest::theOverlayRefusesToOpenTwiceAndSurvivesReopening()
 
 void SurfaceManagerTest::theOverlayReportsAndCleansUpAnExternalDismissal()
 {
-    OverlaySurface surface(OverlaySurface::Placement::Centered);
+    OverlaySurface surface(
+        OverlaySurface::Placement::Centered,
+        QStringLiteral("celestina-overlay")
+    );
     QSignalSpy dismissed(&surface, &OverlaySurface::dismissed);
     QWindow *const content = makeContent();
     QVERIFY(surface.open(content, nullptr));
@@ -2114,7 +2171,10 @@ void SurfaceManagerTest::aClosedOverlayLeavesNoWindowBehind()
     QPointer<QWindow> tracked;
 
     {
-        OverlaySurface surface(OverlaySurface::Placement::Centered);
+        OverlaySurface surface(
+        OverlaySurface::Placement::Centered,
+        QStringLiteral("celestina-overlay")
+    );
         QWindow *const content = makeContent();
         tracked = content;
         QVERIFY(surface.open(content, nullptr));
@@ -2122,7 +2182,10 @@ void SurfaceManagerTest::aClosedOverlayLeavesNoWindowBehind()
     QTRY_VERIFY(tracked.isNull());
 
     {
-        OverlaySurface surface(OverlaySurface::Placement::Centered);
+        OverlaySurface surface(
+        OverlaySurface::Placement::Centered,
+        QStringLiteral("celestina-overlay")
+    );
         QWindow *const content = makeContent();
         tracked = content;
         QVERIFY(surface.open(content, nullptr));
@@ -2177,7 +2240,10 @@ void SurfaceManagerTest::thePanelOverlayPrototypeLoadsAndMaps()
         QVERIFY2(content, qPrintable(fileName));
         QVERIFY2(content->metaObject()->indexOfSignal("dismissed()") >= 0, qPrintable(fileName));
 
-        OverlaySurface surface(OverlaySurface::Placement::Centered);
+        OverlaySurface surface(
+        OverlaySurface::Placement::Centered,
+        QStringLiteral("celestina-overlay")
+    );
         QVERIFY2(surface.open(content, nullptr), qPrintable(fileName));
     }
 }

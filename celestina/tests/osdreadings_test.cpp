@@ -50,9 +50,9 @@ void OsdReadingsTest::theFirstValueIsABaselineAndShowsNothing()
 {
     OsdReadings readings;
 
-    QVERIFY(!readings.apply(audio(40, false)).has_value());
+    QVERIFY(readings.apply(audio(40, false)).isEmpty());
     // The same value again is not news either.
-    QVERIFY(!readings.apply(audio(40, false)).has_value());
+    QVERIFY(readings.apply(audio(40, false)).isEmpty());
 }
 
 void OsdReadingsTest::aChangedLevelIsWorthShowing()
@@ -61,11 +61,11 @@ void OsdReadingsTest::aChangedLevelIsWorthShowing()
     readings.apply(audio(40, false));
 
     const auto reading = readings.apply(audio(45, false));
-    QVERIFY(reading.has_value());
-    QCOMPARE(reading->kind, QStringLiteral("volume"));
-    QCOMPARE(reading->percent, 45);
-    QVERIFY(!reading->muted);
-    QVERIFY(reading->label.isEmpty());
+    QVERIFY(!reading.isEmpty());
+    QCOMPARE(reading.first().kind, QStringLiteral("volume"));
+    QCOMPARE(reading.first().percent, 45);
+    QVERIFY(!reading.first().muted);
+    QVERIFY(reading.first().label.isEmpty());
 }
 
 void OsdReadingsTest::aMuteIsWorthShowingEvenAtTheSameLevel()
@@ -74,11 +74,11 @@ void OsdReadingsTest::aMuteIsWorthShowingEvenAtTheSameLevel()
     readings.apply(audio(40, false));
 
     const auto reading = readings.apply(audio(40, true));
-    QVERIFY(reading.has_value());
-    QCOMPARE(reading->kind, QStringLiteral("volume"));
+    QVERIFY(!reading.isEmpty());
+    QCOMPARE(reading.first().kind, QStringLiteral("volume"));
     // A muted device keeps the level it remembers.
-    QCOMPARE(reading->percent, 40);
-    QVERIFY(reading->muted);
+    QCOMPARE(reading.first().percent, 40);
+    QVERIFY(reading.first().muted);
 }
 
 void OsdReadingsTest::theMicrophoneIsItsOwnReading()
@@ -87,10 +87,10 @@ void OsdReadingsTest::theMicrophoneIsItsOwnReading()
     readings.apply(withMic(audio(40, false), 70, false));
 
     const auto reading = readings.apply(withMic(audio(40, false), 70, true));
-    QVERIFY(reading.has_value());
-    QCOMPARE(reading->kind, QStringLiteral("microphone"));
-    QCOMPARE(reading->percent, 70);
-    QVERIFY(reading->muted);
+    QVERIFY(!reading.isEmpty());
+    QCOMPARE(reading.first().kind, QStringLiteral("microphone"));
+    QCOMPARE(reading.first().percent, 70);
+    QVERIFY(reading.first().muted);
 }
 
 void OsdReadingsTest::aMonitorIsNamedByItsConnector()
@@ -102,10 +102,10 @@ void OsdReadingsTest::aMonitorIsNamedByItsConnector()
     const auto reading = readings.apply(
         brightness({{QStringLiteral("DP-1"), 60}, {QStringLiteral("DP-2"), 55}})
     );
-    QVERIFY(reading.has_value());
-    QCOMPARE(reading->kind, QStringLiteral("brightness"));
-    QCOMPARE(reading->percent, 55);
-    QCOMPARE(reading->label, QStringLiteral("DP-2"));
+    QVERIFY(!reading.isEmpty());
+    QCOMPARE(reading.first().kind, QStringLiteral("brightness"));
+    QCOMPARE(reading.first().percent, 55);
+    QCOMPARE(reading.first().label, QStringLiteral("DP-2"));
 }
 
 void OsdReadingsTest::aMonitorThatHasNotAnsweredIsNeverShown()
@@ -113,12 +113,12 @@ void OsdReadingsTest::aMonitorThatHasNotAnsweredIsNeverShown()
     OsdReadings readings;
     // Unknown is not zero, and a monitor going from unknown to a first reading
     // is that monitor answering, not somebody changing it.
-    QVERIFY(!readings.apply(brightness({{QStringLiteral("DP-1"), QVariant()}}))
-                 .has_value());
-    QVERIFY(!readings.apply(brightness({{QStringLiteral("DP-1"), 60}}))
-                 .has_value());
+    QVERIFY(readings.apply(brightness({{QStringLiteral("DP-1"), QVariant()}}))
+                .isEmpty());
+    QVERIFY(readings.apply(brightness({{QStringLiteral("DP-1"), 60}}))
+                .isEmpty());
 
-    QVERIFY(readings.apply(brightness({{QStringLiteral("DP-1"), 65}})).has_value());
+    QVERIFY(!readings.apply(brightness({{QStringLiteral("DP-1"), 65}})).isEmpty());
 }
 
 void OsdReadingsTest::volumeIsReportedBeforeAMonitorWhenBothChange()
@@ -133,13 +133,18 @@ void OsdReadingsTest::volumeIsReportedBeforeAMonitorWhenBothChange()
     moved.insert(QStringLiteral("brightness"),
                  QVariantMap {{QStringLiteral("DP-1"), 65}});
 
+    // Both changed, so both are announced — volume first, and the monitor's
+    // card right behind it instead of being silently swallowed, which is what
+    // made one command that moved both raise one display.
     const auto reading = readings.apply(moved);
-    QVERIFY(reading.has_value());
-    QCOMPARE(reading->kind, QStringLiteral("volume"));
+    QCOMPARE(reading.size(), 2);
+    QCOMPARE(reading.first().kind, QStringLiteral("volume"));
+    QCOMPARE(reading.last().kind, QStringLiteral("brightness"));
+    QCOMPARE(reading.last().percent, 65);
 
-    // The monitor's new level was still recorded, so it is not announced later
-    // as though it had just moved.
-    QVERIFY(!readings.apply(moved).has_value());
+    // Both new levels were recorded, so neither is announced later as though
+    // it had just moved.
+    QVERIFY(readings.apply(moved).isEmpty());
 }
 
 void OsdReadingsTest::aLostHelperMakesTheNextValueABaselineAgain()
@@ -148,8 +153,8 @@ void OsdReadingsTest::aLostHelperMakesTheNextValueABaselineAgain()
     readings.apply(audio(40, false));
     readings.forget();
 
-    QVERIFY(!readings.apply(audio(45, false)).has_value());
-    QVERIFY(readings.apply(audio(50, false)).has_value());
+    QVERIFY(readings.apply(audio(45, false)).isEmpty());
+    QVERIFY(!readings.apply(audio(50, false)).isEmpty());
 }
 
 QTEST_MAIN(OsdReadingsTest)

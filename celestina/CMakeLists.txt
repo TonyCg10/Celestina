@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.15.0 LANGUAGES CXX)
+project(celestina VERSION 0.16.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -120,6 +120,8 @@ qt_add_executable(celestina
     src/panelmenucontroller.cpp
     src/overlaysurface.h
     src/overlaysurface.cpp
+    src/quietplacement.h
+    src/quietplacement.cpp
     src/overlaycontroller.h
     src/overlaycontroller.cpp
     src/trayitems.h
@@ -398,6 +400,8 @@ if(BUILD_TESTING)
         src/panelattachmentlease.cpp
         src/overlaysurface.h
         src/overlaysurface.cpp
+        src/quietplacement.h
+        src/quietplacement.cpp
         src/panelblurcontroller.h
         src/panelblurcontroller.cpp
         src/surfacemanager.h
@@ -457,6 +461,8 @@ if(BUILD_TESTING)
         src/panelattachmentlease.cpp
         src/overlaysurface.h
         src/overlaysurface.cpp
+        src/quietplacement.h
+        src/quietplacement.cpp
         src/niriclient.h
         src/niriclient.cpp
         src/diagnosticjournal.cpp
@@ -499,6 +505,8 @@ if(BUILD_TESTING)
         src/panelattachmentlease.cpp
         src/overlaysurface.h
         src/overlaysurface.cpp
+        src/quietplacement.h
+        src/quietplacement.cpp
         src/panelblurcontroller.h
         src/panelblurcontroller.cpp
         src/diagnosticjournal.h
@@ -545,6 +553,8 @@ if(BUILD_TESTING)
         src/requestledger.cpp
         src/panelmenucontroller.h
         src/panelmenucontroller.cpp
+        src/quietplacement.h
+        src/quietplacement.cpp
         src/shellscale.h
         src/shellscale.cpp
         src/panelattachmentlease.h

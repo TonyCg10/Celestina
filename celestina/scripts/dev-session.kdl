@@ -15,10 +15,14 @@
 // decoration that quietly does nothing.
 //
 // `scale` does apply, and it is the reason this block exists: a panel that must
-// be proven at scale 1 and scale 2 needs the scale to be a value the harness
-// sets, not whatever the host monitor happened to have.
+// be proven at more than one factor needs the scale to be a value the harness
+// sets, not whatever the host monitor happened to have. `dev-session.sh` sets
+// it: it copies this file into the runtime directory with the number below
+// substituted (1.5 by default, the author's own 4K monitor, `--scale` for a
+// deliberate second case), so the value written here is the fallback for
+// anyone running niri against this file by hand.
 output "winit" {
-    scale 1
+    scale 1.5
     backdrop-color "#101820"
 }
 
@@ -119,11 +123,13 @@ blur {
 // active. Xray deliberately reuses the blurred wallpaper and ignores windows
 // below the surface. Celestina's ext-background-effect request can describe
 // the finite glass shape but cannot override that compositor policy, so the
-// reference session disables xray only for Celestina's interactive glass
-// layers. Wallpaper, toast and OSD surfaces stay outside this visual-language
-// unit.
+// reference session disables xray only for Celestina's glass layers. The
+// toasts and the on-screen display joined the list when they joined the
+// membrane material: a drop out of the bar that blurred only the wallpaper
+// while the menus beside it blurred real windows would read as two glasses.
+// Only the wallpaper stays outside this visual-language unit.
 layer-rule {
-    match namespace="^celestina-(panel|panel-menu|panel-child-menu|overlay)$"
+    match namespace="^celestina-(panel|panel-menu|panel-child-menu|overlay|toasts|osd)$"
 
     background-effect {
         xray false

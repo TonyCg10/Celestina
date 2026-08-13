@@ -11,6 +11,7 @@
 
 class OverlaySurface;
 class QQmlEngine;
+class QScreen;
 class QWindow;
 
 // The bridge property each overlay component declares, or an empty string for a
@@ -70,6 +71,11 @@ public:
     bool isEnabled() const { return m_enabled; }
     bool isOpen() const;
 
+    // The open overlay's card on one output, in output-local shell units, or
+    // an empty rectangle. The quiet surfaces ask before landing at the top
+    // right.
+    QRectF openCardRectOnOutput(QScreen *screen) const;
+
 public slots:
     void open();
     void close();
@@ -83,6 +89,10 @@ public slots:
         const QRectF &globalOpener,
         const QRectF &globalAttachmentAnchor
     );
+
+signals:
+    // This overlay was just mapped; see PanelMenuController's twin signal.
+    void contextualSurfaceOpened();
 
 private slots:
     // A retired QML window may finish its close transition after a successor

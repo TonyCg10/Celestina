@@ -374,12 +374,15 @@ void PanelBlurController::probe()
     }
 
     if (m_state == State::Enabled) {
-        if (m_window->isExposed()) {
-            KWindowEffects::enableBlurBehind(m_window.data(), false);
-            m_window->requestUpdate();
-        }
-        // Any failed prerequisite revokes the confirmed arm before retries.
-        // Only the guarded branch above may use an unexposed surface.
+        // Unconditionally, exposed or not: an idle Wayland window's exposed
+        // flag flaps (measured on the nested session — a mapped, committing
+        // surface reported unexposed), and a withdraw skipped on that flag
+        // left the armed region blurring an empty rectangle over the
+        // wallpaper for as long as the persistent surface lived. The effect
+        // state is double-buffered and simply rides the window's next
+        // commit — which the display's heartbeat guarantees.
+        KWindowEffects::enableBlurBehind(m_window.data(), false);
+        m_window->requestUpdate();
         m_state = State::Pending;
     }
     m_armedSize = {};

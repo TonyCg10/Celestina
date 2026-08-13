@@ -470,6 +470,52 @@ int main(int argc, char *argv[])
         menu,
         reducedMotionRequested()
     );
+    // The quiet surfaces attach to the bar and yield the top-right zone to
+    // anything interactive already there. The probes are lambdas because the
+    // occupants are controllers only this function knows; each surface also
+    // counts the other quiet surface, so a display arriving while toasts are
+    // up retreats, and the other way round.
+    osd->setPanels(&panels);
+    osd->setMenus(menu);
+    toasts->setPanels(&panels);
+    const auto interactiveCards =
+        [menu, launcher, clipboard, notificationCentre, controlCentre,
+         sessionMenu](QScreen *screen) {
+            return QList<QRectF> {
+                menu->openCardRectOnOutput(screen),
+                launcher->openCardRectOnOutput(screen),
+                clipboard->openCardRectOnOutput(screen),
+                notificationCentre->openCardRectOnOutput(screen),
+                controlCentre->openCardRectOnOutput(screen),
+                sessionMenu->openCardRectOnOutput(screen),
+            };
+        };
+    osd->setZoneProbe([interactiveCards, toasts](QScreen *screen) {
+        QList<QRectF> cards = interactiveCards(screen);
+        cards.append(toasts->openCardRectOnOutput(screen));
+        return cards;
+    });
+    toasts->setCentreProbe([notificationCentre]() {
+        return notificationCentre->isOpen();
+    });
+    toasts->setZoneProbe([interactiveCards, osd](QScreen *screen) {
+        QList<QRectF> cards = interactiveCards(screen);
+        cards.append(osd->openCardRectOnOutput(screen));
+        return cards;
+    });
+
+    // A surface opening where a display already sits pushes it to its
+    // fallback in real time, cards and clocks intact.
+    QObject::connect(
+        menu, &PanelMenuController::contextualSurfaceOpened,
+        osd, &OsdController::retreatIfCovered);
+    for (OverlayController *const opener :
+         {launcher, clipboard, notificationCentre, controlCentre, sessionMenu}) {
+        QObject::connect(
+            opener, &OverlayController::contextualSurfaceOpened,
+            osd, &OsdController::retreatIfCovered);
+    }
+
     panels.setLauncher(launcher);
     panels.setNotificationCentre(notificationCentre);
     panels.setControlCentre(controlCentre);

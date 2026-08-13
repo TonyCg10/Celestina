@@ -1170,3 +1170,279 @@ are added rather than removed after the hunt — `blur.armed` and
 `tray.child.placed`/`requested`/`closed` — because a nested session's console
 is unreachable from outside it, and these are the bounded technical facts that
 turned this investigation from guesswork into subtraction.
+
+## PANEL-1-S boundary
+
+Evidence: [quiet-surface glass and placement](../../evidence/2026-08-13-quiet-surface-glass-and-placement.md).
+
+### The on-screen display joins the same glass
+
+The display that appears on a volume, microphone or brightness key was the last
+shell surface still painted as an opaque plate. The cause is one line of the
+old file: it used `GlassCard`, whose material comes from an in-scene capture,
+and an overlay window's scene contains nothing behind the card. With no sample
+to disperse, the surface fell back to its own strong tint and read as solid
+over the desktop while the bar the reading came from was transparent.
+
+It is now the same anatomy as every menu: one `SoftMenuField` contextual veil
+that publishes a finite compositor region through `glassRegions` — which
+`OverlaySurface` already arms a `PanelBlurController` for, on any window that
+exposes the property — carrying one denser `ContentSurface` section for the
+reading itself. Colour comes from `BackdropInk` rather than raw theme text
+tokens, so the display keeps the one light foreground the rest of the shell
+uses over dark content material. Following the icon-first decision, each
+reading now wears the glyph of the panel control it came from, muted variants
+included.
+
+The regression is contracted in `tst_sessionosd.qml`: a shown display publishes
+exactly one glass region, its body tint is a `ContextualVeil` over an external
+backdrop with no capture and no elevation, and that veil is materially lighter
+than the section it carries. That last comparison is the one an opaque plate
+cannot satisfy.
+
+Remaining, and deliberately not done here: the display does not apply
+`shellScale`, so it is drawn small on a fractionally scaled output. That is the
+same open item as the menus and belongs to the scaling unit, not to this one.
+
+The toasts had the identical defect from the identical cause, and they are on
+the same glass now: each notification is a `SoftMenuField` veil carrying one
+`ContentSurface` section, with the critical stripe inside that section.
+
+One thing is different from every other surface, and it is why this took a
+function rather than a property alias. The stack is *one* window with N cards
+on it, while every field collects only its own geometry. The window therefore
+publishes the union: each card reports through `onGlassRegionsChanged` and the
+stack concatenates what they hold, in window coordinates, which is what
+`mapRect` already gives. Reflow needs nothing extra — a card that moves because
+the toast above it was dismissed republishes from its own `y` change — but the
+mapping does, since a card collects on a timer after its reveal and the surface
+may be mapped after that; `onVisibleChanged` asks every card once more.
+
+The dismiss and action buttons stop being the shell's one direct style-control
+exception. That exception existed because the card was an opaque plate of its
+own; it is menu material now, so they use `BackdropIconButton`/`BackdropButton`
+like every other card and take their ink from the same `BackdropInk`.
+
+`tst_notificationjoin.qml` contracts the union directly: two toasts publish two
+regions and two rects, and the veil is materially lighter than the section it
+carries.
+
+### The quiet surfaces hang from the bar
+
+The author's direction (2026-08-13): every OSD appears at the top right as a
+notification does, connected to the bar by the same membrane as the menus,
+from the icon of the reading it shows; a level changed from inside its own
+open menu raises no display; and when the zone is taken, the display falls
+back to the bottom right while the toasts fall back to the bottom centre.
+The toasts are not OSDs but carry the same connected-membrane style, from the
+notification bell.
+
+What carries it: `quietplacement.{h,cpp}` owns the pure decisions — the
+attached geometry (card centred on its control, window spanning from card or
+icon to the right edge so the mouth is never clipped by its own window), the
+zone question (the card's landing rectangle, connector travel included,
+against every open card), the kind-to-icon vocabulary and the suppression
+rule. The anchor is resolved without a click by walking the mapped panel for
+the icon's objectName and its nearest `isPanelAttachmentSource` ancestor —
+the same two rectangles a `PanelMenuButton` click publishes, mapped through
+the scene's per-output factor. `OverlaySurface` grew the placements
+(`AttachedTopRight` ignores exclusive zones because the seam lives inside the
+panel's reserved strip; `BottomRight`/`BottomCentre` are the two fallbacks)
+and a per-open placement override; its scope moved to the constructor since
+two controllers now share mechanics.
+
+Both controllers decide at open: resolve, measure, ask the zone probe
+(`main()` wires it over the menu controller, the five overlays and the other
+quiet surface), then open attached or retreat. The display updates in place
+and its membrane follows a reading whose kind changed — volume to brightness
+slides the mouth to the other icon — releasing the attachment rather than
+pointing at the wrong icon when the new kind has no control on that panel.
+
+Input is the part a screenshot does not show. The attached windows reach the
+real top edge, covering the exact controls that raise them: the display sets
+a one-pixel input mask — it reports and is never touched, so the wheel that
+raised it keeps stepping the control under it — and the toast window masks
+everything above the seam through to the panel while its cards keep their
+buttons. The membrane region between seam and card stays inside the mask
+deliberately: it is transient and card-adjacent, and carving the drop's exact
+outline out of the mask per frame would republish an input region per
+animation tick.
+
+Deliberate limits: occupancy is decided when a surface opens — an OSD already
+up does not move aside for a menu opening under it (it is gone in under two
+seconds, and the menu takes the keyboard either way); a toast stack that
+retreated stays retreated until it empties; and the two QML card sizes are
+restated as host constants for the zone estimate, pinned against the
+components in their own tests.
+
+The nested profile's xray-off rule now includes `celestina-toasts` and
+`celestina-osd`: attached drops sample the same reality as the menus beside
+them.
+
+### The display yields in real time and becomes a card file
+
+The author's two follow-ups after exercising PANEL-1-T live (suppression and
+fallback confirmed working): a menu opening over an already-visible display
+must push it to its fallback *now*, not at its next opening; and two kinds
+arriving together must not overwrite each other — they should stack "como
+tarjetas en archivero", hover bringing a card to the front.
+
+The retreat: `PanelMenuController` and `OverlayController` gained one
+`contextualSurfaceOpened` signal, wired in `main()` to
+`OsdController::retreatIfCovered`, which remaps to the bottom-right corner
+only when the new card really intrudes on the display's own rectangle. It is
+the one remap the display allows itself; the file and every per-kind clock
+survive the move.
+
+The file: `OsdReadings::merged`/`without` own the list's shape (front
+insertion, in-place promotion, kind removal — pure, pinned in
+`osdreadings_test`). The controller keeps one deadline per kind and one timer
+armed to the earliest, so a wheel burst refreshes its own kind without
+resetting a neighbour's card. The QML syncs a `ListModel` in place rather
+than rebuilding it — a rebuilt model recreates every delegate per notch and
+replays every reveal — and each card is the same attached `SoftMenuField`,
+only the front one gripping the bar. Hover raises a card via z; that is the
+surface's only interaction, so the input mask grew from one pixel to
+everything below the seam, keeping the bar's strip — and the wheel that
+raises the display — untouched.
+
+Found while testing: `findChild` does not see Repeater delegates (visual
+children, not QObject children); the QML tests walk the scene instead, as the
+toast tests already did.
+
+### The hunt: the display never composited on the nested session
+
+Hunted on 2026-08-13 with screenshots, the diagnostics journal and a
+`WAYLAND_DEBUG` capture; unresolved at the end of the session. The facts, all
+verified rather than assumed:
+
+- The toast stack works end to end on the nest: attached, membrane from the
+  bell, visible, fallback to the bottom centre when the zone is taken.
+- The display opens (journal `quiet.placed`, placement decisions correct),
+  its layer surface maps with a byte-identical protocol dialog to the toast's
+  (same anchors, exclusive zone, viewport, fractional scale, input region),
+  its glass region arms, and it attaches and commits real buffers — and the
+  compositor composites none of it, in the attached placement and in both
+  fallbacks alike. A pure red rectangle added to the scene was equally
+  invisible, so the content is exonerated.
+- The protocol capture shows the deeper timing fact: an exposed quiet window
+  does not schedule its own first frame. Its commits happen only when data
+  dirties the scene — the provider's two-second poll — so the first buffer
+  arrived ~2.4 s after creation, and without a first commit no frame
+  callbacks flow, so no animation can tick either. The toast survives this
+  because it lives tens of seconds; the display's cards live 1.8 s.
+
+What was fixed along the way, each verified: the toast fallback mapped with
+height zero (cards stated `height`, the column sums `implicitHeight`); one
+command that moved volume and brightness together raised one display, because
+`OsdReadings::apply` returned only the first changed capability (it returns
+the full list now, pinned); the fall's `frameSwapped` wait had a genuine race
+(`Window.window` unresolved at delegate creation) now covered by a nudge plus
+a bounded fallback timer; and the controllers kick an update after mapping.
+Ruled out by isolation: the layer namespace, the input mask, the ListModel
+versus plain-list delegate model, and the nest's xray rule (a fresh nest with
+`celestina-toasts|osd` in the rule changed nothing).
+
+Next hypotheses, in order: reuse one persistent mapped window for the display
+(the toast stack's longevity is the one behavioural difference left standing);
+and instrument when the compositor's configure arrives relative to the card's
+death, since map-to-configure alone measured 1.4 s on the nest.
+
+### The persistent display window, and where the hunt stands
+
+The display moved to one persistent surface: premapped as soon as a panel
+exists to hang it from, resting empty, transparent and pointer-inert between
+readings, updated in place, remapped only for an output change or a real
+intrusion, and going home from its fallback corner when the bar can hold it
+again. `osd.pushed` journals every push. A one-pixel heartbeat keeps a commit
+in flight because a Wayland window that commits nothing loses its frame
+callbacks and Qt then treats it as unexposed — measured, and the panel only
+escapes it because its clock repaints every second.
+
+The measurements that stand: pushes flow (journal), the resting surface
+commits continuously (WAYLAND_DEBUG: heartbeat commits every ~2 s), the
+protocol dialog is identical to the visible toast stack's — and the card
+rendered exactly once across the whole hunt (the first reading of the first
+persistent build, screenshot on record, membrane and all), then never again,
+including after rebuilds that only added instrumentation. The compositor is
+receiving real buffers for a surface it lists and not drawing them, while
+drawing the toast stack's equal twin beside it.
+
+Resolved by the isolation the plan called for: **the ext-background-effect
+region was the blocker.** With the blur controller disabled for
+`celestina-osd` alone, the card appeared on the next trigger and kept
+appearing — membrane, file and expiry all correct — while with the region
+armed the compositor accepted buffers and drew nothing. The display now
+deliberately runs without a compositor effect region (the decision lives as
+a comment at the exact skip in `OverlaySurface::open`); every card still
+paints the canonical glass fallback tint, so the material stays readable,
+and only the live backdrop sample is lost until the niri interaction is
+reported upstream with the two captured protocol dialogs. The two-card file
+was observed live in the journal (`osd.pushed … cards 2`, brightness in
+front of volume) during the verification rounds.
+
+What remains intermittent, and why it is acceptable: a freshly mapped quiet
+window still takes seconds to its first presented frame, so the rare remap
+transitions — retreat to the fallback corner, an output change — can miss a
+short-lived card. The persistent window exists precisely so those are the
+exception; the steady case renders on every trigger.
+
+### The twins, and the boot poison
+
+Continuing the same day: the author asked why the display lost its blur and
+reported the bottom-centre toast overflowing the screen, and that a menu
+opening over a live display still did not push it aside.
+
+Three causes, three fixes, each measured:
+
+- **The overflow**: `mapLayerSurface` told the compositor a desired size once,
+  at map time, and a toast column that grew afterwards committed buffers
+  larger than that stale size — drawn spilling over the screen edge. The
+  desired size now follows the window for every non-centered quiet surface.
+- **The retreat**: it was implemented as a remap, and a freshly mapped quiet
+  window takes seconds to its first frame, so the retreated display arrived
+  invisible — it read as "not moving". The display now keeps **two**
+  persistent surfaces, the attached home and the bottom-right fallback, and
+  moving the file between them is a property push on windows that are
+  already rendering. A centred overlay opened by keybind deliberately does
+  not push the display: the probe tests real intrusion, not mere openness.
+- **The boot poison**: premapping those two surfaces during the shell's own
+  start stopped niri compositing the whole overlay layer and the wallpaper
+  with it — on a fresh nest, reproducibly, and it also retro-explains the
+  day's intermittency, since each earlier run had premapped before its first
+  reading. There is deliberately no premapping now: the surfaces are born at
+  the first reading, made fast enough by the render kick, and persist from
+  then on.
+
+On the blur question the author raised — and, rightly, raised again: the
+effect is back on. The earlier isolation was confounded: disabling the blur
+happened alongside the premap experiments, and once the boot premap was
+identified as the real overlay poison, re-enabling the effect on the now
+on-demand surfaces worked. Two more lifecycle defects surfaced and were
+fixed the same hour, both found because the author saw a blurred rectangle
+that never left: the effect withdraw was gated on `isExposed()`, a flag
+measured to flap on idle Wayland windows, so the armed region survived its
+card — it withdraws unconditionally now, riding the heartbeat's next
+commit; and a dying delegate never republished `glassRegions`, so the
+window kept the dead card's region forever — both quiet surfaces recollect
+when their model shrinks. Verified on the nest: card with live blur,
+expiry, clean wallpaper, no ghost.
+
+### Two follow-ups from live use
+
+The author kept exercising the nest and caught two more: the expired
+display's blur ghost still appeared *sometimes*, and the toasts lacked the
+suppression rule the display already had.
+
+The sometimes was a race: the deferred recollect after a model shrink can
+run while the dying delegate is still in the scene, so the union kept its
+region and the withdraw never fired. Hardened from both sides — an empty
+card file publishes empty glass outright without walking anything, and the
+host clears the published glass properties itself when it empties or
+switches a window — so the withdraw no longer depends on destruction timing.
+Verified over repeated expiry cycles on the nest.
+
+And the toasts now follow the display's own rule: while the notification
+centre is open, the corner stays quiet (`setCentreProbe`, wired over the
+centre's `isOpen`). What is live is still there when the centre closes; the
+server's next publication brings it back.

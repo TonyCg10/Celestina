@@ -426,6 +426,49 @@ not apply the rest of UX-2; menu, overlay and provider work is limited to the
 exact corrections declared in the active plan. Scope, order and evidence are in
 [the PANEL-1 plan](docs/plans/active/2026-08-08-panel-glass-redesign.md).
 
+`PANEL-1-S` puts the on-screen display and the notification toasts on the
+shell's own glass, hangs them from the bar and gives the display a card file.
+
+Both were painted on a `GlassCard`, which takes its material from an in-scene
+capture — and an overlay window has no scene behind it, so each fell back to
+its opaque tint and read as a solid plate over the desktop while the bar it
+came from was transparent. Each card is now a `SoftMenuField` veil carrying
+one dense `ContentSurface` section, and the toast buttons stop being the
+shell's one direct style-control exception.
+
+They appear at the top right, attached by the same drop membrane every menu
+uses, the mouth on the panel icon of what they report — the volume,
+microphone or brightness glyph for a reading, the notification bell for a
+toast — resolved by the host without a click, in the same output-local shell
+units a click would produce. Each yields the zone rather than paint over
+something interactive already there: the display retreats to the bottom-right
+corner, the toasts to the bottom centre, two different fallbacks so the
+retreats cannot collide either, and each counts the other. A level changed
+from inside its own open menu raises no display, and the notification centre
+being open keeps the corner quiet the same way. The display's window takes
+input only where its cards are and the attached toast window passes the strip
+above the seam through to the panel, so the wheel that raised a card keeps
+stepping the control under it.
+
+The display is a file of live cards rather than one card overwritten: a volume
+change while a brightness card is still up slides a second card in front, each
+kind carries its own clock, the cards behind peek out under the front one, and
+hovering one raises it. It lives on two persistent surfaces — the attached
+home and the fallback corner — so a menu opening over it moves the file with a
+property push instead of a remap that would arrive invisible.
+
+Three lifecycle defects were found and fixed underneath all of that, each one
+isolated on the nested session rather than reasoned about: premapping the
+persistent surfaces during the shell's own start stopped the compositor
+drawing the whole overlay layer; the compositor-effect withdraw was gated on
+`isExposed()`, a flag that flaps on idle Wayland windows, so an expired card's
+blur region kept blurring bare wallpaper; and a dying delegate never
+republished its glass, so a window could keep a dead card's region. A quiet
+window also carries a one-pixel heartbeat, because a Wayland surface that
+commits nothing loses its frame callbacks and with them every animation. The
+layer surfaces now follow their window's size, so a growing stack stops
+committing buffers larger than the size the compositor was told.
+
 `PANEL-1-R` gives the clock, the phone reading, brightness and audio the menus
 they never had, collapses four hand-rolled cards into one measured `SoftCard`,
 converts five unit seams that were invisible at factor 1, and moves the tray

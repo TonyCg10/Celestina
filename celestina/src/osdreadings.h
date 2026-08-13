@@ -2,7 +2,10 @@
 
 #include <QHash>
 #include <QString>
+#include <QVariantList>
 #include <QVariantMap>
+
+#include <QList>
 
 #include <optional>
 
@@ -20,6 +23,12 @@
 //
 // Pure policy over the map the helper published — no window, no timer, no Qt
 // event loop — so each rule is testable on its own.
+//
+// The display keeps a small stack of live readings — the card file: a volume
+// change while a brightness card is still up adds a second card rather than
+// overwriting the first, because the overwritten number was information
+// someone was reading. The two functions below own that list's shape; the
+// controller owns only the per-kind clocks.
 class OsdReadings
 {
 public:
@@ -38,17 +47,27 @@ public:
         bool operator==(const Reading &other) const;
     };
 
-    // The one reading worth showing for this publication, if any.
-    //
-    // Several capabilities can change in the same frame; the display shows one
-    // thing at a time, so the order is fixed and documented rather than left
-    // to whichever key of a map came first: volume, then the microphone, then
-    // the monitor that changed.
-    std::optional<Reading> apply(const QVariantMap &providers);
+    // Every reading worth showing for this publication, in a fixed and
+    // documented order — volume, then the microphone, then the monitor that
+    // changed — rather than whichever key of a map came first. It is a list
+    // because the display is a card file now: a volume and a brightness that
+    // changed in the same frame are two cards, and returning only the first
+    // silently swallowed the second, which is why one command that moved both
+    // raised one display.
+    QList<Reading> apply(const QVariantMap &providers);
 
     // The helper went away or restarted. Whatever it publishes next is a
     // baseline again, not a change somebody made.
     void forget();
+
+    // `readings` with this reading at the front: a kind already on the list is
+    // updated and moved forward — its card is the news again — never
+    // duplicated. Each entry is the map the QML consumes.
+    static QVariantList merged(const QVariantList &readings, const Reading &reading);
+
+    // `readings` without the named kinds: what expiring and suppression both
+    // do to the list.
+    static QVariantList without(const QVariantList &readings, const QStringList &kinds);
 
 private:
     struct Audio {

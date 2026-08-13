@@ -4,18 +4,77 @@
 #include <QDebug>
 #include <QGuiApplication>
 #include <QQmlEngine>
+#include <QRegion>
 #include <QScreen>
+#include <QStringList>
 #include <QVariantMap>
+#include <QPointer>
+#include <QQuickItem>
+#include <QQuickWindow>
+#include <QTimer>
 #include <QWindow>
 
+#include <utility>
+
+#include "diagnosticjournal.h"
 #include "overlaysurface.h"
+#include "panelmanager.h"
+#include "panelmenucontroller.h"
+#include "quietplacement.h"
 #include "shellprovidersclient.h"
+#include "shellscale.h"
 
 namespace {
 // Long enough to read a number, short enough that it is gone before it is in
-// the way. Noctalia's own display used the same order of magnitude.
-constexpr int visibleMs = 1800;
+// the way. Noctalia's own display used the same order of magnitude. Each card
+// in the file carries its own clock of this length.
+constexpr qint64 visibleMs = 1800;
 const char componentName[] = "SessionOsd";
+
+// The card the QML draws, in shell units. Pinned by `tst_sessionosd.qml`
+// against the component itself, so a drift between the two is a failing test
+// rather than a mouth beside its card.
+constexpr QSizeF cardSize(260, 96);
+constexpr qreal cardInset = 8;
+// Upper bound for the connector gap plus the drop's overshoot: the QML
+// computes the exact proportional gap from its theme tokens, and the window
+// only has to be tall enough to contain it.
+constexpr qreal connectorSlack = 96;
+// How much of a card behind stays visible under the one before it, and how
+// many kinds can pile up: the window is sized for the full file from the
+// start, because a layer surface that grew per card would reconfigure per
+// wheel notch. Pinned against the QML's own `stackPeek`.
+constexpr qreal stackPeek = 28;
+constexpr int stackDepth = 3;
+
+// A rectangle in output pixels, translated onto the output and into shell
+// units — the same conversion `OverlayController` applies to a click.
+QRectF onOutputInShellUnits(
+    const QRectF &globalRect,
+    const QPointF &outputOrigin,
+    double shellScale
+)
+{
+    const QRectF onOutput = globalRect.translated(-outputOrigin);
+    return shellScale > 0
+        ? QRectF(onOutput.x() / shellScale, onOutput.y() / shellScale,
+                 onOutput.width() / shellScale, onOutput.height() / shellScale)
+        : onOutput;
+}
+} // namespace
+
+namespace {
+void quietKickRender(QWindow *window)
+{
+    const QPointer<QWindow> tracked(window);
+    const auto kick = [tracked]() {
+        if (auto *quick = qobject_cast<QQuickWindow *>(tracked.data()))
+            quick->requestUpdate();
+    };
+    kick();
+    QTimer::singleShot(50, tracked, kick);
+    QTimer::singleShot(250, tracked, kick);
+}
 } // namespace
 
 OsdController::OsdController(
@@ -26,7 +85,16 @@ OsdController::OsdController(
     : QObject(parent)
     , m_component(engine)
     , m_providers(providers)
-    , m_surface(new OverlaySurface(OverlaySurface::Placement::Readout, this))
+    , m_surface(new OverlaySurface(
+          OverlaySurface::Placement::Corner,
+          QStringLiteral("celestina-osd"),
+          this
+      ))
+    , m_fallback(new OverlaySurface(
+          OverlaySurface::Placement::BottomRight,
+          QStringLiteral("celestina-osd"),
+          this
+      ))
     , m_enabled(true)
 {
     m_component.loadFromModule("CelestinaDesktop", QLatin1String(componentName));
@@ -37,9 +105,16 @@ OsdController::OsdController(
         m_enabled = false;
     }
 
-    m_hideTimer.setSingleShot(true);
-    m_hideTimer.setInterval(visibleMs);
-    connect(&m_hideTimer, &QTimer::timeout, this, &OsdController::hide);
+    m_clock.start();
+    m_expiryTimer.setSingleShot(true);
+    connect(&m_expiryTimer, &QTimer::timeout, this, &OsdController::expire);
+
+    // Deliberately no premapping: bringing the two persistent surfaces up
+    // during the shell's own start stopped the compositor from drawing the
+    // whole overlay layer and the wallpaper with it — measured on a fresh
+    // nest, twice. The surfaces are brought up by the first reading instead,
+    // and persist from then on; the render kick makes that first mapping
+    // fast enough for a card's lifetime.
 
     if (m_providers) {
         connect(
@@ -53,7 +128,57 @@ OsdController::OsdController(
 
 bool OsdController::isVisible() const
 {
-    return m_surface->isOpen();
+    // The windows persist between readings; what "visible" means to a caller
+    // is whether any card is on one of them.
+    return !m_active.isEmpty()
+        && (m_surface->isOpen() || m_fallback->isOpen());
+}
+
+QWindow *OsdController::activeWindow() const
+{
+    return m_activeTop ? m_surface->window() : m_fallback->window();
+}
+
+bool OsdController::topIntruded() const
+{
+    QScreen *const screen = m_openScreen.data();
+    return screen && m_zoneProbe
+        && quietZoneOccupied(m_openCard, m_zoneProbe(screen));
+}
+
+void OsdController::setPanels(PanelManager *panels)
+{
+    m_panels = panels;
+}
+
+QRectF OsdController::openCardRectOnOutput(QScreen *screen) const
+{
+    // A resting persistent window occupies nothing: only live cards make the
+    // toasts yield the corner — and only where those cards actually are.
+    if (m_active.isEmpty() || !screen || m_openScreen.data() != screen)
+        return QRectF();
+    return m_activeTop ? m_openCard : m_fallbackCard;
+}
+
+void OsdController::ensureSurfaces(QScreen *screen)
+{
+    if (m_openScreen.data() != screen) {
+        m_surface->close();
+        m_fallback->close();
+        m_openScreen = screen;
+        m_openAttached = false;
+    }
+    if (!m_surface->isOpen())
+        openTop(screen);
+    if (!m_fallback->isOpen())
+        openFallback(screen);
+}
+
+QString OsdController::frontKind() const
+{
+    return m_active.isEmpty()
+        ? QString()
+        : m_active.first().toMap().value(QStringLiteral("kind")).toString();
 }
 
 void OsdController::providersChanged()
@@ -68,35 +193,28 @@ void OsdController::providersChanged()
         return;
     }
 
-    const std::optional<OsdReadings::Reading> reading =
+    // Several capabilities can change in one frame; each is its own card.
+    const QList<OsdReadings::Reading> readings =
         m_readings.apply(m_providers->providers());
-    if (!reading)
-        return;
-
-    show(*reading);
+    for (const OsdReadings::Reading &reading : readings)
+        show(reading);
 }
 
-void OsdController::applyReading(
-    QWindow *window,
-    const OsdReadings::Reading &reading
-)
+QWindow *OsdController::createWindow(const QVariantMap &placementProperties)
 {
-    window->setProperty("kind", reading.kind);
-    window->setProperty("percent", reading.percent);
-    window->setProperty("muted", reading.muted);
-    window->setProperty("label", reading.label);
-}
-
-QWindow *OsdController::createWindow(const OsdReadings::Reading &reading)
-{
-    const QVariantMap initialProperties {
-        {QStringLiteral("kind"), reading.kind},
-        {QStringLiteral("percent"), reading.percent},
-        {QStringLiteral("muted"), reading.muted},
-        {QStringLiteral("label"), reading.label},
+    const QVariantMap front = m_active.isEmpty()
+        ? QVariantMap()
+        : m_active.first().toMap();
+    QVariantMap initialProperties {
+        {QStringLiteral("kind"), front.value(QStringLiteral("kind"), QString())},
+        {QStringLiteral("percent"), front.value(QStringLiteral("percent"), -1)},
+        {QStringLiteral("muted"), front.value(QStringLiteral("muted"), false)},
+        {QStringLiteral("label"), front.value(QStringLiteral("label"), QString())},
+        {QStringLiteral("readings"), m_active},
         {QStringLiteral("reducedMotion"),
          qEnvironmentVariableIsSet("CELESTINA_REDUCED_MOTION")},
     };
+    initialProperties.insert(placementProperties);
     QObject *rootObject = m_component.createWithInitialProperties(initialProperties);
     if (!rootObject) {
         qCritical().noquote()
@@ -114,23 +232,122 @@ QWindow *OsdController::createWindow(const OsdReadings::Reading &reading)
     return window;
 }
 
+// The window shows the whole file and announces the front card through the
+// same four properties it has always had.
+void OsdController::pushReadings(QWindow *window)
+{
+    const QVariantMap front = m_active.isEmpty()
+        ? QVariantMap()
+        : m_active.first().toMap();
+    window->setProperty("kind", front.value(QStringLiteral("kind"), QString()));
+    window->setProperty("percent", front.value(QStringLiteral("percent"), -1));
+    window->setProperty("muted", front.value(QStringLiteral("muted"), false));
+    window->setProperty("label", front.value(QStringLiteral("label"), QString()));
+    window->setProperty("readings", m_active);
+
+    // One bounded line per push: which card fronts the file and how many ride
+    // behind it. The nested session's console is unreachable; this is how a
+    // card that never appeared is told apart from a card never pushed.
+    DiagnosticJournal::instance().record(
+        DiagnosticJournal::Record(
+            DiagnosticJournal::Level::Info,
+            QStringLiteral("osd.pushed"))
+            .text(QStringLiteral("front"),
+                  front.value(QStringLiteral("kind")).toString())
+            .number(QStringLiteral("cards"), m_active.size())
+    );
+}
+
+// The membrane rectangles for one reading on one screen, in output-local
+// shell units, or invalid rects when that screen's panel offers no icon for
+// this kind.
+bool OsdController::resolveAttachment(
+    QScreen *screen,
+    const QString &kind,
+    QRectF *opener,
+    QRectF *icon,
+    qreal *barHeight
+) const
+{
+    if (!m_panels || !screen)
+        return false;
+
+    QWindow *const panel = m_panels->panelWindowFor(screen);
+    if (!panel || !panel->isVisible())
+        return false;
+
+    const QuietAnchor anchor =
+        quietAnchorForIcon(panel, osdIconObjectName(kind));
+    if (!anchor.valid())
+        return false;
+
+    const double shellScale = shellScaleForScreen(screen);
+    const QPointF outputOrigin = screen->geometry().topLeft();
+    *opener = onOutputInShellUnits(anchor.opener, outputOrigin, shellScale);
+    *icon = onOutputInShellUnits(anchor.icon, outputOrigin, shellScale);
+    *barHeight = shellScale > 0
+        ? qMax(0, panel->height()) / shellScale
+        : qMax(0, panel->height());
+    return true;
+}
+
+// The cards are hoverable — a card behind rises to the front — so the window
+// takes input where the cards are and nowhere else: everything above the
+// seam stays the panel's, which is what keeps the wheel that raised this
+// display stepping the control under it.
+void OsdController::applyInputMask(QWindow *window)
+{
+    if (!window)
+        return;
+
+    // Resting — or carrying nothing while its twin carries the file — the
+    // persistent window must swallow no input at all.
+    const bool carries = !m_active.isEmpty() && window == activeWindow();
+    if (!carries) {
+        window->setMask(QRegion(0, 0, 1, 1));
+        return;
+    }
+
+    if (!m_activeTop || !m_openAttached) {
+        window->setMask(QRegion());
+        return;
+    }
+
+    QWindow *const panel =
+        m_panels ? m_panels->panelWindowFor(window->screen()) : nullptr;
+    const int seam = panel ? qMax(0, panel->height()) : 0;
+    window->setMask(QRegion(
+        0, seam,
+        qMax(1, window->width()), qMax(1, window->height() - seam)
+    ));
+}
+
 void OsdController::show(const OsdReadings::Reading &reading)
 {
     if (!m_enabled)
         return;
 
-    // A display that is already up is updated in place: remapping a surface per
-    // wheel notch would make the corner flicker and ask the compositor for a
-    // new surface several times a second.
-    if (QWindow *const shown = m_surface->window()) {
-        applyReading(shown, reading);
-        m_hideTimer.start();
+    // The level is being moved from inside its own open menu, whose slider is
+    // already showing it. The card that was already up for an earlier blind
+    // change of the same kind is stale the moment the menu takes over, so it
+    // leaves the file too; the other kinds' cards keep their clocks.
+    if (m_menus && osdSuppressedByOpenMenu(reading.kind, m_menus->openIndicator())) {
+        m_active = OsdReadings::without(m_active, {reading.kind});
+        m_deadlines.remove(reading.kind);
+        if (m_active.isEmpty()) {
+            clearCards();
+        } else if (QWindow *const shown = activeWindow()) {
+            pushReadings(shown);
+            if (m_activeTop && m_openAttached)
+                updateAttachment(shown, frontKind());
+            quietKickRender(shown);
+        }
         return;
     }
 
-    QWindow *const osd = createWindow(reading);
-    if (!osd)
-        return;
+    m_active = OsdReadings::merged(m_active, reading);
+    m_deadlines.insert(reading.kind, m_clock.elapsed() + visibleMs);
+    scheduleExpiry();
 
     // The display follows the pointer's output, like every other surface the
     // shell opens without a click position, and falls back to the primary
@@ -139,16 +356,322 @@ void OsdController::show(const OsdReadings::Reading &reading)
     if (!screen)
         screen = QGuiApplication::primaryScreen();
 
-    if (!m_surface->open(osd, screen)) {
+    ensureSurfaces(screen);
+
+    // Home when the bar can hold the cards, the fallback corner when
+    // something interactive already sits there. Both surfaces are alive and
+    // rendering, so the choice is a property push, never a remap.
+    switchTo(!topIntruded());
+
+    if (QWindow *const shown = activeWindow()) {
+        pushReadings(shown);
+        if (m_activeTop && m_openAttached)
+            updateAttachment(shown, reading.kind);
+        applyInputMask(shown);
+        quietKickRender(shown);
+    }
+}
+
+void OsdController::openTop(QScreen *screen)
+{
+    const double shellScale = shellScaleForScreen(screen);
+    const QSizeF outputSize = screen && shellScale > 0
+        ? QSizeF(screen->geometry().size()) / shellScale
+        : QSizeF();
+
+    // The window must contain every icon the membrane could ever point at,
+    // because it maps once and the front card's kind changes underneath it.
+    // The card geometry follows the front kind when there is one, or the
+    // first control the panel offers when the window is brought up empty.
+    QRectF opener;
+    QRectF icon;
+    qreal barHeight = 0;
+    QuietSurfaceGeometry geometry;
+    {
+        bool resolved = resolveAttachment(
+            screen, frontKind(), &opener, &icon, &barHeight);
+        qreal leftmost = icon.x();
+        for (const char *kind : {"volume", "microphone", "brightness"}) {
+            QRectF kindOpener;
+            QRectF kindIcon;
+            qreal kindBar = 0;
+            if (!resolveAttachment(screen, QLatin1String(kind),
+                                   &kindOpener, &kindIcon, &kindBar)) {
+                continue;
+            }
+            if (!resolved) {
+                opener = kindOpener;
+                icon = kindIcon;
+                barHeight = kindBar;
+                leftmost = kindIcon.x();
+                resolved = true;
+            }
+            leftmost = qMin(leftmost, kindIcon.x());
+        }
+        if (resolved) {
+            // Sized for the whole card file from the start: a layer surface
+            // that grew per card would reconfigure per wheel notch.
+            const QSizeF fileSize(
+                cardSize.width(),
+                cardSize.height() + stackPeek * (stackDepth - 1)
+            );
+            geometry = attachedQuietGeometry(
+                outputSize,
+                barHeight,
+                opener,
+                icon,
+                fileSize,
+                cardInset,
+                connectorSlack
+            );
+            if (geometry.valid && leftmost - cardInset < geometry.surface.x()) {
+                const qreal left = qMax<qreal>(0, leftmost - cardInset);
+                geometry.surface.setX(left);
+                geometry.surface.setWidth(outputSize.width() - left);
+            }
+        }
+    }
+
+    // Where the cards would land: attached under their icons, or floating in
+    // the top-right corner when this panel offers no icon at all. Occupancy
+    // is not decided here any more — both surfaces persist and `show`
+    // chooses which one carries the cards.
+    const QRectF prospectiveCard = geometry.valid
+        ? geometry.card
+        : QRectF(outputSize.width() - cardInset - cardSize.width(),
+                 cardInset, cardSize.width(),
+                 cardSize.height() + stackPeek * (stackDepth - 1));
+
+    OverlaySurface::Placement placement = OverlaySurface::Placement::Corner;
+    QVariantMap placementProperties {
+        {QStringLiteral("shellScale"), shellScale},
+    };
+    if (geometry.valid) {
+        placement = OverlaySurface::Placement::AttachedTopRight;
+        placementProperties.insert(QStringLiteral("anchoredFromPanel"), true);
+        placementProperties.insert(QStringLiteral("openerRect"), opener);
+        placementProperties.insert(QStringLiteral("attachmentAnchorRect"), icon);
+        placementProperties.insert(QStringLiteral("attachmentStartY"), barHeight);
+        placementProperties.insert(
+            QStringLiteral("surfaceOriginX"), geometry.surface.x());
+        placementProperties.insert(
+            QStringLiteral("surfaceWidth"), geometry.surface.width());
+        placementProperties.insert(
+            QStringLiteral("surfaceHeight"), geometry.surface.height());
+    }
+
+    QWindow *const osd = createWindow(placementProperties);
+    if (!osd)
+        return;
+
+    if (!m_surface->open(osd, screen, placement)) {
         delete osd;
         return;
     }
 
-    m_hideTimer.start();
+    // A nested session's console is unreachable from outside it; where a
+    // quiet surface went and why is the bounded fact this hunt needs.
+    DiagnosticJournal::instance().record(
+        DiagnosticJournal::Record(
+            DiagnosticJournal::Level::Info,
+            QStringLiteral("quiet.placed"))
+            .text(QStringLiteral("surface"), QStringLiteral("osd"))
+            .number(QStringLiteral("placement"), static_cast<int>(placement))
+            .flag(QStringLiteral("anchored"), geometry.valid)
+            .number(QStringLiteral("card_x"), qRound(prospectiveCard.x()))
+            .number(QStringLiteral("card_y"), qRound(prospectiveCard.y()))
+            .number(QStringLiteral("card_width"), qRound(prospectiveCard.width()))
+    );
+
+    m_openAttached = placement == OverlaySurface::Placement::AttachedTopRight;
+    m_openScreen = screen;
+    m_openCard = prospectiveCard;
+    applyInputMask(osd);
+    connect(osd, &QWindow::heightChanged, this, [this]() {
+        applyInputMask(m_surface->window());
+    });
+
+    // Measured on the nested session: an exposed layer window does not
+    // schedule its own first frame — the scene renders only when something
+    // dirties it, its first commit arrived seconds late on the provider's
+    // poll, and without that first commit no frame callbacks flow, so no
+    // animation can tick either. A surface that lives under two seconds died
+    // unpainted. Kicking one update right after mapping starts the chain.
+    quietKickRender(osd);
+
+
+}
+
+// The bottom-right twin: floating, card-file sized, permanently mapped. Its
+// window grows with the file — the compositor follows the size now — and
+// rests transparent and inert between visits.
+void OsdController::openFallback(QScreen *screen)
+{
+    const double shellScale = shellScaleForScreen(screen);
+    const QSizeF outputSize = screen && shellScale > 0
+        ? QSizeF(screen->geometry().size()) / shellScale
+        : QSizeF();
+
+    const QVariantMap placementProperties {
+        {QStringLiteral("shellScale"), shellScale},
+    };
+    QWindow *const osd = createWindow(placementProperties);
+    if (!osd)
+        return;
+    if (!m_fallback->open(osd, screen, OverlaySurface::Placement::BottomRight)) {
+        delete osd;
+        return;
+    }
+
+    m_fallbackCard = QRectF(
+        outputSize.width() - cardInset - cardSize.width(),
+        outputSize.height() - cardInset
+            - (cardSize.height() + stackPeek * (stackDepth - 1)),
+        cardSize.width(),
+        cardSize.height() + stackPeek * (stackDepth - 1)
+    );
+    applyInputMask(osd);
+    quietKickRender(osd);
+}
+
+// Which persistent surface carries the file. Both are alive and rendering,
+// so moving the cards is a property push — which is what lets a menu opening
+// over the display push it aside in real time instead of hiding it.
+void OsdController::switchTo(bool top)
+{
+    if (m_activeTop == top)
+        return;
+
+    QWindow *const from = m_activeTop ? m_surface->window()
+                                      : m_fallback->window();
+    m_activeTop = top;
+    QWindow *const to = activeWindow();
+    if (to) {
+        pushReadings(to);
+        if (m_activeTop && m_openAttached)
+            updateAttachment(to, frontKind());
+        applyInputMask(to);
+        quietKickRender(to);
+    }
+    if (from) {
+        from->setProperty("kind", QString());
+        from->setProperty("percent", -1);
+        from->setProperty("muted", false);
+        from->setProperty("label", QString());
+        from->setProperty("readings", QVariantList());
+        from->setProperty("glassRects", QVariantList());
+        from->setProperty("glassRegions", QVariantList());
+        from->setMask(QRegion(0, 0, 1, 1));
+        quietKickRender(from);
+    }
+}
+
+void OsdController::retreatIfCovered()
+{
+    if (m_active.isEmpty() || !m_activeTop || !m_zoneProbe)
+        return;
+    if (!topIntruded())
+        return;
+
+    // The zone now belongs to something interactive; the file moves to the
+    // corner rather than being painted over, keeping every card and every
+    // clock.
+    switchTo(false);
+}
+
+void OsdController::updateAttachment(QWindow *window, const QString &kind)
+{
+    QRectF opener;
+    QRectF icon;
+    qreal barHeight = 0;
+    if (resolveAttachment(m_openScreen.data(), kind,
+                          &opener, &icon, &barHeight)) {
+        window->setProperty("openerRect", opener);
+        window->setProperty("attachmentAnchorRect", icon);
+        window->setProperty("attachmentStartY", barHeight);
+        return;
+    }
+    // The new reading's control is not on this panel; the cards stay where
+    // they are and the membrane lets go rather than pointing at the wrong
+    // icon.
+    window->setProperty("attachmentStartY", -1);
+}
+
+void OsdController::scheduleExpiry()
+{
+    qint64 earliest = -1;
+    for (const qint64 deadline : std::as_const(m_deadlines)) {
+        if (earliest < 0 || deadline < earliest)
+            earliest = deadline;
+    }
+    if (earliest < 0) {
+        m_expiryTimer.stop();
+        return;
+    }
+    m_expiryTimer.start(qMax<qint64>(0, earliest - m_clock.elapsed()));
+}
+
+void OsdController::expire()
+{
+    const qint64 now = m_clock.elapsed();
+    QStringList done;
+    for (auto it = m_deadlines.cbegin(); it != m_deadlines.cend(); ++it) {
+        if (it.value() <= now)
+            done.append(it.key());
+    }
+    for (const QString &kind : std::as_const(done))
+        m_deadlines.remove(kind);
+    m_active = OsdReadings::without(m_active, done);
+
+    if (m_active.isEmpty()) {
+        clearCards();
+        return;
+    }
+    if (QWindow *const shown = activeWindow()) {
+        pushReadings(shown);
+        if (m_activeTop && m_openAttached)
+            updateAttachment(shown, frontKind());
+        quietKickRender(shown);
+    }
+    scheduleExpiry();
+}
+
+// The cards leave; the window stays. Mapping is the expensive, slow part —
+// measured at seconds on the nested session — so between readings the
+// persistent surface rests empty, transparent and inert instead of being
+// torn down.
+void OsdController::clearCards()
+{
+    m_expiryTimer.stop();
+    m_active.clear();
+    m_deadlines.clear();
+    // Both twins go quiet: the one that carried the file empties, and going
+    // home is decided fresh by the next reading.
+    for (QWindow *const shown : {m_surface->window(), m_fallback->window()}) {
+        if (!shown)
+            continue;
+        pushReadings(shown);
+        // Belt to the QML's braces: the host empties the published glass
+        // itself, so the blur withdraw cannot depend on the timing of a
+        // dying delegate's removal from the scene.
+        shown->setProperty("glassRects", QVariantList());
+        shown->setProperty("glassRegions", QVariantList());
+        applyInputMask(shown);
+        quietKickRender(shown);
+    }
+    m_activeTop = true;
 }
 
 void OsdController::hide()
 {
-    m_hideTimer.stop();
+    m_expiryTimer.stop();
     m_surface->close();
+    m_fallback->close();
+    m_active.clear();
+    m_deadlines.clear();
+    m_openCard = QRectF();
+    m_fallbackCard = QRectF();
+    m_openScreen.clear();
+    m_openAttached = false;
+    m_activeTop = true;
 }

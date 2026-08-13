@@ -13,6 +13,7 @@
 #include "panelattachmentlease.h"
 
 class NiriClient;
+class QScreen;
 class PanelMenuSurface;
 class QQmlEngine;
 
@@ -106,7 +107,16 @@ public slots:
     // regression can read what a second request did rather than inferring it.
     QString openIndicator() const { return m_openMenuKind; }
 
+    // The open menu's card on one output, in output-local shell units, or an
+    // empty rectangle. The quiet surfaces ask before landing at the top right.
+    QRectF openCardRectOnOutput(QScreen *screen) const;
+
 signals:
+    // A contextual surface was just mapped. The quiet surfaces listen: one
+    // that is already on screen where this card landed retreats to its
+    // fallback instead of being painted over.
+    void contextualSurfaceOpened();
+
     // "Ask this item for its menu", and "this entry was chosen".
     void trayMenuNeeded(const QString &service, const QString &path);
     void trayEntryTriggered(const QString &service, const QString &path, int entryId);

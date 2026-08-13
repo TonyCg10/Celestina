@@ -16,6 +16,7 @@
 
 #include "overlaycontroller.h"
 #include "panelpopupplacement.h"
+#include "quietplacement.h"
 
 namespace {
 // Collects what Qt says while a component is created. Qt does not fail a
@@ -62,6 +63,9 @@ private slots:
     void sessionCardGrowthDoesNotResizeItsOutputSurface();
     void aClickOutsideTheCardDismissesEveryOverlay();
     void aClickOnTheCardDismissesNothing();
+    void quietGeometryCentresTheCardAndReachesTheIcon();
+    void quietZoneYieldsOnlyToARealIntrusion();
+    void aLevelChangedFromItsOwnMenuRaisesNoDisplay();
 
 private:
     // The overlays `main()` builds, by component name. Kept here as the set the
@@ -824,6 +828,84 @@ void OverlayContractTest::aClickOnTheCardDismissesNothing()
         );
         QCOMPARE(dismissed.count(), 0);
     }
+}
+
+// The quiet surfaces' placement arithmetic, pinned without a compositor: the
+// card centres on its control clamped inside the output, and the window spans
+// from the leftmost thing it must contain — card or icon — to the right edge,
+// because a mouth outside its own window is a mouth the compositor clips.
+void OverlayContractTest::quietGeometryCentresTheCardAndReachesTheIcon()
+{
+    const QSizeF output(1920, 1080);
+    const qreal bar = 40;
+    const QSizeF card(260, 96);
+
+    // A control near the middle of the right cluster: the card centres on it.
+    const QRectF opener(1500, 5, 60, 30);
+    const QRectF icon(1520, 11, 18, 18);
+    QuietSurfaceGeometry centred = attachedQuietGeometry(
+        output, bar, opener, icon, card, 8, 96);
+    QVERIFY(centred.valid);
+    QCOMPARE(centred.card.x(), 1500 + 30 - 130);
+    QCOMPARE(centred.card.y(), bar);
+    QCOMPARE(centred.surface.y(), 0.0);
+    QCOMPARE(centred.surface.right(), output.width());
+    // The surface contains both the whole card and the icon's mouth.
+    QVERIFY(centred.surface.left() <= centred.card.left());
+    QVERIFY(centred.surface.left() <= icon.left());
+
+    // A control at the very edge: the card clamps inside the output instead
+    // of overflowing it, exactly as a menu's card would.
+    const QRectF edgeOpener(1880, 5, 36, 30);
+    const QRectF edgeIcon(1889, 11, 18, 18);
+    QuietSurfaceGeometry clamped = attachedQuietGeometry(
+        output, bar, edgeOpener, edgeIcon, card, 8, 96);
+    QVERIFY(clamped.valid);
+    QCOMPARE(clamped.card.right(), output.width() - 8);
+
+    // No opener is no geometry, never a guess.
+    QVERIFY(!attachedQuietGeometry(
+        output, bar, QRectF(), edgeIcon, card, 8, 96).valid);
+}
+
+// The zone question is the card's own landing rectangle, travel included: a
+// menu under the card occupies it, a menu elsewhere does not, and an empty
+// list is a free zone.
+void OverlayContractTest::quietZoneYieldsOnlyToARealIntrusion()
+{
+    const QRectF landing(1400, 40, 260, 192);
+
+    QVERIFY(!quietZoneOccupied(landing, {}));
+    QVERIFY(!quietZoneOccupied(landing, {QRectF()}));
+    // The calendar's card, centred on the output: nowhere near the corner.
+    QVERIFY(!quietZoneOccupied(landing, {QRectF(700, 60, 360, 420)}));
+    // The audio menu, dropped from the same cluster: an intrusion.
+    QVERIFY(quietZoneOccupied(landing, {QRectF(1450, 60, 360, 420)}));
+    // Something crossing only the connector's travel still counts: the drop
+    // would fall through it.
+    QVERIFY(quietZoneOccupied(landing, {QRectF(1500, 45, 100, 20)}));
+}
+
+// A level being changed from inside its own open menu needs no display; every
+// other open menu changes nothing about a level, so its display still shows.
+void OverlayContractTest::aLevelChangedFromItsOwnMenuRaisesNoDisplay()
+{
+    QVERIFY(osdSuppressedByOpenMenu(
+        QStringLiteral("volume"), QStringLiteral("audio")));
+    QVERIFY(osdSuppressedByOpenMenu(
+        QStringLiteral("microphone"), QStringLiteral("audio")));
+    QVERIFY(osdSuppressedByOpenMenu(
+        QStringLiteral("brightness"), QStringLiteral("brightness")));
+    // The other menu's display is not suppressed by a menu about something
+    // else, and no open menu at all suppresses nothing.
+    QVERIFY(!osdSuppressedByOpenMenu(
+        QStringLiteral("brightness"), QStringLiteral("audio")));
+    QVERIFY(!osdSuppressedByOpenMenu(
+        QStringLiteral("volume"), QStringLiteral("brightness")));
+    QVERIFY(!osdSuppressedByOpenMenu(
+        QStringLiteral("volume"), QString()));
+    QVERIFY(!osdSuppressedByOpenMenu(
+        QStringLiteral("volume"), QStringLiteral("calendar")));
 }
 
 QTEST_MAIN(OverlayContractTest)

@@ -1,3 +1,4 @@
+import CelestinaStyle
 import QtQuick
 import QtQuick.Controls
 import QtTest
@@ -110,5 +111,68 @@ TestCase {
         compare(dismiss.ToolTip.text, "");
         compare(dismiss.ToolTip.visible, false);
         stack.hide();
+    }
+
+    // The stack is one surface carrying several cards of the shell's glass,
+    // so it publishes the union of their regions. A toast used to be a
+    // `GlassCard` capturing a scene that holds nothing behind it, which fell
+    // back to an opaque tint and published no region at all.
+    function test_every_toast_is_glass_and_the_stack_publishes_all_of_it() {
+        stack.show();
+        tryCompare(stack, "visible", true);
+        tryVerify(function() {
+            return stack.glassRegions.length === stack.toasts.length;
+        });
+        compare(stack.glassRects.length, stack.toasts.length);
+
+        const body = findChild(stack.contentItem, "celestina-menu-body-tint");
+        verify(body);
+        compare(body.backdropMode, GlassSurface.ExternalBackdrop);
+        compare(body.captureActive, false);
+        compare(body.materialRole, GlassSurface.ContextualVeil);
+        compare(body.elevation, 0);
+
+        const section = findChild(stack.contentItem, "celestina-menu-section");
+        verify(section);
+        compare(section.materialRole, GlassSurface.ContentSurface);
+        verify(body.materialStrength < section.materialStrength);
+        stack.hide();
+    }
+
+    // Attached, only the first card grips the bar — the membrane is one drop
+    // out of the bell — and the rest of the column hangs from it, each card
+    // still knowing where it sits on the output.
+    function test_only_the_first_toast_grips_the_bar() {
+        stack.anchoredFromPanel = true;
+        stack.openerRect = Qt.rect(1700, 5, 30, 30);
+        stack.attachmentAnchorRect = Qt.rect(1706, 11, 18, 18);
+        stack.attachmentStartY = 40;
+        stack.surfaceOriginX = 1300;
+        stack.surfaceWidth = 620;
+        stack.surfaceHeight = 400;
+
+        const fields = [];
+        function collect(item) {
+            for (let index = 0; index < item.children.length; ++index) {
+                const child = item.children[index];
+                if (child.objectName === "celestina-soft-menu-field")
+                    fields.push(child);
+                collect(child);
+            }
+        }
+        collect(stack.contentItem);
+        compare(fields.length, stack.toasts.length);
+        // The column keeps the model's order top to bottom, so the gripping
+        // card is the one whose y is the column's own top.
+        fields.sort(function(a, b) { return a.y - b.y; });
+        verify(fields[0].attachedToTop);
+        verify(!fields[1].attachedToTop);
+        verify(fields[0].surfacePosition.y < fields[1].surfacePosition.y);
+
+        stack.anchoredFromPanel = false;
+        stack.attachmentStartY = -1;
+        stack.surfaceOriginX = 0;
+        stack.surfaceWidth = stack.cardWidth;
+        stack.surfaceHeight = 0;
     }
 }

@@ -10,9 +10,6 @@ namespace {
 // How far a corner surface sits from the edges, clear of the panel's own
 // exclusive zone.
 constexpr int cornerMargin = 16;
-// How far the readout sits above the bottom edge: out of the way of anything
-// anchored at the bottom, and low enough to read without covering content.
-constexpr int readoutMargin = 96;
 // A surface placed over everything, including what other surfaces reserved.
 constexpr int ignoreExclusiveZones = -1;
 
@@ -83,34 +80,70 @@ LayerSurfaceSpec quietSpec(
     return spec;
 }
 
-LayerSurfaceSpec cornerSpec(QScreen *screen, const QSize &size)
+LayerSurfaceSpec cornerSpec(QScreen *screen, const QSize &size, const QString &scope)
 {
     auto anchors = LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop);
     anchors |= LayerShellQt::Window::AnchorRight;
     return quietSpec(
         screen,
         size,
-        QStringLiteral("celestina-toasts"),
+        scope,
         anchors,
         QMargins(0, cornerMargin, cornerMargin, 0)
     );
 }
 
-LayerSurfaceSpec readoutSpec(QScreen *screen, const QSize &size)
+// The membrane's mouth lives at the panel's lower seam, which is inside the
+// strip the panel reserved, so this is the one quiet spec that ignores
+// exclusive zones: with them respected the window would start below the bar
+// and the drop would hang from a seam it cannot reach.
+LayerSurfaceSpec attachedTopRightSpec(
+    QScreen *screen,
+    const QSize &size,
+    const QString &scope
+)
+{
+    auto anchors = LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop);
+    anchors |= LayerShellQt::Window::AnchorRight;
+    LayerSurfaceSpec spec = quietSpec(screen, size, scope, anchors, QMargins());
+    spec.exclusiveZone = ignoreExclusiveZones;
+    return spec;
+}
+
+LayerSurfaceSpec bottomRightSpec(QScreen *screen, const QSize &size, const QString &scope)
+{
+    auto anchors = LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorBottom);
+    anchors |= LayerShellQt::Window::AnchorRight;
+    return quietSpec(
+        screen,
+        size,
+        scope,
+        anchors,
+        QMargins(0, 0, cornerMargin, cornerMargin)
+    );
+}
+
+LayerSurfaceSpec bottomCentreSpec(QScreen *screen, const QSize &size, const QString &scope)
 {
     return quietSpec(
         screen,
         size,
-        QStringLiteral("celestina-osd"),
+        scope,
         LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorBottom),
-        QMargins(0, 0, 0, readoutMargin)
+        QMargins(0, 0, 0, cornerMargin)
     );
 }
+
 } // namespace
 
-OverlaySurface::OverlaySurface(Placement placement, QObject *parent)
+OverlaySurface::OverlaySurface(
+    Placement placement,
+    const QString &scope,
+    QObject *parent
+)
     : QObject(parent)
     , m_placement(placement)
+    , m_scope(scope)
 {
 }
 
@@ -120,6 +153,11 @@ OverlaySurface::~OverlaySurface()
 }
 
 bool OverlaySurface::open(QWindow *content, QScreen *screen)
+{
+    return open(content, screen, m_placement);
+}
+
+bool OverlaySurface::open(QWindow *content, QScreen *screen, Placement placement)
 {
     if (!content || isOpen())
         return false;
@@ -131,15 +169,21 @@ bool OverlaySurface::open(QWindow *content, QScreen *screen)
     });
 
     LayerSurfaceSpec spec;
-    switch (m_placement) {
+    switch (placement) {
     case Placement::Centered:
         spec = centeredSpec(screen);
         break;
     case Placement::Corner:
-        spec = cornerSpec(screen, content->size());
+        spec = cornerSpec(screen, content->size(), m_scope);
         break;
-    case Placement::Readout:
-        spec = readoutSpec(screen, content->size());
+    case Placement::AttachedTopRight:
+        spec = attachedTopRightSpec(screen, content->size(), m_scope);
+        break;
+    case Placement::BottomRight:
+        spec = bottomRightSpec(screen, content->size(), m_scope);
+        break;
+    case Placement::BottomCentre:
+        spec = bottomCentreSpec(screen, content->size(), m_scope);
         break;
     }
     if (!mapLayerSurface(content, spec)) {
@@ -147,6 +191,26 @@ bool OverlaySurface::open(QWindow *content, QScreen *screen)
         content->disconnect(this);
         m_content.clear();
         return false;
+    }
+
+    // A quiet surface's content grows and shrinks while it is mapped — the
+    // toast column gains cards, the display's file gains peeks — and the
+    // compositor keeps positioning the surface by the size it was told at
+    // map time. A committed buffer larger than that stale size is drawn
+    // overflowing the screen edge, which is exactly what a growing
+    // bottom-centre stack did. The desired size therefore follows the
+    // window; the centered overlays are compositor-sized (0×0) and must not
+    // be overridden.
+    if (placement != Placement::Centered) {
+        auto *layerWindow = LayerShellQt::Window::get(content);
+        if (layerWindow) {
+            const auto followSize = [layerWindow, content]() {
+                layerWindow->setDesiredSize(content->size());
+                content->requestUpdate();
+            };
+            connect(content, &QWindow::widthChanged, this, followSize);
+            connect(content, &QWindow::heightChanged, this, followSize);
+        }
     }
 
     if (content->metaObject()->indexOfProperty("glassRects") >= 0) {

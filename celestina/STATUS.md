@@ -1,6 +1,6 @@
 # Celestina status
 
-- **Updated:** 2026-08-12
+- **Updated:** 2026-08-13
 - **Implementation:** R0-R5, R7, R8's departure slice, LVR-1 through LVR-3, the
   static hardening previously drafted as `AUD-1`, `UX-1` and `WSG-1` are
   complete
@@ -22,7 +22,13 @@
   its `PanelPill` nor any `ContentSurface` changes shape, geometry or material,
   and no dense bridge or cross-window fill transition is painted. The glyph
   anchor is tracked live to reposition the waist. Routes without a real panel
-  opener and glyph anchor remain floating. The rest of `UX-2`
+  opener and glyph anchor remain floating. Every shell surface uses that same
+  veil-over-section anatomy, the on-screen display and the notification toasts
+  included — both quiet surfaces now hang from the bar at the top right with
+  the same drop membrane, from the panel icon of what they report, retreat to
+  their own corners when the zone is taken, and the display stays silent while
+  its own menu is open: no surface paints
+  its own opaque plate, and none captures a scene it is not part of. The rest of `UX-2`
   remains planned under the still-open `SHELL-D5` discussion
 - **Author validation:** the author closed the LVR-3 phase on 2026-08-07 after
   first-generation media, the four-item tray, Bluetooth state retention,
@@ -48,7 +54,30 @@
 
 ## Current checkout truth
 
-- **Current milestone prototype — `PANEL-1-R`.** Every panel reading now opens
+- **Current milestone prototype — `PANEL-1-S`.** The quiet surfaces are made
+  of the shell's glass and hang from the bar. The on-screen display and the
+  toast stack appear at the top right, attached by the same drop membrane as
+  the menus, the mouth on the panel icon of what they report; each yields the
+  zone to anything interactive already there — the display to the bottom-right
+  corner, the toasts to the bottom centre — and each counts the other. A level
+  changed from inside its own open menu raises no display, and an open
+  notification centre keeps the corner quiet the same way. The display is a
+  file of live cards, each kind on its own clock, the cards behind peeking out
+  and hover raising one; it lives on two persistent surfaces so a menu opening
+  over it moves the file at once instead of remapping.
+
+  Its compositor blur is live: what broke it was never the effect but three
+  lifecycle defects — premapping at boot poisoning the whole overlay layer,
+  the effect withdraw gated on an `isExposed()` flag that flaps on idle
+  Wayland windows, and dying delegates never republishing their glass — each
+  isolated on the nested session and fixed on 2026-08-13. A quiet window
+  carries a one-pixel heartbeat because a Wayland surface that commits nothing
+  loses its frame callbacks, and layer surfaces now follow their window's size
+  so a growing stack cannot overflow the screen. The author exercised the
+  suppression, the fallbacks and the blur lifecycle live during the work; the
+  remaining live checks stay in [VALIDATION.md](VALIDATION.md).
+
+- **Previous milestone prototype — `PANEL-1-R`.** Every panel reading now opens
   something. The clock opens a calendar, the phone reading opens Magnetita's
   device list with ring/pair/unpair, brightness opens a card with one slider
   per monitor that speaks DDC, and audio opens a card with the output, the
