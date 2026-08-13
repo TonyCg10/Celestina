@@ -323,6 +323,9 @@ Window {
             id: clock
 
             ink: backdropInk
+            onMenuRequested: (openerRect, attachmentAnchorRect) =>
+                panel.indicatorMenuRequested("calendar", openerRect,
+                                             attachmentAnchorRect)
 
             anchors.centerIn: bar
 
@@ -430,9 +433,9 @@ Window {
                     height: CelestinaTheme.controlHeightXs
                     reading: panel.provider("audio")
                     ink: backdropInk
-                    onMuteToggled: panel.providerSource.sendCommand("audio", "mute-toggle")
-                    onMicMuteToggled: panel.providerSource.sendCommand("audio", "mic-mute-toggle")
-                    onMixerRequested: panel.providerSource.sendCommand("audio", "open-mixer")
+                    onMenuRequested: (openerRect, attachmentAnchorRect) =>
+                        panel.indicatorMenuRequested("audio", openerRect,
+                                                     attachmentAnchorRect)
                     onStepRequested: (direction) => panel.providerSource.sendCommand(
                         "audio", "volume-step", {"by": direction > 0 ? panel.levelStep : -panel.levelStep})
                 }
@@ -442,6 +445,12 @@ Window {
                     reading: panel.provider("brightness")
                     outputName: panel.outputName
                     ink: backdropInk
+                    blurAvailable: panel.compositorBlurAvailable
+                    // Inside a semantic cluster, so the cluster owns the glass.
+                    ownsGlass: false
+                    onMenuRequested: (openerRect, attachmentAnchorRect) =>
+                        panel.indicatorMenuRequested("brightness", openerRect,
+                                                     attachmentAnchorRect)
                     // The step names its own monitor: one helper serves every
                     // panel, and each panel speaks only for its mapped output.
                     onStepRequested: (direction) => panel.providerSource.sendCommand(
@@ -541,6 +550,9 @@ Window {
 
             PhoneStatus {
                 barHeight: panel.barHeight
+                onMenuRequested: (openerRect, attachmentAnchorRect) =>
+                    panel.indicatorMenuRequested("phone", openerRect,
+                                                 attachmentAnchorRect)
 
                 // PANEL-1 — one height for every reading, so the row aligns them.
 

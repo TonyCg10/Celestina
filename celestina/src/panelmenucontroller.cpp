@@ -1,5 +1,7 @@
 #include "panelmenucontroller.h"
 
+#include "diagnosticjournal.h"
+
 #include <QDebug>
 #include <QQmlEngine>
 #include <QScreen>
@@ -103,6 +105,15 @@ void addPanelOpenerProperties(
     );
 }
 
+/// The factor a mapped surface draws at, or 1 when it has not been told.
+double surfaceShellScale(const QWindow *surface)
+{
+    if (!surface)
+        return 1.0;
+    const double scale = surface->property("shellScale").toDouble();
+    return scale > 0.0 ? scale : 1.0;
+}
+
 void capCardHeightBelowAnchor(
     QWindow *card,
     QWindow *panel,
@@ -127,17 +138,25 @@ void capCardHeightBelowAnchor(
         globalAnchor.y() - output.top(),
         outputHeight - 1
     );
+    // The card lays out in the shell's unscaled units; the output and the
+    // anchor are real pixels. Capped with the real number, a scaled output
+    // was 15 % more generous than the space below the anchor really is, and
+    // the child card ran past the screen's bottom edge.
+    const double scale = surfaceShellScale(card);
+    const int availableInShellUnits =
+        qMax(1, qRound((outputHeight - requestedTop) / scale));
+    const int outputInShellUnits = qMax(1, qRound(outputHeight / scale));
     const int minimumViewportHeight = qBound(
         1,
         card->property("minimumMenuViewportHeight").toInt(),
-        outputHeight
+        outputInShellUnits
     );
     card->setProperty(
         "maximumContentHeight",
         qBound(
             minimumViewportHeight,
-            outputHeight - requestedTop,
-            outputHeight
+            availableInShellUnits,
+            outputInShellUnits
         )
     );
 }
@@ -185,6 +204,10 @@ PanelMenuController::PanelMenuController(
     , m_networkComponent(engine)
     , m_bluetoothComponent(engine)
     , m_performanceComponent(engine)
+    , m_brightnessComponent(engine)
+    , m_calendarComponent(engine)
+    , m_phoneComponent(engine)
+    , m_audioComponent(engine)
     , m_captureComponent(engine)
     , m_wallpaperComponent(engine)
     , m_workspaceMapComponent(engine)
@@ -217,12 +240,20 @@ PanelMenuController::PanelMenuController(
     m_networkComponent.loadFromModule("CelestinaDesktop", "NetworkMenu");
     m_bluetoothComponent.loadFromModule("CelestinaDesktop", "BluetoothMenu");
     m_performanceComponent.loadFromModule("CelestinaDesktop", "PerformanceMenu");
+    m_brightnessComponent.loadFromModule("CelestinaDesktop", "BrightnessMenu");
+    m_calendarComponent.loadFromModule("CelestinaDesktop", "CalendarMenu");
+    m_phoneComponent.loadFromModule("CelestinaDesktop", "PhoneMenu");
+    m_audioComponent.loadFromModule("CelestinaDesktop", "AudioMenu");
     m_captureComponent.loadFromModule("CelestinaDesktop", "CaptureMenu");
     m_wallpaperComponent.loadFromModule("CelestinaDesktop", "WallpaperMenu");
     for (const QQmlComponent *indicator : {
              &m_networkComponent,
              &m_bluetoothComponent,
              &m_performanceComponent,
+             &m_brightnessComponent,
+             &m_calendarComponent,
+             &m_phoneComponent,
+             &m_audioComponent,
              &m_captureComponent,
              &m_wallpaperComponent,
          }) {
@@ -348,6 +379,14 @@ QString indicatorMenuComponent(const QString &kind)
         return QStringLiteral("BluetoothMenu");
     if (kind == QStringLiteral("performance"))
         return QStringLiteral("PerformanceMenu");
+    if (kind == QStringLiteral("brightness"))
+        return QStringLiteral("BrightnessMenu");
+    if (kind == QStringLiteral("calendar"))
+        return QStringLiteral("CalendarMenu");
+    if (kind == QStringLiteral("phone"))
+        return QStringLiteral("PhoneMenu");
+    if (kind == QStringLiteral("audio"))
+        return QStringLiteral("AudioMenu");
     if (kind == QStringLiteral("capture"))
         return QStringLiteral("CaptureMenu");
     if (kind == QStringLiteral("wallpaper"))
@@ -364,7 +403,8 @@ void PanelMenuController::toggleIndicatorMenu(
     QObject *providerSource
 )
 {
-    const bool needsProvider = kind != QStringLiteral("capture");
+    const bool needsProvider = kind != QStringLiteral("capture")
+        && kind != QStringLiteral("calendar");
     if (!m_enabled || !panel || (needsProvider && !providerSource))
         return;
     if (indicatorMenuComponent(kind).isEmpty()) {
@@ -389,6 +429,14 @@ void PanelMenuController::toggleIndicatorMenu(
         component = &m_bluetoothComponent;
     else if (kind == QStringLiteral("performance"))
         component = &m_performanceComponent;
+    else if (kind == QStringLiteral("brightness"))
+        component = &m_brightnessComponent;
+    else if (kind == QStringLiteral("calendar"))
+        component = &m_calendarComponent;
+    else if (kind == QStringLiteral("phone"))
+        component = &m_phoneComponent;
+    else if (kind == QStringLiteral("audio"))
+        component = &m_audioComponent;
     else if (kind == QStringLiteral("capture"))
         component = &m_captureComponent;
     else if (kind == QStringLiteral("wallpaper"))
@@ -627,6 +675,19 @@ void PanelMenuController::requestTrayItemMenu(
 {
     constexpr auto trayItemsKind = "tray-items";
     QWindow *const parentMenu = m_surface->window();
+    // Who asks, and how often: the child was observed being rebuilt roughly
+    // every 650 ms with no user gesture, and this is the only door that
+    // rebuilds it.
+    DiagnosticJournal::instance().record(
+        DiagnosticJournal::Record(
+            DiagnosticJournal::Level::Info,
+            QStringLiteral("tray.child.requested"))
+            .text(QStringLiteral("service"), service)
+            .number(QStringLiteral("x"), globalX)
+            .number(QStringLiteral("y"), globalY)
+            .number(QStringLiteral("width"), globalWidth)
+            .number(QStringLiteral("height"), globalHeight)
+    );
     if (sender() != parentMenu || !m_openPanel
         || m_openMenuKind != QLatin1String(trayItemsKind)) {
         return;
@@ -764,26 +825,36 @@ void PanelMenuController::trayMenuReady(
     capCardHeightBelowAnchor(window, panel, anchor.topLeft());
 
     PanelMenuSurface::Coverage coverage = PanelMenuSurface::Coverage::Output;
-    QPoint childSurfaceOrigin;
     if (keepTrayItems) {
         const QScreen *const screen = panel->screen();
         const QPoint outputOrigin = screen ? screen->geometry().topLeft() : QPoint();
         const QSize outputSize = screen ? screen->geometry().size() : QSize();
+        // In output pixels, like everything else this arithmetic touches.
+        // The card properties are stated in the shell's unscaled units — the
+        // surface lays out in those and the host divides once on the way in —
+        // while `window->size()`, the anchor and the output rectangle are real
+        // pixels. Mixed, they agree only at factor 1, which is why a scaled
+        // output placed the child menu over its parent instead of beside it.
+        const double parentScale = surfaceShellScale(parentMenu);
         const QRect parentCard(
-            parentMenu->property("cardX").toInt(),
-            parentMenu->property("cardY").toInt(),
-            parentMenu->property("cardWidth").toInt(),
-            parentMenu->property("cardHeight").toInt()
+            qRound(parentMenu->property("cardX").toInt() * parentScale),
+            qRound(parentMenu->property("cardY").toInt() * parentScale),
+            qRound(parentMenu->property("cardWidth").toInt() * parentScale),
+            qRound(parentMenu->property("cardHeight").toInt() * parentScale)
         );
+        const double childScale = surfaceShellScale(window);
         // The child grows a sideways droplet membrane out of the edge facing
-        // its parent. Widen the window with the transparent membrane strip
-        // first: the surface adopts the widened size and sits flush against
-        // the parent card, so the seam coincides with the parent's edge and
-        // the strip itself is the membrane's horizontal travel.
+        // its parent, on a surface that covers the output like every other
+        // menu's. It was a card-sized window once, and that window was the
+        // structural reason its push could never read as one piece: the
+        // compositor's glass fills a card-sized surface edge to edge, so the
+        // card had no canvas to visibly move across — measured mid-push with
+        // the body displaced and the glass box pinned. On the whole output it
+        // travels exactly as the top-attached drop does. The author accepted
+        // the input trade (2026-08-13): with the child open, a click outside
+        // it dismisses the child first, as in any nested menu.
         const bool sideAttachment = anchor.width() > 0 && anchor.height() > 0;
         window->setProperty("attachedToMenuSide", sideAttachment);
-        const int strip = qMax(
-            0, window->width() - window->property("cardWidth").toInt());
         const QRect outputAnchor = anchor.translated(-outputOrigin);
         // Keep the invoking tile's centre inside the membrane's flat lateral
         // span rather than at the very corner of the child body.
@@ -793,30 +864,66 @@ void PanelMenuController::trayMenuReady(
                 ? outputAnchor.center().y() - 72
                 : outputAnchor.top()
         );
-        childSurfaceOrigin = adjacentTrayMenuOrigin(
+        // The card, not the window: the window is the output now. The gap the
+        // card keeps from its parent is the membrane's travel, the same
+        // proportional distance the QML derives for the stretch itself.
+        const QSize cardSize(
+            qRound(window->property("cardWidth").toInt() * childScale),
+            qRound(window->property("cardHeight").toInt() * childScale)
+        );
+        const int membraneGap = qRound(
+            window->property("sideAttachmentGap").toInt() * childScale);
+        const QPoint cardOrigin = adjacentTrayMenuOrigin(
             parentCard,
             requestedOrigin,
-            window->size(),
+            cardSize,
             outputSize,
-            sideAttachment ? 0 : window->property("anchorGap").toInt()
+            sideAttachment
+                ? membraneGap
+                : qRound(window->property("anchorGap").toInt() * childScale)
         );
         const bool seamAtRight =
-            childSurfaceOrigin.x() + window->width() / 2
+            cardOrigin.x() + cardSize.width() / 2
             < parentCard.center().x();
         if (sideAttachment) {
             window->setProperty("attachmentSideRight", seamAtRight);
+            // Output-local, in the shell's unscaled units: the surface covers
+            // the output, so the anchor needs no window translation any more.
             window->setProperty(
                 "attachmentAnchorRect",
-                outputAnchor.translated(-childSurfaceOrigin)
+                inShellUnits(QRectF(outputAnchor), childScale)
             );
         }
-        // Card position belongs to the layer surface in this mode. Inside
-        // that bounded surface the QML card begins beside the membrane strip.
+        coverage = PanelMenuSurface::Coverage::Output;
         placeCardOnOutput(
             window,
-            QPoint(sideAttachment && !seamAtRight ? strip : 0, 0)
+            QPoint(
+                qRound(cardOrigin.x()
+                       / (childScale > 0 ? childScale : 1.0)),
+                qRound(cardOrigin.y()
+                       / (childScale > 0 ? childScale : 1.0))
+            )
         );
-        coverage = PanelMenuSurface::Coverage::Card;
+        // The numbers this placement mixed, recorded because they have now
+        // been wrong across the units seam twice and the nest's console is
+        // unreachable from outside: with these, a detached child is a
+        // subtraction instead of a guess.
+        DiagnosticJournal::instance().record(
+            DiagnosticJournal::Record(
+                DiagnosticJournal::Level::Info,
+                QStringLiteral("tray.child.placed"))
+                .flag(QStringLiteral("side_attachment"), sideAttachment)
+                .flag(QStringLiteral("seam_at_right"), seamAtRight)
+                .number(QStringLiteral("origin_x"), cardOrigin.x())
+                .number(QStringLiteral("origin_y"), cardOrigin.y())
+                .number(QStringLiteral("child_width"), cardSize.width())
+                .number(QStringLiteral("child_height"), cardSize.height())
+                .number(QStringLiteral("gap"), membraneGap)
+                .number(QStringLiteral("parent_x"), parentCard.x())
+                .number(QStringLiteral("parent_y"), parentCard.y())
+                .number(QStringLiteral("parent_width"), parentCard.width())
+                .number(QStringLiteral("parent_height"), parentCard.height())
+        );
     } else {
         placeCard(window, panel, anchor.topLeft());
     }
@@ -831,7 +938,7 @@ void PanelMenuController::trayMenuReady(
         return;
     }
 
-    if (!m_trayChildSurface->open(window, panel, coverage, childSurfaceOrigin)) {
+    if (!m_trayChildSurface->open(window, panel, coverage)) {
         delete window;
         return;
     }
@@ -895,6 +1002,13 @@ void PanelMenuController::restoreTrayParentFocus(
 
 void PanelMenuController::closeTrayChild(bool restoreParentFocus)
 {
+    DiagnosticJournal::instance().record(
+        DiagnosticJournal::Record(
+            DiagnosticJournal::Level::Info,
+            QStringLiteral("tray.child.closed"))
+            .flag(QStringLiteral("restore_focus"), restoreParentFocus)
+            .flag(QStringLiteral("had_window"),
+                  m_trayChildSurface && m_trayChildSurface->window()));
     const QPointer<QWindow> parentMenu = m_openParentMenu;
     clearPendingTrayMenu();
     m_openService.clear();

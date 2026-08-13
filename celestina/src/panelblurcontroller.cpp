@@ -1,5 +1,9 @@
 #include "panelblurcontroller.h"
 
+#include "diagnosticjournal.h"
+
+#include <QEvent>
+
 #include <QDebug>
 #include <QMetaType>
 #include <QPointF>
@@ -241,6 +245,13 @@ void PanelBlurController::start()
                 geometryChanged();
         }
     );
+    // Exposure, not visibility: the effect region is double-buffered surface
+    // state, and one committed before the compositor acknowledged the surface
+    // is silently dropped. A card-sized child menu armed its blur in that
+    // window often enough that its glass came and went between openings —
+    // re-arming on the real expose event is what makes the commit land on a
+    // surface that exists.
+    m_window->installEventFilter(this);
     if (!QObject::connect(
             m_window.data(), SIGNAL(glassRegionsChanged()),
             this, SLOT(glassRegionsChanged())
@@ -250,6 +261,20 @@ void PanelBlurController::start()
     }
 
     geometryChanged();
+}
+
+bool PanelBlurController::eventFilter(QObject *watched, QEvent *event)
+{
+    // Only while the region has not landed: the race this exists for is a
+    // commit made before the compositor acknowledged the surface, which can
+    // only happen around the first exposure. Re-arming on every expose kept
+    // resetting an already-enabled region — once per provider tick on the
+    // panel — which is churn with nothing to buy.
+    if (watched == m_window.data() && event->type() == QEvent::Expose
+        && m_window && m_window->isExposed() && m_state != State::Enabled) {
+        geometryChanged();
+    }
+    return QObject::eventFilter(watched, event);
 }
 
 void PanelBlurController::geometryChanged()
@@ -317,6 +342,29 @@ void PanelBlurController::probe()
                         << m_window->property("glassRegions").toList().size()
                         << "shape(s) in" << glass.rectCount()
                         << "region fragment(s)";
+                // Also to the journal: a nested session's console is not
+                // reachable from outside it, and "which surface had its blur
+                // armed, how large" is exactly the bounded technical fact a
+                // glass-less menu needs answered.
+                const QRect bounds = glass.boundingRect();
+                DiagnosticJournal::instance().record(
+                    DiagnosticJournal::Record(
+                        DiagnosticJournal::Level::Info,
+                        QStringLiteral("blur.armed"))
+                        .text(QStringLiteral("surface"), m_window->objectName())
+                        .number(QStringLiteral("shapes"),
+                                m_window->property("glassRegions")
+                                    .toList().size())
+                        .number(QStringLiteral("region_x"), bounds.x())
+                        .number(QStringLiteral("region_y"), bounds.y())
+                        .number(QStringLiteral("region_width"), bounds.width())
+                        .number(QStringLiteral("region_height"),
+                                bounds.height())
+                        .number(QStringLiteral("window_width"),
+                                m_armedSize.width())
+                        .number(QStringLiteral("window_height"),
+                                m_armedSize.height())
+                );
             }
         }
         m_state = State::Enabled;

@@ -426,6 +426,12 @@ not apply the rest of UX-2; menu, overlay and provider work is limited to the
 exact corrections declared in the active plan. Scope, order and evidence are in
 [the PANEL-1 plan](docs/plans/active/2026-08-08-panel-glass-redesign.md).
 
+`PANEL-1-R` gives the clock, the phone reading, brightness and audio the menus
+they never had, collapses four hand-rolled cards into one measured `SoftCard`,
+converts five unit seams that were invisible at factor 1, and moves the tray
+child menu onto the same output-covering carrier as every other menu so its
+sideways push reads as one piece. The UI hierarchy becomes icon-first.
+
 `PANEL-1-Q` refuses to build or deploy over a running shell, after a third GPU
 loss with the same shape as the first two: files replaced under a live session,
 its provider adapter restarted seven times in a second, and seven concurrent

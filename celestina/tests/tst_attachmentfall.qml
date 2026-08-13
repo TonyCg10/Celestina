@@ -176,6 +176,35 @@ TestCase {
         field.destroy();
     }
 
+    // The host turns the side attachment on after the popup has already
+    // revealed — synchronously, but later in the same call. The sideways push
+    // must still run once, and only once: forced-settled is not fallen.
+    function test_an_attachment_arriving_after_reveal_still_pushes_once() {
+        const field = fieldComponent.createObject(
+            testCase, {"reducedMotion": false, "attachedToTop": false});
+        verify(field);
+        field.reveal();
+        compare(field.attachmentProgress, 1);
+        verify(!field.hasFallen);
+
+        // What the tray-child host writes onto an already-open window.
+        field.attachedToSide = true;
+        field.attachmentSideRight = true;
+        field.sideAttachmentGap = 24;
+        verify(field.edgeShapeActive);
+        // The push started from the seam rather than staying parked settled.
+        verify(field.hasFallen);
+        verify(field.attachmentProgress < 1);
+
+        // And it is one push, not one per lease refresh.
+        field.reveal();
+        field.beginDropFall();
+        tryCompare(field, "attachmentProgress", 1);
+        field.beginDropFall();
+        compare(field.attachmentProgress, 1);
+        field.destroy();
+    }
+
     function test_a_floating_surface_has_no_fall_at_all() {
         const field = fieldComponent.createObject(
             testCase, {"reducedMotion": false, "attachedToTop": false});

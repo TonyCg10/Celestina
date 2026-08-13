@@ -60,13 +60,19 @@ Window {
     // The membrane's horizontal travel reuses the same width-proportional
     // rule as the panel attachment gap, so parent-to-child distance and
     // bar-to-menu distance follow one vocabulary.
-    readonly property int sideAttachmentGap: attachedToMenuSide
-            ? Math.round(EdgeAttachedGeometry.proportionalMetric(
-                  cardWidth,
-                  CelestinaTheme.compEdgeAttachmentGapRatio,
-                  CelestinaTheme.compEdgeAttachmentGapMin,
-                  CelestinaTheme.compEdgeAttachmentGapMax))
-            : 0
+    // Unconditional on purpose: every consumer already gates on
+    // `attachedToMenuSide` itself, and a gap that read the flag was stale at
+    // exactly the wrong moment — inside the flag's own change handler, where
+    // the surface size is recomputed and then read back synchronously by the
+    // host, this binding had not re-evaluated yet, so the window was widened
+    // by zero and the two menus were glued together with no membrane between
+    // them.
+    readonly property int sideAttachmentGap:
+            Math.round(EdgeAttachedGeometry.proportionalMetric(
+                cardWidth,
+                CelestinaTheme.compEdgeAttachmentGapRatio,
+                CelestinaTheme.compEdgeAttachmentGapMin,
+                CelestinaTheme.compEdgeAttachmentGapMax))
     // What a glass card samples to blur. Named rather than reached for, so a
     // consumer never has to know the id of an item inside this file.
     readonly property Item backdrop: scene
@@ -110,13 +116,29 @@ Window {
     readonly property real surfaceWidth: root.width / root.shellScale
     readonly property real surfaceHeight: root.height / root.shellScale
 
-    width: Math.round((cardWidth
-           + (attachedToMenuSide ? Math.max(0, sideAttachmentGap) : 0))
-           * shellScale)
-    height: Math.round(cardHeight * shellScale)
     color: CelestinaTheme.clear
 
+    // The size request, recomputed only on the host's own inputs. It re-runs
+    // when the host caps the viewport or turns on the side membrane — both
+    // happen right after creation, before the surface is mapped and read —
+    // and deliberately never on content growth: a measured content height
+    // settles after first layout, and re-requesting then is how the window
+    // shrank under the surface that owns it.
+    function requestSurfaceSize() {
+        width = Math.round((cardWidth
+                + (attachedToMenuSide ? Math.max(0, sideAttachmentGap) : 0))
+                * shellScale);
+        height = Math.round(cardHeight * shellScale);
+    }
+
+    onMaximumContentHeightChanged: root.requestSurfaceSize()
+    onAttachedToMenuSideChanged: root.requestSurfaceSize()
+
+    // One handler on purpose — a second `Component.onCompleted` on the same
+    // object silently replaces the first, which is the exact trap the comment
+    // above `ready()` warns consumers about.
     Component.onCompleted: {
+        root.requestSurfaceSize();
         CelestinaTheme.reducedMotion = root.reducedMotion;
         root.ready();
     }

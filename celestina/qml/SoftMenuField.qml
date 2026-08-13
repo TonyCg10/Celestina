@@ -181,19 +181,90 @@ Item {
         root.scheduleGlassCollection();
     }
 
-    // Idempotent: a route that reveals twice replays nothing, and a settled
-    // surface never falls again. A surface that does not fall resolves to its
-    // settled geometry instead of waiting for an animation that never runs.
+    // One fall per surface, ever. `hasFallen` rather than the progress value,
+    // because the two disagree in exactly one case: a child menu is revealed
+    // before its host has turned the side attachment on, which forces the
+    // progress to 1 with no fall having happened — and when the flag then
+    // arrives, the sideways push the author asked for must still run once.
+    property bool hasFallen: false
+
+    // Idempotent: a route that reveals twice replays nothing, and a surface
+    // that has fallen never falls again. A surface that does not fall resolves
+    // to its settled geometry instead of waiting for an animation that never
+    // runs.
     function beginDropFall() {
         if (!root.fallsIntoPlace) {
             root.attachmentProgress = 1;
             return;
         }
-        if (dropFall.running || root.attachmentProgress >= 1)
+        root.startFall();
+    }
+
+    // Whether this surface has been shown to anyone: flipped by the first
+    // frame the compositor actually presented. A fresh card-sized layer
+    // surface takes the compositor a configure round-trip to map, and a fall
+    // started at creation plays out entirely inside that gap — the author's
+    // recording shows the settled card materialising in one frame, the whole
+    // push already spent unseen. The fall therefore holds at its first frame
+    // until there is a first frame to hold on.
+    property bool surfacePresented: false
+    property bool fallQueued: false
+
+    Connections {
+        target: root.Window.window
+
+        function onFrameSwapped() {
+            if (root.surfacePresented)
+                return;
+            root.surfacePresented = true;
+            if (root.fallQueued) {
+                root.fallQueued = false;
+                dropFall.start();
+            }
+        }
+    }
+
+    function startFall() {
+        if (dropFall.running || root.hasFallen)
             return;
 
+        root.hasFallen = true;
+        root.attachmentProgress = 0;
+        if (!root.surfacePresented) {
+            root.fallQueued = true;
+            return;
+        }
         dropFall.start();
     }
+
+    // The attachment can arrive after the reveal: the host sets the side flag
+    // on an already-created window, synchronously but later in the same call.
+    // A revealed surface that never fell starts its push here.
+    //
+    // Everything read below is a plain input property, never a derived
+    // binding. Inside the change dispatch of one of its own inputs, a lazy
+    // derived binding can still answer with its previous value — measured:
+    // with the side flag, the gap and the anchor all set, the derived request
+    // read false from in here and true from the very next statement outside —
+    // so this recomputes the request from the raw inputs itself.
+    function beginLateFall() {
+        if (!root.revealed || root.reducedMotion)
+            return;
+        const anchorReal = root.attachmentAnchorRect.width > 0
+                           && root.attachmentAnchorRect.height > 0;
+        const sideReady = root.attachedToSide && anchorReal
+                          && root.sideAttachmentGap > 0;
+        const topReady = root.attachedToTop && anchorReal
+                         && root.openerRect.width > 0
+                         && root.openerRect.height > 0
+                         && root.attachmentStartY >= 0;
+        if (sideReady || topReady)
+            root.startFall();
+    }
+    onAttachedToSideChanged: root.beginLateFall()
+    onSideAttachmentGapChanged: root.beginLateFall()
+    onAttachedToTopChanged: root.beginLateFall()
+    onAttachmentAnchorRectChanged: root.beginLateFall()
 
     function collectGlass() {
         const foundRects = [];

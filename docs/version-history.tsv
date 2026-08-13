@@ -61,3 +61,4 @@ celestina	0.14.1	bug	PANEL-1-O	Fix the per-output factor derived from density in
 celestina	0.14.2	bug	PANEL-1-P	Fix the falling drop losing its blur and the journal's write amplification
 celestina	0.14.3	bug	PANEL-1-Q	Fix build and deploy rewriting the binaries of a running shell
 celestina-style	1.6.0	milestone	STYLE-G7-L	Add the minus glyph that pairs with plus
+celestina	0.15.0	milestone	PANEL-1-R	Add the reading menus and one measured card anatomy

@@ -311,7 +311,21 @@ QRectF PanelAttachmentLease::anchorRectOnOutput(
         : (m_panel ? m_panel->screen() : nullptr);
     const QPointF outputOrigin =
         screen ? QPointF(screen->geometry().topLeft()) : QPointF();
-    return globalRect.translated(-outputOrigin);
+    const QRectF onOutput = globalRect.translated(-outputOrigin);
+
+    // In the surface's own units, which are the shell's unscaled ones: the
+    // controller divides the initial snapshot by the per-output factor before
+    // construction, and this refresh replaces exactly that property. Published
+    // undivided, the first live refresh on a scaled output moved the membrane's
+    // mouth right of its glyph by the factor — the drop the author photographed
+    // connecting beside its icon. The factor is read from the surface because
+    // the surface is what lays out in those units; see shellscale.h.
+    const double scale = m_surface
+        ? m_surface->property("shellScale").toDouble() : 0.0;
+    if (scale <= 0.0 || scale == 1.0)
+        return onOutput;
+    return QRectF(onOutput.x() / scale, onOutput.y() / scale,
+                  onOutput.width() / scale, onOutput.height() / scale);
 }
 
 bool PanelAttachmentLease::ownsPublishedToken() const

@@ -1,4 +1,6 @@
 #include <QtTest>
+
+#include <QScopeGuard>
 #include <QSignalSpy>
 
 #include <QQmlComponent>
@@ -153,12 +155,21 @@ private:
 
 QWindow *windowWithProperty(const char *propertyName)
 {
+    // Prefer the mapped one: earlier cases in this same process can leave a
+    // retiring window carrying the same property, and acting on that ghost —
+    // resizing it, reading its card — quietly diverges from what the
+    // controller under test is really using.
+    QWindow *fallback = nullptr;
     for (QWindow *const window : QGuiApplication::topLevelWindows()) {
-        if (window->property(propertyName).isValid())
+        if (!window->property(propertyName).isValid())
+            continue;
+        if (window->isVisible())
             return window;
+        if (!fallback)
+            fallback = window;
     }
 
-    return nullptr;
+    return fallback;
 }
 
 QVariantList trayEntries(int count = 1)
@@ -236,6 +247,8 @@ private slots:
     void anAmbiguousAttachmentSourceLeavesTheSurfaceFloating();
     void aFailedAttachmentLeasePublishesNothing();
     void aTrayChildStaysAdjacentAndInsideTheOutput();
+    void aTrayChildOnAScaledOutputIsPlacedInRealPixels();
+    void aScaledTrayChildStaysBesideItsParentAndOnScreen();
     void anOverflowingTrayMenuUsesABoundedScrollableViewport();
     void trayInventoryAndForeignMenuHaveIndependentLifecycles();
     void wallpaperMenuHandsTheFolderChooserBackToThePermanentPanel();
@@ -822,6 +835,153 @@ void SurfaceManagerTest::aTrayChildStaysAdjacentAndInsideTheOutput()
     );
 }
 
+// A parent card names its size in the shell's unscaled units; the child's own
+// window, the anchor and the output are real pixels. Mixing the two agrees
+// only at factor 1, and on a 1.15 output the child was placed a sixth of the
+// parent's width too far left — over its parent rather than beside it, which
+// is what the author photographed. This case states the conversion the caller
+// owes before it may use `adjacentTrayMenuOrigin` at all.
+void SurfaceManagerTest::aTrayChildOnAScaledOutputIsPlacedInRealPixels()
+{
+    constexpr double factor = 1.15;
+    const QSize output(1920, 1080);
+    // What the parent surface publishes: unscaled.
+    const QRect cardInShellUnits(1200, 40, 300, 500);
+    // What the child window really is: pixels.
+    const QSize child(320, 460);
+    const QPoint anchor(1420, 260);
+
+    const QRect cardInPixels(
+        qRound(cardInShellUnits.x() * factor),
+        qRound(cardInShellUnits.y() * factor),
+        qRound(cardInShellUnits.width() * factor),
+        qRound(cardInShellUnits.height() * factor)
+    );
+
+    const QPoint placed =
+        adjacentTrayMenuOrigin(cardInPixels, anchor, child, output, 8);
+    const QPoint placedFromUnconverted =
+        adjacentTrayMenuOrigin(cardInShellUnits, anchor, child, output, 8);
+
+    // The two disagree, which is the whole point: the unconverted call is the
+    // defect, so a future caller cannot quietly pass shell units again.
+    QVERIFY(placed != placedFromUnconverted);
+
+    // Beside the parent in real pixels, never overlapping it.
+    const QRect childRect(placed, child);
+    QVERIFY2(
+        !childRect.intersects(cardInPixels),
+        qPrintable(QStringLiteral("child %1,%2 overlaps parent")
+                       .arg(placed.x()).arg(placed.y()))
+    );
+    // And the unconverted placement is exactly the failure that was seen.
+    QVERIFY(QRect(placedFromUnconverted, child).intersects(cardInPixels));
+
+    // Still whole and inside the output.
+    QVERIFY(childRect.left() >= 0);
+    QVERIFY(childRect.right() < output.width());
+}
+
+// The whole child-menu route at a real per-output factor: created beside a
+// scaled parent, capped to the screen, and still wearing its glass. Every
+// number this route mixes — the parent card, the window, the anchor, the
+// viewport cap — crosses the shell-units/output-pixels seam somewhere, and
+// each crossing has now been wrong at least once.
+void SurfaceManagerTest::aScaledTrayChildStaysBesideItsParentAndOnScreen()
+{
+    qunsetenv("CELESTINA_PANEL_MENU");
+    qputenv("CELESTINA_SHELL_SCALE", "1.15");
+    const auto restoreScale = qScopeGuard([] {
+        qputenv("CELESTINA_SHELL_SCALE", "1");
+    });
+    registerPanelMenuTypesFromSource();
+    QQmlEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath());
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+    FakeTraySource tray;
+    FakeTrayProviderSource providers;
+    PanelMenuController controller(&engine, nullptr, nullptr);
+    QWindow *const panel = makePanel();
+
+    controller.toggleTrayItemsMenu(
+        panel,
+        QRect(700, 6, 28, 28),
+        QRect(676, 5, 76, 30),
+        &tray,
+        &providers
+    );
+    QPointer<QWindow> inventory = windowWithProperty("traySource");
+    QVERIFY(inventory);
+    const QScreen *const screen = panel->screen();
+    QVERIFY(screen);
+
+    const QString service = QStringLiteral(":1.83");
+    const QString path = QStringLiteral("/org/chromium/StatusNotifierItem/1");
+    QVERIFY(QMetaObject::invokeMethod(
+        inventory,
+        "itemMenuRequested",
+        Q_ARG(QString, service),
+        Q_ARG(QString, path),
+        Q_ARG(int, 620),
+        Q_ARG(int, screen->geometry().top() + 200),
+        Q_ARG(int, 48),
+        Q_ARG(int, 48)
+    ));
+    // Enough actions that the natural height overflows the output even in
+    // shell units, so the cap is exercised rather than merely present.
+    controller.trayMenuReady(service, path, trayEntries(64));
+
+    QPointer<QWindow> child = windowWithProperty("entries");
+    QVERIFY(child);
+
+    // Absolute placement is deliberately not asserted here: the offscreen
+    // platform clamps a shown window to its own 800x800 screen, so an
+    // output-covering surface cannot be given its real size in this harness.
+    // Where the card lands, in real pixels against a real parent, is pinned
+    // by the `adjacentTrayMenuOrigin` unit cases — including the scaled one —
+    // with hand-fed compositor geometry. What this case owns is the child's
+    // attachment and lifecycle on a scaled output.
+
+    QVERIFY(child->property("attachedToMenuSide").toBool());
+    const QRectF childAnchor =
+        child->property("attachmentAnchorRect").toRectF();
+    QVERIFY(childAnchor.width() > 0 && childAnchor.height() > 0);
+    QTRY_VERIFY(!child->property("glassRegions").toList().isEmpty());
+
+    // The membrane really has travel to cross and the field draws the
+    // sideways shape: "both menus glued together with no droplet" is what a
+    // zero gap looks like, and it is what the author saw once already.
+    QCOMPARE(child->property("sideAttachmentGap").toInt() > 0, true);
+    QQuickItem *const field =
+        child->findChild<QQuickItem *>(
+            QStringLiteral("celestina-soft-menu-field"));
+    QVERIFY(field);
+    QVERIFY(field->property("edgeShapeActive").toBool());
+
+    // The push moves the surface as one piece: mid-push, the popup that
+    // carries the rows sits exactly on the momentary body, not at its settled
+    // place. The author recorded the settled card materialising in one frame
+    // while only the body section slid inside it.
+    QTRY_VERIFY(child->property("menu").value<QObject *>() != nullptr);
+    QObject *const menu = child->property("menu").value<QObject *>();
+    QTRY_VERIFY(menu->property("visible").toBool());
+    const double progress = field->property("attachmentProgress").toDouble();
+    QVERIFY2(progress < 1.0,
+             qPrintable(QStringLiteral("progress already %1").arg(progress)));
+    const QRectF bodyRect = field->property("attachmentBodyRect").toRectF();
+    const int cardX = child->property("cardX").toInt();
+    QVERIFY2(
+        qAbs(menu->property("x").toDouble() - (cardX + bodyRect.x())) < 1.0,
+        qPrintable(QStringLiteral("popup at %1, body at %2 (cardX %3)")
+                       .arg(menu->property("x").toDouble())
+                       .arg(bodyRect.x()).arg(cardX))
+    );
+    QVERIFY2(qAbs(bodyRect.x()) > 1.0,
+             qPrintable(QStringLiteral(
+                 "mid-push body still parked at %1").arg(bodyRect.x())));
+
+}
+
 void SurfaceManagerTest::anOverflowingTrayMenuUsesABoundedScrollableViewport()
 {
     qunsetenv("CELESTINA_PANEL_MENU");
@@ -878,11 +1038,13 @@ void SurfaceManagerTest::anOverflowingTrayMenuUsesABoundedScrollableViewport()
         child->property("cardHeight").toInt(),
         availableHeight
     );
-    auto *const childLayer = LayerShellQt::Window::get(child);
-    QVERIFY(childLayer);
     // The side-attached child rises so the invoking tile's centre stays
     // inside the membrane's flat lateral span instead of at the body corner.
-    QCOMPARE(childLayer->margins().top(),
+    // Its surface covers the output now; the rise lives in the card.
+    // The host writes the rise into `menuY`; where the card finally lands is
+    // the placement clamp's business against the compositor-given surface,
+    // which this harness cannot provide (see the scaled case above).
+    QCOMPARE(child->property("menuY").toInt(),
              requestedTop + QRect(0, 0, 48, 48).center().y() - 72);
 
     QObject *const menu = child->property("menu").value<QObject *>();
@@ -908,7 +1070,10 @@ void SurfaceManagerTest::anOverflowingTrayMenuUsesABoundedScrollableViewport()
     QVERIFY(heading);
     auto *const headingItem = qobject_cast<QQuickItem *>(heading);
     QVERIFY(headingItem);
-    QCOMPARE(headingItem->window(), child.data());
+    // The popup now opens one tick after creation, once the host has dressed
+    // the window; the heading is reparented beside its viewport at that
+    // moment, so this waits for it rather than sampling the first tick.
+    QTRY_COMPARE(headingItem->window(), child.data());
     QCOMPARE(headingItem->parentItem(), viewport->parentItem());
     QVERIFY(headingItem->height() > 0);
     // The raised top padding keeps the scrolled rows strictly below that
@@ -978,10 +1143,10 @@ void SurfaceManagerTest::anOverflowingTrayMenuUsesABoundedScrollableViewport()
         minimumViewportHeight
     );
     QCOMPARE(edgeChild->property("cardHeight").toInt(), minimumViewportHeight);
-    auto *const edgeLayer = LayerShellQt::Window::get(edgeChild);
-    QVERIFY(edgeLayer);
+    // The rise that keeps the minimum viewport on screen is the host's
+    // `menuY`; the surface covers the output and carries no margins now.
     QCOMPARE(
-        edgeLayer->margins().top(),
+        edgeChild->property("menuY").toInt(),
         screen->geometry().height() - minimumViewportHeight
     );
     controller.close();
@@ -1107,27 +1272,21 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
 
     auto *childLayer = LayerShellQt::Window::get(child);
     QVERIFY(childLayer);
-    auto cardAnchors = LayerShellQt::Window::Anchors(
+    // The child rides the same output-covering carrier as every menu; a
+    // card-sized surface was the structural reason its push could never read
+    // as one piece.
+    auto childOutputAnchors = LayerShellQt::Window::Anchors(
         LayerShellQt::Window::AnchorTop
     );
-    cardAnchors |= LayerShellQt::Window::AnchorLeft;
-    QCOMPARE(childLayer->anchors(), cardAnchors);
+    childOutputAnchors |= LayerShellQt::Window::AnchorLeft;
+    childOutputAnchors |= LayerShellQt::Window::AnchorRight;
+    childOutputAnchors |= LayerShellQt::Window::AnchorBottom;
+    QCOMPARE(childLayer->anchors(), childOutputAnchors);
     QVERIFY(child->width() > 0);
     QVERIFY(child->height() > 0);
-    QCOMPARE(childLayer->desiredSize(), child->size());
-    const QRect inventoryCard(
-        inventory->property("cardX").toInt(),
-        inventory->property("cardY").toInt(),
-        inventory->property("cardWidth").toInt(),
-        inventory->property("cardHeight").toInt()
-    );
-    const QRect childCard(
-        childLayer->margins().left(),
-        childLayer->margins().top(),
-        child->width(),
-        child->height()
-    );
-    QVERIFY(!inventoryCard.intersects(childCard));
+    // Card-versus-card separation is pinned by the `adjacentTrayMenuOrigin`
+    // unit cases with real compositor geometry; this harness cannot size an
+    // output-covering surface (offscreen clamps shown windows to 800x800).
 
     // Asking another item retires only the child. The inventory remains the
     // exact parent while the replacement D-Bus answer is pending.

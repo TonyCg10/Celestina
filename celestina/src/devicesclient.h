@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QVariantList>
 
 class QDBusServiceWatcher;
 
@@ -23,6 +24,12 @@ class DevicesClient final : public QObject
     Q_PROPERTY(QString phoneName READ phoneName NOTIFY changed)
     Q_PROPERTY(int phoneBattery READ phoneBattery NOTIFY changed)
     Q_PROPERTY(bool phoneCharging READ phoneCharging NOTIFY changed)
+    // Every device the daemon reports, each a map with the dict keys the
+    // `Devices1` contract states (`id`, `name`, `type`, `connected`,
+    // `mounted`, `paired`, `battery`, …). The summary properties above remain
+    // the first connected device, which is all the permanent panel shows; the
+    // phone menu is what reads this.
+    Q_PROPERTY(QVariantList devices READ devices NOTIFY changed)
 
 public:
     explicit DevicesClient(QObject *parent = nullptr);
@@ -31,6 +38,16 @@ public:
     QString phoneName() const { return m_name; }
     int phoneBattery() const { return m_battery; }
     bool phoneCharging() const { return m_charging; }
+    QVariantList devices() const { return m_devices; }
+
+    // The three actions the daemon already serves, fire-and-forget over the
+    // bus. Best-effort like everything else here: with no daemon the call
+    // vanishes, and the menu's rows are only drawn from a daemon's own list,
+    // so there is nothing real to press when there is nobody to answer.
+    // Results arrive as the next `Changed` snapshot, never as painted state.
+    Q_INVOKABLE void ring(const QString &deviceId);
+    Q_INVOKABLE void requestPair(const QString &deviceId);
+    Q_INVOKABLE void unpair(const QString &deviceId);
 
 signals:
     void changed();
@@ -44,6 +61,7 @@ private:
     QString m_name;
     int m_battery = -1;
     bool m_charging = false;
+    QVariantList m_devices;
     bool m_reloadInFlight = false;
     bool m_reloadPending = false;
     QDBusServiceWatcher *m_serviceWatcher = nullptr;

@@ -120,6 +120,8 @@ private slots:
     void eachPanelIndicatorMenuSpansItsOuterVeilAndTargetsTheIcon();
     void theTrayMenuUsesTheSameVeloCarrier();
     void theWholeMenuIsReachableFromTheKeyboard();
+    void aScaledOutputScalesTheRowsWithTheGlassTheySitOn();
+    void aScaledCardKeepsItsMembraneOnTheGlyph();
     void everyRowNamesItselfAndItsState();
     void wallpaperPagesStayOnOneBoundedCatalogue();
     void activatingARowClosesTheMenuAndOutlivesItsWindow();
@@ -139,6 +141,10 @@ private:
             QStringLiteral("network"),
             QStringLiteral("bluetooth"),
             QStringLiteral("performance"),
+            QStringLiteral("brightness"),
+            QStringLiteral("calendar"),
+            QStringLiteral("phone"),
+            QStringLiteral("audio"),
             QStringLiteral("capture"),
             QStringLiteral("wallpaper"),
         };
@@ -153,6 +159,7 @@ private:
             QStringLiteral("network"),
             QStringLiteral("bluetooth"),
             QStringLiteral("performance"),
+            QStringLiteral("phone"),
             QStringLiteral("capture"),
         };
     }
@@ -179,7 +186,8 @@ private:
     static QQuickWindow *openMenu(
         QQmlEngine &engine,
         const QString &kind,
-        std::unique_ptr<QObject> &owner
+        std::unique_ptr<QObject> &owner,
+        double shellScale = 1.0
     )
     {
         QQmlComponent menu(&engine, sourceFor(indicatorMenuComponent(kind)));
@@ -191,8 +199,10 @@ private:
         QVariantMap initialProperties {
             {QStringLiteral("reducedMotion"), true},
             {QStringLiteral("outputName"), QStringLiteral("test-output")},
+            {QStringLiteral("shellScale"), shellScale},
         };
-        if (kind != QStringLiteral("capture")) {
+        if (kind != QStringLiteral("capture")
+                && kind != QStringLiteral("calendar")) {
             initialProperties.insert(
                 QStringLiteral("providerSource"),
                 QVariant::fromValue<QObject *>(nullptr)
@@ -226,6 +236,10 @@ void IndicatorMenuTest::everyIndicatorKindNamesTheComponentThatDrawsIt()
     QCOMPARE(
         indicatorMenuComponent(QStringLiteral("performance")),
         QStringLiteral("PerformanceMenu")
+    );
+    QCOMPARE(
+        indicatorMenuComponent(QStringLiteral("brightness")),
+        QStringLiteral("BrightnessMenu")
     );
     QCOMPARE(
         indicatorMenuComponent(QStringLiteral("capture")),
@@ -265,7 +279,8 @@ void IndicatorMenuTest::eachMenuDeclaresExactlyWhatTheHostHandsIt()
             {QStringLiteral("attachmentAnchorRect"), QRect(905, 11, 18, 18)},
             {QStringLiteral("attachmentStartY"), 40},
         };
-        if (kind == QStringLiteral("capture"))
+        if (kind == QStringLiteral("capture")
+                || kind == QStringLiteral("calendar"))
             initialProperties.remove(QStringLiteral("providerSource"));
         QObject *const root = menu.createWithInitialProperties(initialProperties);
         qInstallMessageHandler(previous);
@@ -775,14 +790,21 @@ void IndicatorMenuTest::theWholeMenuIsReachableFromTheKeyboard()
         // Every menu has semantic context and at least one enabled action.
         QVERIFY2(count >= 2, qPrintable(kind + QStringLiteral(": %1").arg(count)));
 
-        // Except the performance menu with no provider behind it. Its action
-        // is opening the monitor by clicking a reading, so with nothing being
-        // measured there is deliberately nothing to act on. It still names
-        // itself and its absent reading; that part is covered above and by
-        // PerformanceMenu's own cases. This is the one kind whose actions are
-        // all data, so it is named here rather than weakening the rule.
-        if (kind == QStringLiteral("performance")) {
-            QVERIFY(!window->property("hasReading").toBool());
+        // Except the menus whose every action is a piece of provider data.
+        // Performance opens the system monitor by clicking a reading, so with
+        // nothing being measured there is deliberately nothing to act on.
+        // Brightness has exactly that shape — each action is one detected
+        // monitor's own stepper — and so does the phone, whose actions are the
+        // daemon's own device rows. With nothing published each offers a
+        // sentence and no action; each still names itself and its absent
+        // reading, covered above and by its own cases. They are named here
+        // rather than weakening the rule for every menu.
+        if (kind == QStringLiteral("performance")
+                || kind == QStringLiteral("phone")) {
+            if (kind == QStringLiteral("performance"))
+                QVERIFY(!window->property("hasReading").toBool());
+            else
+                QVERIFY(window->property("devices").toList().isEmpty());
             for (int index = 0; index < count; ++index) {
                 QQuickItem *row = nullptr;
                 QMetaObject::invokeMethod(
@@ -819,6 +841,184 @@ void IndicatorMenuTest::theWholeMenuIsReachableFromTheKeyboard()
         // Choosing a row closes the menu, which is the whole reason the request
         // ledger cannot live in this window.
         QTRY_COMPARE(dismissed.count(), 1);
+    }
+}
+
+// A larger output draws the rows as large as the glass they sit on.
+//
+// The rows of these menus live in a Popup, and a Popup is drawn in the window's
+// own overlay rather than as part of the item tree the card scales. So the scene
+// transform never reaches them: the glass grew with the output and the rows
+// stayed at their unscaled size, inside a window sized for the scaled card. The
+// author photographed the result on a 1.15 output — a body card about 1.15
+// times the width of its own rows, and offset, because the popup was also being
+// placed in unscaled coordinates inside a scaled window.
+//
+// Every other case here pins the factor to 1, which is why this defect survived
+// the suite that was meant to cover per-output sizing.
+void IndicatorMenuTest::aScaledOutputScalesTheRowsWithTheGlassTheySitOn()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+
+    // A real factor from the author's own monitors, not a round number that
+    // could hide an arithmetic slip by being one.
+    constexpr double factor = 1.15;
+    for (const QString &kind : softMenuKinds()) {
+        std::unique_ptr<QObject> owner;
+        QQuickWindow *const window = openMenu(engine, kind, owner, factor);
+        QVERIFY2(window, qPrintable(kind));
+
+        QObject *const menu = window->property("menu").value<QObject *>();
+        QVERIFY(menu);
+
+        // The rows' own layer carries the factor, from the same corner the
+        // scene scales from. Not the popup: `GlassContextMenu` animates `scale`
+        // in its enter and exit transitions, and a transition writes the
+        // property directly, so a binding placed there is destroyed the moment
+        // the menu opens. This case is what caught that.
+        auto *const rows =
+            menu->property("contentItem").value<QQuickItem *>();
+        QVERIFY2(rows, qPrintable(kind));
+        QCOMPARE(rows->property("scale").toDouble(), factor);
+        QCOMPARE(
+            rows->property("transformOrigin").toInt(),
+            static_cast<int>(QQuickItem::TopLeft)
+        );
+
+        // What actually decides whether the menu looks whole: the rows sit on
+        // their glass, measured in real output pixels through every transform
+        // either side carries. This is deliberately not an assertion about
+        // which object holds which coordinate — two wrong theories about that
+        // each satisfied their own property checks while the live session
+        // showed rows floating away from their card. Mapping both trees to
+        // scene coordinates is the one comparison a wrong theory cannot pass.
+        auto *const glass = window->findChild<QQuickItem *>(
+            QStringLiteral("celestina-soft-menu-field"));
+        QVERIFY2(glass, qPrintable(kind));
+        const QPointF glassAt = glass->mapToScene(QPointF(0, 0));
+        const QPointF rowsAt = rows->mapToScene(QPointF(0, 0));
+        // The popup carries its own padding between its box and the rows, so
+        // exact equality is not the contract; a scale error displaces rows by
+        // cardX * 0.15 — an order of magnitude past this bound.
+        const double slack = 24.0 * factor;
+        QVERIFY2(
+            std::abs(rowsAt.x() - glassAt.x()) <= slack,
+            qPrintable(QStringLiteral("%1: rows at %2, glass at %3")
+                           .arg(kind).arg(rowsAt.x()).arg(glassAt.x()))
+        );
+        QVERIFY2(
+            std::abs(rowsAt.y() - glassAt.y()) <= slack,
+            qPrintable(QStringLiteral("%1: rows at %2, glass at %3")
+                           .arg(kind).arg(rowsAt.y()).arg(glassAt.y()))
+        );
+
+        // And the drawn widths agree, through the same transforms: a header
+        // band narrower than the rows it heads is the same defect measured on
+        // the other axis, and the author photographed exactly that on the
+        // tray menus.
+        const QPointF glassFar =
+            glass->mapToScene(QPointF(glass->width(), 0));
+        const QPointF rowsFar = rows->mapToScene(QPointF(rows->width(), 0));
+        const double glassSpan = glassFar.x() - glassAt.x();
+        const double rowsSpan = rowsFar.x() - rowsAt.x();
+        QVERIFY2(
+            std::abs(glassSpan - rowsSpan) <= slack,
+            qPrintable(QStringLiteral("%1: rows span %2, glass span %3")
+                           .arg(kind).arg(rowsSpan).arg(glassSpan))
+        );
+
+        // The card itself is stated in unscaled units and stays that way: the
+        // factor belongs on the way to the output, not in the layout numbers.
+        const int cardWidth = window->property("cardWidth").toInt();
+        QCOMPARE(cardWidth, window->property("contentWidth").toInt());
+    }
+}
+
+// A card menu on a scaled output still hangs from the glyph that opened it.
+//
+// The membrane cases above pin the factor to 1 and the scaled case above
+// passes no opener, so the combination — a card, a real opener, a real
+// factor — was covered by neither, and it is exactly where the author saw the
+// drop landing beside its icon and the clock and phone cards opening with no
+// connection at all.
+void IndicatorMenuTest::aScaledCardKeepsItsMembraneOnTheGlyph()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+
+    constexpr double factor = 1.15;
+    // In shell units, exactly as the controller hands them after dividing.
+    constexpr int attachmentStartY = 40;
+    const QRect opener(900, 6, 28, 28);
+    const QRect attachmentAnchor(905, 11, 18, 18);
+
+    for (const QString &kind :
+         {QStringLiteral("calendar"), QStringLiteral("audio"),
+          QStringLiteral("brightness"), QStringLiteral("wallpaper")}) {
+        QQmlComponent menu(&engine, sourceFor(indicatorMenuComponent(kind)));
+        QVERIFY2(menu.isReady(), qPrintable(menu.errorString()));
+
+        QVariantMap properties {
+            {QStringLiteral("reducedMotion"), true},
+            {QStringLiteral("outputName"), QStringLiteral("test-output")},
+            {QStringLiteral("shellScale"), factor},
+            {QStringLiteral("anchoredFromPanel"), true},
+            {QStringLiteral("openerRect"), opener},
+            {QStringLiteral("attachmentAnchorRect"), attachmentAnchor},
+            {QStringLiteral("attachmentStartY"), attachmentStartY},
+        };
+        if (kind != QStringLiteral("calendar")) {
+            properties.insert(
+                QStringLiteral("providerSource"),
+                QVariant::fromValue<QObject *>(nullptr));
+        }
+
+        std::unique_ptr<QObject> owner(menu.createWithInitialProperties(properties));
+        auto *const window = qobject_cast<QQuickWindow *>(owner.get());
+        QVERIFY2(window, qPrintable(kind));
+        window->resize(outputWidth, outputHeight);
+        window->show();
+        QVERIFY2(QTest::qWaitForWindowExposed(window), qPrintable(kind));
+
+        QObject *const field = window->findChild<QObject *>(
+            QStringLiteral("celestina-soft-menu-field"));
+        QVERIFY2(field, qPrintable(kind));
+        QVERIFY2(field->property("edgeAttachmentRequested").toBool(),
+                 qPrintable(kind));
+        QVERIFY2(field->property("edgeShapeActive").toBool(), qPrintable(kind));
+
+        // The compositor region is real pixels; the seam and the mouth are
+        // the shell numbers times the factor.
+        QTRY_COMPARE(window->property("glassRegions").toList().size(), 1);
+        const QVariantMap shape = window->property("glassRegions")
+                                      .toList().constFirst().toMap();
+        const QVariantList polygon =
+            shape.value(QStringLiteral("polygon")).toList();
+        QVERIFY2(polygon.size() >= 3, qPrintable(kind));
+
+        qreal top = std::numeric_limits<qreal>::max();
+        for (const QVariant &value : polygon)
+            top = qMin(top, value.toPointF().y());
+        QCOMPARE(qRound(top), qRound(attachmentStartY * factor));
+
+        qreal mouthLeft = std::numeric_limits<qreal>::max();
+        qreal mouthRight = std::numeric_limits<qreal>::lowest();
+        for (const QVariant &value : polygon) {
+            const QPointF point = value.toPointF();
+            if (qAbs(point.y() - top) < 0.001) {
+                mouthLeft = qMin(mouthLeft, point.x());
+                mouthRight = qMax(mouthRight, point.x());
+            }
+        }
+        const qreal mouthCentre = (mouthLeft + mouthRight) / 2;
+        const qreal glyphCentre =
+            (attachmentAnchor.x() + attachmentAnchor.width() / 2.0) * factor;
+        QVERIFY2(
+            qAbs(mouthCentre - glyphCentre) <= 12.0 * factor,
+            qPrintable(QStringLiteral("%1: mouth at %2, glyph at %3")
+                           .arg(kind).arg(mouthCentre).arg(glyphCentre))
+        );
     }
 }
 

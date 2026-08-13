@@ -237,6 +237,9 @@ TestCase {
                     height: CelestinaTheme.controlHeightXs
                     outputName: "DP-1"
                     reading: ({"DP-1": 65, "HDMI-A-1": 80})
+                    blurAvailable: true
+                    // In a cluster, which owns the glass for its members.
+                    ownsGlass: false
                 }
             }
 

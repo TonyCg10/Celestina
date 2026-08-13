@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.14.3 LANGUAGES CXX)
+project(celestina VERSION 0.15.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -196,6 +196,13 @@ qt_add_qml_module(celestina
         qml/NetworkMenu.qml
         qml/BluetoothMenu.qml
         qml/PerformanceMenu.qml
+        qml/BrightnessMenu.qml
+        qml/CalendarMenu.qml
+        qml/PhoneMenu.qml
+        qml/AudioMenu.qml
+        qml/SoftCard.qml
+        qml/LevelRow.qml
+        qml/DevicePicker.qml
         qml/CaptureButton.qml
         qml/CaptureMenu.qml
         qml/WallpaperMenu.qml
@@ -494,6 +501,8 @@ if(BUILD_TESTING)
         src/overlaysurface.cpp
         src/panelblurcontroller.h
         src/panelblurcontroller.cpp
+        src/diagnosticjournal.h
+        src/diagnosticjournal.cpp
         src/surfacemanager.h
         src/surfacemanager.cpp
     )

@@ -48,7 +48,43 @@
 
 ## Current checkout truth
 
-- **Current milestone prototype — `PANEL-1-Q`.** Building and deploying now
+- **Current milestone prototype — `PANEL-1-R`.** Every panel reading now opens
+  something. The clock opens a calendar, the phone reading opens Magnetita's
+  device list with ring/pair/unpair, brightness opens a card with one slider
+  per monitor that speaks DDC, and audio opens a card with the output, the
+  input and one slider per application making or taking sound — the provider
+  learned to read `wpctl status`'s `Streams:` section and to move a named node,
+  and it does so once per opening rather than on its two-second poll, because
+  the 2026-08-12 audit measured that poll as the busiest subprocess in the
+  shell.
+
+  Four surfaces of hand-rolled card scaffolding collapsed into one `SoftCard`:
+  header, dense body section, dismissal, and a height that is *measured* like
+  `AnchoredMenu`'s rather than summed from constants. The constants were the
+  defect — three cards, three different arithmetics, all smaller than what they
+  drew, which is why rows fell off the bottom. Removing them exposed the real
+  cause underneath: `AnchoredCard` bound its window size to its content, so a
+  height that settled after first layout re-fired the binding and shrank the
+  surface under its own placement clamp. The size is a request made once, and
+  re-made only when the host changes the viewport cap or the side attachment.
+
+  Five separate places mixed the shell's unscaled units with real output
+  pixels, all invisible at factor 1: the attachment lease's live anchor
+  refresh, the tray child's parent card, its viewport cap, its membrane gap,
+  and the tray menu's reparented heading. Each is converted once now, and the
+  child menu moved onto the same output-covering carrier every other menu
+  uses — a card-sized surface was the structural reason its sideways push
+  could never read as one piece, since the compositor's glass fills such a
+  surface edge to edge and leaves the card no canvas to travel across.
+
+  The hierarchy is icon-first from here (author's standing decision,
+  2026-08-13): secondary actions are compact icons where the action applies,
+  every opener carries the same capsule behind it inset from its reading pill,
+  and the speaker-and-microphone pair reads as one capsule twice as long. The
+  tray menu's "Acciones" label is gone; its header already says what the list
+  is. CTest 18/18, provider tests 115/115.
+
+- **Previous milestone prototype — `PANEL-1-Q`.** Building and deploying now
   refuse to run while a Celestina shell is executing the files they would
   rewrite. A third GPU loss was recorded on 2026-08-12 with the same shape as
   the first two: a development nest was live, `deploy-production.sh` replaced

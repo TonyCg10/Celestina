@@ -85,6 +85,8 @@ AnchoredMenu {
     Binding {
         target: root.menu
         property: "x"
+        // In unscaled units like everything else: the popup's parent is the
+        // scaled scene and the mapping to output pixels happens there, once.
         value: root.cardX + (root.ridesTheDrop
                              ? field.attachmentBodyRect.x : 0)
         restoreMode: Binding.RestoreBindingOrValue

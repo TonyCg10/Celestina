@@ -46,8 +46,16 @@ LayerSurfaceSpec panelSpec(QScreen *screen)
     spec.screen = screen;
     spec.anchors = anchors;
     // Full width, fixed height: the compositor owns the axis the panel spans.
-    spec.desiredSize = QSize(0, panelHeight);
-    spec.exclusiveZone = panelHeight;
+    // The height is asked for in real output pixels, which is the bar's 40
+    // design units times this output's factor. Asking for the unscaled number
+    // had the compositor size the strip 40 px tall under a scene drawing 46:
+    // the bottom of every welded capsule was clipped off, and the reserved
+    // exclusive strip was short by the same amount, so the shell looked like a
+    // veil that refused to wrap its own pills.
+    const int scaledPanelHeight =
+        qRound(panelHeight * shellScaleForScreen(screen));
+    spec.desiredSize = QSize(0, scaledPanelHeight);
+    spec.exclusiveZone = scaledPanelHeight;
     spec.layer = LayerShellQt::Window::LayerTop;
     spec.keyboard = LayerShellQt::Window::KeyboardInteractivityNone;
     spec.activateOnShow = false;
@@ -512,12 +520,18 @@ void PanelManager::indicatorMenuRequested(
     if (!panel || !m_menu || !m_providers)
         return;
 
+    // The phone menu's provider is Magnetita's D-Bus client, not the aggregate
+    // helper bridge: its list, and the three actions on a row, live there.
+    QObject *source = m_providers;
+    if (kind == QStringLiteral("phone"))
+        source = m_phone;
+
     m_menu->toggleIndicatorMenu(
         panel,
         globalOpener,
         globalAttachmentAnchor,
         kind,
-        m_providers
+        source
     );
 }
 

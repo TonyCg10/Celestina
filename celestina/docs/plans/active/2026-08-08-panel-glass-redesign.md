@@ -1034,3 +1034,139 @@ history was lost. They were the blobs of this delivery's own staged files, and
 they blocked re-staging because Git treats an object file that exists as an
 object it has already written. Removing them and re-adding restored the index,
 which `git fsck` then reported clean.
+
+
+## PANEL-1-R boundary
+
+Every panel reading opens something now. The clock opens a calendar; the phone
+reading opens Magnetita's device list with ring, pair and unpair; brightness
+opens one slider per monitor that speaks DDC; audio opens the output, the input
+and one slider per application making or taking sound.
+
+Three of the four needed no new data. The brightness provider already published
+a connector-to-level map, `MonthCalendar` already existed, and
+`org.celestina.Devices1` already served `ListDevices`, `Ring`, `RequestPair` and
+`Unpair` — `DevicesClient` was simply keeping the first connected device and
+discarding the rest. Audio needed real work: the provider learned to read the
+`Sinks:`, `Sources:` and `Streams:` sections of `wpctl status` and to move a
+named node's level and mute. It does that once per opening, on the menu's own
+`devices-refresh`, and never on the two-second poll — the 2026-08-12 audit
+measured that poll as the busiest subprocess in the shell, and a device
+inventory is only meaningful while a menu is on screen.
+
+The parser is section-walked rather than shape-matched, because the shapes
+collide. `Video` has `Sinks:` and `Sources:` of its own and a webcam is a video
+source, so the first parser listed it as a microphone. A stream's ports carry
+the same `id. name` shape as the stream itself and are told apart by their
+direction prefix, which is also what files the application as playback or
+capture. And the trailing `[vol: …]` marker is stripped by that exact spelling:
+cutting at the first bracket turned `PipeWire ALSA [parsecd]` into an anonymous
+row. Each of those is a case.
+
+Audio and brightness are cards rather than menus, for the reason the wallpaper
+gallery and the calendar are: these are levels, and a level is moved rather
+than chosen — a slider inside a real `Menu` row fights that row's own
+click-to-activate. The author asked for the panel's own wheel step to work in
+them too, so `LevelRow` owns one vocabulary for both.
+
+### One card anatomy, and the binding that hid behind three copies
+
+Four surfaces had grown their own scaffolding — Escape, the outside-click
+carrier, the reveal, the glass — loosely copied from the wallpaper gallery,
+and each copy drifted. `SoftCard` is that anatomy once, and its height is
+*measured*, the way `AnchoredMenu.naturalMenuHeight` has always measured its
+rows. The hand-written constants were the visible defect: three cards, three
+different arithmetics, every one smaller than what the card actually drew,
+which is why rows fell off the bottom and the author saw dead space.
+
+Restoring measurement brought back a failure that had been blamed on binding
+loops twice, and it was never one. A probe showed the measured height settling
+*after* first layout (116 → 320 px on the calendar). `AnchoredCard` bound its
+window size to that height, so the binding re-fired once the surface was
+already mapped, shrank the window under the placement clamp, and left the card
+parked at zero — over the panel's own row, swallowing the click meant to
+dismiss it. The constants had only ever worked by never re-firing. The window
+size is now a request made once at creation and re-made only on the host's own
+inputs: the viewport cap and the side attachment, both of which arrive
+synchronously right after creation and are read back synchronously by the host.
+The tray-child case caught that nuance the moment the re-request was dropped.
+
+### Five unit seams, all invisible at factor 1
+
+`PANEL-1-N` divided the geometry handed to a surface by the per-output factor
+once, in the controller. Five paths bypassed that division and were therefore
+correct only when the factor was 1 — which is every offscreen test, because
+they pin `CELESTINA_SHELL_SCALE=1` to keep geometry contracts stated in shell
+units:
+
+- the attachment lease's live anchor refresh, which replaces the very property
+  the controller divided, and so moved a menu's mouth off its glyph on the
+  first refresh;
+- the tray child's parent card, read in shell units and mixed with the window
+  size, the anchor and the output rectangle in real pixels, which placed the
+  child over its parent instead of beside it;
+- the same child's viewport cap, written in real pixels into a shell-units
+  property, which let it run past the screen's bottom edge;
+- its membrane gap, which decided the travel the sideways droplet crosses;
+- the tray menu's pinned heading, reparented beside the popup's content item
+  rather than into it, so the factor never reached it and the header band drew
+  narrower than the rows it heads.
+
+Each is converted once now, at the place that owns the crossing.
+
+### The child menu joins the carrier every other menu uses
+
+The sideways push was reported as animating "only the inner body, not the whole
+menu as one block", and three fixes underneath it were real but not the cause:
+the popup's stock enter transition running because the attachment arrived after
+`open()`; a fall that ran to completion before the compositor ever presented
+the new surface; and a membrane gap that read a derived binding inside its own
+change dispatch and got the previous value, so the travel strip was zero and
+the menus were glued together.
+
+The cause was structural, and measuring it took freezing the push and reading
+the numbers: mid-push the body was displaced and the glass polygon tracked it
+correctly, yet the surface was card-sized — and the compositor's glass fills
+such a surface edge to edge. The card had no canvas to visibly travel across.
+The top-attached menus read correctly because they live on a surface that
+covers the output. The child now does too. The author accepted the input trade
+(2026-08-13): with the child open, a click outside it dismisses the child
+first, as in any nested menu.
+
+Migrating three integration cases to that carrier exposed a limit of the
+harness worth recording: the offscreen platform clamps a shown window to its
+own 800x800 screen, so an output-covering surface cannot be given its real
+size there. Absolute placement is therefore contracted by the
+`adjacentTrayMenuOrigin` unit cases against hand-fed compositor geometry —
+including a scaled one that asserts the converted and unconverted placements
+*differ*, so a future caller cannot quietly pass shell units again — while the
+integration cases own attachment, lifecycle, the viewport cap and the keyboard.
+Every assertion that moved says in a comment where its contract now lives.
+
+### Icon-first, from here on
+
+The author's standing decision (2026-08-13): the hierarchy is icons, not text.
+A secondary action is a compact icon where the action applies — the wide
+"Elegir la salida" buttons became a chevron on the section label, present only
+when there is more than one device, because one device is an answer rather than
+a question. Every opener carries the same capsule behind it, inset from the
+reading pill that holds it so the two no longer collide at their lower edge,
+and the speaker-and-microphone pair reads as one capsule twice as long. The
+tray menu's "Acciones" label is gone: its header already says what the list is.
+
+The clock and the phone reading became real `PanelMenuButton`s rather than
+plain items with a hand-rolled click, because the attachment lease resolves a
+drop's anchor by walking the panel for marked openers and deliberately leaves
+anything else floating — which is exactly why those two menus opened with no
+connection to the bar.
+
+The blur controller re-arms on first exposure rather than on visibility: the
+effect region is double-buffered surface state, and a commit made before the
+compositor acknowledged the surface is dropped silently, which is what made a
+freshly mapped child's glass come and go between openings.
+
+CTest passes 18/18 and the provider's own suite 115/115. Two diagnostic events
+are added rather than removed after the hunt — `blur.armed` and
+`tray.child.placed`/`requested`/`closed` — because a nested session's console
+is unreachable from outside it, and these are the bounded technical facts that
+turned this investigation from guesswork into subtraction.

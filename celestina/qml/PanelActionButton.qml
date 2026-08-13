@@ -27,6 +27,12 @@ PanelMenuButton {
         CelestinaIcon {
             id: glyph
 
+            // Derived rather than left blank so the glyph of any action button
+            // can be found by name. Previously only controls that drew their
+            // own icon had one, so moving a control onto this shared anatomy
+            // silently took its icon out of reach of anything looking for it.
+            objectName: root.objectName.length > 0
+                        ? root.objectName + "-icon" : ""
             anchors.centerIn: parent
             width: Math.max(1, Math.min(root.iconSize,
                                         parent.width, parent.height))

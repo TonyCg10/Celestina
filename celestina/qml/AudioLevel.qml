@@ -1,44 +1,38 @@
-// What the session is playing through, and whether it is silenced.
+// What the session is playing through, and the way in to everything it could
+// play through instead.
 //
-// Speaker and microphone use the suite's canonical glyphs. Their exact values
-// remain in accessible names; the panel itself needs only the active/muted
-// shapes.
-//
-// Volume and the microphone are two separate controls, side by side in one
-// row, each with its own click area — they used to share one full-width
-// `MouseArea`, so clicking the "micro" label toggled the speaker instead of
-// the microphone the label names.
+// Speaker and microphone keep the suite's canonical glyphs and their exact
+// values stay in accessible names. Clicking opens the audio menu — the same
+// gesture every other panel opener answers — and muting, the microphone and
+// the mixer live inside it as rows. The author chose that trade (2026-08-12):
+// the one-click mute is gone, and in exchange the control behaves like every
+// neighbour it has. The wheel still steps the volume without opening anything,
+// because a wheel is not a click.
 pragma ComponentBehavior: Bound
 
 import CelestinaStyle
 import QtQuick
 
-Item {
+PanelMenuButton {
     id: root
 
     // The `audio` provider's fields, or `undefined` when no default device can
     // be read. `var` is necessary because QML has no typed map.
     required property var reading
-    required property BackdropInk ink
-    signal muteToggled()
-    signal micMuteToggled()
-    signal mixerRequested()
     // One step of the session's own volume step, up or down.
     signal stepRequested(int direction)
 
     readonly property bool hasReading: reading !== undefined
                                        && reading.volume !== undefined
     readonly property bool muted: hasReading && reading.muted === true
-    // Present whenever the provider could read a default source at all —
-    // shown either way, since a toggle that only appears in one of its two
-    // states is a toggle with no way back to the other from the panel.
+    // Present whenever the provider could read a default source at all: a
+    // silenced microphone is news the panel must not sit on.
     readonly property bool hasMic: hasReading && reading.micVolume !== undefined
     readonly property bool micMuted: hasMic && reading.micMuted === true
 
-    // What a screen reader is told about the speaker. Named here, and read
-    // through `hasReading`, because an `Accessible` binding is evaluated even
-    // while the widget is hidden: reaching into an absent reading from one is
-    // what threw on every frame the helper missed.
+    // Named here and read through the guards, because an `Accessible` binding
+    // is evaluated even while the widget is hidden: reaching into an absent
+    // reading from one is what threw on every frame the helper missed.
     readonly property string spokenVolume: !hasReading
             ? qsTr("Volumen sin lectura")
             : muted
@@ -48,15 +42,26 @@ Item {
             ? qsTr("Micrófono sin lectura")
             : micMuted ? qsTr("Micrófono silenciado") : qsTr("Micrófono activo")
 
-    implicitWidth: hasReading ? readings.implicitWidth : 0
-    implicitHeight: 26
-    visible: hasReading
+    attachmentAnchor: volumeIcon
+    visible: root.hasReading
+    // Two icons in one capsule, with room to breathe at both ends: the shared
+    // opener anatomy stretches its circle into a stadium for a control that is
+    // wider than it is tall, which is exactly the shape the author asked the
+    // speaker-and-microphone pair to read as.
+    leftPadding: CelestinaTheme.spaceSm
+    rightPadding: CelestinaTheme.spaceSm
+    // An absent reading reserves nothing: the row must close over the gap
+    // rather than hold space for a device that is not there.
+    implicitWidth: root.hasReading
+                   ? readings.implicitWidth + leftPadding + rightPadding : 0
+    Accessible.name: root.hasMic
+                     ? qsTr("%1. %2").arg(root.spokenVolume).arg(root.spokenMic)
+                     : root.spokenVolume
+    Accessible.description: qsTr("Abre el menú de audio")
 
     WheelHandler {
         // A wheel notch is 120 eighths of a degree; a touchpad's finer scroll
-        // accumulates instead of being dropped. Scrolling anywhere on the
-        // widget still steps the volume, regardless of which control is under
-        // the cursor.
+        // accumulates instead of being dropped.
         property real steps: 0
 
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
@@ -73,79 +78,35 @@ Item {
         }
     }
 
-    Row {
+    contentItem: Row {
         id: readings
 
-        anchors.verticalCenter: parent.verticalCenter
         spacing: CelestinaTheme.spaceSm
 
-        Item {
-            id: volumeTile
+        CelestinaIcon {
+            id: volumeIcon
+            objectName: "celestina-volume-icon"
 
-            width: volumeIcon.width
-            height: 26
-            Accessible.role: Accessible.Button
-            Accessible.name: root.spokenVolume
-            Accessible.onPressAction: root.muteToggled()
-            Accessible.onScrollUpAction: root.stepRequested(1)
-            Accessible.onScrollDownAction: root.stepRequested(-1)
-
-            CelestinaIcon {
-                id: volumeIcon
-                objectName: "celestina-volume-icon"
-
-                anchors.centerIn: parent
-                width: CelestinaTheme.iconSm
-                height: CelestinaTheme.iconSm
-                name: root.muted ? "media-volume-muted" : "media-volume"
-                tone: CelestinaIcon.Primary
-                tintOverride: root.ink.primary
-                Accessible.ignored: true
-            }
-
-            MouseArea {
-                anchors.fill: parent
-                hoverEnabled: true
-                acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-                cursorShape: Qt.PointingHandCursor
-                onClicked: (mouse) => {
-                    if (mouse.button === Qt.MiddleButton) {
-                        root.mixerRequested();
-                        return;
-                    }
-                    root.muteToggled();
-                }
-            }
+            anchors.verticalCenter: parent.verticalCenter
+            width: CelestinaTheme.iconSm
+            height: CelestinaTheme.iconSm
+            name: root.muted ? "media-volume-muted" : "media-volume"
+            tone: CelestinaIcon.Primary
+            tintOverride: root.ink.primary
+            Accessible.ignored: true
         }
 
-        Item {
-            id: micTile
+        CelestinaIcon {
+            objectName: "celestina-mic-icon"
 
+            anchors.verticalCenter: parent.verticalCenter
             visible: root.hasMic
-            width: micIcon.width
-            height: 26
-            Accessible.role: Accessible.Button
-            Accessible.name: root.spokenMic
-            Accessible.onPressAction: root.micMuteToggled()
-
-            CelestinaIcon {
-                id: micIcon
-
-                anchors.verticalCenter: parent.verticalCenter
-                width: CelestinaTheme.iconSm
-                height: CelestinaTheme.iconSm
-                name: root.micMuted ? "mic-off" : "mic"
-                tone: CelestinaIcon.Primary
-                tintOverride: root.ink.primary
-                Accessible.ignored: true
-            }
-
-            MouseArea {
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.micMuteToggled()
-            }
+            width: visible ? CelestinaTheme.iconSm : 0
+            height: CelestinaTheme.iconSm
+            name: root.micMuted ? "mic-off" : "mic"
+            tone: CelestinaIcon.Primary
+            tintOverride: root.ink.primary
+            Accessible.ignored: true
         }
     }
 }

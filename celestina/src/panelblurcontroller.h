@@ -57,6 +57,9 @@ private:
     // PANEL-1. The blur follows the declared glass shapes, not the surface.
     QRegion glassRegion() const;
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private slots:
     void glassRegionsChanged();
 

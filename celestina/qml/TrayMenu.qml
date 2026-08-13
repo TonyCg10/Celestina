@@ -60,6 +60,15 @@ SoftMenu {
         y: CelestinaTheme.compMenuPadding
         width: root.menuViewport ? root.menuViewport.width : 0
         z: 10
+        // Reparented beside the viewport, not into it — so the per-output
+        // factor the viewport's content carries never reaches this column,
+        // and the header band drew narrower than the rows it heads by exactly
+        // that factor. It states the same transform itself, from the same
+        // corner. (No "Acciones" section row: the author removed it — the
+        // header already says what the list is, and the label only pushed the
+        // first real action down.)
+        transformOrigin: Item.TopLeft
+        scale: root.shellScale
 
         SoftMenuRow {
             ink: root.ink
@@ -76,21 +85,16 @@ SoftMenu {
             width: 1
             height: root.headerBodyGap
         }
-
-        SoftMenuRow {
-            ink: root.ink
-            width: pinnedHeading.width
-            sectionLabel: true
-            actionable: false
-            text: qsTr("Acciones")
-            verticalInset: root.rowVerticalInset
-        }
     }
 
     Binding {
         target: root.menu
         property: "topPadding"
-        value: CelestinaTheme.compMenuPadding + pinnedHeading.height
+        // The visual room the heading occupies: its own height times the
+        // factor it draws at, because this padding lives in the popup's
+        // unscaled coordinates.
+        value: CelestinaTheme.compMenuPadding
+               + Math.round(pinnedHeading.height * root.shellScale)
     }
 
     Binding {

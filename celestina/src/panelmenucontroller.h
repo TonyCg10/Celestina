@@ -184,6 +184,10 @@ private:
     QQmlComponent m_networkComponent;
     QQmlComponent m_bluetoothComponent;
     QQmlComponent m_performanceComponent;
+    QQmlComponent m_brightnessComponent;
+    QQmlComponent m_calendarComponent;
+    QQmlComponent m_phoneComponent;
+    QQmlComponent m_audioComponent;
     QQmlComponent m_captureComponent;
     QQmlComponent m_wallpaperComponent;
     QQmlComponent m_workspaceMapComponent;
