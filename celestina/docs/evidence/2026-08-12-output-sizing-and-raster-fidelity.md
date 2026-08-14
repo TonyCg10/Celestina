@@ -6,7 +6,7 @@
 - **Environment:** Linux release production workflow with offscreen Qt
   verification and normal test-prefix deployment; the author's own three
   outputs read live from the running compositor for the measurements below
-- **Plan:** [panel glass redesign ledger](../plans/active/2026-08-08-panel-glass-redesign.md)
+- **Plan:** [panel glass redesign ledger](../plans/archive/2026-08-08-panel-glass-redesign.md)
 - **Validation:** `VAL-PANEL-1`
 
 ## Procedure

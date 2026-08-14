@@ -71,3 +71,4 @@ celestina	0.20.0	milestone	PANEL-1-W	Add a durable build for the compositor patc
 celestina	0.20.1	bug	PANEL-1-X	Keep the compositor patch as Celestina's own
 celestina	0.20.2	bug	GOV-3-A	Close the running-app dock question against a dock
 celestina	0.20.3	bug	GOV-3-B	Add the authorized boundaries for the lock and the Polkit agent
+celestina	0.21.0	milestone	PANEL-1-Z	Close the panel glass plan and open the session lock

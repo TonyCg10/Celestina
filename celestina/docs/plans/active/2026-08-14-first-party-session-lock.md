@@ -2,8 +2,8 @@
 
 - **Opened:** 2026-08-14
 - **Plan ID:** first-party-session-lock
-- **Status:** pending
-- **Scope:** project
+- **Status:** active
+- **Scope:** celestina
 - **Implementation checkpoint:** R6
 - **Author-validation checkpoint:** VAL-R6
 

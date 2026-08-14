@@ -3,7 +3,7 @@
 - **Opened:** 2026-08-14
 - **Plan ID:** polkit-authentication-agent
 - **Status:** pending
-- **Scope:** project
+- **Scope:** celestina
 - **Implementation checkpoint:** R8
 - **Author-validation checkpoint:** VAL-R8
 

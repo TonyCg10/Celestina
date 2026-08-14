@@ -1,0 +1,42 @@
+# PANEL-1-Z exact change inventory
+
+Base revision	4af55e50daea4b31d9a2761a2a4d2385cf90460e
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/docs/evidence/
+Pathspec	celestina/docs/inventories/2026-08-08-panel-glass-redesign/PANEL-1-Z.numstat.tsv
+Pathspec	celestina/docs/plans/
+Pathspec	docs/version-history.tsv
+
+Plan	celestina/docs/plans/archive/2026-08-08-panel-glass-redesign.md
+Evidence	celestina/docs/evidence/2026-08-14-panel-glass-closure.md
+
+added	deleted	content	path
+1	1	294c45a5ee82f1b608376fb7d55684651823692ea4353ee5cdce7c3f79d2d627	celestina/CMakeLists.txt
+1	1	50710378c816de570673d825e3dccd6891332697aaf3bfe4902e869ca20a1d19	celestina/Cargo.lock
+1	1	74790db343c1efb582e49515b9059686be3abb4cfcef97165251c1e54319e746	celestina/Cargo.toml
+4	4	28c3bf9b9225efc221cf18e445e05afd337ed1eaf1cfdbfb1628e0a0c3e7fe43	celestina/ROADMAP.md
+13	14	75b43b0c1a842cababb5c32e196d3bd201dc8e29649f69c4810350a1bf2f059f	celestina/STATUS.md
+1	1	13700fbcf2f6769e94df49350ded14807dce43c0a5e408b0bb0444218f5883aa	celestina/docs/evidence/2026-08-08-panel-checkpoint-transition.md
+1	1	fe91f5f2752a7223238992d9631973ccc2ce13362e3e7e6709f85ea512cc258f	celestina/docs/evidence/2026-08-08-panel-glass-baseline.md
+1	1	7b0a56977fc494fa9f7ac96611e47d444275247cf9898e9cb17d7c237eae2f2b	celestina/docs/evidence/2026-08-11-contextual-menu-shared-glass.md
+1	1	4f363ae5bdc78909d7353cc887068a12da4caf6daacfa94b205ac0b7ce569d88	celestina/docs/evidence/2026-08-11-edge-attached-shell-prototype.md
+1	1	e9f59bd9cd9eacfac8f71b60999c75e1ef8e971416d4f9715d8d166ff3f57a61	celestina/docs/evidence/2026-08-11-fixed-white-shell-ink.md
+1	1	d302eacefc47fa25c36f769f4e4e2a17c22e6c78c76f4e4e769d4f6da5c53b09	celestina/docs/evidence/2026-08-11-one-ui-content-glass.md
+1	1	c815ce38f29119e4ad211bfc73ec7e3106847681cd56aa9ef4517d5a81cf1c45	celestina/docs/evidence/2026-08-12-droplet-tension-fall.md
+1	1	d05e3131a3c421e6939eaaf563959a5ffd07d1dffe6d232031d3909cae222983	celestina/docs/evidence/2026-08-12-output-sizing-and-raster-fidelity.md
+1	1	55b8beea5c9b4c195a6e456d8b2e3ef5ba83d780eba3b758bda7501960586f2f	celestina/docs/evidence/2026-08-13-quiet-surface-glass-and-placement.md
+62	0	3968bb3435a0552e131045bdea1c2a548a74f8f7a4ecfa1db9795c8fddcfc879	celestina/docs/evidence/2026-08-14-panel-glass-closure.md
+0	1448	deleted	celestina/docs/plans/active/2026-08-08-panel-glass-redesign.md
+77	0	519d53aa18104e4dfc27f6f4cf5d86fd563f6a48c1fcba2f7b877d5edbb31f12	celestina/docs/plans/active/2026-08-14-first-party-session-lock.md
+9	3	438db4abae951afff89ffb3e37b6f95a10715ccb7db25bd2226f0e91e06ac6ac	celestina/docs/plans/active/README.md
+1462	0	40fa40cb2f86814ba65fdf154891c69c250d54489656e31cc6b65a631cd3859c	celestina/docs/plans/archive/2026-08-08-panel-glass-redesign.md
+1	1	7ef536f68e96282b8f1268d04a47a1e8303dccf399c8f20cf1b707795657e665	celestina/docs/plans/archive/2026-08-08-workspace-window-map.md
+0	77	deleted	celestina/docs/plans/pending/2026-08-14-first-party-session-lock.md
+1	1	44ae87704b88ad832b012e75e7be9f61e1a6e7d0ba48b6dc677da9c230bba514	celestina/docs/plans/pending/2026-08-14-polkit-authentication-agent.md
+2	3	4cff21d67b719a211d9c8c979bd55b2e251e880f08b7b83f780606f2cd83db1a	celestina/docs/plans/pending/README.md
+1	0	fb5ab2744ab236224abb7b086d2b960c8f9f23d891b91e138bb7e186f58071c1	docs/version-history.tsv
+42	0	self	celestina/docs/inventories/2026-08-08-panel-glass-redesign/PANEL-1-Z.numstat.tsv

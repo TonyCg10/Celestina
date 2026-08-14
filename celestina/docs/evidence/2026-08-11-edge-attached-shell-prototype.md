@@ -6,7 +6,7 @@
 - **Environment:** Linux release production workflow with focused offscreen Qt
   verification and normal test-prefix deployment; no live or nested session
   activation
-- **Plan:** [panel glass redesign ledger](../plans/active/2026-08-08-panel-glass-redesign.md)
+- **Plan:** [panel glass redesign ledger](../plans/archive/2026-08-08-panel-glass-redesign.md)
 - **Validation:** `VAL-PANEL-1`
 
 ## Procedure

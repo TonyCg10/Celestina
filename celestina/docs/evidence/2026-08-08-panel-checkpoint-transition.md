@@ -7,7 +7,7 @@
 - **Environment:** local Git checkout on Linux, with the repository guards and
   staged-unit checker
 - **Plan:** [the archived workspace window map](../plans/archive/2026-08-08-workspace-window-map.md)
-- **Successor:** [PANEL-1 — borderless glass panel](../plans/active/2026-08-08-panel-glass-redesign.md)
+- **Successor:** [PANEL-1 — borderless glass panel](../plans/archive/2026-08-08-panel-glass-redesign.md)
 - **Version:** unchanged; this unit changes records only
 
 ## What changed

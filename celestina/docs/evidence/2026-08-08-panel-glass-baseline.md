@@ -6,7 +6,7 @@
   CelestinaStyle 1.2.0
 - **Environment:** Linux, Qt 6.9 compiled-module floor, CMake Release, offscreen
   Qt for automated surface tests and one nested Niri session for author review
-- **Plan:** [borderless glass panel](../plans/active/2026-08-08-panel-glass-redesign.md)
+- **Plan:** [borderless glass panel](../plans/archive/2026-08-08-panel-glass-redesign.md)
 - **Author validation:** `VAL-PANEL-1`, partial
 
 ## What changed

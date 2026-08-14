@@ -1,7 +1,7 @@
 # Celestina implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** PANEL-1
+- **Active implementation checkpoint:** R6
 
 This roadmap contains only work an agent can implement and verify. Real Niri,
 hardware, visual and assistive-technology checks live in
@@ -34,9 +34,9 @@ of the design when they provide the narrow capability the shell needs.
 | WSG-1 | complete | Keep a workspace's monitor grouping legible after that monitor is switched off |
 | DIAG-1 | complete | Make the seconds before a freeze reconstructable, without recording anything private |
 | WMAP-1 | complete | Show what a workspace holds, as its real layout, without focusing it |
-| PANEL-1 | active | Replace the hard panel plate with borderless compositor glass and route contextual content through the canonical shared glass material |
+| PANEL-1 | complete | Replace the hard panel plate with borderless compositor glass and route contextual content through the canonical shared glass material |
 | UX-2 | planned | Establish and then implement one coherent shell-wide visual and interaction language after SHELL-D5 is applied |
-| R6 | planned | First-party `ext-session-lock` and deterministic lock-before-suspend |
+| R6 | active | First-party `ext-session-lock` and deterministic lock-before-suspend |
 | R8 | active | Reversible Noctalia removal delivered; the Polkit agent slice is now open |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
 
@@ -438,7 +438,7 @@ shadow.
 The author selected this bounded panel direction from live screenshots. It does
 not apply the rest of UX-2; menu, overlay and provider work is limited to the
 exact corrections declared in the active plan. Scope, order and evidence are in
-[the PANEL-1 plan](docs/plans/active/2026-08-08-panel-glass-redesign.md).
+[the PANEL-1 plan](docs/plans/archive/2026-08-08-panel-glass-redesign.md).
 
 `PANEL-1-S` puts the on-screen display and the notification toasts on the
 shell's own glass, hangs them from the bar and gives the display a card file.

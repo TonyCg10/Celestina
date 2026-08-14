@@ -6,7 +6,7 @@
 - **Environment:** nested niri (`dev-session.sh --own-bus`), one `winit` output
   at 3840x2160, scale 1.5, blur `passes 2 offset 2`; offscreen Qt verification
   for the automated exit; no live-session activation
-- **Plan:** [panel glass redesign ledger](../plans/active/2026-08-08-panel-glass-redesign.md)
+- **Plan:** [panel glass redesign ledger](../plans/archive/2026-08-08-panel-glass-redesign.md)
 - **Validation:** `VAL-PANEL-1`
 
 This records what was measured rather than reasoned about, because the same

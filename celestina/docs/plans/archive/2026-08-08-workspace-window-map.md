@@ -4,7 +4,7 @@
 - **Plan ID:** workspace-window-map
 - **Status:** done
 - **Closed:** 2026-08-08
-- **Successor:** [PANEL-1 — borderless glass panel](../active/2026-08-08-panel-glass-redesign.md)
+- **Successor:** [PANEL-1 — borderless glass panel](../archive/2026-08-08-panel-glass-redesign.md)
 - **Scope:** celestina
 - **Implementation checkpoint:** WMAP-1
 - **Predecessor:** [WSG-1 — workspace groups survive their monitor](../archive/2026-08-08-workspace-monitor-groups.md)

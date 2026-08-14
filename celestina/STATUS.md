@@ -750,20 +750,19 @@ the author reruns them against 0.6.2.
   integration binaries, Clippy and `cargo fmt` clean, QML lint, CTest 15/15 and the
   eight-second offscreen release smoke. The author then completed the controlled
   live rerun and restored Noctalia, which still owns the session.
-- Current checkpoint: `PANEL-1`, now prototyping one edge-to-edge
-  `ContextualVeil` panel with a single finite blur region, ordinary inset
-  rounded capsules, and a droplet contextual membrane that starts at
-  `barHeight` as one narrow glyph-centred mouth, narrows to its neck just
-  below the bar and swells tangent onto the menu body's flat top edge inside
-  its ordinary rounded corners. The clicked control remains the body placement authority,
-  keeps its hover circle while its own menu is open, and never changes its
-  capsule or any dense content card. The membrane is only `ContextualVeil`, with no dense
-  bridge, and live glyph tracking keeps its waist aligned through tray/provider
-  layout changes. The
-  carrier exposes no outline, lit edge or apparent halo. Command/keybind,
-  workspace and foreign child surfaces remain floating. `UX-2` beyond this
-  bounded prototype, conditional lock and Polkit work remain outside it (no
-  dock is planned: ADR 0003)
+- Current checkpoint: `R6`, the first-party session lock — authorized on
+  2026-08-14 by [ADR 0004](docs/decisions/0004-first-party-session-lock.md),
+  which is its threat model: Celestina owns the lock surface and owns no
+  password verification, PAM runs in a separate process holding no compositor
+  state, and `unlock_and_destroy` is reachable from one call site only. The
+  Polkit agent is authorized on the same day by
+  [ADR 0005](docs/decisions/0005-first-party-polkit-agent.md) and waits for
+  R8's slice with its plan already written.
+- `PANEL-1` closed on 2026-08-14 without being finished: the glass redesign
+  shipped through 0.19.0 and is still being iterated, but the plan released
+  the checkpoint rather than holding it open forever. `VAL-PANEL-1` was never
+  run, and design work on the shell's glass reopens under a future checkpoint.
+  See the [closure record](docs/evidence/2026-08-14-panel-glass-closure.md).
 - Last completed plan: [LVR-3 late provider insertion](docs/plans/archive/2026-08-05-late-provider-insertion.md)
 - The milestone before it: [R8 Noctalia departure](docs/plans/archive/2026-08-04-r8-noctalia-departure.md)
 - Open product questions: [discussion queue](docs/discussions/README.md)

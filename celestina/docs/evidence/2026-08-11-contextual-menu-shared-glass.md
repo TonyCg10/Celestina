@@ -7,7 +7,7 @@
 - **Environment:** Release production workflow plus the already-running nested
   Niri `wayland-2` session on output `winit`, 1896 by 998 logical pixels at
   scale 1
-- **Plan:** [panel glass redesign ledger](../plans/active/2026-08-08-panel-glass-redesign.md)
+- **Plan:** [panel glass redesign ledger](../plans/archive/2026-08-08-panel-glass-redesign.md)
 - **Validation:** `VAL-PANEL-1`
 
 ## Procedure
