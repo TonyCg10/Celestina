@@ -89,10 +89,20 @@ TestCase {
         indicator.reading = {"unread": 1, "quiet": false};
         historySpy.clear();
 
+        // The geometry now rides the press, so the layout must have settled
+        // before the press instead of during the release's wait: the fresh
+        // count text widens the control on the next polish.
+        tryVerify(function() { return indicator.width > CelestinaTheme.iconSm; });
+
         mousePress(indicator);
         verify(indicator.down);
         tryCompare(indicator.background, "color",
                    CelestinaTheme.surfaceStrong);
+        // The request rides the press, not the click: a release can be lost
+        // to the keyboard focus the compositor pulls off an open contextual
+        // surface mid-gesture, and an opener that waited for it dropped the
+        // first click whenever any menu was up.
+        compare(historySpy.count, 1);
         mouseRelease(indicator);
 
         verify(!indicator.down);

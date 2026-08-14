@@ -119,10 +119,26 @@ private slots:
     // path; the worker owns every filesystem, scan and image rule after that
     // boundary.
     void wallpaperFolderSelected(const QUrl &source);
+    // A press on a bar's background that no control claimed. Whatever
+    // contextual surface is up goes away, exactly as it would for a press on
+    // the desktop: the bar's strip stays out of those surfaces' input regions
+    // so a click on a different opener can swap menus, which leaves this
+    // dismissal for the bar itself to report.
+    void dismissRequested();
 
 private:
     bool ensurePanel(QScreen *screen);
     void removePanel(QScreen *screen);
+public:
+    // The five panel overlays, all but `keep` retired. The menu controller is
+    // untouched: it owns the memory of which indicator is up, which is what
+    // lets that indicator's own opener toggle it shut.
+    void closeOverlaysExcept(const OverlayController *keep);
+    // The same, plus whatever menu the panel has open — every contextual
+    // surface this manager can have caused.
+    void closeContextualExcept(const OverlayController *keep);
+
+private:
     void togglePanelOverlay(
         OverlayController *controller,
         QWindow *panel,

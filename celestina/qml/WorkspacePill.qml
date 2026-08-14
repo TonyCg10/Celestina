@@ -145,12 +145,24 @@ Item {
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         cursorShape: Qt.PointingHandCursor
-        onClicked: (mouse) => {
+        // The map rides the press, exactly as every panel opener's does. A
+        // click completes on the release, and that release dies whenever a
+        // contextual surface is up: the press on the bar makes the compositor
+        // pull the keyboard focus off that surface mid-gesture, Qt answers by
+        // cancelling this area's grab, and the release never arrives — the
+        // first right click was silently spent and only the second opened the
+        // map. Focusing a workspace stays on the release: it is not an opener,
+        // nothing is holding focus for it to lose, and a press that focused
+        // would fire under a drag across the strip.
+        onPressed: (mouse) => {
             if (mouse.button === Qt.RightButton) {
                 pill.mapRequested(pill.globalRect(pill),
                                   pill.attachmentAnchorGlobalRectNow());
-                return;
             }
+        }
+        onClicked: (mouse) => {
+            if (mouse.button === Qt.RightButton)
+                return;
             pill.focusRequested(pill.workspace.output, pill.workspace.index);
         }
     }

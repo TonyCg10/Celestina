@@ -102,6 +102,10 @@ public slots:
         QObject *providerSource
     );
     void close();
+    // Leave the panel's own strip out of an output-covering menu's input
+    // region, so a click on another opener reaches the bar and swaps menus
+    // instead of being spent dismissing this one.
+    static void passPanelStripThrough(QWindow *content, QWindow *panel);
 
     // Which indicator menu is on screen, or an empty string. Exposed so a
     // regression can read what a second request did rather than inferring it.

@@ -366,6 +366,7 @@ void PanelMenuController::openWorkspaceMap(
             attachmentStartY
         )
     );
+    passPanelStripThrough(card, panel);
     if (!m_surface->open(card, panel)) {
         delete card;
         return;
@@ -417,8 +418,18 @@ void PanelMenuController::toggleIndicatorMenu(
 {
     const bool needsProvider = kind != QStringLiteral("capture")
         && kind != QStringLiteral("calendar");
-    if (!m_enabled || !panel || (needsProvider && !providerSource))
+    if (!m_enabled || !panel || (needsProvider && !providerSource)) {
+        DiagnosticJournal::instance().record(
+            DiagnosticJournal::Record(
+                DiagnosticJournal::Level::Warn,
+                QStringLiteral("ctx.menu_dropped"))
+                .text(QStringLiteral("kind"), kind)
+                .flag(QStringLiteral("enabled"), m_enabled)
+                .flag(QStringLiteral("panel"), panel != nullptr)
+                .flag(QStringLiteral("source"), providerSource != nullptr)
+        );
         return;
+    }
     if (indicatorMenuComponent(kind).isEmpty()) {
         qWarning() << "Celestina has no indicator menu named" << kind;
         return;
@@ -430,6 +441,14 @@ void PanelMenuController::toggleIndicatorMenu(
     // defect where the first click did nothing visible and only the second
     // closed the menu.
     const bool sameAgain = (m_openMenuKind == kind);
+    DiagnosticJournal::instance().record(
+        DiagnosticJournal::Record(
+            DiagnosticJournal::Level::Info,
+            QStringLiteral("ctx.menu"))
+            .text(QStringLiteral("kind"), kind)
+            .text(QStringLiteral("open_before"), m_openMenuKind)
+            .flag(QStringLiteral("same_again"), sameAgain)
+    );
     close();
     if (sameAgain)
         return;
@@ -512,6 +531,7 @@ void PanelMenuController::toggleIndicatorMenu(
         panelPopupBodyOrigin(
             localOpener, contentWidth, anchorGap, attachmentStartY)
     );
+    passPanelStripThrough(window, panel);
     if (!m_surface->open(window, panel)) {
         delete window;
         return;
@@ -567,6 +587,14 @@ void PanelMenuController::toggleTrayItemsMenu(
     }
 
     const bool sameAgain = (m_openMenuKind == QLatin1String(trayItemsKind));
+    DiagnosticJournal::instance().record(
+        DiagnosticJournal::Record(
+            DiagnosticJournal::Level::Info,
+            QStringLiteral("ctx.menu"))
+            .text(QStringLiteral("kind"), QLatin1String(trayItemsKind))
+            .text(QStringLiteral("open_before"), m_openMenuKind)
+            .flag(QStringLiteral("same_again"), sameAgain)
+    );
     close();
     if (sameAgain)
         return;
@@ -639,6 +667,7 @@ void PanelMenuController::toggleTrayItemsMenu(
             qMax(1, screen->geometry().height() - bodyOrigin.y())
         );
     }
+    passPanelStripThrough(window, panel);
     if (!m_surface->open(window, panel)) {
         delete window;
         return;
@@ -977,6 +1006,18 @@ void PanelMenuController::trayEntryChosen(int entryId)
 
 void PanelMenuController::menuDismissed()
 {
+    // The one bounded fact a two-click report needs: what let go, and
+    // whether the controller still recognised it as its own.
+    DiagnosticJournal::instance().record(
+        DiagnosticJournal::Record(
+            DiagnosticJournal::Level::Info,
+            QStringLiteral("ctx.menu_dismissed"))
+            .text(QStringLiteral("open_kind"), m_openMenuKind)
+            .flag(QStringLiteral("is_child"),
+                  sender() == m_trayChildSurface->window())
+            .flag(QStringLiteral("is_current"),
+                  sender() == m_surface->window())
+    );
     if (sender() == m_trayChildSurface->window()) {
         closeTrayChild(true);
         return;
@@ -1045,4 +1086,32 @@ void PanelMenuController::close()
     m_openIndicatorPanel = nullptr;
     m_surface->close();
     m_attachmentLease.release();
+}
+
+void PanelMenuController::passPanelStripThrough(QWindow *content, QWindow *panel)
+{
+    if (!content || !panel)
+        return;
+
+    const QPointer<QWindow> tracked(content);
+    const QPointer<QWindow> bar(panel);
+    const auto apply = [tracked, bar]() {
+        if (!tracked || !bar)
+            return;
+        tracked->setMask(panelPopupInputRegion(
+            tracked->width(), tracked->height(), qMax(0, bar->height())));
+    };
+    apply();
+    // The compositor sizes this surface, so its real extent arrives after the
+    // map; a region computed from the pre-configure size would leave the whole
+    // output inert.
+    connect(content, &QWindow::widthChanged, content, apply);
+    connect(content, &QWindow::heightChanged, content, apply);
+    // A mask set before the platform surface exists can be lost with it, and
+    // a window whose size never changes on configure sees none of the hooks
+    // above — after which the surface takes input over the whole output and
+    // the bar's clicks die in silence. Reapplying on the event loop and once
+    // more after the first commits closes every path.
+    QTimer::singleShot(0, content, apply);
+    QTimer::singleShot(120, content, apply);
 }

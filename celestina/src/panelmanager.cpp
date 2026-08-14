@@ -146,6 +146,43 @@ void PanelManager::setSessionMenu(OverlayController *menu)
     m_sessionMenu = menu;
 }
 
+// One contextual surface at a time, whichever family it belongs to.
+//
+// Each family already replaced its own — the panel's menus share a single
+// surface — but they knew nothing of each other, and the five overlays are
+// five independent controllers, so opening the control centre over an open
+// notification centre left both up.
+//
+// This runs *after* the new surface is mapped, driven by the same
+// `contextualSurfaceOpened` the display already listens to, and that ordering
+// is the whole point. Retiring the old one first, inside the click that asked
+// for the new one, cost a click: the surface being destroyed under the
+// pointer took the press with it and the opener's own request never landed,
+// so the first click only closed and the second opened. Opening first and
+// sweeping after costs one frame of overlap and answers in one click. A
+// controller with nothing mapped answers by doing nothing, so asking all of
+// them is cheaper than tracking which is up.
+void PanelManager::closeOverlaysExcept(const OverlayController *keep)
+{
+    for (OverlayController *const overlay : {
+             m_launcher.data(), m_notificationCentre.data(),
+             m_controlCentre.data(), m_clipboard.data(),
+             m_sessionMenu.data()}) {
+        if (overlay && overlay != keep)
+            overlay->close();
+    }
+}
+
+void PanelManager::closeContextualExcept(const OverlayController *keep)
+{
+    // The menu controller is deliberately not closed on its own routes: it
+    // remembers which indicator is up so that opener can toggle it shut, and
+    // closing it from outside would forget that and reopen instead.
+    if (m_menu)
+        m_menu->close();
+    closeOverlaysExcept(keep);
+}
+
 void PanelManager::togglePanelOverlay(
     OverlayController *controller,
     QWindow *panel,
@@ -389,6 +426,12 @@ bool PanelManager::ensurePanel(QScreen *screen)
         this,
         SLOT(wallpaperFolderSelected(QUrl))
     );
+    connect(
+        window,
+        SIGNAL(dismissRequested()),
+        this,
+        SLOT(dismissRequested())
+    );
 
     // The tray crosses C++, Qt's property notifier and a QML layout before it
     // becomes pixels. Record the last seam as well as the D-Bus seam so a
@@ -473,6 +516,12 @@ void PanelManager::trayDrawerRequested(
         m_tray,
         m_providers
     );
+}
+
+// Every contextual surface this manager can have caused, put away at once.
+void PanelManager::dismissRequested()
+{
+    closeContextualExcept(nullptr);
 }
 
 void PanelManager::wallpaperFolderSelected(const QUrl &source)

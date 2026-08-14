@@ -93,12 +93,20 @@ Item {
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         cursorShape: Qt.PointingHandCursor
-        onClicked: (mouse) => {
+        // The map rides the press, for the reason `WorkspacePill` records:
+        // with a contextual surface up, the release of the first click on the
+        // bar is cancelled by the keyboard focus the compositor pulls off it.
+        // Expanding the group stays on the release — it opens nothing, so no
+        // focus is in flight to lose.
+        onPressed: (mouse) => {
             if (mouse.button === Qt.RightButton) {
                 capsule.mapRequested(capsule.globalRect(capsule),
                                      capsule.attachmentAnchorGlobalRectNow());
-                return;
             }
+        }
+        onClicked: (mouse) => {
+            if (mouse.button === Qt.RightButton)
+                return;
             capsule.expandRequested();
         }
     }

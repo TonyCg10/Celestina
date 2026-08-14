@@ -257,12 +257,20 @@ Row {
                     hoverEnabled: true
                     acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
                     cursorShape: Qt.PointingHandCursor
+                    // The context menu rides the press, for the reason
+                    // `WorkspacePill` records: with a contextual surface up,
+                    // the release of the first click on the bar is cancelled
+                    // by the keyboard focus the compositor pulls off it.
+                    // Activating an item stays on the release: it opens
+                    // nothing of this shell's, so no focus is in flight.
+                    onPressed: (mouse) => {
+                        if (mouse.button === Qt.RightButton)
+                            entry.requestContextMenu();
+                    }
                     onClicked: (mouse) => {
                         const at = entry.mapToGlobal(0, entry.height);
-                        if (mouse.button === Qt.RightButton) {
-                            entry.requestContextMenu();
+                        if (mouse.button === Qt.RightButton)
                             return;
-                        }
                         if (mouse.button === Qt.MiddleButton) {
                             root.secondaryActivated(entry.modelData.service,
                                                     entry.modelData.path,

@@ -39,6 +39,9 @@ Window {
     // complete URL and is the only layer that turns it into a local filesystem
     // path; the gallery provider owns scanning and image validation after that.
     signal wallpaperFolderSelected(url source)
+    // A press on the bar that no control claimed: put away whatever
+    // contextual surface is up, exactly as a press on the desktop does.
+    signal dismissRequested()
 
     BackdropInk {
         id: backdropInk
@@ -197,6 +200,25 @@ Window {
                     silhouetteEdgePath: bar.materialSilhouette.edgePath
                     elevation: 0
                 }
+            }
+
+            // A contextual surface covers the output so a click anywhere else
+            // retires it — but it deliberately leaves this strip out of its
+            // input region, because that is what lets a click on a different
+            // opener swap menus in one gesture instead of merely closing the
+            // first. The bar therefore has to answer for its own background:
+            // a press no control took is the same "somewhere else" a press on
+            // the desktop is, and asks for the same dismissal. It sits under
+            // every control — the flanks are drawn after this — so nothing it
+            // does can reach a button's own click.
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.LeftButton
+                // On the press, for the same reason the openers answer their
+                // press: the release of the first click on the bar can be
+                // cancelled by the focus the compositor pulls off an open
+                // surface in the same gesture.
+                onPressed: panel.dismissRequested()
             }
         }
 
@@ -429,10 +451,30 @@ Window {
                 blurAvailable: panel.compositorBlurAvailable
                 ink: backdropInk
 
+                // The bell keeps company with the levels rather than with the
+                // action buttons: the author's grouping (2026-08-14) is that
+                // the three surfaces a pointer opens by resting on them —
+                // notifications, audio and brightness — read as one rhythm,
+                // so the bell takes this cluster's own spacing beside audio.
+                NotificationIndicator {
+                    height: CelestinaTheme.controlHeightXs
+                    reading: panel.provider("notifications")
+                    ink: backdropInk
+                    opensOnHover: true
+                    // The panel asks; the host owns the surface that answers,
+                    // exactly as it does for the menus.
+                    onHistoryRequested: (openerRect, attachmentAnchorRect) =>
+                        panel.notificationCentreRequested(openerRect,
+                                                           attachmentAnchorRect)
+                    onQuietToggled: panel.providerSource.sendCommand(
+                        "notifications", "quiet-toggle")
+                }
+
                 AudioLevel {
                     height: CelestinaTheme.controlHeightXs
                     reading: panel.provider("audio")
                     ink: backdropInk
+                    opensOnHover: true
                     onMenuRequested: (openerRect, attachmentAnchorRect) =>
                         panel.indicatorMenuRequested("audio", openerRect,
                                                      attachmentAnchorRect)
@@ -448,6 +490,7 @@ Window {
                     blurAvailable: panel.compositorBlurAvailable
                     // Inside a semantic cluster, so the cluster owns the glass.
                     ownsGlass: false
+                    opensOnHover: true
                     onMenuRequested: (openerRect, attachmentAnchorRect) =>
                         panel.indicatorMenuRequested("brightness", openerRect,
                                                      attachmentAnchorRect)
@@ -471,19 +514,6 @@ Window {
                 spacing: CelestinaTheme.spaceXs
                 blurAvailable: panel.compositorBlurAvailable
                 ink: backdropInk
-
-                NotificationIndicator {
-                    height: CelestinaTheme.controlHeightXs
-                    reading: panel.provider("notifications")
-                    ink: backdropInk
-                    // The panel asks; the host owns the surface that answers,
-                    // exactly as it does for the menus.
-                    onHistoryRequested: (openerRect, attachmentAnchorRect) =>
-                        panel.notificationCentreRequested(openerRect,
-                                                           attachmentAnchorRect)
-                    onQuietToggled: panel.providerSource.sendCommand(
-                        "notifications", "quiet-toggle")
-                }
 
                 PanelActionButton {
                     barHeight: panel.barHeight

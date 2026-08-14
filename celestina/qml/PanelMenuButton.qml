@@ -18,6 +18,19 @@ BackdropButton {
     // contextual surface. The inherited background then keeps the ordinary
     // hover circle visible until that exact surface retires.
     property bool menuOpen: false
+    // Opt-in, never the default: a pointer resting on this control opens what
+    // a click would. Only the three reading openers take it (2026-08-14), and
+    // only after a dwell — a pointer crossing the bar on its way somewhere
+    // else passes over every control in the row, and opening on contact would
+    // make the bar unusable to walk across.
+    property bool opensOnHover: false
+    // Whether what is currently up was opened by the pointer resting here
+    // rather than by a click. A click on an opener whose own menu is already
+    // showing puts it away — the toggle every opener has — but the pointer
+    // arriving is not a request to put anything away, so the click that
+    // merely confirms what the dwell already did is spent instead of
+    // answered. It hands the toggle back at once: the next click closes.
+    property bool openedByHover: false
 
     signal menuRequested(rect openerRect, rect attachmentAnchorRect)
 
@@ -72,7 +85,22 @@ BackdropButton {
     bottomPadding: 0
     activeFocusOnTab: true
 
-    onClicked: root.requestMenu()
+    // On the press, never on the click. A click completes on the release,
+    // and that release can die: with a contextual surface holding on-demand
+    // keyboard focus, the press on the bar makes the compositor pull that
+    // focus away mid-gesture — measured on the nested session as a
+    // `wl_keyboard.leave` in the very batch of the press — and Qt answers
+    // the focus loss by cancelling the button's grab, so `clicked` never
+    // fires and the first click on any opener silently dies while a menu is
+    // up. The press is delivered before any of that can happen, and a bar
+    // that answers on the press is also simply faster in the hand.
+    onPressed: {
+        if (root.openedByHover && root.menuOpen) {
+            root.openedByHover = false;
+            return;
+        }
+        root.requestMenu();
+    }
     Keys.onReturnPressed: function(event) {
         root.requestMenu();
         event.accepted = true;
@@ -87,5 +115,40 @@ BackdropButton {
         acceptedButtons: Qt.NoButton
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
+    }
+
+    // The dwell that separates resting on a control from crossing it. It is
+    // restarted rather than merely started on every hover, so a pointer that
+    // wanders in and out never accumulates its way to an opening.
+    Timer {
+        id: hoverDwell
+
+        // Short enough to read as immediate, long enough that a pointer
+        // crossing the bar on its way somewhere else never opens anything.
+        interval: CelestinaTheme.motionFast
+        onTriggered: {
+            if (root.opensOnHover && root.hovered && !root.menuOpen) {
+                root.openedByHover = true;
+                root.requestMenu();
+            }
+        }
+    }
+
+    // Whatever is up stopped being this control's the moment the lease let go,
+    // so the next click is an ordinary open again.
+    onMenuOpenChanged: {
+        if (!root.menuOpen)
+            root.openedByHover = false;
+    }
+
+    onHoveredChanged: {
+        if (!root.opensOnHover)
+            return;
+        // An opener whose own surface is already up has nothing to ask for;
+        // asking again would retire and remap the very menu being reached for.
+        if (root.hovered && !root.menuOpen)
+            hoverDwell.restart();
+        else
+            hoverDwell.stop();
     }
 }

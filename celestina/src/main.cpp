@@ -521,6 +521,24 @@ int main(int argc, char *argv[])
     panels.setControlCentre(controlCentre);
     panels.setClipboard(clipboard);
     panels.setSessionMenu(sessionMenu);
+
+    // And one contextual surface at a time. Whichever opened last says so and
+    // every other retires — after the new one is up, never before it, because
+    // a surface destroyed inside the click that asked for its replacement
+    // takes that click with it. The panel's menus already share one surface,
+    // so a menu opening only has to sweep the overlays; an overlay opening
+    // sweeps the menu and its four siblings.
+    QObject::connect(
+        menu, &PanelMenuController::contextualSurfaceOpened,
+        &panels, [&panels]() { panels.closeOverlaysExcept(nullptr); });
+    for (OverlayController *const opener :
+         {launcher, clipboard, notificationCentre, controlCentre, sessionMenu}) {
+        QObject::connect(
+            opener, &OverlayController::contextualSurfaceOpened,
+            &panels, [&panels, opener]() {
+                panels.closeContextualExcept(opener);
+            });
+    }
     if (!panels.start())
         return EXIT_FAILURE;
 

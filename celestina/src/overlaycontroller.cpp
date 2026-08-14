@@ -1,5 +1,6 @@
 #include "overlaycontroller.h"
 
+#include "diagnosticjournal.h"
 #include "quietplacement.h"
 
 #include <QCursor>
@@ -8,6 +9,7 @@
 #include <QGuiApplication>
 #include <QQmlEngine>
 #include <QScreen>
+#include <QTimer>
 #include <QVariantMap>
 #include <QWindow>
 
@@ -164,6 +166,14 @@ QWindow *OverlayController::createWindow()
 
 void OverlayController::overlayDismissed()
 {
+    DiagnosticJournal::instance().record(
+        DiagnosticJournal::Record(
+            DiagnosticJournal::Level::Info,
+            QStringLiteral("ctx.overlay_dismissed"))
+            .text(QStringLiteral("overlay"), m_componentName)
+            .flag(QStringLiteral("is_current"),
+                  sender() == m_surface->window())
+    );
     if (sender() == m_surface->window())
         close();
 }
@@ -195,6 +205,41 @@ void OverlayController::open()
     // resolves to this very screen.
     overlay->setProperty("shellScale", shellScaleForScreen(screen));
 
+    // Everything this covers answers a click by retiring — except the strip
+    // the panel reserved, which stays the bar's, so a click on another opener
+    // swaps surfaces in one gesture instead of only closing this one. A
+    // keybind route names no panel and cannot measure that strip, so it keeps
+    // the complete coverage it has always had.
+    //
+    // The mask is put on *before* the surface is shown, so its very first
+    // commit already excludes the strip. Applied after, the author could
+    // outrace it: for a few frames the fresh surface took input over the
+    // whole output, and a quick click on the next opener was spent dismissing
+    // this one instead of reaching the bar — the two-click switch, back
+    // again, but only for fast hands. The size connections keep the region
+    // true across the configures that follow.
+    if (m_openerPanel) {
+        const QPointer<QWindow> tracked(overlay);
+        const QPointer<QWindow> bar = m_openerPanel;
+        const auto apply = [tracked, bar]() {
+            if (!tracked || !bar)
+                return;
+            tracked->setMask(panelPopupInputRegion(
+                tracked->width(), tracked->height(), qMax(0, bar->height())));
+        };
+        apply();
+        connect(overlay, &QWindow::widthChanged, overlay, apply);
+        connect(overlay, &QWindow::heightChanged, overlay, apply);
+        // A mask set before the platform surface exists can be lost with it,
+        // and a window whose QML size already matches the output sees no
+        // size change on configure — the one reapply hook this had. Measured
+        // on the nested session: the control centre kept whole-output input
+        // and its card swallowed bar clicks in silence. Reapplying after the
+        // map, and once more after the first commits, closes every path.
+        QTimer::singleShot(0, overlay, apply);
+        QTimer::singleShot(120, overlay, apply);
+    }
+
     if (!m_surface->open(overlay, screen)) {
         delete overlay;
         return;
@@ -212,6 +257,16 @@ void OverlayController::close()
 
 void OverlayController::toggle()
 {
+    // One bounded line per gesture: which overlay was asked, and whether the
+    // ask found it open. The nested session's console is unreachable, and the
+    // author's two-click reports live or die on this ordering.
+    DiagnosticJournal::instance().record(
+        DiagnosticJournal::Record(
+            DiagnosticJournal::Level::Info,
+            QStringLiteral("ctx.toggle"))
+            .text(QStringLiteral("overlay"), m_componentName)
+            .flag(QStringLiteral("was_open"), isOpen())
+    );
     if (isOpen())
         close();
     else
