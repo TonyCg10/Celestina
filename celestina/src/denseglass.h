@@ -73,7 +73,7 @@ public:
 private:
     explicit DenseGlassAggregator(QObject *parent = nullptr);
     void refresh(QScreen *screen);
-    QQuickWindow *companionFor(QScreen *screen);
+    QList<QPointer<QQuickWindow>> companionsFor(QScreen *screen);
     void pulse();
 
     struct Source
@@ -84,7 +84,16 @@ private:
     };
 
     QHash<QWindow *, Source> m_sources;
-    QHash<QScreen *, QPointer<QQuickWindow>> m_companions;
+    // Several companions per output, stacked. Each one blurs what is already
+    // below it, so N of them compose N samples over the same rectangles —
+    // which is how the dense material gets a strength the session's shared
+    // blur profile never names, on a stock compositor. A per-layer strength
+    // override was built and measured first (the patch is kept at
+    // ~/.local/share/celestina/) and then set aside: it needs a forked
+    // compositor on the machine this shell is meant to be *lived in*, and a
+    // config naming options an unpatched niri rejects is a session that does
+    // not start at all.
+    QHash<QScreen *, QList<QPointer<QQuickWindow>>> m_companions;
     // The companion's pulse. Effect state is double-buffered and rides the
     // next commit, and a window whose scene never changes stops committing —
     // the measured lesson of every quiet surface. While anything is armed

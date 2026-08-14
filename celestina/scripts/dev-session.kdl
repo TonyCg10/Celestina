@@ -135,27 +135,40 @@ layer-rule {
     }
 }
 
-// The dark sections' second blur, at the strength the veil never gets. The
-// shell keeps one invisible companion surface per output whose region is
-// exactly the dark content cards; the per-rule `passes`/`offset` here are the
-// patched compositor's contribution, completing the per-rule
-// `noise`/`saturation` upstream already has. This sample deliberately erases
-// structure: the author's direction (2026-08-14) is a material that
-// *summarizes* the colours behind it — Windows 11's Mica, One UI 8.5's
-// frosted panels — under the dark cards alone, while the colourless veil
-// keeps the session's slight sample above. Saturation rises because a grey
-// summary is not a summary of anything; the noise rises with the blur
-// because a wider pyramid bands more.
+// The dense sections' extra blur, at a strength the veil never gets. The
+// shell stacks several invisible companion surfaces per output whose regions
+// are exactly the dark content cards; each composes one more sample of the
+// blur profile above, so the dark cards *summarize* the colours behind them —
+// Windows 11's Mica, One UI 8.5's frosted panels, the author's direction of
+// 2026-08-14 — while the colourless veil above keeps the session's slight
+// sample and the background stays exactly as it always was.
+//
+// Nothing here names a strength, deliberately. A per-layer `passes`/`offset`
+// override was built for niri and measured working; the patch is kept at
+// ~/.local/share/celestina/niri-per-layer-blur-strength.patch and is worth
+// sending upstream, where the same override already exists for noise and
+// saturation. It was then set aside: it needs a forked compositor on the
+// machine this shell is meant to be lived in, and a config naming options an
+// unpatched niri rejects is a session that does not start at all. Stacking
+// asks the stock compositor for nothing it does not already do.
+//
+// `blur` is left unset on purpose. Forced true, the rule kept blurring the
+// whole surface — the whole output, bar included — once the client withdrew
+// its region. Unset, the effect exists exactly while a companion publishes
+// rectangles.
 layer-rule {
     match namespace="^celestina-dense-glass$"
 
     background-effect {
         xray false
-        // No `blur true` here, deliberately: forced on, the rule kept
-        // blurring the whole surface — the whole output — after the client
-        // withdrew its region. Left unset, the effect exists exactly while
-        // the companion publishes rectangles, and the strength below applies
-        // to those rectangles alone.
+        // `blur` stays unset on purpose. Forced true, the rule kept blurring
+        // the whole surface — the whole output, bar included — once the
+        // client withdrew its region. Unset, the effect exists exactly while
+        // a companion publishes rectangles.
+        //
+        // The four below are the patched compositor's contribution; a stock
+        // niri rejects them, and `dev-session.sh` answers that by dropping
+        // these very lines before it starts, so this profile runs either way.
         passes 4
         offset 6
         noise 0.02

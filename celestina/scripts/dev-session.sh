@@ -33,7 +33,9 @@ set -eu
 # session.
 
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-config=$here/dev-session.kdl
+# CELESTINA_NEST_CONFIG names a different profile, for comparing compositor
+# behaviour without editing the reference one.
+config=${CELESTINA_NEST_CONFIG:-$here/dev-session.kdl}
 restart=$here/dev-restart.sh
 runtime=${XDG_RUNTIME_DIR:-/tmp}
 env_file=$runtime/celestina-dev-session.env
@@ -248,10 +250,52 @@ record_and_run="
 
 trap 'rm -f "$env_file"' EXIT INT TERM
 
-# A nest may run a different niri than the session: CELESTINA_NEST_NIRI names
-# the binary, for compositor patches that must prove themselves here before
-# they are allowed anywhere near the live session.
-niri_binary=${CELESTINA_NEST_NIRI:-niri}
+# A nest may run a different niri than the session. CELESTINA_NEST_NIRI names
+# one outright; otherwise the patched build this repository ships a patch for
+# is preferred when it is there, because the dense glass needs the per-layer
+# blur strength it adds. Falling back to the session's own niri is not a
+# failure — the material simply loses its second strength.
+niri_binary=${CELESTINA_NEST_NIRI:-}
+if [ -z "$niri_binary" ]; then
+    patched=${CELESTINA_NIRI_PREFIX:-$HOME/.local/lib/celestina}/niri
+    if [ -x "$patched" ]; then
+        niri_binary=$patched
+    else
+        niri_binary=niri
+    fi
+fi
+
+# The strength override is the one thing in the profile a stock niri rejects,
+# and a rejected profile is a nest that does not start. Rather than keeping two
+# configurations in step, the generated one is offered to the very binary that
+# will run it and, if it is refused, the override lines are dropped and the
+# rest is kept. The nest then runs on stock niri with one blur strength.
+if ! "$niri_binary" validate -c "$generated_config" >/dev/null 2>&1; then
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$generated_config" <<'STRIP'
+import re, sys
+
+# Only inside the dense-glass rule: the global `blur` block names the very
+# same words and every niri accepts them there.
+path = sys.argv[1]
+text = open(path).read()
+marker = 'match namespace="^celestina-dense-glass$"'
+at = text.find(marker)
+if at >= 0:
+    end = text.find("\n}", at)
+    end = len(text) if end < 0 else end
+    head, rule, tail = text[:at], text[at:end], text[end:]
+    rule = re.sub(r"^[ \t]*(passes|offset|noise|saturation)[ \t]+[0-9.]+[ \t]*\n",
+                  "", rule, flags=re.M)
+    open(path, "w").write(head + rule + tail)
+STRIP
+    fi
+    if "$niri_binary" validate -c "$generated_config" >/dev/null 2>&1; then
+        echo ">> this niri has no per-layer blur strength; the dense glass" >&2
+        echo "   keeps the veil's. Build the patched one with" >&2
+        echo "   scripts/build-patched-niri.sh" >&2
+    fi
+fi
 
 echo ">> nested Niri: $config" >&2
 echo ">> the shell runs inside it; Ctrl-C here stops the whole nest" >&2

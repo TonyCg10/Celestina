@@ -15,6 +15,13 @@
 
 namespace {
 
+// How many companion layers stack under the dense sections. Each composes one
+// more sample of the session's shared blur over the same rectangles, so this
+// is the dense material's strength expressed in surfaces rather than in a
+// compositor option no stock niri has. Three, plus the menu's own veil
+// region above them, is what measured closest to the reference material.
+constexpr int denseCompanionDepth = 3;
+
 // One committed frame is what makes double-buffered effect state land, and an
 // idle window schedules none of its own. `requestUpdate` alone is not enough:
 // a scene with nothing dirty renders nothing and commits nothing — the on
@@ -129,13 +136,16 @@ void DenseGlassAggregator::pulse()
     for (const Source &entry : std::as_const(m_sources))
         anythingArmed = anythingArmed || !entry.shapes.isEmpty();
 
-    for (const QPointer<QQuickWindow> &companion : std::as_const(m_companions)) {
-        if (!companion)
-            continue;
-        const QColor current = companion->color();
-        companion->setColor(current.red() == 0 ? QColor(1, 0, 0, 0)
-                                               : QColor(0, 0, 0, 0));
-        companion->requestUpdate();
+    for (const QList<QPointer<QQuickWindow>> &screenCompanions
+             : std::as_const(m_companions)) {
+        for (const QPointer<QQuickWindow> &companion : screenCompanions) {
+            if (!companion)
+                continue;
+            const QColor current = companion->color();
+            companion->setColor(current.red() == 0 ? QColor(1, 0, 0, 0)
+                                                   : QColor(0, 0, 0, 0));
+            companion->requestUpdate();
+        }
     }
 
     if (anythingArmed) {
@@ -231,48 +241,52 @@ void DenseGlassAggregator::withdraw(QWindow *source)
         refresh(screen);
 }
 
-QQuickWindow *DenseGlassAggregator::companionFor(QScreen *screen)
+QList<QPointer<QQuickWindow>> DenseGlassAggregator::companionsFor(QScreen *screen)
 {
-    QPointer<QQuickWindow> &held = m_companions[screen];
-    if (held)
-        return held.data();
+    QList<QPointer<QQuickWindow>> &held = m_companions[screen];
+    held.removeIf([](const QPointer<QQuickWindow> &w) { return w.isNull(); });
+    if (held.size() >= denseCompanionDepth)
+        return held;
 
     // Brought up lazily, on the first dark section, never at shell start:
     // premapping persistent surfaces during startup once stopped the
-    // compositor drawing the whole overlay layer, and this surface has
-    // nothing to say until a section exists.
-    auto *companion = new QQuickWindow();
-    companion->setColor(Qt::transparent);
-    companion->setTitle(QStringLiteral("Celestina dense glass"));
+    // compositor drawing the whole overlay layer, and these have nothing to
+    // say until a section exists. Mapped in order, so each sits above the
+    // one before it and samples its result.
+    while (held.size() < denseCompanionDepth) {
+        auto *companion = new QQuickWindow();
+        companion->setColor(Qt::transparent);
+        companion->setTitle(QStringLiteral("Celestina dense glass"));
 
-    LayerSurfaceSpec spec;
-    spec.scope = QStringLiteral("celestina-dense-glass");
-    spec.screen = screen;
-    auto anchors =
-        LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop);
-    anchors |= LayerShellQt::Window::AnchorBottom;
-    anchors |= LayerShellQt::Window::AnchorLeft;
-    anchors |= LayerShellQt::Window::AnchorRight;
-    spec.anchors = anchors;
-    spec.desiredSize = QSize(0, 0);
-    spec.exclusiveZone = -1;
-    // The top layer, deliberately: every publisher lives on the overlay
-    // layer above it, so the strong sample always sits beneath their paint,
-    // whatever order they map in.
-    spec.layer = LayerShellQt::Window::LayerTop;
-    spec.keyboard = LayerShellQt::Window::KeyboardInteractivityNone;
-    spec.activateOnShow = false;
-    spec.closeOnDismissed = false;
-    spec.acceptsFocus = false;
+        LayerSurfaceSpec spec;
+        spec.scope = QStringLiteral("celestina-dense-glass");
+        spec.screen = screen;
+        auto anchors =
+            LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop);
+        anchors |= LayerShellQt::Window::AnchorBottom;
+        anchors |= LayerShellQt::Window::AnchorLeft;
+        anchors |= LayerShellQt::Window::AnchorRight;
+        spec.anchors = anchors;
+        spec.desiredSize = QSize(0, 0);
+        spec.exclusiveZone = -1;
+        // The top layer, deliberately: every publisher lives on the overlay
+        // layer above it, so the strong sample always sits beneath their
+        // paint, whatever order they map in.
+        spec.layer = LayerShellQt::Window::LayerTop;
+        spec.keyboard = LayerShellQt::Window::KeyboardInteractivityNone;
+        spec.activateOnShow = false;
+        spec.closeOnDismissed = false;
+        spec.acceptsFocus = false;
 
-    if (!mapLayerSurface(companion, spec)) {
-        delete companion;
-        return nullptr;
+        if (!mapLayerSurface(companion, spec)) {
+            delete companion;
+            break;
+        }
+        // They render nothing and must swallow nothing.
+        companion->setMask(QRegion(0, 0, 1, 1));
+        held.append(companion);
     }
-    // It renders nothing and must swallow nothing.
-    companion->setMask(QRegion(0, 0, 1, 1));
-    held = companion;
-    return companion;
+    return held;
 }
 
 void DenseGlassAggregator::refresh(QScreen *screen)
@@ -291,18 +305,19 @@ void DenseGlassAggregator::refresh(QScreen *screen)
         }
     }
 
-    QQuickWindow *const companion = companionFor(screen);
-    if (!companion)
-        return;
-
-    if (region.isEmpty()) {
-        // Withdraw rather than arm: an empty region means "the whole
-        // surface" to the effect, which here would be the whole output.
-        KWindowEffects::enableBlurBehind(companion, false);
-    } else {
-        KWindowEffects::enableBlurBehind(companion, true, region);
+    const QList<QPointer<QQuickWindow>> companions = companionsFor(screen);
+    for (const QPointer<QQuickWindow> &companion : companions) {
+        if (!companion)
+            continue;
+        if (region.isEmpty()) {
+            // Withdraw rather than arm: an empty region means "the whole
+            // surface" to the effect, which here would be the whole output.
+            KWindowEffects::enableBlurBehind(companion.data(), false);
+        } else {
+            KWindowEffects::enableBlurBehind(companion.data(), true, region);
+        }
+        kickRender(companion.data());
     }
-    kickRender(companion);
     m_quietBeats = 0;
     m_pulse.start();
 }
