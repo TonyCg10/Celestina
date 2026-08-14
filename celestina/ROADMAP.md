@@ -37,7 +37,7 @@ of the design when they provide the narrow capability the shell needs.
 | PANEL-1 | active | Replace the hard panel plate with borderless compositor glass and route contextual content through the canonical shared glass material |
 | UX-2 | planned | Establish and then implement one coherent shell-wide visual and interaction language after SHELL-D5 is applied |
 | R6 | conditional | First-party lock starts only if SHELL-D2 is applied |
-| R8 | complete | Reversible Noctalia removal; Polkit/dock slices remain conditional |
+| R8 | complete | Reversible Noctalia removal; Polkit slice remains conditional, dock decided against |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
 
 Recorded live observations and remaining author checks are status on the
@@ -301,7 +301,7 @@ R7 closes on the evidence in
 wallpaper appearance, hotplug on physical monitors and Niri drawing the
 generated colours remain an independent `VAL-R7` run.
 
-## R8 — Polkit, optional dock and Noctalia departure
+## R8 — Polkit and Noctalia departure
 
 - [x] Supply reversible Noctalia removal and rollback tooling without applying
       it to the live session automatically.
@@ -315,9 +315,8 @@ Polkit integration is not an R8 implementation item until
 [SHELL-D3](docs/discussions/2026-08-03-polkit-agent.md) is applied. Any
 first-party agent remains a separate security-sensitive authorization.
 
-The dock is not an R8 implementation item unless
-[SHELL-D4](docs/discussions/2026-08-03-running-app-dock.md) concludes that it is
-retained and that conclusion is applied through a new bounded unit.
+The dock question is closed: [ADR 0003](docs/decisions/0003-no-running-app-dock.md)
+decided against one. No dock slice is planned.
 
 ## R9 — Greeter
 
@@ -597,8 +596,8 @@ The discussion begins from observed needs rather than a predetermined mockup:
 - reduced motion, contrast, assistive semantics and both current output scales.
 
 Functional provider behavior already delivered by UX-1 is not redesigned by
-assumption. Lock, Polkit and dock decisions remain under SHELL-D1 through
-SHELL-D4.
+assumption. Lock and Polkit decisions remain under SHELL-D1 through SHELL-D3;
+the dock question is closed (ADR 0003, no dock).
 
 ## Beyond replacement
 

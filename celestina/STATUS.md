@@ -762,7 +762,8 @@ the author reruns them against 0.6.2.
   layout changes. The
   carrier exposes no outline, lit edge or apparent halo. Command/keybind,
   workspace and foreign child surfaces remain floating. `UX-2` beyond this
-  bounded prototype, conditional lock, Polkit and dock work remain outside it
+  bounded prototype, conditional lock and Polkit work remain outside it (no
+  dock is planned: ADR 0003)
 - Last completed plan: [LVR-3 late provider insertion](docs/plans/archive/2026-08-05-late-provider-insertion.md)
 - The milestone before it: [R8 Noctalia departure](docs/plans/archive/2026-08-04-r8-noctalia-departure.md)
 - Open product questions: [discussion queue](docs/discussions/README.md)

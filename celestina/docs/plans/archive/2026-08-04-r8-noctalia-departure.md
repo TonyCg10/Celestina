@@ -35,8 +35,9 @@ and the documented way back.
 
 Out of scope: Polkit, which is not an R8 item while
 [SHELL-D3](../../discussions/2026-08-03-polkit-agent.md) is open; the dock,
-which waits on [SHELL-D4](../../discussions/2026-08-03-running-app-dock.md);
-uninstalling packages or touching a package manager; editing the author's Niri
+which at plan time waited on SHELL-D4 and has since been decided against
+([ADR 0003](../../decisions/0003-no-running-app-dock.md)); uninstalling
+packages or touching a package manager; editing the author's Niri
 configuration; and running the removal at all — this plan builds the tool and
 never uses it.
 
