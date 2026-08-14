@@ -85,14 +85,16 @@ private:
 
     QHash<QWindow *, Source> m_sources;
     // Several companions per output, stacked. Each one blurs what is already
-    // below it, so N of them compose N samples over the same rectangles —
-    // which is how the dense material gets a strength the session's shared
-    // blur profile never names, on a stock compositor. A per-layer strength
-    // override was built and measured first (the patch is kept at
-    // ~/.local/share/celestina/) and then set aside: it needs a forked
-    // compositor on the machine this shell is meant to be *lived in*, and a
-    // config naming options an unpatched niri rejects is a session that does
-    // not start at all.
+    // below it, so N of them compose N samples over the same rectangles.
+    //
+    // The strength itself comes from Celestina's own compositor patch, in
+    // `packaging/niri/`, which lets a layer rule name the blur's passes and
+    // offset. Stacking alone was measured as the way to need no patch and
+    // rejected on the numbers: blur radius grows with the square root of the
+    // sample count, so matching that strength from the session's slight
+    // profile would take about twenty-five surfaces. The depth kept here is
+    // what the patched strength wants under it, and on an unpatched niri it
+    // is also all there is — the shell still runs, with a plainer material.
     QHash<QScreen *, QList<QPointer<QQuickWindow>>> m_companions;
     // The companion's pulse. Effect state is double-buffered and rides the
     // next commit, and a window whose scene never changes stops committing —

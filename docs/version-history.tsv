@@ -68,3 +68,4 @@ celestina	0.18.0	milestone	PANEL-1-U	Close a contextual surface before opening t
 celestina-style	1.7.0	milestone	STYLE-G7-M	Retire the rejected blur-seam paint, leave the silhouette clean
 celestina	0.19.0	milestone	PANEL-1-V	Add a strong blur behind the dense glass alone
 celestina	0.20.0	milestone	PANEL-1-W	Add a durable build for the compositor patch the dense glass needs
+celestina	0.20.1	bug	PANEL-1-X	Keep the compositor patch as Celestina's own

@@ -143,14 +143,12 @@ layer-rule {
 // 2026-08-14 — while the colourless veil above keeps the session's slight
 // sample and the background stays exactly as it always was.
 //
-// Nothing here names a strength, deliberately. A per-layer `passes`/`offset`
-// override was built for niri and measured working; the patch is kept at
-// ~/.local/share/celestina/niri-per-layer-blur-strength.patch and is worth
-// sending upstream, where the same override already exists for noise and
-// saturation. It was then set aside: it needs a forked compositor on the
-// machine this shell is meant to be lived in, and a config naming options an
-// unpatched niri rejects is a session that does not start at all. Stacking
-// asks the stock compositor for nothing it does not already do.
+// The strength below is Celestina's own compositor patch speaking:
+// `packaging/niri/` carries it and `scripts/build-patched-niri.sh` builds it.
+// Stacking companion surfaces was measured as the way to need no patch at
+// all, and rejected on the numbers — blur radius grows with the square root
+// of the sample count, so reaching this strength from the profile above would
+// take about twenty-five stacked surfaces.
 //
 // `blur` is left unset on purpose. Forced true, the rule kept blurring the
 // whole surface — the whole output, bar included — once the client withdrew

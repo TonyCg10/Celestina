@@ -8,10 +8,15 @@ invisible companion surfaces under the dark sections — and those companions
 need a strength of their own.
 
 `per-layer-blur-strength.patch` adds `passes` and `offset` to niri's
-`background-effect` rule, beside the `noise` and `saturation` overrides
-upstream already carries there. It completes an existing pattern rather than
+`background-effect` rule, beside the `noise` and `saturation` overrides the
+same rule already carries. It completes an existing pattern rather than
 introducing a mechanism: about fifty lines across two files, no shader and no
 render-pipeline change, because niri already blurs per surface.
+
+This patch is Celestina's own and stays here. It is not a contribution
+waiting to be proposed anywhere: it exists so this shell's material can look
+the way its author asked for, on this author's machine, and it is versioned
+with the shell rather than with the compositor.
 
 ## Why the shell does not simply stack more companions
 
@@ -52,9 +57,11 @@ and will never update this one. Re-run the build script after a niri release,
 or drop the override and go back to stock at any time — the shell degrades to
 one blur strength and nothing else changes.
 
-## Sending it upstream
+## Keeping it working
 
-The patch is worth proposing to niri: the override it adds is the one a
-compositing shell needs to give a material more than one blur strength, and
-the same rule already accepts two other per-surface overrides. Until then it
-lives here, versioned with the shell that wants it.
+The only maintenance this asks for is a rebuild when niri changes version:
+the build script follows the installed niri's own tag, so re-running it after
+an update produces a patched binary of that same version. If upstream ever
+moves the code the patch touches, the script says so instead of building
+something wrong, and the patch here is the thing to rebase — fifty lines
+against a rule that has been stable.
