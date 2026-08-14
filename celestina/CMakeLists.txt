@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.21.0 LANGUAGES CXX)
+project(celestina VERSION 0.22.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -26,6 +26,14 @@ set(NIRI_ADAPTER_BINARY
 set(PROVIDER_ADAPTER_BINARY
     "${NIRI_ADAPTER_TARGET_DIR}/release/celestina-provider-adapter"
 )
+
+# The one process allowed to say "authenticated". It is its own binary, not a
+# slice of the shell and not a thread inside it, because ADR 0004 puts PAM
+# behind a process boundary: a module that crashes takes a child with it and
+# leaves the locked surface above untouched. It links libpam and nothing else.
+find_library(PAM_LIBRARY NAMES pam REQUIRED)
+add_executable(celestina-lock-verify src/lockverify/main.cpp)
+target_link_libraries(celestina-lock-verify PRIVATE ${PAM_LIBRARY})
 
 # One cargo invocation builds every helper the shell spawns; they share a
 # package, a lockfile and the shared core crate.
@@ -79,6 +87,8 @@ qt_add_executable(celestina
     src/panelblurcontroller.cpp
     src/denseglass.h
     src/denseglass.cpp
+    src/lockauthenticator.h
+    src/lockauthenticator.cpp
     src/panelattachmentlease.h
     src/panelattachmentlease.cpp
     src/panelmanager.h
@@ -233,6 +243,7 @@ target_compile_definitions(celestina PRIVATE
     CELESTINA_STYLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../celestina-style"
     CELESTINA_NIRI_ADAPTER="${NIRI_ADAPTER_BINARY}"
     CELESTINA_PROVIDER_ADAPTER="${PROVIDER_ADAPTER_BINARY}"
+    CELESTINA_LOCK_VERIFY="$<TARGET_FILE:celestina-lock-verify>"
 )
 
 target_link_libraries(celestina PRIVATE
@@ -308,6 +319,15 @@ if(BUILD_TESTING)
     target_include_directories(celestina-shell-scale-test PRIVATE src)
     target_link_libraries(celestina-shell-scale-test PRIVATE Qt6::Test Qt6::Gui)
     add_test(NAME celestina-shell-scale COMMAND celestina-shell-scale-test)
+
+    qt_add_executable(celestina-lock-authenticator-test
+        tests/lockauthenticator_test.cpp
+        src/lockauthenticator.h
+        src/lockauthenticator.cpp
+    )
+    target_include_directories(celestina-lock-authenticator-test PRIVATE src)
+    target_link_libraries(celestina-lock-authenticator-test PRIVATE Qt6::Test Qt6::Gui)
+    add_test(NAME celestina-lock-authenticator COMMAND celestina-lock-authenticator-test)
 
     qt_add_executable(celestina-tray-icons-test
         tests/trayicons_test.cpp

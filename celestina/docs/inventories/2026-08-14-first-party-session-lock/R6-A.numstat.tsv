@@ -1,0 +1,30 @@
+# R6-A exact change inventory
+
+Base revision	44c243792a01f482163698c3e6313ed53ad0fe94
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/evidence/2026-08-14-lock-verification-boundary.md
+Pathspec	celestina/docs/inventories/2026-08-14-first-party-session-lock/R6-A.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-08-14-first-party-session-lock.md
+Pathspec	celestina/src/lockauthenticator.cpp
+Pathspec	celestina/src/lockauthenticator.h
+Pathspec	celestina/src/lockverify/
+Pathspec	celestina/tests/lockauthenticator_test.cpp
+Pathspec	docs/version-history.tsv
+
+Plan	celestina/docs/plans/active/2026-08-14-first-party-session-lock.md
+Evidence	celestina/docs/evidence/2026-08-14-lock-verification-boundary.md
+
+added	deleted	content	path
+21	1	97281e28d1b98f312761bf8e02c0739adf65a0eeddbb8268312252e250dabbdc	celestina/CMakeLists.txt
+1	1	4759bfd74c77dc1215ee259fe0531ac584781a7b94469fcadb70bc57b70b97da	celestina/Cargo.lock
+1	1	16d519a5de236df4ed4dcc46534e322cebf2e0a74f835d71d0ffa792a1bd5ead	celestina/Cargo.toml
+68	0	55f5fd1f75c444b40442775bbf4960fd69507f4d9bcc86d3493f46087fcd2a13	celestina/docs/evidence/2026-08-14-lock-verification-boundary.md
+1	1	eb028ba55eb6b4716be122418d68f4fa47093df2ba09ff6c1c6ed87ab0a94163	celestina/docs/plans/active/2026-08-14-first-party-session-lock.md
+143	0	30113351b63640b5e0a7472a4a4af02943c0b7c5e481e3449a240b24a24d010c	celestina/src/lockauthenticator.cpp
+72	0	20ce08374cae52a4fdc769fe8e198aaf3de346b1df500f93b122eeb133ff2434	celestina/src/lockauthenticator.h
+207	0	cc995530624d3087945c8ef70d6f76afd2f0c553da102470e1fabb7e6958eb05	celestina/src/lockverify/main.cpp
+223	0	418e5d74223f3edabc7495f23ea894888766017b787b1dc9b599e1ec631d7aad	celestina/tests/lockauthenticator_test.cpp
+1	0	43aedc3739db83053275d1658fb60539020144c0cd768304fdf5cc3beb747fa9	docs/version-history.tsv
+30	0	self	celestina/docs/inventories/2026-08-14-first-party-session-lock/R6-A.numstat.tsv
