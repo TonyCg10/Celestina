@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.22.0 LANGUAGES CXX)
+project(celestina VERSION 0.23.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -8,6 +8,13 @@ set(CMAKE_AUTOMOC ON)
 # QuickControls2: the shared GlassContextMenu is a real QtQuick.Controls Menu,
 # so the shell links the module that provides its style plugin.
 find_package(Qt6 6.9 REQUIRED COMPONENTS Quick QuickControls2 DBus)
+# The lock screen alone needs these: it speaks ext-session-lock-v1 directly,
+# because Qt has no public API for a shell role and one integration is chosen
+# per process — which is also why the lock is a separate program from a shell
+# whose every surface is a layer surface.
+find_package(Qt6 6.9 QUIET COMPONENTS WaylandClient WaylandClientPrivate)
+find_package(QtWaylandScanner QUIET)
+find_package(WaylandScanner QUIET)
 find_package(LayerShellQt 6.6 REQUIRED)
 # KWindowEffects::enableBlurBehind asks the compositor (niri's
 # ext-background-effect) to blur the scene behind the requested finite glass
@@ -34,6 +41,89 @@ set(PROVIDER_ADAPTER_BINARY
 find_library(PAM_LIBRARY NAMES pam REQUIRED)
 add_executable(celestina-lock-verify src/lockverify/main.cpp)
 target_link_libraries(celestina-lock-verify PRIVATE ${PAM_LIBRARY})
+
+# The lock screen: its own process, its own shell integration, and the only
+# program in this repository that may call `unlock_and_destroy`. Built when the
+# private Qt Wayland client API is present and skipped otherwise, so a machine
+# without it still builds the shell — it simply cannot lock, which the session
+# verb reports rather than pretends past.
+set(CELESTINA_LOCK_BUILT OFF)
+foreach(_probe Qt6::WaylandClientPrivate Wayland::Scanner Qt6::qtwaylandscanner)
+    if(TARGET ${_probe})
+        message(STATUS "celestina-lock probe: ${_probe} FOUND")
+    else()
+        message(STATUS "celestina-lock probe: ${_probe} MISSING")
+    endif()
+endforeach()
+if(TARGET Qt6::WaylandClientPrivate AND TARGET Wayland::Scanner
+   AND TARGET Qt6::qtwaylandscanner)
+    set(CELESTINA_LOCK_BUILT ON)
+
+    # The facade both halves share: the plugin fills it, the application reads
+    # it, and neither the application nor its QML ever sees a Wayland header.
+    # One shared object so there is one lock, not one per linked copy.
+    qt_add_library(celestina-lock-session SHARED
+        src/lock/locksession.h
+        src/lock/locksession.cpp
+    )
+    target_include_directories(celestina-lock-session PUBLIC src/lock)
+    target_link_libraries(celestina-lock-session PUBLIC Qt6::Core)
+
+    qt_add_plugin(celestina-lock-shell-integration
+        CLASS_NAME SessionLockIntegrationPlugin
+        src/lock/plugin.cpp
+        src/lock/locksurface.h
+        src/lock/locksurface.cpp
+    )
+    qt6_generate_wayland_protocol_client_sources(celestina-lock-shell-integration
+        PRIVATE_CODE
+        FILES
+            "/usr/share/wayland-protocols/staging/ext-session-lock/ext-session-lock-v1.xml"
+    )
+    target_include_directories(celestina-lock-shell-integration PRIVATE src)
+    target_link_libraries(celestina-lock-shell-integration PRIVATE
+        Qt6::Gui
+        Qt6::GuiPrivate
+        Qt6::WaylandClient
+        Qt6::WaylandClientPrivate
+        celestina-lock-session
+    )
+    set_target_properties(celestina-lock-shell-integration PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY
+            "${CMAKE_CURRENT_BINARY_DIR}/lock-plugins/wayland-shell-integration"
+    )
+
+    qt_add_executable(celestina-lock
+        src/lock/main.cpp
+        src/lockauthenticator.h
+        src/lockauthenticator.cpp
+    )
+    # Its own QML module, not the shell's: the shell's is compiled into the
+    # shell's own executable and cannot be imported from another process.
+    # Both import the same CelestinaStyle, which is a real module on disk.
+    qt_add_qml_module(celestina-lock
+        URI CelestinaLock
+        VERSION 1.0
+        IMPORT_PATH "${CELESTINA_STYLE_IMPORT_ROOT}"
+        QML_FILES
+            qml/LockScreen.qml
+        SOURCES
+            src/lockauthenticator.h
+            src/lockauthenticator.cpp
+    )
+    target_include_directories(celestina-lock PRIVATE src src/lock)
+    target_link_libraries(celestina-lock PRIVATE
+        Qt6::Gui
+        Qt6::Qml
+        Qt6::Quick
+        celestina-lock-session
+    )
+    target_compile_definitions(celestina-lock PRIVATE
+        CELESTINA_LOCK_PLUGIN_PATH="${CMAKE_CURRENT_BINARY_DIR}/lock-plugins"
+        CELESTINA_STYLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../celestina-style"
+    )
+    add_dependencies(celestina-lock celestina-lock-shell-integration)
+endif()
 
 # One cargo invocation builds every helper the shell spawns; they share a
 # package, a lockfile and the shared core crate.
@@ -87,8 +177,6 @@ qt_add_executable(celestina
     src/panelblurcontroller.cpp
     src/denseglass.h
     src/denseglass.cpp
-    src/lockauthenticator.h
-    src/lockauthenticator.cpp
     src/panelattachmentlease.h
     src/panelattachmentlease.cpp
     src/panelmanager.h

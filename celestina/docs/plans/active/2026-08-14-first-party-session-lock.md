@@ -47,6 +47,15 @@ exposing the session.
   supplies the lock it calls, not a new timer.
 - Any lock-surface content beyond the four things named in Scope.
 
+## What the lock turned out to need
+
+The lock is its own process, which the plan did not say and the work made
+unavoidable: Qt chooses one Wayland shell integration per process and every
+surface this shell owns is a layer surface, so a lock surface cannot share it.
+The isolation that falls out is worth having on its own — the shell crashing
+leaves the session locked, and the lock crashing leaves it locked too, because
+the guarantee lives in the compositor.
+
 ## Build order
 
 1. The verification child alone, with no compositor involvement: spawn, PAM
@@ -72,6 +81,6 @@ and a real suspend are `VAL-R6` and do not block this exit.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | R6-A | `celestina:` | done | [inventory](../../inventories/2026-08-14-first-party-session-lock/R6-A.numstat.tsv) | 11 files, +768/-4 | a separate process answers "authenticated" or "not", and only its exit code 0 unlocks | [verification boundary](../../evidence/2026-08-14-lock-verification-boundary.md) | `VAL-R6` |
-| R6-B | `celestina:` | planned | `ext-session-lock-v1` client lifecycle and per-output surfaces | — | every output is covered, late outputs included, and no failure path unlocks | protocol regression incl. hotplug and forced-failure branches | `VAL-R6` |
+| R6-B | `celestina:` | done | [inventory](../../inventories/2026-08-14-first-party-session-lock/R6-B.numstat.tsv) | 17 files, +924/-9 | every output is covered, and killing the lock leaves the session locked | [protocol record](../../evidence/2026-08-14-session-lock-protocol.md) | `VAL-R6` |
 | R6-C | `celestina:` | planned | the locked surface's presentation | — | clock, prompt and failure state on the shell's glass, and no session content | offscreen surface regression | `VAL-R6` |
 | R6-D | `celestina:` | planned | logind inhibitor, lock-then-suspend sequence, session verbs | — | suspend happens only after a confirmed lock, and is refused otherwise | sequencing regression over confirmed and failed lock | `VAL-R6` |

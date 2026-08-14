@@ -1,0 +1,36 @@
+# R6-B exact change inventory
+
+Base revision	9389e9e5bacb326a9dbda7f91a188a9b5e4edeb8
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/evidence/2026-08-14-session-lock-protocol.md
+Pathspec	celestina/docs/inventories/2026-08-14-first-party-session-lock/R6-B.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-08-14-first-party-session-lock.md
+Pathspec	celestina/qml/LockScreen.qml
+Pathspec	celestina/src/lock/
+Pathspec	celestina/src/lockauthenticator.cpp
+Pathspec	celestina/src/lockauthenticator.h
+Pathspec	docs/version-history.tsv
+
+Plan	celestina/docs/plans/active/2026-08-14-first-party-session-lock.md
+Evidence	celestina/docs/evidence/2026-08-14-session-lock-protocol.md
+
+added	deleted	content	path
+91	3	e7724e4ee99ba8ca4847ff3c960ee00f1cee789f372133fe2bea6b791cf2c37a	celestina/CMakeLists.txt
+1	1	cae80075729e06373b34d56599fe4b1d6f18d216690a9472081aad579e65fb9b	celestina/Cargo.lock
+1	1	3dd6f24646de01061f34be686f73ef8cf88c645d2c35085f8d9246f6218aab03	celestina/Cargo.toml
+78	0	fdd52b3c260a9e6547f45b4e4c6ff8a92c712bb961b6477eb84d9b04edb8d91d	celestina/docs/evidence/2026-08-14-session-lock-protocol.md
+10	1	a2320d9f84a9a7f1d197b5249deb6cc5117be3da0d15a8cf8aa2cc5951b0b011	celestina/docs/plans/active/2026-08-14-first-party-session-lock.md
+86	0	864bf8a0f83498ef8f488f94f403eaeb66c9b0533b74fcbe68df08e6aeb2be3e	celestina/qml/LockScreen.qml
+1	0	2f3ebc7931cfc999a6f411625099b63dd76e5b722f63641e5760d54afeb01db7	celestina/src/lock/celestina-lock.json
+40	0	8ca66dcbe62f5923b6085299c2d54acb2448ced0e80baae7e96c086eb335f766	celestina/src/lock/locksession.cpp
+55	0	e47dbbeb5ec9ef28f4b6c250f1c2c60a8fd3f5ccebdd6b187138a162db65431c	celestina/src/lock/locksession.h
+166	0	463ed4dfb23de10ca3625515428debd8fda328a17a4a1dc8485c19cd6578d0ad	celestina/src/lock/locksurface.cpp
+94	0	2953b0d73760f4acc9fb4744533faf7fbce8439987aaa65e00fce053c552e365	celestina/src/lock/locksurface.h
+216	0	ecb25df2c2ec26f717d44978bba66b59ad662b9b6d30b803e3459384d620101c	celestina/src/lock/main.cpp
+32	0	439659d7309bd1cb7b4169ea550c9188ae5eaf76cd8391d966595f1d0951c157	celestina/src/lock/plugin.cpp
+2	0	86a074cbb80884c6b8ff9c4625bc300d01335cff44e98c52cabb663095855e6d	celestina/src/lockauthenticator.cpp
+14	3	59f1803694e0a89de52a823a372703b4f41443e0b5c4d99271abfc0da03dd234	celestina/src/lockauthenticator.h
+1	0	afabad5d65ab1cf9c216caf58a834fafb02226f8fccc957de354dc443fcd1dc8	docs/version-history.tsv
+36	0	self	celestina/docs/inventories/2026-08-14-first-party-session-lock/R6-B.numstat.tsv

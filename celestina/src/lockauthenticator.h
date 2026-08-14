@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QProcess>
 #include <QString>
+#include <QtQml/qqmlregistration.h>
 
 // Asks whether a passphrase unlocks this session, without ever answering it.
 //
@@ -16,9 +17,18 @@
 // Everything that is not an explicit authentication is a refusal. There is no
 // timeout that gives up into success, no missing-helper path that assumes the
 // best, and no verdict inferred from anything but the child's exit status.
-class LockAuthenticator final : public QObject
+class LockAuthenticator : public QObject
 {
     Q_OBJECT
+    // Named in QML so the surface can read its own verdicts by name rather
+    // than by number, and uncreatable there because the host owns the one
+    // instance. Not `final`: the type registration Qt generates derives from
+    // it.
+    QML_ELEMENT
+    QML_UNCREATABLE("The lock screen is given its authenticator by the host.")
+    // The surface asks this so it can refuse a second attempt visibly rather
+    // than silently dropping one.
+    Q_PROPERTY(bool busy READ isBusy NOTIFY busyChanged)
 
 public:
     // What the child answered, and the only three answers there are. Only
@@ -50,13 +60,14 @@ public:
     // environment entry, a property or a log line. A second call while one is
     // in flight is refused rather than queued: an attempt the person did not
     // watch begin is not an attempt they made.
-    void authenticate(QString secret);
+    Q_INVOKABLE void authenticate(QString secret);
 
     // Abandons an attempt in flight — the surface going away, the session
     // ending. No verdict is emitted for it.
-    void cancel();
+    Q_INVOKABLE void cancel();
 
 signals:
+    void busyChanged();
     // Exactly one of these per accepted `authenticate`, unless it was
     // cancelled. A verdict and nothing else: what the person is told about it
     // is the lock surface's wording, in QML where this shell keeps every

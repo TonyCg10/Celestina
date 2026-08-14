@@ -57,6 +57,8 @@ LockAuthenticator::LockAuthenticator(QObject *parent)
     // and is deliberately not forwarded into anything this shell records.
     m_process->setProcessChannelMode(QProcess::ForwardedErrorChannel);
     connect(m_process, &QProcess::finished, this, &LockAuthenticator::finished);
+    connect(m_process, &QProcess::stateChanged, this,
+            [this](QProcess::ProcessState) { emit busyChanged(); });
     connect(m_process, &QProcess::errorOccurred, this,
             [this](QProcess::ProcessError) {
                 // A child that could not run has answered nothing. That is
