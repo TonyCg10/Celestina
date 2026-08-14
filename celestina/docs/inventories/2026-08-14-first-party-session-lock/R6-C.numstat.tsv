@@ -1,0 +1,24 @@
+# R6-C exact change inventory
+
+Base revision	2c1173a5eeca940dad147640473a4bc5779942d8
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/evidence/2026-08-14-lock-surface-presentation.md
+Pathspec	celestina/docs/inventories/2026-08-14-first-party-session-lock/R6-C.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-08-14-first-party-session-lock.md
+Pathspec	celestina/qml/LockScreen.qml
+Pathspec	docs/version-history.tsv
+
+Plan	celestina/docs/plans/active/2026-08-14-first-party-session-lock.md
+Evidence	celestina/docs/evidence/2026-08-14-lock-surface-presentation.md
+
+added	deleted	content	path
+1	1	a38aa3ab304e617106b5c43f045b6e2352bfe21287899b1a539c955d4804db8e	celestina/CMakeLists.txt
+1	1	edbfdbcdd768446044674d330efdda38b4c378378dd10f73e24258821a2d6758	celestina/Cargo.lock
+1	1	4f50b71f4977109e61611c0efdfa134c660eb7fe134f7e1fcae3a80edd94038e	celestina/Cargo.toml
+59	0	4c44bb7311a00af4de3e20a44c32d157b75db58d28580d53251f1649245beabf	celestina/docs/evidence/2026-08-14-lock-surface-presentation.md
+1	1	73f0e1a0d89dd020aaa6735af430cbf8e0134b45bb543cee80c6486e1129fdd9	celestina/docs/plans/active/2026-08-14-first-party-session-lock.md
+115	33	1a1cdfeb40379eea5f6c9a88064d00779477e2cf935abca38c39ece86ab02ef9	celestina/qml/LockScreen.qml
+1	0	03bfbe290454a240bf1caeb726482b8cfdcf819a808bcd32457b2f7bc96a92d2	docs/version-history.tsv
+24	0	self	celestina/docs/inventories/2026-08-14-first-party-session-lock/R6-C.numstat.tsv
