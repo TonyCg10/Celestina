@@ -46,11 +46,63 @@ function appendPoint(points, value) {
     points.push(Qt.point(value.x, value.y));
 }
 
+// How many chords a curve is cut into for the compositor polygon.
+//
+// The material paints the exact curve; the region is a set of pixels, so the
+// boundary between them is the one place the two can visibly disagree. A fixed
+// twelve samples held that disagreement under a pixel while the compositor's
+// blur was slight and its edge nearly invisible. Once the blur became a colour
+// summary (2026-08-14) the edge turned into a hard contrast line and every
+// chord showed as a tooth — the author's own word for it.
+//
+// The count now follows the curve's own size instead of a constant, because
+// the error a chord makes is proportional to how far it spans: the control
+// polygon's length is a cheap upper bound on that, and roughly one sample per
+// unit keeps the chord under a pixel at every per-output factor this shell
+// draws at. The bounds keep a hairline corner cheap and a long body edge
+// honest; `appendPoint` drops anything that lands on its predecessor, so
+// oversampling a short curve costs nothing downstream.
+function curveSegments(controlPoints) {
+    let span = 0;
+    for (let index = 1; index < controlPoints.length; ++index) {
+        const dx = controlPoints[index].x - controlPoints[index - 1].x;
+        const dy = controlPoints[index].y - controlPoints[index - 1].y;
+        span += Math.sqrt(dx * dx + dy * dy);
+    }
+    return clamp(Math.ceil(span), 12, 96);
+}
+
+// A rounded rectangle as a compositor polygon, with every point held at or
+// below `floorY`. The corners are sampled at the same density every other
+// curve here is, so the region's boundary tracks the painted one.
+function roundedRectPolygon(left, top, right, bottom, requestedRadius, floorY) {
+    const radius = Math.max(0, Math.min(requestedRadius,
+                                        (right - left) / 2,
+                                        (bottom - top) / 2));
+    const corners = [
+        // Centre, then the angle the arc sweeps through, clockwise from the
+        // top-left corner so the polygon keeps one winding.
+        {"cx": left + radius, "cy": top + radius, "from": Math.PI},
+        {"cx": right - radius, "cy": top + radius, "from": -Math.PI / 2},
+        {"cx": right - radius, "cy": bottom - radius, "from": 0},
+        {"cx": left + radius, "cy": bottom - radius, "from": Math.PI / 2}
+    ];
+    const points = [];
+    const segments = clamp(Math.ceil(radius), 4, 24);
+    for (let corner = 0; corner < corners.length; ++corner) {
+        const at = corners[corner];
+        for (let step = 0; step <= segments; ++step) {
+            const angle = at.from + (Math.PI / 2) * (step / segments);
+            appendPoint(points, point(
+                at.cx + radius * Math.cos(angle),
+                Math.max(floorY, at.cy + radius * Math.sin(angle))));
+        }
+    }
+    return points;
+}
+
 function appendCubic(points, start, controlOne, controlTwo, end) {
-    // The compositor accepts a polygon while the material paints the exact
-    // cubic. Twelve samples keep the finite blur edge within a sub-pixel visual
-    // tolerance for the real 20..36 px connector travel.
-    const segments = 12;
+    const segments = curveSegments([start, controlOne, controlTwo, end]);
     for (let step = 1; step <= segments; ++step) {
         const t = step / segments;
         const inverse = 1 - t;
@@ -67,7 +119,7 @@ function appendCubic(points, start, controlOne, controlTwo, end) {
 }
 
 function appendQuadratic(points, start, control, end) {
-    const segments = 5;
+    const segments = curveSegments([start, control, end]);
     for (let step = 1; step <= segments; ++step) {
         const t = step / segments;
         const inverse = 1 - t;
@@ -475,13 +527,19 @@ function emergingBodyPath(bodyX, bodyTop, bodyWidth, bodyHeight,
         + " L " + pathPoint(point(left, top + radius))
         + arc + pathPoint(point(left + radius, top))
         + " Z";
+    // The region follows the painted corners, not the bounding box. A
+    // four-point rectangle asked the compositor to blur the square corners
+    // this path never paints, and once the blur became a colour summary that
+    // overhang read as a square block behind every rounded corner.
+    //
     // The region polygon never rises above the pane's top — the seam — so a
     // card still leaving the bar asks the compositor to blur only the part of
-    // it that is already out, never the bar's own rows above.
+    // it that is already out, never the bar's own rows above. Clamping every
+    // sampled y rather than the rectangle's edge is what keeps the corners
+    // round in the ordinary case and flattens only what the bar covers.
     const clampedTop = Math.max(0, top);
     const polygon = bottom > clampedTop
-        ? [point(left, clampedTop), point(right, clampedTop),
-           point(right, bottom), point(left, bottom)]
+        ? roundedRectPolygon(left, top, right, bottom, radius, 0)
         : [];
     return {"path": path, "edgePath": path, "polygon": polygon,
             "tension": 0, "waistWidth": 0, "waistY": 0, "waistCenter": 0,

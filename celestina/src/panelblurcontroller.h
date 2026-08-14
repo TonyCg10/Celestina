@@ -75,6 +75,7 @@ private:
     void probe();
     void scheduleProbe(int delayMs);
     void setAvailable(bool available);
+    void publishDenseSections();
 
     QPointer<QWindow> m_window;
     QTimer m_probeTimer;

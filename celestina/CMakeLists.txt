@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.18.0 LANGUAGES CXX)
+project(celestina VERSION 0.19.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -77,6 +77,8 @@ qt_add_executable(celestina
     src/niriclient.cpp
     src/panelblurcontroller.h
     src/panelblurcontroller.cpp
+    src/denseglass.h
+    src/denseglass.cpp
     src/panelattachmentlease.h
     src/panelattachmentlease.cpp
     src/panelmanager.h
@@ -404,6 +406,8 @@ if(BUILD_TESTING)
         src/quietplacement.cpp
         src/panelblurcontroller.h
         src/panelblurcontroller.cpp
+        src/denseglass.h
+        src/denseglass.cpp
         src/surfacemanager.h
         src/surfacemanager.cpp
         src/shellprovidersclient.h
@@ -453,6 +457,8 @@ if(BUILD_TESTING)
         src/panelmenusurface.cpp
         src/panelblurcontroller.h
         src/panelblurcontroller.cpp
+        src/denseglass.h
+        src/denseglass.cpp
         src/panelmenucontroller.h
         src/panelmenucontroller.cpp
         src/shellscale.h
@@ -509,6 +515,8 @@ if(BUILD_TESTING)
         src/quietplacement.cpp
         src/panelblurcontroller.h
         src/panelblurcontroller.cpp
+        src/denseglass.h
+        src/denseglass.cpp
         src/diagnosticjournal.h
         src/diagnosticjournal.cpp
         src/surfacemanager.h
@@ -563,6 +571,8 @@ if(BUILD_TESTING)
         src/panelmenusurface.cpp
         src/panelblurcontroller.h
         src/panelblurcontroller.cpp
+        src/denseglass.h
+        src/denseglass.cpp
         src/surfacemanager.h
         src/surfacemanager.cpp
         src/niriclient.h

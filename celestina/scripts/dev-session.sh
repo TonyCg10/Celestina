@@ -248,6 +248,11 @@ record_and_run="
 
 trap 'rm -f "$env_file"' EXIT INT TERM
 
+# A nest may run a different niri than the session: CELESTINA_NEST_NIRI names
+# the binary, for compositor patches that must prove themselves here before
+# they are allowed anywhere near the live session.
+niri_binary=${CELESTINA_NEST_NIRI:-niri}
+
 echo ">> nested Niri: $config" >&2
 echo ">> the shell runs inside it; Ctrl-C here stops the whole nest" >&2
 
@@ -256,7 +261,7 @@ if [ "$own_bus" = yes ]; then
     echo "   notification server, and only what runs inside the nest can" >&2
     echo "   reach it (dev-session.sh --shell, then notify-send)" >&2
     exec dbus-run-session -- \
-        niri -c "$generated_config" -- /bin/sh -c "$record_and_run" dev-session "$@"
+        "$niri_binary" -c "$generated_config" -- /bin/sh -c "$record_and_run" dev-session "$@"
 fi
 
-exec niri -c "$generated_config" -- /bin/sh -c "$record_and_run" dev-session "$@"
+exec "$niri_binary" -c "$generated_config" -- /bin/sh -c "$record_and_run" dev-session "$@"

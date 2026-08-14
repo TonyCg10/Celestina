@@ -16,6 +16,7 @@
 #include "overlaysurface.h"
 #include "panelpopupplacement.h"
 #include "shellscale.h"
+#include "softclose.h"
 
 QString overlaySourceProperty(const QString &qmlComponentName)
 {
@@ -174,8 +175,17 @@ void OverlayController::overlayDismissed()
             .flag(QStringLiteral("is_current"),
                   sender() == m_surface->window())
     );
-    if (sender() == m_surface->window())
-        close();
+    // The same closing beat the menus get: fade, then the real close. The
+    // lease releases now so the opener's held hover circle lets go with the
+    // gesture rather than after the beat.
+    if (sender() == m_surface->window()) {
+        m_attachmentLease.release();
+        QWindow *const window = m_surface->window();
+        softCloseWindow(window, [this, window]() {
+            if (m_surface->window() == window)
+                close();
+        });
+    }
 }
 
 void OverlayController::open()
@@ -257,6 +267,9 @@ void OverlayController::close()
 
 void OverlayController::toggle()
 {
+    // A toggle that finds its overlay already fading is a request to have it
+    // gone, not to reopen it mid-beat.
+
     // One bounded line per gesture: which overlay was asked, and whether the
     // ask found it open. The nested session's console is unreachable, and the
     // author's two-click reports live or die on this ordering.
@@ -267,8 +280,14 @@ void OverlayController::toggle()
             .text(QStringLiteral("overlay"), m_componentName)
             .flag(QStringLiteral("was_open"), isOpen())
     );
-    if (isOpen())
-        close();
-    else
+    if (isOpen()) {
+        m_attachmentLease.release();
+        QWindow *const window = m_surface->window();
+        softCloseWindow(window, [this, window]() {
+            if (m_surface->window() == window)
+                close();
+        });
+    } else {
         open();
+    }
 }

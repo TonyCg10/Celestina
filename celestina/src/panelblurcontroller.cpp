@@ -14,6 +14,11 @@
 #include <QWindow>
 
 #include <KWindowEffects>
+#include <LayerShellQt/window.h>
+#include <QQuickWindow>
+#include <QScreen>
+
+#include "denseglass.h"
 
 #include <cmath>
 #include <limits>
@@ -215,10 +220,42 @@ QRegion PanelBlurController::glassRegion() const
     // guesses at that tree were wrong, and the failure mode is the worst kind:
     // an empty region is not "blur nothing" to `enableBlurBehind`, it is "blur
     // the whole window".
-    return glassRegionFromPublishedShapes(
+    const QRegion published = glassRegionFromPublishedShapes(
         m_window->property("glassRegions").toList(),
         m_window->property("glassRects").toList()
     );
+
+    // Eroded by one pixel before it is armed. A region is a set of whole
+    // pixels and the compositor cuts the effect at its boundary with no
+    // antialiasing, so a curved edge is always a one-pixel staircase — which
+    // the strong colour-summary blur (2026-08-14) turned from invisible into
+    // the author's "sawtooth". Pulling the effect one pixel inside the
+    // painted silhouette tucks that staircase under the material's own
+    // antialiased edge and the seam stroke it wears now.
+    //
+    // The erosion is the intersection of the four one-pixel translates — a
+    // true 4-neighbourhood erosion, cheap in region arithmetic — with one
+    // amendment: a neighbour that falls off the window counts as present, so
+    // an edge that runs along the window's own boundary is not eaten. The
+    // panel's backdrop meets the screen's top edge exactly; the first cut of
+    // this erosion shaved that row and opened a one-pixel bright seam over
+    // the whole bar. A region so thin the erosion would consume it keeps its
+    // published shape: a hairline connector with a step beats no connector.
+    const QRect frame(0, 0,
+                      qMax(1, m_window->width()), qMax(1, m_window->height()));
+    QRegion eroded = published;
+    const struct { QPoint step; QRect keep; } sides[] = {
+        {QPoint(1, 0), QRect(frame.x(), frame.y(), 1, frame.height())},
+        {QPoint(-1, 0),
+         QRect(frame.right(), frame.y(), 1, frame.height())},
+        {QPoint(0, 1), QRect(frame.x(), frame.y(), frame.width(), 1)},
+        {QPoint(0, -1),
+         QRect(frame.x(), frame.bottom(), frame.width(), 1)},
+    };
+    for (const auto &side : sides)
+        eroded &= published.translated(side.step) + side.keep;
+    eroded &= published;
+    return eroded.isEmpty() ? published : eroded;
 }
 
 void PanelBlurController::start()
@@ -241,8 +278,14 @@ void PanelBlurController::start()
     QObject::connect(
         m_window.data(), &QWindow::visibleChanged, this,
         [this](bool visible) {
-            if (visible)
+            if (visible) {
                 geometryChanged();
+            } else {
+                // A hidden window's sections are gone now, not when its
+                // deferred destruction runs: the companion's strong sample
+                // outliving the menu was a ghost of blurred rectangles.
+                DenseGlassAggregator::instance().withdraw(m_window.data());
+            }
         }
     );
     // Exposure, not visibility: the effect region is double-buffered surface
@@ -285,6 +328,7 @@ void PanelBlurController::geometryChanged()
     m_fastAttemptsRemaining = fastProbeCount;
     m_probeTimer.stop();
     probe();
+    publishDenseSections();
 }
 
 void PanelBlurController::glassRegionsChanged()
@@ -292,6 +336,41 @@ void PanelBlurController::glassRegionsChanged()
     m_fastAttemptsRemaining = fastProbeCount;
     m_probeTimer.stop();
     probe();
+    publishDenseSections();
+}
+
+// The dark sections' second, stronger blur. The veil's own region above rides
+// this window; the sections' rides the per-output companion surface, because
+// the compositor grants one blur strength per surface and the author's
+// material (2026-08-14) wants the colour summary only under the dark cards.
+// Published on the same beats as the veil's region, so the two stay one
+// movement through every fall and reflow.
+void PanelBlurController::publishDenseSections()
+{
+    auto *quick = qobject_cast<QQuickWindow *>(m_window.data());
+    if (!quick)
+        return;
+    auto *layer = LayerShellQt::Window::get(quick);
+    if (!layer)
+        return;
+    // The panel shares the top layer with the companion and cannot be
+    // guaranteed above it; its sections keep the veil strength.
+    if (layer->scope() == QLatin1String("celestina-panel"))
+        return;
+    QScreen *const screen = quick->screen();
+    if (!screen)
+        return;
+
+    const QPointF origin = layerSurfaceOriginOnOutput(
+        int(layer->anchors()),
+        layer->margins(),
+        QSizeF(quick->width(), quick->height()),
+        QSizeF(screen->geometry().size())
+    );
+    QList<DenseGlassShape> shapes = collectDenseSections(quick);
+    for (DenseGlassShape &shape : shapes)
+        shape.rect.translate(origin);
+    DenseGlassAggregator::instance().publish(quick, shapes);
 }
 
 void PanelBlurController::probe()

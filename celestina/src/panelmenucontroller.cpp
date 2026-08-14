@@ -15,6 +15,7 @@
 #include "panelpopupplacement.h"
 #include "panelmenusurface.h"
 #include "shellscale.h"
+#include "softclose.h"
 
 namespace {
 // Where the card goes inside a surface that now covers the whole output.
@@ -1023,8 +1024,16 @@ void PanelMenuController::menuDismissed()
         return;
     }
 
-    if (sender() == m_surface->window())
-        close();
+    // The closing beat every surface family gets: fade, then the real
+    // close. A swap that hard-closes mid-beat destroys the window and the
+    // pending finish dies with it.
+    if (sender() == m_surface->window()) {
+        QWindow *const window = m_surface->window();
+        softCloseWindow(window, [this, window]() {
+            if (m_surface->window() == window)
+                close();
+        });
+    }
 }
 
 void PanelMenuController::restoreTrayParentFocus(

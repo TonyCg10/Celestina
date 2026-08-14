@@ -92,20 +92,44 @@ AnchoredMenu {
         restoreMode: Binding.RestoreBindingOrValue
     }
 
+    // The entry offset is the top route's whole ride; zero at rest and on
+    // every route that does not fall. The rows are a real popup the field's
+    // seam clip cannot reach, so the clip is rebuilt on the popup itself:
+    // the popup is pinned at the seam while the card is still behind the
+    // bar, its rows are slid up by exactly the hidden distance inside its
+    // own clipped viewport, and so what shows is the slice of the block
+    // already past the seam — the same progressive emergence every card
+    // menu's content gets, never a row drawn over the bar and never rows
+    // waiting at the seam before their glass arrives, which read as a
+    // second, different animation on the author's recording (2026-08-14).
+    readonly property real rowsRideY:
+            root.cardY + field.entryOffsetY
+            + (root.ridesTheDrop ? field.attachmentBodyRect.y : 0)
+    readonly property real rowsSeamY:
+            root.anchoredFromPanel && field.attachmentStartY >= 0
+            ? field.attachmentStartY : -1e9
+    readonly property real rowsCut: Math.max(0, root.rowsSeamY - root.rowsRideY)
+
+    Translate {
+        id: rowsSlide
+
+        y: -root.rowsCut
+    }
+
     Binding {
         target: root.menu
         property: "y"
-        // The entry offset is the top route's whole ride; zero at rest and on
-        // every route that does not fall. The rows are a real popup the
-        // field's seam clip cannot reach, so they are capped at the seam
-        // instead: they wait under the bar's lower edge for the glass and
-        // join it the moment the ride brings the card past — never a row
-        // drawn over the bar.
-        value: Math.max(
-                   root.anchoredFromPanel && field.attachmentStartY >= 0
-                   ? field.attachmentStartY : -1e9,
-                   root.cardY + field.entryOffsetY + (root.ridesTheDrop
-                                ? field.attachmentBodyRect.y : 0))
+        value: Math.max(root.rowsSeamY, root.rowsRideY)
+        restoreMode: Binding.RestoreBindingOrValue
+    }
+
+    // The viewport already clips — the bounded-scroll contract pins it — so
+    // the slide below is all the slice needs.
+    Binding {
+        target: root.menu.contentItem
+        property: "transform"
+        value: rowsSlide
+        when: field.edgeAttachmentRequested
         restoreMode: Binding.RestoreBindingOrValue
     }
 

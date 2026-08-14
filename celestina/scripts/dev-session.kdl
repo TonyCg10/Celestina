@@ -106,12 +106,10 @@ hotkey-overlay {
 
 prefer-no-csd
 
-// PANEL-1 reference profile. Niri owns blur intensity globally; a client can
-// request finite regions but cannot choose their strength. The previous
-// 4-pass, offset-6 candidate erased too much wallpaper structure once the
-// menu material became transparent. This deliberately slight sample keeps the
-// backdrop recognizable. The live-session equivalent remains opt-in
-// documentation.
+// PANEL-1 reference profile. The global sample stays deliberately slight —
+// this is what every other blurred surface in the session gets, and the
+// author's rule (2026-08-14) is that the strong material belongs to the
+// shell's glass alone: the background keeps the blur it always had.
 blur {
     passes 2
     offset 2
@@ -128,11 +126,53 @@ blur {
 // membrane material: a drop out of the bar that blurred only the wallpaper
 // while the menus beside it blurred real windows would read as two glasses.
 // Only the wallpaper stays outside this visual-language unit.
+//
 layer-rule {
     match namespace="^celestina-(panel|panel-menu|panel-child-menu|overlay|toasts|osd)$"
 
     background-effect {
         xray false
+    }
+}
+
+// The dark sections' second blur, at the strength the veil never gets. The
+// shell keeps one invisible companion surface per output whose region is
+// exactly the dark content cards; the per-rule `passes`/`offset` here are the
+// patched compositor's contribution, completing the per-rule
+// `noise`/`saturation` upstream already has. This sample deliberately erases
+// structure: the author's direction (2026-08-14) is a material that
+// *summarizes* the colours behind it — Windows 11's Mica, One UI 8.5's
+// frosted panels — under the dark cards alone, while the colourless veil
+// keeps the session's slight sample above. Saturation rises because a grey
+// summary is not a summary of anything; the noise rises with the blur
+// because a wider pyramid bands more.
+layer-rule {
+    match namespace="^celestina-dense-glass$"
+
+    background-effect {
+        xray false
+        // No `blur true` here, deliberately: forced on, the rule kept
+        // blurring the whole surface — the whole output — after the client
+        // withdrew its region. Left unset, the effect exists exactly while
+        // the companion publishes rectangles, and the strength below applies
+        // to those rectangles alone.
+        passes 4
+        offset 6
+        noise 0.02
+        saturation 1.25
+    }
+}
+
+// The comparison surface: the nest's terminal carries the ordinary background
+// blur — the global slight sample — so the shell's strong glass can be judged
+// against what every other surface in the session gets, side by side.
+window-rule {
+    match app-id="kitty"
+
+    opacity 0.9
+
+    background-effect {
+        blur true
     }
 }
 
