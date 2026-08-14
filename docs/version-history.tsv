@@ -70,3 +70,4 @@ celestina	0.19.0	milestone	PANEL-1-V	Add a strong blur behind the dense glass al
 celestina	0.20.0	milestone	PANEL-1-W	Add a durable build for the compositor patch the dense glass needs
 celestina	0.20.1	bug	PANEL-1-X	Keep the compositor patch as Celestina's own
 celestina	0.20.2	bug	GOV-3-A	Close the running-app dock question against a dock
+celestina	0.20.3	bug	GOV-3-B	Add the authorized boundaries for the lock and the Polkit agent

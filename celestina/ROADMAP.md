@@ -36,8 +36,8 @@ of the design when they provide the narrow capability the shell needs.
 | WMAP-1 | complete | Show what a workspace holds, as its real layout, without focusing it |
 | PANEL-1 | active | Replace the hard panel plate with borderless compositor glass and route contextual content through the canonical shared glass material |
 | UX-2 | planned | Establish and then implement one coherent shell-wide visual and interaction language after SHELL-D5 is applied |
-| R6 | conditional | First-party lock starts only if SHELL-D2 is applied |
-| R8 | complete | Reversible Noctalia removal; Polkit slice remains conditional, dock decided against |
+| R6 | planned | First-party `ext-session-lock` and deterministic lock-before-suspend |
+| R8 | active | Reversible Noctalia removal delivered; the Polkit agent slice is now open |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
 
 Recorded live observations and remaining author checks are status on the
@@ -229,10 +229,11 @@ truthful OSD without depending on a Noctalia command path.
       exact bytes and update the on-disk bundle without a second build or
       replacement of the live session.
 
-The concrete locker integration is not part of the active R3 plan while
-[SHELL-D1](docs/discussions/2026-08-03-external-locker.md) remains open. Applying
-that discussion creates a separate implementation unit; it is not appended to
-R3 by assumption.
+The concrete locker integration is not an R3 item. SHELL-D1 asked which
+external locker to compose and is superseded by
+[ADR 0004](docs/decisions/0004-first-party-session-lock.md): the shell owns the
+lock itself, under R6, and R3's typed command and refusal path stay as they
+are.
 
 R3 closes when these implementation items and their automated evidence are
 complete. Its real-session checks then proceed independently under `VAL-R3`.
@@ -273,17 +274,25 @@ R5 closes on the evidence in
 network and Bluetooth switching, a real weather location and appearance remain
 an independent `VAL-R5` run.
 
-## R6 — Conditional first-party lock and idle
+## R6 — First-party lock and idle
 
-This is not planned implementation while
-[SHELL-D2](docs/discussions/2026-08-03-first-party-session-lock.md) remains open.
-If that discussion is applied with explicit authorization, a new roadmap
-checkpoint and plan may define the threat model and exit tests. The possible
-scope is retained here only to preserve product direction:
+**Outcome:** this session can lock itself, stay locked through anything that
+goes wrong, and never suspend before the lock is confirmed up — with no part
+of Noctalia and no password verification of Celestina's own.
 
-- an `ext-session-lock` and PAM path that remains locked on process failure and
-  covers output hotplug;
-- a logind sleep inhibitor and deterministic lock lifecycle.
+Authorized on 2026-08-14 and bounded by
+[ADR 0004](docs/decisions/0004-first-party-session-lock.md), which is this
+checkpoint's threat model and must be read before any of it is written.
+
+- [ ] An `ext-session-lock-v1` client that covers every output, creates a
+      surface for outputs that arrive while locked, and treats every failure
+      as "stay locked".
+- [ ] PAM verification in a separate short-lived process that holds no
+      compositor state, reporting one verdict and never a passphrase.
+- [ ] A logind delay inhibitor that releases only on a confirmed active lock,
+      so lock-and-suspend refuses rather than suspends unlocked.
+- [ ] The locked surface itself: time, prompt and failure state, and
+      deliberately no session content.
 
 ## R7 — Wallpaper and session look
 
@@ -311,9 +320,15 @@ R8 closes on the evidence in
 Actually removing Noctalia is `VAL-R8` and is the author's decision on their
 own session.
 
-Polkit integration is not an R8 implementation item until
-[SHELL-D3](docs/discussions/2026-08-03-polkit-agent.md) is applied. Any
-first-party agent remains a separate security-sensitive authorization.
+Polkit integration is now an R8 implementation item, authorized on 2026-08-14
+and bounded by
+[ADR 0005](docs/decisions/0005-first-party-polkit-agent.md):
+
+- [ ] Register as this session's `org.freedesktop.PolicyKit1.AuthenticationAgent`.
+- [ ] Prompt on a dedicated surface that holds a keyboard grab, showing the
+      action id, message and identity exactly as `polkitd` gave them.
+- [ ] Delegate every verification to `polkit-agent-helper-1` over its pipe;
+      implement no PAM conversation and deny on every failure.
 
 The dock question is closed: [ADR 0003](docs/decisions/0003-no-running-app-dock.md)
 decided against one. No dock slice is planned.

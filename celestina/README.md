@@ -275,10 +275,13 @@ it back. The rollback file is written **before** anything changes, and if it
 cannot be written nothing changes. Without `--confirm` it only says what it
 would do.
 
-Screen lock and the polkit agent are on the list and deliberately unbuilt —
-they wait on [SHELL-D2](docs/discussions/2026-08-03-first-party-session-lock.md)
-and [SHELL-D3](docs/discussions/2026-08-03-polkit-agent.md). Until those are
-decided, this session still needs Noctalia for them, and the report says so.
+Screen lock and the polkit agent are on the list and not built yet. Both were
+authorized on 2026-08-14 and are bounded by
+[ADR 0004](docs/decisions/0004-first-party-session-lock.md) and
+[ADR 0005](docs/decisions/0005-first-party-polkit-agent.md): the shell owns the
+lock surface and the authorization prompt, and owns neither password
+verification. Until they land, this session still needs Noctalia for them, and
+the report says so.
 
 ## Project documents
 

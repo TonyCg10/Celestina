@@ -33,8 +33,9 @@ and the documented way back.
 
 ## Exclusions
 
-Out of scope: Polkit, which is not an R8 item while
-[SHELL-D3](../../discussions/2026-08-03-polkit-agent.md) is open; the dock,
+Out of scope: Polkit, which at plan time waited on SHELL-D3 and has since been
+authorized as its own R8 slice
+([ADR 0005](../../decisions/0005-first-party-polkit-agent.md)); the dock,
 which at plan time waited on SHELL-D4 and has since been decided against
 ([ADR 0003](../../decisions/0003-no-running-app-dock.md)); uninstalling
 packages or touching a package manager; editing the author's Niri
