@@ -119,7 +119,10 @@ LayerSurfaceSpec bottomRightSpec(QScreen *screen, const QSize &size, const QStri
         size,
         scope,
         anchors,
-        QMargins(0, 0, cornerMargin, cornerMargin)
+        // Flush with the bottom edge on purpose: the display's card enters by
+        // physically emerging from it, so the window is the runway and the
+        // card keeps its own breathing room inside.
+        QMargins(0, 0, cornerMargin, 0)
     );
 }
 
@@ -130,7 +133,10 @@ LayerSurfaceSpec bottomCentreSpec(QScreen *screen, const QSize &size, const QStr
         size,
         scope,
         LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorBottom),
-        QMargins(0, 0, 0, cornerMargin)
+        // Flush like the bottom-right twin, and for the same reason: the
+        // block enters by physically emerging from the edge, so the window
+        // is the runway and the content keeps its breathing room inside.
+        QMargins(0, 0, 0, 0)
     );
 }
 

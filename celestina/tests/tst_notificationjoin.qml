@@ -113,17 +113,17 @@ TestCase {
         stack.hide();
     }
 
-    // The stack is one surface carrying several cards of the shell's glass,
-    // so it publishes the union of their regions. A toast used to be a
-    // `GlassCard` capturing a scene that holds nothing behind it, which fell
-    // back to an opaque tint and published no region at all.
-    function test_every_toast_is_glass_and_the_stack_publishes_all_of_it() {
+    // The stack is one block of the shell's glass: a single veil that grows
+    // with the column, publishing one region, while each notification keeps
+    // a denser section of its own inside it. It used to be one field per
+    // toast — a pile of independent blocks — which the author rejected.
+    function test_the_stack_is_one_glass_block_with_a_section_per_toast() {
         stack.show();
         tryCompare(stack, "visible", true);
         tryVerify(function() {
-            return stack.glassRegions.length === stack.toasts.length;
+            return stack.glassRegions.length === 1;
         });
-        compare(stack.glassRects.length, stack.toasts.length);
+        compare(stack.glassRects.length, 1);
 
         const body = findChild(stack.contentItem, "celestina-menu-body-tint");
         verify(body);
@@ -132,17 +132,25 @@ TestCase {
         compare(body.materialRole, GlassSurface.ContextualVeil);
         compare(body.elevation, 0);
 
-        const section = findChild(stack.contentItem, "celestina-menu-section");
-        verify(section);
-        compare(section.materialRole, GlassSurface.ContentSurface);
-        verify(body.materialStrength < section.materialStrength);
+        const sections = [];
+        function collectSections(item) {
+            for (let index = 0; index < item.children.length; ++index) {
+                const child = item.children[index];
+                if (child.objectName === "celestina-menu-section")
+                    sections.push(child);
+                collectSections(child);
+            }
+        }
+        collectSections(stack.contentItem);
+        compare(sections.length, stack.toasts.length);
+        compare(sections[0].materialRole, GlassSurface.ContentSurface);
+        verify(body.materialStrength < sections[0].materialStrength);
         stack.hide();
     }
 
-    // Attached, only the first card grips the bar — the membrane is one drop
-    // out of the bell — and the rest of the column hangs from it, each card
-    // still knowing where it sits on the output.
-    function test_only_the_first_toast_grips_the_bar() {
+    // Attached, the block itself grips the bar — the membrane is one drop
+    // out of the bell — and every notification rides inside that one field.
+    function test_the_single_block_grips_the_bar() {
         stack.anchoredFromPanel = true;
         stack.openerRect = Qt.rect(1700, 5, 30, 30);
         stack.attachmentAnchorRect = Qt.rect(1706, 11, 18, 18);
@@ -161,13 +169,11 @@ TestCase {
             }
         }
         collect(stack.contentItem);
-        compare(fields.length, stack.toasts.length);
-        // The column keeps the model's order top to bottom, so the gripping
-        // card is the one whose y is the column's own top.
-        fields.sort(function(a, b) { return a.y - b.y; });
+        compare(fields.length, 1);
         verify(fields[0].attachedToTop);
-        verify(!fields[1].attachedToTop);
-        verify(fields[0].surfacePosition.y < fields[1].surfacePosition.y);
+        // Tall enough for both notifications: the block, not its first row,
+        // is what the membrane hangs.
+        verify(fields[0].height > 0);
 
         stack.anchoredFromPanel = false;
         stack.attachmentStartY = -1;

@@ -95,8 +95,17 @@ AnchoredMenu {
     Binding {
         target: root.menu
         property: "y"
-        value: root.cardY + (root.ridesTheDrop
-                             ? field.attachmentBodyRect.y : 0)
+        // The entry offset is the top route's whole ride; zero at rest and on
+        // every route that does not fall. The rows are a real popup the
+        // field's seam clip cannot reach, so they are capped at the seam
+        // instead: they wait under the bar's lower edge for the glass and
+        // join it the moment the ride brings the card past — never a row
+        // drawn over the bar.
+        value: Math.max(
+                   root.anchoredFromPanel && field.attachmentStartY >= 0
+                   ? field.attachmentStartY : -1e9,
+                   root.cardY + field.entryOffsetY + (root.ridesTheDrop
+                                ? field.attachmentBodyRect.y : 0))
         restoreMode: Binding.RestoreBindingOrValue
     }
 

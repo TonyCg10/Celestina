@@ -6,7 +6,9 @@
 //! Surviving localized names is part of what the parser is for, so the vector
 //! keeps them. Everything else in this file is English development truth.
 
-use std::io;
+use std::io::{self, BufRead, BufReader};
+use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -56,10 +58,16 @@ use serde_json::Value;
 
 use super::tools::{launch, lock_runtime, run_bounded};
 
-/// Volume changes are user-driven and rare, so the panel asks rarely. What
-/// matters for how it feels is that the panel re-reads immediately after a
-/// change it made itself, which it does.
+/// The backstop between events, and the whole cadence when no event stream
+/// could be opened. A change the shell made itself is read back at once; a
+/// change made elsewhere arrives on `pactl subscribe`'s wire the moment the
+/// server announces it, and this interval only bounds how stale the reading
+/// can get if that wire is absent or dies.
 const INTERVAL: Duration = Duration::from_secs(2);
+/// How long to let one announced change settle before reading. A wheel burst
+/// announces per notch; reading once per announcement would run one
+/// subprocess per notch for values already superseded.
+const EVENT_SETTLE: Duration = Duration::from_millis(30);
 /// The session's own ceiling: no overdrive, the same `-l 1.0` the keys already
 /// pass to `wpctl`.
 const VOLUME_CEILING: &str = "1.0";
@@ -485,10 +493,73 @@ fn publish(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
     }
 }
 
+/// One line of `pactl subscribe` that means the panel's reading may have
+/// moved: a device changed, or the server re-routed which device is default.
+/// Everything else on that wire — clients appearing, streams, cards — is not
+/// this provider's news.
+fn is_level_event(line: &str) -> bool {
+    line.contains("'change'")
+        && (line.contains(" on sink ")
+            || line.contains(" on source ")
+            || line.contains(" on server "))
+}
+
+/// Follows the sound server's own announcements so an outside change — a
+/// `wpctl` in a terminal, another mixer — reaches the panel in milliseconds
+/// instead of a poll later. `pactl subscribe` is served by pipewire-pulse on
+/// this session; when it cannot be spawned or its wire closes, the channel
+/// disconnects and `run` degrades to the plain interval it always had.
+fn watch_events(events: &mpsc::Sender<()>) -> io::Result<()> {
+    let mut child = Command::new("pactl")
+        .arg("subscribe")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?;
+    let Some(stdout) = child.stdout.take() else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Ok(());
+    };
+    for line in BufReader::new(stdout).lines() {
+        let Ok(line) = line else { break };
+        if is_level_event(&line) && events.send(()).is_err() {
+            break;
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    Ok(())
+}
+
 fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId) {
+    let (sender, receiver) = mpsc::channel::<()>();
+    let watcher = thread::Builder::new()
+        .name(format!("{NAME}-events"))
+        .spawn(move || {
+            let _ = watch_events(&sender);
+        });
+    if watcher.is_err() {
+        eprintln!("celestina-provider-adapter: audio: no event watcher; polling only");
+    }
+
     loop {
         publish(runtime, id);
-        thread::sleep(INTERVAL);
+        // Wake on the server's announcement or on the backstop, whichever
+        // comes first; then let the burst settle and drain it, so one wheel
+        // spin is one read rather than one read per notch.
+        match receiver.recv_timeout(INTERVAL) {
+            Ok(()) => {
+                thread::sleep(EVENT_SETTLE);
+                while receiver.try_recv().is_ok() {}
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                // The watcher is gone and a dead channel answers at once, so
+                // the interval has to be slept here or this loop would spin.
+                thread::sleep(INTERVAL);
+            }
+        }
     }
 }
 

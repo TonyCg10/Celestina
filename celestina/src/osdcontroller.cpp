@@ -29,6 +29,11 @@ namespace {
 // the way. Noctalia's own display used the same order of magnitude. Each card
 // in the file carries its own clock of this length.
 constexpr qint64 visibleMs = 1800;
+// One full exit beat plus a breath. The QML's recede runs for the theme's
+// `motionNormal` (200 ms, pinned by the style tests); the controller waits a
+// little longer so the next card's entry visibly starts after the departure
+// has finished, never on top of it.
+constexpr int transitionMs = 260;
 const char componentName[] = "SessionOsd";
 
 // The card the QML draws, in shell units. Pinned by `tst_sessionosd.qml`
@@ -108,6 +113,10 @@ OsdController::OsdController(
     m_clock.start();
     m_expiryTimer.setSingleShot(true);
     connect(&m_expiryTimer, &QTimer::timeout, this, &OsdController::expire);
+    m_transitionTimer.setSingleShot(true);
+    m_transitionTimer.setInterval(transitionMs);
+    connect(&m_transitionTimer, &QTimer::timeout,
+            this, &OsdController::finishClose);
 
     // Deliberately no premapping: bringing the two persistent surfaces up
     // during the shell's own start stopped the compositor from drawing the
@@ -332,10 +341,12 @@ void OsdController::show(const OsdReadings::Reading &reading)
     // change of the same kind is stale the moment the menu takes over, so it
     // leaves the file too; the other kinds' cards keep their clocks.
     if (m_menus && osdSuppressedByOpenMenu(reading.kind, m_menus->openIndicator())) {
+        if (m_pending && m_pending->kind == reading.kind)
+            m_pending.reset();
         m_active = OsdReadings::without(m_active, {reading.kind});
         m_deadlines.remove(reading.kind);
-        if (m_active.isEmpty()) {
-            clearCards();
+        if (m_active.isEmpty() && !m_closing) {
+            beginClose();
         } else if (QWindow *const shown = activeWindow()) {
             pushReadings(shown);
             if (m_activeTop && m_openAttached)
@@ -345,7 +356,42 @@ void OsdController::show(const OsdReadings::Reading &reading)
         return;
     }
 
-    m_active = OsdReadings::merged(m_active, reading);
+    // One card, always the latest change: the author's rule (2026-08-13) is
+    // that the last modification is the information — and no card may enter
+    // while another is still leaving. A reading that arrives mid-departure
+    // waits for the beat to finish and is then shown from the start.
+    if (m_closing) {
+        m_pending = reading;
+        return;
+    }
+
+    // The same kind updates the open card in place, on the surface it is
+    // already on: a wheel burst moves the number and refreshes the clock and
+    // nothing re-animates.
+    if (!m_active.isEmpty() && frontKind() == reading.kind) {
+        m_active = OsdReadings::merged(QVariantList(), reading);
+        m_deadlines.clear();
+        m_deadlines.insert(reading.kind, m_clock.elapsed() + visibleMs);
+        scheduleExpiry();
+        if (QWindow *const shown = activeWindow()) {
+            pushReadings(shown);
+            if (m_activeTop && m_openAttached)
+                updateAttachment(shown, reading.kind);
+            quietKickRender(shown);
+        }
+        return;
+    }
+
+    // A different kind replaces the card, cleanly: the open card plays its
+    // whole recede first, and this reading enters once it has gone.
+    if (!m_active.isEmpty()) {
+        m_pending = reading;
+        beginClose();
+        return;
+    }
+
+    m_active = OsdReadings::merged(QVariantList(), reading);
+    m_deadlines.clear();
     m_deadlines.insert(reading.kind, m_clock.elapsed() + visibleMs);
     scheduleExpiry();
 
@@ -514,6 +560,7 @@ void OsdController::openFallback(QScreen *screen)
 
     const QVariantMap placementProperties {
         {QStringLiteral("shellScale"), shellScale},
+        {QStringLiteral("entersFromBottom"), true},
     };
     QWindow *const osd = createWindow(placementProperties);
     if (!osd)
@@ -624,7 +671,9 @@ void OsdController::expire()
     m_active = OsdReadings::without(m_active, done);
 
     if (m_active.isEmpty()) {
-        clearCards();
+        // Leaving on its own clock uses the same recede as being replaced;
+        // the beat runs to its end before anything else may enter.
+        beginClose();
         return;
     }
     if (QWindow *const shown = activeWindow()) {
@@ -636,35 +685,52 @@ void OsdController::expire()
     scheduleExpiry();
 }
 
-// The cards leave; the window stays. Mapping is the expensive, slow part —
-// measured at seconds on the nested session — so between readings the
-// persistent surface rests empty, transparent and inert instead of being
-// torn down.
-void OsdController::clearCards()
+// The departure itself: the card file empties, which the QML answers with its
+// recede — fading and shrinking away — while the published glass stays under
+// it to the last frame. Only when the beat has finished does `finishClose`
+// clear the leftovers and admit whatever arrived in the meantime.
+void OsdController::beginClose()
 {
     m_expiryTimer.stop();
     m_active.clear();
     m_deadlines.clear();
-    // Both twins go quiet: the one that carried the file empties, and going
-    // home is decided fresh by the next reading.
+    m_closing = true;
     for (QWindow *const shown : {m_surface->window(), m_fallback->window()}) {
         if (!shown)
             continue;
         pushReadings(shown);
-        // Belt to the QML's braces: the host empties the published glass
-        // itself, so the blur withdraw cannot depend on the timing of a
-        // dying delegate's removal from the scene.
-        shown->setProperty("glassRects", QVariantList());
-        shown->setProperty("glassRegions", QVariantList());
         applyInputMask(shown);
         quietKickRender(shown);
     }
+    m_transitionTimer.start();
+}
+
+void OsdController::finishClose()
+{
+    m_closing = false;
+    // Belt to the QML's braces, exactly as before — but only now, so the
+    // withdraw never cuts the receding card's blur mid-animation.
+    for (QWindow *const shown : {m_surface->window(), m_fallback->window()}) {
+        if (!shown)
+            continue;
+        shown->setProperty("glassRects", QVariantList());
+        shown->setProperty("glassRegions", QVariantList());
+        quietKickRender(shown);
+    }
     m_activeTop = true;
+    if (m_pending) {
+        const OsdReadings::Reading next = *m_pending;
+        m_pending.reset();
+        show(next);
+    }
 }
 
 void OsdController::hide()
 {
     m_expiryTimer.stop();
+    m_transitionTimer.stop();
+    m_closing = false;
+    m_pending.reset();
     m_surface->close();
     m_fallback->close();
     m_active.clear();

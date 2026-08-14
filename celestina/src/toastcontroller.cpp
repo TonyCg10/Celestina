@@ -83,6 +83,12 @@ ToastController::ToastController(
         m_enabled = false;
     }
 
+    // One full exit beat plus a breath, matching the display's own closing
+    // wait: the QML's recede runs for the theme's `motionNormal` (200 ms).
+    m_closeTimer.setSingleShot(true);
+    m_closeTimer.setInterval(260);
+    connect(&m_closeTimer, &QTimer::timeout, this, &ToastController::hide);
+
     if (m_providers) {
         connect(
             m_providers,
@@ -119,9 +125,22 @@ void ToastController::providersChanged()
     const QVariantList toasts = published.value(QStringLiteral("toasts")).toList();
 
     if (toasts.isEmpty()) {
-        hide();
+        // The last section leaves with an animation, and it needs its window
+        // alive to play it: the empty list is pushed onto the mapped surface
+        // and the teardown waits out the beat. A window that is not up has
+        // nothing to play — it is simply confirmed down.
+        if (QWindow *const shown = m_surface->window()) {
+            shown->setProperty("toasts", QVariantList());
+            shown->setProperty("actions", QVariantList());
+            quietKickRender(shown);
+            if (!m_closeTimer.isActive())
+                m_closeTimer.start();
+        } else {
+            hide();
+        }
         return;
     }
+    m_closeTimer.stop();
     // The centre is the whole list, keyboard included; while it is open the
     // corner stays quiet, exactly as a level's display stays quiet while its
     // own menu is up. What is live is still there when the centre closes:
@@ -261,6 +280,7 @@ void ToastController::show(const QVariantList &toasts, const QVariantList &actio
     };
     if (occupied) {
         placement = OverlaySurface::Placement::BottomCentre;
+        placementProperties.insert(QStringLiteral("entersFromBottom"), true);
     } else if (geometry.valid) {
         placement = OverlaySurface::Placement::AttachedTopRight;
         placementProperties.insert(QStringLiteral("anchoredFromPanel"), true);
@@ -321,6 +341,7 @@ void ToastController::show(const QVariantList &toasts, const QVariantList &actio
 
 void ToastController::hide()
 {
+    m_closeTimer.stop();
     m_surface->close();
     m_openCard = QRectF();
     m_openScreen.clear();

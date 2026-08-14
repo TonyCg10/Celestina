@@ -54,9 +54,11 @@ Window {
     function collectGlass() {
         const rects = [];
         const regions = [];
-        for (let index = 0; index < column.children.length; ++index) {
-            const card = column.children[index];
-            if (!card || card.glassRegions === undefined)
+        for (let index = 0; index < scene.children.length; ++index) {
+            const card = scene.children[index];
+            // A hidden field keeps its last published regions as data; what
+            // the compositor must see is that nothing visible asks for glass.
+            if (!card || !card.visible || card.glassRegions === undefined)
                 continue;
             for (let each = 0; each < card.glassRegions.length; ++each)
                 regions.push(card.glassRegions[each]);
@@ -85,9 +87,9 @@ Window {
         // The connector's y sits far above either value, so the clamp is
         // unaffected.
         surfaceHeight: stack.anchoredFromPanel ? stack.surfaceHeight
-                                               : column.implicitHeight
+                                               : field.targetHeight
         contentWidth: stack.cardWidth
-        contentHeight: column.implicitHeight
+        contentHeight: field.targetHeight
         anchoredFromPanel: stack.anchoredFromPanel
         openerRect: Qt.rect(stack.openerRect.x - stack.surfaceOriginX,
                             stack.openerRect.y,
@@ -117,22 +119,31 @@ Window {
     property real surfaceHeight: 0
     // How much larger this output needs the shell drawn; see shellscale.h.
     property real shellScale: 1.0
+    // The bottom-centre fallback sits flush with the screen's bottom edge and
+    // behaves like the display's own fallback: the block enters by physically
+    // emerging from the edge, leaves by receding into the distance, and the
+    // pile grows upward — newest at the edge, the rest riding above it.
+    property bool entersFromBottom: false
 
     // The window is as tall as what it holds: attached, that is the seam, the
     // connector and the whole column; floating, the column alone. The stack
     // grows as toasts arrive and the compositor is asked to follow.
     readonly property real neededHeight: stack.anchoredFromPanel
             ? Math.max(stack.surfaceHeight,
-                       placement.y + column.implicitHeight
+                       placement.y + field.targetHeight
                        + CelestinaTheme.spaceLg)
-            : column.implicitHeight
+            : field.targetHeight
+              + (stack.entersFromBottom ? CelestinaTheme.spaceLg : 0)
 
     width: Math.round(stack.surfaceWidth * stack.shellScale)
     height: Math.round(stack.neededHeight * stack.shellScale)
     color: CelestinaTheme.clear
     title: qsTr("Notificaciones de Celestina")
 
-    Component.onCompleted: CelestinaTheme.reducedMotion = stack.reducedMotion
+    Component.onCompleted: {
+        CelestinaTheme.reducedMotion = stack.reducedMotion;
+        stack.syncToasts();
+    }
 
     // The actions offered by one notification.
     function actionsFor(id) {
@@ -156,10 +167,130 @@ Window {
         }
     }
 
+    // The model is kept in place rather than rebuilt: a plain list handed to
+    // the Repeater recreated every delegate on every arrival, which replayed
+    // every card's reveal each time one toast was added — the whole column
+    // dripping again because one message came in. Rows are keyed by the
+    // server's own notification id.
+    ListModel {
+        id: toastModel
+    }
+
+    // The sweep that finally clears a receded block, once its exit has had
+    // its full beat on screen.
+    Timer {
+        id: blockDeparture
+
+        interval: CelestinaTheme.motionNormal
+        onTriggered: {
+            toastModel.clear();
+            field.departing = false;
+            Qt.callLater(stack.collectGlass);
+        }
+    }
+
+    // The sweep that removes rows whose collapse has had its full beat: a
+    // toast that leaves while others stay is covered rather than cut — its
+    // section fades and folds shut underneath while the survivors slide over
+    // its place, on both routes.
+    Timer {
+        id: rowSweep
+
+        interval: CelestinaTheme.motionNormal
+        onTriggered: {
+            for (let stale = toastModel.count - 1; stale >= 0; --stale) {
+                if (toastModel.get(stale).leaving === true)
+                    toastModel.remove(stale);
+            }
+            Qt.callLater(stack.collectGlass);
+        }
+    }
+
+    function syncToasts() {
+        const list = stack.toasts;
+        const wasEmpty = toastModel.count === 0;
+
+        // On the bottom route an emptied list plays the block's recede — the
+        // display's own moving-away — and is swept after; a toast that
+        // arrives mid-recede reclaims the block. This is the last section's
+        // exit; a section with survivors is covered instead, below.
+        if (stack.entersFromBottom && !stack.reducedMotion) {
+            if (list.length === 0 && toastModel.count > 0) {
+                if (!field.departing) {
+                    field.departing = true;
+                    blockDeparture.restart();
+                }
+                return;
+            }
+            if (list.length > 0 && field.departing) {
+                blockDeparture.stop();
+                field.departing = false;
+            }
+        }
+
+        // The bottom pile mirrors the top one: new sections are born away
+        // from the screen's edge — upward — so the oldest sits at the edge
+        // and the survivors slide down over it when it leaves.
+        const desired = stack.entersFromBottom
+            ? list.slice().reverse() : list.slice();
+
+        for (let stale = toastModel.count - 1; stale >= 0; --stale) {
+            let present = false;
+            for (let index = 0; index < desired.length; ++index) {
+                if (desired[index].id === toastModel.get(stale).noteId)
+                    present = true;
+            }
+            if (present)
+                continue;
+            if (stack.reducedMotion || desired.length === 0) {
+                toastModel.remove(stale);
+            } else if (toastModel.get(stale).leaving !== true) {
+                toastModel.setProperty(stale, "leaving", true);
+                rowSweep.restart();
+            }
+        }
+        for (let index = 0; index < desired.length; ++index) {
+            const entry = {
+                "noteId": desired[index].id,
+                "app": desired[index].app !== undefined ? desired[index].app : "",
+                "summary": desired[index].summary !== undefined
+                           ? desired[index].summary : "",
+                "body": desired[index].body !== undefined ? desired[index].body : "",
+                "urgency": desired[index].urgency !== undefined
+                           ? desired[index].urgency : "",
+                "leaving": false
+            };
+            let at = -1;
+            for (let have = 0; have < toastModel.count; ++have) {
+                if (toastModel.get(have).noteId === entry.noteId)
+                    at = have;
+            }
+            if (at < 0) {
+                toastModel.insert(Math.min(index, toastModel.count), entry);
+            } else {
+                toastModel.set(at, entry);
+                if (at !== index && index < toastModel.count)
+                    toastModel.move(at, index, 1);
+            }
+        }
+        // The first notification is what creates the block: the field is
+        // already alive on the persistent window, so its arrival replays for
+        // each fresh first — the drop out of the bell up top, the emergence
+        // from the screen's edge down below.
+        if (wasEmpty && toastModel.count > 0) {
+            Qt.callLater(field.reveal);
+            if (stack.entersFromBottom && !stack.reducedMotion)
+                blockEntry.start();
+        }
+    }
+
     // A dismissed toast destroys its delegate, and a destroyed field emits
     // nothing — without this the union kept the dead card's region and the
     // compositor kept blurring where it had been.
-    onToastsChanged: Qt.callLater(stack.collectGlass)
+    onToastsChanged: {
+        stack.syncToasts();
+        Qt.callLater(stack.collectGlass);
+    }
 
     // A card collects its region on a timer after its reveal; a window that
     // was mapped later than that would otherwise hold regions collected while
@@ -167,8 +298,8 @@ Window {
     onVisibleChanged: {
         if (!stack.visible)
             return;
-        for (let index = 0; index < column.children.length; ++index) {
-            const card = column.children[index];
+        for (let index = 0; index < scene.children.length; ++index) {
+            const card = scene.children[index];
             if (card && card.scheduleGlassCollection !== undefined)
                 card.scheduleGlassCollection();
         }
@@ -184,95 +315,227 @@ Window {
         transformOrigin: Item.TopLeft
         scale: stack.shellScale
 
-    Column {
-        id: column
+    // One block of glass, not a pile of blocks: the author's direction is
+    // that the first notification creates the field and every later one
+    // expands that same field. The veil is this single carrier — the one
+    // membrane out of the bell — and each notification is a denser section
+    // inside it, exactly the anatomy a menu gives its rows.
+    SoftMenuField {
+        id: field
 
         x: Math.round(placement.x)
-        y: stack.anchoredFromPanel ? Math.round(placement.y) : 0
+        // Attached, under the seam; flush at the bottom, pinned by its lower
+        // edge — the breathing room stays between the block and the screen's
+        // edge, and growth moves the top edge, never the bottom.
+        y: stack.anchoredFromPanel
+           ? Math.round(placement.y)
+           : stack.entersFromBottom
+             ? stack.neededHeight - CelestinaTheme.spaceLg - field.height
+             : 0
         width: stack.cardWidth
-        spacing: stack.cardSpacing
+        // As tall as everything it holds; the growth is a movement of its
+        // own, synchronized with the arriving section's slide by sharing its
+        // duration and curve.
+        readonly property real targetHeight:
+            rows.implicitHeight + CelestinaTheme.spaceMd * 2
+        height: field.targetHeight
+        Behavior on height {
+            enabled: !stack.reducedMotion
+            NumberAnimation {
+                duration: CelestinaTheme.motionNormal
+                easing.type: Easing.OutCubic
+            }
+        }
+        // The compositor region follows the growing edge per frame, as every
+        // falling route already does: a field whose blur waited at the final
+        // size would show the expansion over a bare backdrop.
+        onHeightChanged: field.collectGlass()
+        visible: toastModel.count > 0
+
+        // Leaving, on the bottom route, is moving away — the same recede the
+        // display's card plays: shrinking toward its centre and fading, with
+        // the rows kept alive for the beat and swept only after it. The
+        // region stays where it was published for those frames, exactly as
+        // the display's own bottom window keeps its static footprint.
+        property bool departing: false
+        opacity: field.departing ? 0 : 1
+        scale: field.departing ? 0.88 : 1
+        transformOrigin: Item.Center
+        Behavior on opacity {
+            enabled: !stack.reducedMotion && stack.entersFromBottom
+            NumberAnimation {
+                duration: CelestinaTheme.motionNormal
+                easing.type: CelestinaTheme.easeExit
+            }
+        }
+        Behavior on scale {
+            enabled: !stack.reducedMotion && stack.entersFromBottom
+            NumberAnimation {
+                duration: CelestinaTheme.motionNormal
+                easing.type: CelestinaTheme.easeExit
+            }
+        }
+
+        // The bottom entry: the whole block out of the screen's edge at
+        // speed, braking into place, no recoil — the display's own arrival.
+        transform: Translate {
+            id: blockRide
+
+            y: 0
+        }
+
+        NumberAnimation {
+            id: blockEntry
+
+            target: blockRide
+            property: "y"
+            from: field.height + CelestinaTheme.spaceLg
+            to: 0
+            duration: CelestinaTheme.motionNormal
+            easing.type: Easing.OutCubic
+        }
+        ink: backdropInk
+        reducedMotion: stack.reducedMotion
+        compositorBlurAvailable: stack.compositorBlurAvailable
+        attachedToTop: stack.anchoredFromPanel
+        openerRect: stack.openerRect
+        attachmentAnchorRect: stack.attachmentAnchorRect
+        attachmentStartY: stack.attachmentStartY
+        surfacePosition: Qt.point(stack.surfaceOriginX + field.x, field.y)
+        onGlassRegionsChanged: stack.collectGlass()
+        Component.onCompleted: {
+            if (toastModel.count > 0)
+                field.reveal();
+        }
+
+        Column {
+            id: rows
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            // Downward from the bar, upward from the edge: bottom-anchored,
+            // the newest section sits nearest the screen's edge and the rest
+            // of the pile rides above it.
+            anchors.top: stack.entersFromBottom ? undefined : parent.top
+            anchors.bottom: stack.entersFromBottom ? parent.bottom : undefined
+            anchors.margins: CelestinaTheme.spaceMd
+            spacing: stack.cardSpacing
 
         Repeater {
-            model: stack.toasts
+            model: toastModel
 
-            delegate: SoftMenuField {
+            delegate: Item {
                 id: card
 
-                required property var modelData
                 required property int index
+                required property int noteId
+                required property string app
+                required property string summary
+                required property string body
+                required property string urgency
+                required property bool leaving
 
-                readonly property bool critical: card.modelData.urgency === "critical"
-                readonly property var offered: stack.actionsFor(card.modelData.id)
+                readonly property bool critical: card.urgency === "critical"
+                readonly property var offered: stack.actionsFor(card.noteId)
                 // Chained because QML's `arg` substitutes one value per call,
                 // unlike its C++ namesake. A producer that puts a `%2` in its
                 // own app name can therefore consume the next substitution and
                 // garble this sentence; it cannot reach past it, and the
                 // rendered text is inert either way.
                 readonly property string spokenText: qsTr("%1: %2. %3")
-                    .arg(card.modelData.app)
-                    .arg(card.modelData.summary)
-                    .arg(card.modelData.body)
+                    .arg(card.app)
+                    .arg(card.summary)
+                    .arg(card.body)
 
-                width: stack.cardWidth
-                // Measured, never estimated: the laid-out body plus the veil's
-                // margin and the section's own padding, which is the same
-                // anatomy `SoftCard` gives a menu.
-                // Implicit, not merely set: the column sums implicit heights,
-                // and a card that stated only `height` summed to a zero-tall
-                // column — a fallback window nobody could see.
-                implicitHeight: body.implicitHeight + CelestinaTheme.spaceMd * 4
-                height: implicitHeight
-                ink: backdropInk
-                reducedMotion: stack.reducedMotion
-                compositorBlurAvailable: stack.compositorBlurAvailable
-                // Only the first card grips the bar: the membrane is one drop
-                // out of the bell, and the rest of the column hangs from it.
-                attachedToTop: stack.anchoredFromPanel && card.index === 0
-                openerRect: stack.openerRect
-                attachmentAnchorRect: stack.attachmentAnchorRect
-                attachmentStartY: stack.attachmentStartY
-                surfacePosition: Qt.point(stack.surfaceOriginX + column.x,
-                                          column.y + card.y)
+                width: rows.width
+                // Measured, never estimated: the laid-out body plus the
+                // section's own padding. Implicit, not merely set: the column
+                // sums implicit heights, and a row that stated only `height`
+                // summed to a zero-tall column — a window nobody could see.
+                implicitHeight: body.implicitHeight + CelestinaTheme.spaceMd * 2
+                // Leaving is being covered: the section folds shut and fades
+                // underneath while the survivors slide over its place — the
+                // column reflows with the fold, frame by frame, so the two
+                // movements are one.
+                height: card.leaving ? 0 : card.implicitHeight
+                opacity: card.leaving ? 0 : 1
+                clip: card.leaving
+                Behavior on height {
+                    enabled: !stack.reducedMotion
+                    NumberAnimation {
+                        duration: CelestinaTheme.motionNormal
+                        easing.type: Easing.OutCubic
+                    }
+                }
+                Behavior on opacity {
+                    enabled: !stack.reducedMotion
+                    NumberAnimation {
+                        duration: CelestinaTheme.motionNormal
+                        easing.type: CelestinaTheme.easeExit
+                    }
+                }
+                // Age above youth while arriving — the section before must
+                // paint on top for the whole ride — and a leaving section
+                // drops under everything, because the survivors move over it.
+                z: card.leaving ? -toastModel.count - 1
+                   : stack.entersFromBottom ? card.index : -card.index
                 Accessible.role: Accessible.Notification
                 Accessible.name: card.spokenText
 
-                // Arriving is worth a movement, and it is the field's own
-                // reveal. A stack that reflows because the toast above it left
-                // republishes from the field's geometry change, not from here.
-                Component.onCompleted: card.reveal()
-                onGlassRegionsChanged: stack.collectGlass()
+                // Emerging from behind its neighbour: downward from behind
+                // the one above on the bar route, upward from behind the one
+                // below on the edge route — braking, no recoil, while the
+                // shared field's edge grows to meet it on the same curve.
+                transform: Translate {
+                    id: arrivalRide
 
-                Item {
-                    id: section
+                    y: 0
+                }
+
+                NumberAnimation {
+                    id: arrival
+
+                    target: arrivalRide
+                    property: "y"
+                    from: (stack.entersFromBottom ? 1 : -1)
+                          * (card.implicitHeight + stack.cardSpacing)
+                    to: 0
+                    duration: CelestinaTheme.motionNormal
+                    easing.type: Easing.OutCubic
+                }
+
+                Component.onCompleted: {
+                    // A section joining a block that is already up; the first
+                    // one rides in with the block itself.
+                    if (toastModel.count > 1 && !stack.reducedMotion)
+                        arrival.start();
+                }
+
+                MenuSection {
+                    ink: backdropInk
+                }
+
+                // A critical notification is the one case where the surface
+                // says so on its own: the server will never time it out, so
+                // a person needs to see that it is different.
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.margins: CelestinaTheme.spaceXs
+                    width: CelestinaTheme.spaceXs
+                    radius: CelestinaTheme.radiusPill
+                    visible: card.critical
+                    color: CelestinaTheme.danger
+                    z: 1
+                }
+
+                Column {
+                    id: body
 
                     anchors.fill: parent
                     anchors.margins: CelestinaTheme.spaceMd
-
-                    MenuSection {
-                        ink: backdropInk
-                    }
-
-                    // A critical notification is the one case where the surface
-                    // says so on its own: the server will never time it out, so
-                    // a person needs to see that it is different.
-                    Rectangle {
-                        anchors.left: parent.left
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        anchors.margins: CelestinaTheme.spaceXs
-                        width: CelestinaTheme.spaceXs
-                        radius: CelestinaTheme.radiusPill
-                        visible: card.critical
-                        color: CelestinaTheme.danger
-                        z: 1
-                    }
-
-                    Column {
-                        id: body
-
-                        anchors.fill: parent
-                        anchors.margins: CelestinaTheme.spaceMd
-                        spacing: CelestinaTheme.spaceXs
+                    spacing: CelestinaTheme.spaceXs
 
                         Row {
                             width: parent.width
@@ -282,7 +545,7 @@ Window {
                                 id: appLabel
 
                                 width: parent.width - dismissButton.width - parent.spacing
-                                text: card.modelData.app
+                                text: card.app
                                 // Whatever a producer sent is shown as the
                                 // characters it sent. `AutoText` would guess this
                                 // was markup and render it — a link, or an image
@@ -314,13 +577,13 @@ Window {
                                 // which is not what a timeout means.
                                 helpText: qsTr("Descartar esta notificación")
                                 Accessible.name: helpText
-                                onClicked: stack.dismiss(card.modelData.id)
+                                onClicked: stack.dismiss(card.noteId)
                             }
                         }
 
                         Text {
                             width: parent.width
-                            text: card.modelData.summary
+                            text: card.summary
                             textFormat: Text.PlainText
                             color: backdropInk.primary
                             elide: Text.ElideRight
@@ -331,8 +594,8 @@ Window {
 
                         Text {
                             width: parent.width
-                            visible: card.modelData.body.length > 0
-                            text: card.modelData.body
+                            visible: card.body.length > 0
+                            text: card.body
                             textFormat: Text.PlainText
                             color: backdropInk.muted
                             wrapMode: Text.WordWrap
@@ -355,7 +618,7 @@ Window {
 
                                     ink: backdropInk
                                     text: modelData.label
-                                    onClicked: stack.invoke(card.modelData.id, modelData.key)
+                                    onClicked: stack.invoke(card.noteId, modelData.key)
                                 }
                             }
                         }

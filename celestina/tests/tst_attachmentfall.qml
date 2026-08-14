@@ -3,10 +3,13 @@ import QtQuick
 import QtTest
 import "../qml" as Desktop
 
-// PANEL-1-J. An attached surface is born hanging at its own seam, full size,
-// and falls into place. What matters here is not the curve but the contract
-// around it: the settled geometry is the destination, reduced motion never
-// animates, and the carried content falls with its card.
+// PANEL-1-J gave the attached surface its morphing fall; PANEL-1-S's follow-up
+// replaced the top route with a rigid fall from beyond the screen edge, while
+// the side push keeps the morph. What matters here is still the contract, not
+// the curve: the settled geometry is the destination, the membrane is settled
+// from the first frame on the top route, the whole assembly rides one offset,
+// the compositor is always told the resting place, and reduced motion never
+// animates.
 TestCase {
     id: testCase
 
@@ -65,100 +68,119 @@ TestCase {
         field.destroy();
     }
 
-    function test_a_falling_surface_is_born_at_the_seam_and_lands_settled() {
+    function test_a_falling_surface_starts_beyond_the_screen_and_lands_settled() {
         const field = testCase.fieldWith(false);
         verify(field);
         verify(field.edgeShapeActive);
         verify(field.fallsIntoPlace);
 
-        // Born hanging at the bar: full size, carrying its content, above
-        // its resting place by nearly the whole connector travel.
+        // Born entirely above the screen: full size, no membrane yet — there
+        // is no gap below the seam for one to grow in, so the silhouette is
+        // the bare card at its ridden position.
         compare(field.attachmentProgress, 0);
+        verify(field.entryBodyY < 0);
+        near(field.entryOffsetY, -(field.surfacePosition.y + field.height));
         const born = field.edgeSilhouette;
         verify(born.path.length > 0);
         near(born.openRect.width, field.width);
         near(born.openRect.height, field.height);
-        const seamAtField = field.attachmentStartY - field.surfacePosition.y;
-        verify(field.attachmentBodyRect.y < 0);
-        verify(field.attachmentBodyRect.y >= seamAtField);
+        verify(born.openRect.y < 0);
+        verify(born.mouthLeft === undefined || born.tension === 0);
+        // And it arrives at full opacity — off screen, then entering — so
+        // there is no fade to pop.
+        compare(field.attachmentContentOpacity, 1);
+
+        // Mid-descent the gap below the seam is open and the drop has grown
+        // into it: a real membrane, at the ridden travel, formed by the
+        // descent rather than carried by it.
+        field.attachmentProgress =
+            1 - (field.surfacePosition.y - field.attachmentStartY) / 2
+                / (field.surfacePosition.y + field.height);
+        verify(field.entryBodyY > 0.5);
+        const forming = field.edgeSilhouette;
+        verify(forming.tension > 0);
+        near(forming.openRect.y, field.entryBodyY);
 
         field.reveal();
-        // It lands on exactly the settled geometry and never past it.
-        tryVerify(function() { return !field.attachmentClipsContent; });
-        compare(field.attachmentProgress, 1);
-        compare(field.attachmentBodyRect.y, 0);
-        compare(field.attachmentContentOpacity, 1);
+        tryCompare(field, "attachmentProgress", 1);
+        compare(field.entryOffsetY, 0);
         const settled = field.edgeSilhouette;
-        // The seam contact is the same at both ends of the fall.
-        compare(settled.mouthLeft, born.mouthLeft);
-        compare(settled.mouthRight, born.mouthRight);
+        verify(settled.mouthLeft !== undefined);
+        near(settled.openRect.y, -field.attachmentStartY
+                                 + field.surfacePosition.y);
         field.destroy();
     }
 
-    function test_the_carried_content_rides_inside_the_drop() {
+    // The recoil is a fixed short dip past the resting place, not a fraction
+    // of the flight: a tall menu bounces exactly as far as a short card.
+    function test_the_recoil_is_a_fixed_dip_not_a_fraction_of_the_travel() {
+        const field = testCase.fieldWith(false);
+        verify(field);
+        field.attachmentProgress = 1.05;
+        near(field.entryOffsetY, CelestinaTheme.spaceLg);
+        field.attachmentProgress = 1;
+        compare(field.entryOffsetY, 0);
+        field.destroy();
+    }
+
+    function test_the_carried_content_rides_with_the_descending_card() {
         const field = testCase.fieldWith(false);
         verify(field);
         const window = testCase.bodyOf(field);
         verify(window);
-        // The content layer keeps its own settled layout inside that window,
-        // so nothing it carries is stretched or reflowed by the motion.
+        // The rows ride at the card's ridden position — the same openRect
+        // the glass draws the body at — with their settled layout intact:
+        // nothing is stretched, reflowed or clipped by the motion, and the
+        // seam clip is the enclosing item's job, not this window's.
         const content = findChild(field, "celestina-soft-menu-body");
         verify(content);
         compare(content.width, field.width);
         compare(content.height, field.height);
-
-        // Born: the window is the full-sized body hanging at the seam, so
-        // the content starts above its resting place and falls with the
-        // glass rather than waiting for it.
-        verify(field.attachmentClipsContent);
-        verify(window.clip);
+        verify(!window.clip);
+        verify(window.y < 0);
+        near(window.y, field.entryOffsetY);
         compare(window.width, field.width);
         compare(window.height, field.height);
-        verify(window.y < 0);
 
         field.reveal();
-        // The recoil approaches 1 from above, so a fuzzy progress comparison
-        // matches while the membrane is still relaxing. Wait for the surface
-        // to declare itself settled instead.
-        tryVerify(function() { return !field.attachmentClipsContent; });
-        compare(field.attachmentProgress, 1);
-        // Landed: the window is exactly the card again and stops clipping,
-        // so a settled surface pays nothing for the motion.
-        compare(window.x, 0);
+        tryCompare(field, "attachmentProgress", 1);
+        compare(field.entryOffsetY, 0);
         compare(window.y, 0);
-        compare(window.width, field.width);
-        compare(window.height, field.height);
         verify(!window.clip);
         field.destroy();
     }
 
-    function test_the_blur_region_follows_the_falling_drop() {
+    function test_the_blur_follows_every_frame_and_never_climbs_the_seam() {
         const field = testCase.fieldWith(false);
         verify(field);
+        const seamMapped = field.mapToItem(null, 0, 0).y
+                           + field.attachmentStartY - field.surfacePosition.y;
 
-        // Mid-fall, without waiting for any debounce: setting progress must
-        // publish the momentary polygon in the same turn, because a region
-        // that only arrives from the settle timer is a region that only ever
-        // described the landed shape — the blur-less opening the author saw.
+        // Emergence: the card is still leaving the bar and its region is the
+        // visible part alone, clamped at the seam — blur under the card on
+        // every frame, never a frame asking to blur the bar's own rows.
         field.attachmentProgress = 0.4;
+        field.collectGlass();
         compare(field.glassRegions.length, 1);
-        const midFall = field.glassRegions[0].polygon;
-        verify(midFall.length > 3);
+        let polygon = field.glassRegions[0].polygon;
+        verify(polygon.length >= 4);
+        for (let index = 0; index < polygon.length; ++index)
+            verify(polygon[index].y >= seamMapped - 0.001);
+
+        // Formation: the growing drop publishes its own momentary outline.
+        field.attachmentProgress =
+            1 - (field.surfacePosition.y - field.attachmentStartY) / 2
+                / (field.surfacePosition.y + field.height);
+        field.collectGlass();
+        compare(field.glassRegions.length, 1);
+        polygon = field.glassRegions[0].polygon;
+        verify(polygon.length > 4);
+        for (let index = 0; index < polygon.length; ++index)
+            verify(polygon[index].y >= seamMapped - 0.001);
 
         field.attachmentProgress = 1;
-        compare(field.glassRegions.length, 1);
-        const landed = field.glassRegions[0].polygon;
-
-        // The two publications describe different drops: the body falls at
-        // full size, so mid-fall it still hangs above its resting place and
-        // its lowest sample sits higher than the landed card's bottom.
-        function bottom(points) {
-            let lowest = points[0].y;
-            for (let index = 1; index < points.length; ++index)
-                lowest = Math.max(lowest, points[index].y);
-            return lowest;
-        }
-        verify(bottom(midFall) < bottom(landed));
+        tryVerify(function() { return field.glassRegions.length === 1; });
+        verify(field.glassRegions[0].polygon.length > 3);
         field.destroy();
     }
 
@@ -202,6 +224,26 @@ TestCase {
         tryCompare(field, "attachmentProgress", 1);
         field.beginDropFall();
         compare(field.attachmentProgress, 1);
+        field.destroy();
+    }
+
+    // Behind the bar, not over it: while the assembly is entering, the field
+    // clips everything above the seam, and at rest the clip is off so the
+    // settled surface pays nothing for it.
+    function test_nothing_is_painted_above_the_seam_while_entering() {
+        const field = testCase.fieldWith(false);
+        verify(field);
+        const window = findChild(field, "celestina-soft-menu-content").parent;
+        verify(window);
+        // Mid-entry: clipping, and the clip region starts at the seam.
+        field.attachmentProgress = 0.4;
+        verify(field.entryOffsetY < 0);
+        verify(window.clip);
+        near(window.y, field.attachmentStartY - field.surfacePosition.y);
+
+        field.attachmentProgress = 1;
+        compare(field.entryOffsetY, 0);
+        verify(!window.clip);
         field.destroy();
     }
 

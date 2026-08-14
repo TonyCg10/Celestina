@@ -153,18 +153,20 @@ TestCase {
         osd.reducedMotion = false;
     }
 
-    // Two kinds alive at once are two cards, front first, each showing its
-    // own numbers: the file, not an overwrite. The card behind peeks out
-    // under the front one and sits behind it in z, and updating one kind in
-    // place reorders the file without growing it.
+    // The window still renders whatever file it is handed — the host is the
+    // one that now keeps a single card, the latest change. What this pins is
+    // the choreography around a row leaving: it recedes for one exit beat
+    // instead of vanishing, and only then is it removed.
     function test_two_readings_are_two_cards_in_one_file() {
         osd.readings = [
             {"kind": "volume", "percent": 30, "muted": false, "label": ""},
             {"kind": "brightness", "percent": 70, "muted": false, "label": "DP-1"}
         ];
 
+        // The synthesized card of whichever test ran before recedes for its
+        // exit beat first; the file settles at the two real readings.
+        tryVerify(function() { return testCase.fields().length === 2; });
         let cards = testCase.fields();
-        compare(cards.length, 2);
         cards.sort(function(a, b) { return a.y - b.y; });
         compare(cards[0].kind, "volume");
         compare(cards[1].kind, "brightness");
@@ -186,9 +188,42 @@ TestCase {
         compare(cards[0].kind, "brightness");
         compare(cards[0].cardValueText, "75 %");
 
-        // The file empties back to the synthesized single card.
+        // Emptying does not vanish the rows: they recede — faded, shrunk —
+        // for one exit beat, and the sweep then removes them, leaving the
+        // synthesized single card of the compatibility route.
         osd.readings = [];
-        compare(testCase.fields().length, 1);
+        verify(testCase.fields().length >= 1);
+        tryVerify(function() { return testCase.fields().length === 1; });
+    }
+
+    // A kind the host replaced recedes by moving away: faded and shrunk while
+    // its exit beat plays, removed after it.
+    function test_a_replaced_card_recedes_instead_of_vanishing() {
+        osd.readings = [
+            {"kind": "volume", "percent": 30, "muted": false, "label": ""}
+        ];
+        tryVerify(function() { return testCase.fields().length === 1; });
+
+        osd.readings = [
+            {"kind": "brightness", "percent": 70, "muted": false, "label": "DP-1"}
+        ];
+        // Both rows exist during the exit beat: the newcomer entering and the
+        // replaced card receding toward zero opacity.
+        compare(testCase.fields().length, 2);
+        let leaving = null;
+        const cards = testCase.fields();
+        for (let index = 0; index < cards.length; ++index) {
+            if (cards[index].kind === "volume")
+                leaving = cards[index];
+        }
+        verify(leaving);
+        verify(leaving.departing);
+        tryVerify(function() { return leaving.opacity < 1; });
+        // The sweep removes it once the beat has played.
+        tryVerify(function() { return testCase.fields().length === 1; });
+        compare(testCase.fields()[0].kind, "brightness");
+        osd.readings = [];
+        tryVerify(function() { return testCase.fields().length === 1; });
     }
 
     function test_probe_creation_like_host() {

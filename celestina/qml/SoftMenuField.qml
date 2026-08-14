@@ -66,14 +66,47 @@ Item {
             root.sideAttachmentRequested
             || (root.topAttachmentRequested
                 && root.surfacePosition.y > root.attachmentStartY)
-    // PANEL-1-J. An attached surface is born as a drop at its own seam and
-    // falls into place. Progress is the geometry's own input, not a transform
-    // over a finished shape: every frame is a real droplet outline, and 1 is
-    // exactly the settled geometry, so the motion cannot move where a surface
-    // ends up. Reduced motion never leaves the settled value.
+    // PANEL-1-J gave the drop its morphing fall out of the seam; the author
+    // then asked for the whole card instead (2026-08-13): everything that
+    // hangs from the bar falls rigid from beyond the screen's top edge to its
+    // resting place, with the same short elastic recoil. The side push — the
+    // tray child — keeps the morph. So the top route draws its settled
+    // membrane from the first frame and `attachmentProgress` drives a pure
+    // translation of the whole assembly; the side route still feeds the
+    // geometry. Reduced motion never leaves the settled value on either.
     readonly property bool fallsIntoPlace: root.edgeAttachmentRequested
                                            && !root.reducedMotion
     property real attachmentProgress: root.fallsIntoPlace ? 0 : 1
+    readonly property real membraneProgress: root.sideAttachmentRequested
+                                             ? root.attachmentProgress : 1
+    // Where the descending card's top sits below the seam, per frame: the
+    // geometry's own travel input. Negative while the card is still leaving
+    // the bar — no gap yet, so no membrane yet; the drop grows and stretches
+    // in the gap the descent opens, which is the forming the author asked
+    // for, instead of a finished drop riding down as a block.
+    readonly property real entryBodyY: -root.edgePaneY + root.entryOffsetY
+    // How far the assembly starts above its resting place: its own bottom at
+    // the screen's top edge, so no part of it exists on screen at progress 0.
+    readonly property real entryTravel: root.surfacePosition.y + root.height
+    // The recoil is a fixed short dip, not a fraction of the travel: five
+    // percent of a tall menu's whole flight would be a bounce, not a landing.
+    // Deep enough to be seen landing, and recovered over a real beat below.
+    readonly property real entryBounceDepth: CelestinaTheme.spaceLg
+    // Between constant time and constant speed: one duration over a tall
+    // menu's flight was a blur, but paying the full per-pixel price made the
+    // same menu a slow curtain. The base beat covers the common card and each
+    // extra pixel of flight adds only a fraction, capped at the shell's slow
+    // beat — a tall menu reads a little heavier, never sluggish.
+    readonly property int entryDuration: Math.min(
+            CelestinaTheme.motionSlow,
+            CelestinaTheme.motionNormal
+            + Math.round(Math.max(0, root.entryTravel - 300) * 0.25))
+    readonly property real entryOffsetY:
+            root.topAttachmentRequested && root.fallsIntoPlace
+            ? (root.attachmentProgress <= 1
+               ? (root.attachmentProgress - 1) * root.entryTravel
+               : (root.attachmentProgress - 1) / 0.05 * root.entryBounceDepth)
+            : 0
     // What the drop is carrying rides inside it. The body rectangle comes
     // from the same geometry as the outline, so the content is bounded by the
     // exact drop that holds it and travels with it — including through the
@@ -89,6 +122,7 @@ Item {
     // Only while the drop is still moving: a settled body is exactly its own
     // card, so clipping it would cost a render pass and buy nothing.
     readonly property bool attachmentClipsContent: root.fallsIntoPlace
+            && root.sideAttachmentRequested
             && (dropFall.running || root.attachmentProgress < 1)
     // The content rides the drop on every route — carried by the body window
     // on overlays, translated with the popup for real menus — so the fade is
@@ -100,7 +134,11 @@ Item {
     //
     // The glass and everything it carries share this one value, so the popup
     // that a real Menu keeps outside the field fades in step with it.
-    readonly property real attachmentFadeIn: root.fallsIntoPlace
+    // Only the side morph fades in: a card sliding in from beyond the screen
+    // edge is never seen popping into existence, so it arrives at full
+    // opacity and simply enters.
+    readonly property real attachmentFadeIn:
+            root.fallsIntoPlace && root.sideAttachmentRequested
             ? Math.max(0, Math.min(1, root.attachmentProgress / 0.2))
             : 1
     property real retireOpacity: 1
@@ -154,16 +192,21 @@ Item {
                   root.attachmentAnchorRect.height,
                   CelestinaTheme.radiusMd,
                   root.attachmentSideRight,
-                  root.attachmentProgress)
+                  root.membraneProgress)
             : root.edgeShapeActive
-            ? EdgeAttachedGeometry.topAttachedMembrane(
-                  root.edgePaneWidth, root.edgePaneHeight,
-                  -root.edgePaneX, -root.edgePaneY,
-                  root.width, root.height,
-                  root.attachmentAnchorLeftAtBody - root.edgePaneX,
-                  root.attachmentAnchorRect.width,
-                  CelestinaTheme.radiusMd,
-                  root.attachmentProgress)
+            ? (root.entryBodyY > 0.5
+               ? EdgeAttachedGeometry.topAttachedMembrane(
+                     root.edgePaneWidth, root.edgePaneHeight,
+                     -root.edgePaneX, root.entryBodyY,
+                     root.width, root.height,
+                     root.attachmentAnchorLeftAtBody - root.edgePaneX,
+                     root.attachmentAnchorRect.width,
+                     CelestinaTheme.radiusMd,
+                     root.membraneProgress)
+               : EdgeAttachedGeometry.emergingBodyPath(
+                     -root.edgePaneX, root.entryBodyY,
+                     root.width, root.height,
+                     CelestinaTheme.radiusMd))
             : ({"path": "", "edgePath": "", "polygon": [],
                 "tension": 0, "waistWidth": 0, "waistCenter": 0,
                 "openRect": {"x": 0, "y": 0, "width": 0, "height": 0}})
@@ -359,9 +402,25 @@ Item {
     // double-buffered and the blur controller re-arms only when the region
     // really changed, so publishing per frame costs one region update on a
     // frame that is being committed anyway.
+    // Per frame on every falling route, exactly as PANEL-1-P settled for the
+    // morph: the region and the outline come from the same function, the
+    // effect state is double-buffered, and a card without its blur for the
+    // length of an animation is a card that visibly loses its glass. The
+    // emergence polygon is clamped at the seam, so no frame ever asks the
+    // compositor to blur the bar's own rows.
     onAttachmentProgressChanged: {
         if (root.edgeShapeActive)
             root.collectGlass();
+    }
+    onEntryOffsetYChanged: {
+        // Deferred out of this dispatch on purpose: inside it, the region's
+        // own lazy polygon binding can still answer with the previous frame's
+        // shape — the emergence phase publishes none — which is the exact
+        // stale-read this file already documents for the side gap. The
+        // collector re-checks the offset itself, so a deferral that lands
+        // mid-flight publishes nothing.
+        if (root.entryOffsetY === 0)
+            Qt.callLater(root.collectGlass);
     }
 
     // The fall is two tokened parts: it decelerates from its very first frame
@@ -389,7 +448,8 @@ Item {
             property: "attachmentProgress"
             from: 0
             to: 1.05
-            duration: CelestinaTheme.motionNormal
+            duration: root.topAttachmentRequested ? root.entryDuration
+                                                  : CelestinaTheme.motionNormal
             easing.type: CelestinaTheme.easeStandard
         }
 
@@ -397,7 +457,10 @@ Item {
             target: root
             property: "attachmentProgress"
             to: 1
-            duration: CelestinaTheme.motionFast
+            // The landing recoil is meant to be read, not merely to exist:
+            // a hundred milliseconds disappeared under the fall before it.
+            duration: root.topAttachmentRequested ? CelestinaTheme.motionNormal
+                                                  : CelestinaTheme.motionFast
             easing.type: CelestinaTheme.easeStandard
         }
     }
@@ -429,12 +492,32 @@ Item {
         onTriggered: root.collectGlass()
     }
 
+    // The author asked for the fall to happen behind the bar, and a layer
+    // cannot slide under the panel's own surface: the overlay layer is above
+    // it by protocol. So the field simply never paints above the seam while
+    // it is entering — the assembly emerges from under the bar instead of
+    // flying over it. The window spans the pane's own extents so nothing is
+    // cut sideways, and the clip costs nothing at rest.
+    Item {
+        id: entryWindow
+
+        x: Math.min(0, root.edgePaneX)
+        y: root.topAttachmentRequested && root.edgeShapeActive
+           ? root.attachmentStartY - root.surfacePosition.y : 0
+        width: Math.max(root.width, root.edgePaneRight) - entryWindow.x
+        height: root.height - entryWindow.y
+        clip: root.entryOffsetY !== 0
+
     Item {
         id: content
         objectName: "celestina-soft-menu-content"
 
-        anchors.fill: parent
+        x: -entryWindow.x
+        y: -entryWindow.y
+        width: root.width
+        height: root.height
         transformOrigin: Item.Top
+
         // An edge-attached pane must never scale away from y=0. It keeps the
         // established opacity reveal, while floating fields retain the small
         // scale-up motion and reduced-motion still resolves immediately.
@@ -532,5 +615,6 @@ Item {
                 easing.type: CelestinaTheme.easeStandard
             }
         }
+    }
     }
 }

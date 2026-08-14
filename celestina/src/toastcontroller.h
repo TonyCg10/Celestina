@@ -4,6 +4,7 @@
 #include <QPointer>
 #include <QQmlComponent>
 #include <QRectF>
+#include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
 
@@ -89,5 +90,10 @@ private:
     QRectF m_openCard;
     QPointer<QScreen> m_openScreen;
     bool m_openAttached = false;
+    // The exit's own beat: an emptied list plays the last section's leave on
+    // the still-mapped window first, and only then is the surface torn down —
+    // a window closed with the list would cut the animation on its first
+    // frame. A toast arriving mid-beat stops this and reclaims the window.
+    QTimer m_closeTimer;
     bool m_enabled;
 };

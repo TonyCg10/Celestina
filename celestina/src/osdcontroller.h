@@ -11,6 +11,7 @@
 #include <QVariantMap>
 
 #include <functional>
+#include <optional>
 
 #include "osdreadings.h"
 
@@ -99,7 +100,8 @@ private:
     void switchTo(bool top);
     QWindow *activeWindow() const;
     bool topIntruded() const;
-    void clearCards();
+    void beginClose();
+    void finishClose();
     void applyInputMask(QWindow *window);
     void scheduleExpiry();
     void expire();
@@ -133,5 +135,13 @@ private:
     QHash<QString, qint64> m_deadlines;
     QElapsedTimer m_clock;
     QTimer m_expiryTimer;
+    // The exit's own beat. A card leaves by receding — the author's rule
+    // (2026-08-13) is that no card may enter while another is still leaving,
+    // so a reading that arrives mid-exit waits here and is shown from the
+    // start once the departure has finished. Latest wins: the wait holds one
+    // reading, never a queue.
+    QTimer m_transitionTimer;
+    bool m_closing = false;
+    std::optional<OsdReadings::Reading> m_pending;
     bool m_enabled;
 };

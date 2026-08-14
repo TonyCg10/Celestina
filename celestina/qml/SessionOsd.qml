@@ -71,6 +71,10 @@ Window {
     property real surfaceHeight: osd.neededHeight
     // How much larger this output needs the shell drawn; see shellscale.h.
     property real shellScale: 1.0
+    // The fallback window sits flush with the screen's bottom edge and its
+    // card enters by physically emerging from it: fast off the edge, braking
+    // into place, no recoil — an arrival, not a landing.
+    property bool entersFromBottom: false
 
     readonly property int cardWidth: 260
     readonly property int cardHeight: 96
@@ -136,9 +140,12 @@ Window {
                   "muted": osd.muted, "label": osd.label}]
               : []
 
-    // The file's own height: the front card plus one peek per card behind.
+    // The file's own height: the front card plus one peek per card behind,
+    // and the bottom-entry window keeps the breathing room below the card
+    // that its flush margin gave up.
     readonly property real neededHeight: osd.cardHeight
             + Math.max(0, osd.cards.length - 1) * osd.stackPeek
+            + (osd.entersFromBottom ? CelestinaTheme.spaceLg : 0)
 
     width: Math.round(osd.surfaceWidth * osd.shellScale)
     height: Math.round(
@@ -161,16 +168,47 @@ Window {
         id: cardModel
     }
 
+    // The kinds currently receding. A card leaves by moving away — fading
+    // and shrinking — so its row outlives its reading by one exit beat; a
+    // reading that returns during that beat simply reclaims the row.
+    property var departingKinds: []
+
     function syncCards() {
         const list = osd.cards;
+        let receding = [];
         for (let stale = cardModel.count - 1; stale >= 0; --stale) {
             let present = false;
             for (let index = 0; index < list.length; ++index) {
                 if (list[index].kind === cardModel.get(stale).kind)
                     present = true;
             }
-            if (!present)
-                cardModel.remove(stale);
+            if (!present) {
+                if (osd.reducedMotion) {
+                    cardModel.remove(stale);
+                } else if (osd.departingKinds.indexOf(
+                               cardModel.get(stale).kind) < 0) {
+                    receding.push(cardModel.get(stale).kind);
+                }
+            }
+        }
+        if (receding.length > 0) {
+            osd.departingKinds = osd.departingKinds.concat(receding);
+            departureSweep.restart();
+        }
+        // A reading that came back mid-exit reclaims its row.
+        if (osd.departingKinds.length > 0) {
+            const stillLeaving = [];
+            for (let gone = 0; gone < osd.departingKinds.length; ++gone) {
+                let returned = false;
+                for (let index = 0; index < list.length; ++index) {
+                    if (list[index].kind === osd.departingKinds[gone])
+                        returned = true;
+                }
+                if (!returned)
+                    stillLeaving.push(osd.departingKinds[gone]);
+            }
+            if (stillLeaving.length !== osd.departingKinds.length)
+                osd.departingKinds = stillLeaving;
         }
         for (let index = 0; index < list.length; ++index) {
             const entry = {
@@ -194,6 +232,22 @@ Window {
         }
     }
 
+    // The sweep that finally removes a receded row, once its exit has had
+    // its full beat on screen.
+    Timer {
+        id: departureSweep
+
+        interval: CelestinaTheme.motionNormal
+        onTriggered: {
+            for (let stale = cardModel.count - 1; stale >= 0; --stale) {
+                if (osd.departingKinds.indexOf(cardModel.get(stale).kind) >= 0)
+                    cardModel.remove(stale);
+            }
+            osd.departingKinds = [];
+            Qt.callLater(osd.collectGlass);
+        }
+    }
+
     onCardsChanged: {
         osd.syncCards();
         // A card leaving destroys its delegate, and a destroyed field emits
@@ -207,6 +261,28 @@ Window {
     // One surface, several cards: the union of what each collected, exactly
     // as the toast stack publishes its own.
     function collectGlass() {
+        // The bottom-entry window publishes one static region while anything
+        // is on it. Chasing the ride per frame put the double-buffered effect
+        // one frame behind the card, which read as the backdrop darkening for
+        // a few frames; and a region covering the whole runway window drew a
+        // visible slab past the card's edges. The card's resting footprint is
+        // the still point between the two: the entry slides up into glass
+        // that is already there, and neither dimension exceeds the card.
+        if (osd.entersFromBottom) {
+            const occupied = osd.cards.length > 0
+                             || osd.departingKinds.length > 0;
+            const footprint = Qt.rect(
+                0, 0,
+                Math.round(osd.cardWidth * osd.shellScale),
+                Math.round(osd.cardHeight * osd.shellScale));
+            osd.glassRects = occupied ? [footprint] : [];
+            osd.glassRegions = occupied
+                ? [{"rect": footprint,
+                    "radius": CelestinaTheme.radiusMd * osd.shellScale,
+                    "polygon": []}]
+                : [];
+            return;
+        }
         // An empty file publishes empty glass outright: the walk below races
         // delegate destruction — a dying card can still be in the tree when
         // the deferred recollect runs, and a union that kept it left the
@@ -329,6 +405,9 @@ Window {
                 readonly property string cardSpokenText: qsTr("%1: %2")
                     .arg(card.cardHeadline).arg(card.cardValueText)
 
+                readonly property bool departing:
+                        osd.departingKinds.indexOf(card.kind) >= 0
+
                 x: Math.round(placement.x)
                 y: (osd.anchoredFromPanel ? Math.round(placement.y) : 0)
                    + card.index * osd.stackPeek
@@ -358,7 +437,58 @@ Window {
                 // at creation.
                 Accessible.description: card.cardSpokenText
 
-                Component.onCompleted: card.reveal()
+                // Leaving is moving away: the card shrinks toward its own
+                // centre and fades, and the row is removed only after this
+                // has had its beat.
+                opacity: card.departing ? 0 : 1
+                scale: card.departing ? 0.88 : 1
+                transformOrigin: Item.Center
+                Behavior on opacity {
+                    enabled: !osd.reducedMotion
+                    NumberAnimation {
+                        duration: CelestinaTheme.motionNormal
+                        easing.type: CelestinaTheme.easeExit
+                    }
+                }
+                Behavior on scale {
+                    enabled: !osd.reducedMotion
+                    NumberAnimation {
+                        duration: CelestinaTheme.motionNormal
+                        easing.type: CelestinaTheme.easeExit
+                    }
+                }
+                // The receding card keeps its blur to the last frame: the
+                // region follows the shrinking mapped bounds — except on the
+                // bottom window, whose region is static anyway.
+                onScaleChanged: {
+                    if (!osd.entersFromBottom)
+                        osd.collectGlass();
+                }
+
+                // The bottom entry: out of the screen's edge at speed, braking
+                // into place, no recoil — an arrival rather than a landing.
+                transform: Translate {
+                    id: bottomRide
+
+                    y: 0
+                }
+
+                NumberAnimation {
+                    id: bottomEntry
+
+                    target: bottomRide
+                    property: "y"
+                    from: osd.cardHeight + CelestinaTheme.spaceLg
+                    to: 0
+                    duration: CelestinaTheme.motionNormal
+                    easing.type: Easing.OutCubic
+                }
+
+                Component.onCompleted: {
+                    card.reveal();
+                    if (osd.entersFromBottom && !osd.reducedMotion)
+                        bottomEntry.start();
+                }
                 onGlassRegionsChanged: osd.collectGlass()
 
                 HoverHandler {

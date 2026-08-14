@@ -451,6 +451,44 @@ function membraneOutline(travel, bodyLo, bodyHi, bodyDepth,
 // ordinary rounded top corners outside that swell, so the whole read is one
 // drop falling out of the bar rather than an hourglass pinched between two
 // body-wide edges.
+// The card alone, mid-emergence: a plain rounded rectangle at its ridden
+// position inside the pane, for the stretch of the entry in which the card
+// is still leaving the bar and there is no gap for a membrane to grow in.
+// The caller's seam clip hides whatever is still behind the bar.
+function emergingBodyPath(bodyX, bodyTop, bodyWidth, bodyHeight,
+                          requestedRadius) {
+    const radius = Math.max(0, Math.min(requestedRadius,
+                                        bodyWidth / 2, bodyHeight / 2));
+    const left = bodyX;
+    const right = bodyX + bodyWidth;
+    const top = bodyTop;
+    const bottom = bodyTop + bodyHeight;
+    const arc = " A " + pathNumber(radius) + " " + pathNumber(radius)
+              + " 0 0 1 ";
+    const path = "M " + pathPoint(point(left + radius, top))
+        + " L " + pathPoint(point(right - radius, top))
+        + arc + pathPoint(point(right, top + radius))
+        + " L " + pathPoint(point(right, bottom - radius))
+        + arc + pathPoint(point(right - radius, bottom))
+        + " L " + pathPoint(point(left + radius, bottom))
+        + arc + pathPoint(point(left, bottom - radius))
+        + " L " + pathPoint(point(left, top + radius))
+        + arc + pathPoint(point(left + radius, top))
+        + " Z";
+    // The region polygon never rises above the pane's top — the seam — so a
+    // card still leaving the bar asks the compositor to blur only the part of
+    // it that is already out, never the bar's own rows above.
+    const clampedTop = Math.max(0, top);
+    const polygon = bottom > clampedTop
+        ? [point(left, clampedTop), point(right, clampedTop),
+           point(right, bottom), point(left, bottom)]
+        : [];
+    return {"path": path, "edgePath": path, "polygon": polygon,
+            "tension": 0, "waistWidth": 0, "waistY": 0, "waistCenter": 0,
+            "openRect": {"x": bodyX, "y": bodyTop,
+                         "width": bodyWidth, "height": bodyHeight}};
+}
+
 function topAttachedMembrane(frameWidth, frameHeight,
                              bodyX, bodyY, bodyWidth, bodyHeight,
                              anchorX, anchorWidth, requestedRadius,
