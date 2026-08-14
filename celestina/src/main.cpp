@@ -21,6 +21,7 @@
 #include "diagnosticjournal.h"
 #include "niriclient.h"
 #include "osdcontroller.h"
+#include "lockcontroller.h"
 #include "overlaycontroller.h"
 #include "toastcontroller.h"
 #include "panelmanager.h"
@@ -422,6 +423,12 @@ int main(int argc, char *argv[])
     if (!sessionMenu->isEnabled())
         qWarning() << "Celestina is running without its session menu.";
     shell->setSessionMenuController(sessionMenu);
+    // The session lock, and with it the rule that nothing sleeps an uncovered
+    // screen: `lock`, `suspend` and `lock-and-suspend` all go through it, and
+    // it holds a logind delay inhibitor so a lid or an idle timer waits for
+    // the cover too.
+    auto *lock = new LockController(&app);
+    shell->setLockController(lock);
 
     // The menu controller draws menus; the tray host holds the conversation
     // with the application that owns one. Wiring them here keeps the controller

@@ -13,6 +13,7 @@
 #include "sessionrequests.h"
 
 class NiriClient;
+class LockController;
 class OverlayController;
 class ShellProvidersClient;
 class QDBusConnection;
@@ -70,6 +71,9 @@ public:
     void setNotificationCentreController(OverlayController *controller);
     void setControlCentreController(OverlayController *controller);
     void setSessionMenuController(OverlayController *controller);
+    // The session lock. Without one the lock and suspend verbs keep the
+    // fail-closed refusal they have always had.
+    void setLockController(LockController *controller);
     // The bridge every session verb that changes a device travels over. A
     // shell without it still owns the bus name and serves every other verb;
     // those verbs then fail visibly instead of pretending to have worked.
@@ -153,6 +157,7 @@ private:
     // unlike `focusWorkspace`: it resolves the moment it runs, so it needs no
     // entry in `m_focusRequests`.
     qulonglong toggleOverlay(OverlayController *controller, const QString &verb);
+    qulonglong lockSession(const QString &verb);
     // Refuses the request being served and answers whoever asked.
     //
     // `QDBusContext` carries a call context only while QtDBus is dispatching a
@@ -169,6 +174,7 @@ private:
     QPointer<OverlayController> m_notificationCentre;
     QPointer<OverlayController> m_controlCentre;
     QPointer<OverlayController> m_sessionMenu;
+    QPointer<LockController> m_lock;
     QPointer<ShellProvidersClient> m_providers;
     QTimer m_stateTimer;
     // A pending session verb must not wait forever for a device that will

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.23.0 LANGUAGES C CXX)
+project(celestina VERSION 0.24.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -177,6 +177,8 @@ qt_add_executable(celestina
     src/panelblurcontroller.cpp
     src/denseglass.h
     src/denseglass.cpp
+    src/lockcontroller.h
+    src/lockcontroller.cpp
     src/panelattachmentlease.h
     src/panelattachmentlease.cpp
     src/panelmanager.h
@@ -332,6 +334,7 @@ target_compile_definitions(celestina PRIVATE
     CELESTINA_NIRI_ADAPTER="${NIRI_ADAPTER_BINARY}"
     CELESTINA_PROVIDER_ADAPTER="${PROVIDER_ADAPTER_BINARY}"
     CELESTINA_LOCK_VERIFY="$<TARGET_FILE:celestina-lock-verify>"
+    $<$<BOOL:${CELESTINA_LOCK_BUILT}>:CELESTINA_LOCK_BINARY="${CMAKE_CURRENT_BINARY_DIR}/celestina-lock">
 )
 
 target_link_libraries(celestina PRIVATE
@@ -407,6 +410,16 @@ if(BUILD_TESTING)
     target_include_directories(celestina-shell-scale-test PRIVATE src)
     target_link_libraries(celestina-shell-scale-test PRIVATE Qt6::Test Qt6::Gui)
     add_test(NAME celestina-shell-scale COMMAND celestina-shell-scale-test)
+
+    qt_add_executable(celestina-lock-controller-test
+        tests/lockcontroller_test.cpp
+        src/lockcontroller.h
+        src/lockcontroller.cpp
+    )
+    target_include_directories(celestina-lock-controller-test PRIVATE src)
+    target_link_libraries(celestina-lock-controller-test PRIVATE
+        Qt6::Test Qt6::Gui Qt6::DBus)
+    add_test(NAME celestina-lock-controller COMMAND celestina-lock-controller-test)
 
     qt_add_executable(celestina-lock-authenticator-test
         tests/lockauthenticator_test.cpp

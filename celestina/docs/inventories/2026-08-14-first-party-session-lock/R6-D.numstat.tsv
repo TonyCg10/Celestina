@@ -1,0 +1,36 @@
+# R6-D exact change inventory
+
+Base revision	2f24da5d8691cbef07d09214b01e14b01536f9c8
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/evidence/2026-08-14-lock-before-sleep.md
+Pathspec	celestina/docs/inventories/2026-08-14-first-party-session-lock/R6-D.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-08-14-first-party-session-lock.md
+Pathspec	celestina/src/lockauthenticator.cpp
+Pathspec	celestina/src/lockcontroller.cpp
+Pathspec	celestina/src/lockcontroller.h
+Pathspec	celestina/src/main.cpp
+Pathspec	celestina/src/shellservice.cpp
+Pathspec	celestina/src/shellservice.h
+Pathspec	celestina/tests/lockcontroller_test.cpp
+Pathspec	docs/version-history.tsv
+
+Plan	celestina/docs/plans/active/2026-08-14-first-party-session-lock.md
+Evidence	celestina/docs/evidence/2026-08-14-lock-before-sleep.md
+
+added	deleted	content	path
+14	1	3a820dcce8e3a3b477eb3f9183f9f3cf43c6068807752a383ef5d19b59c7d731	celestina/CMakeLists.txt
+1	1	443904d5f573d4480eaf05ee74e491cf7a0675c50016e65ede9cdeda589800b0	celestina/Cargo.lock
+1	1	50e100aaeb841dfa4d6965b7e3750512b2a2191b7dd3fb870572a1f749c048c9	celestina/Cargo.toml
+71	0	313bbb7f4b78af68ff03ce7f11a242218a4ab076820125e1f1a9609be06f82d2	celestina/docs/evidence/2026-08-14-lock-before-sleep.md
+1	1	42da28b356dfbf5855ac90121850ea3974496f0b4a9c6e824eba6a03d4dfd446	celestina/docs/plans/active/2026-08-14-first-party-session-lock.md
+5	2	639ab5063596982aa5829bfb554493de98aeb2cd5688866e29e1ef620adb5c14	celestina/src/lockauthenticator.cpp
+264	0	79aaf3aa478156adda58b4f96d9a5f90c51336711250536b9ec01974333b354e	celestina/src/lockcontroller.cpp
+73	0	76d7a51cc163da370c685e544358845386eb935f153b6df3b62971961fb32b0e	celestina/src/lockcontroller.h
+7	0	32b92c879ce98a1d6c3a2baa4145b3727a45355653e53dfae432c09d2049d793	celestina/src/main.cpp
+55	20	cef17f8d726fb902fafa5d62ac1cd6b88868c754243e35ad3886b73cc3424133	celestina/src/shellservice.cpp
+6	0	0f1d7bb0d8c97de7847fe44e683c031f5eadeee8ee216611a1dc6038cd8321c9	celestina/src/shellservice.h
+157	0	9abe2966504b74840a292e4cf4cd4b4007317a43d51558935d1b71069964e438	celestina/tests/lockcontroller_test.cpp
+1	0	c6b938036eabdb386276f62606d44f62b915616c0368a199d7230885c918554b	docs/version-history.tsv
+36	0	self	celestina/docs/inventories/2026-08-14-first-party-session-lock/R6-D.numstat.tsv

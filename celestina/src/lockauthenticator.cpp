@@ -18,11 +18,14 @@ constexpr int refusedExit = 1;
 // can rewrite.
 QString verifierPath()
 {
+    // An explicit setting is authoritative, including when it is wrong: a
+    // named verifier that cannot be run refuses, and never falls back to
+    // another binary. Which process may say "authenticated" is not a question
+    // to answer by guessing.
     const QByteArray configured = qgetenv("CELESTINA_LOCK_VERIFY");
     if (!configured.isEmpty()) {
         const QFileInfo named(QString::fromLocal8Bit(configured));
-        if (named.isExecutable())
-            return named.absoluteFilePath();
+        return named.isExecutable() ? named.absoluteFilePath() : QString();
     }
     const QFileInfo beside(
         QDir(QCoreApplication::applicationDirPath())

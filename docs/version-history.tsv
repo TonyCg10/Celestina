@@ -74,3 +74,4 @@ celestina	0.20.3	bug	GOV-3-B	Add the authorized boundaries for the lock and the 
 celestina	0.21.0	milestone	PANEL-1-Z	Close the panel glass plan and open the session lock
 celestina	0.22.0	milestone	R6-A	Add the lock's separate PAM verification boundary
 celestina	0.23.0	milestone	R6-B	Add the session lock the compositor keeps
+celestina	0.24.0	milestone	R6-D	Add the rule that nothing sleeps an uncovered screen

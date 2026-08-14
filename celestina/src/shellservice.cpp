@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "niriclient.h"
+#include "lockcontroller.h"
 #include "overlaycontroller.h"
 #include "shellprovidersclient.h"
 
@@ -344,23 +345,28 @@ qulonglong ShellService::Command(const QString &verb, const QVariantMap &options
         return askLogind(verb, QStringLiteral("Reboot"));
     if (verb == QStringLiteral("power-off"))
         return askLogind(verb, QStringLiteral("PowerOff"));
-    if (verb == QStringLiteral("suspend")) {
-        // Fail-closed, exactly like `lock`: a session that suspends unlocked
-        // wakes up unlocked, so this is refused while no locker provider
-        // exists rather than quietly sleeping an open session.
-        return refuse(
-            QDBusError::NotSupported,
-            QStringLiteral(
-                "this shell has no provider for a session locker, so 'suspend' "
-                "is refused rather than sleeping an unlocked session"
-            )
-        );
+    // `suspend` is deliberately the same path as `lock-and-suspend`: a
+    // session that suspends unlocked wakes up unlocked, so there is no verb
+    // here that sleeps an uncovered screen.
+    if (verb == QStringLiteral("suspend")
+        || verb == QStringLiteral("lock")
+        || verb == QStringLiteral("lock-and-suspend")) {
+        return lockSession(verb);
     }
-    if (verb == QStringLiteral("lock") || verb == QStringLiteral("lock-and-suspend")) {
-        // Fail-closed by contract: this shell has no locker provider, and a
-        // shell that cannot lock says so instead of reporting success and
-        // leaving the session open. The refusal is the seam — a provider is
-        // wired in here, and until one is, nothing here pretends.
+
+    return refuse(
+        QDBusError::UnknownMethod,
+        QStringLiteral("this shell does not serve the verb '%1'").arg(echoed(verb))
+    );
+}
+
+// The lock verbs. Every one of them is fail-closed: with no lock provider, or
+// a lock that will not start, this refuses rather than reporting a success
+// that would leave the session open — and `suspend` refuses rather than
+// sleeping an uncovered screen.
+qulonglong ShellService::lockSession(const QString &verb)
+{
+    if (!m_lock) {
         return refuse(
             QDBusError::NotSupported,
             QStringLiteral(
@@ -370,10 +376,39 @@ qulonglong ShellService::Command(const QString &verb, const QVariantMap &options
         );
     }
 
-    return refuse(
-        QDBusError::UnknownMethod,
-        QStringLiteral("this shell does not serve the verb '%1'").arg(echoed(verb))
-    );
+    if (verb == QStringLiteral("lock")) {
+        if (!m_lock->lock()) {
+            return refuse(
+                QDBusError::Failed,
+                QStringLiteral("the session lock could not be started")
+            );
+        }
+        const qulonglong requestId = ++m_lastRequestId;
+        // Started, not covered: the compositor confirms the cover later, and
+        // `lock` deliberately does not wait for it — a person who asked to
+        // lock is not waiting on a reply.
+        reportOutcome(requestId, verb, QStringLiteral("confirmed"), QString());
+        return requestId;
+    }
+
+    // Suspending: the answer comes when the lock is confirmed and logind has
+    // replied, never before. A refusal here means the session is still awake
+    // and still uncovered, which is the visible, recoverable failure.
+    const qulonglong requestId = ++m_lastRequestId;
+    m_lock->lockAndSuspend([this, requestId, verb](const QString &failure) {
+        if (failure.isEmpty()) {
+            reportOutcome(requestId, verb, QStringLiteral("confirmed"),
+                          QString());
+            return;
+        }
+        reportOutcome(requestId, verb, QStringLiteral("failed"), failure);
+    });
+    return requestId;
+}
+
+void ShellService::setLockController(LockController *controller)
+{
+    m_lock = controller;
 }
 
 qulonglong ShellService::toggleOverlay(OverlayController *controller, const QString &verb)
