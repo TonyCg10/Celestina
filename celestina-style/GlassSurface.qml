@@ -380,6 +380,15 @@ Item {
             }
         }
 
+        // No seam treatment rides the silhouette. The finite blur behind a
+        // shaped surface is a pixel region whose boundary cannot be
+        // antialiased; two attempts to cover it in paint — a stroke in the
+        // material's tint, then the same band blurred into a shadow — both
+        // read as a border the author rejected outright. What remains against
+        // the staircase is geometry alone: the host samples the region at
+        // curve-following density and tucks it one pixel inside the painted
+        // silhouette.
+
         // The opt-in silhouette keeps the same dark definition and lit-glass
         // vocabulary. A generic path cannot derive a mathematically inset ring
         // without changing the host's geometry, so these strokes are clipped

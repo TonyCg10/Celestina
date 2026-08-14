@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina-style VERSION 1.6.0 LANGUAGES CXX)
+project(celestina-style VERSION 1.7.0 LANGUAGES CXX)
 
 include(CTest)
 
