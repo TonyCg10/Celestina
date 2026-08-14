@@ -65,7 +65,10 @@ No suspend was performed and no inhibitor was taken against a real logind here.
 Whether a real lid close, a real idle timeout and a real `lock-and-suspend`
 sequence behave as this describes is `VAL-R6`, on the author's own machine.
 
-The lock still does not start under EGL on the nested session (`R6-B`'s
-record). Until that is resolved or shown to be nest-only, these verbs are
-correct and unusable in the same breath — the refusal path is what they will
-actually exercise.
+`R6-B`'s record first described the lock as unable to start under EGL. That
+was the nest, not the lock: with the nest's own shell stopped, so the lock is
+the only EGL client, it starts on the GPU and locks. These verbs are therefore
+expected to work rather than to exercise only their refusal path — but a real
+session runs a shell *and* a lock, which is the same two-client shape the nest
+could not serve, so whether that constraint is the nest's alone is a `VAL-R6`
+question.

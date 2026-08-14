@@ -76,3 +76,4 @@ celestina	0.22.0	milestone	R6-A	Add the lock's separate PAM verification boundar
 celestina	0.23.0	milestone	R6-B	Add the session lock the compositor keeps
 celestina	0.24.0	milestone	R6-D	Add the rule that nothing sleeps an uncovered screen
 celestina	0.25.0	milestone	R6-C	Add the locked screen's own face
+celestina	0.25.1	bug	R6-E	Correct the record that blamed the lock for the nest's EGL limit

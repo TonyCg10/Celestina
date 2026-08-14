@@ -71,7 +71,11 @@ int main(int argc, char **argv)
         searchPath.append(':');
     searchPath.append(pluginPath);
     qputenv("QT_PLUGIN_PATH", searchPath);
-    qputenv("QT_WAYLAND_SHELL_INTEGRATION", "celestina-lock");
+    // An explicit setting wins, which is what let the EGL hang below be
+    // isolated: the same binary was run against Qt's own xdg-shell to prove
+    // the integration was not the cause.
+    if (qgetenv("QT_WAYLAND_SHELL_INTEGRATION").isEmpty())
+        qputenv("QT_WAYLAND_SHELL_INTEGRATION", "celestina-lock");
 
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("celestina-lock"));

@@ -64,15 +64,22 @@ something covers every output and that only an authenticated verdict can
 reach `unlock_and_destroy` — not that the author's own password opens their
 own machine.
 
-**The lock will not start under EGL on this nested session.** Mesa's EGL hangs
-in a round trip of its own during `QQuickWindow` construction, before any of
-this unit's code runs; the runs above use `QT_QUICK_BACKEND=software`. It was
-isolated to the graphics stack by loading the integration with an empty
-`initialize`, which hung identically, so it is neither the binding nor the
-lock. Whether it reproduces on the author's real session, where the shell's
-own EGL surfaces work, is unknown and is the first thing `VAL-R6` must
-answer — a lock that cannot start is a lock that is not there.
+The runs above use `QT_QUICK_BACKEND=software`, and the reason turned out to
+be the nest rather than this program. Launching a second EGL client into the
+nested session hangs in a round trip inside Mesa during `QQuickWindow`
+construction — before any code here runs. It was chased to the harness by
+elimination: Qt's own `xdg-shell` integration hangs identically, so it is not
+ours; the shell's own `--pick-output` window hangs identically, so it is not
+the lock; the sandbox and the render node were both ruled out; and with the
+nest's shell stopped, so that the lock is the only EGL client, **it starts
+under EGL and prints `locked`**.
 
-Every test here also leaves the nest locked with no client, which is correct
-and makes the *next* run hang in that same EGL round trip. A meaningful run is
-the first one against a freshly started nest.
+So the lock works on the GPU, and the constraint is that this nested
+compositor serves one EGL client at a time. Nothing here says how the author's
+real session behaves, where the shell and a lock would also be two clients —
+that remains a `VAL-R6` question, but it is a question about the nest's
+fidelity, not a defect in this unit.
+
+Every test also leaves the nest locked with no client, which is correct and
+makes the next run meet a locked compositor. A meaningful run is the first one
+against a freshly started nest.
