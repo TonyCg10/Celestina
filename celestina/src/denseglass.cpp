@@ -316,13 +316,23 @@ void DenseGlassAggregator::refresh(QScreen *screen)
         if (!companion)
             continue;
         if (region.isEmpty()) {
-            // Withdraw rather than arm: an empty region means "the whole
-            // surface" to the effect, which here would be the whole output.
+            // A companion with no rectangles is unmapped, not merely
+            // disarmed. Withdrawing the region alone leaves a mapped surface
+            // with *no* region, and the compositor's per-namespace rule then
+            // applies its saturation and noise to the surface's whole
+            // geometry — the whole output. Three resting companions
+            // multiplied the session's saturation by ~1.95 permanently, which
+            // the author lived with as "normal" until a menu opened, showed
+            // the true wallpaper, and read as the menu desaturating the
+            // screen.
             KWindowEffects::enableBlurBehind(companion.data(), false);
+            companion->setVisible(false);
         } else {
+            if (!companion->isVisible())
+                companion->setVisible(true);
             KWindowEffects::enableBlurBehind(companion.data(), true, region);
+            kickRender(companion.data());
         }
-        kickRender(companion.data());
     }
     m_quietBeats = 0;
     m_pulse.start();

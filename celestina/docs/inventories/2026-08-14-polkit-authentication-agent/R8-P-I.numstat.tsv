@@ -1,0 +1,24 @@
+# R8-P-I exact change inventory
+
+Base revision	e07a39d21b10d4fbb516f8c9e15f5a09a701d8f1
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-I.numstat.tsv
+Pathspec	celestina/docs/evidence/
+Pathspec	celestina/docs/plans/
+Pathspec	celestina/src/
+Pathspec	docs/version-history.tsv
+
+Plan	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Evidence	celestina/docs/evidence/2026-08-15-resting-companions-saturated-the-session.md
+
+added	deleted	content	path
+1	1	1ab7e27a554b03cc0806b94f5496674a07dc178faefb9bfd9667958c0dcb7082	celestina/CMakeLists.txt
+1	1	41f9435c6d34fc880b07a2eb6a9586fb9ce35d1f67113b9837184b92a25cb6b2	celestina/Cargo.lock
+1	1	cd7e7a8aa39917626154627c3c3eee188b6787fbabc9a3a2ad8d9db0a5f0365a	celestina/Cargo.toml
+62	0	6dd6f498901cd3ddd105c938400742b2a2cccb4ff94923401bff3776cae1c904	celestina/docs/evidence/2026-08-15-resting-companions-saturated-the-session.md
+24	0	self	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-I.numstat.tsv
+1	0	8c0867b0879c01aa990ea8de32a9a9e2f99727d02ce970f3e3285db68f0e2d3c	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+13	3	95d6c6cca88590d54ce5c6e4ed68ede6924d06ab6853dbf7f17e0fb6632c2a7d	celestina/src/denseglass.cpp
+1	0	7c50d988524f9115124848d62f5d00a568cdfcc79a26d5cc472efaf43ebba889	docs/version-history.tsv

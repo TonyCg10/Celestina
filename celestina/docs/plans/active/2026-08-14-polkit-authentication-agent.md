@@ -77,6 +77,7 @@ when it cannot hold the keyboard. Real `pkexec` against a real password is
 | R8-P-F | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-F.numstat.tsv) | 9 files, +105/-9 | the first live prompt's two defects: the card cut to its header, and a stray click spending the request | [first live prompt](../../evidence/2026-08-15-first-live-prompt.md) | `VAL-R8` |
 | R8-P-G | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-G.numstat.tsv) | 12 files, +165/-12 | the card uses the overlays' real anatomy, and the prompt opens on the focused output | [reproduced with grim](../../evidence/2026-08-15-prompt-reproduced-with-grim.md) | `VAL-R8` |
 | R8-P-H | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-H.numstat.tsv) | 15 files, +205/-16 | the hover/press race, the keybind route's imaginary cursor, and the prompt's missing material — the first live day's findings | [first live session findings](../../evidence/2026-08-15-first-live-session-findings.md) | `VAL-R8` |
+| R8-P-I | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-I.numstat.tsv) | 8 files, +104/-6 | resting dense-glass companions stop saturating the whole session | [resting companions record](../../evidence/2026-08-15-resting-companions-saturated-the-session.md) | `VAL-R8` |
 
 ## What R8-P-A found about the helper
 

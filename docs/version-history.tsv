@@ -87,3 +87,4 @@ celestina	0.29.2	bug	R8-P-E	Add the lock and the polkit child to the bundle
 celestina	0.29.3	bug	R8-P-F	Fix the authorization card cut to its header
 celestina	0.29.4	bug	R8-P-G	Fix the prompt's section anatomy and its output choice
 celestina	0.29.5	bug	R8-P-H	Fix the hover race, the overlay output choice and the prompt's material
+celestina	0.29.6	bug	R8-P-I	Fix the resting glass companions saturating the whole session
