@@ -33,6 +33,14 @@ Window {
     property string problem: ""
     property string notice: ""
 
+    // The same seam every overlay exposes: the card computes its glass
+    // shapes, these aliases put them on the Window, and the host's blur
+    // controller reads them there. Without this the prompt was the one
+    // surface in the shell drawn with no compositor glass at all.
+    property alias compositorBlurAvailable: card.compositorBlurAvailable
+    property alias glassRects: card.glassRects
+    property alias glassRegions: card.glassRegions
+
     property real shellScale: 1.0
     readonly property real surfaceWidth: prompt.width / prompt.shellScale
     readonly property real surfaceHeight: prompt.height / prompt.shellScale

@@ -7,6 +7,8 @@
 #include <QString>
 #include <QVariantMap>
 
+#include <functional>
+
 #include "panelattachmentlease.h"
 
 class OverlaySurface;
@@ -49,6 +51,16 @@ class OverlayController final : public QObject
     Q_OBJECT
 
 public:
+    // Where a keybind-opened overlay goes. `QCursor::pos()` is not an answer
+    // on Wayland — a layer-shell client cannot ask where the pointer is, so
+    // the launcher could open on a blacked-out monitor while the person typed
+    // into nothing. The compositor knows the output holding the focused
+    // workspace; the host wires that in once for every overlay.
+    void setFocusedOutputSource(std::function<QString()> source)
+    {
+        m_focusedOutput = std::move(source);
+    }
+
     // `source` is the bridge this component reads; which property it arrives
     // as comes from `overlaySourceProperty`. Four of these overlays read the
     // provider bridge as `providerSource` and the session menu reads a request
@@ -110,6 +122,7 @@ private:
     PanelAttachmentLease m_attachmentLease;
 
     QQmlComponent m_component;
+    std::function<QString()> m_focusedOutput;
     QString m_componentName;
     QString m_sourceProperty;
     // Guarded rather than owned: the bridge outlives no overlay in practice,

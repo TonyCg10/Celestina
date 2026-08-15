@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.29.4 LANGUAGES C CXX)
+project(celestina VERSION 0.29.5 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -511,10 +511,17 @@ if(BUILD_TESTING)
         src/surfacemanager.cpp
         src/shellscale.h
         src/shellscale.cpp
+        src/panelblurcontroller.h
+        src/panelblurcontroller.cpp
+        src/denseglass.h
+        src/denseglass.cpp
+        src/diagnosticjournal.h
+        src/diagnosticjournal.cpp
     )
     target_include_directories(celestina-polkit-prompt-test PRIVATE src)
     target_link_libraries(celestina-polkit-prompt-test PRIVATE
-        Qt6::Test Qt6::Quick Qt6::DBus LayerShellQt::Interface)
+        Qt6::Test Qt6::Quick Qt6::DBus KF6::WindowSystem
+        LayerShellQt::Interface)
     add_test(NAME celestina-polkit-prompt COMMAND celestina-polkit-prompt-test)
 
     qt_add_executable(celestina-tray-icons-test

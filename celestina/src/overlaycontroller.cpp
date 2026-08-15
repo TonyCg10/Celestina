@@ -195,13 +195,22 @@ void OverlayController::open()
     if (!m_enabled || !m_source || isOpen())
         return;
 
-    // A keybind names no click position; the overlay follows the pointer's
-    // output the way a launcher is expected to, and falls back to the primary
-    // screen when the pointer sits nowhere a screen claims (a session with no
-    // outputs left).
+    // A keybind names no click position; the overlay follows the output the
+    // compositor says is focused. The pointer's position was the old answer
+    // and is not one on Wayland — Qt reports a stale or zero point there, and
+    // the launcher opened on whatever output owned the origin, including a
+    // blacked-out one.
     QScreen *screen = m_openerPanel ? m_openerPanel->screen() : nullptr;
-    if (!screen)
-        screen = QGuiApplication::screenAt(QCursor::pos());
+    if (!screen && m_focusedOutput) {
+        const QString name = m_focusedOutput();
+        const auto screens = QGuiApplication::screens();
+        for (QScreen *const candidate : screens) {
+            if (!name.isEmpty() && candidate->name() == name) {
+                screen = candidate;
+                break;
+            }
+        }
+    }
     if (!screen)
         screen = QGuiApplication::primaryScreen();
 

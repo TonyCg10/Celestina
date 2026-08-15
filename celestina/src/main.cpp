@@ -445,7 +445,7 @@ int main(int argc, char *argv[])
     // The prompt follows the person, and the compositor is the only one who
     // knows where they are: the output holding the focused workspace. Asking
     // the cursor put the first live prompt on a blacked-out monitor.
-    polkitPrompt->setFocusedOutputSource([niri]() -> QString {
+    const auto focusedOutput = [niri]() -> QString {
         const QVariantList workspaces = niri->workspaces();
         for (const QVariant &entry : workspaces) {
             const QVariantMap workspace = entry.toMap();
@@ -453,7 +453,14 @@ int main(int argc, char *argv[])
                 return workspace.value(QStringLiteral("output")).toString();
         }
         return QString();
-    });
+    };
+    polkitPrompt->setFocusedOutputSource(focusedOutput);
+    // And every keybind-opened overlay follows the same answer: the cursor is
+    // not knowable here, and the launcher on a blacked-out output is typing
+    // into nothing.
+    for (OverlayController *const opener :
+         {launcher, clipboard, notificationCentre, controlCentre, sessionMenu})
+        opener->setFocusedOutputSource(focusedOutput);
     const QString sessionId =
         QString::fromLocal8Bit(qgetenv("XDG_SESSION_ID"));
     // Recorded whatever happens. "No authorization prompt appeared" is a

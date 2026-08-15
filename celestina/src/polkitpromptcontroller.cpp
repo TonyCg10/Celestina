@@ -7,8 +7,10 @@
 #include <QVariantMap>
 #include <QWindow>
 
+#include "panelblurcontroller.h"
 #include "polkitagent.h"
 #include "shellscale.h"
+#include "softclose.h"
 #include "surfacemanager.h"
 
 namespace {
@@ -204,6 +206,15 @@ void PolkitPromptController::requested(const QString &cookie,
         return;
     }
 
+    // The same glass the overlays get: the card publishes its shapes on the
+    // window and this follows them, arming the compositor blur and the dense
+    // companions. Skipped silently before, which left the prompt the one
+    // surface in this shell drawn with no material at all.
+    if (window->metaObject()->indexOfProperty("glassRects") >= 0) {
+        auto *blur = new PanelBlurController(window, window);
+        blur->start();
+    }
+
     connect(window, &QWindow::visibleChanged, this, [this](bool visible) {
         // The compositor took the surface away — a session ending, an output
         // going. Nothing was answered, so nothing was authorized.
@@ -250,6 +261,11 @@ void PolkitPromptController::closeWindow()
         return;
     QWindow *const window = m_window.data();
     m_window.clear();
-    window->hide();
-    window->deleteLater();
+    // The unified closing beat every surface in this shell has: a short fade
+    // with the dense material withdrawn mid-way, instead of a card that is
+    // simply gone on the next frame.
+    softCloseWindow(window, [window]() {
+        window->hide();
+        window->deleteLater();
+    });
 }

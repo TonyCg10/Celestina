@@ -34,6 +34,15 @@ BackdropButton {
 
     signal menuRequested(rect openerRect, rect attachmentAnchorRect)
 
+    // When the dwell last opened something. The dwell and the press race on
+    // real hardware: a click lands right after the dwell fired, `menuOpen`
+    // is set asynchronously by the attachment lease, so the press's guard
+    // reads stale state and fires again — the author's journal shows the
+    // pair 19 ms apart, the second toggling the menu it had just opened. A
+    // press that lands inside this window is the click that merely confirms
+    // what the dwell already did, whether or not the lease has reported yet.
+    property double hoverOpenedAt: 0
+
     function globalRect(item) {
         const topLeft = item.mapToGlobal(0, 0);
         const bottomRight = item.mapToGlobal(item.width, item.height);
@@ -95,7 +104,11 @@ BackdropButton {
     // up. The press is delivered before any of that can happen, and a bar
     // that answers on the press is also simply faster in the hand.
     onPressed: {
-        if (root.openedByHover && root.menuOpen) {
+        // The press is the person deciding; whatever the dwell was about to
+        // do is superseded, not queued behind it.
+        hoverDwell.stop();
+        if (root.openedByHover
+            && (root.menuOpen || Date.now() - root.hoverOpenedAt < 250)) {
             root.openedByHover = false;
             return;
         }
@@ -129,6 +142,7 @@ BackdropButton {
         onTriggered: {
             if (root.opensOnHover && root.hovered && !root.menuOpen) {
                 root.openedByHover = true;
+                root.hoverOpenedAt = Date.now();
                 root.requestMenu();
             }
         }

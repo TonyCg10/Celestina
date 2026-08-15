@@ -128,7 +128,7 @@ blur {
 // Only the wallpaper stays outside this visual-language unit.
 //
 layer-rule {
-    match namespace="^celestina-(panel|panel-menu|panel-child-menu|overlay|toasts|osd)$"
+    match namespace="^celestina-(panel|panel-menu|panel-child-menu|overlay|toasts|osd|polkit-prompt)$"
 
     background-effect {
         xray false

@@ -1,0 +1,33 @@
+# R8-P-H exact change inventory
+
+Base revision	efd0f17024ca9f770c593b05994c9441b66bd90a
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-H.numstat.tsv
+Pathspec	celestina/docs/evidence/2026-08-15-first-live-session-findings.md
+Pathspec	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Pathspec	celestina/qml/
+Pathspec	celestina/scripts/dev-session.kdl
+Pathspec	celestina/src/
+Pathspec	docs/version-history.tsv
+
+Evidence	celestina/docs/evidence/2026-08-15-first-live-session-findings.md
+Plan	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+
+added	deleted	content	path
+9	2	779d3e153b4ef174d1a57119952e43a8881f85076e91c3808b2a390aedd24b5c	celestina/CMakeLists.txt
+1	1	f1a204f3e50f1ab44c3d2d5713919d598ef4732a0fce21a54422fd64715dbb76	celestina/Cargo.lock
+1	1	6f6ed4c4042be776de5775e9d73a8adfea5c473c2dda321b47388da585393007	celestina/Cargo.toml
+72	0	65325c45c8e96736df55ac43c9dd75ca24288a188f60e25f8d85531b55c3e67f	celestina/docs/evidence/2026-08-15-first-live-session-findings.md
+33	0	self	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-H.numstat.tsv
+1	0	4b28f749b5dbaefb3cfda4115093415fa8fcbb43625c4bbea236d7c64f4089b8	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+15	1	8576199916d5b3e376878ca23d893b6122f857683d3bdab373da3d2b2f69ba2e	celestina/qml/PanelMenuButton.qml
+8	0	d86d13df325a1bd34e192ee9dfdd1af53976d3646602b5f583f78376a262c4c0	celestina/qml/PolkitPrompt.qml
+1	1	cf0f3813f52dbf47b34856e122af364f3d9bc37e3135a8f1b2e96e840e7301d9	celestina/scripts/dev-session.kdl
+9	2	3a88fb1878abbf93f7e2f1c4279b4409eee8b3951f3e54bef0cd377eae4b0bda	celestina/src/main.cpp
+15	6	9e2036906308f3619d59a810c7b62433d12220ad3351feec67cf1d90878de29f	celestina/src/overlaycontroller.cpp
+13	0	fc279aa3c8ef61f9352448fc58d95c58b9e33a599185199e8b649faa63761578	celestina/src/overlaycontroller.h
+8	0	8c388be9b9bb739f25d3eddd82d266ae2b55f536b07a2c303c00ad213326f52d	celestina/src/panelmenucontroller.cpp
+18	2	9e72b1113fa03cca713d04f1b97b2df0dcbc5ce7019537c2b64584eb0854fcf7	celestina/src/polkitpromptcontroller.cpp
+1	0	53e0c751aeaccbf10986000ddc5f092bd7ddb1e9ad4ad38229723e939b163460	docs/version-history.tsv

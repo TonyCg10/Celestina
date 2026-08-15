@@ -442,6 +442,10 @@ void PanelMenuController::toggleIndicatorMenu(
     // defect where the first click did nothing visible and only the second
     // closed the menu.
     const bool sameAgain = (m_openMenuKind == kind);
+    // The opener rectangle travels into the record because "the menu opened
+    // disconnected at the left edge" has already happened and the journal
+    // could not say what geometry the gesture actually delivered. An empty
+    // rect here is the whole explanation of a floating menu.
     DiagnosticJournal::instance().record(
         DiagnosticJournal::Record(
             DiagnosticJournal::Level::Info,
@@ -449,6 +453,10 @@ void PanelMenuController::toggleIndicatorMenu(
             .text(QStringLiteral("kind"), kind)
             .text(QStringLiteral("open_before"), m_openMenuKind)
             .flag(QStringLiteral("same_again"), sameAgain)
+            .number(QStringLiteral("opener_x"), qRound64(globalOpener.x()))
+            .number(QStringLiteral("opener_y"), qRound64(globalOpener.y()))
+            .number(QStringLiteral("opener_width"), qRound64(globalOpener.width()))
+            .number(QStringLiteral("opener_height"), qRound64(globalOpener.height()))
     );
     close();
     if (sameAgain)
