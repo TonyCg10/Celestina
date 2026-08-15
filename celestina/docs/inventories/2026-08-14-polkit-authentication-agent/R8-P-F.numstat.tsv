@@ -1,0 +1,26 @@
+# R8-P-F exact change inventory
+
+Base revision	ad27ae29bc330deee6cc171ea589956005c4085f
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-F.numstat.tsv
+Pathspec	celestina/docs/evidence/2026-08-15-first-live-prompt.md
+Pathspec	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Pathspec	celestina/qml/
+Pathspec	celestina/tests/
+Pathspec	docs/version-history.tsv
+
+Evidence	celestina/docs/evidence/2026-08-15-first-live-prompt.md
+Plan	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+
+added	deleted	content	path
+1	1	2150348476d2ea44d8c621892ad5edf5db9c7dfeb251de02e92ccf40fb335a7a	celestina/CMakeLists.txt
+1	1	94294b7a09ca62d72aef6298338bc0e443d255f47835a19804c71365077d1773	celestina/Cargo.lock
+1	1	aee6da9803360a9ccf9c217d2e42dbe7d1c0ee67930c46c1b353cab658c8bfb9	celestina/Cargo.toml
+49	0	5fb8336503b18f64bdf51c3ba1c4e121d1660e8b0e58e06c2c7fcaf8b98afb23	celestina/docs/evidence/2026-08-15-first-live-prompt.md
+26	0	self	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-F.numstat.tsv
+1	0	b9d3e8d46d71a3dd56b2a1dadbd4ec1b3b26f6b5100ce9b7a7a63eabbea42af5	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+10	6	58d59288668ec67be9c47a06b6d6e556501dc699b4501a3f3baacd9ddfd6999f	celestina/qml/PolkitPrompt.qml
+15	0	b2804f976584ecab661b4c751415b6b82445257325ff99188c57e0e925a719df	celestina/tests/tst_polkitprompt.qml
+1	0	f4c071c86fd8ec2011981fa604ca309b9681351df4b811d1edf3af94e4503ad4	docs/version-history.tsv

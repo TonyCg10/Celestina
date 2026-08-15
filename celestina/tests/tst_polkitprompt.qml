@@ -111,6 +111,21 @@ TestCase {
         compare(fakeSource.responses.length, 1);
     }
 
+    // The card is tall enough for everything it holds. The first live prompt
+    // was cut to its header: the sections declared `height` alone, a Column
+    // sums its children's `implicitHeight`, and the card sized itself to the
+    // one child that had one.
+    function test_theWholeCardFitsWhatItShows() {
+        const field = testCase.findPasswordField(prompt.contentItem);
+        verify(field !== null);
+        const bottom = field.mapToItem(null, 0, field.height).y;
+        verify(bottom <= prompt.cardHeight,
+               "the password field ends at " + bottom
+               + " but the card is only " + prompt.cardHeight + " tall");
+        const action = testCase.findByText(prompt.contentItem, prompt.actionId);
+        verify(action.mapToItem(null, 0, action.height).y <= prompt.cardHeight);
+    }
+
     // A problem from PAM is shown where the notice would be, and takes
     // precedence over it: what went wrong matters more than what was pending.
     function test_aProblemIsShownAndOutranksANotice() {

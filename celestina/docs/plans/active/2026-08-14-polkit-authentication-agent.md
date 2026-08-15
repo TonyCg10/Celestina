@@ -74,6 +74,7 @@ when it cannot hold the keyboard. Real `pkexec` against a real password is
 | R8-P-C | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-C.numstat.tsv) | 16 files, +1072/-13 | the prompt names the real action and refuses to show without a grab | [prompt surface](../../evidence/2026-08-14-polkit-prompt-surface.md) | `VAL-R8` |
 | R8-P-D | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-D.numstat.tsv) | 11 files, +273/-177 | the production build verifies again, so the departure can be deployed at all | [production contract breaches](../../evidence/2026-08-15-production-contract-breaches.md) | `VAL-R8` |
 | R8-P-E | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-E.numstat.tsv) | 12 files, +176/-28 | the deployed bundle carries the lock and the polkit child, and the handover knows the agent exists | [bundle carries the lock and the agent](../../evidence/2026-08-15-bundle-carries-the-lock-and-the-agent.md) | `VAL-R8` |
+| R8-P-F | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-F.numstat.tsv) | 9 files, +105/-9 | the first live prompt's two defects: the card cut to its header, and a stray click spending the request | [first live prompt](../../evidence/2026-08-15-first-live-prompt.md) | `VAL-R8` |
 
 ## What R8-P-A found about the helper
 

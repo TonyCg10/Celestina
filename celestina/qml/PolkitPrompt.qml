@@ -77,15 +77,17 @@ Window {
         scale: prompt.shellScale
     }
 
-    // A click outside the card dismisses the request. Dismissing is a refusal
-    // to answer, not a wrong answer: nothing is authorized and polkitd is told
-    // the person cancelled.
+    // A click outside the card does nothing, deliberately. This surface holds
+    // the keyboard for a password; a stray click must not spend the request.
+    // The ways out are the ones a person means: Escape, or answering. The
+    // author hit this on the first live prompt — a click on empty space threw
+    // the authorization away.
     MouseArea {
         parent: shellScene
         z: -1
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-        onPressed: prompt.promptSource.dismiss()
+        onPressed: field.forceActiveFocus()
     }
 
     Shortcut {
@@ -126,7 +128,8 @@ Window {
             MenuSection {
                 width: parent.width
                 ink: backdropInk
-                height: detail.implicitHeight + CelestinaTheme.spaceMd * 2
+                implicitHeight: detail.implicitHeight + CelestinaTheme.spaceMd * 2
+                height: implicitHeight
 
                 Column {
                     id: detail
@@ -159,7 +162,8 @@ Window {
             MenuSection {
                 width: parent.width
                 ink: backdropInk
-                height: entry.implicitHeight + CelestinaTheme.spaceMd * 2
+                implicitHeight: entry.implicitHeight + CelestinaTheme.spaceMd * 2
+                height: implicitHeight
 
                 Column {
                     id: entry

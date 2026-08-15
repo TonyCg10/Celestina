@@ -84,3 +84,4 @@ celestina	0.28.0	milestone	R8-P-B	Add the session's polkit agent and its registr
 celestina	0.29.0	milestone	R8-P-C	Add the authorization prompt that holds the keyboard
 celestina	0.29.1	bug	R8-P-D	Fix the two contract breaches that blocked a production build
 celestina	0.29.2	bug	R8-P-E	Add the lock and the polkit child to the bundle
+celestina	0.29.3	bug	R8-P-F	Fix the authorization card cut to its header
