@@ -343,7 +343,7 @@ Window {
             enabled: !stack.reducedMotion
             NumberAnimation {
                 duration: CelestinaTheme.motionNormal
-                easing.type: Easing.OutCubic
+                easing.type: CelestinaTheme.easeStandard
             }
         }
         // The compositor region follows the growing edge per frame, as every
@@ -392,7 +392,7 @@ Window {
             from: field.height + CelestinaTheme.spaceLg
             to: 0
             duration: CelestinaTheme.motionNormal
-            easing.type: Easing.OutCubic
+            easing.type: CelestinaTheme.easeStandard
         }
         ink: backdropInk
         reducedMotion: stack.reducedMotion
@@ -464,7 +464,7 @@ Window {
                     enabled: !stack.reducedMotion
                     NumberAnimation {
                         duration: CelestinaTheme.motionNormal
-                        easing.type: Easing.OutCubic
+                        easing.type: CelestinaTheme.easeStandard
                     }
                 }
                 Behavior on opacity {
@@ -501,7 +501,7 @@ Window {
                           * (card.implicitHeight + stack.cardSpacing)
                     to: 0
                     duration: CelestinaTheme.motionNormal
-                    easing.type: Easing.OutCubic
+                    easing.type: CelestinaTheme.easeStandard
                 }
 
                 Component.onCompleted: {

@@ -481,7 +481,7 @@ Window {
                     from: osd.cardHeight + CelestinaTheme.spaceLg
                     to: 0
                     duration: CelestinaTheme.motionNormal
-                    easing.type: Easing.OutCubic
+                    easing.type: CelestinaTheme.easeStandard
                 }
 
                 Component.onCompleted: {

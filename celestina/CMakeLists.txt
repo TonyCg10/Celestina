@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.29.0 LANGUAGES C CXX)
+project(celestina VERSION 0.29.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -133,7 +133,11 @@ if(TARGET Qt6::WaylandClientPrivate AND TARGET Wayland::Scanner
         VERSION 1.0
         IMPORT_PATH "${CELESTINA_STYLE_IMPORT_ROOT}"
         QML_FILES
-            qml/LockScreen.qml
+            # Beside the lock's own sources rather than in the shell's `qml/`.
+            # That directory is the shell module's, whole: the architecture
+            # scanner requires every file in it to be registered there, and a
+            # component belonging to another executable never can be.
+            src/lock/LockScreen.qml
         SOURCES
             src/lockauthenticator.h
             src/lockauthenticator.cpp

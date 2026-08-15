@@ -72,6 +72,7 @@ when it cannot hold the keyboard. Real `pkexec` against a real password is
 | R8-P-A | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-A.numstat.tsv) | 12 files, +1065/-7 | verification is delegated whole, and every error denies | [helper conversation](../../evidence/2026-08-14-polkit-helper-conversation.md) | `VAL-R8` |
 | R8-P-B | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-B.numstat.tsv) | 10 files, +967/-4 | the session has an agent that survives a `polkitd` restart | [agent registration](../../evidence/2026-08-14-polkit-agent-registration.md) | `VAL-R8` |
 | R8-P-C | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-C.numstat.tsv) | 16 files, +1072/-13 | the prompt names the real action and refuses to show without a grab | [prompt surface](../../evidence/2026-08-14-polkit-prompt-surface.md) | `VAL-R8` |
+| R8-P-D | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-D.numstat.tsv) | 11 files, +273/-177 | the production build verifies again, so the departure can be deployed at all | [production contract breaches](../../evidence/2026-08-15-production-contract-breaches.md) | `VAL-R8` |
 
 ## What R8-P-A found about the helper
 
@@ -107,3 +108,18 @@ The consequence is that `VAL-R8` has one shape rather than two. A real
 `pkexec` against a real password cannot be tried while Noctalia is running, so
 the prompt's first real use and the departure it was built for are the same
 validation.
+
+## Why R8-P-D is in this plan
+
+R8 owns the departure, and the departure cannot happen without a production
+build. `verify-production.sh` refused on two contract breaches that had been
+sitting in the tree since the surfaces they belong to were written: five
+animations naming `Easing.OutCubic` directly instead of the `easeStandard`
+token, and `qml/LockScreen.qml` living in the shell module's own directory
+while belonging to the lock's separate executable — a file that directory's
+rule can never accept, because every file in it must be registered in the
+shell's module and this one cannot be.
+
+Neither is a polkit defect. Both are what stood between this checkpoint and a
+deployable shell, which is why they are closed here rather than filed for a
+plan that would have to open first.

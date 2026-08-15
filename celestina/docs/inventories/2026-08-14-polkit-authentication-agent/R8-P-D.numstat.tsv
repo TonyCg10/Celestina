@@ -1,0 +1,29 @@
+# R8-P-D exact change inventory
+
+Base revision	d9613bed75a776f2099ef92a7affc10fcc4961a0
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-D.numstat.tsv
+Pathspec	celestina/docs/evidence/2026-08-15-production-contract-breaches.md
+Pathspec	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Pathspec	celestina/qml/
+Pathspec	celestina/src/
+Pathspec	celestina/tests/
+Pathspec	docs/version-history.tsv
+
+Evidence	celestina/docs/evidence/2026-08-15-production-contract-breaches.md
+Plan	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+
+added	deleted	content	path
+6	2	028a11209dbfbc0c4b755685c2bd231ccfe4c48f4103c6ac61288e81d3e913c6	celestina/CMakeLists.txt
+1	1	4ccc024fe5e64ac8b7832147ea0764d22aad8c069e89c8df4d3e3a5ef17125b2	celestina/Cargo.lock
+1	1	9b587fcb68982ab02ad4f6193261dcb6435e807b02dffe15aa4bac129d29a7f5	celestina/Cargo.toml
+46	0	f7754374df201c0c5a304acd7725e96ebe95f40b0c28f686e34354aa1ed6e956	celestina/docs/evidence/2026-08-15-production-contract-breaches.md
+29	0	self	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-D.numstat.tsv
+16	0	62f108b50964ec3f3fab3a1c35d6386ccb87a618e73e931e5d1504d426799ab6	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+0	168	deleted	celestina/qml/LockScreen.qml
+1	1	4fb6b09b645fc1decd2012366300d77914e48d774094a493250b5e6c4bdfc40f	celestina/qml/SessionOsd.qml
+4	4	c4c376dbe1372f544feb4ca5bc49051eca6407c295a1b11efb562cc4736d740c	celestina/qml/ToastStack.qml
+168	0	1a1cdfeb40379eea5f6c9a88064d00779477e2cf935abca38c39ece86ab02ef9	celestina/src/lock/LockScreen.qml
+1	0	55aa76655b980b5d9a047b3abd9870bc8e8ca69eed2f2df1bcb2cbaf5bacd0f6	docs/version-history.tsv
