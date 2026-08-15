@@ -442,6 +442,18 @@ int main(int argc, char *argv[])
     // shell that could not name its session does not register, and says so.
     auto *polkitAgent = new PolkitAgent(&app);
     auto *polkitPrompt = new PolkitPromptController(&engine, polkitAgent, &app);
+    // The prompt follows the person, and the compositor is the only one who
+    // knows where they are: the output holding the focused workspace. Asking
+    // the cursor put the first live prompt on a blacked-out monitor.
+    polkitPrompt->setFocusedOutputSource([niri]() -> QString {
+        const QVariantList workspaces = niri->workspaces();
+        for (const QVariant &entry : workspaces) {
+            const QVariantMap workspace = entry.toMap();
+            if (workspace.value(QStringLiteral("focused")).toBool())
+                return workspace.value(QStringLiteral("output")).toString();
+        }
+        return QString();
+    });
     const QString sessionId =
         QString::fromLocal8Bit(qgetenv("XDG_SESSION_ID"));
     // Recorded whatever happens. "No authorization prompt appeared" is a

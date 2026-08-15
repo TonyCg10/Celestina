@@ -125,11 +125,18 @@ Window {
                 fallbackIcon: "lock"
             }
 
-            MenuSection {
+            // `MenuSection` is a backdrop plate — it fills its parent and
+            // sits behind it. The first live prompt used it as a container,
+            // so both sections stretched over the whole column at z -1 and
+            // the card measured nothing but its header. The plain Item owns
+            // the geometry; the section paints it, as every overlay does.
+            Item {
                 width: parent.width
-                ink: backdropInk
-                implicitHeight: detail.implicitHeight + CelestinaTheme.spaceMd * 2
+                implicitHeight: detail.implicitHeight
+                                + CelestinaTheme.spaceMd * 2
                 height: implicitHeight
+
+                MenuSection { ink: backdropInk }
 
                 Column {
                     id: detail
@@ -159,11 +166,13 @@ Window {
                 }
             }
 
-            MenuSection {
+            Item {
                 width: parent.width
-                ink: backdropInk
-                implicitHeight: entry.implicitHeight + CelestinaTheme.spaceMd * 2
+                implicitHeight: entry.implicitHeight
+                                + CelestinaTheme.spaceMd * 2
                 height: implicitHeight
+
+                MenuSection { ink: backdropInk }
 
                 Column {
                     id: entry

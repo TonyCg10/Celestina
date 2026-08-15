@@ -118,11 +118,29 @@ TestCase {
     function test_theWholeCardFitsWhatItShows() {
         const field = testCase.findPasswordField(prompt.contentItem);
         verify(field !== null);
+        const message = testCase.findByText(prompt.contentItem, prompt.message);
+        const action = testCase.findByText(prompt.contentItem, prompt.actionId);
+        const header = testCase.findByText(prompt.contentItem,
+                                           prompt.identity);
+
+        // Reading order, in real coordinates: header, then the message, then
+        // the field — the first live prompt had the sections stretched over
+        // the whole column at z -1, which a bottom-of-card check alone did
+        // not catch because everything overlapped inside it.
+        const headerY = header.mapToItem(null, 0, 0).y;
+        const messageY = message.mapToItem(null, 0, 0).y;
+        const fieldY = field.mapToItem(null, 0, 0).y;
+        verify(messageY > headerY,
+               "the message sits at " + messageY + ", over the header at "
+               + headerY);
+        verify(fieldY > messageY,
+               "the field sits at " + fieldY + ", over the message at "
+               + messageY);
+
         const bottom = field.mapToItem(null, 0, field.height).y;
         verify(bottom <= prompt.cardHeight,
                "the password field ends at " + bottom
                + " but the card is only " + prompt.cardHeight + " tall");
-        const action = testCase.findByText(prompt.contentItem, prompt.actionId);
         verify(action.mapToItem(null, 0, action.height).y <= prompt.cardHeight);
     }
 

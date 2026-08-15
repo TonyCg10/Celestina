@@ -6,6 +6,8 @@
 #include <QQmlComponent>
 #include <QString>
 
+#include <functional>
+
 #include "surfacemanager.h"
 
 class PolkitAgent;
@@ -68,6 +70,16 @@ public:
     // Whether a prompt is on screen right now.
     bool isShowing() const { return !m_window.isNull(); }
 
+    // Where the person is. `QCursor::pos()` is not an answer on Wayland — a
+    // layer-shell client cannot ask where the pointer is, Qt reports a stale
+    // or zero position, and the first live prompt opened on a blacked-out
+    // monitor because of it. The compositor knows which output holds the
+    // focused workspace; the host wires that in, and the prompt follows it.
+    void setFocusedOutputSource(std::function<QString()> source)
+    {
+        m_focusedOutput = std::move(source);
+    }
+
     // The prompt's answers, called from QML. They carry the cookie implicitly:
     // one prompt is on screen at a time, and it belongs to one request.
     Q_INVOKABLE void respond(QString secret);
@@ -81,6 +93,7 @@ private:
     void closeWindow();
 
     QQmlEngine *m_engine = nullptr;
+    std::function<QString()> m_focusedOutput;
     PolkitAgent *m_agent = nullptr;
     QQmlComponent m_component;
     bool m_enabled = false;

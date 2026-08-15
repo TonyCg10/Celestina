@@ -1,6 +1,5 @@
 #include "polkitpromptcontroller.h"
 
-#include <QCursor>
 #include <QDebug>
 #include <QGuiApplication>
 #include <QQmlEngine>
@@ -152,7 +151,20 @@ void PolkitPromptController::requested(const QString &cookie,
         m_agent->dismiss(cookie);
     };
 
-    QScreen *screen = QGuiApplication::screenAt(QCursor::pos());
+    // The focused workspace's output first; the cursor is not knowable here
+    // (see setFocusedOutputSource), and the primary screen is the fallback a
+    // session with no compositor answer gets.
+    QScreen *screen = nullptr;
+    if (m_focusedOutput) {
+        const QString name = m_focusedOutput();
+        const auto screens = QGuiApplication::screens();
+        for (QScreen *const candidate : screens) {
+            if (!name.isEmpty() && candidate->name() == name) {
+                screen = candidate;
+                break;
+            }
+        }
+    }
     if (!screen)
         screen = QGuiApplication::primaryScreen();
 

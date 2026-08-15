@@ -1,0 +1,30 @@
+# R8-P-G exact change inventory
+
+Base revision	aa5f76de43ca40431d8333ca733b4de5a8289dc4
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-G.numstat.tsv
+Pathspec	celestina/docs/evidence/2026-08-15-prompt-reproduced-with-grim.md
+Pathspec	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Pathspec	celestina/qml/
+Pathspec	celestina/src/
+Pathspec	celestina/tests/
+Pathspec	docs/version-history.tsv
+
+Evidence	celestina/docs/evidence/2026-08-15-prompt-reproduced-with-grim.md
+Plan	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+
+added	deleted	content	path
+1	1	e3f024f4dd676e8b4bd39dffc0c7133629b56de7b841ac4c72fd4bd4ff028e42	celestina/CMakeLists.txt
+1	1	5944f9b13d4be209b22b32f301015195eb0f018e53657d14be45865434ea0b5a	celestina/Cargo.lock
+1	1	9add025528c79edc59503e466a369662493d40e137f3135aa2ee1c4dbefc8a94	celestina/Cargo.toml
+57	0	0877ea894be03b243900070d33b86aa069ec8c971311c6b16fd65de916cb631c	celestina/docs/evidence/2026-08-15-prompt-reproduced-with-grim.md
+30	0	self	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-G.numstat.tsv
+1	0	8776473faa1c7a6a69a4733768e67dd8f990d14d5f2933344cd923aaf2b86d99	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+15	6	effdae1b31a9e1a06f741edc56485b0a6984f1a14fc959f67f2cd5ea310e157e	celestina/qml/PolkitPrompt.qml
+12	0	8adefa59348968bef164dd369ee05db3635da232e1470218096f50f693b51d80	celestina/src/main.cpp
+14	2	a96c24b3f0d46a8cca1ff8de689de04c37e7597902fc68e529ed5534125b6098	celestina/src/polkitpromptcontroller.cpp
+13	0	9c9f77ceb7149b8fad745c7c847143c1b523ce8bb2abd6aa0af16723fb91a323	celestina/src/polkitpromptcontroller.h
+19	1	913b07643654388127ef3f29db5d7365ca3fe83b677920b073bc3f947b847e0b	celestina/tests/tst_polkitprompt.qml
+1	0	da0511a12931402c67e14281f8e349a12208715a39509da0703188699858e046	docs/version-history.tsv
