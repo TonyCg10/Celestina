@@ -1,0 +1,37 @@
+# R8-P-K exact change inventory
+
+Base revision	822101f4a1ea8407f16557e6df4ce394171c362f
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-K.numstat.tsv
+Pathspec	celestina/docs/evidence/
+Pathspec	celestina/docs/plans/
+Pathspec	celestina/qml/
+Pathspec	celestina/src/
+Pathspec	celestina/tests/
+Pathspec	docs/version-history.tsv
+
+Plan	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Evidence	celestina/docs/evidence/2026-08-15-one-block-forming-and-leaving.md
+
+added	deleted	content	path
+1	1	5a623376d098dad1b2110007b2c6983f72e2deee33a680e52ea5a75dc3f261e0	celestina/CMakeLists.txt
+1	1	a0626419e720d10574c2d149ec44dc014b26833e76cd823972558228d2e7ad58	celestina/Cargo.lock
+1	1	2524705ee70dd2c7af882e3276d7fecbb72d7336b797fdaf6cd3ae187286e27f	celestina/Cargo.toml
+73	0	c8332eca976b8a4b18435089fc163a3521e8d57f7472a5ec874b31880804826a	celestina/docs/evidence/2026-08-15-one-block-forming-and-leaving.md
+37	0	self	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-K.numstat.tsv
+1	0	060ac573741adecf293aa3ddc53c5f0423927e513609432f6e19f44dba6a101d	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+27	1	3efd5a78bfc12f904c55e14055e9e4175eb65ddaa68bd786dfdc331354564060	celestina/qml/ClipboardOverlay.qml
+27	1	6f860caaa852baa21d596ec07af4610cb6d140e22d230cf9502fd72868e09bfd	celestina/qml/ControlCentre.qml
+27	1	70cd8c4ffde33d4b0b98ce6d7fe27b0171f36b9ce34fa26b8784e6cf8b8b0dae	celestina/qml/LauncherOverlay.qml
+27	1	2e32344a74c895c6539d1c6b816604ed9c7343f9af1f8db4b2906b81d1e42515	celestina/qml/NotificationCenter.qml
+27	1	482223c1c2f5a9aa2b393a520a77aa76b726a7da77f7f608a448b4ba6e645a86	celestina/qml/PolkitPrompt.qml
+27	1	4b5ccfa3b3c41e38622de9b3f016375dfd2289784b8009ccc643e71adb713fa7	celestina/qml/SessionMenu.qml
+34	4	3d06e0e363a2dba3c7d96f0d04012a5f57ab7a877efed7f8c817f7a47ae29e8f	celestina/qml/SoftMenuField.qml
+10	0	4443665ec2295307e1beb5be6522dcd717e94da1038410ba1f38a6cfd3115870	celestina/src/denseglass.cpp
+34	2	0ad94893d945dfa7d6734458b46b544ed1f7b0a2cd056ad5840074433ebf1879	celestina/src/softclose.h
+23	0	f6778d2974783e34b00515b35ab990d1437a7cc29984218cad73e059038610ad	celestina/tests/indicatormenu_test.cpp
+20	0	47e074b3dd293722bd3523909de5c155155f9c63a21e09df2b6a3faa1addad76	celestina/tests/overlaycontract_test.cpp
+5	0	9acd6d20a4ca89917be120e4c5e908640301a063f3990f587854765f685542d1	celestina/tests/tst_attachmentfall.qml
+1	0	88c9ea0e5bc65d45e84a7a992c3c83fc8b83273c8de6bf2629303a84ed99e0eb	docs/version-history.tsv

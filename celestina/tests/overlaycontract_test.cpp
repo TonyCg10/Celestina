@@ -47,6 +47,23 @@ void collect(QtMsgType, const QMessageLogContext &, const QString &message)
 // `OverlaySurface` now arranges by covering the output, and only a real Wayland
 // session can show that; what is provable here is that the window answers such
 // a click with `dismissed()` and leaves a click on the card alone.
+// The glass publishes only once a field's reveal has begun — armed earlier it
+// is a bare milky slab leading the paint, which the author recorded on every
+// open. Offscreen, no frame is ever presented, so the cue that starts the
+// reveal in a session never arrives; the tests start it by hand, exactly as
+// the first presented frame does live.
+static void revealAllFields(QQuickWindow *window)
+{
+    // From the window, not its contentItem: the field is reachable as a
+    // QObject descendant of the window while the contentItem's QObject
+    // subtree does not contain it, which a first version discovered by
+    // finding zero fields and revealing nothing.
+    const auto fields = window->findChildren<QQuickItem *>(
+        QStringLiteral("celestina-soft-menu-field"));
+    for (QQuickItem *const field : fields)
+        QMetaObject::invokeMethod(field, "reveal");
+}
+
 class OverlayContractTest final : public QObject
 {
     Q_OBJECT
@@ -546,6 +563,7 @@ void OverlayContractTest::aScaledOutputDrawsLargerWithoutMovingAnythingItStates(
 
     // The blur region is published in real window pixels, so it must come back
     // scaled even though everything that produced it was not.
+    revealAllFields(window);
     QTRY_COMPARE(window->property("glassRegions").toList().size(), 1);
     const QRectF published = window->property("glassRegions")
                                  .toList().constFirst().toMap()
@@ -589,6 +607,8 @@ void OverlayContractTest::anAttachedOverlayNeverReblursThePanelRows()
         QStringLiteral("celestina-soft-menu-field")
     );
     QVERIFY(field);
+
+    revealAllFields(window);
 
     QTRY_COMPARE(window->property("glassRegions").toList().size(), 1);
     QVariantMap published = window->property("glassRegions")

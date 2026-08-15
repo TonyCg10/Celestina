@@ -4,6 +4,7 @@
 #include <QQuickItem>
 
 #include "denseglass.h"
+#include <KWindowEffects>
 #include <QQuickWindow>
 #include <QTimer>
 #include <QVariantAnimation>
@@ -33,11 +34,28 @@ inline void softCloseWindow(QWindow *window, std::function<void()> finish)
     // the close lands with the fade's last frame. Withdrawing at the start
     // was tried and inverted the author's complaint: the background left
     // first, through still-opaque cards.
-    constexpr int fadeMs = 80;
-    constexpr int closeDelayMs = 90;
+    // `motionFast` in the theme; the QML retire animations below run at that
+    // token, and this fade must not outlive them nor cut them short.
+    constexpr int fadeMs = 150;
+    constexpr int closeDelayMs = 170;
 
     auto *quick = qobject_cast<QQuickWindow *>(window);
     QQuickItem *const content = quick ? quick->contentItem() : nullptr;
+
+    // The universal departure: every menu field aboard this window shrinks
+    // into the screen while it fades — the same `retire()` the popup menus
+    // already ran on `aboutToHide`. Invoked here so the card overlays, the
+    // panel menus and the prompt all leave the same way, glass and content as
+    // one block, instead of only fading.
+    if (content) {
+        // From the window, not its contentItem: the field is a QObject
+        // descendant of the window, and a search rooted at the contentItem
+        // finds nothing — measured, not assumed.
+        const auto fields = window->findChildren<QQuickItem *>(
+            QStringLiteral("celestina-soft-menu-field"));
+        for (QQuickItem *const field : fields)
+            QMetaObject::invokeMethod(field, "retire");
+    }
 
     // The strong sample collapses toward its own centres for the length of
     // the fade — shrinking under fading paint is the one exit a region that
@@ -58,6 +76,20 @@ inline void softCloseWindow(QWindow *window, std::function<void()> finish)
             });
         fade->start(QAbstractAnimation::DeleteWhenStopped);
         quick->requestUpdate();
+    }
+
+    // The compositor's blur region cannot fade, but it can leave early:
+    // withdrawn a third of the way into the fade, the milky backdrop
+    // disappears under paint still opaque enough to cover the swap, instead
+    // of sitting bare on the wallpaper after the paint has gone.
+    if (content) {
+        const QPointer<QWindow> tracked(window);
+        QTimer::singleShot(60, window, [tracked]() {
+            if (tracked) {
+                KWindowEffects::enableBlurBehind(tracked.data(), false);
+                tracked->requestUpdate();
+            }
+        });
     }
 
     // Parented to the window: a window hard-closed mid-beat takes the timer

@@ -153,6 +153,11 @@ TestCase {
     function test_the_blur_follows_every_frame_and_never_climbs_the_seam() {
         const field = testCase.fieldWith(false);
         verify(field);
+        // The glass publishes nothing before the reveal begins — armed
+        // earlier it is a milky slab leading the paint. This case is about
+        // the frames of the fall, so the fall is started the way a presented
+        // frame starts it.
+        field.revealed = true;
         const seamMapped = field.mapToItem(null, 0, 0).y
                            + field.attachmentStartY - field.surfacePosition.y;
 

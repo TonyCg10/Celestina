@@ -102,9 +102,35 @@ Window {
         list.forceActiveFocus();
     }
 
+    // The reveal starts on the first frame the compositor actually shows.
+    // `visible` fires long before that — the configure, the first render and
+    // the first commit all happen after it — and a reveal started there
+    // finishes before anyone can see it, which is the pop the author
+    // recorded: the card simply exists on its first presented frame. The
+    // first `frameSwapped` after mapping is, by definition, the first moment
+    // the animation has an audience.
+    // Two cues, both required. `frameSwapped` alone fires for frames the
+    // compositor throws away before the surface is mapped — the animation ran
+    // to completion against discarded buffers, and the first frame anyone saw
+    // was its final state. The growth past the bootstrap width is the
+    // compositor's configure; the first swap after that carries the buffer
+    // that is actually presented, and that is the animation's first audience.
+    property bool revealPending: false
+    property bool surfaceConfigured: false
     onVisibleChanged: {
-        if (visible)
+        revealPending = visible;
+        if (!visible)
+            surfaceConfigured = false;
+    }
+    onWidthChanged: {
+        if (visible && width > Math.round(cardWidth * shellScale))
+            surfaceConfigured = true;
+    }
+    onFrameSwapped: {
+        if (revealPending && surfaceConfigured) {
+            revealPending = false;
             Qt.callLater(card.reveal);
+        }
     }
 
     PanelPopupPlacement {

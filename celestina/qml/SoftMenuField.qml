@@ -142,6 +142,10 @@ Item {
             ? Math.max(0, Math.min(1, root.attachmentProgress / 0.2))
             : 1
     property real retireOpacity: 1
+    // The universal departure the author asked for: every surface leaves by
+    // shrinking into the screen while it fades — one block, glass and content
+    // together, because both live under `content` and this scales that.
+    property real retireScale: 1
     readonly property real attachmentContentOpacity: root.attachmentFadeIn
                                                      * root.retireOpacity
 
@@ -151,9 +155,11 @@ Item {
     function retire() {
         if (root.reducedMotion) {
             root.retireOpacity = 0;
+            root.retireScale = 1;
             return;
         }
         retireFade.start();
+        retireShrink.start();
     }
     // The panel lives below the overlay layer. Start this window's material at
     // the continuous bar backdrop's lower edge. The overlay supplies only the
@@ -352,6 +358,17 @@ Item {
     onAttachmentAnchorRectChanged: root.beginLateFall()
 
     function collectGlass() {
+        // Not before the reveal. The compositor's material cannot fade — a
+        // region exists or it does not — so a region armed while the paint is
+        // still at zero is a bare milky slab on the wallpaper, which the
+        // author recorded leading the card by several frames on every open.
+        // Collected only once the reveal is running, the snap lands under
+        // paint that is already forming, and the two read as one block.
+        if (root.animateReveal && !root.revealed) {
+            root.glassRects = [];
+            root.glassRegions = [];
+            return;
+        }
         const foundRects = [];
         const foundRegions = [];
         const walk = function(item) {
@@ -476,6 +493,16 @@ Item {
         easing.type: CelestinaTheme.easeExit
     }
 
+    NumberAnimation {
+        id: retireShrink
+
+        target: root
+        property: "retireScale"
+        to: 0.92
+        duration: CelestinaTheme.motionFast
+        easing.type: CelestinaTheme.easeExit
+    }
+
     Timer {
         id: glassSettle
 
@@ -516,14 +543,17 @@ Item {
         y: -entryWindow.y
         width: root.width
         height: root.height
-        transformOrigin: Item.Top
+        // Centre-origin, so both the small entry scale and the departing
+        // shrink read as depth — toward and away from the person — rather
+        // than as hanging growth from the top edge.
+        transformOrigin: Item.Center
 
         // An edge-attached pane must never scale away from y=0. It keeps the
         // established opacity reveal, while floating fields retain the small
         // scale-up motion and reduced-motion still resolves immediately.
-        scale: root.edgeAttachmentRequested
-               || !root.animateReveal || root.revealed || root.reducedMotion
-               ? 1 : 0.92
+        scale: (root.edgeAttachmentRequested
+                || !root.animateReveal || root.revealed || root.reducedMotion
+                ? 1 : 0.92) * root.retireScale
         // The whole surface, glass included, carries the fade at both ends.
         opacity: (!root.animateReveal || root.revealed || root.reducedMotion
                   ? 1 : 0) * root.attachmentContentOpacity

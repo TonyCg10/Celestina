@@ -33,6 +33,23 @@ void collect(QtMsgType, const QMessageLogContext &, const QString &message)
 // A provider bridge with the shape the menus really read: a snapshot, a
 // revision, and the durable request ledger. The ledger is the real one — the
 // point of these cases is that it outlives the window that used it.
+// The glass publishes only once a field's reveal has begun — armed earlier it
+// is a bare milky slab leading the paint, which the author recorded on every
+// open. Offscreen, no frame is ever presented, so the cue that starts the
+// reveal in a session never arrives; the tests start it by hand, exactly as
+// the first presented frame does live.
+static void revealAllFields(QQuickWindow *window)
+{
+    // From the window, not its contentItem: the field is reachable as a
+    // QObject descendant of the window while the contentItem's QObject
+    // subtree does not contain it, which a first version discovered by
+    // finding zero fields and revealing nothing.
+    const auto fields = window->findChildren<QQuickItem *>(
+        QStringLiteral("celestina-soft-menu-field"));
+    for (QQuickItem *const field : fields)
+        QMetaObject::invokeMethod(field, "reveal");
+}
+
 class FakeBridge final : public QObject, public RequestSink
 {
     Q_OBJECT
@@ -475,6 +492,7 @@ void IndicatorMenuTest::aSoftMenuKeepsOneOuterGlassCard()
         const QRectF published = window->property("glassRects").toList()
                                      .constFirst().toRectF();
         QCOMPARE(published, menuBounds);
+        revealAllFields(window);
         QTRY_COMPARE(window->property("glassRegions").toList().size(), 1);
         const QVariantMap publishedShape = window->property("glassRegions")
                                                .toList().constFirst().toMap();
@@ -637,6 +655,8 @@ void IndicatorMenuTest::eachPanelIndicatorMenuSpansItsOuterVeilAndTargetsTheIcon
             attachmentAnchor
         );
 
+        revealAllFields(window);
+
         QTRY_COMPARE(window->property("glassRegions").toList().size(), 1);
         const QVariantMap shape = window->property("glassRegions")
                                       .toList().constFirst().toMap();
@@ -747,6 +767,7 @@ void IndicatorMenuTest::theTrayMenuUsesTheSameVeloCarrier()
         ).size(),
         2
     );
+    revealAllFields(window);
     QTRY_COMPARE(window->property("glassRegions").toList().size(), 1);
     QObject *const bodyMaterial = window->findChild<QObject *>(
         QStringLiteral("celestina-menu-body-tint")
@@ -990,6 +1011,7 @@ void IndicatorMenuTest::aScaledCardKeepsItsMembraneOnTheGlyph()
 
         // The compositor region is real pixels; the seam and the mouth are
         // the shell numbers times the factor.
+        revealAllFields(window);
         QTRY_COMPARE(window->property("glassRegions").toList().size(), 1);
         const QVariantMap shape = window->property("glassRegions")
                                       .toList().constFirst().toMap();
@@ -1522,6 +1544,7 @@ void IndicatorMenuTest::theControlCentreStopsAskingWhenTheHelperAccepts()
     QCOMPARE(centreGlass.size(), 1);
     QCOMPARE(centreWindow->property("cardWidth").toInt(), 530);
     QCOMPARE(centreWindow->property("cardHeight").toInt(), 732);
+    revealAllFields(centreWindow);
     QTRY_COMPARE(centreWindow->property("glassRegions").toList().size(), 1);
     const QVariantMap centreShape = centreWindow->property("glassRegions")
                                         .toList().constFirst().toMap();

@@ -55,6 +55,16 @@ void walkSections(QQuickItem *item, QList<DenseGlassShape> *found)
     for (QQuickItem *const child : children) {
         if (!child->isVisible())
             continue;
+        // A field that has not begun its reveal keeps its sections out of the
+        // companions: the dense material cannot fade, so armed early it is a
+        // bare milky slab leading the card's paint by several frames — the
+        // author's recording showed exactly that on every open. Its sections
+        // join the instant the reveal starts, under paint already forming.
+        if (child->objectName() == QLatin1String("celestina-soft-menu-field")
+            && child->property("animateReveal").toBool()
+            && !child->property("revealed").toBool()) {
+            continue;
+        }
         if (child->objectName() == QLatin1String("celestina-menu-section")
             && child->width() > 0 && child->height() > 0) {
             const QRectF mapped = child->mapRectToScene(
