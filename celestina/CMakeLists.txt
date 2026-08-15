@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.27.0 LANGUAGES C CXX)
+project(celestina VERSION 0.28.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -470,6 +470,21 @@ if(BUILD_TESTING)
         Qt6::Test Qt6::Gui)
     add_test(NAME celestina-polkit-conversation
         COMMAND celestina-polkit-conversation-test)
+
+    # Drives the agent against a stand-in polkitd on the session bus, so
+    # registration, re-registration, cancellation and concurrency run without
+    # the real authority and without a password.
+    qt_add_executable(celestina-polkit-agent-test
+        tests/polkitagent_test.cpp
+        src/polkitagent.h
+        src/polkitagent.cpp
+        src/polkitconversation.h
+        src/polkitconversation.cpp
+    )
+    target_include_directories(celestina-polkit-agent-test PRIVATE src)
+    target_link_libraries(celestina-polkit-agent-test PRIVATE
+        Qt6::Test Qt6::Gui Qt6::DBus)
+    add_test(NAME celestina-polkit-agent COMMAND celestina-polkit-agent-test)
 
     qt_add_executable(celestina-tray-icons-test
         tests/trayicons_test.cpp

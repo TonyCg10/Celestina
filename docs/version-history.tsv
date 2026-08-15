@@ -80,3 +80,4 @@ celestina	0.25.1	bug	R6-E	Correct the record that blamed the lock for the nest's
 celestina	0.25.2	bug	R6-F	Record that the shell now provides a screen lock
 celestina	0.26.0	milestone	R6-Z	Close the lock plan and open the polkit agent
 celestina	0.27.0	milestone	R8-P-A	Add the polkit conversation that asks and never decides
+celestina	0.28.0	milestone	R8-P-B	Add the session's polkit agent and its registration

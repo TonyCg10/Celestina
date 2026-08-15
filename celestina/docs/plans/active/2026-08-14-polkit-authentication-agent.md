@@ -70,7 +70,7 @@ when it cannot hold the keyboard. Real `pkexec` against a real password is
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | R8-P-A | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-A.numstat.tsv) | 12 files, +1065/-7 | verification is delegated whole, and every error denies | [helper conversation](../../evidence/2026-08-14-polkit-helper-conversation.md) | `VAL-R8` |
-| R8-P-B | `celestina:` | planned | agent registration and the `polkitd` interface | — | the session has an agent that survives a `polkitd` restart | interface regression incl. re-registration, cancellation, concurrency | `VAL-R8` |
+| R8-P-B | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-B.numstat.tsv) | 10 files, +967/-4 | the session has an agent that survives a `polkitd` restart | [agent registration](../../evidence/2026-08-14-polkit-agent-registration.md) | `VAL-R8` |
 | R8-P-C | `celestina:` | planned | the prompt surface and its keyboard grab | — | the prompt names the real action and refuses to show without a grab | offscreen surface regression | `VAL-R8` |
 
 ## What R8-P-A found about the helper
@@ -84,3 +84,12 @@ writing a copy of a decision this project does not own. The delegation ADR
 0005 requires is unchanged in every respect that matters: the helper still
 runs PAM as root, still tells polkitd itself, and nothing in this repository
 can produce an authorization it did not grant.
+
+## Why R8-P-B does not register the live shell
+
+The agent is built and exercised, and the shell does not start it. A
+registered agent receives real requests, and until `R8-P-C` there is nothing
+to show them on: a `pkexec` that hangs waiting for a prompt nobody can see is
+worse than this machine's current behaviour, which is to fail immediately
+because no graphical agent exists. Registration therefore lands with the
+surface, in one commit where the capability is whole.
