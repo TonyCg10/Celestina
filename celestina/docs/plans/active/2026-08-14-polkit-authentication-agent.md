@@ -69,6 +69,18 @@ when it cannot hold the keyboard. Real `pkexec` against a real password is
 
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
-| R8-P-A | `celestina:` | planned | `polkit-agent-helper-1` conversation and verdict | — | verification is delegated whole, and every error denies | offscreen regression over success, wrong response, cancel, missing helper | `VAL-R8` |
+| R8-P-A | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-A.numstat.tsv) | 12 files, +1065/-7 | verification is delegated whole, and every error denies | [helper conversation](../../evidence/2026-08-14-polkit-helper-conversation.md) | `VAL-R8` |
 | R8-P-B | `celestina:` | planned | agent registration and the `polkitd` interface | — | the session has an agent that survives a `polkitd` restart | interface regression incl. re-registration, cancellation, concurrency | `VAL-R8` |
 | R8-P-C | `celestina:` | planned | the prompt surface and its keyboard grab | — | the prompt names the real action and refuses to show without a grab | offscreen surface regression | `VAL-R8` |
+
+## What R8-P-A found about the helper
+
+The plan said "spawning `polkit-agent-helper-1`", and on this machine that is
+not possible: the binary is not setuid and refuses to run that way. It is
+reached over `/run/polkit/agent-helper.socket`, socket-activated by systemd,
+and `libpolkit-agent-1` is where polkit keeps the choice between the two
+transports. The conversation child therefore links that library instead of
+writing a copy of a decision this project does not own. The delegation ADR
+0005 requires is unchanged in every respect that matters: the helper still
+runs PAM as root, still tells polkitd itself, and nothing in this repository
+can produce an authorization it did not grant.

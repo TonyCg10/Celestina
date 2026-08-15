@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.26.0 LANGUAGES C CXX)
+project(celestina VERSION 0.27.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -41,6 +41,33 @@ set(PROVIDER_ADAPTER_BINARY
 find_library(PAM_LIBRARY NAMES pam REQUIRED)
 add_executable(celestina-lock-verify src/lockverify/main.cpp)
 target_link_libraries(celestina-lock-verify PRIVATE ${PAM_LIBRARY})
+
+# The one process allowed to say "authorized". Its own binary for the same
+# reason the verifier is: ADR 0005 puts the helper conversation behind a
+# process boundary, so a GLib main loop and polkit's own client library never
+# enter the shell's process at all.
+#
+# It links libpolkit-agent-1 rather than spawning
+# `/usr/lib/polkit-1/polkit-agent-helper-1` itself, because which transport
+# reaches that helper is polkit's decision and not ours: on this machine the
+# binary is not setuid and is reached over a systemd socket instead. Built when
+# that library is present and skipped otherwise, so a machine without polkit
+# still builds the shell — it simply cannot serve authorization prompts, which
+# the agent reports rather than pretends past.
+set(CELESTINA_POLKIT_BUILT OFF)
+find_package(PkgConfig)
+if(PkgConfig_FOUND)
+    pkg_check_modules(POLKIT_AGENT IMPORTED_TARGET polkit-agent-1)
+endif()
+if(TARGET PkgConfig::POLKIT_AGENT)
+    set(CELESTINA_POLKIT_BUILT ON)
+    add_executable(celestina-polkit-converse src/polkitconverse/main.cpp)
+    target_link_libraries(celestina-polkit-converse PRIVATE
+        PkgConfig::POLKIT_AGENT)
+    message(STATUS "celestina-polkit-converse: polkit-agent-1 FOUND")
+else()
+    message(STATUS "celestina-polkit-converse: polkit-agent-1 MISSING")
+endif()
 
 # The lock screen: its own process, its own shell integration, and the only
 # program in this repository that may call `unlock_and_destroy`. Built when the
@@ -334,6 +361,7 @@ target_compile_definitions(celestina PRIVATE
     CELESTINA_NIRI_ADAPTER="${NIRI_ADAPTER_BINARY}"
     CELESTINA_PROVIDER_ADAPTER="${PROVIDER_ADAPTER_BINARY}"
     CELESTINA_LOCK_VERIFY="$<TARGET_FILE:celestina-lock-verify>"
+    $<$<BOOL:${CELESTINA_POLKIT_BUILT}>:CELESTINA_POLKIT_CONVERSE="$<TARGET_FILE:celestina-polkit-converse>">
     $<$<BOOL:${CELESTINA_LOCK_BUILT}>:CELESTINA_LOCK_BINARY="${CMAKE_CURRENT_BINARY_DIR}/celestina-lock">
 )
 
@@ -429,6 +457,19 @@ if(BUILD_TESTING)
     target_include_directories(celestina-lock-authenticator-test PRIVATE src)
     target_link_libraries(celestina-lock-authenticator-test PRIVATE Qt6::Test Qt6::Gui)
     add_test(NAME celestina-lock-authenticator COMMAND celestina-lock-authenticator-test)
+
+    # Drives the polkit conversation against stand-in children, so every
+    # denial branch runs without polkit, without PAM and without a password.
+    qt_add_executable(celestina-polkit-conversation-test
+        tests/polkitconversation_test.cpp
+        src/polkitconversation.h
+        src/polkitconversation.cpp
+    )
+    target_include_directories(celestina-polkit-conversation-test PRIVATE src)
+    target_link_libraries(celestina-polkit-conversation-test PRIVATE
+        Qt6::Test Qt6::Gui)
+    add_test(NAME celestina-polkit-conversation
+        COMMAND celestina-polkit-conversation-test)
 
     qt_add_executable(celestina-tray-icons-test
         tests/trayicons_test.cpp
@@ -537,6 +578,12 @@ if(BUILD_TESTING)
         src/requestledger.cpp
         src/providerstates.h
         src/providerstates.cpp
+        # The session verbs route locking through the controller, so the test
+        # that drives those verbs has to link it. Missing since R6-D wired
+        # `lock` and `lock-and-suspend`: the shell itself linked, so nothing
+        # said this target no longer built.
+        src/lockcontroller.h
+        src/lockcontroller.cpp
     )
     target_include_directories(celestina-shell-service-test PRIVATE src)
     target_compile_definitions(celestina-shell-service-test PRIVATE

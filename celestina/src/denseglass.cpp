@@ -166,6 +166,11 @@ void DenseGlassAggregator::publish(
     if (!source || !source->screen())
         return;
 
+    // Whether this source is new decides whether it still needs a destroyed
+    // hook. `Qt::UniqueConnection` cannot answer that: it is documented not to
+    // work with a functor, and asserts in a debug build rather than
+    // deduplicating — which is what aborted the surface-manager regression.
+    const bool isNew = !m_sources.contains(source);
     Source &entry = m_sources[source];
     const bool unchanged = entry.window == source
         && entry.screen == source->screen() && entry.shapes.size() == shapes.size()
@@ -181,9 +186,10 @@ void DenseGlassAggregator::publish(
     entry.window = source;
     entry.screen = source->screen();
     entry.shapes = shapes;
-    connect(source, &QObject::destroyed, this,
-            [this, source]() { withdraw(source); },
-            Qt::UniqueConnection);
+    if (isNew) {
+        connect(source, &QObject::destroyed, this,
+                [this, source]() { withdraw(source); });
+    }
 
     refresh(source->screen());
     if (previous && previous != source->screen())

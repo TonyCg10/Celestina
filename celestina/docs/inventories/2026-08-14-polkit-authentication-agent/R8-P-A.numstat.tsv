@@ -1,0 +1,29 @@
+# R8-P-A exact change inventory
+
+Base revision	e59219afc3752a09d547242dc744f862cbfee96c
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/evidence/2026-08-14-polkit-helper-conversation.md
+Pathspec	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-A.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Pathspec	celestina/src/
+Pathspec	celestina/tests/
+Pathspec	docs/version-history.tsv
+
+Plan	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Evidence	celestina/docs/evidence/2026-08-14-polkit-helper-conversation.md
+
+added	deleted	content	path
+48	1	4dce59d4deb2583c2697b9c577263114aacb9e3fadac912232d8391ffe6e607c	celestina/CMakeLists.txt
+1	1	fbcded4b1c32bd90763487e8f253c655cd0536b1ed997b2dd86d9ae6a20b0ea7	celestina/Cargo.lock
+1	1	9f9a2b73d1f66e7a13a22df189f2421b9a9148420b0b80f5a7a0100ecd8ff711	celestina/Cargo.toml
+91	0	b877ef54da78e116b1adb64be9c2166da8880dee920387fd182c7c6a1d718f10	celestina/docs/evidence/2026-08-14-polkit-helper-conversation.md
+29	0	self	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-A.numstat.tsv
+13	1	ddbf490a538968ef88fbe1d04f6946724778d83c90bc720a4507319cf13c2444	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+9	3	532c0573316ad62bf378f4587f26cc2d6c1747dd6f7b8fabf80f6e3f66fb2451	celestina/src/denseglass.cpp
+199	0	4459fec7d704f83da1a4d05c17231a8a7d12f651af477daa6a45307cb4a4f222	celestina/src/polkitconversation.cpp
+81	0	da810097237e36212033ceab9489dfa80c3eac95756a544fb8443e0e05ef0c99	celestina/src/polkitconversation.h
+298	0	2acb12ce2ad7d7b273ecf9d0a4357ab9b1982b205219ad6f239d625ef851bab0	celestina/src/polkitconverse/main.cpp
+294	0	cec957b1c019fab4212b6dcccdbd8768fd441c01ec7cb8992c16e62ea4f522f1	celestina/tests/polkitconversation_test.cpp
+1	0	d5b9073c710652df60109dce0a6074e1f29984b27c20c03a827fe1fa06ecd32d	docs/version-history.tsv
