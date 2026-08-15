@@ -1,0 +1,30 @@
+# R8-P-E exact change inventory
+
+Base revision	a6b3b1779717e9b4520be4f5f48904b2677050c0
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-E.numstat.tsv
+Pathspec	celestina/docs/evidence/2026-08-15-bundle-carries-the-lock-and-the-agent.md
+Pathspec	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Pathspec	celestina-rs/crates/celestina-shell-core/src/handover.rs
+Pathspec	celestina/scripts/
+Pathspec	celestina/src/
+Pathspec	docs/version-history.tsv
+
+Evidence	celestina/docs/evidence/2026-08-15-bundle-carries-the-lock-and-the-agent.md
+Plan	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+
+added	deleted	content	path
+39	21	a671d517eed60bd5b55019be4d36ffc173c8075f10ddaf2dbc60a8f6b2cc2312	celestina-rs/crates/celestina-shell-core/src/handover.rs
+1	1	1a269a11895b2d66c04af69bbb107bfbcb63d23e59e9155c461c2fec7fd1f6e1	celestina/CMakeLists.txt
+1	1	a3618bbe4991a59f3fc29110908f3733cf05c43b61ff31ae0ef9211241590163	celestina/Cargo.lock
+1	1	b34fdaeafe51db1f9a04f7dd9b2a92b9900e34bc2614a5da60e5cece14552449	celestina/Cargo.toml
+62	0	ad233665414972c280aaa7ca583674f43abac1580bfaeeed3aa94a872d024455	celestina/docs/evidence/2026-08-15-bundle-carries-the-lock-and-the-agent.md
+30	0	self	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-E.numstat.tsv
+1	0	51f0fde82651377367081143787fac155e1cac06a2d8c7714b8c0b5514f00f9c	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+3	0	95ec4966448fab536638c422d0a00c8c390a895d56ca04d6aeca26d17db45bde	celestina/scripts/celestina-launcher.sh
+21	0	660922dc9a1101a241ce00c26d40e162621e8063d3456747a1370df99d9fab69	celestina/scripts/deploy-production.sh
+4	0	7495eb39543d97a2888259c0301939aebfb6d06d907ae7c7af577fb341bc846c	celestina/scripts/status-production.sh
+12	4	a8629a06ca7bfcd22ccfb623537bf454a5095b135e409af404be703ec195497b	celestina/src/lockcontroller.cpp
+1	0	9217e55215610ca34b01437ea7df8de48a24f520a7a5795f40e6d4932a0e3492	docs/version-history.tsv

@@ -83,3 +83,4 @@ celestina	0.27.0	milestone	R8-P-A	Add the polkit conversation that asks and neve
 celestina	0.28.0	milestone	R8-P-B	Add the session's polkit agent and its registration
 celestina	0.29.0	milestone	R8-P-C	Add the authorization prompt that holds the keyboard
 celestina	0.29.1	bug	R8-P-D	Fix the two contract breaches that blocked a production build
+celestina	0.29.2	bug	R8-P-E	Add the lock and the polkit child to the bundle

@@ -42,6 +42,27 @@ production_install_file \
 production_install_tree \
     "$suite_root/celestina-style/build/CelestinaStyle" \
     "$bundle/CelestinaStyle"
+# The three programs the shell spawns for the two things it deliberately does
+# not do itself: verify a passphrase, cover the session, and talk to polkit's
+# helper. They are found beside the shell at runtime, so a bundle without them
+# is a shell that cannot lock and cannot answer an authorization prompt —
+# which it would report honestly and uselessly.
+production_install_file \
+    "$project_root/build/celestina-lock-verify" \
+    "$bundle/celestina-lock-verify" 0755
+production_install_file \
+    "$project_root/build/celestina-polkit-converse" \
+    "$bundle/celestina-polkit-converse" 0755
+production_install_file \
+    "$project_root/build/celestina-lock" "$bundle/celestina-lock" 0755
+production_install_file \
+    "$project_root/build/libcelestina-lock-session.so" \
+    "$bundle/libcelestina-lock-session.so" 0755
+# The lock's own Wayland shell integration. It is a plugin Qt loads by
+# directory layout, so the tree shape is part of the contract, not a detail.
+production_install_tree \
+    "$project_root/build/lock-plugins" "$bundle/lock-plugins"
+
 production_install_file \
     "$project_root/scripts/celestina-launcher.sh" "$prefix/bin/celestina" 0755
 # Not a launcher entry — it is `NoDisplay` — but the application information the

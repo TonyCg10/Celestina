@@ -18,5 +18,9 @@ production_status "$suite_root" celestina \
     --installed "celestina/build/rust-target/release/celestina-provider-adapter=$prefix/libexec/celestina/celestina-provider-adapter" \
     --installed "celestina-style/build/libcelestina-style.so=$prefix/libexec/celestina/libcelestina-style.so" \
     --installed "celestina-style/build/CelestinaStyle=$prefix/libexec/celestina/CelestinaStyle" \
+    --installed "celestina/build/celestina-lock-verify=$prefix/libexec/celestina/celestina-lock-verify" \
+    --installed "celestina/build/celestina-polkit-converse=$prefix/libexec/celestina/celestina-polkit-converse" \
+    --installed "celestina/build/celestina-lock=$prefix/libexec/celestina/celestina-lock" \
+    --installed "celestina/build/libcelestina-lock-session.so=$prefix/libexec/celestina/libcelestina-lock-session.so" \
     --installed "celestina/scripts/celestina-launcher.sh=$prefix/bin/celestina" \
     --installed "celestina/celestina.desktop=$prefix/share/applications/celestina.desktop"

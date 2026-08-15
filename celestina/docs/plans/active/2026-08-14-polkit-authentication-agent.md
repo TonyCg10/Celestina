@@ -73,6 +73,7 @@ when it cannot hold the keyboard. Real `pkexec` against a real password is
 | R8-P-B | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-B.numstat.tsv) | 10 files, +967/-4 | the session has an agent that survives a `polkitd` restart | [agent registration](../../evidence/2026-08-14-polkit-agent-registration.md) | `VAL-R8` |
 | R8-P-C | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-C.numstat.tsv) | 16 files, +1072/-13 | the prompt names the real action and refuses to show without a grab | [prompt surface](../../evidence/2026-08-14-polkit-prompt-surface.md) | `VAL-R8` |
 | R8-P-D | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-D.numstat.tsv) | 11 files, +273/-177 | the production build verifies again, so the departure can be deployed at all | [production contract breaches](../../evidence/2026-08-15-production-contract-breaches.md) | `VAL-R8` |
+| R8-P-E | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-E.numstat.tsv) | 12 files, +176/-28 | the deployed bundle carries the lock and the polkit child, and the handover knows the agent exists | [bundle carries the lock and the agent](../../evidence/2026-08-15-bundle-carries-the-lock-and-the-agent.md) | `VAL-R8` |
 
 ## What R8-P-A found about the helper
 

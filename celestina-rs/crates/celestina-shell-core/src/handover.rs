@@ -74,12 +74,15 @@ pub const RESPONSIBILITIES: [Responsibility; 8] = [
         implemented_by: Some("R6"),
         validated_by: Some("VAL-R6"),
     },
-    // Still deliberately not built. It is on this list precisely because
-    // leaving it off would make the handover look complete.
+    // Built by R8's polkit slice: the helper conversation, the agent and its
+    // registration, and the prompt that refuses to appear without a keyboard
+    // grab. Unvalidated, and unusually so — polkitd accepts one agent per
+    // session and Noctalia's own plugin holds this one, so the first real use
+    // of this prompt can only happen after the departure it was built for.
     Responsibility {
         name: "polkit authentication agent",
-        implemented_by: None,
-        validated_by: None,
+        implemented_by: Some("R8"),
+        validated_by: Some("VAL-R8"),
     },
 ];
 
@@ -161,12 +164,13 @@ mod tests {
     }
 
     #[test]
-    fn removal_is_refused_while_anything_is_unbuilt_or_unseen() {
+    fn removal_is_refused_until_every_validation_is_recorded() {
         // The state this session is actually in today.
         assert!(!may_remove(&[]));
-        // And with every validation recorded, the two unbuilt responsibilities
-        // still refuse it.
-        assert!(!may_remove(&everything()));
+        // And what the gate has become: everything is built, so the only thing
+        // still refusing the departure is that two of them have never been
+        // watched working. Recording those releases it.
+        assert!(may_remove(&everything()));
     }
 
     #[test]
@@ -186,13 +190,23 @@ mod tests {
     }
 
     #[test]
-    fn what_nobody_built_is_named_as_such() {
-        let found = blockers(&everything());
-        assert!(found.contains(&Blocker::NotImplemented("polkit authentication agent")));
-        // The agent is the whole remaining unbuilt gap: the lock was built by
-        // R6 and now blocks on its validation like every other built
-        // responsibility, not on its absence.
-        assert_eq!(found.len(), 1);
+    fn nothing_is_unbuilt_any_more() {
+        // Every responsibility on the list now has an implementation. What
+        // remains between this shell and the handover is watching two of them
+        // work, which is a different sentence and a different fix — and the
+        // report has to say which one it is.
+        assert!(blockers(&everything()).is_empty());
+    }
+
+    #[test]
+    fn a_built_but_unvalidated_agent_blocks_on_its_validation() {
+        let found = blockers(&[]);
+        assert!(!found.contains(&Blocker::NotImplemented("polkit authentication agent")));
+        let agent = found
+            .into_iter()
+            .find(|blocker| blocker.sentence().contains("polkit"))
+            .expect("the agent blocks the handover until VAL-R8 is recorded");
+        assert!(agent.sentence().contains("VAL-R8"));
     }
 
     #[test]
@@ -230,11 +244,15 @@ mod tests {
     }
 
     #[test]
-    fn the_list_names_what_is_missing_rather_than_leaving_it_out() {
-        // The temptation is to list only what was built, which would make the
-        // handover look finished. Both known gaps are on the list.
-        assert!(RESPONSIBILITIES
-            .iter()
-            .any(|responsibility| !responsibility.is_implemented()));
+    fn the_list_names_what_is_unwatched_rather_than_leaving_it_out() {
+        // The temptation is to report only what was built, which would make
+        // the handover look finished. Both remaining gaps are named, and each
+        // names the validation that would close it.
+        let sentences: Vec<String> = blockers(&[])
+            .into_iter()
+            .map(|blocker| blocker.sentence())
+            .collect();
+        assert!(sentences.iter().any(|line| line.contains("VAL-R6")));
+        assert!(sentences.iter().any(|line| line.contains("VAL-R8")));
     }
 }

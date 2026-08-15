@@ -33,15 +33,23 @@ QString lockProgram()
         const QFileInfo named(QString::fromLocal8Bit(configured));
         return named.isExecutable() ? named.absoluteFilePath() : QString();
     }
+    // Beside the shell first. A deployed bundle carries its own lock, and a
+    // shell that preferred the build tree would run whatever was last compiled
+    // there — a different version from the one installed beside it, which is
+    // exactly the mismatch that makes a locked screen behave unlike the shell
+    // that locked it.
+    const QFileInfo beside(
+        QDir(QCoreApplication::applicationDirPath())
+            .filePath(QStringLiteral("celestina-lock")));
+    if (beside.isExecutable())
+        return beside.absoluteFilePath();
 #ifdef CELESTINA_LOCK_BINARY
+    // The build tree, for a shell run straight out of it in development.
     const QFileInfo built(QStringLiteral(CELESTINA_LOCK_BINARY));
     if (built.isExecutable())
         return built.absoluteFilePath();
 #endif
-    const QFileInfo beside(
-        QDir(QCoreApplication::applicationDirPath())
-            .filePath(QStringLiteral("celestina-lock")));
-    return beside.isExecutable() ? beside.absoluteFilePath() : QString();
+    return QString();
 }
 
 } // namespace
