@@ -1,0 +1,38 @@
+# R6-Z exact change inventory
+
+Base revision	866fe3ba0342be0ba7ed0942035df57fb8c2bf9d
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/
+Pathspec	celestina/docs/inventories/2026-08-14-first-party-session-lock/R6-Z.numstat.tsv
+Pathspec	celestina/docs/plans/
+Pathspec	docs/version-history.tsv
+
+Plan	celestina/docs/plans/archive/2026-08-14-first-party-session-lock.md
+Evidence	celestina/docs/evidence/2026-08-14-lock-plan-closure.md
+
+added	deleted	content	path
+1	1	ef752a8b4add4e3eca334bc6a60f433aec16e24f26f859ff8071d368f2f8b991	celestina/CMakeLists.txt
+1	1	de3a7e09c4620fd54864a598015093f8d352e1c8403409fdd7b2d364f67e096e	celestina/Cargo.lock
+1	1	88278ebacd7dd8e33b94537e60324d043bde3fc5edacb560e223ad583384e6fd	celestina/Cargo.toml
+12	6	2c5d7dc211261f63159dcf4c00208fddb5e2975c7bcd5212024373744e9613cb	celestina/ROADMAP.md
+19	10	772ee951ae08ad4ae88932ade890f35a648106bd20e8dfe376dbb36c0064313b	celestina/STATUS.md
+8	4	5a6e1c10583a1d988dec10b57145567a4d3aeca92c5b04d652828caf66485846	celestina/VALIDATION.md
+1	1	c76bf6d43c0b927fbc4d9ea207937375fc72ef983140ebd2668badb7f5958b7c	celestina/docs/evidence/2026-08-14-handover-knows-about-the-lock.md
+1	1	8d23e3f5b64f2a81bea99dd24957ad5f311b5b8adaec5abc4980df8989a5b89e	celestina/docs/evidence/2026-08-14-lock-before-sleep.md
+70	0	bfbc3205141f4958f9cc947be0771d4dbb028e703a868812c63ca8359079e56a	celestina/docs/evidence/2026-08-14-lock-plan-closure.md
+1	1	e91c4c04e022421b0f8cc3d922e2aaeca2f055e00d81f173146fff71bb1ea3b5	celestina/docs/evidence/2026-08-14-lock-surface-presentation.md
+1	1	822ec73e8ffe75d8c0ba2d929fd131fb90373cfb312ba609cd618e8dc1e1f1b2	celestina/docs/evidence/2026-08-14-lock-verification-boundary.md
+1	1	0b4de56ea13a0fff7c16833c0e6f32b7229401bbce48ba7a0301c75335c091e8	celestina/docs/evidence/2026-08-14-session-lock-protocol.md
+38	0	self	celestina/docs/inventories/2026-08-14-first-party-session-lock/R6-Z.numstat.tsv
+0	88	deleted	celestina/docs/plans/active/2026-08-14-first-party-session-lock.md
+74	0	1277c323216ad205350a8bd30afd22de5d4c33c8564ca93625457f1b837b3f50	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+5	5	58acb1c95493ee552347b29ae8f7b48743381456e692d8ac037b58bf4da15f0f	celestina/docs/plans/active/README.md
+108	0	e9a8856201ea8166db777f3112a2d2c55c8e955ab52df63ee3953984051b9522	celestina/docs/plans/archive/2026-08-14-first-party-session-lock.md
+0	74	deleted	celestina/docs/plans/pending/2026-08-14-polkit-authentication-agent.md
+4	5	a71249f636bdc6d98dbddfc35463add5a5955793d29a3e4ca250acb595b6a44a	celestina/docs/plans/pending/README.md
+1	0	acb9b5ce0143c1c99665de644494660e27a050e3627b5dfbd7bd51a8d5490967	docs/version-history.tsv

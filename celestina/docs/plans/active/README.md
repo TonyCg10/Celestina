@@ -1,12 +1,12 @@
 # Active Celestina plans
 
 The active shell implementation plan is
-[R6 — first-party session lock](2026-08-14-first-party-session-lock.md),
+[R8 — polkit authentication agent](2026-08-14-polkit-authentication-agent.md),
 authorized and bounded by
-[ADR 0004](../../decisions/0004-first-party-session-lock.md). The panel glass
-redesign closed on 2026-08-14 without being finished — it shipped
-continuously and stopped keeping its ledger — and design work on the shell's
-glass reopens under a future checkpoint.
+[ADR 0005](../../decisions/0005-first-party-polkit-agent.md). The first-party
+session lock closed on 2026-08-14 on its implementation exit, with `VAL-R6`
+deliberately unclaimed: the lock is built and tested, and nobody has yet
+unlocked their own machine with it.
 
 Plans that are authorized but whose checkpoint has not opened wait under
 [`../pending/`](../pending/).

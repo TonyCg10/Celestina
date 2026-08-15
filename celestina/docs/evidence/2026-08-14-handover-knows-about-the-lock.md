@@ -5,7 +5,7 @@
 - **Artifact:** Celestina 0.25.2, `celestina-shell-core::handover`
 - **Environment:** the repository's own tests and `scripts/handover-status.sh`,
   which is read-only and touches no session
-- **Plan:** [first-party session lock](../plans/active/2026-08-14-first-party-session-lock.md)
+- **Plan:** [first-party session lock](../plans/archive/2026-08-14-first-party-session-lock.md)
 - **Validation:** `VAL-R6`
 
 ## Procedure

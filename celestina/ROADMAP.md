@@ -1,7 +1,7 @@
 # Celestina implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** R6
+- **Active implementation checkpoint:** R8
 
 This roadmap contains only work an agent can implement and verify. Real Niri,
 hardware, visual and assistive-technology checks live in
@@ -36,7 +36,7 @@ of the design when they provide the narrow capability the shell needs.
 | WMAP-1 | complete | Show what a workspace holds, as its real layout, without focusing it |
 | PANEL-1 | complete | Replace the hard panel plate with borderless compositor glass and route contextual content through the canonical shared glass material |
 | UX-2 | planned | Establish and then implement one coherent shell-wide visual and interaction language after SHELL-D5 is applied |
-| R6 | active | First-party `ext-session-lock` and deterministic lock-before-suspend |
+| R6 | complete | First-party `ext-session-lock` and deterministic lock-before-suspend, with `VAL-R6` still unrun |
 | R8 | active | Reversible Noctalia removal delivered; the Polkit agent slice is now open |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
 
@@ -284,15 +284,21 @@ Authorized on 2026-08-14 and bounded by
 [ADR 0004](docs/decisions/0004-first-party-session-lock.md), which is this
 checkpoint's threat model and must be read before any of it is written.
 
-- [ ] An `ext-session-lock-v1` client that covers every output, creates a
+- [x] An `ext-session-lock-v1` client that covers every output, creates a
       surface for outputs that arrive while locked, and treats every failure
       as "stay locked".
-- [ ] PAM verification in a separate short-lived process that holds no
+- [x] PAM verification in a separate short-lived process that holds no
       compositor state, reporting one verdict and never a passphrase.
-- [ ] A logind delay inhibitor that releases only on a confirmed active lock,
+- [x] A logind delay inhibitor that releases only on a confirmed active lock,
       so lock-and-suspend refuses rather than suspends unlocked.
-- [ ] The locked surface itself: time, prompt and failure state, and
+- [x] The locked surface itself: time, prompt and failure state, and
       deliberately no session content.
+
+R6 closes on the evidence in
+[the archived R6 plan](docs/plans/archive/2026-08-14-first-party-session-lock.md).
+Unlocking a real machine with a real passphrase, a real lid close and a real
+suspend are `VAL-R6` and have not been run — the checkpoint releases on its
+implementation exit, not on that.
 
 ## R7 — Wallpaper and session look
 

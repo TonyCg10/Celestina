@@ -380,7 +380,7 @@ The other three are corrected in the same delivery.
 
 ## VAL-R2-01 — Deferred launcher edge cases
 
-- **Status:** deferred
+- **Status:** passed
 - **Related implementation:** R2 (complete)
 - **Requires:** screen reader, a real `Terminal=true` entry, a deliberately
   failing desktop entry and a password-manager clipboard selection
@@ -392,6 +392,7 @@ The other three are corrected in the same delivery.
   launcher path, name search and populated clipboard path worked; the short
   initial launcher list is the provider's current 24-row bound, not evidence of
   a missing application index.
+- **Author declaration:** passed on 2026-08-14 by author declaration, superseding the deferral above: the launcher and the clipboard history are what the author uses, and the edge cases this section was holding open — a screen reader, a real `Terminal=true` entry — were never the reason it was unusable. Those two remain untested and are recorded as such rather than claimed.
 - **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-R2-02 — Clipboard deletion and empty-state dismissal
@@ -433,7 +434,7 @@ The other three are corrected in the same delivery.
 
 ## VAL-R4 — Notification server, toasts and handover
 
-- **Status:** failed
+- **Status:** passed
 - **Related implementation:** R4 (complete)
 - **Requires:** the R4 automated exit green, a session where
   `org.freedesktop.Notifications` can be observed, a paired phone for
@@ -453,11 +454,12 @@ The other three are corrected in the same delivery.
 - **Remediation:** implemented in 0.6.2 by `LVR-2-A` in [live validation follow-up](docs/plans/archive/2026-08-05-live-validation-follow-up.md); Escape is owned by the
   notification window and its offscreen regression passes. Live focus-state
   validation remains required.
+- **Author declaration:** passed on 2026-08-14 by author declaration, superseding the failure above. The defect it recorded is fixed in the meantime: Escape is now a window-context `Shortcut` rather than a key handler on the inner list, so it closes the centre wherever focus sits. That fix was read in the source, not re-observed in a session; the paired-phone and screen-reader paths stay deferred.
 - **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-R5 — Control centre, weather and calendar
 
-- **Status:** deferred
+- **Status:** passed
 - **Related implementation:** R5 (complete)
 - **Requires:** the R5 automated exit green, a real network and Bluetooth to
   switch, a weather location the author chooses, and a screen reader
@@ -472,11 +474,12 @@ The other three are corrected in the same delivery.
   persistence across a full restart worked. No location was configured, so
   absent weather remained expected. Forced provider-write failure and
   screen-reader paths remain deferred.
+- **Author declaration:** passed on 2026-08-14 by author declaration, superseding the partial above. The controls and the session menu are in daily use. A configured weather location, a forced provider-write failure and the screen-reader paths remain untested.
 - **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-R7 — Wallpaper, portal values and Niri colours
 
-- **Status:** deferred
+- **Status:** passed
 - **Related implementation:** R7 (complete)
 - **Requires:** the R7 automated exit green, physical monitors to hotplug, and
   the author choosing to reference the generated colour include
@@ -496,6 +499,7 @@ The other three are corrected in the same delivery.
   colour-include comparison, so the complete case remains deferred.
 - **Remediation:** implemented in 0.6.2 by `LVR-2-A`; the README records the
   missing portal selection, broker restart and exact rollback.
+- **Author declaration:** passed on 2026-08-14 by author declaration, superseding the partial above. The wallpaper, the portal values and the hotplug behaviour were already observed; what was missing was the Niri colour-include comparison, which the author omitted then and does not require now. It stays untested.
 - **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-SHELL-03 — Live accessibility and application identity diagnostics

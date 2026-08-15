@@ -5,7 +5,7 @@
 - **Artifact:** Celestina 0.23.0, `LockController` and the session lock verbs
 - **Environment:** the repository's automated suite; logind is not called and
   no machine was suspended
-- **Plan:** [first-party session lock](../plans/active/2026-08-14-first-party-session-lock.md)
+- **Plan:** [first-party session lock](../plans/archive/2026-08-14-first-party-session-lock.md)
 - **Validation:** `VAL-R6`
 
 The rule this unit exists to hold is one sentence: the session suspends only

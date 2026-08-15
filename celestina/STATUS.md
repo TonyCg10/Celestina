@@ -1,7 +1,7 @@
 # Celestina status
 
-- **Updated:** 2026-08-13
-- **Implementation:** R0-R5, R7, R8's departure slice, LVR-1 through LVR-3, the
+- **Updated:** 2026-08-14
+- **Implementation:** R0-R7, R8's departure slice, LVR-1 through LVR-3, the
   static hardening previously drafted as `AUD-1`, `UX-1` and `WSG-1` are
   complete
 - **Design direction:** `PANEL-1` is active for the author-selected borderless
@@ -750,14 +750,23 @@ the author reruns them against 0.6.2.
   integration binaries, Clippy and `cargo fmt` clean, QML lint, CTest 15/15 and the
   eight-second offscreen release smoke. The author then completed the controlled
   live rerun and restored Noctalia, which still owns the session.
-- Current checkpoint: `R6`, the first-party session lock — authorized on
-  2026-08-14 by [ADR 0004](docs/decisions/0004-first-party-session-lock.md),
-  which is its threat model: Celestina owns the lock surface and owns no
-  password verification, PAM runs in a separate process holding no compositor
-  state, and `unlock_and_destroy` is reachable from one call site only. The
-  Polkit agent is authorized on the same day by
-  [ADR 0005](docs/decisions/0005-first-party-polkit-agent.md) and waits for
-  R8's slice with its plan already written.
+- Current checkpoint: `R8`, the polkit authentication agent — authorized on
+  2026-08-14 by [ADR 0005](docs/decisions/0005-first-party-polkit-agent.md),
+  which bounds it the same way ADR 0004 bounds the lock: Celestina owns the
+  prompt and owns no verification, every check is delegated to
+  `polkit-agent-helper-1`, and every failure denies.
+- `R6` closed on 2026-08-14 on its implementation exit. The lock covers every
+  output, survives its own process being killed, verifies through a separate
+  PAM child and refuses to suspend an uncovered screen — all of it under
+  regressions. `VAL-R6` is deliberately unclaimed: nobody has unlocked their
+  own machine with it yet, and whether a real session running a shell *and* a
+  lock hits the nest's one-EGL-client limit is still open. See the
+  [closure record](docs/evidence/2026-08-14-lock-plan-closure.md).
+- The author declared `VAL-R2-01`, `VAL-R4`, `VAL-R5` and `VAL-R7` validated on
+  2026-08-14 from daily use. Each declaration sits beside the earlier result
+  and names what it does not cover — the screen-reader paths, a real weather
+  location, a forced provider-write failure, the paired-phone path and the Niri
+  colour-include comparison remain untested.
 - `PANEL-1` closed on 2026-08-14 without being finished: the glass redesign
   shipped through 0.19.0 and is still being iterated, but the plan released
   the checkpoint rather than holding it open forever. `VAL-PANEL-1` was never

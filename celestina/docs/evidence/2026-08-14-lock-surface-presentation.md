@@ -6,7 +6,7 @@
 - **Environment:** nested niri (`dev-session.sh`), one `winit` output at
   3840x2160 scale 1.5, `QT_QUICK_BACKEND=software`, which the nest needs for a
   second EGL client and the lock itself does not; no live session
-- **Plan:** [first-party session lock](../plans/active/2026-08-14-first-party-session-lock.md)
+- **Plan:** [first-party session lock](../plans/archive/2026-08-14-first-party-session-lock.md)
 - **Validation:** `VAL-R6`
 
 ## Procedure

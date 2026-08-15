@@ -1,8 +1,10 @@
 # First-party session lock
 
 - **Opened:** 2026-08-14
+- **Closed:** 2026-08-14
+- **Successor:** [polkit authentication agent](../active/2026-08-14-polkit-authentication-agent.md), which takes the checkpoint
 - **Plan ID:** first-party-session-lock
-- **Status:** active
+- **Status:** done
 - **Scope:** celestina
 - **Implementation checkpoint:** R6
 - **Author-validation checkpoint:** VAL-R6
@@ -86,3 +88,21 @@ and a real suspend are `VAL-R6` and do not block this exit.
 | R6-E | `celestina:` | done | [inventory](../../inventories/2026-08-14-first-party-session-lock/R6-E.numstat.tsv) | 10 files, +64/-22 | the EGL hang is the nest serving one client, not a defect in the lock | [protocol record](../../evidence/2026-08-14-session-lock-protocol.md) | `VAL-R6` |
 | R6-F | `celestina:` | done | [inventory](../../inventories/2026-08-14-first-party-session-lock/R6-F.numstat.tsv) | 8 files, +90/-10 | the handover model stops saying nothing provides a lock | [handover record](../../evidence/2026-08-14-handover-knows-about-the-lock.md) | `VAL-R6` |
 | R6-D | `celestina:` | done | [inventory](../../inventories/2026-08-14-first-party-session-lock/R6-D.numstat.tsv) | 14 files, +692/-26 | suspend happens only after a confirmed lock, and is refused otherwise | [lock before sleep](../../evidence/2026-08-14-lock-before-sleep.md) | `VAL-R6` |
+| R6-Z | `celestina:` | done | [inventory](../../inventories/2026-08-14-first-party-session-lock/R6-Z.numstat.tsv) | 20 files, +347/-200 | Close this plan on its implementation exit, record the author's validation of five earlier responsibilities, and hand the checkpoint to R8 | [closure record](../../evidence/2026-08-14-lock-plan-closure.md) | `VAL-R6` |
+
+## What R6-Z closes, and what it does not
+
+Every unit this plan named is built and has its own record: the verification
+child, the protocol client, the surface, the sequencing, the two corrections
+the work forced on its own earlier records. The implementation exit is met by
+regressions, so the plan closes.
+
+`VAL-R6` is not claimed and does not move. Nobody has typed a passphrase into
+this lock, no lid has closed on it, and the one question the nest could not
+answer — whether a real session running a shell *and* a lock hits the same
+single-EGL-client limit — is still open. A plan that closed by declaring its
+own author validation would be worth nothing; this one closes leaving the
+question written down where it can be answered.
+
+The checkpoint moves to `R8` and its polkit slice, whose plan was written and
+authorized on the same day and has been waiting under `pending/` since.

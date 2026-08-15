@@ -5,7 +5,7 @@
 - **Artifact:** Celestina 0.22.0, `celestina-lock` and its shell integration
 - **Environment:** nested niri 26.04 (`dev-session.sh`), one `winit` output at
   3840x2160 scale 1.5; Qt 6.11.1 with its private Wayland client API
-- **Plan:** [first-party session lock](../plans/active/2026-08-14-first-party-session-lock.md)
+- **Plan:** [first-party session lock](../plans/archive/2026-08-14-first-party-session-lock.md)
 - **Validation:** `VAL-R6`
 
 The claim this unit had to earn is that the session stays locked when the lock

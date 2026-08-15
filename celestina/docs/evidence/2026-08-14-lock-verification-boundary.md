@@ -6,7 +6,7 @@
 - **Environment:** the repository's automated suite, plus the author's own
   Linux-PAM 1.7.2 stack for the three live checks below; no compositor, no lock
   surface and no real passphrase are involved
-- **Plan:** [first-party session lock](../plans/active/2026-08-14-first-party-session-lock.md)
+- **Plan:** [first-party session lock](../plans/archive/2026-08-14-first-party-session-lock.md)
 - **Validation:** `VAL-R6`
 
 This unit builds the only thing in Celestina that may answer "authenticated",
