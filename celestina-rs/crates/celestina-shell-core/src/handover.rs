@@ -69,13 +69,13 @@ pub const RESPONSIBILITIES: [Responsibility; 8] = [
         implemented_by: Some("R7"),
         validated_by: Some("VAL-R7"),
     },
-    // The two that are deliberately not built. They are on this list precisely
-    // because leaving them off would make the handover look complete.
     Responsibility {
         name: "screen lock",
-        implemented_by: None,
-        validated_by: Some("VAL-SHELL-LOCK"),
+        implemented_by: Some("R6"),
+        validated_by: Some("VAL-R6"),
     },
+    // Still deliberately not built. It is on this list precisely because
+    // leaving it off would make the handover look complete.
     Responsibility {
         name: "polkit authentication agent",
         implemented_by: None,
@@ -188,10 +188,22 @@ mod tests {
     #[test]
     fn what_nobody_built_is_named_as_such() {
         let found = blockers(&everything());
-        assert!(found.contains(&Blocker::NotImplemented("screen lock")));
         assert!(found.contains(&Blocker::NotImplemented("polkit authentication agent")));
-        // Nothing else is left: those two are the whole remaining gap.
-        assert_eq!(found.len(), 2);
+        // The agent is the whole remaining unbuilt gap: the lock was built by
+        // R6 and now blocks on its validation like every other built
+        // responsibility, not on its absence.
+        assert_eq!(found.len(), 1);
+    }
+
+    #[test]
+    fn a_built_but_unvalidated_lock_blocks_on_its_validation() {
+        let found = blockers(&everything());
+        assert!(!found.contains(&Blocker::NotImplemented("screen lock")));
+        let lock = blockers(&[])
+            .into_iter()
+            .find(|blocker| blocker.sentence().contains("screen lock"))
+            .expect("the lock blocks the handover until VAL-R6 is recorded");
+        assert!(lock.sentence().contains("VAL-R6"));
     }
 
     #[test]

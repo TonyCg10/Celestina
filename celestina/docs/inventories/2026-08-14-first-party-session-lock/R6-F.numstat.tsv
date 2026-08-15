@@ -1,0 +1,24 @@
+# R6-F exact change inventory
+
+Base revision	be31f9f40d75f488522a7d26f3bbd430a745f243
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/evidence/2026-08-14-handover-knows-about-the-lock.md
+Pathspec	celestina/docs/plans/active/2026-08-14-first-party-session-lock.md
+Pathspec	celestina/docs/inventories/2026-08-14-first-party-session-lock/R6-F.numstat.tsv
+Pathspec	celestina-rs/crates/celestina-shell-core/src/handover.rs
+Pathspec	docs/version-history.tsv
+
+Plan	celestina/docs/plans/active/2026-08-14-first-party-session-lock.md
+Evidence	celestina/docs/evidence/2026-08-14-handover-knows-about-the-lock.md
+
+added	deleted	content	path
+19	7	5da27e939515061b6408394e232f493130123dc1556dc067adf85a7e43cd8679	celestina-rs/crates/celestina-shell-core/src/handover.rs
+1	1	6bd1973ffae9f595b34fc16954361f71e5d5a6587ecfa9eea03a9419d3764f28	celestina/CMakeLists.txt
+1	1	31eab12890c20043f45c9dcfd77e5932d260410d98b1fb0bab04df8250ec1014	celestina/Cargo.lock
+1	1	a8c1dd39de9d8babf84b054c200a065c98034d8450ef54cd03bf2b79e6672fb2	celestina/Cargo.toml
+42	0	eac52a11d7e153f79c518c76b3eb6ae41101e0baa2cff7f3159329f99be266ed	celestina/docs/evidence/2026-08-14-handover-knows-about-the-lock.md
+1	0	53b6676d80080513f32f6a3d34d7a2e8b63d53878649132876574ad10ab5fcf7	celestina/docs/plans/active/2026-08-14-first-party-session-lock.md
+1	0	4d3b220c22d7cb0013f865d5bba5b862fab643e8b5dd709d4757e7c0a972af31	docs/version-history.tsv
+24	0	self	celestina/docs/inventories/2026-08-14-first-party-session-lock/R6-F.numstat.tsv
