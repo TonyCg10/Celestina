@@ -101,6 +101,31 @@ Window {
                          ? qsTr("Fondo en %1").arg(wallpaper.outputName)
                          : qsTr("Sin fondo en %1").arg(wallpaper.outputName)
 
+        // The wallpaper the person was already looking at, held while the next
+        // one decodes. Without it a change of image passes through a frame of
+        // bare canvas: the loader above hides the moment the requested
+        // identity changes, and an Image drops its old texture the moment its
+        // source does — measured on the nest as one dark frame and a fade
+        // from black on every wallpaper switch. This copy's source is only
+        // ever assigned a file the loader finished showing, so it can never
+        // resurrect a stale or unreadable request — an undecodable file still
+        // falls through to the deliberate fallback, exactly as before.
+        Image {
+            id: retained
+
+            anchors.fill: parent
+            visible: source.toString().length > 0
+                     && wallpaper.source.length > 0
+                     && wallpaper.decodable
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            cache: false
+            sourceSize.width: wallpaper.sourceWidth > 0
+                              ? wallpaper.sourceWidth : wallpaper.width
+            sourceSize.height: wallpaper.sourceHeight > 0
+                               ? wallpaper.sourceHeight : wallpaper.height
+        }
+
         Image {
             id: image
 
@@ -132,6 +157,9 @@ Window {
                     wallpaper.readyGeneration = wallpaper.sourceGeneration;
                     wallpaper.readySourceWidth = wallpaper.sourceWidth;
                     wallpaper.readySourceHeight = wallpaper.sourceHeight;
+                    // What is on screen now is what the next change may keep
+                    // showing while its replacement decodes.
+                    retained.source = image.source;
                 }
             }
 

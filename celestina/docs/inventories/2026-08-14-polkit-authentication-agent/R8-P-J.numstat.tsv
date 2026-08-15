@@ -1,0 +1,24 @@
+# R8-P-J exact change inventory
+
+Base revision	ce341a273b7ce736e5fa5fb0f02a857258533e8a
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-J.numstat.tsv
+Pathspec	celestina/docs/evidence/
+Pathspec	celestina/docs/plans/
+Pathspec	celestina/qml/
+Pathspec	docs/version-history.tsv
+
+Plan	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Evidence	celestina/docs/evidence/2026-08-15-wallpaper-switch-black-frame.md
+
+added	deleted	content	path
+1	1	ba45d1ab047d0a83254e139af4c692e68872305cd881e21f256aab7d2fe2e5ad	celestina/CMakeLists.txt
+1	1	0c87daf7395462f9ed6ed01d870b591cde0e2118f6f7b8d36cd55a3c873a7c43	celestina/Cargo.lock
+1	1	891e302d394c9f875523810c3a43c1a32db5aff4f1907477f588dca8af6c82ba	celestina/Cargo.toml
+41	0	566991cef3861b39451e6ede4354d226287303b1dfcb638c89ad0e85a1bcb3f4	celestina/docs/evidence/2026-08-15-wallpaper-switch-black-frame.md
+24	0	self	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-J.numstat.tsv
+1	0	3fce5919f798c439d83af78910793b210cd69f7e5e29a27bdb051641f6dbe9b2	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+28	0	ad1f2de13db6ab0178af883f70527af4c8661bd8785e39533e05e451882c3cfe	celestina/qml/Wallpaper.qml
+1	0	d8e113dcf508a0d24c780633669e346b9a3d1114c1bac23d9a6f335aa3442147	docs/version-history.tsv
