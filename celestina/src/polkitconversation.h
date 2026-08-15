@@ -3,7 +3,6 @@
 #include <QObject>
 #include <QProcess>
 #include <QString>
-#include <QtQml/qqmlregistration.h>
 
 // Runs one polkit authorization conversation, without ever deciding it.
 //
@@ -20,11 +19,10 @@
 class PolkitConversation : public QObject
 {
     Q_OBJECT
-    // Named in QML so a prompt can read verdicts by name rather than by
-    // number, and uncreatable there because the agent owns its conversations.
-    // Not `final`: the type registration Qt generates derives from it.
-    QML_ELEMENT
-    QML_UNCREATABLE("The polkit agent gives a prompt its conversation.")
+    // Not exposed to QML. The prompt talks to `PolkitPromptController`, which
+    // is the only thing that should be able to answer a request; a
+    // conversation reachable from QML would be a second way to send a
+    // response, with no cookie attached to it.
     Q_PROPERTY(bool busy READ isBusy NOTIFY busyChanged)
 
 public:

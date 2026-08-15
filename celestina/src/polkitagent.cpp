@@ -102,6 +102,21 @@ PolkitAgent::~PolkitAgent()
     const QList<QString> cookies = m_pending.keys();
     for (const QString &cookie : cookies)
         finish(cookie, false, cancelledError);
+
+    // And the registration is given back. polkitd would eventually notice the
+    // agent's name disappear, but a shell that exits cleanly should leave the
+    // session's agent slot free rather than held by a process that is gone —
+    // otherwise the next shell to start finds it taken by itself.
+    if (m_registered && m_bus.isConnected()) {
+        PolkitIdentity subject;
+        subject.kind = QStringLiteral("unix-session");
+        subject.details.insert(QStringLiteral("session-id"), m_sessionId);
+        QDBusMessage call = QDBusMessage::createMethodCall(
+            authorityService, authorityPath, authorityInterface,
+            QStringLiteral("UnregisterAuthenticationAgent"));
+        call << QVariant::fromValue(subject) << objectPath();
+        m_bus.call(call, QDBus::NoBlock);
+    }
 }
 
 PolkitAgent::Attachment PolkitAgent::attach(const QDBusConnection &bus,

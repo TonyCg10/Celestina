@@ -23,6 +23,8 @@
 #include "osdcontroller.h"
 #include "lockcontroller.h"
 #include "overlaycontroller.h"
+#include "polkitagent.h"
+#include "polkitpromptcontroller.h"
 #include "toastcontroller.h"
 #include "panelmanager.h"
 #include "panelmenucontroller.h"
@@ -429,6 +431,48 @@ int main(int argc, char *argv[])
     // the cover too.
     auto *lock = new LockController(&app);
     shell->setLockController(lock);
+
+    // This session's authentication agent, and the surface that answers for
+    // it. They are built together on purpose: a registered agent receives
+    // requests, and an agent with nowhere to show them turns an action that
+    // would have failed immediately into one that hangs.
+    //
+    // The session is named by logind. `XDG_SESSION_ID` is what a session's own
+    // programs are given, and polkitd matches the registration against it; a
+    // shell that could not name its session does not register, and says so.
+    auto *polkitAgent = new PolkitAgent(&app);
+    auto *polkitPrompt = new PolkitPromptController(&engine, polkitAgent, &app);
+    const QString sessionId =
+        QString::fromLocal8Bit(qgetenv("XDG_SESSION_ID"));
+    // Recorded whatever happens. "No authorization prompt appeared" is a
+    // question the author will ask of a shell that looks fine, and the answer
+    // belongs here rather than in a console nobody was watching.
+    const char *polkitState = "no-prompt";
+    if (!polkitPrompt->isEnabled()) {
+        qWarning() << "Celestina is running without its authorization prompt; "
+                      "the polkit agent is not registered.";
+    } else {
+        polkitState = "registered";
+        switch (polkitAgent->attach(QDBusConnection::systemBus(), sessionId)) {
+        case PolkitAgent::Attachment::Registered:
+            break;
+        case PolkitAgent::Attachment::Refused:
+            polkitState = "refused";
+            qWarning() << "Celestina is not this session's authorization "
+                          "agent; whatever already holds it keeps it.";
+            break;
+        case PolkitAgent::Attachment::NoBus:
+            polkitState = "no-bus";
+            qWarning() << "Celestina found no system bus; authorization "
+                          "prompts are unavailable.";
+            break;
+        }
+    }
+    DiagnosticJournal::instance().record(
+        CELESTINA_JOURNAL(Critical, "polkit.agent")
+            .text(QStringLiteral("state"), QString::fromLatin1(polkitState))
+            .text(QStringLiteral("session"), sessionId)
+    );
 
     // The menu controller draws menus; the tray host holds the conversation
     // with the application that owns one. Wiring them here keeps the controller

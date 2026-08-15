@@ -71,7 +71,7 @@ when it cannot hold the keyboard. Real `pkexec` against a real password is
 |---|---|---|---|---|---|---|---|
 | R8-P-A | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-A.numstat.tsv) | 12 files, +1065/-7 | verification is delegated whole, and every error denies | [helper conversation](../../evidence/2026-08-14-polkit-helper-conversation.md) | `VAL-R8` |
 | R8-P-B | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-B.numstat.tsv) | 10 files, +967/-4 | the session has an agent that survives a `polkitd` restart | [agent registration](../../evidence/2026-08-14-polkit-agent-registration.md) | `VAL-R8` |
-| R8-P-C | `celestina:` | planned | the prompt surface and its keyboard grab | — | the prompt names the real action and refuses to show without a grab | offscreen surface regression | `VAL-R8` |
+| R8-P-C | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-C.numstat.tsv) | 16 files, +1072/-13 | the prompt names the real action and refuses to show without a grab | [prompt surface](../../evidence/2026-08-14-polkit-prompt-surface.md) | `VAL-R8` |
 
 ## What R8-P-A found about the helper
 
@@ -93,3 +93,17 @@ to show them on: a `pkexec` that hangs waiting for a prompt nobody can see is
 worse than this machine's current behaviour, which is to fail immediately
 because no graphical agent exists. Registration therefore lands with the
 surface, in one commit where the capability is whole.
+
+## What R8-P-C found about this machine
+
+The plan's tangible outcome says that with the agent stopped an action fails
+"exactly as it does on this machine today, which has no graphical agent at
+all". That is not true: Noctalia runs a `polkit-agent` plugin and holds this
+session's single agent slot, so Celestina's registration is refused — by
+design, since polkitd accepts one agent per session and this shell does not
+fight for it.
+
+The consequence is that `VAL-R8` has one shape rather than two. A real
+`pkexec` against a real password cannot be tried while Noctalia is running, so
+the prompt's first real use and the departure it was built for are the same
+validation.

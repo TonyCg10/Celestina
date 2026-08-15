@@ -330,11 +330,18 @@ Polkit integration is now an R8 implementation item, authorized on 2026-08-14
 and bounded by
 [ADR 0005](docs/decisions/0005-first-party-polkit-agent.md):
 
-- [ ] Register as this session's `org.freedesktop.PolicyKit1.AuthenticationAgent`.
-- [ ] Prompt on a dedicated surface that holds a keyboard grab, showing the
+- [x] Register as this session's `org.freedesktop.PolicyKit1.AuthenticationAgent`.
+- [x] Prompt on a dedicated surface that holds a keyboard grab, showing the
       action id, message and identity exactly as `polkitd` gave them.
-- [ ] Delegate every verification to `polkit-agent-helper-1` over its pipe;
+- [x] Delegate every verification to `polkit-agent-helper-1` over its pipe;
       implement no PAM conversation and deny on every failure.
+
+The three units are delivered under
+[the polkit plan](docs/plans/active/2026-08-14-polkit-authentication-agent.md).
+polkitd accepts one agent per session and Noctalia's own plugin currently
+holds this one, so Celestina's registration is refused and says so rather than
+fighting for the slot — which makes a real `pkexec` against a real password
+part of the same `VAL-R8` as removing Noctalia, not a separate check.
 
 The dock question is closed: [ADR 0003](docs/decisions/0003-no-running-app-dock.md)
 decided against one. No dock slice is planned.

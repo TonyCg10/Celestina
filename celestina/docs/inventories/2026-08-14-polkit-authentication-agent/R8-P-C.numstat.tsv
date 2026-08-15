@@ -1,0 +1,35 @@
+# R8-P-C exact change inventory
+
+Base revision	f6c405f378922dc094193571027c6f26fa7a7e98
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/evidence/2026-08-14-polkit-prompt-surface.md
+Pathspec	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-C.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/qml/
+Pathspec	celestina/src/
+Pathspec	celestina/tests/
+Pathspec	docs/version-history.tsv
+
+Plan	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Evidence	celestina/docs/evidence/2026-08-14-polkit-prompt-surface.md
+
+added	deleted	content	path
+28	1	eb26372d04340b49b78f093d3d2d20b1effae7a94f4ac92aa3bebc16c36958d5	celestina/CMakeLists.txt
+1	1	0f893bbc80c2102d914493460686fcf75e37088b268110413f0a78c356dc4eb0	celestina/Cargo.lock
+1	1	ed8638d35623f512d642d3b42e03c207517d1225fe542dec42949ad15e9f4516	celestina/Cargo.toml
+10	3	1510007506f3d9cbf3bfd5ba94aaedbce4503d052230332579ee595a2bccfa32	celestina/ROADMAP.md
+108	0	e0d10f516c2a10039038ed5f312cd067d6e21c8b49d2320cd42d0f2250af9900	celestina/docs/evidence/2026-08-14-polkit-prompt-surface.md
+35	0	self	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-C.numstat.tsv
+15	1	dc26736e2d819c5480ca502098ca9af1be6715870fdca3318d5123e214e9f3ae	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+210	0	6577785ff12fefa256bdfdee48db6dd5fa12339b913d39eda85dd854adf7a50f	celestina/qml/PolkitPrompt.qml
+44	0	4135669d42605c8010fc05916d9ed454d4f2b344b68628aed4e08017fce08483	celestina/src/main.cpp
+15	0	8301080ed617c5c8d1f08699f9b1dfab1824f8900e86cea46db11a6080378286	celestina/src/polkitagent.cpp
+4	6	fbdaa07a6431fe347d81d574499e4d09c70041640ee58d1ee0bcd115cce796ef	celestina/src/polkitconversation.h
+243	0	64726fcbcb7d8973466e4639818ddb10004ef7d553271fabf04352617f683876	celestina/src/polkitpromptcontroller.cpp
+89	0	1431d69c19f974f695f5c425e6152dd52ca50a0c7362c5ac55bce5e793e828ed	celestina/src/polkitpromptcontroller.h
+144	0	96949ec7f0996bd06b5fc7306106d188840725db23d3a76a1ff7af3723204ad3	celestina/tests/polkitprompt_test.cpp
+124	0	3d97e11bad79af4fda8ad2b2be573ef270df059d856241eeb82a081c3cb2ae26	celestina/tests/tst_polkitprompt.qml
+1	0	deac9dee501498ff3c3d91562a3668f42cb98eaa08d9da7b8dd10eb11f03da4c	docs/version-history.tsv

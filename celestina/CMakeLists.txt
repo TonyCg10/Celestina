@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.28.0 LANGUAGES C CXX)
+project(celestina VERSION 0.29.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -253,6 +253,12 @@ qt_add_executable(celestina
     src/quietplacement.cpp
     src/overlaycontroller.h
     src/overlaycontroller.cpp
+    src/polkitconversation.h
+    src/polkitconversation.cpp
+    src/polkitagent.h
+    src/polkitagent.cpp
+    src/polkitpromptcontroller.h
+    src/polkitpromptcontroller.cpp
     src/trayitems.h
     src/trayitems.cpp
     src/traywatcher.h
@@ -346,6 +352,7 @@ qt_add_qml_module(celestina
         qml/NotificationCenter.qml
         qml/ControlCentre.qml
         qml/SessionMenu.qml
+        qml/PolkitPrompt.qml
         qml/MonthCalendar.qml
         qml/Wallpaper.qml
     RESOURCES
@@ -485,6 +492,26 @@ if(BUILD_TESTING)
     target_link_libraries(celestina-polkit-agent-test PRIVATE
         Qt6::Test Qt6::Gui Qt6::DBus)
     add_test(NAME celestina-polkit-agent COMMAND celestina-polkit-agent-test)
+
+    # The prompt's own decision: whether this shell may ask for a password at
+    # all, and what it does when it may not.
+    qt_add_executable(celestina-polkit-prompt-test
+        tests/polkitprompt_test.cpp
+        src/polkitpromptcontroller.h
+        src/polkitpromptcontroller.cpp
+        src/polkitagent.h
+        src/polkitagent.cpp
+        src/polkitconversation.h
+        src/polkitconversation.cpp
+        src/surfacemanager.h
+        src/surfacemanager.cpp
+        src/shellscale.h
+        src/shellscale.cpp
+    )
+    target_include_directories(celestina-polkit-prompt-test PRIVATE src)
+    target_link_libraries(celestina-polkit-prompt-test PRIVATE
+        Qt6::Test Qt6::Quick Qt6::DBus LayerShellQt::Interface)
+    add_test(NAME celestina-polkit-prompt COMMAND celestina-polkit-prompt-test)
 
     qt_add_executable(celestina-tray-icons-test
         tests/trayicons_test.cpp
