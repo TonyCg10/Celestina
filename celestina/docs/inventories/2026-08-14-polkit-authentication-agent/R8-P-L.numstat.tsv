@@ -1,0 +1,26 @@
+# R8-P-L exact change inventory
+
+Base revision	cf9c4c2e08ab75ec2a99b7affef0022447bbc3da
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-L.numstat.tsv
+Pathspec	celestina/docs/evidence/
+Pathspec	celestina/docs/plans/
+Pathspec	celestina/qml/
+Pathspec	celestina/src/
+Pathspec	docs/version-history.tsv
+
+Plan	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Evidence	celestina/docs/evidence/2026-08-15-the-fall-behind-the-bar.md
+
+added	deleted	content	path
+1	1	f8e053b25bddfd9ae9a6a328e655b52a5fb5326053ea58b633c0dd15fc5cc62e	celestina/CMakeLists.txt
+1	1	6a0e0a2d5b09420289d43c5ee83cedf5884fdcdd9c785f556b931798260e75ba	celestina/Cargo.lock
+1	1	df2c5032ff2c493ffef07ca035c0b1dadf9d34b2009909d619a86133dd4f3a7f	celestina/Cargo.toml
+47	0	e363c3986313cc0b7193a3b19e80026eaaa084f24f0fedb58f4e7a71fa43891b	celestina/docs/evidence/2026-08-15-the-fall-behind-the-bar.md
+26	0	self	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-L.numstat.tsv
+1	0	3aa603478047aceb8937cd156ed302050ab2a5147e13789ef8cb6e56bb2f36a0	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+10	2	ce77f2cfbc77864609cac6af7f3a6ab7531d250ad76eec67d49d49a31fb2e189	celestina/qml/SoftMenuField.qml
+0	1	380c860158c5ad848bb36ce7e7e7f612686ec57a4c5b2168f687e911e4aef9e2	celestina/src/denseglass.cpp
+1	0	fe7383434e88bfec2645dd751b9184f6f363eb594b7f062ef70890b282af4bed	docs/version-history.tsv

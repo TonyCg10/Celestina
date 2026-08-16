@@ -364,7 +364,7 @@ Item {
         // author recorded leading the card by several frames on every open.
         // Collected only once the reveal is running, the snap lands under
         // paint that is already forming, and the two read as one block.
-        if (root.animateReveal && !root.revealed) {
+        if (!root.revealed) {
             root.glassRects = [];
             root.glassRegions = [];
             return;
@@ -529,11 +529,19 @@ Item {
         id: entryWindow
 
         x: Math.min(0, root.edgePaneX)
-        y: root.topAttachmentRequested && root.edgeShapeActive
+        // On the silhouette alone this held only while `edgeShapeActive` was
+        // already true; the first frames of a fall can run before the
+        // silhouette is built, and in the author's 4K recording the body
+        // painted from the screen's top edge over the bar's own clock in
+        // exactly those frames. A top attachment now clips at the seam for
+        // the whole entry, silhouette or not.
+        y: root.topAttachmentRequested
            ? root.attachmentStartY - root.surfacePosition.y : 0
         width: Math.max(root.width, root.edgePaneRight) - entryWindow.x
         height: root.height - entryWindow.y
         clip: root.entryOffsetY !== 0
+              || (root.topAttachmentRequested && root.fallsIntoPlace
+                  && root.attachmentProgress < 1)
 
     Item {
         id: content

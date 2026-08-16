@@ -90,3 +90,4 @@ celestina	0.29.5	bug	R8-P-H	Fix the hover race, the overlay output choice and th
 celestina	0.29.6	bug	R8-P-I	Fix the resting glass companions saturating the whole session
 celestina	0.29.7	bug	R8-P-J	Fix the black frame between one wallpaper and the next
 celestina	0.29.8	bug	R8-P-K	Fix surfaces forming background-first and leaving without their departure
+celestina	0.29.9	bug	R8-P-L	Fix the fall painting over the bar and the popup menus' early material

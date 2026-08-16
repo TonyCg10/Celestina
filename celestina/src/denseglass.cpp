@@ -61,7 +61,6 @@ void walkSections(QQuickItem *item, QList<DenseGlassShape> *found)
         // author's recording showed exactly that on every open. Its sections
         // join the instant the reveal starts, under paint already forming.
         if (child->objectName() == QLatin1String("celestina-soft-menu-field")
-            && child->property("animateReveal").toBool()
             && !child->property("revealed").toBool()) {
             continue;
         }

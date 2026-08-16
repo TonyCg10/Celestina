@@ -80,6 +80,7 @@ when it cannot hold the keyboard. Real `pkexec` against a real password is
 | R8-P-I | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-I.numstat.tsv) | 8 files, +104/-6 | resting dense-glass companions stop saturating the whole session | [resting companions record](../../evidence/2026-08-15-resting-companions-saturated-the-session.md) | `VAL-R8` |
 | R8-P-J | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-J.numstat.tsv) | 8 files, +98/-3 | a wallpaper change keeps the old image until the new one is ready | [wallpaper switch record](../../evidence/2026-08-15-wallpaper-switch-black-frame.md) | `VAL-R8` |
 | R8-P-K | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-K.numstat.tsv) | 19 files, +403/-15 | surfaces form and leave as one block, on presented frames, with one shared departure | [one block record](../../evidence/2026-08-15-one-block-forming-and-leaving.md) | `VAL-R8` |
+| R8-P-L | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-L.numstat.tsv) | 9 files, +88/-6 | the fall clips at the seam from its first frame, and the popup menus' material waits for their reveal | [behind the bar record](../../evidence/2026-08-15-the-fall-behind-the-bar.md) | `VAL-R8` |
 
 ## What R8-P-A found about the helper
 
