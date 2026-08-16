@@ -1,0 +1,46 @@
+# R8-P-O exact change inventory
+
+Base revision	314db378d65617441588207990ee3142e110e3ce
+Pathspec	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Pathspec	celestina/docs/evidence/2026-08-16-panel-seam-carriers.md
+Pathspec	celestina/qml/SoftMenu.qml
+Pathspec	celestina/src/denseglass.cpp
+Pathspec	celestina/src/denseglass.h
+Pathspec	celestina/src/osdcontroller.cpp
+Pathspec	celestina/src/osdcontroller.h
+Pathspec	celestina/src/overlaysurface.cpp
+Pathspec	celestina/src/overlaysurface.h
+Pathspec	celestina/src/panelattachmentlease.cpp
+Pathspec	celestina/src/panelattachmentlease.h
+Pathspec	celestina/src/panelmenusurface.cpp
+Pathspec	celestina/src/panelmenusurface.h
+Pathspec	celestina/src/quietplacement.cpp
+Pathspec	celestina/src/quietplacement.h
+Pathspec	celestina/tests/indicatormenu_test.cpp
+Pathspec	celestina/tests/surfacemanager_test.cpp
+Pathspec	celestina/tests/tst_performancemenu.qml
+Pathspec	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-O.numstat.tsv
+
+Plan	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Evidence	celestina/docs/evidence/2026-08-16-panel-seam-carriers.md
+
+added	deleted	content	path
+3	0	2bcb9c707ac1f6dd32b3e7c3f11373cf447959f79953ad64046688f6a7f14199	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+144	0	c584e2e3cc04333dfe13dc81fdee3b4a902c5266690337179f993a661400a200	celestina/docs/evidence/2026-08-16-panel-seam-carriers.md
+69	18	8507e49ee184133861c599b99e65c7bf8501c82f9337a45218c2993e3d65306e	celestina/qml/SoftMenu.qml
+100	11	dd2a33da827ac4a5d8c19a4780beaa53410aeb800af86f60ef1c3c575e5fa9be	celestina/src/denseglass.cpp
+14	0	01f3e013c21afb4c6eb70e1fe9f8aa15e98a599a5182c98c1a07f5a2b86c0f16	celestina/src/denseglass.h
+40	31	5497af2ea1279b5895963b78c3ea7ee44bd0b88c78e7f1288a0b3aff8e584481	celestina/src/osdcontroller.cpp
+4	0	413afbe1e28565a06abe7aadcbec68ccd5e1f5498818485d101ecd1e9a478c97	celestina/src/osdcontroller.h
+36	11	260fd93407edd4095a2445c89d30fd0dce00370d59941a0a60336ed0e7b9dbd6	celestina/src/overlaysurface.cpp
+15	8	e0f590bd8e4c99ed56c588140d13e0336403d391e3032909febae6621ace5b3b	celestina/src/overlaysurface.h
+50	24	abc0a8dd75a365f7975d1dbf58ecbdbffca7de52437b8d0753c5862bb5a64a77	celestina/src/panelattachmentlease.cpp
+19	3	128a38649fc50649e6388bf80de057b783b25fd11258a25d3f0a41197a25b036	celestina/src/panelattachmentlease.h
+14	3	82794ab4176cdee29612e1e02dbc9a8056cb476df6755b89eae1755bc601c860	celestina/src/panelmenusurface.cpp
+8	5	332c88a94aafc390754c88fa3ed7ea3f3e4da2e8ba916894aa6db5dace47eae7	celestina/src/panelmenusurface.h
+12	4	b90e40a6d05da15c7c6528ab0bdbfd5407dea13777449cf866e3f0112974366d	celestina/src/quietplacement.cpp
+14	1	c4dc4f9d655b175c34e7079f4787f7bbc8d56b6be16338c262c66c8fb19ce37d	celestina/src/quietplacement.h
+82	3	47dc124276d284149e23b92e70efb227175dc5713d6048d035522c0d24c87832	celestina/tests/indicatormenu_test.cpp
+152	12	0ac26af2ad5a75d990be7e4c1344be12fa33d79139515238cfcac0b66b2605cb	celestina/tests/surfacemanager_test.cpp
+118	3	797c3f8d849d5dba6bcc5aaec37dc1b55e9d57697b67369dbe2a8124a00fa3b2	celestina/tests/tst_performancemenu.qml
+46	0	self	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-O.numstat.tsv

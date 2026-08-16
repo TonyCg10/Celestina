@@ -49,13 +49,26 @@ QuietAnchor quietAnchorForIcon(QWindow *panel, const QString &iconObjectName);
 struct QuietSurfaceGeometry
 {
     // The layer surface: anchored top-right, so only its size and left edge
-    // matter. Always touches y = 0 — the membrane's seam is inside it.
+    // matter. Its top is the panel's lower seam, making that seam y = 0 in
+    // every QML item the carrier owns.
     QRectF surface;
     // Where the card would land, used both to place it and to ask whether
     // something else is already there. Its height includes the connector
     // travel, so an intrusion into the membrane's path counts as occupied.
     QRectF card;
     bool valid = false;
+
+    // Translate output-local shell geometry into this carrier's local QML
+    // coordinate space. Callers retain output-local `card` for occupancy
+    // comparisons and pass only this translated form to the surface.
+    QRectF onSurface(const QRectF &outputRect) const
+    {
+        return valid ? outputRect.translated(-surface.topLeft()) : QRectF();
+    }
+
+    // Layer-shell consumes output/Qt units while `surface` uses the unscaled
+    // QML units above. Convert the carrier's top exactly once at that boundary.
+    int topInsetInOutputUnits(double shellScale) const;
 };
 
 QuietSurfaceGeometry attachedQuietGeometry(

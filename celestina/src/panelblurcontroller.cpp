@@ -179,10 +179,12 @@ bool blurProbeCanUseEffect(
     bool surfaceExposed,
     bool surfaceSized,
     bool effectAvailable,
-    bool glassPresent
+    bool glassPresent,
+    bool surfaceRetiring
 )
 {
-    return surfaceVisible
+    return !surfaceRetiring
+        && surfaceVisible
         && surfaceSized
         && effectAvailable
         && glassPresent
@@ -350,6 +352,11 @@ void PanelBlurController::publishDenseSections()
     auto *quick = qobject_cast<QQuickWindow *>(m_window.data());
     if (!quick)
         return;
+    // DenseGlassAggregator owns the collapse once softCloseWindow marks this
+    // carrier. A late geometry or region callback must not republish the
+    // resting shapes over that retirement.
+    if (quick->property("celestinaRetiring").toBool())
+        return;
     auto *layer = LayerShellQt::Window::get(quick);
     if (!layer)
         return;
@@ -378,6 +385,17 @@ void PanelBlurController::probe()
     if (!m_window)
         return;
 
+    // `softCloseWindow` owns the deliberate 60 ms weak-blur withdrawal under
+    // fading paint. Stop probing without changing that effect here: otherwise
+    // a pending capability timer can re-arm the region after the soft close
+    // has begun (or withdraw it too early and expose the material swap).
+    const bool surfaceRetiring =
+        m_window->property("celestinaRetiring").toBool();
+    if (surfaceRetiring) {
+        m_probeTimer.stop();
+        return;
+    }
+
     const bool surfaceVisible = m_window->isVisible();
     const bool surfaceExposed = m_window->isExposed();
     const bool surfaceSized = !m_window->size().isEmpty();
@@ -396,7 +414,8 @@ void PanelBlurController::probe()
             surfaceExposed,
             surfaceSized,
             effectAvailable,
-            !glass.isEmpty()
+            !glass.isEmpty(),
+            surfaceRetiring
         )) {
         if (m_state != State::Enabled
             || m_armedSize != m_window->size()

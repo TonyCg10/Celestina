@@ -40,6 +40,11 @@ Window {
     required property var providerSource
     required property bool reducedMotion
 
+    // The presentation owns the end of its own departure. The host keeps the
+    // layer surface mapped until this edge, with its timer only as a fallback
+    // if a broken scene never advances the QML animation.
+    signal departureFinished()
+
     // The compositor sample the cards draw over. `OverlaySurface` arms a
     // `PanelBlurController` for any window publishing these, and the
     // controller writes `compositorBlurAvailable` back when the effect took.
@@ -74,9 +79,9 @@ Window {
     }
 
     // The same placement rule every panel-opened surface uses, fed in this
-    // window's own coordinates: the opener is translated by the window's
-    // origin, and the seam keeps its output value because the window touches
-    // the output's top edge.
+    // carrier's own coordinates. The host translates the opener and icon into
+    // that space and gives an attached carrier a local seam of zero because
+    // the QWindow itself already begins at the panel's physical lower edge.
     PanelPopupPlacement {
         id: placement
 
@@ -106,10 +111,11 @@ Window {
 
     // The stack appears attached to the bar, a drop out of the panel's own
     // notification bell — the same contract every menu carries, resolved by
-    // the host because a toast arrives without a click. All rectangles are
-    // output-local shell units. Left at the defaults the stack is the
-    // floating column it has always been, which is also the fallback the
-    // host uses when the top-right zone is already taken.
+    // the host because a toast arrives without a click. Attached rectangles
+    // are carrier-local shell units; the QWindow's layer-shell margin owns the
+    // output offset. Left at the defaults the stack is the floating column it
+    // has always been, which is also the fallback the host uses when the
+    // top-right zone is already taken.
     property bool anchoredFromPanel: false
     property rect openerRect: Qt.rect(0, 0, 0, 0)
     property rect attachmentAnchorRect: Qt.rect(0, 0, 0, 0)
@@ -125,9 +131,10 @@ Window {
     // pile grows upward — newest at the edge, the rest riding above it.
     property bool entersFromBottom: false
 
-    // The window is as tall as what it holds: attached, that is the seam, the
-    // connector and the whole column; floating, the column alone. The stack
-    // grows as toasts arrive and the compositor is asked to follow.
+    // The window is as tall as what it holds: attached, the connector and the
+    // whole column begin at the carrier-local seam; floating, it is the column
+    // alone. The stack grows as toasts arrive and the compositor is asked to
+    // follow without moving that physical top edge.
     readonly property real neededHeight: stack.anchoredFromPanel
             ? Math.max(stack.surfaceHeight,
                        placement.y + field.targetHeight
@@ -182,11 +189,7 @@ Window {
         id: blockDeparture
 
         interval: CelestinaTheme.motionNormal
-        onTriggered: {
-            toastModel.clear();
-            field.departing = false;
-            Qt.callLater(stack.collectGlass);
-        }
+        onTriggered: stack.finishDeparture()
     }
 
     // The sweep that removes rows whose collapse has had its full beat: a
@@ -206,26 +209,52 @@ Window {
         }
     }
 
+    function finishDeparture() {
+        blockDeparture.stop();
+        blockEntry.stop();
+        rowSweep.stop();
+        toastModel.clear();
+        field.departing = false;
+        field.blockEntryProgress = 0;
+        field.resetForReuse();
+        stack.collectGlass();
+        stack.departureFinished();
+    }
+
+    function cancelRowDepartures() {
+        // A full-block exit supersedes every row exit already in flight. Stop
+        // its delayed sweep first, then restore the rows without rebuilding
+        // the model: their Behaviors reverse under the one departing field,
+        // and no section can disappear on the abandoned row clock.
+        rowSweep.stop();
+        for (let index = 0; index < toastModel.count; ++index) {
+            if (toastModel.get(index).leaving === true)
+                toastModel.setProperty(index, "leaving", false);
+        }
+    }
+
     function syncToasts() {
         const list = stack.toasts;
         const wasEmpty = toastModel.count === 0;
 
-        // On the bottom route an emptied list plays the block's recede — the
-        // display's own moving-away — and is swept after; a toast that
-        // arrives mid-recede reclaims the block. This is the last section's
-        // exit; a section with survivors is covered instead, below.
-        if (stack.entersFromBottom && !stack.reducedMotion) {
-            if (list.length === 0 && toastModel.count > 0) {
-                if (!field.departing) {
-                    field.departing = true;
-                    blockDeparture.restart();
-                }
-                return;
+        // Emptying any route retires the last block as one piece. Keeping its
+        // rows alive until the shared fade and shrink finish prevents the
+        // material, content and carrier from closing on three different
+        // clocks. A toast arriving during that beat reclaims the same block.
+        if (list.length === 0 && toastModel.count > 0) {
+            if (!field.departing)
+                stack.cancelRowDepartures();
+            if (stack.reducedMotion) {
+                stack.finishDeparture();
+            } else if (!field.departing) {
+                field.departing = true;
+                blockDeparture.restart();
             }
-            if (list.length > 0 && field.departing) {
-                blockDeparture.stop();
-                field.departing = false;
-            }
+            return;
+        }
+        if (list.length > 0 && field.departing) {
+            blockDeparture.stop();
+            field.departing = false;
         }
 
         // The bottom pile mirrors the top one: new sections are born away
@@ -242,7 +271,7 @@ Window {
             }
             if (present)
                 continue;
-            if (stack.reducedMotion || desired.length === 0) {
+            if (stack.reducedMotion) {
                 toastModel.remove(stale);
             } else if (toastModel.get(stale).leaving !== true) {
                 toastModel.setProperty(stale, "leaving", true);
@@ -279,8 +308,6 @@ Window {
         // from the screen's edge down below.
         if (wasEmpty && toastModel.count > 0) {
             Qt.callLater(field.reveal);
-            if (stack.entersFromBottom && !stack.reducedMotion)
-                blockEntry.start();
         }
     }
 
@@ -328,8 +355,9 @@ Window {
         // edge — the breathing room stays between the block and the screen's
         // edge, and growth moves the top edge, never the bottom.
         // The top routes are clamped at the seam whatever the routing knows
-        // so far: before `anchoredFromPanel` settles this read 0, which on
-        // the attached window is the screen's top edge, over the bar.
+        // so far. On an attached carrier zero is already the panel's physical
+        // lower edge, so no transient binding state can place this block in a
+        // buffer that covers the bar.
         y: stack.entersFromBottom
            ? stack.neededHeight - CelestinaTheme.spaceLg - field.height
            : Math.max(stack.anchoredFromPanel ? Math.round(placement.y) : 0,
@@ -354,24 +382,28 @@ Window {
         onHeightChanged: field.collectGlass()
         visible: toastModel.count > 0
 
-        // Leaving, on the bottom route, is moving away — the same recede the
-        // display's card plays: shrinking toward its centre and fading, with
-        // the rows kept alive for the beat and swept only after it. The
-        // region stays where it was published for those frames, exactly as
-        // the display's own bottom window keeps its static footprint.
+        // Leaving is one block on every route: rows, field and compositor
+        // material stay together while the complete assembly recedes. The
+        // model is swept only when `blockDeparture` finishes the beat.
         property bool departing: false
+        // Bottom-centre starts beyond the physical edge even before reveal.
+        // `revealed` may trigger the field's first glass collection before
+        // this component's handler runs; deriving the ride from a progress
+        // that starts at zero guarantees that collection sees the offscreen
+        // footprint, never the final card.
+        property real blockEntryProgress: 0
         opacity: field.departing ? 0 : 1
         scale: field.departing ? 0.88 : 1
         transformOrigin: Item.Center
         Behavior on opacity {
-            enabled: !stack.reducedMotion && stack.entersFromBottom
+            enabled: !stack.reducedMotion
             NumberAnimation {
                 duration: CelestinaTheme.motionNormal
                 easing.type: CelestinaTheme.easeExit
             }
         }
         Behavior on scale {
-            enabled: !stack.reducedMotion && stack.entersFromBottom
+            enabled: !stack.reducedMotion
             NumberAnimation {
                 duration: CelestinaTheme.motionNormal
                 easing.type: CelestinaTheme.easeExit
@@ -383,16 +415,20 @@ Window {
         transform: Translate {
             id: blockRide
 
-            y: 0
+            y: stack.entersFromBottom
+               ? (1 - field.blockEntryProgress)
+                 * (field.targetHeight + CelestinaTheme.spaceLg)
+               : 0
+            onYChanged: field.collectGlass()
         }
 
         NumberAnimation {
             id: blockEntry
 
-            target: blockRide
-            property: "y"
-            from: field.height + CelestinaTheme.spaceLg
-            to: 0
+            target: field
+            property: "blockEntryProgress"
+            from: 0
+            to: 1
             duration: CelestinaTheme.motionNormal
             easing.type: CelestinaTheme.easeStandard
         }
@@ -404,7 +440,19 @@ Window {
         attachmentAnchorRect: stack.attachmentAnchorRect
         attachmentStartY: stack.attachmentStartY
         surfacePosition: Qt.point(stack.surfaceOriginX + field.x, field.y)
+        onScaleChanged: field.collectGlass()
         onGlassRegionsChanged: stack.collectGlass()
+        onRevealedChanged: {
+            if (!field.revealed || !stack.entersFromBottom || field.departing)
+                return;
+            blockEntry.stop();
+            if (stack.reducedMotion) {
+                field.blockEntryProgress = 1;
+                field.collectGlass();
+            } else {
+                blockEntry.restart();
+            }
+        }
         Component.onCompleted: {
             if (toastModel.count > 0)
                 field.reveal();
@@ -428,6 +476,8 @@ Window {
 
             delegate: Item {
                 id: card
+
+                objectName: "celestina-toast-card-" + card.noteId
 
                 required property int index
                 required property int noteId

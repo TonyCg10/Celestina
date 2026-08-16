@@ -109,6 +109,16 @@ AnchoredMenu {
             root.anchoredFromPanel && field.attachmentStartY >= 0
             ? field.attachmentStartY : -1e9
     readonly property real rowsCut: Math.max(0, root.rowsSeamY - root.rowsRideY)
+    // Popup.Item reparents the visual popup to the window Overlay. Its styled
+    // content item is the fixed, clipped ListView viewport; Flickable's own
+    // contentItem is the row carrier that may move inside that viewport.
+    // Keeping both handles typed also makes a style that stops supplying the
+    // required viewport fail closed instead of silently moving an unclipped
+    // generic Item over the panel.
+    readonly property Flickable rowsViewport:
+            root.menu.contentItem as Flickable
+    readonly property Item rowsContent:
+            root.rowsViewport ? root.rowsViewport.contentItem : null
 
     Translate {
         id: rowsSlide
@@ -123,33 +133,82 @@ AnchoredMenu {
         restoreMode: Binding.RestoreBindingOrValue
     }
 
-    // The viewport already clips — the bounded-scroll contract pins it — so
-    // the slide below is all the slice needs.
+    // Move the rows, never their viewport. Moving `menu.contentItem` moved the
+    // ListView's clip with it, so its effective top became
+    // `rowsSeamY - rowsCut == rowsRideY` and the first falling frames painted
+    // over the panel. The inner Flickable carrier preserves the ListView's
+    // fixed seam clip, its current scroll position, and the scale applied by
+    // AnchoredMenu. The zero translation is safe on every non-attached route,
+    // so no conditional binding can expose the stock popup during bootstrap.
     Binding {
-        target: root.menu.contentItem
+        target: root.rowsViewport
+        property: "clip"
+        value: true
+        when: root.rowsViewport !== null
+    }
+
+    Binding {
+        target: root.rowsContent
         property: "transform"
         value: rowsSlide
-        when: field.edgeAttachmentRequested
+        when: root.rowsContent !== null
         restoreMode: Binding.RestoreBindingOrValue
     }
 
     Binding {
         target: root.menu
         property: "opacity"
-        value: field.attachmentContentOpacity
+        value: field.presentationOpacity
+        // Popup.Item reparents these rows outside the field. Keep them behind
+        // the same presentation gate on floating routes too; after reveal Qt
+        // regains its stock popup opacity unless attachment or retirement
+        // requires the shared lifecycle value.
+        when: !field.revealed || field.edgeAttachmentRequested || field.retiring
         restoreMode: Binding.RestoreBindingOrValue
     }
 
-    // The stock popup enter motion (its small scale-up and fade at the final
-    // position) is replaced by the drop itself on attached routes. Leaving it
-    // on gave the author's recording its bug: Menu emits `opened()` only when
-    // that enter transition has finished, so the card showed complete and
-    // settled first and the fall replayed afterwards.
+    Binding {
+        target: root.menu
+        property: "scale"
+        value: field.retireScale
+        when: field.retiring
+        restoreMode: Binding.RestoreBindingOrValue
+    }
+
+    Binding {
+        target: root.menu
+        property: "transformOrigin"
+        value: Item.Center
+        when: field.retiring
+        restoreMode: Binding.RestoreBindingOrValue
+    }
+
+    // The field owns the attached entry and every departure. A floating menu
+    // retains the stock popup entry so Qt also retains its focus lifecycle.
+    // During departure the transition is only a lifetime hold: popup rows sit
+    // outside the field's item tree, so the bindings above mirror the field's
+    // opacity and scale while Qt keeps them alive. A transition that also
+    // wrote opacity/scale destroyed those bindings and was the second visual
+    // clock behind the split close.
+    Transition {
+        id: departureHold
+
+        PauseAnimation {
+            duration: root.reducedMotion ? 0 : CelestinaTheme.motionFast
+        }
+    }
+
     Binding {
         target: root.menu
         property: "enter"
         value: null
         when: field.edgeAttachmentRequested
+    }
+
+    Binding {
+        target: root.menu
+        property: "exit"
+        value: departureHold
     }
 
     SoftMenuField {
@@ -201,14 +260,6 @@ AnchoredMenu {
 
         function onOpened() {
             field.reveal();
-        }
-
-        // The host destroys this window once the popup reports itself closed,
-        // and Menu emits that only after its exit transition. Retiring the
-        // glass here is what keeps it from outliving the rows it carries by
-        // the width of that transition.
-        function onAboutToHide() {
-            field.retire();
         }
 
         function onCountChanged() {

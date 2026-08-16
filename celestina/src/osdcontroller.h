@@ -5,6 +5,7 @@
 #include <QQmlComponent>
 #include <QElapsedTimer>
 #include <QHash>
+#include <QPointF>
 #include <QRectF>
 #include <QTimer>
 #include <QVariantList>
@@ -126,6 +127,9 @@ private:
     QRectF m_openCard;
     QPointer<QScreen> m_openScreen;
     bool m_openAttached = false;
+    // Output-local shell origin of the persistent top carrier. Its cards and
+    // every later icon update are translated through this one fixed point.
+    QPointF m_attachedCarrierOrigin;
     OsdReadings m_readings;
     // The card file: every reading still worth showing, front first, and the
     // moment each one stops being. One timer serves the earliest deadline; a

@@ -10,6 +10,8 @@
 #include <QTimer>
 #include <QVariantAnimation>
 
+#include <cmath>
+
 #include "panelblurcontroller.h"
 #include "surfacemanager.h"
 
@@ -47,6 +49,57 @@ void kickRender(QQuickWindow *window)
     QTimer::singleShot(250, tracked, kick);
 }
 
+// A scene-graph clip is continuous geometry while the compositor effect takes
+// an integer QRegion. Round inward: a conservative missing edge pixel is hidden
+// beneath the source material, while rounding outward can blur one pixel the
+// clipped QML surface never painted — exactly the panel-seam leak this guards.
+QRegion containedRegion(const QRectF &rect)
+{
+    const QRectF normalized = rect.normalized();
+    const auto snapIntegral = [](qreal coordinate) {
+        const qreal nearest = std::round(coordinate);
+        return qAbs(coordinate - nearest) < 0.000001 ? nearest : coordinate;
+    };
+    const int left = qCeil(snapIntegral(normalized.left()));
+    const int top = qCeil(snapIntegral(normalized.top()));
+    const int right = qFloor(snapIntegral(normalized.right()));
+    const int bottom = qFloor(snapIntegral(normalized.bottom()));
+    if (right <= left || bottom <= top)
+        return {};
+    return QRegion(left, top, right - left, bottom - top);
+}
+
+QRegion effectiveClipRegion(QQuickItem *item)
+{
+    if (!item || !item->window())
+        return {};
+
+    // The platform surface is an implicit final clip even though the root
+    // content item does not set `clip`. A section outside its carrier cannot
+    // authorize a full-output companion to paint there.
+    QRegion effective(QRect(QPoint(), item->window()->size()));
+    for (QQuickItem *ancestor = item->parentItem(); ancestor;
+         ancestor = ancestor->parentItem()) {
+        if (!ancestor->clip())
+            continue;
+
+        // Celestina's seam and viewport clips use translation plus axis-aligned
+        // scale. Mapping the complete bounds through that transform therefore
+        // gives the exact scene-space clip rectangle, including nested scales.
+        const QRectF mapped = ancestor->mapRectToScene(
+            QRectF(0, 0, ancestor->width(), ancestor->height()));
+        effective &= containedRegion(mapped);
+        if (effective.isEmpty())
+            break;
+    }
+    return effective;
+}
+
+QPoint roundedShapeOrigin(const QRectF &rect)
+{
+    return QPoint(qRound(rect.x()), qRound(rect.y()));
+}
+
 void walkSections(QQuickItem *item, QList<DenseGlassShape> *found)
 {
     if (!item)
@@ -61,7 +114,8 @@ void walkSections(QQuickItem *item, QList<DenseGlassShape> *found)
         // author's recording showed exactly that on every open. Its sections
         // join the instant the reveal starts, under paint already forming.
         if (child->objectName() == QLatin1String("celestina-soft-menu-field")
-            && !child->property("revealed").toBool()) {
+            && (!child->property("revealed").toBool()
+                || child->opacity() <= 0.0)) {
             continue;
         }
         if (child->objectName() == QLatin1String("celestina-menu-section")
@@ -73,10 +127,21 @@ void walkSections(QQuickItem *item, QList<DenseGlassShape> *found)
             // transform directly.
             const qreal factor =
                 child->width() > 0 ? mapped.width() / child->width() : 1.0;
-            found->append(DenseGlassShape{
+            QRegion relativeClip = effectiveClipRegion(child);
+            if (relativeClip.isEmpty()) {
+                walkSections(child, found);
+                continue;
+            }
+            relativeClip.translate(-roundedShapeOrigin(mapped));
+            const DenseGlassShape shape {
                 mapped,
                 child->property("cornerRadius").toReal() * factor,
-            });
+                relativeClip,
+            };
+            // A fully clipped section paints neither QML nor compositor
+            // material. Do not keep an empty shape alive in the aggregator.
+            if (!denseGlassRegion(shape).isEmpty())
+                found->append(shape);
         }
         walkSections(child, found);
     }
@@ -124,6 +189,18 @@ QList<DenseGlassShape> collectDenseSections(QQuickWindow *window)
     if (window)
         walkSections(window->contentItem(), &found);
     return found;
+}
+
+QRegion denseGlassRegion(const DenseGlassShape &shape)
+{
+    QRegion region = roundedGlassRegion(
+        shape.rect.toAlignedRect(), qRound(shape.radius));
+    if (!shape.clipRegion.isEmpty()) {
+        QRegion clip = shape.clipRegion;
+        clip.translate(roundedShapeOrigin(shape.rect));
+        region &= clip;
+    }
+    return region;
 }
 
 DenseGlassAggregator &DenseGlassAggregator::instance()
@@ -186,7 +263,8 @@ void DenseGlassAggregator::publish(
         && std::equal(
             entry.shapes.cbegin(), entry.shapes.cend(), shapes.cbegin(),
             [](const DenseGlassShape &a, const DenseGlassShape &b) {
-                return a.rect == b.rect && qFuzzyCompare(a.radius, b.radius);
+                return a.rect == b.rect && qFuzzyCompare(a.radius, b.radius)
+                    && a.clipRegion == b.clipRegion;
             });
     if (unchanged)
         return;
@@ -232,8 +310,22 @@ void DenseGlassAggregator::retire(QWindow *source)
                     QRectF rect(0, 0, shape.rect.width() * keep,
                                 shape.rect.height() * keep);
                     rect.moveCenter(centre);
-                    if (rect.width() >= 2 && rect.height() >= 2)
-                        scaled.append(DenseGlassShape{rect, shape.radius * keep});
+                    if (rect.width() >= 2 && rect.height() >= 2) {
+                        // The clip is stored relative to the shape so ordinary
+                        // surface-to-output translation stays a one-property
+                        // operation. Retirement is different: the rectangle
+                        // shrinks within a fixed output clip, so compensate for
+                        // its moving top-left before publishing the next frame.
+                        QRegion fixedClip = shape.clipRegion;
+                        fixedClip.translate(
+                            roundedShapeOrigin(shape.rect)
+                            - roundedShapeOrigin(rect));
+                        scaled.append(DenseGlassShape{
+                            rect,
+                            shape.radius * keep,
+                            fixedClip,
+                        });
+                    }
                 }
                 publish(tracked.data(), scaled);
             });
@@ -313,11 +405,8 @@ void DenseGlassAggregator::refresh(QScreen *screen)
     for (const Source &entry : std::as_const(m_sources)) {
         if (!entry.window || entry.screen.data() != screen)
             continue;
-        for (const DenseGlassShape &shape : entry.shapes) {
-            region += roundedGlassRegion(
-                shape.rect.toAlignedRect(),
-                qRound(shape.radius));
-        }
+        for (const DenseGlassShape &shape : entry.shapes)
+            region += denseGlassRegion(shape);
     }
 
     const QList<QPointer<QQuickWindow>> companions = companionsFor(screen);

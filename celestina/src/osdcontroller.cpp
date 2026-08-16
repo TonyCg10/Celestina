@@ -176,6 +176,7 @@ void OsdController::ensureSurfaces(QScreen *screen)
         m_fallback->close();
         m_openScreen = screen;
         m_openAttached = false;
+        m_attachedCarrierOrigin = QPointF();
     }
     if (!m_surface->isOpen())
         openTop(screen);
@@ -211,20 +212,16 @@ void OsdController::providersChanged()
 
 QWindow *OsdController::createWindow(const QVariantMap &placementProperties)
 {
-    const QVariantMap front = m_active.isEmpty()
-        ? QVariantMap()
-        : m_active.first().toMap();
     QVariantMap initialProperties {
-        {QStringLiteral("kind"), front.value(QStringLiteral("kind"), QString())},
-        {QStringLiteral("percent"), front.value(QStringLiteral("percent"), -1)},
-        {QStringLiteral("muted"), front.value(QStringLiteral("muted"), false)},
-        {QStringLiteral("label"), front.value(QStringLiteral("label"), QString())},
-        // Deliberately no `readings` seed: both windows are built from this
-        // one function, and a window born carrying the card file paints it
-        // wherever it stands — the author's recording shows the resting
-        // bottom-right twin drawing a second volume card in its corner while
-        // the attached window presented the real one. The presenting window
-        // receives the file through `pushReadings`, and only it does.
+        // Both persistent twins are born empty. Even the four compatibility
+        // properties must not inherit the active front: SessionOsd used to
+        // synthesize a card from them while `readings` was empty, so omitting
+        // only the list still left the resting twin painting a ghost.
+        {QStringLiteral("kind"), QString()},
+        {QStringLiteral("percent"), -1},
+        {QStringLiteral("muted"), false},
+        {QStringLiteral("label"), QString()},
+        {QStringLiteral("readings"), QVariantList()},
         {QStringLiteral("reducedMotion"),
          qEnvironmentVariableIsSet("CELESTINA_REDUCED_MOTION")},
     };
@@ -305,10 +302,9 @@ bool OsdController::resolveAttachment(
     return true;
 }
 
-// The cards are hoverable — a card behind rises to the front — so the window
-// takes input where the cards are and nowhere else: everything above the
-// seam stays the panel's, which is what keeps the wheel that raised this
-// display stepping the control under it.
+// The cards are hoverable — a card behind rises to the front. An attached
+// window begins at the panel's physical lower seam, so its complete local
+// carrier is safe input and the wheel's panel control is outside the QWindow.
 void OsdController::applyInputMask(QWindow *window)
 {
     if (!window)
@@ -327,12 +323,8 @@ void OsdController::applyInputMask(QWindow *window)
         return;
     }
 
-    QWindow *const panel =
-        m_panels ? m_panels->panelWindowFor(window->screen()) : nullptr;
-    const int seam = panel ? qMax(0, panel->height()) : 0;
     window->setMask(QRegion(
-        0, seam,
-        qMax(1, window->width()), qMax(1, window->height() - seam)
+        0, 0, qMax(1, window->width()), qMax(1, window->height())
     ));
 }
 
@@ -494,17 +486,21 @@ void OsdController::openTop(QScreen *screen)
                  cardSize.height() + stackPeek * (stackDepth - 1));
 
     OverlaySurface::Placement placement = OverlaySurface::Placement::Corner;
+    m_attachedCarrierOrigin = QPointF();
     QVariantMap placementProperties {
         {QStringLiteral("shellScale"), shellScale},
     };
     if (geometry.valid) {
         placement = OverlaySurface::Placement::AttachedTopRight;
+        m_attachedCarrierOrigin = geometry.surface.topLeft();
+        const QRectF localOpener = geometry.onSurface(opener);
+        const QRectF localIcon = geometry.onSurface(icon);
         placementProperties.insert(QStringLiteral("anchoredFromPanel"), true);
-        placementProperties.insert(QStringLiteral("openerRect"), opener);
-        placementProperties.insert(QStringLiteral("attachmentAnchorRect"), icon);
-        placementProperties.insert(QStringLiteral("attachmentStartY"), barHeight);
+        placementProperties.insert(QStringLiteral("openerRect"), localOpener);
         placementProperties.insert(
-            QStringLiteral("surfaceOriginX"), geometry.surface.x());
+            QStringLiteral("attachmentAnchorRect"), localIcon);
+        placementProperties.insert(QStringLiteral("attachmentStartY"), 0);
+        placementProperties.insert(QStringLiteral("surfaceOriginX"), 0);
         placementProperties.insert(
             QStringLiteral("surfaceWidth"), geometry.surface.width());
         placementProperties.insert(
@@ -512,11 +508,16 @@ void OsdController::openTop(QScreen *screen)
     }
 
     QWindow *const osd = createWindow(placementProperties);
-    if (!osd)
+    if (!osd) {
+        m_attachedCarrierOrigin = QPointF();
         return;
+    }
 
-    if (!m_surface->open(osd, screen, placement)) {
+    const int topInset = placement == OverlaySurface::Placement::AttachedTopRight
+        ? geometry.topInsetInOutputUnits(shellScale) : 0;
+    if (!m_surface->open(osd, screen, placement, topInset)) {
         delete osd;
+        m_attachedCarrierOrigin = QPointF();
         return;
     }
 
@@ -638,9 +639,16 @@ void OsdController::updateAttachment(QWindow *window, const QString &kind)
     qreal barHeight = 0;
     if (resolveAttachment(m_openScreen.data(), kind,
                           &opener, &icon, &barHeight)) {
-        window->setProperty("openerRect", opener);
-        window->setProperty("attachmentAnchorRect", icon);
-        window->setProperty("attachmentStartY", barHeight);
+        window->setProperty(
+            "openerRect", opener.translated(-m_attachedCarrierOrigin));
+        window->setProperty(
+            "attachmentAnchorRect",
+            icon.translated(-m_attachedCarrierOrigin)
+        );
+        window->setProperty(
+            "attachmentStartY",
+            barHeight - m_attachedCarrierOrigin.y()
+        );
         return;
     }
     // The new reading's control is not on this panel; the cards stay where
@@ -744,5 +752,6 @@ void OsdController::hide()
     m_fallbackCard = QRectF();
     m_openScreen.clear();
     m_openAttached = false;
+    m_attachedCarrierOrigin = QPointF();
     m_activeTop = true;
 }

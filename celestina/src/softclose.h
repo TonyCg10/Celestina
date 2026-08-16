@@ -12,18 +12,23 @@
 
 // One closing beat for every contextual surface.
 //
-// The popup-backed menus always had one: Qt's exit transition and the glass's
-// own retire fade run between "put it away" and the host destroying the
-// window. Every card menu and overlay instead died on the same instant its
-// `dismissed` was emitted — the discrepancy the author heard as "the tray
-// animates closed, the rest just vanish" (2026-08-14). The host owns the
-// destruction, so the host owns the beat: fade the window's content, then
-// run the real close.
+// The host owns destruction, so it owns this beat for popup menus, card menus,
+// overlays and prompts alike. Popup-backed menus notify it from aboutToHide:
+// their rows remain alive for the same field retirement instead of completing
+// a private popup exit first and starting this host fade afterwards.
 //
 // The durations mirror the theme's `motionFast` plus a breath; the theme
 // itself is QML and this seam deliberately has no engine in reach.
 inline void softCloseWindow(QWindow *window, std::function<void()> finish)
 {
+    if (!window || window->property("celestinaRetiring").toBool())
+        return;
+    // The same close can be observed through Popup.aboutToHide, a layer-shell
+    // dismissal and a repeated toggle in one event turn. The first request
+    // owns the beat and its finish callback; later observations may not start
+    // another animation or move the destruction deadline.
+    window->setProperty("celestinaRetiring", true);
+
     // A compositor blur region cannot fade — it exists or it does not — so a
     // closing beat has three instants that can never truly merge: the strong
     // sample's withdrawal, the paint's fade, and the window's death taking
@@ -38,6 +43,7 @@ inline void softCloseWindow(QWindow *window, std::function<void()> finish)
     // token, and this fade must not outlive them nor cut them short.
     constexpr int fadeMs = 150;
     constexpr int closeDelayMs = 170;
+    const bool reducedMotion = window->property("reducedMotion").toBool();
 
     auto *quick = qobject_cast<QQuickWindow *>(window);
     QQuickItem *const content = quick ? quick->contentItem() : nullptr;
@@ -60,21 +66,28 @@ inline void softCloseWindow(QWindow *window, std::function<void()> finish)
     // The strong sample collapses toward its own centres for the length of
     // the fade — shrinking under fading paint is the one exit a region that
     // cannot fade can share with the paint above it.
-    DenseGlassAggregator::instance().retire(window);
+    if (reducedMotion)
+        DenseGlassAggregator::instance().withdraw(window);
+    else
+        DenseGlassAggregator::instance().retire(window);
     if (content) {
-        auto *fade = new QVariantAnimation(quick);
-        fade->setStartValue(content->opacity());
-        fade->setEndValue(0.0);
-        fade->setDuration(fadeMs);
-        fade->setEasingCurve(QEasingCurve::OutCubic);
-        const QPointer<QQuickItem> tracked(content);
-        QObject::connect(
-            fade, &QVariantAnimation::valueChanged, quick,
-            [tracked](const QVariant &value) {
-                if (tracked)
-                    tracked->setOpacity(value.toReal());
-            });
-        fade->start(QAbstractAnimation::DeleteWhenStopped);
+        if (reducedMotion) {
+            content->setOpacity(0.0);
+        } else {
+            auto *fade = new QVariantAnimation(quick);
+            fade->setStartValue(content->opacity());
+            fade->setEndValue(0.0);
+            fade->setDuration(fadeMs);
+            fade->setEasingCurve(QEasingCurve::OutCubic);
+            const QPointer<QQuickItem> tracked(content);
+            QObject::connect(
+                fade, &QVariantAnimation::valueChanged, quick,
+                [tracked](const QVariant &value) {
+                    if (tracked)
+                        tracked->setOpacity(value.toReal());
+                });
+            fade->start(QAbstractAnimation::DeleteWhenStopped);
+        }
         quick->requestUpdate();
     }
 
@@ -82,7 +95,7 @@ inline void softCloseWindow(QWindow *window, std::function<void()> finish)
     // withdrawn a third of the way into the fade, the milky backdrop
     // disappears under paint still opaque enough to cover the swap, instead
     // of sitting bare on the wallpaper after the paint has gone.
-    if (content) {
+    if (content && !reducedMotion) {
         const QPointer<QWindow> tracked(window);
         QTimer::singleShot(60, window, [tracked]() {
             if (tracked) {
@@ -90,9 +103,14 @@ inline void softCloseWindow(QWindow *window, std::function<void()> finish)
                 tracked->requestUpdate();
             }
         });
+    } else if (content) {
+        KWindowEffects::enableBlurBehind(window, false);
     }
 
     // Parented to the window: a window hard-closed mid-beat takes the timer
     // with it, and the late `finish` never fires on a corpse.
-    QTimer::singleShot(content ? closeDelayMs : 0, window, std::move(finish));
+    QTimer::singleShot(
+        content && !reducedMotion ? closeDelayMs : 0,
+        window,
+        std::move(finish));
 }

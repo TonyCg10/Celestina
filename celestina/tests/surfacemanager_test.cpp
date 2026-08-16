@@ -18,6 +18,7 @@
 
 #include <limits>
 
+#include "denseglass.h"
 #include "overlaysurface.h"
 #include "panelattachmentlease.h"
 #include "panelblurcontroller.h"
@@ -257,6 +258,9 @@ private slots:
     void aPublishedPolygonOverridesItsRoundedBoundingRect();
     void anInvalidPolygonFallsBackToRoundedGlass();
     void emptyPublishedGlassNeverBecomesFullWindowBlur();
+    void aDenseSectionCannotEscapeAnAncestorClip_data();
+    void aDenseSectionCannotEscapeAnAncestorClip();
+    void aTransparentSoftFieldPublishesNoDenseMaterial();
     void anArmedBlurSurvivesLayerShellExposureLoss();
     void theMenuContentLoadsAndFitsItsSurface();
     void theMenuSurfaceIsBigEnoughToClickEveryItem();
@@ -1196,13 +1200,20 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
     QVERIFY(inventory->isVisible());
     const QScreen *const inventoryScreen = panel->screen();
     QVERIFY(inventoryScreen);
-    const QRectF localInventoryOpener = panelPopupOpenerOnOutput(
+    const QPointF outputOrigin(inventoryScreen->geometry().topLeft());
+    const QPointF carrierOrigin(0, panel->height());
+    const double inventoryScale = inventory->property("shellScale").toDouble();
+    const QRectF localInventoryOpener = panelAttachmentRectOnCarrier(
         inventoryOpener,
-        QPointF(inventoryScreen->geometry().topLeft())
+        outputOrigin,
+        carrierOrigin,
+        inventoryScale
     );
-    const QRectF localInventoryAnchor = panelPopupOpenerOnOutput(
+    const QRectF localInventoryAnchor = panelAttachmentRectOnCarrier(
         inventoryAnchor,
-        QPointF(inventoryScreen->geometry().topLeft())
+        outputOrigin,
+        carrierOrigin,
+        inventoryScale
     );
     QVERIFY(inventory->property("anchoredFromPanel").toBool());
     QCOMPARE(
@@ -1213,20 +1224,27 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
         inventory->property("attachmentAnchorRect").toRectF(),
         localInventoryAnchor
     );
-    QCOMPARE(inventory->property("attachmentStartY").toInt(), panel->height());
+    QCOMPARE(inventory->property("attachmentStartY").toInt(), 0);
     QCOMPARE(inventory->property("anchorGap").toInt(), 20);
     const QPoint inventoryOrigin = panelPopupBodyOrigin(
         localInventoryOpener,
         inventory->property("contentWidth").toInt(),
         inventory->property("anchorGap").toInt(),
-        panel->height()
+        0
     );
     QCOMPARE(inventory->property("menuY").toInt(), inventoryOrigin.y());
     QCOMPARE(inventory->property("cardY").toInt(), inventoryOrigin.y());
     QCOMPARE(inventory->property("preserveRequestedTop").toBool(), true);
     QCOMPARE(
         inventory->property("maximumContentHeight").toInt(),
-        inventoryScreen->geometry().height() - inventoryOrigin.y()
+        inventoryScreen->geometry().height()
+            - panel->height() - inventoryOrigin.y()
+    );
+    auto *const inventoryLayer = LayerShellQt::Window::get(inventory);
+    QVERIFY(inventoryLayer);
+    QCOMPARE(
+        inventoryLayer->margins(),
+        QMargins(0, panel->height(), 0, 0)
     );
 
     QSignalSpy needed(&controller, &PanelMenuController::trayMenuNeeded);
@@ -1469,22 +1487,29 @@ void SurfaceManagerTest::wallpaperMenuHandsTheFolderChooserBackToThePermanentPan
     const QScreen *const screen = panel.screen();
     QVERIFY(screen);
     QVERIFY(menu->property("anchoredFromPanel").toBool());
-    QCOMPARE(menu->property("attachmentStartY").toInt(), panel.height());
+    QCOMPARE(menu->property("attachmentStartY").toInt(), 0);
     QCOMPARE(menu->property("anchorGap").toInt(), 25);
     QCOMPARE(
         menu->property("openerRect").toRectF(),
-        panelPopupOpenerOnOutput(
+        panelAttachmentRectOnCarrier(
             openerRect,
-            QPointF(screen->geometry().topLeft())
+            QPointF(screen->geometry().topLeft()),
+            QPointF(0, panel.height()),
+            menu->property("shellScale").toDouble()
         )
     );
     QCOMPARE(
         menu->property("attachmentAnchorRect").toRectF(),
-        panelPopupOpenerOnOutput(
+        panelAttachmentRectOnCarrier(
             anchorRect,
-            QPointF(screen->geometry().topLeft())
+            QPointF(screen->geometry().topLeft()),
+            QPointF(0, panel.height()),
+            menu->property("shellScale").toDouble()
         )
     );
+    auto *const menuLayer = LayerShellQt::Window::get(menu);
+    QVERIFY(menuLayer);
+    QCOMPARE(menuLayer->margins(), QMargins(0, panel.height(), 0, 0));
     QSignalSpy chooser(&panel, &FakePanelWindow::wallpaperFolderPickerOpened);
     QVERIFY(QMetaObject::invokeMethod(menu, "chooseRequested"));
 
@@ -1583,6 +1608,116 @@ void SurfaceManagerTest::emptyPublishedGlassNeverBecomesFullWindowBlur()
     QVERIFY(!blurProbeCanUseEffect(true, true, false, true, true, false));
 }
 
+void SurfaceManagerTest::aDenseSectionCannotEscapeAnAncestorClip_data()
+{
+    QTest::addColumn<QSize>("outputSize");
+    QTest::addColumn<qreal>("shellScale");
+    QTest::addColumn<qreal>("outputScale");
+    QTest::addColumn<int>("physicalSeam");
+
+    // The author's right-hand 1080p output.
+    QTest::newRow("DP-2")
+        << QSize(1920, 1080) << qreal(1.0) << qreal(1.0) << 40;
+    // The 4K output is 2560x1440 in compositor coordinates at scale 1.5;
+    // Celestina's independent 1.15 shell factor makes the 40-unit seam 46
+    // logical pixels and therefore 69 pixels in the recorded buffer.
+    QTest::newRow("DP-1")
+        << QSize(2560, 1440) << qreal(1.15) << qreal(1.5) << 69;
+}
+
+void SurfaceManagerTest::aDenseSectionCannotEscapeAnAncestorClip()
+{
+    QFETCH(QSize, outputSize);
+    QFETCH(qreal, shellScale);
+    QFETCH(qreal, outputScale);
+    QFETCH(int, physicalSeam);
+
+    QQuickWindow window;
+    window.resize(outputSize);
+
+    auto *const scene = new QQuickItem(window.contentItem());
+    scene->setSize(QSizeF(outputSize) / shellScale);
+    scene->setTransformOrigin(QQuickItem::TopLeft);
+    scene->setScale(shellScale);
+
+    // This is SessionOsd's seamLaw shape: the child restores full-scene
+    // coordinates below a clip whose top is the panel's lower edge.
+    constexpr qreal seam = 40;
+    auto *const seamClip = new QQuickItem(scene);
+    seamClip->setY(seam);
+    seamClip->setWidth(scene->width());
+    seamClip->setHeight(scene->height() - seam);
+    seamClip->setClip(true);
+
+    auto *const interior = new QQuickItem(seamClip);
+    interior->setY(-seam);
+    interior->setSize(scene->size());
+
+    // Cross the seam through the original rounded corner. Intersecting the
+    // rectangle first and rounding the shortened result would invent a second
+    // corner at the seam; the expected region instead rounds once, then clips.
+    auto *const section = new QQuickItem(interior);
+    section->setObjectName(QStringLiteral("celestina-menu-section"));
+    section->setPosition(QPointF(100, 30));
+    section->setSize(QSizeF(360, 96));
+    section->setProperty("cornerRadius", 20);
+
+    const QList<DenseGlassShape> shapes = collectDenseSections(&window);
+    QCOMPARE(shapes.size(), 1);
+    const DenseGlassShape &shape = shapes.constFirst();
+
+    const qreal sceneSeam = seamClip->mapToScene(QPointF()).y();
+    const int logicalSeam = qCeil(sceneSeam);
+    QCOMPARE(qRound(sceneSeam * outputScale), physicalSeam);
+    QVERIFY(qFuzzyCompare(shape.radius, qreal(20) * shellScale));
+    QVERIFY(shape.rect.top() < sceneSeam);
+
+    const QRegion expectedClip(
+        0,
+        logicalSeam,
+        outputSize.width(),
+        outputSize.height() - logicalSeam
+    );
+    QRegion absoluteClip = shape.clipRegion;
+    absoluteClip.translate(
+        QPoint(qRound(shape.rect.x()), qRound(shape.rect.y())));
+    QCOMPARE(absoluteClip, expectedClip);
+
+    const QRegion unclipped = roundedGlassRegion(
+        shape.rect.toAlignedRect(), qRound(shape.radius));
+    const QRegion panelStrip(0, 0, outputSize.width(), logicalSeam);
+    QVERIFY(!(unclipped & panelStrip).isEmpty());
+
+    const QRegion expected = unclipped & expectedClip;
+    const QRegion actual = denseGlassRegion(shape);
+    QCOMPARE(actual, expected);
+
+    QVERIFY((actual & panelStrip).isEmpty());
+    QVERIFY(!actual.isEmpty());
+}
+
+void SurfaceManagerTest::aTransparentSoftFieldPublishesNoDenseMaterial()
+{
+    QQuickWindow window;
+    window.resize(640, 480);
+
+    auto *const field = new QQuickItem(window.contentItem());
+    field->setObjectName(QStringLiteral("celestina-soft-menu-field"));
+    field->setProperty("revealed", true);
+    field->setOpacity(0.0);
+    field->setSize(QSizeF(260, 96));
+
+    auto *const section = new QQuickItem(field);
+    section->setObjectName(QStringLiteral("celestina-menu-section"));
+    section->setSize(field->size());
+    section->setProperty("cornerRadius", 20);
+
+    QVERIFY(collectDenseSections(&window).isEmpty());
+
+    field->setOpacity(1.0);
+    QCOMPARE(collectDenseSections(&window).size(), 1);
+}
+
 void SurfaceManagerTest::anArmedBlurSurvivesLayerShellExposureLoss()
 {
     // Initial setup still waits for an exposed native surface.
@@ -1593,6 +1728,11 @@ void SurfaceManagerTest::anArmedBlurSurvivesLayerShellExposureLoss()
     // same visible surface continues rendering. Keep both its effect and any
     // changed region current rather than switching QML to the opaque fallback.
     QVERIFY(blurProbeCanUseEffect(true, true, false, true, true, true));
+
+    // Retirement freezes this controller. The shared close choreography owns
+    // the later withdrawal, and no pending probe may re-arm it meanwhile.
+    QVERIFY(!blurProbeCanUseEffect(
+        true, true, true, true, true, true, true));
 
     // Real lifecycle and capability losses retain the existing fallback.
     QVERIFY(!blurProbeCanUseEffect(true, false, false, true, true, true));

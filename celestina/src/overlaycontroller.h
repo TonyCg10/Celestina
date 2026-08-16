@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QQmlComponent>
+#include <QPointF>
 #include <QRectF>
 #include <QString>
 #include <QVariantMap>
@@ -72,6 +73,7 @@ public:
         QObject *source,
         QObject *parent = nullptr
     );
+    ~OverlayController() override;
 
     // Exactly what this controller would hand its component, and nothing else.
     // Exposed so a regression can compare it against what the QML file
@@ -103,16 +105,26 @@ public slots:
     );
 
 signals:
-    // This overlay was just mapped; see PanelMenuController's twin signal.
+    // This overlay has swapped the first frame after publishing painted glass.
+    // Consumers may now retire the contextual surface it replaces without
+    // exposing the desktop between the old and new cards.
     void contextualSurfaceOpened();
 
 private slots:
     // A retired QML window may finish its close transition after a successor
     // is mapped. Only the window still adopted by the surface may close it.
     void overlayDismissed();
+    // `glassRegions` is a QML alias, so its notify signal is connected by name.
+    // A non-empty publication arms readiness; only its following swapped frame
+    // may publish the edge to the rest of the shell.
+    void overlayGlassRegionsChanged();
 
 private:
     QWindow *createWindow();
+    void revealPresentedWindow(QWindow *window);
+    // The hard edge is private: only a completed soft retirement or object
+    // teardown may destroy the carrier immediately.
+    void closeNow(QWindow *expectedWindow = nullptr);
 
     // Where the surface should grow from, while a panel-opened toggle is in
     // flight. Empty for a keybind, which has no origin on screen.
@@ -120,6 +132,13 @@ private:
     QRectF m_attachmentAnchor;
     QPointer<QWindow> m_openerPanel;
     PanelAttachmentLease m_attachmentLease;
+    // Physical output-local origin of the mapped carrier. Zero for keybind
+    // and floating routes; a panel-attached overlay retains the panel's lower
+    // seam here so occupancy answers can translate its local card back once.
+    QPointF m_openCarrierOriginOnOutput;
+    QPointer<QWindow> m_revealIssuedWindow;
+    QPointer<QWindow> m_glassAwaitingFrameWindow;
+    QPointer<QWindow> m_readyWindow;
 
     QQmlComponent m_component;
     std::function<QString()> m_focusedOutput;

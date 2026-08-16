@@ -27,6 +27,31 @@ TestCase {
         return found;
     }
 
+    function prepareBottomField() {
+        // Remove the fixture card synchronously, then create the bottom-route
+        // delegate with its reveal gate held closed. `resetForReuse()` is the
+        // shared persistent-carrier contract and avoids racing the delegate's
+        // automatic reveal fallback in an offscreen Quick Test window.
+        osd.reducedMotion = true;
+        osd.readings = [];
+        osd.syncCards();
+        osd.departingKinds = [];
+        osd.entersFromBottom = true;
+        osd.shellScale = 1.0;
+        osd.surfaceOriginX = 0;
+        osd.surfaceWidth = osd.cardWidth;
+        osd.surfaceHeight = osd.cardHeight + CelestinaTheme.spaceLg;
+        osd.readings = [
+            {"kind": "volume", "percent": 40, "muted": false, "label": ""}
+        ];
+        const field = testCase.fields()[0];
+        verify(field);
+        field.resetForReuse();
+        osd.collectGlass();
+        osd.reducedMotion = false;
+        return field;
+    }
+
     Desktop.SessionOsd {
         id: osd
 
@@ -35,6 +60,37 @@ TestCase {
         muted: false
         label: ""
         reducedMotion: false
+    }
+
+    function init() {
+        osd.reducedMotion = true;
+        osd.readings = [];
+        osd.kind = "volume";
+        osd.percent = 40;
+        osd.muted = false;
+        osd.label = "";
+        osd.anchoredFromPanel = false;
+        osd.attachmentStartY = -1;
+        osd.surfaceOriginX = 0;
+        osd.surfaceWidth = osd.cardWidth;
+        osd.surfaceHeight = osd.cardHeight;
+        osd.shellScale = 1.0;
+        osd.entersFromBottom = false;
+        osd.readings = [
+            {"kind": "volume", "percent": 40, "muted": false, "label": ""}
+        ];
+        osd.reducedMotion = false;
+    }
+
+    function cleanup() {
+        osd.reducedMotion = true;
+        osd.readings = [];
+        osd.syncCards();
+        osd.departingKinds = [];
+        osd.visible = false;
+        tryVerify(function() { return testCase.fields().length === 0; });
+        osd.entersFromBottom = false;
+        osd.reducedMotion = false;
     }
 
     function test_a_level_reads_as_whole_percent() {
@@ -112,6 +168,84 @@ TestCase {
         compare(section.materialRole, GlassSurface.ContentSurface);
         verify(body.materialStrength < section.materialStrength);
         osd.visible = false;
+    }
+
+    function test_bottom_entry_waits_for_reveal_before_moving_or_glass() {
+        const field = testCase.prepareBottomField();
+        verify(field.transform.length > 0);
+        const ride = field.transform[0];
+        const offscreen = osd.cardHeight + CelestinaTheme.spaceLg;
+
+        compare(field.revealed, false);
+        compare(ride.y, offscreen);
+        compare(osd.glassRegions.length, 0);
+        // Longer than SoftMenuField's offscreen reveal fallback: resetting the
+        // reusable field must have cancelled both presentation and movement.
+        wait(70);
+        compare(field.revealed, false);
+        compare(ride.y, offscreen);
+        compare(osd.glassRegions.length, 0);
+
+        field.revealNow();
+        tryVerify(function() { return ride.y < offscreen; });
+        tryVerify(function() { return osd.glassRegions.length === 1; });
+    }
+
+    function test_hidden_persistent_carrier_waits_to_spend_its_reveal() {
+        osd.reducedMotion = false;
+        osd.visible = false;
+        osd.readings = [];
+        osd.syncCards();
+        osd.departingKinds = [];
+        osd.entersFromBottom = true;
+        osd.surfaceHeight = osd.cardHeight + CelestinaTheme.spaceLg;
+        osd.readings = [
+            {"kind": "volume", "percent": 40,
+             "muted": false, "label": ""}
+        ];
+        const field = testCase.fields()[0];
+        verify(field);
+
+        // Longer than SoftMenuField's fallback. Component completion must not
+        // animate a delegate that its persistent QWindow has not shown yet.
+        wait(70);
+        compare(field.revealed, false);
+        compare(osd.glassRegions.length, 0);
+
+        osd.visible = true;
+        tryCompare(field, "revealed", true);
+        tryVerify(function() { return osd.glassRegions.length === 1; });
+    }
+
+    function test_bottom_glass_follows_the_real_entry_transform() {
+        const field = testCase.prepareBottomField();
+        const ride = field.transform[0];
+        const offscreen = osd.cardHeight + CelestinaTheme.spaceLg;
+        field.revealNow();
+
+        let sawMovingRegion = false;
+        for (let step = 0; step < 24; ++step) {
+            wait(8);
+            if (ride.y <= 1 || ride.y >= offscreen - 1
+                    || osd.glassRegions.length === 0)
+                continue;
+            const moving = osd.glassRegions[0].rect;
+            // The animation may advance once between the deferred collector
+            // and this sample. A token-sized bound still rejects either old
+            // failure: a stationary landed or fully offscreen footprint.
+            verify(Math.abs(moving.y - ride.y) < CelestinaTheme.spaceSm,
+                   "glass y " + moving.y + " did not follow bottom ride y "
+                   + ride.y + " at step " + step);
+            sawMovingRegion = true;
+            break;
+        }
+        verify(sawMovingRegion, "no transformed entry region was observed");
+
+        tryVerify(function() { return Math.abs(ride.y) < 0.01; });
+        tryVerify(function() {
+            return osd.glassRegions.length === 1
+                    && Math.abs(osd.glassRegions[0].rect.y) < 0.01;
+        });
     }
 
     // The display attaches to the bar exactly as a menu does: handed the
@@ -235,11 +369,11 @@ TestCase {
         compare(cards[0].cardValueText, "75 %");
 
         // Emptying does not vanish the rows: they recede — faded, shrunk —
-        // for one exit beat, and the sweep then removes them, leaving the
-        // synthesized single card of the compatibility route.
+        // for one exit beat, and the sweep then removes them. Front
+        // compatibility properties never synthesize a replacement card.
         osd.readings = [];
         verify(testCase.fields().length >= 1);
-        tryVerify(function() { return testCase.fields().length === 1; });
+        tryVerify(function() { return testCase.fields().length === 0; });
     }
 
     // A kind the host replaced recedes by moving away: faded and shrunk while
@@ -269,46 +403,73 @@ TestCase {
         tryVerify(function() { return testCase.fields().length === 1; });
         compare(testCase.fields()[0].kind, "brightness");
         osd.readings = [];
-        tryVerify(function() { return testCase.fields().length === 1; });
+        tryVerify(function() { return testCase.fields().length === 0; });
     }
 
-    function test_probe_creation_like_host() {
-        const component = Qt.createComponent("../qml/SessionOsd.qml");
-        verify(component.status === Component.Ready, component.errorString());
-        const win = component.createObject(null, {
-            "kind": "volume", "percent": 35, "muted": false, "label": "",
-            "reducedMotion": false,
-            "readings": [{"kind": "volume", "percent": 35, "muted": false, "label": ""}],
-            "anchoredFromPanel": true,
-            "openerRect": Qt.rect(1500, 5, 60, 30),
-            "attachmentAnchorRect": Qt.rect(1520, 11, 18, 18),
-            "attachmentStartY": 40,
-            "surfaceOriginX": 1200,
-            "surfaceWidth": 720,
-            "surfaceHeight": 260,
-            "shellScale": 1.0
-        });
-        verify(win);
-        win.visible = true;
-        wait(600);
-        const found = [];
-        function walk(item) {
-            for (let i = 0; i < item.children.length; ++i) {
-                const c = item.children[i];
-                if (c.objectName === "celestina-soft-menu-field") found.push(c);
-                walk(c);
+    function test_bottom_glass_shrinks_with_departing_paint() {
+        const leaving = testCase.prepareBottomField();
+        const ride = leaving.transform[0];
+        leaving.revealNow();
+        tryVerify(function() { return Math.abs(ride.y) < 0.01; });
+        tryVerify(function() { return osd.glassRegions.length === 1; });
+        const resting = osd.glassRegions[0].rect;
+
+        osd.readings = [];
+        compare(osd.departingKinds.length, 1);
+        let faded = null;
+        for (let step = 0; step < 28; ++step) {
+            wait(8);
+            if (testCase.fields().indexOf(leaving) < 0)
+                break;
+            if (leaving.opacity < 0.35 && osd.glassRegions.length === 1) {
+                faded = osd.glassRegions[0].rect;
+                break;
             }
         }
-        walk(win.contentItem);
-        console.warn("fields:", found.length);
-        for (let i = 0; i < found.length; ++i) {
-            const f = found[i];
-            const content = findChild(f, "celestina-soft-menu-content");
-            console.warn(i, "revealed", f.revealed, "presented", f.surfacePresented,
-                         "queued", f.fallQueued, "progress", f.attachmentProgress,
-                         "opacity", content ? content.opacity : "?");
-        }
-        win.destroy();
+        verify(faded !== null,
+               "no glass region accompanied the nearly exhausted paint");
+        verify(faded.width < resting.width - 1);
+        verify(faded.height < resting.height - 1);
+        verify(Math.abs((faded.x + faded.width / 2)
+                        - (resting.x + resting.width / 2)) < 1);
+        verify(Math.abs((faded.y + faded.height / 2)
+                        - (resting.y + resting.height / 2)) < 1);
+
+        tryVerify(function() { return testCase.fields().length === 0; });
+        tryVerify(function() { return osd.glassRegions.length === 0; });
+    }
+
+    function test_only_the_presenting_twin_can_receive_a_card_file() {
+        const component = Qt.createComponent("../qml/SessionOsd.qml");
+        verify(component.status === Component.Ready, component.errorString());
+        const first = component.createObject(null, {
+            "kind": "volume", "percent": 35, "muted": false, "label": "",
+            "reducedMotion": false,
+            "readings": []
+        });
+        const second = component.createObject(null, {
+            "kind": "volume", "percent": 35, "muted": false, "label": "",
+            "reducedMotion": false,
+            "readings": []
+        });
+        verify(first && second);
+        compare(first.cards.length, 0);
+        compare(second.cards.length, 0);
+
+        first.readings = [
+            {"kind": "volume", "percent": 35, "muted": false, "label": ""}
+        ];
+        compare(first.cards.length, 1);
+        compare(second.cards.length, 0);
+
+        first.readings = [];
+        second.readings = [
+            {"kind": "volume", "percent": 35, "muted": false, "label": ""}
+        ];
+        compare(first.cards.length, 0);
+        compare(second.cards.length, 1);
+        first.destroy();
+        second.destroy();
     }
 
     // The three quantities the bar shows are named here by the same glyphs.

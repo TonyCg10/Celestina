@@ -23,6 +23,11 @@ Item {
 
     property bool animateReveal: true
     property bool revealed: false
+    // One irreversible lifecycle edge. A close request may arrive from a
+    // popup, its carrier, or a repeated toggle in the same event turn; they
+    // all retire this one field and none may restart its entry or republish
+    // material underneath the departure.
+    property bool retiring: false
     property bool compositorBlurAvailable: false
     // Only a surface opened by a real panel control grows into the top edge.
     // Command/keybind routes leave this false and keep the rounded floating
@@ -149,11 +154,29 @@ Item {
     property real retireScale: 1
     readonly property real attachmentContentOpacity: root.attachmentFadeIn
                                                      * root.retireOpacity
+    // `animateReveal` chooses whether the reveal itself is animated; it never
+    // grants permission to paint before the reveal gate. Popup-backed menus
+    // deliberately disable the extra fade because their whole card falls, and
+    // reduced motion resolves immediately, but both must still wait for the
+    // shared presentation gate. This is also the value their out-of-tree Qt
+    // Quick Menu rows mirror, keeping rows and glass on one clock.
+    readonly property real presentationOpacity: root.revealed
+                                                ? root.attachmentContentOpacity
+                                                : 0
 
-    // A dismissed surface is destroyed by its host, so the fade has to happen
-    // before that: `SoftMenu` starts it on the popup's `aboutToHide`, which
-    // runs while the exit transition still has the window alive.
+    // A dismissed surface is destroyed by its host after this beat. Stop every
+    // possible entry writer before fading: otherwise a drop still in flight
+    // republishes its glass while the host is collapsing that same material.
     function retire() {
+        if (root.retiring)
+            return;
+        root.retiring = true;
+        root.revealQueued = false;
+        root.fallQueued = false;
+        revealSwap.target = null;
+        revealSwapFallback.stop();
+        presentationFallback.stop();
+        dropFall.stop();
         if (root.reducedMotion) {
             root.retireOpacity = 0;
             root.retireScale = 1;
@@ -234,7 +257,7 @@ Item {
     // never swap a frame at all.
     property bool revealQueued: false
     function reveal() {
-        if (root.revealed || root.revealQueued)
+        if (root.revealed || root.revealQueued || root.retiring)
             return;
         root.revealQueued = true;
         revealSwap.target = root.Window.window;
@@ -244,9 +267,32 @@ Item {
         revealSwap.target = null;
         revealSwapFallback.stop();
         root.revealQueued = false;
+        if (root.retiring)
+            return;
         root.revealed = true;
         root.beginDropFall();
         root.scheduleGlassCollection();
+    }
+
+    // A persistent quiet carrier can become empty and receive a new block
+    // before its host has torn the QWindow down. Reset only the presentation
+    // edge; the already-presented carrier remains presented, while the next
+    // block gets a fresh reveal and (when attached) a fresh fall. Ordinary
+    // menus never call this: their field lifecycle remains irreversible.
+    function resetForReuse() {
+        if (root.retiring)
+            return;
+        revealSwap.target = null;
+        revealSwapFallback.stop();
+        presentationFallback.stop();
+        dropFall.stop();
+        root.revealQueued = false;
+        root.fallQueued = false;
+        root.revealed = false;
+        root.hasFallen = false;
+        root.attachmentProgress = root.fallsIntoPlace ? 0 : 1;
+        root.glassRects = [];
+        root.glassRegions = [];
     }
     Connections {
         id: revealSwap
@@ -275,6 +321,8 @@ Item {
     // to its settled geometry instead of waiting for an animation that never
     // runs.
     function beginDropFall() {
+        if (root.retiring)
+            return;
         if (!root.fallsIntoPlace) {
             root.attachmentProgress = 1;
             return;
@@ -306,6 +354,8 @@ Item {
     onHostWindowChanged: root.nudgePresentation()
 
     function nudgePresentation() {
+        if (root.retiring)
+            return;
         if (!root.surfacePresented || root.fallQueued)
             presentationFallback.restart();
         if (!root.surfacePresented && root.fallQueued && root.hostWindow)
@@ -348,7 +398,7 @@ Item {
     }
 
     function startFall() {
-        if (dropFall.running || root.hasFallen)
+        if (root.retiring || dropFall.running || root.hasFallen)
             return;
 
         root.hasFallen = true;
@@ -372,7 +422,7 @@ Item {
     // read false from in here and true from the very next statement outside —
     // so this recomputes the request from the raw inputs itself.
     function beginLateFall() {
-        if (!root.revealed || root.reducedMotion)
+        if (root.retiring || !root.revealed || root.reducedMotion)
             return;
         const anchorReal = root.attachmentAnchorRect.width > 0
                            && root.attachmentAnchorRect.height > 0;
@@ -391,13 +441,19 @@ Item {
     onAttachmentAnchorRectChanged: root.beginLateFall()
 
     function collectGlass() {
+        // Freeze the last published regions during departure. The host owns
+        // their one collapse; publishing a fresh settled region here would
+        // re-arm the dense companion and weak blur underneath fading paint.
+        if (root.retiring)
+            return;
         // Not before the reveal. The compositor's material cannot fade — a
         // region exists or it does not — so a region armed while the paint is
         // still at zero is a bare milky slab on the wallpaper, which the
         // author recorded leading the card by several frames on every open.
         // Collected only once the reveal is running, the snap lands under
         // paint that is already forming, and the two read as one block.
-        if (!root.revealed) {
+        if (!root.revealed || !root.visible || root.opacity <= 0
+                || content.opacity <= 0) {
             root.glassRects = [];
             root.glassRegions = [];
             return;
@@ -414,12 +470,20 @@ Item {
                     && child.visible
                     && child.width > 0 && child.height > 0) {
                     const rect = EdgeAttachedGeometry.mapRect(child);
+                    const polygon = EdgeAttachedGeometry.mapPolygon(
+                            child, child.polygon);
+                    // An edge silhouette with no sampled area is still wholly
+                    // behind its seam. Publishing its bounding rectangle here
+                    // makes the backend fall back to a full rounded card and
+                    // produces a material-only first frame. Plain floating
+                    // cards deliberately retain their rectangle fallback.
+                    if (root.edgeShapeActive && polygon.length < 3)
+                        continue;
                     foundRects.push(rect);
                     foundRegions.push({
                         "rect": rect,
                         "radius": child.radius,
-                        "polygon": EdgeAttachedGeometry.mapPolygon(
-                            child, child.polygon)
+                        "polygon": polygon
                     });
                 }
                 walk(child);
@@ -431,7 +495,9 @@ Item {
     }
 
     function scheduleGlassCollection() {
-        glassSettle.restart();
+        if (root.retiring)
+            return;
+        Qt.callLater(root.collectGlass);
     }
 
     // The compositor region is expressed in window coordinates, not merely in
@@ -441,14 +507,23 @@ Item {
     onXChanged: root.scheduleGlassCollection()
     onYChanged: root.scheduleGlassCollection()
     onSurfacePositionChanged: root.scheduleGlassCollection()
+    // OSD and toast delegates animate the complete field while preserving
+    // their carriers. Withdraw material on the same terminal paint frame,
+    // rather than leaving a compositor-only footprint until destruction.
+    onOpacityChanged: {
+        if (!root.retiring)
+            root.collectGlass();
+    }
+    onVisibleChanged: {
+        if (!root.retiring)
+            root.collectGlass();
+    }
 
-    // The compositor region follows the falling drop frame by frame. The
-    // settle debounce below exists for reveals whose geometry is briefly
-    // wrong mid-animation; during the fall every frame's geometry is exact —
-    // the outline and its sampled polygon come from the same function — and
-    // debouncing it swallowed every frame and delivered only the landed
-    // shape, so the whole opening played over an unblurred backdrop and the
-    // blur arrived as a pop at the end. ext-background-effect is
+    // The compositor region follows the falling drop frame by frame. Every
+    // frame's geometry is exact — the outline and its sampled polygon come
+    // from the same function — and deferring it until the landed shape made
+    // the whole opening play over an unblurred backdrop before the material
+    // arrived as a pop. ext-background-effect is
     // double-buffered and the blur controller re-arms only when the region
     // really changed, so publishing per frame costs one region update on a
     // frame that is being committed anyway.
@@ -536,22 +611,6 @@ Item {
         easing.type: CelestinaTheme.easeExit
     }
 
-    Timer {
-        id: glassSettle
-
-        // A floating rectangle must be sampled after scale-up reaches 1.0;
-        // publishing its transformed origin with its untransformed size midway
-        // through that animation creates a blur region larger than the card.
-        // The attached route never scales, so it uses the short settle and
-        // arms its polygon with the opacity reveal instead of visibly later.
-        interval: root.animateReveal && !root.reducedMotion
-                  && !root.edgeAttachmentRequested
-                  ? CelestinaTheme.motionNormal + CelestinaTheme.space3xl
-                  : 80
-        repeat: false
-        onTriggered: root.collectGlass()
-    }
-
     // The author asked for the fall to happen behind the bar, and a layer
     // cannot slide under the panel's own surface: the overlay layer is above
     // it by protocol. So the field simply never paints above the seam while
@@ -596,8 +655,22 @@ Item {
                 || !root.animateReveal || root.revealed || root.reducedMotion
                 ? 1 : 0.92) * root.retireScale
         // The whole surface, glass included, carries the fade at both ends.
-        opacity: (!root.animateReveal || root.revealed || root.reducedMotion
-                  ? 1 : 0) * root.attachmentContentOpacity
+        opacity: root.presentationOpacity
+
+        // The collector maps both transformed corners, so the material can
+        // follow the real scale instead of appearing in a second beat after
+        // the animation. Publish on the first non-transparent paint value and
+        // then on every geometric scale change; paint and compositor material
+        // therefore enter in the same committed frame.
+        onOpacityChanged: {
+            if (!root.retiring
+                    && (content.opacity <= 0 || root.glassRegions.length === 0))
+                root.collectGlass();
+        }
+        onScaleChanged: {
+            if (!root.retiring && root.revealed && content.opacity > 0)
+                root.collectGlass();
+        }
 
         CompositorGlassRegion {
             x: root.edgePaneX
@@ -679,7 +752,11 @@ Item {
         }
 
         Behavior on opacity {
-            enabled: !root.reducedMotion
+            // Popup-backed menus disable animateReveal because their complete
+            // block is already moving with the fall. Once their common gate
+            // opens, rows and field must appear on the same frame rather than
+            // leaving only the field in this extra fade.
+            enabled: !root.reducedMotion && root.animateReveal
 
             NumberAnimation {
                 duration: CelestinaTheme.motionFast

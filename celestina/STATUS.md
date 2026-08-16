@@ -1,6 +1,6 @@
 # Celestina status
 
-- **Updated:** 2026-08-14
+- **Updated:** 2026-08-16
 - **Implementation:** R0-R7, R8's departure slice, LVR-1 through LVR-3, the
   static hardening previously drafted as `AUD-1`, `UX-1` and `WSG-1` are
   complete
@@ -53,6 +53,57 @@
   [lifecycle record](docs/evidence/2026-08-05-ddc-process-lifecycle.md).
 
 ## Current checkout truth
+
+- **Implemented corrective unit — `R8-P-P`.** After the panel-seam correction was
+  confirmed live, the author's 1920x1080, 60 fps recording exposed a temporal
+  split in the bottom-right OSD and centred overlays. The OSD published a bare
+  weak-blur footprint before its paint, added dense material 13 frames later
+  and left the footprint behind during departure; switching Launcher to
+  Clipboard hard-removed the old overlay four frames before the new one was
+  presentation-ready, and the new field acquired dense material about 232 ms
+  after its paint. Toasts shared the same independent reveal, material and
+  retirement clocks. OSD, toast and overlay now enter and leave from one
+  presentation lifecycle: material follows the animated geometry, an overlay
+  becomes ready only after its first painted frame, the previous overlay
+  retires softly, and toast re-entry cannot race a pending row sweep. Focused
+  temporal regressions, every Rust suite, the complete QML runner, all 23 CTest
+  contracts and the eight-second production smoke pass. Celestina 0.29.11 is
+  deployed without touching the main session, and the nested host is PID
+  464884 on `wayland-2`. The author's perceptual retry is pending. See the
+  [quiet-surface temporal lifecycle record](docs/evidence/2026-08-16-quiet-surface-temporal-lifecycle.md).
+
+- **Implemented corrective unit — `R8-P-O`.** The corrected 60 fps recording shows
+  four independent openings painting inside the 40-pixel panel strip before
+  becoming coherent below it: calendar frames 97–101, tray inventory 176–181,
+  Notification Centre 271–279 and audio 317–325. That retry also confirms the
+  `R8-P-N` departure synchronization is fixed. The remaining defect was
+  spatial, not another timer: panel-attached layer windows still covered y=0,
+  Popup rows moved their ListView viewport and clip together, and dense-glass
+  publication ignored ancestor clips. Panel menu, focusable overlay, OSD and
+  toast buffers now begin physically below the bar; every attached coordinate
+  is carrier-local, Popup content travels inside a fixed clipped viewport, and
+  dense companions publish only their clipped region. Architecture, focused
+  scale regressions, the complete QML runner, every Rust suite and all 23 CTest
+  contracts pass. The author subsequently confirmed that the panel-seam defect
+  is fixed; that result led to the independent temporal follow-up in `R8-P-P`.
+  The complete batch is delivered as Celestina 0.29.11. See the
+  [panel seam carrier record](docs/evidence/2026-08-16-panel-seam-carriers.md).
+
+- **Completed corrective unit — `R8-P-N`.** The 60 fps report exposed a lifecycle
+  split rather than menu-specific styling: popup-backed tray, phone,
+  performance, network, Bluetooth and capture menus completed a private Qt
+  exit before the host began the field/glass departure, while action routes in
+  the foreign tray child could hard-destroy the carrier. They now notify the
+  host from `aboutToHide`, mirror one field-owned departure and use idempotent
+  retirement; every reveal mode remains unpainted until the presentation gate.
+  The inactive OSD twin can no longer synthesize a card from stale front
+  compatibility properties, and departing OSD glass outlives its final card.
+  Architecture, focused integration, the complete QML runner and all 23 CTest
+  contracts pass, with the D-Bus fixture run outside the restricted sandbox.
+  Its intermediate production completion passed without activating the main
+  session. The subsequent author retry
+  confirms its synchronized-departure result and isolates the remaining
+  first-frame seam failure in `R8-P-O`.
 
 - **Current milestone prototype — `PANEL-1-S`.** The quiet surfaces are made
   of the shell's glass and hang from the bar. The on-screen display and the

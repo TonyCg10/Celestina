@@ -1013,14 +1013,53 @@ result.
   passes CTest 17/17 and the eight-second release smoke.
   The verified bundle is deployed to `~/.local` and reports current without
   activating a session. The author-run nested-Niri perceptual pass remains
-  pending in this active prototype record.
+  pending in this active prototype record. On 2026-08-15 the author's first
+  60 fps recording showed a calendar frame over the panel seam and phone/tray
+  departures split between rows, material and carrier. `R8-P-N` corrected the
+  departure lifecycle, and the author's next retry confirmed that
+  synchronization result. The corrected source recording nevertheless shows
+  four first-frame failures: calendar frames 97–101, tray inventory 176–181,
+  Notification Centre 271–279 and audio 317–325 paint in the panel strip before
+  becoming coherent below it. `R8-P-O` moves the layer-surface buffer boundary
+  itself below the panel, fixes the Popup viewport at that seam and clips dense
+  compositor regions through their ancestors. Its intermediate registered
+  production completion passed without activating the main session. Nested
+  Niri remained PID 80685 and the changed
+  build-tree shell restarted there as PID 306790 with
+  `WAYLAND_DISPLAY=wayland-2` and
+  `NIRI_SOCKET=/run/user/1000/niri.wayland-2.80685.sock`. The author then
+  confirmed that the panel-seam defect is fixed. A subsequent 778-frame,
+  1920x1080 recording at 60 fps
+  (`recording_20260816_001614.mp4`, SHA-256
+  `c2aec9dee5120a8aa37a8e3f709434a3b4a4b7cfabccda791e710c2aa0548c5f`)
+  exposed an independent temporal split. The bottom-right OSD first published
+  bare blur at frames 113–114, paint at frame 115 and dense material at frame
+  126; during departure, frames 340–341 retained bare blur after paint had
+  almost vanished. A second cycle reproduced the same ordering at frames
+  383/386/396 and 503–505. During an overlay switch, Launcher vanished after
+  frame 516, frames 517–520 were empty, Clipboard began at frame 521 and its
+  settled dense material appeared at frame 536. `R8-P-P` now couples animated
+  paint and compositor regions, defers overlay readiness until a painted
+  exposed swap, softly retires the previous overlay, and gives all toast
+  placements one re-entrant whole-block departure. Registered production
+  completion passes every Rust suite, the complete QML runner, all 23 CTest
+  contracts and the eight-second smoke, and deploys Celestina 0.29.11 without
+  activating the main session. The nested Niri remains PID 80685; its changed
+  build-tree host is PID 464884 on `wayland-2`. Repeat two bottom-right OSD
+  cycles and a Launcher-to-Clipboard switch in that nest. Paint, weak blur and
+  dense material must appear, move and disappear as one block, with no empty
+  handoff frames or late material snap. Test a toast only in a nest that owns
+  `org.freedesktop.Notifications`; the current shared bus is owned elsewhere.
 - **Evidence:** [PANEL-1-A delivery](docs/evidence/2026-08-08-panel-glass-baseline.md),
   [PANEL-1-B adaptive ink nested comparison](docs/evidence/2026-08-10-panel-adaptive-ink-nested.md),
   [PANEL-1-B contextual hierarchy and grouping](docs/evidence/2026-08-10-contextual-menu-hierarchy-nested.md),
   [PANEL-1-F shared menu glass](docs/evidence/2026-08-11-contextual-menu-shared-glass.md),
   [PANEL-1-G content glass](docs/evidence/2026-08-11-one-ui-content-glass.md),
   [PANEL-1-H fixed white shell ink](docs/evidence/2026-08-11-fixed-white-shell-ink.md),
-  [PANEL-1-I continuous bar veil and contextual connectors](docs/evidence/2026-08-11-edge-attached-shell-prototype.md)
+  [PANEL-1-I continuous bar veil and contextual connectors](docs/evidence/2026-08-11-edge-attached-shell-prototype.md),
+  [R8-P-N panel-menu lifecycle audit](docs/evidence/2026-08-15-one-panel-menu-lifecycle.md),
+  [R8-P-O panel seam carriers](docs/evidence/2026-08-16-panel-seam-carriers.md),
+  [R8-P-P quiet-surface temporal lifecycle](docs/evidence/2026-08-16-quiet-surface-temporal-lifecycle.md)
 
 ## Closed historical observations
 

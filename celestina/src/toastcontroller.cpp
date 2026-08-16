@@ -83,8 +83,8 @@ ToastController::ToastController(
         m_enabled = false;
     }
 
-    // One full exit beat plus a breath, matching the display's own closing
-    // wait: the QML's recede runs for the theme's `motionNormal` (200 ms).
+    // QML owns the real completion edge. One full exit beat plus a breath is
+    // only the watchdog for an unpresented or otherwise stalled scene.
     m_closeTimer.setSingleShot(true);
     m_closeTimer.setInterval(260);
     connect(&m_closeTimer, &QTimer::timeout, this, &ToastController::hide);
@@ -130,8 +130,13 @@ void ToastController::providersChanged()
         // and the teardown waits out the beat. A window that is not up has
         // nothing to play — it is simply confirmed down.
         if (QWindow *const shown = m_surface->window()) {
-            shown->setProperty("toasts", QVariantList());
             shown->setProperty("actions", QVariantList());
+            shown->setProperty("toasts", QVariantList());
+            // Reduced motion may finish synchronously while assigning the
+            // list. Do not kick or arm a watchdog for a carrier QML already
+            // completed and released.
+            if (m_surface->window() != shown)
+                return;
             quietKickRender(shown);
             if (!m_closeTimer.isActive())
                 m_closeTimer.start();
@@ -185,11 +190,9 @@ QWindow *ToastController::createWindow(
     return window;
 }
 
-// An attached stack's window reaches the real top edge because the membrane's
-// seam is inside the strip the panel reserved — which means it covers the
-// bell and its neighbours. The cards are interactive and keep their input;
-// everything above the seam belongs to the panel, so the pointer must pass
-// through it.
+// An attached stack's window begins at the panel's physical lower seam. The
+// cards remain interactive and the complete local carrier is safe input: no
+// mask can accidentally put this window back over the bell or its neighbours.
 void ToastController::applyInputMask(QWindow *window)
 {
     if (!window)
@@ -200,14 +203,8 @@ void ToastController::applyInputMask(QWindow *window)
         return;
     }
 
-    // The panel window's own height is the seam, in the same logical units
-    // this window's mask uses: both already carry the per-output factor.
-    QWindow *const panel =
-        m_panels ? m_panels->panelWindowFor(window->screen()) : nullptr;
-    const int seam = panel ? qMax(0, panel->height()) : 0;
     window->setMask(QRegion(
-        0, seam,
-        qMax(1, window->width()), qMax(1, window->height() - seam)
+        0, 0, qMax(1, window->width()), qMax(1, window->height())
     ));
 }
 
@@ -220,8 +217,8 @@ void ToastController::show(const QVariantList &toasts, const QVariantList &actio
     // every arrival would make the corner flicker and would lose whatever the
     // person was reading.
     if (QWindow *const shown = m_surface->window()) {
-        shown->setProperty("toasts", toasts);
         shown->setProperty("actions", actions);
+        shown->setProperty("toasts", toasts);
         applyInputMask(shown);
         return;
     }
@@ -283,12 +280,14 @@ void ToastController::show(const QVariantList &toasts, const QVariantList &actio
         placementProperties.insert(QStringLiteral("entersFromBottom"), true);
     } else if (geometry.valid) {
         placement = OverlaySurface::Placement::AttachedTopRight;
+        const QRectF localOpener = geometry.onSurface(opener);
+        const QRectF localIcon = geometry.onSurface(icon);
         placementProperties.insert(QStringLiteral("anchoredFromPanel"), true);
-        placementProperties.insert(QStringLiteral("openerRect"), opener);
-        placementProperties.insert(QStringLiteral("attachmentAnchorRect"), icon);
-        placementProperties.insert(QStringLiteral("attachmentStartY"), barHeight);
+        placementProperties.insert(QStringLiteral("openerRect"), localOpener);
         placementProperties.insert(
-            QStringLiteral("surfaceOriginX"), geometry.surface.x());
+            QStringLiteral("attachmentAnchorRect"), localIcon);
+        placementProperties.insert(QStringLiteral("attachmentStartY"), 0);
+        placementProperties.insert(QStringLiteral("surfaceOriginX"), 0);
         placementProperties.insert(
             QStringLiteral("surfaceWidth"), geometry.surface.width());
         placementProperties.insert(
@@ -299,7 +298,18 @@ void ToastController::show(const QVariantList &toasts, const QVariantList &actio
     if (!stack)
         return;
 
-    if (!m_surface->open(stack, screen, placement)) {
+    // The signal is declared by ToastStack.qml, so it is connected through
+    // the runtime meta-object rather than a generated C++ type.
+    connect(
+        stack,
+        SIGNAL(departureFinished()),
+        this,
+        SLOT(toastDepartureFinished())
+    );
+
+    const int topInset = placement == OverlaySurface::Placement::AttachedTopRight
+        ? geometry.topInsetInOutputUnits(shellScale) : 0;
+    if (!m_surface->open(stack, screen, placement, topInset)) {
         delete stack;
         return;
     }
@@ -323,8 +333,9 @@ void ToastController::show(const QVariantList &toasts, const QVariantList &actio
     m_openScreen = screen;
     m_openCard = prospectiveCard;
     applyInputMask(stack);
-    // The stack grows as toasts arrive; the strip above the seam must stay
-    // the panel's whatever the height becomes.
+    // The stack grows as toasts arrive. Its full local input region follows
+    // that height while the QWindow's physical top remains fixed at the seam,
+    // leaving the panel outside the carrier whatever the column becomes.
     connect(stack, &QWindow::heightChanged, this, [this]() {
         applyInputMask(m_surface->window());
     });
@@ -337,6 +348,14 @@ void ToastController::show(const QVariantList &toasts, const QVariantList &actio
     // unpainted. Kicking one update right after mapping starts the chain.
     quietKickRender(stack);
 
+}
+
+void ToastController::toastDepartureFinished()
+{
+    // A retired stack can finish after a replacement was mapped. Its signal
+    // must never close that newer carrier.
+    if (sender() == m_surface->window())
+        hide();
 }
 
 void ToastController::hide()

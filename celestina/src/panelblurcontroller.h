@@ -34,7 +34,8 @@ bool blurProbeCanUseEffect(
     bool surfaceExposed,
     bool surfaceSized,
     bool effectAvailable,
-    bool glassPresent
+    bool glassPresent,
+    bool surfaceRetiring = false
 );
 
 // Owns the compositor-blur lifecycle for one layer-shell window that publishes

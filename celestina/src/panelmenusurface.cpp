@@ -29,18 +29,29 @@ LayerSurfaceSpec menuSpec(
         ? QStringLiteral("celestina-panel-menu")
         : QStringLiteral("celestina-panel-child-menu");
     spec.screen = screen;
-    // The whole output, with the card placed inside it where the click was.
+    // The available output, with the card placed inside it where the click
+    // was. Panel-attached callers inset this carrier at the panel's lower seam;
+    // floating and side-attached callers retain the complete output by asking
+    // for the default origin.
     //
     // The surface used to be the size of the menu card and positioned by its
     // own margins, which meant a click outside the menu was somebody else's
     // event and the menu stayed up. Covering the output is what lets the menu
     // hear that click — the same correction the focused overlays needed, for
-    // the same reason — and the position moves from the surface's margins into
-    // the content's own coordinates.
+    // the same reason. The card position remains in the content's coordinates;
+    // only the carrier's physical origin is expressed through these margins.
     if (coverage == PanelMenuSurface::Coverage::Output) {
+        const QSize outputSize = screen ? screen->geometry().size() : QSize();
+        const QPoint position(
+            qBound(0, requestedPosition.x(),
+                   qMax(0, outputSize.width() - 1)),
+            qBound(0, requestedPosition.y(),
+                   qMax(0, outputSize.height() - 1))
+        );
         anchors |= LayerShellQt::Window::AnchorBottom;
         anchors |= LayerShellQt::Window::AnchorRight;
         spec.desiredSize = QSize(0, 0);
+        spec.margins = QMargins(position.x(), position.y(), 0, 0);
     } else {
         const QSize outputSize = screen ? screen->geometry().size() : QSize();
         const int maximumX = qMax(0, outputSize.width() - contentSize.width());

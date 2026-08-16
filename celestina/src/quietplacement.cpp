@@ -41,6 +41,13 @@ QQuickItem *findVisibleByObjectName(QQuickItem *root, const QString &name)
 }
 } // namespace
 
+int QuietSurfaceGeometry::topInsetInOutputUnits(double shellScale) const
+{
+    if (!valid || shellScale <= 0.0)
+        return 0;
+    return qMax(0, qRound(surface.y() * shellScale));
+}
+
 QuietAnchor quietAnchorForIcon(QWindow *panel, const QString &iconObjectName)
 {
     auto *quickPanel = qobject_cast<QQuickWindow *>(panel);
@@ -82,7 +89,8 @@ QuietSurfaceGeometry attachedQuietGeometry(
 {
     QuietSurfaceGeometry geometry;
     if (outputSize.width() <= 0 || outputSize.height() <= 0
-        || barHeight < 0 || cardSize.width() <= 0 || cardSize.height() <= 0
+        || barHeight < 0 || barHeight >= outputSize.height()
+        || cardSize.width() <= 0 || cardSize.height() <= 0
         || opener.width() <= 0 || icon.width() <= 0) {
         return geometry;
     }
@@ -111,10 +119,10 @@ QuietSurfaceGeometry attachedQuietGeometry(
         qMax<qreal>(0, qMin(cardX, icon.x()) - inset);
     geometry.surface = QRectF(
         left,
-        0,
+        barHeight,
         outputSize.width() - left,
-        qMin(outputSize.height(),
-             barHeight + connectorSlack + cardSize.height() + inset)
+        qMin(outputSize.height() - barHeight,
+             connectorSlack + cardSize.height() + inset)
     );
     geometry.valid = true;
     return geometry;

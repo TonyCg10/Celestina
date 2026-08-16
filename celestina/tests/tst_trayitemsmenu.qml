@@ -114,6 +114,12 @@ TestCase {
         signalName: "itemMenuRequested"
     }
 
+    SignalSpy {
+        id: menuClosed
+        target: trayMenu.menu
+        signalName: "closed"
+    }
+
     function grid() {
         return findChild(trayMenu, "celestina-tray-icon-grid");
     }
@@ -147,12 +153,13 @@ TestCase {
         trayMenu.menuX = 20;
         trayMenu.menuY = 46;
         trayMenu.maximumContentHeight = 494;
-        if (trayMenu.menu.visible) {
+        if (trayMenu.menu.visible || trayMenu.menu.opened) {
+            menuClosed.clear();
             trayMenu.menu.close();
-            tryCompare(trayMenu.menu, "visible", false);
+            tryCompare(menuClosed, "count", 1);
         }
         trayMenu.menu.open();
-        tryCompare(trayMenu.menu, "visible", true);
+        tryCompare(trayMenu.menu, "opened", true);
         tryCompare(trayMenu.menu, "count", 2);
         tryVerify(function() {
             return testCase.grid() && testCase.grid().count === 2
@@ -458,9 +465,11 @@ TestCase {
         pin.forceActiveFocus();
         tryCompare(pin, "activeFocus", true);
 
+        menuClosed.clear();
         keyClick(Qt.Key_Escape);
 
-        tryCompare(trayMenu.menu, "visible", false);
+        tryCompare(menuClosed, "count", 1);
+        compare(trayMenu.menu.visible, false);
     }
 
     function test_unrelated_inventory_updates_do_not_consume_focus_restore() {

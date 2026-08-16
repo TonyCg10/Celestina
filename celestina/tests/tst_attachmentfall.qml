@@ -38,13 +38,21 @@ TestCase {
         }
     }
 
-    function fieldWith(reducedMotion) {
+    function fieldWith(reducedMotion, animateReveal) {
         return fieldComponent.createObject(
-            testCase, {"reducedMotion": reducedMotion});
+            testCase, {
+                "reducedMotion": reducedMotion,
+                "animateReveal": animateReveal === undefined
+                                 ? true : animateReveal
+            });
     }
 
     function bodyOf(field) {
         return findChild(field, "celestina-soft-menu-body-window");
+    }
+
+    function visualOf(field) {
+        return findChild(field, "celestina-soft-menu-content");
     }
 
     function near(actual, expected) {
@@ -58,13 +66,112 @@ TestCase {
         verify(field.edgeShapeActive);
         verify(!field.fallsIntoPlace);
         // No frame of an animation exists for this route: the surface is
-        // already where it belongs before anything is revealed.
+        // already where it belongs, but the presentation gate still keeps it
+        // unpainted until a frame has authorized the reveal.
         compare(field.attachmentProgress, 1);
         compare(field.attachmentContentOpacity, 1);
-        compare(testCase.bodyOf(field).opacity, 1);
+        compare(field.presentationOpacity, 0);
+        compare(testCase.visualOf(field).opacity, 0);
 
-        field.reveal();
+        field.revealNow();
         compare(field.attachmentProgress, 1);
+        compare(field.presentationOpacity, 1);
+        compare(testCase.visualOf(field).opacity, 1);
+        field.destroy();
+    }
+
+    function test_no_route_paints_before_the_presentation_gate_data() {
+        return [
+            {"tag": "animated", "reduced": false, "animated": true},
+            {"tag": "popup", "reduced": false, "animated": false},
+            {"tag": "reduced-animated", "reduced": true, "animated": true},
+            {"tag": "reduced-popup", "reduced": true, "animated": false}
+        ];
+    }
+
+    function test_no_route_paints_before_the_presentation_gate(data) {
+        const field = testCase.fieldWith(data.reduced, data.animated);
+        verify(field);
+        const visual = testCase.visualOf(field);
+        verify(visual);
+
+        compare(field.revealed, false);
+        compare(field.presentationOpacity, 0);
+        compare(visual.opacity, 0);
+        compare(field.glassRects.length, 0);
+        compare(field.glassRegions.length, 0);
+
+        field.revealNow();
+        compare(field.revealed, true);
+        if (data.reduced || !data.animated) {
+            compare(field.presentationOpacity, 1);
+            compare(visual.opacity, 1);
+        } else {
+            tryCompare(visual, "opacity", 1);
+        }
+        tryVerify(function() { return field.glassRegions.length > 0; });
+        field.destroy();
+    }
+
+    function test_floating_glass_joins_the_first_painted_animation_frame() {
+        const field = fieldComponent.createObject(
+            testCase, {
+                "reducedMotion": false,
+                "attachedToTop": false,
+                "animateReveal": true
+            });
+        verify(field);
+        const visual = testCase.visualOf(field);
+        verify(visual);
+        compare(field.glassRegions.length, 0);
+
+        field.revealNow();
+        tryVerify(function() {
+            return visual.opacity > 0 && visual.opacity < 1;
+        });
+        compare(field.glassRegions.length, 1);
+        verify(visual.scale < 1,
+               "glass waited until after the floating scale animation");
+        const published = field.glassRegions[0].rect;
+        verify(published.width < field.width,
+               "glass published settled geometry during the scale-up");
+        field.destroy();
+    }
+
+    function test_external_field_fade_withdraws_glass_with_its_last_paint() {
+        const field = testCase.fieldWith(true, false);
+        verify(field);
+        field.revealNow();
+        tryVerify(function() { return field.glassRegions.length === 1; });
+
+        // OSD and toast delegates fade the complete field instead of driving
+        // its private retirement animation. Their persistent carrier must not
+        // keep compositor material after that outer paint reaches zero.
+        field.opacity = 0;
+        tryCompare(field.glassRegions, "length", 0);
+        compare(field.glassRects.length, 0);
+        field.destroy();
+    }
+
+    function test_retirement_is_irreversible_and_stops_the_fall() {
+        const field = testCase.fieldWith(false, false);
+        verify(field);
+        field.revealNow();
+        field.surfacePresented = true;
+        field.attachmentProgress = 0.45;
+        const progress = field.attachmentProgress;
+
+        field.retire();
+        verify(field.retiring);
+        field.reveal();
+        field.beginDropFall();
+        wait(30);
+        near(field.attachmentProgress, progress);
+
+        const opacity = field.retireOpacity;
+        field.retire();
+        verify(field.retiring);
+        verify(field.retireOpacity <= opacity);
         field.destroy();
     }
 
@@ -157,7 +264,17 @@ TestCase {
         // earlier it is a milky slab leading the paint. This case is about
         // the frames of the fall, so the fall is started the way a presented
         // frame starts it.
-        field.revealed = true;
+        field.revealNow();
+        tryVerify(function() {
+            return testCase.visualOf(field).opacity > 0;
+        });
+        const fall = findChild(field, "celestina-attachment-drop-fall");
+        verify(fall);
+        fall.stop();
+        field.attachmentProgress = 0;
+        field.collectGlass();
+        compare(field.glassRegions.length, 0);
+        compare(field.glassRects.length, 0);
         const seamMapped = field.mapToItem(null, 0, 0).y
                            + field.attachmentStartY - field.surfacePosition.y;
 

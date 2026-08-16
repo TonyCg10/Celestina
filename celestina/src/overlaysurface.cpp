@@ -13,7 +13,15 @@ constexpr int cornerMargin = 16;
 // A surface placed over everything, including what other surfaces reserved.
 constexpr int ignoreExclusiveZones = -1;
 
-LayerSurfaceSpec centeredSpec(QScreen *screen)
+int boundedTopInset(QScreen *screen, int requested)
+{
+    const int nonNegative = qMax(0, requested);
+    if (!screen)
+        return nonNegative;
+    return qMin(nonNegative, qMax(0, screen->geometry().height() - 1));
+}
+
+LayerSurfaceSpec centeredSpec(QScreen *screen, int topInset)
 {
     auto anchors = LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop);
     anchors |= LayerShellQt::Window::AnchorBottom;
@@ -36,6 +44,10 @@ LayerSurfaceSpec centeredSpec(QScreen *screen)
     // Anchored to all four edges with no size of its own, the compositor sizes
     // the surface to the output — which is what `0 × 0` means here.
     spec.desiredSize = QSize(0, 0);
+    // A panel-opened interactive overlay still covers every available pixel
+    // for outside dismissal, but its carrier begins at the panel's lower seam.
+    // Keybind/floating routes pass zero and retain complete-output coverage.
+    spec.margins = QMargins(0, boundedTopInset(screen, topInset), 0, 0);
     // Reserve nothing, and ignore what everything else reserved: the panel's
     // own exclusive zone would otherwise keep this surface off the one strip
     // whose buttons open it.
@@ -93,19 +105,26 @@ LayerSurfaceSpec cornerSpec(QScreen *screen, const QSize &size, const QString &s
     );
 }
 
-// The membrane's mouth lives at the panel's lower seam, which is inside the
-// strip the panel reserved, so this is the one quiet spec that ignores
-// exclusive zones: with them respected the window would start below the bar
-// and the drop would hang from a seam it cannot reach.
+// The membrane's local mouth is y = 0 and the layer window itself starts at
+// the panel's lower seam. Ignore exclusive zones so the explicit inset is
+// measured once from the output edge rather than composed with the panel's
+// reservation by the compositor.
 LayerSurfaceSpec attachedTopRightSpec(
     QScreen *screen,
     const QSize &size,
-    const QString &scope
+    const QString &scope,
+    int topInset
 )
 {
     auto anchors = LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop);
     anchors |= LayerShellQt::Window::AnchorRight;
-    LayerSurfaceSpec spec = quietSpec(screen, size, scope, anchors, QMargins());
+    LayerSurfaceSpec spec = quietSpec(
+        screen,
+        size,
+        scope,
+        anchors,
+        QMargins(0, boundedTopInset(screen, topInset), 0, 0)
+    );
     spec.exclusiveZone = ignoreExclusiveZones;
     return spec;
 }
@@ -160,10 +179,15 @@ OverlaySurface::~OverlaySurface()
 
 bool OverlaySurface::open(QWindow *content, QScreen *screen)
 {
-    return open(content, screen, m_placement);
+    return open(content, screen, m_placement, 0);
 }
 
-bool OverlaySurface::open(QWindow *content, QScreen *screen, Placement placement)
+bool OverlaySurface::open(
+    QWindow *content,
+    QScreen *screen,
+    Placement placement,
+    int topInset
+)
 {
     if (!content || isOpen())
         return false;
@@ -177,13 +201,14 @@ bool OverlaySurface::open(QWindow *content, QScreen *screen, Placement placement
     LayerSurfaceSpec spec;
     switch (placement) {
     case Placement::Centered:
-        spec = centeredSpec(screen);
+        spec = centeredSpec(screen, topInset);
         break;
     case Placement::Corner:
         spec = cornerSpec(screen, content->size(), m_scope);
         break;
     case Placement::AttachedTopRight:
-        spec = attachedTopRightSpec(screen, content->size(), m_scope);
+        spec = attachedTopRightSpec(
+            screen, content->size(), m_scope, topInset);
         break;
     case Placement::BottomRight:
         spec = bottomRightSpec(screen, content->size(), m_scope);

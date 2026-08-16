@@ -23,8 +23,10 @@ class PanelMenuSurface final : public QObject
 
 public:
     enum class Coverage {
-        // The ordinary panel menu owns the complete output so its outside
-        // click cannot leak through to the panel or an application below it.
+        // The menu owns the output from `outputPosition` to its lower-right
+        // edge. A floating or side-attached menu starts at (0, 0); a menu born
+        // from the panel starts at the panel's lower seam, so no frame from
+        // that carrier can be composited over the bar.
         Output,
         // A child menu is bounded to its card. Its still-mapped output-sized
         // parent remains the outside-click barrier and can receive another
@@ -40,9 +42,10 @@ public:
     // the card sits inside it is the content's own decision, made from the
     // anchor its owner handed it. Returns false without taking ownership when
     // the surface cannot be mapped.
-    // `outputPosition` is used only by `Card` coverage and is expressed in the
-    // panel output's local coordinates. Output coverage retains the content's
-    // own card-placement contract.
+    // `outputPosition` is expressed in the panel output's local coordinates.
+    // With output coverage it is the carrier's top-left origin; with card
+    // coverage it is the bounded card position. Content placement is always
+    // local to the resulting carrier.
     bool open(
         QWindow *content,
         QWindow *panel,

@@ -70,6 +70,11 @@ public:
     // Where the open stack's cards sit, for the display's own probe.
     QRectF openCardRectOnOutput(QScreen *screen) const;
 
+private slots:
+    // QML owns the presentation clock. Only the currently adopted stack may
+    // close its carrier when that clock reaches the end of departure.
+    void toastDepartureFinished();
+
 private:
     void providersChanged();
     void show(const QVariantList &toasts, const QVariantList &actions);
@@ -90,10 +95,9 @@ private:
     QRectF m_openCard;
     QPointer<QScreen> m_openScreen;
     bool m_openAttached = false;
-    // The exit's own beat: an emptied list plays the last section's leave on
-    // the still-mapped window first, and only then is the surface torn down —
-    // a window closed with the list would cut the animation on its first
-    // frame. A toast arriving mid-beat stops this and reclaims the window.
+    // A watchdog, not the presentation clock: QML emits `departureFinished`
+    // after its own exit beat. This closes only if a broken or unpresented
+    // scene never delivers that edge; reentry stops it and reclaims the block.
     QTimer m_closeTimer;
     bool m_enabled;
 };

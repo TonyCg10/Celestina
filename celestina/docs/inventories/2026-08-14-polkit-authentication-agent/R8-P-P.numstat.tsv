@@ -1,0 +1,62 @@
+# R8-P-P exact change inventory
+
+Base revision	314db378d65617441588207990ee3142e110e3ce
+Pathspec	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-08-16-quiet-surface-temporal-lifecycle.md
+Pathspec	celestina/qml/ClipboardOverlay.qml
+Pathspec	celestina/qml/ControlCentre.qml
+Pathspec	celestina/qml/LauncherOverlay.qml
+Pathspec	celestina/qml/NotificationCenter.qml
+Pathspec	celestina/qml/SessionMenu.qml
+Pathspec	celestina/qml/SessionOsd.qml
+Pathspec	celestina/qml/SoftMenuField.qml
+Pathspec	celestina/qml/ToastStack.qml
+Pathspec	celestina/src/overlaycontroller.cpp
+Pathspec	celestina/src/overlaycontroller.h
+Pathspec	celestina/src/panelblurcontroller.cpp
+Pathspec	celestina/src/panelblurcontroller.h
+Pathspec	celestina/src/toastcontroller.cpp
+Pathspec	celestina/src/toastcontroller.h
+Pathspec	celestina/tests/overlaycontract_test.cpp
+Pathspec	celestina/tests/tst_attachmentfall.qml
+Pathspec	celestina/tests/tst_notificationjoin.qml
+Pathspec	celestina/tests/tst_sessionosd.qml
+Pathspec	docs/version-history.tsv
+Pathspec	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-P.numstat.tsv
+
+Plan	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Evidence	celestina/docs/evidence/2026-08-16-quiet-surface-temporal-lifecycle.md
+
+added	deleted	content	path
+3	0	2bcb9c707ac1f6dd32b3e7c3f11373cf447959f79953ad64046688f6a7f14199	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+1	1	35eb5377a35926e99c9759800c193872557db04ac65889d06a2b056a3b5d1140	celestina/CMakeLists.txt
+1	1	76e052833f379cfe4208b7027d8a14562271fcb410b1c1009eda063ad0769f8b	celestina/Cargo.lock
+1	1	b4802162ca0165fc35a0c6267b3f4ff9f9a5a216c1626d7f69853b74159921f9	celestina/Cargo.toml
+52	1	d4d59254117b299e3102231ab3579a15cc4402056a259c84678b7994416eaf65	celestina/STATUS.md
+41	2	5f3b10c9be20cee1112caa2cc4739c8d8428b291f14b12064c93163427477311	celestina/VALIDATION.md
+78	0	bfa718b2659b1c43b4b455d1f763dfce8baf6841b37571637ccced63e5f2b03a	celestina/docs/evidence/2026-08-16-quiet-surface-temporal-lifecycle.md
+0	31	81427b551c29a1a09ed1638fc495d2747e2cecd5bb598e1a404350926c8ae7e3	celestina/qml/ClipboardOverlay.qml
+0	31	c5e2a4320b32d7ed0d9ed76e13f98b817df0358d669e73d9ab3289fdf4cf24c4	celestina/qml/ControlCentre.qml
+0	31	19717b8da300bd032128db9899fa27dfb2657bd21d175b6e3d509b2a13cf7e64	celestina/qml/LauncherOverlay.qml
+0	31	6cc03456b4df5b7cdce9ca1c093cf5384002fc9abb65169802932b5c9dd1404d	celestina/qml/NotificationCenter.qml
+0	31	5dd598f2c94ca9b204c3a64bbad2b0ba5ff6f6254daa75e028887346a8f503ea	celestina/qml/SessionMenu.qml
+59	72	4d572c68ea44417a3c8a8ef93119c31a3184756e8af46169a2f853fe8e8d730c	celestina/qml/SessionOsd.qml
+114	37	c1035e6e3f1da606fe8f2b625873085215d859a320c7b71fe672f4018f3e1689	celestina/qml/SoftMenuField.qml
+97	47	c22264b256242557f3b30413bfe9a1ff33e97cb6f9bb0508d5ddca34a612ac9e	celestina/qml/ToastStack.qml
+207	58	75c69bba473feb66898b62c69a6d5d5b99bf68c6e437c6a18406e163462f0818	celestina/src/overlaycontroller.cpp
+20	1	5f97576d76b16f0c0a0d4f568ee9993ef714a948fd51d87bb7b2b6c79f5d9c41	celestina/src/overlaycontroller.h
+22	3	f9919c560ed82ecc3d532401b09e5847026b69ab88a13980978a5f2fda2f1a22	celestina/src/panelblurcontroller.cpp
+2	1	e4bb13cc046c9a0ac1ce5d7507eafcb53792ea11ddc8b57542d9dfe802338e2e	celestina/src/panelblurcontroller.h
+42	23	835206b834b484a25ff293fc83152c19c8d57556f56a109ca2b82b3f443e10cb	celestina/src/toastcontroller.cpp
+8	4	bde7bbd0efb2409a149e1eee1f619efbf6af190567226812dcdca72fc407fd21	celestina/src/toastcontroller.h
+370	1	1b0609a1be286b2e60f699d0fcff87b4372b6aa9b60524f73c6ae4e356cb4664	celestina/tests/overlaycontract_test.cpp
+123	6	d93efa9f39d5a2dd399f97b97c07854c7273216b6229fe5592a1339af7cb1fe0	celestina/tests/tst_attachmentfall.qml
+244	0	be5fca66f3e302229b07e84946d7b1dda7eaa8aadbca7398158726e568f8abfa	celestina/tests/tst_notificationjoin.qml
+197	36	e56560e37b4267003d170fdfd87f4f72d8b4c048c28c6fbfbc0ccd486cb33f3d	celestina/tests/tst_sessionosd.qml
+1	0	64668eee77ad580b81800a9eea58ed4064fc573e894d81609fc8b0729aec439e	docs/version-history.tsv
+62	0	self	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-P.numstat.tsv

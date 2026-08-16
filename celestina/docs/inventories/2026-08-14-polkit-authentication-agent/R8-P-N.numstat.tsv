@@ -1,0 +1,22 @@
+# R8-P-N exact change inventory
+
+Base revision	314db378d65617441588207990ee3142e110e3ce
+Pathspec	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Pathspec	celestina/docs/evidence/2026-08-15-one-panel-menu-lifecycle.md
+Pathspec	celestina/qml/AnchoredMenu.qml
+Pathspec	celestina/src/panelmenucontroller.cpp
+Pathspec	celestina/src/softclose.h
+Pathspec	celestina/tests/tst_trayitemsmenu.qml
+Pathspec	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-N.numstat.tsv
+
+Plan	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Evidence	celestina/docs/evidence/2026-08-15-one-panel-menu-lifecycle.md
+
+added	deleted	content	path
+3	0	2bcb9c707ac1f6dd32b3e7c3f11373cf447959f79953ad64046688f6a7f14199	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+128	0	08d5ec3e3ea209651656772a4092681e48c4fa130e61111db352c1adcb9ae1a4	celestina/docs/evidence/2026-08-15-one-panel-menu-lifecycle.md
+5	1	fc11f34d354362570b0e4ec1d8d14ee113f72fe55d3372b1e396ccefe2cae105	celestina/qml/AnchoredMenu.qml
+139	50	84ca95d8284685b4966db9fecd8162a012f5fba32ab62ac077626f2399cecd38	celestina/src/panelmenucontroller.cpp
+41	23	559891cf1ef5bb8294d7463c59d834d071160c68f9d410df8de0fcb733cbf6af	celestina/src/softclose.h
+13	4	6394fee643a1f9fc118d04e314b2bc665d1ee9b4022741da9261556fcce0c47e	celestina/tests/tst_trayitemsmenu.qml
+22	0	self	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-N.numstat.tsv

@@ -2,6 +2,7 @@
 
 #include <QList>
 #include <QMetaObject>
+#include <QPointF>
 #include <QPointer>
 #include <QRectF>
 #include <QString>
@@ -10,10 +11,20 @@
 class QQuickItem;
 class QWindow;
 
+// Translate one live panel anchor into the coordinate space of its carrier.
+// `outputOrigin` and `carrierOriginOnOutput` use compositor output units; the
+// returned rectangle uses the surface's unscaled QML units.
+QRectF panelAttachmentRectOnCarrier(
+    const QRectF &globalRect,
+    const QPointF &outputOrigin,
+    const QPointF &carrierOriginOnOutput,
+    double shellScale
+);
+
 // Owns the live icon-anchor state for one mapped primary contextual surface.
 //
 // Several independent controllers can retire asynchronously. Every successful
-// acquisition therefore publishes a private token beside the output-local
+// acquisition therefore publishes a private token beside the carrier-local
 // anchor rectangle on the contextual surface. The initial global rectangle
 // uniquely resolves a marked PanelMenuButton and its declared attachmentAnchor;
 // that Item is a stable identity for the lifetime of the source (the current QML
@@ -35,10 +46,14 @@ public:
     PanelAttachmentLease(PanelAttachmentLease &&) = delete;
     PanelAttachmentLease &operator=(PanelAttachmentLease &&) = delete;
 
+    // `carrierOriginOnOutput` is zero for full-output overlays and floating or
+    // side-attached menus. A physically inset panel carrier supplies its real
+    // top-left so the initial anchor and every live refresh share local units.
     bool acquire(
         QWindow *panel,
         QWindow *surface,
-        const QRectF &globalAttachmentAnchor
+        const QRectF &globalAttachmentAnchor,
+        const QPointF &carrierOriginOnOutput = QPointF()
     );
     void release();
 
@@ -48,7 +63,7 @@ private:
     QQuickItem *resolveSource(const QRectF &initialGlobalRect) const;
     QQuickItem *anchorForSource(QQuickItem *source) const;
     QRectF currentAnchorRect() const;
-    QRectF anchorRectOnOutput(const QRectF &globalRect) const;
+    QRectF anchorRectOnSurface(const QRectF &globalRect) const;
     bool ownsPublishedToken() const;
     bool publishAnchorRect(const QRectF &globalRect);
     bool publishHiddenAnchor();
@@ -67,6 +82,7 @@ private:
     QPointer<QWindow> m_surface;
     QPointer<QQuickItem> m_source;
     QPointer<QQuickItem> m_anchor;
+    QPointF m_carrierOriginOnOutput;
     QString m_token;
     QList<QMetaObject::Connection> m_geometryConnections;
     QList<QMetaObject::Connection> m_lifetimeConnections;

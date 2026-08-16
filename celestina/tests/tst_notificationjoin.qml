@@ -33,6 +33,101 @@ TestCase {
         };
     }
 
+    QtObject {
+        id: lifecycleProbe
+
+        property int departures: 0
+    }
+
+    Component {
+        id: lifecycleStackComponent
+
+        Desktop.ToastStack {}
+    }
+
+    property var transientStack: null
+
+    function routeRows() {
+        return [
+            {"tag": "attached-top-right", "route": "attached"},
+            {"tag": "bottom-centre", "route": "bottom"},
+            {"tag": "corner", "route": "corner"}
+        ];
+    }
+
+    function createLifecycleStack(route, initialToasts) {
+        const properties = {
+            "toasts": initialToasts,
+            "actions": [],
+            "providerSource": fakeSource,
+            "reducedMotion": false,
+            "surfaceWidth": 380,
+            "surfaceHeight": 0
+        };
+        if (route === "attached") {
+            properties.anchoredFromPanel = true;
+            properties.openerRect = Qt.rect(420, -35, 30, 30);
+            properties.attachmentAnchorRect = Qt.rect(426, -29, 18, 18);
+            properties.attachmentStartY = 0;
+            properties.surfaceOriginX = 0;
+            properties.surfaceWidth = 620;
+            properties.surfaceHeight = 280;
+        } else if (route === "bottom") {
+            properties.entersFromBottom = true;
+        }
+
+        const created = lifecycleStackComponent.createObject(null, properties);
+        verify(created !== null);
+        lifecycleProbe.departures = 0;
+        created.departureFinished.connect(function() {
+            lifecycleProbe.departures += 1;
+        });
+        transientStack = created;
+        return created;
+    }
+
+    function fieldFor(window) {
+        const field = findChild(window.contentItem,
+                                "celestina-soft-menu-field");
+        verify(field !== null);
+        return field;
+    }
+
+    function toastSectionCount(window) {
+        let count = 0;
+        function collect(item) {
+            for (let index = 0; index < item.children.length; ++index) {
+                const child = item.children[index];
+                if (child.objectName === "celestina-menu-section")
+                    count += 1;
+                collect(child);
+            }
+        }
+        collect(window.contentItem);
+        return count;
+    }
+
+    function settleLifecycleStack(window, field) {
+        window.show();
+        tryCompare(window, "visible", true);
+        // Make the presentation edge deterministic in the offscreen runner;
+        // production reaches this state through the window's frame swap.
+        field.surfacePresented = true;
+        field.revealNow();
+        wait(CelestinaTheme.motionNormal * 2 + 40);
+        tryVerify(function() {
+            return field.revealed && window.glassRegions.length === 1;
+        });
+    }
+
+    function cleanup() {
+        if (transientStack === null)
+            return;
+        transientStack.hide();
+        transientStack.destroy();
+        transientStack = null;
+    }
+
     Desktop.ToastStack {
         id: stack
 
@@ -180,5 +275,154 @@ TestCase {
         stack.surfaceOriginX = 0;
         stack.surfaceWidth = stack.cardWidth;
         stack.surfaceHeight = 0;
+    }
+
+    function test_bottom_entry_waits_for_the_reveal_gate() {
+        const window = createLifecycleStack(
+            "bottom", [testCase.toast(20, "Gate", 0)]);
+        const field = fieldFor(window);
+
+        // The queued reveal is deliberately refused. A ride tied to model
+        // insertion instead of presentation would still advance underneath.
+        field.retiring = true;
+        compare(field.revealed, false);
+        compare(field.blockEntryProgress, 0);
+        const heldRide = field.transform[0].y;
+        verify(heldRide > 0);
+
+        wait(CelestinaTheme.motionFast);
+        compare(field.revealed, false);
+        compare(field.blockEntryProgress, 0);
+        fuzzyCompare(field.transform[0].y, heldRide, 0.01);
+    }
+
+    function test_departure_keeps_the_last_block_until_one_finish_data() {
+        return routeRows();
+    }
+
+    function test_departure_keeps_the_last_block_until_one_finish(data) {
+        const window = createLifecycleStack(
+            data.route, [testCase.toast(30, "Leaving", 0)]);
+        const field = fieldFor(window);
+        settleLifecycleStack(window, field);
+        const settledWidth = window.glassRegions[0].rect.width;
+
+        window.toasts = [];
+        compare(field.departing, true);
+        compare(field.visible, true);
+        compare(lifecycleProbe.departures, 0);
+        compare(window.glassRegions.length, 1);
+
+        wait(70);
+        verify(field.opacity > 0 && field.opacity < 1);
+        verify(field.scale > 0.88 && field.scale < 1);
+        compare(field.visible, true);
+        compare(lifecycleProbe.departures, 0);
+        compare(window.glassRegions.length, 1);
+        // The compositor footprint must be the currently shrinking block,
+        // not the settled rectangle cached before departure began.
+        verify(Math.abs(window.glassRegions[0].rect.width
+                        - settledWidth * field.scale) < 2);
+
+        tryCompare(lifecycleProbe, "departures", 1);
+        compare(field.visible, false);
+        compare(field.revealed, false);
+        tryVerify(function() {
+            return window.glassRegions.length === 0;
+        });
+    }
+
+    function test_reentry_reverses_the_same_block_data() {
+        return routeRows();
+    }
+
+    function test_reentry_reverses_the_same_block(data) {
+        const window = createLifecycleStack(
+            data.route, [testCase.toast(40, "First", 0)]);
+        const field = fieldFor(window);
+        settleLifecycleStack(window, field);
+
+        window.toasts = [];
+        wait(70);
+        verify(field.departing);
+        verify(field.opacity < 1);
+        window.toasts = [testCase.toast(41, "Replacement", 0)];
+
+        compare(field.departing, false);
+        compare(field.visible, true);
+        compare(lifecycleProbe.departures, 0);
+        wait(CelestinaTheme.motionNormal + 60);
+        compare(lifecycleProbe.departures, 0);
+        fuzzyCompare(field.opacity, 1, 0.01);
+        fuzzyCompare(field.scale, 1, 0.01);
+        verify(field.revealed);
+        compare(window.glassRegions.length, 1);
+    }
+
+    function test_full_departure_supersedes_an_armed_row_sweep() {
+        const first = testCase.toast(60, "First", 0);
+        const second = testCase.toast(61, "Second", 0);
+        const window = createLifecycleStack("corner", [first, second]);
+        const field = fieldFor(window);
+        settleLifecycleStack(window, field);
+        compare(toastSectionCount(window), 2);
+
+        // Arm the individual row clock, then empty the server list while that
+        // first section is still folding away.
+        window.toasts = [second];
+        const firstCard = findChild(
+            window.contentItem, "celestina-toast-card-60");
+        verify(firstCard !== null);
+        verify(firstCard.leaving);
+        wait(70);
+        verify(firstCard.opacity > 0 && firstCard.opacity < 1);
+
+        window.toasts = [];
+        compare(field.departing, true);
+        compare(firstCard.leaving, false);
+        compare(toastSectionCount(window), 2);
+
+        // Past the abandoned rowSweep deadline, but before the newer block
+        // deadline: both sections must still be carried by the departing
+        // field. The old bug removed the first one in this interval.
+        wait(CelestinaTheme.motionNormal - 40);
+        compare(lifecycleProbe.departures, 0);
+        compare(field.visible, true);
+        compare(toastSectionCount(window), 2);
+
+        tryCompare(lifecycleProbe, "departures", 1);
+        compare(field.visible, false);
+        compare(toastSectionCount(window), 0);
+    }
+
+    function test_a_finished_bottom_block_gets_a_fresh_reveal() {
+        const window = createLifecycleStack(
+            "bottom", [testCase.toast(50, "Old", 0)]);
+        const field = fieldFor(window);
+        settleLifecycleStack(window, field);
+
+        window.toasts = [];
+        tryCompare(lifecycleProbe, "departures", 1);
+        compare(field.revealed, false);
+        compare(field.blockEntryProgress, 0);
+
+        lifecycleProbe.departures = 0;
+        window.toasts = [testCase.toast(51, "Fresh", 0)];
+        compare(field.blockEntryProgress, 0);
+        verify(field.transform[0].y > 0);
+        tryVerify(function() {
+            return field.revealed
+                   && field.blockEntryProgress > 0
+                   && field.blockEntryProgress < 1
+                   && window.glassRegions.length === 1;
+        });
+        const rideDuring = field.transform[0].y;
+        const glassDuring = window.glassRegions[0].rect.y;
+        wait(40);
+        verify(field.transform[0].y < rideDuring);
+        verify(window.glassRegions[0].rect.y < glassDuring);
+        tryCompare(field, "blockEntryProgress", 1);
+        compare(lifecycleProbe.departures, 0);
+        compare(window.glassRegions.length, 1);
     }
 }

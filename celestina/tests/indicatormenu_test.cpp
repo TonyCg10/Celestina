@@ -14,6 +14,7 @@
 #include <limits>
 #include <memory>
 
+#include "panelattachmentlease.h"
 #include "panelmenucontroller.h"
 #include "requestledger.h"
 
@@ -127,11 +128,13 @@ class IndicatorMenuTest final : public QObject
 
 private slots:
     void everyIndicatorKindNamesTheComponentThatDrawsIt();
+    void aPanelAnchorIsTranslatedIntoItsCarrier();
     void eachMenuDeclaresExactlyWhatTheHostHandsIt();
     void aPropertyTheComponentDoesNotDeclareIsVisibleAsAFailure();
     void aClickWhereTheIndicatorIsDismissesTheMenu();
     void aClickOnTheCardDismissesNothing();
     void escapeDismissesTheMenu();
+    void popupDismissalStartsBeforeItsRowsLeave();
     void aCardAskedForBeyondTheOutputStaysWhole();
     void aSoftMenuKeepsOneOuterGlassCard();
     void eachPanelIndicatorMenuSpansItsOuterVeilAndTargetsTheIcon();
@@ -204,7 +207,8 @@ private:
         QQmlEngine &engine,
         const QString &kind,
         std::unique_ptr<QObject> &owner,
-        double shellScale = 1.0
+        double shellScale = 1.0,
+        bool reducedMotion = true
     )
     {
         QQmlComponent menu(&engine, sourceFor(indicatorMenuComponent(kind)));
@@ -214,7 +218,7 @@ private:
         }
 
         QVariantMap initialProperties {
-            {QStringLiteral("reducedMotion"), true},
+            {QStringLiteral("reducedMotion"), reducedMotion},
             {QStringLiteral("outputName"), QStringLiteral("test-output")},
             {QStringLiteral("shellScale"), shellScale},
         };
@@ -239,6 +243,31 @@ private:
         return QTest::qWaitForWindowExposed(window) ? window : nullptr;
     }
 };
+
+void IndicatorMenuTest::aPanelAnchorIsTranslatedIntoItsCarrier()
+{
+    const QRectF globalAnchor(100, 70, 30, 20);
+    const QPointF outputOrigin(20, 10);
+
+    QCOMPARE(
+        panelAttachmentRectOnCarrier(
+            globalAnchor,
+            outputOrigin,
+            QPointF(0, 40),
+            2.0),
+        QRectF(40, 10, 15, 10)
+    );
+    // Floating and side-attached surfaces retain the established full-output
+    // carrier by publishing the default zero origin.
+    QCOMPARE(
+        panelAttachmentRectOnCarrier(
+            globalAnchor,
+            outputOrigin,
+            QPointF(),
+            2.0),
+        QRectF(40, 30, 15, 10)
+    );
+}
 
 void IndicatorMenuTest::everyIndicatorKindNamesTheComponentThatDrawsIt()
 {
@@ -413,6 +442,49 @@ void IndicatorMenuTest::escapeDismissesTheMenu()
     }
 }
 
+void IndicatorMenuTest::popupDismissalStartsBeforeItsRowsLeave()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+
+    std::unique_ptr<QObject> owner;
+    QQuickWindow *const window = openMenu(
+        engine, QStringLiteral("phone"), owner, 1.0, false);
+    QVERIFY(window);
+    QObject *const popup = window->property("menu").value<QObject *>();
+    QVERIFY(popup);
+    QQuickItem *const field = window->findChild<QQuickItem *>(
+        QStringLiteral("celestina-soft-menu-field"));
+    QVERIFY(field);
+    revealAllFields(window);
+    QTRY_VERIFY(field->property("revealed").toBool());
+
+    QSignalSpy dismissed(window, SIGNAL(dismissed()));
+    QVERIFY(dismissed.isValid());
+    QTest::keyClick(window, Qt::Key_Escape);
+
+    // The host is notified from aboutToHide, while Qt is still holding the
+    // popup for the shared departure. The old contract emitted only after the
+    // rows had completed their private exit and would fail this same-turn
+    // assertion.
+    QCOMPARE(dismissed.count(), 1);
+
+    // Mirror what the host does on that signal. Popup rows and field now read
+    // the same properties; a second observation of the close is idempotent.
+    QVERIFY(QMetaObject::invokeMethod(field, "retire"));
+    QVERIFY(field->property("retiring").toBool());
+    QTest::qWait(25);
+    const qreal fieldOpacity = field->property("presentationOpacity").toReal();
+    const qreal popupOpacity = popup->property("opacity").toReal();
+    QVERIFY(qAbs(fieldOpacity - popupOpacity) < 0.001);
+    const qreal fieldScale = field->property("retireScale").toReal();
+    const qreal popupScale = popup->property("scale").toReal();
+    QVERIFY(qAbs(fieldScale - popupScale) < 0.001);
+    QVERIFY(QMetaObject::invokeMethod(field, "retire"));
+    QVERIFY(field->property("retiring").toBool());
+    QTRY_VERIFY(!popup->property("opened").toBool());
+}
+
 // An indicator near the right edge of an output asks for a card that would hang
 // off it. The card stays whole; the surface is the output either way, so this
 // is the same arithmetic on every scale and every output.
@@ -482,12 +554,19 @@ void IndicatorMenuTest::aSoftMenuKeepsOneOuterGlassCard()
         );
         // The whole menu contributes one compositor-glass region. Its rows are
         // denser visual divisions, not independent compositor samples.
-        QTRY_COMPARE(window->property("glassRects").toList().size(), 1);
         const QRectF menuBounds(
             menu->property("x").toReal(),
             menu->property("y").toReal(),
             menu->property("width").toReal(),
             menu->property("height").toReal()
+        );
+        // The field may already have published its creation geometry before
+        // this case moves `menuY`. Wait for the deferred geometry collection,
+        // not merely for a list that was already non-empty at the old origin.
+        QTRY_COMPARE(window->property("glassRects").toList().size(), 1);
+        QTRY_COMPARE(
+            window->property("glassRects").toList().constFirst().toRectF(),
+            menuBounds
         );
         const QRectF published = window->property("glassRects").toList()
                                      .constFirst().toRectF();

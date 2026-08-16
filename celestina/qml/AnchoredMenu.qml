@@ -86,7 +86,11 @@ AnchoredCard {
         // pops up in. This surface exists only to carry this menu, so that clamp
         // has nothing to protect and only fights the size above.
         margins: -1
-        onClosed: root.dismissed()
+        // The host begins the one shared departure while the popup and its
+        // rows still exist. Emitting from `closed` made the popup finish its
+        // private exit first and only then started the carrier/glass exit,
+        // producing two visibly separate closures in tray and phone menus.
+        onAboutToHide: root.dismissed()
     }
 
     // The factor is carried by the rows' own layer rather than by the popup.

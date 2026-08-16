@@ -100,6 +100,23 @@ bool itemIsVisibleInWindow(QQuickItem *item, QQuickWindow *window)
 }
 } // namespace
 
+QRectF panelAttachmentRectOnCarrier(
+    const QRectF &globalRect,
+    const QPointF &outputOrigin,
+    const QPointF &carrierOriginOnOutput,
+    double shellScale
+)
+{
+    const QRectF onCarrier = globalRect.translated(
+        -outputOrigin - carrierOriginOnOutput);
+    if (shellScale <= 0.0 || shellScale == 1.0)
+        return onCarrier;
+    return QRectF(onCarrier.x() / shellScale,
+                  onCarrier.y() / shellScale,
+                  onCarrier.width() / shellScale,
+                  onCarrier.height() / shellScale);
+}
+
 PanelAttachmentLease::PanelAttachmentLease()
 {
     m_refreshTimer.setSingleShot(true);
@@ -124,12 +141,16 @@ bool PanelAttachmentLease::isActive() const
 bool PanelAttachmentLease::acquire(
     QWindow *panel,
     QWindow *surface,
-    const QRectF &globalAttachmentAnchor
+    const QRectF &globalAttachmentAnchor,
+    const QPointF &carrierOriginOnOutput
 )
 {
     release();
-    if (!panel || !surface || !isFiniteRect(globalAttachmentAnchor))
+    if (!panel || !surface || !isFiniteRect(globalAttachmentAnchor)
+        || !qIsFinite(carrierOriginOnOutput.x())
+        || !qIsFinite(carrierOriginOnOutput.y())) {
         return false;
+    }
 
     const QString token = QUuid::createUuid().toString(QUuid::WithoutBraces);
     m_panel = panel;
@@ -197,12 +218,17 @@ bool PanelAttachmentLease::acquire(
     const QScreen *const screen = panel->screen();
     const QPointF outputOrigin =
         screen ? QPointF(screen->geometry().topLeft()) : QPointF();
-    const QRectF outputLocalAnchor = itemIsVisibleInWindow(anchor, quickPanel)
-        ? canonicalGlobalAnchor.translated(-outputOrigin)
+    const double shellScale = surface->property("shellScale").toDouble();
+    const QRectF surfaceLocalAnchor = itemIsVisibleInWindow(anchor, quickPanel)
+        ? panelAttachmentRectOnCarrier(
+              canonicalGlobalAnchor,
+              outputOrigin,
+              carrierOriginOnOutput,
+              shellScale)
         : QRectF();
-    surface->setProperty(surfaceAnchorRectProperty, outputLocalAnchor);
+    surface->setProperty(surfaceAnchorRectProperty, surfaceLocalAnchor);
     if (surface->property(surfaceAnchorRectProperty).toRectF()
-        != outputLocalAnchor) {
+        != surfaceLocalAnchor) {
         rollBack();
         return false;
     }
@@ -211,6 +237,7 @@ bool PanelAttachmentLease::acquire(
     m_surface = surface;
     m_source = source;
     m_anchor = anchor;
+    m_carrierOriginOnOutput = carrierOriginOnOutput;
     m_token = token;
 
     m_lifetimeConnections.append(QObject::connect(
@@ -302,7 +329,7 @@ QRectF PanelAttachmentLease::currentAnchorRect() const
     return isFiniteRect(rect) ? rect : QRectF();
 }
 
-QRectF PanelAttachmentLease::anchorRectOnOutput(
+QRectF PanelAttachmentLease::anchorRectOnSurface(
     const QRectF &globalRect
 ) const
 {
@@ -311,21 +338,19 @@ QRectF PanelAttachmentLease::anchorRectOnOutput(
         : (m_panel ? m_panel->screen() : nullptr);
     const QPointF outputOrigin =
         screen ? QPointF(screen->geometry().topLeft()) : QPointF();
-    const QRectF onOutput = globalRect.translated(-outputOrigin);
-
-    // In the surface's own units, which are the shell's unscaled ones: the
-    // controller divides the initial snapshot by the per-output factor before
-    // construction, and this refresh replaces exactly that property. Published
-    // undivided, the first live refresh on a scaled output moved the membrane's
-    // mouth right of its glyph by the factor — the drop the author photographed
-    // connecting beside its icon. The factor is read from the surface because
-    // the surface is what lays out in those units; see shellscale.h.
+    // Initial publication and every live refresh use this same carrier-local,
+    // unscaled contract. Published in output coordinates, the first refresh on
+    // a scaled output moved the membrane's mouth beside its glyph; published
+    // without the carrier offset, it would move back over the physically
+    // excluded panel strip. The factor is read from the surface because that
+    // surface is what lays out in those units; see shellscale.h.
     const double scale = m_surface
         ? m_surface->property("shellScale").toDouble() : 0.0;
-    if (scale <= 0.0 || scale == 1.0)
-        return onOutput;
-    return QRectF(onOutput.x() / scale, onOutput.y() / scale,
-                  onOutput.width() / scale, onOutput.height() / scale);
+    return panelAttachmentRectOnCarrier(
+        globalRect,
+        outputOrigin,
+        m_carrierOriginOnOutput,
+        scale);
 }
 
 bool PanelAttachmentLease::ownsPublishedToken() const
@@ -341,14 +366,14 @@ bool PanelAttachmentLease::publishAnchorRect(const QRectF &globalRect)
 
     const QRectF previousLocal =
         m_surface->property(surfaceAnchorRectProperty).toRectF();
-    const QRectF outputLocalRect = anchorRectOnOutput(globalRect);
-    if (previousLocal == outputLocalRect)
+    const QRectF surfaceLocalRect = anchorRectOnSurface(globalRect);
+    if (previousLocal == surfaceLocalRect)
         return true;
 
-    m_surface->setProperty(surfaceAnchorRectProperty, outputLocalRect);
+    m_surface->setProperty(surfaceAnchorRectProperty, surfaceLocalRect);
     if (!ownsPublishedToken()
         || m_surface->property(surfaceAnchorRectProperty).toRectF()
-            != outputLocalRect) {
+            != surfaceLocalRect) {
         return false;
     }
     return true;
@@ -543,6 +568,7 @@ void PanelAttachmentLease::release()
     m_surface = nullptr;
     m_source = nullptr;
     m_anchor = nullptr;
+    m_carrierOriginOnOutput = QPointF();
     m_token.clear();
     m_rebuildPending = false;
     m_refreshing = false;

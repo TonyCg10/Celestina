@@ -32,12 +32,11 @@ public:
         // the floating fallback for a reading whose panel has no icon to
         // attach to.
         Corner,
-        // Touching the top and right edges, ignoring every exclusive zone, and
-        // never focused: the quiet surfaces that grow a membrane out of the
-        // bar — the on-screen display and the toast stack, each under its own
-        // panel icon. The window reaches the real top edge because the
-        // membrane's mouth lives at the panel's lower seam, which sits inside
-        // the strip the panel reserved.
+        // Attached to the panel's lower seam and the right edge, ignoring every
+        // exclusive zone, and never focused: the quiet surfaces that grow a
+        // membrane out of the bar — the on-screen display and the toast stack,
+        // each under its own panel icon. The physical carrier begins at that
+        // seam, so no buffer owned by it can cover the panel strip.
         AttachedTopRight,
         // The corner diagonally opposite the panel's, never focused: where the
         // on-screen display retreats to when something interactive already
@@ -61,9 +60,17 @@ public:
     // Returns false without taking ownership when the surface cannot be mapped.
     // `placement` overrides the constructed default for this one mapping: the
     // same controller opens attached when its panel offers an icon and falls
-    // back to a corner when the zone is taken.
+    // back to a corner when the zone is taken. `topInset` is an output-local
+    // offset in the Qt units consumed by layer-shell. It remains zero for every
+    // floating route; a non-zero value makes the layer window itself begin
+    // below the panel, so no buffer from that window can cover the bar.
     bool open(QWindow *content, QScreen *screen);
-    bool open(QWindow *content, QScreen *screen, Placement placement);
+    bool open(
+        QWindow *content,
+        QScreen *screen,
+        Placement placement,
+        int topInset = 0
+    );
     void close();
     bool isOpen() const { return !m_content.isNull(); }
     QWindow *window() const { return m_content.data(); }

@@ -9,9 +9,9 @@
 // card is still up adds a second card behind the first, offset so its header
 // stays readable, because the overwritten number was information someone was
 // looking at. Hovering a card behind raises it to the front. That hover is the
-// one interaction this surface has — nothing here is a control, and the host
-// masks everything above the bar's seam so the wheel that raised the display
-// keeps stepping the control under it.
+// one interaction this surface has — nothing here is a control. The host starts
+// an attached QWindow at the bar's physical lower seam, so its complete local
+// input region remains below the wheel control that raised the display.
 //
 // PANEL-1. Each card is the same glass as the bar's readings and their menus:
 // one compositor-backed veil (`SoftMenuField`) carrying one dense content
@@ -28,9 +28,8 @@ Window {
     id: osd
 
     // The front card, as the host has always announced it. `readings` below
-    // carries the whole file; these four remain the compatibility contract
-    // and the source for the synthesized single card when the host sets only
-    // them.
+    // is the only authority that can create cards; these four properties keep
+    // the presentation compatibility contract for the announced front.
     required property string kind
     // Whole percent, or negative when the provider reported no level.
     required property int percent
@@ -55,17 +54,18 @@ Window {
     // The front card appears attached to the bar, a drop out of the panel
     // icon of the reading it shows — the same contract every menu carries.
     // The host resolves the rectangles because a reading changes without a
-    // click; all of them arrive in output-local shell units. Left at their
+    // click. Attached rectangles arrive in carrier-local shell units; the
+    // QWindow's layer-shell margin owns the output offset. Left at their
     // defaults the display is the floating file, which is also the fallback
     // the host uses when the top-right zone is already taken.
     property bool anchoredFromPanel: false
     property rect openerRect: Qt.rect(0, 0, 0, 0)
     property rect attachmentAnchorRect: Qt.rect(0, 0, 0, 0)
     property real attachmentStartY: -1
-    // Where this window sits on its output, and how large it is, in shell
-    // units. An attached window is wider than its card: it spans from the
-    // leftmost thing it must contain — card or icon — to the output's right
-    // edge, so the membrane's mouth is never clipped by its own window.
+    // The carrier's local origin and size, in shell units. An attached window
+    // starts physically at the panel seam and is wider than its card: it spans
+    // from the leftmost thing it must contain — card or icon — to the output's
+    // right edge, so the membrane's mouth is never clipped by its own window.
     property real surfaceOriginX: 0
     property real surfaceWidth: osd.cardWidth
     property real surfaceHeight: osd.neededHeight
@@ -126,19 +126,12 @@ Window {
     // eye gets from the title and the number.
     readonly property string spokenText: qsTr("%1: %2").arg(osd.headline).arg(osd.valueText)
 
-    // The file itself: the host's list, or the single synthesized card when
-    // only the four front properties were set (the compatibility route the
-    // tests use). An empty kind with an empty list is the persistent window
-    // resting between readings: nothing is drawn and nothing takes input,
-    // but the surface stays mapped, because a freshly mapped layer window
-    // measured up to two and a half seconds from creation to its first
-    // presented frame on the nested session — longer than a card lives.
-    readonly property var cards: osd.readings.length > 0
-            ? osd.readings
-            : osd.kind.length > 0
-              ? [{"kind": osd.kind, "percent": osd.percent,
-                  "muted": osd.muted, "label": osd.label}]
-              : []
+    // The file itself has one authority. A non-empty compatibility `kind`
+    // with an empty list is still the persistent resting window: nothing is
+    // drawn and nothing takes input. This makes a stale front harmless and
+    // prevents either OSD twin from inventing a card the controller did not
+    // push to it.
+    readonly property var cards: osd.readings
 
     // The file's own height: the front card plus one peek per card behind,
     // and the bottom-entry window keeps the breathing room below the card
@@ -261,34 +254,12 @@ Window {
     // One surface, several cards: the union of what each collected, exactly
     // as the toast stack publishes its own.
     function collectGlass() {
-        // The bottom-entry window publishes one static region while anything
-        // is on it. Chasing the ride per frame put the double-buffered effect
-        // one frame behind the card, which read as the backdrop darkening for
-        // a few frames; and a region covering the whole runway window drew a
-        // visible slab past the card's edges. The card's resting footprint is
-        // the still point between the two: the entry slides up into glass
-        // that is already there, and neither dimension exceeds the card.
-        if (osd.entersFromBottom) {
-            const occupied = osd.cards.length > 0
-                             || osd.departingKinds.length > 0;
-            const footprint = Qt.rect(
-                0, 0,
-                Math.round(osd.cardWidth * osd.shellScale),
-                Math.round(osd.cardHeight * osd.shellScale));
-            osd.glassRects = occupied ? [footprint] : [];
-            osd.glassRegions = occupied
-                ? [{"rect": footprint,
-                    "radius": CelestinaTheme.radiusMd * osd.shellScale,
-                    "polygon": []}]
-                : [];
-            return;
-        }
         // An empty file publishes empty glass outright: the walk below races
         // delegate destruction — a dying card can still be in the tree when
         // the deferred recollect runs, and a union that kept it left the
         // armed region blurring bare wallpaper, sometimes, which is the worst
         // kind of defect to chase.
-        if (osd.cards.length === 0) {
+        if (osd.cards.length === 0 && osd.departingKinds.length === 0) {
             osd.glassRects = [];
             osd.glassRegions = [];
             return;
@@ -315,9 +286,9 @@ Window {
     }
 
     // The same placement rule every panel-opened surface uses, fed in this
-    // window's own coordinates: the opener is translated by the window's
-    // origin, and the seam keeps its output value because the window touches
-    // the output's top edge.
+    // carrier's own coordinates. The host translates the opener and icon into
+    // that space and gives an attached carrier a local seam of zero because
+    // the QWindow itself already begins at the panel's physical lower edge.
     PanelPopupPlacement {
         id: placement
 
@@ -341,8 +312,8 @@ Window {
     onVisibleChanged: {
         if (!osd.visible)
             return;
-        for (let index = 0; index < scene.children.length; ++index) {
-            const card = scene.children[index];
+        for (let index = 0; index < seamLawInterior.children.length; ++index) {
+            const card = seamLawInterior.children[index];
             if (card && card.reveal !== undefined)
                 Qt.callLater(card.reveal);
         }
@@ -387,12 +358,11 @@ Window {
         transformOrigin: Item.TopLeft
         scale: osd.shellScale
 
-        // The paint law of the attached window, enforced where every card
-        // lives: nothing may exist above the seam. The membrane's mouth is
-        // tangent at the seam and paints downward, so it loses nothing; the
-        // card that slipped above it — whatever geometry raced to put it
-        // there — simply does not show. The bottom window has no bar and no
-        // seam, and keeps its full canvas.
+        // The QWindow's physical top edge is the primary paint law: on the
+        // attached route local zero is already the panel seam, so this surface
+        // owns no buffer above it. This local guard preserves the same rule for
+        // compatibility callers that still supply a positive seam. The bottom
+        // window has no panel seam and keeps its full canvas.
         Item {
             id: seamLaw
 
@@ -436,10 +406,9 @@ Window {
 
                 x: Math.round(placement.x)
                 // Clamped at the seam for every top route, whatever the
-                // routing knows so far: before `anchoredFromPanel` settles
-                // this read 0, and 0 on the attached window is the screen's
-                // top edge — the author's recording caught the finished card
-                // over the bar's own icons for exactly those frames.
+                // routing knows so far. On an attached carrier zero is already
+                // the panel's physical lower edge; the window origin, not the
+                // timing of this binding, prevents a first buffer over the bar.
                 y: (osd.entersFromBottom
                     ? 0
                     : Math.max(osd.anchoredFromPanel
@@ -492,20 +461,26 @@ Window {
                         easing.type: CelestinaTheme.easeExit
                     }
                 }
-                // The receding card keeps its blur to the last frame: the
-                // region follows the shrinking mapped bounds — except on the
-                // bottom window, whose region is static anyway.
-                onScaleChanged: {
-                    if (!osd.entersFromBottom)
-                        osd.collectGlass();
-                }
+                // The field maps through this delegate's complete transform,
+                // so asking it to recollect makes glass shrink with the
+                // departing paint instead of leaving a resting-size footprint
+                // behind it.
+                onScaleChanged: card.scheduleGlassCollection()
 
                 // The bottom entry: out of the screen's edge at speed, braking
                 // into place, no recoil — an arrival rather than a landing.
                 transform: Translate {
                     id: bottomRide
 
-                    y: 0
+                    // Stay beyond the carrier from construction until the
+                    // shared reveal gate opens. `SoftMenuField` may collect in
+                    // its own revealed-change dispatch before this delegate's
+                    // handler runs; an offscreen starting transform makes that
+                    // ordering safe instead of briefly publishing the landed
+                    // footprint ahead of paint.
+                    y: osd.entersFromBottom
+                       ? osd.cardHeight + CelestinaTheme.spaceLg : 0
+                    onYChanged: card.scheduleGlassCollection()
                 }
 
                 NumberAnimation {
@@ -520,9 +495,21 @@ Window {
                 }
 
                 Component.onCompleted: {
-                    card.reveal();
-                    if (osd.entersFromBottom && !osd.reducedMotion)
+                    // A resting persistent carrier may receive its model while
+                    // hidden. Do not spend the reveal fallback offscreen; the
+                    // window-visible handler above owns that transition.
+                    if (osd.visible)
+                        card.reveal();
+                }
+                onRevealedChanged: {
+                    if (!card.revealed || !osd.entersFromBottom)
+                        return;
+                    if (osd.reducedMotion) {
+                        bottomRide.y = 0;
+                        card.collectGlass();
+                    } else {
                         bottomEntry.start();
+                    }
                 }
                 onGlassRegionsChanged: osd.collectGlass()
 

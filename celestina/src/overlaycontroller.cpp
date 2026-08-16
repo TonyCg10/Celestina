@@ -7,6 +7,8 @@
 #include <QDebug>
 #include <QHash>
 #include <QGuiApplication>
+#include <QQuickItem>
+#include <QQuickWindow>
 #include <QQmlEngine>
 #include <QScreen>
 #include <QTimer>
@@ -17,6 +19,13 @@
 #include "panelpopupplacement.h"
 #include "shellscale.h"
 #include "softclose.h"
+
+namespace {
+QPointF panelCarrierOriginOnOutput(QWindow *panel)
+{
+    return panel ? QPointF(0, qMax(0, panel->height())) : QPointF();
+}
+} // namespace
 
 QString overlaySourceProperty(const QString &qmlComponentName)
 {
@@ -53,6 +62,10 @@ OverlayController::OverlayController(
 {
     connect(m_surface, &OverlaySurface::dismissed, this, [this]() {
         m_attachmentLease.release();
+        m_openCarrierOriginOnOutput = QPointF();
+        m_revealIssuedWindow.clear();
+        m_glassAwaitingFrameWindow.clear();
+        m_readyWindow.clear();
     });
 
     if (m_sourceProperty.isEmpty()) {
@@ -69,6 +82,11 @@ OverlayController::OverlayController(
     }
 }
 
+OverlayController::~OverlayController()
+{
+    closeNow();
+}
+
 QVariantMap OverlayController::initialProperties() const
 {
     QVariantMap properties {
@@ -83,7 +101,17 @@ QVariantMap OverlayController::initialProperties() const
 
 QRectF OverlayController::openCardRectOnOutput(QScreen *screen) const
 {
-    return quietOpenCardRect(m_surface->window(), screen);
+    QWindow *const window = m_surface->window();
+    QRectF card = quietOpenCardRect(window, screen);
+    if (card.isEmpty() || !window)
+        return QRectF();
+
+    const double scale = window->property("shellScale").toDouble();
+    const qreal divisor = scale > 0.0 ? scale : 1.0;
+    return card.translated(
+        m_openCarrierOriginOnOutput.x() / divisor,
+        m_openCarrierOriginOnOutput.y() / divisor
+    );
 }
 
 bool OverlayController::isOpen() const
@@ -113,36 +141,35 @@ QWindow *OverlayController::createWindow()
     QVariantMap properties = initialProperties();
     if (!m_opener.isEmpty() && m_openerPanel && m_openerPanel->screen()) {
         const QScreen *const screen = m_openerPanel->screen();
-        const QPointF outputOrigin = screen->geometry().topLeft();
+        const QPointF outputOrigin(screen->geometry().topLeft());
+        const QPointF carrierOrigin =
+            panelCarrierOriginOnOutput(m_openerPanel);
         // An overlay is drawn at the size its output asks for, exactly as the
         // panel it comes from is; see shellscale.h. Everything below arrives
-        // in output pixels and is divided once here, so the QML lays out in
-        // the unscaled units its tokens are written in.
+        // in output pixels, is translated into the physically inset carrier,
+        // and is divided once here, so QML lays out in the unscaled local units
+        // its tokens are written in.
         const double shellScale = shellScaleForScreen(screen);
-        const auto inShellUnits = [shellScale](const QRectF &rect) {
-            return shellScale > 0
-                ? QRectF(rect.x() / shellScale, rect.y() / shellScale,
-                         rect.width() / shellScale, rect.height() / shellScale)
-                : rect;
-        };
-        const QRectF openerOnOutput =
-            panelPopupOpenerOnOutput(m_opener, outputOrigin);
-        const QRectF attachmentAnchorOnOutput =
-            panelPopupOpenerOnOutput(m_attachmentAnchor, outputOrigin);
         properties.insert(QStringLiteral("anchoredFromPanel"), true);
         properties.insert(
-            QStringLiteral("openerRect"), inShellUnits(openerOnOutput));
+            QStringLiteral("openerRect"),
+            panelAttachmentRectOnCarrier(
+                m_opener, outputOrigin, carrierOrigin, shellScale)
+        );
         properties.insert(
             QStringLiteral("attachmentAnchorRect"),
-            inShellUnits(attachmentAnchorOnOutput)
+            panelAttachmentRectOnCarrier(
+                m_attachmentAnchor,
+                outputOrigin,
+                carrierOrigin,
+                shellScale
+            )
         );
-        // The panel is a top-anchored, edge-to-edge surface whose height is
-        // exactly the continuous backdrop. Menus attach to that lower edge,
-        // not to the variable-height control rectangle inside it.
+        // The QWindow begins at the panel's physical lower edge. That edge is
+        // the attachment seam, so it is exactly zero in the local scene.
         properties.insert(
             QStringLiteral("attachmentStartY"),
-            shellScale > 0 ? qMax(0, m_openerPanel->height()) / shellScale
-                           : qMax(0, m_openerPanel->height())
+            0
         );
     }
 
@@ -160,9 +187,103 @@ QWindow *OverlayController::createWindow()
         return nullptr;
     }
 
-    // QML-declared, so it is reached by name rather than a generated header.
+    // QML-declared, so these are reached by name rather than a generated
+    // header. `glassRegions` becomes non-empty only after the common field has
+    // non-zero painted opacity and has published the matching blur geometry.
     connect(window, SIGNAL(dismissed()), this, SLOT(overlayDismissed()));
+    connect(
+        window,
+        SIGNAL(glassRegionsChanged()),
+        this,
+        SLOT(overlayGlassRegionsChanged())
+    );
+
+    auto *const quickWindow = qobject_cast<QQuickWindow *>(window);
+    if (!quickWindow) {
+        qCritical() << "Celestina's" << m_componentName
+                    << "overlay component is not a Qt Quick window.";
+        delete window;
+        return nullptr;
+    }
+
+    // Mapping is one controller concern, not five component-local recipes.
+    // A swapped frame while Qt still reports the window unexposed may be a
+    // bootstrap buffer the compositor will discard. The first swap after
+    // exposure is the presentation gate; `revealNow()` consumes that gate
+    // directly instead of waiting for a second frame inside SoftMenuField.
+    const QPointer<QWindow> tracked(window);
+    connect(
+        quickWindow,
+        &QQuickWindow::frameSwapped,
+        this,
+        [this, tracked]() {
+            if (!tracked || m_surface->window() != tracked
+                || tracked->property("celestinaRetiring").toBool()) {
+                return;
+            }
+            if (!tracked->isExposed()) {
+                tracked->requestUpdate();
+                return;
+            }
+
+            // A non-empty glass publication describes the next render, not
+            // the frame whose swap first opened the reveal gate. Retire the
+            // predecessor only after that painted buffer itself has swapped.
+            if (m_glassAwaitingFrameWindow == tracked) {
+                m_glassAwaitingFrameWindow.clear();
+                if (m_readyWindow != tracked) {
+                    m_readyWindow = tracked;
+                    emit contextualSurfaceOpened();
+                }
+                return;
+            }
+
+            if (m_revealIssuedWindow != tracked)
+                revealPresentedWindow(tracked);
+        }
+    );
     return window;
+}
+
+void OverlayController::revealPresentedWindow(QWindow *window)
+{
+    if (!window || m_surface->window() != window
+        || m_revealIssuedWindow == window
+        || window->property("celestinaRetiring").toBool()) {
+        return;
+    }
+
+    m_revealIssuedWindow = window;
+    const auto fields = window->findChildren<QQuickItem *>(
+        QStringLiteral("celestina-soft-menu-field"));
+    if (fields.isEmpty()) {
+        qCritical() << "Celestina's" << m_componentName
+                    << "overlay has no shared presentation field.";
+        return;
+    }
+    for (QQuickItem *const field : fields)
+        QMetaObject::invokeMethod(field, "revealNow");
+}
+
+void OverlayController::overlayGlassRegionsChanged()
+{
+    auto *const window = qobject_cast<QWindow *>(sender());
+    if (!window || m_surface->window() != window || m_readyWindow == window
+        || window->property("celestinaRetiring").toBool()) {
+        return;
+    }
+
+    if (window->property("glassRegions").toList().isEmpty()) {
+        if (m_glassAwaitingFrameWindow == window)
+            m_glassAwaitingFrameWindow.clear();
+        return;
+    }
+
+    // Publishing the region mutates scene state before Qt Quick has swapped
+    // the buffer that paints it. Arm exactly one following frame and make sure
+    // even a reduced-motion scene schedules that frame.
+    m_glassAwaitingFrameWindow = window;
+    window->requestUpdate();
 }
 
 void OverlayController::overlayDismissed()
@@ -175,17 +296,11 @@ void OverlayController::overlayDismissed()
             .flag(QStringLiteral("is_current"),
                   sender() == m_surface->window())
     );
-    // The same closing beat the menus get: fade, then the real close. The
-    // lease releases now so the opener's held hover circle lets go with the
-    // gesture rather than after the beat.
-    if (sender() == m_surface->window()) {
-        m_attachmentLease.release();
-        QWindow *const window = m_surface->window();
-        softCloseWindow(window, [this, window]() {
-            if (m_surface->window() == window)
-                close();
-        });
-    }
+    // Every public retirement takes the same idempotent soft edge. The lease
+    // releases there immediately while the private hard edge waits for the
+    // animation to complete.
+    if (sender() == m_surface->window())
+        close();
 }
 
 void OverlayController::open()
@@ -214,6 +329,11 @@ void OverlayController::open()
     if (!screen)
         screen = QGuiApplication::primaryScreen();
 
+    const bool attachedFromPanel = !m_opener.isEmpty()
+        && m_openerPanel && m_openerPanel->screen();
+    const QPointF carrierOrigin = attachedFromPanel
+        ? panelCarrierOriginOnOutput(m_openerPanel) : QPointF();
+
     QWindow *const overlay = createWindow();
     if (!overlay)
         return;
@@ -224,27 +344,25 @@ void OverlayController::open()
     // resolves to this very screen.
     overlay->setProperty("shellScale", shellScaleForScreen(screen));
 
-    // Everything this covers answers a click by retiring — except the strip
-    // the panel reserved, which stays the bar's, so a click on another opener
-    // swaps surfaces in one gesture instead of only closing this one. A
-    // keybind route names no panel and cannot measure that strip, so it keeps
-    // the complete coverage it has always had.
+    // Everything this covers answers a click by retiring. On a panel route the
+    // carrier itself begins below the bar, so its complete local region is the
+    // outside-dismiss barrier and the panel remains physically outside it. A
+    // keybind route starts at zero and keeps complete-output coverage.
     //
     // The mask is put on *before* the surface is shown, so its very first
-    // commit already excludes the strip. Applied after, the author could
-    // outrace it: for a few frames the fresh surface took input over the
-    // whole output, and a quick click on the next opener was spent dismissing
-    // this one instead of reaching the bar — the two-click switch, back
-    // again, but only for fast hands. The size connections keep the region
-    // true across the configures that follow.
-    if (m_openerPanel) {
+    // commit already owns the complete below-panel carrier. Applied after,
+    // the author could outrace it: for a few frames the fresh surface took an
+    // incomplete region, and a quick outside click reached whatever was
+    // behind it. The size connections keep the region true across the
+    // configures that follow.
+    if (attachedFromPanel) {
         const QPointer<QWindow> tracked(overlay);
         const QPointer<QWindow> bar = m_openerPanel;
         const auto apply = [tracked, bar]() {
             if (!tracked || !bar)
                 return;
             tracked->setMask(panelPopupInputRegion(
-                tracked->width(), tracked->height(), qMax(0, bar->height())));
+                tracked->width(), tracked->height(), 0));
         };
         apply();
         connect(overlay, &QWindow::widthChanged, overlay, apply);
@@ -259,19 +377,56 @@ void OverlayController::open()
         QTimer::singleShot(120, overlay, apply);
     }
 
-    if (!m_surface->open(overlay, screen)) {
+    if (!m_surface->open(
+            overlay,
+            screen,
+            OverlaySurface::Placement::Centered,
+            qRound(carrierOrigin.y())
+        )) {
         delete overlay;
         return;
     }
 
-    m_attachmentLease.acquire(m_openerPanel, overlay, m_attachmentAnchor);
-    emit contextualSurfaceOpened();
+    m_openCarrierOriginOnOutput = carrierOrigin;
+    m_attachmentLease.acquire(
+        m_openerPanel,
+        overlay,
+        m_attachmentAnchor,
+        carrierOrigin
+    );
 }
 
 void OverlayController::close()
 {
+    m_attachmentLease.release();
+    QWindow *const window = m_surface->window();
+    if (!window) {
+        m_openCarrierOriginOnOutput = QPointF();
+        m_revealIssuedWindow.clear();
+        m_glassAwaitingFrameWindow.clear();
+        m_readyWindow.clear();
+        return;
+    }
+
+    const QPointer<OverlayController> self(this);
+    const QPointer<QWindow> tracked(window);
+    softCloseWindow(window, [self, tracked]() {
+        if (self && tracked)
+            self->closeNow(tracked);
+    });
+}
+
+void OverlayController::closeNow(QWindow *expectedWindow)
+{
+    if (expectedWindow && m_surface->window() != expectedWindow)
+        return;
+
     m_surface->close();
     m_attachmentLease.release();
+    m_openCarrierOriginOnOutput = QPointF();
+    m_revealIssuedWindow.clear();
+    m_glassAwaitingFrameWindow.clear();
+    m_readyWindow.clear();
 }
 
 void OverlayController::toggle()
@@ -289,14 +444,8 @@ void OverlayController::toggle()
             .text(QStringLiteral("overlay"), m_componentName)
             .flag(QStringLiteral("was_open"), isOpen())
     );
-    if (isOpen()) {
-        m_attachmentLease.release();
-        QWindow *const window = m_surface->window();
-        softCloseWindow(window, [this, window]() {
-            if (m_surface->window() == window)
-                close();
-        });
-    } else {
+    if (isOpen())
+        close();
+    else
         open();
-    }
 }

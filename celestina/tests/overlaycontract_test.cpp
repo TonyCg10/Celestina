@@ -3,6 +3,7 @@
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QColor>
+#include <QFile>
 #include <QMap>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -10,13 +11,16 @@
 #include <QUrl>
 #include <QSignalSpy>
 #include <QVariantMap>
+#include <qqml.h>
 
 #include <limits>
 #include <memory>
 
 #include "overlaycontroller.h"
+#include "overlaysurface.h"
 #include "panelpopupplacement.h"
 #include "quietplacement.h"
+#include "surfacemanager.h"
 
 namespace {
 // Collects what Qt says while a component is created. Qt does not fail a
@@ -69,8 +73,13 @@ class OverlayContractTest final : public QObject
     Q_OBJECT
 
 private slots:
+    void initTestCase();
     void everyOverlayDeclaresTheBridgeTheListNamesForIt();
     void everyInteractiveOverlayUsesOneVeloGlassField();
+    void everyOverlayDelegatesItsPresentationGateToTheController();
+    void readinessWaitsForTheFrameAfterGlassAndDiesOnRetirement();
+    void aNewOverlayRetiresItsPredecessorOnlyAfterFirstGlass();
+    void closeIsOneIdempotentSoftRetirement();
     void aPropertyTheComponentDoesNotDeclareIsVisibleAsAFailure();
     void aComponentThisShellDoesNotHaveNamesNoBridge();
     void aPanelOpenedOverlayFollowsOnlyItsButton();
@@ -78,6 +87,8 @@ private slots:
     void anAttachedOverlayNeverReblursThePanelRows();
     void aScaledOutputDrawsLargerWithoutMovingAnythingItStates();
     void sessionCardGrowthDoesNotResizeItsOutputSurface();
+    void attachedCarriersBeginBelowThePanelWithoutChangingInteraction();
+    void aPanelAttachedNotificationUsesCarrierLocalGeometryAndDismissesOutside();
     void aClickOutsideTheCardDismissesEveryOverlay();
     void aClickOnTheCardDismissesNothing();
     void quietGeometryCentresTheCardAndReachesTheIcon();
@@ -115,6 +126,21 @@ private:
         return false;
     }
 };
+
+void OverlayContractTest::initTestCase()
+{
+    // OverlayController intentionally loads the production module by type
+    // name. This executable tests the source files directly, so register the
+    // one production type used by the controller lifecycle regressions before
+    // any engine exists in this process.
+    QVERIFY(qmlRegisterType(
+        sourceFor(QStringLiteral("LauncherOverlay")),
+        "CelestinaDesktop",
+        1,
+        0,
+        "LauncherOverlay"
+    ) >= 0);
+}
 
 void OverlayContractTest::everyOverlayDeclaresTheBridgeTheListNamesForIt()
 {
@@ -244,6 +270,200 @@ void OverlayContractTest::everyInteractiveOverlayUsesOneVeloGlassField()
         };
         QCOMPARE(sections.size(), expectedSections.value(component));
     }
+}
+
+void OverlayContractTest::everyOverlayDelegatesItsPresentationGateToTheController()
+{
+    for (const QString &component : overlays()) {
+        QFile source(sourceFor(component).toLocalFile());
+        QVERIFY2(source.open(QIODevice::ReadOnly), qPrintable(component));
+        const QByteArray qml = source.readAll();
+
+        // Configure, exposure and frame ownership belong to the mapper. A
+        // component-local copy can drift (and did: the width-only bootstrap
+        // test left equal-width outputs permanently transparent).
+        QVERIFY2(!qml.contains("revealPending"), qPrintable(component));
+        QVERIFY2(!qml.contains("surfaceConfigured"), qPrintable(component));
+        QVERIFY2(!qml.contains("onFrameSwapped"), qPrintable(component));
+        QVERIFY2(!qml.contains(".reveal("), qPrintable(component));
+    }
+}
+
+void OverlayContractTest::readinessWaitsForTheFrameAfterGlassAndDiesOnRetirement()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+    QObject source;
+    source.setProperty("providers", QVariantMap());
+
+    const QVariantList paintedGlass {
+        QVariantMap {
+            {QStringLiteral("rect"), QRectF(20, 20, 120, 80)},
+            {QStringLiteral("radius"), 16},
+        },
+    };
+
+    OverlayController presented(
+        &engine, QStringLiteral("LauncherOverlay"), &source);
+    QSignalSpy presentedReady(
+        &presented, &OverlayController::contextualSurfaceOpened);
+    QVERIFY(presented.isEnabled());
+    QVERIFY(presentedReady.isValid());
+    presented.open();
+    auto *const presentedSurface = presented.findChild<OverlaySurface *>();
+    QVERIFY(presentedSurface);
+    QWindow *const presentedWindow = presentedSurface->window();
+    QVERIFY(presentedWindow);
+    presentedWindow->setProperty("reducedMotion", true);
+    QObject *const presentedField = presentedWindow->findChild<QObject *>(
+        QStringLiteral("celestina-soft-menu-field"));
+    QVERIFY(presentedField);
+
+    // The QML publication describes a buffer Qt Quick has not swapped yet.
+    // This used to emit here and retire the predecessor one frame too early.
+    presentedField->setProperty("glassRegions", paintedGlass);
+    QCOMPARE(presentedReady.count(), 0);
+    QVERIFY(QTest::qWaitForWindowExposed(presentedWindow));
+    if (presentedReady.isEmpty())
+        QMetaObject::invokeMethod(presentedWindow, "frameSwapped");
+    QTRY_COMPARE(presentedReady.count(), 1);
+
+    OverlayController retired(
+        &engine, QStringLiteral("LauncherOverlay"), &source);
+    QSignalSpy retiredReady(
+        &retired, &OverlayController::contextualSurfaceOpened);
+    QVERIFY(retired.isEnabled());
+    QVERIFY(retiredReady.isValid());
+    retired.open();
+    auto *const retiredSurface = retired.findChild<OverlaySurface *>();
+    QVERIFY(retiredSurface);
+    QPointer<QWindow> retiredWindow(retiredSurface->window());
+    QVERIFY(retiredWindow);
+    retiredWindow->setProperty("reducedMotion", true);
+    QObject *const retiredField = retiredWindow->findChild<QObject *>(
+        QStringLiteral("celestina-soft-menu-field"));
+    QVERIFY(retiredField);
+    retiredField->setProperty("glassRegions", paintedGlass);
+    QCOMPARE(retiredReady.count(), 0);
+
+    // Retirement invalidates the armed publication. A late swap from this
+    // carrier may neither announce readiness nor sweep another surface.
+    retired.close();
+    QVERIFY(retiredWindow->property("celestinaRetiring").toBool());
+    QMetaObject::invokeMethod(retiredWindow, "frameSwapped");
+    QCoreApplication::processEvents();
+    QCOMPARE(retiredReady.count(), 0);
+    QTRY_VERIFY(!retired.isOpen());
+}
+
+void OverlayContractTest::aNewOverlayRetiresItsPredecessorOnlyAfterFirstGlass()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+    QObject source;
+    source.setProperty("providers", QVariantMap());
+
+    OverlayController oldOverlay(
+        &engine, QStringLiteral("LauncherOverlay"), &source);
+    OverlayController newOverlay(
+        &engine, QStringLiteral("LauncherOverlay"), &source);
+    QVERIFY(oldOverlay.isEnabled());
+    QVERIFY(newOverlay.isEnabled());
+
+    QSignalSpy oldReady(
+        &oldOverlay, &OverlayController::contextualSurfaceOpened);
+    QSignalSpy newReady(
+        &newOverlay, &OverlayController::contextualSurfaceOpened);
+    QVERIFY(oldReady.isValid());
+    QVERIFY(newReady.isValid());
+
+    oldOverlay.open();
+    auto *const oldSurface = oldOverlay.findChild<OverlaySurface *>();
+    QVERIFY(oldSurface);
+    QPointer<QWindow> oldWindow(oldSurface->window());
+    QVERIFY(oldWindow);
+    QVERIFY(QTest::qWaitForWindowExposed(oldWindow));
+    if (oldReady.isEmpty())
+        QMetaObject::invokeMethod(oldWindow, "frameSwapped");
+    QTRY_COMPARE(oldReady.count(), 1);
+    QVERIFY(!oldWindow->property("glassRegions").toList().isEmpty());
+
+    bool oldWasOpenAtReady = false;
+    bool oldStayedOpenForRetirement = false;
+    bool oldEnteredRetirement = false;
+    connect(
+        &newOverlay,
+        &OverlayController::contextualSurfaceOpened,
+        &newOverlay,
+        [&]() {
+            oldWasOpenAtReady = oldOverlay.isOpen();
+            oldOverlay.close();
+            oldStayedOpenForRetirement = oldOverlay.isOpen();
+            oldEnteredRetirement = oldWindow
+                && oldWindow->property("celestinaRetiring").toBool();
+        }
+    );
+
+    newOverlay.open();
+    auto *const newSurface = newOverlay.findChild<OverlaySurface *>();
+    QVERIFY(newSurface);
+    QWindow *const newWindow = newSurface->window();
+    QVERIFY(newWindow);
+
+    // Mapping alone is not readiness and cannot sweep the predecessor.
+    QCOMPARE(newReady.count(), 0);
+    QVERIFY(oldOverlay.isOpen());
+    QVERIFY(!oldWindow->property("celestinaRetiring").toBool());
+
+    QVERIFY(QTest::qWaitForWindowExposed(newWindow));
+    if (newReady.isEmpty())
+        QMetaObject::invokeMethod(newWindow, "frameSwapped");
+    QTRY_COMPARE(newReady.count(), 1);
+    QVERIFY(!newWindow->property("glassRegions").toList().isEmpty());
+    QVERIFY(oldWasOpenAtReady);
+    QVERIFY(oldStayedOpenForRetirement);
+    QVERIFY(oldEnteredRetirement);
+    QTRY_VERIFY(!oldOverlay.isOpen());
+
+    // Geometry can republish while scale or placement moves. Readiness is one
+    // edge for this mapped window, never one signal per glass publication.
+    QObject *const field = newWindow->findChild<QObject *>(
+        QStringLiteral("celestina-soft-menu-field"));
+    QVERIFY(field);
+    const QVariant regions = field->property("glassRegions");
+    field->setProperty("glassRegions", QVariantList());
+    field->setProperty("glassRegions", regions);
+    QCoreApplication::processEvents();
+    QCOMPARE(newReady.count(), 1);
+}
+
+void OverlayContractTest::closeIsOneIdempotentSoftRetirement()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+    QObject source;
+    source.setProperty("providers", QVariantMap());
+    OverlayController overlay(
+        &engine, QStringLiteral("LauncherOverlay"), &source);
+    QVERIFY(overlay.isEnabled());
+
+    overlay.open();
+    auto *const surface = overlay.findChild<OverlaySurface *>();
+    QVERIFY(surface);
+    QPointer<QWindow> window(surface->window());
+    QVERIFY(window);
+
+    overlay.close();
+    QVERIFY(overlay.isOpen());
+    QVERIFY(window->property("celestinaRetiring").toBool());
+    QCOMPARE(surface->window(), window.data());
+
+    // A repeated close observes the same beat instead of destroying early or
+    // scheduling a second completion against the window.
+    overlay.close();
+    QVERIFY(overlay.isOpen());
+    QCOMPARE(surface->window(), window.data());
+    QTRY_VERIFY(!overlay.isOpen());
 }
 
 void OverlayContractTest::everyPanelOpenedOverlayUsesTheSamePlacement()
@@ -775,6 +995,153 @@ void OverlayContractTest::aPanelOpenedOverlayFollowsOnlyItsButton()
     QCOMPARE(panelPopupBodyOrigin(local, 530, 24, 40).y(), 64);
 }
 
+void OverlayContractTest::attachedCarriersBeginBelowThePanelWithoutChangingInteraction()
+{
+    constexpr int physicalPanelHeight = 46;
+    constexpr double shellScale = 1.15;
+
+    const QuietSurfaceGeometry scaledGeometry = attachedQuietGeometry(
+        QSizeF(3840.0 / shellScale, 2160.0 / shellScale),
+        physicalPanelHeight / shellScale,
+        QRectF(3300.0 / shellScale, 5.0 / shellScale,
+               34.0 / shellScale, 34.0 / shellScale),
+        QRectF(3306.0 / shellScale, 11.0 / shellScale,
+               21.0 / shellScale, 21.0 / shellScale),
+        QSizeF(380, 240),
+        16,
+        32
+    );
+    QVERIFY(scaledGeometry.valid);
+    // `surface.y()` is already in unscaled QML units. The one conversion at
+    // the layer-shell boundary must recover the real 46-pixel panel, not apply
+    // the per-output factor a second time.
+    QCOMPARE(
+        scaledGeometry.topInsetInOutputUnits(shellScale),
+        physicalPanelHeight
+    );
+
+    auto *interactiveWindow = new QQuickWindow;
+    interactiveWindow->resize(460, 520);
+    OverlaySurface interactive(
+        OverlaySurface::Placement::Centered,
+        QStringLiteral("celestina-overlay")
+    );
+    QVERIFY(interactive.open(
+        interactiveWindow,
+        nullptr,
+        OverlaySurface::Placement::Centered,
+        physicalPanelHeight
+    ));
+    auto *interactiveLayer = LayerShellQt::Window::get(interactiveWindow);
+    QVERIFY(interactiveLayer);
+    QCOMPARE(
+        interactiveLayer->margins(),
+        QMargins(0, physicalPanelHeight, 0, 0)
+    );
+    QCOMPARE(
+        interactiveLayer->keyboardInteractivity(),
+        LayerShellQt::Window::KeyboardInteractivityOnDemand
+    );
+    QVERIFY(!interactiveWindow->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
+
+    auto *quietWindow = new QQuickWindow;
+    quietWindow->resize(380, 240);
+    OverlaySurface quiet(
+        OverlaySurface::Placement::Corner,
+        QStringLiteral("celestina-toasts")
+    );
+    QVERIFY(quiet.open(
+        quietWindow,
+        nullptr,
+        OverlaySurface::Placement::AttachedTopRight,
+        physicalPanelHeight
+    ));
+    auto *quietLayer = LayerShellQt::Window::get(quietWindow);
+    QVERIFY(quietLayer);
+    QCOMPARE(
+        quietLayer->margins(),
+        QMargins(0, physicalPanelHeight, 0, 0)
+    );
+    QCOMPARE(
+        quietLayer->keyboardInteractivity(),
+        LayerShellQt::Window::KeyboardInteractivityNone
+    );
+    QVERIFY(quietWindow->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
+
+    // A keybind/floating overlay still begins at the output origin.
+    auto *floatingWindow = new QQuickWindow;
+    floatingWindow->resize(460, 520);
+    OverlaySurface floating(
+        OverlaySurface::Placement::Centered,
+        QStringLiteral("celestina-overlay")
+    );
+    QVERIFY(floating.open(floatingWindow, nullptr));
+    auto *floatingLayer = LayerShellQt::Window::get(floatingWindow);
+    QVERIFY(floatingLayer);
+    QCOMPARE(floatingLayer->margins(), QMargins());
+    QCOMPARE(
+        floatingLayer->keyboardInteractivity(),
+        LayerShellQt::Window::KeyboardInteractivityOnDemand
+    );
+}
+
+void OverlayContractTest::aPanelAttachedNotificationUsesCarrierLocalGeometryAndDismissesOutside()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+
+    QQmlComponent overlay(
+        &engine, sourceFor(QStringLiteral("NotificationCenter")));
+    QVERIFY2(overlay.isReady(), qPrintable(overlay.errorString()));
+
+    constexpr double shellScale = 1.15;
+    constexpr int physicalPanelHeight = 46;
+    const QPointF outputOrigin(1920, 0);
+    const QPointF carrierOrigin(0, physicalPanelHeight);
+    const QRectF globalOpener(5220, 5, 34, 34);
+    const QRectF globalIcon(5226, 11, 21, 21);
+    const QRectF localOpener = panelAttachmentRectOnCarrier(
+        globalOpener, outputOrigin, carrierOrigin, shellScale);
+    const QRectF localIcon = panelAttachmentRectOnCarrier(
+        globalIcon, outputOrigin, carrierOrigin, shellScale);
+
+    // The physical carrier starts at output y=46. Its QML sees that seam as
+    // zero and receives the panel rectangles translated and unscaled into the
+    // same local space, including on the author's 1.15-scale 4K output.
+    QVERIFY(localOpener.y() < 0);
+    QCOMPARE(qRound(localOpener.x() * shellScale), 3300);
+    std::unique_ptr<QObject> root(overlay.createWithInitialProperties({
+        {QStringLiteral("reducedMotion"), true},
+        {QStringLiteral("providerSource"),
+         QVariant::fromValue<QObject *>(nullptr)},
+        {QStringLiteral("shellScale"), shellScale},
+        {QStringLiteral("anchoredFromPanel"), true},
+        {QStringLiteral("openerRect"), localOpener},
+        {QStringLiteral("attachmentAnchorRect"), localIcon},
+        {QStringLiteral("attachmentStartY"), 0},
+    }));
+    auto *window = qobject_cast<QQuickWindow *>(root.get());
+    QVERIFY(window);
+    window->resize(3840, 2160 - physicalPanelHeight);
+
+    QCOMPARE(window->property("cardY").toInt(),
+             window->property("anchorGap").toInt());
+    QQuickItem *const body = window->findChild<QQuickItem *>(
+        QStringLiteral("celestina-compositor-glass-region")
+    );
+    QVERIFY(body);
+    QCOMPARE(qRound(body->mapToItem(window->contentItem(), 0, 0).y()), 0);
+
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QSignalSpy dismissed(window, SIGNAL(dismissed()));
+    QVERIFY(dismissed.isValid());
+    // The carrier still covers every pixel below the bar, so an outside click
+    // remains the overlay's to dismiss even though the bar is not in its window.
+    QTest::mouseClick(window, Qt::LeftButton, {}, QPoint(4, 4));
+    QCOMPARE(dismissed.count(), 1);
+}
+
 
 namespace {
 // The surface covers the output, so the window is bigger than the card. This is
@@ -868,11 +1235,13 @@ void OverlayContractTest::quietGeometryCentresTheCardAndReachesTheIcon()
     QVERIFY(centred.valid);
     QCOMPARE(centred.card.x(), 1500 + 30 - 130);
     QCOMPARE(centred.card.y(), bar);
-    QCOMPARE(centred.surface.y(), 0.0);
+    QCOMPARE(centred.surface.y(), bar);
     QCOMPARE(centred.surface.right(), output.width());
     // The surface contains both the whole card and the icon's mouth.
     QVERIFY(centred.surface.left() <= centred.card.left());
     QVERIFY(centred.surface.left() <= icon.left());
+    QCOMPARE(centred.onSurface(centred.card).y(), 0.0);
+    QCOMPARE(centred.onSurface(icon).y(), icon.y() - bar);
 
     // A control at the very edge: the card clamps inside the output instead
     // of overflowing it, exactly as a menu's card would.

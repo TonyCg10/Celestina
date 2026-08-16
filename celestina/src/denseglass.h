@@ -5,6 +5,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QRectF>
+#include <QRegion>
 #include <QTimer>
 #include <QWindow>
 
@@ -34,7 +35,20 @@ struct DenseGlassShape
 {
     QRectF rect;
     qreal radius = 0;
+    // The section's rounded rectangle is clipped after it is formed. Coordinates
+    // are relative to the rounded top-left of `rect`, so moving the shape from
+    // surface-local to output-local coordinates also moves the clip without a
+    // second translation path. Keeping it separate is load-bearing: shrinking
+    // `rect` to the visible bounds would invent new rounded corners at a panel
+    // seam, while omitting it lets the companion blur pixels the source surface
+    // never paints.
+    QRegion clipRegion;
 };
+
+// The finite compositor region for one collected dense section. An empty clip
+// means no additional clip for compatibility with hand-built shapes; the
+// collector always supplies the window bounds and every clipping ancestor.
+QRegion denseGlassRegion(const DenseGlassShape &shape);
 
 // Where a layer surface sits on its output, derived from the anchors and
 // margins it was mapped with — the same numbers the compositor positions it
