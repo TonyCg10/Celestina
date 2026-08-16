@@ -153,6 +153,52 @@ TestCase {
         osd.reducedMotion = false;
     }
 
+    // The paint law of the attached window, proven on pixels: while a card
+    // falls — and even if a card is misplaced by any geometry race — nothing
+    // may show above the seam, where the bar lives. The author's recordings
+    // caught the finished card over the bar's own icons twice, through two
+    // different orderings; this grabs real frames during the entry and
+    // asserts the strip stays untouched, whatever future ordering appears.
+    function test_nothing_shows_above_the_seam_on_the_attached_window() {
+        osd.visible = true;
+        osd.reducedMotion = false;
+        osd.shellScale = 1.0;
+        osd.surfaceOriginX = 1200;
+        osd.surfaceWidth = 720;
+        osd.surfaceHeight = 232;
+        osd.openerRect = Qt.rect(1500, 5, 60, 30);
+        osd.attachmentAnchorRect = Qt.rect(1520, 11, 18, 18);
+        osd.attachmentStartY = 40;
+        osd.anchoredFromPanel = true;
+        osd.readings = [{"kind": "volume", "percent": 40, "muted": false,
+                         "label": ""}];
+
+        const field = testCase.fields()[0];
+        verify(field);
+        field.revealNow();
+        // Sample frames across the whole fall, the recoil included.
+        for (let step = 0; step < 8; ++step) {
+            wait(30);
+            const shot = grabImage(osd.contentItem);
+            for (let y = 0; y < osd.attachmentStartY - 1; y += 6) {
+                for (let x = 0; x < osd.surfaceWidth; x += 24) {
+                    const px = shot.pixel(x, y);
+                    verify((px & 0xFF000000) === 0
+                           || px === shot.pixel(0, 0),
+                           "painted above the seam at " + x + "," + y
+                           + " step " + step);
+                }
+            }
+        }
+
+        osd.readings = [];
+        osd.anchoredFromPanel = false;
+        osd.attachmentStartY = -1;
+        osd.surfaceOriginX = 0;
+        osd.surfaceWidth = osd.cardWidth;
+        osd.surfaceHeight = osd.cardHeight;
+    }
+
     // The window still renders whatever file it is handed — the host is the
     // one that now keeps a single card, the latest change. What this pins is
     // the choreography around a row leaving: it recedes for one exit beat

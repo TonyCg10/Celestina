@@ -94,7 +94,11 @@ Window {
     // used to put it.
     // The complete visible card stays inside the surface.
     readonly property int cardX: Math.round(placement.x)
-    readonly property int cardY: Math.round(placement.y)
+    // Clamped at the seam: before the placement's inputs settle it reads 0,
+    // and a card at 0 on a full-output window sits over the bar — the frames
+    // the author's recording caught on every menu open.
+    readonly property int cardY: Math.max(Math.round(placement.y),
+                                          Math.max(0, root.attachmentStartY))
 
     // Raised once the surface exists and the theme has been told about reduced
     // motion. A consumer opens its content from here rather than from its own

@@ -211,6 +211,10 @@ TestCase {
             testCase, {"reducedMotion": false, "attachedToTop": false});
         verify(field);
         field.reveal();
+        // The reveal waits for the window's next presented frame; the
+        // offscreen fallback resolves it within a beat, and this case is
+        // about what happens on a window that is already open.
+        tryCompare(field, "revealed", true);
         compare(field.attachmentProgress, 1);
         verify(!field.hasFallen);
 

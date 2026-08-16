@@ -327,11 +327,13 @@ Window {
         // Attached, under the seam; flush at the bottom, pinned by its lower
         // edge — the breathing room stays between the block and the screen's
         // edge, and growth moves the top edge, never the bottom.
-        y: stack.anchoredFromPanel
-           ? Math.round(placement.y)
-           : stack.entersFromBottom
-             ? stack.neededHeight - CelestinaTheme.spaceLg - field.height
-             : 0
+        // The top routes are clamped at the seam whatever the routing knows
+        // so far: before `anchoredFromPanel` settles this read 0, which on
+        // the attached window is the screen's top edge, over the bar.
+        y: stack.entersFromBottom
+           ? stack.neededHeight - CelestinaTheme.spaceLg - field.height
+           : Math.max(stack.anchoredFromPanel ? Math.round(placement.y) : 0,
+                      Math.max(0, stack.attachmentStartY))
         width: stack.cardWidth
         // As tall as everything it holds; the growth is a movement of its
         // own, synchronized with the arriving section's slide by sharing its

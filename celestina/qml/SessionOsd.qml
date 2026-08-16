@@ -295,8 +295,10 @@ Window {
         }
         const rects = [];
         const regions = [];
-        for (let index = 0; index < scene.children.length; ++index) {
-            const card = scene.children[index];
+        // The cards live under the seam-law clip now, one level below the
+        // scene; the walk follows them there.
+        for (let index = 0; index < seamLawInterior.children.length; ++index) {
+            const card = seamLawInterior.children[index];
             if (!card || card.glassRegions === undefined)
                 continue;
             for (let each = 0; each < card.glassRegions.length; ++each)
@@ -385,6 +387,30 @@ Window {
         transformOrigin: Item.TopLeft
         scale: osd.shellScale
 
+        // The paint law of the attached window, enforced where every card
+        // lives: nothing may exist above the seam. The membrane's mouth is
+        // tangent at the seam and paints downward, so it loses nothing; the
+        // card that slipped above it — whatever geometry raced to put it
+        // there — simply does not show. The bottom window has no bar and no
+        // seam, and keeps its full canvas.
+        Item {
+            id: seamLaw
+
+            x: 0
+            y: !osd.entersFromBottom && osd.attachmentStartY >= 0
+               ? osd.attachmentStartY : 0
+            width: scene.width
+            height: scene.height - seamLaw.y
+            clip: seamLaw.y > 0
+
+            Item {
+                id: seamLawInterior
+
+                x: 0
+                y: -seamLaw.y
+                width: scene.width
+                height: scene.height
+
         Repeater {
             model: cardModel
 
@@ -409,7 +435,16 @@ Window {
                         osd.departingKinds.indexOf(card.kind) >= 0
 
                 x: Math.round(placement.x)
-                y: (osd.anchoredFromPanel ? Math.round(placement.y) : 0)
+                // Clamped at the seam for every top route, whatever the
+                // routing knows so far: before `anchoredFromPanel` settles
+                // this read 0, and 0 on the attached window is the screen's
+                // top edge — the author's recording caught the finished card
+                // over the bar's own icons for exactly those frames.
+                y: (osd.entersFromBottom
+                    ? 0
+                    : Math.max(osd.anchoredFromPanel
+                               ? Math.round(placement.y) : 0,
+                               Math.max(0, osd.attachmentStartY)))
                    + card.index * osd.stackPeek
                 width: osd.cardWidth
                 height: osd.cardHeight
@@ -610,6 +645,8 @@ Window {
                         }
                     }
                 }
+            }
+        }
             }
         }
     }

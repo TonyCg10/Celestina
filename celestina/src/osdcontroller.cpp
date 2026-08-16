@@ -219,7 +219,12 @@ QWindow *OsdController::createWindow(const QVariantMap &placementProperties)
         {QStringLiteral("percent"), front.value(QStringLiteral("percent"), -1)},
         {QStringLiteral("muted"), front.value(QStringLiteral("muted"), false)},
         {QStringLiteral("label"), front.value(QStringLiteral("label"), QString())},
-        {QStringLiteral("readings"), m_active},
+        // Deliberately no `readings` seed: both windows are built from this
+        // one function, and a window born carrying the card file paints it
+        // wherever it stands — the author's recording shows the resting
+        // bottom-right twin drawing a second volume card in its corner while
+        // the attached window presented the real one. The presenting window
+        // receives the file through `pushReadings`, and only it does.
         {QStringLiteral("reducedMotion"),
          qEnvironmentVariableIsSet("CELESTINA_REDUCED_MOTION")},
     };

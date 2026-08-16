@@ -7,6 +7,7 @@ pragma ComponentBehavior: Bound
 
 import CelestinaStyle
 import QtQuick
+import QtQuick.Window
 import "EdgeAttachedGeometry.js" as EdgeAttachedGeometry
 
 Item {
@@ -224,10 +225,42 @@ Item {
     readonly property real attachmentWaistCenterAtBody: root.edgeShapeActive
             ? root.edgePaneX + root.edgeSilhouette.waistCenter : 0
 
+    // A reveal request waits for the window's next presented frame. Every
+    // route that revealed at creation had its first commit shown with the
+    // scene still mid-layout — at 4K the OSD's finished card covered the
+    // bar's own icons for exactly one frame before its placement applied,
+    // and the menus' falls began from geometry nobody had settled. The
+    // timer is the offscreen fallback, where a window nobody presents may
+    // never swap a frame at all.
+    property bool revealQueued: false
     function reveal() {
+        if (root.revealed || root.revealQueued)
+            return;
+        root.revealQueued = true;
+        revealSwap.target = root.Window.window;
+        revealSwapFallback.start();
+    }
+    function revealNow() {
+        revealSwap.target = null;
+        revealSwapFallback.stop();
+        root.revealQueued = false;
         root.revealed = true;
         root.beginDropFall();
         root.scheduleGlassCollection();
+    }
+    Connections {
+        id: revealSwap
+
+        target: null
+        function onFrameSwapped() {
+            root.revealNow();
+        }
+    }
+    Timer {
+        id: revealSwapFallback
+
+        interval: 50
+        onTriggered: root.revealNow()
     }
 
     // One fall per surface, ever. `hasFallen` rather than the progress value,

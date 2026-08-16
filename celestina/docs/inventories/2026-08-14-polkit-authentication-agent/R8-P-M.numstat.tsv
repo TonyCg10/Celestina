@@ -1,0 +1,32 @@
+# R8-P-M exact change inventory
+
+Base revision	88b7ccab3b688ebaf3934e7b988c9ec39d3488ed
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-M.numstat.tsv
+Pathspec	celestina/docs/evidence/
+Pathspec	celestina/docs/plans/
+Pathspec	celestina/qml/
+Pathspec	celestina/src/
+Pathspec	celestina/tests/
+Pathspec	docs/version-history.tsv
+
+Plan	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Evidence	celestina/docs/evidence/2026-08-15-the-seam-law-and-the-twin-ghost.md
+
+added	deleted	content	path
+1	1	f63622c6a732749aaf50cb11e11ad5fda1ef49b9532ef0a5a3b74a917753469d	celestina/CMakeLists.txt
+1	1	edda253446d546aa26f2177a2d9c2b12086dd3403e4f03d2ea4d8a179c8b6a43	celestina/Cargo.lock
+1	1	850d8835326bd8878e7cfbf20ef4b6faea372328a8170d1c66dafd8396447428	celestina/Cargo.toml
+55	0	788d954eba4a3658d520bf153e29b5dc4d636d9fb7f43e733286b34ecf9e8d1f	celestina/docs/evidence/2026-08-15-the-seam-law-and-the-twin-ghost.md
+32	0	self	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-M.numstat.tsv
+1	0	6bff13fa8e32ce64d5bc115bbebc614bed65b3f4b31c158f803d8aa1e008984a	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+5	1	1f4a21a06e540ae3bd9c3a0461c4f9204e7e97ad916e1850c356a4205be6089d	celestina/qml/AnchoredCard.qml
+40	3	5bc537034aecc39d3dcd1ed5f332d26d37673edcbee9216c8beabc249b63ab46	celestina/qml/SessionOsd.qml
+33	0	a361f269bd674c4b9d69b42f2727d597d7f61fd0d1c619594de7cb8de581abf3	celestina/qml/SoftMenuField.qml
+7	5	402293d0be497c623416c66eb23fc3246db5637bb96eb89f514daea8e28dc652	celestina/qml/ToastStack.qml
+6	1	f1126ad9dc3944e5a0cb5f0541a58aaac3e7c477839d3cf9665eaac0f6e5ff59	celestina/src/osdcontroller.cpp
+4	0	8175fa93e62d51b530bdfe6dde901e77d538f38ddfbe74725f9641e161e87cd3	celestina/tests/tst_attachmentfall.qml
+46	0	643657262af9396b431947d4e8dc9db4d8b6f00926fda72777b68fe699904bfd	celestina/tests/tst_sessionosd.qml
+1	0	4e5fcaee5405cbf47a0938c16fa990faa0374d8ba18b1cec99e290e7ba0e7ec4	docs/version-history.tsv
