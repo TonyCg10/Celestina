@@ -611,17 +611,23 @@ result.
 - **Related implementation:** R6 (complete)
 - **Requires:** the verified bundle carrying R6, and the author's own
   passphrase
-- **Procedure:** lock the session from `Mod+Shift+A`, confirm every output is
-  covered, type the wrong passphrase and confirm the session stays locked,
-  then type the correct one and confirm it returns.
+- **Procedure:** lock the session by hand — `celestina-lock` or `celestina msg
+  lock` from a terminal, since no keybind calls it yet on the live session —
+  confirm every output is covered, type the wrong passphrase and confirm the
+  session stays locked, then type the correct one and confirm it returns.
 - **Pass condition:** every output is covered, a refusal never unlocks
   anything, and the session returns only after a real PAM success.
-- **Result:** passed by author declaration from daily use — the lock has been
-  used to cover and return to the session repeatedly, including a wrong
-  passphrase leaving it covered. Killing the shell or the lock process while
-  locked, an output arriving mid-lock, and `lock-and-suspend`'s refusal path
-  were not separately exercised on the live session; those remain the
-  automated regressions' claim, not an author-watched one.
+- **Result:** passed by author declaration — the lock was invoked directly
+  from a terminal, not from a keybind: the live `config.kdl` still binds
+  `Mod+Shift+A` to `swaylock` and `Mod+Shift+Escape` to `noctalia msg session
+  lock-and-suspend`, and carries no binding to Celestina's own lock. The
+  author reports the manual invocation covered and returned the session
+  repeatedly, including a wrong passphrase leaving it covered. Killing the
+  shell or the lock process while locked, an output arriving mid-lock, and
+  `lock-and-suspend`'s refusal path were not separately exercised on the live
+  session; those remain the automated regressions' claim, not an
+  author-watched one. Ordinary daily use through a keybind — the actual
+  handover target — has not happened yet.
 - **Evidence:** [lock and polkit live declarations](docs/evidence/2026-08-17-lock-and-polkit-live-declarations.md)
 
 ## VAL-R8 — Living without Noctalia
