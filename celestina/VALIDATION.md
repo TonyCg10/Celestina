@@ -605,6 +605,25 @@ result.
 
 - **Evidence:** [menu anchor correction](docs/evidence/2026-08-08-menu-anchor-correction.md)
 
+## VAL-R6 — Locking and unlocking a real session
+
+- **Status:** passed
+- **Related implementation:** R6 (complete)
+- **Requires:** the verified bundle carrying R6, and the author's own
+  passphrase
+- **Procedure:** lock the session from `Mod+Shift+A`, confirm every output is
+  covered, type the wrong passphrase and confirm the session stays locked,
+  then type the correct one and confirm it returns.
+- **Pass condition:** every output is covered, a refusal never unlocks
+  anything, and the session returns only after a real PAM success.
+- **Result:** passed by author declaration from daily use — the lock has been
+  used to cover and return to the session repeatedly, including a wrong
+  passphrase leaving it covered. Killing the shell or the lock process while
+  locked, an output arriving mid-lock, and `lock-and-suspend`'s refusal path
+  were not separately exercised on the live session; those remain the
+  automated regressions' claim, not an author-watched one.
+- **Evidence:** [lock and polkit live declarations](docs/evidence/2026-08-17-lock-and-polkit-live-declarations.md)
+
 ## VAL-R8 — Living without Noctalia
 
 - **Status:** deferred
@@ -623,6 +642,17 @@ result.
   inhibitors failed. Screen lock and Polkit remain unbuilt, Niri colour
   adoption was omitted, and several AT/configuration-dependent cases remain
   deferred. The removal tool must continue to refuse.
+- **Author declaration:** the polkit agent's own first real test — the one the
+  code comment on its `Responsibility` entry says can only happen after
+  Noctalia steps aside, since `polkitd` accepts one agent per session — has
+  been done by the author from a controlled handover: Noctalia's agent
+  stopped, Celestina's registered in its place, a real `pkexec` authenticated
+  through it, and Noctalia restored afterward. That closes the part of this
+  case that is specific to the polkit prompt working. Status stays `deferred`
+  rather than `passed`: this section's own procedure and ROADMAP's R8 text
+  both tie `VAL-R8` to actually living a full day without Noctalia and
+  removing it, which is a separate, larger decision the author has not made —
+  Noctalia still owns the session as of this declaration.
 - **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-SHELL-LOCK — Concrete lock, suspend and resume lifecycle
