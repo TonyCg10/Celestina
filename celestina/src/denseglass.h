@@ -87,6 +87,10 @@ public:
 private:
     explicit DenseGlassAggregator(QObject *parent = nullptr);
     void refresh(QScreen *screen);
+    // Drops every companion belonging to an output that has gone away, so a
+    // destroyed `QScreen *` key cannot leave ghost surfaces applying the dense
+    // namespace rule on a monitor that outlived it.
+    void forgetScreen(QScreen *screen);
     QList<QPointer<QQuickWindow>> companionsFor(QScreen *screen);
     void pulse();
 

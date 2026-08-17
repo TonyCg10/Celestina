@@ -47,21 +47,34 @@ QImage AppIconProvider::requestImage(
         return QImage();
 
     QImage image;
+    bool resolved = false;
     {
         const QMutexLocker locked(&m_lock);
         const auto cached = m_cache.constFind(name);
-        if (cached != m_cache.constEnd())
+        if (cached != m_cache.constEnd()) {
             image = *cached;
+            resolved = true;
+        }
     }
 
-    if (image.isNull()) {
+    if (!resolved) {
         // A theme that has never heard of this application is the ordinary
         // case, not an error: plenty of programs ship no icon under the id they
         // report. The null image is cached too, so a miss is not looked up again
         // on every frame the map is drawn.
+        //
+        // Whether the answer was already found is what decides that, and it has
+        // to be — asking whether the *image* is null cannot tell a miss that was
+        // cached from a name never looked up, so every miss resolved again on
+        // every frame. `QIcon::fromTheme` walks each installed theme's
+        // directories before it can conclude nothing is there, on the GUI
+        // thread, and a workspace map holding two unknown application ids paid
+        // that walk twice per frame for as long as it was open. Measured as the
+        // ids `com.anthropic.Claude` and `Chatgpt` on the author's session.
         image = QIcon::fromTheme(name).pixmap(iconSize, iconSize).toImage();
         const QMutexLocker locked(&m_lock);
         m_cache.insert(name, image);
+        ++m_resolutions;
     }
 
     if (image.isNull())
@@ -77,4 +90,10 @@ QImage AppIconProvider::requestImage(
     if (size)
         *size = image.size();
     return image;
+}
+
+int AppIconProvider::resolutionCount() const
+{
+    const QMutexLocker locked(&m_lock);
+    return m_resolutions;
 }

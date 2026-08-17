@@ -214,6 +214,34 @@ DenseGlassAggregator::DenseGlassAggregator(QObject *parent)
 {
     m_pulse.setInterval(500);
     connect(&m_pulse, &QTimer::timeout, this, &DenseGlassAggregator::pulse);
+
+    // An output that leaves takes its companions with it.
+    //
+    // They are keyed by raw `QScreen *`, and a screen Qt has destroyed leaves
+    // that key dangling: the entry survives, its windows are reassigned by Qt
+    // to whatever screen remains, and they go on applying the dense namespace's
+    // compositor rule there — a ghost from an unplugged monitor saturating a
+    // different one. Unplugging is not rare on this session; it is how the
+    // author works.
+    if (auto *application = qApp) {
+        connect(application, &QGuiApplication::screenRemoved, this,
+                [this](QScreen *screen) { forgetScreen(screen); });
+    }
+}
+
+void DenseGlassAggregator::forgetScreen(QScreen *screen)
+{
+    const auto held = m_companions.take(screen);
+    for (const QPointer<QQuickWindow> &companion : held) {
+        if (!companion)
+            continue;
+        // Withdrawn before it dies, like every other effect-bearing surface in
+        // this shell: a destroy that reaches the compositor after the surface
+        // is gone is a fatal protocol error for the whole client.
+        KWindowEffects::enableBlurBehind(companion.data(), false);
+        companion->setVisible(false);
+        companion->deleteLater();
+    }
 }
 
 void DenseGlassAggregator::pulse()
@@ -389,6 +417,13 @@ QList<QPointer<QQuickWindow>> DenseGlassAggregator::companionsFor(QScreen *scree
             delete companion;
             break;
         }
+        // Mapped, then immediately withdrawn, because `mapLayerSurface` ends in
+        // `show()` and a companion that is visible before its region is armed is
+        // the whole-output saturation defect all over again — for as many frames
+        // as pass before `refresh` arms it. The caller below shows it again, and
+        // only once it has rectangles. Never brought up armed-less.
+        KWindowEffects::enableBlurBehind(companion, false);
+        companion->setVisible(false);
         // They render nothing and must swallow nothing.
         companion->setMask(QRegion(0, 0, 1, 1));
         held.append(companion);
@@ -426,9 +461,16 @@ void DenseGlassAggregator::refresh(QScreen *screen)
             KWindowEffects::enableBlurBehind(companion.data(), false);
             companion->setVisible(false);
         } else {
+            // Armed first, shown second, and that order is the point. The
+            // region is cached by KWindowSystem and applied when the surface is
+            // next exposed, so arming a hidden companion loses nothing — while
+            // showing one first hands the compositor a mapped surface with no
+            // region, which its per-namespace rule reads as "this effect covers
+            // the whole geometry" and saturates the entire output for as long
+            // as it takes the region to follow.
+            KWindowEffects::enableBlurBehind(companion.data(), true, region);
             if (!companion->isVisible())
                 companion->setVisible(true);
-            KWindowEffects::enableBlurBehind(companion.data(), true, region);
             kickRender(companion.data());
         }
     }

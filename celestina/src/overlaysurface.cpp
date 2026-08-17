@@ -1,5 +1,7 @@
 #include "overlaysurface.h"
 
+#include <KWindowEffects>
+
 #include <QDebug>
 #include <QScreen>
 
@@ -236,7 +238,21 @@ bool OverlaySurface::open(
         auto *layerWindow = LayerShellQt::Window::get(content);
         if (layerWindow) {
             const auto followSize = [layerWindow, content]() {
-                layerWindow->setDesiredSize(content->size());
+                // Never zero, and never while leaving. These placements anchor
+                // one edge per axis, and layer-shell makes a zero extent on an
+                // unopposed axis a *protocol error* — the compositor kills the
+                // whole shell for it, not just the surface. A content window
+                // whose last card is retiring can pass through an empty height
+                // on its way out, so the floor is one pixel and a retiring
+                // surface stops following at all: its size from here on is the
+                // close animation's business, and nothing it does is worth
+                // committing.
+                if (content->property("celestinaRetiring").toBool())
+                    return;
+                const QSize followed = content->size();
+                layerWindow->setDesiredSize(
+                    QSize(qMax(1, followed.width()), qMax(1, followed.height()))
+                );
                 content->requestUpdate();
             };
             connect(content, &QWindow::widthChanged, this, followSize);
@@ -260,6 +276,22 @@ void OverlaySurface::close()
         return;
 
     content->disconnect(this);
+    // The effect object leaves before the surface it hangs on, deliberately.
+    //
+    // KWindowSystem tears its blur wrapper down from `surfaceDestroyed`, and it
+    // does so with `deleteLater` — so the `ext_background_effect_surface_v1`
+    // destroy lands a whole event-loop pass *after* Qt has already destroyed the
+    // `wl_surface`. A compositor that still holds that surface answers the late
+    // request with a fatal protocol error and kills the client; upstream niri
+    // #3660 is that exact sequence, reported against Dolphin, which is this same
+    // Qt and KWindowSystem stack. `softCloseWindow` already withdraws before its
+    // own close; this is the hard path, which did not.
+    //
+    // Withdrawing here does not merely clear a region: it releases the object
+    // while the surface is unquestionably alive, leaving nothing for a late
+    // destroy to reference.
+    content->setProperty("celestinaRetiring", true);
+    KWindowEffects::enableBlurBehind(content, false);
     content->hide();
     content->deleteLater();
 }

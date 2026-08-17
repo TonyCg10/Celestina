@@ -61,9 +61,19 @@ found the defect classes — and that the nest compositor has silently been
 niri `main` (2026-08-14) rather than the session's 26.04 release, so the
 shell was verified for months against a compositor five months newer than
 the one it must live on. See
-[the investigation record](docs/evidence/2026-08-17-live-session-investigation.md)
-and the planned `LIVE-1` checkpoint in [ROADMAP.md](ROADMAP.md). Noctalia
-remains the session's shell until `LIVE-1` lands.
+[the investigation record](docs/evidence/2026-08-17-live-session-investigation.md).
+
+Six of `LIVE-1`'s seven repairs are delivered ahead of the checkpoint, since
+the session cannot be lived in until they are: the icon miss that re-walked
+every theme per frame, the unclamped layer-surface size, the effect object
+outliving its surface on both hard-close paths, glass mapped before it was
+armed, per-output blur refusals now journalled, and the nest that silently
+built the wrong compositor. Night light gained a temperature setting and verb;
+its control-centre control is not built. The per-output correction waits on
+the records the new journalling produces. See
+[the hardening record](docs/evidence/2026-08-17-live-session-hardening.md).
+None of it has been run on the author's session, so Noctalia remains the
+session's shell.
 
 ## Active checkpoint
 

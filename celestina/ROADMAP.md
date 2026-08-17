@@ -38,7 +38,7 @@ of the design when they provide the narrow capability the shell needs.
 | UX-2 | planned | Establish and then implement one coherent shell-wide visual and interaction language after SHELL-D5 is applied |
 | R6 | complete | First-party `ext-session-lock` and deterministic lock-before-suspend, with `VAL-R6` still unrun |
 | LOCK-1 | active | Let the session recede behind its own blurred wallpaper instead of vanishing into an opaque slab, and uncover it continuously |
-| LIVE-1 | planned | Make the shell survive and look right on the real session: fix the crash-class defects, the whole-output saturation, and the per-monitor divergence the first live migration exposed |
+| LIVE-1 | partly delivered | Make the shell survive and look right on the real session; six of its seven repairs are delivered ahead of the checkpoint, and the per-output correction waits on the records the sixth now produces |
 | R8 | complete | Reversible Noctalia removal and the first-party Polkit agent are delivered; live departure remains `VAL-R8` |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
 
@@ -653,30 +653,38 @@ compositor five months newer than the one the shell must live on. The
 findings, mechanisms and upstream citations are in
 [the investigation record](docs/evidence/2026-08-17-live-session-investigation.md).
 
-Planned decomposition, by priority:
+Six of the seven were delivered on 2026-08-17, ahead of the checkpoint, because
+the session cannot be lived in until they are; see
+[the hardening record](docs/evidence/2026-08-17-live-session-hardening.md).
+Reading the code to repair them also corrected the investigation: its first
+critical finding — icons resolved on a non-GUI thread — was wrong, and a real
+defect nobody had reported was found in the same class.
 
-- **LIVE-1-A — Icon lookups leave the render thread.** `AppIconProvider`
-  resolves themed icons on Qt Quick's image-loader thread with GUI-thread-only
-  machinery; resolve on the GUI thread and hand only `QImage`s across.
-- **LIVE-1-B — No zero-sized layer surface, ever.** Clamp the quiet-surface
+Decomposition, by priority:
+
+- **LIVE-1-A — A miss is looked up once (delivered).** `AppIconProvider`
+  cached its answers but decided whether to resolve by asking whether the
+  image was null, which cannot tell a cached miss from a name never seen — so
+  every miss re-walked every icon theme on every frame that drew it.
+- **LIVE-1-B — No zero-sized layer surface, ever (delivered).** Clamp the quiet-surface
   `followSize` path to a 1x1 minimum and skip while retiring, so a collapsing
   content window can never commit a fatal `set_size(0, …)`.
-- **LIVE-1-C — Blur teardown precedes surface teardown.** Withdraw the effect
+- **LIVE-1-C — Blur teardown precedes surface teardown (delivered).** Withdraw the effect
   before hide on every animated close, stop the per-frame re-arm once a close
   begins, and never hand KWindowSystem a region for a window whose surface is
   gone — the niri #3660 fingerprint must have nothing to bite.
-- **LIVE-1-D — No mapped glass without a region.** Arm a companion's region
+- **LIVE-1-D — No mapped glass without a region (delivered).** Arm a companion's region
   before its surface maps, sweep every overlay/toast/OSD surface for the
   mapped-without-region state, and handle screen removal for companions.
-- **LIVE-1-E — Per-output gating becomes observable and correct.** Journal
+- **LIVE-1-E — Per-output gating becomes observable (delivered); correcting it waits on those records.** Journal
   which precondition fails when a membrane or blur region does not arm on an
   output, then fix the per-screen scale/anchor derivation those records
   expose.
-- **LIVE-1-F — The compositor baseline is a decision, not an accident.** Pin
+- **LIVE-1-F — The compositor baseline is a decision, not an accident (the nest now refuses to build a different compositor; which one the session runs is still the author's call).** Pin
   the nest to the session's exact niri commit, record the divergence as a
   build input, and decide explicitly whether the session adopts the patched
   newer compositor or the shell degrades gracefully on the release.
-- **LIVE-1-G — Night light gets a temperature control.** Replace the 2700 K
+- **LIVE-1-G — Night light gets a temperature (delivered as a setting and a verb; the control-centre control itself is not built).** Replace the 2700 K
   constant with a bounded setting surfaced in the control centre.
 
 This checkpoint activates only after `LOCK-1` archives — the guard permits one

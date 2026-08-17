@@ -198,8 +198,28 @@ pub fn spawn(
 /// Sends a typed switch request to the Wayland owner and waits for its final
 /// gamma state. Acceptance is returned only after the last transition frame.
 pub fn action(verb: &str, options: &Payload) -> Result<(), String> {
-    let SessionRequest::NightLight(switch) = session::parse_for(NAME, verb, options)? else {
-        return Err(session::unserved_verb(NAME, verb));
+    let switch = match session::parse_for(NAME, verb, options)? {
+        SessionRequest::NightLight(switch) => switch,
+        // Choosing the warmth is not switching the light. The preference is
+        // remembered here and the worker reads it on its next transition, so a
+        // change while the light is already on lands without a toggle; while it
+        // is off, it sets what the light will be.
+        SessionRequest::NightLightTemperature(kelvin) => {
+            super::settings::remember(|settings| settings.night_light_kelvin = kelvin)
+                .map_err(|error| format!("cannot remember the night-light warmth: {error}"))?;
+            if super::settings::current().night_light {
+                if let Some(sender) = REQUESTS.get() {
+                    let (reply, _answer) = sync_channel(1);
+                    let _ = sender.try_send(Request {
+                        switch: Switch::On,
+                        permit: Arc::new(RequestPermit::new(Instant::now() + REQUEST_TIMEOUT)),
+                        reply,
+                    });
+                }
+            }
+            return Ok(());
+        }
+        _ => return Err(session::unserved_verb(NAME, verb)),
     };
     let Some(sender) = REQUESTS.get() else {
         return Err("the night-light worker has not started".to_owned());
@@ -850,10 +870,19 @@ impl GammaSession {
         self.state.validate_controls()
     }
 
+    /// The warmth the person chose, read at the moment it is applied.
+    ///
+    /// Read here rather than cached so that changing the temperature while the
+    /// light is already on takes effect on the next transition, without the
+    /// session having to toggle it off and on again.
+    fn chosen_whitepoint() -> Whitepoint {
+        Whitepoint::for_temperature(super::settings::current().night_light_kelvin)
+    }
+
     fn set_active(&mut self, active: bool, budget: &OperationBudget<'_>) -> Result<(), String> {
         if active {
             self.ensure_controls(budget)?;
-            self.transition_to(Whitepoint::warm_2700k(), budget)
+            self.transition_to(Self::chosen_whitepoint(), budget)
         } else {
             self.transition_to(Whitepoint::NEUTRAL, budget)?;
             self.destroy_controls(budget)
@@ -864,7 +893,7 @@ impl GammaSession {
         self.ensure_controls(budget)?;
         // Existing outputs start and end warm; a newly added output is the
         // only one whose per-output plan travels from neutral to warm.
-        self.transition_to(Whitepoint::warm_2700k(), budget)
+        self.transition_to(Self::chosen_whitepoint(), budget)
     }
 
     fn destroy_controls(&mut self, budget: &OperationBudget<'_>) -> Result<(), String> {

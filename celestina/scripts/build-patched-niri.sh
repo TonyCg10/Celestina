@@ -33,21 +33,69 @@ done
 
 # The tag of the niri already installed, so the patched build tracks the
 # session's own version rather than whatever upstream's tip happens to be.
+# The session's compositor, by version *and* by commit.
+#
+# The commit is what matters and the version alone was not enough. This script
+# used to ask for the version tag and, when that failed, silently clone the
+# default branch — and it failed every time, because niri's release tag is
+# `v26.04` while `niri --version` prints `26.04`. The nest therefore ran niri
+# `main` for months while the session ran the April release, so every visual
+# check of the glass, the membrane and the blur was made against a compositor
+# carrying post-release fixes the session does not have. The first live
+# migration is where that was discovered, by crashing.
+#
+# `niri --version` prints `niri <version> (<commit>)`, and a patched build
+# appends `-modified` to its commit; both are parsed off.
 version=$(niri --version 2>/dev/null | awk '{print $2}')
-[ -n "$version" ] || version=main
-echo ">> building niri $version with the per-layer blur strength patch" >&2
-
-if [ -d "$work_dir/.git" ]; then
-    git -C "$work_dir" fetch --tags --depth 1 origin "$version" 2>/dev/null || true
-    git -C "$work_dir" checkout --force FETCH_HEAD 2>/dev/null \
-        || git -C "$work_dir" checkout --force "$version"
-    git -C "$work_dir" reset --hard
-else
-    mkdir -p "$(dirname "$work_dir")"
-    git clone --depth 1 --branch "$version" \
-        https://github.com/YaLTeR/niri.git "$work_dir" 2>/dev/null \
-        || git clone --depth 1 https://github.com/YaLTeR/niri.git "$work_dir"
+session_commit=$(niri --version 2>/dev/null \
+    | sed -n 's/.*(\([0-9a-f]\{7,\}\).*/\1/p')
+if [ -z "$version" ] || [ -z "$session_commit" ]; then
+    echo "build-patched-niri: cannot read the session's niri version." >&2
+    echo "   Refusing rather than guessing which compositor to build." >&2
+    exit 1
 fi
+echo ">> building niri $version ($session_commit) with the per-layer blur strength patch" >&2
+
+mkdir -p "$(dirname "$work_dir")"
+[ -d "$work_dir/.git" ] || git init -q "$work_dir"
+git -C "$work_dir" remote get-url origin >/dev/null 2>&1 \
+    || git -C "$work_dir" remote add origin https://github.com/YaLTeR/niri.git
+
+# The tag first, because a shallow fetch of an arbitrary short commit is not
+# something the smart protocol serves. `v<version>` is niri's actual tag
+# spelling; the bare version is tried too in case that ever changes.
+fetched=""
+for ref in "v$version" "$version"; do
+    if git -C "$work_dir" fetch --depth 1 --force origin \
+        "refs/tags/$ref:refs/tags/$ref" 2>/dev/null; then
+        fetched=$ref
+        break
+    fi
+done
+if [ -z "$fetched" ]; then
+    echo "build-patched-niri: no tag v$version or $version upstream." >&2
+    echo "   The nest must be the session's compositor; refusing to build a" >&2
+    echo "   different one. Check what \`niri --version\` reports." >&2
+    exit 1
+fi
+
+git -C "$work_dir" checkout --force -q "refs/tags/$fetched"
+git -C "$work_dir" reset --hard -q
+
+# The invariant this whole block exists for: what was checked out is the commit
+# the session actually runs. Anything else is a nest that cannot predict the
+# session, which is the defect being fixed here — so it is a refusal, never a
+# warning.
+built_commit=$(git -C "$work_dir" rev-parse --short=40 HEAD)
+case "$built_commit" in
+"$session_commit"*) ;;
+*)
+    echo "build-patched-niri: tag $fetched is $built_commit, but this session" >&2
+    echo "   runs $session_commit. The nest would not be the session's" >&2
+    echo "   compositor, so nothing is built." >&2
+    exit 1
+    ;;
+esac
 
 # Idempotent: a re-run over an already-patched tree is not an error.
 if ! git -C "$work_dir" apply --check "$patch_file" 2>/dev/null; then

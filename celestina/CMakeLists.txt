@@ -467,6 +467,20 @@ if(BUILD_TESTING)
     # Proves the release cannot be held hostage by the retreat that plays in
     # front of it: every case here stalls, ignores or repeats the animation and
     # still requires exactly one uncovering.
+    # Guards the cached-miss path: an application id no theme knows must be
+    # searched for once, not on every frame that draws it.
+    qt_add_executable(celestina-appicon-provider-test
+        tests/appiconprovider_test.cpp
+        src/appiconprovider.h
+        src/appiconprovider.cpp
+        src/trayicons.h
+        src/trayicons.cpp
+    )
+    target_include_directories(celestina-appicon-provider-test PRIVATE src)
+    target_link_libraries(celestina-appicon-provider-test PRIVATE
+        Qt6::Test Qt6::Gui Qt6::Quick)
+    add_test(NAME celestina-appicon-provider COMMAND celestina-appicon-provider-test)
+
     qt_add_executable(celestina-lock-uncover-test
         tests/lockuncover_test.cpp
         src/lock/lockuncover.h

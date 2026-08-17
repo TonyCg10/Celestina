@@ -91,6 +91,7 @@ celestina msg mic-mute-on
 celestina msg brightness-step by=-5 output=DP-1
 celestina msg brightness-set level=60 output=DP-1
 celestina msg night-light-toggle
+celestina msg night-light-temperature kelvin=3400
 celestina msg caffeine-on
 celestina msg displays-off
 ```
@@ -163,6 +164,7 @@ is missing rather than reporting a change that did not happen:
 | `volume-*`, `mute-*`, `mic-mute-*` | `wpctl` (WirePlumber) |
 | `brightness-*` | `ddcutil`, and a monitor that answers DDC/CI |
 | `night-light-*` | Celestina's bounded Wayland gamma transition |
+| `night-light-temperature` | the same, at a chosen warmth: `kelvin` from 2000 to 6500, remembered and applied on the next transition |
 | `caffeine-*` | `systemd-inhibit` (systemd) |
 | `displays-off` | Niri itself |
 | `lock`, `lock-and-suspend` | nothing yet — these are refused on purpose |

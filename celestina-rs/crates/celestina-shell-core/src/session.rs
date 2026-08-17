@@ -119,6 +119,10 @@ pub enum SessionRequest {
     Mute(MuteDevice, Switch),
     Brightness(LevelChange),
     NightLight(Switch),
+    /// How warm night light should be, in kelvin. Separate from the switch:
+    /// choosing a temperature says nothing about whether the light is on, and
+    /// a person adjusting it while it is off is setting what it will be.
+    NightLightTemperature(u32),
     /// Keeping the session awake on purpose.
     Caffeine(Switch),
     /// Blanking the outputs now. There is no "on": any input wakes them, and a
@@ -140,6 +144,22 @@ fn level(options: &Payload) -> Result<u8, String> {
         .ok_or_else(|| format!("'level' must be a whole number from 0 to {MAX_LEVEL}"))?;
 
     u8::try_from(level).map_err(|_| "'level' is out of range".to_owned())
+}
+
+fn kelvin(options: &Payload) -> Result<u32, String> {
+    let minimum = crate::nightlight::Whitepoint::MINIMUM_KELVIN;
+    let maximum = crate::nightlight::Whitepoint::MAXIMUM_KELVIN;
+    let value = options.get("kelvin").ok_or_else(|| {
+        format!("this verb needs a 'kelvin' between {minimum} and {maximum}")
+    })?;
+    let kelvin = value
+        .as_i64()
+        .filter(|kelvin| (i64::from(minimum)..=i64::from(maximum)).contains(kelvin))
+        .ok_or_else(|| {
+            format!("'kelvin' must be a whole number from {minimum} to {maximum}")
+        })?;
+
+    u32::try_from(kelvin).map_err(|_| "'kelvin' is out of range".to_owned())
 }
 
 fn step(options: &Payload) -> Result<i16, String> {
@@ -198,6 +218,7 @@ pub fn parse_request(verb: &str, options: &Payload) -> Result<SessionRequest, St
     }
 
     match verb {
+        "night-light-temperature" => Ok(SessionRequest::NightLightTemperature(kelvin(options)?)),
         "volume-set" => Ok(SessionRequest::Volume(LevelChange::Set(level(options)?))),
         "volume-step" => Ok(SessionRequest::Volume(LevelChange::Step(step(options)?))),
         "brightness-set" => Ok(SessionRequest::Brightness(LevelChange::Set(level(
@@ -265,7 +286,9 @@ pub fn serves(provider: &str, request: SessionRequest) -> bool {
     match request {
         SessionRequest::Volume(_) | SessionRequest::Mute(..) => provider == "audio",
         SessionRequest::Brightness(_) => provider == "brightness",
-        SessionRequest::NightLight(_) => provider == "night-light",
+        SessionRequest::NightLight(_) | SessionRequest::NightLightTemperature(_) => {
+            provider == "night-light"
+        }
         SessionRequest::Caffeine(_) => provider == "caffeine",
         SessionRequest::DisplaysOff
         | SessionRequest::Lock
@@ -288,7 +311,7 @@ pub fn no_provider(request: SessionRequest) -> String {
         }
         SessionRequest::Mute(MuteDevice::Input, _) => "the session's microphone",
         SessionRequest::Brightness(_) => "monitor brightness",
-        SessionRequest::NightLight(_) => "night light",
+        SessionRequest::NightLight(_) | SessionRequest::NightLightTemperature(_) => "night light",
         SessionRequest::Caffeine(_) => "the idle inhibitor",
         SessionRequest::DisplaysOff => "the compositor's display power control",
         SessionRequest::Lock

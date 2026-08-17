@@ -31,16 +31,44 @@ impl Whitepoint {
         blue: 1.0,
     };
 
-    /// The fixed 2700 K endpoint used by Celestina's night-light switch.
+    /// The warmest temperature the switch offers, in kelvin.
+    pub const MINIMUM_KELVIN: u32 = 2000;
+    /// The coolest. Above this the effect is indistinguishable from neutral,
+    /// so offering more would be offering nothing.
+    pub const MAXIMUM_KELVIN: u32 = 6500;
+    /// What the switch used before it was adjustable, and what a session with
+    /// no recorded preference still gets.
+    pub const DEFAULT_KELVIN: u32 = 2700;
+
+    /// The 2700 K endpoint Celestina's night-light switch used before its
+    /// temperature could be chosen.
     #[must_use]
     pub fn warm_2700k() -> Self {
-        // This is `calc_whitepoint(2700)` specialized from wlsunset's
-        // `color.c`: its Illuminant D and Planckian loci are blended by the
-        // same cosine factor, converted with the same XYZ-to-sRGB matrix and
-        // 1/2.2 transfer, then normalized by the largest channel. Keeping the
-        // calculation here avoids replacing the former effect with a generic
-        // RGB approximation that merely looks close.
-        const TEMPERATURE: f64 = 2700.0;
+        Self::for_temperature(Self::DEFAULT_KELVIN)
+    }
+
+    /// The whitepoint for one colour temperature, in kelvin.
+    ///
+    /// Clamped rather than refused: this is reached from a settings file a
+    /// person can edit, and a night light that silently declines to change is
+    /// worse than one that stops at its warmest.
+    #[must_use]
+    pub fn for_temperature(kelvin: u32) -> Self {
+        // This is wlsunset's `calc_whitepoint` from `color.c`: its Illuminant D
+        // and Planckian loci are blended by the same cosine factor, converted
+        // with the same XYZ-to-sRGB matrix and 1/2.2 transfer, then normalized
+        // by the largest channel. Keeping the calculation here avoids replacing
+        // the effect with a generic RGB approximation that merely looks close.
+        let temperature = f64::from(kelvin.clamp(Self::MINIMUM_KELVIN, Self::MAXIMUM_KELVIN));
+
+        // wlsunset's own switch: above 6500 K the daylight locus alone applies,
+        // and the blend below is only defined under it.
+        if temperature >= 6500.0 {
+            return Self::NEUTRAL;
+        }
+
+        #[allow(non_snake_case)]
+        let TEMPERATURE = temperature;
 
         let daylight_x = 0.244_063 + 0.099_11e3 / TEMPERATURE + 2.967_8e6 / TEMPERATURE.powi(2)
             - 4.607_0e9 / TEMPERATURE.powi(3);
@@ -161,6 +189,57 @@ pub fn gamma_ramp(size: u32, whitepoint: Whitepoint) -> Option<Vec<u16>> {
         }
     }
     Some(ramp)
+}
+
+#[cfg(test)]
+mod temperature_tests {
+    use super::Whitepoint;
+
+    /// The adjustable path must reproduce the constant it replaced, or every
+    /// session that never touches the setting silently changes colour.
+    #[test]
+    fn the_default_temperature_is_the_former_constant() {
+        assert_eq!(
+            Whitepoint::for_temperature(Whitepoint::DEFAULT_KELVIN).channels(),
+            Whitepoint::warm_2700k().channels()
+        );
+    }
+
+    /// Warmer means less blue relative to red. Without this the slider could
+    /// run backwards and still look plausible in a screenshot.
+    #[test]
+    fn warmer_temperatures_cut_more_blue() {
+        let warm = Whitepoint::for_temperature(2000).channels();
+        let mild = Whitepoint::for_temperature(4500).channels();
+        assert!(
+            warm[2] < mild[2],
+            "2000 K should leave less blue than 4500 K: {warm:?} vs {mild:?}"
+        );
+    }
+
+    /// A hand-edited settings file is a real input, and it must land on the
+    /// nearest usable value rather than produce a nonsense gamma table.
+    #[test]
+    fn temperatures_outside_the_range_are_clamped() {
+        assert_eq!(
+            Whitepoint::for_temperature(0).channels(),
+            Whitepoint::for_temperature(Whitepoint::MINIMUM_KELVIN).channels()
+        );
+        assert_eq!(
+            Whitepoint::for_temperature(1_000_000).channels(),
+            Whitepoint::for_temperature(Whitepoint::MAXIMUM_KELVIN).channels()
+        );
+    }
+
+    /// The coolest offered temperature is the identity, so turning the light
+    /// to its coolest is indistinguishable from turning it off.
+    #[test]
+    fn the_coolest_temperature_is_neutral() {
+        assert_eq!(
+            Whitepoint::for_temperature(Whitepoint::MAXIMUM_KELVIN).channels(),
+            Whitepoint::NEUTRAL.channels()
+        );
+    }
 }
 
 #[cfg(test)]

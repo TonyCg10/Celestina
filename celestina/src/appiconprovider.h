@@ -32,9 +32,20 @@ public:
 
     QImage requestImage(const QString &id, QSize *size, const QSize &requested) override;
 
+    // How many times a name was actually searched for in the themes.
+    //
+    // Exposed for one reason: the defect this class had was invisible from
+    // outside it. A cached miss looked exactly like a resolved one — same null
+    // image, same absence of an icon — while costing a full walk of every
+    // theme directory on every frame that drew it. Only the count of searches
+    // distinguishes the two, and a timing measurement does not: on a machine
+    // with few themes installed the wasted walk is quick enough to hide.
+    int resolutionCount() const;
+
 private:
     // Locked because Qt may still ask for an already-cached image from its
     // render thread while the GUI thread is resolving another.
-    QMutex m_lock;
+    mutable QMutex m_lock;
     QHash<QString, QImage> m_cache;
+    int m_resolutions = 0;
 };

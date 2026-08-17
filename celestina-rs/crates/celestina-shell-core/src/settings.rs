@@ -147,6 +147,11 @@ pub struct Settings {
     pub caffeine: bool,
     /// Whether night light is on.
     pub night_light: bool,
+    /// How warm night light is, in kelvin, when it is on. Bounded by
+    /// `Whitepoint::MINIMUM_KELVIN`/`MAXIMUM_KELVIN` on the way in, because
+    /// this file is a person's to edit and a nonsense number should land on
+    /// the nearest sane one rather than refuse the whole document.
+    pub night_light_kelvin: u32,
     /// The step one wheel notch or one key press takes, in whole percent.
     pub level_step: u8,
     /// Where the weather is for, or nothing — in which case no weather is
@@ -183,6 +188,7 @@ impl Default for Settings {
             quiet: false,
             caffeine: false,
             night_light: false,
+            night_light_kelvin: crate::nightlight::Whitepoint::DEFAULT_KELVIN,
             level_step: 5,
             weather: None,
             weather_icon: String::new(),
@@ -205,6 +211,13 @@ impl Settings {
         if self.level_step == 0 || self.level_step > MAX_LEVEL {
             self.level_step = Self::default().level_step;
         }
+        // Clamped rather than defaulted: unlike a step, every kelvin value has
+        // a nearest sensible neighbour, and landing on the warmest the switch
+        // offers is a better answer to "1000" than silently reverting to 2700.
+        self.night_light_kelvin = self.night_light_kelvin.clamp(
+            crate::nightlight::Whitepoint::MINIMUM_KELVIN,
+            crate::nightlight::Whitepoint::MAXIMUM_KELVIN,
+        );
         self.weather = self
             .weather
             .and_then(|place| Location::new(place.latitude, place.longitude, &place.label));

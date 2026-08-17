@@ -1,5 +1,7 @@
 #include "panelmenusurface.h"
 
+#include <KWindowEffects>
+
 #include <QDebug>
 #include <QMargins>
 #include <QScreen>
@@ -135,6 +137,13 @@ void PanelMenuSurface::close()
         return;
 
     content->disconnect(this);
+    // Before the surface, never after it. KWindowSystem drops its blur wrapper
+    // from `surfaceDestroyed` via `deleteLater`, so the effect object's destroy
+    // would otherwise reach the compositor once the `wl_surface` is already
+    // gone — a fatal protocol error for the whole client, which is upstream
+    // niri #3660 against this very Qt and KWindowSystem stack.
+    content->setProperty("celestinaRetiring", true);
+    KWindowEffects::enableBlurBehind(content, false);
     content->hide();
     content->deleteLater();
 }

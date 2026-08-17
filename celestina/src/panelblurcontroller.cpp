@@ -496,6 +496,30 @@ void PanelBlurController::probe()
     if (m_state != State::Fallback) {
         qInfo() << "Celestina compositor blur unavailable on"
                 << m_window->objectName() << "(using opaque fallback)";
+        // Which precondition failed, per surface, and therefore per output.
+        //
+        // "No blur on that monitor" was unanswerable before this: the positive
+        // `blur.armed` record says nothing about the surfaces that never armed,
+        // and on a three-output session the interesting case is the output that
+        // differs from its neighbours. Each of these is one of the reasons
+        // `blurProbeCanUseEffect` can refuse, recorded separately so the answer
+        // is read rather than guessed at.
+        DiagnosticJournal::instance().record(
+            DiagnosticJournal::Record(
+                DiagnosticJournal::Level::Info,
+                QStringLiteral("blur.unavailable"))
+                .text(QStringLiteral("surface"), m_window->objectName())
+                .text(QStringLiteral("output"),
+                      m_window->screen() ? m_window->screen()->name()
+                                         : QString())
+                .flag(QStringLiteral("visible"), surfaceVisible)
+                .flag(QStringLiteral("exposed"), surfaceExposed)
+                .flag(QStringLiteral("sized"), surfaceSized)
+                .flag(QStringLiteral("effect_available"), effectAvailable)
+                .flag(QStringLiteral("has_glass"), !glass.isEmpty())
+                .number(QStringLiteral("window_width"), m_window->width())
+                .number(QStringLiteral("window_height"), m_window->height())
+        );
     }
     m_state = State::Fallback;
     scheduleProbe(fallbackProbeDelayMs);
