@@ -26,7 +26,8 @@ Window {
     // Forwarded to the host, which owns every surface this window does not.
     signal workspaceMapRequested(rect openerRect, rect attachmentAnchorRect, var workspaces)
     signal trayDrawerRequested(rect openerRect, rect attachmentAnchorRect)
-    signal trayMenuRequested(string service, string path, int globalX, int globalY)
+    signal trayMenuRequested(string service, string path, string appName,
+                             rect openerRect, rect attachmentAnchorRect)
     signal launcherRequested(rect openerRect, rect attachmentAnchorRect)
     signal notificationCentreRequested(rect openerRect,
                                        rect attachmentAnchorRect)
@@ -407,7 +408,9 @@ Window {
                     ink: backdropInk
                     onActivated: (service, path, globalX, globalY) => panel.traySource.activate(service, path, globalX, globalY)
                     onSecondaryActivated: (service, path, globalX, globalY) => panel.traySource.secondaryActivate(service, path, globalX, globalY)
-                    onMenuRequested: (service, path, globalX, globalY) => panel.trayMenuRequested(service, path, globalX, globalY)
+                    onMenuRequested: (service, path, appName, openerRect, attachmentAnchorRect) =>
+                        panel.trayMenuRequested(service, path, appName,
+                                                openerRect, attachmentAnchorRect)
                     onDrawerRequested: (openerRect, attachmentAnchorRect) =>
                         panel.trayDrawerRequested(openerRect, attachmentAnchorRect)
 

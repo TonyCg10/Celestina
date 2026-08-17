@@ -1,12 +1,8 @@
 # Active Celestina plans
 
-The active shell implementation plan is
-[R8 — polkit authentication agent](2026-08-14-polkit-authentication-agent.md),
-authorized and bounded by
-[ADR 0005](../../decisions/0005-first-party-polkit-agent.md). The first-party
-session lock closed on 2026-08-14 on its implementation exit, with `VAL-R6`
-deliberately unclaimed: the lock is built and tested, and nobody has yet
-unlocked their own machine with it.
+No Celestina implementation plan is active. R8 is complete and archived under
+[`../archive/`](../archive/); author-only validation remains recorded in
+`VALIDATION.md` without keeping an implementation checkpoint open.
 
 Plans that are authorized but whose checkpoint has not opened wait under
 [`../pending/`](../pending/).

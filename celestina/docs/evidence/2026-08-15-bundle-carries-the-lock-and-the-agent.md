@@ -5,7 +5,7 @@
 - **Artifact:** Celestina 0.29.2, the production bundle and the handover model
 - **Environment:** `complete-production.sh` on the author's machine, deploying
   to `~/.local`; the running session was not changed
-- **Plan:** [polkit authentication agent](../plans/active/2026-08-14-polkit-authentication-agent.md)
+- **Plan:** [polkit authentication agent](../plans/archive/2026-08-14-polkit-authentication-agent.md)
 - **Validation:** `VAL-R8`
 
 ## Procedure

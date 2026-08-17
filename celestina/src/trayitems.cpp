@@ -1,8 +1,11 @@
 #include "trayitems.h"
 
+#include <QByteArray>
 #include <QCryptographicHash>
+#include <QDBusArgument>
 #include <QDBusObjectPath>
 #include <QDir>
+#include <QRegularExpression>
 
 #include <algorithm>
 
@@ -49,7 +52,97 @@ QString readObjectPath(const QVariant &value)
     const QString path = value.toString().left(maxTrayPathLength);
     return path.startsWith(u'/') && path != QStringLiteral("/") ? path : QString();
 }
+
+QString readToolTipTitle(const QVariant &value)
+{
+    // Plain lists keep the pure unit boundary cheap; QtDBus supplies the real
+    // `(sa(iiay)ss)` value as a lazy argument in production.
+    if (value.canConvert<QVariantList>()) {
+        const QVariantList fields = value.toList();
+        return fields.size() >= 3
+            ? boundedText(fields.at(2)).trimmed() : QString();
+    }
+    if (!value.canConvert<QDBusArgument>())
+        return {};
+
+    const QDBusArgument argument = value.value<QDBusArgument>();
+    if (argument.currentType() != QDBusArgument::StructureType)
+        return {};
+
+    QString iconName;
+    QString title;
+    QString description;
+    argument.beginStructure();
+    argument >> iconName;
+    if (argument.currentType() != QDBusArgument::ArrayType)
+        return {};
+
+    // The icon pixels are irrelevant to identity, but the cursor must cross
+    // them to reach the tooltip title. Refuse an implausible peer rather than
+    // letting a foreign array turn name resolution into unbounded work.
+    constexpr qsizetype maxToolTipPixmaps = 64;
+    qsizetype pixmapCount = 0;
+    argument.beginArray();
+    while (!argument.atEnd()) {
+        if (++pixmapCount > maxToolTipPixmaps)
+            return {};
+        int width = 0;
+        int height = 0;
+        QByteArray pixels;
+        argument.beginStructure();
+        argument >> width >> height >> pixels;
+        argument.endStructure();
+    }
+    argument.endArray();
+    argument >> title >> description;
+    argument.endStructure();
+    return boundedText(title).trimmed();
+}
+
+QString humanizedTrayId(const QString &id)
+{
+    QString candidate = boundedText(id).trimmed();
+    static const QRegularExpression statusIconSuffix(
+        QStringLiteral("[_-]status[_-]icon(?:[_-]\\d+)?$"),
+        QRegularExpression::CaseInsensitiveOption
+    );
+    candidate.remove(statusIconSuffix);
+    candidate.replace(QRegularExpression(QStringLiteral("[_-]+")),
+                      QStringLiteral(" "));
+    candidate = candidate.simplified();
+    if (!candidate.isEmpty() && candidate == candidate.toLower())
+        candidate[0] = candidate.at(0).toUpper();
+    return candidate;
+}
 } // namespace
+
+QString trayDisplayName(
+    const QString &id,
+    const QString &declaredTitle,
+    const QString &toolTipTitle
+)
+{
+    const QString title = boundedText(declaredTitle).trimmed();
+    if (!title.isEmpty())
+        return title;
+
+    const QString idName = humanizedTrayId(id);
+    const QString runtime = idName.toLower();
+    const QString toolTip = boundedText(toolTipTitle).trimmed();
+    // Chromium/Electron SNI bridges often publish the runtime as Id. Their
+    // tooltip is then the only protocol field carrying the product identity.
+    // Do not apply that precedence to an app-specific Id: Slack, for example,
+    // uses its tooltip for unread state rather than its name.
+    if (!toolTip.isEmpty()
+        && (runtime == QStringLiteral("chrome")
+            || runtime == QStringLiteral("chromium")
+            || runtime == QStringLiteral("electron"))) {
+        return toolTip;
+    }
+    if (!idName.isEmpty())
+        return idName;
+    return toolTip;
+}
 
 bool TrayItem::operator==(const TrayItem &other) const
 {
@@ -132,10 +225,11 @@ TrayItem readTrayItem(
     item.hasPixmap = hasPixmapData(properties.value(QStringLiteral("IconPixmap")));
     item.menuPath = readObjectPath(properties.value(QStringLiteral("Menu")));
 
-    // An item with no title is not nameless: its id is what the application
-    // calls itself, and that is better than an empty slot in a drawer.
-    const QString title = boundedText(properties.value(QStringLiteral("Title")));
-    item.title = title.isEmpty() ? item.id : title;
+    item.title = trayDisplayName(
+        item.id,
+        boundedText(properties.value(QStringLiteral("Title"))),
+        readToolTipTitle(properties.value(QStringLiteral("ToolTip")))
+    );
 
     // An icon theme the application ships itself. A relative path names nothing
     // this panel can resolve, so it is dropped rather than guessed against some

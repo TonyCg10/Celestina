@@ -18,6 +18,7 @@ private slots:
     void preferenceIdentitySurvivesLiveRegistrationChangesWithoutReplacingLiveIdentity();
     void anItemWithoutARealIdHasNoPersistentPreferenceIdentity();
     void anItemWithNoUsableIconStillHasAName();
+    void technicalStatusIconIdsProduceApplicationNames();
     void everyStatusOutsideTheSpecificationIsShownAnyway();
     void refusesAnIconThemeItCannotResolve();
     void aListReplacesWholesaleAndReportsRealChangesOnly();
@@ -165,10 +166,53 @@ void TrayItemsTest::anItemWithNoUsableIconStillHasAName()
 
     QVERIFY(item.iconName.isEmpty());
     QVERIFY(item.hasPixmap);
-    // No title, so the panel calls it what the application calls itself.
-    QCOMPARE(item.title, QStringLiteral("Slack_status_icon_1"));
+    // The durable protocol Id remains exact, while display copy drops the
+    // Chromium bridge's technical status-icon suffix.
+    QCOMPARE(item.id, QStringLiteral("Slack_status_icon_1"));
+    QCOMPARE(item.title, QStringLiteral("Slack"));
     // No menu either: an absent path must not become "/".
     QVERIFY(item.menuPath.isEmpty());
+}
+
+void TrayItemsTest::technicalStatusIconIdsProduceApplicationNames()
+{
+    QCOMPARE(
+        trayDisplayName(
+            QStringLiteral("Slack_status_icon_1"),
+            QString(),
+            QStringLiteral("No unread messages")
+        ),
+        QStringLiteral("Slack")
+    );
+    QCOMPARE(
+        trayDisplayName(
+            QStringLiteral("chrome_status_icon_1"),
+            QString(),
+            QStringLiteral("ChatGPT")
+        ),
+        QStringLiteral("ChatGPT")
+    );
+    QCOMPARE(
+        trayDisplayName(
+            QStringLiteral("chrome_status_icon_1"),
+            QStringLiteral("Declared product"),
+            QStringLiteral("Ignored tooltip")
+        ),
+        QStringLiteral("Declared product")
+    );
+
+    const TrayItem chatgpt = readTrayItem(
+        QStringLiteral(":1.92"),
+        QStringLiteral("/org/chromium/StatusNotifierItem/1"),
+        QVariantMap {
+            {QStringLiteral("Id"), QStringLiteral("chrome_status_icon_1")},
+            {QStringLiteral("Title"), QString()},
+            {QStringLiteral("ToolTip"),
+             QVariantList {QString(), QVariantList {},
+                           QStringLiteral("ChatGPT"), QString()}},
+        }
+    );
+    QCOMPARE(chatgpt.title, QStringLiteral("ChatGPT"));
 }
 
 void TrayItemsTest::everyStatusOutsideTheSpecificationIsShownAnyway()
@@ -366,8 +410,8 @@ void TrayItemsTest::thisSessionsFourItemsAllSurviveIntoTheModel()
         QCOMPARE(item.status, QStringLiteral("active"));
         QVERIFY2(!item.title.isEmpty(), qPrintable(item.service));
     }
-    // Slack gave no title, so it is named by its own id rather than left blank.
-    QCOMPARE(read.at(0).title, QStringLiteral("Slack_status_icon_1"));
+    // Slack's technical bridge suffix is not product copy.
+    QCOMPARE(read.at(0).title, QStringLiteral("Slack"));
     QVERIFY(read.at(0).hasPixmap);
     QVERIFY(read.at(0).iconName.isEmpty());
     // Solaar gave a name and no pixels, which is the other way an item arrives.

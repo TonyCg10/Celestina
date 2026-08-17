@@ -1,0 +1,130 @@
+# R8-P-Q exact change inventory
+
+Base revision	e059da5ec1f0365631337955f56d5247f35bbc78
+Pathspec	celestina-rs/crates/celestina-shell-core/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/nightlight.rs
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/README.md
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/decisions/0006-own-night-light-gamma-transition.md
+Pathspec	celestina/docs/decisions/README.md
+Pathspec	celestina/docs/evidence/2026-08-14-polkit-agent-registration.md
+Pathspec	celestina/docs/evidence/2026-08-14-polkit-helper-conversation.md
+Pathspec	celestina/docs/evidence/2026-08-14-polkit-prompt-surface.md
+Pathspec	celestina/docs/evidence/2026-08-15-bundle-carries-the-lock-and-the-agent.md
+Pathspec	celestina/docs/evidence/2026-08-15-first-live-prompt.md
+Pathspec	celestina/docs/evidence/2026-08-15-first-live-session-findings.md
+Pathspec	celestina/docs/evidence/2026-08-15-one-block-forming-and-leaving.md
+Pathspec	celestina/docs/evidence/2026-08-15-one-panel-menu-lifecycle.md
+Pathspec	celestina/docs/evidence/2026-08-15-production-contract-breaches.md
+Pathspec	celestina/docs/evidence/2026-08-15-prompt-reproduced-with-grim.md
+Pathspec	celestina/docs/evidence/2026-08-15-resting-companions-saturated-the-session.md
+Pathspec	celestina/docs/evidence/2026-08-15-the-fall-behind-the-bar.md
+Pathspec	celestina/docs/evidence/2026-08-15-the-seam-law-and-the-twin-ghost.md
+Pathspec	celestina/docs/evidence/2026-08-15-wallpaper-switch-black-frame.md
+Pathspec	celestina/docs/evidence/2026-08-16-panel-seam-carriers.md
+Pathspec	celestina/docs/evidence/2026-08-16-pinned-tray-menu-attachment.md
+Pathspec	celestina/docs/evidence/2026-08-16-quiet-surface-temporal-lifecycle.md
+Pathspec	celestina/docs/evidence/2026-08-17-control-centre-reading-transition.md
+Pathspec	celestina/docs/evidence/2026-08-17-night-light-gamma-transition.md
+Pathspec	celestina/docs/evidence/2026-08-17-r8-final-corrections.md
+Pathspec	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-Q.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+Pathspec	celestina/docs/plans/active/README.md
+Pathspec	celestina/docs/plans/archive/2026-08-14-first-party-session-lock.md
+Pathspec	celestina/docs/plans/archive/2026-08-14-polkit-authentication-agent.md
+Pathspec	celestina/qml/AnchoredCard.qml
+Pathspec	celestina/qml/ControlCentre.qml
+Pathspec	celestina/qml/Panel.qml
+Pathspec	celestina/qml/TrayDrawer.qml
+Pathspec	celestina/qml/TrayItemsMenu.qml
+Pathspec	celestina/qml/TrayMenu.qml
+Pathspec	celestina/src/panelmanager.cpp
+Pathspec	celestina/src/panelmanager.h
+Pathspec	celestina/src/panelmenucontroller.cpp
+Pathspec	celestina/src/panelmenucontroller.h
+Pathspec	celestina/src/provider_adapter/held.rs
+Pathspec	celestina/src/provider_adapter/main.rs
+Pathspec	celestina/src/provider_adapter/nightlight.rs
+Pathspec	celestina/src/provider_adapter/sessionholds.rs
+Pathspec	celestina/src/trayitems.cpp
+Pathspec	celestina/src/trayitems.h
+Pathspec	celestina/src/traywatcher.cpp
+Pathspec	celestina/tests/indicatormenu_test.cpp
+Pathspec	celestina/tests/surfacemanager_test.cpp
+Pathspec	celestina/tests/trayitems_test.cpp
+Pathspec	celestina/tests/traywatcher_test.cpp
+Pathspec	celestina/tests/tst_controlcentre.qml
+Pathspec	celestina/tests/tst_traydrawer.qml
+Pathspec	celestina/tests/tst_trayitemsmenu.qml
+Pathspec	docs/version-history.tsv
+
+Plan	celestina/docs/plans/archive/2026-08-14-polkit-authentication-agent.md
+Evidence	celestina/docs/evidence/2026-08-17-r8-final-corrections.md
+
+added	deleted	content	path
+3	0	cdf7906a01c91168c90d7bb8e6c97bec4b77c59562d8bcf3488eb6cc0159a510	celestina-rs/crates/celestina-shell-core/src/lib.rs
+244	0	5ae4c708217c4ddd18e34215df0a4a0cf0dbb96a9172033c8c794258441437fd	celestina-rs/crates/celestina-shell-core/src/nightlight.rs
+1	1	8a89f2fab42ec51a42e1607e069845f1475efbdd51f054c0f189c18e14f9d858	celestina/CMakeLists.txt
+15	1	158509519ed73489903ec14782aca0c0ad51744347e98c62f6ca8fe44b3cce10	celestina/Cargo.lock
+10	5	4ced7c452ca01f07c7a1cca7d99d2d3f8a7ba54ddb5a39adc531c8dd64f67c05	celestina/Cargo.toml
+1	1	6069d4e8651f5ac7ae76f26d942537a7ab1a7ef13998ba71aab787f29728702b	celestina/README.md
+8	7	9b0ac15a7d67336dc379eba8950687cc46b6e7c430e0f997fcdb0d117817f6bb	celestina/ROADMAP.md
+57	1	5c3f7ad675f7e3fd83ea05506f456e5eda9f9bb73ec28787fde5056771b30aca	celestina/STATUS.md
+63	1	661410038210f8394d82085e5a5f06e854589a2d9e848a3990754886d75a4f2c	celestina/VALIDATION.md
+63	0	f906254f2e400665953f43ed86d1e0314ae4ad68fc6f1bbac54cafb239f585f7	celestina/docs/decisions/0006-own-night-light-gamma-transition.md
+1	0	4116e2341c0c0de2378e204b577b279bd9913ca6b1461c084600405447160098	celestina/docs/decisions/README.md
+1	1	37320ba6e4e48f742df8099e78d68896974128a2c9986e9c184bf3684a9ae8a2	celestina/docs/evidence/2026-08-14-polkit-agent-registration.md
+1	1	32ff291e6f04a749851cb13993a035212e5311b3566a660d180de2f8f6b9109f	celestina/docs/evidence/2026-08-14-polkit-helper-conversation.md
+1	1	bb3ac0d85b6d16053a02256b9e98d26b76697caa2d6a5292b7c9cd14eddb28ff	celestina/docs/evidence/2026-08-14-polkit-prompt-surface.md
+1	1	5c974e4d9061556c0ee7820867fe2b6d37d29d5f0191cc1510dc068ea521b775	celestina/docs/evidence/2026-08-15-bundle-carries-the-lock-and-the-agent.md
+1	1	654fa0bfe4a241d2898388d4fdef6d47e8e1084cf55af1bcf6366199821eb0d3	celestina/docs/evidence/2026-08-15-first-live-prompt.md
+1	1	cb998dd906dabbb6ddea597955ba032ac43001aeec98208b7da4547fd8f82055	celestina/docs/evidence/2026-08-15-first-live-session-findings.md
+1	1	ff5520acae0b02281348d25fac51b6d3420fb91bf3788d258053ce7cbf4a1e07	celestina/docs/evidence/2026-08-15-one-block-forming-and-leaving.md
+1	1	eb39a7e9acabed2aa079d60a2cc347ea49b4190850ef133943f9b4ed09374045	celestina/docs/evidence/2026-08-15-one-panel-menu-lifecycle.md
+1	1	24abde99bebb77944bb9ba0ceeac01c499b2feaa6a61ec3555a3145bcb5a39b4	celestina/docs/evidence/2026-08-15-production-contract-breaches.md
+1	1	a43515d1cc9c92360557dafbd73ce346a2828a5f8e732be72dca43ac0969fcdb	celestina/docs/evidence/2026-08-15-prompt-reproduced-with-grim.md
+1	1	8d0f6f4f505e0a7eaf476c95fda5aa857a0ce7690bfaa4a67625d8343552c5db	celestina/docs/evidence/2026-08-15-resting-companions-saturated-the-session.md
+1	1	e6e711faed9ec9bf715f724714077bafdf0fe0942406acd5aa747e202168eed5	celestina/docs/evidence/2026-08-15-the-fall-behind-the-bar.md
+1	1	f15b27d9865e27616b80c32fac64345b36ff87c90be037a9ec30bd69b1af787d	celestina/docs/evidence/2026-08-15-the-seam-law-and-the-twin-ghost.md
+1	1	c5ee40627c9817705a746dd02dec9fb6f9a0e05ec5a654fadee15eb2da1c2ccc	celestina/docs/evidence/2026-08-15-wallpaper-switch-black-frame.md
+1	1	7a29e42dfd57e1341fec017c7ebea2ca430309a90fa0c52bcc9cca0352d89f09	celestina/docs/evidence/2026-08-16-panel-seam-carriers.md
+152	0	d8fda7a5fe0864cc3a72e842e0fee8be925d3902aee579bab8448363af4cfd0c	celestina/docs/evidence/2026-08-16-pinned-tray-menu-attachment.md
+1	1	70a1cc88cd61779f642069d3eff8b75c046ba0c8e05329a68b44dd8eab249105	celestina/docs/evidence/2026-08-16-quiet-surface-temporal-lifecycle.md
+55	0	6e3904e5ec9afd7a18be0d35eb90483451146f265ab253bfcf4cb8d531d712db	celestina/docs/evidence/2026-08-17-control-centre-reading-transition.md
+89	0	5dbc4030d0e25c94bb912a57ea3561b00e68ade2e6175c32f1c6fecdb66ca56a	celestina/docs/evidence/2026-08-17-night-light-gamma-transition.md
+53	0	7ee33763e1ee4b73eed51080af0fb3df1e6138213498f360c5ced125c72a9b32	celestina/docs/evidence/2026-08-17-r8-final-corrections.md
+0	137	deleted	celestina/docs/plans/active/2026-08-14-polkit-authentication-agent.md
+3	7	f1d356e431f5b707a04cdfef17516b42672bbc178568deea4c9328af79168b70	celestina/docs/plans/active/README.md
+1	1	eb9da5f6620f5669b601b04160e7a895992682286b1655a8f431a17e705f9fe3	celestina/docs/plans/archive/2026-08-14-first-party-session-lock.md
+140	0	951368b59b48d9c381666a4df8b22f69d3d10ba900cdd27e322948782d13aacd	celestina/docs/plans/archive/2026-08-14-polkit-authentication-agent.md
+4	4	37eb3c43e0f3b3e637037bc1f3cd64d826d5028a3906974904b88b309f8c3832	celestina/qml/AnchoredCard.qml
+177	20	77659cccd9ac39df7445cc2ed78aa56844e45ce5150e4fe38838976085bcdf3b	celestina/qml/ControlCentre.qml
+5	2	068489124ea2e8047bf689e3f3a9d3d97d58890157ac27043fba908eb6c609df	celestina/qml/Panel.qml
+222	64	730a35f1ba4357dd2119a468d856e92c81fe4342687c535c94ab8ebaad207ee0	celestina/qml/TrayDrawer.qml
+4	2	b07980071cc5614117981855082b2ab0308e8464c27c056c360067d25386f563	celestina/qml/TrayItemsMenu.qml
+13	19	72f20702fa50df1b1ad5f40f7525de90176b2c90562798714f4264f0e4c82a53	celestina/qml/TrayMenu.qml
+7	5	02655fb53a2873819e2defd3d588575f580478a468941b18903be118306c97b2	celestina/src/panelmanager.cpp
+3	2	109dbd6a6d1371e32a113d0fe51340f189539f7d30c3fc0e85275907fa58a5c2	celestina/src/panelmanager.h
+83	14	ca1674813de68faa2947896b150b59d4df2bf16a902d20eccc3f998c5292243c	celestina/src/panelmenucontroller.cpp
+14	6	1f3633f159331edf8eff182427c785f39f1cecb99cbb976565483a7f5a2c4d5f	celestina/src/panelmenucontroller.h
+13	13	f1c4b439379277eb250abb4f8bfc069f38bd8a57dbc366edffea77e1c86e6bb5	celestina/src/provider_adapter/held.rs
+13	12	333fac829cfbe061f221112d5898d6d0958f96bab0ed35699c70ce4aed6752ac	celestina/src/provider_adapter/main.rs
+992	0	5e39a6bce41d0fda7aa371d4977cde8551ad9975afe26a6a6c5c535bff4b6fe4	celestina/src/provider_adapter/nightlight.rs
+35	110	5de2731a985953ad07e7ff416925f0c4d3557f154577e00344a64a9807250b94	celestina/src/provider_adapter/sessionholds.rs
+98	4	12e00c55fa87f5046187b8cf23a5ac137341d326376c1d651e8b20162ae423b1	celestina/src/trayitems.cpp
+14	2	13b7e85f6741699c92feedbaf05ec40e0c5b801ae0aa5f47df598574e5aae858	celestina/src/trayitems.h
+1	0	8965812571bfaaaa18f8f615956dda8a91a0e87ed0fce0c80b3e4715babb8f88	celestina/src/traywatcher.cpp
+4	0	10d62d35f288019bf8669f809b7d7b35beb9c98deb2d097dcc89d0d4f357ebfa	celestina/tests/indicatormenu_test.cpp
+115	9	cac325e0bd9457a6db210353eaa3d1c3629c39e8a13385237d2324dfeeed628f	celestina/tests/surfacemanager_test.cpp
+48	4	3f77ab85f85a05965ff353e6a7ddd76e5be8cc40538176ca3d1810710dd10f42	celestina/tests/trayitems_test.cpp
+79	12	a36f842dbc6a9be741f134fb71409b8d1d06af3e8905a11b1d3273c7548cd416	celestina/tests/traywatcher_test.cpp
+95	0	36e2c19f1fa03a551e62a8d6a90631f8528107d6e8ad1579d7322ececc4ea83d	celestina/tests/tst_controlcentre.qml
+67	7	23d776129d0d2128e6af448a78a3445f0af42110158041efa3854fde98e0f7c7	celestina/tests/tst_traydrawer.qml
+4	2	1dccc3cea240a39f974883d74af86fb00d390c0aa612d494d235e453f35a0cdb	celestina/tests/tst_trayitemsmenu.qml
+1	0	a12a4b214a9a7bb9baedeb448ca2e6e30a18745ac94e8d6f8f42f89fa8d21a6b	docs/version-history.tsv
+130	0	self	celestina/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-Q.numstat.tsv

@@ -73,9 +73,11 @@ public slots:
     // wiring, so nothing here knows the tray host exists.
     void requestTrayMenu(
         QWindow *panel,
-        const QPoint &globalAnchor,
+        const QRectF &globalOpener,
+        const QRectF &globalAttachmentAnchor,
         const QString &service,
-        const QString &path
+        const QString &path,
+        const QString &appName
     );
     // A panel control's own contextual menu. The same surface carries network,
     // Bluetooth, performance, toolbox and wallpaper actions, so opening one
@@ -161,6 +163,7 @@ private slots:
     void requestTrayItemMenu(
         const QString &service,
         const QString &path,
+        const QString &appName,
         int globalX,
         int globalY,
         int globalWidth,
@@ -184,9 +187,11 @@ private slots:
 private:
     void beginTrayMenuRequest(
         QWindow *panel,
-        const QRect &globalAnchor,
+        const QRectF &globalAnchor,
+        const QRectF &globalAttachmentAnchor,
         const QString &service,
         const QString &path,
+        const QString &appName,
         QWindow *parentMenu
     );
     void clearPendingTrayMenu();
@@ -210,11 +215,14 @@ private:
     // and whose it is.
     QPointer<QWindow> m_pendingPanel;
     QPointer<QWindow> m_pendingParentMenu;
-    // The invoking control's complete global rectangle. A point-only route
-    // arrives as a zero-sized rectangle and never attaches a membrane.
-    QRect m_pendingAnchor;
+    // The invoking control and its exact icon, both in global coordinates.
+    // Inventory children use only the first rectangle for side attachment;
+    // a direct panel request uses both for the standard top membrane.
+    QRectF m_pendingAnchor;
+    QRectF m_pendingAttachmentAnchor;
     QString m_pendingService;
     QString m_pendingPath;
+    QString m_pendingAppName;
     bool m_pendingKeepsTrayItems = false;
     // Whose menu is on screen right now, which is not the same question: the
     // request is answered once and forgotten, while the open menu still has to

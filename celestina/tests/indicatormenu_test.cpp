@@ -1,3 +1,4 @@
+// language-contract: product-copy
 #include <QtTest>
 
 #include <QQmlComponent>
@@ -818,6 +819,7 @@ void IndicatorMenuTest::theTrayMenuUsesTheSameVeloCarrier()
     std::unique_ptr<QObject> owner(component.createWithInitialProperties({
         {QStringLiteral("reducedMotion"), true},
         {QStringLiteral("outputName"), QStringLiteral("test-output")},
+        {QStringLiteral("appName"), QStringLiteral("Solaar")},
         {QStringLiteral("entries"), QVariantList {entry}},
     }));
     auto *window = qobject_cast<QQuickWindow *>(owner.get());
@@ -838,6 +840,8 @@ void IndicatorMenuTest::theTrayMenuUsesTheSameVeloCarrier()
         QStringLiteral("celestina-menu-header")
     ));
     QCOMPARE(window->property("itemSpacing").toInt(), 8);
+    QCOMPARE(window->property("title").toString(),
+             QStringLiteral("Menú de Solaar"));
     QCOMPARE(window->property("headerBodyGap").toInt(), 12);
     QCOMPARE(window->property("rowVerticalInset").toInt(), 4);
     QCOMPARE(

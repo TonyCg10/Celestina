@@ -6,7 +6,7 @@
 - **Environment:** the nested reference session (patched niri, one output at
   3840x2160 scale 1.5), measured with `grim` and per-block saturation ratios
   over the author's own screen recording and controlled toggles
-- **Plan:** [polkit authentication agent](../plans/active/2026-08-14-polkit-authentication-agent.md)
+- **Plan:** [polkit authentication agent](../plans/archive/2026-08-14-polkit-authentication-agent.md)
 - **Validation:** `VAL-R8`
 
 ## Procedure

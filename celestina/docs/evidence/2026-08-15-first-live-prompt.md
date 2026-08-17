@@ -5,7 +5,7 @@
 - **Artifact:** Celestina 0.29.3, `qml/PolkitPrompt.qml`
 - **Environment:** the author's real session, Celestina 0.29.2 as the session
   shell, stock niri 26.04; a real `pkexec` raised the prompt
-- **Plan:** [polkit authentication agent](../plans/active/2026-08-14-polkit-authentication-agent.md)
+- **Plan:** [polkit authentication agent](../plans/archive/2026-08-14-polkit-authentication-agent.md)
 - **Validation:** `VAL-R8`
 
 ## Procedure

@@ -372,9 +372,9 @@ bool PanelManager::ensurePanel(QScreen *screen)
         );
         connect(
             window,
-            SIGNAL(trayMenuRequested(QString, QString, int, int)),
+            SIGNAL(trayMenuRequested(QString, QString, QString, QRectF, QRectF)),
             this,
-            SLOT(trayMenuRequested(QString, QString, int, int))
+            SLOT(trayMenuRequested(QString, QString, QString, QRectF, QRectF))
         );
         connect(
             window,
@@ -587,15 +587,17 @@ void PanelManager::indicatorMenuRequested(
 void PanelManager::trayMenuRequested(
     const QString &service,
     const QString &path,
-    int globalX,
-    int globalY
+    const QString &appName,
+    const QRectF &globalOpener,
+    const QRectF &globalAttachmentAnchor
 )
 {
     auto *panel = qobject_cast<QWindow *>(sender());
     if (!panel || !m_menu)
         return;
 
-    m_menu->requestTrayMenu(panel, QPoint(globalX, globalY), service, path);
+    m_menu->requestTrayMenu(
+        panel, globalOpener, globalAttachmentAnchor, service, path, appName);
 }
 
 void PanelManager::removePanel(QScreen *screen)

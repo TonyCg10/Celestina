@@ -307,10 +307,11 @@ TestCase {
         compare(itemMenus.count, 1);
         compare(itemMenus.signalArguments[0][0], testCase.slack.service);
         compare(itemMenus.signalArguments[0][1], testCase.slack.path);
-        verify(itemMenus.signalArguments[0][2] >= 0);
+        compare(itemMenus.signalArguments[0][2], testCase.slack.title);
         verify(itemMenus.signalArguments[0][3] >= 0);
-        verify(itemMenus.signalArguments[0][4] > 0);
+        verify(itemMenus.signalArguments[0][4] >= 0);
         verify(itemMenus.signalArguments[0][5] > 0);
+        verify(itemMenus.signalArguments[0][6] > 0);
         // The request is for the independent child carrier; the inventory does
         // not dismiss itself first.
         compare(trayMenu.menu.visible, true);
@@ -340,6 +341,7 @@ TestCase {
         compare(itemMenus.count, 1);
         compare(itemMenus.signalArguments[0][0], testCase.slack.service);
         compare(itemMenus.signalArguments[0][1], testCase.slack.path);
+        compare(itemMenus.signalArguments[0][2], testCase.slack.title);
         compare(trayMenu.menu.visible, true);
 
         keyClick(Qt.Key_Right);

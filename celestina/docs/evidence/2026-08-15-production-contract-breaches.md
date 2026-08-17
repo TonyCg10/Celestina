@@ -6,7 +6,7 @@
   and the lock's own QML module
 - **Environment:** `celestina/scripts/complete-production.sh` on the author's
   machine, with no development nest running
-- **Plan:** [polkit authentication agent](../plans/active/2026-08-14-polkit-authentication-agent.md)
+- **Plan:** [polkit authentication agent](../plans/archive/2026-08-14-polkit-authentication-agent.md)
 - **Validation:** `VAL-R8`
 
 ## Procedure

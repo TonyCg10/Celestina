@@ -11,5 +11,6 @@ cannot silently choose them or treat its own text as authorization.
 | [0003](0003-no-running-app-dock.md) | accepted | Do not build a running-app dock |
 | [0004](0004-first-party-session-lock.md) | accepted | Own the session lock, and never own password verification |
 | [0005](0005-first-party-polkit-agent.md) | accepted | Own the Polkit agent's prompt, and nothing behind it |
+| [0006](0006-own-night-light-gamma-transition.md) | accepted | Own the fixed night-light gamma transition in the aggregate provider |
 
 New records use the suite [decision template](../../../docs/templates/decision.md).

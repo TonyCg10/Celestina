@@ -5,7 +5,7 @@
 - **Artifact:** Celestina 0.29.9
 - **Environment:** the author's 60 fps recording of the 4K nest (scale 1.5),
   decomposed to frames; the repository's offscreen suite
-- **Plan:** [polkit authentication agent](../plans/active/2026-08-14-polkit-authentication-agent.md)
+- **Plan:** [polkit authentication agent](../plans/archive/2026-08-14-polkit-authentication-agent.md)
 - **Validation:** `VAL-R8`
 
 ## Procedure

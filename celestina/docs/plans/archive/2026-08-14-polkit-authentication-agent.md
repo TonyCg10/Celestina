@@ -1,8 +1,10 @@
 # Polkit authentication agent
 
 - **Opened:** 2026-08-14
+- **Closed:** 2026-08-17
+- **Successor:** none; R8 is complete and the roadmap returns to planned work
 - **Plan ID:** polkit-authentication-agent
-- **Status:** active
+- **Status:** done
 - **Scope:** celestina
 - **Implementation checkpoint:** R8
 - **Author-validation checkpoint:** VAL-R8
@@ -85,6 +87,7 @@ when it cannot hold the keyboard. Real `pkexec` against a real password is
 | R8-P-N | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-N.numstat.tsv) | 7 files, +351/-78 | every panel menu obeys one seam, presentation, and departure lifecycle, and only the presenting OSD twin can carry cards | [panel-menu lifecycle audit](../../evidence/2026-08-15-one-panel-menu-lifecycle.md) | `VAL-PANEL-1` |
 | R8-P-O | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-O.numstat.tsv) | 19 files, +940/-137 | every panel-attached QWindow, Popup row viewport and dense companion obeys the physical panel seam in every buffer | [panel seam carrier record](../../evidence/2026-08-16-panel-seam-carriers.md) | `VAL-PANEL-1` |
 | R8-P-P | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-P.numstat.tsv) | 27 files, +1745/-450 | OSDs, toasts and contextual overlays publish paint, motion and compositor material from one presentation and retirement lifecycle without empty or material-only frames | [quiet-surface temporal lifecycle](../../evidence/2026-08-16-quiet-surface-temporal-lifecycle.md) | `VAL-PANEL-1` |
+| R8-P-Q | `celestina:` | done | [inventory](../../inventories/2026-08-14-polkit-authentication-agent/R8-P-Q.numstat.tsv) | 61 files, +3216/-491 | pinned tray application menus grow from their named icon with the shared membrane, changing provider readings cross-fade, and night light follows one confirmed bounded gamma transition | [final corrective batch](../../evidence/2026-08-17-r8-final-corrections.md) | `VAL-PANEL-1`, `VAL-NIGHT-1` |
 
 ## What R8-P-A found about the helper
 

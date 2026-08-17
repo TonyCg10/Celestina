@@ -5,7 +5,7 @@
 - **Artifact:** Celestina 0.29.7, `qml/Wallpaper.qml`
 - **Environment:** the nested reference session, recorded at 60 fps with
   `gpu-screen-recorder` while the author switched wallpapers from the menu
-- **Plan:** [polkit authentication agent](../plans/active/2026-08-14-polkit-authentication-agent.md)
+- **Plan:** [polkit authentication agent](../plans/archive/2026-08-14-polkit-authentication-agent.md)
 - **Validation:** `VAL-R8`
 
 ## Procedure

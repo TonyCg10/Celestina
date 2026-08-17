@@ -36,6 +36,7 @@ constexpr const char *itemSignals[] = {
     "NewIcon",
     "NewStatus",
     "NewTitle",
+    "NewToolTip",
     "NewAttentionIcon",
 };
 

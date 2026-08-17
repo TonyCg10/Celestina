@@ -162,7 +162,7 @@ is missing rather than reporting a change that did not happen:
 |---|---|
 | `volume-*`, `mute-*`, `mic-mute-*` | `wpctl` (WirePlumber) |
 | `brightness-*` | `ddcutil`, and a monitor that answers DDC/CI |
-| `night-light-*` | `wlsunset` |
+| `night-light-*` | Celestina's bounded Wayland gamma transition |
 | `caffeine-*` | `systemd-inhibit` (systemd) |
 | `displays-off` | Niri itself |
 | `lock`, `lock-and-suspend` | nothing yet — these are refused on purpose |

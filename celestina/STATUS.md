@@ -1,6 +1,6 @@
 # Celestina status
 
-- **Updated:** 2026-08-16
+- **Updated:** 2026-08-17
 - **Implementation:** R0-R7, R8's departure slice, LVR-1 through LVR-3, the
   static hardening previously drafted as `AUD-1`, `UX-1` and `WSG-1` are
   complete
@@ -53,6 +53,62 @@
   [lifecycle record](docs/evidence/2026-08-05-ddc-process-lifecycle.md).
 
 ## Current checkout truth
+
+- **Completed `R8-P-Q` night-light follow-up.** The author's night-light interaction
+  exposed two independent one-frame reversals. The control-centre switch first
+  painted its optimistic local value, rebound to the old provider frame, then
+  moved again on confirmation. More importantly, the `wlsunset` child applied
+  2700 K in one gamma commit and its destruction restored identity in one
+  commit; process liveness was also published before gamma ownership was known.
+  Night light has moved out of the generic child-process hold and into the
+  aggregate provider's dedicated Wayland gamma worker. Its pure core emits a
+  bounded 19-sample, 300 ms smoothstep transition between identity and the
+  exact former 2700 K white point; the adapter owns all output controls on one
+  thread, every protocol wait and interactive request is deadline-bounded, and
+  the switch paints only provider-confirmed state. The registered production
+  build, complete verification and deployment pass for Celestina 0.29.12. The nested winit
+  compositor cannot validate physical gamma because it deliberately does not
+  advertise the protocol; its acceptance case is a truthful refusal without a
+  thumb or colour flash. Real-output perceptual validation remains
+  `VAL-NIGHT-1`. The restarted build-tree host is PID 757796 with provider
+  adapter PID 757987 on `wayland-2`; no `wlsunset` process remains. See the
+  [night-light gamma transition record](docs/evidence/2026-08-17-night-light-gamma-transition.md).
+
+- **Completed `R8-P-Q` tray follow-up.** A pinned tray application's direct
+  menu still crossed a point-only adapter that deliberately constructed a
+  floating `TrayMenu`; it therefore received neither the panel attachment
+  geometry nor the standard top membrane. Pinned and attention icons were
+  also instantiated to the inventory opener's right by a `Repeater`, whose
+  immediate destruction left no object to animate when a preference was
+  removed. The direct route now carries the complete opener and glyph
+  rectangles through the ordinary panel carrier and attachment lease, while a
+  stable presentation model places icons to the opener's left and retains each
+  one through tokened fade-in/fade-out. The first nested retest exposed that
+  the lease still named the optional foreign `Image`; when the fallback glyph
+  was visible, that hidden object cleared the attachment and removed both the
+  membrane and fall. A stable icon-slot item is now the semantic anchor across
+  both rendering branches. The following 60 fps retest still showed two
+  detached, already-settled openings: the controller had widened a fractional
+  18-pixel glyph to 19 pixels with `toAlignedRect()` while awaiting D-Bus, so
+  the lease rejected its own source. The pending adapter now preserves exact
+  `QRectF` geometry and rounds only final card placement. Architecture, the
+  complete QML runner, the complete surface-manager suite and the 0.29.12
+  build pass. A third 60 fps retest confirms the glass now begins at the
+  carrier seam, but exposed the menu's custom heading landing before its rows:
+  that heading lived beside the scrolled viewport and did not follow the
+  shared `rowsCut`. It now remains non-scrolling while moving by the same entry
+  offset as the row carrier. The request also carries the tray item's canonical
+  title, so the header names the application rather than the generic tray.
+  Slack and ChatGPT then exposed empty SNI titles backed by technical IDs. The
+  adapter now preserves those raw IDs for preferences while deriving `Slack`
+  from its app-specific status-icon ID and `ChatGPT` from the tooltip attached
+  to its generic Chrome runtime ID; transient Slack tooltip state never becomes
+  its name. Focused temporal, title, private-bus, QML and surface regressions
+  pass. The registered
+  production verification and deployment now pass outside the restricted
+  sandbox as part of the current Celestina 0.29.12 batch. The prior nested
+  build-tree host was stopped before those binaries were rewritten. See the
+  [pinned tray attachment record](docs/evidence/2026-08-16-pinned-tray-menu-attachment.md).
 
 - **Implemented corrective unit — `R8-P-P`.** After the panel-seam correction was
   confirmed live, the author's 1920x1080, 60 fps recording exposed a temporal

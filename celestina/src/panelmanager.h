@@ -112,8 +112,9 @@ private slots:
     void trayMenuRequested(
         const QString &service,
         const QString &path,
-        int globalX,
-        int globalY
+        const QString &appName,
+        const QRectF &globalOpener,
+        const QRectF &globalAttachmentAnchor
     );
     // A native folder dialog returns a URL. The manager accepts only a local
     // path; the worker owns every filesystem, scan and image rule after that

@@ -6,7 +6,7 @@
 - **Environment:** the repository's automated suite on the author's machine,
   against a stand-in authority on the session bus. The real polkitd was not
   registered with, no action was authorized and no password was typed.
-- **Plan:** [polkit authentication agent](../plans/active/2026-08-14-polkit-authentication-agent.md)
+- **Plan:** [polkit authentication agent](../plans/archive/2026-08-14-polkit-authentication-agent.md)
 - **Validation:** `VAL-R8`
 
 ## Procedure

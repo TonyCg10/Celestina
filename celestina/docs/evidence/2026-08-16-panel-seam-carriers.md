@@ -7,7 +7,7 @@
   offscreen regressions; nested Niri on `wayland-2`
 - **Artifact:** Celestina 0.29.11 delivery batch, built, verified and deployed to the normal
   test prefix without activating the main session
-- **Plan:** [polkit authentication agent](../plans/active/2026-08-14-polkit-authentication-agent.md)
+- **Plan:** [polkit authentication agent](../plans/archive/2026-08-14-polkit-authentication-agent.md)
 - **Validation:** `VAL-PANEL-1`
 
 ## Procedure

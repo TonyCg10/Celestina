@@ -81,6 +81,15 @@ TestCase {
         reducedMotion: false
     }
 
+    Component {
+        id: animatedCentreComponent
+
+        Desktop.ControlCentre {
+            providerSource: fakeSource
+            reducedMotion: false
+        }
+    }
+
     function init() {
         fakeSource.sent = [];
         fakeSource.nextId = 1;
@@ -123,6 +132,92 @@ TestCase {
         // And falls back to the panel's own step when settings say nothing.
         fakeSource.providers = {};
         compare(centre.levelStep, 5);
+    }
+
+    function test_a_reported_option_cross_fades_instead_of_cutting_text() {
+        const animatedCentre = animatedCentreComponent.createObject(null);
+        verify(animatedCentre);
+        const reading = findChild(
+            animatedCentre.contentItem,
+            "celestina-control-reading-night-light-night-light-toggle");
+        verify(reading);
+        compare(reading.displayedValue, qsTr("apagada"));
+        compare(reading.outgoingValue, "");
+        compare(reading.progress, 1.0);
+
+        const nextProviders = {
+            "audio": {"volume": 40, "muted": false},
+            "night-light": {"active": true},
+            "caffeine": {"active": false},
+            "notifications": {"quiet": false, "unread": 0},
+            "power": {"active": "performance", "count": 3},
+            "settings": {"levelStep": 5}
+        };
+        fakeSource.publish(nextProviders);
+
+        tryCompare(reading, "displayedValue", qsTr("encendida"));
+        compare(reading.outgoingValue, qsTr("apagada"));
+        verify(reading.progress < 1.0,
+               "the provider commit retains the old reading for the fade");
+        wait(40);
+        verify(reading.progress > 0.0 && reading.progress < 1.0,
+               "both reading layers remain in the motionFast transition");
+        tryCompare(reading, "progress", 1.0);
+        compare(reading.outgoingValue, "");
+
+        // Reduced motion removes the duration, not the provider-owned state
+        // change or the final value.
+        animatedCentre.reducedMotion = true;
+        const reducedProviders = {
+            "audio": {"volume": 40, "muted": false},
+            "night-light": {"active": false},
+            "caffeine": {"active": false},
+            "notifications": {"quiet": false, "unread": 0},
+            "power": {"active": "performance", "count": 3},
+            "settings": {"levelStep": 5}
+        };
+        fakeSource.publish(reducedProviders);
+        tryCompare(reading, "displayedValue", qsTr("apagada"));
+        compare(reading.progress, 1.0);
+        compare(reading.outgoingValue, "");
+        animatedCentre.destroy();
+    }
+
+    function test_night_light_switch_waits_for_provider_confirmation() {
+        const nightSwitch = findChild(
+            centre.contentItem,
+            "celestina-night-light-switch");
+        verify(nightSwitch);
+        compare(nightSwitch.checked, false);
+
+        let checkedChanges = 0;
+        const countCheckedChange = function() {
+            checkedChanges += 1;
+        };
+        nightSwitch.checkedChanged.connect(countCheckedChange);
+
+        // `click()` is the AbstractButton activation path used by keyboard and
+        // accessibility too: it must request once without painting acceptance.
+        nightSwitch.click();
+        compare(fakeSource.sent.length, 1);
+        compare(fakeSource.sent[0].provider, "night-light");
+        compare(fakeSource.sent[0].verb, "night-light-toggle");
+        compare(nightSwitch.checked, false);
+        compare(checkedChanges, 0);
+
+        const confirmedProviders = {
+            "audio": {"volume": 40, "muted": false},
+            "night-light": {"active": true},
+            "caffeine": {"active": false},
+            "notifications": {"quiet": false, "unread": 0},
+            "power": {"active": "performance", "count": 3},
+            "settings": {"levelStep": 5}
+        };
+        fakeSource.publish(confirmedProviders);
+
+        tryCompare(nightSwitch, "checked", true);
+        compare(checkedChanges, 1);
+        nightSwitch.checkedChanged.disconnect(countCheckedChange);
     }
 
 

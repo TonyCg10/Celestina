@@ -8,7 +8,7 @@
   was raised by the assistant, photographed with `grim` on every output, and
   cancelled by killing the `pkexec` process — nothing was typed into the
   session.
-- **Plan:** [polkit authentication agent](../plans/active/2026-08-14-polkit-authentication-agent.md)
+- **Plan:** [polkit authentication agent](../plans/archive/2026-08-14-polkit-authentication-agent.md)
 - **Validation:** `VAL-R8`
 
 ## Procedure

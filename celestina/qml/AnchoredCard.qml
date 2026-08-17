@@ -43,10 +43,10 @@ Window {
     // controller and scrolls inside that viewport instead of moving its top.
     property int maximumContentHeight: 0
     property bool preserveRequestedTop: false
-    // A real panel opener is optional. Panel-owned controls publish both its
-    // exact output-local control rectangle and its icon anchor; point-only
-    // routes such as workspace and foreign tray menus leave this false and
-    // retain the established floating card.
+    // A real panel opener is optional. Panel-owned controls, including pinned
+    // foreign tray items, publish both its exact output-local control
+    // rectangle and its icon anchor. Command routes without a control leave
+    // this false and retain the established floating card.
     property alias anchoredFromPanel: placement.anchoredFromPanel
     property alias openerRect: placement.openerRect
     property alias attachmentAnchorRect: placement.attachmentAnchorRect

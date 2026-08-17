@@ -1,7 +1,7 @@
 # Celestina implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** R8
+- **Status:** planned
+- **Active implementation checkpoint:** none
 
 This roadmap contains only work an agent can implement and verify. Real Niri,
 hardware, visual and assistive-technology checks live in
@@ -37,7 +37,7 @@ of the design when they provide the narrow capability the shell needs.
 | PANEL-1 | complete | Replace the hard panel plate with borderless compositor glass and route contextual content through the canonical shared glass material |
 | UX-2 | planned | Establish and then implement one coherent shell-wide visual and interaction language after SHELL-D5 is applied |
 | R6 | complete | First-party `ext-session-lock` and deterministic lock-before-suspend, with `VAL-R6` still unrun |
-| R8 | active | Reversible Noctalia removal delivered; the Polkit agent slice is now open |
+| R8 | complete | Reversible Noctalia removal and the first-party Polkit agent are delivered; live departure remains `VAL-R8` |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
 
 Recorded live observations and remaining author checks are status on the
@@ -215,8 +215,9 @@ truthful OSD without depending on a Noctalia command path.
       honouring the reduced-motion path. It draws a meter rather than a
       `CelestinaSlider`: the surface never takes a pointer or the keyboard, so
       offering a control it cannot accept would be a lie about what it is.
-- [x] Compose fixed 2700 K night light through an owned, bounded `wlsunset`
-      lifecycle that releases gamma on normal shutdown and failure.
+- [x] Compose fixed 2700 K night light through the aggregate provider's bounded
+      Wayland gamma transition, which reaches identity before releasing gamma
+      on normal shutdown and refuses unsupported compositor backends.
 - [x] Add shell-owned caffeine/idle-inhibit state; keep the idle chain disabled
       by default until the author explicitly enables it.
 - [x] Compose DPMS through Niri and expose a fail-closed lock-and-suspend
@@ -336,8 +337,8 @@ and bounded by
 - [x] Delegate every verification to `polkit-agent-helper-1` over its pipe;
       implement no PAM conversation and deny on every failure.
 
-The three units are delivered under
-[the polkit plan](docs/plans/active/2026-08-14-polkit-authentication-agent.md).
+The implementation and its corrective follow-ups are delivered under
+[the archived polkit plan](docs/plans/archive/2026-08-14-polkit-authentication-agent.md).
 polkitd accepts one agent per session and Noctalia's own plugin currently
 holds this one, so Celestina's registration is refused and says so rather than
 fighting for the slot — which makes a real `pkexec` against a real password

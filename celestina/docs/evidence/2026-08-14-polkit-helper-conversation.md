@@ -7,7 +7,7 @@
 - **Environment:** the repository's automated suite on the author's machine,
   plus one run of the real child against this machine's real polkit helper. No
   password was typed and no action was authorized.
-- **Plan:** [polkit authentication agent](../plans/active/2026-08-14-polkit-authentication-agent.md)
+- **Plan:** [polkit authentication agent](../plans/archive/2026-08-14-polkit-authentication-agent.md)
 - **Validation:** `VAL-R8`
 
 The rule this unit exists to hold is one sentence: nothing in this repository

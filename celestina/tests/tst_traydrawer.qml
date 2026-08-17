@@ -321,6 +321,9 @@ TestCase {
         drawer.items = testCase.session;
         drawer.preferences = [];
         flankTray.preferences = [];
+        // A preceding removal deliberately retains its delegate for the
+        // fade-out. Start each case after that animation has released it.
+        wait(CelestinaTheme.motionFast + 20);
         drawerRequests.clear();
         trayActivations.clear();
         trayItemMenus.clear();
@@ -405,6 +408,7 @@ TestCase {
         const urgent = JSON.parse(JSON.stringify(testCase.solaar));
         urgent.status = "attention";
         drawer.items = [testCase.slack, urgent, testCase.applet, testCase.blueman];
+        waitForRendering(drawer);
 
         const shown = testCase.entriesOf(drawer);
         compare(shown.length, 1);
@@ -421,16 +425,47 @@ TestCase {
             {"key": testCase.slack.preferenceKey, "mode": "pinned"},
             {"key": testCase.solaar.preferenceKey, "mode": "hidden"}
         ];
-        wait(0);
+        waitForRendering(drawer);
+        wait(CelestinaTheme.motionFast + 20);
 
         const toggle = findChild(drawer, "celestina-tray-toggle");
         const shown = testCase.entriesOf(drawer);
         compare(shown.length, 1);
         compare(shown[0].modelData.service, testCase.slack.service);
         const itemOnDrawer = shown[0].mapToItem(drawer, 0, 0);
-        verify(itemOnDrawer.x > toggle.x,
-               "a pinned item belongs immediately to the opener's right: item "
+        verify(itemOnDrawer.x < toggle.x,
+               "a pinned item belongs immediately to the opener's left: item "
                + itemOnDrawer.x + ", opener " + toggle.x);
+    }
+
+    function test_pinning_and_unpinning_fade_one_icon_in_and_out() {
+        drawer.items = [testCase.slack];
+        drawer.preferences = [];
+        wait(CelestinaTheme.motionFast + 20);
+        compare(testCase.entriesOf(drawer).length, 0);
+
+        drawer.preferences = [
+            {"key": testCase.slack.preferenceKey, "mode": "pinned"}
+        ];
+        waitForRendering(drawer);
+        let entry = testCase.entriesOf(drawer)[0];
+        verify(entry);
+        if (!CelestinaTheme.reducedMotion) {
+            verify(entry.opacity >= 0 && entry.opacity < 1,
+                   "the pinned icon must enter through opacity: "
+                   + entry.opacity);
+        }
+        tryCompare(entry, "opacity", 1);
+
+        drawer.preferences = [];
+        wait(Math.max(1, Math.floor(CelestinaTheme.motionFast / 2)));
+        if (!CelestinaTheme.reducedMotion) {
+            verify(entry.opacity > 0 && entry.opacity < 1,
+                   "the unpinned icon must remain alive while fading: "
+                   + entry.opacity);
+        }
+        wait(CelestinaTheme.motionFast + 20);
+        compare(testCase.entriesOf(drawer).length, 0);
     }
 
     function test_attention_does_not_duplicate_a_pin() {
@@ -440,6 +475,7 @@ TestCase {
         drawer.preferences = [
             {"key": testCase.slack.preferenceKey, "mode": "pinned"}
         ];
+        waitForRendering(drawer);
 
         const shown = testCase.entriesOf(drawer);
         compare(shown.length, 1);
@@ -451,11 +487,18 @@ TestCase {
         longUrgent.status = "attention";
         longUrgent.title = "A tray application with a deliberately long title";
         drawer.items = [longUrgent];
-        wait(0);
+        waitForRendering(drawer);
 
         let entry = testCase.entriesOf(drawer)[0];
+        const anchor = findChild(
+            entry, "celestina-tray-item-attachment-anchor");
         let fallback = findChild(entry, "celestina-tray-item-fallback-icon");
+        verify(anchor);
         verify(fallback);
+        verify(anchor.visible);
+        compare(entry.attachmentAnchor, anchor);
+        compare(entry.attachmentAnchorGlobalRectNow(),
+                entry.globalRect(anchor));
         verify(fallback.visible);
         compare(fallback.name, "app-window");
         compare(entry.width, CelestinaTheme.iconSm);
@@ -468,7 +511,8 @@ TestCase {
         brokenUrgent.title = "Icono roto";
         brokenUrgent.iconSource = "file:///celestina-test/no-such-tray-icon.png";
         drawer.items = [brokenUrgent];
-        wait(0);
+        waitForRendering(drawer);
+        wait(CelestinaTheme.motionFast + 20);
 
         entry = testCase.entriesOf(drawer)[0];
         const image = findChild(entry, "celestina-tray-item-image");
@@ -477,6 +521,10 @@ TestCase {
         verify(fallback);
         tryCompare(image, "status", Image.Error);
         tryCompare(fallback, "visible", true);
+        verify(entry.attachmentAnchor.visible,
+               "the semantic anchor stays visible with the fallback glyph");
+        compare(entry.attachmentAnchor.objectName,
+                "celestina-tray-item-attachment-anchor");
         compare(fallback.name, "app-window");
         compare(entry.width, CelestinaTheme.iconSm);
         compare(entry.height, CelestinaTheme.iconSm);
@@ -489,6 +537,7 @@ TestCase {
         urgent.status = "attention";
         drawer.items = [urgent];
         waitForRendering(drawer);
+        wait(CelestinaTheme.motionFast + 20);
 
         const entry = testCase.entriesOf(drawer)[0];
         const focusRing = findChild(entry, "celestina-tray-item-focus");
@@ -512,9 +561,19 @@ TestCase {
         keyClick(Qt.Key_F10, Qt.ShiftModifier);
         compare(trayItemMenus.count, 2);
         for (let index = 0; index < trayItemMenus.count; ++index) {
-            compare(trayItemMenus.signalArguments[index][0], urgent.service);
-            compare(trayItemMenus.signalArguments[index][1], urgent.path);
+            const arguments = trayItemMenus.signalArguments[index];
+            compare(arguments[0], urgent.service);
+            compare(arguments[1], urgent.path);
+            compare(arguments[2], urgent.title);
+            compare(arguments[3], entry.openerGlobalRectNow());
+            compare(arguments[4], entry.attachmentAnchorGlobalRectNow());
         }
+        verify(entry.isPanelAttachmentSource);
+        compare(entry.attachmentAnchor,
+                findChild(entry,
+                          "celestina-tray-item-attachment-anchor"));
+        verify(entry.attachmentAnchor.visible);
+        compare(entry.menuOpen, false);
     }
 
     function test_a_tray_item_menu_press_is_not_silent() {
@@ -526,6 +585,7 @@ TestCase {
         urgent.status = "attention";
         drawer.items = [urgent];
         waitForRendering(drawer);
+        wait(CelestinaTheme.motionFast + 20);
         const entry = testCase.entriesOf(drawer)[0];
         const pointer = findChild(entry, "celestina-tray-item-pointer");
         const feedback = findChild(entry, "celestina-tray-item-feedback");

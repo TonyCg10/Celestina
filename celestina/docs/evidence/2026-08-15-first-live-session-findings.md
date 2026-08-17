@@ -6,7 +6,7 @@
 - **Environment:** the author's real session — three outputs at two scales,
   stock niri 26.04 — and the diagnostic journal of the author's own use of it.
   Nothing was typed into the session by the assistant.
-- **Plan:** [polkit authentication agent](../plans/active/2026-08-14-polkit-authentication-agent.md)
+- **Plan:** [polkit authentication agent](../plans/archive/2026-08-14-polkit-authentication-agent.md)
 - **Validation:** `VAL-R8`
 
 ## Procedure

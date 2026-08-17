@@ -1,15 +1,15 @@
-//! Night light and staying awake: the two session states this shell holds by
-//! keeping somebody else's program alive.
+//! Staying awake: the session state this shell holds by keeping a program
+//! alive.
 //!
-//! Neither is a reading. `wlsunset` owns the gamma ramps and `systemd-inhibit`
-//! owns a logind lock, so what the panel is told is simply whether this helper
-//! still has that child — see [`super::held`] for why that distinction is the
-//! whole design. They share one module because they share one lifecycle: the
-//! same poll notices either one dying, and the same shutdown releases both.
+//! This is not a reading. `systemd-inhibit` owns a logind lock, so what the
+//! panel is told is simply whether this helper still has that child — see
+//! [`super::held`] for why that distinction is the whole design. Night light
+//! is deliberately separate: its Wayland gamma worker owns a gradual numeric
+//! transition rather than a process whose liveness is the state.
 //!
-//! Nothing turns either of them on by itself. The idle chain in particular
-//! stays off until somebody asks for it, which is the only honest default for a
-//! state whose whole effect is stopping the session from sleeping.
+//! Nothing turns the idle chain on by itself. It stays off until somebody asks
+//! for it, which is the only honest default for a state whose whole effect is
+//! stopping the session from sleeping.
 
 use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -34,37 +34,13 @@ const INTERVAL: Duration = Duration::from_secs(2);
 /// within one piece, so the helper's exit is not held up by a full interval.
 const SLEEP_SLICES: u32 = 8;
 
-pub const NIGHT_LIGHT: &str = "night-light";
 pub const CAFFEINE: &str = "caffeine";
-
-/// One fixed warm temperature rather than a location-driven curve: this shell
-/// offers night light as something you turn on, not as a schedule it decides
-/// for you. `wlsunset` insists the high temperature be above the low one, so
-/// the pair is 2701/2700 K and both ends of its ramp are the same warmth.
-const NIGHT_LIGHT_TOOL: &str = "wlsunset";
-const NIGHT_LIGHT_HIGH: &str = "2701";
-const NIGHT_LIGHT_LOW: &str = "2700";
 
 /// `--mode=block` because a delay inhibitor only postpones sleep; what the
 /// verb promises is that the session does not idle or suspend while it is on.
 const CAFFEINE_TOOL: &str = "systemd-inhibit";
 
-static NIGHT: OnceLock<Mutex<Hold>> = OnceLock::new();
 static AWAKE: OnceLock<Mutex<Hold>> = OnceLock::new();
-
-fn night() -> &'static Mutex<Hold> {
-    NIGHT.get_or_init(|| {
-        Mutex::new(Hold::new(
-            NIGHT_LIGHT_TOOL,
-            vec![
-                "-T".to_owned(),
-                NIGHT_LIGHT_HIGH.to_owned(),
-                "-t".to_owned(),
-                NIGHT_LIGHT_LOW.to_owned(),
-            ],
-        ))
-    })
-}
 
 fn awake() -> &'static Mutex<Hold> {
     AWAKE.get_or_init(|| {
@@ -89,42 +65,29 @@ fn lock_hold(hold: &'static Mutex<Hold>) -> std::sync::MutexGuard<'static, Hold>
     }
 }
 
-fn hold_for(provider: &str) -> Option<&'static Mutex<Hold>> {
-    match provider {
-        NIGHT_LIGHT => Some(night()),
-        CAFFEINE => Some(awake()),
-        _ => None,
-    }
-}
-
 pub fn spawn(
     runtime: &Arc<Mutex<ProviderRuntime>>,
     shutdown: &Arc<AtomicBool>,
 ) -> io::Result<Option<Worker>> {
-    let (Ok(night_id), Ok(caffeine_id)) = (ProviderId::new(NIGHT_LIGHT), ProviderId::new(CAFFEINE))
-    else {
-        eprintln!("celestina-provider-adapter: session holds: unusable provider name");
+    let Ok(caffeine_id) = ProviderId::new(CAFFEINE) else {
+        eprintln!("celestina-provider-adapter: caffeine: unusable provider name");
         return Ok(None);
     };
-
-    let mut state = lock_runtime(runtime);
-    state.register(night_id.clone());
-    state.register(caffeine_id.clone());
-    drop(state);
+    lock_runtime(runtime).register(caffeine_id.clone());
 
     let runtime = Arc::clone(runtime);
     let worker_shutdown = Arc::clone(shutdown);
-    // This thread starts the session's remembered holds, so it has to be the
-    // thread that stops before they are released. Left detached, it could take
-    // a hold back after `release_all` had already given both up, and the child
-    // it started would then outlive the helper with nothing able to end it.
+    // This thread starts the remembered hold, so it has to stop before release.
+    // Left detached, it could take the hold back after `release_all` had already
+    // given it up and leave a child with nothing able to end it.
     Worker::spawn("session-holds", shutdown, move || {
-        run(&runtime, &night_id, &caffeine_id, &worker_shutdown);
+        run(&runtime, &caffeine_id, &worker_shutdown);
     })
     .map(Some)
 }
 
-/// Applies one switch verb and publishes what the session is actually left in.
+/// Applies one caffeine verb and publishes what the session is actually left
+/// in.
 ///
 /// # Errors
 ///
@@ -132,25 +95,16 @@ pub fn spawn(
 /// a tool that could not be started. A missing tool is a refusal: the state is
 /// never reported as on because somebody asked for it.
 pub fn action(
-    provider: &str,
     verb: &str,
     options: &Payload,
     runtime: &Mutex<ProviderRuntime>,
     id: &ProviderId,
 ) -> Result<(), String> {
-    let Some(shared) = hold_for(provider) else {
-        return Err(session::unserved_verb(provider, verb));
+    let SessionRequest::Caffeine(state) = session::parse_for(CAFFEINE, verb, options)? else {
+        return Err(session::unserved_verb(CAFFEINE, verb));
     };
 
-    // `parse_for` already refused anything this provider does not serve, so
-    // the only shapes left are the two switches these holds are.
-    let (SessionRequest::NightLight(state) | SessionRequest::Caffeine(state)) =
-        session::parse_for(provider, verb, options)?
-    else {
-        return Err(session::unserved_verb(provider, verb));
-    };
-
-    let mut hold = lock_hold(shared);
+    let mut hold = lock_hold(awake());
     let current = hold.is_held();
     let outcome = hold.set(wanted(state, current));
     let now_held = hold.is_held();
@@ -163,25 +117,19 @@ pub fn action(
     // The session really changed, so the choice that describes it is recorded.
     // A preference that persisted while the change itself failed would be a
     // promise nothing kept, which is why this is after the outcome.
-    let remembered = if provider == NIGHT_LIGHT {
-        super::settings::remember(|settings| settings.night_light = now_held)
-    } else {
-        super::settings::remember(|settings| settings.caffeine = now_held)
-    };
-    if let Err(error) = remembered {
+    if let Err(error) = super::settings::remember(|settings| settings.caffeine = now_held) {
         // The session is in the state that was asked for; only its survival
         // past this session failed, and that is worth saying without undoing
         // what did work.
-        eprintln!("celestina-provider-adapter: {provider}: {error}");
+        eprintln!("celestina-provider-adapter: caffeine: {error}");
     }
     Ok(())
 }
 
-/// Releases both holds. The helper calls this before it exits, so a shell that
-/// stops never leaves the screen tinted or the session unable to sleep with
-/// nothing left that knows how to undo it.
+/// Releases the hold. The helper calls this before it exits, so a shell that
+/// stops never leaves the session unable to sleep with nothing left that knows
+/// how to undo it.
 pub fn release_all() {
-    lock_hold(night()).release();
     lock_hold(awake()).release();
 }
 
@@ -193,45 +141,22 @@ fn publish(runtime: &Mutex<ProviderRuntime>, id: &ProviderId, held: bool) {
     }
 }
 
-/// Puts the session back into the states the person chose last time.
-///
-/// A failure here is reported and left: a tool that has since been uninstalled
-/// must not stop the rest of the shell from starting, and the published state
-/// will simply say the hold is not held.
+/// Puts the session back into the state the person chose last time.
 fn restore(shutdown: &AtomicBool) {
-    let chosen = super::settings::current();
-    for (wanted, hold, what) in [
-        (chosen.night_light, night(), NIGHT_LIGHT),
-        (chosen.caffeine, awake(), CAFFEINE),
-    ] {
-        if !wanted {
-            continue;
-        }
-        // Reading the settings takes long enough that a shutdown can arrive
-        // during it. Taking a hold after the helper has decided to leave would
-        // start a child nothing is going to release.
-        if shutdown.load(Ordering::Acquire) {
-            return;
-        }
-        if let Err(error) = lock_hold(hold).set(true) {
-            eprintln!("celestina-provider-adapter: {what}: {error}");
-        }
+    if !super::settings::current().caffeine || shutdown.load(Ordering::Acquire) {
+        return;
+    }
+    if let Err(error) = lock_hold(awake()).set(true) {
+        eprintln!("celestina-provider-adapter: caffeine: {error}");
     }
 }
 
-fn run(
-    runtime: &Mutex<ProviderRuntime>,
-    night_id: &ProviderId,
-    caffeine_id: &ProviderId,
-    shutdown: &AtomicBool,
-) {
+fn run(runtime: &Mutex<ProviderRuntime>, caffeine_id: &ProviderId, shutdown: &AtomicBool) {
     restore(shutdown);
     while !shutdown.load(Ordering::Acquire) {
         // Asking is what notices a holder that died, so this is a poll of this
-        // helper's own children rather than of the session.
-        let night_held = lock_hold(night()).is_held();
+        // helper's own child rather than of the session.
         let awake_held = lock_hold(awake()).is_held();
-        publish(runtime, night_id, night_held);
         publish(runtime, caffeine_id, awake_held);
         // Slept in slices so a shutdown is noticed within one of them rather
         // than after the full poll interval.

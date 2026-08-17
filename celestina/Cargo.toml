@@ -1,6 +1,6 @@
 [package]
 name = "celestina-shell"
-version = "0.29.11"
+version = "0.29.12"
 edition = "2021"
 rust-version = "1.85"
 publish = false
@@ -48,9 +48,14 @@ celestina-core = { path = "../celestina-rs/crates/celestina-core" }
 # and the standardized one is the one to prefer going forward.
 wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+# Night light needs one persistent gamma-control owner so activation and
+# release can cross several compositor commits instead of flashing in the
+# single commit of an external process starting or dying. The wlroots binding
+# uses the same wayland-client runtime already owned by the clipboard worker.
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 # Already a transitive dependency of `wayland-backend`; used directly only for
-# `pipe()`, so receiving a selection needs no raw libc call in a workspace that
-# forbids unsafe code.
+# `pipe()` and `memfd_create()`, so clipboard reception and native gamma tables
+# need no raw libc call in a workspace that forbids unsafe code.
 rustix = { version = "1", features = ["fs", "pipe"] }
 # The notification server is a session-bus service, not a tool this helper can
 # shell out to: it must own a well-known name, answer method calls and emit
@@ -60,8 +65,8 @@ rustix = { version = "1", features = ["fs", "pipe"] }
 # helper is threads and blocking IO, with no async runtime anywhere in it.
 zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
 # The host restarts this helper with SIGTERM when its channel fails. Catching
-# that ordinary Unix shutdown signal lets the helper release wlsunset and
-# systemd-inhibit before it exits instead of leaving session-wide state orphaned.
+# that ordinary Unix shutdown signal lets the helper restore its owned gamma
+# tables and release systemd-inhibit before leaving session-wide state orphaned.
 # `signal-hook` is a narrow signal delivery seam and adds no runtime framework.
 signal-hook = "0.3"
 # Wallpaper gallery validation decodes the same four raster families the Qt

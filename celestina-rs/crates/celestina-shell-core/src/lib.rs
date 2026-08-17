@@ -31,6 +31,8 @@
 //!   name.
 //! - [`notifications`] — what the session's applications are trying to say:
 //!   identity, replacement, expiry, actions, capabilities and how much is kept.
+//! - [`nightlight`] — the fixed warm whitepoint and the bounded monotonic
+//!   gamma transition used to reach and leave it.
 //! - [`weather`] — the one thing that leaves the machine, and how little goes
 //!   with it.
 //! - [`calendar`] — which day falls where in a month, computed rather than
@@ -82,6 +84,7 @@ pub mod launcher;
 pub mod lines;
 pub mod media;
 pub mod network;
+pub mod nightlight;
 pub mod niri_colours;
 pub mod notifications;
 pub mod pending;

@@ -41,8 +41,9 @@ struct TrayItem {
     // durable identity and must not become a preference. Live activation
     // continues to use service/path, never this fingerprint.
     QString preferenceKey;
-    // `Title` when the item gave one, its `Id` otherwise — never empty, because
-    // an item with no name is one the user cannot tell from another.
+    // User-facing application name: declared `Title`, or a bounded name
+    // derived from the technical Id/tooltip contract — never empty for a
+    // peer that supplied any usable identity.
     QString title;
     // "active", "passive" or "attention". A drawer shows all three; where each
     // belongs is the panel's business, not this file's.
@@ -68,6 +69,17 @@ struct TrayItem {
 // service names and object paths are deliberately absent. Empty input means
 // there is no stable preference identity to promise.
 QString trayPreferenceKey(const QString &id);
+
+// Chooses the user-facing application name without changing the SNI Id used
+// for durable preference identity. A declared Title wins. Technical
+// Chromium/Electron status-icon suffixes are removed; only a generic runtime
+// Id lets the tooltip supply product identity, because app-specific peers may
+// use that tooltip for transient state instead.
+QString trayDisplayName(
+    const QString &id,
+    const QString &declaredTitle,
+    const QString &toolTipTitle
+);
 
 // Splits a watcher's registration string, which is a bus name with the object
 // path appended — `:1.19/org/ayatana/NotificationItem/nm_applet`. An entry with

@@ -6,7 +6,7 @@
 - **Environment:** the 4K nest (scale 1.5) recorded at 60 fps for the
   failures; a live QML probe through the session journal for the mechanism;
   the offscreen suite, now grabbing real pixels, for the proof
-- **Plan:** [polkit authentication agent](../plans/active/2026-08-14-polkit-authentication-agent.md)
+- **Plan:** [polkit authentication agent](../plans/archive/2026-08-14-polkit-authentication-agent.md)
 - **Validation:** `VAL-R8`
 
 ## Procedure

@@ -720,9 +720,9 @@ void PanelMenuController::toggleTrayItemsMenu(
     );
     connect(
         window,
-        SIGNAL(itemMenuRequested(QString, QString, int, int, int, int)),
+        SIGNAL(itemMenuRequested(QString, QString, QString, int, int, int, int)),
         this,
-        SLOT(requestTrayItemMenu(QString, QString, int, int, int, int))
+        SLOT(requestTrayItemMenu(QString, QString, QString, int, int, int, int))
     );
     connect(window, SIGNAL(dismissed()), this, SLOT(menuDismissed()));
 
@@ -801,6 +801,7 @@ void PanelMenuController::secondaryActivateTrayItem(
 void PanelMenuController::requestTrayItemMenu(
     const QString &service,
     const QString &path,
+    const QString &appName,
     int globalX,
     int globalY,
     int globalWidth,
@@ -843,17 +844,21 @@ void PanelMenuController::requestTrayItemMenu(
     beginTrayMenuRequest(
         m_openPanel,
         QRect(globalX, globalY, qMax(0, globalWidth), qMax(0, globalHeight)),
+        QRect(),
         service,
         path,
+        appName,
         parentMenu
     );
 }
 
 void PanelMenuController::requestTrayMenu(
     QWindow *panel,
-    const QPoint &globalAnchor,
+    const QRectF &globalOpener,
+    const QRectF &globalAttachmentAnchor,
     const QString &service,
-    const QString &path
+    const QString &path,
+    const QString &appName
 )
 {
     if (!m_enabled || !panel)
@@ -867,27 +872,38 @@ void PanelMenuController::requestTrayMenu(
         return;
     }
 
-    // A menu requested directly from the bar is a standalone contextual menu:
-    // no inventory is its parent, so it keeps the established full-output
-    // outside-click surface.
+    // A menu requested directly from the bar is standalone, but it is still
+    // a panel-attached contextual menu. Its own pinned icon is the exact
+    // membrane waist and participates in the same attachment lease as every
+    // first-party opener.
     close();
     beginTrayMenuRequest(
-        panel, QRect(globalAnchor, QSize()), service, path, nullptr);
+        panel,
+        globalOpener,
+        globalAttachmentAnchor,
+        service,
+        path,
+        appName,
+        nullptr);
 }
 
 void PanelMenuController::beginTrayMenuRequest(
     QWindow *panel,
-    const QRect &globalAnchor,
+    const QRectF &globalAnchor,
+    const QRectF &globalAttachmentAnchor,
     const QString &service,
     const QString &path,
+    const QString &appName,
     QWindow *parentMenu
 )
 {
     m_pendingPanel = panel;
     m_pendingParentMenu = parentMenu;
     m_pendingAnchor = globalAnchor;
+    m_pendingAttachmentAnchor = globalAttachmentAnchor;
     m_pendingService = service;
     m_pendingPath = path;
+    m_pendingAppName = appName.trimmed();
     m_pendingKeepsTrayItems = parentMenu != nullptr;
     emit trayMenuNeeded(service, path);
 }
@@ -896,8 +912,11 @@ void PanelMenuController::clearPendingTrayMenu()
 {
     m_pendingService.clear();
     m_pendingPath.clear();
+    m_pendingAppName.clear();
     m_pendingPanel = nullptr;
     m_pendingParentMenu = nullptr;
+    m_pendingAnchor = QRectF();
+    m_pendingAttachmentAnchor = QRectF();
     m_pendingKeepsTrayItems = false;
 }
 
@@ -920,7 +939,9 @@ void PanelMenuController::trayMenuReady(
     const QPointer<QWindow> panel = m_pendingPanel;
     const QPointer<QWindow> parentMenu = m_pendingParentMenu;
     const bool keepTrayItems = m_pendingKeepsTrayItems;
-    const QRect anchor = m_pendingAnchor;
+    const QRectF anchor = m_pendingAnchor;
+    const QRectF attachmentAnchor = m_pendingAttachmentAnchor;
+    const QString appName = m_pendingAppName;
     clearPendingTrayMenu();
 
     // An empty layout is still the answer that spends the request. Keeping its
@@ -937,9 +958,25 @@ void PanelMenuController::trayMenuReady(
 
     QVariantMap initialProperties {
         {QStringLiteral("entries"), entries},
+        {QStringLiteral("appName"),
+         appName.isEmpty() ? service : appName},
         {QStringLiteral("reducedMotion"),
          qEnvironmentVariableIsSet("CELESTINA_REDUCED_MOTION")},
     };
+    const bool panelAttached = !keepTrayItems
+                               && !anchor.isEmpty()
+                               && !attachmentAnchor.isEmpty();
+    const PanelCarrierGeometry carrier = panelAttached
+        ? panelCarrierGeometry(panel, anchor, attachmentAnchor)
+        : PanelCarrierGeometry();
+    if (panelAttached) {
+        addPanelOpenerProperties(
+            initialProperties,
+            carrier.opener,
+            carrier.attachmentAnchor,
+            carrier.attachmentStartY,
+            menuShellScale(panel));
+    }
     initialProperties.insert(menuOutputProperties(panel));
     QObject *rootObject = m_trayComponent.createWithInitialProperties(initialProperties);
     auto *window = qobject_cast<QWindow *>(rootObject);
@@ -956,7 +993,7 @@ void PanelMenuController::trayMenuReady(
     // Both the standalone foreign menu and the child beside the tray
     // inventory use the same bounded viewport. Set it before reading the
     // window size because card-sized layer surfaces adopt that exact measure.
-    capCardHeightBelowAnchor(window, panel, anchor.topLeft());
+    capCardHeightBelowAnchor(window, panel, anchor.topLeft().toPoint());
 
     PanelMenuSurface::Coverage coverage = PanelMenuSurface::Coverage::Output;
     if (keepTrayItems) {
@@ -989,7 +1026,12 @@ void PanelMenuController::trayMenuReady(
         // it dismisses the child first, as in any nested menu.
         const bool sideAttachment = anchor.width() > 0 && anchor.height() > 0;
         window->setProperty("attachedToMenuSide", sideAttachment);
-        const QRect outputAnchor = anchor.translated(-outputOrigin);
+        // Inventory rows still enter through the integer D-Bus/QML child
+        // contract. Preserve QRect's inclusive centre for that established
+        // side placement; only the direct panel route carries fractional icon
+        // geometry into its semantic attachment lease.
+        const QRect outputAnchor =
+            anchor.toAlignedRect().translated(-outputOrigin);
         // Keep the invoking tile's centre inside the membrane's flat lateral
         // span rather than at the very corner of the child body.
         const QPoint requestedOrigin(
@@ -1058,8 +1100,17 @@ void PanelMenuController::trayMenuReady(
                 .number(QStringLiteral("parent_width"), parentCard.width())
                 .number(QStringLiteral("parent_height"), parentCard.height())
         );
+    } else if (panelAttached) {
+        placeCardOnOutput(
+            window,
+            panelPopupBodyOrigin(
+                carrier.opener,
+                window->property("contentWidth").toInt(),
+                window->property("anchorGap").toInt(),
+                carrier.attachmentStartY));
+        passPanelStripThrough(window, panel);
     } else {
-        placeCard(window, panel, anchor.topLeft());
+        placeCard(window, panel, anchor.topLeft().toPoint());
     }
 
     // QML construction is synchronous but may execute arbitrary completion
@@ -1072,7 +1123,11 @@ void PanelMenuController::trayMenuReady(
         return;
     }
 
-    if (!m_trayChildSurface->open(window, panel, coverage)) {
+    if (!m_trayChildSurface->open(
+            window,
+            panel,
+            coverage,
+            panelAttached ? carrier.outputPosition : QPoint())) {
         delete window;
         return;
     }
@@ -1080,6 +1135,14 @@ void PanelMenuController::trayMenuReady(
     m_openService = service;
     m_openPath = path;
     m_openParentMenu = keepTrayItems ? parentMenu : nullptr;
+    if (panelAttached) {
+        emit contextualSurfaceOpened();
+        m_attachmentLease.acquire(
+            panel,
+            window,
+            attachmentAnchor,
+            QPointF(carrier.outputPosition));
+    }
 }
 
 void PanelMenuController::trayEntryChosen(int entryId)
@@ -1161,6 +1224,7 @@ void PanelMenuController::restoreTrayParentFocus(
 
 void PanelMenuController::closeTrayChild(bool restoreParentFocus)
 {
+    constexpr auto trayItemsKind = "tray-items";
     DiagnosticJournal::instance().record(
         DiagnosticJournal::Record(
             DiagnosticJournal::Level::Info,
@@ -1169,11 +1233,16 @@ void PanelMenuController::closeTrayChild(bool restoreParentFocus)
             .flag(QStringLiteral("had_window"),
                   m_trayChildSurface && m_trayChildSurface->window()));
     const QPointer<QWindow> parentMenu = m_openParentMenu;
+    const bool inventoryRemainsOpen =
+        m_openMenuKind == QLatin1String(trayItemsKind)
+        && m_surface && m_surface->window();
     clearPendingTrayMenu();
     m_openService.clear();
     m_openPath.clear();
     m_openParentMenu = nullptr;
     m_trayChildSurface->close();
+    if (!parentMenu && !inventoryRemainsOpen)
+        m_attachmentLease.release();
 
     if (restoreParentFocus)
         restoreTrayParentFocus(parentMenu);

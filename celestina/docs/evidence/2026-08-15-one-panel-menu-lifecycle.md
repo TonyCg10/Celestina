@@ -8,7 +8,7 @@
   `recording_20260815_195243.mp4`; source audit at
   `314db378d65617441588207990ee3142e110e3ce`; offscreen Qt 6.11.1 tests;
   registered production completion; nested Niri on `wayland-2`
-- **Plan:** [polkit authentication agent](../plans/active/2026-08-14-polkit-authentication-agent.md)
+- **Plan:** [polkit authentication agent](../plans/archive/2026-08-14-polkit-authentication-agent.md)
 - **Validation:** `VAL-PANEL-1`
 
 ## What the recording establishes

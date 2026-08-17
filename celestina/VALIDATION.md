@@ -432,6 +432,32 @@ The other three are corrected in the same delivery.
   repeated lifecycle rerun passed on 2026-08-07.
 - **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
+## VAL-NIGHT-1 — Smooth provider-confirmed night light
+
+- **Status:** pending
+- **Related implementation:** R8-P-Q
+- **Requires:** Celestina on a real Niri TTY output that advertises
+  `wlr-gamma-control-unstable-v1`, no competing gamma client, and an external
+  camera at 120 fps or faster or a colorimeter. The nested winit backend is a
+  refusal-path fixture only because it does not advertise gamma control.
+- **Procedure:** start neutral, open the control centre and activate night light
+  once. Record the physical output while it reaches the fixed 2700 K endpoint,
+  then deactivate it and record the return to identity. Repeat once from the
+  key binding, stop Celestina while warm, and try activation while a deliberate
+  competing gamma client owns one output. Confirm the switch remains at its
+  last provider-confirmed position while each request is pending and moves only
+  when the final gamma commit succeeds.
+- **Pass condition:** activation and deactivation each form one monotonic
+  approximately 300 ms colour transition with no neutral/warm flash at either
+  edge; every controlled output advances together; shutdown restores identity;
+  a missing or competing gamma controller is refused without moving the switch
+  or persisting an active state. Ordinary screen capture is not sufficient
+  evidence because output gamma is applied after the captured scene.
+- **Result:** not run. Automated tests cover the whitepoint, transition samples,
+  LUT bounds and provider-confirmed switch state; the development nest can only
+  prove the unsupported-backend refusal.
+- **Evidence:** none
+
 ## VAL-R4 — Notification server, toasts and handover
 
 - **Status:** passed
@@ -708,6 +734,10 @@ result.
   provider and confirm the one panel region remains the complete 40-pixel bar.
   Open network, Bluetooth, tray, workspace map, control centre, clipboard,
   notification centre, session, launcher, performance, toolbox and wallpaper.
+  Pin at least two foreign tray applications. Their icons must appear to the
+  inventory opener's left, each pin and unpin must fade that icon in or out,
+  and right-clicking either icon must reveal its foreign menu from that exact
+  glyph with the same top membrane and fall as the first-party panel menus.
   Confirm each menu keeps a nearly transparent shadowless outer field, dense
   dark matte internal cards that match the panel capsules, fixed light/white
   foregrounds and no shadow on either material. Confirm the bar, menu body and
@@ -1050,6 +1080,37 @@ result.
   dense material must appear, move and disappear as one block, with no empty
   handoff frames or late material snap. Test a toast only in a nest that owns
   `org.freedesktop.Notifications`; the current shared bus is owned elsewhere.
+  For `R8-P-Q`, the first author retest showed that the direct foreign menu
+  still appeared without its membrane: the lease named the optional foreign
+  `Image`, so a visible fallback glyph left its semantic anchor hidden. The
+  icon slot is now the stable source across both rendering branches. The next
+  60 fps recording from PID 530038 still showed already-settled foreign menus
+  at frames 131 and 198, and the host journal placed their blur at local
+  `y == 21` instead of the seam. A fractional 18-pixel glyph had been widened
+  to 19 pixels by `toAlignedRect()`, causing the semantic lease to reject it.
+  Pending tray geometry now remains `QRectF`. The author-requested build-tree
+  restart replaced PID 530038 with PID 548897 on `wayland-2`; nested Niri PID
+  80685 retained its 1920x1080 scale-1 `winit` output. That host acquired
+  `org.celestina.Shell`, mapped the panel and armed one panel blur shape without
+  a QML construction error. The next recording confirms that membrane at
+  carrier-local `y == 0`, but shows the custom header already landed while the
+  foreign actions are still entering. The header now follows the exact same
+  hidden distance without joining the scrollable content, and the request
+  carries the real application title for the application-specific heading. Visual
+  acceptance of that corrected whole-block fall, the app-specific heading and
+  the left-side icon fades remains pending. The author-requested restart then
+  replaced only the build-tree host with PID 565451 on the same nested output;
+  it acquired `org.celestina.Shell`, mapped the panel and reported no QML
+  construction error. The following screenshots exposed raw bridge IDs in the
+  new app-specific heading: `Slack_status_icon_1` and
+  `chrome_status_icon_1`. The adapter now keeps those raw values only as stable
+  preference identity, publishes `Slack` from the app-specific Id and
+  `ChatGPT` from the generic Chrome bridge's tooltip, and ignores Slack's
+  transient tooltip state as a name. Repeat both pinned menu openings after the
+  next build-tree restart and require the Slack and ChatGPT application-specific headings.
+  That restart replaced PID 565451 with PID 579663; the new host acquired
+  `org.celestina.Shell`, mapped the same 1920x1080 nested panel and published
+  four tray items without a QML construction error.
 - **Evidence:** [PANEL-1-A delivery](docs/evidence/2026-08-08-panel-glass-baseline.md),
   [PANEL-1-B adaptive ink nested comparison](docs/evidence/2026-08-10-panel-adaptive-ink-nested.md),
   [PANEL-1-B contextual hierarchy and grouping](docs/evidence/2026-08-10-contextual-menu-hierarchy-nested.md),
@@ -1059,7 +1120,8 @@ result.
   [PANEL-1-I continuous bar veil and contextual connectors](docs/evidence/2026-08-11-edge-attached-shell-prototype.md),
   [R8-P-N panel-menu lifecycle audit](docs/evidence/2026-08-15-one-panel-menu-lifecycle.md),
   [R8-P-O panel seam carriers](docs/evidence/2026-08-16-panel-seam-carriers.md),
-  [R8-P-P quiet-surface temporal lifecycle](docs/evidence/2026-08-16-quiet-surface-temporal-lifecycle.md)
+  [R8-P-P quiet-surface temporal lifecycle](docs/evidence/2026-08-16-quiet-surface-temporal-lifecycle.md),
+  [R8-P-Q pinned tray attachment](docs/evidence/2026-08-16-pinned-tray-menu-attachment.md)
 
 ## Closed historical observations
 

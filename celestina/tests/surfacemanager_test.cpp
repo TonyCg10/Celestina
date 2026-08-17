@@ -1,3 +1,4 @@
+// language-contract: product-copy
 #include <QtTest>
 
 #include <QScopeGuard>
@@ -927,6 +928,7 @@ void SurfaceManagerTest::aScaledTrayChildStaysBesideItsParentAndOnScreen()
         "itemMenuRequested",
         Q_ARG(QString, service),
         Q_ARG(QString, path),
+        Q_ARG(QString, QStringLiteral("Chromium")),
         Q_ARG(int, 620),
         Q_ARG(int, screen->geometry().top() + 200),
         Q_ARG(int, 48),
@@ -1021,6 +1023,7 @@ void SurfaceManagerTest::anOverflowingTrayMenuUsesABoundedScrollableViewport()
         "itemMenuRequested",
         Q_ARG(QString, service),
         Q_ARG(QString, path),
+        Q_ARG(QString, QStringLiteral("Chromium")),
         Q_ARG(int, requestedGlobalX),
         Q_ARG(int, requestedGlobalY),
         Q_ARG(int, 48),
@@ -1076,11 +1079,14 @@ void SurfaceManagerTest::anOverflowingTrayMenuUsesABoundedScrollableViewport()
     auto *const headingItem = qobject_cast<QQuickItem *>(heading);
     QVERIFY(headingItem);
     // The popup now opens one tick after creation, once the host has dressed
-    // the window; the heading is reparented beside its viewport at that
-    // moment, so this waits for it rather than sampling the first tick.
+    // the window; wait for that reparenting rather than sampling creation.
     QTRY_COMPARE(headingItem->window(), child.data());
     QCOMPARE(headingItem->parentItem(), viewport->parentItem());
     QVERIFY(headingItem->height() > 0);
+    QCOMPARE(child->property("appName").toString(),
+             QStringLiteral("Chromium"));
+    QCOMPARE(child->property("title").toString(),
+             QStringLiteral("Menú de Chromium"));
     // The raised top padding keeps the scrolled rows strictly below that
     // pinned heading.
     QVERIFY(menu->property("topPadding").toReal()
@@ -1131,6 +1137,7 @@ void SurfaceManagerTest::anOverflowingTrayMenuUsesABoundedScrollableViewport()
         "itemMenuRequested",
         Q_ARG(QString, service),
         Q_ARG(QString, path),
+        Q_ARG(QString, QStringLiteral("Chromium")),
         Q_ARG(int, requestedGlobalX),
         Q_ARG(int, edgeGlobalY),
         Q_ARG(int, 48),
@@ -1175,7 +1182,11 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
     QVERIFY(quickPanel);
     auto *const inventorySource =
         new SemanticAttachmentSource(quickPanel->contentItem());
-    inventorySource->setPosition(QPointF(660, 5));
+    // The real trailing panel row may land on a half pixel. Preserve that
+    // exact QRectF through the asynchronous D-Bus answer: aligning it first
+    // expands this 18-pixel glyph to 19 pixels and makes the semantic lease
+    // reject its own source, which removes the membrane and attached fall.
+    inventorySource->setPosition(QPointF(660.5, 5));
     inventorySource->setSize(QSizeF(120, 30));
     inventorySource->placeAnchor(QPointF(41, 6));
 
@@ -1255,6 +1266,7 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
         "itemMenuRequested",
         Q_ARG(QString, service),
         Q_ARG(QString, path),
+        Q_ARG(QString, QStringLiteral("Chromium")),
         Q_ARG(int, 620),
         Q_ARG(int, 220),
         Q_ARG(int, 48),
@@ -1272,6 +1284,7 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
         "itemMenuRequested",
         Q_ARG(QString, service),
         Q_ARG(QString, path),
+        Q_ARG(QString, QStringLiteral("Chromium")),
         Q_ARG(int, 620),
         Q_ARG(int, 220),
         Q_ARG(int, 48),
@@ -1316,6 +1329,7 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
         "itemMenuRequested",
         Q_ARG(QString, replacementService),
         Q_ARG(QString, replacementPath),
+        Q_ARG(QString, QStringLiteral("Replacement")),
         Q_ARG(int, 620),
         Q_ARG(int, 300),
         Q_ARG(int, 48),
@@ -1356,6 +1370,7 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
         "itemMenuRequested",
         Q_ARG(QString, emptyService),
         Q_ARG(QString, emptyPath),
+        Q_ARG(QString, QStringLiteral("Empty")),
         Q_ARG(int, 620),
         Q_ARG(int, 260),
         Q_ARG(int, 48),
@@ -1376,6 +1391,7 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
         "itemMenuRequested",
         Q_ARG(QString, cascadeService),
         Q_ARG(QString, cascadePath),
+        Q_ARG(QString, QStringLiteral("Cascade")),
         Q_ARG(int, 620),
         Q_ARG(int, 300),
         Q_ARG(int, 48),
@@ -1411,6 +1427,7 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
         "itemMenuRequested",
         Q_ARG(QString, lateService),
         Q_ARG(QString, latePath),
+        Q_ARG(QString, QStringLiteral("Late")),
         Q_ARG(int, 620),
         Q_ARG(int, 340),
         Q_ARG(int, 48),
@@ -1422,19 +1439,107 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
     QCoreApplication::processEvents();
     QVERIFY(!windowWithProperty("entries"));
 
-    // A direct bar request has no inventory parent and retains the established
-    // full-output outside-click carrier.
+    // A direct bar request has no inventory parent, but its pinned icon is a
+    // first-class panel attachment source. The same output-covering carrier
+    // now begins physically below the bar and the standard top membrane owns
+    // its reveal.
     const int beforeDirectRequest = needed.size();
-    controller.requestTrayMenu(panel, QPoint(700, 40), service, path);
-    controller.requestTrayMenu(panel, QPoint(700, 40), service, path);
+    controller.requestTrayMenu(
+        panel,
+        inventoryOpener,
+        inventoryAnchor,
+        service,
+        path,
+        QStringLiteral("Chromium")
+    );
+    controller.requestTrayMenu(
+        panel,
+        inventoryOpener,
+        inventoryAnchor,
+        service,
+        path,
+        QStringLiteral("Chromium")
+    );
     QCOMPARE(needed.size(), beforeDirectRequest + 1);
     controller.trayMenuReady(service, path, trayEntries());
     child = windowWithProperty("entries");
     QVERIFY(child);
     childLayer = LayerShellQt::Window::get(child);
     QVERIFY(childLayer);
-    QVERIFY(!child->property("anchoredFromPanel").toBool());
-    QVERIFY(child->property("openerRect").toRect().isEmpty());
+    const double childScale = child->property("shellScale").toDouble();
+    const QRectF directOpener = panelAttachmentRectOnCarrier(
+        inventoryOpener,
+        outputOrigin,
+        carrierOrigin,
+        childScale
+    );
+    const QRectF directAnchor = panelAttachmentRectOnCarrier(
+        inventoryAnchor,
+        outputOrigin,
+        carrierOrigin,
+        childScale
+    );
+    QVERIFY(child->property("anchoredFromPanel").toBool());
+    QCOMPARE(child->property("openerRect").toRectF(), directOpener);
+    QCOMPARE(child->property("attachmentAnchorRect").toRectF(), directAnchor);
+    QCOMPARE(child->property("attachmentStartY").toInt(), 0);
+    const QPoint directOrigin = panelPopupBodyOrigin(
+        directOpener,
+        child->property("contentWidth").toInt(),
+        child->property("anchorGap").toInt(),
+        0
+    );
+    QCOMPARE(child->property("menuY").toInt(), directOrigin.y());
+    QCOMPARE(child->property("cardY").toInt(), directOrigin.y());
+    QVERIFY(inventorySource->menuOpen());
+    QQuickItem *const directField =
+        child->findChild<QQuickItem *>(
+            QStringLiteral("celestina-soft-menu-field"));
+    QVERIFY(directField);
+    QVERIFY(directField->property("topAttachmentRequested").toBool());
+    QVERIFY(directField->property("edgeShapeActive").toBool());
+    auto *const directViewport = qobject_cast<QQuickItem *>(
+        child->property("menuViewport").value<QObject *>()
+    );
+    auto *const directHeading = child->findChild<QQuickItem *>(
+        QStringLiteral("celestina-tray-menu-heading")
+    );
+    QVERIFY(directViewport);
+    QVERIFY(directHeading);
+    QCOMPARE(directHeading->parentItem(), directViewport->parentItem());
+    QCOMPARE(child->property("title").toString(),
+             QStringLiteral("Menú de Chromium"));
+
+    // Freeze one real frame of the top fall. The foreign header is pinned
+    // against scrolling at rest, but it must follow the same hidden distance
+    // as the row carrier during entry; otherwise it lands first and the body
+    // grows beneath it as two visibly separate animations.
+    QObject *const directFall = directField->findChild<QObject *>(
+        QStringLiteral("celestina-attachment-drop-fall")
+    );
+    QVERIFY(directFall);
+    QVERIFY(QMetaObject::invokeMethod(directFall, "stop"));
+    directField->setProperty("fallQueued", false);
+    directField->setProperty("hasFallen", true);
+    directField->setProperty("attachmentProgress", 1.0);
+    QCoreApplication::processEvents();
+    const qreal settledHeadingY = directHeading->y();
+    directField->setProperty("attachmentProgress", 0.0);
+    QCoreApplication::processEvents();
+    const qreal hiddenDistance = child->property("rowsCut").toReal();
+    QVERIFY(hiddenDistance > 0.0);
+    QVERIFY(directHeading->y() < settledHeadingY);
+    QVERIFY(qAbs((settledHeadingY - directHeading->y()) - hiddenDistance)
+            < 0.01);
+    directField->setProperty("attachmentProgress", 1.0);
+    QCoreApplication::processEvents();
+    QTRY_COMPARE(child->property("glassRegions").toList().size(), 1);
+    const QVariantMap directShape = child->property("glassRegions")
+                                        .toList().constFirst().toMap();
+    QCOMPARE(
+        qRound(directShape.value(QStringLiteral("rect")).toRectF().top()),
+        0
+    );
     auto outputAnchors = LayerShellQt::Window::Anchors(
         LayerShellQt::Window::AnchorTop
     );
@@ -1443,6 +1548,7 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
     outputAnchors |= LayerShellQt::Window::AnchorRight;
     QCOMPARE(childLayer->anchors(), outputAnchors);
     QCOMPARE(childLayer->desiredSize(), QSize(0, 0));
+    QCOMPARE(childLayer->margins(), QMargins(0, panel->height(), 0, 0));
 
     controller.close();
     QTRY_VERIFY(child.isNull());

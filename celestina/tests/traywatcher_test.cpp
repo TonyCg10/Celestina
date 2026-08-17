@@ -1,4 +1,4 @@
-// The tray host against a real bus and four real StatusNotifierItems.
+// The tray host against a real bus and five real StatusNotifierItems.
 //
 // Everything else about the tray is tested against fabricated values: a map
 // handed to `readTrayItem`, a list handed to `TrayDrawer`. That leaves the part
@@ -64,6 +64,36 @@ const QDBusArgument &operator>>(const QDBusArgument &argument, SniPixmap &pixmap
 Q_DECLARE_METATYPE(SniPixmap)
 Q_DECLARE_METATYPE(QList<SniPixmap>)
 
+namespace {
+struct SniToolTip {
+    QString iconName;
+    QList<SniPixmap> iconPixmaps;
+    QString title;
+    QString description;
+};
+
+QDBusArgument &operator<<(QDBusArgument &argument, const SniToolTip &toolTip)
+{
+    argument.beginStructure();
+    argument << toolTip.iconName << toolTip.iconPixmaps
+             << toolTip.title << toolTip.description;
+    argument.endStructure();
+    return argument;
+}
+
+const QDBusArgument &operator>>(const QDBusArgument &argument,
+                                SniToolTip &toolTip)
+{
+    argument.beginStructure();
+    argument >> toolTip.iconName >> toolTip.iconPixmaps
+             >> toolTip.title >> toolTip.description;
+    argument.endStructure();
+    return argument;
+}
+} // namespace
+
+Q_DECLARE_METATYPE(SniToolTip)
+
 /// An item that names a themed icon and publishes no pixels: Solaar, nm-applet
 /// and Blueman on this session. It deliberately has no `IconPixmap` property at
 /// all, because `GetAll` omitting a key is the shape the host must survive.
@@ -114,10 +144,17 @@ class PixmapItem final : public QObject
     Q_PROPERTY(QString Status READ status CONSTANT)
     Q_PROPERTY(QString Category READ category CONSTANT)
     Q_PROPERTY(QList<SniPixmap> IconPixmap READ iconPixmap CONSTANT)
+    Q_PROPERTY(SniToolTip ToolTip READ toolTip CONSTANT)
     Q_PROPERTY(QDBusObjectPath Menu READ menu CONSTANT)
 
 public:
-    QString id() const { return QStringLiteral("Slack_status_icon_1"); }
+    PixmapItem(QString id, QString toolTipTitle)
+        : m_id(std::move(id))
+        , m_toolTipTitle(std::move(toolTipTitle))
+    {
+    }
+
+    QString id() const { return m_id; }
     // Empty, exactly as Chromium publishes it.
     QString title() const { return QString(); }
     QString status() const { return QStringLiteral("Active"); }
@@ -135,10 +172,19 @@ public:
         return {pixmap};
     }
 
+    SniToolTip toolTip() const
+    {
+        return SniToolTip {QString(), {}, m_toolTipTitle, QString()};
+    }
+
     QDBusObjectPath menu() const
     {
         return QDBusObjectPath(QStringLiteral("/org/chromium/DbusMenu/1"));
     }
+
+private:
+    QString m_id;
+    QString m_toolTipTitle;
 };
 
 /// A registration whose object is never exported. `GetAll` fails against it, so
@@ -175,6 +221,7 @@ void TrayWatcherTest::initTestCase()
 {
     qDBusRegisterMetaType<SniPixmap>();
     qDBusRegisterMetaType<QList<SniPixmap>>();
+    qDBusRegisterMetaType<SniToolTip>();
     m_icons = QSharedPointer<TrayIconCache>::create();
 
     QVERIFY2(
@@ -227,14 +274,21 @@ bool TrayWatcherTest::waitForItems(TrayWatcher *watcher, int expected)
     return watcher->items().size() == expected;
 }
 
-/// The whole path the live failure ran through: four applications register,
-/// four objects answer `GetAll` asynchronously, and the host publishes four
+/// The whole path the live failure ran through: five applications register,
+/// five objects answer `GetAll` asynchronously, and the host publishes five
 /// items with what each one really said.
 void TrayWatcherTest::everyRegisteredItemReachesTheHostsPublishedList()
 {
     TrayWatcher watcher(m_icons);
 
-    PixmapItem slack;
+    PixmapItem slack(
+        QStringLiteral("Slack_status_icon_1"),
+        QStringLiteral("No unread messages")
+    );
+    PixmapItem chatgpt(
+        QStringLiteral("chrome_status_icon_1"),
+        QStringLiteral("ChatGPT")
+    );
     ThemedItem solaar(
         QStringLiteral("indicator-solaar"),
         QStringLiteral("Solaar"),
@@ -255,27 +309,32 @@ void TrayWatcherTest::everyRegisteredItemReachesTheHostsPublishedList()
     );
 
     const QString slackPath = QStringLiteral("/org/chromium/StatusNotifierItem/1");
+    const QString chatgptPath = QStringLiteral("/org/chromium/StatusNotifierItem/2");
     const QString solaarPath =
         QStringLiteral("/org/ayatana/NotificationItem/indicator_solaar");
     const QString appletPath = QStringLiteral("/org/ayatana/NotificationItem/nm_applet");
     const QString bluemanPath = QStringLiteral("/org/blueman/sni");
 
     QDBusConnection slackBus = application(QStringLiteral("fake-slack"));
+    QDBusConnection chatgptBus = application(QStringLiteral("fake-chatgpt"));
     QDBusConnection solaarBus = application(QStringLiteral("fake-solaar"));
     QDBusConnection appletBus = application(QStringLiteral("fake-nm-applet"));
     QDBusConnection bluemanBus = application(QStringLiteral("fake-blueman"));
 
     QVERIFY(slackBus.registerObject(slackPath, &slack, QDBusConnection::ExportAllProperties));
+    QVERIFY(chatgptBus.registerObject(
+        chatgptPath, &chatgpt, QDBusConnection::ExportAllProperties));
     QVERIFY(solaarBus.registerObject(solaarPath, &solaar, QDBusConnection::ExportAllProperties));
     QVERIFY(appletBus.registerObject(appletPath, &applet, QDBusConnection::ExportAllProperties));
     QVERIFY(bluemanBus.registerObject(bluemanPath, &blueman, QDBusConnection::ExportAllProperties));
 
     registerItem(slackBus, slackPath);
+    registerItem(chatgptBus, chatgptPath);
     registerItem(solaarBus, solaarPath);
     registerItem(appletBus, appletPath);
     registerItem(bluemanBus, bluemanPath);
 
-    if (!waitForItems(&watcher, 4)) {
+    if (!waitForItems(&watcher, 5)) {
         QStringList seen;
         for (const QVariant &entry : watcher.items())
             seen.append(entry.toMap().value(QStringLiteral("id")).toString());
@@ -291,11 +350,11 @@ void TrayWatcherTest::everyRegisteredItemReachesTheHostsPublishedList()
         const QVariantMap item = entry.toMap();
         byTitle.insert(item.value(QStringLiteral("title")).toString(), item);
     }
-    QCOMPARE(byTitle.size(), 4);
+    QCOMPARE(byTitle.size(), 5);
 
-    // Slack gave no title, so the host names it by its own id — and its pixels
-    // came back through a nested `a(iiay)` intact enough to resolve an icon.
-    const QVariantMap slackItem = byTitle.value(QStringLiteral("Slack_status_icon_1")).toMap();
+    // Slack's tooltip is transient state; its app-specific Id supplies the
+    // display name after the bridge's technical suffix is removed.
+    const QVariantMap slackItem = byTitle.value(QStringLiteral("Slack")).toMap();
     QVERIFY(!slackItem.isEmpty());
     QCOMPARE(slackItem.value(QStringLiteral("id")).toString(), QStringLiteral("Slack_status_icon_1"));
     QCOMPARE(slackItem.value(QStringLiteral("status")).toString(), QStringLiteral("active"));
@@ -305,6 +364,14 @@ void TrayWatcherTest::everyRegisteredItemReachesTheHostsPublishedList()
         !slackItem.value(QStringLiteral("iconSource")).toString().isEmpty(),
         "22x22 published pixels resolved to something the drawer can draw"
     );
+
+    // ChatGPT's Id names only the generic Chromium runtime. Its real tooltip
+    // structure is therefore the protocol source for the product identity.
+    const QVariantMap chatgptItem =
+        byTitle.value(QStringLiteral("ChatGPT")).toMap();
+    QVERIFY(!chatgptItem.isEmpty());
+    QCOMPARE(chatgptItem.value(QStringLiteral("id")).toString(),
+             QStringLiteral("chrome_status_icon_1"));
 
     // Solaar gave a themed name, a title and a menu, and no pixels at all.
     const QVariantMap solaarItem = byTitle.value(QStringLiteral("Solaar")).toMap();
@@ -330,8 +397,8 @@ void TrayWatcherTest::everyRegisteredItemReachesTheHostsPublishedList()
     // the name itself.
     TrayWatcher second(m_icons);
     QVERIFY2(
-        waitForItems(&second, 4),
-        "a fresh registry read finds all four rather than racing itself"
+        waitForItems(&second, 5),
+        "a fresh registry read finds all five rather than racing itself"
     );
 }
 

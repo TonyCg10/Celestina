@@ -37,6 +37,7 @@ mod generated;
 mod held;
 mod launcher;
 mod media;
+mod nightlight;
 mod notifications;
 mod portal_settings;
 mod session;
@@ -108,13 +109,10 @@ fn perform(command: &Command, runtime: &Mutex<ProviderRuntime>) -> Result<(), St
             &command.id,
             runtime,
         ),
-        provider @ (sessionholds::NIGHT_LIGHT | sessionholds::CAFFEINE) => sessionholds::action(
-            provider,
-            &command.verb,
-            &command.options,
-            runtime,
-            &command.provider,
-        ),
+        nightlight::NAME => nightlight::action(&command.verb, &command.options),
+        sessionholds::CAFFEINE => {
+            sessionholds::action(&command.verb, &command.options, runtime, &command.provider)
+        }
         launcher::NAME => {
             launcher::action(&command.verb, &command.options, runtime, &command.provider)
         }
@@ -236,12 +234,11 @@ fn read_host_commands(sender: &SyncSender<Command>, writer: &HelperWriter) {
     }
 }
 
-/// Gives back both session holds however `run` ends.
+/// Gives back the process-backed session hold however `run` ends.
 ///
-/// The holds themselves live in process-wide statics, so nothing drops them on
-/// an early return. Releasing only on the success path left a `wlsunset` or
-/// `systemd-inhibit` child running with its helper gone and nothing left that
-/// knew how to end it — the session could then no longer be suspended.
+/// The hold lives in a process-wide static, so nothing drops it on an early
+/// return. Night light has a separate owned worker whose join restores identity
+/// before its Wayland connection is released.
 struct HeldStates;
 
 impl Drop for HeldStates {
@@ -299,6 +296,7 @@ fn run() -> io::Result<()> {
     // `run` ends, including the initialization failures below.
     let _released_on_exit = HeldStates;
     let holds_worker = sessionholds::spawn(&runtime, &shutdown)?;
+    let nightlight_worker = nightlight::spawn(&runtime, &shutdown)?;
     launcher::spawn(&runtime)?;
     clipboard::spawn(&runtime)?;
     notifications::spawn(&runtime)?;
@@ -380,6 +378,9 @@ fn run() -> io::Result<()> {
     // function returns, by whichever path it returns.
     if let Some(holds_worker) = holds_worker {
         holds_worker.join();
+    }
+    if let Some(nightlight_worker) = nightlight_worker {
+        nightlight_worker.join();
     }
     journal::record(Event::new(Level::Critical, "helper.shutdown.end"));
     Ok(())

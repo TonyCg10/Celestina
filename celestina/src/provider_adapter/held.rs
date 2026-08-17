@@ -1,17 +1,17 @@
 //! A state the session holds by keeping a program alive.
 //!
-//! Night light and the idle inhibitor are the same shape: something is true
-//! for exactly as long as a child process is running, and false the moment it
-//! is not. Neither owns a value to poll — `wlsunset` is holding the gamma ramps
-//! and `systemd-inhibit` is holding a logind lock — so the honest state is
-//! simply whether this helper still has that child.
+//! The idle inhibitor is true for exactly as long as its child process is
+//! running, and false the moment it is not. It owns no value to poll —
+//! `systemd-inhibit` is holding a logind lock — so the honest state is simply
+//! whether this helper still has that child. Night light no longer uses this
+//! shape: its dedicated Wayland worker owns a numeric gamma transition.
 //!
-//! What makes it worth one type rather than two modules is where these go
+//! What makes this process-backed hold worth its own type is where it goes
 //! wrong. A child that dies keeps its state advertised as on; a helper that
-//! exits without killing it leaves a session tinted orange or unable to sleep
-//! with nothing left that knows how to undo it. So a hold checks liveness every
-//! time it is asked, and it is released on shutdown, on failure, and when the
-//! program refuses to start at all.
+//! exits without killing it leaves a session unable to sleep with nothing left
+//! that knows how to undo it. So a hold checks liveness every time it is asked,
+//! and it is released on shutdown, on failure, and when the program refuses to
+//! start at all.
 
 use std::process::{Child, Command, Stdio};
 
@@ -54,7 +54,7 @@ impl Hold {
                 false
             }
             // Unwaitable. Dropping the handle here would abandon a child that
-            // may still be holding gamma or a logind lock, and the next `set`
+            // may still be holding a logind lock, and the next `set`
             // would start a second holder beside it. Ending it is what keeps
             // this helper's claim and the session's state the same thing.
             Err(_) => {
@@ -94,8 +94,8 @@ impl Hold {
     }
 
     /// Releases the hold now, waiting for the child so it never lingers as a
-    /// zombie and so the thing it was holding — gamma, a logind lock — is
-    /// really given back before this returns.
+    /// zombie and so the logind lock it was holding is really given back before
+    /// this returns.
     pub fn release(&mut self) {
         let Some(mut child) = self.child.take() else {
             return;

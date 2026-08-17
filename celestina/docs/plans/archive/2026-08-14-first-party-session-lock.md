@@ -2,7 +2,7 @@
 
 - **Opened:** 2026-08-14
 - **Closed:** 2026-08-14
-- **Successor:** [polkit authentication agent](../active/2026-08-14-polkit-authentication-agent.md), which takes the checkpoint
+- **Successor:** [polkit authentication agent](2026-08-14-polkit-authentication-agent.md), which took the checkpoint
 - **Plan ID:** first-party-session-lock
 - **Status:** done
 - **Scope:** celestina

@@ -87,7 +87,7 @@ SoftMenu {
                               int globalX, int globalY)
     // The complete global rectangle of the invoking tile, not only a point:
     // the child menu's sideways droplet membrane centres its mouth on it.
-    signal itemMenuRequested(string service, string path,
+    signal itemMenuRequested(string service, string path, string appName,
                              int globalX, int globalY,
                              int globalWidth, int globalHeight)
 
@@ -169,12 +169,14 @@ SoftMenu {
         if (tile) {
             const at = tile.mapToGlobal(0, 0);
             root.itemMenuRequested(item.service, item.path,
+                                   root.accessibleTitleFor(item),
                                    Math.round(at.x), Math.round(at.y),
                                    Math.round(tile.width),
                                    Math.round(tile.height));
             return;
         }
-        root.itemMenuRequested(item.service, item.path, 0, 0, 0, 0);
+        root.itemMenuRequested(item.service, item.path,
+                               root.accessibleTitleFor(item), 0, 0, 0, 0);
     }
 
     function resetInventoryView() {

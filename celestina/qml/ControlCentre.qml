@@ -118,6 +118,157 @@ Window {
                && centre.ledger.isPending(provider, verb);
     }
 
+    // Provider frames replace a reading atomically. Painting that replacement
+    // directly made every glyph cut in one frame while the adjacent switch was
+    // still moving. Keep the previous and current readings as two short-lived
+    // layers so the provider remains authoritative without making its commits
+    // visually abrupt. A second frame that arrives during the fade is queued;
+    // it never restarts the animation from a half-painted word.
+    component CrossfadeText: Item {
+        id: crossfade
+
+        required property string value
+        required property color valueColor
+        property int textElide: Text.ElideRight
+        property int textWrapMode: Text.NoWrap
+        property int maximumLineCount: 1
+        property int pixelSize: CelestinaTheme.fontCaption
+        property int weight: CelestinaTheme.weightRegular
+
+        property bool initialized: false
+        property bool adoptionScheduled: false
+        property bool queued: false
+        property string displayedValue: ""
+        property color displayedColor: CelestinaTheme.clear
+        property string outgoingValue: ""
+        property color outgoingColor: CelestinaTheme.clear
+        property string queuedValue: ""
+        property color queuedColor: CelestinaTheme.clear
+        property real progress: 1.0
+
+        implicitHeight: Math.max(currentText.implicitHeight,
+                                 outgoingText.implicitHeight)
+        height: implicitHeight
+
+        function sameColor(left, right) {
+            return Qt.colorEqual(left, right);
+        }
+
+        function scheduleAdoption() {
+            if (!crossfade.initialized || crossfade.adoptionScheduled)
+                return;
+
+            crossfade.adoptionScheduled = true;
+            Qt.callLater(crossfade.adoptLatest);
+        }
+
+        function adoptLatest() {
+            crossfade.adoptionScheduled = false;
+            if (crossfade.value === crossfade.displayedValue
+                    && crossfade.sameColor(crossfade.valueColor,
+                                           crossfade.displayedColor))
+                return;
+
+            if (readingTransition.running) {
+                crossfade.queuedValue = crossfade.value;
+                crossfade.queuedColor = crossfade.valueColor;
+                crossfade.queued = true;
+                return;
+            }
+
+            crossfade.beginTransition(crossfade.value, crossfade.valueColor);
+        }
+
+        function beginTransition(nextValue, nextColor) {
+            if (centre.reducedMotion || crossfade.displayedValue.length === 0) {
+                readingTransition.stop();
+                crossfade.outgoingValue = "";
+                crossfade.displayedValue = nextValue;
+                crossfade.displayedColor = nextColor;
+                crossfade.progress = 1.0;
+                return;
+            }
+
+            crossfade.outgoingValue = crossfade.displayedValue;
+            crossfade.outgoingColor = crossfade.displayedColor;
+            crossfade.displayedValue = nextValue;
+            crossfade.displayedColor = nextColor;
+            crossfade.progress = 0.0;
+            readingTransition.restart();
+        }
+
+        function finishTransition() {
+            crossfade.progress = 1.0;
+            crossfade.outgoingValue = "";
+            if (!crossfade.queued)
+                return;
+
+            const nextValue = crossfade.queuedValue;
+            const nextColor = crossfade.queuedColor;
+            crossfade.queued = false;
+            if (nextValue !== crossfade.displayedValue
+                    || !crossfade.sameColor(nextColor,
+                                            crossfade.displayedColor))
+                crossfade.beginTransition(nextValue, nextColor);
+        }
+
+        onValueChanged: scheduleAdoption()
+        onValueColorChanged: scheduleAdoption()
+
+        Component.onCompleted: {
+            crossfade.displayedValue = crossfade.value;
+            crossfade.displayedColor = crossfade.valueColor;
+            crossfade.initialized = true;
+        }
+
+        Text {
+            id: outgoingText
+
+            width: parent.width
+            visible: crossfade.outgoingValue.length > 0
+                     && crossfade.progress < 1.0
+            text: crossfade.outgoingValue
+            textFormat: Text.PlainText
+            color: crossfade.outgoingColor
+            opacity: 1.0 - crossfade.progress
+            elide: crossfade.textElide
+            wrapMode: crossfade.textWrapMode
+            maximumLineCount: crossfade.maximumLineCount
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: crossfade.pixelSize
+            font.weight: crossfade.weight
+            Accessible.ignored: true
+        }
+
+        Text {
+            id: currentText
+
+            width: parent.width
+            text: crossfade.displayedValue
+            textFormat: Text.PlainText
+            color: crossfade.displayedColor
+            opacity: crossfade.progress
+            elide: crossfade.textElide
+            wrapMode: crossfade.textWrapMode
+            maximumLineCount: crossfade.maximumLineCount
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: crossfade.pixelSize
+            font.weight: crossfade.weight
+        }
+
+        NumberAnimation {
+            id: readingTransition
+
+            target: crossfade
+            property: "progress"
+            from: 0.0
+            to: 1.0
+            duration: centre.reducedMotion ? 0 : CelestinaTheme.motionFast
+            easing.type: CelestinaTheme.easeStandard
+            onFinished: crossfade.finishTransition()
+        }
+    }
+
     component ControlRow: Item {
         id: row
 
@@ -180,11 +331,15 @@ Window {
                 font.weight: CelestinaTheme.weightDemiBold
             }
 
-            Text {
+            CrossfadeText {
+                objectName: row.verb.length > 0
+                            ? "celestina-control-reading-" + row.provider
+                              + "-" + row.verb
+                            : ""
                 width: parent.width
                 // The provider's own reading, and only then what happened to
                 // the last request about it.
-                text: {
+                value: {
                     // `accepted` is still waiting: the helper ran a tool and
                     // nothing has observed an effect yet.
                     if (row.verb.length > 0 && centre.isPending(row.provider, row.verb))
@@ -205,25 +360,22 @@ Window {
                     }
                     return row.reading;
                 }
-                color: row.outcome && row.outcome.state === "failed"
-                       ? row.ink.danger : row.ink.muted
-                elide: Text.ElideRight
-                wrapMode: Text.WordWrap
+                valueColor: row.outcome && row.outcome.state === "failed"
+                            ? row.ink.danger : row.ink.muted
+                textElide: Text.ElideRight
+                textWrapMode: Text.WordWrap
                 maximumLineCount: 2
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontCaption
+                pixelSize: CelestinaTheme.fontCaption
             }
 
-            Text {
+            CrossfadeText {
                 width: parent.width
                 visible: row.status.length > 0
-                text: row.status
-                textFormat: Text.PlainText
-                color: row.statusColor
-                elide: Text.ElideRight
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontRowSecondary
-                font.weight: CelestinaTheme.weightDemiBold
+                value: row.status
+                valueColor: row.statusColor
+                textElide: Text.ElideRight
+                pixelSize: CelestinaTheme.fontRowSecondary
+                weight: CelestinaTheme.weightDemiBold
             }
         }
 
@@ -400,14 +552,19 @@ Window {
 
                                     CelestinaSwitch {
                                         id: nightLightSwitch
+                                        objectName: "celestina-night-light-switch"
 
+                                        // The helper owns the state. A pointer,
+                                        // keyboard or assistive activation only
+                                        // asks for the transition; the later
+                                        // provider frame moves the thumb once.
+                                        checkable: false
                                         checked: centre.nightLight !== undefined
                                                  && centre.nightLight.active === true
                                         Accessible.name: qsTr("Luz nocturna")
-                                        onToggled: {
-                                            nightLightSwitch.checked = Qt.binding(
-                                                () => centre.nightLight !== undefined
-                                                      && centre.nightLight.active === true);
+                                        Accessible.checkable: true
+                                        Accessible.checked: nightLightSwitch.checked
+                                        onClicked: {
                                             centre.send("night-light", "night-light-toggle");
                                         }
                                     }

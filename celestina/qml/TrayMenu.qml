@@ -20,9 +20,10 @@ SoftMenu {
     // The entries the host read, already stripped, bounded and flattened.
     // `var` is necessary: QML has no typed map-list.
     required property var entries
+    required property string appName
     signal chosen(int entryId)
 
-    title: qsTr("Menú de la bandeja")
+    title: qsTr("Menú de %1").arg(root.appName)
     itemSpacing: CelestinaTheme.spaceSm
     headerBodyGap: CelestinaTheme.spaceMd
     rowVerticalInset: CelestinaTheme.spaceXs
@@ -45,28 +46,22 @@ SoftMenu {
         return Math.max(1, Math.ceil(measured));
     }
 
-    // The header card and section label do not scroll: they live beside the
-    // viewport in the popup item, and the real Menu holds only the
-    // application's rows. The raised top padding keeps that viewport strictly
-    // inside the dark body section, and the clip below stops a scrolled row
-    // from being painted over the lighter header field above it. No separate
-    // scroll bar: the wheel, keyboard and drag reach the ListView directly.
+    // The header does not scroll: it remains beside Flickable.contentItem.
+    // During the attached fall it follows the row carrier's hidden distance,
+    // so the complete card emerges as one block instead of leaving an
+    // already-settled header above moving rows. The physically inset carrier
+    // clips that shared movement at the panel seam.
     Column {
         id: pinnedHeading
         objectName: "celestina-tray-menu-heading"
 
         parent: root.menuViewport ? root.menuViewport.parent : null
         x: root.menuViewport ? root.menuViewport.x : 0
-        y: CelestinaTheme.compMenuPadding
+        y: CelestinaTheme.compMenuPadding - root.rowsCut
         width: root.menuViewport ? root.menuViewport.width : 0
         z: 10
-        // Reparented beside the viewport, not into it — so the per-output
-        // factor the viewport's content carries never reaches this column,
-        // and the header band drew narrower than the rows it heads by exactly
-        // that factor. It states the same transform itself, from the same
-        // corner. (No "Acciones" section row: the author removed it — the
-        // header already says what the list is, and the label only pushed the
-        // first real action down.)
+        // This sibling does not inherit the scale installed on the viewport.
+        // Draw it from the same corner with the same per-output factor.
         transformOrigin: Item.TopLeft
         scale: root.shellScale
 
@@ -75,7 +70,7 @@ SoftMenu {
             width: pinnedHeading.width
             header: true
             actionable: false
-            text: qsTr("Menú de la bandeja")
+            text: root.title
             subtitle: qsTr("%n acción(es)", "", root.entries.length)
             iconName: "app-window"
             fallbackIcon: "app-window"
@@ -90,9 +85,8 @@ SoftMenu {
     Binding {
         target: root.menu
         property: "topPadding"
-        // The visual room the heading occupies: its own height times the
-        // factor it draws at, because this padding lives in the popup's
-        // unscaled coordinates.
+        // Padding belongs to the viewport's unscaled coordinates, while the
+        // sibling heading states the same output factor itself.
         value: CelestinaTheme.compMenuPadding
                + Math.round(pinnedHeading.height * root.shellScale)
     }

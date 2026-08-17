@@ -8,7 +8,7 @@
   the shell itself against this machine's real polkitd. No action was
   authorized, no password was typed, and the author's running session was not
   changed.
-- **Plan:** [polkit authentication agent](../plans/active/2026-08-14-polkit-authentication-agent.md)
+- **Plan:** [polkit authentication agent](../plans/archive/2026-08-14-polkit-authentication-agent.md)
 - **Validation:** `VAL-R8`
 
 The rule this unit exists to hold is that there is no lesser prompt. A

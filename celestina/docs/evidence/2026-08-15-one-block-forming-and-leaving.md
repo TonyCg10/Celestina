@@ -7,7 +7,7 @@
   moved there by the author so its output records — driven by `celestina msg`
   and `pkexec`, recorded at 60 fps with `gpu-screen-recorder`, decomposed
   with `ffmpeg` and measured as per-frame regional difference profiles
-- **Plan:** [polkit authentication agent](../plans/active/2026-08-14-polkit-authentication-agent.md)
+- **Plan:** [polkit authentication agent](../plans/archive/2026-08-14-polkit-authentication-agent.md)
 - **Validation:** `VAL-R8`
 
 ## Procedure
