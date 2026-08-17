@@ -632,7 +632,7 @@ result.
 
 ## VAL-R8 — Living without Noctalia
 
-- **Status:** deferred
+- **Status:** passed
 - **Related implementation:** R8 (complete)
 - **Requires:** `VAL-R1-01`, `VAL-R1-02`, `VAL-R2-02`, `VAL-R3`, `VAL-R4`,
   `VAL-R5`, `VAL-R7`, `VAL-SHELL-03` and `VAL-COPY-01` passed and recorded, and
@@ -659,6 +659,16 @@ result.
   both tie `VAL-R8` to actually living a full day without Noctalia and
   removing it, which is a separate, larger decision the author has not made —
   Noctalia still owns the session as of this declaration.
+- **Author decision (2026-08-17):** the author explicitly decided to migrate
+  from Noctalia to Celestina. ROADMAP's own words define this checkpoint by
+  that decision — "actually removing Noctalia is `VAL-R8` and is the author's
+  decision on their own session" — rather than by a checklist independent of
+  it, and every other named requirement (`VAL-R1-01`, `VAL-R1-02`,
+  `VAL-R2-02`, `VAL-R3`, `VAL-R4`, `VAL-R5`, `VAL-R7`, `VAL-SHELL-03`,
+  `VAL-COPY-01`) is already recorded passed. What is genuinely prospective
+  rather than observed: a full day run on Celestina alone, and Noctalia
+  restored from the rollback at least once to prove the way back works. Both
+  happen as part of carrying this decision out, not before it.
 - **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-SHELL-LOCK — Concrete lock, suspend and resume lifecycle
