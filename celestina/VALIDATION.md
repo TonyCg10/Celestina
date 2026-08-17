@@ -669,6 +669,15 @@ result.
   rather than observed: a full day run on Celestina alone, and Noctalia
   restored from the rollback at least once to prove the way back works. Both
   happen as part of carrying this decision out, not before it.
+- **First migration attempt (2026-08-17):** the shell ran on all three real
+  outputs for ~55 seconds and died on a Wayland protocol error while the
+  workspace map animated closed; Noctalia was restored immediately and the
+  session was never left without a shell. The causes — and the finding that
+  the nest compositor has silently been niri `main` rather than the session's
+  26.04 release — are investigated in
+  [the live-session investigation](docs/evidence/2026-08-17-live-session-investigation.md)
+  and planned as `LIVE-1`. The decision stands; living a full day on
+  Celestina waits for `LIVE-1`.
 - **Evidence:** [2026-08-05 follow-up](docs/evidence/2026-08-05-live-validation-follow-up.md)
 
 ## VAL-SHELL-LOCK — Concrete lock, suspend and resume lifecycle

@@ -52,6 +52,19 @@
   [system audit](docs/evidence/2026-08-05-gpu-loss-system-audit.md) and
   [lifecycle record](docs/evidence/2026-08-05-ddc-process-lifecycle.md).
 
+## Live migration state
+
+The author decided on 2026-08-17 to migrate the session from Noctalia to
+Celestina. The first attempt ran ~55 seconds on all three outputs and died on
+a Wayland protocol error; Noctalia was restored at once. The investigation
+found the defect classes — and that the nest compositor has silently been
+niri `main` (2026-08-14) rather than the session's 26.04 release, so the
+shell was verified for months against a compositor five months newer than
+the one it must live on. See
+[the investigation record](docs/evidence/2026-08-17-live-session-investigation.md)
+and the planned `LIVE-1` checkpoint in [ROADMAP.md](ROADMAP.md). Noctalia
+remains the session's shell until `LIVE-1` lands.
+
 ## Active checkpoint
 
 `LOCK-1` is delivered and deployed as celestina 0.30.0, and its implementation

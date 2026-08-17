@@ -38,6 +38,7 @@ of the design when they provide the narrow capability the shell needs.
 | UX-2 | planned | Establish and then implement one coherent shell-wide visual and interaction language after SHELL-D5 is applied |
 | R6 | complete | First-party `ext-session-lock` and deterministic lock-before-suspend, with `VAL-R6` still unrun |
 | LOCK-1 | active | Let the session recede behind its own blurred wallpaper instead of vanishing into an opaque slab, and uncover it continuously |
+| LIVE-1 | planned | Make the shell survive and look right on the real session: fix the crash-class defects, the whole-output saturation, and the per-monitor divergence the first live migration exposed |
 | R8 | complete | Reversible Noctalia removal and the first-party Polkit agent are delivered; live departure remains `VAL-R8` |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
 
@@ -634,6 +635,52 @@ exclusions, measured feasibility results and unit boundaries are in
 
 Perceptual confirmation on a real output is `VAL-LOCK-1` and does not keep this
 checkpoint open.
+
+## LIVE-1 — The real session stops being a different shell (planned)
+
+**Outcome:** Celestina runs on the author's real compositor without crashing,
+without shifting the session's colours, and with the same material, membrane
+and motion on every monitor — or degrades in a way that is chosen and
+recorded, never random.
+
+The first live migration on 2026-08-17 ran for ~55 seconds and died on a
+Wayland protocol error, and the author reported a global saturation shift and
+per-monitor randomness in blur, animation and membrane behaviour. The
+investigation traced all of it, and its central finding reframes the work:
+the nest compositor has silently been niri `main` (2026-08-14) rather than
+the session's 26.04 release, so months of visual verification ran against a
+compositor five months newer than the one the shell must live on. The
+findings, mechanisms and upstream citations are in
+[the investigation record](docs/evidence/2026-08-17-live-session-investigation.md).
+
+Planned decomposition, by priority:
+
+- **LIVE-1-A — Icon lookups leave the render thread.** `AppIconProvider`
+  resolves themed icons on Qt Quick's image-loader thread with GUI-thread-only
+  machinery; resolve on the GUI thread and hand only `QImage`s across.
+- **LIVE-1-B — No zero-sized layer surface, ever.** Clamp the quiet-surface
+  `followSize` path to a 1x1 minimum and skip while retiring, so a collapsing
+  content window can never commit a fatal `set_size(0, …)`.
+- **LIVE-1-C — Blur teardown precedes surface teardown.** Withdraw the effect
+  before hide on every animated close, stop the per-frame re-arm once a close
+  begins, and never hand KWindowSystem a region for a window whose surface is
+  gone — the niri #3660 fingerprint must have nothing to bite.
+- **LIVE-1-D — No mapped glass without a region.** Arm a companion's region
+  before its surface maps, sweep every overlay/toast/OSD surface for the
+  mapped-without-region state, and handle screen removal for companions.
+- **LIVE-1-E — Per-output gating becomes observable and correct.** Journal
+  which precondition fails when a membrane or blur region does not arm on an
+  output, then fix the per-screen scale/anchor derivation those records
+  expose.
+- **LIVE-1-F — The compositor baseline is a decision, not an accident.** Pin
+  the nest to the session's exact niri commit, record the divergence as a
+  build input, and decide explicitly whether the session adopts the patched
+  newer compositor or the shell degrades gracefully on the release.
+- **LIVE-1-G — Night light gets a temperature control.** Replace the 2700 K
+  constant with a bounded setting surfaced in the control centre.
+
+This checkpoint activates only after `LOCK-1` archives — the guard permits one
+active plan — and its plan must carry `Plan ID: live-session-hardening`.
 
 ## UX-2 — Shell visual and interaction language (planned)
 
