@@ -10,6 +10,8 @@
 #include <QDebug>
 #include <QDir>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 namespace {
 
@@ -21,6 +23,56 @@ constexpr auto logindInterface = "org.freedesktop.login1.Manager";
 // the only thing this shell trusts as "the screen is covered" — not that the
 // process started, which says nothing about what is on screen.
 constexpr auto confirmedLine = "locked";
+
+// What the lock is told about the session's backdrop, and the limits on it.
+//
+// The channel is the lock's stdin rather than its argv: `/proc/<pid>/cmdline`
+// is world-readable and a wallpaper's filename can say something about the
+// person. The payload is one bounded, versioned JSON line, which is the same
+// shape every other channel in this shell uses.
+constexpr int backdropVersion = 1;
+// More outputs than any session this shell has met, and small enough that a
+// confused provider cannot make the line unbounded.
+constexpr int maximumBackdropOutputs = 16;
+// `PATH_MAX` on Linux. A longer string is not a path this session can open.
+constexpr int maximumBackdropPathChars = 4096;
+// The whole line, after which it is dropped rather than truncated: half a JSON
+// object is not a smaller message, it is a broken one.
+constexpr int maximumBackdropLineBytes = 65536;
+
+// One line describing which image belongs to which output, or nothing at all.
+//
+// Paths must be absolute. The lock is a different process with a different
+// working directory, so a relative path here would name a different file
+// there — and a lock screen showing the wrong picture is a defect that looks
+// like a decode failure.
+QByteArray backdropLine(const QVariantMap &wallpapersByOutput)
+{
+    QJsonObject wallpapers;
+    for (auto entry = wallpapersByOutput.constBegin();
+         entry != wallpapersByOutput.constEnd();
+         ++entry) {
+        if (wallpapers.size() >= maximumBackdropOutputs)
+            break;
+        const QString path = entry.value().toString();
+        if (path.isEmpty() || path.size() > maximumBackdropPathChars)
+            continue;
+        if (!QFileInfo(path).isAbsolute())
+            continue;
+        wallpapers.insert(entry.key(), path);
+    }
+
+    QJsonObject payload;
+    payload.insert(QStringLiteral("version"), backdropVersion);
+    payload.insert(QStringLiteral("wallpapers"), wallpapers);
+
+    QByteArray line =
+        QJsonDocument(payload).toJson(QJsonDocument::Compact);
+    if (line.size() + 1 > maximumBackdropLineBytes)
+        return QByteArray();
+    line.append('\n');
+    return line;
+}
 
 QString lockProgram()
 {
@@ -176,7 +228,32 @@ bool LockController::lock()
         m_process->kill();
         return false;
     }
+    sendBackdrop();
     return true;
+}
+
+void LockController::setBackdrop(const QVariantMap &wallpapersByOutput)
+{
+    m_backdrop = wallpapersByOutput;
+}
+
+void LockController::sendBackdrop()
+{
+    // Nothing here is waited on, and that is the whole design of this method.
+    //
+    // The backdrop is decoration: the lock covers the screen whether or not it
+    // ever learns which picture to show. Waiting for these bytes to be read —
+    // or for the lock to acknowledge them — would turn an ornament into a
+    // precondition for covering the session, which is the one thing this
+    // channel must never become. `write` buffers into the pipe and returns; if
+    // the lock never reads it, the bytes are simply dropped when it exits.
+    const QByteArray line = backdropLine(m_backdrop);
+    if (!line.isEmpty())
+        m_process->write(line);
+    // The lock waits for one line or end of input, whichever comes first, so
+    // closing is what tells a lock with no backdrop to stop listening rather
+    // than hold a reader open for the rest of the session.
+    m_process->closeWriteChannel();
 }
 
 void LockController::started(const QString &line)

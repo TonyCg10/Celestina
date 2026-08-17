@@ -52,6 +52,42 @@
   [system audit](docs/evidence/2026-08-05-gpu-loss-system-audit.md) and
   [lifecycle record](docs/evidence/2026-08-05-ddc-process-lifecycle.md).
 
+## Active checkpoint
+
+`LOCK-1` is delivered and deployed as celestina 0.30.0, and its implementation
+exit passed: CTest 24/24, QML lint, the eight-second offscreen release smoke
+against the built bytes, and deployment to `~/.local` without activating the
+session. The three backdrop cases — a wallpaper, no wallpaper, and a path that
+will not decode — were each run against a freshly restarted nest. The retreat
+that plays before `unlock_and_destroy` was not observed, because watching it
+needs a real passphrase; its guarantee is proved by `celestina-lock-uncover`
+instead. All three units — `LOCK-1-A`, `LOCK-1-B` and `LOCK-1-C` — are `done`
+on the plan's ledger, each with its own exact inventory and evidence record:
+[backdrop hand-off](docs/evidence/2026-08-17-lock-backdrop-handoff.md),
+[depth transition](docs/evidence/2026-08-17-lock-depth-transition.md), and
+[uncover guarantee](docs/evidence/2026-08-17-lock-uncover-guarantee.md).
+
+The plan is not archived. `VAL-LOCK-1` — whether the retreat actually reads as
+continuous on a real output — has not run, and the author has not said the
+design is closed; the roadmap keeps `LOCK-1` active until one of those
+happens.
+
+`LOCK-1` was opened as: the locked session should recede behind its own blurred
+wallpaper instead of vanishing into an opaque slab, and should be uncovered
+continuously. It changes what a locked screen looks like and nothing about what
+unlocks it — `ADR 0004` stands unrelaxed, verification remains delegated to a
+separate PAM child, and no error path recovers by unlocking. Its bounded scope,
+exclusions and measured feasibility results are in
+[the LOCK-1 plan](docs/plans/active/2026-08-17-lock-depth-transition.md).
+
+Two facts were measured against the running nest on 2026-08-17 and are worth
+recording outside the plan. The nested Niri **does** implement
+`ext-session-lock-v1`: the deployed lock covered the nested output while the
+nested shell and both adapters stayed alive, which closes the open question
+below about a nest running a shell and a lock together. Killing that lock left
+the nest covered until the nest was restarted, which is the protocol guarantee
+behaving exactly as `ADR 0004` describes.
+
 ## Current checkout truth
 
 - **Completed `R8-P-Q` night-light follow-up.** The author's night-light interaction

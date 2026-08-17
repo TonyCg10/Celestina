@@ -1123,6 +1123,37 @@ result.
   [R8-P-P quiet-surface temporal lifecycle](docs/evidence/2026-08-16-quiet-surface-temporal-lifecycle.md),
   [R8-P-Q pinned tray attachment](docs/evidence/2026-08-16-pinned-tray-menu-attachment.md)
 
+## VAL-LOCK-1 — The locked session recedes and returns
+
+- **Status:** pending
+- **Related implementation:** LOCK-1
+- **Requires:** a real Niri session running the verified LOCK-1 bundle, a
+  detailed wallpaper on at least one output, and the author's own passphrase
+- **Procedure:** lock the session from a real binding. Confirm the wallpaper of
+  each locked output appears as its own image rather than a flat canvas,
+  recedes to a smaller scale and reaches an intense blur, and that the clock,
+  date and prompt fade in above it and remain legible against the blurred
+  photograph. Confirm no window, panel or notification content is visible at
+  any point in the transition. On a second output confirm the same treatment
+  uses that output's own wallpaper. Unlock with the real passphrase and watch
+  the uncovering specifically: the prompt must fade out, the backdrop must
+  return to full scale and sharpness, and the session must be revealed on a
+  frame where the wallpaper is already in its true position — no jump in scale,
+  sharpness or alignment at the moment the compositor uncovers. Enter a wrong
+  passphrase first and confirm the refusal leaves the receded, blurred state
+  exactly as it was and unlocks nothing. Confirm an output configured with no
+  wallpaper shows the deliberate canvas rather than a black rectangle. Repeat
+  with reduced motion enabled and confirm the travel is gone while the prompt
+  stays legible.
+- **Pass condition:** the backdrop is the output's own wallpaper rather than a
+  flat canvas, no session content of any kind appears during either direction
+  of the transition, the passphrase stays legible against the blurred image, a
+  refusal changes nothing and unlocks nothing, the uncovering shows no jump in
+  scale or sharpness at the moment the compositor reveals the session, and an
+  output without a usable wallpaper degrades to today's deliberate canvas.
+- **Result:** not run
+- **Evidence:** none
+
 ## Closed historical observations
 
 `VAL-SHELL-R0-BASE` and `VAL-SHELL-R2-BASE` are preserved in the

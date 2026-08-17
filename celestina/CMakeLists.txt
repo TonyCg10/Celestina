@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.29.12 LANGUAGES C CXX)
+project(celestina VERSION 0.30.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -122,6 +122,10 @@ if(TARGET Qt6::WaylandClientPrivate AND TARGET Wayland::Scanner
 
     qt_add_executable(celestina-lock
         src/lock/main.cpp
+        src/lock/lockbackdrop.h
+        src/lock/lockbackdrop.cpp
+        src/lock/lockuncover.h
+        src/lock/lockuncover.cpp
         src/lockauthenticator.h
         src/lockauthenticator.cpp
     )
@@ -459,6 +463,18 @@ if(BUILD_TESTING)
     target_link_libraries(celestina-lock-controller-test PRIVATE
         Qt6::Test Qt6::Gui Qt6::DBus)
     add_test(NAME celestina-lock-controller COMMAND celestina-lock-controller-test)
+
+    # Proves the release cannot be held hostage by the retreat that plays in
+    # front of it: every case here stalls, ignores or repeats the animation and
+    # still requires exactly one uncovering.
+    qt_add_executable(celestina-lock-uncover-test
+        tests/lockuncover_test.cpp
+        src/lock/lockuncover.h
+        src/lock/lockuncover.cpp
+    )
+    target_include_directories(celestina-lock-uncover-test PRIVATE src)
+    target_link_libraries(celestina-lock-uncover-test PRIVATE Qt6::Test Qt6::Core)
+    add_test(NAME celestina-lock-uncover COMMAND celestina-lock-uncover-test)
 
     qt_add_executable(celestina-lock-authenticator-test
         tests/lockauthenticator_test.cpp

@@ -431,6 +431,17 @@ int main(int argc, char *argv[])
     // the cover too.
     auto *lock = new LockController(&app);
     shell->setLockController(lock);
+    // The lock covers a screen that was showing something, and should be able
+    // to keep showing it. Which file belongs to which output stays the shell's
+    // decision — this hands the lock the answer as the provider publishes it,
+    // and the lock never asks the question itself.
+    const auto publishBackdrop = [lock, providers]() {
+        lock->setBackdrop(
+            providers->providers().value(QStringLiteral("wallpaper")).toMap());
+    };
+    QObject::connect(providers, &ShellProvidersClient::changed, lock,
+                     publishBackdrop);
+    publishBackdrop();
 
     // This session's authentication agent, and the surface that answers for
     // it. They are built together on purpose: a registered agent receives

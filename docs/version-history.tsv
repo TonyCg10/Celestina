@@ -94,3 +94,4 @@ celestina	0.29.9	bug	R8-P-L	Fix the fall painting over the bar and the popup men
 celestina	0.29.10	bug	R8-P-M	Fix the card above the seam and the resting twin painting the file
 celestina	0.29.11	bug	R8-P-P	Synchronize panel surfaces and quiet overlays
 celestina	0.29.12	bug	R8-P-Q	Fix tray menus, control readings, and night light
+celestina	0.30.0	milestone	LOCK-1-C	Set the locked session back behind its own wallpaper

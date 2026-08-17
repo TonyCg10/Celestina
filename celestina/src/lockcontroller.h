@@ -5,6 +5,7 @@
 #include <QPointer>
 #include <QProcess>
 #include <QString>
+#include <QVariantMap>
 
 #include <functional>
 
@@ -42,6 +43,17 @@ public:
     // must treat as "the session is not locked".
     bool lock();
 
+    // Which image the session is showing on each output, keyed by output name,
+    // as the wallpaper provider last published it. The lock is handed this at
+    // the moment it starts so a covered screen can show the picture it was
+    // already showing instead of a bare canvas.
+    //
+    // It is deliberately a plain map rather than a provider connection: which
+    // file belongs to which output is the shell's decision and stays here. The
+    // lock is told the answer and never asks the question, which is also why
+    // this class needs no provider type to be tested.
+    void setBackdrop(const QVariantMap &wallpapersByOutput);
+
     // Locks, waits for the compositor to confirm, and only then suspends.
     // `answer` receives an empty string on success or the reason it was
     // refused; it is called exactly once. Nothing here suspends on a timeout.
@@ -57,11 +69,20 @@ private slots:
 private:
     void started(const QString &line);
     void finished();
+    // Writes the backdrop line, if there is one, and closes the lock's stdin.
+    // Never waits for it: the bytes go into the pipe buffer and the lock reads
+    // them when it gets to them. Covering the screen does not wait for this and
+    // must not — see `sendBackdrop`'s own note.
+    void sendBackdrop();
     void takeSleepInhibitor();
     void releaseSleepInhibitor();
     void suspendNow(std::function<void(const QString &)> answer);
 
     QProcess *m_process;
+    // The wallpaper choice as of the last provider frame. Read only when a
+    // lock starts, so a change while the screen is covered does not reach a
+    // surface that is already up.
+    QVariantMap m_backdrop;
     bool m_confirmed = false;
     // Held while this session may be asked to sleep, and dropped only once a
     // lock is confirmed. An invalid descriptor means logind is free to sleep

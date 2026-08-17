@@ -1,0 +1,23 @@
+# LOCK-1-A exact change inventory
+
+Base revision	3c80c15e3b6f3e21e09a4ea11e2fbb7c6d1549d2
+Pathspec	celestina/src/lockcontroller.cpp
+Pathspec	celestina/src/lockcontroller.h
+Pathspec	celestina/src/lock/lockbackdrop.cpp
+Pathspec	celestina/src/lock/lockbackdrop.h
+Pathspec	celestina/src/main.cpp
+Pathspec	celestina/tests/lockcontroller_test.cpp
+Pathspec	celestina/docs/evidence/2026-08-17-lock-backdrop-handoff.md
+Pathspec	celestina/docs/plans/active/2026-08-17-lock-depth-transition.md
+Pathspec	celestina/docs/inventories/2026-08-17-lock-depth-transition/LOCK-1-A.numstat.tsv
+
+added	deleted	content	path
+77	0	eefcc00a7ca53b13916ae325b2bb0a3c6ebeffba753c1b084f66b4052e298a45	celestina/src/lockcontroller.cpp
+21	0	2d4091d9d0e567f39e26899faa9bf1dd111890d6f8b836c9e3f522e19d12cfd2	celestina/src/lockcontroller.h
+138	0	ed428d9a91b33d9264d83cc24e6574b2442f508948433efd2838c1ca78893212	celestina/src/lock/lockbackdrop.cpp
+52	0	1a637345ce2adc3594eb80b1d9dc0e35de49dd04b8c9a02d32ba5b406ee4c775	celestina/src/lock/lockbackdrop.h
+11	0	a3121c72fcb24fe759492125019cb5d6b7b58af2fd51c93da3668ad07eb03cc1	celestina/src/main.cpp
+65	0	1f067829d63d399e8da80f4211e6589be6d3fa232750e510689d9768064a19ca	celestina/tests/lockcontroller_test.cpp
+46	0	cd1e0d25775d7bb19bcc11b1c9e771adbd5667e9879de4041bd36b2a043a7736	celestina/docs/evidence/2026-08-17-lock-backdrop-handoff.md
+186	0	d26d07382cc886e1976c102ee48d6fe2e0aa386573982d6ddd8bfc46f92e5c60	celestina/docs/plans/active/2026-08-17-lock-depth-transition.md
+23	0	self	celestina/docs/inventories/2026-08-17-lock-depth-transition/LOCK-1-A.numstat.tsv

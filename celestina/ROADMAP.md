@@ -1,7 +1,7 @@
 # Celestina implementation roadmap
 
-- **Status:** planned
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** LOCK-1
 
 This roadmap contains only work an agent can implement and verify. Real Niri,
 hardware, visual and assistive-technology checks live in
@@ -37,6 +37,7 @@ of the design when they provide the narrow capability the shell needs.
 | PANEL-1 | complete | Replace the hard panel plate with borderless compositor glass and route contextual content through the canonical shared glass material |
 | UX-2 | planned | Establish and then implement one coherent shell-wide visual and interaction language after SHELL-D5 is applied |
 | R6 | complete | First-party `ext-session-lock` and deterministic lock-before-suspend, with `VAL-R6` still unrun |
+| LOCK-1 | active | Let the session recede behind its own blurred wallpaper instead of vanishing into an opaque slab, and uncover it continuously |
 | R8 | complete | Reversible Noctalia removal and the first-party Polkit agent are delivered; live departure remains `VAL-R8` |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
 
@@ -600,6 +601,39 @@ the tall Control Centre keeps its complete membrane and a blur region disjoint
 from the panel;
 the output clips its last 36 pixels.
 Reachable low-height overflow is not claimed by this prototype.
+
+## LOCK-1 — The session recedes instead of vanishing (active)
+
+**Outcome:** a locked output shows its own wallpaper pushed back and blurred,
+with the clock and prompt on the shell's own glass above it, and unlocking
+returns that backdrop to the session's real geometry before the compositor
+uncovers it.
+
+The lock delivered by `R6` is correct and unpleasant: it covers every output
+and refuses to unlock on any error, and it does so on a flat opaque slab that
+shares nothing with the session. This checkpoint changes what a locked screen
+looks like and nothing about what unlocks it.
+
+- [ ] Hand `celestina-lock` its per-output wallpaper over a bounded,
+      non-blocking channel, and paint the deliberate canvas whenever that image
+      is absent or unreadable.
+- [ ] Recede and blur that backdrop, fade the overlay in above it, and give the
+      prompt card a real in-scene glass backdrop instead of a declared one.
+- [ ] Sequence the retreat before `unlock_and_destroy`, with the release
+      guaranteed by a timer rather than by the animation completing.
+
+The compositor will not help: Niri 26.04 publishes no session-lock animation,
+and `ext-session-lock-v1` has already stopped it showing the session, so the
+receding backdrop is the wallpaper and never a picture of the desktop — the
+same limit `WMAP-1` recorded against window previews. `ADR 0004` is unchanged
+and unrelaxed by this work: the surface still shows only time, prompt and
+failure state, verification stays in `polkit`-style delegation to a separate
+PAM child, and no error path recovers by unlocking. The bounded scope,
+exclusions, measured feasibility results and unit boundaries are in
+[the LOCK-1 plan](docs/plans/active/2026-08-17-lock-depth-transition.md).
+
+Perceptual confirmation on a real output is `VAL-LOCK-1` and does not keep this
+checkpoint open.
 
 ## UX-2 — Shell visual and interaction language (planned)
 

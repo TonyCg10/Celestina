@@ -34,15 +34,30 @@
 #include <QWindow>
 #include <QTextStream>
 #include <QTimer>
+#include <QUrl>
+
+#include <utility>
 
 #include "lockauthenticator.h"
+#include "lockbackdrop.h"
 #include "locksession.h"
+#include "lockuncover.h"
 
 namespace {
 
 // What the caller reads on stdout. One word, so a shell script can wait for it
 // as easily as the shell can.
 constexpr const char *confirmedLine = "locked";
+
+// How long the session stays covered after PAM has said yes, so the backdrop
+// can travel back to the geometry the session's own wallpaper is already in.
+//
+// It must be at least as long as `LockScreen.qml`'s retreat, which is one
+// `motionFast` pause followed by `motionSlow` of travel. The margin is for the
+// frame the compositor still has to present. Being generous here costs a person
+// a few tenths of a second; being short costs them only a visible seam, and
+// neither can leave the session unlocked early or locked forever.
+constexpr int uncoverCeilingMs = 550;
 
 enum ExitCode {
     Unlocked = 0,
@@ -134,8 +149,26 @@ int main(int argc, char **argv)
     // keeps the session locked rather than exposing itself, so a screen whose
     // window fails to build is left uncovered by the *compositor*, which shows
     // its own blank — it is never a reason to unlock.
+    // What the shell says this session is showing. It may never arrive, and
+    // every cover below is built without waiting for it.
+    auto *backdrop = new LockBackdrop(&app);
+
+    // A cover paints the file chosen for its own output, or nothing — in which
+    // case the surface keeps the deliberate canvas it has always shown. C++
+    // owns the path-to-URL conversion so a space or a `#` in a filename stays
+    // filename data rather than becoming URL syntax.
+    const auto dress = [backdrop](QWindow *window, QScreen *screen) {
+        if (!window || !screen)
+            return;
+        const QString source = backdrop->sourceFor(screen->name());
+        window->setProperty("wallpaperSource", source);
+        window->setProperty(
+            "wallpaperUrl",
+            source.isEmpty() ? QUrl() : QUrl::fromLocalFile(source));
+    };
+
     QHash<QScreen *, QWindow *> covers;
-    const auto cover = [&covers, &component, &engine](QScreen *screen) {
+    const auto cover = [&covers, &component, &engine, dress](QScreen *screen) {
         if (!screen || covers.contains(screen))
             return;
         auto *object = component.create(engine.rootContext());
@@ -146,6 +179,9 @@ int main(int argc, char **argv)
             return;
         }
         window->setScreen(screen);
+        // Before `show`, so a cover that already knows its picture never maps
+        // one frame of bare canvas first.
+        dress(window, screen);
         // The compositor sends this surface its size; the geometry here is
         // only what Qt needs before that configure arrives.
         window->setGeometry(screen->geometry());
@@ -159,6 +195,14 @@ int main(int argc, char **argv)
     for (QScreen *const screen : QGuiApplication::screens())
         cover(screen);
     QObject::connect(&app, &QGuiApplication::screenAdded, &app, cover);
+    // The ordinary case: every cover is already up and mapped when the shell's
+    // line arrives, so they are dressed after the fact rather than before it.
+    QObject::connect(backdrop, &LockBackdrop::changed, &app, [&covers, dress]() {
+        for (auto entry = covers.constBegin(); entry != covers.constEnd();
+             ++entry) {
+            dress(entry.value(), entry.key());
+        }
+    });
     QObject::connect(&app, &QGuiApplication::screenRemoved, &app,
                      [&covers](QScreen *screen) {
                          if (QWindow *const window = covers.take(screen))
@@ -207,13 +251,27 @@ int main(int argc, char **argv)
     // The one place this program unlocks anything. Every other verdict — a
     // refusal, a verifier that would not run, a child that crashed — leaves
     // the lock exactly where it is and the person free to try again.
+    auto *uncover = new LockUncover(uncoverCeilingMs, &app);
+
+    // What the retreat is allowed to do: change what is on screen. Every cover
+    // is told, none is asked, and none of them is on the path to the release
+    // below.
+    QObject::connect(uncover, &LockUncover::retreat, &app, [&covers]() {
+        for (QWindow *const window : std::as_const(covers))
+            window->setProperty("retreating", true);
+    });
+
+    QObject::connect(uncover, &LockUncover::uncover, &app, [lock]() {
+        lock->release();
+        QGuiApplication::exit(Unlocked);
+    });
+
     QObject::connect(
         authenticator, &LockAuthenticator::answered, &app,
-        [lock](LockAuthenticator::Verdict verdict) {
+        [uncover](LockAuthenticator::Verdict verdict) {
             if (verdict != LockAuthenticator::Verdict::Authenticated)
                 return;
-            lock->release();
-            QGuiApplication::exit(Unlocked);
+            uncover->begin();
         });
 
     return app.exec();

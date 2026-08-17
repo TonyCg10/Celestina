@@ -1,0 +1,35 @@
+# LOCK-1-C exact change inventory
+
+Base revision	3c80c15e3b6f3e21e09a4ea11e2fbb7c6d1549d2
+Pathspec	celestina/src/lock/main.cpp
+Pathspec	celestina/src/lock/lockuncover.cpp
+Pathspec	celestina/src/lock/lockuncover.h
+Pathspec	celestina/tests/lockuncover_test.cpp
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/plans/active/README.md
+Pathspec	docs/version-history.tsv
+Pathspec	celestina/docs/evidence/2026-08-17-lock-uncover-guarantee.md
+Pathspec	celestina/docs/plans/active/2026-08-17-lock-depth-transition.md
+Pathspec	celestina/docs/inventories/2026-08-17-lock-depth-transition/LOCK-1-C.numstat.tsv
+
+added	deleted	content	path
+62	4	4941b56adad959957fffda37568389d3b2d5f0436b6d561a6b8a23be9e59a2a4	celestina/src/lock/main.cpp
+24	0	3b82e083fa008de8e37d700dad067a7fb32b27d381491c487a12a3f6cee38cd4	celestina/src/lock/lockuncover.cpp
+52	0	6c7982f0a921bb8dce99da42e32927c371d0061c2b52e12f677ea9f9973b9c83	celestina/src/lock/lockuncover.h
+130	0	79a6908e2e495a187dc7b1ab0248cc368fae3a5e723ac96e4b5e22f25b69e83b	celestina/tests/lockuncover_test.cpp
+17	1	8ac60807e505def95d120c9e36464fb8dcb41ff288ca00c9b45bd15d9dab4ec7	celestina/CMakeLists.txt
+1	1	cdaeecc18398b8de2c71bda0a574f88957fec2eef3bdc204970a290087368f55	celestina/Cargo.lock
+1	1	76a957fd7759fe413599fe10801f3294df302137c6497dc9d2f6351cc6ed5cb2	celestina/Cargo.toml
+36	2	881ca7422123bee0bc669f98d3e140ddc92fbd8ad3c72a735bfe2e1a5c672b45	celestina/ROADMAP.md
+36	0	0cf708ed755549b007f6cfe63964ff7e5afbac9634370494382854dd3fee56e3	celestina/STATUS.md
+31	0	a613b25cdf0f3cf852ac52e82313d289a59fa7e13bb953f157388b394d973b38	celestina/VALIDATION.md
+5	3	3e3d47dba888f7956eb604f52df1461a56b8ae19493245cc384a1cb0be6bff4b	celestina/docs/plans/active/README.md
+1	0	8ea898fec18e75b2cf357d1b6a342215d5019d816ea6577429b733a6c4d90c89	docs/version-history.tsv
+64	0	051cc76ed11fae82d47e8168d0dc9f137978285881f229a182f5f64401baf40e	celestina/docs/evidence/2026-08-17-lock-uncover-guarantee.md
+186	0	d26d07382cc886e1976c102ee48d6fe2e0aa386573982d6ddd8bfc46f92e5c60	celestina/docs/plans/active/2026-08-17-lock-depth-transition.md
+35	0	self	celestina/docs/inventories/2026-08-17-lock-depth-transition/LOCK-1-C.numstat.tsv

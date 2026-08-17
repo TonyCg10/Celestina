@@ -1,0 +1,13 @@
+# LOCK-1-B exact change inventory
+
+Base revision	3c80c15e3b6f3e21e09a4ea11e2fbb7c6d1549d2
+Pathspec	celestina/src/lock/LockScreen.qml
+Pathspec	celestina/docs/evidence/2026-08-17-lock-depth-transition.md
+Pathspec	celestina/docs/plans/active/2026-08-17-lock-depth-transition.md
+Pathspec	celestina/docs/inventories/2026-08-17-lock-depth-transition/LOCK-1-B.numstat.tsv
+
+added	deleted	content	path
+443	13	7c8df8dae4015c271a9915ceae5b4573490eaef89f9dde599b6025c119e9447b	celestina/src/lock/LockScreen.qml
+70	0	8fc36964388877cf39bc875315daa7d915a12d16d6819673955e88bcaa5dbc5b	celestina/docs/evidence/2026-08-17-lock-depth-transition.md
+186	0	d26d07382cc886e1976c102ee48d6fe2e0aa386573982d6ddd8bfc46f92e5c60	celestina/docs/plans/active/2026-08-17-lock-depth-transition.md
+13	0	self	celestina/docs/inventories/2026-08-17-lock-depth-transition/LOCK-1-B.numstat.tsv

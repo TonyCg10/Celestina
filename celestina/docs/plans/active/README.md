@@ -1,8 +1,10 @@
 # Active Celestina plans
 
-No Celestina implementation plan is active. R8 is complete and archived under
-[`../archive/`](../archive/); author-only validation remains recorded in
-`VALIDATION.md` without keeping an implementation checkpoint open.
+[`LOCK-1`](2026-08-17-lock-depth-transition.md) is the active Celestina
+implementation plan: the locked session recedes behind its own blurred
+wallpaper instead of vanishing into an opaque slab, and is uncovered
+continuously. It changes what a locked screen looks like and nothing about what
+unlocks it.
 
 Plans that are authorized but whose checkpoint has not opened wait under
 [`../pending/`](../pending/).

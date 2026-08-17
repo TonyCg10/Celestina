@@ -13,6 +13,8 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
@@ -51,6 +53,8 @@ private slots:
     void aMissingLockBinaryRefusesToSuspend();
     void aLockThatNeverConfirmsNeverSuspends();
     void aLockThatDiesBeforeCoveringRefusesToSuspend();
+    void aLockThatNeverReadsItsBackdropStillCovers();
+    void theBackdropCarriesOnlyAbsolutePaths();
 
 private:
     QTemporaryDir *m_dir = nullptr;
@@ -151,6 +155,67 @@ void LockControllerTest::aLockThatDiesBeforeCoveringRefusesToSuspend()
     QTRY_VERIFY_WITH_TIMEOUT(answered, 4000);
     QVERIFY(!answer.isEmpty());
     QVERIFY(!controller.isLocked());
+}
+
+// The backdrop is decoration and the cover is not. A lock that never reads the
+// wallpaper line — because it is busy covering the screen, or because it does
+// not care — must still confirm. Anything that waited for this hand-off would
+// have made an ornament into a precondition for covering the session, and the
+// failure would appear as a screen that stays uncovered.
+void LockControllerTest::aLockThatNeverReadsItsBackdropStillCovers()
+{
+    const QString lock = writeFakeLock(
+        QDir(m_dir->path()),
+        QStringLiteral("#!/bin/sh\necho locked\nsleep 5\n"));
+    qputenv("CELESTINA_LOCK", lock.toLocal8Bit());
+
+    LockController controller;
+    controller.setBackdrop({{QStringLiteral("DP-1"),
+                             QStringLiteral("/usr/share/backgrounds/one.png")}});
+
+    QSignalSpy spy(&controller, &LockController::lockedChanged);
+    QVERIFY(controller.lock());
+    QVERIFY(spy.wait(4000));
+    QVERIFY(controller.isLocked());
+}
+
+// What actually crosses the pipe, read back by the lock's stand-in. A relative
+// path would name a different file in a process with a different working
+// directory, so it is dropped rather than resolved here.
+void LockControllerTest::theBackdropCarriesOnlyAbsolutePaths()
+{
+    const QDir dir(m_dir->path());
+    const QString received = dir.filePath(QStringLiteral("received"));
+    const QString lock = writeFakeLock(
+        dir,
+        QStringLiteral("#!/bin/sh\ncat > '%1'\necho locked\nsleep 5\n")
+            .arg(received));
+    qputenv("CELESTINA_LOCK", lock.toLocal8Bit());
+
+    LockController controller;
+    controller.setBackdrop({
+        {QStringLiteral("DP-1"), QStringLiteral("/usr/share/one.png")},
+        {QStringLiteral("DP-2"), QStringLiteral("relative/two.png")},
+        {QStringLiteral("HDMI-A-1"), QString()},
+    });
+    QVERIFY(controller.lock());
+
+    QFile file(received);
+    QTRY_VERIFY_WITH_TIMEOUT(file.exists() && file.size() > 0, 4000);
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    const QByteArray line = file.readAll();
+    file.close();
+
+    QVERIFY(line.endsWith('\n'));
+    const QJsonObject payload = QJsonDocument::fromJson(line).object();
+    QCOMPARE(payload.value(QStringLiteral("version")).toInt(), 1);
+    const QJsonObject wallpapers =
+        payload.value(QStringLiteral("wallpapers")).toObject();
+    QCOMPARE(wallpapers.size(), 1);
+    QCOMPARE(wallpapers.value(QStringLiteral("DP-1")).toString(),
+             QStringLiteral("/usr/share/one.png"));
+    QVERIFY(!wallpapers.contains(QStringLiteral("DP-2")));
+    QVERIFY(!wallpapers.contains(QStringLiteral("HDMI-A-1")));
 }
 
 QTEST_MAIN(LockControllerTest)
