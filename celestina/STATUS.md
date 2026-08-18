@@ -55,61 +55,30 @@
 ## Live migration state
 
 The author decided on 2026-08-17 to migrate the session from Noctalia to
-Celestina. The first attempt ran ~55 seconds on all three outputs and died on
-a Wayland protocol error; Noctalia was restored at once. The investigation
-found the defect classes — and that the nest compositor has silently been
-niri `main` (2026-08-14) rather than the session's 26.04 release, so the
-shell was verified for months against a compositor five months newer than
-the one it must live on. See
-[the investigation record](docs/evidence/2026-08-17-live-session-investigation.md).
+Celestina, and the session now runs the patched compositor built from its own
+release commit. Three attempts died on a Wayland protocol error within a
+minute; the fourth ran for minutes of ordinary use without one.
 
-Six of `LIVE-1`'s seven repairs are delivered ahead of the checkpoint, since
-the session cannot be lived in until they are: the icon miss that re-walked
-every theme per frame, the unclamped layer-surface size, the effect object
-outliving its surface on both hard-close paths, glass mapped before it was
-armed, per-output blur refusals now journalled, and the nest that silently
-built the wrong compositor. Night light gained a temperature setting and verb;
-its control-centre control is not built. The per-output correction waits on
-the records the new journalling produces. See
-[the hardening record](docs/evidence/2026-08-17-live-session-hardening.md).
-None of it has been run on the author's session, so Noctalia remains the
-session's shell.
+What the attempts exposed was almost entirely the difference between one
+output and three, plus a compositor older than the one months of nested
+verification used. `LIVE-1` repairs it: the crash, a membrane that reached
+only the primary monitor, connectivity indicators kept off the bar by a
+visibility cycle, and two providers that misread the machine. The blur needed
+no code — the session's configuration simply carried no global `blur {}`
+block, so the veil ran at niri's default and matched the dense profile.
+
+Noctalia remains installed and is the rollback. Whether the shell survives a
+full day is `VAL-R8`, and it has not been claimed. See
+[the three-monitor evidence](docs/evidence/2026-08-17-three-monitors.md) and
+[the LIVE-1 plan](docs/plans/active/2026-08-17-live-session-repairs.md).
 
 ## Active checkpoint
 
-`LOCK-1` is delivered and deployed as celestina 0.30.0, and its implementation
-exit passed: CTest 24/24, QML lint, the eight-second offscreen release smoke
-against the built bytes, and deployment to `~/.local` without activating the
-session. The three backdrop cases — a wallpaper, no wallpaper, and a path that
-will not decode — were each run against a freshly restarted nest. The retreat
-that plays before `unlock_and_destroy` was not observed, because watching it
-needs a real passphrase; its guarantee is proved by `celestina-lock-uncover`
-instead. All three units — `LOCK-1-A`, `LOCK-1-B` and `LOCK-1-C` — are `done`
-on the plan's ledger, each with its own exact inventory and evidence record:
-[backdrop hand-off](docs/evidence/2026-08-17-lock-backdrop-handoff.md),
-[depth transition](docs/evidence/2026-08-17-lock-depth-transition.md), and
-[uncover guarantee](docs/evidence/2026-08-17-lock-uncover-guarantee.md).
-
-The plan is not archived. `VAL-LOCK-1` — whether the retreat actually reads as
-continuous on a real output — has not run, and the author has not said the
-design is closed; the roadmap keeps `LOCK-1` active until one of those
-happens.
-
-`LOCK-1` was opened as: the locked session should recede behind its own blurred
-wallpaper instead of vanishing into an opaque slab, and should be uncovered
-continuously. It changes what a locked screen looks like and nothing about what
-unlocks it — `ADR 0004` stands unrelaxed, verification remains delegated to a
-separate PAM child, and no error path recovers by unlocking. Its bounded scope,
-exclusions and measured feasibility results are in
-[the LOCK-1 plan](docs/plans/active/2026-08-17-lock-depth-transition.md).
-
-Two facts were measured against the running nest on 2026-08-17 and are worth
-recording outside the plan. The nested Niri **does** implement
-`ext-session-lock-v1`: the deployed lock covered the nested output while the
-nested shell and both adapters stayed alive, which closes the open question
-below about a nest running a shell and a lock together. Killing that lock left
-the nest covered until the nest was restarted, which is the protocol guarantee
-behaving exactly as `ADR 0004` describes.
+`LIVE-1` is active. `LOCK-1` closed on its implementation exit as celestina
+0.30.0 and is archived; its `VAL-LOCK-1` — whether the lock's retreat reads as
+continuous on a real output — was never run, and closing the plan released the
+checkpoint slot rather than claiming the design finished. See
+[the closure record](docs/evidence/2026-08-17-lock-plan-closure.md).
 
 ## Current checkout truth
 

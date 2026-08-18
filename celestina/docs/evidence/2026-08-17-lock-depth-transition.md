@@ -5,7 +5,7 @@
 - **Artifact:** `celestina/src/lock/LockScreen.qml`
 - **Environment:** the nest on DP-2 at scale 1, one lock client asserted alive
   before every measurement; the live session was not touched
-- **Plan:** [lock depth transition](../plans/active/2026-08-17-lock-depth-transition.md)
+- **Plan:** [lock depth transition](../plans/archive/2026-08-17-lock-depth-transition.md)
 - **Validation:** `VAL-LOCK-1`
 
 ## Procedure

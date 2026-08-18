@@ -27,7 +27,33 @@ Row {
     signal indicatorMenuRequested(string kind, rect openerRect,
                                   rect attachmentAnchorRect)
 
-    readonly property bool hasVisibleIndicator: link.visible || radio.visible
+    // Derived from the readings, never from the children's rendered
+    // visibility, and that distinction is the whole of this property.
+    //
+    // A parent hides its children in QML. This row lives inside a PanelCluster
+    // whose own `visible` is driven by this bit, so asking `link.visible ||
+    // radio.visible` asked the children a question whose answer the cluster
+    // already controlled: the group hid itself because its children looked
+    // invisible, and the children were invisible because the group was hidden.
+    // Nothing broke the cycle once entered, so network and Bluetooth never
+    // reached the bar even with both providers publishing — `adapter` reading
+    // `on` and a link the control centre displayed at the same moment.
+    //
+    // The tray met this exact cycle first (see Panel.qml, where four valid
+    // D-Bus items produced no pixels) and answered it the same way: let the
+    // model be the independent source of truth.
+    readonly property bool hasVisibleIndicator: root.linkPresent
+                                                || root.radioPresent
+
+    // The same conditions the two indicators bind their own `visible` to, held
+    // where the cluster can read them without depending on rendering.
+    readonly property bool linkPresent: root.network !== undefined
+    readonly property bool radioPresent: {
+        const adapter = root.bluetooth !== undefined
+                        && root.bluetooth.adapter !== undefined
+                        ? root.bluetooth.adapter : "";
+        return adapter === "on" || adapter === "off";
+    }
 
     // PANEL-1 — a Row aligns its children at the top, so readings of different
     // heights sat at different heights. One height each.
@@ -101,7 +127,7 @@ Row {
         objectName: "celestina-network-indicator"
         // Present whenever the provider is publishing. A withdrawn provider is
         // an unreadable session, and there is nothing truthful to offer then.
-        visible: root.network !== undefined
+        visible: root.linkPresent
         kind: "network"
         iconName: "wifi"
         // The kind of link is what a glance needs; its name is what tells two
@@ -139,7 +165,7 @@ Row {
                                      ? root.bluetooth.count : 0
 
         objectName: "celestina-bluetooth-indicator"
-        visible: adapter === "on" || adapter === "off"
+        visible: root.radioPresent
         kind: "bluetooth"
         iconName: "bluetooth"
         reading: {

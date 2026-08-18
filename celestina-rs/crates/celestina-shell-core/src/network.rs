@@ -47,17 +47,29 @@ pub fn parse_default_route_device(routes: &str) -> Option<String> {
 }
 
 /// Reads nmcli's terse device list. A connection name may contain spaces, so
-/// only the field separator is trusted to split it.
+/// only the field separator is trusted to split it — and it is read through
+/// `split_terse`, because nmcli escapes a colon *inside* a field as `\:`.
+///
+/// This listing carries a Bluetooth row whose DEVICE field is a MAC address, so
+/// the escape is not a rare case here but the ordinary one: splitting on the
+/// raw byte turned `5C\:DC\:49\:0D\:D1\:62:bt:disconnected:` into the device
+/// `5C\` of kind `DC\`, and every field after it shifted. The real link was
+/// still found — it lives on its own line — but the machine's own Bluetooth
+/// adapter was reported as a network device with a nonsense name.
 #[must_use]
 pub fn parse_devices(listing: &str) -> Vec<Device> {
     listing
         .lines()
         .filter_map(|line| {
-            let mut fields = line.splitn(4, ':');
+            let fields = split_terse(line);
+            let mut fields = fields.iter();
             let name = fields.next()?.trim();
-            let kind = fields.next()?.trim();
-            let state = fields.next()?.trim();
-            let connection = fields.next().unwrap_or("").trim();
+            let kind = fields.next().map(|f| f.trim()).unwrap_or("");
+            let state = fields.next().map(|f| f.trim()).unwrap_or("");
+            // Everything after the third separator belongs to the connection
+            // name, which may itself contain one.
+            let connection = fields.map(|f| f.as_str()).collect::<Vec<_>>().join(":");
+            let connection = connection.trim();
             if name.is_empty() {
                 return None;
             }
@@ -1287,5 +1299,44 @@ mod tests {
         // Loopback carries a route on a machine with nothing else, and is
         // still not a link.
         assert_eq!(active_link(&devices, Some("lo")), None);
+    }
+}
+
+#[cfg(test)]
+mod live_session_regression {
+    use super::*;
+
+    // The author's own `nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device`, kept
+    // verbatim. The Bluetooth row is the interesting one: its DEVICE field is a
+    // MAC address, and nmcli escapes every colon inside a field as `\:`.
+    const REAL_DEVICES: &str = concat!(
+        "wlan0:wifi:connected:Tonys 1\n",
+        "lo:loopback:connected (externally):lo\n",
+        r"5C\:DC\:49\:0D\:D1\:62:bt:disconnected:",
+        "\n",
+        "p2p-dev-wlan0:wifi-p2p:disconnected:\n",
+    );
+
+    #[test]
+    fn a_mac_addressed_row_does_not_hide_the_real_link() {
+        let devices = parse_devices(REAL_DEVICES);
+        let link = active_link(&devices, Some("wlan0"));
+        assert_eq!(
+            link,
+            Some(Link {
+                kind: "wifi".to_owned(),
+                connection: "Tonys 1".to_owned(),
+            })
+        );
+    }
+
+    #[test]
+    fn an_escaped_field_separator_is_not_a_field_boundary() {
+        let devices = parse_devices(REAL_DEVICES);
+        let bluetooth = devices
+            .iter()
+            .find(|device| device.kind == "bt")
+            .expect("the Bluetooth row must survive parsing as one device");
+        assert_eq!(bluetooth.name, "5C:DC:49:0D:D1:62");
     }
 }

@@ -6,7 +6,7 @@
   the shell wiring in `celestina/src/main.cpp`
 - **Environment:** `ctest --test-dir celestina/build -R lock-controller`, on the
   author's own machine; no session was touched
-- **Plan:** [lock depth transition](../plans/active/2026-08-17-lock-depth-transition.md)
+- **Plan:** [lock depth transition](../plans/archive/2026-08-17-lock-depth-transition.md)
 - **Validation:** `VAL-LOCK-1`
 
 ## Procedure

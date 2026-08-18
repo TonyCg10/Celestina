@@ -18,6 +18,7 @@
 #include <QQuickWindow>
 #include <QScreen>
 
+#include "blurreach.h"
 #include "denseglass.h"
 
 #include <cmath>
@@ -385,6 +386,31 @@ void PanelBlurController::probe()
     if (!m_window)
         return;
 
+    // A live `QWindow` is not a live Wayland surface. Qt destroys the platform
+    // window — and with it the `wl_surface` — the moment a window hides, while
+    // the C++ object survives for as long as anything holds it. `QPointer`
+    // cannot see that difference, so every path below has to.
+    //
+    // This is not defensive tidiness: it is the crash that ended the first two
+    // live migrations. `KWindowEffects::enableBlurBehind` becomes
+    // `ext_background_effect_surface_v1.set_blur_region`, and the compositor
+    // answers a request whose `wl_surface` is gone with a *fatal* protocol
+    // error — the whole shell dies, every output at once. A menu that hid
+    // while this controller still had a probe queued was enough.
+    //
+    // Both directions are refused, arm and withdraw alike. There is nothing to
+    // withdraw from a surface the compositor has already forgotten.
+    if (!m_window->handle()) {
+        // The effect died with the surface. Forget the armed state so a window
+        // that maps again re-arms from scratch rather than believing a region
+        // it no longer has.
+        m_state = State::Pending;
+        m_armedSize = {};
+        m_armedRegion = {};
+        m_probeTimer.stop();
+        return;
+    }
+
     // `softCloseWindow` owns the deliberate 60 ms weak-blur withdrawal under
     // fading paint. Stop probing without changing that effect here: otherwise
     // a pending capability timer can re-arm the region after the soft close
@@ -422,11 +448,7 @@ void PanelBlurController::probe()
             || m_armedRegion != glass) {
             // ext-background-effect state is double-buffered. Submit a finite,
             // surface-local region and request the frame that commits it.
-            KWindowEffects::enableBlurBehind(
-                m_window.data(),
-                true,
-                glass
-            );
+            armBlur(m_window.data(), glass);
             m_window->requestUpdate();
             m_armedSize = m_window->size();
             m_armedRegion = glass;
@@ -472,14 +494,20 @@ void PanelBlurController::probe()
     }
 
     if (m_state == State::Enabled) {
-        // Unconditionally, exposed or not: an idle Wayland window's exposed
-        // flag flaps (measured on the nested session — a mapped, committing
-        // surface reported unexposed), and a withdraw skipped on that flag
-        // left the armed region blurring an empty rectangle over the
-        // wallpaper for as long as the persistent surface lived. The effect
-        // state is double-buffered and simply rides the window's next
-        // commit — which the display's heartbeat guarantees.
-        KWindowEffects::enableBlurBehind(m_window.data(), false);
+        // Regardless of *exposure*: an idle Wayland window's exposed flag flaps
+        // (measured on the nested session — a mapped, committing surface
+        // reported unexposed), and a withdraw skipped on that flag left the
+        // armed region blurring an empty rectangle over the wallpaper for as
+        // long as the persistent surface lived. The effect state is
+        // double-buffered and simply rides the window's next commit — which the
+        // display's heartbeat guarantees.
+        //
+        // Visibility is a different matter and `withdrawBlur` enforces it: a
+        // hidden window has no `wl_surface` left to withdraw from, and this
+        // exact call on a just-closed menu is what killed the shell live. The
+        // local state below is reset either way, so a surface that comes back
+        // re-arms from scratch.
+        withdrawBlur(m_window.data());
         m_window->requestUpdate();
         m_state = State::Pending;
     }

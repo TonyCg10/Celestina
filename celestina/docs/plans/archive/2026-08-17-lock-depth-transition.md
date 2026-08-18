@@ -1,11 +1,13 @@
 # Lock depth transition — the session recedes instead of vanishing
 
 - **Opened:** 2026-08-17
+- **Closed:** 2026-08-17
 - **Plan ID:** lock-depth-transition
-- **Status:** active
+- **Status:** done
 - **Scope:** celestina
 - **Implementation checkpoint:** LOCK-1
 - **Author-validation checkpoint:** VAL-LOCK-1
+- **Successor:** [LIVE-1 live session repairs](../active/2026-08-17-live-session-repairs.md)
 
 ## Hypothesis
 

@@ -47,6 +47,20 @@ const REQUEST_CANCELLED: u8 = 2;
 
 type Reply = SyncSender<Result<(), String>>;
 
+/// How long an output waits before its gamma controller is rebuilt again.
+///
+/// Rebuilding is not free and it is not invisible: destroying the controller
+/// restores the compositor's own gamma at once, so every attempt costs a snap
+/// to neutral and a fresh warm sweep. The first retry is quick because most
+/// failures are transient — an output still settling after a hotplug — and it
+/// climbs to a ceiling where a monitor that simply cannot hold a controller
+/// stops costing the session anything visible.
+fn retry_backoff(attempts: u32) -> Duration {
+    const CEILING: Duration = Duration::from_secs(30);
+    let seconds = 1u64 << attempts.min(5);
+    Duration::from_secs(seconds).min(CEILING)
+}
+
 struct Request {
     switch: Switch,
     permit: Arc<RequestPermit>,
@@ -465,6 +479,18 @@ impl Controller {
 struct Output {
     proxy: wl_output::WlOutput,
     control: Option<Controller>,
+    // How many times this output's controller has been torn down and rebuilt,
+    // and the soonest another attempt may happen.
+    //
+    // Rebuilding is visible, which is why it needs a brake. Destroying a
+    // `zwlr_gamma_control_v1` restores the compositor's own tables *instantly*
+    // by protocol, so a teardown-and-rebuild is a hard snap to neutral
+    // followed by a fresh warm transition. Left ungoverned, an output that
+    // cannot hold a controller made the poll loop do exactly that every 25 ms,
+    // for as long as the light stayed on: the author saw it as small warm
+    // flickers, and it needed three monitors to become likely at all.
+    attempts: u32,
+    retry_after: Option<Instant>,
 }
 
 struct WaylandState {
@@ -490,13 +516,26 @@ impl WaylandState {
             return Err("the compositor reports no output for night light".to_owned());
         }
         let manager = manager.clone();
+        let now = Instant::now();
         for (global, output) in &mut self.outputs {
-            if output
+            // A controller that is merely *young* is not a broken one. A fresh
+            // proxy has no `gamma_size` until the compositor sends it, and
+            // tearing it down for that reason destroyed controllers before they
+            // could ever answer — the loop that produced the flicker.
+            let broken = output
                 .control
                 .as_ref()
-                .is_some_and(|control| !control.valid || control.failure.is_some())
-            {
+                .is_some_and(|control| !control.valid || control.failure.is_some());
+            if broken {
+                if output.retry_after.is_some_and(|at| now < at) {
+                    // Still serving its backoff. Leave the broken controller
+                    // exactly where it is: replacing it now would snap this
+                    // output back to neutral for nothing.
+                    continue;
+                }
                 output.control = None;
+                output.attempts = output.attempts.saturating_add(1);
+                output.retry_after = Some(now + retry_backoff(output.attempts));
             }
             if output.control.is_none() {
                 let proxy = manager.get_gamma_control(&output.proxy, qh, *global);
@@ -537,8 +576,15 @@ impl WaylandState {
     }
 
     fn needs_reconciliation(&self) -> bool {
+        let now = Instant::now();
         self.outputs.is_empty()
             || self.outputs.values().any(|output| {
+                // An output inside its backoff is not asking for anything. It
+                // is the whole point of the backoff that the loop leaves it
+                // alone rather than rebuilding a controller it cannot keep.
+                if output.retry_after.is_some_and(|at| now < at) {
+                    return false;
+                }
                 output.control.as_ref().is_none_or(|control| {
                     !control.valid || control.failure.is_some() || control.gamma_size.is_none()
                 })
@@ -630,6 +676,8 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WaylandState {
                         name,
                     ),
                     control: None,
+                    attempts: 0,
+                    retry_after: None,
                 });
             }
             wl_registry::Event::Global {
@@ -708,11 +756,10 @@ impl Dispatch<gamma_proto::ZwlrGammaControlV1, u32> for WaylandState {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        let Some(current) = state
-            .outputs
-            .get_mut(global)
-            .and_then(|output| output.control.as_mut())
-        else {
+        let Some(output) = state.outputs.get_mut(global) else {
+            return;
+        };
+        let Some(current) = output.control.as_mut() else {
             return;
         };
         if current.proxy.id() != control.id() {
@@ -720,7 +767,15 @@ impl Dispatch<gamma_proto::ZwlrGammaControlV1, u32> for WaylandState {
         }
 
         match event {
-            gamma_proto::Event::GammaSize { size } => current.gamma_size = Some(size),
+            gamma_proto::Event::GammaSize { size } => {
+                current.gamma_size = Some(size);
+                // It answered, so it is not the output that cannot hold a
+                // controller. Forget the backoff: the next genuine failure
+                // deserves a quick first retry of its own rather than
+                // inheriting a penalty this output has just disproved.
+                output.attempts = 0;
+                output.retry_after = None;
+            }
             gamma_proto::Event::Failed => {
                 current.failure = Some("the compositor rejected or revoked it".to_owned());
                 current.valid = false;

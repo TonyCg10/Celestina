@@ -2,6 +2,8 @@
 
 #include <KWindowEffects>
 
+#include "blurreach.h"
+
 #include <QDebug>
 #include <QScreen>
 
@@ -291,7 +293,7 @@ void OverlaySurface::close()
     // while the surface is unquestionably alive, leaving nothing for a late
     // destroy to reference.
     content->setProperty("celestinaRetiring", true);
-    KWindowEffects::enableBlurBehind(content, false);
+    withdrawBlur(content);
     content->hide();
     content->deleteLater();
 }

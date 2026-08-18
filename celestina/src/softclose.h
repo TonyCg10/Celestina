@@ -5,6 +5,8 @@
 
 #include "denseglass.h"
 #include <KWindowEffects>
+
+#include "blurreach.h"
 #include <QQuickWindow>
 #include <QTimer>
 #include <QVariantAnimation>
@@ -99,12 +101,12 @@ inline void softCloseWindow(QWindow *window, std::function<void()> finish)
         const QPointer<QWindow> tracked(window);
         QTimer::singleShot(60, window, [tracked]() {
             if (tracked) {
-                KWindowEffects::enableBlurBehind(tracked.data(), false);
+                withdrawBlur(tracked.data());
                 tracked->requestUpdate();
             }
         });
     } else if (content) {
-        KWindowEffects::enableBlurBehind(window, false);
+        withdrawBlur(window);
     }
 
     // Parented to the window: a window hard-closed mid-beat takes the timer

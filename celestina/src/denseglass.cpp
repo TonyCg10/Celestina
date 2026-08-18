@@ -1,6 +1,9 @@
 #include "denseglass.h"
 
 #include <KWindowEffects>
+
+#include "blurreach.h"
+#include "diagnosticjournal.h"
 #include <LayerShellQt/window.h>
 #include <QGuiApplication>
 #include <QQuickItem>
@@ -238,7 +241,7 @@ void DenseGlassAggregator::forgetScreen(QScreen *screen)
         // Withdrawn before it dies, like every other effect-bearing surface in
         // this shell: a destroy that reaches the compositor after the surface
         // is gone is a fatal protocol error for the whole client.
-        KWindowEffects::enableBlurBehind(companion.data(), false);
+        withdrawBlur(companion.data());
         companion->setVisible(false);
         companion->deleteLater();
     }
@@ -414,6 +417,25 @@ QList<QPointer<QQuickWindow>> DenseGlassAggregator::companionsFor(QScreen *scree
         spec.acceptsFocus = false;
 
         if (!mapLayerSurface(companion, spec)) {
+            // Per screen, and silently until now. A companion that will not map
+            // leaves *this* output with fewer blur samples than its neighbours
+            // — the dark cards summarize less, or stop summarizing at all — and
+            // that is exactly the shape of "one monitor has no glass" with
+            // nothing anywhere to say so. The screen is named because on a
+            // multi-output session the interesting fact is which one differs.
+            qCritical() << "Celestina could not map a dense-glass companion on"
+                        << (screen ? screen->name() : QStringLiteral("(no screen)"))
+                        << "— that output keeps" << held.size()
+                        << "of" << denseCompanionDepth << "samples";
+            DiagnosticJournal::instance().record(
+                DiagnosticJournal::Record(
+                    DiagnosticJournal::Level::Critical,
+                    QStringLiteral("glass.companion.unmapped"))
+                    .text(QStringLiteral("output"),
+                          screen ? screen->name() : QString())
+                    .number(QStringLiteral("mapped"), held.size())
+                    .number(QStringLiteral("expected"), denseCompanionDepth)
+            );
             delete companion;
             break;
         }
@@ -422,7 +444,7 @@ QList<QPointer<QQuickWindow>> DenseGlassAggregator::companionsFor(QScreen *scree
         // the whole-output saturation defect all over again — for as many frames
         // as pass before `refresh` arms it. The caller below shows it again, and
         // only once it has rectangles. Never brought up armed-less.
-        KWindowEffects::enableBlurBehind(companion, false);
+        withdrawBlur(companion);
         companion->setVisible(false);
         // They render nothing and must swallow nothing.
         companion->setMask(QRegion(0, 0, 1, 1));
@@ -458,7 +480,7 @@ void DenseGlassAggregator::refresh(QScreen *screen)
             // the author lived with as "normal" until a menu opened, showed
             // the true wallpaper, and read as the menu desaturating the
             // screen.
-            KWindowEffects::enableBlurBehind(companion.data(), false);
+            withdrawBlur(companion.data());
             companion->setVisible(false);
         } else {
             // Armed first, shown second, and that order is the point. The
@@ -468,7 +490,7 @@ void DenseGlassAggregator::refresh(QScreen *screen)
             // region, which its per-namespace rule reads as "this effect covers
             // the whole geometry" and saturates the entire output for as long
             // as it takes the region to follow.
-            KWindowEffects::enableBlurBehind(companion.data(), true, region);
+            armBlur(companion.data(), region);
             if (!companion->isVisible())
                 companion->setVisible(true);
             kickRender(companion.data());

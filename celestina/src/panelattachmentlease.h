@@ -9,6 +9,7 @@
 #include <QTimer>
 
 class QQuickItem;
+class QScreen;
 class QWindow;
 
 // Translate one live panel anchor into the coordinate space of its carrier.
@@ -80,6 +81,17 @@ private:
 
     QPointer<QWindow> m_panel;
     QPointer<QWindow> m_surface;
+    // The output this lease was taken for, recorded once at acquisition.
+    //
+    // It is not derived from the surface on every refresh, and that is the
+    // whole point. On Wayland a client is not told which output its surface
+    // occupies until `wl_surface.enter` arrives, so Qt answers `screen()` with
+    // the *primary* screen until then. The refresh runs on a zero-delay timer —
+    // before that event — so comparing the panel against the surface's live
+    // screen reported a mismatch on every output except the primary one, and
+    // released the attachment permanently. The membrane therefore existed only
+    // on the primary monitor, and a single-output nest could never show it.
+    QPointer<QScreen> m_output;
     QPointer<QQuickItem> m_source;
     QPointer<QQuickItem> m_anchor;
     QPointF m_carrierOriginOnOutput;

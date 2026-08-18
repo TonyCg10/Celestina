@@ -1,0 +1,17 @@
+# LIVE-1-B exact change inventory
+
+Base revision	30e0a31f26bcac134ba1156962017cacf3728f55
+Pathspec	celestina/docs/plans/active/2026-08-17-live-session-repairs.md
+Pathspec	celestina/src/provider_adapter/nightlight.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/network.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/session.rs
+Pathspec	celestina/docs/evidence/2026-08-17-provider-truthfulness.md
+Pathspec	celestina/docs/inventories/2026-08-17-live-session-repairs/LIVE-1-B.numstat.tsv
+
+added	deleted	content	path
+95	0	0c32a78b1f39d8435a78cb3dea35e01473ceb8346169add885558518d4d1c46e	celestina/docs/plans/active/2026-08-17-live-session-repairs.md
+64	9	bee13bf7dffd832db505bc19e8e9827c71020bfdd94191fde84a4dcd5aada32c	celestina/src/provider_adapter/nightlight.rs
+56	5	a7d5b88d970fd388ce92355615434589547eef6673e567e0524d454adca4eb84	celestina-rs/crates/celestina-shell-core/src/network.rs
+4	6	e6795cc56d4eb49e0e873e7d30627fa5a3cdddc900cfaef454b2ef4902e2d591	celestina-rs/crates/celestina-shell-core/src/session.rs
+75	0	bff653f5ea9f620852767a39685456341a3b081404b126fd19b86015d9b7f246	celestina/docs/evidence/2026-08-17-provider-truthfulness.md
+17	0	self	celestina/docs/inventories/2026-08-17-live-session-repairs/LIVE-1-B.numstat.tsv

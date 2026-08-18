@@ -1,0 +1,29 @@
+# LIVE-1-A exact change inventory
+
+Base revision	30e0a31f26bcac134ba1156962017cacf3728f55
+Pathspec	celestina/src/blurreach.h
+Pathspec	celestina/src/panelblurcontroller.cpp
+Pathspec	celestina/src/denseglass.cpp
+Pathspec	celestina/src/overlaysurface.cpp
+Pathspec	celestina/src/panelmenusurface.cpp
+Pathspec	celestina/src/softclose.h
+Pathspec	celestina/src/panelattachmentlease.h
+Pathspec	celestina/src/panelattachmentlease.cpp
+Pathspec	celestina/qml/SessionStatus.qml
+Pathspec	celestina/docs/evidence/2026-08-17-three-monitors.md
+Pathspec	celestina/docs/plans/active/2026-08-17-live-session-repairs.md
+Pathspec	celestina/docs/inventories/2026-08-17-live-session-repairs/LIVE-1-A.numstat.tsv
+
+added	deleted	content	path
+65	0	29474fc591c8b311054836f2e7b4679ae5c94a01dc334c648485ab2325a4f8d9	celestina/src/blurreach.h
+41	13	76e620a78dca29f7c4df25999287578b0ebc20f22d075c559a101facdbd4968d	celestina/src/panelblurcontroller.cpp
+26	4	78ecbf1ec5550182518e52366102b03a1c26f6ecdad849ac136c134f29c47618	celestina/src/denseglass.cpp
+3	1	ef587206118a6d5f70513854ec5a6a3e13d46f4a13c9c29156439e23d4b679c7	celestina/src/overlaysurface.cpp
+3	1	ba8944b914af9b61e850e290f7db1d82ac863894fe913ab4599c5a2a6a402169	celestina/src/panelmenusurface.cpp
+4	2	fa53ccffc63fa967d402b3e61c7d048f232c24abd27075c41c23723781f4fbae	celestina/src/softclose.h
+12	0	cfcfc8968d6852bbab2ac239b446f2df89f08468263cf1118d80013a0146d851	celestina/src/panelattachmentlease.h
+17	2	f32866c0a22de7e479cbad0a6b7f1f943d63a9eae898d13053eababcdf47bc9f	celestina/src/panelattachmentlease.cpp
+29	3	20a6a072bc9312720ff3e6f3cad906fae49568b5e07cb24eccab5e21a2dd1715	celestina/qml/SessionStatus.qml
+134	0	d34c0349f3f03c85ddbebaf4ba55ce1de2ad01a20b73f23016677a7e2912869e	celestina/docs/evidence/2026-08-17-three-monitors.md
+95	0	0c32a78b1f39d8435a78cb3dea35e01473ceb8346169add885558518d4d1c46e	celestina/docs/plans/active/2026-08-17-live-session-repairs.md
+29	0	self	celestina/docs/inventories/2026-08-17-live-session-repairs/LIVE-1-A.numstat.tsv

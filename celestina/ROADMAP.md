@@ -1,7 +1,7 @@
 # Celestina implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** LOCK-1
+- **Active implementation checkpoint:** LIVE-1
 
 This roadmap contains only work an agent can implement and verify. Real Niri,
 hardware, visual and assistive-technology checks live in
@@ -37,8 +37,8 @@ of the design when they provide the narrow capability the shell needs.
 | PANEL-1 | complete | Replace the hard panel plate with borderless compositor glass and route contextual content through the canonical shared glass material |
 | UX-2 | planned | Establish and then implement one coherent shell-wide visual and interaction language after SHELL-D5 is applied |
 | R6 | complete | First-party `ext-session-lock` and deterministic lock-before-suspend, with `VAL-R6` still unrun |
-| LOCK-1 | active | Let the session recede behind its own blurred wallpaper instead of vanishing into an opaque slab, and uncover it continuously |
-| LIVE-1 | partly delivered | Make the shell survive and look right on the real session; six of its seven repairs are delivered ahead of the checkpoint, and the per-output correction waits on the records the sixth now produces |
+| LOCK-1 | complete | Let the session recede behind its own blurred wallpaper instead of vanishing into an opaque slab, and uncover it continuously |
+| LIVE-1 | active | Make the shell survive and look right on the real session: the crash, the membrane that only reached the primary monitor, the missing connectivity indicators, and two providers that misread the machine |
 | R8 | complete | Reversible Noctalia removal and the first-party Polkit agent are delivered; live departure remains `VAL-R8` |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
 
@@ -631,64 +631,53 @@ and unrelaxed by this work: the surface still shows only time, prompt and
 failure state, verification stays in `polkit`-style delegation to a separate
 PAM child, and no error path recovers by unlocking. The bounded scope,
 exclusions, measured feasibility results and unit boundaries are in
-[the LOCK-1 plan](docs/plans/active/2026-08-17-lock-depth-transition.md).
+[the LOCK-1 plan](docs/plans/archive/2026-08-17-lock-depth-transition.md).
 
 Perceptual confirmation on a real output is `VAL-LOCK-1` and does not keep this
 checkpoint open.
 
-## LIVE-1 — The real session stops being a different shell (planned)
+## LIVE-1 — The real session stops being a different shell (active)
 
-**Outcome:** Celestina runs on the author's real compositor without crashing,
-without shifting the session's colours, and with the same material, membrane
-and motion on every monitor — or degrades in a way that is chosen and
-recorded, never random.
+**Outcome:** Celestina survives ordinary use on the author's three monitors —
+it does not die when a menu closes, its membrane connects on every output
+rather than only the primary one, the panel shows Wi-Fi and Bluetooth, and no
+provider misreads the machine.
 
-The first live migration on 2026-08-17 ran for ~55 seconds and died on a
-Wayland protocol error, and the author reported a global saturation shift and
-per-monitor randomness in blur, animation and membrane behaviour. The
-investigation traced all of it, and its central finding reframes the work:
-the nest compositor has silently been niri `main` (2026-08-14) rather than
-the session's 26.04 release, so months of visual verification ran against a
-compositor five months newer than the one the shell must live on. The
-findings, mechanisms and upstream citations are in
-[the investigation record](docs/evidence/2026-08-17-live-session-investigation.md).
+Every defect here is a consequence of the nest being one output and the
+session being three, or of the compositor being older than the one the shell
+was verified against. None of them needed a redesign; each needed measuring on
+the real session instead of reasoning about.
 
-Six of the seven were delivered on 2026-08-17, ahead of the checkpoint, because
-the session cannot be lived in until they are; see
-[the hardening record](docs/evidence/2026-08-17-live-session-hardening.md).
-Reading the code to repair them also corrected the investigation: its first
-critical finding — icons resolved on a non-GUI thread — was wrong, and a real
-defect nobody had reported was found in the same class.
+Delivered:
 
-Decomposition, by priority:
+- [x] **LIVE-1-A — The shell survives three monitors.** One predicate owns
+      whether compositor blur may be spoken to at all — Qt keeps
+      `QPlatformWindow` alive after destroying the `wl_surface`, and a withdraw
+      sent into that gap is a fatal protocol error. The attachment lease
+      records its output at acquisition rather than re-deriving it from a
+      surface Qt answers with the *primary* screen until `wl_surface.enter`,
+      which cancelled the membrane on every other monitor. And the connectivity
+      group's presence comes from the readings rather than from its own
+      children's rendered visibility, which was a cycle the tray had already
+      met and solved.
+- [x] **LIVE-1-B — Two providers stop misreading the machine.** A young gamma
+      controller is no longer mistaken for a broken one, and a genuinely
+      failing output serves a bounded backoff instead of a rebuild loop whose
+      every pass snapped the session back to neutral. The device listing is
+      read with the escaping `nmcli` actually uses.
 
-- **LIVE-1-A — A miss is looked up once (delivered).** `AppIconProvider`
-  cached its answers but decided whether to resolve by asking whether the
-  image was null, which cannot tell a cached miss from a name never seen — so
-  every miss re-walked every icon theme on every frame that drew it.
-- **LIVE-1-B — No zero-sized layer surface, ever (delivered).** Clamp the quiet-surface
-  `followSize` path to a 1x1 minimum and skip while retiring, so a collapsing
-  content window can never commit a fatal `set_size(0, …)`.
-- **LIVE-1-C — Blur teardown precedes surface teardown (delivered).** Withdraw the effect
-  before hide on every animated close, stop the per-frame re-arm once a close
-  begins, and never hand KWindowSystem a region for a window whose surface is
-  gone — the niri #3660 fingerprint must have nothing to bite.
-- **LIVE-1-D — No mapped glass without a region (delivered).** Arm a companion's region
-  before its surface maps, sweep every overlay/toast/OSD surface for the
-  mapped-without-region state, and handle screen removal for companions.
-- **LIVE-1-E — Per-output gating becomes observable (delivered); correcting it waits on those records.** Journal
-  which precondition fails when a membrane or blur region does not arm on an
-  output, then fix the per-screen scale/anchor derivation those records
-  expose.
-- **LIVE-1-F — The compositor baseline is a decision, not an accident (the nest now refuses to build a different compositor; which one the session runs is still the author's call).** Pin
-  the nest to the session's exact niri commit, record the divergence as a
-  build input, and decide explicitly whether the session adopts the patched
-  newer compositor or the shell degrades gracefully on the release.
-- **LIVE-1-G — Night light gets a temperature (delivered as a setting and a verb; the control-centre control itself is not built).** Replace the 2700 K
-  constant with a bounded setting surfaced in the control centre.
+The blur was investigated and needed no code: the compositor patch delivers
+`passes` and `offset` to the shader, proved with tracing compiled into a
+separate binary. The live configuration simply carried no global `blur {}`
+block, so the veil ran at niri's default and matched the dense profile. That
+is a configuration the author owns; the values the material was tuned against
+are recorded in
+[the three-monitor evidence](docs/evidence/2026-08-17-three-monitors.md).
 
-This checkpoint activates only after `LOCK-1` archives — the guard permits one
-active plan — and its plan must carry `Plan ID: live-session-hardening`.
+Still open, and deliberately not claimed: night light's temperature is a
+setting with no control surface, and whether the shell survives a full day is
+`VAL-R8`. See
+[the LIVE-1 plan](docs/plans/active/2026-08-17-live-session-repairs.md).
 
 ## UX-2 — Shell visual and interaction language (planned)
 

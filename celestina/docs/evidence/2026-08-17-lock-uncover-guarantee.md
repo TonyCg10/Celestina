@@ -9,7 +9,7 @@
   pipeline ran, so its smoke could start the real host without a second helper
   contending for the same DDC buses; the live session was not activated and
   Noctalia still owns it
-- **Plan:** [lock depth transition](../plans/active/2026-08-17-lock-depth-transition.md)
+- **Plan:** [lock depth transition](../plans/archive/2026-08-17-lock-depth-transition.md)
 - **Validation:** `VAL-LOCK-1`
 
 ## Procedure

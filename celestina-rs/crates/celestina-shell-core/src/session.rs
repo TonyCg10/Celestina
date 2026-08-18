@@ -149,15 +149,13 @@ fn level(options: &Payload) -> Result<u8, String> {
 fn kelvin(options: &Payload) -> Result<u32, String> {
     let minimum = crate::nightlight::Whitepoint::MINIMUM_KELVIN;
     let maximum = crate::nightlight::Whitepoint::MAXIMUM_KELVIN;
-    let value = options.get("kelvin").ok_or_else(|| {
-        format!("this verb needs a 'kelvin' between {minimum} and {maximum}")
-    })?;
+    let value = options
+        .get("kelvin")
+        .ok_or_else(|| format!("this verb needs a 'kelvin' between {minimum} and {maximum}"))?;
     let kelvin = value
         .as_i64()
         .filter(|kelvin| (i64::from(minimum)..=i64::from(maximum)).contains(kelvin))
-        .ok_or_else(|| {
-            format!("'kelvin' must be a whole number from {minimum} to {maximum}")
-        })?;
+        .ok_or_else(|| format!("'kelvin' must be a whole number from {minimum} to {maximum}"))?;
 
     u32::try_from(kelvin).map_err(|_| "'kelvin' is out of range".to_owned())
 }

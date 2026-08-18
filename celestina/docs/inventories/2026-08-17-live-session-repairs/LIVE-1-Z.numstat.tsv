@@ -1,0 +1,35 @@
+# LIVE-1-Z exact change inventory
+
+Base revision	30e0a31f26bcac134ba1156962017cacf3728f55
+Pathspec	celestina/docs/plans/active/2026-08-17-live-session-repairs.md
+Pathspec	celestina/docs/plans/archive/2026-08-17-lock-depth-transition.md
+Pathspec	celestina/docs/plans/active/README.md
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/docs/evidence/2026-08-17-lock-plan-closure.md
+Pathspec	celestina/docs/evidence/2026-08-17-lock-backdrop-handoff.md
+Pathspec	celestina/docs/evidence/2026-08-17-lock-depth-transition.md
+Pathspec	celestina/docs/evidence/2026-08-17-lock-uncover-guarantee.md
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/Cargo.lock
+Pathspec	docs/version-history.tsv
+Pathspec	celestina/docs/plans/active/2026-08-17-lock-depth-transition.md
+Pathspec	celestina/docs/inventories/2026-08-17-live-session-repairs/LIVE-1-Z.numstat.tsv
+
+added	deleted	content	path
+95	0	0c32a78b1f39d8435a78cb3dea35e01473ceb8346169add885558518d4d1c46e	celestina/docs/plans/active/2026-08-17-live-session-repairs.md
+188	0	f38f01cbf17a6d8ef9384bb49040aeb6aac9f54d203d19ca346429067548b78a	celestina/docs/plans/archive/2026-08-17-lock-depth-transition.md
+8	14	895aa89e07e20b74bac9f27bac19bc969a73aac110f65b9c85071765fdfe8691	celestina/docs/plans/active/README.md
+46	57	cf1ebde006b8121018492dcf5807c29b8d4066039847c47e26f1ed0afde21ec7	celestina/ROADMAP.md
+21	52	2713967c7b3b7970ee525a15e61c0da77770057b2697e7d0c145076dec22b890	celestina/STATUS.md
+46	0	a2e0910991ee92018cdc13f803c1b2d386bb679760b106d3fdb1835ff3d8dd07	celestina/docs/evidence/2026-08-17-lock-plan-closure.md
+1	1	d08db757807ca851583f480508e49a3d8ff9f9735bdb6b07067b28471d8405d2	celestina/docs/evidence/2026-08-17-lock-backdrop-handoff.md
+1	1	0b7b1b2615c103e353307ec6c274cb2c0ab154967bf502e109b0177e0c6cb07a	celestina/docs/evidence/2026-08-17-lock-depth-transition.md
+1	1	a5cc2edd31cc47f0da6ee2eadf7dcc7294b826f0e1ef5ddd923387611ca91db2	celestina/docs/evidence/2026-08-17-lock-uncover-guarantee.md
+1	1	a2de3b8e78be618af689db42eff20ad441a383c67f6ac9e4d3dcb0b475d27241	celestina/CMakeLists.txt
+1	1	94a94e5161d8202020587110c9809fe734d016bc3acd50e33a00f018b1b64982	celestina/Cargo.toml
+1	1	636c4b0bff08be809a3424f636db282dec562c4a955ce9970715ce85dd4ce913	celestina/Cargo.lock
+1	0	bcaea4a3691d73c98bfd264155966452a6d9d1bc2e63129d2a9cdd483dd27d37	docs/version-history.tsv
+0	186	deleted	celestina/docs/plans/active/2026-08-17-lock-depth-transition.md
+35	0	self	celestina/docs/inventories/2026-08-17-live-session-repairs/LIVE-1-Z.numstat.tsv

@@ -2,6 +2,8 @@
 
 #include <KWindowEffects>
 
+#include "blurreach.h"
+
 #include <QDebug>
 #include <QMargins>
 #include <QScreen>
@@ -143,7 +145,7 @@ void PanelMenuSurface::close()
     // gone — a fatal protocol error for the whole client, which is upstream
     // niri #3660 against this very Qt and KWindowSystem stack.
     content->setProperty("celestinaRetiring", true);
-    KWindowEffects::enableBlurBehind(content, false);
+    withdrawBlur(content);
     content->hide();
     content->deleteLater();
 }

@@ -153,6 +153,10 @@ bool PanelAttachmentLease::acquire(
     }
 
     const QString token = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    // By construction the caller mapped the surface to the panel's own output,
+    // so the panel's screen *is* this lease's output. Recorded now, while it is
+    // known, rather than asked of a surface that cannot answer yet.
+    m_output = panel->screen();
     m_panel = panel;
     QQuickItem *const source = resolveSource(globalAttachmentAnchor);
     m_panel = nullptr;
@@ -405,8 +409,18 @@ bool PanelAttachmentLease::windowsShareOutput() const
 {
     if (!m_panel || !m_surface)
         return false;
-    return !m_panel->screen() || !m_surface->screen()
-        || m_panel->screen() == m_surface->screen();
+    // Against the output this lease was taken for, never against the surface's
+    // live `screen()`. The surface is mapped to the panel's output by
+    // construction; what changes underneath is only Qt's *knowledge* of it, and
+    // acting on that knowledge before `wl_surface.enter` released every
+    // attachment that was not on the primary monitor.
+    //
+    // A genuine change still releases: an output that goes away leaves
+    // `m_output` null, and a panel that really moves to another screen no
+    // longer matches it.
+    if (!m_output)
+        return false;
+    return !m_panel->screen() || m_panel->screen() == m_output;
 }
 
 void PanelAttachmentLease::scheduleRefresh()
@@ -566,6 +580,7 @@ void PanelAttachmentLease::release()
     disconnectLifetimeTracking();
     m_panel = nullptr;
     m_surface = nullptr;
+    m_output = nullptr;
     m_source = nullptr;
     m_anchor = nullptr;
     m_carrierOriginOnOutput = QPointF();
