@@ -1520,19 +1520,27 @@ class DocumentationContract:
         if not self.git_object_exists(f"{parent_commit}:{active_relative}"):
             return
 
+        # The archiving unit is usually hosted by the *successor* checkpoint's
+        # plan, not by the plan being archived: a closed checkpoint does not
+        # edit itself to record its own retirement, the checkpoint taking the
+        # slot does. Searching only this plan's own inventories therefore missed
+        # every cross-plan archival — including `LIVE-1-Z`, which claims exactly
+        # this move and always did. What matters is that *some* done unit at the
+        # same endpoint claims both halves, not which plan hosts it.
         transition_found = False
-        for _unit, _inventory, endpoint, row_contents in self.historical_plan_inventories.get(
-            plan_relative, []
-        ):
-            if endpoint != archive_commit:
-                continue
-            if row_contents.get(active_relative) != "deleted":
-                continue
-            archive_content = row_contents.get(plan_relative)
-            if archive_content is None or archive_content in {"deleted", "self"}:
-                continue
-            transition_found = True
-            break
+        for hosted in self.historical_plan_inventories.values():
+            for _unit, _inventory, endpoint, row_contents in hosted:
+                if endpoint != archive_commit:
+                    continue
+                if row_contents.get(active_relative) != "deleted":
+                    continue
+                archive_content = row_contents.get(plan_relative)
+                if archive_content is None or archive_content in {"deleted", "self"}:
+                    continue
+                transition_found = True
+                break
+            if transition_found:
+                break
         if not transition_found:
             self.error(
                 path,
