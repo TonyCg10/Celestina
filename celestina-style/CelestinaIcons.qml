@@ -24,6 +24,8 @@ QtObject {
     // an icon. The guard belongs on the table, not on each reader of it.
     readonly property var available: Object.assign(Object.create(null), {
         "app-window": true,
+        "archive-compress": true,
+        "archive-extract": true,
         "arrow-down": true,
         "arrow-right": true,
         "battery-charging": true,
@@ -131,6 +133,7 @@ QtObject {
         "application-json": "file-braces",
         "application-pdf": "file-text",
         "application-x-archive": "file-archive",
+        "archive-insert": "archive-compress",
         "application-x-desktop": "app-window",
         "application-x-executable": "binary",
         "bookmark-new": "bookmark-plus",

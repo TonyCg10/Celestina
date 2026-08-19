@@ -55,6 +55,8 @@ qt_add_qml_module(celestina-style
         GlassContextMenu.qml
         GlassMenuItem.qml
     RESOURCES
+        icons/archive-compress.svg
+        icons/archive-extract.svg
         icons/go-previous.svg
         icons/go-next.svg
         icons/go-up.svg

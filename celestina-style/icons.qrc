@@ -1,5 +1,7 @@
 <RCC>
   <qresource prefix="/qt/qml/CelestinaStyle/icons">
+    <file alias="archive-compress.svg">icons/archive-compress.svg</file>
+    <file alias="archive-extract.svg">icons/archive-extract.svg</file>
     <file alias="go-previous.svg">icons/go-previous.svg</file>
     <file alias="go-next.svg">icons/go-next.svg</file>
     <file alias="go-up.svg">icons/go-up.svg</file>
