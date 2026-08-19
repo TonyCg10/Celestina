@@ -49,6 +49,7 @@ const QML_FILES: &[&str] = &[
     "qml/components/sidebar/SidebarContextMenus.qml",
     "qml/components/sidebar/SidebarInfo.qml",
     "qml/components/entry/EntryGlyph.qml",
+    "qml/components/entry/EntryIconRules.qml",
     "qml/components/entry/FavoriteBadge.qml",
     "qml/components/entry/DragScrollEdge.qml",
     "qml/components/entry/FolderRowDelegate.qml",
@@ -211,6 +212,9 @@ fn main() {
         .cpp_file(fluorita_qt::VIDEO_ITEM_HEADER)
         .files([
             "src/controller.rs",
+            // Exports one function to the thumbnail provider: the picture a
+            // file carries inside itself.
+            "src/embedded.rs",
             "src/dbus.rs",
             "src/editor.rs",
             "src/media.rs",

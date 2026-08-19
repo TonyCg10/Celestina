@@ -13,7 +13,7 @@ Item {
     readonly property bool missing: entry.kind === "missing"
     readonly property bool current: !missing
                                     && entry.path === (hostWindow.activeController
-                                                       ? hostWindow.activeController.currentPathKey : "")
+                                                       ? hostWindow.activeController.markedKey : "")
 
     height: hostWindow.sidebarRowHeight
 

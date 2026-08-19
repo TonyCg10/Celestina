@@ -1,5 +1,10 @@
 #include "siderita/thumbnailprovider.h"
 
+// The Rust side of the same crate: the parsers that read a picture out of a
+// program, a music tag or a package. Declared through the generated header so
+// the signature stays the bridge's, not a hand-written copy of it.
+#include "siderita/src/embedded.cxx.h"
+
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -141,6 +146,31 @@ bool openGeneratableSource(const QByteArray &pathBytes, QFile &file, ReadDescrip
            descriptor.adoptInto(file);
 }
 
+// Caches a produced thumbnail: write to a temp sibling then rename, so a reader
+// never sees a half-written PNG. Failure to cache is non-fatal — the thumbnail
+// still shows this session.
+void writeCache(const QString &largeDir, const QString &cachePath, const QImage &image,
+                const QByteArray &uri, const QDateTime &sourceMtime)
+{
+    QDir().mkpath(largeDir);
+    const QString temp =
+        cachePath + QStringLiteral(".tmp-") +
+        QString::number(reinterpret_cast<quintptr>(QThread::currentThreadId()), 16);
+    QImageWriter writer(temp, "png");
+    writer.setText(QStringLiteral("Thumb::URI"), QString::fromLatin1(uri));
+    writer.setText(QStringLiteral("Thumb::MTime"),
+                   QString::number(sourceMtime.toSecsSinceEpoch()));
+    if (writer.write(image)) {
+        QFile::setPermissions(temp, QFile::ReadOwner | QFile::WriteOwner);
+        QFile::remove(cachePath);
+        if (!QFile::rename(temp, cachePath)) {
+            QFile::remove(temp);
+        }
+    } else {
+        QFile::remove(temp);
+    }
+}
+
 // Loads a thumbnail for the file named by `pathBytes`: a valid cached one from
 // the shared cache, else a freshly generated + cached one. Returns a null image
 // for anything that is not a loadable image (the delegate then keeps its generic
@@ -177,6 +207,30 @@ QImage loadThumbnail(const QByteArray &pathBytes)
         }
     }
 
+    // A file that carries its own picture is answered from that picture: a
+    // program's icon, an album cover, an app's launcher art. It is tried before
+    // the image reader because none of these files *is* an image — the reader
+    // would refuse them — and after the cache because reading one costs a parse.
+    {
+        const ::rust::Slice<const ::std::uint8_t> raw(
+            reinterpret_cast<const ::std::uint8_t *>(pathBytes.constData()),
+            static_cast<::std::size_t>(pathBytes.size()));
+        const ::rust::Vec<::std::uint8_t> carried = siderita_embedded_image(raw);
+        if (!carried.empty()) {
+            QImage embedded = QImage::fromData(QByteArray(
+                reinterpret_cast<const char *>(carried.data()),
+                static_cast<qsizetype>(carried.size())));
+            if (!embedded.isNull()) {
+                if (embedded.width() > kThumbMax || embedded.height() > kThumbMax) {
+                    embedded = embedded.scaled(kThumbMax, kThumbMax, Qt::KeepAspectRatio,
+                                               Qt::SmoothTransformation);
+                }
+                writeCache(largeDir, cachePath, embedded, uri, sourceMtime);
+                return embedded;
+            }
+        }
+    }
+
     // Past here we would generate — but only for images. A video / audio file
     // with no cached thumbnail keeps its themed glyph until a media producer
     // fills the cache.
@@ -203,27 +257,7 @@ QImage loadThumbnail(const QByteArray &pathBytes)
         image = image.scaled(kThumbMax, kThumbMax, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     }
 
-    // Cache it: write to a temp sibling then rename, so a reader never sees a
-    // half-written PNG. Failure to cache is non-fatal — the thumbnail still
-    // shows this session.
-    QDir().mkpath(largeDir);
-    const QString temp =
-        cachePath + QStringLiteral(".tmp-") +
-        QString::number(reinterpret_cast<quintptr>(QThread::currentThreadId()), 16);
-    QImageWriter writer(temp, "png");
-    writer.setText(QStringLiteral("Thumb::URI"), QString::fromLatin1(uri));
-    writer.setText(QStringLiteral("Thumb::MTime"),
-                   QString::number(sourceMtime.toSecsSinceEpoch()));
-    if (writer.write(image)) {
-        QFile::setPermissions(temp, QFile::ReadOwner | QFile::WriteOwner);
-        QFile::remove(cachePath);
-        if (!QFile::rename(temp, cachePath)) {
-            QFile::remove(temp);
-        }
-    } else {
-        QFile::remove(temp);
-    }
-
+    writeCache(largeDir, cachePath, image, uri, sourceMtime);
     return image;
 }
 

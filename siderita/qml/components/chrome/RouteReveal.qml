@@ -16,9 +16,15 @@ Item {
     required property var navigationController
     required property bool ready
     property real progress: 1
-    readonly property real offset: CelestinaTheme.reducedMotion
-                                   ? 0
-                                   : (1 - progress) * CelestinaTheme.spaceSm
+    // The reveal is a *cut softener*, not an entrance: content that changes
+    // under a fixed frame is jarring, and the smallest gesture that hides the
+    // jump is the right one. A rise of eight pixels read as the page moving —
+    // this settles the new listing from 98.5% instead, which is felt rather
+    // than seen. The number is small on purpose: at this size the scale is
+    // legible as "something changed" without anything appearing to travel.
+    readonly property real revealScale: CelestinaTheme.reducedMotion
+                                        ? 1
+                                        : 0.985 + 0.015 * progress
     readonly property bool prepared: progress < 1 && !reveal.running
 
     function prepare() {

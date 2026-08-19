@@ -12,6 +12,7 @@ Item {
     readonly property real frameBottom: height - CelestinaTheme.spaceMd
     readonly property real frameHeight: Math.max(0, frameBottom - frameY)
     property alias surface: surfaceItem
+    readonly property real surfaceRadius: CelestinaTheme.concentricRadius(frameX)
 
     CelestinaSurface {
         id: surfaceItem
@@ -20,5 +21,9 @@ Item {
         width: root.frameWidth
         height: root.frameHeight
         role: CelestinaSurface.Grouped
+        // Concentric with the window: the box sits `frameX` inside it, so its
+        // corner is the window's minus that gap and the two curves stay
+        // parallel.
+        radiusOverride: root.surfaceRadius
     }
 }

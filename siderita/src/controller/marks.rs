@@ -365,3 +365,49 @@ const PLACE_CATALOGUE: &[&str] = &[
     "RECENT",
     "TRASH",
 ];
+
+impl qobject::SideritaController {
+    /// Records a section's collapsed state and republishes the list QML reads.
+    ///
+    /// Collapsing is a preference like any other: it survived only until the
+    /// window closed, which for someone who keeps a section shut is a setting
+    /// that does not work.
+    pub fn set_section_collapsed(mut self: Pin<&mut Self>, section: &QString, collapsed: bool) {
+        let section = section.to_string();
+        if section.is_empty() {
+            return;
+        }
+        let mut settings = crate::settings::load();
+        let already = settings.collapsed_sections.contains(&section);
+        if collapsed == already {
+            return;
+        }
+        if collapsed {
+            settings.collapsed_sections.push(section);
+        } else {
+            settings.collapsed_sections.retain(|s| *s != section);
+        }
+        let _ = crate::settings::save(&settings);
+        self.as_mut().publish_collapsed_sections(&settings);
+    }
+
+    /// Publishes the stored list, so a binding can read it without asking the
+    /// disk on every evaluation.
+    pub(crate) fn publish_collapsed_sections(
+        mut self: Pin<&mut Self>,
+        settings: &crate::settings::Settings,
+    ) {
+        self.as_mut()
+            .set_collapsed_sections(folded_list(&settings.collapsed_sections));
+    }
+}
+
+/// The stored section names as the list QML binds to.
+pub(crate) fn folded_list(sections: &[String]) -> QStringList {
+    sections
+        .iter()
+        .fold(QStringList::default(), |mut list, section| {
+            list.append(QString::from(section.as_str()));
+            list
+        })
+}

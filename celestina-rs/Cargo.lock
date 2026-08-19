@@ -1142,6 +1142,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "siderita-embedded"
+version = "0.1.0"
+dependencies = [
+ "zip",
+]
+
+[[package]]
 name = "siderita-ops"
 version = "0.1.0"
 dependencies = [

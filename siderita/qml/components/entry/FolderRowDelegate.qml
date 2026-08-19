@@ -157,7 +157,7 @@ Item {
         clip: true
 
         readonly property string media: root.kind === "directory"
-                                        ? "" : root.panel.mediaKind(root.name)
+                                        ? "" : root.panel.icons.mediaKind(root.name)
 
         EntryGlyph {
             anchors.centerIn: parent
@@ -170,10 +170,11 @@ Item {
             height: width
             kind: root.kind
             path: root.path
-            iconName: root.panel.mediaIconName(root.kind, kindGlyph.media, root.path)
+            iconName: root.panel.icons.mediaIconName(root.kind, kindGlyph.media, root.path)
+            ownIcon: root.panel.icons.entryOwnIcon(root.path)
             fallbackName: root.kind === "symlink" ? "symlink" : "file"
-            tone: root.panel.entryIconTone(root.kind)
-            tintOverride: root.panel.iconTint(root.path)
+            tone: root.panel.icons.entryIconTone(root.kind)
+            tintOverride: root.panel.icons.iconTint(root.path)
         }
 
         // The cached image / video-frame / cover the "thumb" provider
@@ -207,7 +208,7 @@ Item {
             anchors.bottom: parent.bottom
             anchors.margins: 1
             diameter: Math.round(13 * root.hostWindow.contentIconScale)
-            starred: root.panel.isFavorite(root.path)
+            starred: root.panel.icons.isFavorite(root.path)
         }
 
         // A small play badge marks a video's frame apart from a still image.

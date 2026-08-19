@@ -4,6 +4,7 @@ members = [
     "crates/celestina-shell-core",
     "crates/siderita-core",
     "crates/siderita-archive",
+    "crates/siderita-embedded",
     "crates/siderita-ops",
     "crates/siderita-qt",
     "crates/dotfiles-core",

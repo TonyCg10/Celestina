@@ -183,6 +183,12 @@ Item {
         onGoBackOrLeaveRequested: root.goBackOrLeave()
     }
 
+    EntryIconRules {
+        id: entryIconRules
+        controller: root.tabController
+        hostWindow: root.hostWindow
+    }
+
     Item {
         id: mainPanel
 
@@ -194,7 +200,7 @@ Item {
         // (root.hostWindow.contentIconScale / root.hostWindow.contentTextScale).
         Component.onCompleted: {
             viewMode = controller.savedViewMode()
-            rebuildFolderTypeIcons()
+            entryIconRules.rebuildFolderTypeIcons()
         }
         // Picking a view is both a new default and a statement about this
         // folder: the global keeps folders you have never arranged looking
@@ -243,104 +249,12 @@ Item {
         function isSelected(token) {
             return token.length > 0 && selectedTokens[token] === true
         }
-        // The media class of a file by extension — "image", "video",
-        // "audio" or "" — driving its Lucide icon and whether it asks the
-        // thumbnail provider (which reuses any cached thumbnail for any type,
-        // but only generates images itself; video/audio come from a producer).
-        function mediaKind(n) {
-            if (/\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|jxl|heic|heif)$/i.test(n))
-                return "image"
-            if (/\.(mp4|mkv|webm|mov|avi|m4v|mpe?g|wmv|flv|3gp|ogv|ts)$/i.test(n))
-                return "video"
-            if (/\.(mp3|flac|ogg|oga|opus|m4a|aac|wav|wma|aiff?|mka)$/i.test(n))
-                return "audio"
-            return ""
-        }
-        // Map each XDG user directory's PATH to its freedesktop folder-type
-        // icon, so Documentos / Descargas / Música / … show their own glyph
-        // in the content view, not the generic folder. Rebuilt on open; the
-        // paths are user-level and stable.
-        property var folderTypeIcons: ({})
-        function rebuildFolderTypeIcons() {
-            var defs = CelestinaFolderTypeIcons.defs
-            var m = {}
-            for (var k in defs) {
-                var p = controller.placePath(k)
-                if (p.length > 0)
-                    m[p] = defs[k]
-            }
-            folderTypeIcons = m
-        }
-        function folderIcon(path) {
-            return (path && folderTypeIcons[path]) ? folderTypeIcons[path] : "folder"
-        }
-        // User-chosen per-path appearance (shape + optional colour), folded
-        // from one atomic `path\ticon\taccent` record. The two-column parser is
-        // deliberately retained for configurations written by older builds.
-        readonly property var customAppearances: {
-            var m = {}
-            var entries = controller.customIconEntries
-            for (var i = 0; i < entries.length; i++) {
-                var first = entries[i].indexOf("\t")
-                if (first <= 0)
-                    continue
-                var second = entries[i].indexOf("\t", first + 1)
-                var path = entries[i].substring(0, first)
-                m[path] = {
-                    "icon": second < 0
-                            ? entries[i].substring(first + 1)
-                            : entries[i].substring(first + 1, second),
-                    "accent": second < 0 ? "" : entries[i].substring(second + 1)
-                }
-            }
-            return m
-        }
-        // Starred paths ("Añadir a favoritos"), folded into a set for O(1)
-        // lookup from every delegate. Same shape as customIcons: a binding,
-        // so a star appears the moment it is set.
-        readonly property var favorites: {
-            var s = {}
-            var entries = controller.favoriteEntries
-            for (var i = 0; i < entries.length; i++) {
-                var cut = entries[i].indexOf("\t")
-                s[cut > 0 ? entries[i].substring(0, cut) : entries[i]] = true
-            }
-            return s
-        }
-        function isFavorite(path) {
-            return path.length > 0 && favorites[path] === true
-        }
-        function customIcon(path) {
-            var appearance = path ? customAppearances[path] : undefined
-            return appearance ? appearance.icon : ""
-        }
-        function customIconAccent(path) {
-            var appearance = path ? customAppearances[path] : undefined
-            return appearance ? appearance.accent : ""
-        }
-        function iconTint(path) {
-            return CelestinaTheme.iconAccentColor(customIconAccent(path))
-        }
-        function entryIconTone(kind) {
-            return kind === "directory" ? CelestinaIcon.Folder
-                 : kind === "symlink" ? CelestinaIcon.Symlink
-                 : CelestinaIcon.File
-        }
+        // Appearance rules live in their own object, declared at the view's own
+        // level so it exists before anything binds to it; the panel only
+        // republishes it so delegates and dialogs reach it without borrowing an
+        // id from outside their own scope.
+        readonly property var icons: entryIconRules
 
-        // The Lucide icon a non-thumbnailed entry shows — a user override if
-        // set, else a media-type icon (video/audio/image), a type-specific
-        // folder, else generic.
-        function mediaIconName(kind, media, path) {
-            var custom = customIcon(path)
-            if (custom.length > 0)
-                return custom
-            return kind === "directory" ? folderIcon(path)
-                 : kind === "symlink" ? "emblem-symbolic-link"
-                 : media === "image" ? "image-x-generic"
-                 : media === "video" ? "video-x-generic"
-                 : media === "audio" ? "audio-x-generic"
-                 : "text-x-generic"
-        }
         function clearSelection() {
             selectedTokens = ({})
             selectionCount = 0
@@ -604,7 +518,7 @@ Item {
                 color: CelestinaTheme.clear
                 border.width: CelestinaTheme.borderFocus
                 border.color: CelestinaTheme.accent
-                radius: CelestinaTheme.radiusLg
+                radius: contentFrame.surfaceRadius
                 z: 40
             }
         }
@@ -616,7 +530,7 @@ Item {
             width: contentFrame.surface.width
             height: contentFrame.surface.height
             opacity: routeReveal.progress
-            transform: Translate { y: routeReveal.offset }
+            scale: routeReveal.revealScale
             controller: tabController
             entryModel: folderEntryModel
             panel: mainPanel
@@ -649,7 +563,7 @@ Item {
             width: contentFrame.surface.width
             height: contentFrame.surface.height
             opacity: routeReveal.progress
-            transform: Translate { y: routeReveal.offset }
+            scale: routeReveal.revealScale
             controller: tabController
             entryModel: folderEntryModel
             panel: mainPanel
@@ -740,7 +654,7 @@ Item {
             y: contentFrame.surface.y
                + (contentFrame.surface.height - height) / 2
             opacity: routeReveal.progress
-            transform: Translate { y: routeReveal.offset }
+            scale: routeReveal.revealScale
             controller: tabController
         }
 
@@ -765,7 +679,7 @@ Item {
         y: CelestinaTheme.compFloatingInset
         width: root.width - 2 * CelestinaTheme.compFloatingInset
         opacity: routeReveal.progress
-        transform: Translate { y: routeReveal.offset }
+        scale: routeReveal.revealScale
         compact: !root.headingExpanded
         controller: tabController
         hostWindow: root.hostWindow
@@ -780,8 +694,8 @@ Item {
         y: folderHeading.y + folderHeading.height + CelestinaTheme.spaceLg
         width: mainPanel.floatingChromeWidth
         height: CelestinaTheme.controlHeightLg
-        opacity: routeReveal.progress
-        transform: Translate { y: routeReveal.offset }
+        // No route reveal here: fading the breadcrumb and the search field —
+        // the very controls that carry you between routes — reads as a flinch.
         controller: tabController
         activeView: mainPanel.viewMode === "grid" ? fileGrid : folderListView
         hostWindow: root.hostWindow

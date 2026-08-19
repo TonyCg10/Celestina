@@ -59,11 +59,24 @@ Item {
             }
         }
 
-        // Cada zona se pliega por su cabecera. Vive en la sesión y no en
-        // disco a propósito: plegar es un gesto de "ahora estorba", no una
-        // preferencia — al abrir Siderita el panel enseña lo que hay.
-        property bool placesCollapsed: false
-        property bool devicesCollapsed: false
+        // Each zone folds by its own header, and the fold is remembered. It
+        // used to live only in the session, on the reasoning that folding is a
+        // passing "not now" rather than a preference — but for someone who
+        // keeps a section shut, a setting that forgets on every launch is a
+        // setting that does not work. The controller owns the list; these are
+        // bindings on it, so a fold written to disk is the one drawn.
+        readonly property bool placesCollapsed: sidebar.folded("places")
+        readonly property bool devicesCollapsed: sidebar.folded("devices")
+
+        function folded(section) {
+            const controller = root.hostWindow.activeController
+            return controller ? controller.collapsedSections.indexOf(section) >= 0 : false
+        }
+        function fold(section, collapsed) {
+            const controller = root.hostWindow.activeController
+            if (controller)
+                controller.setSectionCollapsed(section, collapsed)
+        }
 
         readonly property real placesHeaderTop:
                 placesColumn.y + placesHeader.y
@@ -132,7 +145,7 @@ Item {
                     textScale: root.hostWindow.sidebarTextScale
                     iconScale: root.hostWindow.sidebarIconScale
                     collapsed: sidebar.placesCollapsed
-                    onActivated: sidebar.placesCollapsed = !sidebar.placesCollapsed
+                    onActivated: sidebar.fold("places", !sidebar.placesCollapsed)
                 }
 
                 // ── Places ───────────────────────────────────────────────
@@ -190,7 +203,7 @@ Item {
                                    && root.hostWindow.activeController.recentActive)
                                 : (placePath.length > 0
                                    && placePath === (root.hostWindow.activeController
-                                                     ? root.hostWindow.activeController.currentPathKey : ""))
+                                                     ? root.hostWindow.activeController.markedKey : ""))
                         readonly property bool dragging: placesList.dragIndex === index
                         property bool justDragged: false
 
@@ -413,7 +426,7 @@ Item {
                     iconScale: root.hostWindow.sidebarIconScale
                     collapsed: sidebar.devicesCollapsed
                     trailingText: hiddenCount > 0 ? hiddenCount + " ocultos" : ""
-                    onActivated: sidebar.devicesCollapsed = !sidebar.devicesCollapsed
+                    onActivated: sidebar.fold("devices", !sidebar.devicesCollapsed)
                     onTrailingActivated: if (root.hostWindow.activeController)
                                              root.hostWindow.activeController.unhideAllDevices()
                 }
@@ -435,7 +448,7 @@ Item {
                         readonly property bool mounted: mountPoint.length > 0
                         readonly property bool current: mounted
                             && mountPoint === (root.hostWindow.activeController
-                                               ? root.hostWindow.activeController.currentPathKey : "")
+                                               ? root.hostWindow.activeController.markedKey : "")
 
                         width: placesColumn.width
                         height: root.hostWindow.sidebarRowHeight

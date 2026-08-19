@@ -32,7 +32,7 @@
 1	celestina-rs/crates/magnetitad/src/payload_handlers.rs
 6	celestina-rs/crates/magnetitad/src/runtime.rs
 6	celestina-style/CelestinaButton.qml
-14	celestina-style/CelestinaFileIcon.qml
+12	celestina-style/CelestinaFileIcon.qml
 16	celestina-style/CelestinaFolderIcon.qml
 4	celestina-style/CelestinaIconShapes.qml
 6	celestina-style/CelestinaSlider.qml
@@ -133,8 +133,8 @@
 6	siderita/qml/menus/FolderSortMenu.qml
 6	siderita/qml/menus/PathMenu.qml
 4	siderita/qml/menus/SizePopup.qml
-16	siderita/qml/views/FolderView.qml
-17	siderita/qml/views/Sidebar.qml
+14	siderita/qml/views/FolderView.qml
+14	siderita/qml/views/Sidebar.qml
 9	siderita/scripts/qml-tests.sh
 6	siderita/scripts/run.sh
 12	siderita/scripts/smoke.sh

@@ -4,6 +4,27 @@ This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md). Each failed row keeps its result and opens a new
 corrective implementation unit.
 
+## VAL-SID-08 — The volume's Trash, and what a folder shows
+
+- **Status:** pending
+- **Related implementation:** `SID-A2`
+- **Requires:** a verified Siderita artifact on the real Niri/Wayland session, a
+  removable volume mounted and writable, a folder holding source files of
+  several languages, a Windows program, a song with cover art and a book
+- **Procedure:** delete a large file on the removable volume and check where it
+  went, open Papelera, restore it, and check it returned to the volume; unmount
+  and remount to confirm the Trash view follows; fold two sidebar sections and
+  reopen Siderita; enter Papelera and Recientes with a place selected; edit a
+  text file and close it without saving
+- **Pass condition:** the delete is instant and lands in the volume's own
+  `.Trash-$uid` rather than the home Trash, the restore returns the file to its
+  original path, exactly one sidebar row is marked at a time, the folds are
+  still folded after a restart, the unsaved-changes question is legible over the
+  document, and each file shows the page — or the picture — that belongs to it
+- **Result:** not run by hand
+- **Evidence:** the volume used, `ls -a` of its root after the delete, and any
+  failure text
+
 ## VAL-SID-07 — Compressing and extracting on the live session
 
 - **Status:** pending

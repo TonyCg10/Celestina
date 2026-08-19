@@ -1,6 +1,6 @@
 [package]
 name = "siderita"
-version = "1.3.0"
+version = "1.4.0"
 edition = "2021"
 rust-version = "1.85"
 license = "GPL-3.0-or-later"
@@ -26,6 +26,9 @@ celestina-core = { path = "../celestina-rs/crates/celestina-core" }
 siderita-core = { path = "../celestina-rs/crates/siderita-core" }
 siderita-archive = { path = "../celestina-rs/crates/siderita-archive" }
 siderita-ops = { path = "../celestina-rs/crates/siderita-ops" }
+# The picture a file carries inside itself: a program's icon, an album cover,
+# an app's launcher art. Read here so the thumbnail provider can draw it.
+siderita-embedded = { path = "../celestina-rs/crates/siderita-embedded" }
 siderita-qt = { path = "../celestina-rs/crates/siderita-qt" }
 # The embedded Grafita editor: document, encoding, edit and loss-free save
 # rules live there, so this app only marshals them to Qt.

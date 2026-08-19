@@ -122,7 +122,7 @@ GlassContextMenu {
     }
 
     GlassMenuItem {
-        text: root.panel.isFavorite(root.targetPath)
+        text: root.panel.icons.isFavorite(root.targetPath)
               ? "Quitar de favoritos" : "Añadir a favoritos"
         visible: !root.multi && !root.controller.trashActive
         height: visible ? implicitHeight : 0
@@ -130,7 +130,7 @@ GlassContextMenu {
         // to read as the same mark the badge draws on the tile, and not
         // every theme carries both a filled and an outline star.
         icon.source: CelestinaTheme.fallbackIcon(
-                         root.panel.isFavorite(root.targetPath)
+                         root.panel.icons.isFavorite(root.targetPath)
                          ? "star" : "star-outline")
         onTriggered: root.controller.toggleFavorite(root.targetPath)
     }
@@ -228,7 +228,7 @@ GlassContextMenu {
         icon.source: CelestinaTheme.fallbackIcon("paintbrush")
         backdropSource: root.backdropSource
         enabled: !root.multi && !root.controller.trashActive
-        currentKey: root.panel.customIconAccent(root.targetPath)
+        currentKey: root.panel.icons.customIconAccent(root.targetPath)
         onAccentSelected: function(accentKey) {
             root.controller.setCustomIconAccent(root.targetPath, accentKey)
             root.close()

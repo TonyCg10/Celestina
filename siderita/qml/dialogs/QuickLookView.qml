@@ -30,7 +30,7 @@ CelestinaModalLayer {
                                      ? controller.entryNames[qlIndex] : ""
     readonly property string qlPath: qlIndex >= 0 ? controller.entryPath(qlIndex) : ""
     readonly property string qlKind: qlIndex >= 0 ? controller.entryKind(qlIndex) : ""
-    readonly property string qlMedia: panel.mediaKind(qlName)
+    readonly property string qlMedia: panel.icons.mediaKind(qlName)
     readonly property bool qlIsImage: qlMedia === "image"
     // El audio se reproduce aquí mismo; el vídeo todavía no tiene superficie en
     // este modal, así que se dice y se ofrece Intro para abrir Fluorita.
@@ -108,10 +108,10 @@ CelestinaModalLayer {
             y: 16
             width: CelestinaTheme.iconSm
             height: CelestinaTheme.iconSm
-            name: panel.mediaIconName(quickLookView.qlKind, quickLookView.qlMedia, quickLookView.qlPath)
+            name: panel.icons.mediaIconName(quickLookView.qlKind, quickLookView.qlMedia, quickLookView.qlPath)
             fallbackName: quickLookView.qlKind === "directory" ? "folder" : "file"
-            tone: panel.entryIconTone(quickLookView.qlKind)
-            tintOverride: panel.iconTint(quickLookView.qlPath)
+            tone: panel.icons.entryIconTone(quickLookView.qlKind)
+            tintOverride: panel.icons.iconTint(quickLookView.qlPath)
         }
         Text {
             anchors.left: qlIcon.right
@@ -255,12 +255,12 @@ CelestinaModalLayer {
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: 56
                     height: 56
-                    name: panel.mediaIconName(quickLookView.qlKind,
+                    name: panel.icons.mediaIconName(quickLookView.qlKind,
                                                   quickLookView.qlMedia, quickLookView.qlPath)
                     sourceSize: Qt.size(width, height)
                     fallbackName: quickLookView.qlKind === "directory" ? "folder" : "file"
-                    tone: panel.entryIconTone(quickLookView.qlKind)
-                    tintOverride: panel.iconTint(quickLookView.qlPath)
+                    tone: panel.icons.entryIconTone(quickLookView.qlKind)
+                    tintOverride: panel.icons.iconTint(quickLookView.qlPath)
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter

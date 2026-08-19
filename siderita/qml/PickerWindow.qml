@@ -507,7 +507,7 @@ Window {
                 anchors.fill: parent
                 anchors.margins: 10
                 opacity: routeReveal.progress
-                transform: Translate { y: routeReveal.offset }
+                scale: routeReveal.revealScale
                 clip: true
                 model: entryModel
                 currentIndex: -1
@@ -769,7 +769,7 @@ Window {
                 width: Math.min(420, parent.width - 64)
                 spacing: CelestinaTheme.spaceSm
                 opacity: routeReveal.progress
-                transform: Translate { y: routeReveal.offset }
+                scale: routeReveal.revealScale
                 visible: entryGrid.count === 0
                 Accessible.role: Accessible.Pane
                 Accessible.name: emptyTitle.text

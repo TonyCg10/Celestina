@@ -72,6 +72,8 @@ pub mod qobject {
         // and the headings read, `current_path_key` its byte-exact identity.
         #[qproperty(QString, current_path)]
         #[qproperty(QString, current_path_key)]
+        #[qproperty(QString, marked_key)]
+        #[qproperty(QStringList, collapsed_sections)]
         #[qproperty(QString, status_text)]
         #[qproperty(QString, error_text)]
         #[qproperty(QStringList, entry_names)]
@@ -103,7 +105,7 @@ pub mod qobject {
         #[qproperty(QStringList, op_icons)]
         #[qproperty(QStringList, op_steps)]
         /// An extraction parked on a password: which archive, and whether the
-        /// last attempt was wrong rather than missing.
+        /// last try was wrong rather than missing.
         #[qproperty(bool, password_pending)]
         #[qproperty(QString, password_archive)]
         #[qproperty(bool, password_retry)]
@@ -668,6 +670,21 @@ pub mod qobject {
         #[qinvokable]
         fn hide_device(self: Pin<&mut SideritaController>, name: &QString);
 
+        /// A name's glyph, the tint that separates what shares it, its own face.
+        #[qinvokable]
+        fn glyph_for_name(self: &SideritaController, name: &QString) -> QString;
+        #[qinvokable]
+        fn glyph_accent_for_name(self: &SideritaController, name: &QString) -> QString;
+        #[qinvokable]
+        fn own_icon_url(self: &SideritaController, key: &QString) -> QString;
+
+        #[qinvokable]
+        fn set_section_collapsed(
+            self: Pin<&mut SideritaController>,
+            section: &QString,
+            collapsed: bool,
+        );
+
         #[qinvokable]
         fn unhide_all_devices(self: Pin<&mut SideritaController>);
 
@@ -695,6 +712,7 @@ mod archive;
 mod display;
 mod fileops;
 mod find;
+mod glyphs;
 mod jobs;
 mod keys;
 mod marks;
@@ -706,6 +724,7 @@ mod scan;
 mod selection;
 mod session;
 pub(crate) mod shell;
+mod sorting;
 mod trash;
 mod view_options;
 
@@ -714,10 +733,13 @@ pub(crate) use display::{display_name, kind_key, kind_label, row_subtitle, searc
 pub(crate) use marks::{favorite_entry_list, icon_override_entries};
 pub(crate) use paste::{PasteOutcome, PendingPaste};
 pub(crate) use pendingnav::PendingNav;
+pub(crate) use sorting::{sort_field_from_index, RECENT_LIMIT};
 
 pub struct SideritaControllerRust {
     current_path: QString,
     current_path_key: QString,
+    marked_key: QString,
+    collapsed_sections: QStringList,
     status_text: QString,
     error_text: QString,
     entry_names: QStringList,
@@ -874,6 +896,10 @@ impl Default for SideritaControllerRust {
         Self {
             current_path: QString::default(),
             current_path_key: QString::default(),
+            marked_key: QString::default(),
+            // Read at construction so a folded section is already folded when
+            // the sidebar first draws.
+            collapsed_sections: marks::folded_list(&settings.collapsed_sections),
             status_text: QString::from("Preparando Siderita…"),
             error_text: QString::default(),
             entry_names: QStringList::default(),
@@ -1043,31 +1069,4 @@ fn launch_argument() -> Option<std::ffi::OsString> {
     std::env::args_os()
         .skip(1)
         .find(|arg| !arg.to_string_lossy().starts_with('-'))
-}
-
-const fn sort_field_from_index(index: i32) -> Option<SortField> {
-    match index {
-        0 => Some(SortField::Name),
-        1 => Some(SortField::Size),
-        2 => Some(SortField::Modified),
-        3 => Some(SortField::Kind),
-        _ => None,
-    }
-}
-
-const RECENT_LIMIT: usize = 100;
-
-#[cfg(test)]
-mod tests {
-    use super::sort_field_from_index;
-    use siderita_core::SortField;
-
-    #[test]
-    fn sort_field_indices_are_stable_for_qml() {
-        assert_eq!(sort_field_from_index(0), Some(SortField::Name));
-        assert_eq!(sort_field_from_index(1), Some(SortField::Size));
-        assert_eq!(sort_field_from_index(2), Some(SortField::Modified));
-        assert_eq!(sort_field_from_index(3), Some(SortField::Kind));
-        assert_eq!(sort_field_from_index(4), None);
-    }
 }

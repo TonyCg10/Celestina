@@ -1,7 +1,7 @@
 # Siderita implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** SID-A1
+- **Active implementation checkpoint:** SID-A2
 - **Related author validation:** `VAL-SID-G7`, `VAL-SID-04` and `VAL-SID-07` in
   [VALIDATION.md](VALIDATION.md); none of them blocks implementation
 
@@ -47,6 +47,28 @@ The plan is
 [Compressing and extracting archives](docs/plans/active/2026-08-18-archive-compression.md).
 It excludes browsing inside an archive, encrypted or split containers, `.rar`
 and `.7z`, and single-file `.gz`/`.xz`/`.zst`.
+
+## SID-A2 — After the archive verbs
+
+Everything in this checkpoint came from the author running the archive verbs on
+their own session. The falsifiable problems were: a delete on another disk was
+copying every byte to the home Trash instead of using that volume's own; the
+sidebar lit two rows at once; a folded section forgot itself on every launch;
+the unsaved-changes question was text over a scrim with nothing behind it; and
+every file that was not a folder or media drew one generic page, including the
+ones that carry their own picture.
+
+The boundary is `siderita-ops` for the Trash rules, a new `siderita-embedded`
+for reading an image out of a program, a song, a package or a book, and
+Siderita's own `src/` and `qml/` for what the folder draws. The tangible outcome
+is a delete that stays on its disk and is recoverable from there, one marked
+sidebar row, folds that persist, a legible guard dialog, and a folder whose
+files are told apart by family, by language and by the picture inside them.
+
+The plan is
+[After the archive verbs](docs/plans/active/2026-08-19-after-the-archive-verbs.md).
+It excludes reading a Windows executable for anything but its icon, and the
+author's own pass on the live session, which is `VAL-SID-08`.
 
 ## SID-M1 — Parent portal pickers on Wayland
 

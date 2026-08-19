@@ -20,7 +20,7 @@ impl qobject::SideritaController {
     /// name / origin / date lists), keeping the info paths for restore-by-index.
     pub fn load_trash(mut self: Pin<&mut Self>) {
         self.as_mut().set_op_error(QString::default());
-        let entries = match siderita_ops::list_home_trash() {
+        let entries = match siderita_ops::list_trash() {
             Ok(entries) => entries,
             Err(error) => {
                 self.as_mut()
@@ -118,6 +118,7 @@ impl qobject::SideritaController {
             .collect();
         self.as_mut().rust_mut().get_mut().search_hits = hits;
         self.as_mut().set_trash_active(true);
+        self.as_mut().publish_marked_key();
         self.as_mut().set_selected_token(QString::default());
         self.as_mut().set_entry_names(names.clone());
         self.as_mut().rows_ready(
@@ -194,6 +195,7 @@ impl qobject::SideritaController {
         let count = hits.len().min(i32::MAX as usize) as i32;
         self.as_mut().rust_mut().get_mut().search_hits = hits;
         self.as_mut().set_recent_active(true);
+        self.as_mut().publish_marked_key();
         self.as_mut().set_recent_count(count);
         self.as_mut().set_selected_token(QString::default());
         self.as_mut().set_entry_names(names.clone());
@@ -207,8 +209,25 @@ impl qobject::SideritaController {
         if self.rust().recent_active {
             self.as_mut().rust_mut().get_mut().search_hits.clear();
             self.as_mut().set_recent_active(false);
+            self.as_mut().publish_marked_key();
         }
     }
+    /// Publishes which location the sidebar should mark.
+    ///
+    /// One question with one owner. Every sidebar row used to compare its own
+    /// path against `current_path_key`, which keeps naming the folder
+    /// underneath while Papelera or Recientes are shown — so entering either
+    /// left two rows lit at once. The rule lives here instead of in the five
+    /// QML files that would otherwise have to agree.
+    pub(crate) fn publish_marked_key(mut self: Pin<&mut Self>) {
+        let marked = if *self.trash_active() || *self.recent_active() {
+            QString::default()
+        } else {
+            self.current_path_key().clone()
+        };
+        self.as_mut().set_marked_key(marked);
+    }
+
     /// Leaves Recientes and repaints the folder underneath.
     pub fn close_recent(mut self: Pin<&mut Self>) {
         self.as_mut().exit_recent();
@@ -220,6 +239,7 @@ impl qobject::SideritaController {
         if self.rust().trash_active {
             self.as_mut().rust_mut().get_mut().search_hits.clear();
             self.as_mut().set_trash_active(false);
+            self.as_mut().publish_marked_key();
         }
     }
     /// The `.trashinfo` record of the trashed entry whose body the key

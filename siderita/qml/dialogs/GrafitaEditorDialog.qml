@@ -374,17 +374,28 @@ CelestinaModalLayer {
 
             onVisibleChanged: if (visible) keepButton.forceActiveFocus()
 
-            Item {
+            // The question needs a surface of its own. It used to be text laid
+            // straight over the scrim, and a scrim is a veil, not a background:
+            // the document kept showing through the words a person has to read
+            // before answering.
+            GlassCard {
                 anchors.centerIn: parent
                 width: Math.min(420, card.width - CelestinaTheme.space2xl)
-                height: question.height + guardButtons.height + CelestinaTheme.space2xl
+                // Three gaps, not one: above the question, between it and the
+                // buttons, and below them. The card was sized for a single gap
+                // and cut the question in half.
+                height: question.height + guardButtons.height
+                        + 3 * CelestinaTheme.spaceLg
+                backdropSource: card
 
                 Accessible.role: Accessible.Dialog
                 Accessible.name: "Cambios sin guardar"
 
                 Text {
                     id: question
-                    width: parent.width
+                    y: CelestinaTheme.spaceLg
+                    x: CelestinaTheme.spaceLg
+                    width: parent.width - 2 * CelestinaTheme.spaceLg
                     wrapMode: Text.WordWrap
                     horizontalAlignment: Text.AlignHCenter
                     text: "«" + editorLayer.editor.name + "» tiene cambios sin guardar."

@@ -1,0 +1,28 @@
+# SID-A2-A exact change inventory
+
+Base revision	bfa640fdd7a29e19a8398a9ae801c8fc51c7bfc0
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/Cargo.toml
+Pathspec	celestina-rs/crates/siderita-embedded/
+Pathspec	celestina-rs/crates/siderita-ops/
+Pathspec	siderita/docs/evidence/2026-08-19-volume-trash-and-embedded-images.md
+Pathspec	siderita/docs/inventories/2026-08-19-after-the-archive-verbs/SID-A2-A.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-08-19-after-the-archive-verbs.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+7	0	dfcc3ad6c8bbae3be3cfcc0e35c1d4fe51a0fa40a5ad297b83b66cb81f4638c5	celestina-rs/Cargo.lock
+1	0	d465251f3f4687d682eaea0556c663bd4506c3c5f4da75c6b5c7a3340aefdaf3	celestina-rs/Cargo.toml
+14	0	3246eb83e64e5c598588513623fc991f948eea42f64f64f3c69ccac51b50e1a2	celestina-rs/crates/siderita-embedded/Cargo.toml
+285	0	0efc584d336581b724350e69e5211f9bf2d8ab011ffe5f5d551b3b5100434ed0	celestina-rs/crates/siderita-embedded/src/audio.rs
+133	0	c7be37c7106a725e3f8f260ca61f0737ad1758af35f1b537f84d530e4e8606fd	celestina-rs/crates/siderita-embedded/src/lib.rs
+109	0	ce8a0d76bead8ff7ddc4400f31da40299a84c68dede7b4e7570045d6d6f74636	celestina-rs/crates/siderita-embedded/src/packaged.rs
+274	0	5a36a93ed6aeadfb304401e29e702d07b4b6737dfd9a496f1d04150beb3c8ea3	celestina-rs/crates/siderita-embedded/src/pe.rs
+2	1	2fb5c91a15a853cec50bf60c7e0c26398e87fc287d5f2c410a5e5d4c6205f819	celestina-rs/crates/siderita-ops/src/lib.rs
+13	8	b63d2a9da3548caf4e014fa8ff82c7f093189ee0da8796b62b8be25356730430	celestina-rs/crates/siderita-ops/src/trash.rs
+38	12	52d4a23051b8c93e13fd0dddacd50b91ee744a191e31cf5b7b990312c6ea2d91	celestina-rs/crates/siderita-ops/src/trashinfo.rs
+311	0	00c699e8c3cf49c05daf763b7e69a54c1c214246a0752c38608ecb7dfb3fadfa	celestina-rs/crates/siderita-ops/src/volume.rs
+60	0	13557e96ae3638ff7c11720b3e4884b35b9fa751c1a107a1fd15d7ca1340fb16	siderita/docs/evidence/2026-08-19-volume-trash-and-embedded-images.md
+28	0	self	siderita/docs/inventories/2026-08-19-after-the-archive-verbs/SID-A2-A.numstat.tsv
+86	0	7715bc63dccf5456e1f06b464dae2f28d868d1962819d542a0ab8ca25e6b118d	siderita/docs/plans/active/2026-08-19-after-the-archive-verbs.md

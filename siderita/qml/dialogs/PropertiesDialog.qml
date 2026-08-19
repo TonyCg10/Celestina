@@ -37,11 +37,11 @@ CelestinaModalLayer {
             y: 18
             width: CelestinaTheme.iconMd
             height: CelestinaTheme.iconMd
-            name: panel.mediaIconName(propertiesView.iconKind, "",
+            name: panel.icons.mediaIconName(propertiesView.iconKind, "",
                                       controller.propPath)
             fallbackName: controller.propIsDir ? "folder" : "file"
-            tone: panel.entryIconTone(propertiesView.iconKind)
-            tintOverride: panel.iconTint(controller.propPath)
+            tone: panel.icons.entryIconTone(propertiesView.iconKind)
+            tintOverride: panel.icons.iconTint(controller.propPath)
         }
 
         Text {

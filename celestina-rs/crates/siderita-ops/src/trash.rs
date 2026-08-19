@@ -21,7 +21,9 @@ pub struct Trashed {
     pub info: PathBuf,
 }
 
-/// Sends `source` to the freedesktop home Trash (`$XDG_DATA_HOME/Trash`).
+/// Sends `source` to the Trash it belongs in: the home one
+/// (`$XDG_DATA_HOME/Trash`) when they share a filesystem, and the volume's own
+/// (`.Trash-$uid`, or a sticky shared `.Trash/$uid`) otherwise.
 ///
 /// Follows the spec's ordering: an `info/<name>.trashinfo` is created with
 /// `O_EXCL` first, which reserves a unique name, and only then is the entry
@@ -30,12 +32,15 @@ pub struct Trashed {
 /// only then removed (the same no-data-loss path as a cross-device move). A
 /// failure rolls the reserved info file back.
 ///
-/// Cross-filesystem entries land in the home Trash rather than a per-mount
-/// `.Trash-$uid`; using the mount-local trash is a later refinement.
+/// Which Trash is chosen matters for more than tidiness: trashing into the home
+/// Trash from another disk copies every byte onto the home filesystem, so a
+/// large folder deleted from an external drive would fill the system disk and
+/// take as long as the copy it really is. In its own volume's Trash the same
+/// delete is a rename.
 ///
-/// That cross-filesystem case is a real copy (see [`trash_into`]), so a caller
-/// trashing something large from another mount must run this off its UI thread
-/// and use `progress` to keep showing life, exactly like a copy or move would.
+/// A volume whose Trash cannot be created falls back to the home one, and that
+/// case is a real copy (see [`trash_into`]) — so a caller must still run this
+/// off its UI thread and use `progress`, exactly like a copy or move.
 pub fn trash(
     source: &Path,
     cancellation: &CancellationToken,
@@ -55,8 +60,8 @@ pub fn trash(
         Err(error) => return Err(OpError::io(source, &error)),
     }
 
-    let trash_root = home_trash()?;
-    trash_into(source, &trash_root, cancellation, progress)
+    let home = crate::volume::trash_home_for(source)?;
+    trash_into(source, &home.root, cancellation, progress)
 }
 
 /// Sends `source` into the Trash directory rooted at `trash_root` (which will

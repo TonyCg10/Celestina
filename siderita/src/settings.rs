@@ -63,6 +63,9 @@ pub struct Settings {
     pub place_order: Vec<String>,
     /// Place keys the user hid from the sidebar.
     pub hidden_places: Vec<String>,
+    /// Sidebar sections the user collapsed. Stored by name rather than by
+    /// position so a section added later simply starts open.
+    pub collapsed_sections: Vec<String>,
     /// The window size to reopen at. Only the size: a Wayland client cannot
     /// place its own window, so there is no honest position to remember.
     pub window_width: i32,
@@ -86,6 +89,7 @@ impl Default for Settings {
             sort_ascending: true,
             show_hidden: false,
             hidden_devices: Vec::new(),
+            collapsed_sections: Vec::new(),
             place_order: Vec::new(),
             hidden_places: Vec::new(),
             window_width: DEFAULT_WINDOW_WIDTH,
@@ -211,6 +215,9 @@ fn load_from(path: &Path) -> Settings {
                     .map(str::to_owned)
                     .collect();
             }
+            "collapsed_section" if !value.is_empty() => {
+                settings.collapsed_sections.push(value.to_owned());
+            }
             "hidden_place" if !value.is_empty() => {
                 settings.hidden_places.push(value.to_owned());
             }
@@ -315,6 +322,14 @@ fn save_to(path: &Path, settings: &Settings) -> io::Result<()> {
             text.push('\n');
         }
     }
+    for section in &settings.collapsed_sections {
+        let section = section.replace(['\n', '\r'], "");
+        if !section.is_empty() {
+            text.push_str("collapsed_section=");
+            text.push_str(&section);
+            text.push('\n');
+        }
+    }
     // Place keys are a closed vocabulary (HOME, DOCUMENTS, TRASH …), so a comma
     // list is safe here in a way a path list would not be.
     let order: Vec<&str> = settings
@@ -390,6 +405,7 @@ mod tests {
             hidden_devices: vec!["MI USB".to_owned(), "sdb1".to_owned()],
             place_order: vec!["TRASH".to_owned(), "HOME".to_owned()],
             hidden_places: vec!["MUSIC".to_owned()],
+            collapsed_sections: vec!["devices".to_owned(), "bookmarks".to_owned()],
             window_width: 1400,
             window_height: 900,
             tabs: vec!["/home/u".to_owned(), "/etc".to_owned()],

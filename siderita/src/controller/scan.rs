@@ -402,6 +402,7 @@ impl qobject::SideritaController {
             .set_current_path(QString::from(display.as_str()));
         self.as_mut()
             .set_current_path_key(crate::pathkey::publish(location));
+        self.as_mut().publish_marked_key();
     }
 
     pub(crate) fn update_navigation_state(mut self: Pin<&mut Self>) {

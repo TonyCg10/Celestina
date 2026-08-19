@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 use celestina_core::percent;
 
 use crate::error::OpError;
-use crate::trash::home_trash;
 
 /// One recoverable entry in the freedesktop Trash, read from its `.trashinfo`.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -23,18 +22,40 @@ pub struct TrashEntry {
     pub name: String,
 }
 
-/// Lists the recoverable entries in the home Trash (`$XDG_DATA_HOME/Trash`),
-/// most-recently-deleted first. An absent Trash is an empty list, not an error;
-/// orphan `.trashinfo` records with no matching `files/` body are skipped, since
-/// they cannot be restored.
-pub fn list_home_trash() -> Result<Vec<TrashEntry>, OpError> {
-    let root = home_trash()?;
-    list_trash_at(&root)
+/// Lists every recoverable entry this user has trashed, most-recently-deleted
+/// first: the home Trash and the Trash of every mounted volume.
+///
+/// All of them, because otherwise deleting from an external drive would look
+/// like the file simply vanished — its Trash is on the drive, and only the home
+/// one was ever read. An absent Trash is an empty list, not an error; orphan
+/// `.trashinfo` records with no matching `files/` body are skipped, since they
+/// cannot be restored.
+pub fn list_trash() -> Result<Vec<TrashEntry>, OpError> {
+    let mut out = Vec::new();
+    for home in crate::volume::all_trash_roots() {
+        // One unreadable volume must not empty the whole view.
+        if let Ok(entries) = list_trash_at_volume(&home.root, home.top.as_deref()) {
+            out.extend(entries);
+        }
+    }
+    sort_newest_first(&mut out);
+    Ok(out)
 }
 
 /// Lists the Trash rooted at `trash_root`. Split out so listing is testable
 /// without touching the real `$XDG_DATA_HOME`.
+#[cfg(test)]
 pub(crate) fn list_trash_at(trash_root: &Path) -> Result<Vec<TrashEntry>, OpError> {
+    list_trash_at_volume(trash_root, None)
+}
+
+/// The same, for a Trash that sits on a volume: a record there may write its
+/// original path relative to the volume's top directory, which is the one form
+/// this crate never writes and every reader must still understand.
+pub(crate) fn list_trash_at_volume(
+    trash_root: &Path,
+    top: Option<&Path>,
+) -> Result<Vec<TrashEntry>, OpError> {
     let info_dir = trash_root.join("info");
     let entries = match fs::read_dir(&info_dir) {
         Ok(entries) => entries,
@@ -52,9 +73,10 @@ pub(crate) fn list_trash_at(trash_root: &Path) -> Result<Vec<TrashEntry>, OpErro
         let Ok(content) = fs::read_to_string(&info) else {
             continue;
         };
-        let Some(original) = parse_original_path(&content) else {
+        let Some(recorded) = parse_original_path(&content) else {
             continue;
         };
+        let original = crate::volume::resolve_original(&recorded, top);
         let Some(trashed) = trashed_file_for(&info) else {
             continue;
         };
@@ -75,14 +97,18 @@ pub(crate) fn list_trash_at(trash_root: &Path) -> Result<Vec<TrashEntry>, OpErro
         });
     }
 
-    // Spec dates are `YYYY-MM-DDThh:mm:ss`, so lexical order is chronological;
-    // newest first, with the name as a stable tie-break.
+    sort_newest_first(&mut out);
+    Ok(out)
+}
+
+/// Spec dates are `YYYY-MM-DDThh:mm:ss`, so lexical order is chronological;
+/// newest first, with the name as a stable tie-break.
+fn sort_newest_first(out: &mut [TrashEntry]) {
     out.sort_by(|a, b| {
         b.deletion_date
             .cmp(&a.deletion_date)
             .then_with(|| a.name.cmp(&b.name))
     });
-    Ok(out)
 }
 
 /// Derives `<trash_root>/files/<name>` from `<trash_root>/info/<name>.trashinfo`.

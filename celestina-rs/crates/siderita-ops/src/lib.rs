@@ -31,6 +31,7 @@ mod reserve;
 mod restore;
 mod trash;
 mod trashinfo;
+mod volume;
 
 pub use available::{next_available, NameShape};
 pub use copy::{copy, copy_as, Progress};
@@ -42,4 +43,4 @@ pub use relocate::{move_as, move_entry, Moved};
 pub use rename::{rename, Renamed};
 pub use restore::{restore_from_trash, Restored};
 pub use trash::{trash, Trashed};
-pub use trashinfo::{list_home_trash, TrashEntry};
+pub use trashinfo::{list_trash, TrashEntry};

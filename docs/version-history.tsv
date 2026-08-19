@@ -97,3 +97,4 @@ celestina	0.29.12	bug	R8-P-Q	Fix tray menus, control readings, and night light
 celestina	0.30.0	milestone	LOCK-1-C	Set the locked session back behind its own wallpaper
 celestina	0.31.0	milestone	LIVE-1-A	Make the shell survive three monitors
 siderita	1.3.0	milestone	SID-A1-B	Compress and extract archives, with several at once
+siderita	1.4.0	milestone	SID-A2-B	Keep a delete on its own disk, and show what each file is

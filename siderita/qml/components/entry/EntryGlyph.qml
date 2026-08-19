@@ -17,6 +17,9 @@ Item {
     // El nombre de icono ya resuelto por el panel (respeta la elección del
     // usuario y el tipo de carpeta), y el tinte de acento si lo hay.
     required property string iconName
+    // The picture the entry carries as its own icon — a launcher has a face of
+    // its own — and empty for everything else.
+    property url ownIcon: ""
     property string fallbackName: "file"
     property color tintOverride: CelestinaTheme.clear
     property int tone: CelestinaIcon.File
@@ -57,9 +60,32 @@ Item {
         return ""
     }
 
+    // Its own face wins over its family: a game's launcher says more than "this
+    // is a file". If the image does not load, nothing is lost — the glyph
+    // underneath is still there.
+    //
+    // "Loaded" is not enough to hide that glyph: a file that turned out to carry
+    // no picture — most `.dll`s do not — answers with an image that is *ready
+    // and empty*, which drew nothing at all and left the cell blank. A face
+    // counts only once it has pixels.
+    Image {
+        id: ownFace
+        anchors.fill: parent
+        readonly property bool drawn: status === Image.Ready
+                                      && implicitWidth > 0 && implicitHeight > 0
+        source: glyph.ownIcon
+        visible: ownFace.drawn
+        sourceSize.width: 128
+        sourceSize.height: 128
+        fillMode: Image.PreserveAspectFit
+        asynchronous: true
+        cache: true
+        smooth: true
+    }
+
     CelestinaFolderIcon {
         anchors.fill: parent
-        visible: glyph.isDirectory
+        visible: glyph.isDirectory && !ownFace.drawn
         tone: glyph.tintOverride.a > 0 ? glyph.tintOverride
                                        : CelestinaTheme.glyphDirectory
         sheetVisible: glyph.sheetFits
@@ -72,7 +98,7 @@ Item {
     CelestinaFileIcon {
         id: shape
         anchors.fill: parent
-        visible: !glyph.isDirectory && known
+        visible: !glyph.isDirectory && known && !ownFace.drawn
         name: glyph.iconName
         tone: glyph.tintOverride.a > 0 ? glyph.tintOverride
               : glyph.kind === "symlink" ? CelestinaTheme.glyphSymlink
@@ -81,7 +107,7 @@ Item {
 
     CelestinaIcon {
         anchors.fill: parent
-        visible: !glyph.isDirectory && !shape.known
+        visible: !glyph.isDirectory && !shape.known && !ownFace.drawn
         name: glyph.iconName
         fallbackName: glyph.fallbackName
         // Un icono elegido a mano suele ser simbólico, y los simbólicos sólo se

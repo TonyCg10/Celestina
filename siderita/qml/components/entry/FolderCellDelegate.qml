@@ -132,7 +132,7 @@ Item {
             color: CelestinaTheme.clear
 
             readonly property string media: root.kind === "directory"
-                                            ? "" : root.panel.mediaKind(root.name)
+                                            ? "" : root.panel.icons.mediaKind(root.name)
 
             EntryGlyph {
                 anchors.centerIn: parent
@@ -141,10 +141,11 @@ Item {
                 height: width
                 kind: root.kind
                 path: root.path
-                iconName: root.panel.mediaIconName(root.kind, cellGlyph.media, root.path)
+                iconName: root.panel.icons.mediaIconName(root.kind, cellGlyph.media, root.path)
+                ownIcon: root.panel.icons.entryOwnIcon(root.path)
                 fallbackName: root.kind === "symlink" ? "symlink" : "file"
-                tone: root.panel.entryIconTone(root.kind)
-                tintOverride: root.panel.iconTint(root.path)
+                tone: root.panel.icons.entryIconTone(root.kind)
+                tintOverride: root.panel.icons.iconTint(root.path)
             }
 
             Image {
@@ -173,7 +174,7 @@ Item {
                 anchors.bottom: parent.bottom
                 anchors.margins: 2
                 iconScale: root.hostWindow.contentIconScale
-                starred: root.panel.isFavorite(root.path)
+                starred: root.panel.icons.isFavorite(root.path)
             }
 
             // Play badge on a video frame.

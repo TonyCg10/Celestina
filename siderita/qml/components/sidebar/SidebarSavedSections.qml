@@ -11,8 +11,20 @@ Item {
     signal favoriteMenuRequested(string path, real popupX, real popupY)
     signal bookmarkMenuRequested(int index, string path, real popupX, real popupY)
 
-    property bool favoritesCollapsed: false
-    property bool bookmarksCollapsed: false
+    // Remembered between runs, like the other two sections: the controller
+    // holds the list and these read it.
+    readonly property bool favoritesCollapsed: root.folded("favorites")
+    readonly property bool bookmarksCollapsed: root.folded("bookmarks")
+
+    function folded(section) {
+        const controller = root.hostWindow.activeController
+        return controller ? controller.collapsedSections.indexOf(section) >= 0 : false
+    }
+    function fold(section, collapsed) {
+        const controller = root.hostWindow.activeController
+        if (controller)
+            controller.setSectionCollapsed(section, collapsed)
+    }
 
     readonly property int bookmarkCount: bookmarksList.count
     readonly property Item favoritesHeaderItem: favoritesHeader
@@ -57,7 +69,7 @@ Item {
         textScale: root.hostWindow.sidebarTextScale
         iconScale: root.hostWindow.sidebarIconScale
         collapsed: root.favoritesCollapsed
-        onActivated: root.favoritesCollapsed = !root.favoritesCollapsed
+        onActivated: root.fold("favorites", !root.favoritesCollapsed)
     }
 
     ListView {
@@ -97,7 +109,7 @@ Item {
         textScale: root.hostWindow.sidebarTextScale
         iconScale: root.hostWindow.sidebarIconScale
         collapsed: root.bookmarksCollapsed
-        onActivated: root.bookmarksCollapsed = !root.bookmarksCollapsed
+        onActivated: root.fold("bookmarks", !root.bookmarksCollapsed)
     }
 
     ListView {

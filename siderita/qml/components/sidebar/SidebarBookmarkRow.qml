@@ -26,7 +26,7 @@ Item {
 
     readonly property bool current: bookmarkPath.length > 0
                                     && bookmarkPath === (hostWindow.activeController
-                                                         ? hostWindow.activeController.currentPathKey : "")
+                                                         ? hostWindow.activeController.markedKey : "")
     readonly property bool dragging: listDragIndex === rowIndex
     property bool justDragged: false
     property bool dragConsumed: false
