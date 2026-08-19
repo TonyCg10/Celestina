@@ -151,6 +151,30 @@ SoftMenu {
                     root.providerSource.requestPair(entry.modelData.id);
             }
 
+            // Mirror the phone's screen, beside the phone it mirrors.
+            //
+            // The mirror rides on Android's wireless debugging rather than on
+            // the KDE Connect identity this row carries, so it is not addressed
+            // by `id` the way ringing and unpairing are — the daemon finds the
+            // phone on the LAN by itself. It still belongs on the device row:
+            // that is the phone the author means, and an action parked on the
+            // section label read as belonging to the list rather than to the
+            // device.
+            //
+            // The icon is absent, not merely disabled, when the phone is out of
+            // reach: a row counts as actionable the moment it carries a
+            // trailing icon at all, and a menu with nothing published must
+            // offer nothing to press.
+            trailingTertiaryIcon: entry.isDevice && entry.modelData.connected
+                                  ? "monitor" : ""
+            trailingTertiaryHelpText: qsTr("Reflejar la pantalla de %1")
+                                      .arg(entry.text)
+            trailingTertiaryEnabled: entry.isDevice && entry.modelData.connected
+            onTrailingTertiaryTriggered: {
+                if (root.providerSource)
+                    root.providerSource.mirror();
+            }
+
             Accessible.description: entry.isDevice
                                     ? root.stateLine(entry.modelData) : ""
         }

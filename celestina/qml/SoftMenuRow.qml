@@ -42,6 +42,13 @@ GlassMenuItem {
     property string trailingSecondaryHelpText: ""
     property bool trailingSecondarySelected: false
     property bool trailingSecondaryEnabled: true
+    // A third slot, empty everywhere until a row earns it. Three is the ceiling
+    // the trailing column can hold before it starts eating the label a row
+    // exists to show.
+    property string trailingTertiaryIcon: ""
+    property string trailingTertiaryHelpText: ""
+    property bool trailingTertiarySelected: false
+    property bool trailingTertiaryEnabled: true
     // These opt-in dimensions distinguish outer section rhythm from the
     // air inside a row. The header's trailing space remains transparent so it
     // separates the two glass sections instead of making either one denser.
@@ -57,6 +64,7 @@ GlassMenuItem {
                                                 ? row.iconName : row.fallbackIcon
     readonly property bool hasTrailingActions: row.trailingPrimaryIcon.length > 0
                                                || row.trailingSecondaryIcon.length > 0
+                                               || row.trailingTertiaryIcon.length > 0
     readonly property int visualHeight: row.header
                                          ? CelestinaTheme.rowHeight
                                            + CelestinaTheme.borderFocus
@@ -74,6 +82,7 @@ GlassMenuItem {
     signal contextTriggered(int globalX, int globalY)
     signal trailingPrimaryTriggered()
     signal trailingSecondaryTriggered()
+    signal trailingTertiaryTriggered()
 
     enabled: row.actionable || row.hasTrailingActions
     implicitWidth: CelestinaTheme.compMenuWidth
@@ -274,6 +283,20 @@ GlassMenuItem {
                 role: row.trailingSecondarySelected
                       ? CelestinaButton.Selected : CelestinaButton.Ghost
                 onClicked: row.trailingSecondaryTriggered()
+            }
+
+            BackdropIconButton {
+                objectName: "celestina-menu-row-tertiary-action"
+                visible: row.trailingTertiaryIcon.length > 0
+                width: CelestinaTheme.controlHeightXs
+                height: CelestinaTheme.controlHeightXs
+                ink: row.ink
+                iconName: row.trailingTertiaryIcon
+                helpText: row.trailingTertiaryHelpText
+                enabled: row.trailingTertiaryEnabled
+                role: row.trailingTertiarySelected
+                      ? CelestinaButton.Selected : CelestinaButton.Ghost
+                onClicked: row.trailingTertiaryTriggered()
             }
         }
     }
