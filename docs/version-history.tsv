@@ -101,3 +101,4 @@ siderita	1.4.0	milestone	SID-A2-B	Keep a delete on its own disk, and show what e
 siderita	1.5.0	milestone	SID-A3-A	Pause a job, and watch it from any tab
 celestina	0.32.0	milestone	BUBBLE-1-A	Add Melibea's minimized windows as shell bubbles
 magnetita	1.1.0	milestone	MAG-R1	Add the one-button wireless screen mirror
+celestina	1.0.0	release	M7	Bump to v1.0.0 for coordinated bubble motion
