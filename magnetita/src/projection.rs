@@ -1,4 +1,9 @@
 //! Pure projection from confirmed daemon snapshots to QML-friendly values.
+//!
+//! language-contract: product-copy
+//!
+//! The mirror labels below are the words the author reads on the device row;
+//! everything else in this file is development truth as usual.
 
 use magnetita_core::{playback_progress, PlaybackProgress};
 
@@ -61,9 +66,50 @@ pub(crate) fn state_label(device: &Device) -> &'static str {
     }
 }
 
+/// The mirror's state in the author's words. The daemon's contract names are
+/// language-neutral by design, so the wording lives here, where it is tested
+/// without a bus and without a phone.
+pub(crate) fn mirror_label(state: &str, reason: &str) -> String {
+    match state {
+        "idle" => "Activa la depuración inalámbrica en el móvil".to_owned(),
+        "available" => "Listo para reflejar".to_owned(),
+        "pairing" => "Vinculando…".to_owned(),
+        "connecting" => "Conectando…".to_owned(),
+        "connected" => "Abriendo el espejo…".to_owned(),
+        "mirroring" => "Reflejando".to_owned(),
+        "failed" => mirror_reason_label(reason),
+        "" => "Espejo no disponible".to_owned(),
+        // A daemon newer than this app: say so rather than render a raw token.
+        _ => "Estado del espejo desconocido".to_owned(),
+    }
+}
+
+/// Why the last attempt failed, phrased as what to do about it.
+pub(crate) fn mirror_reason_label(reason: &str) -> String {
+    match reason {
+        "not-advertised" => {
+            "No se ve el móvil. Activa la depuración inalámbrica y comprueba que estáis en la misma red".to_owned()
+        }
+        "pair-rejected" => "El móvil rechazó el código de vinculación".to_owned(),
+        "connect-failed" => "No se pudo conectar con el móvil".to_owned(),
+        "device-offline" => "El móvil respondió pero no llegó a estar listo".to_owned(),
+        "mirror-failed" => "scrcpy no pudo abrirse".to_owned(),
+        "tool-missing" => "Faltan adb o scrcpy en el sistema".to_owned(),
+        "bad-address" | "bad-port" | "bad-service-name" => {
+            "El anuncio del móvil no era válido".to_owned()
+        }
+        _ => "El espejo falló".to_owned(),
+    }
+}
+
+/// Whether the Mirror control should offer to start or to stop.
+pub(crate) fn mirror_is_active(state: &str) -> bool {
+    matches!(state, "pairing" | "connecting" | "connected" | "mirroring")
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{media_label, next_toggle_value, progress_fields};
+    use super::{media_label, mirror_is_active, mirror_label, next_toggle_value, progress_fields};
     use crate::devices::Device;
 
     #[test]
@@ -108,5 +154,50 @@ mod tests {
         let second = next_toggle_value(true, Some(first));
         assert!(!first);
         assert!(second);
+    }
+
+    #[test]
+    fn every_contract_state_gets_its_own_words() {
+        let states = [
+            "idle",
+            "available",
+            "pairing",
+            "connecting",
+            "connected",
+            "mirroring",
+        ];
+        let labels: Vec<String> = states.iter().map(|s| mirror_label(s, "")).collect();
+        assert!(labels.iter().all(|label| !label.is_empty()));
+        // No two states may read the same, or the card would say nothing.
+        for (i, a) in labels.iter().enumerate() {
+            for b in &labels[i + 1..] {
+                assert_ne!(a, b);
+            }
+        }
+    }
+
+    #[test]
+    fn a_failure_is_phrased_as_what_to_do_about_it() {
+        assert!(mirror_label("failed", "not-advertised").contains("depuración inalámbrica"));
+        assert!(mirror_label("failed", "tool-missing").contains("scrcpy"));
+    }
+
+    #[test]
+    fn a_state_this_app_does_not_know_never_renders_a_raw_token() {
+        let label = mirror_label("teleporting", "");
+        assert!(!label.contains("teleporting"));
+        assert!(!label.is_empty());
+        let reason = mirror_label("failed", "cosmic-rays");
+        assert!(!reason.contains("cosmic-rays"));
+        assert!(!reason.is_empty());
+    }
+
+    #[test]
+    fn the_control_offers_to_stop_only_while_something_is_running() {
+        assert!(!mirror_is_active("idle"));
+        assert!(!mirror_is_active("available"));
+        assert!(!mirror_is_active("failed"));
+        assert!(mirror_is_active("connecting"));
+        assert!(mirror_is_active("mirroring"));
     }
 }

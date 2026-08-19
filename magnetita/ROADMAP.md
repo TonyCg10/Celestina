@@ -2,7 +2,7 @@
 
 - **Status:** active
 - **Active implementation checkpoint:** MAG-S1
-- **Related author validation:** `VAL-MAG-01` through `VAL-MAG-07` in
+- **Related author validation:** `VAL-MAG-01` through `VAL-MAG-08` in
   [VALIDATION.md](VALIDATION.md); they do not block implementation
 
 `MAG-S1` is executing under
@@ -107,6 +107,66 @@ test destination without a second build. If an implementation unit changes
 `magnetita-core`, it also runs `celestina/scripts/complete-production.sh` so the
 installed shell bundle carries the same shared contract without activating the
 live session. Do not wait for a real phone session to close the checkpoint.
+
+## MAG-R1 — One-button wireless screen mirror
+
+## Hypothesis and tangible outcome
+
+This host's `adb` is built without mDNS, so every manual step in the author's
+`~/Scripts/cpy.sh` — a hardcoded IP, a ping, a cached port, a 20000-port TCP
+sweep and three prompts — substitutes for one service lookup the phone already
+publishes. Browsing `_adb-tls-connect._tcp` and `_adb-tls-pairing._tcp` through
+the running Avahi daemon, which `magnetitad` can reach over the `zbus` it
+already depends on, collapses all of it. The tangible outcome is a Mirror
+control that opens scrcpy on the phone with no terminal, no address, no port
+and no code after the first pairing, and that survives the phone's port
+changing every time Wireless debugging is toggled.
+
+## Scope
+
+- Avahi mDNS watchers for the two ADB service types, as typed appear/disappear
+  events with validated host, port and service name.
+- A pure link state machine with a typed reason for every failure the UI shows.
+- Pairing and reconnection with no port or address entered by hand.
+- Owned, bounded `adb` and `scrcpy` subprocesses killed by the pid the daemon
+  started, never by process name.
+- A new versioned `org.celestina.Mirror1` interface and a Mirror control.
+
+## Exclusions
+
+- Embedding the scrcpy surface in QML. The author chose scrcpy's own window;
+  embedding means decoding `scrcpy-server`'s stream in process.
+- Extending `org.celestina.Devices1`. Mirroring is not KDE Connect.
+- Replacing this host's `adb` with the AUR platform-tools build.
+- Audio, recording, OTG and any scrcpy feature beyond the author's script.
+- Enabling Wireless debugging on the phone, which Android reserves to the user.
+
+## Build order
+
+| Unit | Status | Dependency | Implementation result | Agent evidence |
+|---|---|---|---|---|
+| MAG-R1-A | done | none | Validated endpoints and the pure link state machine | `cargo test -p magnetita-core -p magnetita-net` |
+| MAG-R1-B | done | MAG-R1-A | Pairing against a discovered endpoint, no port typed by hand | Pairing unit tests |
+| MAG-R1-C | done | MAG-R1-B | Resident reconnection, owned processes and `org.celestina.Mirror1` | Producer/consumer tests |
+| MAG-R1-D | done | MAG-R1-C | The Mirror control over confirmed snapshots | `qmllint` and app lifecycle test |
+| MAG-R1-E | done | MAG-R1-D | Installed bytes carry the mirror | `scripts/complete-production.sh` |
+
+## Implementation exit
+
+Every unit is implemented, tested and deployed: `scripts/complete-production.sh`
+passed and `celestina/scripts/complete-production.sh` carried the
+`magnetita-core` addition to the installed shell bundle. Against the real S25U,
+discovery, pairing with only the six digits read off the phone, connecting and
+mirroring all happened exactly as designed, and a defect the first live attempt
+found — an exited scrcpy read as the author closing the window when the phone
+had merely gone away — is corrected and deployed. What has not yet been
+observed live is the reconnection itself completing unattended end to end: the
+toggle test was run once, against the pre-fix daemon, and has not been repeated
+since. Unlike `MAG-M1`, this checkpoint does not close on tests alone: `VAL-MAG-08`
+is the exit, because a loopback test cannot observe an mDNS advertisement
+crossing the LAN, and it is not yet claimed.
+
+Plan: [wireless mirror](docs/plans/archive/2026-08-19-wireless-mirror.md).
 
 ## Closed evidence
 

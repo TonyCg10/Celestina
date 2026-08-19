@@ -108,6 +108,43 @@ does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
 - **Evidence:** `pgrep -a wl-copy` after a copy, `findmnt` around each mount,
   and the daemon log for the interval
 
+## VAL-MAG-08 — One-button mirror against the real S25U
+
+- **Status:** pending
+- **Related implementation:** `MAG-R1`
+- **Requires:** the mirror-capable daemon deployed, the phone and desktop on the
+  same LAN, and Wireless debugging enabled on the phone
+- **Procedure:** with the phone never before paired for wireless debugging on
+  this host, press Mirror and complete the one pairing step the app offers;
+  confirm scrcpy opens. Then turn Wireless debugging off and on, which gives the
+  phone a new random port, and press Mirror again without touching anything
+  else. Suspend and resume the desktop and repeat. Finally, start an unrelated
+  `scrcpy` by hand, stop the mirror from the app, and confirm the unrelated
+  window survives
+- **Pass condition:** the first mirror needs no terminal, no address and no
+  port; every later mirror needs no input at all; the app explains rather than
+  hangs when Wireless debugging is off; and stopping the mirror never kills a
+  scrcpy this daemon did not start
+- **Result:** partially observed on 2026-08-19, by hand rather than through the
+  app. With Wireless debugging on, the S25U advertised at `10.0.0.190:39799`;
+  `adb connect` failed on trust alone while the port accepted TCP, so the phone
+  was paired from its discovered pairing port `41059` with only the six digits
+  read off the screen, after which connect reached `device` state and scrcpy
+  came up on the daemon's exact argument vector. The phone's address was not
+  the one `~/Scripts/cpy.sh` hardcodes, so the old script would have declared it
+  unreachable. Recorded in
+  [mirror discovery evidence](docs/evidence/2026-08-19-mirror-discovery.md).
+  The daemon was then deployed and driven over the bus: it discovered the phone
+  unprompted and reached `mirroring` with a scrcpy of its own. Toggling Wireless
+  debugging **failed** the reconnection clause — the port moved to `45461` and
+  `adb` followed, but the mirror stayed dark, because scrcpy exits before the
+  mDNS record lapses and that exit was being read as the author closing the
+  window. Corrected and unit-covered; the corrected daemon is not yet deployed,
+  so the toggle has not been re-run. The control has still not been pressed in
+  the app itself
+- **Evidence:** `avahi-browse -rtp _adb-tls-connect._tcp` before and after the
+  toggle to record that the port changed, `adb devices -l`, and the daemon log
+
 ## Closed historical observations
 
 `VAL-MAG-1.0` is preserved in the

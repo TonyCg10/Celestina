@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::error::Error;
 use std::fs;
 use std::net::{SocketAddr, TcpListener, TcpStream};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -46,6 +46,8 @@ mod incoming_file;
 mod link_commands;
 mod lock;
 mod media;
+mod mirror;
+mod mirror_discovery;
 mod mount;
 mod notify;
 mod payload_handlers;
@@ -145,17 +147,26 @@ fn run() -> Result<(), Box<dyn Error>> {
     let event_log: Log = Arc::new(Mutex::new(VecDeque::new()));
     let commands: Commands = Arc::new(Mutex::new(HashMap::new()));
     let revocations = Arc::new(Revocations::new());
+    // The mirror worker is owned here so it is joined when the daemon ends: a
+    // scrcpy this daemon started must never outlive it.
+    let (mirror_handle, _mirror_worker) = mirror::start(dir.join("mirror.json"));
     let dbus = match serve_devices(
-        Arc::clone(&registry),
-        Arc::clone(&event_log),
-        Arc::clone(&commands),
-        Arc::clone(&trust),
-        Arc::clone(&revocations),
-        Arc::clone(&settings),
-        settings_path,
+        Devices::new(
+            Arc::clone(&registry),
+            Arc::clone(&event_log),
+            Arc::clone(&commands),
+            Arc::clone(&trust),
+            Arc::clone(&revocations),
+            Arc::clone(&settings),
+            settings_path,
+        ),
+        mirror_handle,
     ) {
         Ok(connection) => {
-            log("dbus", &format!("serving {}", devices::INTERFACE));
+            log(
+                "dbus",
+                &format!("serving {} and {}", devices::INTERFACE, mirror::INTERFACE),
+            );
             Some(connection)
         }
         Err(e) => {
@@ -875,30 +886,19 @@ impl Daemon {
     }
 }
 
-/// Start serving `org.celestina.Devices1` on the session bus.
+/// Start serving the daemon's two session-bus contracts under one name:
+/// `org.celestina.Devices1`, the phone link, and `org.celestina.Mirror1`, the
+/// wireless screen mirror. They are siblings rather than one interface because
+/// mirroring rides on Android debugging, not KDE Connect, and the consumers of
+/// the device contract have no use for it.
 fn serve_devices(
-    registry: Registry,
-    log: Log,
-    commands: Commands,
-    trust: Arc<Mutex<TrustStore>>,
-    revocations: Arc<Revocations>,
-    settings: Arc<Mutex<Settings>>,
-    settings_path: PathBuf,
+    devices: Devices,
+    mirror: mirror::Mirror,
 ) -> zbus::Result<zbus::blocking::Connection> {
     zbus::blocking::connection::Builder::session()?
         .name(devices::BUS_NAME)?
-        .serve_at(
-            devices::OBJECT_PATH,
-            Devices::new(
-                registry,
-                log,
-                commands,
-                trust,
-                revocations,
-                settings,
-                settings_path,
-            ),
-        )?
+        .serve_at(mirror::OBJECT_PATH, mirror::MirrorInterface::new(mirror))?
+        .serve_at(devices::OBJECT_PATH, devices)?
         .build()
 }
 

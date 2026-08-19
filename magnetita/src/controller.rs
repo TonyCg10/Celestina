@@ -76,6 +76,21 @@ pub mod qobject {
         #[qproperty(QStringList, plugin_labels)]
         #[qproperty(QStringList, plugin_enabled)]
         #[qproperty(bool, settings_available)]
+        // The wireless screen mirror: the state in the author's words, whether
+        // the phone is showing a pairing screen right now, and whether the
+        // control should offer to stop rather than to start.
+        #[qproperty(QString, mirror_label)]
+        #[qproperty(bool, mirror_can_pair)]
+        #[qproperty(bool, mirror_active)]
+        #[qproperty(bool, mirror_available)]
+        // The mirror options, each the daemon's own contract name so the
+        // settings surface binds to one value rather than parsing a list.
+        #[qproperty(QString, mirror_resolution)]
+        #[qproperty(QString, mirror_rate)]
+        #[qproperty(QString, mirror_quality)]
+        #[qproperty(QString, mirror_audio)]
+        #[qproperty(bool, mirror_screen_off)]
+        #[qproperty(bool, mirror_stay_awake)]
         type DevicesModel = super::DevicesModelRust;
 
         /// Re-read the devices Magnetita reports.
@@ -121,6 +136,28 @@ pub mod qobject {
         /// Flip plugin `index`'s enabled state and persist it.
         #[qinvokable]
         fn toggle_plugin(self: Pin<&mut DevicesModel>, index: i32);
+
+        /// Re-read the mirror state. The daemon publishes no change signal for
+        /// it — its state moves on the phone's schedule, not on a bus event —
+        /// so the card polls this while it is on screen.
+        #[qinvokable]
+        fn reload_mirror(self: Pin<&mut DevicesModel>);
+
+        /// Start mirroring, and keep mirroring across the phone's port changes.
+        #[qinvokable]
+        fn start_mirror(self: Pin<&mut DevicesModel>);
+
+        /// Stop mirroring and stop reconnecting.
+        #[qinvokable]
+        fn stop_mirror(self: Pin<&mut DevicesModel>);
+
+        /// Pair with the code the phone is showing.
+        #[qinvokable]
+        fn pair_mirror(self: Pin<&mut DevicesModel>, code: QString);
+
+        /// Change one mirror option, by the daemon's contract names.
+        #[qinvokable]
+        fn set_mirror_option(self: Pin<&mut DevicesModel>, key: QString, value: QString);
     }
 
     impl cxx_qt::Threading for DevicesModel {}
@@ -162,6 +199,16 @@ pub struct DevicesModelRust {
     plugin_labels: QStringList,
     plugin_enabled: QStringList,
     settings_available: bool,
+    mirror_label: QString,
+    mirror_can_pair: bool,
+    mirror_active: bool,
+    mirror_available: bool,
+    mirror_resolution: QString,
+    mirror_rate: QString,
+    mirror_quality: QString,
+    mirror_audio: QString,
+    mirror_screen_off: bool,
+    mirror_stay_awake: bool,
     watch_started: bool,
     event_watch_started: bool,
     device_reload_in_flight: bool,
@@ -204,6 +251,10 @@ enum ClientCommand {
     Media(String, MediaAction),
     Forget(String),
     SetPlugin(&'static str, bool),
+    MirrorStart,
+    MirrorStop,
+    MirrorPair(String),
+    MirrorOption(String, String),
 }
 
 impl ClientCommand {
@@ -216,6 +267,10 @@ impl ClientCommand {
             Self::Media(id, action) => crate::devices::media_action(&id, action),
             Self::Forget(id) => crate::devices::forget(&id),
             Self::SetPlugin(plugin, enabled) => crate::devices::set_plugin(plugin, enabled),
+            Self::MirrorStart => crate::devices::mirror_start(),
+            Self::MirrorStop => crate::devices::mirror_stop(),
+            Self::MirrorPair(code) => crate::devices::mirror_pair(&code),
+            Self::MirrorOption(key, value) => crate::devices::mirror_set_option(&key, &value),
         };
         if let Err(error) = result {
             eprintln!("magnetita: D-Bus action failed: {error}");
@@ -708,6 +763,86 @@ impl qobject::DevicesModel {
 
     /// Opens the device's mount in the file manager (Siderita). A device with no
     /// mount yet is a no-op.
+    /// Reads the mirror snapshot off the GUI thread and applies it whole, so
+    /// the state and the reason that explains it are never from different
+    /// moments.
+    pub fn reload_mirror(mut self: Pin<&mut Self>) {
+        let qt = self.as_mut().qt_thread();
+        std::thread::spawn(move || {
+            let snapshot = crate::devices::mirror_snapshot();
+            let _ = qt.queue(
+                move |mut model: Pin<&mut qobject::DevicesModel>| match snapshot {
+                    Ok(snapshot) => {
+                        let label =
+                            crate::projection::mirror_label(&snapshot.state, &snapshot.reason);
+                        model.as_mut().set_mirror_label(QString::from(&label));
+                        model.as_mut().set_mirror_can_pair(snapshot.can_pair);
+                        model
+                            .as_mut()
+                            .set_mirror_active(crate::projection::mirror_is_active(
+                                &snapshot.state,
+                            ));
+                        model.as_mut().set_mirror_available(true);
+                        let option = |key: &str, fallback: &str| {
+                            QString::from(
+                                snapshot
+                                    .options
+                                    .get(key)
+                                    .map(String::as_str)
+                                    .unwrap_or(fallback),
+                            )
+                        };
+                        model
+                            .as_mut()
+                            .set_mirror_resolution(option("resolution", "balanced"));
+                        model.as_mut().set_mirror_rate(option("rate", "smooth"));
+                        model
+                            .as_mut()
+                            .set_mirror_quality(option("quality", "everyday"));
+                        model.as_mut().set_mirror_audio(option("audio", "phone"));
+                        model.as_mut().set_mirror_screen_off(
+                            snapshot.options.get("screenOff").map(String::as_str) == Some("true"),
+                        );
+                        model.as_mut().set_mirror_stay_awake(
+                            snapshot.options.get("stayAwake").map(String::as_str) == Some("true"),
+                        );
+                    }
+                    Err(error) => {
+                        eprintln!("magnetita: mirror snapshot unavailable: {error}");
+                        model.as_mut().set_mirror_available(false);
+                        model.as_mut().set_mirror_can_pair(false);
+                        model.as_mut().set_mirror_active(false);
+                    }
+                },
+            );
+        });
+    }
+
+    pub fn start_mirror(mut self: Pin<&mut Self>) {
+        self.as_mut().enqueue_command(ClientCommand::MirrorStart);
+    }
+
+    pub fn stop_mirror(mut self: Pin<&mut Self>) {
+        self.as_mut().enqueue_command(ClientCommand::MirrorStop);
+    }
+
+    pub fn set_mirror_option(mut self: Pin<&mut Self>, key: QString, value: QString) {
+        self.as_mut().enqueue_command(ClientCommand::MirrorOption(
+            key.to_string(),
+            value.to_string(),
+        ));
+    }
+
+    pub fn pair_mirror(mut self: Pin<&mut Self>, code: QString) {
+        let code = code.to_string();
+        // An empty code would make adb wait on stdin for one; refuse here.
+        if code.is_empty() {
+            return;
+        }
+        self.as_mut()
+            .enqueue_command(ClientCommand::MirrorPair(code));
+    }
+
     pub fn open_mount(self: Pin<&mut Self>, index: i32) {
         let mount = usize::try_from(index)
             .ok()

@@ -23,6 +23,8 @@ pub mod clipboard;
 pub mod event;
 pub mod findmyphone;
 pub mod identity;
+pub mod mirror;
+pub mod mirror_options;
 pub mod mpris;
 pub mod notification;
 pub mod packet;
@@ -41,6 +43,11 @@ pub use findmyphone::TYPE_FINDMYPHONE_REQUEST;
 pub use identity::{
     DeviceType, Identity, DEFAULT_PORT, MIN_PROTOCOL_VERSION, PROTOCOL_VERSION, TYPE_IDENTITY,
 };
+pub use mirror::{
+    valid_service_name, AdbService, MirrorAction, MirrorEndpoint, MirrorError, MirrorEvent,
+    MirrorLink, MirrorState, SERVICE_CONNECT, SERVICE_PAIRING,
+};
+pub use mirror_options::{MirrorAudio, MirrorOptions, MirrorQuality, MirrorRate, MirrorResolution};
 pub use mpris::{
     playback_progress, read_album_art, read_mpris, read_mpris_request, request_album_art,
     IncomingAlbumArt, MediaAction, MprisRequest, MprisUpdate, PlaybackProgress, PlayerState,

@@ -13,6 +13,7 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaSectionLabel.qml",
     "qml/CelestinaFocusRing.qml",
     "qml/CelestinaSwitch.qml",
+    "qml/CelestinaTextField.qml",
     "qml/GlassSurface.qml",
     "qml/ListSection.qml",
     // App composition: Main owns state/navigation; pages compose reusable pieces.
@@ -21,6 +22,9 @@ const QML_FILES: &[&str] = &[
     "qml/components/MediaProgress.qml",
     "qml/components/MediaCard.qml",
     "qml/components/DeviceControls.qml",
+    "qml/components/QuietIconButton.qml",
+    "qml/components/MirrorChoiceRow.qml",
+    "qml/components/MirrorSettingsSheet.qml",
     "qml/components/ActivityLog.qml",
     "qml/components/PairedDeviceRow.qml",
     "qml/components/PluginRow.qml",

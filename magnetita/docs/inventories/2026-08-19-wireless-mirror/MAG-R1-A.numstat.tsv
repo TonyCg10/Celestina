@@ -1,0 +1,59 @@
+# MAG-R1-A exact change inventory
+
+Base revision	ae2b0f3e197eede1ff7bc87d33ff61ef16c06073
+Pathspec	celestina-rs/crates/magnetita-core/src/lib.rs
+Pathspec	celestina-rs/crates/magnetitad/src/main.rs
+Pathspec	celestina-rs/crates/magnetitad/src/subprocess.rs
+Pathspec	magnetita/Cargo.lock
+Pathspec	magnetita/Cargo.toml
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/VALIDATION.md
+Pathspec	magnetita/build.rs
+Pathspec	magnetita/qml/components/AppHeader.qml
+Pathspec	magnetita/qml/components/DeviceControls.qml
+Pathspec	magnetita/qml/components/MediaCard.qml
+Pathspec	magnetita/src/controller.rs
+Pathspec	magnetita/src/devices.rs
+Pathspec	magnetita/src/projection.rs
+Pathspec	celestina-rs/crates/magnetita-core/src/mirror.rs
+Pathspec	celestina-rs/crates/magnetita-core/src/mirror_options.rs
+Pathspec	celestina-rs/crates/magnetitad/src/mirror.rs
+Pathspec	celestina-rs/crates/magnetitad/src/mirror_discovery.rs
+Pathspec	magnetita/docs/evidence/2026-08-19-mirror-discovery.md
+Pathspec	magnetita/docs/plans/archive/2026-08-19-wireless-mirror.md
+Pathspec	magnetita/qml/CelestinaTextField.qml
+Pathspec	magnetita/qml/components/MirrorChoiceRow.qml
+Pathspec	magnetita/qml/components/MirrorSettingsSheet.qml
+Pathspec	magnetita/qml/components/QuietIconButton.qml
+Pathspec	docs/version-history.tsv
+Pathspec	magnetita/docs/inventories/2026-08-19-wireless-mirror/MAG-R1-A.numstat.tsv
+
+added	deleted	content	path
+7	0	ee8288b88365b6fd900115333c33372f94043cda0bebab729a8c31fe338a0729	celestina-rs/crates/magnetita-core/src/lib.rs
+29	29	358da605e619918fc5ced77e305d48b0471a97af24708eb29ca60e2ecf622b81	celestina-rs/crates/magnetitad/src/main.rs
+16	0	91739759b3dd6461f5162d113b33fe11ec0fe4c17bdea86418d3d2ddde56c5bc	celestina-rs/crates/magnetitad/src/subprocess.rs
+1	1	a5fc329dfd1b90f81c03c0da550cfc6686fd8d178516effa91b57896f1c4a6f5	magnetita/Cargo.lock
+1	1	a8db3e9d76288a388c5de12e47c90cb99c5c9b131461a1fd3381ea729806fc01	magnetita/Cargo.toml
+61	1	660e88c1ab64c7ddea42b4e634cf68fa3999513a325f5aff596ad9db986ad229	magnetita/ROADMAP.md
+13	1	07e2e2ccae9a16b5f9a6d95be48bd7b5b88e786cb5f508ea68e2997d8cac308b	magnetita/STATUS.md
+37	0	2f8a2c0a4d1650aa814fc8e81f041fe8e90ca69dcaeaeb42672d5070edd94904	magnetita/VALIDATION.md
+4	0	802eec0e1448780024f5d41461377ae854d8b3d5a9b6cc3ffe7fa9117cdb3bc7	magnetita/build.rs
+1	1	aebccb8757c95d5e3f27c5f0f4d392fa43e7e30a1427e4a8619e3d403cb054c8	magnetita/qml/components/AppHeader.qml
+130	15	12502544c1f7548581dd353a4a1abbf09a2a13dc25e07463bb0fce2c9d33f936	magnetita/qml/components/DeviceControls.qml
+3	3	648b5c1095877b1e867df9ac25ee04b732fdd3abdbd3c5356d4e861fde622f4e	magnetita/qml/components/MediaCard.qml
+135	0	ffc5d9fe5a6791c7978ad7a90271ac2ef3529e920fec1a1b1e6692477c20956d	magnetita/src/controller.rs
+67	0	bb72dd798b63a2ddadaaf3feebcca126e3230c866f50d1d0adf52a47118d0dae	magnetita/src/devices.rs
+92	1	990fd3da76214b4a23215dc0962c444466ccde5b37b175e6dd9a8686914c25a4	magnetita/src/projection.rs
+760	0	78e0023a8f9428302dffca0b8c42a92b2d84fd3b90ea77aefa91e9809cfaaaf6	celestina-rs/crates/magnetita-core/src/mirror.rs
+408	0	346ff500cb463ef9a17b42ce0d0b6b04d266816033f19c4bf2bea9d596d8a204	celestina-rs/crates/magnetita-core/src/mirror_options.rs
+714	0	a4388e0e8086cd52429ee8c5c9bc9ce99ebd9e08fe13a4be86072ea8a43a35dc	celestina-rs/crates/magnetitad/src/mirror.rs
+275	0	660064a795fa806cb17860bbc7b57d0a0814c5be2eaed167737483be28f223a1	celestina-rs/crates/magnetitad/src/mirror_discovery.rs
+229	0	f879ca65b6856380a7315b4c181982fe05e2074db1dc6725dedbae0d178dc63e	magnetita/docs/evidence/2026-08-19-mirror-discovery.md
+193	0	c49d8b1d128099cec4f870e45685d612a041e8eca4fdb320cf70276ac0607084	magnetita/docs/plans/archive/2026-08-19-wireless-mirror.md
+1	0	859908d291e5a0b4de0cdce98b8b1b7265183971fba73f7d008309af0eb54aef	magnetita/qml/CelestinaTextField.qml
+59	0	0048602907261eab3398194cff5dfe47b2d27417e1b4c6485c462cc02c97fc7e	magnetita/qml/components/MirrorChoiceRow.qml
+101	0	78610de4ef2491a5a0005bc5183ccbdaebfcea9c797c6cb6f52d0318186f78c0	magnetita/qml/components/MirrorSettingsSheet.qml
+17	0	afd87d103ebac26f6c5a62a21ffa6ea4eae43ea82453cb62fdf22be9cc2eebaa	magnetita/qml/components/QuietIconButton.qml
+1	0	0206170a60be7f565c75e1c106e490310c58a1caf0ffd8e13a1da2cc4fe041d2	docs/version-history.tsv
+59	0	self	magnetita/docs/inventories/2026-08-19-wireless-mirror/MAG-R1-A.numstat.tsv

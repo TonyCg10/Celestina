@@ -17,6 +17,10 @@ use zbus::zvariant::OwnedValue;
 const SERVICE: &str = "org.celestina.Magnetita";
 const OBJECT: &str = "/org/celestina/Devices1";
 const INTERFACE: &str = "org.celestina.Devices1";
+/// The screen mirror is a sibling contract under the same bus name, not part of
+/// the device contract: it rides on Android debugging, not KDE Connect.
+const MIRROR_OBJECT: &str = "/org/celestina/Mirror1";
+const MIRROR_INTERFACE: &str = "org.celestina.Mirror1";
 
 /// A device Magnetita reports as connected.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -251,6 +255,69 @@ pub fn set_plugin(plugin: &str, enabled: bool) -> Result<(), String> {
         Proxy::new(&connection, SERVICE, OBJECT, INTERFACE).map_err(|error| error.to_string())?;
     proxy
         .call("SetPlugin", &(plugin, enabled))
+        .map_err(|error| error.to_string())
+}
+
+/// What the daemon confirms about the mirror. Read whole so the state and the
+/// reason that explains it can never be shown from different moments.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct MirrorSnapshot {
+    pub state: String,
+    pub can_pair: bool,
+    pub reason: String,
+    /// The mirror options as the daemon's contract names them.
+    pub options: HashMap<String, String>,
+}
+
+/// The confirmed mirror state. An unavailable daemon is an error, not an idle
+/// mirror, so the app can say so rather than offer a button that cannot work.
+pub fn mirror_snapshot() -> Result<MirrorSnapshot, String> {
+    let connection = confirmed("session bus unavailable", Connection::session())?;
+    let proxy = confirmed(
+        "Magnetita unavailable",
+        Proxy::new(&connection, SERVICE, MIRROR_OBJECT, MIRROR_INTERFACE),
+    )?;
+    Ok(MirrorSnapshot {
+        state: confirmed("State read failed", proxy.get_property("State"))?,
+        can_pair: confirmed("CanPair read failed", proxy.get_property("CanPair"))?,
+        reason: confirmed("Reason read failed", proxy.get_property("Reason"))?,
+        options: confirmed("Options read failed", proxy.get_property("Options"))?,
+    })
+}
+
+/// Start mirroring, and keep mirroring across the phone's port changes.
+pub fn mirror_start() -> Result<(), String> {
+    mirror_proxy()?
+        .call("Start", &())
+        .map_err(|error| error.to_string())
+}
+
+/// Stop mirroring and stop reconnecting.
+pub fn mirror_stop() -> Result<(), String> {
+    mirror_proxy()?
+        .call("Stop", &())
+        .map_err(|error| error.to_string())
+}
+
+/// Change one mirror option. The daemon refuses a value outside its contract,
+/// so the app never has to guess whether one was accepted — the next snapshot
+/// says.
+pub fn mirror_set_option(key: &str, value: &str) -> Result<(), String> {
+    mirror_proxy()?
+        .call("SetOption", &(key, value))
+        .map_err(|error| error.to_string())
+}
+
+/// Pair with the code the phone is showing right now.
+pub fn mirror_pair(code: &str) -> Result<(), String> {
+    mirror_proxy()?
+        .call("Pair", &(code,))
+        .map_err(|error| error.to_string())
+}
+
+fn mirror_proxy() -> Result<Proxy<'static>, String> {
+    let connection = Connection::session().map_err(|error| error.to_string())?;
+    Proxy::new(&connection, SERVICE, MIRROR_OBJECT, MIRROR_INTERFACE)
         .map_err(|error| error.to_string())
 }
 

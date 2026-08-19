@@ -62,9 +62,25 @@ pub(crate) fn spawn_grouped(
     args: &[&str],
     stdout: Stdio,
 ) -> io::Result<(Child, Pid)> {
+    spawn_grouped_env(program, args, stdout, &[])
+}
+
+/// [`spawn_grouped`], with extra environment variables for the child.
+///
+/// A daemon inherits the environment it was *started* with, and a user service
+/// can start before the compositor publishes the session's display variables.
+/// A child that needs them therefore cannot rely on this process's environment
+/// and must be given the values resolved at spawn time.
+pub(crate) fn spawn_grouped_env(
+    program: &str,
+    args: &[&str],
+    stdout: Stdio,
+    env: &[(String, String)],
+) -> io::Result<(Child, Pid)> {
     let mut command = Command::new(program);
     command
         .args(args)
+        .envs(env.iter().map(|(key, value)| (key, value)))
         .stdin(Stdio::null())
         .stdout(stdout)
         .stderr(Stdio::null())

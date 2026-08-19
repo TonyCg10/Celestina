@@ -1,7 +1,7 @@
 # Magnetita status
 
 - **Updated:** 2026-08-06
-- **Implementation:** `MAG-S1` is active — the 2026-08-05 static audit's
+- **Implementation:** `MAG-R1-A`–`MAG-R1-D` are implemented and uncommitted; `MAG-S1` is active — the 2026-08-05 static audit's
   Magnetita findings are corrected in source and covered by tests, but not
   built, deployed or committed; `MAG-M1` remains planned
 - **Author validation:** the original 1.0 daily set passed on the real phone;
@@ -9,6 +9,18 @@
   [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
+
+- Uncommitted in the checkout: `MAG-R1-A` through `MAG-R1-D`, the new
+  [`MAG-R1`](ROADMAP.md) wireless-mirror checkpoint. `magnetita-core` gains the
+  pure `mirror` module, `magnetitad` gains `mirror_discovery` over
+  `avahi-browse`, a resident worker that owns `adb` and `scrcpy` by pid, and a
+  new `org.celestina.Mirror1`; the app gains a Mirror control. Verified by
+  `cargo fmt`/`clippy -D warnings`/`cargo test` and `qmllint`.
+- `MAG-R1-E` has not run. `build-production.sh` and `verify-production.sh` pass
+  and leave the service untouched; `complete-production.sh` was refused by the
+  session guard because it stops and restarts the live `magnetitad`. The
+  installed daemon still has no mirror, and the real phone has never been
+  observed advertising. `VAL-MAG-08` is the exit and is pending.
 
 - Uncommitted in the checkout: `MAG-S1-C`. The one arm of the TLS handshake loop
   that retried without waiting now sleeps the same interval the socket timeout
