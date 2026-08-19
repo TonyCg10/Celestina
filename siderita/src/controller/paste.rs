@@ -4,10 +4,45 @@
 //! settled before any byte moves: which sources survive, which collisions the
 //! user still has to answer, and which "collision" is an entry meeting itself.
 
-use super::{display_name, ConflictStrategy, PasteOutcome};
+use super::{display_name, ConflictStrategy};
 use celestina_core::CancellationToken;
 use siderita_ops::Progress;
 use std::path::{Path, PathBuf};
+
+/// A paste held back because at least one destination already exists, waiting
+/// for the user's conflict choices before the worker starts.
+///
+/// The choice is per collision: `decisions[i]` is what to do with `sources[i]`,
+/// and `cursor` is the collision being asked about. Entries that do not collide
+/// carry `Skip` and never reach that code path. One "apply to all" fills the
+/// rest in at once — the old behaviour, now something the user opts into rather
+/// than the only option.
+pub(crate) struct PendingPaste {
+    pub(crate) sources: Vec<PathBuf>,
+    pub(crate) destination: PathBuf,
+    pub(crate) cut: bool,
+    pub(crate) decisions: Vec<Option<ConflictStrategy>>,
+    pub(crate) colliding: Vec<usize>,
+    pub(crate) cursor: usize,
+}
+
+/// What a pasted batch did, carried from the worker thread to `finish_paste`.
+pub(crate) struct PasteOutcome {
+    pub(crate) total: usize,
+    /// Every entry the batch was asked to place, so a consumed cut can check
+    /// that the system clipboard still holds its own sources before wiping it.
+    pub(crate) sources: Vec<PathBuf>,
+    pub(crate) failures: Vec<String>,
+    /// Cut sources that could not be moved (kept on the clipboard for a retry).
+    pub(crate) unmoved: Vec<PathBuf>,
+    /// Plain (non-colliding) moves, for the undo record.
+    pub(crate) undo_moves: Vec<(PathBuf, PathBuf)>,
+    pub(crate) skipped: usize,
+    /// Whether any entry went through replace/keep-both, which makes the batch
+    /// too tangled to offer a single-step undo for.
+    pub(crate) conflict_touched: bool,
+    pub(crate) cancelled: bool,
+}
 
 /// What one paste or drop will do, decided before any write starts: which
 /// sources survive, what was already settled for them, and which of them still
@@ -157,7 +192,13 @@ pub(crate) fn paste_one(
             place_into(source, destination_dir, cut, token, on_progress, outcome);
         }
         ConflictStrategy::KeepBoth => {
-            let freed = siderita_ops::next_available(destination_dir, name, "copia");
+            // A folder's name has no extension to preserve; a file's does.
+            let shape = if source.is_dir() {
+                siderita_ops::NameShape::Directory
+            } else {
+                siderita_ops::NameShape::File
+            };
+            let freed = siderita_ops::next_available(destination_dir, name, "copia", shape);
             let result = if cut {
                 siderita_ops::move_as(source, &freed, token, on_progress).map(|_| ())
             } else {

@@ -12,6 +12,10 @@ and bounded in-place Grafita/Fluorita actions.
   view/play media with embedded Fluorita. Double-click/`Enter` opens the owning
   standalone application. The canonical mapping is
   [the content-activation contract](../docs/contracts/content-activation.md).
+- Compressing and extracting are ordinary loss-free file operations: `.zip`,
+  `.tar` and `.tar.gz` are read, `.zip` and `.tar.gz` are written, entirely in
+  process. Browsing *inside* an archive is not offered — that is the archive VFS
+  this product deliberately does not become.
 - Phone storage exposed by Magnetita is ordinary mounted filesystem content;
   D-Bus contributes device state, identity and actions.
 - Siderita is not an IDE, media library, shell, global indexer, archive VFS or

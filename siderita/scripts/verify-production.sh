@@ -22,11 +22,11 @@ bash "$suite_root/scripts/check-architecture-contract.sh"
 (cd "$project_root" && cargo test --all-targets --locked)
 (cd "$suite_root/celestina-rs" && cargo fmt --all --check)
 (cd "$suite_root/celestina-rs" && cargo clippy --locked \
-    -p celestina-core -p siderita-core -p siderita-ops -p siderita-qt \
+    -p celestina-core -p siderita-archive -p siderita-core -p siderita-ops -p siderita-qt \
     -p grafita-core -p fluorita-core -p fluorita-engine -p fluorita-qt \
     --all-targets -- -D warnings)
 (cd "$suite_root/celestina-rs" && cargo test --locked \
-    -p celestina-core -p siderita-core -p siderita-ops -p siderita-qt \
+    -p celestina-core -p siderita-archive -p siderita-core -p siderita-ops -p siderita-qt \
     -p grafita-core -p fluorita-core -p fluorita-engine -p fluorita-qt)
 "$suite_root/scripts/qmllint-cxxqt.sh" "$project_root"
 "$project_root/scripts/qml-tests.sh"

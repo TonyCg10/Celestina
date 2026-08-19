@@ -56,7 +56,7 @@ Item {
 
     Shortcut {
         sequence: "F2"
-        enabled: root.viewActive && !root.controller.loading && !root.controller.opRunning
+        enabled: root.viewActive && !root.controller.loading
         onActivated: {
             const index = root.topBar.activeView.currentIndex
             if (index >= 0)
@@ -68,7 +68,7 @@ Item {
     Shortcut {
         sequence: "Delete"
         enabled: root.viewActive && !root.controller.loading
-                 && !root.controller.opRunning && !root.controller.trashActive
+                 && !root.controller.trashActive
         onActivated: {
             const paths = root.panel.selectedPaths()
             if (paths.length > 1)
@@ -97,12 +97,14 @@ Item {
 
     Shortcut {
         sequences: [StandardKey.Paste]
-        enabled: root.viewActive && root.controller.canPaste && !root.controller.opRunning
+        enabled: root.viewActive && root.controller.canPaste
         onActivated: root.controller.paste()
     }
 
     Shortcut {
         sequences: [StandardKey.Undo]
+        // Undo stays out while anything is writing: the record it would reverse
+        // is the last finished write, and a running one is about to replace it.
         enabled: root.viewActive && root.controller.canUndo
                  && !root.controller.loading && !root.controller.opRunning
         onActivated: root.controller.undo()

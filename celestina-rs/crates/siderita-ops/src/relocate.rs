@@ -44,21 +44,24 @@ pub fn move_entry(
         Err(error) => return Err(OpError::io(source, &error)),
     }
 
-    // The destination was just checked to be free; `rename` would still clobber
-    // on a race, but the window is the same tiny one as the rename verb.
-    match fs::rename(source, &destination) {
+    // The destination was just checked to be free, and the reservation keeps it
+    // that way: `rename` on its own would replace whatever appeared in between.
+    let source_is_directory = fs::symlink_metadata(source)
+        .map(|data| data.is_dir())
+        .unwrap_or(false);
+    match crate::reserve::rename_without_replacing(source, &destination, source_is_directory) {
         Ok(()) => Ok(Moved {
             from: source.to_path_buf(),
             to: destination,
         }),
-        Err(error) if is_cross_device(&error) => {
+        Err(crate::reserve::RenameFailure::Io(error)) if is_cross_device(&error) => {
             relocate_by_copy(source, &destination, cancellation, progress)?;
             Ok(Moved {
                 from: source.to_path_buf(),
                 to: destination,
             })
         }
-        Err(error) => Err(OpError::io(&destination, &error)),
+        Err(failure) => Err(failure.into_op_error(&destination)),
     }
 }
 
@@ -98,19 +101,24 @@ pub fn move_as(
         Err(error) => return Err(OpError::io(source, &error)),
     }
 
-    match fs::rename(source, destination) {
+    // Same reservation as `move_entry`: the look above is the honest error, and
+    // the reservation is what keeps the answer true while the rename happens.
+    let source_is_directory = fs::symlink_metadata(source)
+        .map(|data| data.is_dir())
+        .unwrap_or(false);
+    match crate::reserve::rename_without_replacing(source, destination, source_is_directory) {
         Ok(()) => Ok(Moved {
             from: source.to_path_buf(),
             to: destination.to_path_buf(),
         }),
-        Err(error) if is_cross_device(&error) => {
+        Err(crate::reserve::RenameFailure::Io(error)) if is_cross_device(&error) => {
             relocate_by_copy(source, destination, cancellation, progress)?;
             Ok(Moved {
                 from: source.to_path_buf(),
                 to: destination.to_path_buf(),
             })
         }
-        Err(error) => Err(OpError::io(destination, &error)),
+        Err(failure) => Err(failure.into_op_error(destination)),
     }
 }
 

@@ -27,11 +27,12 @@ mod name;
 mod purge;
 mod relocate;
 mod rename;
+mod reserve;
 mod restore;
 mod trash;
 mod trashinfo;
 
-pub use available::next_available;
+pub use available::{next_available, NameShape};
 pub use copy::{copy, copy_as, Progress};
 pub use create::{create_directory, create_file};
 pub use error::OpError;

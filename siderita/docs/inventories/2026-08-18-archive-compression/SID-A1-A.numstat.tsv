@@ -1,0 +1,37 @@
+# SID-A1-A exact change inventory
+
+Base revision	aa2489c92b84e653cf516941516956f04a8deb2d
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/Cargo.toml
+Pathspec	celestina-rs/crates/siderita-archive/
+Pathspec	celestina-rs/crates/siderita-ops/
+Pathspec	siderita/docs/evidence/2026-08-18-archive-domain.md
+Pathspec	siderita/docs/inventories/2026-08-18-archive-compression/SID-A1-A.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-08-18-archive-compression.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+336	1	56bea61f0032eca5360cd2b8007ca9fef8801166ba4fb2677ea566b60b385838	celestina-rs/Cargo.lock
+1	0	b355695e2973779c488e86dab685d3bf3832bb0610e0a9e9af9c84daabcd2e59	celestina-rs/Cargo.toml
+29	0	0d72e97984b3dd6262297ce122c9e3775f5037ceb3083369d15852f87f681bd8	celestina-rs/crates/siderita-archive/Cargo.toml
+399	0	38288baf10c68fa1737aa95213045b81a1800967c181a4a9ba640fba780db81c	celestina-rs/crates/siderita-archive/src/create.rs
+119	0	f4be3894e6e4f6c341b3aba4368e1d229bbda9c3551967b9e6281ccf6e4de745	celestina-rs/crates/siderita-archive/src/error.rs
+696	0	3805207511b5ac41c3c4b3516d197fd6940ae073d93b3825b8bae50c67199b05	celestina-rs/crates/siderita-archive/src/extract.rs
+160	0	76359f37d85dee0644f1a9bb6cfea47de565e15248da0f703843d1188cafe4ef	celestina-rs/crates/siderita-archive/src/format.rs
+44	0	930c143d538828092352f93ea58dd0e0ba3621e1aea4897759b452ab5fb245b8	celestina-rs/crates/siderita-archive/src/lib.rs
+107	0	b00d6b2845477af3dfff2de989809fd475b573bd3d2ed9aeace6cf2cb535eac2	celestina-rs/crates/siderita-archive/src/member.rs
+96	0	bf9dcb99ce876fc3d6620d7e4169c77b9a487e934df1e4d15c2fe965e7be95bb	celestina-rs/crates/siderita-archive/src/read.rs
+225	0	2723f1df451e3900953c19caa43958c8f7789afd519f6ba56e2eb9d5bfa8e669	celestina-rs/crates/siderita-archive/src/stamp.rs
+38	0	eb8c67740e3f4ab9a78844dc67cf67ee8a0d101eb3ca2f78347ab3d07117b1c3	celestina-rs/crates/siderita-archive/src/tarname.rs
+592	0	6a4a963a9d82d8096d2ce5dc289d0d23f1dd6e9ed3b0c51d6733d12fff3a82c9	celestina-rs/crates/siderita-archive/src/tool.rs
+557	0	a402035ca82977327fde9ade1a29ebefe350ecb09ed5efbb24c704b197c2a8f9	celestina-rs/crates/siderita-archive/tests/archives.rs
+91	8	4cde229b2a7e6981ab236dca60e962926daa7300214aa197b179f9edcd9ca9aa	celestina-rs/crates/siderita-ops/src/available.rs
+4	1	f60afaae341ca420287f825342298d6ad08d7b44f1f61c94efb980aa3abb751f	celestina-rs/crates/siderita-ops/src/error.rs
+2	1	43c1982e3fe8f4898632026422c49103a191d1eec3bd93b21d4b3da9c210b472	celestina-rs/crates/siderita-ops/src/lib.rs
+16	8	3cc2a5bef6baa33939357038a866622f63323e5311fde704b0f16addb25fea72	celestina-rs/crates/siderita-ops/src/relocate.rs
+21	10	6a6169a1c874777b5935cc81808251e836d3c6ae053b9debb6d20f769c70232b	celestina-rs/crates/siderita-ops/src/rename.rs
+180	0	ebae00d290f3160072aa16dcf549d8465111416be8d76c24c8920413cd517fc5	celestina-rs/crates/siderita-ops/src/reserve.rs
+75	0	b844ded01ad3781be3c56defe1d5c53b890e9d50cab3af866265ccced564746c	siderita/docs/evidence/2026-08-18-archive-domain.md
+37	0	self	siderita/docs/inventories/2026-08-18-archive-compression/SID-A1-A.numstat.tsv
+254	0	0116fc1bb396817ca72a033c418017cf63d35da5041d957621462245bb9277f2	siderita/docs/plans/active/2026-08-18-archive-compression.md

@@ -37,7 +37,7 @@ GlassContextMenu {
 
     GlassMenuItem {
         text: "Pegar"
-        enabled: root.controller.canPaste && !root.controller.opRunning
+        enabled: root.controller.canPaste
         icon.name: "edit-paste"
         icon.source: CelestinaTheme.fallbackIcon("file")
         onTriggered: root.controller.paste()

@@ -1,0 +1,63 @@
+# SID-A1-B exact change inventory
+
+Base revision	aa2489c92b84e653cf516941516956f04a8deb2d
+Pathspec	docs/version-history.tsv
+Pathspec	scripts/architecture-baseline.tsv
+Pathspec	scripts/language-baseline.tsv
+Pathspec	scripts/qmllint-baseline.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/README.md
+Pathspec	siderita/ROADMAP.md
+Pathspec	siderita/STATUS.md
+Pathspec	siderita/VALIDATION.md
+Pathspec	siderita/build.rs
+Pathspec	siderita/docs/evidence/2026-08-18-archive-verbs.md
+Pathspec	siderita/docs/inventories/2026-08-18-archive-compression/SID-A1-B.numstat.tsv
+Pathspec	siderita/docs/plans/active/
+Pathspec	siderita/qml/
+Pathspec	siderita/scripts/verify-production.sh
+Pathspec	siderita/src/
+Pathspec	siderita/tests/
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	d123e2215277098a198ddf7ee925671322e4452f9542d216eac491e0a6fc47c7	docs/version-history.tsv
+1	1	888536ebcc3e46c47c03dda7ada7ac79c50a864273b97efbb8f6928923e7a423	scripts/architecture-baseline.tsv
+1	1	a577e4cb32ded2395d6bf323e5fbb25431c5dd654dcaf3d6e38b51db712c4fec	scripts/language-baseline.tsv
+1	1	204661615a9aff3751fd89c76dfb0ecb49e15011dde3511789403f82a6b09885	scripts/qmllint-baseline.tsv
+175	3	5d816c38aea64bf0c3c3ee19d7516cb95282af18f678f907dd75c2ac4c53b10d	siderita/Cargo.lock
+2	1	9a0281a812c8ce8f09401c031d972177754cae81ffa60b1b1cf718b0c3d565d3	siderita/Cargo.toml
+4	0	0324fa3669c27c72e23c8698f34cbfec8adb0babe479beb4ad0247994647e0c6	siderita/README.md
+25	5	0b62f16eaed108183f3b12cc06017315efa05cfd920a0094e49cece242cb5a50	siderita/ROADMAP.md
+34	3	37b12015a2395d74bf9883e114dac867132abd9c9304fa94ed8f4513f4ef4ded	siderita/STATUS.md
+17	0	ab85f68fb8e40c66c8934d0da1e43d348eb17859018253feae26de848e36bdcd	siderita/VALIDATION.md
+5	0	4ae487c03230886bb4abe46aa2b2e5f155697564766df4a0135219c35a0b2444	siderita/build.rs
+71	0	f3136cb0b5ffeab103be2d3114bf1416b1a49a80c72fb431e81b01ee9bab8684	siderita/docs/evidence/2026-08-18-archive-verbs.md
+63	0	self	siderita/docs/inventories/2026-08-18-archive-compression/SID-A1-B.numstat.tsv
+254	0	0116fc1bb396817ca72a033c418017cf63d35da5041d957621462245bb9277f2	siderita/docs/plans/active/2026-08-18-archive-compression.md
+2	1	f0492d41386092f275760cec832ff873c49ba826a1ad78f35144859e7cc75d0b	siderita/docs/plans/active/README.md
+16	0	33ec7e501de405a7aed04858b2c3dc45c97ff3fc1304900077a37cfa746884a0	siderita/qml/components/folder/FolderActions.qml
+21	81	fd62b344a31bdd9c377eb72f553cfcbdeb8a224b063a1223b5308405829803c6	siderita/qml/components/folder/FolderBottomStatus.qml
+5	3	516a70548ba81212f3a72bd102db2195b907980eb7c201d2e114fbeec4b03a20	siderita/qml/components/folder/FolderShortcuts.qml
+162	0	5c72701736c6cb44873c6e0a8551c28d767be0d2d56f1004379834008a1a6a5c	siderita/qml/components/folder/OperationCallout.qml
+131	0	1562f7fb5a4aa86b7fca4085ecfb7f67222660b21c0aac48e474a466687d3d94	siderita/qml/components/folder/OperationRing.qml
+157	0	9ffd804d6e4c1c1815b1d423ce890ff06859bab287e358e7609cf2aaf93736a4	siderita/qml/components/folder/OperationsDock.qml
+145	0	9852fddec6a261a07ad1a52af3113a8da6abb9b4bf130a1afc20d38926b19aa8	siderita/qml/dialogs/CompressDialog.qml
+117	0	ceb6208cadd445512dd3a4801c58f3c47e9c02d62ea511b5e095ba51c298f9db	siderita/qml/dialogs/PasswordDialog.qml
+33	4	605ab97f47e2e6f74712a8fd725214e7e73747b0ed597556deb3e41876053672	siderita/qml/menus/EntryContextMenu.qml
+1	1	75157f848832d5faef3a810182fbf614844543faeb50f94b04035d760d1d07e4	siderita/qml/menus/FolderMenu.qml
+2	2	1d34de5361dfb5db9349b75b35dd0d0eda22df5c4d7e8a9834e5f7e8fa0ec922	siderita/scripts/verify-production.sh
+99	132	d256bb0d0be5b370fcff34e9f5adbd086ae72d32789dbb25ac9855e12075f1fd	siderita/src/controller.rs
+58	0	1748efdda3845e9c6fe17aa59de9d1d82736e5286ff2b245da95bf4da5d4c1ba	siderita/src/controller/actions.rs
+514	0	7cd131e53b42cb55da31f00f3bbcc98845f2a37807b51251633bc00f0e18ef29	siderita/src/controller/archive.rs
+41	69	e115fec6181976f5534b618dd15b55a0bd8ef0a1e7d145c9ad5a0843dfe6be48	siderita/src/controller/fileops.rs
+303	0	f7e594e950e64be77a164e6b6251cd59188f15a31206027b3dd3eb2a8ae163f5	siderita/src/controller/jobs.rs
+43	2	7297437aaefbdc7fee2dcc4135b416ecdaa38c852c3f964c9db05b76a3cb0556	siderita/src/controller/paste.rs
+43	0	716f854a40a5de7f822e973d8c62874577d7e3d5cc7cb676d6b16a5b3aa93f74	siderita/src/controller/pendingnav.rs
+56	0	287d75fa4bcf7c53e0f54e38a1e95fef1eb203816b073d835187a0462e9c1474	siderita/src/localzone.rs
+1	0	f3e443770acd0d096da75819115817a9a9abb722ae65afc707e7f336f29cd2f2	siderita/src/main.rs
+104	0	583bbdb908e148bc92bbcf24678db0b54ed3b67d74e68ac7e78908be248868ce	siderita/tests/qml/tst_compress_dialog.qml
+195	0	a676fefdb61a9b5fbd7cb6a0556be9340b675b4e1f0d27519679016004f84191	siderita/tests/qml/tst_operations_dock.qml
+116	0	16da05bc3cbec176a59961b204bf51cd56b21aa6df7ab463e5ef7aafc60bbc9a	siderita/tests/qml/tst_password_dialog.qml

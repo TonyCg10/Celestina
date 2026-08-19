@@ -1,13 +1,44 @@
 # Siderita status
 
-- **Updated:** 2026-08-06
+- **Updated:** 2026-08-18
 - **Implementation:** the registered product version and CP0-CP7 behaviour are
-  present; `SID-G7` (shared reading surface) is the active checkpoint and the
-  portal-parenting one remains planned
+  present; `SID-G7` (shared reading surface) and `SID-A1` (archives) are the
+  active checkpoints and the portal-parenting one remains planned
 - **Author validation:** mixed; current manual queue is in
   [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
+
+- Uncommitted in the checkout: `SID-A1`, compressing and extracting. A new pure
+  crate, `siderita-archive`, identifies a container by its bytes, lists it,
+  extracts it into a folder and creates one, holding `siderita-ops`' own
+  guarantees: it never overwrites (a second extraction lands beside the first
+  under a freed name), it stages the whole extraction and promotes or removes
+  it whole, and it refuses any member whose stored name or symlink target would
+  land outside the destination — the stored bytes are read, never `zip`'s
+  sanitised spelling, so an escape is reported instead of quietly renamed. The
+  containers are pure Rust: no `unzip`, no `tar`, no process. The entry menu
+  gains the extract verb — offered only when the domain says every selected entry
+  really is an archive — and «Comprimir…», which asks for a name and a container
+  (ZIP or TAR.GZ) and suggests a free one. Both run on the paste operation's
+  worker, progress and Cancel button. `controller.rs` did not grow: `UndoAction`
+  and `ConflictStrategy` moved out to `controller/actions.rs` and the ratchet
+  fell to 1092.
+
+  Exercised against real archives rather than only fixtures, which is what
+  found the rest: a 12 MB zip from the cache extracts byte-identical to
+  `unzip`; archives this domain writes pass `unzip -t` and `tar tzf` and come
+  back identical through both tools; a hand-built zip-slip, an absolute member
+  and an escaping symlink are each refused with the destination left empty; a
+  truncated zip reports damage. Three defects that only a real archive shows
+  were fixed on the way — `next_available` cut `web-2.1.2` into
+  `web-2.1 (copia).2` (a folder name is not `stem.ext`, and the same defect hit
+  copying folders, so it was fixed in its owner and now takes a `NameShape`),
+  modification dates were dropped on both write and read, and the archive
+  refusals reached the person in English. Formatted, Clippy-clean, 14 domain
+  tests, 31 ops tests, 109 unit tests, 54 QML tests, the offscreen smoke and
+  the three repository guards — no production run, no version transition, no
+  inventory and nothing tried by hand: that is `VAL-SID-07`.
 
 - Uncommitted in the checkout: `SID-G7-I`. The tab strip keeps deriving its own
   label: routing it through the adapter costs qmllint warnings the project's

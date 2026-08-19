@@ -142,25 +142,19 @@ impl qobject::SideritaController {
     /// for as long as it lasts. Reuses the paste operation's progress surface and
     /// cancellation, since it is the same shape of long write.
     ///
-    /// Refused while another operation is running or a conflict is being
-    /// answered, exactly like `paste`. The two share one progress surface and
-    /// one cancellation token, so a second worker would take over the Cancel
-    /// button from the paste that is still running, interleave its progress and
-    /// let whichever finished first clear the state of the one still alive.
+    /// Registered as its own job, so it runs alongside whatever else is
+    /// writing: each job carries its own cancellation and its own counters, and
+    /// the domain reserves every destination name atomically, so two writers in
+    /// one folder cannot overwrite each other.
     fn spawn_trash(mut self: Pin<&mut Self>, paths: Vec<PathBuf>) {
-        if *self.op_running() || *self.conflict_pending() {
+        if *self.conflict_pending() {
             return;
         }
-        let token = CancellationToken::new();
-        self.as_mut().rust_mut().get_mut().op_cancel = Some(token.clone());
-        self.as_mut().set_op_running(true);
-        self.as_mut()
-            .set_op_total(paths.len().min(i32::MAX as usize) as i32);
-        self.as_mut().set_op_done(0);
-        self.as_mut().set_op_current(QString::default());
-        self.as_mut().set_op_detail(QString::default());
-        self.as_mut()
-            .set_status_text(QString::from("Enviando a la papelera…"));
+        let (job, token) = self.as_mut().start_job(
+            "Enviando a la papelera…",
+            super::jobs::JobKind::Trash,
+            paths.len(),
+        );
 
         let qt = self.qt_thread();
         std::thread::spawn(move || {
@@ -175,12 +169,8 @@ impl qobject::SideritaController {
 
                 let done = index as i32;
                 let announced = display_name(path);
-                let _ = qt.queue(move |mut controller| {
-                    controller.as_mut().set_op_done(done);
-                    controller
-                        .as_mut()
-                        .set_op_current(QString::from(announced.as_str()));
-                    controller.as_mut().set_op_detail(QString::default());
+                let _ = qt.queue(move |controller| {
+                    controller.job_reached(job, done, Some(announced), Some(String::new()));
                 });
 
                 // Throttled byte progress, same cadence as a paste (fileops::spawn_paste).
@@ -192,10 +182,8 @@ impl qobject::SideritaController {
                     }
                     last = std::time::Instant::now();
                     let detail = format!("{} copiados", crate::format::size(progress.bytes));
-                    let _ = qt_progress.queue(move |mut controller| {
-                        controller
-                            .as_mut()
-                            .set_op_detail(QString::from(detail.as_str()));
+                    let _ = qt_progress.queue(move |controller| {
+                        controller.job_reached(job, done, None, Some(detail));
                     });
                 };
 
@@ -207,7 +195,7 @@ impl qobject::SideritaController {
 
             let cancelled = token.is_cancelled();
             let _ = qt.queue(move |controller| {
-                controller.finish_trash(total, infos, failures, cancelled);
+                controller.finish_trash(job, total, infos, failures, cancelled);
             });
         });
     }
@@ -215,17 +203,13 @@ impl qobject::SideritaController {
     /// Finalises a trashed batch back on the Qt thread, mirroring `finish_paste`.
     fn finish_trash(
         mut self: Pin<&mut Self>,
+        job: u64,
         total: usize,
         infos: Vec<PathBuf>,
         failures: Vec<String>,
         cancelled: bool,
     ) {
-        self.as_mut().set_op_running(false);
-        self.as_mut().rust_mut().get_mut().op_cancel = None;
-        self.as_mut().set_op_current(QString::default());
-        self.as_mut().set_op_detail(QString::default());
-        self.as_mut().set_op_done(0);
-        self.as_mut().set_op_total(0);
+        self.as_mut().end_job(job);
 
         if !infos.is_empty() {
             self.as_mut().set_undo(Some(UndoAction::Trash { infos }));
@@ -309,7 +293,7 @@ impl qobject::SideritaController {
     /// (see `resolve_conflicts`); otherwise it starts straight away on a worker
     /// thread. A paste is refused while one is running or a conflict is pending.
     pub fn paste(mut self: Pin<&mut Self>) {
-        if *self.op_running() || *self.conflict_pending() {
+        if *self.conflict_pending() {
             return;
         }
         self.as_mut().set_op_error(QString::default());
@@ -374,7 +358,7 @@ impl qobject::SideritaController {
         destination: &QString,
         move_entries: bool,
     ) {
-        if *self.op_running() || *self.conflict_pending() {
+        if *self.conflict_pending() {
             return;
         }
         self.as_mut().set_op_error(QString::default());
@@ -565,19 +549,15 @@ impl qobject::SideritaController {
         // batch can skip one collision and replace the next.
         strategies: Vec<ConflictStrategy>,
     ) {
-        let token = CancellationToken::new();
-        self.as_mut().rust_mut().get_mut().op_cancel = Some(token.clone());
-        self.as_mut().set_op_running(true);
-        self.as_mut()
-            .set_op_total(sources.len().min(i32::MAX as usize) as i32);
-        self.as_mut().set_op_done(0);
-        self.as_mut().set_op_current(QString::default());
-        self.as_mut().set_op_detail(QString::default());
-        self.as_mut().set_status_text(QString::from(if cut {
-            "Moviendo…"
-        } else {
-            "Copiando…"
-        }));
+        let (job, token) = self.as_mut().start_job(
+            if cut { "Moviendo…" } else { "Copiando…" },
+            if cut {
+                super::jobs::JobKind::Move
+            } else {
+                super::jobs::JobKind::Copy
+            },
+            sources.len(),
+        );
 
         let qt = self.qt_thread();
         std::thread::spawn(move || {
@@ -600,12 +580,8 @@ impl qobject::SideritaController {
                 let name = display_name(source);
                 let done = index as i32;
                 let announced = name.clone();
-                let _ = qt.queue(move |mut controller| {
-                    controller.as_mut().set_op_done(done);
-                    controller
-                        .as_mut()
-                        .set_op_current(QString::from(announced.as_str()));
-                    controller.as_mut().set_op_detail(QString::default());
+                let _ = qt.queue(move |controller| {
+                    controller.job_reached(job, done, Some(announced), Some(String::new()));
                 });
 
                 // Throttled byte progress: at most ~one update per 60 ms, so a
@@ -618,10 +594,8 @@ impl qobject::SideritaController {
                     }
                     last = std::time::Instant::now();
                     let detail = format!("{} copiados", crate::format::size(progress.bytes));
-                    let _ = qt_progress.queue(move |mut controller| {
-                        controller
-                            .as_mut()
-                            .set_op_detail(QString::from(detail.as_str()));
+                    let _ = qt_progress.queue(move |controller| {
+                        controller.job_reached(job, done, None, Some(detail));
                     });
                 };
 
@@ -641,7 +615,7 @@ impl qobject::SideritaController {
 
             outcome.cancelled = token.is_cancelled();
             let _ = qt.queue(move |controller| {
-                controller.finish_paste(cut, outcome);
+                controller.finish_paste(job, cut, outcome);
             });
         });
     }
@@ -650,22 +624,20 @@ impl qobject::SideritaController {
     /// next check and finalises through `finish_paste`, so a cancelled cross-
     /// device move still leaves every source intact.
     pub fn cancel_op(mut self: Pin<&mut Self>) {
-        if let Some(token) = self.as_mut().rust_mut().get_mut().op_cancel.as_ref() {
-            token.cancel();
-        }
+        self.as_mut().cancel_all_jobs();
         self.as_mut().set_status_text(QString::from("Cancelando…"));
     }
 
     /// Finalises a pasted batch back on the Qt thread: restores the idle state,
     /// settles the clipboard and undo record, refreshes the view and reports any
     /// per-entry failures (noting skips and part-way cancellation).
-    pub(crate) fn finish_paste(mut self: Pin<&mut Self>, cut: bool, outcome: PasteOutcome) {
-        self.as_mut().set_op_running(false);
-        self.as_mut().rust_mut().get_mut().op_cancel = None;
-        self.as_mut().set_op_current(QString::default());
-        self.as_mut().set_op_detail(QString::default());
-        self.as_mut().set_op_done(0);
-        self.as_mut().set_op_total(0);
+    pub(crate) fn finish_paste(
+        mut self: Pin<&mut Self>,
+        job: u64,
+        cut: bool,
+        outcome: PasteOutcome,
+    ) {
+        self.as_mut().end_job(job);
 
         if cut {
             if outcome.unmoved.is_empty() {

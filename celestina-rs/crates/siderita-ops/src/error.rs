@@ -36,7 +36,10 @@ pub enum OpError {
 
 impl OpError {
     /// Builds an [`OpError::Io`] from a `std::io::Error` and the path it failed on.
-    pub(crate) fn io(path: &Path, error: &io::Error) -> Self {
+    ///
+    /// Public because the peer write-side domains — `siderita-archive` — report
+    /// their filesystem half as this very error rather than restating it.
+    pub fn io(path: &Path, error: &io::Error) -> Self {
         Self::Io {
             path: path.to_path_buf(),
             kind: error.kind(),

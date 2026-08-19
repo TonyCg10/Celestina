@@ -20,6 +20,7 @@ Item {
             || openWithDialog.shown || openWithDialog.visible
             || propertiesDialog.shown || propertiesDialog.visible
             || iconPickerDialog.shown || iconPickerDialog.visible
+            || compressDialog.shown || compressDialog.visible
             || quickLookDialog.shown || quickLookDialog.visible
             || grafitaEditorDialog.shown || grafitaEditorDialog.visible
             || phoneMediaDialog.shown || phoneMediaDialog.visible
@@ -66,6 +67,7 @@ Item {
         namePrompt: namePromptDialog
         batchRename: batchRenameDialog
         iconPicker: iconPickerDialog
+        compressPrompt: compressDialog
         onNewTabRequested: function(path, foreground) {
             root.newTabRequested(path, foreground)
         }
@@ -125,6 +127,20 @@ Item {
         owner: root.owner
         backdrop: root.panel
         panel: root.panel
+    }
+
+    CompressDialog {
+        id: compressDialog
+        controller: root.controller
+        owner: root.owner
+        backdrop: root.panel
+    }
+
+    PasswordDialog {
+        id: passwordDialog
+        controller: root.controller
+        owner: root.owner
+        backdrop: root.panel
     }
 
     IconPickerDialog {

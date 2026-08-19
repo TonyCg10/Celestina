@@ -113,7 +113,7 @@
 6	siderita/qml/components/entry/FolderCellDelegate.qml
 8	siderita/qml/components/entry/FolderRowDelegate.qml
 2	siderita/qml/components/folder/FolderActions.qml
-4	siderita/qml/components/folder/FolderBottomStatus.qml
+3	siderita/qml/components/folder/FolderBottomStatus.qml
 2	siderita/qml/components/folder/FolderEmptyState.qml
 6	siderita/qml/components/folder/FolderHeading.qml
 2	siderita/qml/components/sidebar/SidebarChevron.qml

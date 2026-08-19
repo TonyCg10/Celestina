@@ -1,12 +1,12 @@
 # Siderita implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** SID-G7
-- **Related author validation:** `VAL-SID-G7` and `VAL-SID-04` in
-  [VALIDATION.md](VALIDATION.md); neither blocks implementation
+- **Active implementation checkpoint:** SID-A1
+- **Related author validation:** `VAL-SID-G7`, `VAL-SID-04` and `VAL-SID-07` in
+  [VALIDATION.md](VALIDATION.md); none of them blocks implementation
 
-`SID-M1` remains the next settled checkpoint after `SID-G7` and has no active
-execution plan.
+`SID-M1` remains the next settled checkpoint after `SID-G7` and `SID-A1`, and
+has no active execution plan.
 
 ## SID-G7 — Shared reading surface in both text panes
 
@@ -27,6 +27,26 @@ The plan is
 [Shared reading surface](docs/plans/active/2026-08-04-shared-reading-surface.md).
 It excludes a settings surface, any preference Siderita owns for itself, and the
 components themselves, which are `STYLE-G7`'s.
+
+## SID-A1 — Compressing and extracting archives
+
+The falsifiable problem: Siderita could not open a `.zip` or make one. Every
+other verb it owns is loss-free and cancellable, and the two archive verbs a
+file manager is expected to have were simply absent, so the person left the
+application to run `tar` by hand.
+
+The boundary is a new pure crate, `siderita-archive`, beside `siderita-ops` and
+holding the same guarantees: nothing existing is overwritten, nothing partial is
+left claiming to be complete, and — the rule only an archive needs — no member
+may be written outside the folder the person chose. The containers are pure
+Rust, so an extraction never spawns a process and never depends on a tool being
+installed. The tangible outcome is an extract verb and a compress verb on the entry
+menu, running on the same progress surface and Cancel button a paste uses.
+
+The plan is
+[Compressing and extracting archives](docs/plans/active/2026-08-18-archive-compression.md).
+It excludes browsing inside an archive, encrypted or split containers, `.rar`
+and `.7z`, and single-file `.gz`/`.xz`/`.zst`.
 
 ## SID-M1 — Parent portal pickers on Wayland
 

@@ -73,90 +73,24 @@ Item {
         }
     }
 
-    CelestinaSurface {
-        id: operationProgress
-        x: root.contentFrame.x + root.panel.floatingChromeInset
+    // The running operations, as rings over the content rather than a bar
+    // spanning the window for an hour. It rests on the right, above the bottom
+    // bar, and grows leftwards as more jobs appear.
+    OperationsDock {
+        id: operationsDock
+        controller: root.controller
+        backdrop: root.bottomView
+        // Always floating: the dock sits over the content by definition, and
+        // switching the glass off at the end of the list left it flat and
+        // opaque.
+        floating: true
+        x: root.contentFrame.x + root.contentFrame.width
+           - root.panel.floatingChromeInset - width
         y: (operationErrorBanner.visible
             ? operationErrorBanner.y
             : (errorBanner.visible ? errorBanner.y : root.bottomBar.y))
            - CelestinaTheme.compFloatingGap - height
-        width: root.contentFrame.width
-               - 2 * root.panel.floatingChromeInset
-        height: 62
-        visible: root.controller.opRunning
-        role: CelestinaSurface.Tonal
         z: 5
-
-        // The progress panel is the largest floating box and the one that stays
-        // longest: nothing that happens over it belongs to the listing.
-        CelestinaInputShield { }
-
-        Text {
-            id: progressTitle
-            x: 12
-            y: 9
-            width: cancelButton.x - x - 12
-            text: {
-                let label = root.controller.opCurrent.length > 0
-                            ? root.controller.opCurrent : "Preparando…"
-                if (root.controller.opTotal > 1)
-                    label += "  ·  " + (root.controller.opDone + 1)
-                             + " de " + root.controller.opTotal
-                return label
-            }
-            color: CelestinaTheme.text
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontRowSecondary
-            elide: Text.ElideMiddle
-        }
-
-        Text {
-            x: 12
-            anchors.top: progressTitle.bottom
-            anchors.topMargin: 3
-            width: cancelButton.x - x - 12
-            text: root.controller.opDetail
-            visible: root.controller.opDetail.length > 0
-            color: CelestinaTheme.textMuted
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: Math.round(CelestinaTheme.fontCaption
-                                       * root.hostWindow.interfaceTextScale)
-            elide: Text.ElideRight
-        }
-
-        Rectangle {
-            x: 12
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 10
-            width: cancelButton.x - x - 12
-            height: CelestinaTheme.compLinearTrackHeight
-            radius: height / 2
-            color: CelestinaTheme.controlFill
-
-            Rectangle {
-                height: parent.height
-                radius: height / 2
-                color: CelestinaTheme.accent
-                width: root.controller.opTotal > 0
-                       ? parent.width * Math.min(1, root.controller.opDone
-                                                 / root.controller.opTotal)
-                       : 0
-                Behavior on width {
-                    NumberAnimation { duration: CelestinaTheme.motionFast }
-                }
-            }
-        }
-
-        CelestinaButton {
-            id: cancelButton
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.right: parent.right
-            anchors.rightMargin: 12
-            height: 28
-            text: "Cancelar"
-            Accessible.name: "Cancelar la operación"
-            onClicked: root.controller.cancelOp()
-        }
     }
 
     GlassPill {
@@ -168,7 +102,10 @@ Item {
         width: Math.max(0, sizeButton.x - x - 12)
         visible: width > 80 && statusLine.text.length > 0
         backdrop: root.bottomView
-        floating: root.bottomFloating
+        // Always floating: the dock sits over the content by definition, and
+        // switching the glass off at the end of the list left it flat and
+        // opaque.
+        floating: true
         fill: CelestinaTheme.controlFill
 
         CelestinaIcon {
@@ -214,7 +151,10 @@ Item {
         y: root.bottomBar.y + (root.bottomBar.height - height) / 2
         text: "Tamaño"
         backdrop: root.bottomView
-        floating: root.bottomFloating
+        // Always floating: the dock sits over the content by definition, and
+        // switching the glass off at the end of the list left it flat and
+        // opaque.
+        floating: true
         active: sizePopup.opened
         Accessible.name: "Ajustar tamaños"
         onClicked: sizePopup.opened ? sizePopup.close() : sizePopup.open()

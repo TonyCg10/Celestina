@@ -1,0 +1,29 @@
+[package]
+name = "siderita-archive"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+celestina-core.workspace = true
+siderita-ops = { path = "../siderita-ops" }
+# The three formats this domain reads and writes, as pure Rust: `zip` for the
+# central directory and deflate members, `tar` for the POSIX stream (its byte
+# paths are what keeps a non-UTF-8 name intact), and `flate2`'s Rust backend for
+# the gzip layer around it. No process, no system tool, no C toolchain — RAR and
+# 7z are the stated exception, delegated to an installed tool (see `src/tool.rs`)
+# and never linked.
+# `aes-crypto` reads the AES members a modern encrypted zip carries; the
+# legacy ZipCrypto cipher needs no feature. Neither is ever written here.
+zip = { version = "2", default-features = false, features = ["deflate", "aes-crypto"] }
+tar = { version = "0.4", default-features = false }
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+# The zip-slip test hand-builds a member no honest writer produces, and the
+# password tests build encrypted ones.
+zip = { version = "2", default-features = false, features = ["deflate", "aes-crypto"] }

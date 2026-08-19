@@ -24,6 +24,7 @@ GlassContextMenu {
     property var namePrompt   // diálogo de nombre (renombrar uno)
     property var batchRename  // diálogo de renombrado en lote
     property var iconPicker   // diálogo de cambiar icono
+    property var compressPrompt  // the compress dialog
     signal newTabRequested(string path, bool foreground)
 
     // How many entries the batch-capable verbs (copy/cut/trash) will act
@@ -31,6 +32,16 @@ GlassContextMenu {
     // multi-selection, otherwise just this one.
     readonly property int actingCount: root.panel.actingCount(root.targetToken)
     readonly property bool multi: root.actingCount > 1
+
+    // The entries compress and extract will act on, and whether every one of
+    // them is an archive. The domain decides that by bytes rather than by name,
+    // so a `.zip` that is not one offers no extract verb — and a RAR is only
+    // offered when the tool that reads it is installed.
+    readonly property var archiveTargets:
+            root.panel.operativePaths(root.targetToken, root.targetPath)
+    readonly property bool allArchives:
+            !root.controller.trashActive
+            && root.controller.areArchives(root.archiveTargets)
 
     // ── Trash-only actions ──
     GlassMenuItem {
@@ -174,14 +185,32 @@ GlassContextMenu {
               : "Enviar a la papelera"
         visible: !root.controller.trashActive
         height: visible ? implicitHeight : 0
-        // Disabled while a copy, move or trash is running, exactly like the
-        // Supr shortcut: a second write would take over the shared progress
-        // surface and the Cancel button from the one already going.
-        enabled: !root.controller.opRunning
         icon.name: "user-trash"
         icon.source: CelestinaTheme.fallbackIcon("file")
         onTriggered: root.panel.trashSelection(
                          root.targetToken, root.targetPath)
+    }
+
+    GlassMenuItem {
+        text: root.multi
+              ? qsTr("Extraer %1 archivos aquí").arg(root.actingCount)
+              : qsTr("Extraer aquí")
+        visible: root.allArchives
+        height: visible ? implicitHeight : 0
+        icon.name: "archive-extract"
+        icon.source: CelestinaTheme.fallbackIcon("file")
+        onTriggered: root.controller.extractKeys(root.archiveTargets)
+    }
+
+    GlassMenuItem {
+        text: root.multi
+              ? qsTr("Comprimir %1 elementos…").arg(root.actingCount)
+              : qsTr("Comprimir…")
+        visible: !root.controller.trashActive
+        height: visible ? implicitHeight : 0
+        icon.name: "archive-insert"
+        icon.source: CelestinaTheme.fallbackIcon("file")
+        onTriggered: root.compressPrompt.openFor(root.archiveTargets)
     }
 
     GlassMenuItem {

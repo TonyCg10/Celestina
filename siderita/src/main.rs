@@ -8,6 +8,7 @@ mod favorites;
 mod folder_views;
 mod format;
 mod icons;
+mod localzone;
 mod media;
 mod pathkey;
 mod places;

@@ -1,5 +1,4 @@
-use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use celestina_core::CancellationToken;
 use cxx_qt_lib::{QString, QStringList};
@@ -94,11 +93,20 @@ pub mod qobject {
         #[qproperty(QStringList, cut_paths)]
         #[qproperty(bool, can_undo)]
         #[qproperty(QString, undo_label)]
+        /// The running write operations, a job per entry (`controller/jobs.rs`).
         #[qproperty(bool, op_running)]
-        #[qproperty(QString, op_current)]
-        #[qproperty(QString, op_detail)]
-        #[qproperty(i32, op_done)]
-        #[qproperty(i32, op_total)]
+        #[qproperty(QStringList, op_ids)]
+        #[qproperty(QStringList, op_labels)]
+        #[qproperty(QStringList, op_currents)]
+        #[qproperty(QStringList, op_details)]
+        #[qproperty(QStringList, op_percents)]
+        #[qproperty(QStringList, op_icons)]
+        #[qproperty(QStringList, op_steps)]
+        /// An extraction parked on a password: which archive, and whether the
+        /// last attempt was wrong rather than missing.
+        #[qproperty(bool, password_pending)]
+        #[qproperty(QString, password_archive)]
+        #[qproperty(bool, password_retry)]
         #[qproperty(bool, conflict_pending)]
         #[qproperty(i32, conflict_count)]
         #[qproperty(QString, conflict_name)]
@@ -378,6 +386,39 @@ pub mod qobject {
         #[qinvokable]
         fn trash_paths(self: Pin<&mut SideritaController>, paths: &QStringList);
 
+        /// Whether the entry a key names is an archive Siderita can extract,
+        /// decided by its bytes.
+        #[qinvokable]
+        fn is_archive(self: &SideritaController, key: &QString) -> bool;
+
+        /// The same question for a whole selection, so a menu offers the
+        /// extract verb only when every selected entry really is one.
+        #[qinvokable]
+        fn are_archives(self: &SideritaController, keys: &QStringList) -> bool;
+
+        /// The file name the compress dialog opens with for this selection and
+        /// container format, already stepped past any name that is taken.
+        #[qinvokable]
+        fn archive_suggested_name(
+            self: &SideritaController,
+            keys: &QStringList,
+            format: &QString,
+        ) -> QString;
+
+        /// Extracts every archive in `keys` into the folder being shown.
+        #[qinvokable]
+        fn extract_keys(self: Pin<&mut SideritaController>, keys: &QStringList);
+
+        /// Compresses every entry in `keys` into `name` (a plain file name in
+        /// the folder being shown) using the container `format` names.
+        #[qinvokable]
+        fn compress_keys(
+            self: Pin<&mut SideritaController>,
+            keys: &QStringList,
+            name: &QString,
+            format: &QString,
+        );
+
         #[qinvokable]
         fn copy_to_clipboard(self: Pin<&mut SideritaController>, path: &QString, cut: bool);
 
@@ -419,6 +460,12 @@ pub mod qobject {
         #[qinvokable]
         fn cancel_op(self: Pin<&mut SideritaController>);
 
+        /// Cancels one operation by id (a number: QML has no 64-bit integer).
+        #[qinvokable]
+        fn cancel_job(self: Pin<&mut SideritaController>, id: f64);
+
+        #[qinvokable]
+        fn cancel_all_jobs(self: Pin<&mut SideritaController>);
         /// Answers the collision currently being asked about with "skip" /
         /// "replace" / "keepboth". With `apply_to_all`, the same answer settles
         /// every collision left in the batch.
@@ -431,6 +478,17 @@ pub mod qobject {
 
         #[qinvokable]
         fn cancel_conflicts(self: Pin<&mut SideritaController>);
+
+        /// Resumes the parked extraction with this password. Never stored: it
+        /// travels to the domain for that one archive and is dropped with the
+        /// call.
+        #[qinvokable]
+        fn answer_password(self: Pin<&mut SideritaController>, password: &QString);
+
+        /// Skips the archive that asked for a password and carries on with the
+        /// rest of the batch.
+        #[qinvokable]
+        fn cancel_password(self: Pin<&mut SideritaController>);
 
         #[qinvokable]
         fn undo(self: Pin<&mut SideritaController>);
@@ -632,30 +690,18 @@ pub mod qobject {
     impl cxx_qt::Threading for SideritaController {}
 }
 
-/// How to reverse the last loss-free operation. Only the three verbs the
-/// roadmap names as undoable are recorded — create and copy are not, since
-/// undoing them would mean deleting data the user did not ask to lose.
-pub(crate) enum UndoAction {
-    /// A rename: the entry now sits at `renamed`; put its `old_name` back.
-    Rename {
-        renamed: PathBuf,
-        old_name: OsString,
-    },
-    /// One or more moves (a cut-paste): move each entry from where it landed
-    /// back into the directory it came from.
-    Move { entries: Vec<(PathBuf, PathBuf)> },
-    /// One or more sends-to-Trash: restore each from its recorded `.trashinfo`.
-    Trash { infos: Vec<PathBuf> },
-}
-
+mod actions;
+mod archive;
 mod display;
 mod fileops;
 mod find;
+mod jobs;
 mod keys;
 mod marks;
 mod mounts;
 mod navigation;
 mod paste;
+mod pendingnav;
 mod scan;
 mod selection;
 mod session;
@@ -663,108 +709,11 @@ pub(crate) mod shell;
 mod trash;
 mod view_options;
 
+pub(crate) use actions::{ConflictStrategy, UndoAction};
 pub(crate) use display::{display_name, kind_key, kind_label, row_subtitle, search_hit_parent};
 pub(crate) use marks::{favorite_entry_list, icon_override_entries};
-
-impl UndoAction {
-    /// A short Spanish label for what undo will reverse, for the menu/tooltip.
-    fn label(&self) -> &'static str {
-        match self {
-            Self::Rename { .. } => "Deshacer renombrar",
-            Self::Move { .. } => "Deshacer mover",
-            Self::Trash { .. } => "Deshacer enviar a la papelera",
-        }
-    }
-}
-
-/// How to resolve entries whose paste destination already exists.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ConflictStrategy {
-    /// Leave the existing entry; the source is not pasted.
-    Skip,
-    /// Send the existing entry to Trash (recoverable), then paste over it.
-    Replace,
-    /// Paste beside the existing entry under a freed "(copia)" name.
-    KeepBoth,
-}
-
-impl ConflictStrategy {
-    fn from_key(key: &str) -> Option<Self> {
-        match key {
-            "skip" => Some(Self::Skip),
-            "replace" => Some(Self::Replace),
-            "keepboth" => Some(Self::KeepBoth),
-            _ => None,
-        }
-    }
-}
-
-/// A paste held back because at least one destination already exists, waiting
-/// for the user's conflict choices before the worker starts.
-///
-/// The choice is per collision: `decisions[i]` is what to do with `sources[i]`,
-/// and `cursor` is the collision being asked about. Entries that do not collide
-/// carry `Skip` and never reach that code path. One "apply to all" fills the
-/// rest in at once — the old behaviour, now something the user opts into rather
-/// than the only option.
-struct PendingPaste {
-    sources: Vec<PathBuf>,
-    destination: PathBuf,
-    cut: bool,
-    decisions: Vec<Option<ConflictStrategy>>,
-    colliding: Vec<usize>,
-    cursor: usize,
-}
-
-/// What a pasted batch did, carried from the worker thread to `finish_paste`.
-pub(crate) struct PasteOutcome {
-    total: usize,
-    /// Every entry the batch was asked to place, so a consumed cut can check
-    /// that the system clipboard still holds its own sources before wiping it.
-    sources: Vec<PathBuf>,
-    failures: Vec<String>,
-    /// Cut sources that could not be moved (kept on the clipboard for a retry).
-    unmoved: Vec<PathBuf>,
-    /// Plain (non-colliding) moves, for the undo record.
-    undo_moves: Vec<(PathBuf, PathBuf)>,
-    skipped: usize,
-    /// Whether any entry went through replace/keep-both, which makes the batch
-    /// too tangled to offer a single-step undo for.
-    conflict_touched: bool,
-    cancelled: bool,
-}
-
-/// A navigation whose history change is held back until its scan succeeds, so a
-/// failed back / forward / up / home / activate never leaves the path pointing
-/// at an unreadable directory while the list still shows the previous one.
-pub(crate) enum PendingNav {
-    Back(PathBuf),
-    Forward(PathBuf),
-    To(PathBuf),
-}
-
-impl PendingNav {
-    fn destination(&self) -> &Path {
-        match self {
-            PendingNav::Back(path) | PendingNav::Forward(path) | PendingNav::To(path) => path,
-        }
-    }
-
-    /// Applies the navigation to `history` once its scan has succeeded.
-    fn commit(self, history: &mut NavigationHistory) {
-        match self {
-            PendingNav::Back(_) => {
-                history.go_back();
-            }
-            PendingNav::Forward(_) => {
-                history.go_forward();
-            }
-            PendingNav::To(path) => {
-                history.navigate_to(path);
-            }
-        }
-    }
-}
+pub(crate) use paste::{PasteOutcome, PendingPaste};
+pub(crate) use pendingnav::PendingNav;
 
 pub struct SideritaControllerRust {
     current_path: QString,
@@ -846,14 +795,24 @@ pub struct SideritaControllerRust {
     can_undo: bool,
     undo_label: QString,
     op_running: bool,
-    op_current: QString,
-    op_detail: QString,
-    op_done: i32,
-    op_total: i32,
-    op_cancel: Option<CancellationToken>,
+    op_ids: QStringList,
+    op_labels: QStringList,
+    op_currents: QStringList,
+    op_details: QStringList,
+    op_percents: QStringList,
+    op_icons: QStringList,
+    op_steps: QStringList,
+    jobs: Vec<crate::controller::jobs::Job>,
+    next_job_id: u64,
+    /// The extraction batch parked on a password question, if any: an encrypted
+    /// archive turns one operation into two halves with a person in between.
+    pending_password: Option<crate::controller::archive::Pending>,
     conflict_pending: bool,
     conflict_count: i32,
     conflict_name: QString,
+    password_pending: bool,
+    password_archive: QString,
+    password_retry: bool,
     pending_paste: Option<PendingPaste>,
     trash_names: QStringList,
     trash_origins: QStringList,
@@ -988,14 +947,22 @@ impl Default for SideritaControllerRust {
             can_undo: false,
             undo_label: QString::default(),
             op_running: false,
-            op_current: QString::default(),
-            op_detail: QString::default(),
-            op_done: 0,
-            op_total: 0,
-            op_cancel: None,
+            op_ids: QStringList::default(),
+            op_labels: QStringList::default(),
+            op_currents: QStringList::default(),
+            op_details: QStringList::default(),
+            op_percents: QStringList::default(),
+            op_icons: QStringList::default(),
+            op_steps: QStringList::default(),
+            jobs: Vec::new(),
+            next_job_id: 0,
+            pending_password: None,
             conflict_pending: false,
             conflict_count: 0,
             conflict_name: QString::default(),
+            password_pending: false,
+            password_archive: QString::default(),
+            password_retry: false,
             pending_paste: None,
             trash_names: QStringList::default(),
             trash_origins: QStringList::default(),

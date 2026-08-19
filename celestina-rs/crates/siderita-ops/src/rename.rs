@@ -24,10 +24,10 @@ pub struct Renamed {
 /// case-insensitive filesystem — is allowed, as is a no-op rename to the
 /// identical name. The source must still exist ([`OpError::SourceMissing`]).
 ///
-/// There is a small check-then-rename window: `std::fs::rename` would otherwise
-/// overwrite silently, and a no-clobber rename syscall needs `unsafe` FFI this
-/// crate forbids. For a single-user manager the guard is sufficient; the window
-/// is documented rather than hidden.
+/// The check above is the honest error; the rename itself then goes through
+/// [`crate::reserve`], which takes the target name atomically, so nothing that
+/// appears between the two steps — including another operation of this very
+/// application — can be overwritten.
 pub fn rename(
     path: &Path,
     new_name: &OsStr,
@@ -75,13 +75,24 @@ pub fn rename(
         Err(error) => return Err(OpError::io(&target, &error)),
     }
 
-    match fs::rename(path, &target) {
-        Ok(()) => Ok(Renamed {
-            from: path.to_path_buf(),
-            to: target,
-        }),
-        Err(error) => Err(OpError::io(&target, &error)),
+    // A case-only change on a case-insensitive filesystem renames onto the very
+    // entry being renamed, which no reservation can be taken for: the name is
+    // already held by the source itself.
+    if fs::symlink_metadata(&target).is_ok() {
+        return match fs::rename(path, &target) {
+            Ok(()) => Ok(Renamed {
+                from: path.to_path_buf(),
+                to: target,
+            }),
+            Err(error) => Err(OpError::io(&target, &error)),
+        };
     }
+    crate::reserve::rename_without_replacing(path, &target, source.is_dir())
+        .map_err(|failure| failure.into_op_error(&target))?;
+    Ok(Renamed {
+        from: path.to_path_buf(),
+        to: target,
+    })
 }
 
 /// Whether two metadata records name the same underlying entry.

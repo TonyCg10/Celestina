@@ -4,6 +4,23 @@ This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md). Each failed row keeps its result and opens a new
 corrective implementation unit.
 
+## VAL-SID-07 — Compressing and extracting on the live session
+
+- **Status:** pending
+- **Related implementation:** `SID-A1`
+- **Requires:** a verified Siderita artifact on the real Niri/Wayland session, a
+  disposable tree and archives made elsewhere (`zip`, `tar czf`, and one whose
+  members carry accents and spaces)
+- **Procedure:** extract each archive from the entry menu, extract the same one
+  twice into the same folder, compress a folder and a multi-selection in both
+  containers, and cancel a long run part-way
+- **Pass condition:** the extracted tree matches the original byte for byte, the
+  second extraction lands beside the first instead of over it, the archives open
+  in another manager, and a cancelled run leaves neither a partial archive nor a
+  staging folder behind
+- **Result:** not run by hand
+- **Evidence:** the archives used, the resulting listings and any failure text
+
 ## VAL-SID-01 — Drag comfort and live menu glass
 
 - **Status:** pending

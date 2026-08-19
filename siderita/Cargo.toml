@@ -1,6 +1,6 @@
 [package]
 name = "siderita"
-version = "1.2.7"
+version = "1.3.0"
 edition = "2021"
 rust-version = "1.85"
 license = "GPL-3.0-or-later"
@@ -24,6 +24,7 @@ cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
 ] }
 celestina-core = { path = "../celestina-rs/crates/celestina-core" }
 siderita-core = { path = "../celestina-rs/crates/siderita-core" }
+siderita-archive = { path = "../celestina-rs/crates/siderita-archive" }
 siderita-ops = { path = "../celestina-rs/crates/siderita-ops" }
 siderita-qt = { path = "../celestina-rs/crates/siderita-qt" }
 # The embedded Grafita editor: document, encoding, edit and loss-free save
