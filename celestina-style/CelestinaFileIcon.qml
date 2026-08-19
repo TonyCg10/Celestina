@@ -23,11 +23,17 @@ Item {
     property color gradientTop: CelestinaTheme.iconGradientTop(tone)
     property color gradientBottom: CelestinaTheme.iconGradientBottom(tone)
 
-    // El nombre pasa por el mismo `resolve` que los glifos de trazo, así que un
-    // alias heredado (`text-x-generic`) encuentra su forma sin una segunda tabla
-    // de sinónimos que mantener.
-    readonly property var paths: CelestinaIconShapes.pathsFor(
-                                     CelestinaIcons.resolve(name, ""))
+    // By its own name first: the shape table covers families the stroke
+    // catalogue does not publish — a page per language — and asking `resolve`
+    // for those would have degraded them to the generic page. With no shape of
+    // that name it falls back to the same `resolve` the stroke glyphs use, so a
+    // legacy alias (`text-x-generic`) still finds its own without a second table
+    // of synonyms to keep.
+    readonly property var paths: {
+        const own = CelestinaIconShapes.pathsFor(name)
+        return own.length > 0 ? own
+                              : CelestinaIconShapes.pathsFor(CelestinaIcons.resolve(name, ""))
+    }
     readonly property bool known: paths.length > 0
     readonly property real side: Math.min(width, height)
     readonly property real scaleFactor: side / CelestinaIconShapes.viewBox

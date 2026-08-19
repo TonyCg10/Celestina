@@ -63,6 +63,29 @@ shapes=(
     file-code:file-code
     file-braces:brackets-curly
     file-archive:file-zip
+    # One page per language and per document kind, from the same family and the
+    # same grid — so a folder of source files reads at a glance without a single
+    # glyph borrowed from anywhere else. Phosphor has no page for Python, C,
+    # Markdown or JSON; those keep `file-code` and are told apart by their tint.
+    file-rs:file-rs
+    file-js:file-js
+    file-ts:file-ts
+    file-jsx:file-jsx
+    file-tsx:file-tsx
+    file-vue:file-vue
+    file-html:file-html
+    file-css:file-css
+    file-sql:file-sql
+    file-svg:file-svg
+    file-csv:file-csv
+    file-doc:file-doc
+    file-xls:file-xls
+    file-ppt:file-ppt
+    file-pdf:file-pdf
+    file-jpg:file-jpg
+    file-png:file-png
+    file-lock:file-lock
+    file-cloud:file-cloud
     hard-drive:hard-drives
     phone:device-mobile
     monitor:monitor

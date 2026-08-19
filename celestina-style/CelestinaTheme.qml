@@ -668,7 +668,24 @@ QtObject {
     readonly property int radiusButton: 18   // ready — filled/tonal buttons (S4)
     readonly property int radiusInput: 22    // ready — search/text field (S4)
     readonly property int radiusLg: 26       // dialogs, popup menus, grouped cards
+    // The window corner the compositor draws — Celestina's own
+    // `geometry-corner-radius`, which is what a window in this session is
+    // rounded by. It is not a radius to copy onto anything: it is the outer
+    // curve that `concentricRadius` measures inwards from.
+    readonly property int radiusWindow: 14
     readonly property int radiusPill: 9999   // full capsule
+
+    // The radius a box takes to sit *concentrically* inside the window: two
+    // rounded rectangles look parallel only when the inner radius is the outer
+    // one minus the gap between them. Copying the window's own radius instead
+    // leaves the gap pinching at the corners, and using a card radius leaves
+    // the inner curve visibly rounder than the window it sits in.
+    //
+    // `inset` is the real distance from the window edge, so the rule keeps
+    // holding if either the margin or the compositor's radius changes.
+    function concentricRadius(inset) {
+        return Math.max(radiusXs, radiusWindow - inset)
+    }
 
     // ── Spacing scale (4-based) ──────────────────────────────────────────────
     readonly property int spaceXs: 4

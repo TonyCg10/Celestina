@@ -27,7 +27,14 @@ Pane {
                                          ? CelestinaTheme.elevatedInk
                                          : CelestinaTheme.cardInk
 
-    readonly property real radius: role === CelestinaSurface.Canvas
+    // A caller may set its own corner when the surface has to agree with
+    // something outside the design system — the window's own rounding, for
+    // instance. Below zero means "use the role's".
+    property int radiusOverride: -1
+
+    readonly property real radius: control.radiusOverride >= 0
+                                          ? control.radiusOverride
+                                       : role === CelestinaSurface.Canvas
                                           ? 0
                                         : role === CelestinaSurface.Content
                                           || role === CelestinaSurface.Tonal
