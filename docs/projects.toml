@@ -167,8 +167,8 @@ roadmap = "siderita/ROADMAP.md"
 validation = "siderita/VALIDATION.md"
 active_plans = "siderita/docs/plans/active"
 context_documents = ["celestina-style/DESIGN.md"]
-source_roots = ["siderita/src", "siderita/cpp", "siderita/qml", "siderita/portal", "celestina-rs/crates/siderita-archive", "celestina-rs/crates/siderita-core", "celestina-rs/crates/siderita-ops", "celestina-rs/crates/siderita-qt"]
-commit_roots = ["siderita/", "celestina-rs/crates/siderita-archive/", "celestina-rs/crates/siderita-core/", "celestina-rs/crates/siderita-ops/", "celestina-rs/crates/siderita-qt/"]
+source_roots = ["siderita/src", "siderita/cpp", "siderita/qml", "siderita/portal", "celestina-rs/crates/siderita-archive", "celestina-rs/crates/siderita-embedded", "celestina-rs/crates/siderita-core", "celestina-rs/crates/siderita-ops", "celestina-rs/crates/siderita-qt"]
+commit_roots = ["siderita/", "celestina-rs/crates/siderita-archive/", "celestina-rs/crates/siderita-embedded/", "celestina-rs/crates/siderita-core/", "celestina-rs/crates/siderita-ops/", "celestina-rs/crates/siderita-qt/"]
 include_workspace_manifests = true
 production_role = "desktop-application"
 deployable = true
@@ -179,10 +179,11 @@ deploy_script = "siderita/scripts/deploy-production.sh"
 status_script = "siderita/scripts/status-production.sh"
 artifact_manifest = "siderita/target/production-artifact.toml"
 artifact_paths = ["siderita/target/release/siderita"]
-production_inputs = ["siderita/Cargo.toml", "siderita/Cargo.lock", "siderita/rust-toolchain.toml", "siderita/build.rs", "siderita/src", "siderita/cpp", "siderita/qml", "siderita/portal", "siderita/org.celestina.Siderita.desktop", "celestina-style/icons/apps/org.celestina.Siderita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/siderita-archive", "celestina-rs/crates/siderita-core", "celestina-rs/crates/siderita-ops", "celestina-rs/crates/siderita-qt", "celestina-rs/crates/grafita-core", "celestina-rs/crates/fluorita-core", "celestina-rs/crates/fluorita-engine", "celestina-rs/crates/fluorita-qt"]
+production_inputs = ["siderita/Cargo.toml", "siderita/Cargo.lock", "siderita/rust-toolchain.toml", "siderita/build.rs", "siderita/src", "siderita/cpp", "siderita/qml", "siderita/portal", "siderita/org.celestina.Siderita.desktop", "celestina-style/icons/apps/org.celestina.Siderita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/siderita-archive", "celestina-rs/crates/siderita-embedded", "celestina-rs/crates/siderita-core", "celestina-rs/crates/siderita-ops", "celestina-rs/crates/siderita-qt", "celestina-rs/crates/grafita-core", "celestina-rs/crates/fluorita-core", "celestina-rs/crates/fluorita-engine", "celestina-rs/crates/fluorita-qt"]
 verification_inputs = ["siderita/tests", "siderita/scripts/qml-tests.sh", "siderita/scripts/smoke.sh", "celestina-rs/rust-toolchain.toml"]
 component_commit_scopes = [
   { prefix = "siderita-archive", roots = ["celestina-rs/crates/siderita-archive/"], include_workspace_manifests = true },
+  { prefix = "siderita-embedded", roots = ["celestina-rs/crates/siderita-embedded/"], include_workspace_manifests = true },
   { prefix = "siderita-core", roots = ["celestina-rs/crates/siderita-core/"], include_workspace_manifests = true },
   { prefix = "siderita-ops", roots = ["celestina-rs/crates/siderita-ops/"], include_workspace_manifests = true },
   { prefix = "siderita-qt", roots = ["celestina-rs/crates/siderita-qt/"], include_workspace_manifests = true },
