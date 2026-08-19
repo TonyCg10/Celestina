@@ -104,8 +104,8 @@ pub mod qobject {
         #[qproperty(QStringList, op_percents)]
         #[qproperty(QStringList, op_icons)]
         #[qproperty(QStringList, op_steps)]
-        /// An extraction parked on a password: which archive, and whether the
-        /// last try was wrong rather than missing.
+        #[qproperty(QStringList, op_paused)]
+        /// An extraction parked on a password: which, and whether it was wrong.
         #[qproperty(bool, password_pending)]
         #[qproperty(QString, password_archive)]
         #[qproperty(bool, password_retry)]
@@ -465,9 +465,12 @@ pub mod qobject {
         /// Cancels one operation by id (a number: QML has no 64-bit integer).
         #[qinvokable]
         fn cancel_job(self: Pin<&mut SideritaController>, id: f64);
-
         #[qinvokable]
         fn cancel_all_jobs(self: Pin<&mut SideritaController>);
+
+        /// Holds one operation where it is, or lets it carry on.
+        #[qinvokable]
+        fn toggle_job_paused(self: Pin<&mut SideritaController>, id: f64);
         /// Answers the collision currently being asked about with "skip" /
         /// "replace" / "keepboth". With `apply_to_all`, the same answer settles
         /// every collision left in the batch.
@@ -482,8 +485,7 @@ pub mod qobject {
         fn cancel_conflicts(self: Pin<&mut SideritaController>);
 
         /// Resumes the parked extraction with this password. Never stored: it
-        /// travels to the domain for that one archive and is dropped with the
-        /// call.
+        /// reaches the domain for that one archive and is dropped with the call.
         #[qinvokable]
         fn answer_password(self: Pin<&mut SideritaController>, password: &QString);
 
@@ -824,8 +826,7 @@ pub struct SideritaControllerRust {
     op_percents: QStringList,
     op_icons: QStringList,
     op_steps: QStringList,
-    jobs: Vec<crate::controller::jobs::Job>,
-    next_job_id: u64,
+    op_paused: QStringList,
     /// The extraction batch parked on a password question, if any: an encrypted
     /// archive turns one operation into two halves with a person in between.
     pending_password: Option<crate::controller::archive::Pending>,
@@ -980,8 +981,7 @@ impl Default for SideritaControllerRust {
             op_percents: QStringList::default(),
             op_icons: QStringList::default(),
             op_steps: QStringList::default(),
-            jobs: Vec::new(),
-            next_job_id: 0,
+            op_paused: QStringList::default(),
             pending_password: None,
             conflict_pending: false,
             conflict_count: 0,

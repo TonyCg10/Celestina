@@ -25,6 +25,9 @@ Item {
     // repainted on the author's machine — the ring sat still through two
     // attempts. A step changes the arc's geometry, which cannot be skipped.
     property int steps: 0
+    // Held: the arc dims and the icon gives way to a pause mark, so a stopped
+    // job is not read as a finished one.
+    property bool paused: false
     property bool active: false
     property alias hovered: hover.hovered
 
@@ -84,7 +87,7 @@ Item {
         preferredRendererType: Shape.CurveRenderer
 
         ShapePath {
-            strokeColor: CelestinaTheme.accent
+            strokeColor: ring.paused ? CelestinaTheme.textMuted : CelestinaTheme.accent
             strokeWidth: ring.ringWidth
             fillColor: CelestinaTheme.clear
             capStyle: ShapePath.RoundCap
@@ -109,10 +112,30 @@ Item {
         anchors.centerIn: parent
         width: Math.round(parent.width * 0.45)
         height: width
+        visible: !ring.paused
         name: ring.iconName
         fallbackName: "file"
         tone: ring.active || ring.hovered ? CelestinaIcon.Accent
                                           : CelestinaIcon.Primary
+    }
+
+    // The held mark: two bars, drawn rather than fetched, because the catalogue
+    // carries a play glyph but no pause one and a single borrowed shape is not
+    // worth a new icon family.
+    Row {
+        anchors.centerIn: parent
+        visible: ring.paused
+        spacing: Math.round(ring.width * 0.09)
+
+        Repeater {
+            model: 2
+            Rectangle {
+                width: Math.round(ring.width * 0.09)
+                height: Math.round(ring.width * 0.30)
+                radius: width / 2
+                color: CelestinaTheme.textMuted
+            }
+        }
     }
 
     HoverHandler {

@@ -19,6 +19,9 @@ Item {
     property int jobIndex: -1
     // Hundredths, or below zero when there is no knowable fraction.
     property int percent: -1
+    // Whether this job is being held, which changes one button's face and the
+    // line above it.
+    property bool paused: false
     // Where the pointer should sit, in the parent's coordinates.
     property real pointerX: 0
 
@@ -117,16 +120,34 @@ Item {
 
             Item { width: 1; height: 8 }
 
-            CelestinaButton {
-                objectName: "calloutCancel"
+            // Held or running, then stopped for good: the two answers a person
+            // can give a long operation, in the order they are reached for.
+            Row {
                 anchors.right: parent.right
-                height: 28
-                text: qsTr("Cancelar")
-                Accessible.name: qsTr("Cancelar %1").arg(
-                    callout.at(callout.controller.opLabels, callout.jobIndex))
-                onClicked: {
-                    callout.controller.cancelJob(parseFloat(callout.jobId))
-                    callout.dismissed()
+                spacing: 8
+
+                CelestinaButton {
+                    objectName: "calloutPause"
+                    height: 28
+                    text: callout.paused ? qsTr("Reanudar") : qsTr("Pausar")
+                    Accessible.name: (callout.paused ? qsTr("Reanudar %1") : qsTr("Pausar %1"))
+                        .arg(callout.at(callout.controller.opLabels, callout.jobIndex))
+                    // Pausing leaves the callout open: a person who holds a copy
+                    // usually wants to watch that it really stopped.
+                    onClicked: callout.controller.toggleJobPaused(
+                                   parseFloat(callout.jobId))
+                }
+
+                CelestinaButton {
+                    objectName: "calloutCancel"
+                    height: 28
+                    text: qsTr("Cancelar")
+                    Accessible.name: qsTr("Cancelar %1").arg(
+                        callout.at(callout.controller.opLabels, callout.jobIndex))
+                    onClicked: {
+                        callout.controller.cancelJob(parseFloat(callout.jobId))
+                        callout.dismissed()
+                    }
                 }
             }
         }

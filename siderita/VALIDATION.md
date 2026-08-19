@@ -4,6 +4,22 @@ This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md). Each failed row keeps its result and opens a new
 corrective implementation unit.
 
+## VAL-SID-09 — Pausing a job, watched from another tab
+
+- **Status:** pending
+- **Related implementation:** `SID-A3`
+- **Requires:** a verified Siderita artifact on the real Niri/Wayland session, a
+  file large enough that copying it takes more than a few seconds, two tabs
+- **Procedure:** copy that file, open its callout and press Pausar; watch the
+  destination's size in another manager while it is held; switch to a second
+  tab and confirm the same job's ring and callout are there; press Reanudar
+  from that second tab
+- **Pass condition:** the destination's size does not move while held, the job
+  is visible and pausable from the second tab, and resuming from there
+  finishes the copy exactly as if the first tab had done it
+- **Result:** not run by hand
+- **Evidence:** the file used, its size held vs finished, and any failure text
+
 ## VAL-SID-08 — The volume's Trash, and what a folder shows
 
 - **Status:** pending

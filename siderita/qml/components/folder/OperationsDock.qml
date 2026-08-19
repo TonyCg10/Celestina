@@ -114,6 +114,7 @@ Item {
                                                  jobRing.index), 10)
                     return isNaN(raw) ? 0 : raw
                 }
+                paused: dock.at(dock.controller.opPaused, jobRing.index) === "1"
                 active: dock.openId === jobRing.jobId
                 Accessible.role: Accessible.Button
                 Accessible.name: dock.at(dock.controller.opLabels, jobRing.index)
@@ -139,6 +140,8 @@ Item {
             const raw = parseInt(dock.at(dock.controller.opPercents, index), 10)
             return isNaN(raw) ? -1 : raw
         }
+        paused: dock.at(dock.controller.opPaused,
+                        dock.indexOfJob(dock.openId)) === "1"
         // Points at the ring it belongs to, and sits above the dock.
         pointerX: {
             const index = dock.indexOfJob(dock.openId)

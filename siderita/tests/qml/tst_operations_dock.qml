@@ -15,6 +15,7 @@ TestCase {
     when: windowShown
 
     property var cancelled: []
+    property var toggled: []
 
     QtObject {
         id: controllerStub
@@ -26,7 +27,11 @@ TestCase {
         property var opDetails: []
         property var opPercents: []
         property var opSteps: []
+        property var opPaused: []
 
+        function toggleJobPaused(id) {
+            testCase.toggled.push(id)
+        }
         function cancelJob(id) { testCase.cancelled.push(id) }
     }
 
@@ -45,6 +50,8 @@ TestCase {
 
     function init() {
         testCase.cancelled = []
+        testCase.toggled = []
+        controllerStub.opPaused = []
         controllerStub.opIds = []
         controllerStub.opLabels = []
         controllerStub.opIcons = []
@@ -171,6 +178,34 @@ TestCase {
         // Away from the dock entirely: the catcher covers the folder behind it.
         mouseClick(testCase, 40, 40)
         compare(dock.openId, "")
+    }
+
+    // Held is a state a person must be able to see and undo from the same
+    // button, and the ring must not go on looking like it is working.
+    function test_dd_a_held_job_shows_it_and_offers_to_resume() {
+        load([extracting("8")])
+        controllerStub.opPaused = ["1"]
+        waitForRendering(dock)
+
+        const ring = findChild(dock, "operationRing-8")
+        compare(ring.paused, true)
+
+        ring.clicked()
+        waitForRendering(dock)
+        const pause = findChild(dock, "calloutPause")
+        verify(pause !== null)
+        compare(pause.text, "Reanudar")
+
+        pause.clicked()
+        compare(testCase.toggled.length, 1)
+        compare(testCase.toggled[0], 8)
+        // Holding a job does not close its callout: a person who pauses a copy
+        // wants to see that it really stopped.
+        compare(dock.openId, "8")
+
+        controllerStub.opPaused = ["0"]
+        compare(ring.paused, false)
+        compare(pause.text, "Pausar")
     }
 
     function test_e_the_callouts_cancel_names_that_job() {

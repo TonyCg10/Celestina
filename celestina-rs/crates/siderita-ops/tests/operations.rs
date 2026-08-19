@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use celestina_core::CancellationToken;
-use siderita_ops::{copy, create_directory, create_file, move_entry, rename, OpError, Progress};
+use siderita_ops::{
+    copy, copy_as, create_directory, create_file, move_entry, rename, OpError, Progress,
+};
 
 /// A throwaway directory in the system temp dir, removed on drop.
 struct TestDir(PathBuf);
@@ -337,4 +339,40 @@ fn a_cancelled_move_does_nothing() {
     assert!(matches!(error, OpError::Cancelled));
     assert!(source.exists(), "source untouched");
     assert!(!into.join("s").exists());
+}
+
+/// A paused operation writes nothing until it is let go.
+///
+/// The pause rides on the cancellation token, so this is also the proof that
+/// the two are not confused with one another: the copy is held, then released,
+/// and completes — it is not cancelled, and it does not half-write.
+#[test]
+fn a_paused_copy_holds_where_it_is_and_then_finishes() {
+    let dir = TestDir::new("pausa");
+    let source = dir.path().join("grande.bin");
+    // Big enough that it cannot finish inside the window this test measures.
+    fs::write(&source, vec![7u8; 8 * 1024 * 1024]).expect("write source");
+    let destination = dir.path().join("copia.bin");
+
+    let token = CancellationToken::new();
+    token.pause();
+
+    let worker_token = token.clone();
+    let from = source.clone();
+    let to = destination.clone();
+    let worker =
+        std::thread::spawn(move || copy_as(&from, &to, &worker_token, &mut |_: Progress| {}));
+
+    std::thread::sleep(std::time::Duration::from_millis(250));
+    let written = fs::metadata(&destination)
+        .map(|data| data.len())
+        .unwrap_or(0);
+    assert_eq!(written, 0, "a held copy wrote {written} bytes");
+    token.resume();
+    worker.join().expect("worker").expect("copy");
+    assert_eq!(
+        fs::read(&destination).expect("read copy").len(),
+        8 * 1024 * 1024,
+        "the released copy did not finish"
+    );
 }

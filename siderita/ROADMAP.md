@@ -1,7 +1,7 @@
 # Siderita implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** SID-A2
+- **Active implementation checkpoint:** SID-A3
 - **Related author validation:** `VAL-SID-G7`, `VAL-SID-04` and `VAL-SID-07` in
   [VALIDATION.md](VALIDATION.md); none of them blocks implementation
 
@@ -69,6 +69,25 @@ The plan is
 [After the archive verbs](docs/plans/active/2026-08-19-after-the-archive-verbs.md).
 It excludes reading a Windows executable for anything but its icon, and the
 author's own pass on the live session, which is `VAL-SID-08`.
+
+## SID-A3 — Pausing a job, and the register that belongs to the process
+
+The author found the operations dock scoped to the tab that started a job — a
+copy launched in one tab looked finished the moment they switched to another,
+though it was still writing — and asked for a pause button the two prior
+attempts at this surface had not offered.
+
+Pausing rides on the cancellation token every write verb already holds and
+already asks at each safe point, so `celestina-core` gained
+`pause`/`resume`/`is_paused` and a blocking `is_cancelled` rather than a second
+token threaded through two crates. The job register moved from each tab's
+controller to one shared by the process. The tangible outcome is a job visible
+and controllable from any tab, and Pausar/Reanudar next to Cancelar.
+
+The plan is
+[Pause and global scope](docs/plans/active/2026-08-19-pause-and-global-scope.md).
+It excludes pausing a delegated RAR/7z extraction, whose writer is another
+process, and the author's own pass, which is `VAL-SID-09`.
 
 ## SID-M1 — Parent portal pickers on Wayland
 

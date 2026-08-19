@@ -44,6 +44,8 @@ impl qobject::SideritaController {
             self.as_mut().rust_mut().get_mut().executor = Some(executor);
         }
 
+        // Work started in another tab is still this tab's business to show.
+        self.as_mut().watch_jobs();
         self.as_mut().reload_bookmarks();
         self.as_mut().refresh_place_props();
 

@@ -9,22 +9,63 @@
 //!
 //! What replaces it is a register of jobs. Each has its own identity, its own
 //! cancellation token and its own counters, so several run at once and each is
-//! cancelled on its own. The scalar properties the current surface reads are
-//! kept, published from the register: `op_running` is now "at least one job is
-//! alive" and the rest describe the job at the front. `op_count` says how many
-//! there are, which is what lets the surface say more than one is running
-//! without redrawing itself.
+//! cancelled on its own.
+//!
+//! The register belongs to the **process**, not to a tab. A copy started in one
+//! tab is still running when a person switches to another, and a surface that
+//! only knew about its own tab's work would tell them it had finished. Every
+//! controller therefore publishes the same list, and a change wakes all of them
+//! through the Qt threads they registered on start.
+//!
+//! Each job can also be held. Pausing rides on the cancellation token because
+//! the points a long operation asks "should I stop?" are exactly the points at
+//! which it is safe to wait — see `celestina_core::CancellationToken::pause`.
 //!
 //! The marker above declares the Spanish here: a job's label is the line a
 //! person reads while it runs.
 
 use core::pin::Pin;
+use std::sync::{Mutex, OnceLock};
 
 use celestina_core::CancellationToken;
-use cxx_qt::CxxQtType;
+use cxx_qt::Threading;
 use cxx_qt_lib::QString;
 
 use super::qobject;
+
+/// The process-wide register: every running job, and every controller that
+/// wants to be told about them.
+struct Registry {
+    jobs: Vec<Job>,
+    next_id: u64,
+    listeners: Vec<cxx_qt::CxxQtThread<qobject::SideritaController>>,
+}
+
+fn registry() -> &'static Mutex<Registry> {
+    static REGISTRY: OnceLock<Mutex<Registry>> = OnceLock::new();
+    REGISTRY.get_or_init(|| {
+        Mutex::new(Registry {
+            jobs: Vec::new(),
+            next_id: 0,
+            listeners: Vec::new(),
+        })
+    })
+}
+
+/// Asks every controller to publish the register again.
+///
+/// A queue that fails names a controller whose window is gone, so it is dropped
+/// here rather than accumulating for the life of the process.
+fn wake_listeners() {
+    let Ok(mut state) = registry().lock() else {
+        return;
+    };
+    state.listeners.retain(|listener| {
+        listener
+            .queue(|controller| controller.publish_jobs())
+            .is_ok()
+    });
+}
 
 /// What a job is doing, as a stable token rather than as its Spanish label: the
 /// surface picks an icon from this, and a translated word must never decide
@@ -49,6 +90,19 @@ impl JobKind {
             Self::Extract => "archive-extract",
         }
     }
+}
+
+/// One job as the surface reads it: every column already worded, so QML works
+/// nothing out on its own.
+struct Row {
+    id: String,
+    label: String,
+    icon: String,
+    current: String,
+    detail: String,
+    percent: String,
+    steps: String,
+    paused: String,
 }
 
 /// One running write operation.
@@ -89,6 +143,16 @@ pub(crate) struct Job {
 }
 
 impl qobject::SideritaController {
+    /// Subscribes this controller to the process-wide register, so work started
+    /// anywhere reaches its surface too.
+    pub(crate) fn watch_jobs(self: Pin<&mut Self>) {
+        let thread = self.qt_thread();
+        if let Ok(mut state) = registry().lock() {
+            state.listeners.push(thread);
+        }
+        self.publish_jobs();
+    }
+
     /// Registers a new job and hands back its id and cancellation token.
     ///
     /// Nothing is refused here. Two jobs writing into the same folder are safe
@@ -103,9 +167,11 @@ impl qobject::SideritaController {
     ) -> (u64, CancellationToken) {
         let token = CancellationToken::new();
         let id = {
-            let state = self.as_mut().rust_mut().get_mut();
-            state.next_job_id += 1;
-            let id = state.next_job_id;
+            let Ok(mut state) = registry().lock() else {
+                return (0, token);
+            };
+            state.next_id += 1;
+            let id = state.next_id;
             state.jobs.push(Job {
                 id,
                 label: label.to_owned(),
@@ -122,7 +188,7 @@ impl qobject::SideritaController {
             id
         };
         self.as_mut().set_status_text(QString::from(label));
-        self.publish_jobs();
+        wake_listeners();
         (id, token)
     }
 
@@ -130,14 +196,16 @@ impl qobject::SideritaController {
     /// which is what makes a late progress message from a finished worker
     /// harmless.
     pub(crate) fn job_reached(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         id: u64,
         done: i32,
         current: Option<String>,
         detail: Option<String>,
     ) {
         {
-            let state = self.as_mut().rust_mut().get_mut();
+            let Ok(mut state) = registry().lock() else {
+                return;
+            };
             let Some(job) = state.jobs.iter_mut().find(|job| job.id == id) else {
                 return;
             };
@@ -150,7 +218,7 @@ impl qobject::SideritaController {
                 job.detail = detail;
             }
         }
-        self.publish_jobs();
+        wake_listeners();
     }
 
     /// Records how many bytes a job has moved, and how many it will move in
@@ -160,14 +228,16 @@ impl qobject::SideritaController {
     /// carries both and the entry counter is left alone — it counts entries, and
     /// bytes are not entries.
     pub(crate) fn job_weighed(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         id: u64,
         done: u64,
         total: u64,
         detail: String,
     ) {
         {
-            let state = self.as_mut().rust_mut().get_mut();
+            let Ok(mut state) = registry().lock() else {
+                return;
+            };
             let Some(job) = state.jobs.iter_mut().find(|job| job.id == id) else {
                 return;
             };
@@ -176,52 +246,72 @@ impl qobject::SideritaController {
             job.detail = detail;
             job.steps = job.steps.wrapping_add(1).max(0);
         }
-        self.publish_jobs();
+        wake_listeners();
     }
 
     /// Removes a finished job from the register.
-    pub(crate) fn end_job(mut self: Pin<&mut Self>, id: u64) {
-        self.as_mut()
-            .rust_mut()
-            .get_mut()
-            .jobs
-            .retain(|job| job.id != id);
+    pub(crate) fn end_job(self: Pin<&mut Self>, id: u64) {
+        if let Ok(mut state) = registry().lock() {
+            state.jobs.retain(|job| job.id != id);
+        }
+        wake_listeners();
         self.publish_jobs();
     }
 
     /// Cancels one job by id, leaving every other one running.
-    pub fn cancel_job(mut self: Pin<&mut Self>, id: f64) {
+    pub fn cancel_job(self: Pin<&mut Self>, id: f64) {
         let id = id as u64;
-        if let Some(job) = self
-            .as_mut()
-            .rust_mut()
-            .get_mut()
-            .jobs
-            .iter()
-            .find(|job| job.id == id)
-        {
-            job.cancel.cancel();
+        if let Ok(state) = registry().lock() {
+            if let Some(job) = state.jobs.iter().find(|job| job.id == id) {
+                job.cancel.cancel();
+            }
         }
+        wake_listeners();
+        self.publish_jobs();
+    }
+
+    /// Holds one job where it is, or lets it carry on. The same button, because
+    /// to a person it is one state with two faces.
+    pub fn toggle_job_paused(self: Pin<&mut Self>, id: f64) {
+        let id = id as u64;
+        if let Ok(state) = registry().lock() {
+            if let Some(job) = state.jobs.iter().find(|job| job.id == id) {
+                if job.cancel.is_paused() {
+                    job.cancel.resume();
+                } else {
+                    job.cancel.pause();
+                }
+            }
+        }
+        wake_listeners();
         self.publish_jobs();
     }
 
     /// Cancels every running job: the Cancel that belongs to the whole surface
     /// rather than to one row.
-    pub fn cancel_all_jobs(mut self: Pin<&mut Self>) {
-        for job in &self.as_mut().rust_mut().get_mut().jobs {
-            job.cancel.cancel();
+    pub fn cancel_all_jobs(self: Pin<&mut Self>) {
+        if let Ok(state) = registry().lock() {
+            for job in &state.jobs {
+                job.cancel.cancel();
+            }
         }
+        wake_listeners();
         self.publish_jobs();
     }
 
     /// The cancellation token of a job that is already registered — for work
     /// that pauses for a person's answer and then resumes as the same job.
     pub(crate) fn job_token(&self, id: u64) -> CancellationToken {
-        self.rust()
-            .jobs
-            .iter()
-            .find(|job| job.id == id)
-            .map(|job| job.cancel.clone())
+        registry()
+            .lock()
+            .ok()
+            .and_then(|state| {
+                state
+                    .jobs
+                    .iter()
+                    .find(|job| job.id == id)
+                    .map(|job| job.cancel.clone())
+            })
             .unwrap_or_default()
     }
 
@@ -232,50 +322,59 @@ impl qobject::SideritaController {
     /// single scalar left — "is anything writing" is still a question other
     /// parts of the application ask.
     pub(crate) fn publish_jobs(mut self: Pin<&mut Self>) {
-        let running = !self.rust().jobs.is_empty();
+        let running = registry()
+            .lock()
+            .map(|state| !state.jobs.is_empty())
+            .unwrap_or(false);
         self.as_mut().set_op_running(running);
         self.publish_job_rows();
     }
 
     /// The per-job rows, as the parallel lists the operations surface consumes.
     fn publish_job_rows(mut self: Pin<&mut Self>) {
-        let rows: Vec<(String, String, String, String, String, String, String)> = self
-            .rust()
+        // Named fields rather than an eight-wide tuple: the columns are only
+        // parallel lists once they cross into QML, and until then they deserve
+        // to be readable.
+        let Ok(state) = registry().lock() else {
+            return;
+        };
+        let rows: Vec<Row> = state
             .jobs
             .iter()
-            .map(|job| {
-                (
-                    job.id.to_string(),
-                    job.label.clone(),
-                    job.kind.icon().to_owned(),
-                    job.current.clone(),
-                    // What the row shows on its right: the byte read-out, or the
-                    // count when there is more than one entry to get through.
-                    if job.detail.is_empty() && job.total > 1 {
-                        format!("{} de {}", job.done, job.total)
-                    } else {
-                        job.detail.clone()
-                    },
-                    // How full its ring is, as hundredths — or `-1` when there
-                    // is no fraction to show. Bytes first, because they are the
-                    // finest measure available and the only one that moves
-                    // inside a single 26 GB member; then entries, for a batch of
-                    // several; and only then "unknown", which is what a lone
-                    // archive of unmeasurable size gets.
-                    if let Some(share) =
-                        (100 * job.bytes_done.min(job.bytes_total)).checked_div(job.bytes_total)
-                    {
-                        share.to_string()
-                    } else if job.total > 1 {
-                        (100 * i64::from(job.done.min(job.total)) / i64::from(job.total))
-                            .to_string()
-                    } else {
-                        "-1".to_owned()
-                    },
-                    job.steps.to_string(),
-                )
+            .map(|job| Row {
+                id: job.id.to_string(),
+                label: job.label.clone(),
+                icon: job.kind.icon().to_owned(),
+                current: job.current.clone(),
+                // What the row shows on its right: the byte read-out, or the
+                // count when there is more than one entry to get through.
+                detail: if job.detail.is_empty() && job.total > 1 {
+                    format!("{} de {}", job.done, job.total)
+                } else {
+                    job.detail.clone()
+                },
+                // How full its ring is, as hundredths — or `-1` when there is no
+                // fraction to show. Bytes first, because they are the finest
+                // measure available and the only one that moves inside a single
+                // 26 GB member; then entries, for a batch of several; and only
+                // then "unknown", which is what a lone archive of unmeasurable
+                // size gets.
+                percent: if let Some(share) =
+                    (100 * job.bytes_done.min(job.bytes_total)).checked_div(job.bytes_total)
+                {
+                    share.to_string()
+                } else if job.total > 1 {
+                    (100 * i64::from(job.done.min(job.total)) / i64::from(job.total)).to_string()
+                } else {
+                    "-1".to_owned()
+                },
+                steps: job.steps.to_string(),
+                // Held or running: the surface shows one button with two faces,
+                // and the truth of which face is the token's.
+                paused: if job.cancel.is_paused() { "1" } else { "0" }.to_owned(),
             })
             .collect();
+        drop(state);
         let mut ids = cxx_qt_lib::QStringList::default();
         let mut labels = cxx_qt_lib::QStringList::default();
         let mut currents = cxx_qt_lib::QStringList::default();
@@ -283,14 +382,16 @@ impl qobject::SideritaController {
         let mut percents = cxx_qt_lib::QStringList::default();
         let mut icons = cxx_qt_lib::QStringList::default();
         let mut steps = cxx_qt_lib::QStringList::default();
-        for (id, label, icon, current, detail, percent, step) in &rows {
-            ids.append(QString::from(id.as_str()));
-            labels.append(QString::from(label.as_str()));
-            icons.append(QString::from(icon.as_str()));
-            currents.append(QString::from(current.as_str()));
-            details.append(QString::from(detail.as_str()));
-            percents.append(QString::from(percent.as_str()));
-            steps.append(QString::from(step.as_str()));
+        let mut held = cxx_qt_lib::QStringList::default();
+        for row in &rows {
+            ids.append(QString::from(row.id.as_str()));
+            labels.append(QString::from(row.label.as_str()));
+            icons.append(QString::from(row.icon.as_str()));
+            currents.append(QString::from(row.current.as_str()));
+            details.append(QString::from(row.detail.as_str()));
+            percents.append(QString::from(row.percent.as_str()));
+            steps.append(QString::from(row.steps.as_str()));
+            held.append(QString::from(row.paused.as_str()));
         }
         self.as_mut().set_op_ids(ids);
         self.as_mut().set_op_labels(labels);
@@ -299,5 +400,6 @@ impl qobject::SideritaController {
         self.as_mut().set_op_percents(percents);
         self.as_mut().set_op_icons(icons);
         self.as_mut().set_op_steps(steps);
+        self.as_mut().set_op_paused(held);
     }
 }

@@ -1,0 +1,39 @@
+# SID-A3-A exact change inventory
+
+Base revision	33bd08e759e1be50f362a3c2b7f8bd2ee64930e8
+Pathspec	docs/version-history.tsv
+Pathspec	celestina-rs/crates/siderita-ops/tests/operations.rs
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/ROADMAP.md
+Pathspec	siderita/VALIDATION.md
+Pathspec	siderita/qml/components/folder/OperationCallout.qml
+Pathspec	siderita/qml/components/folder/OperationRing.qml
+Pathspec	siderita/qml/components/folder/OperationsDock.qml
+Pathspec	siderita/src/controller/jobs.rs
+Pathspec	siderita/src/controller/navigation.rs
+Pathspec	siderita/src/controller.rs
+Pathspec	siderita/tests/qml/tst_operations_dock.qml
+Pathspec	siderita/docs/plans/active/2026-08-19-pause-and-global-scope.md
+Pathspec	siderita/docs/evidence/2026-08-19-pause-and-global-scope.md
+Pathspec	siderita/docs/inventories/2026-08-19-pause-and-global-scope/SID-A3-A.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+39	1	d9bf3c5835a9240a9343a88384ce467ce5095bd15377b2f1ac924eb49777ea83	celestina-rs/crates/siderita-ops/tests/operations.rs
+1	0	54c43bf348b8f34315ec85dd9784b605a699d573c5e92fb35d8f749e869e7f96	docs/version-history.tsv
+1	1	2d9850ea2a265579a7a7463915517429282a2ca3c73e44e889076ca5d3a8cafc	siderita/Cargo.lock
+1	1	8b0fafba7f509768e8e62e254e05ad6106b8fba798193e94a5248b5c281ad542	siderita/Cargo.toml
+20	1	5ad05396f54dc502ec69d67a41622a55d0b13e515a87218c140f1309403f4c20	siderita/ROADMAP.md
+16	0	9a2f4058b84ac31cb020d7f20e2641539a2e92d63b1d1deda01ccc468924728d	siderita/VALIDATION.md
+56	0	4b4309362f1b606f483d32d3415dc4e09225a01107f0d237287d4656c2d89f86	siderita/docs/evidence/2026-08-19-pause-and-global-scope.md
+39	0	self	siderita/docs/inventories/2026-08-19-pause-and-global-scope/SID-A3-A.numstat.tsv
+68	0	81994b53eded815fbcbcfa2344a18270c432cfb59a22a380a83bbf3d8915b6c2	siderita/docs/plans/active/2026-08-19-pause-and-global-scope.md
+30	9	f6ba7daf52b2d2d8d72ccc9d7071e18bf868f654a8aed7ae21c3e9630ea5d25b	siderita/qml/components/folder/OperationCallout.qml
+24	1	036252493899f3d900038a92788ae162bd32c3645ff67fc0f547d4cecc37e830	siderita/qml/components/folder/OperationRing.qml
+3	0	f8d7fedc9bd97d1c8a17d97ef65840e1c128869237190c285ad84298506327ae	siderita/qml/components/folder/OperationsDock.qml
+9	9	0a1dfaacaa424c032473d2e9ee80f202e0a0cd566c7ced12c6df6174b3a4d1b9	siderita/src/controller.rs
+184	82	9e39bc0af2aa80fb5d6fd55b6411447830a5a0103ad5b5c953d4a37f8a9d861f	siderita/src/controller/jobs.rs
+2	0	10113f74e042c5f6c7667b4a39b4937e49e897c274c9ee5c2973623e0b280632	siderita/src/controller/navigation.rs
+35	0	e01512b9879698f92cc822e461c162c5b4d57220e52f3b864e96531ea932ff18	siderita/tests/qml/tst_operations_dock.qml
