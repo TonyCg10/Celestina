@@ -95,4 +95,4 @@ left as a ratchet the file no longer needs.
 `VAL-G7`, and the sibling units
 [`STYLE-G7-A`](../../../celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md)
 and
-[`SID-G7-A`](../../../siderita/docs/plans/active/2026-08-04-shared-reading-surface.md).
+[`SID-G7-A`](../../../siderita/docs/plans/archive/2026-08-04-shared-reading-surface.md).

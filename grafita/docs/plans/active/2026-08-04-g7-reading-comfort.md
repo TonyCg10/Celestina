@@ -43,7 +43,7 @@ one, so the promotion and its second consumer are delivered by two sibling
 plans that land before and after this one:
 [`STYLE-G7`](../../../../celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md)
 publishes `CelestinaLineGutter` and `CelestinaScrollBar`, and
-[`SID-G7`](../../../../siderita/docs/plans/active/2026-08-04-shared-reading-surface.md)
+[`SID-G7`](../../../../siderita/docs/plans/archive/2026-08-04-shared-reading-surface.md)
 adopts them in Siderita's two text surfaces. This plan owns Grafita and
 `grafita-core` only; it consumes the shared components through the canonical
 path and therefore depends on `STYLE-G7` landing first.
