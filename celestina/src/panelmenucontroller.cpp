@@ -379,6 +379,33 @@ void PanelMenuController::openWorkspaceMap(
     // with the same droplet membrane as every other panel-opened surface.
     const PanelCarrierGeometry carrier = panelCarrierGeometry(
         panel, globalOpener, globalAttachmentAnchor);
+    // What the panel actually hands the surface, per output. The membrane is
+    // suppressed when the anchor arrives empty or off-surface, and that is a
+    // per-output arithmetic question — the global rectangle comes from Qt,
+    // whose idea of where a layer surface sits is not guaranteed to include
+    // the output's own origin. Recorded rather than inferred.
+    {
+        const QScreen *const s = panel ? panel->screen() : nullptr;
+        DiagnosticJournal::instance().record(
+            DiagnosticJournal::Record(
+                DiagnosticJournal::Level::Info,
+                QStringLiteral("attachment.carrier"))
+                .text(QStringLiteral("route"), QStringLiteral("workspace-map"))
+                .text(QStringLiteral("output"), s ? s->name() : QString())
+                .number(QStringLiteral("screen_x"), s ? s->geometry().x() : -1)
+                .number(QStringLiteral("screen_y"), s ? s->geometry().y() : -1)
+                .number(QStringLiteral("global_anchor_x"),
+                        qRound(globalAttachmentAnchor.x()))
+                .number(QStringLiteral("global_anchor_y"),
+                        qRound(globalAttachmentAnchor.y()))
+                .number(QStringLiteral("anchor_x"), qRound(carrier.attachmentAnchor.x()))
+                .number(QStringLiteral("anchor_y"), qRound(carrier.attachmentAnchor.y()))
+                .number(QStringLiteral("anchor_w"), qRound(carrier.attachmentAnchor.width()))
+                .number(QStringLiteral("opener_x"), qRound(carrier.opener.x()))
+                .number(QStringLiteral("opener_y"), qRound(carrier.opener.y()))
+                .number(QStringLiteral("start_y"), carrier.attachmentStartY)
+        );
+    }
     addPanelOpenerProperties(
         initialProperties,
         carrier.opener,
@@ -395,6 +422,34 @@ void PanelMenuController::openWorkspaceMap(
             << m_workspaceMapComponent.errorString();
         delete rootObject;
         return;
+    }
+
+    // Read back from the object that was actually built, not from what was
+    // handed to the constructor. The membrane's own precondition lives in QML
+    // (`topAttachmentRequested`), and every term of it is exposed here as an
+    // alias — so whichever one arrives false is the answer, and no console
+    // logging is involved, which this stack has already proved unreliable.
+    {
+        const QRectF ro = card->property("openerRect").toRectF();
+        const QRectF ra = card->property("attachmentAnchorRect").toRectF();
+        DiagnosticJournal::instance().record(
+            DiagnosticJournal::Record(
+                DiagnosticJournal::Level::Info,
+                QStringLiteral("attachment.readback"))
+                .text(QStringLiteral("anchored"),
+                      card->property("anchoredFromPanel").toBool()
+                          ? QStringLiteral("true") : QStringLiteral("false"))
+                .number(QStringLiteral("opener_w"), qRound(ro.width()))
+                .number(QStringLiteral("opener_h"), qRound(ro.height()))
+                .number(QStringLiteral("anchor_w"), qRound(ra.width()))
+                .number(QStringLiteral("anchor_h"), qRound(ra.height()))
+                .number(QStringLiteral("start_y"),
+                        card->property("attachmentStartY").toInt())
+                .number(QStringLiteral("card_y"),
+                        qRound(card->property("cardY").toDouble()))
+                .number(QStringLiteral("card_x"),
+                        qRound(card->property("cardX").toDouble()))
+        );
     }
 
     // The same two signals the panel menu declares, so the surface that answers
@@ -549,6 +604,22 @@ void PanelMenuController::toggleIndicatorMenu(
     };
     const PanelCarrierGeometry carrier = panelCarrierGeometry(
         panel, globalOpener, globalAttachmentAnchor);
+    {
+        const QScreen *const s = panel ? panel->screen() : nullptr;
+        DiagnosticJournal::instance().record(
+            DiagnosticJournal::Record(
+                DiagnosticJournal::Level::Info,
+                QStringLiteral("attachment.carrier"))
+                .text(QStringLiteral("route"), QStringLiteral("indicator"))
+                .text(QStringLiteral("output"), s ? s->name() : QString())
+                .number(QStringLiteral("anchor_x"), qRound(carrier.attachmentAnchor.x()))
+                .number(QStringLiteral("anchor_y"), qRound(carrier.attachmentAnchor.y()))
+                .number(QStringLiteral("anchor_w"), qRound(carrier.attachmentAnchor.width()))
+                .number(QStringLiteral("opener_x"), qRound(carrier.opener.x()))
+                .number(QStringLiteral("opener_y"), qRound(carrier.opener.y()))
+                .number(QStringLiteral("start_y"), carrier.attachmentStartY)
+        );
+    }
     addPanelOpenerProperties(
         initialProperties,
         carrier.opener,

@@ -1,11 +1,13 @@
 # Live session repairs — what three monitors broke that one never could
 
 - **Opened:** 2026-08-17
+- **Closed:** 2026-08-17
 - **Plan ID:** live-session-repairs
-- **Status:** active
+- **Status:** done
 - **Scope:** celestina
 - **Implementation checkpoint:** LIVE-1
 - **Author-validation checkpoint:** VAL-R8
+- **Successor:** [BUBBLE-1 shell bubble integration](2026-08-17-melibea-bubbles.md)
 
 ## Hypothesis
 
@@ -93,3 +95,4 @@ reading for the others.
 | LIVE-1-A | `celestina:` | done | [inventory](../../inventories/2026-08-17-live-session-repairs/LIVE-1-A.numstat.tsv) | Refuse every compositor-blur request to a surface Qt destroyed while still allowing a region to be armed before its surface is shown; keep the membrane on outputs Qt cannot place yet; derive connectivity presence from the readings | 12 files, +458/-26 | [evidence](../../evidence/2026-08-17-three-monitors.md) | `VAL-R8` |
 | LIVE-1-B | `celestina:` | done | [inventory](../../inventories/2026-08-17-live-session-repairs/LIVE-1-B.numstat.tsv) | Stop the night light rebuilding a controller that has not yet reported its size, give a failing output a bounded backoff, and read nmcli's escaped field separators | 6 files, +311/-20 | [evidence](../../evidence/2026-08-17-provider-truthfulness.md) | `VAL-R8` |
 | LIVE-1-Z | `celestina:` | done | [inventory](../../inventories/2026-08-17-live-session-repairs/LIVE-1-Z.numstat.tsv) | Archive the closed LOCK-1 plan so this checkpoint may hold the one active slot, and move the roadmap, status and plan index onto LIVE-1 | 15 files, +446/-315 | [evidence](../../evidence/2026-08-17-lock-plan-closure.md) | `VAL-LOCK-1` |
+| LIVE-1-Y | `celestina:` | done | [inventory](../../inventories/2026-08-17-live-session-repairs/LIVE-1-Y.numstat.tsv) | Archive this closed plan itself, releasing its slot to `BUBBLE-1` | 4 files, +138/-95 | [archival evidence](../../evidence/2026-08-19-live-session-repairs-archival.md) | `VAL-R8` |

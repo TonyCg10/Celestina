@@ -7,7 +7,7 @@
   roadmap and status entries that pointed at it
 - **Environment:** repository only; nothing was built, run or deployed for this
   record
-- **Plan:** [live session repairs](../plans/active/2026-08-17-live-session-repairs.md)
+- **Plan:** [live session repairs](../plans/archive/2026-08-17-live-session-repairs.md)
 - **Validation:** `VAL-LOCK-1`
 
 ## Procedure

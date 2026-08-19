@@ -27,8 +27,8 @@ class QWindow;
 // files themselves.
 QString overlaySourceProperty(const QString &qmlComponentName);
 
-// Opens and closes one overlay — the launcher, the clipboard history, the
-// notification centre, the control centre, the session menu.
+// Opens and closes one overlay — the launcher, clipboard history,
+// notification centre, control centre, bubble selector or session menu.
 //
 // They are identical in mechanics: one on-demand-keyboard surface, centred
 // for a `celestina msg`/keybind request or anchored for a panel request, and
@@ -98,6 +98,9 @@ public slots:
     // opener's rectangle travels with it so the surface can grow out of the
     // control instead of appearing beside it; an empty rectangle means there was
     // no control, which is what a keybind is.
+    // Toggle for a surface with no pointer origin, told directly which monitor's bubbles
+    // it is about.
+    void toggleWithBubbleAnchor(const QString &output, const QRectF &anchor);
     void toggleFrom(
         QWindow *panel,
         const QRectF &globalOpener,
@@ -131,6 +134,8 @@ private:
     QRectF m_opener;
     QRectF m_attachmentAnchor;
     QPointer<QWindow> m_openerPanel;
+    QString m_bubbleAnchorOutput;
+    QRectF m_bubbleAnchor;
     PanelAttachmentLease m_attachmentLease;
     // Physical output-local origin of the mapped carrier. Zero for keybind
     // and floating routes; a panel-attached overlay retains the panel's lower

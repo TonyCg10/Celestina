@@ -1,7 +1,7 @@
 # Celestina implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** LIVE-1
+- **Status:** planned
+- **Active implementation checkpoint:** none
 
 This roadmap contains only work an agent can implement and verify. Real Niri,
 hardware, visual and assistive-technology checks live in
@@ -38,7 +38,8 @@ of the design when they provide the narrow capability the shell needs.
 | UX-2 | planned | Establish and then implement one coherent shell-wide visual and interaction language after SHELL-D5 is applied |
 | R6 | complete | First-party `ext-session-lock` and deterministic lock-before-suspend, with `VAL-R6` still unrun |
 | LOCK-1 | complete | Let the session recede behind its own blurred wallpaper instead of vanishing into an opaque slab, and uncover it continuously |
-| LIVE-1 | active | Make the shell survive and look right on the real session: the crash, the membrane that only reached the primary monitor, the missing connectivity indicators, and two providers that misread the machine |
+| LIVE-1 | complete | Make the shell survive and look right on the real session: the crash, the membrane that only reached the primary monitor, the missing connectivity indicators, and two providers that misread the machine |
+| BUBBLE-1 | complete | Present Melibea's native minimized windows as a compact shell bubble group and accessible selector |
 | R8 | complete | Reversible Noctalia removal and the first-party Polkit agent are delivered; live departure remains `VAL-R8` |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
 
@@ -636,7 +637,7 @@ exclusions, measured feasibility results and unit boundaries are in
 Perceptual confirmation on a real output is `VAL-LOCK-1` and does not keep this
 checkpoint open.
 
-## LIVE-1 — The real session stops being a different shell (active)
+## LIVE-1 — The real session stops being a different shell (complete)
 
 **Outcome:** Celestina survives ordinary use on the author's three monitors —
 it does not die when a menu closes, its membrane connects on every output
@@ -677,7 +678,29 @@ are recorded in
 Still open, and deliberately not claimed: night light's temperature is a
 setting with no control surface, and whether the shell survives a full day is
 `VAL-R8`. See
-[the LIVE-1 plan](docs/plans/active/2026-08-17-live-session-repairs.md).
+[the archived LIVE-1 plan](docs/plans/archive/2026-08-17-live-session-repairs.md).
+
+## BUBBLE-1 — Native minimized windows join the shell (complete)
+
+**Outcome:** a window removed from Niri's layout by native minimization remains
+reachable as one compact application bubble in Celestina. The panel shows one
+overlapping group rather than a running-app dock; opening it reveals the
+ordered minimized windows with explicit restore and close actions.
+
+Celestina consumes Melibea's versioned local protocol through its existing
+aggregate provider helper. Niri remains authoritative for surface lifetime and
+minimized state, so action acceptance never removes a row. A later subscribed
+snapshot or incremental revision confirms restoration or closure and only then
+changes the UI.
+
+The pure protocol, reconnecting provider, group, selector, keyboard and pointer
+routes passed their automated contracts. A disposable Niri/Melibea session
+proved ordered reconstruction, restore and authoritative close, and the
+canonical 0.32.0 bundle passed and deployed without replacing live bytes.
+The complete record is in [the archived BUBBLE-1 plan](docs/plans/archive/2026-08-17-melibea-bubbles.md)
+and [delivery evidence](docs/evidence/2026-08-18-melibea-bubbles.md).
+Coordinated window-to-bubble motion and any future preview contract remain
+Melibea M7 work, not part of this checkpoint.
 
 ## UX-2 — Shell visual and interaction language (planned)
 

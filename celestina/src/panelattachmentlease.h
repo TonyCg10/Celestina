@@ -69,6 +69,9 @@ private:
     bool publishAnchorRect(const QRectF &globalRect);
     bool publishHiddenAnchor();
     bool trackedAnchorIsVisible() const;
+    // Attempts to adopt a recreated source occupying the lease's own anchor
+    // rectangle. Returns false when no unique successor exists.
+    bool rebindSource();
     bool windowsShareOutput() const;
     void scheduleRefresh();
     void scheduleRebuild();
@@ -92,6 +95,10 @@ private:
     // released the attachment permanently. The membrane therefore existed only
     // on the primary monitor, and a single-output nest could never show it.
     QPointer<QScreen> m_output;
+    // The source's own canonical anchor rectangle in global coordinates,
+    // remembered so a destroyed source can be matched to its successor.
+    QRectF m_canonicalGlobalRect;
+    bool m_rebindPending = false;
     QPointer<QQuickItem> m_source;
     QPointer<QQuickItem> m_anchor;
     QPointF m_carrierOriginOnOutput;

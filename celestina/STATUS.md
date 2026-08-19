@@ -1,9 +1,9 @@
 # Celestina status
 
-- **Updated:** 2026-08-17
+- **Updated:** 2026-08-18
 - **Implementation:** R0-R7, R8's departure slice, LVR-1 through LVR-3, the
   static hardening previously drafted as `AUD-1`, `UX-1` and `WSG-1` are
-  complete
+  complete; `BUBBLE-1` is complete and deployed as Celestina 0.32.0
 - **Design direction:** `PANEL-1` is active for the author-selected borderless
   glass bar: one nearly transparent, shadowless `ContextualVeil` reaches
   edge-to-edge with no outer margin and owns one real compositor-blur region.
@@ -70,15 +70,18 @@ block, so the veil ran at niri's default and matched the dense profile.
 Noctalia remains installed and is the rollback. Whether the shell survives a
 full day is `VAL-R8`, and it has not been claimed. See
 [the three-monitor evidence](docs/evidence/2026-08-17-three-monitors.md) and
-[the LIVE-1 plan](docs/plans/active/2026-08-17-live-session-repairs.md).
+[the LIVE-1 plan](docs/plans/archive/2026-08-17-live-session-repairs.md).
 
-## Active checkpoint
+## Implementation checkpoint
 
-`LIVE-1` is active. `LOCK-1` closed on its implementation exit as celestina
-0.30.0 and is archived; its `VAL-LOCK-1` — whether the lock's retreat reads as
-continuous on a real output — was never run, and closing the plan released the
-checkpoint slot rather than claiming the design finished. See
-[the closure record](docs/evidence/2026-08-17-lock-plan-closure.md).
+No implementation checkpoint is active. `BUBBLE-1` delivered Melibea's
+compositor-authoritative native minimized state as one compact panel bubble
+group and an accessible selector; Celestina never owns window lifetime and
+removes nothing optimistically. The 0.32.0 bundle and the combined Niri binary
+are deployed, with the explicitly authorized session restart as the final
+activation boundary. Author visual and assistive-technology acceptance remains
+separate in `VAL-BUBBLE-1`. See [the archived plan](docs/plans/archive/2026-08-17-melibea-bubbles.md)
+and [delivery evidence](docs/evidence/2026-08-18-melibea-bubbles.md).
 
 ## Current checkout truth
 

@@ -7,7 +7,7 @@
 - **Scope:** celestina
 - **Implementation checkpoint:** LOCK-1
 - **Author-validation checkpoint:** VAL-LOCK-1
-- **Successor:** [LIVE-1 live session repairs](../active/2026-08-17-live-session-repairs.md)
+- **Successor:** [LIVE-1 live session repairs](2026-08-17-live-session-repairs.md)
 
 ## Hypothesis
 

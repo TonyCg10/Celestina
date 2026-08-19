@@ -6,6 +6,8 @@
 #include <QQuickWindow>
 #include <QScopedValueRollback>
 #include <QScreen>
+
+#include "diagnosticjournal.h"
 #include <QUuid>
 #include <QVariant>
 #include <QWindow>
@@ -174,6 +176,22 @@ bool PanelAttachmentLease::acquire(
         // QML construction. Without one unique semantic source, remove that
         // attachment request and keep the already-open menu safely floating.
         // Never erase geometry owned by a newer lease on the same surface.
+        DiagnosticJournal::instance().record(
+            DiagnosticJournal::Record(
+                DiagnosticJournal::Level::Info,
+                QStringLiteral("attachment.acquire_failed"))
+                .text(QStringLiteral("source"),
+                      source ? QStringLiteral("ok") : QStringLiteral("null"))
+                .text(QStringLiteral("anchor"),
+                      anchor ? QStringLiteral("ok") : QStringLiteral("null"))
+                .text(QStringLiteral("finite"),
+                      isFiniteRect(canonicalGlobalAnchor)
+                          ? QStringLiteral("ok") : QStringLiteral("no"))
+                .text(QStringLiteral("same_window"),
+                      anchor && anchor->window() == quickPanel
+                          ? QStringLiteral("ok") : QStringLiteral("no"))
+                .number(QStringLiteral("menu_open_idx"), menuOpenPropertyIndex)
+        );
         if (surface->property(surfaceLeaseTokenProperty).toString().isEmpty())
             surface->setProperty(surfaceAnchorRectProperty, QRectF());
         return false;
@@ -242,6 +260,7 @@ bool PanelAttachmentLease::acquire(
     m_source = source;
     m_anchor = anchor;
     m_carrierOriginOnOutput = carrierOriginOnOutput;
+    m_canonicalGlobalRect = canonicalGlobalAnchor;
     m_token = token;
 
     m_lifetimeConnections.append(QObject::connect(
@@ -314,6 +333,29 @@ QQuickItem *PanelAttachmentLease::resolveSource(
         return visibleMatches.constFirst();
     if (visibleMatches.isEmpty() && matches.size() == 1)
         return matches.constFirst();
+
+    // Why the membrane gave up, on the record rather than by inference. A
+    // surface that ends up floating has exactly one of two stories: no
+    // candidate's anchor rectangle matched the one the click reported
+    // (`candidates` walked but `matches` empty), or several did. Both are
+    // per-output questions and neither is answerable from a screenshot.
+    DiagnosticJournal::instance().record(
+        DiagnosticJournal::Record(
+            DiagnosticJournal::Level::Info,
+            QStringLiteral("attachment.unresolved"))
+            .text(QStringLiteral("output"),
+                  m_panel && m_panel->screen() ? m_panel->screen()->name()
+                                               : QString())
+            .number(QStringLiteral("candidates"), candidates.size())
+            .number(QStringLiteral("matches"), matches.size())
+            .number(QStringLiteral("visible_matches"), visibleMatches.size())
+            .number(QStringLiteral("wanted_x"), qRound(initialGlobalRect.x()))
+            .number(QStringLiteral("wanted_y"), qRound(initialGlobalRect.y()))
+            .number(QStringLiteral("wanted_w"),
+                    qRound(initialGlobalRect.width()))
+            .number(QStringLiteral("wanted_h"),
+                    qRound(initialGlobalRect.height()))
+    );
     return nullptr;
 }
 
@@ -387,6 +429,10 @@ bool PanelAttachmentLease::publishHiddenAnchor()
 {
     if (!ownsPublishedToken())
         return false;
+    DiagnosticJournal::instance().record(
+        DiagnosticJournal::Record(
+            DiagnosticJournal::Level::Info,
+            QStringLiteral("attachment.hidden")));
 
     m_surface->setProperty(surfaceAnchorRectProperty, QRectF());
     if (!ownsPublishedToken()
@@ -444,6 +490,13 @@ void PanelAttachmentLease::processScheduledRefresh()
     if (!windowsShareOutput()) {
         release();
         return;
+    }
+    if (m_rebindPending) {
+        m_rebindPending = false;
+        if (!rebindSource()) {
+            release();
+            return;
+        }
     }
     if (m_rebuildPending) {
         m_rebuildPending = false;
@@ -557,7 +610,61 @@ void PanelAttachmentLease::rebuildGeometryTracking()
 
 void PanelAttachmentLease::resolvedSourceLost()
 {
-    release();
+    // Losing the Item is not losing the icon. A workspace pill is a model
+    // delegate: every workspaces snapshot the strip consumes destroys it and
+    // creates an identical successor in the same place — on the monitor whose
+    // window titles churn, several times a second. Releasing here emptied the
+    // published anchor within milliseconds of every workspace-map open, which
+    // switched the surface to its floating presentation: the membrane and its
+    // fall existed only on monitors whose strips happened to hold still.
+    //
+    // The published state is left exactly as it is — the successor occupies
+    // the same rectangle — and one deferred pass adopts it. Deferred, because
+    // this signal fires mid-destruction while the tree is being rebuilt; the
+    // timer runs once the model's handler has finished. If no unique successor
+    // exists then, the lease releases as it always did.
+    disconnectGeometryTracking();
+    m_rebindPending = true;
+    m_refreshTimer.start();
+}
+
+bool PanelAttachmentLease::rebindSource()
+{
+    if (!ownsPublishedToken())
+        return false;
+
+    QQuickItem *const source = resolveSource(m_canonicalGlobalRect);
+    QQuickItem *const anchor = anchorForSource(source);
+    auto *const quickPanel = qobject_cast<QQuickWindow *>(m_panel.data());
+    const QRectF canonical = invokeAttachmentAnchorGlobalRect(source);
+    const int menuOpenPropertyIndex = source
+        ? source->metaObject()->indexOfProperty(sourceMenuOpenProperty) : -1;
+    if (!source || !anchor || !quickPanel || anchor->window() != quickPanel
+        || !isFiniteRect(canonical) || menuOpenPropertyIndex < 0
+        || !source->metaObject()->property(menuOpenPropertyIndex).isWritable()) {
+        return false;
+    }
+
+    // The successor takes over the exact identities the predecessor held: the
+    // feedback token so its hover circle persists, and the lease's own
+    // tracking. The published surface rectangle needs no touch — the successor
+    // sits where the predecessor sat, and the next refresh follows it live.
+    source->setProperty(sourceMenuOpenProperty, true);
+    source->setProperty(sourceFeedbackTokenProperty, m_token);
+    m_source = source;
+    m_anchor = anchor;
+    m_canonicalGlobalRect = canonical;
+    m_lifetimeConnections.append(QObject::connect(
+        source,
+        &QObject::destroyed,
+        [this]() { resolvedSourceLost(); }
+    ));
+    rebuildGeometryTracking();
+    DiagnosticJournal::instance().record(
+        DiagnosticJournal::Record(
+            DiagnosticJournal::Level::Info,
+            QStringLiteral("attachment.rebound")));
+    return true;
 }
 
 void PanelAttachmentLease::disconnectGeometryTracking()
@@ -572,6 +679,16 @@ void PanelAttachmentLease::disconnectLifetimeTracking()
 
 void PanelAttachmentLease::release()
 {
+    if (m_surface && !m_token.isEmpty()) {
+        DiagnosticJournal::instance().record(
+            DiagnosticJournal::Record(
+                DiagnosticJournal::Level::Info,
+                QStringLiteral("attachment.release"))
+                .text(QStringLiteral("owned"),
+                      ownsPublishedToken() ? QStringLiteral("yes")
+                                           : QStringLiteral("no"))
+        );
+    }
     QWindow *const surface = m_surface.data();
     QQuickItem *const source = m_source.data();
     const QString token = m_token;

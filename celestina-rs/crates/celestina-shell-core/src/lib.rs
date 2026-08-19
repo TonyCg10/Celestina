@@ -83,6 +83,7 @@ pub mod journal;
 pub mod launcher;
 pub mod lines;
 pub mod media;
+pub mod melibea;
 pub mod network;
 pub mod nightlight;
 pub mod niri_colours;

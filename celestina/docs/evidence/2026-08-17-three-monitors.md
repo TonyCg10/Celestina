@@ -9,7 +9,7 @@
   from the session's own release commit `8ed0da4`; measured with `grim`
   per output, `gpu-screen-recorder` for the moving cases, the DIAG-1 journal,
   and temporary tracing compiled into a separate compositor binary
-- **Plan:** [live session repairs](../plans/active/2026-08-17-live-session-repairs.md)
+- **Plan:** [live session repairs](../plans/archive/2026-08-17-live-session-repairs.md)
 - **Validation:** `VAL-R8`
 
 ## Procedure

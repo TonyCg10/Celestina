@@ -84,6 +84,9 @@ The already-built host also acts as a transient client:
 celestina msg get-state
 celestina msg launcher-toggle
 celestina msg clipboard-toggle
+celestina msg bubbles-toggle
+celestina msg minimize
+celestina msg minimize window_id=42
 celestina msg volume-step by=5
 celestina msg volume-set level=40
 celestina msg mute-toggle

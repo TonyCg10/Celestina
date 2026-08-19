@@ -36,6 +36,7 @@ QString overlaySourceProperty(const QString &qmlComponentName)
         {QStringLiteral("ClipboardOverlay"), QStringLiteral("providerSource")},
         {QStringLiteral("NotificationCenter"), QStringLiteral("providerSource")},
         {QStringLiteral("ControlCentre"), QStringLiteral("providerSource")},
+        {QStringLiteral("BubbleSelector"), QStringLiteral("providerSource")},
         // The one overlay that reads no provider: it asks the session to end.
         {QStringLiteral("SessionMenu"), QStringLiteral("shellSource")},
     };
@@ -119,6 +120,18 @@ bool OverlayController::isOpen() const
     return m_surface->isOpen();
 }
 
+void OverlayController::toggleWithBubbleAnchor(const QString &output, const QRectF &anchor)
+{
+    // A keybind has no pointer origin, so there is no panel to read geometry from. The
+    // anchor is handed straight in instead: the caller already resolved which monitor's
+    // bubbles this surface is about, and that is the whole of what it needs.
+    m_bubbleAnchorOutput = output;
+    m_bubbleAnchor = anchor;
+    toggle();
+    m_bubbleAnchorOutput.clear();
+    m_bubbleAnchor = QRectF();
+}
+
 void OverlayController::toggleFrom(
     QWindow *panel,
     const QRectF &globalOpener,
@@ -139,6 +152,32 @@ void OverlayController::toggleFrom(
 QWindow *OverlayController::createWindow()
 {
     QVariantMap properties = initialProperties();
+    // M7 — where this output's bubbles sit. Outside the opener block on purpose: a bubble
+    // anchor depends only on which panel the surface belongs to, never on where a pointer
+    // was, so a selector opened from a keybind must get one too. Unlike the geometry below
+    // it is not translated into the carrier — it stays in the compositor's output-local
+    // logical space, because it is going to Niri rather than into this surface's layout.
+    if (m_componentName == QStringLiteral("BubbleSelector")) {
+        QRectF rect = m_bubbleAnchor;
+        QString output = m_bubbleAnchorOutput;
+        // Opened from the panel itself: ask that live panel where its slot is now.
+        if (rect.isEmpty() && m_openerPanel) {
+            QVariant answer;
+            if (QMetaObject::invokeMethod(
+                    m_openerPanel,
+                    "bubbleAnchorRect",
+                    Q_RETURN_ARG(QVariant, answer)
+                )
+                && answer.canConvert<QRectF>()) {
+                rect = answer.toRectF();
+                output = m_openerPanel->property("outputName").toString();
+            }
+        }
+        if (!output.isEmpty() && rect.isValid() && rect.width() > 0 && rect.height() > 0) {
+            properties.insert(QStringLiteral("bubbleAnchorRect"), rect);
+            properties.insert(QStringLiteral("bubbleAnchorOutput"), output);
+        }
+    }
     if (!m_opener.isEmpty() && m_openerPanel && m_openerPanel->screen()) {
         const QScreen *const screen = m_openerPanel->screen();
         const QPointF outputOrigin(screen->geometry().topLeft());

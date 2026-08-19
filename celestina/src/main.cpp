@@ -372,6 +372,17 @@ int main(int argc, char *argv[])
     if (!clipboard->isEnabled())
         qWarning() << "Celestina is running without its clipboard history overlay.";
     shell->setClipboardController(clipboard);
+    auto *bubbleSelector = new OverlayController(
+        &engine,
+        QStringLiteral("BubbleSelector"),
+        providers,
+        &app
+    );
+    if (!bubbleSelector->isEnabled()) {
+        qWarning() << "Celestina is running without its minimized-window "
+                      "bubble selector.";
+    }
+    shell->setBubbleSelectorController(bubbleSelector);
     // Session verbs change devices, and every device the shell can change is
     // behind the one provider helper.
     shell->setProvidersClient(providers);
@@ -470,7 +481,8 @@ int main(int argc, char *argv[])
     // not knowable here, and the launcher on a blacked-out output is typing
     // into nothing.
     for (OverlayController *const opener :
-         {launcher, clipboard, notificationCentre, controlCentre, sessionMenu})
+         {launcher, clipboard, notificationCentre, controlCentre, sessionMenu,
+          bubbleSelector})
         opener->setFocusedOutputSource(focusedOutput);
     const QString sessionId =
         QString::fromLocal8Bit(qgetenv("XDG_SESSION_ID"));
@@ -561,7 +573,7 @@ int main(int argc, char *argv[])
     toasts->setPanels(&panels);
     const auto interactiveCards =
         [menu, launcher, clipboard, notificationCentre, controlCentre,
-         sessionMenu](QScreen *screen) {
+         sessionMenu, bubbleSelector](QScreen *screen) {
             return QList<QRectF> {
                 menu->openCardRectOnOutput(screen),
                 launcher->openCardRectOnOutput(screen),
@@ -569,6 +581,7 @@ int main(int argc, char *argv[])
                 notificationCentre->openCardRectOnOutput(screen),
                 controlCentre->openCardRectOnOutput(screen),
                 sessionMenu->openCardRectOnOutput(screen),
+                bubbleSelector->openCardRectOnOutput(screen),
             };
         };
     osd->setZoneProbe([interactiveCards, toasts](QScreen *screen) {
@@ -591,7 +604,8 @@ int main(int argc, char *argv[])
         menu, &PanelMenuController::contextualSurfaceOpened,
         osd, &OsdController::retreatIfCovered);
     for (OverlayController *const opener :
-         {launcher, clipboard, notificationCentre, controlCentre, sessionMenu}) {
+         {launcher, clipboard, notificationCentre, controlCentre, sessionMenu,
+          bubbleSelector}) {
         QObject::connect(
             opener, &OverlayController::contextualSurfaceOpened,
             osd, &OsdController::retreatIfCovered);
@@ -601,7 +615,11 @@ int main(int argc, char *argv[])
     panels.setNotificationCentre(notificationCentre);
     panels.setControlCentre(controlCentre);
     panels.setClipboard(clipboard);
+    panels.setBubbleSelector(bubbleSelector);
     panels.setSessionMenu(sessionMenu);
+    // A minimize asked for by keybind has no surface of its own, so the service reads the
+    // bubble anchor off the mapped panel for whichever output holds focus.
+    shell->setBubbleAnchorSource(&panels);
 
     // And one contextual surface at a time. Whichever opened last says so and
     // every other retires — after the new one is up, never before it, because
@@ -613,7 +631,8 @@ int main(int argc, char *argv[])
         menu, &PanelMenuController::contextualSurfaceOpened,
         &panels, [&panels]() { panels.closeOverlaysExcept(nullptr); });
     for (OverlayController *const opener :
-         {launcher, clipboard, notificationCentre, controlCentre, sessionMenu}) {
+         {launcher, clipboard, notificationCentre, controlCentre, sessionMenu,
+          bubbleSelector}) {
         QObject::connect(
             opener, &OverlayController::contextualSurfaceOpened,
             &panels, [&panels, opener]() {

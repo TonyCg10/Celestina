@@ -1178,6 +1178,33 @@ result.
   [R8-P-P quiet-surface temporal lifecycle](docs/evidence/2026-08-16-quiet-surface-temporal-lifecycle.md),
   [R8-P-Q pinned tray attachment](docs/evidence/2026-08-16-pinned-tray-menu-attachment.md)
 
+## VAL-BUBBLE-1 — Native minimized windows remain easy to recover
+
+- **Status:** pending
+- **Related implementation:** BUBBLE-1
+- **Requires:** the verified Celestina 0.32.0 bundle, the combined Niri 26.04
+  binary, a running Melibea service and two ordinary applications with usable
+  icon identities
+- **Procedure:** minimize one tiled window and confirm it leaves the strip,
+  overview, focus navigation and input completely while its application stays
+  alive. Confirm one compact bubble group appears in the panel. Minimize a
+  second application and confirm the group overlaps rather than becoming a
+  taskbar. Open it by pointer and keyboard, distinguish both rows by icon,
+  title and application identity, move through the list, restore one, and
+  confirm it returns to its deterministic Niri location before its row leaves.
+  Close the remaining minimized application and confirm its row stays until the
+  client actually disappears. Restart only Celestina while one bubble exists
+  and confirm the group reconstructs without changing Niri state. Repeat on a
+  second output, with reduced motion, and with a screen reader if available.
+- **Pass condition:** no minimized window remains visible or navigable outside
+  the bubble group; two applications remain distinguishable; pointer, keyboard
+  and assistive routes expose the same restore and close operations; no row is
+  removed optimistically; shell restart reconstructs the exact ordered group;
+  and the interaction remains legible on every exercised output and motion
+  setting.
+- **Result:** not run by the author
+- **Evidence:** [agent-run nested and automated delivery evidence](docs/evidence/2026-08-18-melibea-bubbles.md)
+
 ## VAL-LOCK-1 — The locked session recedes and returns
 
 - **Status:** pending

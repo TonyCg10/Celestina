@@ -99,3 +99,4 @@ celestina	0.31.0	milestone	LIVE-1-A	Make the shell survive three monitors
 siderita	1.3.0	milestone	SID-A1-B	Compress and extract archives, with several at once
 siderita	1.4.0	milestone	SID-A2-B	Keep a delete on its own disk, and show what each file is
 siderita	1.5.0	milestone	SID-A3-A	Pause a job, and watch it from any tab
+celestina	0.32.0	milestone	BUBBLE-1-A	Add Melibea's minimized windows as shell bubbles

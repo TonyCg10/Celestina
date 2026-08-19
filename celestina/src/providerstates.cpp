@@ -165,9 +165,15 @@ ProviderMessage readResult(const QJsonObject &root)
         return invalid(QStringLiteral("the result carries no usable request id"));
     }
 
+    // `accepted` says the helper ran the request; `confirmed` says the machine actually
+    // changed. A request whose effect something still has to observe reports both, in that
+    // order, so dropping `confirmed` would leave such a request pending until it expired even
+    // though it had already succeeded.
     const QString outcome = state.toString();
-    if (outcome != QStringLiteral("accepted") && outcome != QStringLiteral("failed"))
+    if (outcome != QStringLiteral("accepted") && outcome != QStringLiteral("confirmed")
+        && outcome != QStringLiteral("failed")) {
         return invalid(QStringLiteral("the result carries an unknown state"));
+    }
 
     ProviderMessage message;
     message.kind = ProviderMessage::Kind::Result;

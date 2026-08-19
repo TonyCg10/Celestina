@@ -91,7 +91,13 @@ private:
     // destroyed `QScreen *` key cannot leave ghost surfaces applying the dense
     // namespace rule on a monitor that outlived it.
     void forgetScreen(QScreen *screen);
-    QList<QPointer<QQuickWindow>> companionsFor(QScreen *screen);
+    // The companions for one output, created on first use and armed with
+    // `region` *before* they are ever mapped. The region is required, not
+    // optional: a companion may not exist without one.
+    QList<QPointer<QQuickWindow>> companionsFor(
+        QScreen *screen,
+        const QRegion &region
+    );
     void pulse();
 
     struct Source
@@ -122,4 +128,20 @@ private:
     // armed region survived its menu as a ghost of blurred rectangles.
     QTimer m_pulse;
     int m_quietBeats = 0;
+    // How long a parked companion stays mapped after its last section left.
+    //
+    // Unmapping used to be immediate, and every menu or OSD therefore added
+    // and removed whole-output surfaces on its output — each one a scene
+    // change the compositor answers by rebuilding that output's element list,
+    // which is the churn the author measured as a slight physical flicker of
+    // exactly that monitor (2026-08-18; menus and OSD flickered, Noctalia's
+    // persistent surfaces did not). Parking keeps the surface mapped with a
+    // one-pixel effect region — see `refresh` for why one pixel and not none —
+    // so a burst of popups reuses the same mapped surfaces with no scene
+    // change at all. The deadline exists for the other tenant of that output:
+    // a companion parked forever would deny direct scanout to fullscreen
+    // windows, and the author games on these monitors. One unmap at rest,
+    // instead of one per popup.
+    QTimer m_parkSweep;
+    QHash<QScreen *, qint64> m_parkedSinceMs;
 };

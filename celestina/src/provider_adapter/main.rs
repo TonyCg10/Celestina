@@ -37,6 +37,7 @@ mod generated;
 mod held;
 mod launcher;
 mod media;
+mod melibea;
 mod nightlight;
 mod notifications;
 mod portal_settings;
@@ -87,6 +88,7 @@ fn perform(command: &Command, runtime: &Mutex<ProviderRuntime>) -> Result<(), St
         sysmon::NAME => sysmon::action(&command.verb),
         audio::NAME => audio::action(&command.verb, &command.options, runtime, &command.provider),
         media::NAME => media::action(&command.verb),
+        melibea::NAME => melibea::action(&command.verb, &command.options, &command.id),
         // The host saw the session's outputs change. It is not a session verb
         // — no key binding produces it and it changes no device — so it never
         // enters the vocabulary a binding writes; it only tells the one DDC
@@ -172,6 +174,9 @@ fn run_commands(
         if let Err(error) = writer.emit(&frame) {
             if accepted {
                 session::discard(&command.provider, &command.id);
+                if command.provider.as_str() == melibea::NAME {
+                    melibea::discard(&command.id);
+                }
             }
             eprintln!("celestina-provider-adapter: {error}");
             // Only a lost pipe ends this worker. A frame that could not be
@@ -184,6 +189,9 @@ fn run_commands(
             // Connectivity reservations cannot be observed until this exact
             // `accepted` frame is already on the pipe.
             session::arm(&command.provider, &command.id);
+            if command.provider.as_str() == melibea::NAME {
+                melibea::arm(&command.id, runtime);
+            }
         }
     }
 }
@@ -281,6 +289,7 @@ fn run() -> io::Result<()> {
     // reach it while it is still starting up.
     sysmon::spawn(&runtime)?;
     media::spawn(&runtime)?;
+    let melibea_worker = melibea::spawn(&runtime, &shutdown)?;
     audio::spawn(&runtime)?;
     // A diagnostic safety hold can remove DDC without changing any other
     // provider. It is intentionally process-local and opt-in; normal product
@@ -382,6 +391,7 @@ fn run() -> io::Result<()> {
     if let Some(nightlight_worker) = nightlight_worker {
         nightlight_worker.join();
     }
+    melibea_worker.join();
     journal::record(Event::new(Level::Critical, "helper.shutdown.end"));
     Ok(())
 }

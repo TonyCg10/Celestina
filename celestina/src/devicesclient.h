@@ -49,6 +49,10 @@ public:
     Q_INVOKABLE void requestPair(const QString &deviceId);
     Q_INVOKABLE void unpair(const QString &deviceId);
 
+    // Open the wireless screen mirror. Takes no device: the mirror is reached
+    // through Android's wireless debugging, which the daemon discovers itself.
+    Q_INVOKABLE void mirror();
+
 signals:
     void changed();
 

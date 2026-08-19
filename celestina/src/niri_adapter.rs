@@ -15,7 +15,9 @@
 
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
-use std::io::{self, BufReader, BufWriter, Stdout};
+use std::io::{self, BufRead, BufReader, BufWriter, Stdout, Write};
+use std::net::Shutdown;
+use std::os::unix::net::UnixStream;
 use std::process::{self, ExitCode};
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::sync::Arc;
@@ -33,7 +35,7 @@ use celestina_shell_core::workspace_groups::{self, Homes, Workspace as CoreWorks
 use celestina_shell_core::workspace_map;
 use niri_ipc::socket::Socket;
 use niri_ipc::state::{EventStreamState, EventStreamStatePart};
-use niri_ipc::{Action, Event, Request, Response, WorkspaceReferenceArg};
+use niri_ipc::{Action, Event, Reply, Request, Response, WorkspaceReferenceArg};
 use serde::{Deserialize, Serialize};
 
 const RECONNECT_DELAY: Duration = Duration::from_secs(1);
@@ -636,16 +638,38 @@ fn emit_json<T: Serialize>(writer: &AdapterWriter, value: &T) -> Result<(), Adap
     writer.emit(value).map_err(AdapterError::Emit)
 }
 
-fn stream_session(
-    writer: &AdapterWriter,
-    emitted_snapshot: &mut bool,
-    homes: &mut Homes,
-) -> Result<(), AdapterError> {
-    let mut socket = Socket::connect().map_err(AdapterError::Connect)?;
-    let reply = socket
-        .send(Request::EventStream)
+fn protocol_io(error: serde_json::Error) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, error)
+}
+
+fn open_event_stream() -> Result<BufReader<UnixStream>, AdapterError> {
+    let path = std::env::var_os(niri_ipc::socket::SOCKET_PATH_ENV).ok_or_else(|| {
+        AdapterError::Connect(io::Error::new(
+            io::ErrorKind::NotFound,
+            "NIRI_SOCKET is not set",
+        ))
+    })?;
+    let stream = UnixStream::connect(path).map_err(AdapterError::Connect)?;
+    let mut reader = BufReader::new(stream);
+    let mut request = serde_json::to_vec(&Request::EventStream)
+        .map_err(protocol_io)
+        .map_err(AdapterError::Request)?;
+    request.push(b'\n');
+    reader
+        .get_mut()
+        .write_all(&request)
         .map_err(AdapterError::Request)?;
 
+    let mut line = String::new();
+    if reader.read_line(&mut line).map_err(AdapterError::Request)? == 0 {
+        return Err(AdapterError::Request(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "Niri closed the event-stream handshake",
+        )));
+    }
+    let reply: Reply = serde_json::from_str(&line)
+        .map_err(protocol_io)
+        .map_err(AdapterError::Request)?;
     match reply {
         Ok(Response::Handled) => {}
         Ok(response) => {
@@ -656,14 +680,50 @@ fn stream_session(
         Err(message) => return Err(AdapterError::Rejected(message)),
     }
 
-    let mut read_event = socket.read_events();
+    reader
+        .get_mut()
+        .shutdown(Shutdown::Write)
+        .map_err(AdapterError::Request)?;
+    Ok(reader)
+}
+
+fn parse_shell_event(line: &str) -> io::Result<Option<Event>> {
+    let value: serde_json::Value = serde_json::from_str(line).map_err(protocol_io)?;
+    if value
+        .as_object()
+        .is_some_and(|object| object.len() == 1 && object.contains_key("MinimizedWindowsChanged"))
+    {
+        // Melibea is the sole consumer and reducer for compositor-native
+        // minimized state. This adapter keeps serving ordinary workspace and
+        // window state when that independent extension shares Niri's global
+        // event stream.
+        return Ok(None);
+    }
+    serde_json::from_value(value).map(Some).map_err(protocol_io)
+}
+
+fn stream_session(
+    writer: &AdapterWriter,
+    emitted_snapshot: &mut bool,
+    homes: &mut Homes,
+) -> Result<(), AdapterError> {
+    let mut stream = open_event_stream()?;
     let mut state = EventStreamState::default();
     let mut have_workspaces = false;
     let mut have_windows = false;
     let mut last_snapshot = None;
 
     loop {
-        let event = read_event().map_err(AdapterError::Stream)?;
+        let mut line = String::new();
+        if stream.read_line(&mut line).map_err(AdapterError::Stream)? == 0 {
+            return Err(AdapterError::Stream(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "Niri closed the event stream",
+            )));
+        }
+        let Some(event) = parse_shell_event(&line).map_err(AdapterError::Stream)? else {
+            continue;
+        };
         match &event {
             Event::WorkspacesChanged { .. } => have_workspaces = true,
             Event::WindowsChanged { .. } => have_windows = true,
@@ -1038,6 +1098,19 @@ mod tests {
     fn apply_json(state: &mut EventStreamState, json: &str) {
         let event = serde_json::from_str::<Event>(json).expect("valid Niri event fixture");
         state.apply(event);
+    }
+
+    #[test]
+    fn compositor_native_minimization_does_not_break_shell_state_stream() {
+        assert!(
+            parse_shell_event(r#"{"MinimizedWindowsChanged":{"windows":[{"id":42}]}}"#)
+                .expect("recognized extension")
+                .is_none()
+        );
+        assert!(matches!(
+            parse_shell_event(r#"{"WindowFocusChanged":{"id":42}}"#),
+            Ok(Some(Event::WindowFocusChanged { id: Some(42) }))
+        ));
     }
 
     /// A snapshot taken against a memory that knows nothing, which is what every

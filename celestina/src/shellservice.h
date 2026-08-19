@@ -16,6 +16,7 @@ class NiriClient;
 class LockController;
 class OverlayController;
 class ShellProvidersClient;
+class BubbleAnchorSource;
 class QDBusConnection;
 
 // The session's one way in.
@@ -70,6 +71,7 @@ public:
     void setClipboardController(OverlayController *controller);
     void setNotificationCentreController(OverlayController *controller);
     void setControlCentreController(OverlayController *controller);
+    void setBubbleSelectorController(OverlayController *controller);
     void setSessionMenuController(OverlayController *controller);
     // The session lock. Without one the lock and suspend verbs keep the
     // fail-closed refusal they have always had.
@@ -78,6 +80,21 @@ public:
     // shell without it still owns the bus name and serves every other verb;
     // those verbs then fail visibly instead of pretending to have worked.
     void setProvidersClient(ShellProvidersClient *providers);
+    // Wired in after construction, like the overlay controllers. Only the anchor for a
+    // minimize needs it; a shell without one still minimizes, with Niri's ordinary motion.
+    void setBubbleAnchorSource(BubbleAnchorSource *anchors);
+
+private:
+    qulonglong toggleBubbleSelector(const QString &verb);
+    QVariantMap minimizeTransition() const;
+    qulonglong minimizeWindow(const QVariantMap &options);
+    void reportProviderAction(
+        qulonglong helperRequestId,
+        const QString &state,
+        const QString &reason
+    );
+
+public:
 
     // The longest a request may stay pending before the shell reports a
     // failure. A monitor over DDC is what makes it seconds rather than
@@ -173,9 +190,13 @@ private:
     QPointer<OverlayController> m_clipboard;
     QPointer<OverlayController> m_notificationCentre;
     QPointer<OverlayController> m_controlCentre;
+    QPointer<OverlayController> m_bubbleSelector;
     QPointer<OverlayController> m_sessionMenu;
     QPointer<LockController> m_lock;
     QPointer<ShellProvidersClient> m_providers;
+    // Not a QPointer: the interface is not a QObject. Its implementation outlives this
+    // service, both being owned by main() for the session.
+    BubbleAnchorSource *m_anchors = nullptr;
     QTimer m_stateTimer;
     // A pending session verb must not wait forever for a device that will
     // never answer, so the table is swept while anything is in flight.
@@ -190,6 +211,11 @@ private:
     QHash<qulonglong, qulonglong> m_actionRequests;
     // Which verb each of those was, so the outcome says what it answered.
     QHash<qulonglong, QString> m_actionVerbs;
+    // Provider-backed verbs, kept apart from `m_actionRequests` on purpose: the compositor
+    // adapter and the provider helper number their requests independently, both from one, so
+    // one map would answer the wrong caller as soon as the two counters met.
+    QHash<qulonglong, qulonglong> m_providerRequests;
+    QHash<qulonglong, QString> m_providerVerbs;
     // The last refusal's sentence, held only until the caller that caused it
     // reads it. One request is served at a time, so one slot is enough.
     QString m_refusalReason;

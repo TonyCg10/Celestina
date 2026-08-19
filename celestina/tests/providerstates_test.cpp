@@ -16,6 +16,7 @@ private slots:
     void refusesUnusableProviderNamesValuesAndSizes();
     void readsAListFieldAsBoundedRowsButNeverNestsFurther();
     void readsACommandResult();
+    void readsATerminalConfirmationAsAnAnswerRatherThanAnInvalidFrame();
     void aFrameReplacesTheWholeSetSoAWithdrawnProviderCannotLinger();
     void aNewGenerationIsAChangeEvenWithIdenticalValues();
     void aProviderInsertedInTheSameGenerationAdvancesTheBindingRevision();
@@ -160,6 +161,56 @@ void ProviderStatesTest::readsACommandResult()
         parseProviderMessage(R"({"kind":"result","state":"accepted"})").kind,
         ProviderMessage::Kind::Invalid
     );
+}
+
+void ProviderStatesTest::readsATerminalConfirmationAsAnAnswerRatherThanAnInvalidFrame()
+{
+    // A request whose effect something still has to observe reports `accepted` and then
+    // `confirmed`. Dropping the second one used to leave such a request pending until it
+    // expired, even though it had already succeeded.
+    const ProviderMessage confirmed =
+        parseProviderMessage(R"({"kind":"result","id":"7","state":"confirmed"})");
+    QCOMPARE(confirmed.kind, ProviderMessage::Kind::Result);
+    QCOMPARE(confirmed.requestId, QStringLiteral("7"));
+    QCOMPARE(confirmed.state, QStringLiteral("confirmed"));
+
+    // It must reach the host as an answer, not merely parse.
+    QCOMPARE(effectOf(confirmed), FrameEffect::Answer);
+
+    // Widening the accepted set must not weaken anything else about a result frame.
+    QCOMPARE(
+        parseProviderMessage(R"({"kind":"result","id":"7","state":"Confirmed"})").kind,
+        ProviderMessage::Kind::Invalid
+    );
+    QCOMPARE(
+        parseProviderMessage(R"({"kind":"result","state":"confirmed"})").kind,
+        ProviderMessage::Kind::Invalid
+    );
+    QCOMPARE(
+        parseProviderMessage(R"({"kind":"result","id":"","state":"confirmed"})").kind,
+        ProviderMessage::Kind::Invalid
+    );
+
+    const QString hostileId = QStringLiteral("x").repeated(4096);
+    QCOMPARE(
+        parseProviderMessage(
+            QStringLiteral(R"({"kind":"result","id":"%1","state":"confirmed"})")
+                .arg(hostileId)
+                .toUtf8()
+        )
+            .kind,
+        ProviderMessage::Kind::Invalid
+    );
+
+    // A hostile reason is bounded rather than rejected, exactly as for `failed`.
+    const QString hostileReason = QStringLiteral("y").repeated(8192);
+    const ProviderMessage bounded = parseProviderMessage(
+        QStringLiteral(R"({"kind":"result","id":"7","state":"confirmed","reason":"%1"})")
+            .arg(hostileReason)
+            .toUtf8()
+    );
+    QCOMPARE(bounded.kind, ProviderMessage::Kind::Result);
+    QVERIFY(bounded.reason.size() < hostileReason.size());
 }
 
 void ProviderStatesTest::aFrameReplacesTheWholeSetSoAWithdrawnProviderCannotLinger()

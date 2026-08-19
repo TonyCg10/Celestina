@@ -106,6 +106,7 @@ private:
             QStringLiteral("ClipboardOverlay"),
             QStringLiteral("NotificationCenter"),
             QStringLiteral("ControlCentre"),
+            QStringLiteral("BubbleSelector"),
             QStringLiteral("SessionMenu"),
         };
     }
@@ -266,6 +267,7 @@ void OverlayContractTest::everyInteractiveOverlayUsesOneVeloGlassField()
             {QStringLiteral("ClipboardOverlay"), 2},
             {QStringLiteral("NotificationCenter"), 2},
             {QStringLiteral("ControlCentre"), 4},
+            {QStringLiteral("BubbleSelector"), 2},
             {QStringLiteral("SessionMenu"), 2},
         };
         QCOMPARE(sections.size(), expectedSections.value(component));

@@ -7,7 +7,7 @@
 - **Environment:** read against the author's real three-output session and its
   own `nmcli` output; verified by `cargo test` and `cargo clippy` on
   `celestina-shell-core`
-- **Plan:** [live session repairs](../plans/active/2026-08-17-live-session-repairs.md)
+- **Plan:** [live session repairs](../plans/archive/2026-08-17-live-session-repairs.md)
 - **Validation:** `VAL-R8`
 
 ## Procedure

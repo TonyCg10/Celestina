@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 0.31.0 LANGUAGES C CXX)
+project(celestina VERSION 0.32.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -238,6 +238,7 @@ qt_add_executable(celestina
     src/sessionactions.cpp
     src/shellcommandline.h
     src/shellcommandline.cpp
+    src/bubbleanchorsource.h
     src/shellservice.h
     src/shellservice.cpp
     src/shellclient.h
@@ -302,6 +303,9 @@ qt_add_qml_module(celestina
     IMPORT_PATH "${CELESTINA_STYLE_IMPORT_ROOT}"
     QML_FILES
         qml/Panel.qml
+        qml/BubbleAnchorSlot.qml
+        qml/BubbleGroup.qml
+        qml/BubbleSelector.qml
         qml/Clock.qml
         qml/OutputChooser.qml
         qml/WorkspaceStrip.qml
@@ -626,7 +630,8 @@ if(BUILD_TESTING)
     # it claims a test-only name and skips where no bus is available.
     qt_add_executable(celestina-shell-service-test
         tests/shellservice_test.cpp
-        src/shellservice.h
+        src/bubbleanchorsource.h
+    src/shellservice.h
         src/shellservice.cpp
         src/sessionactions.h
         src/sessionactions.cpp
@@ -801,6 +806,8 @@ if(BUILD_TESTING)
         tests/requestledger_test.cpp
         src/requestledger.h
         src/requestledger.cpp
+        src/providerstates.h
+        src/providerstates.cpp
     )
     target_include_directories(celestina-request-ledger-test PRIVATE src)
     target_link_libraries(celestina-request-ledger-test PRIVATE Qt6::Test)

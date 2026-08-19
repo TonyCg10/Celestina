@@ -1,0 +1,13 @@
+# LIVE-1-Y exact change inventory
+
+Base revision	d5d7948a1cbb3cb0befa12c23fa9e43fca6a3149
+Pathspec	celestina/docs/plans/active/2026-08-17-live-session-repairs.md
+Pathspec	celestina/docs/plans/archive/2026-08-17-live-session-repairs.md
+Pathspec	celestina/docs/evidence/2026-08-19-live-session-repairs-archival.md
+Pathspec	celestina/docs/inventories/2026-08-17-live-session-repairs/LIVE-1-Y.numstat.tsv
+
+added	deleted	content	path
+0	95	deleted	celestina/docs/plans/active/2026-08-17-live-session-repairs.md
+98	0	89382d3f2498a6af96de3888c60453227881d9ef144073060d6ea8106ac0a12b	celestina/docs/plans/archive/2026-08-17-live-session-repairs.md
+27	0	9e38d455115d69a53b2cc6952f87e551c31808657f6f54901026d36ec892b172	celestina/docs/evidence/2026-08-19-live-session-repairs-archival.md
+13	0	self	celestina/docs/inventories/2026-08-17-live-session-repairs/LIVE-1-Y.numstat.tsv

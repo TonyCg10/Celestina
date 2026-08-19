@@ -4,6 +4,7 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include "providerstates.h"
 #include "requestledger.h"
 
 namespace {
@@ -58,6 +59,7 @@ private slots:
     void theLedgerIsBoundedByTheOldestTarget();
     void aFailureStaysVisibleUntilItIsActedOnAgain();
     void anUnknownContractSendsNothing();
+    void aConfirmationOffTheWireSettlesTheRequestItAnswers();
 };
 
 void RequestLedgerTest::anImmediateRequestIsFinishedByAcceptance()
@@ -85,6 +87,47 @@ void RequestLedgerTest::anImmediateRequestIsFinishedByAcceptance()
         RequestLedger::ConfirmedState
     );
     QVERIFY(changed.count() >= 2);
+}
+
+void RequestLedgerTest::aConfirmationOffTheWireSettlesTheRequestItAnswers()
+{
+    // `aConfirmedRequestKeepsWaitingAfterAcceptance` drives the ledger directly, so it cannot
+    // see whether a real frame ever reaches it. The parser used to reject `confirmed` as an
+    // unknown state, which left a request pending until it expired even though the machine had
+    // already changed. This drives the same decision the provider client makes on each line.
+    const auto deliver = [](RequestLedger &ledger, const QByteArray &line) {
+        const ProviderMessage message = parseProviderMessage(line);
+        if (effectOf(message) != FrameEffect::Answer)
+            return false;
+        bool parsed = false;
+        const quint64 requestId = message.requestId.toULongLong(&parsed);
+        if (!parsed)
+            return false;
+        ledger.result(requestId, message.state, message.reason);
+        return true;
+    };
+
+    Recorder bridge;
+    RequestLedger ledger(&bridge);
+
+    ledger.send(
+        QStringLiteral("melibea"), QStringLiteral("minimize"), {},
+        QStringLiteral("minimize:42"), RequestLedger::ConfirmedPolicy
+    );
+
+    QVERIFY(deliver(ledger, R"({"kind":"result","id":"1","state":"accepted"})"));
+    QVERIFY(ledger.isPending(QStringLiteral("melibea"), QStringLiteral("minimize:42")));
+
+    QVERIFY(deliver(ledger, R"({"kind":"result","id":"1","state":"confirmed"})"));
+    QVERIFY(!ledger.isPending(QStringLiteral("melibea"), QStringLiteral("minimize:42")));
+    QCOMPARE(
+        ledger.stateOf(QStringLiteral("melibea"), QStringLiteral("minimize:42"))
+            .value(QStringLiteral("state")).toString(),
+        RequestLedger::ConfirmedState
+    );
+
+    // An unknown state must still never reach the ledger at all.
+    QVERIFY(!deliver(ledger, R"({"kind":"result","id":"1","state":"maybe"})"));
 }
 
 void RequestLedgerTest::aConfirmedRequestKeepsWaitingAfterAcceptance()

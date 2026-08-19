@@ -1,0 +1,107 @@
+# BUBBLE-1-A exact change inventory
+
+Base revision	d5d7948a1cbb3cb0befa12c23fa9e43fca6a3149
+Pathspec	celestina-rs/crates/celestina-shell-core/src/lib.rs
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/README.md
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-08-17-lock-plan-closure.md
+Pathspec	celestina/docs/evidence/2026-08-17-provider-truthfulness.md
+Pathspec	celestina/docs/evidence/2026-08-17-three-monitors.md
+Pathspec	celestina/docs/plans/active/README.md
+Pathspec	celestina/docs/plans/archive/2026-08-17-lock-depth-transition.md
+Pathspec	celestina/qml/Panel.qml
+Pathspec	celestina/src/main.cpp
+Pathspec	celestina/src/niri_adapter.rs
+Pathspec	celestina/src/overlaycontroller.cpp
+Pathspec	celestina/src/overlaycontroller.h
+Pathspec	celestina/src/panelmanager.cpp
+Pathspec	celestina/src/panelmanager.h
+Pathspec	celestina/src/provider_adapter/main.rs
+Pathspec	celestina/src/shellservice.cpp
+Pathspec	celestina/src/shellservice.h
+Pathspec	celestina/tests/overlaycontract_test.cpp
+Pathspec	celestina/tests/shellservice_test.cpp
+Pathspec	docs/version-history.tsv
+Pathspec	celestina-rs/crates/celestina-shell-core/src/melibea.rs
+Pathspec	celestina/docs/evidence/2026-08-18-melibea-bubbles.md
+Pathspec	celestina/docs/plans/archive/2026-08-17-melibea-bubbles.md
+Pathspec	celestina/qml/BubbleGroup.qml
+Pathspec	celestina/qml/BubbleSelector.qml
+Pathspec	celestina/src/provider_adapter/melibea.rs
+Pathspec	celestina/tests/tst_bubblegroup.qml
+Pathspec	celestina/tests/tst_bubbleselector.qml
+Pathspec	celestina/qml/BubbleAnchorSlot.qml
+Pathspec	celestina/qml/PanelCluster.qml
+Pathspec	celestina/src/bubbleanchorsource.h
+Pathspec	celestina/src/denseglass.cpp
+Pathspec	celestina/src/denseglass.h
+Pathspec	celestina/src/devicesclient.cpp
+Pathspec	celestina/src/devicesclient.h
+Pathspec	celestina/src/niriclient.cpp
+Pathspec	celestina/src/niriclient.h
+Pathspec	celestina/src/panelattachmentlease.cpp
+Pathspec	celestina/src/panelattachmentlease.h
+Pathspec	celestina/src/panelmenucontroller.cpp
+Pathspec	celestina/src/providerstates.cpp
+Pathspec	celestina/tests/providerstates_test.cpp
+Pathspec	celestina/tests/requestledger_test.cpp
+Pathspec	celestina/tests/tst_bubbleanchorslot.qml
+Pathspec	celestina/docs/inventories/2026-08-17-melibea-bubbles/BUBBLE-1-A.numstat.tsv
+
+added	deleted	content	path
+1	0	705ee4b32696bad7a66b6569be6634b6d0300c39383667c0d3b3c3c160fa7f4f	celestina-rs/crates/celestina-shell-core/src/lib.rs
+9	2	e045470f445100fca823e6ec5a775834d8eff72519737fb7c3012afdab8cd69f	celestina/CMakeLists.txt
+1	1	4009fa1592956d17676caa69cdaa6d80a2ad118df30dd2049eb902c786bb4f2c	celestina/Cargo.lock
+1	1	bb74241982b3ebc070b561c9f8243fcec01155a177736f93900e232765c48c6e	celestina/Cargo.toml
+3	0	2c91b11221df4dbc1052cd4f1451855cc8a4deb7dc0ecc80006066cdf59ce21e	celestina/README.md
+28	5	05ad41f3438b9b77daf99358a3004dd0d574d91352464ecaeddfc366f4d9fef1	celestina/ROADMAP.md
+14	11	f90979747964466ddcf09361f2701dd97ca49c1dbeb04bdd262499e2044bc09f	celestina/STATUS.md
+27	0	7879151b88921b98a0ac41587f97356c291c585ed35a11cc576cb7a5c61209f7	celestina/VALIDATION.md
+1	1	5a2f60e9f6bb94fd3cb71d188074dfe047495967d688df5f5c118584025f8355	celestina/docs/evidence/2026-08-17-lock-plan-closure.md
+1	1	5caa64d85f8d5f2c5edfa566249d80f5670495f3f2a0d778bdf1c6e048717737	celestina/docs/evidence/2026-08-17-provider-truthfulness.md
+1	1	029a7da47572ea03a9883929f113865990e1cf17138d2dfcdfe29f751d9c3e7b	celestina/docs/evidence/2026-08-17-three-monitors.md
+5	8	1a5e1083b0273347a458fab44f1b7358d8c641d0a373535dc8dfe6af20c6e63e	celestina/docs/plans/active/README.md
+1	1	fef6fb8ad4f17e04abcabe5c6d513cc8a4d4ff5386839baf763c4b8e184772c7	celestina/docs/plans/archive/2026-08-17-lock-depth-transition.md
+44	0	8d8cb59b39463e5c547c224bc302bbacf2c58571dee75af759d15e44da783d34	celestina/qml/Panel.qml
+23	4	c81d3044bfb9fd627e2a53f639da6d5eb18a784d221fa7d24adfa60520ac5f41	celestina/src/main.cpp
+85	12	0f104f3b93fab76c9717ddf533352774b9a072970a9aa150ea2518ddfc1bfecd	celestina/src/niri_adapter.rs
+39	0	32a2d34f929d0ea01d26dadbfb68ea0b3bafd9d5bd566f194567249d2818ec60	celestina/src/overlaycontroller.cpp
+7	2	7f5e691a281e171a499c79a19c65b4d8ef2bc6c0ffd1741b235c19fa7858dd9d	celestina/src/overlaycontroller.h
+46	1	47bb63057f272fe188dc9629eaf286c0b7c1941f638a052d8e02af6a037a3b5a	celestina/src/panelmanager.cpp
+21	2	6da2b773e8d3f3ff2bf86f7109a1346e1621a23f74ddff2849b47530baf66f36	celestina/src/panelmanager.h
+10	0	46d5cf97dec17bf449d0af04891e9628fa4b0812f4040314212a4a03c5a06065	celestina/src/provider_adapter/main.rs
+144	0	84b2c96356b7297e24ceebb98a0e8bf7fb83e812e93eb9e01a2c201a457c7ca2	celestina/src/shellservice.cpp
+26	0	9670bb7668f00a4c42a706528dce2c469cea5927c53b5acd5a1e17778597915a	celestina/src/shellservice.h
+2	0	8016c2b9348d975ad7520fa935f56db75a8b4afa6a71a597159dde468060538a	celestina/tests/overlaycontract_test.cpp
+36	2	3ebf23923afb571a3325de73251ea35738ce9e0383ab6b653140c3b9ea2f6512	celestina/tests/shellservice_test.cpp
+1	0	ffc6e53068553f901ed9ef4309c4a293f121e059fe044a294fdc7178e66bbdbd	docs/version-history.tsv
+905	0	380f8971f086b95836186ab68cdf73c8923f31b6a43a993243b868d62d2c3ff6	celestina-rs/crates/celestina-shell-core/src/melibea.rs
+87	0	31acc045e76ae65f5530e6ab2e8153311fff482546fecd32e9b98c264aad1042	celestina/docs/evidence/2026-08-18-melibea-bubbles.md
+94	0	d5747a911de4946023775f50ef044abbac9feb2d0c15daf36eb6d5805702d385	celestina/docs/plans/archive/2026-08-17-melibea-bubbles.md
+131	0	db63b03fbe7883ebca3527367351ab93ed88bb6dd558968e0a13dec0fd237163	celestina/qml/BubbleGroup.qml
+471	0	3bcb88c926a46b471f0fb053e8d4ef8bdb18e6b9ea1515bb83afbf1f228aa021	celestina/qml/BubbleSelector.qml
+935	0	1811ca7afd477f3072d32068547197c5e8c8fb52c670b2c9cb5cdf1bf1ef1171	celestina/src/provider_adapter/melibea.rs
+91	0	9a4cede5d2dfe2305b690066d57fb6c15e34cdf417f3807ae47e54f9b3dead20	celestina/tests/tst_bubblegroup.qml
+320	0	c094314aafe874616719c051e9d2bcff9f7e798b2a60db127e5a42d92833d6a4	celestina/tests/tst_bubbleselector.qml
+66	0	e95418cb30e668b39f06ced4d4a921fc9bd65e31fdd2657484a708ea11d884e7	celestina/qml/BubbleAnchorSlot.qml
+5	1	9fc97198aba52ec7526a8019f74038f51632f662c4e49e9bebdfda735a8e6902	celestina/qml/PanelCluster.qml
+23	0	ad285093af19d94603cba0af36a51937f08ef4825cea8a9ee6303b3fa2077623	celestina/src/bubbleanchorsource.h
+109	34	79bbf474db63f6bd197132248cbd50e9d0db80f7288b9288582e80852d2a0372	celestina/src/denseglass.cpp
+23	1	692727356f03044d81a90b974817baf5b53ec382fc7ee8a44041275b875bcf46	celestina/src/denseglass.h
+23	0	559b9eabc9c4bbb855ef3dcd7f88ef6822ed433325dfee2ce4c12efd53eab7d2	celestina/src/devicesclient.cpp
+4	0	f0bc106a4f919cc2e2b6d2e9de88fb5cbf2674e65653b7f116d8d78dc9e1b058	celestina/src/devicesclient.h
+10	0	aea12d34948a25dc63fa0a03350be29671dbf30fef92b0a1ca58e8a3e667627e	celestina/src/niriclient.cpp
+4	0	3f9964f2e854ab822620f96e3c8aa6145b472c368cd1cfa8842283b430899095	celestina/src/niriclient.h
+118	1	92377dd645e16ae968ee20974b1a19a8e77fb43bb1d705cccc971548ae0c3286	celestina/src/panelattachmentlease.cpp
+7	0	6f75fe0516a478e242e8b90efa958b8fce50ff415a2fa3db8e851797e735718d	celestina/src/panelattachmentlease.h
+71	0	3a28c09e515217a36af197d28e0d6c4266fe6c7aba85b41179281886f8abae84	celestina/src/panelmenucontroller.cpp
+7	1	3a118e2997a71e4831ee16d176cc7737af7aa7f9116e03a8387d323ddfe9b070	celestina/src/providerstates.cpp
+51	0	9b992eb43e6404b81fcc02f3f75e8d2d5fbf42057a131e709760195843054307	celestina/tests/providerstates_test.cpp
+43	0	6071f587ba3dc0081da10dc11118a587cea4608eca32c94c210b1c728d37a93a	celestina/tests/requestledger_test.cpp
+115	0	069a17b17a12b257d131c41fdd2db6c6d602c4f7c7f491fbe47db065b08f96da	celestina/tests/tst_bubbleanchorslot.qml
+107	0	self	celestina/docs/inventories/2026-08-17-melibea-bubbles/BUBBLE-1-A.numstat.tsv

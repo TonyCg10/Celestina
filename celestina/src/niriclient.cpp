@@ -893,3 +893,13 @@ void NiriClient::setUnavailable()
     scheduleRequestOutcomes();
     emit changed();
 }
+
+QString NiriClient::focusedOutput() const
+{
+    for (const QVariant &entry : m_workspaces) {
+        const QVariantMap item = entry.toMap();
+        if (item.value(QStringLiteral("focused")).toBool())
+            return item.value(QStringLiteral("output")).toString();
+    }
+    return {};
+}

@@ -42,6 +42,7 @@ private slots:
     void refusesFocusWorkspaceWithoutUsableOptions();
     void refusesToPretendARequestWasSentWithoutAnAdapter();
     void refusesOverlayTogglesWithoutAControllerWired();
+    void refusesToMinimizeWithoutAnAuthoritativeMelibea();
     void refusesToLockWhileNoLockerProviderExists();
     void refusesSessionVerbsWithoutAProviderHelper();
     void refusesToSuspendAnUnlockedSession();
@@ -198,8 +199,8 @@ void ShellServiceTest::refusesToPretendARequestWasSentWithoutAnAdapter()
     QCOMPARE(blanked.error().type(), QDBusError::Failed);
 }
 
-// `initTestCase` never wires a launcher or clipboard controller — the same
-// "the shell exists but this surface does not" shape
+// `initTestCase` never wires these overlay controllers — the same "the shell
+// exists but this surface does not" shape
 // `refusesToPretendARequestWasSentWithoutAnAdapter` already covers for the
 // compositor adapter.
 void ShellServiceTest::refusesOverlayTogglesWithoutAControllerWired()
@@ -207,6 +208,7 @@ void ShellServiceTest::refusesOverlayTogglesWithoutAControllerWired()
     for (const QString &verb : {
              QStringLiteral("launcher-toggle"),
              QStringLiteral("clipboard-toggle"),
+             QStringLiteral("bubbles-toggle"),
          }) {
         QDBusPendingReply<qulonglong> reply =
             m_client.asyncCall(command(verb, QVariantMap()));
@@ -214,6 +216,38 @@ void ShellServiceTest::refusesOverlayTogglesWithoutAControllerWired()
         QVERIFY2(!reply.isValid(), qPrintable(verb));
         QCOMPARE(reply.error().type(), QDBusError::Failed);
     }
+}
+
+// The bubble ledger's own defect, at the verb: the shell frame can still name Melibea for a
+// moment after its projection has been withdrawn, and a truthy string is not availability.
+// With no provider helper wired at all there is nothing authoritative to act on, so the verb
+// must refuse rather than report a request nothing will ever answer.
+void ShellServiceTest::refusesToMinimizeWithoutAnAuthoritativeMelibea()
+{
+    // Naming no window is the ordinary "minimize what is focused" form; naming one is the
+    // exact-id form. Neither may invent a request without an authoritative provider.
+    QDBusPendingReply<qulonglong> focused =
+        m_client.asyncCall(command(QStringLiteral("minimize"), QVariantMap()));
+    QVERIFY(settle(focused));
+    QVERIFY(!focused.isValid());
+    QCOMPARE(focused.error().type(), QDBusError::Failed);
+
+    QVariantMap named;
+    named.insert(QStringLiteral("window_id"), QStringLiteral("42"));
+    QDBusPendingReply<qulonglong> exact =
+        m_client.asyncCall(command(QStringLiteral("minimize"), named));
+    QVERIFY(settle(exact));
+    QVERIFY(!exact.isValid());
+    QCOMPARE(exact.error().type(), QDBusError::Failed);
+
+    // A window id that is not an exact decimal is a caller mistake, not a rounded number.
+    QVariantMap hostile;
+    hostile.insert(QStringLiteral("window_id"), QStringLiteral("4 2"));
+    QDBusPendingReply<qulonglong> refused =
+        m_client.asyncCall(command(QStringLiteral("minimize"), hostile));
+    QVERIFY(settle(refused));
+    QVERIFY(!refused.isValid());
+    QCOMPARE(refused.error().type(), QDBusError::Failed);
 }
 
 // Fail-closed: a shell that cannot lock says so. Reporting success here would

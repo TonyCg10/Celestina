@@ -1,11 +1,8 @@
 # Active Celestina plans
 
-[`LIVE-1`](2026-08-17-live-session-repairs.md) is the active Celestina
-implementation plan: the defects the first live migrations exposed on the
-author's three-monitor session — a crash, a membrane that reached only the
-primary output, missing connectivity indicators, and two providers that
-misread the machine.
+No Celestina implementation plan is active. `UX-2` remains planned until its
+design discussion becomes an accepted bounded implementation plan.
 
-`LOCK-1` closed on its implementation exit and is archived under
-[`../archive/`](../archive/); `VAL-LOCK-1` remains unrun and is recorded in
-`VALIDATION.md` without keeping a checkpoint open.
+`BUBBLE-1` and `LIVE-1` closed on their implementation exits and are archived
+under [`../archive/`](../archive/). Their remaining author observations live in
+`VAL-BUBBLE-1` and `VAL-R8` without keeping an implementation checkpoint open.

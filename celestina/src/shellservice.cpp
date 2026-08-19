@@ -11,8 +11,11 @@
 #include <optional>
 #include <utility>
 
+#include <QMetaType>
+#include <QRectF>
 #include "niriclient.h"
 #include "lockcontroller.h"
+#include "bubbleanchorsource.h"
 #include "overlaycontroller.h"
 #include "shellprovidersclient.h"
 
@@ -279,9 +282,99 @@ void ShellService::setControlCentreController(OverlayController *controller)
     m_controlCentre = controller;
 }
 
+void ShellService::setBubbleSelectorController(OverlayController *controller)
+{
+    m_bubbleSelector = controller;
+}
+
 void ShellService::setSessionMenuController(OverlayController *controller)
 {
     m_sessionMenu = controller;
+}
+
+void ShellService::setBubbleAnchorSource(BubbleAnchorSource *anchors)
+{
+    m_anchors = anchors;
+}
+
+// The presentation hint for a minimize triggered with no surface of its own.
+//
+// Reduced motion wins over the anchor: someone who asked for less movement is asking for no
+// travel at all, not for travel somewhere else. An absent panel, an unknown output, or an
+// unusable rectangle simply sends nothing, which asks Niri for its ordinary motion; a hint is
+// never allowed to hold up or refuse the state change it decorates.
+QVariantMap ShellService::minimizeTransition() const
+{
+    if (!m_anchors || !m_niri)
+        return {};
+    if (m_anchors->reducedMotion())
+        return {{QStringLiteral("transition"), QStringLiteral("disabled")}};
+    // The focused window is the one Niri will minimize, so its monitor is the one whose
+    // bubbles it should travel to.
+    const QString output = m_niri->focusedOutput();
+    const QRectF anchor = m_anchors->bubbleAnchorFor(output);
+    if (output.isEmpty() || !anchor.isValid() || anchor.width() <= 0 || anchor.height() <= 0)
+        return {};
+    return {
+        {QStringLiteral("transition"), QStringLiteral("anchored")},
+        {QStringLiteral("anchor_output"), output},
+        {QStringLiteral("anchor_x"), anchor.x()},
+        {QStringLiteral("anchor_y"), anchor.y()},
+        {QStringLiteral("anchor_width"), anchor.width()},
+        {QStringLiteral("anchor_height"), anchor.height()},
+    };
+}
+
+qulonglong ShellService::minimizeWindow(const QVariantMap &options)
+{
+    // The shell's own frame can still name Melibea while its projection has been withdrawn.
+    // The boolean is checked as a boolean: a truthy string would say available for a
+    // provider that had published nothing, and this verb would then report a request that
+    // nothing was ever going to answer.
+    const QVariant available =
+        m_providers
+        ? m_providers->providers().value(QStringLiteral("melibea")).toMap().value(
+              QStringLiteral("available"))
+        : QVariant();
+    if (available.metaType().id() != QMetaType::Bool || !available.toBool()) {
+        return refuse(
+            QDBusError::Failed,
+            QStringLiteral("this shell has no authoritative Melibea to minimize through")
+        );
+    }
+
+    QVariantMap request = minimizeTransition();
+    // Naming no window asks Niri to resolve whichever one is focused. Anything the caller
+    // does name must be an exact id, never a rounded or reinterpreted one.
+    const QVariant target = options.value(QStringLiteral("window_id"));
+    if (target.isValid() && !target.isNull()) {
+        const QString exact = target.toString();
+        bool parsed = false;
+        exact.toULongLong(&parsed);
+        if (!parsed) {
+            return refuse(
+                QDBusError::InvalidArgs,
+                QStringLiteral("'minimize' needs an exact window id or none at all")
+            );
+        }
+        request.insert(QStringLiteral("window_id"), exact);
+    }
+
+    const qulonglong helperRequestId = m_providers->sendCommand(
+        QStringLiteral("melibea"), QStringLiteral("minimize"), request);
+    if (helperRequestId == 0) {
+        return refuse(
+            QDBusError::Failed,
+            QStringLiteral("this shell could not send the minimize to Melibea")
+        );
+    }
+
+    // The helper numbers its own requests, so the caller is answered under a shell id and the
+    // two are matched up when the terminal result arrives.
+    const qulonglong requestId = ++m_lastRequestId;
+    m_providerRequests.insert(helperRequestId, requestId);
+    m_providerVerbs.insert(helperRequestId, QStringLiteral("minimize"));
+    return requestId;
 }
 
 void ShellService::setProvidersClient(ShellProvidersClient *providers)
@@ -302,6 +395,7 @@ void ShellService::setProvidersClient(ShellProvidersClient *providers)
                 m_clock.elapsed()
             );
             reportSessionOutcomes();
+            reportProviderAction(helperRequestId, state, reason);
         }
     );
     connect(m_providers, &ShellProvidersClient::changed, this, [this] {
@@ -333,6 +427,10 @@ qulonglong ShellService::Command(const QString &verb, const QVariantMap &options
         return toggleOverlay(m_notificationCentre, verb);
     if (verb == QStringLiteral("control-centre-toggle"))
         return toggleOverlay(m_controlCentre, verb);
+    if (verb == QStringLiteral("bubbles-toggle"))
+        return toggleBubbleSelector(verb);
+    if (verb == QStringLiteral("minimize"))
+        return minimizeWindow(options);
     if (verb == QStringLiteral("session-menu-toggle"))
         return toggleOverlay(m_sessionMenu, verb);
     if (const auto expectation = sessionExpectation(verb, options))
@@ -409,6 +507,29 @@ qulonglong ShellService::lockSession(const QString &verb)
 void ShellService::setLockController(LockController *controller)
 {
     m_lock = controller;
+}
+
+qulonglong ShellService::toggleBubbleSelector(const QString &verb)
+{
+    // The selector must belong to a monitor even when nothing pointed at one, because that is
+    // what carries the bubble anchor its restores travel to. The focused output is the one
+    // whose bubbles the person is looking at.
+    if (!m_bubbleSelector) {
+        return refuse(
+            QDBusError::Failed,
+            QStringLiteral("this shell has no '%1' surface").arg(echoed(verb))
+        );
+    }
+    const QString output = (m_anchors && m_niri) ? m_niri->focusedOutput() : QString();
+    const QRectF anchor = m_anchors ? m_anchors->bubbleAnchorFor(output) : QRectF();
+    m_bubbleSelector->toggleWithBubbleAnchor(output, anchor);
+
+    const qulonglong requestId = ++m_lastRequestId;
+    QVariantMap details;
+    details.insert(QStringLiteral("version"), shellStateVersion);
+    details.insert(QStringLiteral("verb"), verb);
+    emit CommandResult(requestId, QStringLiteral("confirmed"), details);
+    return requestId;
 }
 
 qulonglong ShellService::toggleOverlay(OverlayController *controller, const QString &verb)
@@ -598,6 +719,29 @@ void ShellService::reportSessionOutcomes()
 
     if (m_sessionRequests.isEmpty())
         m_sessionTimer.stop();
+}
+
+// A provider-backed verb answering under its own request id.
+//
+// `accepted` only says the helper ran a tool; the caller is waiting to hear that the machine
+// changed, so nothing is reported until a terminal state arrives. Reporting acceptance here
+// would tell `celestina msg` a minimize had succeeded before Niri had done it.
+void ShellService::reportProviderAction(
+    qulonglong helperRequestId,
+    const QString &state,
+    const QString &reason
+)
+{
+    if (state == QStringLiteral("accepted"))
+        return;
+
+    const auto request = m_providerRequests.constFind(helperRequestId);
+    if (request == m_providerRequests.constEnd())
+        return;
+
+    reportOutcome(request.value(), m_providerVerbs.value(helperRequestId), state, reason);
+    m_providerRequests.remove(helperRequestId);
+    m_providerVerbs.remove(helperRequestId);
 }
 
 void ShellService::reportAction(

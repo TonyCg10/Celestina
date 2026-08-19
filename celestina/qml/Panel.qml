@@ -33,6 +33,8 @@ Window {
                                        rect attachmentAnchorRect)
     signal controlCentreRequested(rect openerRect, rect attachmentAnchorRect)
     signal clipboardRequested(rect openerRect, rect attachmentAnchorRect)
+    signal bubbleSelectorRequested(rect openerRect,
+                                   rect attachmentAnchorRect)
     signal sessionMenuRequested(rect openerRect, rect attachmentAnchorRect)
     signal indicatorMenuRequested(string kind, rect openerRect,
                                   rect attachmentAnchorRect)
@@ -54,6 +56,17 @@ Window {
     // not exist yet. See `ProviderReading`.
     function provider(name) {
         return ProviderReading.read(panel.providerSource, name);
+    }
+
+    // M7 — where a bubble for this output currently sits, in output-local logical
+    // coordinates. Read off this window by the overlay controller when it builds the
+    // selector, the same way it already reads the opener geometry, so a surface that has
+    // no anchor slot of its own still knows where its bubbles are.
+    //
+    // A function rather than a bound property: it must answer where the slot is now, not
+    // where it was when something last happened to invalidate a binding.
+    function bubbleAnchorRect() {
+        return bubbleAnchorSlot.outputLocalRect();
     }
 
     readonly property var settingsReading: panel.provider("settings")
@@ -374,6 +387,37 @@ Window {
             anchors.verticalCenter: bar.verticalCenter
             height: panel.barHeight
             trailing: true
+
+            PanelCluster {
+                barHeight: panel.barHeight
+                id: bubbleCluster
+
+                spacing: CelestinaTheme.spaceXs
+                blurAvailable: panel.compositorBlurAvailable
+                ink: backdropInk
+                // The anchor slot keeps this cluster present with no bubbles in it, so the
+                // first minimize has a destination. The glass still follows the group.
+                hasContent: true
+                showsGlass: bubbleGroup.bubbleCount > 0
+
+                BubbleGroup {
+                    id: bubbleGroup
+                    reading: panel.provider("melibea")
+                    ink: backdropInk
+                    onSelectorRequested: (openerRect, attachmentAnchorRect) =>
+                        panel.bubbleSelectorRequested(openerRect,
+                                                      attachmentAnchorRect)
+                }
+
+                // M7 — permanent, so minimizing the first window travels somewhere real.
+                // It sits after the group, which is the edge the group grows away from, so
+                // gaining bubbles never moves it.
+                BubbleAnchorSlot {
+                    id: bubbleAnchorSlot
+                    objectName: "celestina-bubble-anchor-slot"
+                    outputName: panel.outputName
+                }
+            }
 
             // PANEL-1 — this reading lays out its own children, so a pill
 

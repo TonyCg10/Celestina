@@ -5,6 +5,8 @@
 #include <QPointer>
 #include <QQmlComponent>
 #include <QRectF>
+
+#include "bubbleanchorsource.h"
 #include <QUrl>
 #include <QVariant>
 #include <QWindow>
@@ -28,7 +30,7 @@ class QTimer;
 // blur policy and presentation live in their own owners.
 class OverlayController;
 
-class PanelManager final : public QObject
+class PanelManager final : public QObject, public BubbleAnchorSource
 {
     Q_OBJECT
 
@@ -57,10 +59,22 @@ public:
         return m_panels.value(screen).data();
     }
 
+    // M7 — where this output's bubbles currently sit, in the compositor's output-local
+    // logical coordinates, or an empty rectangle when that output has no mapped panel.
+    //
+    // Asked of the live panel rather than remembered, for the same reason `panelWindowFor`
+    // exists: a remembered rectangle is a rectangle that can be wrong after a relayout, and
+    // a minimize triggered from a keybind has no surface of its own to read.
+    QRectF bubbleAnchorFor(const QString &outputName) const override;
+
+    // The session's motion preference, so a surface-less action can honour it too.
+    bool reducedMotion() const override { return m_reducedMotion; }
+
     void setLauncher(OverlayController *launcher);
     void setNotificationCentre(OverlayController *centre);
     void setControlCentre(OverlayController *centre);
     void setClipboard(OverlayController *clipboard);
+    void setBubbleSelector(OverlayController *selector);
     void setSessionMenu(OverlayController *menu);
 
 private slots:
@@ -94,6 +108,10 @@ private slots:
         const QRectF &globalAttachmentAnchor
     );
     void clipboardRequested(
+        const QRectF &globalOpener,
+        const QRectF &globalAttachmentAnchor
+    );
+    void bubbleSelectorRequested(
         const QRectF &globalOpener,
         const QRectF &globalAttachmentAnchor
     );
@@ -131,7 +149,7 @@ private:
     bool ensurePanel(QScreen *screen);
     void removePanel(QScreen *screen);
 public:
-    // The five panel overlays, all but `keep` retired. The menu controller is
+    // The panel overlays, all but `keep` retired. The menu controller is
     // untouched: it owns the memory of which indicator is up, which is what
     // lets that indicator's own opener toggle it shut.
     void closeOverlaysExcept(const OverlayController *keep);
@@ -164,6 +182,7 @@ private:
     QPointer<OverlayController> m_notificationCentre;
     QPointer<OverlayController> m_controlCentre;
     QPointer<OverlayController> m_clipboard;
+    QPointer<OverlayController> m_bubbleSelector;
     QPointer<OverlayController> m_sessionMenu;
     QHash<QScreen *, QPointer<QWindow>> m_panels;
     // Coalesces a hotplug burst into one request. Owned here because the panel

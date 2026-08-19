@@ -5,6 +5,7 @@
 #include "blurreach.h"
 #include "diagnosticjournal.h"
 #include <LayerShellQt/window.h>
+#include <QDateTime>
 #include <QGuiApplication>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -26,6 +27,29 @@ namespace {
 // compositor option no stock niri has. Three, plus the menu's own veil
 // region above them, is what measured closest to the reference material.
 constexpr int denseCompanionDepth = 3;
+
+// How long a companion whose sections all left stays mapped before it is
+// really unmapped, and how often the sweep looks. Mapping and unmapping a
+// whole-output surface is a scene change on that output, and a scene change
+// per popup was measured (2026-08-18) as a slight physical flicker of the
+// monitor the popup opened on — menus and the OSD alike, while Noctalia's
+// persistently mapped surfaces never flickered. Twenty seconds covers a burst
+// of menus and volume notches with zero scene changes; after that the unmap
+// happens once, at rest, so a fullscreen window on this output can have its
+// direct scanout back.
+constexpr qint64 parkedCompanionGraceMs = 20000;
+constexpr int parkSweepIntervalMs = 5000;
+
+// The parked state's effect region. One pixel, not empty and not withdrawn,
+// and both alternatives are measured defects: `withdrawBlur` removes the
+// client's region entirely, and a mapped surface with a matching layer-rule
+// and no region carries the rule's effect over its whole geometry — the
+// resting-companion saturation of 2026-08-15. An *empty* region is no better:
+// KWindowSystem reads it as "everything". With one pixel the compositor clips
+// the effect to that pixel, which keeps the parked surface invisible and the
+// output's effect pipeline warm, so re-arming is a region update rather than
+// an on/off transition.
+const QRegion parkedCompanionRegion(0, 0, 1, 1);
 
 // One committed frame is what makes double-buffered effect state land, and an
 // idle window schedules none of its own. `requestUpdate` alone is not enough:
@@ -218,6 +242,33 @@ DenseGlassAggregator::DenseGlassAggregator(QObject *parent)
     m_pulse.setInterval(500);
     connect(&m_pulse, &QTimer::timeout, this, &DenseGlassAggregator::pulse);
 
+    // The parking sweep runs only while something is parked; `refresh` starts
+    // it and the sweep stops itself when the last parked output is unmapped.
+    m_parkSweep.setInterval(parkSweepIntervalMs);
+    connect(&m_parkSweep, &QTimer::timeout, this, [this] {
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        for (auto it = m_parkedSinceMs.begin(); it != m_parkedSinceMs.end();) {
+            if (now - it.value() < parkedCompanionGraceMs) {
+                ++it;
+                continue;
+            }
+            const auto resting = m_companions.value(it.key());
+            for (const QPointer<QQuickWindow> &companion : resting) {
+                if (!companion)
+                    continue;
+                // Withdrawn while still visible, then hidden: the order every
+                // effect-bearing surface in this shell must keep, because a
+                // withdraw sent after the surface hid is a fatal protocol
+                // error for the whole client.
+                withdrawBlur(companion.data());
+                companion->setVisible(false);
+            }
+            it = m_parkedSinceMs.erase(it);
+        }
+        if (m_parkedSinceMs.isEmpty())
+            m_parkSweep.stop();
+    });
+
     // An output that leaves takes its companions with it.
     //
     // They are keyed by raw `QScreen *`, and a screen Qt has destroyed leaves
@@ -234,6 +285,7 @@ DenseGlassAggregator::DenseGlassAggregator(QObject *parent)
 
 void DenseGlassAggregator::forgetScreen(QScreen *screen)
 {
+    m_parkedSinceMs.remove(screen);
     const auto held = m_companions.take(screen);
     for (const QPointer<QQuickWindow> &companion : held) {
         if (!companion)
@@ -379,7 +431,10 @@ void DenseGlassAggregator::withdraw(QWindow *source)
         refresh(screen);
 }
 
-QList<QPointer<QQuickWindow>> DenseGlassAggregator::companionsFor(QScreen *screen)
+QList<QPointer<QQuickWindow>> DenseGlassAggregator::companionsFor(
+    QScreen *screen,
+    const QRegion &region
+)
 {
     QList<QPointer<QQuickWindow>> &held = m_companions[screen];
     held.removeIf([](const QPointer<QQuickWindow> &w) { return w.isNull(); });
@@ -416,6 +471,20 @@ QList<QPointer<QQuickWindow>> DenseGlassAggregator::companionsFor(QScreen *scree
         spec.closeOnDismissed = false;
         spec.acceptsFocus = false;
 
+        // Armed before the surface exists, and that ordering is the whole
+        // repair. `mapLayerSurface` ends in `show()`, so a companion created
+        // the old way was mapped with no region for at least the frame that
+        // `show()` commits — and the compositor reads a mapped surface with no
+        // region as "this effect covers the whole geometry", which is the
+        // entire output. The author saw it as a colour flash on every menu
+        // opening, and it survived the earlier repair because that one only
+        // withdrew *after* the surface was already up.
+        //
+        // `armBlur` deliberately does not require visibility: KWindowSystem
+        // caches the region and applies it on the first expose, so the
+        // compositor's very first sight of this surface already carries it.
+        armBlur(companion, region);
+
         if (!mapLayerSurface(companion, spec)) {
             // Per screen, and silently until now. A companion that will not map
             // leaves *this* output with fewer blur samples than its neighbours
@@ -439,13 +508,6 @@ QList<QPointer<QQuickWindow>> DenseGlassAggregator::companionsFor(QScreen *scree
             delete companion;
             break;
         }
-        // Mapped, then immediately withdrawn, because `mapLayerSurface` ends in
-        // `show()` and a companion that is visible before its region is armed is
-        // the whole-output saturation defect all over again — for as many frames
-        // as pass before `refresh` arms it. The caller below shows it again, and
-        // only once it has rectangles. Never brought up armed-less.
-        withdrawBlur(companion);
-        companion->setVisible(false);
         // They render nothing and must swallow nothing.
         companion->setMask(QRegion(0, 0, 1, 1));
         held.append(companion);
@@ -466,35 +528,48 @@ void DenseGlassAggregator::refresh(QScreen *screen)
             region += denseGlassRegion(shape);
     }
 
-    const QList<QPointer<QQuickWindow>> companions = companionsFor(screen);
+    if (region.isEmpty()) {
+        // Nothing to summarize. Existing companions are parked below — mapped,
+        // invisible, their effect clipped to one pixel — instead of unmapped,
+        // because unmapping per popup is a scene change on this output and a
+        // scene change per popup is the measured physical flicker of exactly
+        // this monitor (2026-08-18). The real unmap happens once, from the
+        // sweep, after the grace. New companions are still not created here,
+        // because a companion brought up without a region is the whole-output
+        // flash this class exists to avoid.
+        const auto resting = m_companions.value(screen);
+        bool anyParked = false;
+        for (const QPointer<QQuickWindow> &companion : resting) {
+            if (!companion || !companion->isVisible())
+                continue;
+            armBlur(companion.data(), parkedCompanionRegion);
+            kickRender(companion.data());
+            anyParked = true;
+        }
+        if (anyParked) {
+            m_parkedSinceMs.insert(screen, QDateTime::currentMSecsSinceEpoch());
+            m_parkSweep.start();
+        }
+        m_quietBeats = 0;
+        m_pulse.start();
+        return;
+    }
+
+    // Sections are back: this output is no longer parked, whatever the sweep
+    // had scheduled for it.
+    m_parkedSinceMs.remove(screen);
+
+    const QList<QPointer<QQuickWindow>> companions =
+        companionsFor(screen, region);
     for (const QPointer<QQuickWindow> &companion : companions) {
         if (!companion)
             continue;
-        if (region.isEmpty()) {
-            // A companion with no rectangles is unmapped, not merely
-            // disarmed. Withdrawing the region alone leaves a mapped surface
-            // with *no* region, and the compositor's per-namespace rule then
-            // applies its saturation and noise to the surface's whole
-            // geometry — the whole output. Three resting companions
-            // multiplied the session's saturation by ~1.95 permanently, which
-            // the author lived with as "normal" until a menu opened, showed
-            // the true wallpaper, and read as the menu desaturating the
-            // screen.
-            withdrawBlur(companion.data());
-            companion->setVisible(false);
-        } else {
-            // Armed first, shown second, and that order is the point. The
-            // region is cached by KWindowSystem and applied when the surface is
-            // next exposed, so arming a hidden companion loses nothing — while
-            // showing one first hands the compositor a mapped surface with no
-            // region, which its per-namespace rule reads as "this effect covers
-            // the whole geometry" and saturates the entire output for as long
-            // as it takes the region to follow.
-            armBlur(companion.data(), region);
-            if (!companion->isVisible())
-                companion->setVisible(true);
-            kickRender(companion.data());
-        }
+        // Armed first, shown second, on every refresh as on creation. A
+        // companion that is already up simply takes the new rectangles.
+        armBlur(companion.data(), region);
+        if (!companion->isVisible())
+            companion->setVisible(true);
+        kickRender(companion.data());
     }
     m_quietBeats = 0;
     m_pulse.start();

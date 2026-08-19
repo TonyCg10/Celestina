@@ -20,6 +20,10 @@ Item {
     // rather than to effective child visibility. The natural row width is the
     // safe default for groups whose controls are permanent.
     property bool hasContent: controls.implicitWidth > 0
+    // Whether the glass floor is painted. It follows presence for every ordinary group;
+    // a group that reserves space for something invisible separates the two, so the space
+    // can exist without a pill sitting under nothing.
+    property bool showsGlass: root.hasContent
 
     implicitWidth: root.hasContent ? controls.implicitWidth : 0
     implicitHeight: CelestinaTheme.controlHeightXs
@@ -36,7 +40,7 @@ Item {
         barHeight: root.barHeight
         id: pill
 
-        visible: root.hasContent
+        visible: root.showsGlass
         blurAvailable: root.blurAvailable
         ink: root.ink
     }

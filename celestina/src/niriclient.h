@@ -47,6 +47,10 @@ public:
     // is nothing later to confirm it against — the compositor takes over the
     // screen — so the panel reports only that the request could not be made.
     Q_INVOKABLE qulonglong requestScreenshot();
+    // The output whose workspace currently holds focus, or an empty string when nothing
+    // says. The focused window lives there, so it is also the monitor whose bubble anchor a
+    // minimize should travel to.
+    Q_INVOKABLE QString focusedOutput() const;
     // Asks Niri to blank the outputs. Unlike a workspace focus, the shell sees
     // no later snapshot that could confirm it: the compositor's own answer to
     // the request is the outcome, and it is reported as such.

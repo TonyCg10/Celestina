@@ -11,6 +11,11 @@ namespace {
 constexpr auto service = "org.celestina.Magnetita";
 constexpr auto path = "/org/celestina/Devices1";
 constexpr auto iface = "org.celestina.Devices1";
+// The wireless screen mirror is a sibling contract under the same bus name,
+// not part of the device contract: it rides on Android debugging rather than
+// KDE Connect, and only the daemon knows where the phone currently answers.
+constexpr auto mirrorPath = "/org/celestina/Mirror1";
+constexpr auto mirrorIface = "org.celestina.Mirror1";
 } // namespace
 
 DevicesClient::DevicesClient(QObject *parent)
@@ -139,4 +144,22 @@ void DevicesClient::requestPair(const QString &deviceId)
 void DevicesClient::unpair(const QString &deviceId)
 {
     callDeviceAction("Unpair", deviceId);
+}
+
+void DevicesClient::mirror()
+{
+    // No device id: the mirror is not per-device. It rides on Android's own
+    // wireless debugging, which the daemon discovers on the LAN, and the phone
+    // that answers there is not necessarily the one this row was drawn from.
+    //
+    // Start only. The daemon ignores a request for a mirror that is already
+    // running, so a second press cannot tear down a window the author is
+    // looking at, and stopping stays where the state to reason about lives —
+    // the Magnetita application, or the scrcpy window's own close button.
+    QDBusMessage call = QDBusMessage::createMethodCall(
+        QString::fromLatin1(service),
+        QString::fromLatin1(mirrorPath),
+        QString::fromLatin1(mirrorIface),
+        QStringLiteral("Start"));
+    QDBusConnection::sessionBus().asyncCall(call);
 }

@@ -141,6 +141,32 @@ void PanelManager::setClipboard(OverlayController *clipboard)
     m_clipboard = clipboard;
 }
 
+QRectF PanelManager::bubbleAnchorFor(const QString &outputName) const
+{
+    if (outputName.isEmpty())
+        return {};
+    for (const QPointer<QWindow> &panel : m_panels) {
+        if (!panel || panel->property("outputName").toString() != outputName)
+            continue;
+        QVariant anchor;
+        if (!QMetaObject::invokeMethod(
+                panel.data(),
+                "bubbleAnchorRect",
+                Q_RETURN_ARG(QVariant, anchor)
+            )) {
+            return {};
+        }
+        const QRectF rect = anchor.toRectF();
+        return rect.isValid() ? rect : QRectF();
+    }
+    return {};
+}
+
+void PanelManager::setBubbleSelector(OverlayController *selector)
+{
+    m_bubbleSelector = selector;
+}
+
 void PanelManager::setSessionMenu(OverlayController *menu)
 {
     m_sessionMenu = menu;
@@ -167,7 +193,7 @@ void PanelManager::closeOverlaysExcept(const OverlayController *keep)
     for (OverlayController *const overlay : {
              m_launcher.data(), m_notificationCentre.data(),
              m_controlCentre.data(), m_clipboard.data(),
-             m_sessionMenu.data()}) {
+             m_sessionMenu.data(), m_bubbleSelector.data()}) {
         if (overlay && overlay != keep)
             overlay->close();
     }
@@ -242,6 +268,19 @@ void PanelManager::clipboardRequested(
 {
     togglePanelOverlay(
         m_clipboard,
+        qobject_cast<QWindow *>(sender()),
+        globalOpener,
+        globalAttachmentAnchor
+    );
+}
+
+void PanelManager::bubbleSelectorRequested(
+    const QRectF &globalOpener,
+    const QRectF &globalAttachmentAnchor
+)
+{
+    togglePanelOverlay(
+        m_bubbleSelector,
         qobject_cast<QWindow *>(sender()),
         globalOpener,
         globalAttachmentAnchor
@@ -413,6 +452,12 @@ bool PanelManager::ensurePanel(QScreen *screen)
         SIGNAL(clipboardRequested(QRectF, QRectF)),
         this,
         SLOT(clipboardRequested(QRectF, QRectF))
+    );
+    connect(
+        window,
+        SIGNAL(bubbleSelectorRequested(QRectF, QRectF)),
+        this,
+        SLOT(bubbleSelectorRequested(QRectF, QRectF))
     );
     connect(
         window,
