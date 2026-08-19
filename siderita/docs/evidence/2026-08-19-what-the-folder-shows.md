@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-19
 - **Scope:** `SID-A2-B`; plan
-  [after-the-archive-verbs](../plans/active/2026-08-19-after-the-archive-verbs.md);
+  [after-the-archive-verbs](../plans/archive/2026-08-19-after-the-archive-verbs.md);
   domain evidence
   [volume Trash and embedded images](2026-08-19-volume-trash-and-embedded-images.md)
 - **Environment:** Arch-derived Linux, Qt 6.11.1. The author ran the deployed

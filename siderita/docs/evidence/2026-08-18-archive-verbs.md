@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-18
 - **Scope:** `SID-A1-B`; plan
-  [archive-compression](../plans/active/2026-08-18-archive-compression.md);
+  [archive-compression](../plans/archive/2026-08-18-archive-compression.md);
   domain evidence [archive domain](2026-08-18-archive-domain.md)
 - **Environment:** Arch-derived Linux, Qt 6.11.1, `cargo` stable. The author ran
   the deployed binary on the live session; everything else is offscreen

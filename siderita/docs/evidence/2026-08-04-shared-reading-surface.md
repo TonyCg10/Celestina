@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-04
 - **Scope:** Siderita `SID-G7-A`; plan
-  [shared-reading-surface](../plans/active/2026-08-04-shared-reading-surface.md)
+  [shared-reading-surface](../plans/archive/2026-08-04-shared-reading-surface.md)
 - **Environment:** Linux 7.1.5-1-cachyos, Qt 6, CXX-Qt, offscreen Qt platform
   for every automated surface check; the two units this one depends on,
   CelestinaStyle `STYLE-G7-A` and Grafita `G7-A`, are the two commits that

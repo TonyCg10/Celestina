@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-19
 - **Scope:** `SID-A2-A`; plan
-  [after-the-archive-verbs](../plans/active/2026-08-19-after-the-archive-verbs.md)
+  [after-the-archive-verbs](../plans/archive/2026-08-19-after-the-archive-verbs.md)
 - **Environment:** Arch-derived Linux, `cargo` stable. One filesystem for the
   checkout and the home Trash, which is what the volume test asserts
 - **Artifact:** none built here; the application's build and deployment are

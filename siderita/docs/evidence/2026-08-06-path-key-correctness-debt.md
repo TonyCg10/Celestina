@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-06
 - **Scope:** `SID-G7-G`; plan
-  [shared-reading-surface](../plans/active/2026-08-04-shared-reading-surface.md);
+  [shared-reading-surface](../plans/archive/2026-08-04-shared-reading-surface.md);
   the three Siderita items of stage 3 in the
   [light monorepo audit](../../../docs/evidence/2026-08-06-light-monorepo-audit.md),
   applying [ADR 0008](../../../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md)

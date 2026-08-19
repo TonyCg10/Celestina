@@ -1,12 +1,14 @@
 # Shared reading surface
 
 - **Opened:** 2026-08-04
-- **Status:** active
+- **Closed:** 2026-08-04
+- **Status:** done
 - **Plan ID:** shared-reading-surface
 - **Scope:** siderita
 - **Implementation checkpoint:** SID-G7
 - **Author-validation checkpoint:** `VAL-SID-G7` in
   [`../../../VALIDATION.md`](../../../VALIDATION.md)
+- **Successor:** [Compressing and extracting archives](2026-08-18-archive-compression.md)
 
 ## Hypothesis
 
@@ -89,6 +91,7 @@ commit cannot produce.
 | SID-G7-G | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-G.numstat.tsv) | 17 files, +452/-27 | Publish a breadcrumb key-first so a tab in a folder name can no longer move the cut that separates it from its display text; mark a persisted path record as a key when it is written instead of inferring it from codec idempotence, which could not tell a legacy raw path holding a literal `%20` from the key for a path holding a space; and send a file to the phone over Magnetita's new `SendFileUri` with the byte-exact `file://` URI `dbus::path_to_uri` already writes, closing the last verb that put a lossy path out of the process | `cargo fmt --all --check`, `cargo clippy --all-targets --locked -- -D warnings`, `cargo test --all-targets --locked`, the architecture and documentation guards — recorded in [correctness debt evidence](../../evidence/2026-08-06-path-key-correctness-debt.md) | `VAL-SID-06` |
 | SID-G7-H | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-H.numstat.tsv) | 12 files, +343/-13 | Report a paste made entirely of cuts into the folder those entries already occupy — plan it as a dropped set rather than a discarded one, settle the clipboard it came from and say so on the status line, so Ctrl+V is never a silent no-op; and take the last two QML surfaces that cut a label out of a path off that pattern, asking the adapter for the label [ADR 0008](../../../../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md) says it owns | `cargo fmt --all --check`, `cargo clippy --all-targets --locked -- -D warnings`, `cargo test --all-targets --locked`, the architecture, language and documentation guards — recorded in [silent paste and QML path surgery evidence](../../evidence/2026-08-06-silent-paste-and-label-surgery.md) | `VAL-SID-06` |
 | SID-G7-I | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-I.numstat.tsv) | 8 files, +50/-9 | Restore the tab strip's own label derivation, which `SID-G7-H` moved to the adapter at the cost of three qmllint warnings the project's debt ceiling refuses; the folder heading keeps the adapter, where it cost nothing, and the reason the strip cannot follow is written into that unit's limits | `bash scripts/qmllint-cxxqt.sh siderita`, `cargo test --all-targets --locked` in `siderita/`, the three suite guards — recorded in [silent paste and label surgery evidence](../../evidence/2026-08-06-silent-paste-and-label-surgery.md) | `VAL-SID-06` |
+| SID-G7-Z | `siderita:` | done | [inventory](../../inventories/2026-08-04-shared-reading-surface/SID-G7-Z.numstat.tsv) | 18 files, +351/-264 | Archive this plan and `SID-A1`/`SID-A2`, each shipped weeks or days earlier with every unit already `done`, and repoint every stale `plans/active/...` reference the roadmap's advance past them left behind — no implementation, evidence or validation content changed | [checkpoint archival evidence](../../evidence/2026-08-19-checkpoint-archival.md) | None |
 SID-G7-B is the independent portal correction that was already in the dirty
 checkout when the author requested every pending change be delivered. It does
 not extend the shared reading-surface rules. Its C++ seam exists because Qt's

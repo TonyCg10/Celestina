@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-05
 - **Scope:** `SID-G7-C`; plan
-  [shared-reading-surface](../plans/active/2026-08-04-shared-reading-surface.md);
+  [shared-reading-surface](../plans/archive/2026-08-04-shared-reading-surface.md);
   suite audit findings `SID-A1`, `SID-A3`, `SID-M1`–`SID-M5`, `SID-M7`,
   `SID-M8`, `SID-B4`–`SID-B6`, `SID-B9` from
   [`../../../docs/evidence/2026-08-05-static-suite-audit.md`](../../../docs/evidence/2026-08-05-static-suite-audit.md)

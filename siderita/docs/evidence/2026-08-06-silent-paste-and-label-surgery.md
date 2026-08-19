@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-06
 - **Scope:** `SID-G7-H`; plan
-  [shared-reading-surface](../plans/active/2026-08-04-shared-reading-surface.md);
+  [shared-reading-surface](../plans/archive/2026-08-04-shared-reading-surface.md);
   two of the low findings of the
   [light monorepo audit](../../../docs/evidence/2026-08-06-light-monorepo-audit.md)
   — a cut pasted into its own folder ending in silence, and `TabStrip.qml` and

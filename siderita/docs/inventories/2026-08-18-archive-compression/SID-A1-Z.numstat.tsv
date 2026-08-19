@@ -1,0 +1,13 @@
+# SID-A1-Z exact change inventory
+
+Base revision	41ef83444264c390dc25ca9a132e5bdd982cdce9
+Pathspec	siderita/docs/plans/active/2026-08-18-archive-compression.md
+Pathspec	siderita/docs/plans/archive/2026-08-18-archive-compression.md
+Pathspec	siderita/docs/evidence/2026-08-19-archive-compression-archival.md
+Pathspec	siderita/docs/inventories/2026-08-18-archive-compression/SID-A1-Z.numstat.tsv
+
+added	deleted	content	path
+0	254	deleted	siderita/docs/plans/active/2026-08-18-archive-compression.md
+257	0	8dd259ae77ace9fa07f8f034564e0d2916b470d43da48452473ca8c0778b226a	siderita/docs/plans/archive/2026-08-18-archive-compression.md
+29	0	a360b751de419a66bb5793d4186d09028e22a61f06548140aa28d40321475138	siderita/docs/evidence/2026-08-19-archive-compression-archival.md
+13	0	self	siderita/docs/inventories/2026-08-18-archive-compression/SID-A1-Z.numstat.tsv

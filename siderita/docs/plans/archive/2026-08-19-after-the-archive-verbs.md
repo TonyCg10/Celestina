@@ -1,12 +1,14 @@
 # After the archive verbs
 
 - **Opened:** 2026-08-19
+- **Closed:** 2026-08-19
 - **Plan ID:** after-the-archive-verbs
-- **Status:** active
+- **Status:** done
 - **Scope:** siderita
 - **Implementation checkpoint:** SID-A2
 - **Author-validation checkpoint:** `VAL-SID-08` in
   [`../../../VALIDATION.md`](../../../VALIDATION.md)
+- **Successor:** [Pause and global scope](../active/2026-08-19-pause-and-global-scope.md)
 
 ## Hypothesis
 
@@ -81,6 +83,7 @@ bytes. The author's own pass on the live session belongs to `VAL-SID-08`.
 |---|---|---|---|---|---|---|---|
 | SID-A2-A | `siderita:` | done | [inventory](../../inventories/2026-08-19-after-the-archive-verbs/SID-A2-A.numstat.tsv) | 14 files, +1361/-21 | The domain: the freedesktop per-volume Trash with its listing across every mounted volume, and `siderita-embedded`, which reads the image inside a program, a song, a package or a book | [evidence](../../evidence/2026-08-19-volume-trash-and-embedded-images.md) | `None` |
 | SID-A2-B | `siderita:` | done | [inventory](../../inventories/2026-08-19-after-the-archive-verbs/SID-A2-B.numstat.tsv) | 41 files, +1122/-217 | The application: icon families and their tints, embedded pictures through the thumbnail provider, one marked sidebar row, remembered folds, a legible guard dialog, a concentric content radius and a quieter route reveal | [evidence](../../evidence/2026-08-19-what-the-folder-shows.md) | `VAL-SID-08` |
+| SID-A2-Z | `siderita:` | done | [inventory](../../inventories/2026-08-19-after-the-archive-verbs/SID-A2-Z.numstat.tsv) | 4 files, +131/-86 | Archive this plan, closed the same day with every unit already `done`, alongside `SID-G7` and `SID-A1` in the same administrative move | [archival evidence](../../evidence/2026-08-19-after-the-archive-verbs-archival.md) | None |
 
 Like every plan in this repository, this one records intent and grants no
 authority.

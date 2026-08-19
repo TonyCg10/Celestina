@@ -1,0 +1,13 @@
+# SID-A2-Z exact change inventory
+
+Base revision	41ef83444264c390dc25ca9a132e5bdd982cdce9
+Pathspec	siderita/docs/plans/active/2026-08-19-after-the-archive-verbs.md
+Pathspec	siderita/docs/plans/archive/2026-08-19-after-the-archive-verbs.md
+Pathspec	siderita/docs/evidence/2026-08-19-after-the-archive-verbs-archival.md
+Pathspec	siderita/docs/inventories/2026-08-19-after-the-archive-verbs/SID-A2-Z.numstat.tsv
+
+added	deleted	content	path
+0	86	deleted	siderita/docs/plans/active/2026-08-19-after-the-archive-verbs.md
+89	0	6fbff2a2cc7eb8fff3da873bebe1c207133b9a8b4240c47cea4b3ca963e7333f	siderita/docs/plans/archive/2026-08-19-after-the-archive-verbs.md
+29	0	210eaa6d2b8d23d7eed3cceb01c2c245fd051a56d0bfb00c64bcc9060a1f344a	siderita/docs/evidence/2026-08-19-after-the-archive-verbs-archival.md
+13	0	self	siderita/docs/inventories/2026-08-19-after-the-archive-verbs/SID-A2-Z.numstat.tsv

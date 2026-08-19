@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-06
 - **Scope:** `SID-G7-F`; plan
-  [shared-reading-surface](../plans/active/2026-08-04-shared-reading-surface.md);
+  [shared-reading-surface](../plans/archive/2026-08-04-shared-reading-surface.md);
   finding `C1` of the
   [light monorepo audit](../../../docs/evidence/2026-08-06-light-monorepo-audit.md),
   a regression `SID-G7-E` introduced the same day

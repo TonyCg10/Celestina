@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-06
 - **Scope:** `SID-G7-D`; plan
-  [shared-reading-surface](../plans/active/2026-08-04-shared-reading-surface.md);
+  [shared-reading-surface](../plans/archive/2026-08-04-shared-reading-surface.md);
   [ADR 0008](../../../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md);
   suite audit finding `SID-A2` in
   [`../../../docs/evidence/2026-08-05-static-suite-audit.md`](../../../docs/evidence/2026-08-05-static-suite-audit.md)

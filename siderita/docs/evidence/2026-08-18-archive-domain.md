@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-18
 - **Scope:** `SID-A1-A`; plan
-  [archive-compression](../plans/active/2026-08-18-archive-compression.md)
+  [archive-compression](../plans/archive/2026-08-18-archive-compression.md)
 - **Environment:** Arch-derived Linux, `cargo` stable, `unrar` 7.23 and `7-Zip`
   present on the machine. Local time `-0400`, which is what made the zip date
   defect visible at all

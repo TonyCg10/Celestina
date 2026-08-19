@@ -1,0 +1,41 @@
+# SID-G7-Z exact change inventory
+
+Base revision	41ef83444264c390dc25ca9a132e5bdd982cdce9
+Pathspec	siderita/ROADMAP.md
+Pathspec	siderita/VALIDATION.md
+Pathspec	siderita/docs/evidence/2026-08-04-shared-reading-surface.md
+Pathspec	siderita/docs/evidence/2026-08-05-destructive-operation-guards.md
+Pathspec	siderita/docs/evidence/2026-08-06-byte-exact-path-seam.md
+Pathspec	siderita/docs/evidence/2026-08-06-path-key-correctness-debt.md
+Pathspec	siderita/docs/evidence/2026-08-06-silent-paste-and-label-surgery.md
+Pathspec	siderita/docs/evidence/2026-08-06-thumbnail-and-clipboard-bytes.md
+Pathspec	siderita/docs/evidence/2026-08-06-thumbnail-seam-regression.md
+Pathspec	siderita/docs/evidence/2026-08-18-archive-domain.md
+Pathspec	siderita/docs/evidence/2026-08-18-archive-verbs.md
+Pathspec	siderita/docs/evidence/2026-08-19-checkpoint-archival.md
+Pathspec	siderita/docs/evidence/2026-08-19-volume-trash-and-embedded-images.md
+Pathspec	siderita/docs/evidence/2026-08-19-what-the-folder-shows.md
+Pathspec	siderita/docs/plans/active/README.md
+Pathspec	siderita/docs/plans/active/2026-08-04-shared-reading-surface.md
+Pathspec	siderita/docs/plans/archive/2026-08-04-shared-reading-surface.md
+Pathspec	siderita/docs/inventories/2026-08-04-shared-reading-surface/SID-G7-Z.numstat.tsv
+
+added	deleted	content	path
+3	3	e6f2c181ebf4a6b45a2d3aaf4e009514fb9d88c69f687b4e2823f95f84330acd	siderita/ROADMAP.md
+1	1	e7edc3789bbd2d788361c25e0c428444958e4fd8929be1b9373d5cb6558ec27f	siderita/VALIDATION.md
+1	1	291432ee4148b38534f797164a6e901401bcbd1972bdf4938a8707f9f72ab4a5	siderita/docs/evidence/2026-08-04-shared-reading-surface.md
+1	1	5c1f528b0081680c07b7044250acfe19380a5ae72ad28054914f7c93e32f24d1	siderita/docs/evidence/2026-08-05-destructive-operation-guards.md
+1	1	13bd6d2ff2739c40c1837a3be03e762e872365c841ce0aa518b83a5fa9a92e93	siderita/docs/evidence/2026-08-06-byte-exact-path-seam.md
+1	1	694868ed3ba7e6bfa66698998c4a9e11fa407ea0e070fb5d45fb095b1dcfc45f	siderita/docs/evidence/2026-08-06-path-key-correctness-debt.md
+1	1	7265ab76139ab2426f8780b5a0d0f7848bc3339e0636fc826d7d7cb3749f751c	siderita/docs/evidence/2026-08-06-silent-paste-and-label-surgery.md
+1	1	59fdeee02631980a3bb0350cd83d2e8da24e5931375ee08dccee26cf0777a0c5	siderita/docs/evidence/2026-08-06-thumbnail-and-clipboard-bytes.md
+1	1	3c4392fde8e3b7f38c2d58212088ad32454d1cc55dc83be466ceafa8c0c06560	siderita/docs/evidence/2026-08-06-thumbnail-seam-regression.md
+1	1	0f3e60c4bbeb1eb64b7e49dae7ce97c1284e375a08983b9801c26142c2b7dc0b	siderita/docs/evidence/2026-08-18-archive-domain.md
+1	1	9c8e369eab5ca1e37a9134e320ddbc6f99d54dcd60c80835318a13d1df058233	siderita/docs/evidence/2026-08-18-archive-verbs.md
+43	0	86955a4583b1bcb4f7ec45fd57383f328891af291adefd3409e61c9321c51ac6	siderita/docs/evidence/2026-08-19-checkpoint-archival.md
+1	1	2ff9a3cb1948bb0b9ad9c7b60dec2a26840bc15a1bd57b2ee41a619f149fc489	siderita/docs/evidence/2026-08-19-volume-trash-and-embedded-images.md
+1	1	aea94f5ae747a47f3f52d0146119e315358a86f7cb4654a69ddba6154bcebcf1	siderita/docs/evidence/2026-08-19-what-the-folder-shows.md
+3	3	c461f7e4467fa7e3127c891c170505b9fe721c4494a1c8be67a01309c5fbb944	siderita/docs/plans/active/README.md
+0	246	deleted	siderita/docs/plans/active/2026-08-04-shared-reading-surface.md
+249	0	b73a2cb596d3af97a1cdc78a355c7c837fca6f710c82dc51d2dc2ea7611352b4	siderita/docs/plans/archive/2026-08-04-shared-reading-surface.md
+41	0	self	siderita/docs/inventories/2026-08-04-shared-reading-surface/SID-G7-Z.numstat.tsv

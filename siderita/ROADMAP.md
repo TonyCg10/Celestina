@@ -24,7 +24,7 @@ the shared bar, report the caret's line and character column, honour the stored
 text size, and retire two raw-control baseline rows instead of adding any.
 
 The plan is
-[Shared reading surface](docs/plans/active/2026-08-04-shared-reading-surface.md).
+[Shared reading surface](docs/plans/archive/2026-08-04-shared-reading-surface.md).
 It excludes a settings surface, any preference Siderita owns for itself, and the
 components themselves, which are `STYLE-G7`'s.
 
@@ -44,7 +44,7 @@ installed. The tangible outcome is an extract verb and a compress verb on the en
 menu, running on the same progress surface and Cancel button a paste uses.
 
 The plan is
-[Compressing and extracting archives](docs/plans/active/2026-08-18-archive-compression.md).
+[Compressing and extracting archives](docs/plans/archive/2026-08-18-archive-compression.md).
 It excludes browsing inside an archive, encrypted or split containers, `.rar`
 and `.7z`, and single-file `.gz`/`.xz`/`.zst`.
 
@@ -66,7 +66,7 @@ sidebar row, folds that persist, a legible guard dialog, and a folder whose
 files are told apart by family, by language and by the picture inside them.
 
 The plan is
-[After the archive verbs](docs/plans/active/2026-08-19-after-the-archive-verbs.md).
+[After the archive verbs](docs/plans/archive/2026-08-19-after-the-archive-verbs.md).
 It excludes reading a Windows executable for anything but its icon, and the
 author's own pass on the live session, which is `VAL-SID-08`.
 

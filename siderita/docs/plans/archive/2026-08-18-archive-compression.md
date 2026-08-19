@@ -1,11 +1,13 @@
 # Compressing and extracting archives
 
 - **Opened:** 2026-08-18
+- **Closed:** 2026-08-18
 - **Plan ID:** archive-compression
-- **Status:** active
+- **Status:** done
 - **Scope:** siderita
 - **Implementation checkpoint:** SID-A1
 - **Author-validation checkpoint:** VAL-SID-07
+- **Successor:** [After the archive verbs](2026-08-19-after-the-archive-verbs.md)
 
 ## Hypothesis
 
@@ -249,6 +251,7 @@ sections above.
 |---|---|---|---|---|---|---|---|
 | SID-A1-A | `siderita:` | done | [inventory](../../inventories/2026-08-18-archive-compression/SID-A1-A.numstat.tsv) | 23 files, +4079/-29 | The pure archive domain — sniff, list, extract, create, zone-correct dates, encrypted members, RAR and 7z delegated to an installed tool — and the no-replace rename in `siderita-ops` that makes two writers in one folder safe | [evidence](../../evidence/2026-08-18-archive-domain.md) | `None` |
 | SID-A1-B | `siderita:` | done | [inventory](../../inventories/2026-08-18-archive-compression/SID-A1-B.numstat.tsv) | 38 files, +3019/-310 | The application: the two menu verbs, the compress and password dialogs, the job register that lets writes run at once, and the dock of rings that reports them | [evidence](../../evidence/2026-08-18-archive-verbs.md) | `VAL-SID-07` |
+| SID-A1-Z | `siderita:` | done | [inventory](../../inventories/2026-08-18-archive-compression/SID-A1-Z.numstat.tsv) | 4 files, +299/-254 | Archive this plan, closed weeks earlier with every unit already `done`, alongside `SID-G7` and `SID-A2` in the same administrative move | [archival evidence](../../evidence/2026-08-19-archive-compression-archival.md) | None |
 
 Like every plan in this repository, this one records intent and grants no
 authority.

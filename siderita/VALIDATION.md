@@ -190,7 +190,7 @@ and is not a Siderita defect.
 
 - **Status:** pending
 - **Related implementation:** checkpoint SID-G7,
-  [plan](docs/plans/active/2026-08-04-shared-reading-surface.md)
+  [plan](docs/plans/archive/2026-08-04-shared-reading-surface.md)
 - **Requires:** the author's own compositor, keyboard layout and display scale,
   and a text file long enough to scroll with at least one line far wider than
   the dialog
