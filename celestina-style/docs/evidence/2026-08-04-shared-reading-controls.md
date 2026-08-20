@@ -76,6 +76,6 @@ Inside the verification entry: the style and contrast contracts, the module
 ## Follow-up
 
 `VAL-STYLE-04`, and the two consuming units
-[`G7-A`](../../../grafita/docs/plans/active/2026-08-04-g7-reading-comfort.md)
+[`G7-A`](../../../grafita/docs/plans/archive/2026-08-04-g7-reading-comfort.md)
 and
 [`SID-G7-A`](../../../siderita/docs/plans/archive/2026-08-04-shared-reading-surface.md).
