@@ -16,6 +16,7 @@ use std::time::Duration;
 use celestina_core::{Generation, GenerationClock, GenerationExhausted};
 
 use crate::media::{MediaCapabilities, MediaId, MediaKind};
+use crate::streams::{Speed, Stream, StreamKind, StreamSet};
 
 /// Confirmed playback state — moved only by [`PlaybackSession::apply`].
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -49,6 +50,14 @@ pub enum PlaybackRequest {
     Seek(Duration),
     /// Volume in `0.0..=1.0`; the value is clamped when the request is made.
     SetVolume(f64),
+    /// Use this track of the kind, or none of them. `None` for audio is a
+    /// silent film; `None` for subtitles is the ordinary case.
+    SelectStream {
+        kind: StreamKind,
+        id: Option<i64>,
+    },
+    /// How fast to play, clamped when the request is made.
+    SetSpeed(Speed),
 }
 
 /// A request that has been issued but not confirmed.
@@ -89,6 +98,12 @@ pub enum ReportKind {
     SeekCompleted(Duration),
     /// Confirmed output volume.
     Volume(f64),
+    /// The streams this file turned out to hold, read once it was loaded.
+    Streams(Vec<Stream>),
+    /// The backend confirmed which track of a kind is in use.
+    StreamSelected { kind: StreamKind, id: Option<i64> },
+    /// Confirmed playback rate.
+    Speed(Speed),
     /// The file could not be opened or decoded; the message is for the user.
     Failed(String),
 }
@@ -115,6 +130,12 @@ pub struct PlaybackSession {
     pending_transport: Option<PendingRequest>,
     pending_seek: Option<PendingRequest>,
     pending_volume: Option<PendingRequest>,
+    /// What the file holds and what is playing out of it. Only reports change
+    /// it: a request marks nothing selected.
+    streams: StreamSet,
+    speed: Speed,
+    pending_streams: Option<PendingRequest>,
+    pending_speed: Option<PendingRequest>,
     error: Option<String>,
 }
 
@@ -190,6 +211,20 @@ impl PlaybackSession {
             PlaybackRequest::SetVolume(_) if !capabilities.has_audio => {
                 return Err(RequestRejected::Unsupported)
             }
+            // A still has no streams to choose between and no rate to play at.
+            PlaybackRequest::SelectStream { .. } | PlaybackRequest::SetSpeed(_)
+                if !capabilities.timed =>
+            {
+                return Err(RequestRejected::Unsupported)
+            }
+            // Asking for a track this file does not have would leave a pending
+            // request the backend can never confirm.
+            PlaybackRequest::SelectStream { kind, id: Some(id) }
+                if !self.streams.of(kind).any(|track| track.id == id) =>
+            {
+                return Err(RequestRejected::Unsupported)
+            }
+            PlaybackRequest::SetSpeed(speed) => PlaybackRequest::SetSpeed(Speed::new(speed.rate())),
             PlaybackRequest::Seek(target) => {
                 PlaybackRequest::Seek(clamp_seek(target, self.duration))
             }
@@ -204,9 +239,35 @@ impl PlaybackSession {
         match request {
             PlaybackRequest::Seek(_) => self.pending_seek = Some(pending),
             PlaybackRequest::SetVolume(_) => self.pending_volume = Some(pending),
+            PlaybackRequest::SelectStream { .. } => self.pending_streams = Some(pending),
+            PlaybackRequest::SetSpeed(_) => self.pending_speed = Some(pending),
             _ => self.pending_transport = Some(pending),
         }
         Ok(pending)
+    }
+
+    /// What this file holds and what is playing out of it.
+    #[must_use]
+    pub const fn streams(&self) -> &StreamSet {
+        &self.streams
+    }
+
+    /// The confirmed playback rate.
+    #[must_use]
+    pub const fn speed(&self) -> Speed {
+        self.speed
+    }
+
+    /// A track change asked for and not yet confirmed.
+    #[must_use]
+    pub const fn pending_streams(&self) -> Option<PendingRequest> {
+        self.pending_streams
+    }
+
+    /// A rate change asked for and not yet confirmed.
+    #[must_use]
+    pub const fn pending_speed(&self) -> Option<PendingRequest> {
+        self.pending_speed
     }
 
     /// Applies an engine report, rejecting anything that does not belong to the
@@ -236,6 +297,20 @@ impl PlaybackSession {
             ReportKind::Volume(level) => {
                 self.volume = Some(level.clamp(0.0, 1.0));
                 self.pending_volume = None;
+            }
+            ReportKind::Streams(tracks) => {
+                // A new list is a new file's worth of streams: whatever was
+                // selected in the previous one does not survive it.
+                self.streams = StreamSet::from_reported(tracks.clone());
+                self.pending_streams = None;
+            }
+            ReportKind::StreamSelected { kind, id } => {
+                self.streams.confirm(*kind, *id);
+                self.pending_streams = None;
+            }
+            ReportKind::Speed(speed) => {
+                self.speed = *speed;
+                self.pending_speed = None;
             }
             ReportKind::Failed(message) => {
                 self.state = PlaybackState::Failed;

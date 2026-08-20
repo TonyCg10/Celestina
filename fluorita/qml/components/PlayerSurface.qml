@@ -105,6 +105,10 @@ Item {
         onContextFailed: surface.player.surfaceFailed()
     }
 
+    // The still's zoom, published so the window can put a magnifier beside its
+    // other actions without reaching into this surface's children.
+    readonly property ZoomController imageZoom: still.zoom
+
     ImageView {
         id: still
 
@@ -149,6 +153,58 @@ Item {
             wrapMode: Text.WordWrap
             Accessible.role: Accessible.StaticText
             Accessible.name: text
+        }
+    }
+
+    // What the picture is actually doing, when someone asks.
+    //
+    // Off by default and never in the way: judder is rare enough that a
+    // permanent read-out would be furniture, and specific enough that the
+    // person who sees it needs numbers within seconds of seeing it.
+    Rectangle {
+        id: pacing
+
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.margins: CelestinaTheme.spaceLg
+        width: pacingLine.implicitWidth + CelestinaTheme.spaceMd * 2
+        height: pacingColumn.implicitHeight + CelestinaTheme.spaceSm * 2
+        radius: CelestinaTheme.radiusMd
+        color: CelestinaTheme.scrim
+        visible: surface.player.capturingPacing
+
+        Column {
+            id: pacingColumn
+
+            anchors.centerIn: parent
+            spacing: CelestinaTheme.spaceXs
+
+            Text {
+                id: pacingLine
+
+                text: surface.player.pacingLine
+                color: surface.player.pacingVerdict === "dropping"
+                    ? CelestinaTheme.danger
+                    : surface.player.pacingVerdict === "delayed"
+                        ? CelestinaTheme.warning
+                        : CelestinaTheme.text
+                font.family: CelestinaTheme.monoFamily
+                font.pixelSize: CelestinaTheme.fontRowSecondary
+                Accessible.role: Accessible.StaticText
+                Accessible.name: text
+            }
+
+            Text {
+                visible: surface.player.pacingReport.length > 0
+                text: surface.player.pacingReport
+                color: CelestinaTheme.textMuted
+                font.family: CelestinaTheme.monoFamily
+                font.pixelSize: CelestinaTheme.fontRowSecondary
+                elide: Text.ElideMiddle
+                width: pacingLine.width
+                Accessible.role: Accessible.StaticText
+                Accessible.name: text
+            }
         }
     }
 

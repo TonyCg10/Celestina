@@ -54,6 +54,33 @@ Item {
                 Layout.fillWidth: true
                 spacing: CelestinaTheme.spaceMd
 
+                // Finding something by name. The typing is debounced and the
+                // matching is the domain's: a grid that folded accents in
+                // JavaScript would be a second answer to "does this match".
+                CelestinaTextField {
+                    id: search
+
+                    Layout.preferredWidth: Math.min(280, view.width / 3)
+                    placeholderText: qsTr("Buscar")
+                    shape: CelestinaTextField.Search
+                    text: view.library.query
+                    onTextChanged: typing.restart()
+                    Keys.onEscapePressed: {
+                        search.text = ""
+                        view.library.search("")
+                    }
+
+                    // Long enough that a word is typed before the library is
+                    // re-projected, short enough that it feels like filtering
+                    // rather than submitting.
+                    Timer {
+                        id: typing
+
+                        interval: 150
+                        onTriggered: view.library.search(search.text)
+                    }
+                }
+
                 Text {
                     Layout.fillWidth: true
                     // The centred state below already says why the panel is
@@ -100,6 +127,11 @@ Item {
 
             GalleryGrid {
                 id: galleryGrid
+
+                onPreviewRequested: function(key, origin) {
+                    view.previewRequested(key, origin)
+                }
+                onPreviewDropped: view.previewDropped()
 
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -179,12 +211,33 @@ Item {
     // The shared menu is a real `Menu`: it is popped at a point in a parent's
     // coordinates and the overlay keeps it on screen by itself, so nothing here
     // clamps or positions it.
+    // Where the keyboard puts the caret when a person asks to search.
+    function focusSearch() {
+        search.forceActiveFocus(Qt.ShortcutFocusReason)
+        search.selectAll()
+    }
+
     function showMenu(source, key, name, x, y) {
         const point = source.mapToItem(view, x, y);
         itemMenu.targetName = name;
         itemMenu.targetKey = key;
+        itemMenu.editable = view.editor.admits(key);
+        itemMenu.describable = view.metadata.admits(key);
         itemMenu.popup(view, point.x, point.y);
     }
+
+    // Editing is the host's business, not the library's: it opens a surface
+    // over the whole window, so the menu says what was asked for and the window
+    // decides what that means. What the view does need is the two objects that
+    // know what an item admits, because a menu is built before it is shown.
+    required property FluoritaEditor editor
+    required property FluoritaMetadata metadata
+    signal previewRequested(string key, rect origin)
+    signal previewDropped()
+    required property FluoritaBatch batch
+
+    signal editRequested(string key)
+    signal metadataRequested(string key)
 
     ItemMenu {
         id: itemMenu
@@ -192,6 +245,33 @@ Item {
         backdropSource: libraryBody
         onTrashRequested: function(key) { view.library.trashItem(key) }
         onPropertiesRequested: function(key) { view.library.describeItem(key) }
+        onEditRequested: function(key) { view.editRequested(key) }
+        onMetadataRequested: function(key) { view.metadataRequested(key) }
+    }
+
+    // What can be done to the files the person picked out. It sits over the
+    // grid because that is where the selection is, and it is only there while
+    // there is a selection.
+    BatchBar {
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: CelestinaTheme.spaceLg
+        visible: galleryGrid.selectedKeys.length > 0
+        batch: view.batch
+        keys: galleryGrid.selectedKeys
+        onDismissed: galleryGrid.clearSelection()
+    }
+
+    // What a finished run amounted to. The selection is dropped with it: the
+    // files it named are not the files that are there now.
+    Connections {
+        target: view.batch
+
+        function onRunningChanged() {
+            if (!view.batch.running && view.batch.notice.length > 0) {
+                galleryGrid.clearSelection()
+            }
+        }
     }
 
     ItemDetailPanel {

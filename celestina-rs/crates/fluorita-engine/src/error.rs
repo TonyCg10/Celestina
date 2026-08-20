@@ -42,6 +42,14 @@ pub enum EngineError {
         limit: u64,
         actual: u64,
     },
+    /// The result was written, but the original it replaced could not be sent
+    /// to the Trash. Deliberately not folded into `Io`: the destination
+    /// exists, so this is a half-finished replacement rather than a failed
+    /// write, and a host must say so.
+    Trash {
+        path: PathBuf,
+        source: siderita_ops::OpError,
+    },
     /// The worker thread is gone, so no further job can be accepted.
     WorkerStopped,
 }
@@ -73,6 +81,9 @@ impl fmt::Display for EngineError {
                 limit,
                 actual,
             } => write!(formatter, "{what} exceeded its budget: {actual} > {limit}"),
+            Self::Trash { path, .. } => {
+                write!(formatter, "cannot send {} to the Trash", path.display())
+            }
             Self::WorkerStopped => formatter.write_str("the engine worker is no longer running"),
         }
     }
@@ -83,6 +94,7 @@ impl Error for EngineError {
         match self {
             Self::BackendUnavailable { source } | Self::Backend { source, .. } => Some(source),
             Self::Io { source, .. } => Some(source),
+            Self::Trash { source, .. } => Some(source),
             _ => None,
         }
     }
@@ -108,7 +120,12 @@ impl EngineError {
             Self::TimedOut { .. } => "La operación tardó demasiado".to_owned(),
             Self::Cancelled => "Operación cancelada".to_owned(),
             Self::OverBudget { .. } => "La vista previa excedió su presupuesto".to_owned(),
-            Self::Io { .. } => "No se pudo escribir el resultado".to_owned(),
+            // A half-finished replacement is a *written* result whose original
+            // did not move. The engine says only what it always says about a
+            // write here; the wording that tells a person the original is still
+            // there belongs to the host, which is the one that knows a save was
+            // what failed.
+            Self::Io { .. } | Self::Trash { .. } => "No se pudo escribir el resultado".to_owned(),
             Self::WorkerStopped => "El motor multimedia se detuvo".to_owned(),
         }
     }

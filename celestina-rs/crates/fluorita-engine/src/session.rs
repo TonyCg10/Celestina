@@ -13,7 +13,9 @@
 use std::time::Duration;
 
 use celestina_core::Generation;
-use fluorita_core::{EngineReport, PlaybackRequest, PlaybackState, ReportKind};
+use fluorita_core::{
+    EngineReport, PlaybackRequest, PlaybackState, ReportKind, Speed, Stream, StreamKind,
+};
 use libmpv2::events::{Event, PropertyData};
 use libmpv2::{mpv_end_file_reason, EndFileReason, Format, Mpv};
 
@@ -37,6 +39,11 @@ pub struct MpvSession {
     seek_in_flight: bool,
     closed: bool,
     started: bool,
+    /// Reports produced together and delivered one at a time. Loading a file
+    /// answers three questions at once — what streams it has, and which audio
+    /// and subtitle stream the backend chose — and `poll` hands back one report
+    /// per call.
+    queued: std::collections::VecDeque<ReportKind>,
 }
 
 impl MpvSession {
@@ -64,6 +71,19 @@ impl MpvSession {
             ("pause", if request.start_paused { "yes" } else { "no" }),
             ("keep-open", "yes"),
         ];
+        // Both are pushed rather than always present: an option set to its own
+        // default is still an option the backend parses, and this list is the
+        // one place a session's behaviour is decided.
+        let start = request
+            .start_at
+            .map(|at| format!("{}", at.as_secs_f64()))
+            .unwrap_or_default();
+        if !start.is_empty() {
+            options.push(("start", &start));
+        }
+        if request.looping {
+            options.push(("loop-file", "inf"));
+        }
         // Silence is an explicit driver; *sound* is the backend's own probe.
         // There is no driver called "auto": naming one leaves the session with
         // no audio at all, and a cover-art-only file then reaches end of file
@@ -80,6 +100,11 @@ impl MpvSession {
             ("duration", Format::Double),
             ("pause", Format::Flag),
             ("volume", Format::Double),
+            ("speed", Format::Double),
+            // As strings, because the backend's own word for "off" is `no` and
+            // an integer format cannot carry it.
+            ("aid", Format::String),
+            ("sid", Format::String),
         ] {
             client
                 .observe_property(name, format, 0)
@@ -101,6 +126,7 @@ impl MpvSession {
             seek_in_flight: false,
             closed: false,
             started: false,
+            queued: std::collections::VecDeque::new(),
         })
     }
 
@@ -156,9 +182,67 @@ fn translate_property(name: &str, change: &PropertyData<'_>) -> Option<ReportKin
             ("volume", PropertyData::Double(value)) if value.is_finite() => {
                 Some(ReportKind::Volume((*value / VOLUME_SCALE).clamp(0.0, 1.0)))
             }
+            ("speed", PropertyData::Double(value)) if value.is_finite() => {
+                Some(ReportKind::Speed(Speed::new(*value)))
+            }
+            ("aid", PropertyData::Str(value)) => Some(ReportKind::StreamSelected {
+                kind: StreamKind::Audio,
+                id: selected_id(value),
+            }),
+            ("sid", PropertyData::Str(value)) => Some(ReportKind::StreamSelected {
+                kind: StreamKind::Subtitle,
+                id: selected_id(value),
+            }),
             _ => None,
         }
     }
+}
+
+/// What the backend's `aid`/`sid` says, as an identifier or as nothing.
+///
+/// `no` means the kind is off. `auto` means the backend has not decided yet —
+/// reporting that as a selection would mark a row in the menu that the person
+/// did not choose and that may not survive the next frame.
+fn selected_id(value: &str) -> Option<i64> {
+    match value {
+        "no" | "auto" | "" => None,
+        other => other.parse().ok(),
+    }
+}
+
+/// Reads the streams the loaded file turned out to hold.
+///
+/// Every field is optional: a container may name none of them, and a track
+/// without a title or a language is ordinary rather than broken. The count is
+/// the backend's, and `fluorita-core` caps it again before it is held.
+fn streams_of(instance: &Instance) -> Vec<Stream> {
+    let count = instance.optional_i64("track-list/count").unwrap_or(0);
+    let mut streams = Vec::new();
+    for index in 0..count.max(0) {
+        let kind = match instance
+            .optional_string(&format!("track-list/{index}/type"))
+            .as_deref()
+        {
+            Some("audio") => StreamKind::Audio,
+            Some("sub") => StreamKind::Subtitle,
+            // Video streams are listed and deliberately not offered.
+            _ => continue,
+        };
+        let Some(id) = instance.optional_i64(&format!("track-list/{index}/id")) else {
+            continue;
+        };
+        streams.push(Stream::new(
+            id,
+            kind,
+            &instance
+                .optional_string(&format!("track-list/{index}/title"))
+                .unwrap_or_default(),
+            &instance
+                .optional_string(&format!("track-list/{index}/lang"))
+                .unwrap_or_default(),
+        ));
+    }
+    streams
 }
 
 /// mpv distinguishes "the file ended" from "the file broke"; so must the UI.
@@ -232,6 +316,16 @@ impl EngineSession for MpvSession {
                 "volume",
                 &format!("{}", level.clamp(0.0, 1.0) * VOLUME_SCALE),
             ),
+            PlaybackRequest::SelectStream { kind, id } => {
+                // "no" is the backend's own word for a kind that is off, and
+                // it is the only way to turn subtitles off without unloading
+                // them.
+                let value = id.map_or_else(|| "no".to_owned(), |id| id.to_string());
+                self.instance.set(kind.selector(), &value)
+            }
+            PlaybackRequest::SetSpeed(speed) => {
+                self.instance.set("speed", &format!("{}", speed.rate()))
+            }
         }
     }
 
@@ -239,15 +333,42 @@ impl EngineSession for MpvSession {
         if self.closed {
             return None;
         }
+        if let Some(kind) = self.queued.pop_front() {
+            return Some(EngineReport {
+                generation: self.generation,
+                kind,
+            });
+        }
         let Self {
             instance,
             client,
             generation,
             seek_in_flight,
+            queued,
             ..
         } = self;
         let event = client.wait_event(timeout.as_secs_f64())?;
         let kind = match event {
+            Ok(Event::FileLoaded) => {
+                // The list can only be read once the file is open, and the two
+                // selections are read with it so the menu never opens marking
+                // nothing while the backend has already chosen.
+                queued.push_back(ReportKind::StreamSelected {
+                    kind: StreamKind::Audio,
+                    id: instance
+                        .optional_string("aid")
+                        .as_deref()
+                        .and_then(selected_id),
+                });
+                queued.push_back(ReportKind::StreamSelected {
+                    kind: StreamKind::Subtitle,
+                    id: instance
+                        .optional_string("sid")
+                        .as_deref()
+                        .and_then(selected_id),
+                });
+                ReportKind::Streams(streams_of(instance))
+            }
             Ok(event) => Self::translate(instance, seek_in_flight, &event)?,
             Err(error) => ReportKind::Failed(format!("el motor multimedia falló: {error}")),
         };

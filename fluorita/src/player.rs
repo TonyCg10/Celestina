@@ -21,9 +21,12 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::QString;
+use cxx_qt_lib::{QString, QStringList};
 
-use fluorita_core::{MediaKind, PlaybackRequest, PlaybackSession, PlaybackState, ReportOutcome};
+use fluorita_core::{
+    Continuation, MediaKind, PlaybackRequest, PlaybackSession, PlaybackState, ReportOutcome, Speed,
+    StreamKind,
+};
 
 use crate::image::ImageDecision;
 use fluorita_engine::backend::{MediaEngine, SessionRequest};
@@ -38,6 +41,8 @@ pub mod qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qstringlist.h");
+        type QStringList = cxx_qt_lib::QStringList;
     }
 
     unsafe extern "C++" {
@@ -99,6 +104,46 @@ pub mod qobject {
         /// backend reports, the same way `position_seconds` is — call
         /// `set_volume` to request a change, never this.
         #[qproperty(f64, volume_level)]
+        /// What happened to the last frame kept, or empty. Its own property
+        /// rather than `error_message`: keeping a frame is not playback, and a
+        /// success has to be sayable too.
+        #[qproperty(QString, frame_notice)]
+        /// True while one is being extracted, so the action cannot be asked
+        /// for twice.
+        #[qproperty(bool, extracting_frame)]
+        /// The audio streams this file holds, as the words a menu shows, and
+        /// which of them the backend confirmed. `-1` is none.
+        #[qproperty(QStringList, audio_streams)]
+        #[qproperty(i32, audio_stream)]
+        /// The same for subtitles, where none is the ordinary case.
+        #[qproperty(QStringList, subtitle_streams)]
+        #[qproperty(i32, subtitle_stream)]
+        /// Whether choosing is worth offering at all: one audio stream is not
+        /// a choice, one set of subtitles is, because it can also be off.
+        #[qproperty(bool, choosable_audio)]
+        #[qproperty(bool, choosable_subtitles)]
+        /// The confirmed playback rate.
+        #[qproperty(f64, speed)]
+        /// True while frame pacing is being recorded.
+        #[qproperty(bool, capturing_pacing)]
+        /// What the recording says so far, in one line a person can read.
+        #[qproperty(QString, pacing_line)]
+        /// Its verdict as a token the surface colours by: `too-early`,
+        /// `smooth`, `delayed` or `dropping`.
+        #[qproperty(QString, pacing_verdict)]
+        /// Where the last report was written, or empty.
+        #[qproperty(QString, pacing_report)]
+        /// True while this player is showing a hover preview rather than what
+        /// a person chose to open. A preview is silent, loops, starts inside
+        /// the film and never reaches the bus: one desktop has one media
+        /// player, and a picture that plays because a pointer went past is not
+        /// what "now playing" means.
+        #[qproperty(bool, previewing)]
+        /// What happens when the current item ends, as a position in the
+        /// domain's own list of modes. A number and not a word because this
+        /// crosses the seam as a token, and the words for it belong to the
+        /// surface.
+        #[qproperty(i32, continuation)]
         type FluoritaPlayer = super::PlayerRust;
 
         /// Opens the item a path key names and starts it. A second call
@@ -139,6 +184,59 @@ pub mod qobject {
         #[qinvokable]
         fn surface_ready(self: Pin<&mut FluoritaPlayer>);
 
+        /// Starts or stops recording what the picture is doing.
+        ///
+        /// The counters are the backend's; what this adds is the difference
+        /// between two of them over the time between, which is the only form
+        /// in which they mean anything.
+        #[qinvokable]
+        fn toggle_pacing(self: Pin<&mut FluoritaPlayer>);
+
+        /// Writes the recording to a file and publishes its path, so a person
+        /// who just saw judder has something to attach to a report rather than
+        /// a memory of it.
+        #[qinvokable]
+        fn write_pacing_report(self: Pin<&mut FluoritaPlayer>);
+
+        /// Opens `key` as a bounded hover preview: silent, looping, starting
+        /// inside the film. Refused for anything that is not a moving picture.
+        #[qinvokable]
+        fn preview(self: Pin<&mut FluoritaPlayer>, key: &QString);
+
+        /// Uses the audio stream at this position in `audio_streams`, or none
+        /// of them at `-1`.
+        #[qinvokable]
+        fn select_audio_stream(self: Pin<&mut FluoritaPlayer>, index: i32);
+
+        /// The same for subtitles. `-1` turns them off.
+        #[qinvokable]
+        fn select_subtitle_stream(self: Pin<&mut FluoritaPlayer>, index: i32);
+
+        /// Chooses what happens at the end of an item.
+        #[qinvokable]
+        fn set_continuation_mode(self: Pin<&mut FluoritaPlayer>, mode: i32);
+
+        /// Which item the folder should open next, given where the current one
+        /// sits and how many there are. `-1` when nothing should start.
+        ///
+        /// The host asks this only after the engine confirmed the end: a
+        /// prediction made while a file was merely near its end would skip a
+        /// track whose last seconds failed to decode.
+        #[qinvokable]
+        fn next_in_folder(self: &FluoritaPlayer, index: i32, count: i32) -> i32;
+
+        /// Plays at this rate. Clamped by the domain before it is asked for.
+        /// Named for the act rather than for the property it ends up changing,
+        /// because `set_speed` is already the confirmed value's own setter.
+        #[qinvokable]
+        fn play_at(self: Pin<&mut FluoritaPlayer>, rate: f64);
+
+        /// Keeps the frame at the current position as a picture beside the
+        /// film. Takes the row's path key. Returns at once: a seek and a decode
+        /// run on their own backend instance, off this thread.
+        #[qinvokable]
+        fn extract_frame(self: Pin<&mut FluoritaPlayer>, key: &QString);
+
         /// Called by the video item once its render context is released.
         #[qinvokable]
         fn surface_released(self: Pin<&mut FluoritaPlayer>);
@@ -174,6 +272,12 @@ struct Snapshot {
     volume: Option<f64>,
     pending: bool,
     error: Option<String>,
+    /// What the file holds, and what is playing out of it. Carried on the
+    /// snapshot like everything else: the surface never reads the session.
+    streams: Vec<fluorita_core::Stream>,
+    audio: Option<i64>,
+    subtitle: Option<i64>,
+    speed: f64,
 }
 
 #[derive(Default)]
@@ -198,6 +302,40 @@ pub struct PlayerRust {
     image_source: QString,
     timed: bool,
     volume_level: f64,
+    frame_notice: QString,
+    extracting_frame: bool,
+    audio_streams: QStringList,
+    audio_stream: i32,
+    subtitle_streams: QStringList,
+    subtitle_stream: i32,
+    choosable_audio: bool,
+    choosable_subtitles: bool,
+    speed: f64,
+    continuation: i32,
+    previewing: bool,
+    capturing_pacing: bool,
+    pacing_line: QString,
+    pacing_verdict: QString,
+    pacing_report: QString,
+
+    /// What has been recorded, and the flag the worker reads to know whether
+    /// to sample at all. Shared because the sampling happens on the session
+    /// thread and the folding happens here.
+    pacing: fluorita_core::PacingCapture,
+    pacing_on: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// When the current recording began, so each sample can say how far into
+    /// it it was taken. The domain never reads a clock; this is where the time
+    /// comes from.
+    pacing_started: Option<std::time::Instant>,
+
+    /// The streams the last snapshot carried, kept so a chosen menu position
+    /// can be turned back into the backend's own identifier without QML ever
+    /// seeing one.
+    streams: Vec<fluorita_core::Stream>,
+
+    /// The extraction in flight, if any. One at a time: two decoders started
+    /// from the same window would compete for the same name on disk.
+    frame_worker: Option<JoinHandle<()>>,
 
     commands: Option<Sender<Command>>,
     worker: Option<JoinHandle<()>>,
@@ -236,6 +374,14 @@ impl qobject::FluoritaPlayer {
     /// surface is closed through the same handshake and the new item waits for
     /// the surface to confirm.
     pub fn open(mut self: core::pin::Pin<&mut Self>, key: &QString) {
+        // Whatever this player was doing before, an explicit open is not a
+        // preview: leaving the flag set would give the item a person chose the
+        // silent, looping treatment meant for a glance.
+        self.as_mut().set_previewing(false);
+        self.as_mut().open_key(key);
+    }
+
+    fn open_key(mut self: core::pin::Pin<&mut Self>, key: &QString) {
         let text = key.to_string();
         // An empty key is the ordinary "nothing to open" case — a bare launch
         // binds one — and stays silent. Anything else that is not a key is a
@@ -304,7 +450,13 @@ impl qobject::FluoritaPlayer {
                 // The publisher needs the path too, and the worker takes it by
                 // value; one clone is cheaper than making the session borrow.
                 let path = path.clone();
-                move || run_session(&path, kind, generation, &receiver, &qt_thread)
+                let previewing = *self.previewing();
+                let pacing_on = std::sync::Arc::clone(&self.rust().pacing_on);
+                move || {
+                    run_session(
+                        &path, kind, generation, previewing, &pacing_on, &receiver, &qt_thread,
+                    )
+                }
             });
 
         match worker {
@@ -399,6 +551,140 @@ impl qobject::FluoritaPlayer {
         }
     }
 
+    pub fn select_audio_stream(self: core::pin::Pin<&mut Self>, index: i32) {
+        self.select_stream(StreamKind::Audio, index);
+    }
+
+    pub fn select_subtitle_stream(self: core::pin::Pin<&mut Self>, index: i32) {
+        self.select_stream(StreamKind::Subtitle, index);
+    }
+
+    pub fn toggle_pacing(mut self: core::pin::Pin<&mut Self>) {
+        let on = !*self.capturing_pacing();
+        self.as_mut().set_capturing_pacing(on);
+        self.as_mut().set_pacing_report(QString::default());
+        if on {
+            // A new recording, not a continuation of the last one: the numbers
+            // are rates over a span, and stitching two sittings together would
+            // average a stutter away with the good minutes before it.
+            self.as_mut().rust_mut().pacing.clear();
+            self.as_mut().rust_mut().pacing_started = Some(std::time::Instant::now());
+        }
+        self.rust()
+            .pacing_on
+            .store(on, std::sync::atomic::Ordering::Relaxed);
+        self.as_mut().publish_pacing();
+    }
+
+    pub fn write_pacing_report(mut self: core::pin::Pin<&mut Self>) {
+        let Some(path) = pacing_report_path() else {
+            self.as_mut()
+                .set_pacing_report(QString::from(crate::copy::NO_REPORT_DIRECTORY));
+            return;
+        };
+        let report =
+            render_pacing_report(&self.rust().pacing, self.rust().now_playing.path.as_deref());
+        match celestina_core::atomic_file::replace(&path, report.as_bytes()) {
+            Ok(()) => {
+                let shown = path.to_string_lossy().into_owned();
+                self.as_mut().set_pacing_report(QString::from(&shown));
+            }
+            Err(_) => {
+                self.as_mut()
+                    .set_pacing_report(QString::from(crate::copy::REPORT_NOT_WRITTEN));
+            }
+        }
+    }
+
+    /// Takes one reading from the session thread.
+    ///
+    /// The sample carries how far into the recording it was taken, because the
+    /// domain that folds it never reads a clock — and because a rate needs the
+    /// time between two readings, not the moment either of them arrived.
+    pub fn record_pacing(
+        mut self: core::pin::Pin<&mut Self>,
+        stats: &fluorita_engine::backend::FrameStats,
+    ) {
+        if !*self.capturing_pacing() {
+            return;
+        }
+        let at = self
+            .rust()
+            .pacing_started
+            .map_or(std::time::Duration::ZERO, |started| started.elapsed());
+        let sample = fluorita_core::PacingSample {
+            at,
+            dropped: stats.dropped,
+            delayed: stats.delayed,
+            display_fps: stats.display_fps,
+            vsync_jitter: stats.vsync_jitter,
+        };
+        self.as_mut().rust_mut().pacing.push(sample);
+        self.publish_pacing();
+    }
+
+    /// Folds what has been recorded and publishes it as one readable line.
+    fn publish_pacing(mut self: core::pin::Pin<&mut Self>) {
+        let summary = self.rust().pacing.summary();
+        let verdict = fluorita_core::Verdict::of(&summary);
+        self.as_mut()
+            .set_pacing_verdict(QString::from(verdict_token(verdict)));
+        self.as_mut()
+            .set_pacing_line(QString::from(&crate::copy::pacing_line(&summary, verdict)));
+    }
+
+    pub fn preview(mut self: core::pin::Pin<&mut Self>, key: &QString) {
+        let Ok(path) = celestina_core::pathkey::decode(&key.to_string()) else {
+            return;
+        };
+        // Only a moving picture has anything to preview. A still is already on
+        // the card, and starting a decoder for one would break the promise that
+        // browsing costs nothing.
+        if !MediaKind::classify_path(&path).is_some_and(|kind| kind == MediaKind::Video) {
+            return;
+        }
+        self.as_mut().set_previewing(true);
+        self.as_mut().open_key(key);
+    }
+
+    pub fn set_continuation_mode(mut self: core::pin::Pin<&mut Self>, mode: i32) {
+        // A mode this build does not have is ignored rather than stored: the
+        // list is the domain's, and a number outside it would answer every
+        // later question with "stop".
+        if usize::try_from(mode).is_ok_and(|mode| mode < Continuation::ALL.len()) {
+            self.as_mut().set_continuation(mode);
+        }
+    }
+
+    #[must_use]
+    pub fn next_in_folder(&self, index: i32, count: i32) -> i32 {
+        let (Ok(index), Ok(count)) = (usize::try_from(index), usize::try_from(count)) else {
+            return -1;
+        };
+        // What ended decides whether anything follows, and the path is the one
+        // thing this object always has for the open item.
+        let Some(kind) = self
+            .rust()
+            .now_playing
+            .path
+            .as_deref()
+            .and_then(MediaKind::classify_path)
+        else {
+            return -1;
+        };
+        let mode = Continuation::ALL
+            .get(usize::try_from(*self.continuation()).unwrap_or(0))
+            .copied()
+            .unwrap_or_default();
+        mode.next(kind, index, count)
+            .and_then(|next| i32::try_from(next).ok())
+            .unwrap_or(-1)
+    }
+
+    pub fn play_at(self: core::pin::Pin<&mut Self>, rate: f64) {
+        self.send(PlaybackRequest::SetSpeed(Speed::new(rate)));
+    }
+
     /// The handle goes first: the surface must stop rendering before anything
     /// it renders from can be destroyed.
     pub fn close(mut self: core::pin::Pin<&mut Self>) {
@@ -475,6 +761,32 @@ impl qobject::FluoritaPlayer {
         self.rust().worker.as_ref()
     }
 
+    /// Turns a menu position into the backend's own identifier.
+    ///
+    /// QML never sees an identifier: it says "the second one" and this decides
+    /// what that means, so a file whose streams are numbered oddly — which is
+    /// most of them — cannot be mis-addressed from the surface.
+    fn select_stream(mut self: core::pin::Pin<&mut Self>, kind: StreamKind, index: i32) {
+        let id = if index < 0 {
+            None
+        } else {
+            match self
+                .rust()
+                .streams
+                .iter()
+                .filter(|stream| stream.kind == kind)
+                .nth(index as usize)
+            {
+                Some(stream) => Some(stream.id),
+                // A position that names nothing is dropped rather than turned
+                // into a request the backend would refuse.
+                None => return,
+            }
+        };
+        self.as_mut()
+            .send(PlaybackRequest::SelectStream { kind, id });
+    }
+
     fn send(self: core::pin::Pin<&mut Self>, request: PlaybackRequest) {
         let mut this = self;
         if let Some(sender) = this.as_mut().rust().commands.as_ref() {
@@ -496,6 +808,53 @@ impl qobject::FluoritaPlayer {
             let _ = worker.join();
         }
         self.as_mut().set_render_handle(0);
+    }
+
+    /// Keeps the frame at the position the player is confirmed to be at.
+    ///
+    /// The position comes from the published property rather than from a fresh
+    /// query, so the picture is the frame the person was looking at when they
+    /// asked — the engine's confirmed position, not one measured a moment later.
+    pub fn extract_frame(mut self: core::pin::Pin<&mut Self>, key: &QString) {
+        if *self.extracting_frame() {
+            return;
+        }
+        let Ok(path) = celestina_core::pathkey::decode(&key.to_string()) else {
+            self.as_mut()
+                .set_frame_notice(QString::from(crate::copy::UNREADABLE_KEY));
+            return;
+        };
+        if !MediaKind::classify_path(&path).is_some_and(|kind| kind.capabilities().has_video) {
+            self.as_mut()
+                .set_frame_notice(QString::from(crate::copy::NO_FRAME));
+            return;
+        }
+
+        let at = std::time::Duration::from_secs_f64(self.position_seconds().max(0.0));
+        self.as_mut().set_extracting_frame(true);
+        self.as_mut().set_frame_notice(QString::default());
+
+        let qt_thread = self.qt_thread();
+        let worker = std::thread::spawn(move || {
+            let request = fluorita_engine::FrameRequest {
+                source: &path,
+                at,
+                marker: crate::copy::FRAME_MARKER,
+                deadline: fluorita_engine::FRAME_DEADLINE,
+            };
+            let message = match fluorita_engine::extract_frame(
+                &request,
+                &celestina_core::CancellationToken::new(),
+            ) {
+                Ok(kept) => crate::copy::frame_kept(&kept),
+                Err(error) => error.user_message(),
+            };
+            let _ = qt_thread.queue(move |mut player| {
+                player.as_mut().set_extracting_frame(false);
+                player.as_mut().set_frame_notice(QString::from(&message));
+            });
+        });
+        self.as_mut().rust_mut().frame_worker = Some(worker);
     }
 
     fn reset_for(mut self: core::pin::Pin<&mut Self>, path: &std::path::Path) {
@@ -530,6 +889,10 @@ impl qobject::FluoritaPlayer {
         path: &std::path::Path,
         kind: MediaKind,
     ) {
+        // A preview is not what this desktop is playing.
+        if *self.previewing() {
+            return;
+        }
         if self.rust().mpris.is_none() {
             let remote = std::sync::Arc::clone(&self.rust().remote);
             // The closure runs on the D-Bus thread: it does nothing but hand
@@ -599,6 +962,63 @@ impl qobject::FluoritaPlayer {
         if let Some(message) = snapshot.error.as_deref() {
             self.as_mut().set_error_message(QString::from(message));
         }
+        self.publish_streams(snapshot);
+    }
+
+    /// Publishes the streams as the words a menu shows.
+    ///
+    /// The label is built here and not in QML because what a stream is called
+    /// is three optional fields and a fallback, and a surface rebuilding that
+    /// rule would drift from the one the domain bounded.
+    fn publish_streams(mut self: core::pin::Pin<&mut Self>, snapshot: &Snapshot) {
+        let label = |stream: &fluorita_core::Stream, position: usize| {
+            if stream.is_anonymous() {
+                crate::copy::stream_position(position)
+            } else if stream.title.is_empty() {
+                stream.language.clone()
+            } else if stream.language.is_empty() {
+                stream.title.clone()
+            } else {
+                format!("{} · {}", stream.title, stream.language)
+            }
+        };
+
+        for kind in [StreamKind::Audio, StreamKind::Subtitle] {
+            let mut labels = QStringList::default();
+            let mut selected = -1i32;
+            let chosen = match kind {
+                StreamKind::Audio => snapshot.audio,
+                StreamKind::Subtitle => snapshot.subtitle,
+            };
+            for (position, stream) in snapshot
+                .streams
+                .iter()
+                .filter(|stream| stream.kind == kind)
+                .enumerate()
+            {
+                labels.append(QString::from(&label(stream, position)));
+                if chosen == Some(stream.id) {
+                    selected = i32::try_from(position).unwrap_or(-1);
+                }
+            }
+            let count = labels.len();
+            match kind {
+                StreamKind::Audio => {
+                    self.as_mut().set_audio_streams(labels);
+                    self.as_mut().set_audio_stream(selected);
+                    // One audio stream is not a choice.
+                    self.as_mut().set_choosable_audio(count > 1);
+                }
+                StreamKind::Subtitle => {
+                    self.as_mut().set_subtitle_streams(labels);
+                    self.as_mut().set_subtitle_stream(selected);
+                    // One set of subtitles is, because it can also be off.
+                    self.as_mut().set_choosable_subtitles(count > 0);
+                }
+            }
+        }
+        self.as_mut().set_speed(snapshot.speed);
+        self.as_mut().rust_mut().streams = snapshot.streams.clone();
     }
 }
 
@@ -641,6 +1061,9 @@ impl Drop for PlayerRust {
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
         }
+        if let Some(worker) = self.frame_worker.take() {
+            let _ = worker.join();
+        }
     }
 }
 
@@ -661,6 +1084,8 @@ fn run_session(
     path: &std::path::Path,
     kind: MediaKind,
     session_generation: u64,
+    previewing: bool,
+    pacing_on: &std::sync::atomic::AtomicBool,
     commands: &mpsc::Receiver<Command>,
     qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaPlayer>,
 ) {
@@ -676,6 +1101,16 @@ fn run_session(
     // and a render context it never draws into.
     if kind.capabilities().has_video {
         request = request.embedded_video();
+    }
+    if previewing {
+        // A preview is a glance, not a session: no sound, no hardware context
+        // for a picture the size of a card, and it starts where the film is
+        // rather than in its titles. It loops because a frozen last frame
+        // under the pointer reads as a hang.
+        request = request.silent();
+        request.hardware_decoding = false;
+        request.looping = true;
+        request.start_at = Some(PREVIEW_START);
     }
 
     let mut session = match MpvEngine::new().open_session(request) {
@@ -711,7 +1146,9 @@ fn run_session(
         });
     }
 
-    let pacing_on = std::env::var_os("FLUORITA_PACING").is_some();
+    // The environment variable still turns the sampler on for a headless run;
+    // the shared flag is what the window toggles while something is playing.
+    let forced = std::env::var_os("FLUORITA_PACING").is_some();
     let mut last_pacing = std::time::Instant::now();
 
     loop {
@@ -731,13 +1168,20 @@ fn run_session(
             Err(mpsc::TryRecvError::Empty) => {}
         }
 
-        if pacing_on && last_pacing.elapsed() >= PACING_INTERVAL {
-            report_pacing(session.as_ref());
-            last_pacing = std::time::Instant::now();
+        let sampling = forced || pacing_on.load(std::sync::atomic::Ordering::Relaxed);
+        if sampling && last_pacing.elapsed() >= PACING_INTERVAL {
+            let stats = session.frame_stats();
+            if forced {
+                report_pacing(&stats);
+            }
+            let taken = std::time::Instant::now();
+            let _ = qt_thread.queue(move |player| player.record_pacing(&stats));
+            last_pacing = taken;
         }
 
         if let Some(report) = session.poll(POLL_TIMEOUT) {
             if truth.apply(&report) == ReportOutcome::Applied {
+                let streams = truth.streams();
                 let snapshot = Snapshot {
                     state: truth.state(),
                     position: truth.position(),
@@ -745,6 +1189,14 @@ fn run_session(
                     volume: truth.volume(),
                     pending: truth.pending_transport().is_some() || truth.is_seeking(),
                     error: truth.error().map(str::to_owned),
+                    streams: streams
+                        .of(StreamKind::Audio)
+                        .chain(streams.of(StreamKind::Subtitle))
+                        .cloned()
+                        .collect(),
+                    audio: streams.selected(StreamKind::Audio),
+                    subtitle: streams.selected(StreamKind::Subtitle),
+                    speed: truth.speed().rate(),
                 };
                 let _ = qt_thread.queue(move |player| player.apply(&snapshot));
             }
@@ -752,6 +1204,94 @@ fn run_session(
     }
 
     session.close();
+}
+
+/// Where a hover preview begins. Far enough in to be past titles and black,
+/// and a fixed offset rather than a fraction so a long film does not start
+/// twenty minutes from its opening.
+const PREVIEW_START: Duration = Duration::from_secs(30);
+
+/// The token a surface colours by.
+const fn verdict_token(verdict: fluorita_core::Verdict) -> &'static str {
+    match verdict {
+        fluorita_core::Verdict::TooEarly => "too-early",
+        fluorita_core::Verdict::Smooth => "smooth",
+        fluorita_core::Verdict::Delayed => "delayed",
+        fluorita_core::Verdict::Dropping => "dropping",
+    }
+}
+
+/// Where a report lands: beside the caches this application already owns, under
+/// a name carrying the moment it was written so two are never the same file.
+fn pacing_report_path() -> Option<std::path::PathBuf> {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_secs();
+    let directory = celestina_core::xdg::cache_home()?.join("fluorita");
+    std::fs::create_dir_all(&directory).ok()?;
+    Some(directory.join(format!("pacing-{stamp}.txt")))
+}
+
+/// The report itself: the conclusion first, then every reading behind it.
+///
+/// English, like every other development artefact — this is evidence attached
+/// to a defect report, not something the interface says.
+fn render_pacing_report(
+    capture: &fluorita_core::PacingCapture,
+    source: Option<&std::path::Path>,
+) -> String {
+    let summary = capture.summary();
+    let verdict = fluorita_core::Verdict::of(&summary);
+    let mut out = String::new();
+    out.push_str("fluorita frame pacing report\n\n");
+    if let Some(source) = source {
+        out.push_str(&format!("source\t{}\n", source.display()));
+    }
+    out.push_str(&format!("verdict\t{}\n", verdict_token(verdict)));
+    out.push_str(&format!("samples\t{}\n", summary.samples));
+    out.push_str(&format!(
+        "span_seconds\t{:.1}\n",
+        summary.span.as_secs_f64()
+    ));
+    out.push_str(&format!(
+        "dropped_per_minute\t{:.2}\n",
+        summary.dropped_per_minute
+    ));
+    out.push_str(&format!(
+        "delayed_per_minute\t{:.2}\n",
+        summary.delayed_per_minute
+    ));
+    out.push_str(&format!(
+        "display_fps\t{}\n",
+        summary
+            .display_fps
+            .map_or_else(|| "unknown".to_owned(), |value| format!("{value:.2}"))
+    ));
+    out.push_str(&format!(
+        "worst_vsync_jitter\t{}\n\n",
+        summary
+            .worst_jitter
+            .map_or_else(|| "unknown".to_owned(), |value| format!("{value:.4}"))
+    ));
+    out.push_str("at_seconds\tdropped\tdelayed\tdisplay_fps\tvsync_jitter\n");
+    for sample in capture.samples() {
+        let number = |value: Option<i64>| {
+            value.map_or_else(|| "unknown".to_owned(), |value| value.to_string())
+        };
+        let decimal = |value: Option<f64>| {
+            value.map_or_else(|| "unknown".to_owned(), |value| format!("{value:.4}"))
+        };
+        out.push_str(&format!(
+            "{:.1}\t{}\t{}\t{}\t{}\n",
+            sample.at.as_secs_f64(),
+            number(sample.dropped),
+            number(sample.delayed),
+            decimal(sample.display_fps),
+            decimal(sample.vsync_jitter),
+        ));
+    }
+    out
 }
 
 /// How often the pacing sampler prints, when it is on.
@@ -767,8 +1307,7 @@ const PACING_INTERVAL: Duration = Duration::from_secs(1);
 /// Sampled *while playing*, not at the end: pacing is a distribution over time,
 /// and a session that has already stopped has no properties left to answer with
 /// — which is how the first attempt at this measured nothing at all.
-fn report_pacing(session: &dyn fluorita_engine::backend::EngineSession) {
-    let stats = session.frame_stats();
+fn report_pacing(stats: &fluorita_engine::backend::FrameStats) {
     let show = |value: Option<f64>| {
         value.map_or_else(|| "desconocido".to_owned(), |number| format!("{number:.2}"))
     };

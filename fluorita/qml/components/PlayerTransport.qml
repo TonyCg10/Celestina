@@ -53,6 +53,30 @@ RowLayout {
         onVolumeRequested: function(level) { transport.player.setVolume(level) }
     }
 
+    // Soundtrack, subtitles and rate. One button, because they are one kind of
+    // question, and it is only there when the file gives at least one of them
+    // an answer worth choosing between.
+    CelestinaIconButton {
+        id: streamsButton
+
+        visible: transport.player.choosableAudio || transport.player.choosableSubtitles
+            || transport.timed
+        iconName: "settings"
+        helpText: qsTr("Audio, subtítulos y velocidad")
+        checked: streams.visible
+        onClicked: streams.popup(streamsButton, 0, -streams.height)
+    }
+
+    StreamMenu {
+        id: streams
+
+        player: transport.player
+        // What the menu blurs. The transport's own row: a menu that captured
+        // the compositor window would blur the desktop behind Fluorita rather
+        // than the film it is sitting on.
+        backdropSource: transport
+    }
+
     // Lets a host give keyboard seeking focus the moment a session starts,
     // instead of leaving arrow keys aimed at whatever the library last
     // focused until someone clicks the bar by hand.

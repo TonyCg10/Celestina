@@ -52,6 +52,10 @@ ApplicationWindow {
         }
         window.openPoster = poster === undefined ? "" : poster;
         window.openKind = kind === undefined ? window.requestedKind : kind;
+        // A glance ends the moment a person commits to the thing: the frame is
+        // about to grow, and leaving the flag set would keep it card-sized over
+        // a film that is now open.
+        window.previewing = false;
         window.openKey = key;
         window.openLabel = name === undefined ? window.requestedLabel : name;
         mediaPlayer.open(key);
@@ -69,6 +73,28 @@ ApplicationWindow {
         // re-run the expansion.
         window.open(wanted.key, wanted.name, Qt.rect(0, 0, 0, 0),
                     wanted.thumbnail, wanted.kind);
+    }
+
+    // What happens when something ends.
+    //
+    // The rule is the domain's; this only asks it, and only once the engine has
+    // *confirmed* the end. Acting on a position near the duration instead would
+    // skip a track whose last seconds failed to decode.
+    Connections {
+        target: mediaPlayer
+
+        function onStateChanged() {
+            if (mediaPlayer.state !== "terminado" || !window.playing) {
+                return
+            }
+            const wanted = mediaPlayer.nextInFolder(folderNavigator.index,
+                                                    folderNavigator.rows.length)
+            if (wanted < 0) {
+                return
+            }
+            const row = folderNavigator.rows[wanted]
+            window.open(row.key, row.name, Qt.rect(0, 0, 0, 0), row.thumbnail, row.kind)
+        }
     }
 
     function backToLibrary() {
@@ -141,6 +167,11 @@ ApplicationWindow {
     // a video or a track gets arrows.
     property string openKind: window.requestedKind
     readonly property bool expanded: window.playing && !window.closing
+
+    // A glance at a film under the pointer: where the frame sits while it
+    // lasts, and whether one is running at all.
+    property rect previewOrigin: Qt.rect(0, 0, 0, 0)
+    property bool previewing: false
     // The seek bar's own step, so the keyboard agrees with the control it is
     // standing in for rather than inventing a second idea of "a bit".
     readonly property int seekStep: 5
@@ -153,22 +184,65 @@ ApplicationWindow {
         id: mediaLibrary
     }
 
+    FluoritaEditor {
+        id: mediaEditor
+    }
+
+    FluoritaMetadata {
+        id: mediaMetadata
+    }
+
+
+    FluoritaBatch {
+        id: mediaBatch
+    }
+
     CelestinaBackdrop {
         anchors.fill: parent
         visible: !window.playing || !playerSurface.showsPicture
     }
 
     LibraryView {
+        id: libraryView
+
         anchors.fill: parent
         // Stays under the growing frame instead of disappearing the moment
         // something is activated: the card has to still be there for the frame
         // to look like it came out of it.
         visible: !window.playing || !window.expanded
         library: mediaLibrary
+        editor: mediaEditor
+        metadata: mediaMetadata
+        batch: mediaBatch
         // Activating an item is exactly what the command line does, so it goes
         // through the same door.
         onActivated: function(key, name, origin, poster, kind) {
             window.open(key, name, origin, poster, kind)
+        }
+        onEditRequested: function(key) { window.edit(key) }
+        onMetadataRequested: function(key) { mediaMetadata.openItem(key) }
+
+        // A glance at a film, in the frame the window already owns.
+        //
+        // The same surface the immersive view uses, put over the card and made
+        // small: one video item in this window and one render context, which is
+        // the only arrangement whose teardown this application has ever got
+        // right. It is refused outright while something is open, because the
+        // frame cannot be in two places.
+        onPreviewRequested: function(key, origin) {
+            if (window.playing) {
+                return
+            }
+            window.previewOrigin = origin
+            window.previewing = true
+            mediaPlayer.preview(key)
+        }
+        onPreviewDropped: {
+            if (!window.previewing) {
+                return
+            }
+            window.previewing = false
+            mediaPlayer.close()
         }
     }
 
@@ -177,13 +251,21 @@ ApplicationWindow {
     Item {
         id: playerFrame
 
-        visible: window.playing
+        visible: window.playing || window.previewing
         clip: true
 
-        x: window.expanded ? 0 : window.openOrigin.x
-        y: window.expanded ? 0 : window.openOrigin.y
-        width: window.expanded ? window.width : window.openOrigin.width
-        height: window.expanded ? window.height : window.openOrigin.height
+        // Three places this frame can be: over the card it is growing from,
+        // filling the window, or sitting on a card as a preview. The preview
+        // never animates — a rectangle sliding between cards as the pointer
+        // moves would be chasing it, not following it.
+        x: window.previewing ? window.previewOrigin.x
+            : window.expanded ? 0 : window.openOrigin.x
+        y: window.previewing ? window.previewOrigin.y
+            : window.expanded ? 0 : window.openOrigin.y
+        width: window.previewing ? window.previewOrigin.width
+            : window.expanded ? window.width : window.openOrigin.width
+        height: window.previewing ? window.previewOrigin.height
+            : window.expanded ? window.height : window.openOrigin.height
 
         // One behaviour per edge rather than a state machine: the frame has one
         // property that matters and two ends, and `expanded` already says which
@@ -276,6 +358,36 @@ ApplicationWindow {
             }
         }
 
+        // Looking closer, where the picture is. Beside the pencil because they
+        // are the same kind of act on the same thing, and a person reaching for
+        // one has usually just tried the other.
+        Row {
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.margins: CelestinaTheme.spaceLg
+            spacing: CelestinaTheme.spaceXs
+            visible: window.expanded && !mediaEditor.open && playerSurface.showsImage
+
+            CelestinaIconButton {
+                // The style has one magnifier and no second one with a minus in
+                // it. Rather than invent an icon here — assets belong to
+                // celestina-style, not to a consumer — the same glyph carries
+                // the state: pressed means the picture is enlarged.
+                iconName: "search"
+                helpText: playerSurface.imageZoom.zoomed ? qsTr("Ver la imagen entera")
+                                                         : qsTr("Acercar")
+                checked: playerSurface.imageZoom.zoomed
+                onClicked: playerSurface.imageZoom.toggle()
+            }
+
+            CelestinaIconButton {
+                visible: mediaEditor.admits(window.openKey)
+                iconName: "pencil"
+                helpText: qsTr("Editar esta imagen")
+                onClicked: window.edit(window.openKey)
+            }
+        }
+
         // A video or a track gets previous and next instead: a strip of posters
         // you cannot read at a glance, over a playing film, is furniture.
         ContentArrows {
@@ -283,6 +395,91 @@ ApplicationWindow {
             navigator: folderNavigator
             onStepped: function(delta) { window.step(delta) }
         }
+    }
+
+    // A refusal with nowhere to appear.
+    //
+    // Both surfaces write what happened into their own `notice`, and both only
+    // show it while they are open — so a request they turned down before
+    // opening said nothing at all. The menu no longer offers what an item does
+    // not admit, but a file can still vanish or be too large between the click
+    // and the read, and that has to be visible somewhere.
+    Item {
+        id: refusal
+
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: CelestinaTheme.spaceXl
+        width: notice.implicitWidth + CelestinaTheme.spaceLg * 2
+        height: notice.implicitHeight + CelestinaTheme.spaceMd * 2
+        visible: refusal.opacity > 0
+        opacity: 0
+
+        readonly property string message: !mediaEditor.open && mediaEditor.notice.length > 0
+            ? mediaEditor.notice
+            : !mediaMetadata.open && mediaMetadata.notice.length > 0
+                ? mediaMetadata.notice
+                : mediaPlayer.frameNotice.length > 0
+                    ? mediaPlayer.frameNotice
+                    : mediaBatch.notice.length > 0 && !mediaBatch.running
+                        ? mediaBatch.notice
+                        : ""
+
+        onMessageChanged: if (refusal.message.length > 0) linger.restart()
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: CelestinaTheme.reducedMotion ? 0 : CelestinaTheme.motionNormal
+                easing.type: CelestinaTheme.easeStandard
+            }
+        }
+
+        // Long enough to read a sentence, short enough that it does not become
+        // furniture. It is a report, not a state.
+        Timer {
+            id: linger
+
+            interval: 6000
+            onTriggered: refusal.opacity = 0
+            onRunningChanged: if (running) refusal.opacity = 1
+        }
+
+        GlassSurface {
+            anchors.fill: parent
+            cornerRadius: CelestinaTheme.radiusPill
+        }
+
+        CelestinaSectionLabel {
+            id: notice
+
+            anchors.centerIn: parent
+            text: refusal.message
+        }
+    }
+
+    // What a file says about itself, over whatever is open.
+    MetadataPanel {
+        anchors.fill: parent
+        metadata: mediaMetadata
+    }
+
+    // Editing takes the window: the picture is the work, and the library
+    // underneath it is not. It closes back to whatever was open before.
+    EditSurface {
+        anchors.fill: parent
+        visible: mediaEditor.open
+        focus: mediaEditor.open
+        editor: mediaEditor
+        onClosed: mediaEditor.close()
+    }
+
+    // Editing what is open, or what the pointer named, without going through
+    // the menu.
+    Shortcut {
+        sequence: "Ctrl+E"
+        enabled: !mediaEditor.open && window.playing
+            && mediaEditor.admits(window.openKey)
+        onActivated: window.edit(window.openKey)
     }
 
     Shortcut {
@@ -369,6 +566,14 @@ ApplicationWindow {
         close.accepted = false
         window.pendingRelease = "close"
         mediaPlayer.close()
+    }
+
+    // One door into the editor, wherever the request came from.
+    function edit(key) {
+        if (key.length === 0) {
+            return
+        }
+        mediaEditor.openItem(key)
     }
 
     Component.onCompleted: {

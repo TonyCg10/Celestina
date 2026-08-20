@@ -54,10 +54,10 @@ mod work;
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
-use project::{project, LibrarySnapshot};
+use project::{project, project_matching, LibrarySnapshot};
 use work::{run_artwork, run_folder_choice, run_scan, run_trash};
 
-use fluorita_core::{Catalogue, SourceId, SourceScope, SourceSet};
+use fluorita_core::{Catalogue, Query, SourceId, SourceScope, SourceSet};
 
 /// What `selectedSource` holds when nothing is selected: every configured root
 /// at once. A real [`SourceId`] is a `u32`, so no handle can collide with it.
@@ -103,10 +103,18 @@ pub mod qobject {
         /// between them, with half the columns still holding the previous
         /// publication.
         #[qproperty(i32, revision)]
+        /// What is being searched for, as it was typed. Published so the box
+        /// keeps its text across a re-projection, and so a header can say the
+        /// library is showing a subset.
+        #[qproperty(QString, query)]
         /// The sidebar, index-aligned: the root's handle as text, the label to
         /// show and where it is, as display text. Configuration order, which is
         /// the order the user built.
         #[qproperty(QStringList, source_ids)]
+        /// How many items the query hid. Zero when nothing is being searched
+        /// for; a surface uses it to say "nothing matches" rather than showing
+        /// an empty grid that looks like a broken library.
+        #[qproperty(i32, hidden_by_query)]
         #[qproperty(QStringList, source_names)]
         #[qproperty(QStringList, source_locations)]
         /// The selected root's handle, or `-1` for every root at once. The
@@ -208,6 +216,11 @@ pub mod qobject {
         /// Produces the thumbnails the shared cache is missing, for video and
         /// audio only. This is the one thing here that starts the media
         /// backend, which is why nothing but an explicit request calls it.
+        /// Shows only what matches, or everything again when the text is
+        /// empty.
+        #[qinvokable]
+        fn search(self: Pin<&mut FluoritaLibrary>, text: &QString);
+
         #[qinvokable]
         fn generate_artwork(self: Pin<&mut FluoritaLibrary>);
 
@@ -231,6 +244,8 @@ pub struct LibraryRust {
     artwork_done: i32,
     artwork_total: i32,
     revision: i32,
+    query: QString,
+    hidden_by_query: i32,
 
     source_ids: QStringList,
     source_names: QStringList,
@@ -296,6 +311,8 @@ impl Default for LibraryRust {
         Self {
             state: QString::from("empty"),
             summary: QString::default(),
+            query: QString::default(),
+            hidden_by_query: 0,
             truncated: false,
             image_count: 0,
             video_count: 0,
@@ -566,6 +583,28 @@ impl qobject::FluoritaLibrary {
         let scope = self.rust().scope();
         let refreshed = project(&catalogue, &configured, scope, *self.truncated(), "ready");
         self.apply(refreshed);
+    }
+
+    /// Shows only what matches `text`, or everything again when it is empty.
+    ///
+    /// Re-projects from the catalogue already in memory: no scan, no disk, no
+    /// worker. The surface debounces the keystrokes; this does the filtering,
+    /// because what matches is a rule the domain owns.
+    pub fn search(mut self: core::pin::Pin<&mut Self>, text: &QString) {
+        let query = Query::new(&text.to_string());
+        self.as_mut().set_query(text.clone());
+
+        let catalogue = self.rust().catalogue.clone();
+        let configured = self.rust().configured.clone();
+        let scope = self.rust().scope();
+        let truncated = *self.truncated();
+        let everything = project(&catalogue, &configured, scope, truncated, "ready");
+        let total = everything.gallery.len() + everything.music.len();
+        let matching = project_matching(&catalogue, &configured, scope, truncated, "ready", &query);
+        let shown = matching.gallery.len() + matching.music.len();
+        self.as_mut()
+            .set_hidden_by_query(i32::try_from(total.saturating_sub(shown)).unwrap_or(0));
+        self.apply(matching);
     }
 
     /// Starts the explicit artwork pass.

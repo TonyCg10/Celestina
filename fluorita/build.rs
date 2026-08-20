@@ -10,6 +10,7 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaBackdrop.qml",
     "qml/CelestinaInputShield.qml",
     "qml/CelestinaModalLayer.qml",
+    "qml/CelestinaTextField.qml",
     "qml/GlassCard.qml",
     "qml/GlassContextMenu.qml",
     "qml/GlassMenuItem.qml",
@@ -23,20 +24,27 @@ const QML_FILES: &[&str] = &[
     // region.
     "qml/components/AmbientLight.qml",
     "qml/components/ContentArrows.qml",
+    "qml/components/BatchBar.qml",
     "qml/components/ContentDock.qml",
     "qml/components/ContentNavigator.qml",
+    "qml/components/EditObjectLayer.qml",
+    "qml/components/EditSurface.qml",
+    "qml/components/EditToolbar.qml",
     "qml/components/GalleryGrid.qml",
     "qml/components/ImageView.qml",
     "qml/components/ItemDetailPanel.qml",
     "qml/components/ItemMenu.qml",
     "qml/components/LibrarySidebar.qml",
     "qml/components/LibraryView.qml",
+    "qml/components/MetadataPanel.qml",
     "qml/components/MusicList.qml",
     "qml/components/PlayerSurface.qml",
     "qml/components/SidebarRow.qml",
     "qml/components/PlayerTransport.qml",
     "qml/components/SeekBar.qml",
+    "qml/components/StreamMenu.qml",
     "qml/components/VolumeBar.qml",
+    "qml/components/ZoomController.qml",
     "qml/Main.qml",
 ];
 
@@ -78,6 +86,8 @@ fn main() {
     // the shim resolve "fluorita/mpvvideoitem.h".
     println!("cargo::rerun-if-changed=cpp/imageprobe.cpp");
     println!("cargo::rerun-if-changed=cpp/fluorita/imageprobe.h");
+    println!("cargo::rerun-if-changed=cpp/imagecanvas.cpp");
+    println!("cargo::rerun-if-changed=cpp/fluorita/imagecanvas.h");
     for source in fluorita_qt::rerun_paths() {
         println!("cargo::rerun-if-changed={source}");
     }
@@ -95,10 +105,20 @@ fn main() {
         // No Q_OBJECT: a free function over QImageReader, so it is only
         // compiled, not moc'd.
         .cpp_file("cpp/imageprobe.cpp")
+        // The drawing seam: QBrush, QTransform and the image encoder, none of
+        // which cxx-qt-lib exposes. No Q_OBJECT, so compiled and not moc'd.
+        .cpp_file("cpp/imagecanvas.cpp")
         // The shared render seam, compiled from the crate that owns it.
         .cpp_file(fluorita_qt::VIDEO_ITEM_SOURCE)
         .cpp_file(fluorita_qt::VIDEO_ITEM_HEADER)
-        .files(["src/library.rs", "src/player.rs"]);
+        .files([
+            "src/library.rs",
+            "src/player.rs",
+            "src/batch.rs",
+            "src/editor.rs",
+            "src/metadata.rs",
+            "src/rasteriser.rs",
+        ]);
 
     // SAFETY: only adds an include directory for our own headers.
     let builder = unsafe {

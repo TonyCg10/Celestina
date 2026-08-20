@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import org.celestina.fluorita 1.0
 
@@ -11,6 +13,21 @@ GridView {
     id: grid
 
     required property FluoritaLibrary library
+    // Dwelling on a film asks the window for a glance at it; leaving takes it
+    // back. The grid draws nothing itself: the window has exactly one video
+    // surface and it moves that one over the card. A render context per cell —
+    // or even a second one for the grid — is what the suite's worst crash was
+    // made of.
+    signal previewRequested(string key, rect origin)
+    signal previewDropped()
+
+    // Which card the pointer is dwelling on, or an empty key.
+    property string previewKey: ""
+
+    // How long the pointer has to stay still before anything decodes. Long
+    // enough that crossing the grid on the way somewhere else starts nothing —
+    // which is the whole promise that browsing costs no decoder.
+    readonly property int dwell: 700
     // Emitted when a card is activated, with the card's own rectangle in scene
     // coordinates. The window grows the player from exactly that rectangle, so
     // the thing the person clicked is the thing that expands.
@@ -74,6 +91,26 @@ GridView {
     Accessible.role: Accessible.List
     Accessible.name: qsTr("Galería")
 
+    // The keys the person has picked out for a batch, in the order they picked
+    // them. Held here because the grid is what a person points at; what may be
+    // done with them is decided elsewhere entirely.
+    property var selectedKeys: []
+
+    function toggleSelection(key) {
+        const at = grid.selectedKeys.indexOf(key)
+        const next = grid.selectedKeys.slice()
+        if (at >= 0) {
+            next.splice(at, 1)
+        } else {
+            next.push(key)
+        }
+        grid.selectedKeys = next
+    }
+
+    function clearSelection() {
+        grid.selectedKeys = []
+    }
+
     delegate: Item {
         id: cell
 
@@ -99,6 +136,7 @@ GridView {
             ? cell.kindWord
             : qsTr("%1 — sin encontrar").arg(cell.kindWord)
         Accessible.focusable: true
+        readonly property bool picked: grid.selectedKeys.indexOf(cell.modelData.key) >= 0
         // The same four values the pointer sends. Passing the path alone left
         // the origin, the poster and the kind undefined, so an item opened with
         // a screen reader lost its transition and its filmstrip.
@@ -107,6 +145,21 @@ GridView {
                                                  grid.originOf(cell),
                                                  cell.modelData.thumbnail,
                                                  cell.modelData.kind)
+
+        // Picked out for a batch. A mark of its own rather than the selection
+        // colour: "the keyboard is here" and "this one is coming with me" are
+        // different facts and a person has to be able to see both at once.
+        CelestinaIcon {
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.margins: CelestinaTheme.spaceSm
+            width: CelestinaTheme.iconSm
+            height: CelestinaTheme.iconSm
+            z: 2
+            visible: cell.picked
+            name: "check"
+            tone: CelestinaIcon.Accent
+        }
 
         CelestinaSurface {
             anchors.fill: parent
@@ -170,10 +223,38 @@ GridView {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
+
+            // Dwelling on a film starts a bounded, silent, looping glance at
+            // it. Leaving cancels it, and so does starting to dwell on another
+            // card: the grid holds one session at a time.
+            onEntered: if (cell.modelData.kind === "video"
+                           && cell.modelData.available) {
+                linger.restart()
+            }
+            onExited: {
+                linger.stop()
+                if (grid.previewKey === cell.modelData.key) {
+                    grid.stopPreview()
+                }
+            }
+
+            Timer {
+                id: linger
+
+                interval: grid.dwell
+                onTriggered: grid.startPreview(cell.modelData.key, cell)
+            }
             acceptedButtons: Qt.LeftButton | Qt.RightButton
             onClicked: function(mouse) {
                 grid.currentIndex = cell.index;
                 grid.forceActiveFocus();
+                // Ctrl picks out rather than opens. It is the desktop's own
+                // gesture for "and this one too", and it keeps a plain click
+                // meaning exactly what it meant before.
+                if (mouse.button === Qt.LeftButton && (mouse.modifiers & Qt.ControlModifier)) {
+                    grid.toggleSelection(cell.modelData.key);
+                    return;
+                }
                 if (mouse.button === Qt.RightButton) {
                     const point = mapToItem(grid, mouse.x, mouse.y);
                     grid.menuRequested(cell.modelData.key, cell.modelData.name,
@@ -186,6 +267,28 @@ GridView {
             }
         }
     }
+
+    function startPreview(key, cell) {
+        if (grid.previewKey === key) {
+            return
+        }
+        grid.previewKey = key
+        // Scene coordinates, which is where the window's own frame lives.
+        grid.previewRequested(key, grid.originOf(cell))
+    }
+
+    function stopPreview() {
+        if (grid.previewKey.length === 0) {
+            return
+        }
+        grid.previewKey = ""
+        grid.previewDropped()
+    }
+
+    // Anything that moves the grid under the pointer ends the glance: the card
+    // it was showing is no longer where the pointer is.
+    onContentYChanged: grid.stopPreview()
+    onCountChanged: grid.stopPreview()
 
     // The keyboard opens what the pointer opens.
     Keys.onReturnPressed: grid.activateCurrent()

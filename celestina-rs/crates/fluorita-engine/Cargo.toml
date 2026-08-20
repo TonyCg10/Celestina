@@ -20,6 +20,14 @@ fluorita-core = { path = "../fluorita-core" }
 # here initializes it.
 libmpv2 = "=6.0.0"
 
+# The freedesktop Trash. Replacing an edited picture must send the original
+# somewhere recoverable, and the suite has exactly one implementation of that
+# spec — a pure crate over `celestina-core` that reserves the info file with
+# `O_EXCL` and rolls back on failure. The ordering rule this engine enforces
+# (destination confirmed before the source moves) is worth nothing if the host
+# is left to reimplement the second half of it.
+siderita-ops = { path = "../siderita-ops" }
+
 # Noticing that the library changed while it is open. Already the suite's
 # watcher (Siderita's folder view uses the same crate, and learned the same
 # lesson about coalescing and `Access` events), so this adds a dependency the

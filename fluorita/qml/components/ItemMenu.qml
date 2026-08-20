@@ -19,9 +19,27 @@ GlassContextMenu {
     // ever read out.
     property string targetKey: ""
     property string targetName: ""
+    // What this item admits, answered by the objects that own those matrices
+    // before the menu is popped. An entry that would refuse is not shown: a
+    // menu item that does nothing when clicked is the worst of both worlds,
+    // because it looks like the application broke rather than like the thing
+    // it never did.
+    property bool editable: false
+    property bool describable: false
 
     signal trashRequested(string key)
     signal propertiesRequested(string key)
+    signal editRequested(string key)
+    signal metadataRequested(string key)
+
+    GlassMenuItem {
+        visible: menu.editable
+        text: qsTr("Editar")
+        icon.name: "pencil"
+        icon.source: CelestinaTheme.fallbackIcon("pencil")
+        Accessible.description: qsTr("Abre %1 para girarla, recortarla o anotarla").arg(menu.targetName)
+        onTriggered: menu.editRequested(menu.targetKey)
+    }
 
     GlassMenuItem {
         text: qsTr("Mover a la papelera")
@@ -30,6 +48,16 @@ GlassContextMenu {
         Accessible.description: qsTr(
             "Mueve %1 a la papelera del escritorio, desde donde se puede restaurar").arg(menu.targetName)
         onTriggered: menu.trashRequested(menu.targetKey)
+    }
+
+    GlassMenuItem {
+        visible: menu.describable
+        text: qsTr("Datos del archivo")
+        icon.name: "info"
+        icon.source: CelestinaTheme.fallbackIcon("info")
+        Accessible.description: qsTr(
+            "Muestra lo que %1 dice de sí mismo y permite corregirlo o quitarlo").arg(menu.targetName)
+        onTriggered: menu.metadataRequested(menu.targetKey)
     }
 
     GlassMenuItem {

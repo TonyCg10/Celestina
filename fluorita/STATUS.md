@@ -1,52 +1,38 @@
 # Fluorita status
 
-- **Updated:** 2026-08-06
-- **Implementation:** checkpoints F0-F4 are closed; F5 rebuilds the library
-  around the configured roots and is the active implementation checkpoint
+- **Updated:** 2026-08-19
+- **Implementation:** checkpoints F0-F6 are closed; F7 is implemented, verified
+  and deployed, and stays the active checkpoint until its commit closes the
+  ledger
 - **Author validation:** the version-1 playback and interaction pass is closed;
-  `VAL-FLU-SOURCES` is open for the new surface — see
-  [VALIDATION.md](VALIDATION.md)
+  `VAL-FLU-SOURCES`, `VAL-FLU-IMMERSIVE`, `VAL-FLU-TEARDOWN`, `VAL-FLU-BYTES`
+  and `VAL-FLU-EDIT` are open — see [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
 
-- Uncommitted in the checkout: `F6-E`. A render handle now names the session
-  that produced it, so one published after the player has moved on is dropped
-  instead of pointing at a destroyed instance; and a close that finds no worker
-  starts whatever activation was parked rather than stranding the player for the
-  rest of the process.
-
-- Uncommitted in the checkout: `F6-D`. The image probe is addressed by path key
-  and opens the file by descriptor, so a picture whose name is not valid UTF-8
-  is measured on itself rather than refused as unreadable — the one limit
-  `F6-C` had recorded as inevitable. Compiled, linted and unit-tested against
-  the real C++ seam; nothing opened in a real window, which is
-  `VAL-FLU-BYTES`.
-
-- Uncommitted in the checkout: `F6-C`, the Fluorita half of
-  [ADR 0008](../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md). A
-  path crossing to QML is now a percent-encoded key — `fluorita/src/pathkey.rs`
-  composes it over the suite's one codec — and every verb decodes it back with a
-  typed refusal instead of rebuilding a `PathBuf` from a lossy string. The name,
-  the location and the title a person reads travel in their own columns and
-  never come back. A file whose name is not valid UTF-8 can therefore be opened,
-  described and trashed; before this it listed and answered the library's
-  item-is-gone notice (`copy::ITEM_GONE`) to everything. Compiled, linted and
-  unit-tested, with no inventory, no version transition and no production run. Nothing has been
-  tried on a real session: that is `VAL-FLU-BYTES`. The image limit this unit
-  left open — a picture with such a name refused as unreadable, because the C++
-  probe seam took a `QString` — is closed by `F6-D`.
-- Delivered as `fluorita-bug` at 1.2.1, built, verified and deployed: `F6-B`,
-  the corrective unit from the suite audit.
-  A render context's release is now decided by an explicit renderer claim
-  instead of by item visibility, which is what allowed the mpv core to be
-  destroyed under a live context after a stream failed; an activation arriving
-  during a close is held rather than run through the teardown; the player stops
-  and joins on `Drop`; a context that fails to build is reported instead of
-  leaving the file on "abriendo" for ever; cancellation reaches the scan and the
-  tag probes; MPRIS emits its property and seek signals; a watcher refresh
-  projects under the scope in force and a scan failure no longer empties the
-  library on screen. None of the teardown paths has been exercised on real GPU
-  state: that is `VAL-FLU-TEARDOWN`.
+- Uncommitted in the checkout: the whole of `F7`, at version `1.3.0`. A
+  picture opens for editing from the item menu or `Ctrl+E`: it can be turned,
+  mirrored, cropped, resized, written on, drawn on, boxed, highlighted and
+  redacted, every mark stays a movable object, and saving offers a copy beside
+  the original — which stays reopenable — or a replacement, which flattens the
+  result and sends the original to the Trash. A turn on a JPEG rewrites two
+  bytes of EXIF instead of re-encoding the picture. Both hosts completed: the
+  verified bytes are installed in `~/.local`, and Siderita carries the same
+  shared crates. The offscreen gate constructs the edit surface; nothing has
+  been drawn on a real display, which is `VAL-FLU-EDIT`.
+- F6 is delivered in full: the
+  catalogue forgets what a completed scan of a reachable root did not find, an
+  item grows out of its card and shrinks back into it, right-click offers Trash
+  and Properties, the folder is navigable from inside the open item, the space
+  around it is lit by its own artwork, and the surface is Spanish under
+  ADR 0007. Its corrective units are in with it — the render context released
+  by an explicit renderer claim rather than by item visibility, byte-exact path
+  keys across the Qt seam under
+  [ADR 0008](../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md), the
+  image probe addressed by key and opened by descriptor, and a session
+  generation that drops a render handle published after the player moved on.
+  None of it has been seen on a real session: that is `VAL-FLU-IMMERSIVE`,
+  `VAL-FLU-TEARDOWN` and `VAL-FLU-BYTES`.
 - The shared core/engine implement media classification, source-scoped
   Gallery/Music projections, user-owned persistent roots, persistent
   incremental catalogue/watch, bounded metadata and artwork generation,
@@ -66,11 +52,25 @@
 
 ## Active work
 
-F5 replaces the two kind tabs with the source sidebar its
-[plan](docs/plans/archive/2026-08-04-source-first-library.md) describes, under
-suite [ADR 0006](../docs/decisions/0006-source-first-library-navigation.md).
-The library lane's Rust and QML moved to English as it was rewritten, and the
-matching language-baseline rows went down or away with it.
+F7 made the library able to change an item and not only show it, under the
+[plan](docs/plans/active/2026-08-19-bounded-media-editing.md) and
+[ADR 0009](../docs/decisions/0009-editing-without-an-encoder.md). It is
+implemented, verified and deployed; what remains is the commit, which is the
+author's to request. Its unit has no inventory yet on purpose: an inventory is
+compared against the worktree until it lands, so it is computed at commit time
+rather than kept fresh against work that keeps arriving.
+
+Ahead of it, and not opened: F8 gives the edit path the half that touches no
+pixel — a track's tags and the EXIF a photograph carries. Its model, its FLAC
+and EXIF writers, its adapter and its panel are implemented and tested in this
+checkout: "Datos del archivo" in the item menu reads what a file says about
+itself, corrects a FLAC's four projected tags, and removes what a photograph is
+carrying, all on the same copy-or-replace terms editing already uses, with the
+audio frames and the picture data carried across byte for byte. A track can also be given a
+front cover through the desktop's picker, bounded before it is read. Only FLAC
+is writable: Ogg, ID3 and MP4 are read, reported and refused rather than
+half-written. None of it carries a ledger unit: it waits for F7's commit to
+free the crates they share.
 
 ## Conditional work, not active debt
 

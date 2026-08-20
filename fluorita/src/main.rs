@@ -1,10 +1,14 @@
 mod activation;
+mod batch;
 mod copy;
+mod editor;
 mod folders;
 mod image;
 mod library;
+mod metadata;
 mod mpris;
 mod player;
+mod rasteriser;
 
 use cxx_qt_lib::{
     QGuiApplication, QMap, QMapPair_QString_QVariant, QQmlApplicationEngine, QQuickStyle, QString,

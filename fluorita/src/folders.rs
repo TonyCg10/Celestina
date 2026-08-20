@@ -60,13 +60,35 @@ pub enum FolderChoice {
 /// Blocking by construction: call it from a worker thread.
 #[must_use]
 pub fn choose(title: &str) -> FolderChoice {
-    match request(title) {
+    match request(title, Wanted::Directory) {
         Ok(choice) => choice,
         Err(error) => FolderChoice::Unavailable(error),
     }
 }
 
-fn request(title: &str) -> Result<FolderChoice, String> {
+/// Opens the desktop's file chooser, showing pictures, and waits for the
+/// answer.
+///
+/// The same request with one option flipped and a filter added, rather than a
+/// second portal client: a chooser that answers a path is one conversation
+/// whatever it was asked to find.
+#[must_use]
+pub fn choose_picture(title: &str, filter_label: &str) -> FolderChoice {
+    match request(title, Wanted::Picture(filter_label)) {
+        Ok(choice) => choice,
+        Err(error) => FolderChoice::Unavailable(error),
+    }
+}
+
+/// What the chooser is being asked for.
+#[derive(Clone, Copy)]
+enum Wanted<'a> {
+    Directory,
+    /// A picture, labelled for the dialog's filter row.
+    Picture(&'a str),
+}
+
+fn request(title: &str, wanted: Wanted<'_>) -> Result<FolderChoice, String> {
     let connection = zbus::blocking::Connection::session()
         .map_err(|error| format!("no session bus: {error}"))?;
 
@@ -106,9 +128,25 @@ fn request(title: &str) -> Result<FolderChoice, String> {
         .map_err(|error| format!("cannot listen for the answer: {error}"))?;
 
     let mut options: HashMap<&str, Value<'_>> = HashMap::new();
-    options.insert("directory", Value::Bool(true));
     options.insert("multiple", Value::Bool(false));
     options.insert("modal", Value::Bool(true));
+    match wanted {
+        Wanted::Directory => {
+            options.insert("directory", Value::Bool(true));
+        }
+        Wanted::Picture(label) => {
+            options.insert("directory", Value::Bool(false));
+            // The portal's filter shape: a label, then a list of (kind, spec)
+            // pairs where kind 1 is a media type. Globs would have to spell
+            // every extension the toolkit reads; the media type says what is
+            // meant once.
+            let patterns = vec![Value::from((1u32, "image/*".to_owned()))];
+            options.insert(
+                "filters",
+                Value::from(vec![Value::from((label.to_owned(), patterns))]),
+            );
+        }
+    }
 
     let handle: zbus::zvariant::OwnedObjectPath = connection
         .call_method(

@@ -275,6 +275,12 @@ pub struct SessionRequest {
     pub hardware_decoding: bool,
     pub audio_output: AudioOutput,
     pub video_output: VideoOutput,
+    /// Where to begin. `None` starts at the beginning; a hover preview starts
+    /// inside the film, because the first seconds of one are titles.
+    pub start_at: Option<Duration>,
+    /// Whether reaching the end starts it again. A preview that stopped after
+    /// its first pass would leave a frozen frame under the pointer.
+    pub looping: bool,
 }
 
 impl SessionRequest {
@@ -288,6 +294,8 @@ impl SessionRequest {
             hardware_decoding: true,
             audio_output: AudioOutput::System,
             video_output: VideoOutput::None,
+            start_at: None,
+            looping: false,
         }
     }
 

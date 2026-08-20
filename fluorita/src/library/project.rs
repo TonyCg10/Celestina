@@ -7,7 +7,7 @@
 use std::path::Path;
 
 use fluorita_core::{
-    gallery, Catalogue, GalleryFilter, GalleryOrder, MediaKind, MusicLibrary, SourceScope,
+    gallery, Catalogue, GalleryFilter, GalleryOrder, MediaKind, MusicLibrary, Query, SourceScope,
     SourceSet,
 };
 
@@ -59,13 +59,39 @@ pub(super) fn project(
     truncated: bool,
     state: &'static str,
 ) -> LibrarySnapshot {
+    project_matching(
+        catalogue,
+        configured,
+        scope,
+        truncated,
+        state,
+        &Query::default(),
+    )
+}
+
+/// The same projection, keeping only what a query matches.
+///
+/// The query is applied here and not in the surface because *what matches* is a
+/// rule — accents folded, case ignored — and a grid that re-implemented it in
+/// JavaScript would be a second answer to the same question.
+pub(super) fn project_matching(
+    catalogue: &Catalogue,
+    configured: &SourceSet,
+    scope: SourceScope,
+    truncated: bool,
+    state: &'static str,
+    query: &Query,
+) -> LibrarySnapshot {
     let cache_root = thumbnail_cache_root();
-    let items = gallery(
+    let items: Vec<_> = gallery(
         catalogue,
         scope,
         GalleryFilter::All,
         GalleryOrder::NewestFirst,
-    );
+    )
+    .into_iter()
+    .filter(|item| query.matches(&item.display_name))
+    .collect();
 
     let image_count = items
         .iter()
@@ -99,20 +125,36 @@ pub(super) fn project(
         .iter()
         .flat_map(|artist| {
             artist.albums.iter().flat_map(move |album| {
-                album.tracks.iter().map(move |track| {
-                    [
-                        pathkey::encode(&track.path),
-                        track.display_name.clone(),
-                        artist.name.clone().unwrap_or_else(unknown_artist),
-                        album.title.clone().unwrap_or_else(unknown_album),
-                        flag(track.available),
-                        // The embedded cover, from the same shared cache the
-                        // grid reads. Without it a track has nothing to light
-                        // the room with, and the ambient light would be the one
-                        // kind of content that does not get one.
-                        cached_thumbnail(covers, &track.path),
-                    ]
-                })
+                album
+                    .tracks
+                    .iter()
+                    .filter(move |track| {
+                        // A track matches on what a person would search by: its
+                        // own name, the artist it is under, or the album it is on.
+                        query.matches(&track.display_name)
+                            || artist
+                                .name
+                                .as_deref()
+                                .is_some_and(|name| query.matches(name))
+                            || album
+                                .title
+                                .as_deref()
+                                .is_some_and(|title| query.matches(title))
+                    })
+                    .map(move |track| {
+                        [
+                            pathkey::encode(&track.path),
+                            track.display_name.clone(),
+                            artist.name.clone().unwrap_or_else(unknown_artist),
+                            album.title.clone().unwrap_or_else(unknown_album),
+                            flag(track.available),
+                            // The embedded cover, from the same shared cache the
+                            // grid reads. Without it a track has nothing to light
+                            // the room with, and the ambient light would be the one
+                            // kind of content that does not get one.
+                            cached_thumbnail(covers, &track.path),
+                        ]
+                    })
             })
         })
         .collect();

@@ -18,8 +18,20 @@ application, plus a bounded image/video/audio surface embedded in Siderita.
 - In Siderita, `Space` views/plays media in place and double-click/`Enter`
   launches standalone Fluorita. The canonical mapping is the
   [content-activation contract](../docs/contracts/content-activation.md).
-- Fluorita is not a streaming service, tag editor, social catalogue, general
-  file manager or codec implementation.
+- Editing acts on the media the library already holds, in the standalone
+  application, under
+  [ADR 0009](../docs/decisions/0009-editing-without-an-encoder.md). Every
+  operation is either *lossless* — it reorders the original bytes — or
+  *raster* — it produces a new image, and the interface says which. Saving
+  offers exactly two outcomes: a copy beside the original, which stays
+  reopenable, or a replacement, which flattens the result and sends the
+  original to the desktop Trash. The output format follows a fixed rule and is
+  never a question.
+- Fluorita is not a streaming service, editing suite, social catalogue, general
+  file manager or codec implementation. No layers, masks or blend modes, no
+  configurable brushes, no per-channel colour correction, no rich text, and no
+  encoder: video and audio editing is bounded to demux and remux, so a cut
+  lands where the keyframes are.
 
 Static image thumbnails, video posters and embedded covers use the freedesktop
 PNG cache. Live video trailers are separate, bounded and cancelable; normal
