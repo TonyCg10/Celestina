@@ -32,12 +32,13 @@ Item {
 
     CelestinaSurface {
         id: sidebar
-        x: 14
-        y: 14
+        x: CelestinaTheme.windowMargin
+        y: CelestinaTheme.windowMargin
         width: 220
         // Leave room below for the separate item-info box (its height scales
         // with the sidebar text) plus a gap.
-        height: parent.height - y - 14 - sidebarInfo.height - 12
+        height: parent.height - y - CelestinaTheme.windowMargin
+                - sidebarInfo.height - 12
         visible: parent.width >= 820
         role: CelestinaSurface.Panel
 
@@ -697,7 +698,7 @@ Item {
         x: sidebar.x
         width: sidebar.width
         height: implicitHeight
-        y: parent.height - height - 14
+        y: parent.height - height - CelestinaTheme.windowMargin
         visible: sidebar.visible
         hostWindow: root.hostWindow
     }

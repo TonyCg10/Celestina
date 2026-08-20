@@ -19,53 +19,44 @@ Item {
     readonly property bool contextualHeaderVisible:
             controller.searchActive || controller.searchRunning
             || controller.trashActive || controller.recentActive
-    // El marco sube tras la ruta compacta y baja bajo el encabezado expandido.
-    readonly property real primaryChromeBottom:
-            folderTabBar.visible ? folderTabBar.y + folderTabBar.height
-                                 : topBar.y + topBar.height
-    readonly property real chromeBottom:
-            primaryChromeBottom
+    // El marco sube tras la ruta compacta y baja bajo el encabezado grande.
+    readonly property real primaryChromeBottom: folderTabBar.visible
+            ? folderTabBar.y + folderTabBar.height : topBar.y + topBar.height
+    readonly property real chromeBottom: primaryChromeBottom
             + (contextualHeaderVisible
-               ? CelestinaTheme.compFloatingGap
-                 + folderChrome.searchBar.height : 0)
-    readonly property real expandedFrameY:
-            chromeBottom + CelestinaTheme.compFloatingGap
-    readonly property real compactFrameY:
-            topBar.y - CelestinaTheme.compFloatingInset
-    readonly property real contentFrameY:
-            expandedFrameY + (compactFrameY - expandedFrameY)
-            * folderHeading.compactProgress
-    readonly property real contentTopInset: Math.max(
-            0, expandedFrameY - contentFrameY)
+               ? CelestinaTheme.compFloatingGap + folderChrome.searchBar.height : 0)
+    readonly property real expandedFrameY: chromeBottom + CelestinaTheme.compFloatingGap
+    readonly property real compactFrameY: topBar.y - CelestinaTheme.compFloatingInset
+    readonly property real contentFrameY: expandedFrameY
+            + (compactFrameY - expandedFrameY) * folderHeading.compactProgress
+    readonly property real contentTopInset: Math.max(0, expandedFrameY - contentFrameY)
     readonly property real contentBottomInset:
-            CelestinaTheme.controlHeightSm
-            + 2 * CelestinaTheme.compFloatingInset
+            CelestinaTheme.controlHeightSm + 2 * CelestinaTheme.compFloatingInset
     property Item ghost
     property Item overlayParent
-    // La ventana que hospeda este documento: de ella vienen el modelo de
-    // pestañas y las seis escalas de tamaño, que son de la ventana y no de la
-    // pestaña — el menú de tamaños vive aquí dentro pero ajusta a todas.
+    // The window hosting this document: the tab model and size scales are its
+    // own, not the tab's.
     property var hostWindow
     property bool active: false
-    property bool headingExpanded: false
     readonly property bool modalBlocked: folderActions.modalBlocked
     readonly property bool navigationBlocked: folderActions.navigationBlocked
     property alias tabController: controller
     // Nombre distinto evita el auto-binding sombreado `x: x`.
     property alias viewTopBar: topBar
     signal requestNewTab(string path, bool foreground)
-    function collapseHeading() {
-        headingExpanded = false
-    }
-    function revealHeading() {
-        if (active && !controller.loading
-            && controller.errorText.length === 0
-            && bottomView && bottomView.atYBeginning)
-            headingExpanded = true
-    }
+    function collapseHeading() { heading.collapse() }
+    function restoreHeading() { heading.restore() }
+    function retireHeading() { heading.retire() }
+    function revealHeading() { heading.reveal() }
     onActiveChanged: if (!active) collapseHeading()
     SideritaController {
         id: controller
+    }
+
+    HeadingState {
+        id: heading
+        canReveal: root.active && !controller.loading && root.bottomView
+                   && !controller.errorText.length && root.bottomView.atYBeginning
     }
     // RouteReveal se arma antes de que este modelo publique la ruta nueva.
     // Native role model shared by list and grid.
@@ -105,10 +96,8 @@ Item {
         }
     }
 
-    // The overlay (below) previews whatever entry is selected; ↑/↓ while it
-    // is open step the selection so the preview browses the folder without
-    // closing. On close, focus returns to the active view so the keyboard
-    // keeps working.
+    // The overlay (below) previews the selected entry; ↑/↓ step the selection,
+    // and focus returns to the active view on close.
     property bool quickLookOpen: false
     onQuickLookOpenChanged: if (!quickLookOpen) {
         if (mainPanel.viewMode === "grid")
@@ -116,10 +105,8 @@ Item {
         else
             folderListView.forceActiveFocus()
     }
-    // Devuelve el foco a la vista activa. Lo usan los diálogos al cerrarse
-    // (viven en sus propios ficheros y ya no alcanzan `fileList`); antes fijaban
-    // la lista aunque estuviera activa la rejilla, así que ahora el teclado
-    // también responde tras cerrar un diálogo en modo cuadrícula.
+    // Devuelve el foco a la vista activa; lo usan los diálogos al cerrarse.
+    // Antes fijaban la lista aunque la rejilla estuviera activa.
     function focusView() {
         if (mainPanel.viewMode === "grid")
             fileGrid.forceActiveFocus()
@@ -139,10 +126,8 @@ Item {
             folderListView.selectRow(j)
     }
 
-    // Drop any active search — the live filter and the recursive results —
-    // and empty the field, returning the content box to the plain listing.
-    // Fired on navigation (so a sidebar/place click lands on a clean folder)
-    // and by the mouse Back button.
+    // Drop any active search and empty the field. Fired on navigation, so a
+    // place click lands on a clean folder, and by the mouse Back button.
     function clearSearch() {
         topBar.searchText = ""
         controller.applyQuery("")
@@ -151,8 +136,7 @@ Item {
 
     // Back undoes wherever you are, in the order you got there: a search
     // bows out first, then the Trash location, and only then does history
-    // move. Trash is a place you can be but not a folder in history, so
-    // without this the only way out was the sidebar.
+    // move. Trash is a place you can be but not a folder in history.
     readonly property bool canGoBackOrLeave:
             !controller.loading
             && (topBar.searchText.length > 0 || controller.searchActive
@@ -196,8 +180,7 @@ Item {
         onViewModeChanged: root.collapseHeading()
 
         // Restore the last-used view mode on open and persist a change
-        // (list⇄grid). The size scales are window-level and independent
-        // (root.hostWindow.contentIconScale / root.hostWindow.contentTextScale).
+        // (list⇄grid). The size scales are window-level and independent.
         Component.onCompleted: {
             viewMode = controller.savedViewMode()
             entryIconRules.rebuildFolderTypeIcons()
@@ -210,9 +193,8 @@ Item {
             controller.rememberViewMode(viewMode)
         }
 
-        // A folder that remembers a view wins over the global default when
-        // it opens. `folderViewMode` is empty for folders never arranged,
-        // which leaves whatever the user is currently looking at alone.
+        // A folder that remembers a view wins over the global default when it
+        // opens; empty means never arranged, and leaves the current view alone.
         Connections {
             target: controller
             function onFolderViewModeChanged() {
@@ -541,8 +523,11 @@ Item {
                               + (folderListView.detailsMode
                                  ? folderChrome.detailsHeader.height + 12 : 8)
             contentBottomInset: mainPanel.contentBottomInset
+            headingState: heading
             onRevealHeadingRequested: root.revealHeading()
+            onRestoreHeadingRequested: root.restoreHeading()
             onCollapseHeadingRequested: root.collapseHeading()
+            onRetireHeadingRequested: root.retireHeading()
             onQuickLookRequested: folderActions.requestPreview()
             onNewTabRequested: function(path, foreground) {
                 root.requestNewTab(path, foreground)
@@ -572,8 +557,11 @@ Item {
             overlayParent: root.overlayParent
             contentTopMargin: mainPanel.contentTopInset + 8
             contentBottomInset: mainPanel.contentBottomInset
+            headingState: heading
             onRevealHeadingRequested: root.revealHeading()
+            onRestoreHeadingRequested: root.restoreHeading()
             onCollapseHeadingRequested: root.collapseHeading()
+            onRetireHeadingRequested: root.retireHeading()
             onQuickLookRequested: folderActions.requestPreview()
             onNewTabRequested: function(path, foreground) {
                 root.requestNewTab(path, foreground)
@@ -613,7 +601,7 @@ Item {
                     mouse.accepted = false   // over an item → item handles it
                     return
                 }
-                folderListView.forceActiveFocus()
+                root.focusView()   // the view on screen, not always the list
                 base = (mouse.modifiers & Qt.ControlModifier)
                        ? Object.assign({}, mainPanel.selectedTokens)
                        : {}
@@ -676,22 +664,34 @@ Item {
         id: folderHeading
         z: 9
         x: CelestinaTheme.compFloatingInset
-        y: CelestinaTheme.compFloatingInset
-        width: root.width - 2 * CelestinaTheme.compFloatingInset
-        opacity: routeReveal.progress
-        scale: routeReveal.revealScale
-        compact: !root.headingExpanded
+        y: x * (1 - retiredProgress)
+        width: root.width - 2 * x
+        opacity: routeReveal.progress; scale: routeReveal.revealScale
+        compact: !heading.expanded
+        retired: heading.retired
         controller: tabController
         hostWindow: root.hostWindow
         shortcutActive: root.active && !root.navigationBlocked
         onPhoneMediaRequested: index => folderActions.openPhoneMedia(index)
     }
 
+    PhoneMediaUnderBar {
+        bar: topBar; heading: folderHeading
+        onClicked: folderActions.openPhoneMedia(folderHeading.phoneIndex)
+    }
+
     TopBar {
         id: topBar
         z: 10
+        headingRetired: folderHeading.retiredProgress
+        phoneLocation: folderHeading.phoneLocation
+        phoneConnected: folderHeading.phoneConnected
+        phoneIndex: folderHeading.phoneIndex
+        onPhoneMediaRequested: index => folderActions.openPhoneMedia(index)
         x: mainPanel.floatingChromeX
         y: folderHeading.y + folderHeading.height + CelestinaTheme.spaceLg
+           * (1 - folderHeading.retiredProgress) + CelestinaTheme.compFloatingInset
+           * folderHeading.retiredProgress
         width: mainPanel.floatingChromeWidth
         height: CelestinaTheme.controlHeightLg
         // No route reveal here: fading the breadcrumb and the search field —

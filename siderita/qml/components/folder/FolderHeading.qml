@@ -10,7 +10,13 @@ Item {
     required property var hostWindow
     required property bool shortcutActive
     property bool compact: false
+    // Retired is a third state, past compact: the heading is not there at all
+    // and the listing takes its band. Compact remains what a folder shows by
+    // default — the mistake this replaces made "compact" mean "gone", which
+    // left the window with no title at all and the rows sliding under the bars.
+    property bool retired: false
     property real compactProgress: compact ? 1 : 0
+    property real retiredProgress: retired ? 1 : 0
     signal phoneMediaRequested(int index)
 
     readonly property int phoneIndex: {
@@ -35,6 +41,13 @@ Item {
             phoneInfo.length > 3 && phoneInfo[3] === "1"
 
     Behavior on compactProgress {
+        NumberAnimation {
+            duration: CelestinaTheme.motionNormal
+            easing.type: CelestinaTheme.easeStandard
+        }
+    }
+
+    Behavior on retiredProgress {
         NumberAnimation {
             duration: CelestinaTheme.motionNormal
             easing.type: CelestinaTheme.easeStandard
@@ -125,8 +138,13 @@ Item {
     readonly property real expandedHeight:
             secondaryMetadata.length > 0 ? 116 : 98
     readonly property real compactHeight: 60
-    height: Math.round(expandedHeight
-                       + (compactHeight - expandedHeight) * compactProgress)
+    height: Math.round((expandedHeight
+                        + (compactHeight - expandedHeight) * compactProgress)
+                       * (1 - retiredProgress))
+    opacity: 1 - retiredProgress
+    visible: opacity > 0.01
+    // Nothing may spill out of a band that is closing.
+    clip: true
 
     Column {
         x: root.phoneLocation ? 12 : 6
@@ -195,19 +213,16 @@ Item {
         }
     }
 
-    CelestinaIconButton {
+    PhoneMediaButton {
         id: mediaButton
 
         anchors.right: parent.right
         anchors.rightMargin: 12
         anchors.verticalCenter: parent.verticalCenter
-        visible: root.phoneLocation
-        enabled: root.phoneConnected
-        density: CelestinaButton.Regular
-        iconName: "music"
-        fallbackIcon: "audio-x-generic"
-        Accessible.name: root.phoneConnected
-                         ? "Multimedia del móvil" : "Móvil desconectado"
+        // Present in both heading states — expanded and compact — and handed
+        // over to the path bar only once the heading itself is gone.
+        visible: root.phoneLocation && root.retiredProgress < 0.5
+        connected: root.phoneConnected
         onClicked: root.phoneMediaRequested(root.phoneIndex)
     }
 

@@ -9,7 +9,7 @@ use siderita_core::{
     ViewOptions, WatchState,
 };
 
-/// The filesystem debouncer type kept alive for the controller's lifetime.
+/// The debouncer type the shared watch register owns.
 type FsDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
 use siderita_ops::TrashEntry;
 use siderita_qt::{EntryRow, SnapshotAdapter, ViewSnapshot};
@@ -73,6 +73,11 @@ pub mod qobject {
         #[qproperty(QString, current_path)]
         #[qproperty(QString, current_path_key)]
         #[qproperty(QString, marked_key)]
+        /// The breadcrumbs for the folder being shown, `key\tname` per entry.
+        /// Composed here because QML does not build paths: a Magnetita mount
+        /// collapses into one device crumb, and each crumb carries the key its
+        /// click navigates to.
+        #[qproperty(QStringList, path_crumbs)]
         #[qproperty(QStringList, collapsed_sections)]
         #[qproperty(QString, status_text)]
         #[qproperty(QString, error_text)]
@@ -213,23 +218,15 @@ pub mod qobject {
         #[qinvokable]
         fn go_up(self: Pin<&mut SideritaController>);
 
-        /// Navigates to whatever a person typed into the path bar: an absolute
-        /// or relative path, `~`, or a `file://` URI. This is the one entry
-        /// that takes prose rather than a key, because prose is what a keyboard
-        /// produces; everything the interface already holds uses `open_key`.
+        /// Navigates to whatever a person typed into the path bar: a path,
+        /// `~`, or a `file://` URI. The one entry that takes prose rather than
+        /// a key, because prose is what a keyboard produces.
         #[qinvokable]
         fn open_location(self: Pin<&mut SideritaController>, location: &QString);
 
         /// Navigates to the folder a path key names.
         #[qinvokable]
         fn open_key(self: Pin<&mut SideritaController>, key: &QString);
-
-        /// The breadcrumbs for the folder being shown, as `name\tkey` lines.
-        /// Composed here because QML does not build paths: a Magnetita mount
-        /// collapses into one device crumb, and each crumb carries the key its
-        /// click will navigate to.
-        #[qinvokable]
-        fn path_segments(self: &SideritaController) -> QStringList;
 
         /// The key for `name` inside the folder being shown — how a surface
         /// that lets someone type a file name (the save picker) names the file
@@ -323,9 +320,8 @@ pub mod qobject {
         #[qinvokable]
         fn reveal_path(self: Pin<&mut SideritaController>, path: &QString);
 
-        /// A bounded, read-only text preview of the file at `path` for the
-        /// quick-look overlay: up to a fixed byte budget, decoded lossily.
-        /// Returns an empty string for a binary file (or one it cannot read),
+        /// A bounded, read-only text preview for the quick-look overlay,
+        /// decoded lossily. Empty for a binary file — or one it cannot read —
         /// which the overlay reads as "no text preview".
         #[qinvokable]
         fn preview_text(self: &SideritaController, path: &QString) -> QString;
@@ -729,6 +725,7 @@ pub(crate) mod shell;
 mod sorting;
 mod trash;
 mod view_options;
+mod watchreg;
 
 pub(crate) use actions::{ConflictStrategy, UndoAction};
 pub(crate) use display::{display_name, kind_key, kind_label, row_subtitle, search_hit_parent};
@@ -741,6 +738,7 @@ pub struct SideritaControllerRust {
     current_path: QString,
     current_path_key: QString,
     marked_key: QString,
+    path_crumbs: QStringList,
     collapsed_sections: QStringList,
     status_text: QString,
     error_text: QString,
@@ -760,6 +758,9 @@ pub struct SideritaControllerRust {
     adapter: SnapshotAdapter,
     options: ViewOptions,
     snapshot: Option<DirectorySnapshot>,
+    // Where the window says it is: what was published, and for what folder.
+    published_digest: Option<u64>,
+    published_location: Option<PathBuf>,
     view: Option<ViewSnapshot>,
     pending_nav: Option<PendingNav>,
     /// Whether the scan generation now in flight is a background watcher
@@ -769,7 +770,6 @@ pub struct SideritaControllerRust {
     quiet_scan: bool,
     watch: Option<WatchState>,
     watched: Option<PathBuf>,
-    debouncer: Option<FsDebouncer>,
     watch_degraded: bool,
     folder_visible_count: i32,
     folder_total_count: i32,
@@ -827,8 +827,6 @@ pub struct SideritaControllerRust {
     op_icons: QStringList,
     op_steps: QStringList,
     op_paused: QStringList,
-    /// The extraction batch parked on a password question, if any: an encrypted
-    /// archive turns one operation into two halves with a person in between.
     pending_password: Option<crate::controller::archive::Pending>,
     conflict_pending: bool,
     conflict_count: i32,
@@ -898,6 +896,7 @@ impl Default for SideritaControllerRust {
             current_path: QString::default(),
             current_path_key: QString::default(),
             marked_key: QString::default(),
+            path_crumbs: QStringList::default(),
             // Read at construction so a folded section is already folded when
             // the sidebar first draws.
             collapsed_sections: marks::folded_list(&settings.collapsed_sections),
@@ -923,12 +922,13 @@ impl Default for SideritaControllerRust {
             adapter: SnapshotAdapter::new(),
             options,
             snapshot: None,
+            published_digest: None,
+            published_location: None,
             view: None,
             pending_nav: None,
             quiet_scan: false,
             watch: None,
             watched: None,
-            debouncer: None,
             watch_degraded: false,
             folder_visible_count: 0,
             folder_total_count: 0,

@@ -115,7 +115,7 @@
 2	siderita/qml/components/folder/FolderActions.qml
 3	siderita/qml/components/folder/FolderBottomStatus.qml
 2	siderita/qml/components/folder/FolderEmptyState.qml
-6	siderita/qml/components/folder/FolderHeading.qml
+5	siderita/qml/components/folder/FolderHeading.qml
 2	siderita/qml/components/sidebar/SidebarChevron.qml
 12	siderita/qml/components/sidebar/SidebarContextMenus.qml
 2	siderita/qml/components/sidebar/SidebarInfo.qml
@@ -133,7 +133,7 @@
 6	siderita/qml/menus/FolderSortMenu.qml
 6	siderita/qml/menus/PathMenu.qml
 4	siderita/qml/menus/SizePopup.qml
-14	siderita/qml/views/FolderView.qml
+10	siderita/qml/views/FolderView.qml
 14	siderita/qml/views/Sidebar.qml
 9	siderita/scripts/qml-tests.sh
 6	siderita/scripts/run.sh

@@ -3,8 +3,6 @@ use std::path::{Path, PathBuf};
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
-use notify_debouncer_full::notify::{EventKind, RecursiveMode};
-use notify_debouncer_full::{new_debouncer, DebounceEventResult};
 use siderita_core::{DirectorySnapshot, EntryKind, PublishOutcome, ScanResult, WatchState};
 use siderita_qt::RowKind;
 
@@ -261,6 +259,23 @@ impl qobject::SideritaController {
             }
         };
 
+        // A watcher tick that changed nothing visible must cost nothing. The
+        // folder is rescanned either way — that is how we learn it did not
+        // change — but publishing it again resets the model, rebuilds every
+        // delegate and re-evaluates every binding, which measured 124 ms of CPU
+        // in a 2 000-entry folder for a file nobody could see.
+        //
+        // The digest covers exactly what crosses to QML, so two projections
+        // with the same digest produce the same view by construction.
+        let digest = projection_digest(self.rust().history.current(), &view, &metadata);
+        if self.rust().published_digest == Some(digest) {
+            // The projection itself is still kept: selection, keyboard
+            // navigation and the verbs all read it.
+            self.as_mut().rust_mut().get_mut().view = Some(view);
+            return;
+        }
+        self.as_mut().rust_mut().get_mut().published_digest = Some(digest);
+
         let names: QStringList = view
             .rows()
             .iter()
@@ -393,6 +408,16 @@ impl qobject::SideritaController {
         );
     }
 
+    /// Forgets what was last published, so the next projection is handed over
+    /// even if it matches.
+    ///
+    /// Search results, the Trash and Recientes write rows by their own route;
+    /// without this, returning to the folder underneath would find a matching
+    /// fingerprint and publish nothing over them.
+    pub(crate) fn invalidate_published_rows(mut self: Pin<&mut Self>) {
+        self.as_mut().rust_mut().get_mut().published_digest = None;
+    }
+
     /// Publishes the folder being shown twice over, as ADR 0008 requires: the
     /// lossy text a person reads, and the key every verb and every navigation
     /// hands back.
@@ -402,6 +427,13 @@ impl qobject::SideritaController {
             .set_current_path(QString::from(display.as_str()));
         self.as_mut()
             .set_current_path_key(crate::pathkey::publish(location));
+        // Kept beside the published key so every part of the window answers
+        // "where am I?" from one place. The history answers a different
+        // question — where I have *been* — and it is only committed once a scan
+        // succeeds, so reading it to paint left the breadcrumbs a folder behind
+        // whenever a navigation did not commit.
+        self.as_mut().rust_mut().get_mut().published_location = Some(location.to_path_buf());
+        self.as_mut().publish_crumbs(location);
         self.as_mut().publish_marked_key();
     }
 
@@ -435,52 +467,13 @@ impl qobject::SideritaController {
         }
     }
 
-    /// Creates the filesystem debouncer once. Its callback runs on the notify
-    /// thread and only marshals a coalesced "something changed" back to the Qt
-    /// thread — it never touches Qt state directly.
-    pub(crate) fn ensure_debouncer(mut self: Pin<&mut Self>) {
-        if self.rust().debouncer.is_some() {
-            return;
-        }
-        let qt = self.qt_thread();
-        let created = new_debouncer(
-            std::time::Duration::from_millis(200),
-            None,
-            move |result: DebounceEventResult| {
-                match result {
-                    Ok(events) => {
-                        // Ignore Access events (open/close/read) — our own scan
-                        // opens the directory, which notify reports as IN_OPEN;
-                        // reacting to that would loop scan → open → scan. Only a
-                        // real content change (create/modify/remove/rename) counts.
-                        let content_changed = events
-                            .iter()
-                            .any(|event| !matches!(event.event.kind, EventKind::Access(_)));
-                        if content_changed {
-                            let _ = qt.queue(
-                                move |controller: Pin<&mut qobject::SideritaController>| {
-                                    controller.on_fs_change(false);
-                                },
-                            );
-                        }
-                    }
-                    Err(_errors) => {
-                        let _ =
-                            qt.queue(move |controller: Pin<&mut qobject::SideritaController>| {
-                                controller.on_fs_change(true);
-                            });
-                    }
-                }
-            },
-        );
-        if let Ok(debouncer) = created {
-            self.as_mut().rust_mut().get_mut().debouncer = Some(debouncer);
-        }
-    }
-
-    /// Points the watch at `location`: a rescan of the already-watched folder
-    /// just marks the snapshot fresh again; a new folder moves the (non-recursive)
-    /// watch there. Called after every successful scan.
+    /// Points the watch at `location` through the process-wide register: a
+    /// rescan of the folder already followed just marks the snapshot fresh
+    /// again; a new folder moves this tab's interest there.
+    ///
+    /// The watch itself is shared. Three tabs on one folder used to hold three
+    /// kernel watches and wake three times for one write; now they share one,
+    /// and each still decides for itself whether anything it shows changed.
     pub(crate) fn update_watch(mut self: Pin<&mut Self>, location: &Path) {
         if self.rust().watched.as_deref() == Some(location) {
             if let Some(watch) = self.as_mut().rust_mut().get_mut().watch.as_mut() {
@@ -489,30 +482,20 @@ impl qobject::SideritaController {
             return;
         }
 
-        self.as_mut().ensure_debouncer();
-
-        let established = {
+        let thread = self.qt_thread();
+        let previous = self.rust().watched.clone();
+        let established = super::watchreg::follow(thread, previous.as_deref(), location);
+        {
             let state = self.as_mut().rust_mut();
             let state = state.get_mut();
-            let Some(debouncer) = state.debouncer.as_mut() else {
-                return;
-            };
-            if let Some(old) = state.watched.take() {
-                let _ = debouncer.unwatch(&old);
+            if established {
+                state.watched = Some(location.to_path_buf());
+                state.watch = Some(WatchState::active(location));
+            } else {
+                state.watched = None;
+                state.watch = None;
             }
-            match debouncer.watch(location, RecursiveMode::NonRecursive) {
-                Ok(()) => {
-                    state.watched = Some(location.to_path_buf());
-                    state.watch = Some(WatchState::active(location));
-                    true
-                }
-                Err(_) => {
-                    state.watched = None;
-                    state.watch = None;
-                    false
-                }
-            }
-        };
+        }
         self.as_mut().set_watch_degraded(!established);
     }
 
@@ -552,6 +535,42 @@ impl qobject::SideritaController {
             self.as_mut().refresh_quiet();
         }
     }
+}
+
+/// A fingerprint of everything a projection publishes.
+///
+/// Rows first — name, kind, size, date and the key each verb hands back — then
+/// the folder counts the heading and the sidebar read. Two projections with the
+/// same fingerprint would produce the same view, so republishing one is work
+/// with no outcome.
+fn projection_digest(
+    location: Option<&Path>,
+    view: &siderita_qt::ViewSnapshot,
+    metadata: &FolderMetadata,
+) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    // The folder itself, so moving between two identically-empty folders still
+    // publishes: same rows, different place.
+    location.hash(&mut hasher);
+    view.rows().len().hash(&mut hasher);
+    for row in view.rows() {
+        row.display_name().hash(&mut hasher);
+        row.token().to_string().hash(&mut hasher);
+        row.path().hash(&mut hasher);
+        (row.kind() as u8).hash(&mut hasher);
+        row.size().hash(&mut hasher);
+        row.modified().hash(&mut hasher);
+    }
+    metadata.total.hash(&mut hasher);
+    metadata.directories.hash(&mut hasher);
+    metadata.files.hash(&mut hasher);
+    metadata.hidden.hash(&mut hasher);
+    metadata.size.hash(&mut hasher);
+    metadata.modified.hash(&mut hasher);
+    metadata.accessed.hash(&mut hasher);
+    metadata.created.hash(&mut hasher);
+    hasher.finish()
 }
 
 #[cfg(test)]

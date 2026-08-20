@@ -4,6 +4,25 @@ This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md). Each failed row keeps its result and opens a new
 corrective implementation unit.
 
+## VAL-SID-10 — A quiet folder, and a heading with three states
+
+- **Status:** pending
+- **Related implementation:** `SID-A4`
+- **Requires:** a verified Siderita artifact on the real session, a folder with
+  something writing into it (a download, a build), a phone mounted, two tabs
+- **Procedure:** watch a folder while something writes in it and check the
+  window stays still and keeps its scroll position; scroll down from the big
+  heading and confirm one gesture folds it without the list jumping; keep
+  scrolling until the title retires and the box reaches the sidebar's top edge;
+  return to the top; paste with `Ctrl+V` in grid and in list; walk into a phone
+  and back out, watching the path bar
+- **Pass condition:** a watched folder does not flicker or lose its place, each
+  heading transition takes its own gesture and no extra scroll, the path bar
+  always names the folder on screen, `Ctrl+V` works in both modes, and the media
+  button sits under the search glyph once the heading is gone
+- **Result:** not run by hand
+- **Evidence:** what was writing, and any failure text
+
 ## VAL-SID-09 — Pausing a job, watched from another tab
 
 - **Status:** pending

@@ -121,6 +121,7 @@ impl qobject::SideritaController {
         self.as_mut().publish_marked_key();
         self.as_mut().set_selected_token(QString::default());
         self.as_mut().set_entry_names(names.clone());
+        self.as_mut().invalidate_published_rows();
         self.as_mut().rows_ready(
             names, tokens, kinds, subtitles, paths, sections, sizes, dates,
         );
@@ -199,6 +200,7 @@ impl qobject::SideritaController {
         self.as_mut().set_recent_count(count);
         self.as_mut().set_selected_token(QString::default());
         self.as_mut().set_entry_names(names.clone());
+        self.as_mut().invalidate_published_rows();
         self.as_mut().rows_ready(
             names, tokens, kinds, subtitles, paths, sections, sizes, dates,
         );

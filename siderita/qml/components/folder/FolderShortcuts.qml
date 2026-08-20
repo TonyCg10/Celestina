@@ -97,7 +97,16 @@ Item {
 
     Shortcut {
         sequences: [StandardKey.Paste]
-        enabled: root.viewActive && root.controller.canPaste
+        // Not gated on `canPaste`: that property is a *menu* state, refreshed
+        // when the folder menu opens, so it stays false after copying in
+        // another application — or in another tab, since the internal clipboard
+        // belongs to a controller. The shortcut would then do nothing at all,
+        // with no way for a person to tell why.
+        //
+        // `paste()` already reads the system clipboard itself and does nothing
+        // when there is nothing to paste, so asking it is both cheaper and
+        // truer than asking a cached answer.
+        enabled: root.viewActive && !root.controller.trashActive
         onActivated: root.controller.paste()
     }
 

@@ -16,6 +16,20 @@ Item {
     id: root
 
     property var controller
+    // How far the heading has retired, 0…1. The path bar takes over from it:
+    // the current folder is set in caps and weight as the title fades, so the
+    // name never disappears from the window — it changes seat.
+    property real headingRetired: 0
+    // Whether this location is a phone, and whether it answers. Handed down
+    // from the heading, which already works both out; asking twice would be a
+    // second definition of the same thing.
+    // Where the search glyph sits, measured from this bar's right edge, so a
+    // control placed below it can line up without reaching inside.
+    readonly property real searchCentreFromRight: searchCollapsedWidth / 2
+    property bool phoneLocation: false
+    property bool phoneConnected: false
+    property int phoneIndex: -1
+    signal phoneMediaRequested(int index)
     property Item activeView    // fileList o fileGrid según el modo (lo fija quien instancia)
     property var hostWindow
     property Item overlayParent
@@ -90,14 +104,14 @@ Item {
             root.viewFocusRequested()
         }
 
-        // The crumbs come from the controller as `key\tname` lines. QML does
-        // not compose paths (ADR 0008): joining components is a path operation,
-        // and a crumb has to carry the exact bytes its click navigates to.
-        // The key is first because a tab is a legal filename character: it can
-        // only ever appear in the name, which is the remainder after the cut.
-        function pathSegments() {
+        // The crumbs arrive as `key\tname` lines on a published property. QML
+        // does not compose paths (ADR 0008): joining components is a path
+        // operation, and a crumb has to carry the exact bytes its click
+        // navigates to. The key is first because a tab is a legal filename
+        // character: it can only ever appear in the name, which is the
+        // remainder after the cut.
+        function splitCrumbs(lines) {
             const segs = []
-            const lines = root.controller.pathSegments()
             for (let idx = 0; idx < lines.length; idx++) {
                 const cut = lines[idx].indexOf("\t")
                 if (cut <= 0)
@@ -173,12 +187,9 @@ Item {
 
             Repeater {
                 id: crumbRepeater
-                model: {
-                    root.controller.phoneNames.length
-                    root.controller.phoneMounts.length
-                    root.controller.currentPathKey
-                    return pathPill.pathSegments()
-                }
+                // Straight off the property: no bare reads to declare a
+                // dependency with, and nothing for a compiler to drop.
+                model: pathPill.splitCrumbs(root.controller.pathCrumbs)
 
                 delegate: Row {
                     id: crumb
@@ -212,12 +223,26 @@ Item {
                         Text {
                             id: crumbText
                             anchors.centerIn: parent
-                            text: crumb.modelData.name
-                            color: crumb.index === crumbRepeater.count - 1
+                            readonly property bool current:
+                                    crumb.index === crumbRepeater.count - 1
+                            // Only the folder you are in takes the accent, and
+                            // only once the heading is gone.
+                            readonly property bool accented:
+                                    crumbText.current && root.headingRetired > 0.5
+                            text: crumbText.accented
+                                  ? crumb.modelData.name.toLocaleUpperCase()
+                                  : crumb.modelData.name
+                            color: crumbText.current
                                    ? CelestinaTheme.text
                                    : CelestinaTheme.textMuted
                             font.family: CelestinaTheme.sansFamily
+                            font.weight: crumbText.accented
+                                         ? CelestinaTheme.weightDemiBold
+                                         : CelestinaTheme.weightRegular
                             font.pixelSize: Math.round(CelestinaTheme.fontRowSecondary * root.hostWindow.interfaceTextScale)
+                            Behavior on font.pixelSize {
+                                NumberAnimation { duration: CelestinaTheme.motionFast }
+                            }
                         }
 
                         MouseArea {

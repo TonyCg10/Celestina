@@ -1,7 +1,7 @@
 # Siderita implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** SID-A3
+- **Active implementation checkpoint:** SID-A4
 - **Related author validation:** `VAL-SID-G7`, `VAL-SID-04` and `VAL-SID-07` in
   [VALIDATION.md](VALIDATION.md); none of them blocks implementation
 
@@ -88,6 +88,25 @@ The plan is
 [Pause and global scope](docs/plans/active/2026-08-19-pause-and-global-scope.md).
 It excludes pausing a delegated RAR/7z extraction, whose writer is another
 process, and the author's own pass, which is `VAL-SID-09`.
+
+## SID-A4 — What the window costs, and what it shows
+
+The author asked for a performance audit. It measured rather than guessed, and
+found two things worth fixing: a folder being written to spent 124 ms of CPU per
+change even when nothing visible had changed — `beginResetModel` drops every
+delegate — and resolving a launcher's icon cost 165 `stat` calls per cell with
+no cache. Scanning and projecting were never the problem: 41.9 ms for 50 000
+entries.
+
+Checking the result turned up the rest: `Ctrl+V` did nothing in grid mode, the
+crumbs named the previous folder, the heading needed three states rather than
+two, and the content box agreed with neither the sidebar nor the info box about
+where the window's edge is.
+
+The plan is
+[What the window costs, and what it shows](docs/plans/active/2026-08-20-what-the-window-costs-and-shows.md).
+It excludes publishing row patches from Rust, and the author's own pass, which
+is `VAL-SID-10`.
 
 ## SID-M1 — Parent portal pickers on Wayland
 

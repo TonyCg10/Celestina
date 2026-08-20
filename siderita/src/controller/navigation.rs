@@ -141,15 +141,23 @@ impl qobject::SideritaController {
         self.as_mut().request_nav_scan(PendingNav::To(destination));
     }
 
-    /// The breadcrumbs for the folder being shown, as `key\tname` lines.
-    pub fn path_segments(&self) -> QStringList {
-        let Some(location) = self.rust().history.current() else {
-            return QStringList::default();
-        };
-        crumbs(location, &self.rust().phones)
+    /// Publishes the breadcrumbs for `location`, as `key\tname` lines.
+    ///
+    /// A published property, not a method QML calls. It was a method, read
+    /// inside a binding that listed `currentPathKey` on a line of its own to
+    /// declare the dependency — and a bare read like that is exactly what the
+    /// QML compiler is free to drop, which leaves the crumbs frozen on whatever
+    /// folder they were built for. A property cannot lose its own change
+    /// signal.
+    ///
+    /// Built from the location being published rather than from the history,
+    /// which only commits once a scan succeeds.
+    pub(crate) fn publish_crumbs(mut self: Pin<&mut Self>, location: &Path) {
+        let crumbs: QStringList = crumbs(location, &self.rust().phones)
             .iter()
             .map(|(name, path)| QString::from(segment_line(name, path).as_str()))
-            .collect()
+            .collect();
+        self.as_mut().set_path_crumbs(crumbs);
     }
 
     /// The key for `name` inside the folder being shown.
@@ -276,6 +284,34 @@ mod tests {
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
     use std::path::{Path, PathBuf};
+
+    /// The crumbs follow the folder the window is *showing*.
+    ///
+    /// They used to be read from the history, which is only committed once a
+    /// scan succeeds — so a navigation that did not commit left the crumbs on
+    /// the previous folder while the heading and the sidebar had already moved,
+    /// which is exactly what the author saw: `toni` in the title, `Documentos`
+    /// in the path bar.
+    #[test]
+    fn crumbs_follow_the_published_folder_not_the_history() {
+        let published = PathBuf::from("/home/toni");
+        let history_behind = PathBuf::from("/home/toni/Documentos");
+
+        let shown: Vec<String> = crumbs(&published, &[])
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+        let stale: Vec<String> = crumbs(&history_behind, &[])
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+
+        assert_eq!(shown, ["/", "home", "toni"]);
+        assert_ne!(shown, stale, "the two sources must be distinguishable");
+        // The published folder is the last crumb: no trailing folder from
+        // wherever the history happens to be.
+        assert_eq!(shown.last().map(String::as_str), Some("toni"));
+    }
 
     #[test]
     fn crumbs_walk_every_level_and_keep_the_bytes() {

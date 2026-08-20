@@ -819,6 +819,7 @@ dependencies = [
  "fluorita-core",
  "libmpv2",
  "notify-debouncer-full",
+ "siderita-ops",
 ]
 
 [[package]]
@@ -979,6 +980,7 @@ name = "grafita-core"
 version = "1.0.0"
 dependencies = [
  "celestina-core",
+ "flate2",
  "xattr",
 ]
 
@@ -2098,7 +2100,7 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
 name = "siderita"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "async-channel",
  "celestina-core",

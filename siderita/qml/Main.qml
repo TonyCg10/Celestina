@@ -476,10 +476,12 @@ ApplicationWindow {
         // ── Documents: one per tab, only the active one visible ──────────
         Item {
             id: documentRegion
-            x: sidebarPanel.panelVisible ? sidebarPanel.rightEdge + 14 : 14
-            y: 14
-            width: parent.width - x - 14
-            height: parent.height - y - 14
+            x: sidebarPanel.panelVisible
+               ? sidebarPanel.rightEdge + CelestinaTheme.windowMargin
+               : CelestinaTheme.windowMargin
+            y: CelestinaTheme.windowMargin
+            width: parent.width - x - CelestinaTheme.windowMargin
+            height: parent.height - y - CelestinaTheme.windowMargin
 
             Repeater {
                 id: tabRepeater

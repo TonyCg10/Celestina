@@ -50,7 +50,9 @@ public:
                              const QStringList &sizes,
                              const QStringList &dates);
 
-private:
+    // Public because `setRows` compares two of these to work out what the view
+    // needs to be told — the alternative was doing that comparison inline over
+    // eight parallel lists, which reads far worse than one named row.
     struct Row {
         QString name;
         QString token;
@@ -62,6 +64,8 @@ private:
         QString dateText;
         bool isDir;
     };
+
+private:
     QVector<Row> m_rows;
 };
 

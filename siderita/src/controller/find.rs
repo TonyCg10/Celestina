@@ -157,6 +157,7 @@ impl qobject::SideritaController {
         // A fresh result set drops any selection carried over from the folder.
         self.as_mut().set_selected_token(QString::default());
         self.as_mut().set_entry_names(names.clone());
+        self.as_mut().invalidate_published_rows();
         self.as_mut().rows_ready(
             names,
             tokens,

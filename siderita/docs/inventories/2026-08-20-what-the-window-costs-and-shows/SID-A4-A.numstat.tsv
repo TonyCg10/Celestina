@@ -1,0 +1,60 @@
+# SID-A4-A exact change inventory
+
+Base revision	c6be83ec7a71f9387e902bcbd00873b07439046f
+Pathspec	docs/version-history.tsv
+Pathspec	scripts/language-baseline.tsv
+Pathspec	scripts/qmllint-baseline.tsv
+Pathspec	siderita/build.rs
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/ROADMAP.md
+Pathspec	siderita/VALIDATION.md
+Pathspec	siderita/cpp/
+Pathspec	siderita/qml/
+Pathspec	siderita/tests/
+Pathspec	siderita/src/controller/
+Pathspec	siderita/src/controller.rs
+Pathspec	siderita/src/ownicon.rs
+Pathspec	siderita/docs/plans/active/2026-08-20-what-the-window-costs-and-shows.md
+Pathspec	siderita/docs/evidence/2026-08-20-what-the-window-costs-and-shows.md
+Pathspec	siderita/docs/inventories/2026-08-20-what-the-window-costs-and-shows/SID-A4-A.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	7e57363b7bed35ff38b6c97c27050fc00fb558df2890ce06d33510dbef3c5890	docs/version-history.tsv
+2	2	5990ab0015121cd5b45a989a4056cb1ea83a77db224218ae6924708d264c0ab2	scripts/language-baseline.tsv
+1	1	a46c88a276f56735e31388f1a6dc5a6d2ffc4106cd9d07f1e6925ebfb493c3ea	scripts/qmllint-baseline.tsv
+3	1	7f9c7fc52ada28674e9a66110f38971ca3ebb45ef1681e52511528235ff9d098	siderita/Cargo.lock
+1	1	28c36f4329ef54e34a26a1194b751b0a3e7c5a96a9b2b7aaac337393602c8266	siderita/Cargo.toml
+20	1	b43d50782d4b04caf25dbd6f5c1a7688f2db0621572b20aa4f0d844ea1dca311	siderita/ROADMAP.md
+19	0	896b1ebd1ecf687e3c4d872b5c91512731494dad047f3369acea2711d9b41eaf	siderita/VALIDATION.md
+3	0	27977f8982213de3a88cc55a93120e51f820699f7ea7aee6bdda4be14afc2253	siderita/build.rs
+121	14	68779aaa6a4d64d83d94359ea50cc70380fbf37a4d205ed7d6e1afb9661f7baf	siderita/cpp/entrymodel.cpp
+5	1	575fbf30fde8883a904bc11d000e97438ad5ee77c863feabfceb3ac98f5ad97e	siderita/cpp/siderita/entrymodel.h
+85	0	36cbe6c09a2f0951868c2e797b95aec6274137aedad149a11bb6d7a0b9c36c0d	siderita/docs/evidence/2026-08-20-what-the-window-costs-and-shows.md
+60	0	self	siderita/docs/inventories/2026-08-20-what-the-window-costs-and-shows/SID-A4-A.numstat.tsv
+82	0	99e341711ac0984919f86cfb63acacf877a0463106552541aaa12aa52f6c5a45	siderita/docs/plans/active/2026-08-20-what-the-window-costs-and-shows.md
+6	4	f1c022686b6345aa7bdf55e0305383922c49da3bcf503f89bc4b8bf4529b8afc	siderita/qml/Main.qml
+40	15	fcdb507abb879641c35012db2277760a8183e2fd025a36f19ce08eb184f8418d	siderita/qml/components/chrome/TopBar.qml
+10	6	4e970d8606021ce635f314954de32f93923335793a7c5d372c5b435358a9dc6f	siderita/qml/components/folder/FolderContentFrame.qml
+11	0	d1a3d79a6c38eea99df4445b921e152656770fddd047a01b52efccd90fef7ace	siderita/qml/components/folder/FolderGridView.qml
+25	10	a26d63bc01d0fd7eb9185d1cd2127d0c946cafefb192a9d4fa3413bbc3dbb8a5	siderita/qml/components/folder/FolderHeading.qml
+11	0	de300cb18523a15dd7319bef899ffb098472bb817e9819197e0ca911ae34c922	siderita/qml/components/folder/FolderListView.qml
+10	1	685851f7c5876c6ade95faeaa5984a0e49040a8a5ff5a83a4f3c13e9e3494b10	siderita/qml/components/folder/FolderShortcuts.qml
+77	18	5c117b2bd1cde9f8949b15a665707a821c5f1d77f985e7894e96d66f18bd77d2	siderita/qml/components/folder/FolderWheelHandler.qml
+46	0	dd546796ae36aabfb6307a307be441e57cdc8bed30957e24dd5822893e4e458e	siderita/qml/components/folder/HeadingState.qml
+26	0	bd441bcb5cc9b3efd2d34df38d0b1b513584be9883468a2268f7751dcb19d1de	siderita/qml/components/folder/PhoneMediaButton.qml
+27	0	7dc009b75f05e565098093acb45404dd166e855294ed56d6befda3108a35b83b	siderita/qml/components/folder/PhoneMediaUnderBar.qml
+57	57	4932cb5f9c5c190290a1d026a7ac01f3278830c8ad4c35d6d706cf4ebdea7afc	siderita/qml/views/FolderView.qml
+5	4	6c528a19bc054d1a1beadb167ea42372e70d8e7f6de009ce17577e11f2199c4c	siderita/qml/views/Sidebar.qml
+19	19	2f51d71deae6ae21a6b5a2fdacf6eb235d003637ba86c6efd355a414b681fa96	siderita/src/controller.rs
+1	0	3e6ccef0273dda00d8b97e8367f11bdd36ccb71bcf25de640a84e0dab5c0bb50	siderita/src/controller/find.rs
+43	7	9c53c3b261d86ae0275a3d3307451c3be3a5f5630c97102939db50938ba251af	siderita/src/controller/navigation.rs
+88	69	4b1bd74830e865cc8d95553589a639f739d15a81b5f815f52a739340a73cd8e4	siderita/src/controller/scan.rs
+2	0	d4d14db7a1c5156d073f25c5e06eec6d9b290b80feb0dfdb4341f53ad0127ee9	siderita/src/controller/trash.rs
+186	0	d19c8f8c7c2fc3dff1613a78b787be7a63cde06a2fe0bfbdc5634ab3386ae05e	siderita/src/controller/watchreg.rs
+169	2	c75aa410bd43ccdf9c643016fbb5478fa0ede249d03c43fd84158701cd73103d	siderita/src/ownicon.rs
+121	0	bdec7aba50ffdcf6ed6d99bd2a12b729391616c11114292499ceb18d82806f0c	siderita/tests/qml/tst_heading_retire.qml
+53	0	cad564620f0a1855232b364eef90dd48164fc4dc462493a380d3f58512fa4c22	siderita/tests/qml/tst_media_button_place.qml
+65	0	28538ab1594e0227ea45be423ff9403aafde568408b513df567b56986d563f9e	siderita/tests/qml/tst_paste_shortcut.qml
