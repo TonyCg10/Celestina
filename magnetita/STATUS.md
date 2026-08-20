@@ -1,30 +1,29 @@
 # Magnetita status
 
-- **Updated:** 2026-08-06
-- **Implementation:** `MAG-R1-A`–`MAG-R1-D` are implemented and uncommitted; `MAG-S1` is active — the 2026-08-05 static audit's
-  Magnetita findings are corrected in source and covered by tests, but not
-  built, deployed or committed; `MAG-M1` remains planned
-- **Author validation:** the original 1.0 daily set passed on the real phone;
-  the hardening revalidation and the two new `MAG-S1` checks are pending in
-  [VALIDATION.md](VALIDATION.md)
+- **Updated:** 2026-08-19
+- **Implementation:** `MAG-S1` (hostile network input) and `MAG-R1` (the
+  one-button wireless mirror) are delivered, committed and deployed. `MAG-R2`
+  (the mirror without discovery) is committed but **not deployed**. `MAG-M1`
+  remains planned and unimplemented
+- **Author validation:** the original 1.0 daily set passed on the real phone,
+  before the 2026-07-29 hardening. **Every one of `VAL-MAG-01` through
+  `VAL-MAG-04` and `VAL-MAG-06` through `VAL-MAG-09` is still pending**, so no
+  corrected path has an author pass against the phone. This, not the code, is
+  Magnetita's largest open risk
 
 ## Current checkout truth
 
-- Uncommitted in the checkout: `MAG-R1-A` through `MAG-R1-D`, the new
-  [`MAG-R1`](ROADMAP.md) wireless-mirror checkpoint. `magnetita-core` gains the
-  pure `mirror` module, `magnetitad` gains `mirror_discovery` over
-  `avahi-browse`, a resident worker that owns `adb` and `scrcpy` by pid, and a
-  new `org.celestina.Mirror1`; the app gains a Mirror control. Verified by
-  `cargo fmt`/`clippy -D warnings`/`cargo test` and `qmllint`.
-- `MAG-R1-E` has not run. `build-production.sh` and `verify-production.sh` pass
-  and leave the service untouched; `complete-production.sh` was refused by the
-  session guard because it stops and restarts the live `magnetitad`. The
-  installed daemon still has no mirror, and the real phone has never been
-  observed advertising. `VAL-MAG-08` is the exit and is pending.
-
-- Uncommitted in the checkout: `MAG-S1-C`. The one arm of the TLS handshake loop
-  that retried without waiting now sleeps the same interval the socket timeout
-  uses, so it cannot spin a pump thread until the deadline.
+- The checkout is clean of Magnetita work: `MAG-S1`, `MAG-R1` and `MAG-R2` are
+  all committed.
+- The installed daemon carries `MAG-S1`, `MAG-R1` and `MAG-R2`'s port pinning
+  and remembered endpoint, but **not** `MAG-R2`'s stale-advertisement fallback:
+  `verify-production.sh` runs a workspace-wide `cargo fmt --all --check` and
+  unrelated in-flight `grafita-core` work was failing it when that correction
+  landed. Redeploying is the only thing standing between the tree and the
+  installed bytes.
+- The mirror was observed working end to end against the real S25U, including
+  pairing on six digits alone and pinning to the fixed port. What has never been
+  observed is a mirror after a *phone* reboot (`VAL-MAG-09`).
 
 - `magnetitad` implements KDE Connect discovery, TCP/TLS trust, local pairing,
   storage mount, the daily plugins and `org.celestina.Devices1`.
@@ -38,7 +37,7 @@
   detached best-effort work and still lack a fully deterministic shutdown path.
 - Live phone evidence for the released daily set predates the 2026-07-29
   hardening; it is not reused as proof of the corrected paths.
-- Uncommitted in the checkout: `MAG-S1-B`, a new `SendFileUri` on
+- `SendFileUri` on
   `org.celestina.Devices1`. It names the file by the percent-encoded `file://`
   URI the portal and the clipboard already speak, decodes it by bytes with
   `celestina_core::percent`, and refuses a URI that is not a local `file://` one
@@ -47,15 +46,12 @@
   `serve_file` unaltered. `SendFile` itself is unchanged and stays for
   compatibility: it is a published interface and altering the meaning of its
   argument would break any other caller. Siderita's send-to-phone menu item is the
-  first consumer, under its own `SID-G7-G`. Formatted, Clippy-clean and unit
-  tested (`magnetitad`, 67 tests) with `celestina-shell-core` excluded under the
-  hardware-safety hold; no bus call, no daemon started and no file transferred —
-  that is `VAL-MAG-HARDENING`. See the
+  first consumer, under its own `SID-G7-G`. Committed and deployed; no live file
+  transfer has been observed since — that is `VAL-MAG-HARDENING`. See the
   [byte-exact send evidence](docs/evidence/2026-08-06-byte-exact-send-to-phone.md).
-- The `MAG-S1` corrections exist only in the worktree. The installed daemon
-  still carries the argument-injection, handshake-deadline, protocol-floor,
-  subprocess-bounding and key-permission defects, because the author asked for
-  the corrections without a production build or deployment.
+- The `MAG-S1` corrections are committed and installed. They have never been
+  exercised against the phone: `VAL-MAG-06` is what would prove the corrected
+  boundaries hold, and it has not been run.
 
 ## Planned implementation debt
 

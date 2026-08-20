@@ -29,6 +29,7 @@ use std::time::{Duration, Instant};
 
 use magnetita_core::mirror::{
     AdbService, MirrorAction, MirrorEndpoint, MirrorError, MirrorEvent, MirrorLink, MirrorState,
+    FIXED_PORT,
 };
 use magnetita_core::mirror_options::MirrorOptions;
 
@@ -125,7 +126,7 @@ impl Drop for MirrorWorker {
 /// `options_path` is the mirror's own settings file, a sibling of the plugin
 /// settings rather than a key inside them: the plugin flags are a published
 /// contract the app and the shell already read, and the mirror is not a plugin.
-pub(crate) fn start(options_path: PathBuf) -> (Mirror, MirrorWorker) {
+pub(crate) fn start(options_path: PathBuf, endpoint_path: PathBuf) -> (Mirror, MirrorWorker) {
     let (commands, inbox) = mpsc::channel();
     let options = load_options(&options_path);
     let snapshot = Arc::new(Mutex::new(snapshot_of(&MirrorLink::new(), &options)));
@@ -134,7 +135,14 @@ pub(crate) fn start(options_path: PathBuf) -> (Mirror, MirrorWorker) {
     let worker_snapshot = Arc::clone(&snapshot);
     let worker_stopping = Arc::clone(&stopping);
     let handle = thread::spawn(move || {
-        Session::new(worker_snapshot, worker_stopping, options, options_path).run(&inbox);
+        Session::new(
+            worker_snapshot,
+            worker_stopping,
+            options,
+            options_path,
+            endpoint_path,
+        )
+        .run(&inbox);
     });
 
     (
@@ -158,6 +166,9 @@ struct Session {
     seen_pairing: Option<Advertisement>,
     options: MirrorOptions,
     options_path: PathBuf,
+    /// Where the last reached fixed-port endpoint persists, so a daemon
+    /// restart does not lose the one way in that needs no discovery.
+    endpoint_path: PathBuf,
     /// The session's display variables, resolved fresh before each spawn.
     display_env: Vec<(String, String)>,
 }
@@ -168,9 +179,13 @@ impl Session {
         stopping: Arc<AtomicBool>,
         options: MirrorOptions,
         options_path: PathBuf,
+        endpoint_path: PathBuf,
     ) -> Self {
         Self {
-            link: MirrorLink::new(),
+            link: match load_endpoint(&endpoint_path) {
+                Some(remembered) => MirrorLink::with_remembered(remembered),
+                None => MirrorLink::new(),
+            },
             published,
             stopping,
             mirror: None,
@@ -178,6 +193,7 @@ impl Session {
             seen_pairing: None,
             options,
             options_path,
+            endpoint_path,
             display_env: Vec::new(),
         }
     }
@@ -314,9 +330,20 @@ impl Session {
             MirrorAction::Pair { endpoint, code } => Some(MirrorEvent::PairFinished {
                 paired: self.pair(endpoint, &code),
             }),
-            MirrorAction::Connect { endpoint } => Some(MirrorEvent::ConnectFinished {
-                ok: self.connect(endpoint),
-            }),
+            MirrorAction::Connect { endpoint } => {
+                let reached = self.connect(endpoint);
+                log(
+                    "mirror",
+                    &match reached {
+                        Some(reached) => format!("connected to {}", reached.serial()),
+                        None => format!("could not reach {}", endpoint.serial()),
+                    },
+                );
+                if let Some(reached) = reached {
+                    self.remember(reached);
+                }
+                Some(MirrorEvent::ConnectFinished { endpoint: reached })
+            }
             MirrorAction::StartMirror { serial } => {
                 // Resolved here, not at boot: this daemon can start before the
                 // compositor publishes the session's display, and a scrcpy with
@@ -355,27 +382,66 @@ impl Session {
         String::from_utf8_lossy(&output).contains("Successfully paired")
     }
 
-    fn connect(&self, endpoint: MirrorEndpoint) -> bool {
+    /// Reaches the phone, and returns the endpoint that actually answered.
+    ///
+    /// That is not always the one dialled. After a discovered endpoint comes
+    /// up, this pins the device to [`FIXED_PORT`] so the *next* mirror needs no
+    /// discovery at all — the port `adb tcpip` opens keeps answering when
+    /// Android has turned wireless debugging off and taken the advertisement
+    /// with it.
+    fn connect(&self, endpoint: MirrorEndpoint) -> Option<MirrorEndpoint> {
+        let reached = self.dial(endpoint)?;
+        if reached.port == FIXED_PORT {
+            return Some(reached);
+        }
+        // Best-effort: a phone that refuses to be pinned still mirrors on the
+        // endpoint that already works, so a failure here is not the mirror's.
+        Some(self.pin_fixed_port(reached).unwrap_or(reached))
+    }
+
+    /// One `adb connect`, waited until adb calls the device ready.
+    fn dial(&self, endpoint: MirrorEndpoint) -> Option<MirrorEndpoint> {
         let serial = endpoint.serial();
-        let Some(output) = self.adb(&["connect", &serial]) else {
-            return false;
-        };
+        let output = self.adb(&["connect", &serial])?;
         if !String::from_utf8_lossy(&output).contains("connected") {
-            return false;
+            return None;
         }
         // `connected` only means the socket opened. The author's script learned
         // the hard way that the device can sit `offline` afterwards, so the
         // mirror does not start until adb calls it a device.
         for _ in 0..READY_TRIES {
             if self.stopping.load(Ordering::Acquire) {
-                return false;
+                return None;
             }
             if self.device_ready(&serial) {
-                return true;
+                return Some(endpoint);
             }
             thread::sleep(Duration::from_millis(500));
         }
-        false
+        None
+    }
+
+    /// Moves the device onto [`FIXED_PORT`] and reconnects there.
+    ///
+    /// `adb tcpip` restarts `adbd`, which drops the very connection that asked
+    /// for it — so this is a disconnect and a fresh dial, not a live
+    /// reconfiguration.
+    fn pin_fixed_port(&self, reached: MirrorEndpoint) -> Option<MirrorEndpoint> {
+        let serial = reached.serial();
+        let port = FIXED_PORT.to_string();
+        self.adb(&["-s", &serial, "tcpip", &port])?;
+        let _ = self.adb(&["disconnect", &serial]);
+        thread::sleep(Duration::from_secs(1));
+
+        let pinned = self.dial(MirrorEndpoint {
+            host: reached.host,
+            port: FIXED_PORT,
+        })?;
+        log(
+            "mirror",
+            &format!("pinned {} — discovery is no longer needed", pinned.serial()),
+        );
+        Some(pinned)
     }
 
     fn device_ready(&self, serial: &str) -> bool {
@@ -413,6 +479,20 @@ impl Session {
         }
     }
 
+    /// Persists a reached fixed-port endpoint. Only the fixed port is worth
+    /// keeping: a discovered one is stale by the next toggle.
+    fn remember(&self, reached: MirrorEndpoint) {
+        if reached.port != FIXED_PORT {
+            return;
+        }
+        if let Err(error) = save_endpoint(&reached, &self.endpoint_path) {
+            log(
+                "mirror",
+                &format!("could not persist the endpoint: {error}"),
+            );
+        }
+    }
+
     fn publish(&self) {
         let snapshot = snapshot_of(&self.link, &self.options);
         let mut published = self
@@ -447,6 +527,26 @@ fn snapshot_of(link: &MirrorLink, options: &MirrorOptions) -> MirrorSnapshot {
             .map(|(key, value)| (key.to_owned(), value))
             .collect(),
     }
+}
+
+/// Reads the remembered fixed-port endpoint, or `None`.
+///
+/// Validated through [`MirrorEndpoint::parse`] like anything else that becomes
+/// a subprocess argument. This file is ours, but it is on disk and hand
+/// editable, and the parse costs nothing.
+fn load_endpoint(path: &Path) -> Option<MirrorEndpoint> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let (host, port) = text.trim().rsplit_once(':')?;
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    let endpoint = MirrorEndpoint::parse(host, port.parse().ok()?).ok()?;
+    (endpoint.port == FIXED_PORT).then_some(endpoint)
+}
+
+fn save_endpoint(endpoint: &MirrorEndpoint, path: &Path) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    celestina_core::atomic_file::replace(path, endpoint.serial().as_bytes())
 }
 
 /// Loads the stored options, falling back to defaults for a missing or corrupt
@@ -691,7 +791,10 @@ mod tests {
 
     #[test]
     fn the_worker_starts_and_joins_deterministically() {
-        let (mirror, mut worker) = start(PathBuf::from("/nonexistent/mirror.json"));
+        let (mirror, mut worker) = start(
+            PathBuf::from("/nonexistent/mirror.json"),
+            PathBuf::from("/nonexistent/mirror-endpoint"),
+        );
         assert_eq!(mirror.snapshot().state, "idle");
         worker.stop();
         // A second stop is a no-op, so Drop after an explicit stop is safe.
@@ -700,11 +803,55 @@ mod tests {
 
     #[test]
     fn a_stopped_worker_refuses_commands_instead_of_panicking() {
-        let (mirror, mut worker) = start(PathBuf::from("/nonexistent/mirror.json"));
+        let (mirror, mut worker) = start(
+            PathBuf::from("/nonexistent/mirror.json"),
+            PathBuf::from("/nonexistent/mirror-endpoint"),
+        );
         worker.stop();
         // The worker is joined; the channel may or may not have been dropped
         // yet, but neither outcome may panic.
         let _ = mirror.send(MirrorCommand::Stop);
+    }
+
+    #[test]
+    fn a_remembered_endpoint_round_trips_through_its_file() {
+        let dir = std::env::temp_dir().join(format!("magnetita-mirror-{}", std::process::id()));
+        let path = dir.join("mirror-endpoint");
+        let endpoint = MirrorEndpoint::parse("10.0.0.190", u32::from(FIXED_PORT)).unwrap();
+        save_endpoint(&endpoint, &path).expect("save");
+        assert_eq!(load_endpoint(&path), Some(endpoint));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_stored_discovery_port_is_refused_on_load() {
+        // The file is ours, but it is on disk: a hand-edited discovery port is
+        // exactly the stale cache this design refuses, so it is not honoured.
+        let dir = std::env::temp_dir().join(format!("magnetita-stale-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let path = dir.join("mirror-endpoint");
+        std::fs::write(&path, b"10.0.0.190:37059").expect("write");
+        assert_eq!(load_endpoint(&path), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_missing_or_malformed_endpoint_file_is_simply_no_memory() {
+        let dir = std::env::temp_dir().join(format!("magnetita-bad-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        assert_eq!(load_endpoint(&dir.join("absent")), None);
+        for junk in [
+            "",
+            "nonsense",
+            "10.0.0.190",
+            "phone.local:5555",
+            "10.0.0.190:0",
+        ] {
+            let path = dir.join("junk");
+            std::fs::write(&path, junk.as_bytes()).expect("write");
+            assert_eq!(load_endpoint(&path), None, "{junk:?} was honoured");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

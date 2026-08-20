@@ -31,6 +31,22 @@ pub const SERVICE_CONNECT: &str = "_adb-tls-connect._tcp";
 /// The mDNS service Android advertises only while its pairing screen is open.
 pub const SERVICE_PAIRING: &str = "_adb-tls-pairing._tcp";
 
+/// The port `adb tcpip` puts the device on, and the one this daemon pins.
+///
+/// Wireless debugging and this are **two different listeners**. Android turns
+/// the first off constantly — on every reboot, and on its own whenever it feels
+/// like it — and with it goes the mDNS advertisement this daemon discovers by.
+/// A device moved to `adb tcpip` keeps answering here regardless: measured on
+/// the author's S25U, turning wireless debugging off stopped the advertisement
+/// dead while this port stayed open and the device stayed `device`.
+///
+/// So the mirror remembers the last host it reached and dials this port
+/// directly, which is what lets it work when there is nothing to discover.
+/// It does not survive the *phone* rebooting — `persist.adb.tcp.port` is the
+/// only thing that would, and setting it needs root the author's phone
+/// does not have.
+pub const FIXED_PORT: u16 = 5555;
+
 /// Longest service name accepted from the network. Real ADB names are far
 /// shorter; the bound only stops a peer handing us a name no honest phone
 /// would advertise.
@@ -193,7 +209,10 @@ pub enum MirrorEvent {
     /// `adb pair` succeeded or failed.
     PairFinished { paired: bool },
     /// `adb connect` reached `device` state, or did not.
-    ConnectFinished { ok: bool },
+    /// A connection attempt finished. `Some` carries the endpoint actually
+    /// reached, which is not always the one dialled: pinning the fixed port
+    /// restarts `adbd` and moves the device onto it.
+    ConnectFinished { endpoint: Option<MirrorEndpoint> },
     /// scrcpy started under this pid.
     MirrorStarted { pid: u32 },
     /// scrcpy exited, whether by the author closing the window or by failing.
@@ -208,15 +227,28 @@ pub enum MirrorEvent {
 
 /// The mirror's whole decision-making, as a pure machine.
 ///
-/// It holds the last seen endpoints because Android re-randomises the port on
-/// every toggle: the machine must always act on the *current* advertisement,
-/// never a remembered one. Losing the connect service therefore drops the
-/// endpoint rather than keeping a stale port to retry — the exact failure the
-/// author's script worked around with a port cache.
+/// It holds the last *advertised* endpoints because Android re-randomises the
+/// discovery port on every toggle: the machine must act on the current
+/// advertisement, never a remembered one. Losing the connect service therefore
+/// drops that endpoint rather than keeping a stale port to retry — the exact
+/// failure the author's script worked around with a port cache.
+///
+/// [`remembered`](Self::remembered) is the deliberate exception, and it is not
+/// the same thing. It is never a discovered port: it is the host we last
+/// reached, on [`FIXED_PORT`], which `adb tcpip` keeps open whether or not
+/// wireless debugging is on and whether or not anything is being advertised.
+/// Remembering a *discovered* port would resurrect the stale-cache bug;
+/// remembering the fixed one is what lets the mirror work with nothing to
+/// discover.
 #[derive(Clone, Debug, Default)]
 pub struct MirrorLink {
     connect: Option<MirrorEndpoint>,
     pairing: Option<MirrorEndpoint>,
+    /// The host last reached, on [`FIXED_PORT`]. Survives the advertisement.
+    remembered: Option<MirrorEndpoint>,
+    /// What the in-flight connect is dialling, so a failure knows whether the
+    /// remembered port is still worth trying.
+    dialling: Option<MirrorEndpoint>,
     state: MirrorStateInner,
     /// Set while the author's intent to mirror outlives a reconnection.
     wanted: bool,
@@ -242,11 +274,38 @@ impl MirrorLink {
         Self::default()
     }
 
+    /// A link that already knows where the phone answered last time.
+    ///
+    /// Only a [`FIXED_PORT`] endpoint is accepted: a remembered discovery port
+    /// is exactly the stale cache this design refuses.
+    pub fn with_remembered(endpoint: MirrorEndpoint) -> Self {
+        let mut link = Self::default();
+        if endpoint.port == FIXED_PORT {
+            link.remembered = Some(endpoint);
+        }
+        link
+    }
+
+    /// The host last reached on the fixed port, if any. The daemon persists
+    /// this so a restart does not lose it.
+    pub fn remembered(&self) -> Option<MirrorEndpoint> {
+        self.remembered
+    }
+
+    /// Where a mirror request should dial: whatever is advertised now, and
+    /// otherwise the remembered fixed port.
+    fn target(&self) -> Option<MirrorEndpoint> {
+        self.connect.or(self.remembered)
+    }
+
     /// What the app shows.
     pub fn state(&self) -> MirrorState {
         match self.state {
             MirrorStateInner::Idle => {
-                if self.connect.is_some() {
+                // A remembered fixed port is as real a way in as an
+                // advertisement, so the control must not read `Idle` — there is
+                // something to press.
+                if self.target().is_some() {
                     MirrorState::Available
                 } else {
                     MirrorState::Idle
@@ -289,6 +348,7 @@ impl MirrorLink {
                     )
                 {
                     self.state = MirrorStateInner::Connecting;
+                    self.dialling = Some(endpoint);
                     return MirrorAction::Connect { endpoint };
                 }
                 MirrorAction::None
@@ -325,9 +385,10 @@ impl MirrorLink {
                 if matches!(self.state, MirrorStateInner::Mirroring) {
                     return MirrorAction::None;
                 }
-                match self.connect {
+                match self.target() {
                     Some(endpoint) => {
                         self.state = MirrorStateInner::Connecting;
+                        self.dialling = Some(endpoint);
                         MirrorAction::Connect { endpoint }
                     }
                     None => {
@@ -357,6 +418,7 @@ impl MirrorLink {
                 match self.connect {
                     Some(endpoint) => {
                         self.state = MirrorStateInner::Connecting;
+                        self.dialling = Some(endpoint);
                         MirrorAction::Connect { endpoint }
                     }
                     None => {
@@ -365,22 +427,36 @@ impl MirrorLink {
                     }
                 }
             }
-            MirrorEvent::ConnectFinished { ok } => {
-                if !ok {
-                    self.state = MirrorStateInner::Failed(MirrorError::ConnectFailed);
-                    return MirrorAction::None;
-                }
-                match self.connect {
-                    Some(endpoint) => {
-                        self.state = MirrorStateInner::Connected;
-                        MirrorAction::StartMirror {
-                            serial: endpoint.serial(),
+            MirrorEvent::ConnectFinished { endpoint } => {
+                let dialled = self.dialling.take();
+                let Some(endpoint) = endpoint else {
+                    // An advertisement can outlive the thing it advertises:
+                    // Avahi served a cached record for a minute after Android
+                    // turned wireless debugging off, and dialling that dead
+                    // port used to end the attempt while the fixed port was
+                    // answering. Try the remembered one before giving up —
+                    // once, so a dead pair cannot loop.
+                    if let Some(remembered) = self.remembered {
+                        if dialled != Some(remembered) {
+                            self.state = MirrorStateInner::Connecting;
+                            self.dialling = Some(remembered);
+                            return MirrorAction::Connect {
+                                endpoint: remembered,
+                            };
                         }
                     }
-                    None => {
-                        self.state = MirrorStateInner::Failed(MirrorError::NotAdvertised);
-                        MirrorAction::None
-                    }
+                    self.state = MirrorStateInner::Failed(MirrorError::ConnectFailed);
+                    return MirrorAction::None;
+                };
+                // Remember only the fixed port. That is the one that answers
+                // when nothing is advertised; a discovered port would be stale
+                // by the next toggle.
+                if endpoint.port == FIXED_PORT {
+                    self.remembered = Some(endpoint);
+                }
+                self.state = MirrorStateInner::Connected;
+                MirrorAction::StartMirror {
+                    serial: endpoint.serial(),
                 }
             }
             MirrorEvent::MirrorStarted { pid } => {
@@ -530,7 +606,9 @@ mod tests {
             }
         );
         assert_eq!(
-            link.handle(MirrorEvent::ConnectFinished { ok: true }),
+            link.handle(MirrorEvent::ConnectFinished {
+                endpoint: Some(endpoint(37059))
+            }),
             MirrorAction::StartMirror {
                 serial: "10.0.0.85:37059".to_owned()
             }
@@ -545,7 +623,9 @@ mod tests {
         let mut link = MirrorLink::new();
         link.handle(found(AdbService::Connect, 37059));
         link.handle(MirrorEvent::MirrorRequested);
-        link.handle(MirrorEvent::ConnectFinished { ok: true });
+        link.handle(MirrorEvent::ConnectFinished {
+            endpoint: Some(endpoint(37059)),
+        });
         link.handle(MirrorEvent::MirrorStarted { pid: 4242 });
 
         assert_eq!(
@@ -561,7 +641,9 @@ mod tests {
         let mut link = MirrorLink::new();
         link.handle(found(AdbService::Connect, 37059));
         link.handle(MirrorEvent::MirrorRequested);
-        link.handle(MirrorEvent::ConnectFinished { ok: true });
+        link.handle(MirrorEvent::ConnectFinished {
+            endpoint: Some(endpoint(37059)),
+        });
         link.handle(MirrorEvent::MirrorStarted { pid: 4242 });
 
         // Wireless debugging off: the mirror cannot outlive the phone.
@@ -596,7 +678,9 @@ mod tests {
         let mut link = MirrorLink::new();
         link.handle(found(AdbService::Connect, 39799));
         link.handle(MirrorEvent::MirrorRequested);
-        link.handle(MirrorEvent::ConnectFinished { ok: true });
+        link.handle(MirrorEvent::ConnectFinished {
+            endpoint: Some(endpoint(39799)),
+        });
         link.handle(MirrorEvent::MirrorStarted { pid: 4242 });
 
         link.handle(MirrorEvent::MirrorExited { failed: true });
@@ -617,7 +701,9 @@ mod tests {
         let mut link = MirrorLink::new();
         link.handle(found(AdbService::Connect, 37059));
         link.handle(MirrorEvent::MirrorRequested);
-        link.handle(MirrorEvent::ConnectFinished { ok: true });
+        link.handle(MirrorEvent::ConnectFinished {
+            endpoint: Some(endpoint(37059)),
+        });
         link.handle(MirrorEvent::MirrorStarted { pid: 4242 });
 
         link.handle(MirrorEvent::StopRequested);
@@ -636,7 +722,9 @@ mod tests {
         let mut link = MirrorLink::new();
         link.handle(found(AdbService::Connect, 37059));
         link.handle(MirrorEvent::MirrorRequested);
-        link.handle(MirrorEvent::ConnectFinished { ok: true });
+        link.handle(MirrorEvent::ConnectFinished {
+            endpoint: Some(endpoint(37059)),
+        });
         link.handle(MirrorEvent::MirrorStarted { pid: 4242 });
 
         link.handle(MirrorEvent::MirrorExited { failed: false });
@@ -659,7 +747,9 @@ mod tests {
 
         link.handle(found(AdbService::Connect, 37059));
         link.handle(MirrorEvent::MirrorRequested);
-        link.handle(MirrorEvent::ConnectFinished { ok: true });
+        link.handle(MirrorEvent::ConnectFinished {
+            endpoint: Some(endpoint(37059)),
+        });
         link.handle(MirrorEvent::MirrorStarted { pid: 4242 });
         assert_eq!(
             link.handle(MirrorEvent::StopRequested),
@@ -729,7 +819,9 @@ mod tests {
         let mut link = MirrorLink::new();
         link.handle(found(AdbService::Connect, 39799));
         link.handle(MirrorEvent::MirrorRequested);
-        link.handle(MirrorEvent::ConnectFinished { ok: true });
+        link.handle(MirrorEvent::ConnectFinished {
+            endpoint: Some(endpoint(39799)),
+        });
 
         link.handle(MirrorEvent::DisplayMissing);
         assert_eq!(link.state(), MirrorState::Failed(MirrorError::NoDisplay));
@@ -744,6 +836,157 @@ mod tests {
         assert_eq!(
             link.handle(found(AdbService::Connect, 45461)),
             MirrorAction::None
+        );
+    }
+
+    fn fixed(host_port: u16) -> MirrorEndpoint {
+        MirrorEndpoint {
+            host: "10.0.0.85".parse().unwrap(),
+            port: host_port,
+        }
+    }
+
+    #[test]
+    fn a_remembered_fixed_port_is_a_way_in_when_nothing_is_advertised() {
+        // The case this exists for: Android turned wireless debugging off, so
+        // there is no advertisement at all — but `adb tcpip` left the fixed
+        // port open, which was measured to survive exactly that.
+        let mut link = MirrorLink::with_remembered(fixed(FIXED_PORT));
+        assert_eq!(link.state(), MirrorState::Available);
+        assert_eq!(
+            link.handle(MirrorEvent::MirrorRequested),
+            MirrorAction::Connect {
+                endpoint: fixed(FIXED_PORT)
+            }
+        );
+    }
+
+    #[test]
+    fn a_live_advertisement_wins_over_the_remembered_port() {
+        // Discovery is the fresher truth: the phone is right there saying
+        // where it is, so dial that rather than a port from last week.
+        let mut link = MirrorLink::with_remembered(fixed(FIXED_PORT));
+        link.handle(found(AdbService::Connect, 37059));
+        assert_eq!(
+            link.handle(MirrorEvent::MirrorRequested),
+            MirrorAction::Connect {
+                endpoint: endpoint(37059)
+            }
+        );
+    }
+
+    #[test]
+    fn only_the_fixed_port_is_ever_remembered() {
+        // Remembering a discovered port would rebuild the stale-cache defect
+        // the author's own script suffered from.
+        let mut link = MirrorLink::new();
+        link.handle(found(AdbService::Connect, 37059));
+        link.handle(MirrorEvent::MirrorRequested);
+        link.handle(MirrorEvent::ConnectFinished {
+            endpoint: Some(endpoint(37059)),
+        });
+        assert_eq!(link.remembered(), None);
+
+        link.handle(MirrorEvent::ConnectFinished {
+            endpoint: Some(fixed(FIXED_PORT)),
+        });
+        assert_eq!(link.remembered(), Some(fixed(FIXED_PORT)));
+    }
+
+    #[test]
+    fn a_remembered_discovery_port_is_refused_at_construction() {
+        assert_eq!(
+            MirrorLink::with_remembered(endpoint(37059)).remembered(),
+            None
+        );
+        assert_eq!(
+            MirrorLink::with_remembered(endpoint(37059)).state(),
+            MirrorState::Idle
+        );
+    }
+
+    #[test]
+    fn the_mirror_starts_on_the_endpoint_actually_reached() {
+        // Pinning the fixed port restarts adbd and moves the device onto it,
+        // so the serial scrcpy is given must be the one that answered, not the
+        // one dialled.
+        let mut link = MirrorLink::new();
+        link.handle(found(AdbService::Connect, 37059));
+        link.handle(MirrorEvent::MirrorRequested);
+        assert_eq!(
+            link.handle(MirrorEvent::ConnectFinished {
+                endpoint: Some(fixed(FIXED_PORT))
+            }),
+            MirrorAction::StartMirror {
+                serial: format!("10.0.0.85:{FIXED_PORT}")
+            }
+        );
+    }
+
+    #[test]
+    fn losing_the_advertisement_does_not_forget_the_fixed_port() {
+        let mut link = MirrorLink::with_remembered(fixed(FIXED_PORT));
+        link.handle(found(AdbService::Connect, 37059));
+        link.handle(MirrorEvent::ServiceLost {
+            service: AdbService::Connect,
+        });
+        assert_eq!(link.remembered(), Some(fixed(FIXED_PORT)));
+        // And it is still a way in.
+        assert_eq!(link.state(), MirrorState::Available);
+    }
+
+    #[test]
+    fn a_stale_advertisement_falls_back_to_the_remembered_port() {
+        // Measured against the real phone: Android turned wireless debugging
+        // off, but Avahi still served the advertisement from its cache for
+        // another minute. Dialling that dead port and giving up left the mirror
+        // failed while the fixed port was answering the whole time.
+        let mut link = MirrorLink::with_remembered(fixed(FIXED_PORT));
+        link.handle(found(AdbService::Connect, 42293));
+        assert_eq!(
+            link.handle(MirrorEvent::MirrorRequested),
+            MirrorAction::Connect {
+                endpoint: endpoint(42293)
+            }
+        );
+        // The stale port is dead; the remembered one is the way in.
+        assert_eq!(
+            link.handle(MirrorEvent::ConnectFinished { endpoint: None }),
+            MirrorAction::Connect {
+                endpoint: fixed(FIXED_PORT)
+            }
+        );
+        assert_eq!(link.state(), MirrorState::Connecting);
+    }
+
+    #[test]
+    fn the_fallback_is_tried_once_and_then_the_failure_is_real() {
+        let mut link = MirrorLink::with_remembered(fixed(FIXED_PORT));
+        link.handle(found(AdbService::Connect, 42293));
+        link.handle(MirrorEvent::MirrorRequested);
+        link.handle(MirrorEvent::ConnectFinished { endpoint: None });
+        // The fixed port failed too: stop, rather than dial in a circle.
+        assert_eq!(
+            link.handle(MirrorEvent::ConnectFinished { endpoint: None }),
+            MirrorAction::None
+        );
+        assert_eq!(
+            link.state(),
+            MirrorState::Failed(MirrorError::ConnectFailed)
+        );
+    }
+
+    #[test]
+    fn dialling_the_remembered_port_first_has_no_fallback_to_make() {
+        let mut link = MirrorLink::with_remembered(fixed(FIXED_PORT));
+        link.handle(MirrorEvent::MirrorRequested);
+        assert_eq!(
+            link.handle(MirrorEvent::ConnectFinished { endpoint: None }),
+            MirrorAction::None
+        );
+        assert_eq!(
+            link.state(),
+            MirrorState::Failed(MirrorError::ConnectFailed)
         );
     }
 

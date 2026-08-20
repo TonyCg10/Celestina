@@ -147,9 +147,9 @@ fn run() -> Result<(), Box<dyn Error>> {
     let event_log: Log = Arc::new(Mutex::new(VecDeque::new()));
     let commands: Commands = Arc::new(Mutex::new(HashMap::new()));
     let revocations = Arc::new(Revocations::new());
-    // The mirror worker is owned here so it is joined when the daemon ends: a
-    // scrcpy this daemon started must never outlive it.
-    let (mirror_handle, _mirror_worker) = mirror::start(dir.join("mirror.json"));
+    // Owned here so it is joined at exit: a scrcpy this daemon started must never outlive it.
+    let (mirror_handle, _mirror_worker) =
+        mirror::start(dir.join("mirror.json"), dir.join("mirror-endpoint"));
     let dbus = match serve_devices(
         Devices::new(
             Arc::clone(&registry),

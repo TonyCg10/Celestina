@@ -168,6 +168,56 @@ crossing the LAN, and it is not yet claimed.
 
 Plan: [wireless mirror](docs/plans/archive/2026-08-19-wireless-mirror.md).
 
+## MAG-R2 — The mirror without discovery
+
+## Hypothesis and tangible outcome
+
+`MAG-R1` made the mirror one press, but only while Android was advertising.
+Android turns wireless debugging off constantly — on every reboot and on its
+own besides — and the advertisement goes with it, so the author was back to
+enabling it by hand each time.
+
+Measured on the author's S25U: `adb tcpip` and wireless debugging are two
+different listeners. Turning wireless debugging off stopped the mDNS
+advertisement dead while the fixed port stayed open and the device stayed
+`device`. Pinning the phone to that port after the first connection, and
+remembering it, therefore removes the discovery dependency for every mirror
+after the first. The tangible outcome is a Mirror control that works with
+nothing advertised at all.
+
+## Scope
+
+- Pin the device to `adb tcpip` port 5555 once a discovered endpoint is up, and
+  reconnect there.
+- Remember that endpoint across daemon restarts, validated on load like any
+  other value that becomes a subprocess argument.
+- Prefer a live advertisement, fall back to the remembered port when the
+  connection fails.
+
+## Exclusions
+
+- Surviving a reboot of the *phone*. `persist.adb.tcp.port` is the only thing
+  that would, and setting it was attempted and refused: it needs root the
+  author's phone does not have. One manual enable per phone reboot remains.
+- Any change to how pairing works. The six-digit path `MAG-R1` delivered is
+  untouched.
+- The QR pairing decision, still open and still independent.
+
+## Build order
+
+| Unit | Status | Dependency | Implementation result | Agent evidence |
+|---|---|---|---|---|
+| MAG-R2-A | done | MAG-R1 | The mirror reaches the phone with nothing advertised | `cargo test -p magnetita-core -p magnetitad` |
+
+## Implementation exit
+
+Close `MAG-R2` when the mirror connects with wireless debugging off and the
+daemon restarted, which was observed on the real phone. `VAL-MAG-09` carries
+the author's own acceptance across a phone reboot, which no test can stand in
+for.
+
+Plan: [mirror without discovery](docs/plans/archive/2026-08-19-mirror-without-discovery.md).
+
 ## Closed evidence
 
 The released CP0-CP4 implementation and 2026-07-29 hardening record are

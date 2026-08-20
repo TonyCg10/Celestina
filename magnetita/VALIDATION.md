@@ -145,6 +145,28 @@ does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
 - **Evidence:** `avahi-browse -rtp _adb-tls-connect._tcp` before and after the
   toggle to record that the port changed, `adb devices -l`, and the daemon log
 
+## VAL-MAG-09 — The mirror with nothing advertised
+
+- **Status:** pending
+- **Related implementation:** `MAG-R2`
+- **Requires:** the corrected daemon deployed (it is not yet — see the
+  [evidence limits](docs/evidence/2026-08-19-mirror-without-discovery.md)), and
+  a phone that has mirrored at least once so the fixed port is pinned
+- **Procedure:** mirror once so the port is pinned and
+  `~/.config/magnetita/mirror-endpoint` is written. Then turn Wireless
+  debugging off on the phone, wait two minutes so any cached mDNS record has
+  expired, and press Mirror. Then reboot the *phone*, and press Mirror again
+- **Pass condition:** with debugging off and the cache expired the mirror
+  opens with no input at all. After a phone reboot it does **not** — the fixed
+  port does not survive that, and the app must say so plainly rather than hang,
+  leaving one manual enable
+- **Result:** not run. The stale-advertisement fallback was observed failing and
+  then corrected in tests, but the corrected daemon is not deployed, and the
+  post-reboot case has never been exercised
+- **Evidence:** `avahi-browse -rpt _adb-tls-connect._tcp` to confirm the cache
+  really expired before pressing, `cat ~/.config/magnetita/mirror-endpoint`, and
+  `journalctl --user -u magnetitad | grep mirror`
+
 ## Closed historical observations
 
 `VAL-MAG-1.0` is preserved in the

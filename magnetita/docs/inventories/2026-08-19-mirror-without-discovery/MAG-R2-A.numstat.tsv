@@ -1,0 +1,29 @@
+# MAG-R2-A exact change inventory
+
+Base revision	61d1839cf3c9f56a443f28c54da1be126a7f401b
+Pathspec	celestina-rs/crates/magnetita-core/src/mirror.rs
+Pathspec	celestina-rs/crates/magnetitad/src/main.rs
+Pathspec	celestina-rs/crates/magnetitad/src/mirror.rs
+Pathspec	magnetita/Cargo.lock
+Pathspec	magnetita/Cargo.toml
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/VALIDATION.md
+Pathspec	magnetita/docs/evidence/2026-08-19-mirror-without-discovery.md
+Pathspec	magnetita/docs/inventories/2026-08-19-mirror-without-discovery/MAG-R2-A.numstat.tsv
+Pathspec	magnetita/docs/plans/archive/2026-08-19-mirror-without-discovery.md
+Pathspec	docs/version-history.tsv
+
+added	deleted	content	path
+272	29	1fad678c0f74b4cad4d5ee949ef39c8fda2f1f0dc52c4ab1bde64b7380186746	celestina-rs/crates/magnetita-core/src/mirror.rs
+3	3	20276b2e7cc3e3e15c43968a95f193b53bfd54b2190d16d44ab1347b12a3181b	celestina-rs/crates/magnetitad/src/main.rs
+163	16	2359858a49a36b0c662e354c3687562adc8c1730e2a1d88d87f8ca2101fbeb8d	celestina-rs/crates/magnetitad/src/mirror.rs
+1	0	0aa933fe3d8fd0246f9816cd9737ceb442d41226f381b1ff1f734fcf029dd8e2	docs/version-history.tsv
+1	1	14ace258c5039f080aad1c7de7a12344c6a00f5464e1c4f386b13abfe0226b48	magnetita/Cargo.lock
+1	1	f6a539754e9468624baa31de4f66b772527f2fa8d14380d05773e80b3ad17c23	magnetita/Cargo.toml
+50	0	327390f7931c7e7ac408f3ae34c636eaae57368bc0aa6ba5df40070df9a75779	magnetita/ROADMAP.md
+27	31	aba8b655d13d77013c1fda8a814dd53574ff614daca182520d745813c4f8b3e0	magnetita/STATUS.md
+22	0	a2b53d8e7b963240d450d271d2268ccc855a1c2bd509b50f6ca3e187498f05bc	magnetita/VALIDATION.md
+92	0	b6643c7a3f5f32143edf8c107a899bc92da09ba0d12caeaea6f5676bf6151d48	magnetita/docs/evidence/2026-08-19-mirror-without-discovery.md
+91	0	f21075f982ec07bbd08048c74866e9ec5a7df7033a64d35691a6ae00b3664e45	magnetita/docs/plans/archive/2026-08-19-mirror-without-discovery.md
+29	0	self	magnetita/docs/inventories/2026-08-19-mirror-without-discovery/MAG-R2-A.numstat.tsv
