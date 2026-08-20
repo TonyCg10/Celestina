@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-05
 - **Scope:** Grafita `G7-C`; plan
-  [g7-reading-comfort](../plans/active/2026-08-04-g7-reading-comfort.md)
+  [g7-reading-comfort](../plans/archive/2026-08-04-g7-reading-comfort.md)
 - **Trigger:** the suite audit in
   [`docs/evidence/2026-08-05-static-suite-audit.md`](../../../docs/evidence/2026-08-05-static-suite-audit.md),
   findings `GRA-C1`, `GRA-A1`, `GRA-A2`, `GRA-A3`, `GRA-A4`, `GRA-M2` and

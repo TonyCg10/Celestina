@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-06
 - **Scope:** `G7-D`; plan
-  [g7-reading-comfort](../plans/active/2026-08-04-g7-reading-comfort.md); a low
+  [g7-reading-comfort](../plans/archive/2026-08-04-g7-reading-comfort.md); a low
   finding of the
   [light monorepo audit](../../../docs/evidence/2026-08-06-light-monorepo-audit.md)
 - **Environment:** source correction with compilation, lint and unit tests. No

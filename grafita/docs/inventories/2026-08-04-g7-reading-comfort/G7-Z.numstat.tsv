@@ -1,0 +1,21 @@
+# G7-Z exact change inventory
+
+Base revision	72bca3ad0370ff32658e76266d9c48e2da7153bc
+Pathspec	grafita/docs/evidence/2026-08-04-g7-reading-comfort.md
+Pathspec	grafita/docs/evidence/2026-08-05-loss-free-save-as.md
+Pathspec	grafita/docs/evidence/2026-08-06-naming-an-untouched-document.md
+Pathspec	grafita/docs/evidence/2026-08-19-g7-production-completion.md
+Pathspec	grafita/docs/plans/active/2026-08-04-g7-reading-comfort.md
+Pathspec	grafita/docs/plans/archive/2026-08-04-g7-reading-comfort.md
+Pathspec	grafita/docs/inventories/2026-08-04-g7-reading-comfort/G7-Z.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	22d87838611a17807bfba2f7a001e9df2d937c78023400280aa847c77fe7abad	grafita/docs/evidence/2026-08-04-g7-reading-comfort.md
+1	1	e54dd33f3498c91f3685937802fb207c68808bc80438483b3f359a7053e78ec4	grafita/docs/evidence/2026-08-05-loss-free-save-as.md
+1	1	c146e171620d05727e9e076c3be13fa5e7e9e91f5356132c5b848f01f5dc1ef9	grafita/docs/evidence/2026-08-06-naming-an-untouched-document.md
+79	0	e1e8670e97028679a74a11556f09045ea56d9fa4a45e1fd9163815228762b27b	grafita/docs/evidence/2026-08-19-g7-production-completion.md
+0	185	deleted	grafita/docs/plans/active/2026-08-04-g7-reading-comfort.md
+193	0	41af2e2770e289b0f58cc63cf997972c89dd32aa29f337efd4d7f8987a77579c	grafita/docs/plans/archive/2026-08-04-g7-reading-comfort.md
+21	0	self	grafita/docs/inventories/2026-08-04-g7-reading-comfort/G7-Z.numstat.tsv

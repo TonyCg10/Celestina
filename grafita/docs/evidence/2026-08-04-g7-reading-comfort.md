@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-04
 - **Scope:** Grafita `G7-A`; plan
-  [g7-reading-comfort](../plans/active/2026-08-04-g7-reading-comfort.md)
+  [g7-reading-comfort](../plans/archive/2026-08-04-g7-reading-comfort.md)
 - **Environment:** Linux 7.1.5-1-cachyos, Qt 6, CXX-Qt, offscreen Qt platform
   for every automated surface check; the author's checkout carried the Siderita
   `SID-G7-A` unit uncommitted while this ran, since it is delivered by the

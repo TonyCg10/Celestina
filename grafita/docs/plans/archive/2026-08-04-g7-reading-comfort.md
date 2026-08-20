@@ -1,11 +1,13 @@
 # G7 — reading comfort
 
 - **Opened:** 2026-08-04
-- **Status:** active
+- **Closed:** 2026-08-19
+- **Status:** done
 - **Plan ID:** g7-reading-comfort
 - **Scope:** grafita
 - **Implementation checkpoint:** G7
 - **Author-validation checkpoint:** `VAL-G7` in [`../../../VALIDATION.md`](../../../VALIDATION.md)
+- **Successor:** [Text Grafita already refuses](../archive/2026-08-19-g8-text-already-refused.md)
 
 ## Hypothesis
 
@@ -107,6 +109,12 @@ single commit cannot produce.
 | G7-B | `grafita:` | done | [inventory](../../inventories/2026-08-04-g7-reading-comfort/G7-B.numstat.tsv) | 8 files, +60/-3 | Preserve an explicit platform theme while routing otherwise unowned Qt file dialogs through the session portal | [portal file-dialog evidence](../../evidence/2026-08-05-portal-file-dialog.md) | `VAL-SID-02` |
 | G7-C | `grafita:` | done | [inventory](../../inventories/2026-08-04-g7-reading-comfort/G7-C.numstat.tsv) | 18 files, +780/-51 | Make "save as" obey the same revision rule as an ordinary save, decode its destination through `url::local_path`, write through a symlink and report the durability it observed; refuse a duplicate or clean save; disarm a cancelled destination chooser; answer a classify superseded by an open; reset the live search on a new document; keep the undo bound from splitting an action; and stop a generic refusal from overwriting the one that names the file | `cargo test -p grafita-core`, `cargo clippy -p grafita-core --all-targets`, `cargo fmt`, `cargo check`/`cargo test`/`cargo clippy` in `grafita/`, `scripts/qmllint-cxxqt.sh grafita`, `bash scripts/check-architecture-contract.sh` — recorded in [loss-free save-as evidence](../../evidence/2026-08-05-loss-free-save-as.md) | `VAL-GRA-SAVEAS` |
 | G7-D | `grafita:` | done | [inventory](../../inventories/2026-08-04-g7-reading-comfort/G7-D.numstat.tsv) | 9 files, +123/-5 | Ask where a document goes before applying the clean guard, so a new document nobody has typed into can still be given a name — the guard exists to stop an unchanged file being rewritten, and a document with no file has nothing to rewrite | `cargo test -p grafita-core`, `cargo fmt --all --check`, `cargo clippy -p grafita-core --all-targets --locked -- -D warnings` — recorded in [naming an untouched document evidence](../../evidence/2026-08-06-naming-an-untouched-document.md) | `VAL-GRA-SAVEAS` |
+| G7-Z | `grafita:` | done | [inventory](../../inventories/2026-08-04-g7-reading-comfort/G7-Z.numstat.tsv) | 7 files, +296/-188 | Run the checkpoint's implementation exit — the canonical release, its verification and both installed consumers — and archive the plan, retarget its links and open G8 in the roadmap | [G7 delivered to both installed hosts](../../evidence/2026-08-19-g7-production-completion.md) | `VAL-G7` |
+
+G7-Z carries no source change. G7-A through G7-D were written and tested but
+never built as a canonical release, so the author's installed binaries still
+held pre-G7 bytes; this unit runs that exit for both consumers of
+`grafita-core` and closes the plan.
 
 G7-B is a bounded corrective delivery discovered while validating open/save in
 the completed reading surface. It changes no document or reading rule: it
