@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-05
 - **Scope:** `F6-B`; plan
-  [immersive-content](../plans/active/2026-08-04-immersive-content.md); suite
+  [immersive-content](../plans/archive/2026-08-04-immersive-content.md); suite
   audit findings `FLU-C1`, `FLU-A1`–`FLU-A4`, `FLU-M2`–`FLU-M6`, `FLU-B3` from
   [`../../../docs/evidence/2026-08-05-static-suite-audit.md`](../../../docs/evidence/2026-08-05-static-suite-audit.md)
 - **Environment:** source corrections with compilation and unit tests. No

@@ -2,10 +2,12 @@
 
 - **Opened:** 2026-08-04
 - **Plan ID:** immersive-content
-- **Status:** active
+- **Status:** done
 - **Scope:** fluorita
 - **Implementation checkpoint:** F6
 - **Author-validation checkpoint:** VAL-FLU-IMMERSIVE
+- **Closed:** 2026-08-19
+- **Successor:** F7, [bounded-media-editing](../active/2026-08-19-bounded-media-editing.md)
 
 ## Hypothesis
 
@@ -93,6 +95,7 @@ is no animation to wait for.
 | F6-C | `fluorita:` | done | [inventory](../../inventories/2026-08-04-immersive-content/F6-C.numstat.tsv) | 24 files, +607/-162 | Carry a file's byte-exact identity across the Qt seam as a percent-encoded path key, decode it back with a typed refusal at every entry point, and keep the lossy text a person reads in its own columns — so a file whose name is not UTF-8 can be opened, described and trashed instead of reporting that it is no longer in the library | `cargo fmt --all --check`, `cargo clippy --all-targets --locked -- -D warnings` and `cargo test --all-targets --locked` in `fluorita/` and `celestina-rs/`, plus `scripts/check-architecture-contract.sh`, `scripts/check-language-contract.py` and `scripts/qmllint-cxxqt.sh fluorita` — recorded in [byte-exact path seam evidence](../../evidence/2026-08-06-byte-exact-path-seam.md) | `VAL-FLU-BYTES` |
 | F6-D | `fluorita:` | done | [inventory](../../inventories/2026-08-04-immersive-content/F6-D.numstat.tsv) | 12 files, +304/-35 | Address the image probe by path key: decode it to bytes with the byte-level call, open the file by descriptor and hand that to the reader, so a picture whose name is not valid UTF-8 is measured on itself instead of being refused as unreadable | `cargo fmt --all --check`, `cargo clippy --all-targets --locked -- -D warnings`, `cargo test --all-targets --locked` in `fluorita/` — recorded in [image probe evidence](../../evidence/2026-08-06-image-probe-bytes.md) | `VAL-FLU-BYTES` |
 | F6-E | `fluorita:` | done | [inventory](../../inventories/2026-08-04-immersive-content/F6-E.numstat.tsv) | 8 files, +173/-6 | Give each session a generation so a render handle published by a session the player has already left is dropped rather than written over a destroyed instance, and make a close that finds no worker honour an activation parked while the previous one was closing | `cargo fmt --all --check`, `cargo clippy --all-targets --locked -- -D warnings`, `cargo test --all-targets --locked` — recorded in [session generation evidence](../../evidence/2026-08-06-session-generation.md) | `VAL-FLU-TEARDOWN` |
+| F6-Z | `fluorita:` | done | [inventory](../../inventories/2026-08-04-immersive-content/F6-Z.numstat.tsv) | 10 files, +174/-144 | Close F6 and archive this plan, retargeting every link that named it under `active/`, and name F7's plan as the active one | documentation contract and staged-unit guard — recorded in [immersive content evidence](../../evidence/2026-08-04-immersive-content.md) | `VAL-FLU-TEARDOWN` |
 
 One unit because it is one worktree: the defect and the features were found and
 fixed against each other, in the same files, and no part of it was ever going to

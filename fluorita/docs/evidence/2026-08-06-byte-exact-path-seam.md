@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-06
 - **Scope:** `F6-C`; plan
-  [immersive-content](../plans/active/2026-08-04-immersive-content.md);
+  [immersive-content](../plans/archive/2026-08-04-immersive-content.md);
   [ADR 0008](../../../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md);
   suite audit finding `FLU-M1` from
   [`../../../docs/evidence/2026-08-05-static-suite-audit.md`](../../../docs/evidence/2026-08-05-static-suite-audit.md).

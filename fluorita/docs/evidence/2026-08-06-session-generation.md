@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-06
 - **Scope:** `F6-E`; plan
-  [immersive-content](../plans/active/2026-08-04-immersive-content.md); finding
+  [immersive-content](../plans/archive/2026-08-04-immersive-content.md); finding
   `H3` of the
   [light monorepo audit](../../../docs/evidence/2026-08-06-light-monorepo-audit.md)
 - **Environment:** source correction with compilation, lint and unit tests. No

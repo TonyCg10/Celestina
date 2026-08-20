@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-04
 - **Scope:** F6-A; plan
-  [immersive-content](../plans/active/2026-08-04-immersive-content.md)
+  [immersive-content](../plans/archive/2026-08-04-immersive-content.md)
 - **Environment:** Arch-based Linux, niri, Qt 6.9, libmpv; author's checkout
 - **Artifact:** `fluorita/target/release/fluorita`, `siderita/target/release/siderita`
 

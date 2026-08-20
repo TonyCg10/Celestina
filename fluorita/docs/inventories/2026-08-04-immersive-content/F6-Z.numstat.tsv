@@ -1,0 +1,27 @@
+# F6-Z exact change inventory
+
+Base revision	c88b70fa12c57b8a496c55f3799053102c791753
+Pathspec	fluorita/docs/evidence/2026-08-04-immersive-content.md
+Pathspec	fluorita/docs/evidence/2026-08-05-render-context-lifecycle.md
+Pathspec	fluorita/docs/evidence/2026-08-06-byte-exact-path-seam.md
+Pathspec	fluorita/docs/evidence/2026-08-06-image-probe-bytes.md
+Pathspec	fluorita/docs/evidence/2026-08-06-session-generation.md
+Pathspec	fluorita/docs/plans/active/2026-08-04-immersive-content.md
+Pathspec	fluorita/docs/plans/active/README.md
+Pathspec	fluorita/docs/plans/archive/2026-08-04-immersive-content.md
+Pathspec	fluorita/docs/plans/archive/2026-08-04-source-first-library.md
+Pathspec	fluorita/docs/inventories/2026-08-04-immersive-content/F6-Z.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	942f41748bd1c52a1efcb9f984b2c276781f60f01bcdb3f49bc4332c5943448d	fluorita/docs/evidence/2026-08-04-immersive-content.md
+1	1	a23a3f472996073a0b932355b6e3c151cbd26fc1159bc8aa0c9fc3ab6e150eec	fluorita/docs/evidence/2026-08-05-render-context-lifecycle.md
+1	1	0282999a5c5cdc7d073fb8de8ef7d7a918f0e3e8453c5b32dc88e13f6a6fce53	fluorita/docs/evidence/2026-08-06-byte-exact-path-seam.md
+1	1	450e972df615ad41567f8af93cf3bfcf9d1991302945064c37e7004eb1d60711	fluorita/docs/evidence/2026-08-06-image-probe-bytes.md
+1	1	91b610cf0a10fa3145533d708fef282fcfe16067dbf53dc46131656aa66c831f	fluorita/docs/evidence/2026-08-06-session-generation.md
+0	136	deleted	fluorita/docs/plans/active/2026-08-04-immersive-content.md
+2	2	1087644a127050b641b409854fd92dbc0c2fd32f50d13fbf76051cc129ea4e99	fluorita/docs/plans/active/README.md
+139	0	0686175bcf7a343f12fd38271d3d83063ba1083c026b2fd2ca161299778c91c4	fluorita/docs/plans/archive/2026-08-04-immersive-content.md
+1	1	6f6e3b3916aa5aed484ce17528e4463fe5f057160e72ffcecd8c167ebb02ab61	fluorita/docs/plans/archive/2026-08-04-source-first-library.md
+27	0	self	fluorita/docs/inventories/2026-08-04-immersive-content/F6-Z.numstat.tsv

@@ -7,7 +7,7 @@
 - **Implementation checkpoint:** F5
 - **Author-validation checkpoint:** VAL-FLU-SOURCES
 - **Closed:** 2026-08-04
-- **Successor:** F6, [immersive-content](../active/2026-08-04-immersive-content.md)
+- **Successor:** F6, [immersive-content](./2026-08-04-immersive-content.md)
 
 ## Hypothesis
 

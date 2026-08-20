@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-06
 - **Scope:** `F6-D`; plan
-  [immersive-content](../plans/active/2026-08-04-immersive-content.md); closes
+  [immersive-content](../plans/archive/2026-08-04-immersive-content.md); closes
   the image limit `F6-C` left open, recorded in
   [the byte-exact path seam evidence](2026-08-06-byte-exact-path-seam.md)
 - **Environment:** source correction with compilation, lint and unit tests,
