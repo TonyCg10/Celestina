@@ -22,11 +22,13 @@
 #![forbid(unsafe_code)]
 
 pub mod buffer;
+pub mod container;
 pub mod display;
 pub mod document;
 pub mod encoding;
 pub mod highlight;
 pub mod history;
+pub mod import;
 pub mod indent;
 pub mod metadata;
 pub mod newline;
@@ -45,8 +47,8 @@ pub mod worker;
 mod testing;
 
 pub use buffer::{Fragment, Line, Replacement, TextBuffer};
-pub use document::{Conflict, Document, EditOutcome, Freshness, SaveApplication};
-pub use encoding::{DecodeError, Encoding};
+pub use document::{Conflict, Document, EditOutcome, Freshness, SaveApplication, SaveIntent};
+pub use encoding::{DecodeError, EncodeError, Encoding, MultiByte, SingleByte};
 pub use highlight::{Language, LineState, Span as HighlightSpan, Token};
 pub use history::{History, Revision};
 pub use indent::Indentation;

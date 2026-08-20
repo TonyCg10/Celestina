@@ -14,6 +14,21 @@ celestina-core.workspace = true
 # only way to read and reproduce them. `xattr` is a single-purpose crate over
 # `getxattr`/`setxattr` with no runtime, no macros and no transitive framework.
 xattr = "1.6"
+# The deflate codec, and only that. G9's imported documents are ZIP containers,
+# and the contract is that every part the author did not edit is written back as
+# the bytes it already was — so this crate parses and rebuilds the container
+# itself rather than repacking it through an archive library, which promises
+# correct output and not identical output. Compression is the one piece worth
+# taking: `flate2`'s Rust backend is already vendored here for Siderita's
+# archives, needs no C toolchain, and does nothing but compress.
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+
+[dev-dependencies]
+# Only to build the containers the tests read. Writing the fixture with the
+# same code that parses it would prove nothing; `zip` is a third-party writer
+# and is already vendored here for Siderita's archives. It never enters the
+# library.
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [lints]
 workspace = true

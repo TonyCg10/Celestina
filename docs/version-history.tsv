@@ -103,3 +103,4 @@ celestina	0.32.0	milestone	BUBBLE-1-A	Add Melibea's minimized windows as shell b
 magnetita	1.1.0	milestone	MAG-R1	Add the one-button wireless screen mirror
 celestina	1.0.0	release	M7	Bump to v1.0.0 for coordinated bubble motion
 siderita	1.5.1	bug	SID-A4-A	Stop paying for folder changes nobody can see
+grafita	1.2.0	milestone	G8-A	Add the encodings a file cannot declare, and the documents it used to refuse

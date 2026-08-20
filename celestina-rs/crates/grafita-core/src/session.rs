@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 
 use celestina_core::{Generation, GenerationClock};
 
-use crate::document::{Conflict, Document, SaveApplication};
+use crate::document::{Conflict, Document, SaveApplication, SaveIntent};
 use crate::encoding::Encoding;
 use crate::history::Revision;
 use crate::open::{Limits, OpenRefusal, OpenedFile, ProbeOutcome};
@@ -58,6 +58,10 @@ pub struct SessionState {
     pub name: String,
     /// The encoding it will be written back in.
     pub encoding: Option<Encoding>,
+    /// The container it came out of, when it is an imported document. Its
+    /// presence is what a host shows instead of an encoding: the encoding of a
+    /// projection is not something anybody chooses.
+    pub container: Option<crate::import::Format>,
     pub dirty: bool,
     /// A read or write is in flight.
     pub busy: bool,
@@ -198,6 +202,7 @@ impl DocumentSession {
             active: true,
             name: String::new(),
             encoding: Some(document.encoding()),
+            container: document.container_format(),
             ..SessionState::default()
         };
         self.document = Some(document);
@@ -235,16 +240,50 @@ impl DocumentSession {
         if path.as_os_str().is_empty() {
             return Outcome::nothing();
         }
+        // The destination is known here, so the only question left is whether
+        // the text can become bytes at all. Asking before the job is queued is
+        // what keeps a refusal from being reported against a file the write
+        // never reached.
+        // "Save as" on an imported document writes the whole container, exactly
+        // as an ordinary save does; the difference is only where the bytes come
+        // from, which the document answers.
+        let bytes = match document.save_request() {
+            SaveIntent::Ready(request) => request.bytes().to_vec(),
+            SaveIntent::Unrepresentable(source) => {
+                return self.refuse_save(SaveRefusal::Unrepresentable { source })
+            }
+            SaveIntent::Unwritable(detail) => {
+                return self.refuse_save(SaveRefusal::StructureChanged { detail })
+            }
+            // A document with no file of its own still has bytes to write here:
+            // this path is the one that gives it a file.
+            SaveIntent::DestinationNeeded => match document.to_bytes() {
+                Ok(bytes) => bytes,
+                Err(source) => return self.refuse_save(SaveRefusal::Unrepresentable { source }),
+            },
+        };
         self.state.busy = true;
         self.state.failure = None;
         self.state.saved = None;
         self.in_flight = Some(document.revision());
         Outcome::job(Job::SaveAs {
             path: path.to_path_buf(),
-            bytes: document.to_bytes(),
+            bytes,
             generation: document.generation(),
             revision: document.revision(),
         })
+    }
+
+    /// Publishes a refusal decided before anything was queued.
+    ///
+    /// Nothing is in flight and nothing was written, so the document keeps its
+    /// dirty state and the session goes back to idle carrying the reason.
+    fn refuse_save(&mut self, refusal: SaveRefusal) -> Outcome {
+        self.state.busy = false;
+        self.state.saved = None;
+        self.state.failure = Some(Failure::Save(refusal));
+        self.refresh();
+        Outcome::nothing()
     }
 
     /// Moves the caret to the start of a line, counting from 1.
@@ -367,6 +406,51 @@ impl DocumentSession {
         })
     }
 
+    /// Opens `path` reading it as `encoding`, whatever its bytes look like.
+    ///
+    /// This is how a single-byte table, an unmarked UTF-16 file or a UTF-32
+    /// file becomes a document: the caller has answered the question the probe
+    /// cannot. The read still refuses if that encoding cannot write the file
+    /// back byte for byte, so naming one is a choice, not an override.
+    pub fn open_with(&mut self, path: &Path, encoding: Encoding) -> Outcome {
+        if path.as_os_str().is_empty() {
+            return Outcome::nothing();
+        }
+        let Ok(generation) = self.clock.issue() else {
+            return Outcome::nothing();
+        };
+        self.latest = generation;
+        self.state.busy = true;
+        self.state.failure = None;
+        self.state.saved = None;
+        Outcome::job(Job::OpenWith {
+            path: path.to_path_buf(),
+            encoding,
+            generation,
+            limits: self.limits,
+        })
+    }
+
+    /// Reads the open document again as `encoding`.
+    ///
+    /// Refused while the document is dirty, because re-reading the file is how
+    /// this works and there is no way to re-read it and keep edits that were
+    /// never written. A host offers this on a saved document, or saves first.
+    pub fn reopen_with(&mut self, encoding: Encoding) -> Outcome {
+        if self.state.dirty {
+            return Outcome::nothing();
+        }
+        let Some(path) = self
+            .document
+            .as_ref()
+            .and_then(Document::target)
+            .map(|target| target.resolved().to_path_buf())
+        else {
+            return Outcome::nothing();
+        };
+        self.open_with(&path, encoding)
+    }
+
     /// Asks only whether `path` holds editable text, without opening it.
     ///
     /// Activation needs the question without the answer's cost: deciding which
@@ -473,8 +557,15 @@ impl DocumentSession {
         // no file has nothing to rewrite, so the question does not apply to it.
         // Behind the other order, a new document nobody had typed into yet
         // could not even be given a name: the shortcut answered nothing at all.
-        let Some(request) = document.save_request() else {
-            return Outcome::event(Event::DestinationNeeded);
+        let request = match document.save_request() {
+            SaveIntent::DestinationNeeded => return Outcome::event(Event::DestinationNeeded),
+            SaveIntent::Unrepresentable(source) => {
+                return self.refuse_save(SaveRefusal::Unrepresentable { source })
+            }
+            SaveIntent::Unwritable(detail) => {
+                return self.refuse_save(SaveRefusal::StructureChanged { detail })
+            }
+            SaveIntent::Ready(request) => request,
         };
         if !self.state.dirty {
             return Outcome::nothing();
@@ -619,11 +710,15 @@ impl DocumentSession {
             }
         };
         match outcome.classification {
-            Classification::EditableText { .. } => Outcome::job(Job::Open {
-                path: outcome.path,
-                generation,
-                limits: self.limits,
-            }),
+            // Both kinds of document open the same way. Which contract the
+            // document turns out to be under is decided by the read, not here.
+            Classification::EditableText { .. } | Classification::ImportedDocument => {
+                Outcome::job(Job::Open {
+                    path: outcome.path,
+                    generation,
+                    limits: self.limits,
+                })
+            }
             Classification::Binary { reason } => {
                 self.state.busy = false;
                 self.state.failure = Some(Failure::Open(OpenRefusal::NotText { reason }));
@@ -656,6 +751,7 @@ impl DocumentSession {
                     name: file_name(&path),
                     path,
                     encoding: Some(document.encoding()),
+                    container: document.container_format(),
                     ..SessionState::default()
                 };
                 self.document = Some(document);

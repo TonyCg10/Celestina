@@ -1,18 +1,19 @@
 # Grafita status
 
-- **Updated:** 2026-08-05
-- **Implementation:** checkpoints G0-G6 are present; G7 (reading comfort) is
-  the active checkpoint and its code is written but not yet delivered
-- **Author validation:** the version-1 interaction pass is closed; `VAL-G7` and
-  `VAL-GRA-SAVEAS` are requested and intentionally excluded coverage is
-  recorded in [VALIDATION.md](VALIDATION.md)
+- **Updated:** 2026-08-19
+- **Implementation:** checkpoints G0-G13 are present and delivered; no
+  checkpoint is active
+- **Author validation:** the version-1 interaction pass is closed; `VAL-G7`,
+  `VAL-GRA-SAVEAS`, `VAL-G8` and `VAL-G9` are requested and intentionally
+  excluded coverage is recorded in [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
 
-- Uncommitted in the checkout: `G7-D`. A new document nobody has typed into can
-  be given a name again: the destination is asked for before the clean guard,
-  which exists to stop an unchanged file being rewritten and does not apply to a
-  document that has no file.
+- Grafita is 1.2.0 and installed; Siderita carries the same verified core.
+- `G8-A` touches `siderita/src/editor.rs`, because a new `SaveRefusal` variant
+  stops the other host compiling until it presents it. The author chose two
+  consecutive commits over widening the unit, so one revision in between does
+  not build Siderita.
 
 - `grafita-core` owns content-based text acceptance, byte/newline-preserving
   editing, undo/redo, search/replace, indentation, highlighting, conflict
@@ -49,13 +50,31 @@
   live search is reset when a new document is adopted, and the undo bound
   drops an action whole or not at all. Written under unit `G7-C`, covered by
   `grafita-core` tests, not yet built or deployed.
-- Legacy encodings are an explicit product exclusion until a real document
-  demonstrates the need; they are not an incomplete version-1 item.
+- Grafita has two kinds of document. A native one is a text file whose bytes it
+  reproduces exactly. An imported one is the text inside `.docx`, `.odt`,
+  `.epub`, `.rtf`, PDF or gzip, and what it promises is that every part the
+  author did not edit is written back as the bytes it already was. The contract
+  is [document import](docs/contracts/document-import.md); the two never
+  share a save path.
+- An imported document never creates structure: adding or removing a paragraph
+  is refused, a character the font cannot draw is refused, and a PDF is never
+  re-laid-out. A PDF correction is appended as an incremental update, so the
+  original file is the literal byte prefix of the saved one.
+- `grafita-core` carries thirty single-byte encodings and four multi-byte ones,
+  generated from the standards' own mappings, plus unmarked UTF-16 and UTF-32.
+  None is ever concluded from bytes: `open_with` reads a file as the encoding a
+  caller names and refuses it unless re-encoding reproduces the file exactly.
+  A document's text can fail to become bytes, so `Document::save_request`
+  answers with `SaveIntent` and both hosts present
+  `SaveRefusal::Unrepresentable`. In the application the encoding is a footer
+  button and `Ctrl + E`; a document with unsaved work is not offered the
+  choice, because choosing re-reads the file.
+- What this does not do is detect a wrong choice. The same bytes are often
+  valid in two encodings and both write back unchanged; the guarantee is that
+  no byte is lost, not that the author picked the right language.
 
 ## Conditional work, not active debt
 
-- Add a legacy encoding only after a representative file and explicit encoding
-  choice establish a reversible contract.
 - Extract a shared visual editor surface only after the author accepts that
   design-system API and all consumers can be validated together.
 - Revisit highlighter or large-document architecture only with a measured

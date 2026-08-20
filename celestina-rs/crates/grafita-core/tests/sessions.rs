@@ -7,10 +7,11 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use celestina_core::{CancellationToken, Generation, GenerationClock};
-use grafita_core::open::{open, probe, Limits, OpenRefusal};
+use grafita_core::open::{open, open_with, probe, Limits, OpenRefusal};
 use grafita_core::save::perform;
 use grafita_core::session::{DeclineReason, DocumentSession, Event, Failure};
 use grafita_core::worker::{Completion, Job};
+use grafita_core::{Encoding, SingleByte};
 
 static NEXT_SCRATCH: AtomicU64 = AtomicU64::new(1);
 
@@ -51,6 +52,21 @@ fn pump(session: &mut DocumentSession, job: Job) -> Option<Event> {
         } => Completion::Opened {
             generation,
             result: Box::new(open(&path, generation, limits, &cancellation)),
+        },
+        Job::OpenWith {
+            path,
+            encoding,
+            generation,
+            limits,
+        } => Completion::Opened {
+            generation,
+            result: Box::new(open_with(
+                &path,
+                encoding,
+                generation,
+                limits,
+                &cancellation,
+            )),
         },
         Job::SaveAs {
             path,
@@ -839,4 +855,112 @@ fn an_untouched_new_document_can_still_be_given_a_destination() {
         matches!(outcome.event, Some(Event::DestinationNeeded)),
         "a document with no file asks where it goes, however clean it is"
     );
+}
+
+/// The whole gesture the window offers: a file nothing can classify is
+/// refused, the author names an encoding, and the same file becomes an
+/// ordinary document that saves back byte for byte.
+#[test]
+fn naming_an_encoding_opens_what_the_probe_refused() {
+    let root = scratch("session-encoding");
+    let path = root.join("nota");
+    let latin = Encoding::SingleByte(SingleByte::Iso8859_1);
+    let bytes = latin.encode("façade\n").expect("latin-1 carries these");
+    fs::write(&path, &bytes).expect("write");
+
+    let (mut session, event) = open_session(&path);
+    assert!(matches!(
+        event,
+        Some(Event::Declined {
+            reason: DeclineReason::UnsupportedEncoding,
+            ..
+        })
+    ));
+    assert!(!session.state().active);
+
+    // What the chooser does with the file the refusal left behind.
+    let outcome = session.open_with(&path, latin);
+    let job = outcome.job.expect("an open job");
+    let event = pump(&mut session, job);
+
+    assert!(matches!(event, Some(Event::PushText { .. })));
+    assert!(session.state().active);
+    assert_eq!(session.state().encoding, Some(latin));
+    assert!(!session.state().dirty);
+    assert!(session.state().failure.is_none());
+
+    let _ = fs::remove_dir_all(root);
+}
+
+/// Re-reading is how choosing works, so a document with unsaved work is left
+/// alone rather than quietly losing them.
+#[test]
+fn a_dirty_document_does_not_get_reread_in_another_encoding() {
+    let root = scratch("session-encoding-dirty");
+    let path = root.join("notas.txt");
+    fs::write(&path, b"uno\n").expect("write");
+
+    let (mut session, _event) = open_session(&path);
+    let _ = session.apply_display_text("uno y algo\n");
+    assert!(session.state().dirty);
+
+    let outcome = session.reopen_with(Encoding::SingleByte(SingleByte::Windows1252));
+    assert!(outcome.job.is_none());
+    assert!(outcome.event.is_none());
+    assert!(session.state().dirty);
+    assert_eq!(session.state().encoding, Some(Encoding::Utf8));
+
+    let _ = fs::remove_dir_all(root);
+}
+
+/// The path the window actually takes. A session probes first and opens only if
+/// that probe says yes, so a document the reader understands but the probe
+/// calls binary never reaches the reader at all — which is exactly how `.docx`,
+/// `.epub` and PDF stayed unopenable after they were implemented.
+#[test]
+fn every_imported_format_survives_the_probe_the_window_runs_first() {
+    let root = scratch("session-imported");
+    let cases: [(&str, Vec<u8>); 3] = [
+        ("report.docx", docx_bytes()),
+        ("letter.rtf", br"{\rtf1\ansi Hola\par }".to_vec()),
+        ("notes.txt.gz", gzip_bytes("una linea\n")),
+    ];
+
+    for (name, bytes) in cases {
+        let path = root.join(name);
+        fs::write(&path, &bytes).expect("write");
+
+        let (session, event) = open_session(&path);
+        assert!(
+            matches!(event, Some(Event::PushText { .. })),
+            "{name} must open, and got {event:?}"
+        );
+        assert!(session.state().active, "{name}");
+        assert!(session.state().container.is_some(), "{name} is imported");
+        assert!(session.state().failure.is_none(), "{name}");
+    }
+
+    let _ = fs::remove_dir_all(root);
+}
+
+fn docx_bytes() -> Vec<u8> {
+    use std::io::Write;
+    let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let options = zip::write::SimpleFileOptions::default();
+    writer
+        .start_file("word/document.xml", options)
+        .expect("start");
+    writer
+        .write_all(
+            br#"<w:document><w:body><w:p><w:r><w:t>Hola</w:t></w:r></w:p></w:body></w:document>"#,
+        )
+        .expect("write");
+    writer.finish().expect("finish").into_inner()
+}
+
+fn gzip_bytes(text: &str) -> Vec<u8> {
+    use std::io::Write;
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(text.as_bytes()).expect("compress");
+    encoder.finish().expect("compress")
 }

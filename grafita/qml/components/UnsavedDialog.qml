@@ -28,7 +28,12 @@ CelestinaModalLayer {
     GlassCard {
         anchors.centerIn: parent
         width: Math.min(420, layer.width - CelestinaTheme.space3xl)
-        height: question.height + buttons.height + CelestinaTheme.space3xl
+        // Measured from where the buttons actually end rather than from a
+        // constant: the question wraps to two lines as soon as the document
+        // has a long name, and a fixed guess at the margins left the card too
+        // short for it — the text was cut off at the top and the buttons sat
+        // on the edge.
+        height: buttons.y + buttons.height + CelestinaTheme.spaceLg
         backdropSource: layer.backdrop
 
         Accessible.role: Accessible.Dialog

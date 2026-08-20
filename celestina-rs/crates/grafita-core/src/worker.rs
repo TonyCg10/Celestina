@@ -20,8 +20,9 @@ use std::thread::{self, JoinHandle};
 
 use celestina_core::{CancellationToken, Generation};
 
+use crate::encoding::Encoding;
 use crate::history::Revision;
-use crate::open::{open, probe, Limits, OpenRefusal, OpenedFile, ProbeOutcome};
+use crate::open::{open, open_with, probe, Limits, OpenRefusal, OpenedFile, ProbeOutcome};
 use crate::save::{perform, CreatedFile, SaveRefusal, SaveReport, SaveRequest};
 
 /// A piece of blocking work for the document worker.
@@ -52,6 +53,14 @@ pub enum Job {
         generation: Generation,
         limits: Limits,
     },
+    /// Read a file completely and decode it as the encoding the caller names,
+    /// refusing if that encoding cannot write the bytes back unchanged.
+    OpenWith {
+        path: PathBuf,
+        encoding: Encoding,
+        generation: Generation,
+        limits: Limits,
+    },
     /// Write a document to a file it does not own yet, and report the target it
     /// may adopt. Never superseded: it is work the user asked for.
     SaveAs {
@@ -78,7 +87,10 @@ impl Job {
     /// Only questions about the current state of a file are superseded. A save
     /// is never discarded to make room for anything.
     const fn is_supersedable(&self) -> bool {
-        matches!(self, Self::Probe { .. } | Self::Open { .. })
+        matches!(
+            self,
+            Self::Probe { .. } | Self::Open { .. } | Self::OpenWith { .. }
+        )
     }
 }
 
@@ -314,6 +326,21 @@ fn run(queued: &Queued) -> Completion {
             generation: *generation,
             result: Box::new(open(path, *generation, *limits, cancellation)),
         },
+        Job::OpenWith {
+            path,
+            encoding,
+            generation,
+            limits,
+        } => Completion::Opened {
+            generation: *generation,
+            result: Box::new(open_with(
+                path,
+                *encoding,
+                *generation,
+                *limits,
+                cancellation,
+            )),
+        },
         Job::SaveAs {
             path,
             bytes,
@@ -479,7 +506,7 @@ mod tests {
 
         worker
             .submit(Job::Save {
-                request: Box::new(document.save_request().expect("a target")),
+                request: Box::new(document.save_request().ready().expect("a target")),
                 generation: document.generation(),
             })
             .expect("submit");

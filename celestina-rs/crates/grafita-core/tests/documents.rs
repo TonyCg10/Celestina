@@ -7,10 +7,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use celestina_core::{CancellationToken, Generation, GenerationClock};
-use grafita_core::document::SaveApplication;
-use grafita_core::open::{open, probe, Limits, OpenRefusal};
+use grafita_core::document::{SaveApplication, SaveIntent};
+use grafita_core::open::{open, open_with, probe, Limits, OpenRefusal};
 use grafita_core::save::{perform, Durability, SaveRefusal};
-use grafita_core::{Document, Encoding, Position, Span};
+use grafita_core::{Document, Encoding, MultiByte, Position, SingleByte, Span};
 
 static NEXT_SCRATCH: AtomicU64 = AtomicU64::new(1);
 
@@ -41,13 +41,11 @@ fn document_at(path: &Path) -> Document {
 }
 
 fn save_now(document: &mut Document) -> Durability {
-    let report = perform(
-        &document
-            .save_request()
-            .expect("an opened document has a target"),
-        &live(),
-    )
-    .unwrap_or_else(|refusal| panic!("the save must succeed: {refusal}"));
+    let SaveIntent::Ready(request) = document.save_request() else {
+        panic!("an opened document has a target and encodable text");
+    };
+    let report = perform(&request, &live())
+        .unwrap_or_else(|refusal| panic!("the save must succeed: {refusal}"));
     assert_eq!(document.apply_save(&report), SaveApplication::Clean);
     report.durability
 }
@@ -125,9 +123,16 @@ fn an_untouched_open_and_save_is_byte_identical() {
         ("vacio", Vec::new()),
         (
             "marca-utf8",
-            Encoding::Utf8Bom.encode("con marca\r\nsegunda\r\n"),
+            Encoding::Utf8Bom
+                .encode("con marca\r\nsegunda\r\n")
+                .expect("a Unicode encoding carries every character"),
         ),
-        ("ancho-le", Encoding::Utf16Le.encode("ancho\nsegunda\n")),
+        (
+            "ancho-le",
+            Encoding::Utf16Le
+                .encode("ancho\nsegunda\n")
+                .expect("a Unicode encoding carries every character"),
+        ),
     ];
 
     for (name, bytes) in cases {
@@ -136,7 +141,11 @@ fn an_untouched_open_and_save_is_byte_identical() {
 
         let mut document = document_at(&path);
         assert!(!document.is_dirty(), "{name}");
-        assert_eq!(document.to_bytes(), bytes, "{name} must re-encode exactly");
+        assert_eq!(
+            document.to_bytes(),
+            Ok(bytes.clone()),
+            "{name} must re-encode exactly"
+        );
 
         save_now(&mut document);
         assert_eq!(fs::read(&path).expect("read back"), bytes, "{name}");
@@ -156,7 +165,10 @@ fn marked_encodings_survive_an_edit() {
 
     for (encoding, text) in cases {
         let path = root.join(encoding.label().replace(' ', "-"));
-        fs::write(&path, encoding.encode(text)).expect("write the fixture");
+        let bytes = encoding
+            .encode(text)
+            .expect("a Unicode encoding carries every character");
+        fs::write(&path, bytes).expect("write the fixture");
 
         let mut document = document_at(&path);
         assert_eq!(document.encoding(), encoding);
@@ -406,6 +418,7 @@ fn a_file_changed_underneath_refuses_and_keeps_the_other_version() {
     let refusal = perform(
         &document
             .save_request()
+            .ready()
             .expect("an opened document has a target"),
         &live(),
     )
@@ -448,6 +461,7 @@ fn a_repointed_symlink_refuses_instead_of_writing_the_new_target() {
     let refusal = perform(
         &document
             .save_request()
+            .ready()
             .expect("an opened document has a target"),
         &live(),
     )
@@ -479,6 +493,7 @@ fn a_deleted_target_refuses_rather_than_recreating_the_file() {
     let refusal = perform(
         &document
             .save_request()
+            .ready()
             .expect("an opened document has a target"),
         &live(),
     )
@@ -509,8 +524,11 @@ fn an_interrupted_save_leaves_the_original_and_no_temporary() {
     // reproduced, which is the last moment before the rename publishes it.
     let cancellation = CancellationToken::new();
     cancellation.cancel();
-    let refusal = perform(&document.save_request().expect("a target"), &cancellation)
-        .expect_err("must refuse");
+    let refusal = perform(
+        &document.save_request().ready().expect("a target"),
+        &cancellation,
+    )
+    .expect_err("must refuse");
 
     assert_eq!(refusal, SaveRefusal::Cancelled);
     assert_eq!(fs::read(&path).expect("read back"), b"contenido original\n");
@@ -543,6 +561,7 @@ fn a_save_that_cannot_create_its_temporary_leaves_the_original_intact() {
     let refusal = perform(
         &document
             .save_request()
+            .ready()
             .expect("an opened document has a target"),
         &live(),
     )
@@ -567,7 +586,7 @@ fn a_save_report_older_than_the_document_does_not_clear_the_newer_edit() {
     document
         .insert(document.buffer().end_position(), "primera\n")
         .expect("insert");
-    let request = document.save_request().expect("a target");
+    let request = document.save_request().ready().expect("a target");
 
     // The user keeps typing while the worker is still writing.
     document
@@ -757,6 +776,162 @@ fn a_tab_indented_file_reports_tabs() {
 
     assert_eq!(document.indentation(), grafita_core::Indentation::Tabs);
     assert_eq!(document.indentation().unit(4), "\t");
+
+    let _ = fs::remove_dir_all(root);
+}
+
+/// A file nothing in its bytes can identify still opens once the author names
+/// its encoding, and saving it untouched reproduces it exactly.
+#[test]
+fn a_named_encoding_opens_what_the_bytes_cannot_prove() {
+    let root = scratch("named");
+    let latin = Encoding::SingleByte(SingleByte::Iso8859_1);
+    let bytes = latin
+        .encode("façade\nnaïve\n")
+        .expect("latin-1 carries these");
+    let path = root.join("note");
+    fs::write(&path, &bytes).expect("write the fixture");
+
+    // Left to itself the file is refused: 0xE7 is not UTF-8 and nothing says
+    // which single-byte encoding it is.
+    assert!(matches!(
+        open(&path, first_generation(), Limits::default(), &live()),
+        Err(OpenRefusal::UnsupportedEncoding { .. })
+    ));
+
+    let opened = open_with(&path, latin, first_generation(), Limits::default(), &live())
+        .expect("the named encoding reads it");
+    assert_eq!(opened.encoding, latin);
+    assert_eq!(opened.text, "façade\nnaïve\n");
+
+    let mut document = Document::from_opened(opened);
+    assert!(!document.is_dirty());
+    assert_eq!(document.to_bytes(), Ok(bytes.clone()));
+    save_now(&mut document);
+    assert_eq!(fs::read(&path).expect("read back"), bytes);
+
+    let _ = fs::remove_dir_all(root);
+}
+
+/// Naming an encoding is a choice, not an override: one that reads the file but
+/// would not write it back unchanged is refused before it can be edited.
+#[test]
+fn a_named_encoding_that_would_not_write_the_file_back_is_refused() {
+    let root = scratch("named-refused");
+
+    // ISO-8859-7 assigns no character to 0xAE, so it cannot even read this.
+    let path = root.join("greek");
+    fs::write(&path, b"alfa \xAE beta\n").expect("write the fixture");
+    assert!(matches!(
+        open_with(
+            &path,
+            Encoding::SingleByte(SingleByte::Iso8859_7),
+            first_generation(),
+            Limits::default(),
+            &live()
+        ),
+        Err(OpenRefusal::UnsupportedEncoding { .. })
+    ));
+
+    // An odd number of bytes cannot be UTF-16 whatever the author names.
+    let odd = root.join("odd");
+    fs::write(&odd, b"abc").expect("write the fixture");
+    assert!(matches!(
+        open_with(
+            &odd,
+            Encoding::Utf16LeBare,
+            first_generation(),
+            Limits::default(),
+            &live()
+        ),
+        Err(OpenRefusal::UnsupportedEncoding { .. })
+    ));
+
+    let _ = fs::remove_dir_all(root);
+}
+
+/// Unmarked UTF-16 is the case the probe cannot answer at all: its NUL bytes
+/// make it binary, and only the author can say which byte order it is.
+#[test]
+fn unmarked_wide_text_opens_only_when_it_is_named() {
+    let root = scratch("wide");
+    for (label, encoding) in [
+        ("le", Encoding::Utf16LeBare),
+        ("be", Encoding::Utf16BeBare),
+        ("32le", Encoding::Utf32LeBare),
+        ("32be", Encoding::Utf32BeBare),
+    ] {
+        let bytes = encoding
+            .encode("wide text\n")
+            .expect("Unicode carries this");
+        let path = root.join(label);
+        fs::write(&path, &bytes).expect("write the fixture");
+
+        assert!(
+            matches!(
+                open(&path, first_generation(), Limits::default(), &live()),
+                Err(OpenRefusal::NotText { .. })
+            ),
+            "{label} must look like binary until it is named"
+        );
+
+        let opened = open_with(
+            &path,
+            encoding,
+            first_generation(),
+            Limits::default(),
+            &live(),
+        )
+        .unwrap_or_else(|refusal| panic!("{label}: {refusal}"));
+        assert_eq!(opened.text, "wide text\n", "{label}");
+        assert_eq!(
+            Document::from_opened(opened).to_bytes(),
+            Ok(bytes),
+            "{label} must re-encode exactly"
+        );
+    }
+
+    let _ = fs::remove_dir_all(root);
+}
+
+/// A multi-byte file is the case a table alone cannot make safe, so opening it
+/// is the check: decoded, re-encoded and compared with the bytes on disk.
+#[test]
+fn a_multi_byte_file_opens_named_and_saves_back_identically() {
+    let root = scratch("multibyte");
+    let shift = Encoding::MultiByte(MultiByte::ShiftJis);
+    let bytes = shift
+        .encode("私 wa\ntwo\n")
+        .expect("Shift-JIS carries these");
+    let path = root.join("nota");
+    fs::write(&path, &bytes).expect("write the fixture");
+
+    // Those bytes are not UTF-8, and nothing in them says which encoding they
+    // are, so the file is refused until the author names one.
+    assert!(matches!(
+        open(&path, first_generation(), Limits::default(), &live()),
+        Err(OpenRefusal::UnsupportedEncoding { .. })
+    ));
+
+    let opened = open_with(&path, shift, first_generation(), Limits::default(), &live())
+        .expect("the named encoding reads it");
+    assert_eq!(opened.text, "私 wa\ntwo\n");
+
+    let mut document = Document::from_opened(opened);
+    assert_eq!(document.to_bytes(), Ok(bytes.clone()));
+    save_now(&mut document);
+    assert_eq!(fs::read(&path).expect("read back"), bytes);
+
+    // The limit of what naming an encoding can promise. These same bytes are
+    // also valid GBK, where they spell a different character, and GBK writes
+    // them back unchanged — so the byte check cannot catch it and does not
+    // pretend to. What the contract guarantees is that no byte is lost, not
+    // that the author picked the language the file was written in.
+    let gbk = Encoding::MultiByte(MultiByte::Gbk);
+    let other = open_with(&path, gbk, first_generation(), Limits::default(), &live())
+        .expect("these bytes are valid GBK as well");
+    assert_ne!(other.text, "私 wa\ntwo\n");
+    assert_eq!(Document::from_opened(other).to_bytes(), Ok(bytes.clone()));
 
     let _ = fs::remove_dir_all(root);
 }

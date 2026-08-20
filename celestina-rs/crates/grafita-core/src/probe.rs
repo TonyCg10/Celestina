@@ -7,6 +7,7 @@
 //! safely map back" instead of pretending the file is binary.
 
 use crate::encoding::{DecodeError, Encoding};
+use crate::import::Imported;
 
 /// How much of a file [`classify`] needs to answer for the whole file.
 ///
@@ -20,6 +21,10 @@ pub const DEFAULT_PROBE_BYTES: usize = 64 * 1024;
 pub enum Classification {
     /// Text in a reversible encoding: editable and safe to save.
     EditableText { encoding: Encoding },
+    /// Not text, but a document whose text can be carried in and out of it: a
+    /// `.docx`, an `.odt`, an `.epub`, a `.rtf`, a PDF, a `.txt.gz`. Editable,
+    /// under the imported contract rather than the byte-preserving one.
+    ImportedDocument,
     /// Text-shaped bytes with no reversible mapping yet. Showable, but never
     /// advertised as editable, because saving could not reproduce them.
     UnsupportedEncoding { reason: DecodeError },
@@ -29,9 +34,13 @@ pub enum Classification {
 
 impl Classification {
     /// Whether this content may be opened for editing.
+    ///
+    /// True for both kinds of document. A host asking "may I offer the editor"
+    /// gets one answer; which contract the document is under is the document's
+    /// business, not the question's.
     #[must_use]
     pub const fn is_editable(&self) -> bool {
-        matches!(self, Self::EditableText { .. })
+        matches!(self, Self::EditableText { .. } | Self::ImportedDocument)
     }
 
     /// The encoding, when there is a reversible one.
@@ -67,6 +76,13 @@ const CONTROL_PERCENT_LIMIT: usize = 5;
 /// expected, in a complete file they are a genuine encoding failure.
 #[must_use]
 pub fn classify(bytes: &[u8], complete: bool) -> Classification {
+    // Asked before anything else, because every one of these formats would
+    // otherwise be called binary by the very next check and never reach the
+    // reader that understands it. The marks are the formats' own first bytes,
+    // so this is still content deciding and never a name.
+    if Imported::looks_importable(bytes) {
+        return Classification::ImportedDocument;
+    }
     match Encoding::from_byte_order_mark(bytes) {
         Some(encoding @ (Encoding::Utf16Le | Encoding::Utf16Be)) => {
             classify_utf16(bytes, encoding, complete)
@@ -190,17 +206,47 @@ mod tests {
     }
 
     #[test]
+    fn a_terminal_capture_full_of_escapes_is_text_and_a_program_is_not() {
+        // The escape itself is exempt from the control count, so a coloured log
+        // is prose with punctuation as far as the heuristic is concerned. This
+        // is pinned because it is the case that most looks like it should fail.
+        let log = "\u{1B}[0;32mOK\u{1B}[0m compilado\n\u{1B}[1;31mERROR\u{1B}[0m dos\n";
+        assert_eq!(editable(log.as_bytes()), Some(Encoding::Utf8));
+
+        // What the count is actually for: bytes that decode but are not text.
+        let program: Vec<u8> = (1..=8u8).cycle().take(64).collect();
+        assert!(matches!(
+            classify(&program, true),
+            Classification::Binary {
+                reason: BinaryReason::ControlBytes { .. }
+            }
+        ));
+    }
+
+    #[test]
     fn marked_streams_are_read_from_their_mark() {
         assert_eq!(
-            editable(&Encoding::Utf8Bom.encode("con marca\n")),
+            editable(
+                &Encoding::Utf8Bom
+                    .encode("con marca\n")
+                    .expect("Unicode carries this")
+            ),
             Some(Encoding::Utf8Bom)
         );
         assert_eq!(
-            editable(&Encoding::Utf16Le.encode("ancho\n")),
+            editable(
+                &Encoding::Utf16Le
+                    .encode("ancho\n")
+                    .expect("Unicode carries this")
+            ),
             Some(Encoding::Utf16Le)
         );
         assert_eq!(
-            editable(&Encoding::Utf16Be.encode("ancho\n")),
+            editable(
+                &Encoding::Utf16Be
+                    .encode("ancho\n")
+                    .expect("Unicode carries this")
+            ),
             Some(Encoding::Utf16Be)
         );
     }
@@ -264,6 +310,7 @@ mod tests {
     #[test]
     fn a_prefix_that_cuts_a_surrogate_pair_is_still_text() {
         let complete = Encoding::Utf16Le.encode("hola 🜲");
+        let complete = complete.expect("a Unicode encoding carries every character");
         let cut = &complete[..complete.len() - 2];
 
         assert_eq!(

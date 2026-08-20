@@ -60,6 +60,33 @@ Item {
         Accessible.ignored: status.text.length === 0
     }
 
+    // Back in the footer because it now asks for something. G7 removed this
+    // label when it was only a statement about the document; naming the
+    // encoding is an action, and this is where the document's actions live.
+    CelestinaButton {
+        id: encodingButton
+        anchors.right: actions.left
+        anchors.rightMargin: CelestinaTheme.spaceSm
+        anchors.verticalCenter: actions.verticalCenter
+        visible: root.session.active || root.session.encodingRetry.length > 0
+        // A document with unsaved work cannot be re-read without losing them,
+        // so the action is not offered rather than offered and refused. An
+        // imported document has no encoding to choose either: it says what
+        // container it came out of and stops there.
+        enabled: !root.session.dirty && !root.session.busy
+                 && !root.session.imported
+        text: {
+            if (root.session.imported)
+                return root.session.containerLabel
+            return root.session.active
+                   ? root.session.encodingLabel : "Leer como…"
+        }
+        onClicked: root.session.requestEncodingChooser()
+
+        Accessible.role: Accessible.Button
+        Accessible.name: "Read this document as another encoding"
+    }
+
     Row {
         id: actions
         anchors.right: parent.right

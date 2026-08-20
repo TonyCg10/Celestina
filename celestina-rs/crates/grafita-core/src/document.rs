@@ -13,9 +13,10 @@ use celestina_core::Generation;
 
 use crate::buffer::{Fragment, TextBuffer};
 use crate::display;
-use crate::encoding::Encoding;
+use crate::encoding::{EncodeError, Encoding};
 use crate::highlight::{self, Language, LineState, Span as HighlightSpan};
 use crate::history::{History, Revision};
+use crate::import::Imported;
 use crate::indent::{self, Indentation};
 use crate::open::OpenedFile;
 use crate::position::{Location, Position, PositionError, Span};
@@ -41,6 +42,37 @@ pub struct EditOutcome {
     pub caret: Position,
     /// The document revision this edit produced.
     pub revision: Revision,
+}
+
+/// What saving a document would do, answered before a byte is written.
+///
+/// The three answers are separate because a host reacts differently to each:
+/// one asks a question, one reports a refusal, and one is the write itself.
+#[derive(Clone, Debug)]
+pub enum SaveIntent {
+    /// The document has no file yet, so the host has to ask where it goes.
+    /// This is a question, not a refusal.
+    DestinationNeeded,
+    /// The text holds a character this document's encoding has no byte for.
+    /// Nothing is written and the file on disk is untouched.
+    Unrepresentable(EncodeError),
+    /// An imported document's text no longer fits the structure it came from.
+    /// Nothing is written and the container on disk is untouched.
+    Unwritable(String),
+    /// The write, with its bytes already snapshotted.
+    Ready(SaveRequest),
+}
+
+impl SaveIntent {
+    /// The write, when there is one. A host reacts to each answer separately;
+    /// this is for a caller that only cares whether a write was produced.
+    #[must_use]
+    pub fn ready(self) -> Option<SaveRequest> {
+        match self {
+            Self::Ready(request) => Some(request),
+            Self::DestinationNeeded | Self::Unrepresentable(_) | Self::Unwritable(_) => None,
+        }
+    }
 }
 
 /// What a save report did to the document's dirty state.
@@ -77,6 +109,11 @@ pub struct Document {
     /// its action can follow it.
     undone_group: Option<u64>,
     redone_group: Option<u64>,
+    /// The container this document came out of, when it came out of one. Its
+    /// presence makes this an imported document: the text is a projection of a
+    /// structure, and saving writes that structure back rather than these
+    /// bytes.
+    imported: Option<Imported>,
     /// The line-feed-only text a widget edits, kept in step with the buffer.
     /// Holding it rather than rebuilding it per keystroke is what lets
     /// [`Document::apply_display_text`] recognise the document's own projection
@@ -100,6 +137,7 @@ impl Document {
             generation: opened.generation,
             revision: Revision::INITIAL,
             conflict: None,
+            imported: opened.imported,
         }
     }
 
@@ -126,6 +164,7 @@ impl Document {
             conflict: None,
             undone_group: None,
             redone_group: None,
+            imported: None,
         }
     }
 
@@ -207,9 +246,25 @@ impl Document {
         self.buffer.to_text()
     }
 
-    /// The bytes this document would write.
+    /// Whether this document is the text inside a container somebody else
+    /// wrote, rather than the bytes of a file.
     #[must_use]
-    pub fn to_bytes(&self) -> Vec<u8> {
+    pub const fn is_imported(&self) -> bool {
+        self.imported.is_some()
+    }
+
+    /// What kind of container this document came out of, if any.
+    #[must_use]
+    pub fn container_format(&self) -> Option<crate::import::Format> {
+        self.imported.as_ref().map(Imported::format)
+    }
+
+    /// The bytes this document would write, or the character that stops it.
+    ///
+    /// An imported document writes its whole container: the text goes back into
+    /// the part it came from and every other part is copied as the bytes it
+    /// already was.
+    pub fn to_bytes(&self) -> Result<Vec<u8>, EncodeError> {
         self.encoding.encode(&self.buffer.to_text())
     }
 
@@ -498,16 +553,28 @@ impl Document {
         }
     }
 
-    /// The write this document would perform, or `None` when it has no file yet
-    /// and the host must ask where to put it.
+    /// What saving this document would do, decided before anything is written.
     ///
     /// The bytes are snapshotted here, so later keystrokes cannot change what
-    /// the worker writes.
+    /// the worker writes. The three answers are separate because a host reacts
+    /// differently to each: one asks a question, one reports a refusal, and one
+    /// is the write.
     #[must_use]
-    pub fn save_request(&self) -> Option<SaveRequest> {
-        self.target
-            .as_ref()
-            .map(|target| SaveRequest::new(target.clone(), self.to_bytes(), self.revision))
+    pub fn save_request(&self) -> SaveIntent {
+        let Some(target) = self.target.as_ref() else {
+            return SaveIntent::DestinationNeeded;
+        };
+        let bytes = match self.imported.as_ref() {
+            Some(imported) => match imported.to_bytes(&self.buffer.to_text()) {
+                Ok(bytes) => bytes,
+                Err(source) => return SaveIntent::Unwritable(source.to_string()),
+            },
+            None => match self.to_bytes() {
+                Ok(bytes) => bytes,
+                Err(source) => return SaveIntent::Unrepresentable(source),
+            },
+        };
+        SaveIntent::Ready(SaveRequest::new(target.clone(), bytes, self.revision))
     }
 
     /// Applies a completed save.
@@ -536,7 +603,11 @@ impl Document {
                 found: found.clone(),
             }),
             SaveRefusal::TargetMissing { .. } => Some(Conflict::Missing),
+            // Unrepresentable is about the text in this window, not about the
+            // file, so it raises no conflict banner either.
             SaveRefusal::MetadataNotReproducible { .. }
+            | SaveRefusal::Unrepresentable { .. }
+            | SaveRefusal::StructureChanged { .. }
             | SaveRefusal::Cancelled
             | SaveRefusal::Io { .. } => None,
         };

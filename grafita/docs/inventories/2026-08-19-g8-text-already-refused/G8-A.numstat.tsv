@@ -1,0 +1,29 @@
+# G8-A exact change inventory
+
+Base revision	6fcfa0c37b94430a21edb39db731d0871fd4bed4
+Pathspec	celestina-rs/crates/grafita-core/src/encoding.rs
+Pathspec	celestina-rs/crates/grafita-core/src/encoding/multibyte.rs
+Pathspec	celestina-rs/crates/grafita-core/src/encoding/tables.rs
+Pathspec	celestina-rs/crates/grafita-core/tools/generate-encoding-tables.py
+Pathspec	grafita/qml/Main.qml
+Pathspec	grafita/qml/components/DocumentFooter.qml
+Pathspec	grafita/qml/components/EncodingDialog.qml
+Pathspec	grafita/src/session.rs
+Pathspec	grafita/docs/evidence/2026-08-19-encodings-a-file-cannot-declare.md
+Pathspec	grafita/docs/plans/archive/2026-08-19-g8-text-already-refused.md
+Pathspec	grafita/docs/inventories/2026-08-19-g8-text-already-refused/G8-A.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+574	16	e498f2aaf8734c54f87bc3740fc93dc7c24766006270feb8cefff27a036c5a86	celestina-rs/crates/grafita-core/src/encoding.rs
+62340	0	70f121c5b70e7adb35ea1836a53d360280c463d861f7a1b95ca807301585cb98	celestina-rs/crates/grafita-core/src/encoding/multibyte.rs
+782	0	2548929d3c3842bc59375f90ea8477b78aaddf845a141befde44d2a2f7e6ab54	celestina-rs/crates/grafita-core/src/encoding/tables.rs
+299	0	325320a9c722a72a43b5cb9f3ca79efe6884a759d27e029ebefeee18bd2a38bc	celestina-rs/crates/grafita-core/tools/generate-encoding-tables.py
+131	0	1620402fd175fe666f6f92a62e8f805aa8a24e1567fb41b6ab97c87fd54df948	grafita/docs/evidence/2026-08-19-encodings-a-file-cannot-declare.md
+151	0	d0a9826e2ff620672240081a1fb0b449000d73d5f4900f33c221eeda8b70f9bc	grafita/docs/plans/archive/2026-08-19-g8-text-already-refused.md
+24	0	361e9ff5b4f7a44580102a761ee88efc1b497b439d93da13da6a4dfd08bc3871	grafita/qml/Main.qml
+27	0	473d516acb30b52f503955b1e42271251dfc3220e3106e33caa321cecb86a5c9	grafita/qml/components/DocumentFooter.qml
+146	0	751034f359395d64c808230cb49506b59d989a103adf9101f60e527735c56d01	grafita/qml/components/EncodingDialog.qml
+145	1	2c88164389ed06233498cb37a10d58e260031cf5d3387f8075cfcc03ef7f935d	grafita/src/session.rs
+29	0	self	grafita/docs/inventories/2026-08-19-g8-text-already-refused/G8-A.numstat.tsv

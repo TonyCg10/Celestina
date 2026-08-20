@@ -16,6 +16,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use celestina_core::CancellationToken;
 
+use crate::encoding::EncodeError;
 use crate::history::Revision;
 use crate::metadata::MetadataError;
 use crate::target::{FileIdentity, Target};
@@ -95,6 +96,13 @@ pub enum SaveRefusal {
     TargetMissing { path: PathBuf },
     /// Part of the original's metadata could not be reproduced.
     MetadataNotReproducible { source: MetadataError },
+    /// The text holds a character the document's encoding has no byte for, so
+    /// writing it would silently substitute or drop it. Nothing was written.
+    Unrepresentable { source: EncodeError },
+    /// An imported document's text no longer fits the structure it came from —
+    /// a paragraph added or removed, which is structure this editor does not
+    /// write. Nothing was written and the container is untouched.
+    StructureChanged { detail: String },
     /// The save was cancelled before anything was published.
     Cancelled,
     /// Any other IO failure, tagged with the path it happened on.
@@ -133,6 +141,14 @@ impl fmt::Display for SaveRefusal {
             Self::MetadataNotReproducible { source } => {
                 write!(formatter, "the original's metadata would be lost: {source}")
             }
+            Self::Unrepresentable { source } => write!(
+                formatter,
+                "this text cannot be written without losing a character: {source}"
+            ),
+            Self::StructureChanged { detail } => write!(
+                formatter,
+                "this text no longer fits the document it came from: {detail}"
+            ),
             Self::Cancelled => formatter.write_str("the save was cancelled"),
             Self::Io {
                 path,

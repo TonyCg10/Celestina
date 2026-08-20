@@ -98,6 +98,15 @@ ApplicationWindow {
         return holder ? holder.tabSession : null
     }
 
+    /// Asks which encoding the visible document should be read as. The
+    /// question belongs to that document, so the session is the one that
+    /// decides whether there is anything to ask.
+    function chooseEncoding() {
+        const tab = window.sessionAt(window.currentTab)
+        if (tab)
+            tab.requestEncodingChooser()
+    }
+
     /// Moves a dragged tab from `from` to `to`, keeping the *active* tab
     /// pointed at correctly even when some other tab is the one that moved.
     ///
@@ -247,6 +256,14 @@ ApplicationWindow {
         onActivated: window.requestQuit()
     }
 
+    // Reading a document as another encoding. `Ctrl + E` because the two
+    // conventional ones are taken: the compositor claims `Alt`, and every
+    // `StandardKey` an editor uses is already bound above.
+    Shortcut {
+        sequences: ["Ctrl+E"]
+        onActivated: window.chooseEncoding()
+    }
+
     TabStrip {
         id: tabStrip
         anchors.left: parent.left
@@ -345,6 +362,13 @@ ApplicationWindow {
                     backdrop: view
                     onCancelled: window.cancelQuit()
                 }
+
+                EncodingDialog {
+                    anchors.fill: parent
+                    session: documentSession
+                    backdrop: view
+                }
+
 
                 Component.onCompleted: if (holder.initialPath.length > 0)
                                            documentSession.openPath(holder.initialPath)

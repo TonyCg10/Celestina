@@ -1,0 +1,87 @@
+# G9-A exact change inventory
+
+Base revision	6fcfa0c37b94430a21edb39db731d0871fd4bed4
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/crates/grafita-core/Cargo.toml
+Pathspec	celestina-rs/crates/grafita-core/examples/pdfprobe.rs
+Pathspec	celestina-rs/crates/grafita-core/src/container.rs
+Pathspec	celestina-rs/crates/grafita-core/src/document.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/epub.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/gzip.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/part.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/pdf.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/pdf/edit.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/pdf/file.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/pdf/form.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/pdf/glyphs.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/pdf/object.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/pdf/text.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/pdf/update.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/rtf.rs
+Pathspec	celestina-rs/crates/grafita-core/src/lib.rs
+Pathspec	celestina-rs/crates/grafita-core/src/open.rs
+Pathspec	celestina-rs/crates/grafita-core/src/probe.rs
+Pathspec	celestina-rs/crates/grafita-core/src/save.rs
+Pathspec	celestina-rs/crates/grafita-core/src/session.rs
+Pathspec	celestina-rs/crates/grafita-core/src/worker.rs
+Pathspec	celestina-rs/crates/grafita-core/tests/containers.rs
+Pathspec	celestina-rs/crates/grafita-core/tests/documents.rs
+Pathspec	celestina-rs/crates/grafita-core/tests/imported.rs
+Pathspec	celestina-rs/crates/grafita-core/tests/sessions.rs
+Pathspec	docs/version-history.tsv
+Pathspec	grafita/Cargo.lock
+Pathspec	grafita/Cargo.toml
+Pathspec	grafita/ROADMAP.md
+Pathspec	grafita/STATUS.md
+Pathspec	grafita/VALIDATION.md
+Pathspec	grafita/build.rs
+Pathspec	grafita/docs/contracts/document-import.md
+Pathspec	grafita/docs/evidence/2026-08-19-documents-grafita-used-to-refuse.md
+Pathspec	grafita/docs/plans/archive/2026-08-19-g9-imported-document.md
+Pathspec	grafita/qml/components/UnsavedDialog.qml
+Pathspec	grafita/docs/inventories/2026-08-19-g9-imported-document/G9-A.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+3	0	863cc2204f128f8cb6e7d37fa91274072d0a5149429853d7242b2d4e36be7203	celestina-rs/Cargo.lock
+15	0	dddfb916ca9b1069ddc59f6827865e6f5df09a586e866ab84b8e155cc0de9b8c	celestina-rs/crates/grafita-core/Cargo.toml
+106	0	30b755bf39d7fe6e31a57aac08359f8a03eabeb936335b9ee4062d2d66a9638d	celestina-rs/crates/grafita-core/examples/pdfprobe.rs
+440	0	f21b47a100a53cf8aaa588fe8f2d8b58d85c5ecb8af741d44ef65776ee622832	celestina-rs/crates/grafita-core/src/container.rs
+81	10	11d6e49ca480166338d0adcd0656301ca367ed889060d571bb239c7fda31f06c	celestina-rs/crates/grafita-core/src/document.rs
+360	0	852ff4d9606e3c56a37f194393ca634d4af90a1551e0422e705b85a799afd580	celestina-rs/crates/grafita-core/src/import.rs
+139	0	9913f4b9870881ba0fb3a35a3d0e9962da6393391bcef231e549f9bc2c6a2676	celestina-rs/crates/grafita-core/src/import/epub.rs
+121	0	0038e91f6e393ef7c342c3396d7e8d8d1bafcaa1f6a5d933607ab540dc7e0931	celestina-rs/crates/grafita-core/src/import/gzip.rs
+237	0	195d3f157a5f8287062e9724b77105e70e549459b35a4dd37887714982e415a9	celestina-rs/crates/grafita-core/src/import/part.rs
+10	0	d88fbba09100d37f20e4f93d02fb2e9892d98e0e61600d4286697d63c77be6b6	celestina-rs/crates/grafita-core/src/import/pdf.rs
+211	0	5fef8dd3b1962533310ec5097b37945c8c92eb85ad43b061f58ef06dd0565d08	celestina-rs/crates/grafita-core/src/import/pdf/edit.rs
+488	0	f4b241f44a6af50fcfaff1dae1ef5e5376d3f54ed242c5da5f8238083072abc8	celestina-rs/crates/grafita-core/src/import/pdf/file.rs
+211	0	896ad8b2488a3014c681db0f9e594dee7ca6436c2de7c2cacb681d55c3e85aff	celestina-rs/crates/grafita-core/src/import/pdf/form.rs
+505	0	5998b5d8ff7c97960e52ec23e34a870d2f6700f359688b0013a6a88a90039329	celestina-rs/crates/grafita-core/src/import/pdf/glyphs.rs
+417	0	72de4afd0d31d7ff0b3222b21b10a197a6939c6eb128098694e409e9cc17b53a	celestina-rs/crates/grafita-core/src/import/pdf/object.rs
+579	0	1efdc1be2d3b553fa386ee2cdf4ed8f5a47867d6252b6fe4f17b5b2c98ead120	celestina-rs/crates/grafita-core/src/import/pdf/text.rs
+230	0	9d3c70aa67e6e94e00abddf05279d456bbbc85400767b6dae5660744b66e441e	celestina-rs/crates/grafita-core/src/import/pdf/update.rs
+420	0	6c134202123642c4fd26b4cc1d8bab794a95cbd6d43e414c11278cfd4c66bde8	celestina-rs/crates/grafita-core/src/import/rtf.rs
+4	2	6f7370c8dc67dd57180163f3dd61d95808a0f3a17c74d87d45deb1bd1e39415c	celestina-rs/crates/grafita-core/src/lib.rs
+96	14	8325776dfbc4f52d4c2c599c4a7dcbb1a7d77139b2d162d4dc79fe5a565c2299	celestina-rs/crates/grafita-core/src/open.rs
+51	4	bdb8d865105195db3f168325f70e6cc5f950282ff2da6f7682cf7af02d0114ab	celestina-rs/crates/grafita-core/src/probe.rs
+16	0	283aeb5b1a2cd909e0d3fd26afbe06072ebb4f4d507983d15726d81ce71aaf50	celestina-rs/crates/grafita-core/src/save.rs
+105	9	f1be3ed33397e13c3cc4f2b305cc04af74243728c2df93224116f1dc220e0470	celestina-rs/crates/grafita-core/src/session.rs
+30	3	e72b8f1f5d1968feede7f361a75efe9a1c2ff64d708c5c504d668c0f9cca4b8a	celestina-rs/crates/grafita-core/src/worker.rs
+137	0	dbe41b3895bfac5429b8b7e83607b4d6be42200f18029c62a7271f9b2c88cdca	celestina-rs/crates/grafita-core/tests/containers.rs
+192	17	ea42146186569de9ed146f1c4d2b038dbebc1964975de50fa539defdf2fcf4c7	celestina-rs/crates/grafita-core/tests/documents.rs
+822	0	0cf241ec2ad5c44d93ce1a95f128abdf6c696c6b8bacb1fc1640691f5b57bd03	celestina-rs/crates/grafita-core/tests/imported.rs
+125	1	62334638e6b522968565119ac737d12977c7de337f8ce7535cd4459d66087ac5	celestina-rs/crates/grafita-core/tests/sessions.rs
+1	0	bfabd837a49a2c11a5b2ed6340bb99b872c9c9eea928c2230bf1b5cd09a68133	docs/version-history.tsv
+47	5	7537e7c15dfb2737d6d4c502b5381d171fd3ce838b82eb94d1c6e0cb33f8426b	grafita/Cargo.lock
+1	1	82ba80908ce48f36e057e2fbe8ba3755dd1b87b11680428ee0dc6c426508e583	grafita/Cargo.toml
+119	37	6f8d3330c6213a63f82418cfd798795c59ade4f5af6fe2a4b75f27390991cfe5	grafita/ROADMAP.md
+33	14	e954f88c77aaaac2c9eccc119fe6b6a16fe03ffd60e702e1ef013d493186fc1a	grafita/STATUS.md
+70	2	c872405a653f4addd2ad7ee2b7c22ee4cf0fca8fc1bedc0d092dcce00577bb72	grafita/VALIDATION.md
+1	0	a1b3ec4a41a20432b978b7ecb74a94dbe9e8b8ddad3bc0e9fd6efe12312d13b7	grafita/build.rs
+59	0	7c05fb82995a4e49d29bed19f74d04bcebcde40b32eb9e53e09dd335cb11b0b1	grafita/docs/contracts/document-import.md
+138	0	28825288ef406ff538ae9559a7ce9022693a7273b4b06e18576b0d94ea843c34	grafita/docs/evidence/2026-08-19-documents-grafita-used-to-refuse.md
+117	0	64fae76c562f627e988c00929241c5b29db7d38b240665eb301d8840d1192d59	grafita/docs/plans/archive/2026-08-19-g9-imported-document.md
+6	1	cce653beb0c7d9066dc9ff3c7408bc816990cce10017efcbfafc40bd4cdea8eb	grafita/qml/components/UnsavedDialog.qml
+87	0	self	grafita/docs/inventories/2026-08-19-g9-imported-document/G9-A.numstat.tsv
