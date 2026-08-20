@@ -673,18 +673,29 @@ QtObject {
     // rounded by. It is not a radius to copy onto anything: it is the outer
     // curve that `concentricRadius` measures inwards from.
     readonly property int radiusWindow: 14
+
+    // The gap every first-level box keeps from the window edge: the sidebar,
+    // the item-info box and the content box alike. One number, because boxes
+    // that share an edge have to share the distance to it — the content box
+    // used to sit 8 px further in and 12 px higher, which is why it lined up
+    // with nothing.
+    readonly property int windowMargin: 14
     readonly property int radiusPill: 9999   // full capsule
 
-    // The radius a box takes to sit *concentrically* inside the window: two
-    // rounded rectangles look parallel only when the inner radius is the outer
-    // one minus the gap between them. Copying the window's own radius instead
-    // leaves the gap pinching at the corners, and using a card radius leaves
-    // the inner curve visibly rounder than the window it sits in.
+    // The radius a box takes when it sits inside the window.
     //
-    // `inset` is the real distance from the window edge, so the rule keeps
-    // holding if either the margin or the compositor's radius changes.
-    function concentricRadius(inset) {
-        return Math.max(radiusXs, radiusWindow - inset)
+    // Concentricity only applies while the window's corner still reaches the
+    // box: two rounded rectangles look parallel when the inner radius is the
+    // outer one minus the gap, and that is what a box tucked against the edge
+    // needs. Once the gap is as wide as the window's own corner, the curves no
+    // longer relate at all — the box is out in the open — and the honest answer
+    // is the radius its role gives it, which is also what its siblings use.
+    //
+    // Getting this wrong is visible: a content box at 14 px from the edge was
+    // given 14 − 8, so it sat among panels rounded to 26 looking like a
+    // different design.
+    function nestedRadius(inset, own) {
+        return inset >= radiusWindow ? own : Math.max(radiusXs, radiusWindow - inset)
     }
 
     // ── Spacing scale (4-based) ──────────────────────────────────────────────
