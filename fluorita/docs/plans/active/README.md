@@ -1,8 +1,8 @@
 # Active Fluorita plans
 
-[bounded-media-editing](2026-08-19-bounded-media-editing.md) is active and owns
-checkpoint F7, which the project roadmap names.
+No plan is active. A dated plan is added here only when the project roadmap
+names the same active implementation checkpoint.
 
 Unit inventories live under
 [`../../inventories/<plan-slug>/<unit>.numstat.tsv`](../../inventories/) and do
-not move when the completed plan moves to `../archive/`.
+not move when the completed plan moves to [`../archive/`](../archive/).

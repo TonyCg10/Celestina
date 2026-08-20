@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-19
 - **Scope:** `F7-A` to `F7-D` of the
-  [bounded-media-editing plan](../plans/active/2026-08-19-bounded-media-editing.md):
+  [bounded-media-editing plan](../plans/archive/2026-08-19-bounded-media-editing.md):
   `docs/decisions/0009-editing-without-an-encoder.md`, `fluorita/README.md`,
   `celestina-rs/crates/fluorita-core/src/edit.rs`,
   `celestina-rs/crates/fluorita-core/src/edit_stack.rs`,

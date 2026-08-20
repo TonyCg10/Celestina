@@ -2,7 +2,11 @@
 
 - **Opened:** 2026-08-19
 - **Plan ID:** bounded-media-editing
-- **Status:** active
+- **Status:** done
+- **Closed:** 2026-08-20
+- **Successor:** none; the roadmap names no active checkpoint, and the work
+  this plan's single unit carried beyond F7 is described in the roadmap's
+  F8-F15 sections
 - **Scope:** fluorita
 - **Implementation checkpoint:** F7
 - **Author-validation checkpoint:** VAL-FLU-EDIT
@@ -133,6 +137,13 @@ scale and the desktop's own Trash belong to `VAL-FLU-EDIT`.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | F7-A | `fluorita:` | done | [inventory](../../inventories/2026-08-19-bounded-media-editing/F7-A.numstat.tsv) | 61 files, +14987/-120 | Rule what editing means in Fluorita and replace the `tag editor` limit with the editing-suite limit; answer what an item admits and in which class; model the composable stack with undo, redo and the preview mapping; rasterise through a toolkit seam and land the result with copy and replace as its two confirmed outcomes; remember the recipe behind a copy beside the catalogue; and compose the edit mode inside the immersive viewer | [evidence](../../evidence/2026-08-19-bounded-media-editing.md) | `VAL-FLU-EDIT` |
+| F7-B | `fluorita:` | done | [inventory](../../inventories/2026-08-19-bounded-media-editing/F7-B.numstat.tsv) | 11 files, +539/-270 | Archive this plan and make the project's documents describe what its commit actually delivered, rather than only the editing surface it was written for | [evidence](../../evidence/2026-08-20-what-shipped-and-what-nothing-could-reach.md) | `None` |
+
+`F7-B` is an administrative unit added after `F7-A` landed: it owns the archive
+transition this plan could not carry itself, and the documents that understated
+what its commit delivered. A corrective unit follows it for the defect that
+shipping revealed — two capabilities reached production with nothing in the
+interface able to call them.
 
 One unit because it was one worktree. The plan opened with four — contract,
 model, writer, surface — and they never became four deliveries: the seam's shape

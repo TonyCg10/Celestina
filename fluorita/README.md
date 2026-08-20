@@ -22,11 +22,32 @@ application, plus a bounded image/video/audio surface embedded in Siderita.
   application, under
   [ADR 0009](../docs/decisions/0009-editing-without-an-encoder.md). Every
   operation is either *lossless* — it reorders the original bytes — or
-  *raster* — it produces a new image, and the interface says which. Saving
-  offers exactly two outcomes: a copy beside the original, which stays
-  reopenable, or a replacement, which flattens the result and sends the
-  original to the desktop Trash. The output format follows a fixed rule and is
-  never a question.
+  *raster* — it produces a new image, and the interface says which. A picture
+  can be turned, cropped, resized, written on, drawn on and redacted, and every
+  mark stays selectable and undoable. Saving offers exactly two outcomes: a
+  copy beside the original, which stays reopenable, or a replacement, which
+  flattens the result and sends the original to the desktop Trash. The output
+  format follows a fixed rule and is never a question. The same operations
+  apply to a chosen set of pictures at once, with progress, cancellation and an
+  honest count of what could not be done.
+- What a file says about itself can be read and corrected: a track's title,
+  artist, album and album artist, the cover art embedded beside them, and the
+  EXIF a photograph carries — including where it was taken, which can be
+  removed. The media stream is copied across byte for byte; nothing is
+  re-encoded. A container this suite cannot write says so instead of being
+  half-written, which today means MP3, M4A and Ogg are read and refused.
+- A frame of a film can be kept as a picture beside it, at the film's own
+  resolution, and is then an ordinary image the editor can work on.
+- Playback offers what a file really carries: its audio tracks, its subtitles
+  or none of them, and a playback speed. At the end of an item it stops,
+  continues with the folder, or repeats, and it advances only when the engine
+  confirms the item ended.
+- A picture can be looked at closely, in the viewer and in the editor alike,
+  with `Ctrl` and the wheel or the magnifier beside the other actions. Resting
+  on a video's card plays a bounded, silent preview of it in place.
+- `Ctrl+Shift+P` reports what the picture is actually doing — frames lost and
+  frames presented late, as rates — and `Ctrl+Shift+S` writes that to a file.
+  It is a diagnostic for a moment that looks wrong, off unless asked for.
 - Fluorita is not a streaming service, editing suite, social catalogue, general
   file manager or codec implementation. No layers, masks or blend modes, no
   configurable brushes, no per-channel colour correction, no rich text, and no

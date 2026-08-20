@@ -7,7 +7,7 @@
 - **Implementation checkpoint:** F6
 - **Author-validation checkpoint:** VAL-FLU-IMMERSIVE
 - **Closed:** 2026-08-19
-- **Successor:** F7, [bounded-media-editing](../active/2026-08-19-bounded-media-editing.md)
+- **Successor:** F7, [bounded-media-editing](./2026-08-19-bounded-media-editing.md)
 
 ## Hypothesis
 

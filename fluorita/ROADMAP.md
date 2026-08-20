@@ -1,7 +1,10 @@
 # Fluorita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** F7
+- **Status:** planned
+- **Active implementation checkpoint:** none
+- **Authorised sequence:** F7-F15, opened by author decision on 2026-08-19 and
+  delivered on 2026-08-20 in a single commit. Nothing is in flight; a new
+  checkpoint needs a measured need and the author's word
 - **Related author validation:** none; completed observations are in
   [VALIDATION.md](VALIDATION.md)
 
@@ -98,7 +101,7 @@ validation does not keep this checkpoint open.
 The build order, exclusions, exit and ledger are in the
 [archived plan](docs/plans/archive/2026-08-04-immersive-content.md).
 
-## F7 — Editing what the library already holds
+## F7 — Editing what the library already holds, closed 2026-08-20
 
 **Measured need.** The author edits the pictures this library already shows,
 and today every one of those edits leaves Fluorita: a photo that opens upside
@@ -169,23 +172,16 @@ which is everything a person actually sees, and is `VAL-FLU-EDIT`. What remains
 is the ledger closure, which belongs to the author's commit request.
 
 The build order, exclusions, exit and ledger are in the
-[active plan](docs/plans/active/2026-08-19-bounded-media-editing.md).
+[archived plan](docs/plans/archive/2026-08-19-bounded-media-editing.md).
 
-## Conditions for opening the next checkpoint
+**F7 carried more than F7.** The single `F7-A` commit that closed it also
+delivered everything in F8-F15 below: the plan's own ledger says so, and the
+inventory's 61 files are the proof. The sections that follow describe what
+shipped rather than what was planned, because a roadmap that named only the
+editing surface would leave the next reader believing the rest was still to be
+built — and rebuilding it is exactly what such a document causes.
 
-A new checkpoint must begin with a measured user need, a bounded resource and
-lifecycle model, and a tangible result. Current ideas remain conditional:
-
-- trailer-on-hover requires a defined trigger/cancel interaction and proof that
-  one active trailer per host stays within budget;
-- subtitles/tracks/speed or queues/playlists require an accepted product slice,
-  not opportunistic controls;
-- shell MPRIS presentation requires a shell-owned checkpoint and preserves
-  Fluorita as the single confirmed playback source;
-- presentation-timing work requires reproducible judder and must account for
-  Qt owning the final frame swap.
-
-### F8 — What a file says about itself
+## F8 — What a file says about itself
 
 **Measured need.** F7 gave the library a way to change a picture, and every one
 of its operations rewrites pixels or refuses to. The half of editing that
@@ -236,17 +232,17 @@ file is still carrying.
       rather than individual tags: a picture whose camera fields were removed
       while its GPS pointer still resolved would be worse than one carrying
       nothing.
-- [ ] Offer both from the item menu and the properties panel, in the icon-first
-      anatomy, with every action reachable by keyboard.
+- [x] Offer it from the item menu, in the shared modal anatomy, with every
+      action reachable by keyboard. The menu asks what an item admits before it
+      is shown, so a video — whose tags nothing here projects — is not offered
+      an entry that would refuse.
 
-All of it is already implemented and tested in the checkout — the model, the
-FLAC and EXIF writers, the cover block, the adapter and the panel. They are not a delivery: a writer nothing can reach changes nothing
-for a person, and they carry no ledger unit until F7's commit frees the paths
-they share. **F8 opens, with its own plan, once F7 lands.** A checkpoint cannot
-be opened before then: exactly one plan may be active, and F7's inventory
-cannot be computed while later work keeps changing the same crates.
+**What it does not write.** MP3, M4A and Ogg are read, reported and refused:
+each needs a container writer this suite does not have, and a half-written
+container is worse than one left alone. The panel says so in words rather than
+disabling a control with no reason attached.
 
-### F9 — Keeping a frame of a film
+## F9 — Keeping a frame of a film
 
 **Measured need.** A person watching something pauses on a frame and wants that
 frame: as a wallpaper, to send, to annotate. Fluorita could already render one —
@@ -280,7 +276,7 @@ strongest argument for the encoder decision ADR 0009 deferred, because the
 person asking for a trim is asking for the one thing this suite has decided
 twice not to fake.
 
-### F10 — The same small change, to many files
+## F10 — The same small change, to many files
 
 **Measured need.** Two things a folder of photographs actually needs, and
 neither of them is a photo-by-photo job: they are all sideways, or they are all
@@ -324,6 +320,149 @@ None authorises a streaming catalogue, codec rewrite, global filesystem crawl
 or duplication between standalone and Siderita. Editing belongs to the
 standalone application; Siderita's embedded surface keeps content, honest state
 and transport only.
+
+## F11 — Choosing a stream and a speed
+
+**Measured need.** A film with two audio tracks played whichever the backend
+picked, and a film with subtitles played none of them, because nothing in the
+interface could say otherwise. The player could start, pause, seek and set a
+volume; everything else about how a film sounds and reads was decided for the
+person.
+
+**Bounded resource and lifecycle model.** No new session and no second decode:
+choosing a track sets one backend property on the session that is already open,
+and the value is published only when the backend confirms it. A track list is
+read out of a file, so it is bounded before it is held — a count ceiling, a
+label ceiling, and control characters stripped from what a container claims.
+Speed is clamped to a range and offered as a few known rates rather than as a
+slider, because 1.03x by accident is not something anyone asks for.
+
+**Tangible result.** A control in the transport lists the audio tracks and the
+subtitles a film carries, marks the one in use, offers turning subtitles off,
+and sets the playback speed. A film with one audio track and no subtitles does
+not show the control at all.
+
+- [x] Read the tracks a file carries, bounded, and publish them with the one
+      in use marked.
+- [x] Select an audio track and a subtitle track, or none, confirmed by the
+      backend before it is shown as selected.
+- [x] Set the playback speed from a short list of rates.
+
+## F12 — What plays next
+
+**Measured need.** Reaching the end of a track was the end of listening: the
+session stopped and the next song in the folder sat there waiting to be
+clicked. A music player that cannot play an album is not one.
+
+**Bounded resource and lifecycle model.** No queue and no second model of the
+library: the folder's order is the one the filmstrip already navigates, and the
+rule is a pure function over a position in it. Nothing advances on its own —
+the host asks what follows only after the engine has *confirmed* the file
+ended, so a track whose last seconds fail to decode is not skipped past. A
+still has no end to reach, so a gallery cannot turn itself into a slideshow.
+
+**Tangible result.** A choice of what happens at the end: stop, continue with
+the folder, or repeat. Continuing stops after the last item rather than
+starting again from the top, because a list that never ends is one that plays
+to an empty room.
+
+- [x] Rule what follows an item that ended, as a pure function over the
+      folder's order.
+- [x] Offer the three modes where the rest of playback is chosen.
+
+## F13 — Looking closer
+
+**Measured need.** A photograph could be looked at only at the size the window
+gave it, in the viewer and in the editor alike — so checking whether a face was
+sharp, or placing a redaction over something small, meant opening another
+application.
+
+**Bounded resource and lifecycle model.** One owner for the arithmetic, used by
+both surfaces: zoom that behaved differently in the viewer and the editor would
+be the same defect as a mark that lands where it was not drawn. Every
+conversion between a pointer and the picture goes through a single scale, so a
+stroke drawn while zoomed in lands where it was drawn. Enlarging asks the
+reader for more pixels rather than magnifying the ones it already threw away,
+bounded to four times the window and settled after the person stops moving.
+
+**Tangible result.** `Ctrl` and the wheel, at the pointer, in the viewer and in
+the editor; a magnifier beside the other actions; dragging to move around;
+double-click to go back to the whole picture. Zoom is around the cursor rather
+than the centre, so the gesture can be aimed instead of chased.
+
+- [x] Own the zoom arithmetic once and use it in both surfaces.
+- [x] Convert every pointer position through the zoomed scale.
+- [x] Raise the decode as the picture is enlarged, bounded and settled.
+
+## F14 — A film that moves under the pointer
+
+**Measured need.** A grid of video posters says what a file is called and
+nothing about what is in it, and the roadmap had kept this shut until the
+trigger, the cancellation and the budget were defined rather than assumed.
+
+**Bounded resource and lifecycle model.** One preview at a time, on the rule
+`fluorita-core` already owned. It starts after a dwell rather than on the first
+pixel of contact, and leaving cancels it. It is silent, it loops so a frozen
+last frame never reads as a hang, it starts inside the film rather than in its
+titles, and it decodes in software because a picture the size of a card does
+not need a hardware context. It never reaches the bus: one desktop has one
+media player, and a film playing because a pointer went past is not what "now
+playing" means.
+
+**Tangible result.** Resting on a video's card plays a bounded, silent preview
+of it in place; moving away stops it.
+
+- [x] Give the preview a trigger and a cancellation, and keep one at a time.
+- [x] Keep it silent, looping and off the bus.
+
+## F15 — What the picture is actually doing
+
+**Measured need.** Presentation-timing work was shut because judder that cannot
+be reproduced cannot be fixed, and "it stutters sometimes" is not a
+measurement. The backend has counted dropped and delayed frames all along, and
+nothing could show them to the person watching the stutter happen.
+
+**Bounded resource and lifecycle model.** A bounded recording — a fixed number
+of samples, one a second, folded by a pure function that never reads a clock.
+The counters are cumulative, so what is reported is the difference between two
+readings over the time between them; a counter that goes backwards is a reset
+and contributes nothing, because a negative rate would read as a picture that
+repaired itself. Off by default: a permanent read-out would be furniture.
+
+**Tangible result.** `Ctrl+Shift+P` shows what the picture is doing, with
+dropped and late frames as rates per minute, the display's refresh rate and the
+worst jitter seen. `Ctrl+Shift+S` writes it to a file and names the path, so a
+person who just saw judder has something to attach to a report rather than a
+memory of it. The verdict distinguishes losing frames from presenting them
+late, with its thresholds written down.
+
+- [x] Fold cumulative counters into rates, treating a reset as a fresh start.
+- [x] Show the recording while it happens and write it out on request.
+
+## Conditions for opening the next checkpoint
+
+A new checkpoint must begin with a measured user need, a bounded resource and
+lifecycle model, and a tangible result. Three of the four ideas this section
+used to hold are now above it, delivered; what remains conditional is:
+
+- **Trimming, dropping a track, converting a format and exporting a clip** all
+  need a muxer, and this suite has none. That is one decision — whether FFmpeg
+  enters the dependency closure — with a cost the author has not been asked to
+  pay yet: a second media stack, a new hostile-input surface, long jobs needing
+  their own progress model, and a much heavier production verification. Until
+  it is taken, every one of those operations is refused rather than
+  approximated, and F8 and F9 are written so that taking it later adds a writer
+  instead of rewriting them.
+- **Correcting tags in MP3, M4A and Ogg**, which F8 reads, reports and refuses.
+  Each needs its own container writer — an atom tree rebuilt with every offset
+  corrected, or page checksums recomputed — and each is either done properly or
+  not claimed.
+- **Repairing frame pacing.** The condition used to be "reproducible judder";
+  F15 is the instrument that makes it reproducible, so what is missing now is a
+  captured report from a real session showing something to fix, and an account
+  of Qt owning the final frame swap.
+- **Shell MPRIS presentation**, which requires a shell-owned checkpoint in
+  Celestina and preserves Fluorita as the single confirmed playback source.
 
 ## Implementation exit
 

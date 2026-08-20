@@ -180,6 +180,31 @@ stream and the refusals. It cannot prove what another application reads back,
 which is the only test that says whether the write was really lossless. A
 failure records the observation here and opens a linked corrective unit.
 
+## VAL-FLU-PACING — the two triggers, and what a stutter looks like
+
+- **Status:** pending
+- **Related implementation:** `F7-C`, and F9 and F15 in the roadmap
+- **Requires:** the deployed binary, a real Wayland session, a film that
+  stutters on this machine, and a video whose frame is worth keeping
+- **Procedure:** open a film, press the transport's frame button, and look for
+  the picture beside the film; open it and check it is the frame that was on
+  screen, at the film's own size. Then press `Ctrl+Shift+P` while something is
+  playing, watch the read-out for a minute, cause or wait for a stutter, and
+  press `Ctrl+Shift+S`; open the file at the path it names
+- **Pass condition:** the frame lands beside the film under a name that never
+  overwrites an earlier one; the read-out appears, its rates change as the film
+  plays, and its verdict says *dropping* or *delayed* when the picture visibly
+  falters rather than staying *smooth*; the written report contains the
+  readings behind that verdict
+- **Result:** not run
+- **Evidence:** none
+
+The agent lane can prove the arithmetic, the bounds and the refusals, and it
+can prove the surfaces construct. Whether the verdict matches what an eye sees
+is the whole question, and only this lane can answer it. A verdict that reads
+*smooth* through a visible stutter is a defect in the thresholds, not in the
+observation.
+
 ## Closed historical observations
 
 `VAL-FLU-PLAYBACK`, `VAL-FLU-INPUT`, `VAL-FLU-PRESENT`,

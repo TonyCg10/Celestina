@@ -1,0 +1,23 @@
+# F7-B exact change inventory
+
+Base revision	c51751dd8baaccbe2fab0327f85982bc0513ac09
+Pathspec	fluorita/README.md
+Pathspec	fluorita/ROADMAP.md
+Pathspec	fluorita/STATUS.md
+Pathspec	fluorita/VALIDATION.md
+Pathspec	fluorita/docs/
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+26	5	10cb4b24dcc1535d503ad7b962f790b9f9414a09ea0d63df5901a73e12e7f445	fluorita/README.md
+167	28	b49b0c06a386ea2fe88ad38e081eb26e8d9c748c0608bd1934e8dc9a9b7c8c6c	fluorita/ROADMAP.md
+31	63	47f1d34fb229eeeb54c0110e4f201a4cc6793a7cb73adf7ea155e8a45c653503	fluorita/STATUS.md
+25	0	6fc5140d5a2fdc40d880bb22f203e4730b041d6c722814bd85c80dc49a97e830	fluorita/VALIDATION.md
+1	1	d9877360e9d73b90e1f132124882b86df077ab4fc2af4a595efe458998b126aa	fluorita/docs/evidence/2026-08-19-bounded-media-editing.md
+82	0	e04bbe0ffe86e08c6259788f7df418c4dc815b360d8741614843444286b6b7d5	fluorita/docs/evidence/2026-08-20-what-shipped-and-what-nothing-could-reach.md
+0	169	deleted	fluorita/docs/plans/active/2026-08-19-bounded-media-editing.md
+3	3	f7243ea7d96cf4b50513a0f4b6c5588743c3702df5bcd5cb87e4626facbd7513	fluorita/docs/plans/active/README.md
+1	1	439da1e48452d4fde2b969872c36404e93886ff99f9e3c385b654eb5a8d948e1	fluorita/docs/plans/archive/2026-08-04-immersive-content.md
+180	0	0081b844f43691f38311f1c4c0ccb27f5a4b00e7023b02a1aec65858980e1344	fluorita/docs/plans/archive/2026-08-19-bounded-media-editing.md
+23	0	self	fluorita/docs/inventories/2026-08-19-bounded-media-editing/F7-B.numstat.tsv
