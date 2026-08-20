@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-19
 - **Scope:** `SID-A3-A`; plan
-  [pause-and-global-scope](../plans/active/2026-08-19-pause-and-global-scope.md)
+  [pause-and-global-scope](../plans/archive/2026-08-19-pause-and-global-scope.md)
 - **Environment:** Arch-derived Linux, Qt 6.11.1, `cargo` stable
 - **Artifact:** `siderita/target/release/siderita`, built, verified and deployed
   by `scripts/complete-production.sh`

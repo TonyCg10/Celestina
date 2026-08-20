@@ -112,4 +112,4 @@ Dropping the encoding label removed the file's last non-English string, so its
 `VAL-SID-G7`, and the sibling units
 [`STYLE-G7-A`](../../../celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md)
 and
-[`G7-A`](../../../grafita/docs/plans/active/2026-08-04-g7-reading-comfort.md).
+[`G7-A`](../../../grafita/docs/plans/archive/2026-08-04-g7-reading-comfort.md).

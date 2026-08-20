@@ -38,6 +38,26 @@ three states the author asked for, and the path bar names the folder on screen.
   what remains at 50 000 entries is the rescan itself.
 - The author's own pass on the live session, tracked as `VAL-SID-10`.
 
+## Build order
+
+Derived from the scope above, in the order each step depends on the one before
+it. The audit's two findings come first because the interface defects were
+found while checking them.
+
+1. Stop publishing when a rescan finds the listing unchanged, and tell the view
+   what changed instead of resetting it — this is the 124 ms.
+2. Cache icon resolution against the theme the session actually uses, which is
+   the launcher's 165 `stat` calls per cell.
+3. Share one filesystem watch per folder across the tabs that show it.
+4. Read the crumbs from the published location rather than the history, so they
+   name the folder on screen.
+5. Bind `Ctrl+V` in every view mode, off a paste state that does not wait for a
+   menu to refresh it.
+6. Build the heading's third state, put the threshold on the transition that
+   needs it, and keep the media button placed after the heading retires.
+7. Give boxes that share an edge the same distance to it and the same corner,
+   from the two tokens `celestina-style` carries.
+
 ## What the audit measured
 
 | | before | after |

@@ -8,7 +8,7 @@
 - **Implementation checkpoint:** SID-A2
 - **Author-validation checkpoint:** `VAL-SID-08` in
   [`../../../VALIDATION.md`](../../../VALIDATION.md)
-- **Successor:** [Pause and global scope](../active/2026-08-19-pause-and-global-scope.md)
+- **Successor:** [Pause and global scope](2026-08-19-pause-and-global-scope.md)
 
 ## Hypothesis
 

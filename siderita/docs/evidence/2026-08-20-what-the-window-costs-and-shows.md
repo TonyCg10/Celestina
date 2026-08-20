@@ -74,6 +74,14 @@ chain, `hicolor` last.
 | `scripts/complete-production.sh` | built, verified and deployed |
 | Repository guards | language, architecture, style and qmllint contracts pass |
 
+## Result
+
+- **Exit:** 0 for every command in the table above.
+- **Observed:** the numbers in *What the audit measured* are what those
+  commands produced, measured before and after on the same machine; the
+  release named under **Artifact** is the one that was built, verified and
+  deployed from them.
+
 ## Limits
 
 - At 50 000 entries a change still costs ~120 ms, and most of what remains is

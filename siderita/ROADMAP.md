@@ -85,7 +85,7 @@ controller to one shared by the process. The tangible outcome is a job visible
 and controllable from any tab, and Pausar/Reanudar next to Cancelar.
 
 The plan is
-[Pause and global scope](docs/plans/active/2026-08-19-pause-and-global-scope.md).
+[Pause and global scope](docs/plans/archive/2026-08-19-pause-and-global-scope.md).
 It excludes pausing a delegated RAR/7z extraction, whose writer is another
 process, and the author's own pass, which is `VAL-SID-09`.
 

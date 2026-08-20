@@ -1,8 +1,10 @@
 # Pausing a job, and the register that belongs to the process
 
 - **Opened:** 2026-08-19
+- **Closed:** 2026-08-19
 - **Plan ID:** pause-and-global-scope
-- **Status:** active
+- **Status:** done
+- **Successor:** [What the window costs, and what it shows](../active/2026-08-20-what-the-window-costs-and-shows.md)
 - **Scope:** siderita
 - **Implementation checkpoint:** SID-A3
 - **Author-validation checkpoint:** `VAL-SID-09` in
@@ -63,6 +65,7 @@ component-prefix rule, no ledger row or inventory here.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | SID-A3-A | `siderita:` | done | [inventory](../../inventories/2026-08-19-pause-and-global-scope/SID-A3-A.numstat.tsv) | 16 files, +528/-105 | A process-wide job register, the pause proof in `siderita-ops`, and the dock's pause control, built on `celestina-core`'s new pause | [evidence](../../evidence/2026-08-19-pause-and-global-scope.md) | `VAL-SID-09` |
+| SID-A3-Z | `siderita:` | done | [inventory](../../inventories/2026-08-19-pause-and-global-scope/SID-A3-Z.numstat.tsv) | 11 files, +135/-75 | Archive this plan once `SID-A3` closed, retarget every link that named it under `active/`, and record the result of the audit evidence that followed it | [evidence](../../evidence/2026-08-19-pause-and-global-scope.md) | `VAL-SID-09` |
 
 Like every plan in this repository, this one records intent and grants no
 authority.

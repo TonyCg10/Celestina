@@ -42,7 +42,7 @@ label; the two `build.rs` registrations; and both retired baseline rows.
 Out of scope: the components themselves, which are
 [`STYLE-G7`](../../../../celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md)'s;
 the standalone Grafita window, which is
-[`G7`](../../../../grafita/docs/plans/active/2026-08-04-g7-reading-comfort.md)'s;
+[`G7`](../../../../grafita/docs/plans/archive/2026-08-04-g7-reading-comfort.md)'s;
 a settings surface; any preference Siderita defines for itself; a wrap binding,
 which was not asked for; and Siderita's other surfaces. This plan records work
 but grants no authorization beyond the repository rules.

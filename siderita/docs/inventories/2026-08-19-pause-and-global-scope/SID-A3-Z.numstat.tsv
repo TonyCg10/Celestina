@@ -1,0 +1,29 @@
+# SID-A3-Z exact change inventory
+
+Base revision	35b21e2bf44115f706f3b5843e5c12d9a70a3ff7
+Pathspec	siderita/ROADMAP.md
+Pathspec	siderita/docs/evidence/2026-08-04-shared-reading-surface.md
+Pathspec	siderita/docs/evidence/2026-08-19-pause-and-global-scope.md
+Pathspec	siderita/docs/evidence/2026-08-20-what-the-window-costs-and-shows.md
+Pathspec	siderita/docs/plans/active/2026-08-19-pause-and-global-scope.md
+Pathspec	siderita/docs/plans/active/2026-08-20-what-the-window-costs-and-shows.md
+Pathspec	siderita/docs/plans/active/README.md
+Pathspec	siderita/docs/plans/archive/2026-08-04-shared-reading-surface.md
+Pathspec	siderita/docs/plans/archive/2026-08-19-after-the-archive-verbs.md
+Pathspec	siderita/docs/plans/archive/2026-08-19-pause-and-global-scope.md
+Pathspec	siderita/docs/inventories/2026-08-19-pause-and-global-scope/SID-A3-Z.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	0a9b65206a31c5383218085a134e079eae38ece24350fe0d0c10c350d2f2219f	siderita/ROADMAP.md
+1	1	992fe16abb40ce20c327821de8b282b4a37c4f908f715a9b8a0ad9a6c9b9f87a	siderita/docs/evidence/2026-08-04-shared-reading-surface.md
+1	1	cf9fda6ffde2f44044c2afed0b982c57ed61235a49c9d49216348b3fc80d7953	siderita/docs/evidence/2026-08-19-pause-and-global-scope.md
+8	0	8d4b9c494744866a4f1a7b9f4c1ce48141a807b611027c8c55e8475f2df8e5b3	siderita/docs/evidence/2026-08-20-what-the-window-costs-and-shows.md
+0	68	deleted	siderita/docs/plans/active/2026-08-19-pause-and-global-scope.md
+20	0	114c2123f3992fe0abdc4c83881ae2c5fb9da878df3108547758730d42b76962	siderita/docs/plans/active/2026-08-20-what-the-window-costs-and-shows.md
+2	2	207a8d54de9efba1539ca6ef44fa985a3972a5f769c6c389228b1b2162d6c036	siderita/docs/plans/active/README.md
+1	1	df6f05bec6aef78fea9fff901d452348da815f8ebc535582988bdf293f7b8e27	siderita/docs/plans/archive/2026-08-04-shared-reading-surface.md
+1	1	1110c0c56931cf2f16a631ce9af7461b81c9d93d4d7e71130927707a7538219c	siderita/docs/plans/archive/2026-08-19-after-the-archive-verbs.md
+71	0	9b0a5d9185c2fa97e86928bc075f59dafe8ca91085cf9a430eead95d2ec3242f	siderita/docs/plans/archive/2026-08-19-pause-and-global-scope.md
+29	0	self	siderita/docs/inventories/2026-08-19-pause-and-global-scope/SID-A3-Z.numstat.tsv
