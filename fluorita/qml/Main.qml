@@ -293,6 +293,7 @@ ApplicationWindow {
 
             anchors.fill: parent
             player: mediaPlayer
+            itemKey: window.openKey
             label: window.openLabel
             ambientSource: window.openPoster
 
@@ -480,6 +481,24 @@ ApplicationWindow {
         enabled: !mediaEditor.open && window.playing
             && mediaEditor.admits(window.openKey)
         onActivated: window.edit(window.openKey)
+    }
+
+    // Measuring what the picture is doing, and keeping the measurement.
+    //
+    // Shortcuts rather than controls in the transport: this is a diagnostic for
+    // the moment something looks wrong, not part of watching a film. Without
+    // them the read-out in the player surface existed and nothing could ever
+    // turn it on.
+    Shortcut {
+        sequence: "Ctrl+Shift+P"
+        enabled: window.playing
+        onActivated: mediaPlayer.togglePacing()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+Shift+S"
+        enabled: window.playing && mediaPlayer.capturingPacing
+        onActivated: mediaPlayer.writePacingReport()
     }
 
     Shortcut {

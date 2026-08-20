@@ -13,6 +13,9 @@ Item {
     id: surface
 
     required property FluoritaPlayer player
+    // The open item's key, passed through to the transport for the verbs that
+    // act on the file rather than on the session.
+    required property string itemKey
     // Empty until something is open; shown when there is no picture to show.
     required property string label
     // The item's own artwork, used to light the space the picture does not
@@ -210,6 +213,8 @@ Item {
 
     PlayerTransport {
         id: playerTransport
+
+        itemKey: surface.itemKey
 
         anchors.left: parent.left
         anchors.right: parent.right

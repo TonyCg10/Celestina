@@ -1,0 +1,21 @@
+# F7-C exact change inventory
+
+Base revision	3dcc4bb4a9c71a1256a3f74ea5f02cd10305de1b
+Pathspec	fluorita/Cargo.toml
+Pathspec	fluorita/Cargo.lock
+Pathspec	fluorita/qml/
+Pathspec	fluorita/docs/
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	e63efd594275d01abe34b1f472bebfedf019f80877b08046672037d52be3fed4	docs/version-history.tsv
+1	1	9df5699fe3c2b67033196ec8d34462023500f80248e7cf3dd9aec3397c1f0962	fluorita/Cargo.lock
+1	1	1efcf5f862d2a37beae1c47f408f75f3b6b6f05b6ee566bdda8d4cb775d83658	fluorita/Cargo.toml
+4	2	696286bdb17f5b10618c42a92ab877300223aea71935ae940cc5e0c429007154	fluorita/docs/evidence/2026-08-20-what-shipped-and-what-nothing-could-reach.md
+5	3	6c4edaa2c9701996d5451b528294e4e3dc933bf61672533044c001441174e917	fluorita/docs/plans/archive/2026-08-19-bounded-media-editing.md
+19	0	ff8e52e9bf9e551c9e4af8810c53aa56ea7ec6384827a83ea45b809a2fe60f57	fluorita/qml/Main.qml
+5	0	7df25e598c046e1491651e19502f0b50e2cd6128fe54a786cf57d036045f2277	fluorita/qml/components/PlayerSurface.qml
+14	0	c95e7e6e41564860bf6e604b7df1a542f378d032bb67d655b66614298d04c457	fluorita/qml/components/PlayerTransport.qml
+21	0	self	fluorita/docs/inventories/2026-08-19-bounded-media-editing/F7-C.numstat.tsv

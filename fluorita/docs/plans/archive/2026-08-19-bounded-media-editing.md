@@ -138,12 +138,14 @@ scale and the desktop's own Trash belong to `VAL-FLU-EDIT`.
 |---|---|---|---|---|---|---|---|
 | F7-A | `fluorita:` | done | [inventory](../../inventories/2026-08-19-bounded-media-editing/F7-A.numstat.tsv) | 61 files, +14987/-120 | Rule what editing means in Fluorita and replace the `tag editor` limit with the editing-suite limit; answer what an item admits and in which class; model the composable stack with undo, redo and the preview mapping; rasterise through a toolkit seam and land the result with copy and replace as its two confirmed outcomes; remember the recipe behind a copy beside the catalogue; and compose the edit mode inside the immersive viewer | [evidence](../../evidence/2026-08-19-bounded-media-editing.md) | `VAL-FLU-EDIT` |
 | F7-B | `fluorita:` | done | [inventory](../../inventories/2026-08-19-bounded-media-editing/F7-B.numstat.tsv) | 11 files, +539/-270 | Archive this plan and make the project's documents describe what its commit actually delivered, rather than only the editing surface it was written for | [evidence](../../evidence/2026-08-20-what-shipped-and-what-nothing-could-reach.md) | `None` |
+| F7-C | `fluorita:` | done | [inventory](../../inventories/2026-08-19-bounded-media-editing/F7-C.numstat.tsv) | 9 files, +71/-7 | Add a trigger to the two capabilities that shipped without one: keeping a frame of a film, and capturing what the picture is doing | [evidence](../../evidence/2026-08-20-what-shipped-and-what-nothing-could-reach.md) | `VAL-FLU-PACING` |
 
 `F7-B` is an administrative unit added after `F7-A` landed: it owns the archive
 transition this plan could not carry itself, and the documents that understated
-what its commit delivered. A corrective unit follows it for the defect that
-shipping revealed — two capabilities reached production with nothing in the
-interface able to call them.
+what its commit delivered. `F7-C` is the corrective unit for the defect
+shipping revealed: two capabilities reached production with nothing in the
+interface able to call them. It moves the exact PATCH transition, `1.3.0` to
+`1.3.1`, because a capability nobody can reach is a defect and not a feature.
 
 One unit because it was one worktree. The plan opened with four — contract,
 model, writer, surface — and they never became four deliveries: the seam's shape

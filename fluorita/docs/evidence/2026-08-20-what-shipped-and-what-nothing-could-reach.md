@@ -10,9 +10,11 @@
 - **Environment:** Arch-based Linux, Qt 6 with the system libmpv, Rust
   toolchain, `cargo` offline against the committed lockfiles. No Wayland
   session was driven and no window was opened.
-- **Artifact:** `fluorita/target/release/fluorita`, built by
+- **Artifact:** `fluorita/target/release/fluorita` at version `1.3.1`, built by
   `fluorita/scripts/build-production.sh`, verified and deployed to
-  `~/.local/bin/fluorita`.
+  `~/.local/bin/fluorita`. `F7-B` carries no version: documents are not a
+  product change. `F7-C` moves the exact PATCH transition `1.3.0` to `1.3.1`,
+  because a capability nobody can reach is a defect and not a feature.
 
 ## Procedure
 

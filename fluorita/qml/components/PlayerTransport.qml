@@ -9,6 +9,9 @@ RowLayout {
     id: transport
 
     required property FluoritaPlayer player
+    // Which item is open, so a verb that acts on the file — rather than on the
+    // session — has a key to name it with.
+    required property string itemKey
 
     // An image has no transport at all: the player says whether time means
     // anything for this item, and that is the only thing this asks.
@@ -56,6 +59,17 @@ RowLayout {
     // Soundtrack, subtitles and rate. One button, because they are one kind of
     // question, and it is only there when the file gives at least one of them
     // an answer worth choosing between.
+    // Keeping the frame that is on screen. Only for a moving picture, and only
+    // while one is really open: the verb exists for what you are looking at,
+    // not as a permanent control.
+    CelestinaIconButton {
+        visible: transport.player.hasVideo && transport.player.timed
+        enabled: !transport.player.extractingFrame
+        iconName: "file-image"
+        helpText: qsTr("Guardar este fotograma")
+        onClicked: transport.player.extractFrame(transport.itemKey)
+    }
+
     CelestinaIconButton {
         id: streamsButton
 
