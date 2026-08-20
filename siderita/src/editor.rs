@@ -453,6 +453,9 @@ const fn open_refusal_text(refusal: &OpenRefusal) -> &'static str {
         OpenRefusal::ChangedWhileReading { .. } => {
             "El archivo cambió mientras se leía; inténtalo otra vez"
         }
+        OpenRefusal::NotImportable { .. } => {
+            "Este archivo es un contenedor que Grafita no puede editar"
+        }
         OpenRefusal::Cancelled => "",
         OpenRefusal::Io { .. } => "No se pudo leer el archivo",
     }
@@ -471,6 +474,14 @@ fn save_refusal_text(refusal: &SaveRefusal) -> String {
         }
         SaveRefusal::MetadataNotReproducible { source } => {
             format!("No se guardó para no perder metadatos del original: {source}")
+        }
+        SaveRefusal::Unrepresentable { source } => format!(
+            "«{}» no existe en {}; no se ha escrito nada",
+            source.character,
+            source.encoding.label()
+        ),
+        SaveRefusal::StructureChanged { detail } => {
+            format!("El texto ya no encaja en el documento original: {detail}")
         }
         SaveRefusal::Cancelled => String::new(),
         SaveRefusal::Io { .. } => "No se pudo escribir el archivo".to_owned(),
