@@ -10,7 +10,11 @@
   which is the scene-change churn the author measured (2026-08-18) as a
   slight physical flicker of that monitor; the checkpoint parks the carriers
   persistently and moves the companion unpark from a timer to Niri fullscreen
-  state
+  state. All three units are implemented and exercised in the nest against
+  the compositor's own layer list
+  ([evidence](docs/evidence/2026-08-20-persistent-carriers-nest-exercise.md));
+  the production bundle is verified and deployed without activating the
+  session, which runs Noctalia. Activation and `VAL-SURF-1` are the author's
 - **Design direction:** `PANEL-1` is active for the author-selected borderless
   glass bar: one nearly transparent, shadowless `ContextualVeil` reaches
   edge-to-edge with no outer margin and owns one real compositor-blur region.
