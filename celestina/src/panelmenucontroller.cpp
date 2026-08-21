@@ -1409,6 +1409,20 @@ void PanelMenuController::close()
         // A repeated close finds the carrier already resting; putting it
         // away now would be exactly the unmap the park exists to avoid.
     } else if (parkable) {
+        // The hard close used to destroy the window, and destruction took
+        // the painted card with it. A park keeps the window, so the card
+        // must leave this same instant: paint down to zero — the fields'
+        // own collectors then withdraw the glass and the dense sections in
+        // cascade — plus the two explicit withdrawals as belt to those
+        // braces. Parked with its card still painted, the carrier stood as
+        // a floating menu detached from the bar, still blurred, inviting
+        // the clicks the author recorded (2026-08-20).
+        if (auto *quick = qobject_cast<QQuickWindow *>(window)) {
+            if (QQuickItem *const content = quick->contentItem())
+                content->setOpacity(0.0);
+        }
+        DenseGlassAggregator::instance().withdraw(window);
+        withdrawBlur(window);
         window->setProperty("celestinaRetiring", false);
         if (m_surface->park()) {
             m_parkedMenuKind = departingKind;
