@@ -282,15 +282,17 @@ void DenseGlassAggregator::pulse()
     for (const Source &entry : std::as_const(m_sources))
         anythingArmed = anythingArmed || !entry.shapes.isEmpty();
 
+    // The same honest dirt as everywhere else. This loop kept its own copy
+    // of the old clear-colour toggle after the kick's was fixed, so the red
+    // unit went on blinking at the pulse's beat for as long as any glass was
+    // armed — which is exactly "while a menu is open", where the author kept
+    // seeing it.
     for (const QList<QPointer<QQuickWindow>> &screenCompanions
              : std::as_const(m_companions)) {
         for (const QPointer<QQuickWindow> &companion : screenCompanions) {
             if (!companion)
                 continue;
-            const QColor current = companion->color();
-            companion->setColor(current.red() == 0 ? QColor(1, 0, 0, 0)
-                                                   : QColor(0, 0, 0, 0));
-            companion->requestUpdate();
+            nudgeSurfaceCommit(companion.data());
         }
     }
 
