@@ -71,8 +71,16 @@ public:
         Placement placement,
         int topInset = 0
     );
+    // Rests the mapped surface without unmapping it: input shrinks to one
+    // pixel, keyboard and focus are refused, the window stays on screen. The
+    // point is the scene change that never happens — SURF-1's measured
+    // flicker is one map or unmap per popup. Refuses a surface that is not
+    // open or is already retiring; a retiring window is on its way out and
+    // parking it would cancel a departure someone is animating.
+    bool park();
     void close();
-    bool isOpen() const { return !m_content.isNull(); }
+    bool isOpen() const { return !m_content.isNull() && !m_parked; }
+    bool isParked() const { return !m_content.isNull() && m_parked; }
     QWindow *window() const { return m_content.data(); }
 
 signals:
@@ -84,4 +92,10 @@ private:
     QPointer<QWindow> m_content;
     Placement m_placement;
     QString m_scope;
+    // What `open` may resume rather than remap. The scope cannot change on a
+    // mapped surface, and every placement wears different anchors, so only
+    // the same placement on the same screen is a reuse; everything else is a
+    // fresh map.
+    Placement m_mappedPlacement = Placement::Centered;
+    bool m_parked = false;
 };

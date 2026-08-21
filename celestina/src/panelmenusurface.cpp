@@ -99,13 +99,37 @@ bool PanelMenuSurface::open(
     const QPoint &outputPosition
 )
 {
-    if (!content || !panel || isOpen())
+    if (!content || !panel)
         return false;
     if (coverage == Coverage::Card
         && (content->width() <= 0 || content->height() <= 0)) {
         qWarning() << "Celestina refused a card-sized panel menu without size.";
         return false;
     }
+
+    // A parked carrier resumes in place instead of remapping — the scene
+    // change this state exists to avoid. Only the very window that parked, on
+    // the screen it is mapped on, with the anchors it was mapped with, is a
+    // resume; any other request finds this surface occupied.
+    if (isParked()) {
+        if (content != m_content.data()
+            || coverage != m_mappedCoverage
+            || !panel->screen()
+            || panel->screen() != content->screen()) {
+            return false;
+        }
+        if (!resumeLayerSurface(
+                content,
+                menuSpec(panel->screen(), coverage, content->size(), outputPosition)
+            )) {
+            return false;
+        }
+        m_parked = false;
+        return true;
+    }
+
+    if (isOpen())
+        return false;
 
     content->setParent(nullptr);
     m_content = content;
@@ -128,6 +152,24 @@ bool PanelMenuSurface::open(
         blur->start();
     }
 
+    m_mappedCoverage = coverage;
+    return true;
+}
+
+bool PanelMenuSurface::park()
+{
+    if (!isOpen())
+        return false;
+    QWindow *const content = m_content.data();
+    // A retiring window is mid-departure: its close animation owns it, and
+    // the soft close will destroy it. Parking it would leave a carrier this
+    // surface believes is resting while its teardown is already scheduled.
+    if (content->property("celestinaRetiring").toBool())
+        return false;
+    if (!parkLayerSurface(content))
+        return false;
+
+    m_parked = true;
     return true;
 }
 
@@ -135,6 +177,7 @@ void PanelMenuSurface::close()
 {
     QWindow *const content = m_content.data();
     m_content.clear();
+    m_parked = false;
     if (!content)
         return;
 
@@ -155,8 +198,14 @@ void PanelMenuSurface::contentVisibilityChanged(bool visible)
     if (visible)
         return;
 
+    // A parked carrier that hides was not dismissed by anyone this signal is
+    // for — the compositor was told it may not dismiss it, and nothing was
+    // open for a person to close. Its window is gone either way, so tear down
+    // silently and let the next open map fresh.
+    const bool parked = m_parked;
     // The compositor or the menu itself dismissed the surface; this owns the
     // teardown either way, so no closed-but-tracked window survives.
     close();
-    emit dismissed();
+    if (!parked)
+        emit dismissed();
 }

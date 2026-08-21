@@ -112,6 +112,6 @@ is the one tenant the park was yielding direct scanout to.
 
 | Unit | Commit prefix | Status | Files / areas | Intended change | Diffstat | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
-| SURF-1-A | `celestina:` | planned | `src/panelmenusurface.*`, `src/overlaysurface.*`, `src/surfacemanager.*`, `src/panelmenucontroller.*`, `src/overlaycontroller.*` | Persistent parked interactive carriers reused across opens | — | — | `VAL-SURF-1` |
+| SURF-1-A | `celestina:` | active | `src/panelmenusurface.*`, `src/overlaysurface.*`, `src/surfacemanager.*`, `src/panelmenucontroller.*`, `src/overlaycontroller.*` | Persistent parked interactive carriers reused across opens | — | — | `VAL-SURF-1` |
 | SURF-1-B | `celestina:` | planned | `src/osdcontroller.*`, `src/toastcontroller.*` | Quiet surfaces park mapped between bursts | — | — | `VAL-SURF-1` |
 | SURF-1-C | `celestina:` | planned | `src/denseglass.*`, `src/niriclient.*` | Companion unpark driven by Niri fullscreen state instead of a timer | — | — | `VAL-SURF-1` |

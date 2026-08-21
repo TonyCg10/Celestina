@@ -52,8 +52,16 @@ public:
         Coverage coverage = Coverage::Output,
         const QPoint &outputPosition = QPoint()
     );
+    // Rests the mapped surface without unmapping it: input shrinks to one
+    // pixel, keyboard and focus are refused, the window stays on screen. The
+    // point is the scene change that never happens — SURF-1's measured
+    // flicker is one map or unmap per popup. Refuses a surface that is not
+    // open or is already retiring; a retiring window is on its way out and
+    // parking it would cancel a departure someone is animating.
+    bool park();
     void close();
-    bool isOpen() const { return !m_content.isNull(); }
+    bool isOpen() const { return !m_content.isNull() && !m_parked; }
+    bool isParked() const { return !m_content.isNull() && m_parked; }
     QWindow *window() const { return m_content.data(); }
 
 signals:
@@ -63,4 +71,10 @@ private:
     void contentVisibilityChanged(bool visible);
 
     QPointer<QWindow> m_content;
+    // What `open` may resume rather than remap. The scope cannot change on a
+    // mapped surface, and output and card carriers wear different anchors, so
+    // only the same coverage on the same screen is a reuse; everything else
+    // is a fresh map.
+    Coverage m_mappedCoverage = Coverage::Output;
+    bool m_parked = false;
 };

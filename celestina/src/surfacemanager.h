@@ -62,3 +62,24 @@ LayerShellSupport layerShellSupport(const QString &platformName);
 // sees a half-described surface. Returns false — having shown nothing — when
 // the platform has no layer shell to attach to.
 bool mapLayerSurface(QWindow *window, const LayerSurfaceSpec &spec);
+
+// Puts a mapped surface to rest without unmapping it, and wakes it again.
+//
+// Mapping and unmapping a whole-output surface is a scene change on that
+// output, and a scene change per popup was measured (2026-08-18) as a slight
+// physical flicker of the monitor the popup opened on. A parked surface stays
+// mapped and stops being a surface in every way a person could notice: its
+// input region shrinks to one pixel, it refuses the keyboard and focus, and
+// the compositor may no longer dismiss it — a parked carrier that went away
+// on dismissal would be exactly the unmap this exists to avoid.
+//
+// One pixel of input, not none: Qt reads an empty mask as "no mask", which is
+// the whole surface — the same all-or-nothing trap the effect region already
+// documented on the dense-glass companions.
+//
+// Resuming reapplies everything `spec` says except what cannot change on a
+// mapped surface: the scope and the screen are fixed at map time, so a caller
+// that wants either different has no parked surface to resume. `activateOnShow`
+// has no show to ride any more; resuming asks for activation directly.
+bool parkLayerSurface(QWindow *window);
+bool resumeLayerSurface(QWindow *window, const LayerSurfaceSpec &spec);

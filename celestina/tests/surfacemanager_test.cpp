@@ -242,6 +242,11 @@ private slots:
     void theMenuRefusesToOpenTwiceAndSurvivesReopening();
     void theMenuReportsAndCleansUpAnExternalDismissal();
     void aClosedMenuLeavesNoWindowBehind();
+    void aParkedMenuRestsMappedWithItsInputWithdrawn();
+    void aParkedMenuResumesInPlaceAndOnlyAsItself();
+    void aParkedMenuThatLosesItsWindowClosesSilently();
+    void aRetiringMenuRefusesToPark();
+    void aParkedOverlayResumesWhereItIsAskedNext();
     void theMenuIsOnUnlessTheEnvironmentTurnsItOff();
     void aMenuKeepsTheInvokingControlsAnchor();
     void aRetiredAttachmentLeaseCannotClearItsSuccessor();
@@ -518,6 +523,180 @@ void SurfaceManagerTest::aClosedMenuLeavesNoWindowBehind()
         QVERIFY(surface.open(content, panel));
         surface.close();
     }
+    QTRY_VERIFY(tracked.isNull());
+}
+
+// The parked state, in window terms: still mapped — the unmap is the scene
+// change SURF-1 exists to avoid — but no longer a surface anyone can reach.
+// Input shrinks to the same one pixel the dense-glass companions park with
+// (an empty mask is Qt's "no mask", the whole surface), the keyboard and
+// focus are refused, and the compositor may no longer dismiss it.
+void SurfaceManagerTest::aParkedMenuRestsMappedWithItsInputWithdrawn()
+{
+    QWindow *const panel = makePanel();
+    QWindow *const content = makeContent();
+    PanelMenuSurface surface;
+    QVERIFY(surface.open(content, panel));
+    auto *const layerWindow = LayerShellQt::Window::get(content);
+    QVERIFY(layerWindow);
+    QVERIFY(layerWindow->closeOnDismissed());
+
+    QVERIFY(surface.park());
+    QVERIFY(surface.isParked());
+    QVERIFY(!surface.isOpen());
+    QCOMPARE(surface.window(), content);
+    QVERIFY(content->isVisible());
+    QVERIFY(content->property("celestinaParked").toBool());
+    QCOMPARE(content->mask(), QRegion(0, 0, 1, 1));
+    QVERIFY(content->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
+    QCOMPARE(
+        layerWindow->keyboardInteractivity(),
+        LayerShellQt::Window::KeyboardInteractivityNone
+    );
+    QVERIFY(!layerWindow->closeOnDismissed());
+
+    // Nothing is open any more, so there is nothing left to park.
+    QVERIFY(!surface.park());
+
+    surface.close();
+    QVERIFY(!surface.isParked());
+}
+
+void SurfaceManagerTest::aParkedMenuResumesInPlaceAndOnlyAsItself()
+{
+    QWindow *const panel = makePanel();
+    QWindow *const content = makeContent();
+    PanelMenuSurface surface;
+    QVERIFY(surface.open(content, panel));
+    QVERIFY(surface.park());
+
+    // Only the window that parked may resume: a stranger, or the same window
+    // wearing the other coverage's anchors, finds the surface occupied.
+    QWindow *const stranger = makeContent();
+    QVERIFY(!surface.open(stranger, panel));
+    delete stranger;
+    QVERIFY(!surface.open(
+        content, panel, PanelMenuSurface::Coverage::Card, QPoint(10, 10)));
+    QVERIFY(surface.isParked());
+
+    // The resume is a fresh placement on the same mapped surface: new margins,
+    // input and keyboard back, park property down — and no new window.
+    QVERIFY(surface.open(
+        content, panel, PanelMenuSurface::Coverage::Output, QPoint(120, 80)));
+    QVERIFY(surface.isOpen());
+    QVERIFY(!surface.isParked());
+    QCOMPARE(surface.window(), content);
+    QVERIFY(!content->property("celestinaParked").toBool());
+    QCOMPARE(content->mask(), QRegion());
+    QVERIFY(!content->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
+    auto *const layerWindow = LayerShellQt::Window::get(content);
+    QVERIFY(layerWindow);
+    QCOMPARE(layerWindow->margins(), QMargins(120, 80, 0, 0));
+    QCOMPARE(
+        layerWindow->keyboardInteractivity(),
+        LayerShellQt::Window::KeyboardInteractivityOnDemand
+    );
+    QVERIFY(layerWindow->closeOnDismissed());
+
+    // The cycle holds: park, resume somewhere else, and the margins follow.
+    QVERIFY(surface.park());
+    QVERIFY(surface.open(
+        content, panel, PanelMenuSurface::Coverage::Output, QPoint(4, 4)));
+    QCOMPARE(layerWindow->margins(), QMargins(4, 4, 0, 0));
+
+    QPointer<QWindow> tracked(content);
+    surface.close();
+    QTRY_VERIFY(tracked.isNull());
+}
+
+void SurfaceManagerTest::aParkedMenuThatLosesItsWindowClosesSilently()
+{
+    QWindow *const panel = makePanel();
+    QWindow *const content = makeContent();
+    QPointer<QWindow> tracked(content);
+    PanelMenuSurface surface;
+    QSignalSpy dismissed(&surface, &PanelMenuSurface::dismissed);
+    QVERIFY(surface.open(content, panel));
+    QVERIFY(surface.park());
+
+    // Nothing was open for anyone to dismiss: a parked carrier whose window
+    // hid is torn down without announcing a dismissal no person performed.
+    content->hide();
+    QCOMPARE(dismissed.count(), 0);
+    QVERIFY(!surface.isOpen());
+    QVERIFY(!surface.isParked());
+    QTRY_VERIFY(tracked.isNull());
+}
+
+void SurfaceManagerTest::aRetiringMenuRefusesToPark()
+{
+    QWindow *const panel = makePanel();
+    QWindow *const content = makeContent();
+    PanelMenuSurface surface;
+    QVERIFY(surface.open(content, panel));
+
+    // A retiring window belongs to its close animation; parking it would rest
+    // a carrier whose teardown is already scheduled.
+    content->setProperty("celestinaRetiring", true);
+    QVERIFY(!surface.park());
+    QVERIFY(surface.isOpen());
+}
+
+void SurfaceManagerTest::aParkedOverlayResumesWhereItIsAskedNext()
+{
+    auto *const content = new QWindow;
+    content->setGeometry(0, 0, 460, 520);
+    QScreen *const screen = content->screen();
+    QVERIFY(screen);
+    OverlaySurface surface(
+        OverlaySurface::Placement::Centered,
+        QStringLiteral("celestina-overlay")
+    );
+    QVERIFY(surface.open(
+        content, screen, OverlaySurface::Placement::Centered, 46));
+    auto *const layerWindow = LayerShellQt::Window::get(content);
+    QVERIFY(layerWindow);
+    QCOMPARE(layerWindow->margins(), QMargins(0, 46, 0, 0));
+
+    QVERIFY(surface.park());
+    QVERIFY(surface.isParked());
+    QVERIFY(!surface.isOpen());
+    QVERIFY(content->isVisible());
+    QVERIFY(content->property("celestinaParked").toBool());
+    QCOMPARE(content->mask(), QRegion(0, 0, 1, 1));
+    QVERIFY(content->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
+    QCOMPARE(
+        layerWindow->keyboardInteractivity(),
+        LayerShellQt::Window::KeyboardInteractivityNone
+    );
+    QVERIFY(!layerWindow->closeOnDismissed());
+
+    // Anchors are the placement's; a parked centred carrier cannot resume as
+    // an edge-attached one.
+    QVERIFY(!surface.open(
+        content, screen, OverlaySurface::Placement::AttachedTopRight, 46));
+    QVERIFY(surface.isParked());
+
+    // The resume takes the next request's inset on the same mapped surface.
+    QVERIFY(surface.open(
+        content, screen, OverlaySurface::Placement::Centered, 0));
+    QVERIFY(surface.isOpen());
+    QCOMPARE(layerWindow->margins(), QMargins());
+    QCOMPARE(
+        layerWindow->keyboardInteractivity(),
+        LayerShellQt::Window::KeyboardInteractivityOnDemand
+    );
+    QVERIFY(!content->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
+    QCOMPARE(content->mask(), QRegion());
+    QVERIFY(layerWindow->closeOnDismissed());
+
+    // From parked, a window that hides is torn down without a dismissal.
+    QVERIFY(surface.park());
+    QSignalSpy dismissed(&surface, &OverlaySurface::dismissed);
+    QPointer<QWindow> tracked(content);
+    content->hide();
+    QCOMPARE(dismissed.count(), 0);
+    QVERIFY(!surface.isParked());
     QTRY_VERIFY(tracked.isNull());
 }
 
