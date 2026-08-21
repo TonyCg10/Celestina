@@ -595,9 +595,11 @@ void SurfaceManagerTest::aParkedMenuResumesInPlaceAndOnlyAsItself()
     auto *const layerWindow = LayerShellQt::Window::get(content);
     QVERIFY(layerWindow);
     QCOMPARE(layerWindow->margins(), QMargins(120, 80, 0, 0));
+    // Exclusive, not on-demand: the compositor grants on-demand keyboard
+    // only at map time, and a resumed carrier is never mapped again.
     QCOMPARE(
         layerWindow->keyboardInteractivity(),
-        LayerShellQt::Window::KeyboardInteractivityOnDemand
+        LayerShellQt::Window::KeyboardInteractivityExclusive
     );
     QVERIFY(layerWindow->closeOnDismissed());
 
@@ -685,9 +687,11 @@ void SurfaceManagerTest::aParkedOverlayResumesWhereItIsAskedNext()
         content, screen, OverlaySurface::Placement::Centered, 0));
     QVERIFY(surface.isOpen());
     QCOMPARE(layerWindow->margins(), QMargins());
+    // Exclusive, not on-demand: the compositor grants on-demand keyboard
+    // only at map time, and a resumed carrier is never mapped again.
     QCOMPARE(
         layerWindow->keyboardInteractivity(),
-        LayerShellQt::Window::KeyboardInteractivityOnDemand
+        LayerShellQt::Window::KeyboardInteractivityExclusive
     );
     QVERIFY(!content->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
     QCOMPARE(content->mask(), QRegion());

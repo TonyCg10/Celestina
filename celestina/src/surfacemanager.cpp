@@ -1,5 +1,7 @@
 #include "surfacemanager.h"
 
+#include "commitnudge.h"
+
 #include <QRegion>
 #include <QWindow>
 
@@ -65,9 +67,13 @@ bool parkLayerSurface(QWindow *window)
         LayerShellQt::Window::KeyboardInteractivityNone
     );
     layerWindow->setCloseOnDismissed(false);
-    // Double-buffered layer state rides the next commit, which an idle window
-    // never schedules on its own.
-    window->requestUpdate();
+    // Double-buffered layer state rides the next commit, and an idle window
+    // with nothing dirty renders nothing and commits nothing — a park whose
+    // keyboard release never landed left the compositor's focus wedged on an
+    // invisible carrier, which the author's unfocused-window rule turned into
+    // a visible blink each time the state finally arrived. The nudge makes
+    // the commit happen now.
+    nudgeSurfaceCommit(window);
     return true;
 }
 
@@ -88,12 +94,24 @@ bool resumeLayerSurface(QWindow *window, const LayerSurfaceSpec &spec)
     if (spec.desiredSize.isValid())
         layerWindow->setDesiredSize(spec.desiredSize);
     layerWindow->setExclusiveZone(spec.exclusiveZone);
-    layerWindow->setKeyboardInteractivity(spec.keyboard);
+    // Map time is the only moment the compositor grants an on-demand surface
+    // the keyboard (niri takes it on `was_unmapped`), and a resumed carrier
+    // is never mapped again — resumed as on-demand, the launcher could not be
+    // typed into until it was clicked. Exclusive is the resume's way of
+    // asking for the same keyboard the map used to give; the next park's
+    // `None` hands it back.
+    layerWindow->setKeyboardInteractivity(
+        spec.keyboard == LayerShellQt::Window::KeyboardInteractivityOnDemand
+            ? LayerShellQt::Window::KeyboardInteractivityExclusive
+            : spec.keyboard
+    );
     layerWindow->setCloseOnDismissed(spec.closeOnDismissed);
     // The surface never unmapped, so `activateOnShow` has no show left to
     // ride; a resumed interactive surface asks for its focus directly.
     if (spec.activateOnShow)
         window->requestActivate();
-    window->requestUpdate();
+    // The same double-buffered contract as the park: nothing above reaches
+    // the compositor until a commit really happens.
+    nudgeSurfaceCommit(window);
     return true;
 }
