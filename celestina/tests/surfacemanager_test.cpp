@@ -247,6 +247,7 @@ private slots:
     void aParkedMenuThatLosesItsWindowClosesSilently();
     void aRetiringMenuRefusesToPark();
     void aParkedOverlayResumesWhereItIsAskedNext();
+    void aResumedIndicatorMenuPresentsItsCardAgain();
     void aParkedQuietSurfaceRestsAndResumesOnlyAsItsPlacement();
     void denseCompanionsYieldOnlyWhileTheirOutputIsFullscreen();
     void theMenuIsOnUnlessTheEnvironmentTurnsItOff();
@@ -829,6 +830,67 @@ void SurfaceManagerTest::denseCompanionsYieldOnlyWhileTheirOutputIsFullscreen()
 
     aggregator.withdraw(source);
     aggregator.setFullscreenOutputs({});
+}
+
+// The journal of the author's 00:39 session shows the defect exactly: every
+// resumed indicator open logs no `blur.armed`, because the reveal that a
+// fresh window takes from `Component.onCompleted` never runs again on a
+// window that was never destroyed. What the author saw was that shell of a
+// card — content at opacity zero, no glass, no membrane — floating detached
+// from the bar, and clicks that "kept reopening" a menu that was really
+// toggling underneath the ghost.
+void SurfaceManagerTest::aResumedIndicatorMenuPresentsItsCardAgain()
+{
+    qunsetenv("CELESTINA_PANEL_MENU");
+    registerPanelMenuTypesFromSource();
+    QQmlEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath());
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+    PanelMenuController controller(&engine, nullptr, nullptr);
+    QWindow *const panel = makePanel();
+    const QRectF opener(700, 6, 28, 28);
+    const QRectF anchor(706, 11, 18, 18);
+    const QString kind = QStringLiteral("capture");
+
+    controller.toggleIndicatorMenu(panel, opener, anchor, kind, nullptr);
+    auto *const surface = controller.findChild<PanelMenuSurface *>();
+    QVERIFY(surface);
+    QVERIFY(surface->isOpen());
+    QPointer<QWindow> first(surface->window());
+    QVERIFY(first);
+    auto *const quick = qobject_cast<QQuickWindow *>(first.data());
+    QVERIFY(quick);
+    QQuickItem *const field = first->findChild<QQuickItem *>(
+        QStringLiteral("celestina-soft-menu-field"));
+    QVERIFY(field);
+    // The reveal's presented-frame gate resolves through its own fallback
+    // where nothing presents frames.
+    QTRY_VERIFY(field->property("revealed").toBool());
+    QTRY_VERIFY(!first->property("glassRegions").toList().isEmpty());
+
+    // The same indicator again puts it away: parked, with the paint down and
+    // the glass withdrawn — nothing of the card may remain visible.
+    controller.toggleIndicatorMenu(panel, opener, anchor, kind, nullptr);
+    // The put-away rides the soft retirement's beat before it parks.
+    QTRY_VERIFY(surface->isParked());
+    QCOMPARE(surface->window(), first.data());
+    QCOMPARE(quick->contentItem()->opacity(), 0.0);
+    // The published glass is deliberately frozen through the departure —
+    // `retire()` owns that freeze — and the parked branch of the blur
+    // controller is what withdraws the compositor's material. What must not
+    // survive the park is paint, checked above, not the frozen publication.
+
+    // The reopen resumes the same window, and the card is really presented
+    // again: revived, revealed anew, glass republished for the blur to
+    // re-arm from.
+    controller.toggleIndicatorMenu(panel, opener, anchor, kind, nullptr);
+    QVERIFY(surface->isOpen());
+    QCOMPARE(surface->window(), first.data());
+    QCOMPARE(quick->contentItem()->opacity(), 1.0);
+    QVERIFY(!field->property("retiring").toBool());
+    QTRY_VERIFY(field->property("revealed").toBool());
+    QTRY_VERIFY(!first->property("glassRegions").toList().isEmpty());
+    QVERIFY(field->property("presentationOpacity").toReal() > 0);
 }
 
 void SurfaceManagerTest::theMenuIsOnUnlessTheEnvironmentTurnsItOff()

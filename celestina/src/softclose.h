@@ -37,8 +37,19 @@ inline void reviveSoftClosedWindow(QWindow *window)
     }
     const auto fields = window->findChildren<QQuickItem *>(
         QStringLiteral("celestina-soft-menu-field"));
-    for (QQuickItem *const field : fields)
+    for (QQuickItem *const field : fields) {
         QMetaObject::invokeMethod(field, "reviveForReuse");
+        // A fresh window reveals from `Component.onCompleted`, which runs
+        // once in a component's life — a resumed carrier never passes that
+        // hook again, and a revived field that nobody reveals is a menu
+        // whose content sits at opacity zero, publishes no glass and
+        // re-arms no blur: the author's floating shell of a card, detached
+        // from the bar (2026-08-21, the 00:39 journal shows resumed opens
+        // without one `blur.armed`). The reveal takes the same presented-
+        // frame gate a first open takes; it is idempotent for the overlay
+        // route, whose controller re-reveals through its own frame gate.
+        QMetaObject::invokeMethod(field, "reveal");
+    }
 }
 
 inline void softCloseWindow(QWindow *window, std::function<void()> finish)
