@@ -250,7 +250,7 @@ private slots:
     void aRetiringMenuRefusesToPark();
     void aParkedOverlayResumesWhereItIsAskedNext();
     void aResumedIndicatorMenuPresentsItsCardAgain();
-    void aPopupBackedMenuKeepsItsHardClose();
+    void aPopupBackedMenuParksAndReplaysItsPopup();
     void aParkedQuietSurfaceRestsAndResumesOnlyAsItsPlacement();
     void denseCompanionsYieldOnlyWhileTheirOutputIsFullscreen();
     void theMenuIsOnUnlessTheEnvironmentTurnsItOff();
@@ -934,11 +934,10 @@ void SurfaceManagerTest::aResumedIndicatorMenuPresentsItsCardAgain()
     QVERIFY(field->property("presentationOpacity").toReal() > 0);
 }
 
-// The capability is declared by the base, not listed by the controller: a
-// popup-backed menu's reveal and retirement ride its Popup, which nothing
-// replays on a resumed window, so it must keep the hard close — parked, it
-// came back as the author's ghost card while the calendar came back whole.
-void SurfaceManagerTest::aPopupBackedMenuKeepsItsHardClose()
+// SURF-1-D: the popup family's park closes its popup without announcing a
+// dismissal, and its resume replays the popup's open — reveal, glass and
+// rows all flow through the popup's own gates, exactly as a fresh open.
+void SurfaceManagerTest::aPopupBackedMenuParksAndReplaysItsPopup()
 {
     qunsetenv("CELESTINA_PANEL_MENU");
     registerPanelMenuTypesFromSource();
@@ -957,13 +956,32 @@ void SurfaceManagerTest::aPopupBackedMenuKeepsItsHardClose()
     QVERIFY(surface->isOpen());
     QPointer<QWindow> window(surface->window());
     QVERIFY(window);
-    QVERIFY(!window->property("carrierReusable").toBool());
+    QVERIFY(window->property("carrierReusable").toBool());
+    QObject *const popup = window->property("menu").value<QObject *>();
+    QVERIFY(popup);
+    QTRY_VERIFY(popup->property("visible").toBool());
 
+    // The same icon puts it away: parked with the popup really closed, and
+    // the silent close announced no dismissal that could start a second
+    // retirement against the window being put away.
     controller.toggleIndicatorMenu(
         panel, opener, anchor, QStringLiteral("capture"), nullptr);
-    QTRY_VERIFY(!surface->isOpen());
-    QVERIFY(!surface->isParked());
-    QTRY_VERIFY(window.isNull());
+    QTRY_VERIFY(surface->isParked());
+    QCOMPARE(surface->window(), window.data());
+    QTRY_VERIFY(!popup->property("visible").toBool());
+
+    // The reopen resumes the same window and replays the popup: rows,
+    // reveal and glass return through the family's own lifecycle.
+    controller.toggleIndicatorMenu(
+        panel, opener, anchor, QStringLiteral("capture"), nullptr);
+    QVERIFY(surface->isOpen());
+    QCOMPARE(surface->window(), window.data());
+    QTRY_VERIFY(popup->property("visible").toBool());
+    QObject *const field = window->findChild<QObject *>(
+        QStringLiteral("celestina-soft-menu-field"));
+    QVERIFY(field);
+    QTRY_VERIFY(field->property("revealed").toBool());
+    QVERIFY(!field->property("retiring").toBool());
 }
 
 void SurfaceManagerTest::theMenuIsOnUnlessTheEnvironmentTurnsItOff()

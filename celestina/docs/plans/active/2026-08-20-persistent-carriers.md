@@ -58,6 +58,17 @@ is the one tenant the park was yielding direct scanout to.
   client's window state: companions (and the SURF-1-A carriers) unmap only
   while a fullscreen window occupies their output, and return once it leaves.
 
+- **SURF-1-D — the popup family earns its parking.** The live exercise showed
+  the nine indicator menus stand on three bases, and only SoftCard's family
+  keeps its whole visual lifecycle in the shared revive seam; the popup-backed
+  SoftMenu family rides its Popup's own open and aboutToHide, which nothing
+  replays on a resumed window, so it was excluded from parking by the
+  `carrierReusable` capability. This unit teaches SoftMenu the missing half:
+  a park closes its popup without announcing a dismissal, and a resume
+  reopens it after the attachment is re-established, so the reveal flows
+  through the popup's own gates exactly as a fresh open. Wallpaper stays
+  hard-closing: moving it onto SoftCard is its own cleanup, not this unit.
+
 ## Exclusions
 
 - No change to placement, dismissal semantics, focus return, glass anatomy,
@@ -115,3 +126,4 @@ is the one tenant the park was yielding direct scanout to.
 | SURF-1-A | `celestina:` | active | `src/panelmenusurface.*`, `src/overlaysurface.*`, `src/surfacemanager.*`, `src/panelmenucontroller.*`, `src/overlaycontroller.*` | Persistent parked interactive carriers reused across opens | — | [nest exercise](../../evidence/2026-08-20-persistent-carriers-nest-exercise.md) | `VAL-SURF-1` |
 | SURF-1-B | `celestina:` | active | `src/osdcontroller.*`, `src/toastcontroller.*` | Quiet surfaces park mapped between bursts | — | [nest exercise](../../evidence/2026-08-20-persistent-carriers-nest-exercise.md) | `VAL-SURF-1` |
 | SURF-1-C | `celestina:` | active | `src/denseglass.*`, `src/niriclient.*`, `src/niri_adapter.rs` | Companion unpark driven by Niri fullscreen state instead of a timer | — | [nest exercise](../../evidence/2026-08-20-persistent-carriers-nest-exercise.md) | `VAL-SURF-1` |
+| SURF-1-D | `celestina:` | active | `qml/SoftMenu.qml`, `qml/AnchoredMenu.qml`, `src/softclose.h`, `src/panelmenucontroller.cpp` | The popup-backed menus park by closing their popup silently and resume by replaying its open | — | — | `VAL-SURF-1` |

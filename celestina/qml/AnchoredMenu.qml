@@ -23,6 +23,14 @@ AnchoredCard {
     // a `Menu` a model.
     readonly property alias menu: menu
 
+    // Raised while the host parks this carrier for reuse (SURF-1-D). The
+    // park closes the popup so its rows are really gone from the resting
+    // scene, and that close must not read as the person dismissing the menu:
+    // announced, it would start the retirement beat against a window that is
+    // already being put away — the reentrancy the dismissal wiring below
+    // guards against. Families that never park leave this false forever.
+    property bool parkingForReuse: false
+
     // Height comes from the complete item model plus Menu padding, never from
     // the ListView's laid-out viewport, for the reason `AnchoredCard` records.
     // Reading ListView.contentHeight still lets Qt briefly feed the explicit
@@ -90,7 +98,13 @@ AnchoredCard {
         // rows still exist. Emitting from `closed` made the popup finish its
         // private exit first and only then started the carrier/glass exit,
         // producing two visibly separate closures in tray and phone menus.
-        onAboutToHide: root.dismissed()
+        // A park-driven close is the one exception: the host is already
+        // putting the carrier away, and announcing a dismissal from inside
+        // that would start a second retirement against it.
+        onAboutToHide: {
+            if (!root.parkingForReuse)
+                root.dismissed();
+        }
     }
 
     // The factor is carried by the rows' own layer rather than by the popup.

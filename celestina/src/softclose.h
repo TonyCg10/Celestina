@@ -84,6 +84,13 @@ inline void revealResumedWindow(QWindow *window)
             });
             return;
         }
+        // Each family presents its own way. The popup-backed menus replay
+        // their popup, whose aboutToShow carries the reveal exactly as a
+        // fresh open; the card family reveals its fields directly.
+        if (tracked->metaObject()->indexOfMethod("reopenForReuse()") >= 0) {
+            QMetaObject::invokeMethod(tracked.data(), "reopenForReuse");
+            return;
+        }
         const auto fields = tracked->findChildren<QQuickItem *>(
             QStringLiteral("celestina-soft-menu-field"));
         for (QQuickItem *const field : fields)

@@ -12,6 +12,31 @@ import QtQuick
 AnchoredMenu {
     id: root
 
+    // This family's park and resume are complete (SURF-1-D): the popup that
+    // owns its reveal and retirement is closed silently on park and replayed
+    // on resume, so a resumed carrier presents through the popup's own gates
+    // exactly as a fresh open — which is the promise this property makes to
+    // the host. See `SoftCard` for the card family's declaration.
+    readonly property bool carrierReusable: true
+
+    // The park's half: the rows leave with the paint, without announcing a
+    // dismissal the host did not ask for.
+    function prepareForPark() {
+        root.parkingForReuse = true;
+        root.menu.close();
+    }
+
+    // The resume's half, invoked by the host once the attachment is
+    // re-established. The same one-tick deferral as the first open's
+    // `onReady`: the host dresses the window synchronously but later in the
+    // same call, and a popup opened before the attachment exists starts its
+    // enter transition detached. Reveal, glass and blur all follow from the
+    // popup's own aboutToShow, as they always have.
+    function reopenForReuse() {
+        root.parkingForReuse = false;
+        Qt.callLater(function() { root.menu.open(); });
+    }
+
     property bool compositorBlurAvailable: false
     property alias glassRects: field.glassRects
     property alias glassRegions: field.glassRegions
