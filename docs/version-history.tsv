@@ -107,3 +107,4 @@ grafita	1.2.0	milestone	G8-A	Add the encodings a file cannot declare, and the do
 magnetita	1.2.0	milestone	MAG-R2-A	Add the direct mirror that reaches the phone with nothing advertised
 fluorita	1.3.0	milestone	F7-A	Add bounded editing to the pictures the library already holds
 fluorita	1.3.1	bug	F7-C	Add a trigger to keeping a frame and to capturing frame pacing
+celestina	1.1.0	milestone	SURF-1-A	Bump to v1.1.0 for persistent carriers
