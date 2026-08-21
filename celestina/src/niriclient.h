@@ -51,6 +51,12 @@ public:
     // says. The focused window lives there, so it is also the monitor whose bubble anchor a
     // minimize should travel to.
     Q_INVOKABLE QString focusedOutput() const;
+    // Outputs whose active workspace holds a fullscreen window, by the
+    // compositor's own output names — the one tenant every parked shell
+    // surface yields direct scanout to (SURF-1-C). Empty when nothing is
+    // fullscreen, when the helper is unavailable, or when it predates the
+    // field; every one of those answers means "yield nothing".
+    QStringList fullscreenOutputs() const { return m_fullscreenOutputs; }
     // Asks Niri to blank the outputs. Unlike a workspace focus, the shell sees
     // no later snapshot that could confirm it: the compositor's own answer to
     // the request is the outcome, and it is reported as such.
@@ -60,6 +66,9 @@ public:
 
 signals:
     void changed();
+    // The fullscreen tenancy of some output changed. Emitted beside `changed`
+    // so parked-surface owners can react without diffing whole snapshots.
+    void fullscreenOutputsChanged();
     // One transition of one request: "pending", then "confirmed" or "failed".
     void focusRequestChanged(qulonglong requestId, const QString &state);
     void screenshotFailed(const QString &reason);
@@ -126,6 +135,7 @@ private:
     // The compositor's snapshot as validated, before request state is merged
     // into the list QML consumes.
     QVariantList m_snapshot;
+    QStringList m_fullscreenOutputs;
     QVariantList m_workspaces;
     // Ids are never reused, and every request records the adapter process it
     // belongs to, so a result from a previous helper cannot answer a new

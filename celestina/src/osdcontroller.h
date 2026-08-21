@@ -7,6 +7,8 @@
 #include <QHash>
 #include <QPointF>
 #include <QRectF>
+#include <QSet>
+#include <QStringList>
 #include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
@@ -75,6 +77,13 @@ public:
     // Where this display's card currently sits, for the toasts' own probe.
     QRectF openCardRectOnOutput(QScreen *screen) const;
 
+    // Which outputs a fullscreen window occupies (SURF-1-C). The resting
+    // persistent twins on such an output unmap so the game keeps its direct
+    // scanout; a reading raised during the game still opens them — the author
+    // wants a volume notch visible there — and the recede's end puts them
+    // away again. Wired from the Niri client by `main()`.
+    void setFullscreenOutputs(const QStringList &outputs);
+
 public slots:
     // A menu or overlay was just mapped. A display already on screen where
     // that card landed retreats to its fallback corner, carrying its stack,
@@ -103,6 +112,9 @@ private:
     bool topIntruded() const;
     void beginClose();
     void finishClose();
+    // Unmaps the resting twins when their output is fullscreen-occupied.
+    // Nothing to do while cards are up or the recede beat is still running.
+    void yieldRestingToFullscreen();
     void applyInputMask(QWindow *window);
     void scheduleExpiry();
     void expire();
@@ -147,5 +159,6 @@ private:
     QTimer m_transitionTimer;
     bool m_closing = false;
     std::optional<OsdReadings::Reading> m_pending;
+    QSet<QString> m_fullscreenOutputs;
     bool m_enabled;
 };

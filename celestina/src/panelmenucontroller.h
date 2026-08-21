@@ -4,6 +4,7 @@
 #include <QPoint>
 #include <QRect>
 #include <QRectF>
+#include <QStringList>
 #include <QPointer>
 #include <QQmlComponent>
 #include <QSize>
@@ -112,6 +113,12 @@ public slots:
     // Which indicator menu is on screen, or an empty string. Exposed so a
     // regression can read what a second request did rather than inferring it.
     QString openIndicator() const { return m_openMenuKind; }
+
+    // A fullscreen window took these outputs (SURF-1-C): a carrier parked on
+    // one of them unmaps so the game keeps its direct scanout. An open menu
+    // is left alone — it is being used. Wired from the Niri client by
+    // `main()`.
+    void yieldParkedCarrier(const QStringList &fullscreenOutputs);
 
     // The open menu's card on one output, in output-local shell units, or an
     // empty rectangle. The quiet surfaces ask before landing at the top right.

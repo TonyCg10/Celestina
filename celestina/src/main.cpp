@@ -17,6 +17,7 @@
 #include <QTimer>
 #include <QVariantMap>
 
+#include "denseglass.h"
 #include "devicesclient.h"
 #include "diagnosticjournal.h"
 #include "niriclient.h"
@@ -484,6 +485,26 @@ int main(int argc, char *argv[])
          {launcher, clipboard, notificationCentre, controlCentre, sessionMenu,
           bubbleSelector})
         opener->setFocusedOutputSource(focusedOutput);
+    // SURF-1-C: the compositor names the outputs a fullscreen window holds,
+    // and everything that rests mapped — parked carriers, the dense-glass
+    // companions, the display's resting twins — yields exactly those outputs
+    // so the game keeps its direct scanout. One connection per owner, made
+    // here because the owners are controllers `main()` knows and the client
+    // must not.
+    QObject::connect(
+        niri, &NiriClient::fullscreenOutputsChanged, &app,
+        [niri, menu, osd, toasts, launcher, clipboard, notificationCentre,
+         controlCentre, sessionMenu, bubbleSelector]() {
+            const QStringList outputs = niri->fullscreenOutputs();
+            DenseGlassAggregator::instance().setFullscreenOutputs(outputs);
+            menu->yieldParkedCarrier(outputs);
+            toasts->yieldParkedCarrier(outputs);
+            osd->setFullscreenOutputs(outputs);
+            for (OverlayController *const opener :
+                 {launcher, clipboard, notificationCentre, controlCentre,
+                  sessionMenu, bubbleSelector})
+                opener->yieldParkedCarrier(outputs);
+        });
     const QString sessionId =
         QString::fromLocal8Bit(qgetenv("XDG_SESSION_ID"));
     // Recorded whatever happens. "No authorization prompt appeared" is a

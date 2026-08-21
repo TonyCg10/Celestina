@@ -111,6 +111,17 @@ QRectF ToastController::openCardRectOnOutput(QScreen *screen) const
     return m_openCard;
 }
 
+void ToastController::yieldParkedCarrier(const QStringList &fullscreenOutputs)
+{
+    if (!m_surface->isParked())
+        return;
+    QWindow *const window = m_surface->window();
+    if (window && window->screen()
+        && fullscreenOutputs.contains(window->screen()->name())) {
+        m_surface->close();
+    }
+}
+
 void ToastController::providersChanged()
 {
     if (!m_providers)

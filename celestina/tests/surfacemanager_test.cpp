@@ -248,6 +248,7 @@ private slots:
     void aRetiringMenuRefusesToPark();
     void aParkedOverlayResumesWhereItIsAskedNext();
     void aParkedQuietSurfaceRestsAndResumesOnlyAsItsPlacement();
+    void denseCompanionsYieldOnlyWhileTheirOutputIsFullscreen();
     void theMenuIsOnUnlessTheEnvironmentTurnsItOff();
     void aMenuKeepsTheInvokingControlsAnchor();
     void aRetiredAttachmentLeaseCannotClearItsSuccessor();
@@ -745,6 +746,85 @@ void SurfaceManagerTest::aParkedQuietSurfaceRestsAndResumesOnlyAsItsPlacement()
     QPointer<QWindow> tracked(content);
     surface.close();
     QTRY_VERIFY(tracked.isNull());
+}
+
+// SURF-1-C: the companions' park is indefinite now — no timer — and yields
+// exactly while the compositor says a fullscreen window holds their output.
+void SurfaceManagerTest::denseCompanionsYieldOnlyWhileTheirOutputIsFullscreen()
+{
+    auto &aggregator = DenseGlassAggregator::instance();
+    auto *const source = new QQuickWindow;
+    source->setGeometry(0, 0, 400, 300);
+    source->show();
+    m_owned.append(source);
+    QVERIFY(source->screen());
+    const QString output = source->screen()->name();
+
+    const auto companions = []() {
+        QList<QWindow *> found;
+        const auto windows = QGuiApplication::topLevelWindows();
+        for (QWindow *const window : windows) {
+            if (window->title() == QStringLiteral("Celestina dense glass"))
+                found.append(window);
+        }
+        return found;
+    };
+    const auto allVisible = [&companions]() {
+        const auto found = companions();
+        if (found.isEmpty())
+            return false;
+        for (QWindow *const companion : found) {
+            if (!companion->isVisible())
+                return false;
+        }
+        return true;
+    };
+    const auto noneVisible = [&companions]() {
+        const auto found = companions();
+        for (QWindow *const companion : found) {
+            if (companion->isVisible())
+                return false;
+        }
+        return true;
+    };
+
+    const QList<DenseGlassShape> shapes {
+        DenseGlassShape {QRectF(10, 10, 120, 80), 8, {}},
+    };
+    aggregator.publish(source, shapes);
+    QVERIFY(allVisible());
+
+    // Live sections never yield: a menu open over a game is showing
+    // something, whatever the tenancy says.
+    aggregator.setFullscreenOutputs({output});
+    QVERIFY(allVisible());
+
+    // Once the sections leave under that tenancy, the companions unmap.
+    aggregator.publish(source, {});
+    QVERIFY(noneVisible());
+
+    // Giving the output back remaps nothing for nobody...
+    aggregator.setFullscreenOutputs({});
+    QVERIFY(noneVisible());
+
+    // ...the next real publication is what brings them back.
+    aggregator.publish(source, shapes);
+    QVERIFY(allVisible());
+
+    // Resting without a fullscreen tenant parks mapped, indefinitely, and a
+    // tenancy somewhere else changes nothing.
+    aggregator.publish(source, {});
+    QVERIFY(allVisible());
+    aggregator.setFullscreenOutputs(
+        {QStringLiteral("celestina-no-such-output")});
+    QVERIFY(allVisible());
+
+    // And a tenancy arriving while parked puts them away directly.
+    aggregator.setFullscreenOutputs({output});
+    QVERIFY(noneVisible());
+
+    aggregator.withdraw(source);
+    aggregator.setFullscreenOutputs({});
 }
 
 void SurfaceManagerTest::theMenuIsOnUnlessTheEnvironmentTurnsItOff()

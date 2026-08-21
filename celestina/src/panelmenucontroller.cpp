@@ -1375,6 +1375,18 @@ void PanelMenuController::closeTrayChild(bool restoreParentFocus)
         restoreTrayParentFocus(parentMenu);
 }
 
+void PanelMenuController::yieldParkedCarrier(const QStringList &fullscreenOutputs)
+{
+    if (!m_surface->isParked())
+        return;
+    QWindow *const window = m_surface->window();
+    if (window && window->screen()
+        && fullscreenOutputs.contains(window->screen()->name())) {
+        m_parkedMenuKind.clear();
+        m_surface->close();
+    }
+}
+
 void PanelMenuController::close()
 {
     // Whatever was asked for is no longer wanted. A pending target that

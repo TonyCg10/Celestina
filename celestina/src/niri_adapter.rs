@@ -13,6 +13,7 @@
 //! A single shared writer serializes every frame — snapshots and request
 //! results can never interleave on stdout.
 
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::{self, BufRead, BufReader, BufWriter, Stdout, Write};
@@ -198,6 +199,15 @@ struct WorkspaceSnapshot {
 struct ShellSnapshot {
     kind: &'static str,
     workspaces: Vec<WorkspaceSnapshot>,
+    /// Outputs whose active workspace holds a tile the size of the output
+    /// itself — a fullscreen window, and therefore the one tenant the shell's
+    /// parked surfaces yield direct scanout to (SURF-1-C).
+    ///
+    /// A semantic fact rather than a measure, deliberately: the map already
+    /// refuses to publish pixel counts, and this field keeps that rule — the
+    /// comparison against each output's logical size happens here, where both
+    /// numbers live. Additive: a host that predates it ignores it.
+    fullscreen_outputs: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -547,7 +557,112 @@ fn published(tile: &workspace_map::Tile) -> WindowSnapshot {
 
 /// Returns whether anything new was learned, so the caller writes the file when
 /// there is something to write rather than on every compositor event.
-fn shell_snapshot(state: &EventStreamState, homes: &mut Homes) -> (ShellSnapshot, bool) {
+/// The logical size of each connected output, from the request socket.
+///
+/// The event stream never carries outputs, so the one comparison this adapter
+/// needs them for — whether a tile is the size of its whole output — reads a
+/// cache fetched over the same socket the actions use. Refetched only when
+/// something says the answer may have moved: session start, a config reload
+/// (scale lives in the config), or a workspace naming an output the cache does
+/// not know. A fetch that fails keeps the previous map and waits for the next
+/// of those moments rather than hammering a socket that just refused.
+struct OutputSizes {
+    by_name: HashMap<String, (f64, f64)>,
+    stale: bool,
+}
+
+impl OutputSizes {
+    fn new() -> Self {
+        Self {
+            by_name: HashMap::new(),
+            stale: true,
+        }
+    }
+
+    fn mark_stale(&mut self) {
+        self.stale = true;
+    }
+
+    fn ensure(&mut self, state: &EventStreamState) {
+        if !self.stale {
+            let unknown = state
+                .workspaces
+                .workspaces
+                .values()
+                .filter(|workspace| workspace.is_active)
+                .filter_map(|workspace| workspace.output.as_deref())
+                .any(|output| !self.by_name.contains_key(output));
+            if !unknown {
+                return;
+            }
+        }
+        self.stale = false;
+
+        match Socket::connect().and_then(|mut socket| socket.send(Request::Outputs)) {
+            Ok(Ok(Response::Outputs(outputs))) => {
+                self.by_name = outputs
+                    .into_iter()
+                    .filter_map(|(name, output)| {
+                        let logical = output.logical?;
+                        Some((name, (f64::from(logical.width), f64::from(logical.height))))
+                    })
+                    .collect();
+            }
+            answer => {
+                journal::record(
+                    Record::new(Level::Warn, "niri.outputs.unavailable").with_text(
+                        "reason",
+                        &match answer {
+                            Ok(Ok(response)) => format!("unexpected response: {response:?}"),
+                            Ok(Err(message)) => message,
+                            Err(error) => error.to_string(),
+                        },
+                    ),
+                );
+            }
+        }
+    }
+}
+
+/// Outputs whose active workspace holds a tile the size of the output itself.
+///
+/// A maximized tile never matches: it excludes the panel's exclusive zone, so
+/// only a really fullscreened window — the direct-scanout tenant — reaches the
+/// full logical height. The tolerance absorbs fractional logical sizes; an
+/// output whose size is unknown reports nothing rather than guessing.
+fn fullscreen_outputs(
+    state: &EventStreamState,
+    sizes: &HashMap<String, (f64, f64)>,
+) -> Vec<String> {
+    const TOLERANCE: f64 = 1.0;
+
+    let mut outputs: Vec<String> = state
+        .workspaces
+        .workspaces
+        .values()
+        .filter(|workspace| workspace.is_active)
+        .filter_map(|workspace| {
+            let output = workspace.output.as_deref()?;
+            let (width, height) = sizes.get(output)?;
+            let holds = state.windows.windows.values().any(|window| {
+                window.workspace_id == Some(workspace.id)
+                    && (window.layout.tile_size.0 - width).abs() <= TOLERANCE
+                    && (window.layout.tile_size.1 - height).abs() <= TOLERANCE
+            });
+            holds.then(|| bounded(output, MAX_LABEL_UNITS))
+        })
+        .collect();
+    outputs.sort();
+    outputs.dedup();
+    outputs.truncate(MAX_WORKSPACES);
+    outputs
+}
+
+fn shell_snapshot(
+    state: &EventStreamState,
+    homes: &mut Homes,
+    sizes: &HashMap<String, (f64, f64)>,
+) -> (ShellSnapshot, bool) {
     let mut workspaces = state
         .workspaces
         .workspaces
@@ -629,6 +744,7 @@ fn shell_snapshot(state: &EventStreamState, homes: &mut Homes) -> (ShellSnapshot
         ShellSnapshot {
             kind: "snapshot",
             workspaces,
+            fullscreen_outputs: fullscreen_outputs(state, sizes),
         },
         learned,
     )
@@ -709,6 +825,7 @@ fn stream_session(
 ) -> Result<(), AdapterError> {
     let mut stream = open_event_stream()?;
     let mut state = EventStreamState::default();
+    let mut sizes = OutputSizes::new();
     let mut have_workspaces = false;
     let mut have_windows = false;
     let mut last_snapshot = None;
@@ -727,12 +844,17 @@ fn stream_session(
         match &event {
             Event::WorkspacesChanged { .. } => have_workspaces = true,
             Event::WindowsChanged { .. } => have_windows = true,
+            // Output scale — and with it every logical size — lives in the
+            // compositor's config, so a reload is the one mid-session moment
+            // the cached sizes can silently change under this adapter.
+            Event::ConfigLoaded { .. } => sizes.mark_stale(),
             _ => {}
         }
         state.apply(event);
 
         if have_workspaces && have_windows {
-            let (snapshot, learned) = shell_snapshot(&state, homes);
+            sizes.ensure(&state);
+            let (snapshot, learned) = shell_snapshot(&state, homes, &sizes.by_name);
             // Persisted on learning rather than on publication: a frame that
             // taught nothing leaves the file alone, so an ordinary session of
             // switching workspaces never touches the disk.
@@ -1118,7 +1240,61 @@ mod tests {
     /// home reports the output it is on, so these keep asserting the contract
     /// they asserted before homes existed.
     fn snapshot_of(state: &EventStreamState) -> ShellSnapshot {
-        shell_snapshot(state, &mut Homes::new()).0
+        shell_snapshot(state, &mut Homes::new(), &HashMap::new()).0
+    }
+
+    /// The author's centre monitor: 3840x2160 at scale 1.5.
+    fn dp1_sized() -> HashMap<String, (f64, f64)> {
+        HashMap::from([("DP-1".to_owned(), (2560.0, 1440.0))])
+    }
+
+    #[test]
+    fn a_fullscreen_sized_tile_names_its_output() {
+        let state = workspace_holding(&window_json(1, "game", "null", "[2560.0,1440.0]", false));
+
+        assert_eq!(
+            fullscreen_outputs(&state, &dp1_sized()),
+            vec!["DP-1".to_owned()]
+        );
+        let snapshot = shell_snapshot(&state, &mut Homes::new(), &dp1_sized()).0;
+        assert_eq!(snapshot.fullscreen_outputs, vec!["DP-1".to_owned()]);
+    }
+
+    #[test]
+    fn a_maximized_tile_is_not_fullscreen() {
+        // The full width, but not the full height: a maximized tile excludes
+        // the panel's exclusive zone, which is exactly what tells it apart.
+        let state = workspace_holding(&window_json(1, "editor", "[1,1]", "[2560.0,1400.0]", false));
+
+        assert!(fullscreen_outputs(&state, &dp1_sized()).is_empty());
+    }
+
+    #[test]
+    fn an_output_without_a_known_size_reports_nothing() {
+        let state = workspace_holding(&window_json(1, "game", "null", "[2560.0,1440.0]", false));
+
+        assert!(fullscreen_outputs(&state, &HashMap::new()).is_empty());
+        assert!(snapshot_of(&state).fullscreen_outputs.is_empty());
+    }
+
+    #[test]
+    fn only_the_active_workspace_can_hold_the_fullscreen_tenant() {
+        let mut state = EventStreamState::default();
+        apply_json(
+            &mut state,
+            r#"{"WorkspacesChanged":{"workspaces":[{"id":3,"idx":1,"name":"one","output":"DP-1","is_urgent":false,"is_active":false,"is_focused":false,"active_window_id":null},{"id":4,"idx":2,"name":"two","output":"DP-1","is_urgent":false,"is_active":true,"is_focused":true,"active_window_id":null}]}}"#,
+        );
+        // The fullscreen-sized window sits on the inactive workspace: nothing
+        // is scanning it out, so nothing needs yielding.
+        apply_json(
+            &mut state,
+            &format!(
+                r#"{{"WindowsChanged":{{"windows":[{}]}}}}"#,
+                window_json(1, "game", "null", "[2560.0,1440.0]", false)
+            ),
+        );
+
+        assert!(fullscreen_outputs(&state, &dp1_sized()).is_empty());
     }
 
     /// Two monitors, one named workspace each, and no windows anywhere.
@@ -1306,7 +1482,7 @@ mod tests {
         two_outputs(&mut state);
         let mut homes = Homes::new();
 
-        let (snapshot, learned) = shell_snapshot(&state, &mut homes);
+        let (snapshot, learned) = shell_snapshot(&state, &mut homes, &HashMap::new());
 
         assert!(learned);
         assert_eq!(home_of(&snapshot, "left"), "HDMI-A-1");
@@ -1318,13 +1494,13 @@ mod tests {
         let mut state = EventStreamState::default();
         two_outputs(&mut state);
         let mut homes = Homes::new();
-        shell_snapshot(&state, &mut homes);
+        shell_snapshot(&state, &mut homes, &HashMap::new());
 
         // The monitor goes away. This is the frame that would overwrite the
         // memory if the memory let it, and the whole feature rests on it not.
         let mut displaced = EventStreamState::default();
         displaced_onto_one(&mut displaced);
-        let (snapshot, learned) = shell_snapshot(&displaced, &mut homes);
+        let (snapshot, learned) = shell_snapshot(&displaced, &mut homes, &HashMap::new());
 
         assert!(!learned);
         assert_eq!(home_of(&snapshot, "right"), "DP-1");
@@ -1337,7 +1513,7 @@ mod tests {
         displaced_onto_one(&mut state);
         let mut homes = Homes::new();
 
-        let (_, learned) = shell_snapshot(&state, &mut homes);
+        let (_, learned) = shell_snapshot(&state, &mut homes, &HashMap::new());
 
         assert!(!learned);
         assert!(homes.is_empty());
@@ -1349,11 +1525,11 @@ mod tests {
         let mut learning = EventStreamState::default();
         two_outputs(&mut learning);
         let mut homes = Homes::new();
-        shell_snapshot(&learning, &mut homes);
+        shell_snapshot(&learning, &mut homes, &HashMap::new());
 
         let mut state = EventStreamState::default();
         displaced_onto_one(&mut state);
-        shell_snapshot(&state, &mut homes).0
+        shell_snapshot(&state, &mut homes, &HashMap::new()).0
     }
 
     fn workspace<'a>(snapshot: &'a ShellSnapshot, label: &str) -> &'a WorkspaceSnapshot {
@@ -1408,7 +1584,7 @@ mod tests {
         let mut learning = EventStreamState::default();
         two_outputs(&mut learning);
         let mut homes = Homes::new();
-        shell_snapshot(&learning, &mut homes);
+        shell_snapshot(&learning, &mut homes, &HashMap::new());
 
         // The person moved that workspace in their Niri configuration and says
         // so in the shell's settings; the observation underneath is overruled
@@ -1416,7 +1592,7 @@ mod tests {
         homes.set_declarations([("right", "HDMI-A-1")]);
         let mut state = EventStreamState::default();
         displaced_onto_one(&mut state);
-        let snapshot = shell_snapshot(&state, &mut homes).0;
+        let snapshot = shell_snapshot(&state, &mut homes, &HashMap::new()).0;
 
         assert_eq!(home_of(&snapshot, "right"), "HDMI-A-1");
         // One group now, so the strip is flat again and nothing is collapsed.

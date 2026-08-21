@@ -3,6 +3,8 @@
 #include <QHash>
 #include <QList>
 #include <QObject>
+#include <QSet>
+#include <QStringList>
 #include <QPointer>
 #include <QRectF>
 #include <QRegion>
@@ -83,6 +85,13 @@ public:
     // vanished in a single step stood naked for the frames the paint had
     // already left (the author's recording, 2026-08-14).
     void retire(QWindow *source);
+    // Which outputs a fullscreen window currently occupies, by the
+    // compositor's own names (SURF-1-C). Parked companions on those outputs
+    // unmap now and stay unmapped while the tenancy lasts, so the game gets
+    // its direct scanout back; everywhere else a parked companion rests
+    // mapped indefinitely. Companions with live sections are never touched —
+    // a menu open over a game is showing something.
+    void setFullscreenOutputs(const QStringList &outputs);
 
 private:
     explicit DenseGlassAggregator(QObject *parent = nullptr);
@@ -128,8 +137,6 @@ private:
     // armed region survived its menu as a ghost of blurred rectangles.
     QTimer m_pulse;
     int m_quietBeats = 0;
-    // How long a parked companion stays mapped after its last section left.
-    //
     // Unmapping used to be immediate, and every menu or OSD therefore added
     // and removed whole-output surfaces on its output — each one a scene
     // change the compositor answers by rebuilding that output's element list,
@@ -137,11 +144,13 @@ private:
     // exactly that monitor (2026-08-18; menus and OSD flickered, Noctalia's
     // persistent surfaces did not). Parking keeps the surface mapped with a
     // one-pixel effect region — see `refresh` for why one pixel and not none —
-    // so a burst of popups reuses the same mapped surfaces with no scene
-    // change at all. The deadline exists for the other tenant of that output:
-    // a companion parked forever would deny direct scanout to fullscreen
-    // windows, and the author games on these monitors. One unmap at rest,
-    // instead of one per popup.
-    QTimer m_parkSweep;
-    QHash<QScreen *, qint64> m_parkedSinceMs;
+    // so every popup reuses the same mapped surfaces with no scene change at
+    // all. The park used to expire on a twenty-second timer for the other
+    // tenant of these outputs — a companion parked forever would deny direct
+    // scanout to fullscreen windows, and the author games on these monitors —
+    // which meant every open spaced past the grace paid the flicker again.
+    // The compositor now names that tenant itself: a companion parks
+    // indefinitely, and yields only while `m_fullscreenOutputs` says its
+    // output is really taken.
+    QSet<QString> m_fullscreenOutputs;
 };

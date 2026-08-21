@@ -42,6 +42,10 @@ constexpr qsizetype maxColumnsPerWorkspace = 12;
 // form, because JSON numbers would reach this parser as doubles. Twenty digits
 // is the widest such value that exists.
 constexpr qsizetype maxIdentifierLength = 20;
+// One fullscreen tenant per output at most, so this is really "how many
+// monitors": far above any session and small enough that a hostile list
+// cannot grow the client's state.
+constexpr qsizetype maxFullscreenOutputs = 16;
 
 QString boundedString(const QJsonValue &value, qsizetype maximum)
 {
@@ -525,16 +529,37 @@ bool NiriClient::applySnapshot(const QJsonObject &root)
         }
     }
 
+    // Additive field, bounded like every other producer list: a helper that
+    // predates it publishes none, and an oversized or malformed entry is
+    // dropped rather than failing the snapshot the workspaces still describe.
+    QStringList nextFullscreen;
+    const QJsonArray fullscreenNames =
+        root.value(QStringLiteral("fullscreen_outputs")).toArray();
+    for (const QJsonValue &name : fullscreenNames) {
+        if (nextFullscreen.size() >= maxFullscreenOutputs)
+            break;
+        if (!name.isString())
+            continue;
+        const QString text = boundedString(name, maxLabelLength);
+        if (!text.isEmpty() && !nextFullscreen.contains(text))
+            nextFullscreen.append(text);
+    }
+    nextFullscreen.sort();
+
     const bool becameAvailable = !m_available;
     m_available = true;
     m_restartDelayMs = initialRestartDelayMs;
     m_snapshot = nextWorkspaces;
     m_requests.applyActive(activeByOutput, nowMs());
+    const bool fullscreenChanged = nextFullscreen != m_fullscreenOutputs;
+    m_fullscreenOutputs = nextFullscreen;
 
     const bool listChanged = rebuildWorkspaces();
     scheduleRequestOutcomes();
     if (listChanged || becameAvailable)
         emit changed();
+    if (fullscreenChanged)
+        emit fullscreenOutputsChanged();
     return true;
 }
 
@@ -889,9 +914,16 @@ void NiriClient::setUnavailable()
 
     m_available = false;
     m_snapshot.clear();
+    // An unavailable helper says nothing about fullscreen, and "nothing" must
+    // read as "yield nothing": parked surfaces stay parked rather than being
+    // torn down on a helper restart.
+    const bool fullscreenChanged = !m_fullscreenOutputs.isEmpty();
+    m_fullscreenOutputs.clear();
     rebuildWorkspaces();
     scheduleRequestOutcomes();
     emit changed();
+    if (fullscreenChanged)
+        emit fullscreenOutputsChanged();
 }
 
 QString NiriClient::focusedOutput() const

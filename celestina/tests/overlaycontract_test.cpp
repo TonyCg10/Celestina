@@ -81,6 +81,7 @@ private slots:
     void aNewOverlayRetiresItsPredecessorOnlyAfterFirstGlass();
     void closeIsOneIdempotentSoftRetirement();
     void aClosedOverlayParksItsCarrierAndTheNextOpenReusesIt();
+    void aFullscreenOutputTakesOnlyItsOwnParkedCarrierAway();
     void aPropertyTheComponentDoesNotDeclareIsVisibleAsAFailure();
     void aComponentThisShellDoesNotHaveNamesNoBridge();
     void aPanelOpenedOverlayFollowsOnlyItsButton();
@@ -540,6 +541,49 @@ void OverlayContractTest::aClosedOverlayParksItsCarrierAndTheNextOpenReusesIt()
     QTRY_VERIFY(!overlay.isOpen());
     QVERIFY(surface->isParked());
     QCOMPARE(surface->window(), first.data());
+}
+
+// SURF-1-C: a parked carrier yields its output to a fullscreen window — and
+// only its own output, and only while it is parked.
+void OverlayContractTest::aFullscreenOutputTakesOnlyItsOwnParkedCarrierAway()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+    QObject source;
+    source.setProperty("providers", QVariantMap());
+
+    OverlayController overlay(
+        &engine, QStringLiteral("LauncherOverlay"), &source);
+    QVERIFY(overlay.isEnabled());
+    overlay.open();
+    auto *const surface = overlay.findChild<OverlaySurface *>();
+    QVERIFY(surface);
+    QPointer<QWindow> window(surface->window());
+    QVERIFY(window);
+    window->setProperty("reducedMotion", true);
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    const QString output = window->screen()->name();
+
+    // Open is in use: the tenancy does not touch it.
+    overlay.yieldParkedCarrier({output});
+    QVERIFY(overlay.isOpen());
+    QCOMPARE(surface->window(), window.data());
+
+    overlay.close();
+    QTRY_VERIFY(surface->isParked());
+
+    // A tenancy somewhere else leaves the park alone.
+    overlay.yieldParkedCarrier({QStringLiteral("celestina-no-such-output")});
+    QVERIFY(surface->isParked());
+    QVERIFY(window);
+
+    // Its own output really takes it, and the next open maps fresh.
+    overlay.yieldParkedCarrier({output});
+    QVERIFY(!surface->isParked());
+    QTRY_VERIFY(window.isNull());
+    overlay.open();
+    QVERIFY(overlay.isOpen());
+    QVERIFY(surface->window());
 }
 
 void OverlayContractTest::everyPanelOpenedOverlayUsesTheSamePlacement()

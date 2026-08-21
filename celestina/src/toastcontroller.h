@@ -4,6 +4,7 @@
 #include <QPointer>
 #include <QQmlComponent>
 #include <QRectF>
+#include <QStringList>
 #include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
@@ -69,6 +70,12 @@ public:
 
     // Where the open stack's cards sit, for the display's own probe.
     QRectF openCardRectOnOutput(QScreen *screen) const;
+
+    // A fullscreen window took these outputs (SURF-1-C): a carrier parked on
+    // one of them unmaps so the game keeps its direct scanout. A stack that
+    // is actually showing toasts is left alone. Wired from the Niri client
+    // by `main()`.
+    void yieldParkedCarrier(const QStringList &fullscreenOutputs);
 
 private slots:
     // QML owns the presentation clock. Only the currently adopted stack may

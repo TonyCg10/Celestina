@@ -735,7 +735,30 @@ void OsdController::finishClose()
         const OsdReadings::Reading next = *m_pending;
         m_pending.reset();
         show(next);
+        return;
     }
+    // The file is really at rest now: if a fullscreen window holds this
+    // output, the twins give the scanout back until the next reading.
+    yieldRestingToFullscreen();
+}
+
+void OsdController::setFullscreenOutputs(const QStringList &outputs)
+{
+    m_fullscreenOutputs = QSet<QString>(outputs.begin(), outputs.end());
+    yieldRestingToFullscreen();
+}
+
+void OsdController::yieldRestingToFullscreen()
+{
+    // Only a resting file yields: cards on screen are being read, and the
+    // recede beat owns its own end.
+    if (!m_active.isEmpty() || m_closing || m_pending)
+        return;
+    QScreen *const screen = m_openScreen.data();
+    if (!screen || !m_fullscreenOutputs.contains(screen->name()))
+        return;
+    if (m_surface->isOpen() || m_fallback->isOpen())
+        hide();
 }
 
 void OsdController::hide()

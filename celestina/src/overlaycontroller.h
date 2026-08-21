@@ -6,6 +6,7 @@
 #include <QPointF>
 #include <QRectF>
 #include <QString>
+#include <QStringList>
 #include <QVariantMap>
 
 #include <functional>
@@ -89,6 +90,12 @@ public:
     // an empty rectangle. The quiet surfaces ask before landing at the top
     // right.
     QRectF openCardRectOnOutput(QScreen *screen) const;
+
+    // A fullscreen window took these outputs (SURF-1-C): a carrier parked on
+    // one of them unmaps so the game keeps its direct scanout. An overlay
+    // that is actually open is left alone — it is being used, and its own
+    // close parks or unmaps as ever. Wired from the Niri client by `main()`.
+    void yieldParkedCarrier(const QStringList &fullscreenOutputs);
 
 public slots:
     void open();

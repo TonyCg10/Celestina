@@ -125,6 +125,17 @@ bool OverlayController::isOpen() const
     return m_surface->isOpen();
 }
 
+void OverlayController::yieldParkedCarrier(const QStringList &fullscreenOutputs)
+{
+    if (!m_surface->isParked())
+        return;
+    QWindow *const window = m_surface->window();
+    if (window && window->screen()
+        && fullscreenOutputs.contains(window->screen()->name())) {
+        m_surface->close();
+    }
+}
+
 void OverlayController::toggleWithBubbleAnchor(const QString &output, const QRectF &anchor)
 {
     // A keybind has no pointer origin, so there is no panel to read geometry from. The

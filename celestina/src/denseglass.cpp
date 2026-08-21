@@ -28,18 +28,6 @@ namespace {
 // region above them, is what measured closest to the reference material.
 constexpr int denseCompanionDepth = 3;
 
-// How long a companion whose sections all left stays mapped before it is
-// really unmapped, and how often the sweep looks. Mapping and unmapping a
-// whole-output surface is a scene change on that output, and a scene change
-// per popup was measured (2026-08-18) as a slight physical flicker of the
-// monitor the popup opened on — menus and the OSD alike, while Noctalia's
-// persistently mapped surfaces never flickered. Twenty seconds covers a burst
-// of menus and volume notches with zero scene changes; after that the unmap
-// happens once, at rest, so a fullscreen window on this output can have its
-// direct scanout back.
-constexpr qint64 parkedCompanionGraceMs = 20000;
-constexpr int parkSweepIntervalMs = 5000;
-
 // The parked state's effect region. One pixel, not empty and not withdrawn,
 // and both alternatives are measured defects: `withdrawBlur` removes the
 // client's region entirely, and a mapped surface with a matching layer-rule
@@ -242,33 +230,6 @@ DenseGlassAggregator::DenseGlassAggregator(QObject *parent)
     m_pulse.setInterval(500);
     connect(&m_pulse, &QTimer::timeout, this, &DenseGlassAggregator::pulse);
 
-    // The parking sweep runs only while something is parked; `refresh` starts
-    // it and the sweep stops itself when the last parked output is unmapped.
-    m_parkSweep.setInterval(parkSweepIntervalMs);
-    connect(&m_parkSweep, &QTimer::timeout, this, [this] {
-        const qint64 now = QDateTime::currentMSecsSinceEpoch();
-        for (auto it = m_parkedSinceMs.begin(); it != m_parkedSinceMs.end();) {
-            if (now - it.value() < parkedCompanionGraceMs) {
-                ++it;
-                continue;
-            }
-            const auto resting = m_companions.value(it.key());
-            for (const QPointer<QQuickWindow> &companion : resting) {
-                if (!companion)
-                    continue;
-                // Withdrawn while still visible, then hidden: the order every
-                // effect-bearing surface in this shell must keep, because a
-                // withdraw sent after the surface hid is a fatal protocol
-                // error for the whole client.
-                withdrawBlur(companion.data());
-                companion->setVisible(false);
-            }
-            it = m_parkedSinceMs.erase(it);
-        }
-        if (m_parkedSinceMs.isEmpty())
-            m_parkSweep.stop();
-    });
-
     // An output that leaves takes its companions with it.
     //
     // They are keyed by raw `QScreen *`, and a screen Qt has destroyed leaves
@@ -283,9 +244,28 @@ DenseGlassAggregator::DenseGlassAggregator(QObject *parent)
     }
 }
 
+void DenseGlassAggregator::setFullscreenOutputs(const QStringList &outputs)
+{
+    const QSet<QString> next(outputs.begin(), outputs.end());
+    if (next == m_fullscreenOutputs)
+        return;
+    m_fullscreenOutputs = next;
+
+    // Only outputs whose companions are resting change anything now: a parked
+    // companion on a newly fullscreen output unmaps, and a parked companion
+    // whose output was just given back re-parks lazily on its next refresh
+    // rather than being remapped for nobody. Live sections are left alone.
+    for (auto it = m_companions.constBegin(); it != m_companions.constEnd();
+         ++it) {
+        QScreen *const screen = it.key();
+        if (!screen || !m_fullscreenOutputs.contains(screen->name()))
+            continue;
+        refresh(screen);
+    }
+}
+
 void DenseGlassAggregator::forgetScreen(QScreen *screen)
 {
-    m_parkedSinceMs.remove(screen);
     const auto held = m_companions.take(screen);
     for (const QPointer<QQuickWindow> &companion : held) {
         if (!companion)
@@ -533,31 +513,32 @@ void DenseGlassAggregator::refresh(QScreen *screen)
         // invisible, their effect clipped to one pixel — instead of unmapped,
         // because unmapping per popup is a scene change on this output and a
         // scene change per popup is the measured physical flicker of exactly
-        // this monitor (2026-08-18). The real unmap happens once, from the
-        // sweep, after the grace. New companions are still not created here,
+        // this monitor (2026-08-18). The park is indefinite: the one tenant
+        // it yields to is a fullscreen window, and the compositor names those
+        // outputs itself now. New companions are still not created here,
         // because a companion brought up without a region is the whole-output
         // flash this class exists to avoid.
+        const bool yields = m_fullscreenOutputs.contains(screen->name());
         const auto resting = m_companions.value(screen);
-        bool anyParked = false;
         for (const QPointer<QQuickWindow> &companion : resting) {
             if (!companion || !companion->isVisible())
                 continue;
-            armBlur(companion.data(), parkedCompanionRegion);
-            kickRender(companion.data());
-            anyParked = true;
-        }
-        if (anyParked) {
-            m_parkedSinceMs.insert(screen, QDateTime::currentMSecsSinceEpoch());
-            m_parkSweep.start();
+            if (yields) {
+                // Withdrawn while still visible, then hidden: the order every
+                // effect-bearing surface in this shell must keep, because a
+                // withdraw sent after the surface hid is a fatal protocol
+                // error for the whole client.
+                withdrawBlur(companion.data());
+                companion->setVisible(false);
+            } else {
+                armBlur(companion.data(), parkedCompanionRegion);
+                kickRender(companion.data());
+            }
         }
         m_quietBeats = 0;
         m_pulse.start();
         return;
     }
-
-    // Sections are back: this output is no longer parked, whatever the sweep
-    // had scheduled for it.
-    m_parkedSinceMs.remove(screen);
 
     const QList<QPointer<QQuickWindow>> companions =
         companionsFor(screen, region);
