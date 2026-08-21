@@ -515,6 +515,18 @@ void PanelBlurController::probe()
     m_armedRegion = {};
 
     setAvailable(false);
+    // A parked carrier's blur is deliberately down (SURF-1): the withdraw
+    // above still ran, so no armed region outlives the park, but probing on
+    // would only exhaust the fast attempts and print one fallback record per
+    // park — measured as 110 journal lines in a ten-minute nest against zero
+    // on the pre-park shell, the exact amplification class of the 2026-08-12
+    // performance audit. The resume republishes glass, and that publication
+    // restarts this probe.
+    if (m_window->property("celestinaParked").toBool()) {
+        m_probeTimer.stop();
+        m_state = State::Pending;
+        return;
+    }
     if (m_fastAttemptsRemaining > 0) {
         --m_fastAttemptsRemaining;
         scheduleProbe(fastProbeDelayMs);
