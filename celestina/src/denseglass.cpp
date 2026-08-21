@@ -9,6 +9,7 @@
 #include <QGuiApplication>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QSGSimpleRectNode>
 #include <QRegion>
 #include <QScreen>
 #include <QTimer>
@@ -48,15 +49,58 @@ const QRegion parkedCompanionRegion(0, 0, 1, 1);
 // invisible and the repaint it forces is the commit the effect state rides.
 // Without it, the withdrawal sat unarmed for up to a pulse period and the
 // strong sample outlived its menu by half a second on the author's recording.
+// The dirt used to be the clear colour, toggled between transparent black
+// and `QColor(1, 0, 0, 0)`. That red unit was never invisible: with alpha
+// zero it reaches the compositor unpremultiplied and composites additively,
+// +1/255 of red per companion — measured as exactly +3 red, green and blue
+// untouched, uniform across the whole output with the three companions up.
+// The pulse toggled it every half second, which is the light red one-hertz
+// blink the author filmed off the monitor (2026-08-20); the park made the
+// companions permanent and the blink with them. The dirt is now a one-pixel,
+// fully transparent scene node nudged between two positions: the scene is
+// really dirty, so the frame renders and the commit the effect state rides
+// still happens, and the composited pixels are identical either way.
+class CommitDirt final : public QQuickItem
+{
+public:
+    explicit CommitDirt(QQuickItem *parent = nullptr)
+        : QQuickItem(parent)
+    {
+        setFlag(ItemHasContents);
+        setSize(QSizeF(1, 1));
+    }
+
+protected:
+    QSGNode *updatePaintNode(QSGNode *old, UpdatePaintNodeData *) override
+    {
+        auto *node = static_cast<QSGSimpleRectNode *>(old);
+        if (!node)
+            node = new QSGSimpleRectNode(QRectF(0, 0, 1, 1), Qt::transparent);
+        node->setRect(0, 0, 1, 1);
+        return node;
+    }
+};
+
 void kickRender(QQuickWindow *window)
 {
     const QPointer<QQuickWindow> tracked(window);
     const auto kick = [tracked]() {
-        if (!tracked)
+        if (!tracked || !tracked->contentItem())
             return;
-        const QColor current = tracked->color();
-        tracked->setColor(current.red() == 0 ? QColor(1, 0, 0, 0)
-                                             : QColor(0, 0, 0, 0));
+        QQuickItem *dirt = nullptr;
+        const auto children = tracked->contentItem()->childItems();
+        for (QQuickItem *const child : children) {
+            if (child->objectName()
+                == QLatin1String("celestina-commit-dirt")) {
+                dirt = child;
+                break;
+            }
+        }
+        if (!dirt) {
+            dirt = new CommitDirt(tracked->contentItem());
+            dirt->setObjectName(QStringLiteral("celestina-commit-dirt"));
+        }
+        dirt->setX(dirt->x() == 0 ? 1 : 0);
         tracked->requestUpdate();
     };
     kick();
