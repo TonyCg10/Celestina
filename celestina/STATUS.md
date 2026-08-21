@@ -1,9 +1,16 @@
 # Celestina status
 
-- **Updated:** 2026-08-18
+- **Updated:** 2026-08-20
 - **Implementation:** R0-R7, R8's departure slice, LVR-1 through LVR-3, the
   static hardening previously drafted as `AUD-1`, `UX-1` and `WSG-1` are
-  complete; `BUBBLE-1` is complete and deployed as Celestina 0.32.0
+  complete; `BUBBLE-1` is complete and deployed as Celestina 0.32.0.
+  `SURF-1` is active under
+  [the persistent-carriers plan](docs/plans/active/2026-08-20-persistent-carriers.md):
+  every popup route still maps and unmaps a whole-output carrier per open,
+  which is the scene-change churn the author measured (2026-08-18) as a
+  slight physical flicker of that monitor; the checkpoint parks the carriers
+  persistently and moves the companion unpark from a timer to Niri fullscreen
+  state
 - **Design direction:** `PANEL-1` is active for the author-selected borderless
   glass bar: one nearly transparent, shadowless `ContextualVeil` reaches
   edge-to-edge with no outer margin and owns one real compositor-blur region.

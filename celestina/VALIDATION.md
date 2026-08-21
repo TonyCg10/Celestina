@@ -1236,6 +1236,27 @@ result.
 - **Result:** not run
 - **Evidence:** none
 
+## VAL-SURF-1 — Spaced popup opens without a physical flicker
+
+- **Status:** pending
+- **Related implementation:** SURF-1
+- **Requires:** the live session on the deployed SURF-1 bundle; the same
+  monitors and compositor as the 2026-08-18 observation
+- **Procedure:** with the session at rest for more than a minute, open one
+  panel menu, watch the monitor it opens on, close it, and repeat across the
+  three outputs with more than twenty seconds between opens — the spacing that
+  used to defeat the companion parking. Repeat with the launcher, the control
+  centre, a volume notch for the on-screen display, and a toast. Then repeat
+  once while a fullscreen window occupies one output, confirming popups there
+  still open and close correctly.
+- **Pass condition:** the author sees none of the slight physical flicker
+  measured on 2026-08-18 on any spaced open or close, and every dismissal,
+  focus-return and placement behavior reads unchanged. A flicker that
+  survives fails the case and opens a driver-level investigation unit rather
+  than reopening this checkpoint's scope.
+- **Result:** not run
+- **Evidence:** none
+
 ## Closed historical observations
 
 `VAL-SHELL-R0-BASE` and `VAL-SHELL-R2-BASE` are preserved in the

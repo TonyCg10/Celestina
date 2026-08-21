@@ -1,7 +1,7 @@
 # Celestina implementation roadmap
 
-- **Status:** planned
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** SURF-1
 
 This roadmap contains only work an agent can implement and verify. Real Niri,
 hardware, visual and assistive-technology checks live in
@@ -40,6 +40,7 @@ of the design when they provide the narrow capability the shell needs.
 | LOCK-1 | complete | Let the session recede behind its own blurred wallpaper instead of vanishing into an opaque slab, and uncover it continuously |
 | LIVE-1 | complete | Make the shell survive and look right on the real session: the crash, the membrane that only reached the primary monitor, the missing connectivity indicators, and two providers that misread the machine |
 | BUBBLE-1 | complete | Present Melibea's native minimized windows as a compact shell bubble group and accessible selector |
+| SURF-1 | active | End the per-popup whole-output map/unmap churn with persistent parked carriers |
 | R8 | complete | Reversible Noctalia removal and the first-party Polkit agent are delivered; live departure remains `VAL-R8` |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
 
@@ -701,6 +702,29 @@ The complete record is in [the archived BUBBLE-1 plan](docs/plans/archive/2026-0
 and [delivery evidence](docs/evidence/2026-08-18-melibea-bubbles.md).
 Coordinated window-to-bubble motion and any future preview contract remain
 Melibea M7 work, not part of this checkpoint.
+
+## SURF-1 — Persistent carriers end the per-popup scene change (active)
+
+**Outcome:** opening or closing any panel menu, focused overlay, on-screen
+display or toast changes only content inside surfaces that are already
+mapped. No popup route maps or unmaps a whole-output surface during ordinary
+use.
+
+The author measured (2026-08-18) that mapping and unmapping a whole-output
+surface per popup is a slight physical flicker of exactly that monitor, while
+persistently mapped surfaces never flicker. The 2026-08-20 audit found the
+parking mitigation covers only the dense-glass companions and expires after
+twenty seconds, while every menu and overlay carrier still churns on every
+open. This checkpoint extends the already-measured parked pattern — mapped,
+empty input region, one-pixel effect region — to the interactive and quiet
+carriers, and replaces the companions' timed unpark with Niri's fullscreen
+state, the one tenant the park yields direct scanout to.
+
+This checkpoint asserts nothing about the driver-level step that turns the
+scene change into the visible blink; if removing the churn does not end the
+flicker, that investigation is a new unit. Scope, order, exclusions and exit
+are in [the active SURF-1 plan](docs/plans/active/2026-08-20-persistent-carriers.md);
+the perceptual acceptance is `VAL-SURF-1`.
 
 ## UX-2 — Shell visual and interaction language (planned)
 
