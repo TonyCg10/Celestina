@@ -247,6 +247,7 @@ private slots:
     void aParkedMenuThatLosesItsWindowClosesSilently();
     void aRetiringMenuRefusesToPark();
     void aParkedOverlayResumesWhereItIsAskedNext();
+    void aParkedQuietSurfaceRestsAndResumesOnlyAsItsPlacement();
     void theMenuIsOnUnlessTheEnvironmentTurnsItOff();
     void aMenuKeepsTheInvokingControlsAnchor();
     void aRetiredAttachmentLeaseCannotClearItsSuccessor();
@@ -698,6 +699,51 @@ void SurfaceManagerTest::aParkedOverlayResumesWhereItIsAskedNext()
     content->hide();
     QCOMPARE(dismissed.count(), 0);
     QVERIFY(!surface.isParked());
+    QTRY_VERIFY(tracked.isNull());
+}
+
+// The quiet carriers — the toast stack's corner and its fallbacks — park the
+// same way, keeping their never-focusable contract through the whole cycle.
+void SurfaceManagerTest::aParkedQuietSurfaceRestsAndResumesOnlyAsItsPlacement()
+{
+    auto *const content = new QWindow;
+    content->setGeometry(0, 0, 380, 240);
+    QScreen *const screen = content->screen();
+    QVERIFY(screen);
+    OverlaySurface surface(
+        OverlaySurface::Placement::Corner,
+        QStringLiteral("celestina-toasts")
+    );
+    QVERIFY(surface.open(
+        content, screen, OverlaySurface::Placement::Corner));
+    auto *const layerWindow = LayerShellQt::Window::get(content);
+    QVERIFY(layerWindow);
+    QVERIFY(content->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
+
+    QVERIFY(surface.park());
+    QVERIFY(content->isVisible());
+    QCOMPARE(content->mask(), QRegion(0, 0, 1, 1));
+    QVERIFY(!layerWindow->closeOnDismissed());
+
+    // The other landing places wear other anchors; only its own placement
+    // resumes it.
+    QVERIFY(!surface.open(
+        content, screen, OverlaySurface::Placement::BottomCentre));
+    QVERIFY(surface.isParked());
+    QVERIFY(surface.open(
+        content, screen, OverlaySurface::Placement::Corner));
+    QVERIFY(surface.isOpen());
+    QCOMPARE(content->mask(), QRegion());
+    QVERIFY(content->flags().testFlag(Qt::WindowDoesNotAcceptFocus));
+    QVERIFY(layerWindow->closeOnDismissed());
+
+    // The size-following contract made at map time survives the cycle: a
+    // stack that grows keeps telling the compositor its real extent.
+    content->resize(380, 400);
+    QTRY_COMPARE(layerWindow->desiredSize(), QSize(380, 400));
+
+    QPointer<QWindow> tracked(content);
+    surface.close();
     QTRY_VERIFY(tracked.isNull());
 }
 

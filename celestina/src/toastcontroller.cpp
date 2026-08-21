@@ -198,6 +198,11 @@ void ToastController::applyInputMask(QWindow *window)
     if (!window)
         return;
 
+    // The park owns a resting carrier's one-pixel mask; a late size change
+    // arriving through the persistent height connection must not widen it.
+    if (window->property("celestinaParked").toBool())
+        return;
+
     if (!m_openAttached) {
         window->setMask(QRegion());
         return;
@@ -215,8 +220,11 @@ void ToastController::show(const QVariantList &toasts, const QVariantList &actio
 
     // Already up: the list is replaced in place. Remapping the surface for
     // every arrival would make the corner flicker and would lose whatever the
-    // person was reading.
-    if (QWindow *const shown = m_surface->window()) {
+    // person was reading. Open, not merely mapped: a parked carrier also has
+    // a window, and content pushed onto it would paint behind one pixel of
+    // input instead of resuming the surface first.
+    if (m_surface->isOpen()) {
+        QWindow *const shown = m_surface->window();
         shown->setProperty("actions", actions);
         shown->setProperty("toasts", toasts);
         applyInputMask(shown);
@@ -294,24 +302,69 @@ void ToastController::show(const QVariantList &toasts, const QVariantList &actio
             QStringLiteral("surfaceHeight"), geometry.surface.height());
     }
 
-    QWindow *const stack = createWindow(toasts, actions, placementProperties);
-    if (!stack)
-        return;
-
-    // The signal is declared by ToastStack.qml, so it is connected through
-    // the runtime meta-object rather than a generated C++ type.
-    connect(
-        stack,
-        SIGNAL(departureFinished()),
-        this,
-        SLOT(toastDepartureFinished())
-    );
-
     const int topInset = placement == OverlaySurface::Placement::AttachedTopRight
         ? geometry.topInsetInOutputUnits(shellScale) : 0;
-    if (!m_surface->open(stack, screen, placement, topInset)) {
-        delete stack;
-        return;
+
+    // A carrier parked on this same output resumes in place instead of
+    // remapping — the scene change the park exists to avoid (SURF-1). The
+    // resume itself insists on the placement the surface was mapped with;
+    // a stack that must land somewhere else pays the one remap.
+    QWindow *stack = nullptr;
+    bool reused = false;
+    if (m_surface->isParked()) {
+        QWindow *const parked = m_surface->window();
+        if (parked && parked->handle() && parked->screen() == screen) {
+            // Defaults first, so a corner reuse does not inherit an attached
+            // route's geometry, then this open's own placement and content.
+            parked->setProperty("anchoredFromPanel", false);
+            parked->setProperty("openerRect", QRectF());
+            parked->setProperty("attachmentAnchorRect", QRectF());
+            parked->setProperty("attachmentStartY", -1);
+            parked->setProperty("surfaceOriginX", 0);
+            parked->setProperty("surfaceWidth", cardSize.width());
+            parked->setProperty("surfaceHeight", 0);
+            parked->setProperty("entersFromBottom", false);
+            for (auto it = placementProperties.constBegin();
+                 it != placementProperties.constEnd(); ++it) {
+                parked->setProperty(it.key().toUtf8().constData(), it.value());
+            }
+            parked->setProperty("actions", actions);
+            parked->setProperty("toasts", toasts);
+            reused = m_surface->open(parked, screen, placement, topInset);
+            if (reused)
+                stack = parked;
+        }
+        if (!reused)
+            m_surface->close();
+    }
+
+    if (!reused) {
+        stack = createWindow(toasts, actions, placementProperties);
+        if (!stack)
+            return;
+
+        // The signal is declared by ToastStack.qml, so it is connected through
+        // the runtime meta-object rather than a generated C++ type. Made once
+        // per window, never per open: a reused carrier keeps them.
+        connect(
+            stack,
+            SIGNAL(departureFinished()),
+            this,
+            SLOT(toastDepartureFinished())
+        );
+
+        if (!m_surface->open(stack, screen, placement, topInset)) {
+            delete stack;
+            return;
+        }
+
+        // The stack grows as toasts arrive. Its full local input region
+        // follows that height while the QWindow's physical top remains fixed
+        // at the seam, leaving the panel outside the carrier whatever the
+        // column becomes.
+        connect(stack, &QWindow::heightChanged, this, [this]() {
+            applyInputMask(m_surface->window());
+        });
     }
 
     // A nested session's console is unreachable from outside it; where a
@@ -327,18 +380,13 @@ void ToastController::show(const QVariantList &toasts, const QVariantList &actio
             .number(QStringLiteral("card_x"), qRound(prospectiveCard.x()))
             .number(QStringLiteral("card_y"), qRound(prospectiveCard.y()))
             .number(QStringLiteral("card_width"), qRound(prospectiveCard.width()))
+            .flag(QStringLiteral("reused"), reused)
     );
 
     m_openAttached = placement == OverlaySurface::Placement::AttachedTopRight;
     m_openScreen = screen;
     m_openCard = prospectiveCard;
     applyInputMask(stack);
-    // The stack grows as toasts arrive. Its full local input region follows
-    // that height while the QWindow's physical top remains fixed at the seam,
-    // leaving the panel outside the carrier whatever the column becomes.
-    connect(stack, &QWindow::heightChanged, this, [this]() {
-        applyInputMask(m_surface->window());
-    });
 
     // Measured on the nested session: an exposed layer window does not
     // schedule its own first frame — the scene renders only when something
@@ -361,7 +409,22 @@ void ToastController::toastDepartureFinished()
 void ToastController::hide()
 {
     m_closeTimer.stop();
-    m_surface->close();
+    // Rest rather than unmap (SURF-1): the emptied stack keeps its mapped
+    // carrier, one pixel of input and all, and the next burst resumes it in
+    // place. The lists are emptied so the parked scene carries nothing — a
+    // parked window is visible, and a stale card on it would simply show. A
+    // carrier already resting is left so; only a window that cannot park
+    // takes the unmap it always took.
+    if (m_surface->isOpen()) {
+        if (QWindow *const shown = m_surface->window()) {
+            shown->setProperty("actions", QVariantList());
+            shown->setProperty("toasts", QVariantList());
+        }
+        if (!m_surface->park())
+            m_surface->close();
+    } else if (!m_surface->isParked()) {
+        m_surface->close();
+    }
     m_openCard = QRectF();
     m_openScreen.clear();
     m_openAttached = false;
