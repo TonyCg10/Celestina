@@ -491,11 +491,18 @@ void PanelMenuController::openWorkspaceMap(
         return;
     }
     ++m_openGeneration;
-    if (!m_attachmentLease.acquire(
-            panel,
-            card,
-            globalAttachmentAnchor,
-            QPointF(carrier.outputPosition))) {
+    const bool leased = m_attachmentLease.acquire(
+        panel,
+        card,
+        globalAttachmentAnchor,
+        QPointF(carrier.outputPosition));
+    DiagnosticJournal::instance().record(
+        DiagnosticJournal::Record(
+            DiagnosticJournal::Level::Info,
+            QStringLiteral("attachment.lease"))
+            .text(QStringLiteral("route"), QStringLiteral("workspace-map"))
+            .flag(QStringLiteral("ok"), leased));
+    if (!leased) {
         // Genuinely floating, as above: the field must not wait for an
         // anchor no lease is going to publish.
         card->setProperty("anchoredFromPanel", false);
@@ -757,11 +764,18 @@ void PanelMenuController::toggleIndicatorMenu(
     m_openMenuKind = kind;
     emit contextualSurfaceOpened();
     m_openIndicatorPanel = panel;
-    if (!m_attachmentLease.acquire(
-            panel,
-            window,
-            globalAttachmentAnchor,
-            QPointF(carrier.outputPosition))) {
+    const bool leased = m_attachmentLease.acquire(
+        panel,
+        window,
+        globalAttachmentAnchor,
+        QPointF(carrier.outputPosition));
+    DiagnosticJournal::instance().record(
+        DiagnosticJournal::Record(
+            DiagnosticJournal::Level::Info,
+            QStringLiteral("attachment.lease"))
+            .text(QStringLiteral("route"), QStringLiteral("indicator"))
+            .flag(QStringLiteral("ok"), leased));
+    if (!leased) {
         // The route asked for the bar but no live source answered: this
         // surface is genuinely floating, and saying so is what lets the
         // field tell that apart from an anchor still in flight.

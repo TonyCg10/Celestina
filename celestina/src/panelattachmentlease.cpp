@@ -14,6 +14,8 @@
 #include <QtGlobal>
 
 namespace {
+constexpr int maximumRebindAttempts = 8;
+
 constexpr auto surfaceAnchorRectProperty = "attachmentAnchorRect";
 constexpr auto surfaceLeaseTokenProperty =
     "_celestinaAttachmentAnchorLeaseToken";
@@ -494,9 +496,24 @@ void PanelAttachmentLease::processScheduledRefresh()
     if (m_rebindPending) {
         m_rebindPending = false;
         if (!rebindSource()) {
+            // One deferred pass is enough for a delegate the model recreates
+            // in its own handler — the workspace pills — but a group capsule's
+            // successor can be built a few turns later, and a lease that
+            // released on the first miss emptied the published anchor for
+            // good: the author's group map opened invisible, held by the
+            // pending-attachment gate, on whichever opens lost that race.
+            // The published state is still the predecessor's rectangle, so
+            // waiting costs nothing visible; only a rebuild that never
+            // produces a successor gives up.
+            if (++m_rebindAttempts <= maximumRebindAttempts) {
+                m_rebindPending = true;
+                m_refreshTimer.start();
+                return;
+            }
             release();
             return;
         }
+        m_rebindAttempts = 0;
     }
     if (m_rebuildPending) {
         m_rebuildPending = false;

@@ -99,6 +99,11 @@ private:
     // remembered so a destroyed source can be matched to its successor.
     QRectF m_canonicalGlobalRect;
     bool m_rebindPending = false;
+    // How many deferred passes a lost source is given to reappear before the
+    // lease really lets go. Each pass is one zero-delay turn behind whatever
+    // handler is rebuilding the strip; eight of them cover the slowest
+    // rebuild measured while staying imperceptible.
+    int m_rebindAttempts = 0;
     QPointer<QQuickItem> m_source;
     QPointer<QQuickItem> m_anchor;
     QPointF m_carrierOriginOnOutput;
