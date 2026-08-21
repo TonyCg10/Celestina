@@ -1431,8 +1431,15 @@ void PanelMenuController::close()
     // carriers this surface hosts — the popup-backed tray inventory, the
     // workspace map — keep the hard close their lifecycles were built on.
     QWindow *const window = m_surface->window();
+    // The component's own base declares whether its lifecycle can be brought
+    // back on a resumed carrier — SoftCard's family can, the popup-backed
+    // SoftMenu family cannot, and a kind list here could not tell them
+    // apart: the calendar parked cleanly while wifi and bluetooth came back
+    // as ghosts, because their reveal and retirement ride a Popup nothing
+    // replays. A window that does not declare the capability keeps the hard
+    // close its family was built on.
     const bool parkable = window && m_surface->isOpen()
-        && !indicatorMenuComponent(m_openMenuKind).isEmpty();
+        && window->property("carrierReusable").toBool();
     const QString departingKind = m_openMenuKind;
     m_openMenuKind.clear();
     m_openPanel = nullptr;

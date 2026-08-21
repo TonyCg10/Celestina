@@ -209,6 +209,8 @@ void registerPanelMenuTypesFromSource()
              QStringLiteral("BluetoothMenu"),
              QStringLiteral("PerformanceMenu"),
              QStringLiteral("CaptureMenu"),
+             QStringLiteral("CalendarMenu"),
+             QStringLiteral("BrightnessMenu"),
              QStringLiteral("WallpaperMenu"),
              QStringLiteral("WorkspaceMap"),
          }) {
@@ -248,6 +250,7 @@ private slots:
     void aRetiringMenuRefusesToPark();
     void aParkedOverlayResumesWhereItIsAskedNext();
     void aResumedIndicatorMenuPresentsItsCardAgain();
+    void aPopupBackedMenuKeepsItsHardClose();
     void aParkedQuietSurfaceRestsAndResumesOnlyAsItsPlacement();
     void denseCompanionsYieldOnlyWhileTheirOutputIsFullscreen();
     void theMenuIsOnUnlessTheEnvironmentTurnsItOff();
@@ -863,7 +866,7 @@ void SurfaceManagerTest::aResumedIndicatorMenuPresentsItsCardAgain()
     const QRectF opener(
         panel->position() + QPointF(690, 5), QSizeF(48, 30));
     const QRectF anchor = source->attachmentAnchorGlobalRectNow();
-    const QString kind = QStringLiteral("capture");
+    const QString kind = QStringLiteral("calendar");
 
     controller.toggleIndicatorMenu(panel, opener, anchor, kind, nullptr);
     auto *const surface = controller.findChild<PanelMenuSurface *>();
@@ -929,6 +932,38 @@ void SurfaceManagerTest::aResumedIndicatorMenuPresentsItsCardAgain()
     QVERIFY(field->property("revealed").toBool());
     QVERIFY(field->property("edgeAttachmentRequested").toBool());
     QVERIFY(field->property("presentationOpacity").toReal() > 0);
+}
+
+// The capability is declared by the base, not listed by the controller: a
+// popup-backed menu's reveal and retirement ride its Popup, which nothing
+// replays on a resumed window, so it must keep the hard close — parked, it
+// came back as the author's ghost card while the calendar came back whole.
+void SurfaceManagerTest::aPopupBackedMenuKeepsItsHardClose()
+{
+    qunsetenv("CELESTINA_PANEL_MENU");
+    registerPanelMenuTypesFromSource();
+    QQmlEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath());
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+    PanelMenuController controller(&engine, nullptr, nullptr);
+    QWindow *const panel = makePanel();
+    const QRectF opener(700, 6, 28, 28);
+    const QRectF anchor(706, 11, 18, 18);
+
+    controller.toggleIndicatorMenu(
+        panel, opener, anchor, QStringLiteral("capture"), nullptr);
+    auto *const surface = controller.findChild<PanelMenuSurface *>();
+    QVERIFY(surface);
+    QVERIFY(surface->isOpen());
+    QPointer<QWindow> window(surface->window());
+    QVERIFY(window);
+    QVERIFY(!window->property("carrierReusable").toBool());
+
+    controller.toggleIndicatorMenu(
+        panel, opener, anchor, QStringLiteral("capture"), nullptr);
+    QTRY_VERIFY(!surface->isOpen());
+    QVERIFY(!surface->isParked());
+    QTRY_VERIFY(window.isNull());
 }
 
 void SurfaceManagerTest::theMenuIsOnUnlessTheEnvironmentTurnsItOff()
@@ -2053,9 +2088,13 @@ void SurfaceManagerTest::aClosedIndicatorMenuParksAndOnlyItsOwnKindResumesIt()
     const QRectF opener(panelGlobal + QPointF(720, 6), QSizeF(28, 28));
     const QRectF anchor(panelGlobal + QPointF(726, 11), QSizeF(18, 18));
 
+    // Brightness carries the SoftCard family's reusable lifecycle and a
+    // provider bridge this lookup can find it by. Wallpaper — hand-built on
+    // the raw AnchoredCard, with its own reveal wiring — declares no reuse
+    // and keeps the hard close, exactly like the popup-backed family.
     controller.toggleIndicatorMenu(
-        &panel, opener, anchor, QStringLiteral("wallpaper"), &providers);
-    QCOMPARE(controller.openIndicator(), QStringLiteral("wallpaper"));
+        &panel, opener, anchor, QStringLiteral("brightness"), &providers);
+    QCOMPARE(controller.openIndicator(), QStringLiteral("brightness"));
     QPointer<QWindow> menu(windowWithProperty("providerSource"));
     QVERIFY(menu);
     const QRectF firstOpener = menu->property("openerRect").toRectF();
@@ -2076,8 +2115,8 @@ void SurfaceManagerTest::aClosedIndicatorMenuParksAndOnlyItsOwnKindResumesIt()
     const QRectF movedAnchor = anchor.translated(-80, 0);
     controller.toggleIndicatorMenu(
         &panel, movedOpener, movedAnchor,
-        QStringLiteral("wallpaper"), &providers);
-    QCOMPARE(controller.openIndicator(), QStringLiteral("wallpaper"));
+        QStringLiteral("brightness"), &providers);
+    QCOMPARE(controller.openIndicator(), QStringLiteral("brightness"));
     QVERIFY(menu);
     QCOMPARE(windowWithProperty("providerSource"), menu.data());
     QVERIFY(!menu->property("celestinaParked").toBool());

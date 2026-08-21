@@ -24,6 +24,17 @@ import QtQuick.Window
 AnchoredCard {
     id: root
 
+    // The card family's whole lifecycle — reveal on `ready`, retire, revive,
+    // re-reveal — lives in the host's shared seam, so a parked carrier of
+    // this family really comes back whole. The popup-backed `SoftMenu`
+    // family does not declare this: its reveal and retirement ride the
+    // Popup's own open and aboutToHide, which nothing replays on a resumed
+    // window, and a parked popup menu came back as the author's ghost card —
+    // present, unpainted, unattached. A base that declares this is promising
+    // the host that every visual it owns can be brought back without the
+    // component being created again.
+    readonly property bool carrierReusable: true
+
     // The heading, drawn by the shared MenuHeader.
     required property string title
     property string subtitle: ""
