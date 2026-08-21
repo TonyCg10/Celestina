@@ -247,6 +247,11 @@ private:
     // stale — never trusted — once the parked window is gone: the reuse test
     // is always the surface's own parked state.
     QString m_parkedMenuKind;
+    // Which open the surface is currently showing. A reused carrier keeps
+    // its pointer across opens, so the retirement beat's old window check no
+    // longer tells a stale beat from a live one — the generation does:
+    // advanced by every open, captured by every scheduled close.
+    quint64 m_openGeneration = 0;
     // The panel that opened the tray inventory. Retained only while that menu
     // is current so a right click can place the chosen item's own asynchronously
     // loaded D-Bus menu beside it on the same output.

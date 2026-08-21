@@ -484,6 +484,7 @@ void PanelMenuController::openWorkspaceMap(
         delete card;
         return;
     }
+    ++m_openGeneration;
     m_attachmentLease.acquire(
         panel,
         card,
@@ -730,6 +731,7 @@ void PanelMenuController::toggleIndicatorMenu(
     }
 
     m_parkedMenuKind.clear();
+    ++m_openGeneration;
     m_openMenuKind = kind;
     emit contextualSurfaceOpened();
     m_openIndicatorPanel = panel;
@@ -885,6 +887,7 @@ void PanelMenuController::toggleTrayItemsMenu(
         return;
     }
 
+    ++m_openGeneration;
     m_openMenuKind = QLatin1String(trayItemsKind);
     emit contextualSurfaceOpened();
     m_openPanel = panel;
@@ -1314,9 +1317,15 @@ void PanelMenuController::menuDismissed()
     // pending finish dies with it.
     if (sender() == m_surface->window()) {
         QWindow *const window = m_surface->window();
-        softCloseWindow(window, [this, window]() {
-            if (m_surface->window() == window)
+        const quint64 generation = m_openGeneration;
+        softCloseWindow(window, [this, window, generation]() {
+            // The window pointer alone stopped distinguishing beats when the
+            // carrier became reusable; a beat from a previous open must not
+            // close the one the person made since.
+            if (m_surface->window() == window
+                && generation == m_openGeneration) {
                 close();
+            }
         });
     }
 }
@@ -1446,6 +1455,14 @@ void PanelMenuController::passPanelStripThrough(QWindow *content, QWindow *panel
     const QPointer<QWindow> bar(panel);
     const auto apply = [tracked, bar]() {
         if (!tracked || !bar)
+            return;
+        // The park owns a resting carrier's one-pixel mask. The delayed
+        // reapplications below outlive a fast close, and one that landed on
+        // the parked carrier gave an invisible surface the whole output's
+        // input — every click below the bar died on it, while clicks on the
+        // excluded panel strip kept toggling menus, which read as menus that
+        // would not stay closed.
+        if (tracked->property("celestinaParked").toBool())
             return;
         // This window already begins below the bar. Its local seam is zero, so
         // the complete carrier remains the outside-click barrier while the

@@ -486,6 +486,12 @@ void OverlayController::open()
         const auto apply = [tracked, bar]() {
             if (!tracked || !bar)
                 return;
+            // The park owns a resting carrier's one-pixel mask. The delayed
+            // reapplications below outlive a fast close, and one that landed
+            // on the parked carrier gave an invisible surface the whole
+            // output's input — every click below the bar died on it.
+            if (tracked->property("celestinaParked").toBool())
+                return;
             tracked->setMask(panelPopupInputRegion(
                 tracked->width(), tracked->height(), 0));
         };
@@ -515,6 +521,9 @@ void OverlayController::open()
         return;
     }
 
+    // This open owns the surface now; any close beat still in flight from a
+    // previous open dies against this count.
+    ++m_openGeneration;
     m_openCarrierOriginOnOutput = carrierOrigin;
     m_attachmentLease.acquire(
         m_openerPanel,
@@ -541,15 +550,24 @@ void OverlayController::close()
 
     const QPointer<OverlayController> self(this);
     const QPointer<QWindow> tracked(window);
-    softCloseWindow(window, [self, tracked]() {
+    const quint64 generation = m_openGeneration;
+    softCloseWindow(window, [self, tracked, generation]() {
         if (self && tracked)
-            self->closeNow(tracked);
+            self->closeNow(tracked, generation);
     });
 }
 
-void OverlayController::closeNow(QWindow *expectedWindow)
+void OverlayController::closeNow(
+    QWindow *expectedWindow,
+    quint64 expectedGeneration
+)
 {
     if (expectedWindow && m_surface->window() != expectedWindow)
+        return;
+    // A reused carrier keeps its pointer across opens, so the pointer check
+    // above no longer distinguishes the open this beat was scheduled for
+    // from the one the person made since. The generation does.
+    if (expectedGeneration != 0 && expectedGeneration != m_openGeneration)
         return;
 
     // The retirement beat has completed; what follows is a rest, not a

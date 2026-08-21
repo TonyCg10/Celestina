@@ -120,7 +120,12 @@ inline void softCloseWindow(QWindow *window, std::function<void()> finish)
     if (content && !reducedMotion) {
         const QPointer<QWindow> tracked(window);
         QTimer::singleShot(60, window, [tracked]() {
-            if (tracked) {
+            // Only while this very retirement is still the window's state. A
+            // reused carrier can be revived between this timer's scheduling
+            // and its firing — the revival clears the retiring mark — and a
+            // withdraw landing then strips the blur off a menu the person
+            // just reopened.
+            if (tracked && tracked->property("celestinaRetiring").toBool()) {
                 withdrawBlur(tracked.data());
                 tracked->requestUpdate();
             }

@@ -148,8 +148,15 @@ private:
     void reviveWindowForReuse(QWindow *window);
     void revealPresentedWindow(QWindow *window);
     // The hard edge is private: only a completed soft retirement or object
-    // teardown may destroy the carrier immediately.
-    void closeNow(QWindow *expectedWindow = nullptr);
+    // teardown may destroy the carrier immediately. The generation is the
+    // guard the window pointer used to be: before carrier reuse, a reopen
+    // built a new window and a stale beat's pointer no longer matched — now
+    // every open resumes the same window, so the beat names which open it
+    // belongs to and a reopen invalidates it by advancing the count.
+    void closeNow(
+        QWindow *expectedWindow = nullptr,
+        quint64 expectedGeneration = 0
+    );
 
     // Where the surface should grow from, while a panel-opened toggle is in
     // flight. Empty for a keybind, which has no origin on screen.
@@ -176,5 +183,9 @@ private:
     // into a `required property`.
     QPointer<QObject> m_source;
     OverlaySurface *m_surface;
+    // Which open the surface is currently showing. Advanced by every open —
+    // fresh map and resume alike — so a close beat scheduled against an
+    // earlier open can never park the one the person just made.
+    quint64 m_openGeneration = 0;
     bool m_enabled;
 };
