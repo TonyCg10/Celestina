@@ -37,19 +37,39 @@ inline void reviveSoftClosedWindow(QWindow *window)
     }
     const auto fields = window->findChildren<QQuickItem *>(
         QStringLiteral("celestina-soft-menu-field"));
-    for (QQuickItem *const field : fields) {
+    // Revive alone, deliberately without the reveal. A fresh window reveals
+    // from `Component.onCompleted`, which never runs again on a resumed
+    // carrier, so each route owes its own re-reveal — and it owes it *after*
+    // its attachment is re-established. Revealed here, the field woke while
+    // the released lease still had the anchor empty, believed itself a
+    // floating card, and published the full settled rectangle for one beat:
+    // the author's black empty card flashing detached from the bar
+    // (2026-08-21 13:19, the tall-then-small `blur.armed` pairs). The
+    // overlay route re-reveals through its controller's presented-frame
+    // gate; the indicator route re-reveals after its lease reacquires.
+    for (QQuickItem *const field : fields)
         QMetaObject::invokeMethod(field, "reviveForReuse");
-        // A fresh window reveals from `Component.onCompleted`, which runs
-        // once in a component's life — a resumed carrier never passes that
-        // hook again, and a revived field that nobody reveals is a menu
-        // whose content sits at opacity zero, publishes no glass and
-        // re-arms no blur: the author's floating shell of a card, detached
-        // from the bar (2026-08-21, the 00:39 journal shows resumed opens
-        // without one `blur.armed`). The reveal takes the same presented-
-        // frame gate a first open takes; it is idempotent for the overlay
-        // route, whose controller re-reveals through its own frame gate.
-        QMetaObject::invokeMethod(field, "reveal");
-    }
+}
+
+// The resumed route's reveal, deferred one turn so the attachment lease's
+// zero-delay republication lands first — the same head start a fresh map's
+// configure round-trip used to give it — with the presented-frame gate
+// inside `reveal` adding the frame after that.
+inline void revealResumedWindow(QWindow *window)
+{
+    if (!window)
+        return;
+    const QPointer<QWindow> tracked(window);
+    QTimer::singleShot(0, window, [tracked]() {
+        if (!tracked || tracked->property("celestinaParked").toBool()
+            || tracked->property("celestinaRetiring").toBool()) {
+            return;
+        }
+        const auto fields = tracked->findChildren<QQuickItem *>(
+            QStringLiteral("celestina-soft-menu-field"));
+        for (QQuickItem *const field : fields)
+            QMetaObject::invokeMethod(field, "reveal");
+    });
 }
 
 inline void softCloseWindow(QWindow *window, std::function<void()> finish)

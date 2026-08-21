@@ -740,6 +740,11 @@ void PanelMenuController::toggleIndicatorMenu(
         window,
         globalAttachmentAnchor,
         QPointF(carrier.outputPosition));
+    // Only a resumed carrier needs this: a fresh map reveals from its own
+    // component hooks behind the configure round-trip, while the resume owes
+    // the reveal after the lease above has republished the anchor.
+    if (reused)
+        revealResumedWindow(window);
 }
 
 void PanelMenuController::captureScreenshot()

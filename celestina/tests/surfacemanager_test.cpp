@@ -847,9 +847,22 @@ void SurfaceManagerTest::aResumedIndicatorMenuPresentsItsCardAgain()
     engine.addImportPath(QCoreApplication::applicationDirPath());
     engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
     PanelMenuController controller(&engine, nullptr, nullptr);
-    QWindow *const panel = makePanel();
-    const QRectF opener(700, 6, 28, 28);
-    const QRectF anchor(706, 11, 18, 18);
+    // A real attachment source on the panel, so the lease attaches the card
+    // to the bar exactly as the live session does: the defect this pins was
+    // a resume revealing before the released lease had republished the
+    // anchor, and it cannot exist on a panel that never attaches.
+    auto *const quickPanel = new QQuickWindow;
+    quickPanel->setGeometry(0, 0, 800, 40);
+    m_owned.append(quickPanel);
+    quickPanel->show();
+    auto *const source = new SemanticAttachmentSource(quickPanel->contentItem());
+    source->setPosition(QPointF(690, 5));
+    source->setSize(QSizeF(48, 30));
+    source->placeAnchor(QPointF(15, 6));
+    QWindow *const panel = quickPanel;
+    const QRectF opener(
+        panel->position() + QPointF(690, 5), QSizeF(48, 30));
+    const QRectF anchor = source->attachmentAnchorGlobalRectNow();
     const QString kind = QStringLiteral("capture");
 
     controller.toggleIndicatorMenu(panel, opener, anchor, kind, nullptr);
@@ -864,9 +877,11 @@ void SurfaceManagerTest::aResumedIndicatorMenuPresentsItsCardAgain()
         QStringLiteral("celestina-soft-menu-field"));
     QVERIFY(field);
     // The reveal's presented-frame gate resolves through its own fallback
-    // where nothing presents frames.
+    // where nothing presents frames, and the lease's republication attaches
+    // the card to the bar before that gate opens.
     QTRY_VERIFY(field->property("revealed").toBool());
     QTRY_VERIFY(!first->property("glassRegions").toList().isEmpty());
+    QTRY_VERIFY(field->property("edgeAttachmentRequested").toBool());
 
     // The same indicator again puts it away: parked, with the paint down and
     // the glass withdrawn — nothing of the card may remain visible.
@@ -888,8 +903,31 @@ void SurfaceManagerTest::aResumedIndicatorMenuPresentsItsCardAgain()
     QCOMPARE(surface->window(), first.data());
     QCOMPARE(quick->contentItem()->opacity(), 1.0);
     QVERIFY(!field->property("retiring").toBool());
-    QTRY_VERIFY(field->property("revealed").toBool());
-    QTRY_VERIFY(!first->property("glassRegions").toList().isEmpty());
+
+    // The race this fails without the deferred reveal: woken before the
+    // lease republished the anchor, the field believed itself floating and
+    // published the full settled card for a beat — the author's black empty
+    // card detached from the bar. No publication of this resume may ever be
+    // an unattached one.
+    bool publishedFloating = false;
+    bool published = false;
+    for (int step = 0; step < 150; ++step) {
+        QTest::qWait(2);
+        if (first->property("glassRegions").toList().isEmpty())
+            continue;
+        published = true;
+        if (!field->property("edgeAttachmentRequested").toBool())
+            publishedFloating = true;
+        if (field->property("revealed").toBool()
+            && field->property("edgeAttachmentRequested").toBool()
+            && step > 30) {
+            break;
+        }
+    }
+    QVERIFY(published);
+    QVERIFY(!publishedFloating);
+    QVERIFY(field->property("revealed").toBool());
+    QVERIFY(field->property("edgeAttachmentRequested").toBool());
     QVERIFY(field->property("presentationOpacity").toReal() > 0);
 }
 
