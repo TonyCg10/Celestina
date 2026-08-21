@@ -369,12 +369,6 @@ void PanelMenuController::openWorkspaceMap(
         return;
 
     close();
-    // The map never reuses an indicator's parked carrier: a mapped surface
-    // cannot change its window, so anything resting here is put away first.
-    if (m_surface->isParked()) {
-        m_parkedMenuKind.clear();
-        m_surface->close();
-    }
 
     QVariantMap initialProperties {
         {QStringLiteral("workspaces"), workspaces},
@@ -464,6 +458,18 @@ void PanelMenuController::openWorkspaceMap(
     connect(card, SIGNAL(activated(QString, int)), this, SLOT(activate(QString, int)));
     connect(card, SIGNAL(windowActivated(QString)), this, SLOT(activateWindow(QString)));
     connect(card, SIGNAL(dismissed()), this, SLOT(menuDismissed()));
+
+    // The map never reuses an indicator's parked carrier: a mapped surface
+    // cannot change its window, so anything resting here is put away — but
+    // only now, with the map's own window already alive at its own address.
+    // Put away first, the allocator recycled the dead carrier's address into
+    // the card above, and KWindowSystem's pointer-keyed effect cache handed
+    // it an effect whose surface was gone — the fatal protocol error the
+    // author reproduced on every workspace-map click after using a menu.
+    if (m_surface->isParked()) {
+        m_parkedMenuKind.clear();
+        m_surface->close();
+    }
 
     placeCardOnOutput(
         card,
@@ -588,8 +594,14 @@ void PanelMenuController::toggleIndicatorMenu(
     // A carrier parked holding this same kind on this same output resumes in
     // place instead of remapping — the scene change the park exists to
     // avoid. Anything else parked is put away for real, because a mapped
-    // surface can change neither its window nor its screen.
+    // surface can change neither its window nor its screen — but only after
+    // the successor window exists: destroyed first, the allocator handed the
+    // freshly created window the dead one's address, and KWindowSystem's
+    // pointer-keyed effect cache made the successor inherit an effect whose
+    // surface was gone — the fatal `wl_surface was destroyed` that killed
+    // the shell on a workspace-map click (2026-08-21).
     QWindow *reused = nullptr;
+    bool retireParked = false;
     if (m_surface->isParked()) {
         QWindow *const parked = m_surface->window();
         if (parked && parked->handle()
@@ -597,8 +609,7 @@ void PanelMenuController::toggleIndicatorMenu(
             && panel->screen() && panel->screen() == parked->screen()) {
             reused = parked;
         } else {
-            m_parkedMenuKind.clear();
-            m_surface->close();
+            retireParked = true;
         }
     }
 
@@ -704,6 +715,13 @@ void PanelMenuController::toggleIndicatorMenu(
                 SLOT(chooseWallpaperFolder())
             );
         }
+    }
+
+    // The parked stranger leaves only now, with its successor already alive
+    // at its own address.
+    if (retireParked) {
+        m_parkedMenuKind.clear();
+        m_surface->close();
     }
 
     const int contentWidth = window->property("contentWidth").toInt();

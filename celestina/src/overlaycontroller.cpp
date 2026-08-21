@@ -437,21 +437,33 @@ void OverlayController::open()
     // pays the one remap.
     QWindow *overlay = nullptr;
     bool reused = false;
+    bool retireParked = false;
     if (m_surface->isParked()) {
         QWindow *const parked = m_surface->window();
         if (parked && parked->handle() && parked->screen() == screen) {
             overlay = parked;
             reused = true;
         } else {
-            m_surface->close();
+            // Put away only after the successor exists: destroyed first, the
+            // allocator recycled this window's address into the fresh one,
+            // and KWindowSystem's pointer-keyed effect cache handed it an
+            // effect whose surface was gone — the fatal protocol error of
+            // the workspace-map click (2026-08-21), one class for every
+            // carrier this shell retires beside a creation.
+            retireParked = true;
         }
     }
     if (reused) {
         reviveWindowForReuse(overlay);
     } else {
         overlay = createWindow();
-        if (!overlay)
+        if (!overlay) {
+            if (retireParked)
+                m_surface->close();
             return;
+        }
+        if (retireParked)
+            m_surface->close();
     }
 
     // The output is only known here for a keybind route, which names no click

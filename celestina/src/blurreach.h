@@ -43,11 +43,25 @@ inline bool blurReachable(const QWindow *window)
 // is still showing this and should stop", so a hidden window has nothing to
 // withdraw from and asking is the fatal request measured above. The armed state
 // died with the surface; the caller resets its own bookkeeping either way.
+//
+// The withdrawal itself arms one pixel rather than disabling, and that is the
+// second crash this header carries the scar of. KWindowSystem 6.29's disable
+// path tears down the armed effect *and its cleanup watchers*, then creates a
+// fresh `ext_background_effect_surface_v1` just to send the empty region — an
+// orphan no watcher will ever clean. Its cache is keyed by `QWindow *`, so
+// once the withdrawn window died, the next window the allocator placed at the
+// same address inherited the orphan, and its first honest arm became
+// `set_blur_region` on a surface the compositor had destroyed — the fatal
+// error that killed the shell when a workspace-map click followed a parked
+// menu's teardown (2026-08-21, `wldebug` capture: effect #89, born in a
+// withdraw, never destroyed, re-armed one second after its surface died). A
+// one-pixel arm keeps the effect owned and watched: the enable path installs
+// the destroy watchers, and the window's death then really cleans the entry.
 inline void withdrawBlur(QWindow *window)
 {
     if (!blurReachable(window))
         return;
-    KWindowEffects::enableBlurBehind(window, false);
+    KWindowEffects::enableBlurBehind(window, true, QRegion(0, 0, 1, 1));
 }
 
 // Arming is deliberately *not* gated on visibility, and that asymmetry is load
