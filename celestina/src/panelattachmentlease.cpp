@@ -157,6 +157,9 @@ bool PanelAttachmentLease::acquire(
     }
 
     const QString token = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    // Every acquisition starts its own patience. Carried over, one exhausted
+    // storm left every later lease with zero real retries.
+    m_rebindAttempts = 0;
     // By construction the caller mapped the surface to the panel's own output,
     // so the panel's screen *is* this lease's output. Recorded now, while it is
     // known, rather than asked of a surface that cannot answer yet.
@@ -506,8 +509,17 @@ void PanelAttachmentLease::processScheduledRefresh()
             // waiting costs nothing visible; only a rebuild that never
             // produces a successor gives up.
             if (++m_rebindAttempts <= maximumRebindAttempts) {
-                m_rebindPending = true;
-                m_refreshTimer.start();
+                // Real beats apart, deliberately not the zero-delay refresh
+                // timer: rescheduled through it, all the patience ran inside
+                // one event-loop batch — the trace shows nine failures in
+                // the same millisecond — while the successor delegate was
+                // still queued behind the map's own close, create and
+                // workspace snapshot. The timer member is the context, so a
+                // destroyed lease takes the pending retry with it.
+                QTimer::singleShot(25, &m_refreshTimer, [this]() {
+                    m_rebindPending = true;
+                    m_refreshTimer.start();
+                });
                 return;
             }
             release();
@@ -627,6 +639,7 @@ void PanelAttachmentLease::rebuildGeometryTracking()
 
 void PanelAttachmentLease::resolvedSourceLost()
 {
+
     // Losing the Item is not losing the icon. A workspace pill is a model
     // delegate: every workspaces snapshot the strip consumes destroys it and
     // creates an identical successor in the same place — on the monitor whose
