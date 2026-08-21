@@ -54,6 +54,21 @@ Item {
     property var glassRects: []
     property var glassRegions: []
 
+    // An anchored route whose icon rectangle has not arrived yet. The anchor
+    // travels with creation but the lease that owns it may clear and
+    // republish it around every acquire, and a field that fell back to the
+    // floating full card inside that blink published — and painted — the
+    // settled rectangle detached from the bar: the tall-then-small armings
+    // and the empty floating cards of the author's recordings, on whichever
+    // family's reveal happened to lose the race. Pending is not floating:
+    // the field holds its paint and its publications until the anchor lands,
+    // and a route that is genuinely floating says so by leaving
+    // `attachedToTop` off — the host clears it when its lease really fails.
+    readonly property bool attachmentPending:
+            root.attachedToTop
+            && (root.attachmentAnchorRect.width <= 0
+                || root.attachmentAnchorRect.height <= 0)
+
     readonly property bool topAttachmentRequested:
             root.attachedToTop
             && root.openerRect.width > 0
@@ -161,8 +176,15 @@ Item {
     // shared presentation gate. This is also the value their out-of-tree Qt
     // Quick Menu rows mirror, keeping rows and glass on one clock.
     readonly property real presentationOpacity: root.revealed
+                                                && !root.attachmentPending
                                                 ? root.attachmentContentOpacity
                                                 : 0
+    // The anchor landing is a presentation edge like the reveal itself: the
+    // glass must follow the paint it just allowed.
+    onAttachmentPendingChanged: {
+        if (!root.attachmentPending)
+            root.scheduleGlassCollection();
+    }
 
     // A dismissed surface is destroyed by its host after this beat. Stop every
     // possible entry writer before fading: otherwise a drop still in flight
@@ -466,8 +488,11 @@ Item {
         // still at zero is a bare milky slab on the wallpaper, which the
         // author recorded leading the card by several frames on every open.
         // Collected only once the reveal is running, the snap lands under
-        // paint that is already forming, and the two read as one block.
-        if (!root.revealed || !root.visible || root.opacity <= 0
+        // paint that is already forming, and the two read as one block. A
+        // pending attachment holds the same door: the geometry that would be
+        // collected is the floating fallback the anchor is about to replace.
+        if (!root.revealed || root.attachmentPending || !root.visible
+                || root.opacity <= 0
                 || content.opacity <= 0) {
             root.glassRects = [];
             root.glassRegions = [];

@@ -537,12 +537,18 @@ void OverlayController::open()
     // previous open dies against this count.
     ++m_openGeneration;
     m_openCarrierOriginOnOutput = carrierOrigin;
-    m_attachmentLease.acquire(
-        m_openerPanel,
-        overlay,
-        m_attachmentAnchor,
-        carrierOrigin
-    );
+    if (!m_attachmentLease.acquire(
+            m_openerPanel,
+            overlay,
+            m_attachmentAnchor,
+            carrierOrigin
+        )
+        && overlay->property("anchoredFromPanel").toBool()) {
+        // The route asked for the bar but no live source answered: this
+        // surface is genuinely floating, and saying so is what lets the
+        // field tell that apart from an anchor still in flight.
+        overlay->setProperty("anchoredFromPanel", false);
+    }
 }
 
 void OverlayController::close()

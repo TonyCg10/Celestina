@@ -491,11 +491,15 @@ void PanelMenuController::openWorkspaceMap(
         return;
     }
     ++m_openGeneration;
-    m_attachmentLease.acquire(
-        panel,
-        card,
-        globalAttachmentAnchor,
-        QPointF(carrier.outputPosition));
+    if (!m_attachmentLease.acquire(
+            panel,
+            card,
+            globalAttachmentAnchor,
+            QPointF(carrier.outputPosition))) {
+        // Genuinely floating, as above: the field must not wait for an
+        // anchor no lease is going to publish.
+        card->setProperty("anchoredFromPanel", false);
+    }
 }
 
 QRectF PanelMenuController::openCardRectOnOutput(QScreen *screen) const
@@ -753,11 +757,16 @@ void PanelMenuController::toggleIndicatorMenu(
     m_openMenuKind = kind;
     emit contextualSurfaceOpened();
     m_openIndicatorPanel = panel;
-    m_attachmentLease.acquire(
-        panel,
-        window,
-        globalAttachmentAnchor,
-        QPointF(carrier.outputPosition));
+    if (!m_attachmentLease.acquire(
+            panel,
+            window,
+            globalAttachmentAnchor,
+            QPointF(carrier.outputPosition))) {
+        // The route asked for the bar but no live source answered: this
+        // surface is genuinely floating, and saying so is what lets the
+        // field tell that apart from an anchor still in flight.
+        window->setProperty("anchoredFromPanel", false);
+    }
     // Only a resumed carrier needs this: a fresh map reveals from its own
     // component hooks behind the configure round-trip, while the resume owes
     // the reveal after the lease above has republished the anchor.
