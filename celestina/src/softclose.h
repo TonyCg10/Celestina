@@ -21,6 +21,26 @@
 //
 // The durations mirror the theme's `motionFast` plus a breath; the theme
 // itself is QML and this seam deliberately has no engine in reach.
+// The reuse companion to the beat below (SURF-1): a parked carrier is
+// brought back for its next open. The completed retirement comes down, the
+// content item the fade took to zero paints again, and every field clears
+// its terminal edge for a fresh reveal. The caller owns everything else —
+// route properties, readiness trackers and the surface's own resume.
+inline void reviveSoftClosedWindow(QWindow *window)
+{
+    if (!window)
+        return;
+    window->setProperty("celestinaRetiring", false);
+    if (auto *quick = qobject_cast<QQuickWindow *>(window)) {
+        if (QQuickItem *const content = quick->contentItem())
+            content->setOpacity(1.0);
+    }
+    const auto fields = window->findChildren<QQuickItem *>(
+        QStringLiteral("celestina-soft-menu-field"));
+    for (QQuickItem *const field : fields)
+        QMetaObject::invokeMethod(field, "reviveForReuse");
+}
+
 inline void softCloseWindow(QWindow *window, std::function<void()> finish)
 {
     if (!window || window->property("celestinaRetiring").toBool())

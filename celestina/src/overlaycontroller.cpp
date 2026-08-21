@@ -245,18 +245,7 @@ void OverlayController::reviveWindowForReuse(QWindow *window)
     m_glassAwaitingFrameWindow.clear();
     m_readyWindow.clear();
 
-    // The soft close faded the whole content item down; the fields carry
-    // their own terminal edge on top of that. Both come back before any
-    // reveal machinery runs again.
-    if (auto *quick = qobject_cast<QQuickWindow *>(window)) {
-        if (QQuickItem *const content = quick->contentItem())
-            content->setOpacity(1.0);
-    }
-    const auto fields = window->findChildren<QQuickItem *>(
-        QStringLiteral("celestina-soft-menu-field"));
-    for (QQuickItem *const field : fields)
-        QMetaObject::invokeMethod(field, "reviveForReuse");
-
+    reviveSoftClosedWindow(window);
     applyRouteProperties(window);
 }
 
@@ -528,7 +517,10 @@ void OverlayController::close()
 {
     m_attachmentLease.release();
     QWindow *const window = m_surface->window();
-    if (!window) {
+    // A parked carrier is already closed in every sense a person can see;
+    // running the retirement beat on it would end in the very unmap the park
+    // exists to avoid.
+    if (!window || !m_surface->isOpen()) {
         m_openCarrierOriginOnOutput = QPointF();
         m_revealIssuedWindow.clear();
         m_glassAwaitingFrameWindow.clear();
@@ -559,7 +551,7 @@ void OverlayController::closeNow(QWindow *expectedWindow)
         window->setProperty("celestinaRetiring", false);
         if (!m_surface->park())
             m_surface->close();
-    } else {
+    } else if (!m_surface->isParked()) {
         m_surface->close();
     }
     m_attachmentLease.release();

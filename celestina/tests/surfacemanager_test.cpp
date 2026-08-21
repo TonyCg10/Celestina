@@ -259,6 +259,7 @@ private slots:
     void anOverflowingTrayMenuUsesABoundedScrollableViewport();
     void trayInventoryAndForeignMenuHaveIndependentLifecycles();
     void wallpaperMenuHandsTheFolderChooserBackToThePermanentPanel();
+    void aClosedIndicatorMenuParksAndOnlyItsOwnKindResumesIt();
     void aFullWidthBarShapeRemainsFinite();
     void aTallGlassCardKeepsItsRoundedRectangle();
     void aPublishedPolygonOverridesItsRoundedBoundingRect();
@@ -1802,6 +1803,72 @@ void SurfaceManagerTest::wallpaperMenuHandsTheFolderChooserBackToThePermanentPan
     QVERIFY(panel.hasOpenedWallpaperFolderPicker());
     QVERIFY(!source.menuOpen());
     QVERIFY(controller.openIndicator().isEmpty());
+}
+
+// SURF-1: closing an indicator menu rests its carrier mapped, and only the
+// same kind on the same output resumes it; any other kind pays the one remap.
+void SurfaceManagerTest::aClosedIndicatorMenuParksAndOnlyItsOwnKindResumesIt()
+{
+    qunsetenv("CELESTINA_PANEL_MENU");
+    registerPanelMenuTypesFromSource();
+    QQmlEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath());
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+    FakeTrayProviderSource providers;
+    PanelMenuController controller(&engine, nullptr, nullptr);
+    FakePanelWindow panel;
+    panel.setGeometry(0, 0, 800, 40);
+    panel.show();
+    const QPointF panelGlobal = panel.position();
+    const QRectF opener(panelGlobal + QPointF(720, 6), QSizeF(28, 28));
+    const QRectF anchor(panelGlobal + QPointF(726, 11), QSizeF(18, 18));
+
+    controller.toggleIndicatorMenu(
+        &panel, opener, anchor, QStringLiteral("wallpaper"), &providers);
+    QCOMPARE(controller.openIndicator(), QStringLiteral("wallpaper"));
+    QPointer<QWindow> menu(windowWithProperty("providerSource"));
+    QVERIFY(menu);
+    const QRectF firstOpener = menu->property("openerRect").toRectF();
+
+    controller.close();
+    QVERIFY(controller.openIndicator().isEmpty());
+    // Parked, not destroyed: mapped, one pixel of input, no retirement left.
+    QVERIFY(menu);
+    QVERIFY(menu->isVisible());
+    QVERIFY(menu->property("celestinaParked").toBool());
+    QVERIFY(!menu->property("celestinaRetiring").toBool());
+    QCOMPARE(menu->mask(), QRegion(0, 0, 1, 1));
+    // And it claims no occupancy while it rests.
+    QVERIFY(controller.openCardRectOnOutput(panel.screen()).isEmpty());
+
+    // The same kind resumes the same window, following the new opener.
+    const QRectF movedOpener = opener.translated(-80, 0);
+    const QRectF movedAnchor = anchor.translated(-80, 0);
+    controller.toggleIndicatorMenu(
+        &panel, movedOpener, movedAnchor,
+        QStringLiteral("wallpaper"), &providers);
+    QCOMPARE(controller.openIndicator(), QStringLiteral("wallpaper"));
+    QVERIFY(menu);
+    QCOMPARE(windowWithProperty("providerSource"), menu.data());
+    QVERIFY(!menu->property("celestinaParked").toBool());
+    QVERIFY(menu->mask() != QRegion(0, 0, 1, 1));
+    const QRectF resumedOpener = menu->property("openerRect").toRectF();
+    QCOMPARE(resumedOpener, firstOpener.translated(
+        movedOpener.x() - opener.x(), 0));
+    QObject *const field = menu->findChild<QObject *>(
+        QStringLiteral("celestina-soft-menu-field"));
+    QVERIFY(field);
+    QVERIFY(!field->property("retiring").toBool());
+
+    // A different kind cannot reuse the parked window: it pays the remap and
+    // the parked carrier really goes away.
+    controller.close();
+    QVERIFY(menu->property("celestinaParked").toBool());
+    controller.toggleIndicatorMenu(
+        &panel, opener, anchor, QStringLiteral("network"), &providers);
+    QCOMPARE(controller.openIndicator(), QStringLiteral("network"));
+    QTRY_VERIFY(menu.isNull());
+    controller.close();
 }
 
 void SurfaceManagerTest::aTallGlassCardKeepsItsRoundedRectangle()

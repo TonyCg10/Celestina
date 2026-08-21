@@ -234,6 +234,12 @@ private:
     // closes it. A foreign tray item's D-Bus menu is identified separately by
     // service/path above.
     QString m_openMenuKind;
+    // Which indicator kind's window the parked carrier holds (SURF-1). Only
+    // the same kind on the same output resumes it; anything else pays the one
+    // remap. Empty whenever the surface holds nothing parked, and merely
+    // stale — never trusted — once the parked window is gone: the reuse test
+    // is always the surface's own parked state.
+    QString m_parkedMenuKind;
     // The panel that opened the tray inventory. Retained only while that menu
     // is current so a right click can place the chosen item's own asynchronously
     // loaded D-Bus menu beside it on the same output.

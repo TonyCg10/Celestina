@@ -369,6 +369,12 @@ void PanelMenuController::openWorkspaceMap(
         return;
 
     close();
+    // The map never reuses an indicator's parked carrier: a mapped surface
+    // cannot change its window, so anything resting here is put away first.
+    if (m_surface->isParked()) {
+        m_parkedMenuKind.clear();
+        m_surface->close();
+    }
 
     QVariantMap initialProperties {
         {QStringLiteral("workspaces"), workspaces},
@@ -487,8 +493,11 @@ void PanelMenuController::openWorkspaceMap(
 
 QRectF PanelMenuController::openCardRectOnOutput(QScreen *screen) const
 {
+    // A parked carrier is still a mapped, visible window; it occupies no
+    // zone. Only an actually open menu answers.
     const QRectF card = quietOpenCardRect(
-        m_surface ? m_surface->window() : nullptr, screen);
+        m_surface && m_surface->isOpen() ? m_surface->window() : nullptr,
+        screen);
     if (!card.isEmpty())
         return card;
     return quietOpenCardRect(
@@ -575,28 +584,47 @@ void PanelMenuController::toggleIndicatorMenu(
     }
     close();
 
-    QQmlComponent *component = nullptr;
-    if (kind == QStringLiteral("network"))
-        component = &m_networkComponent;
-    else if (kind == QStringLiteral("bluetooth"))
-        component = &m_bluetoothComponent;
-    else if (kind == QStringLiteral("performance"))
-        component = &m_performanceComponent;
-    else if (kind == QStringLiteral("brightness"))
-        component = &m_brightnessComponent;
-    else if (kind == QStringLiteral("calendar"))
-        component = &m_calendarComponent;
-    else if (kind == QStringLiteral("phone"))
-        component = &m_phoneComponent;
-    else if (kind == QStringLiteral("audio"))
-        component = &m_audioComponent;
-    else if (kind == QStringLiteral("capture"))
-        component = &m_captureComponent;
-    else if (kind == QStringLiteral("wallpaper"))
-        component = &m_wallpaperComponent;
+    // A carrier parked holding this same kind on this same output resumes in
+    // place instead of remapping — the scene change the park exists to
+    // avoid. Anything else parked is put away for real, because a mapped
+    // surface can change neither its window nor its screen.
+    QWindow *reused = nullptr;
+    if (m_surface->isParked()) {
+        QWindow *const parked = m_surface->window();
+        if (parked && parked->handle()
+            && m_parkedMenuKind == kind
+            && panel->screen() && panel->screen() == parked->screen()) {
+            reused = parked;
+        } else {
+            m_parkedMenuKind.clear();
+            m_surface->close();
+        }
+    }
 
-    if (!component || !component->isReady())
-        return;
+    QQmlComponent *component = nullptr;
+    if (!reused) {
+        if (kind == QStringLiteral("network"))
+            component = &m_networkComponent;
+        else if (kind == QStringLiteral("bluetooth"))
+            component = &m_bluetoothComponent;
+        else if (kind == QStringLiteral("performance"))
+            component = &m_performanceComponent;
+        else if (kind == QStringLiteral("brightness"))
+            component = &m_brightnessComponent;
+        else if (kind == QStringLiteral("calendar"))
+            component = &m_calendarComponent;
+        else if (kind == QStringLiteral("phone"))
+            component = &m_phoneComponent;
+        else if (kind == QStringLiteral("audio"))
+            component = &m_audioComponent;
+        else if (kind == QStringLiteral("capture"))
+            component = &m_captureComponent;
+        else if (kind == QStringLiteral("wallpaper"))
+            component = &m_wallpaperComponent;
+
+        if (!component || !component->isReady())
+            return;
+    }
 
     QVariantMap initialProperties {
         {QStringLiteral("reducedMotion"),
@@ -633,31 +661,48 @@ void PanelMenuController::toggleIndicatorMenu(
         );
     }
     initialProperties.insert(menuOutputProperties(panel));
-    QObject *rootObject = component->createWithInitialProperties(initialProperties);
-    auto *window = qobject_cast<QWindow *>(rootObject);
-    if (!window) {
-        qCritical().noquote()
-            << "Celestina could not create the" << kind
-            << "menu:" << component->errorString();
-        delete rootObject;
-        return;
-    }
 
-    connect(window, SIGNAL(dismissed()), this, SLOT(menuDismissed()));
-    if (kind == QStringLiteral("capture")) {
-        connect(
-            window,
-            SIGNAL(captureRequested()),
-            this,
-            SLOT(captureScreenshot())
-        );
-    } else if (kind == QStringLiteral("wallpaper")) {
-        connect(
-            window,
-            SIGNAL(chooseRequested()),
-            this,
-            SLOT(chooseWallpaperFolder())
-        );
+    QWindow *window = reused;
+    if (reused) {
+        // The window keeps the connections its creation made; only its
+        // route, its revived fields and the mask followers below change.
+        reviveSoftClosedWindow(reused);
+        for (auto it = initialProperties.constBegin();
+             it != initialProperties.constEnd(); ++it) {
+            reused->setProperty(it.key().toUtf8().constData(), it.value());
+        }
+        QObject::disconnect(
+            reused, &QWindow::widthChanged, reused, nullptr);
+        QObject::disconnect(
+            reused, &QWindow::heightChanged, reused, nullptr);
+    } else {
+        QObject *rootObject =
+            component->createWithInitialProperties(initialProperties);
+        window = qobject_cast<QWindow *>(rootObject);
+        if (!window) {
+            qCritical().noquote()
+                << "Celestina could not create the" << kind
+                << "menu:" << component->errorString();
+            delete rootObject;
+            return;
+        }
+
+        connect(window, SIGNAL(dismissed()), this, SLOT(menuDismissed()));
+        if (kind == QStringLiteral("capture")) {
+            connect(
+                window,
+                SIGNAL(captureRequested()),
+                this,
+                SLOT(captureScreenshot())
+            );
+        } else if (kind == QStringLiteral("wallpaper")) {
+            connect(
+                window,
+                SIGNAL(chooseRequested()),
+                this,
+                SLOT(chooseWallpaperFolder())
+            );
+        }
     }
 
     const int contentWidth = window->property("contentWidth").toInt();
@@ -677,10 +722,14 @@ void PanelMenuController::toggleIndicatorMenu(
             PanelMenuSurface::Coverage::Output,
             carrier.outputPosition
         )) {
-        delete window;
+        // A refused resume leaves the surface parked and its window adopted;
+        // only a fresh window this controller still owns is deleted here.
+        if (!reused)
+            delete window;
         return;
     }
 
+    m_parkedMenuKind.clear();
     m_openMenuKind = kind;
     emit contextualSurfaceOpened();
     m_openIndicatorPanel = panel;
@@ -750,6 +799,13 @@ void PanelMenuController::toggleTrayItemsMenu(
         return;
     }
     close();
+    // The popup-backed inventory never reuses an indicator's parked carrier:
+    // a mapped surface cannot change its window, so anything resting here is
+    // put away first.
+    if (m_surface->isParked()) {
+        m_parkedMenuKind.clear();
+        m_surface->close();
+    }
 
     QVariantMap initialProperties {
         {QStringLiteral("traySource"), QVariant::fromValue(traySource)},
@@ -1325,10 +1381,33 @@ void PanelMenuController::close()
     // outlives the menu is what lets a late answer open a surface the user
     // never asked for.
     closeTrayChild(false);
+    // An indicator menu's carrier rests instead of unmapping (SURF-1): its
+    // completed retirement is cleared so the park is accepted, and the next
+    // toggle of the same kind resumes this same mapped window. The other
+    // carriers this surface hosts — the popup-backed tray inventory, the
+    // workspace map — keep the hard close their lifecycles were built on.
+    QWindow *const window = m_surface->window();
+    const bool parkable = window && m_surface->isOpen()
+        && !indicatorMenuComponent(m_openMenuKind).isEmpty();
+    const QString departingKind = m_openMenuKind;
     m_openMenuKind.clear();
     m_openPanel = nullptr;
     m_openIndicatorPanel = nullptr;
-    m_surface->close();
+    if (m_surface->isParked()) {
+        // A repeated close finds the carrier already resting; putting it
+        // away now would be exactly the unmap the park exists to avoid.
+    } else if (parkable) {
+        window->setProperty("celestinaRetiring", false);
+        if (m_surface->park()) {
+            m_parkedMenuKind = departingKind;
+        } else {
+            m_parkedMenuKind.clear();
+            m_surface->close();
+        }
+    } else {
+        m_parkedMenuKind.clear();
+        m_surface->close();
+    }
     m_attachmentLease.release();
 }
 
