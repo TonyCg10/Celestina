@@ -124,6 +124,21 @@ private slots:
 
 private:
     QWindow *createWindow();
+    // The per-route geometry and anchors the next window needs beyond the
+    // constant initial properties: the panel opener, the attachment anchor,
+    // the bubble anchor. One computation for both lifecycles — created fresh
+    // it merges into the initial properties, reused it is applied over the
+    // reset defaults.
+    QVariantMap routeProperties() const;
+    // Resets a parked carrier's route to this open's own: defaults first, so
+    // a keybind that follows a panel click does not inherit the click's
+    // origin, then whatever `routeProperties` names.
+    void applyRouteProperties(QWindow *window) const;
+    // Brings a parked carrier's content back for the next open: the fields'
+    // completed retirement is cleared, the faded content paints again, and
+    // the readiness trackers forget the previous open so the reveal gate can
+    // be earned again on this same window.
+    void reviveWindowForReuse(QWindow *window);
     void revealPresentedWindow(QWindow *window);
     // The hard edge is private: only a completed soft retirement or object
     // teardown may destroy the carrier immediately.

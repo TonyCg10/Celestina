@@ -294,6 +294,21 @@ Item {
         root.glassRects = [];
         root.glassRegions = [];
     }
+    // A parked interactive carrier is reused across opens (SURF-1), so a
+    // field whose retirement completed must be able to come back: the host
+    // rests the mapped window instead of destroying it, and the next open
+    // arrives on this same field. Revive stops the departure, clears the
+    // terminal edge and the departed paint, then resets the presentation
+    // edge the same way a persistent quiet carrier does — the next open gets
+    // a fresh reveal and, when attached, a fresh fall.
+    function reviveForReuse() {
+        retireFade.stop();
+        retireShrink.stop();
+        root.retiring = false;
+        root.retireOpacity = 1;
+        root.retireScale = 1;
+        root.resetForReuse();
+    }
     Connections {
         id: revealSwap
 

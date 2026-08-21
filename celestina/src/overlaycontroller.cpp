@@ -102,6 +102,11 @@ QVariantMap OverlayController::initialProperties() const
 
 QRectF OverlayController::openCardRectOnOutput(QScreen *screen) const
 {
+    // A parked carrier is still a mapped, visible window; it occupies no
+    // zone. Only an actually open overlay answers.
+    if (!m_surface->isOpen())
+        return QRectF();
+
     QWindow *const window = m_surface->window();
     QRectF card = quietOpenCardRect(window, screen);
     if (card.isEmpty() || !window)
@@ -149,9 +154,9 @@ void OverlayController::toggleFrom(
     m_openerPanel = nullptr;
 }
 
-QWindow *OverlayController::createWindow()
+QVariantMap OverlayController::routeProperties() const
 {
-    QVariantMap properties = initialProperties();
+    QVariantMap properties;
     // M7 — where this output's bubbles sit. Outside the opener block on purpose: a bubble
     // anchor depends only on which panel the surface belongs to, never on where a pointer
     // was, so a selector opened from a keybind must get one too. Unlike the geometry below
@@ -212,6 +217,54 @@ QWindow *OverlayController::createWindow()
         );
     }
 
+    return properties;
+}
+
+void OverlayController::applyRouteProperties(QWindow *window) const
+{
+    // The reused carrier remembers its previous route. Defaults first: a
+    // keybind names no opener, and `-1` is the floating value the components
+    // declare for the seam.
+    window->setProperty("anchoredFromPanel", false);
+    window->setProperty("openerRect", QRectF());
+    window->setProperty("attachmentAnchorRect", QRectF());
+    window->setProperty("attachmentStartY", -1);
+    if (m_componentName == QStringLiteral("BubbleSelector")) {
+        window->setProperty("bubbleAnchorRect", QRectF());
+        window->setProperty("bubbleAnchorOutput", QString());
+    }
+
+    const QVariantMap route = routeProperties();
+    for (auto it = route.constBegin(); it != route.constEnd(); ++it)
+        window->setProperty(it.key().toUtf8().constData(), it.value());
+}
+
+void OverlayController::reviveWindowForReuse(QWindow *window)
+{
+    m_revealIssuedWindow.clear();
+    m_glassAwaitingFrameWindow.clear();
+    m_readyWindow.clear();
+
+    // The soft close faded the whole content item down; the fields carry
+    // their own terminal edge on top of that. Both come back before any
+    // reveal machinery runs again.
+    if (auto *quick = qobject_cast<QQuickWindow *>(window)) {
+        if (QQuickItem *const content = quick->contentItem())
+            content->setOpacity(1.0);
+    }
+    const auto fields = window->findChildren<QQuickItem *>(
+        QStringLiteral("celestina-soft-menu-field"));
+    for (QQuickItem *const field : fields)
+        QMetaObject::invokeMethod(field, "reviveForReuse");
+
+    applyRouteProperties(window);
+}
+
+QWindow *OverlayController::createWindow()
+{
+    QVariantMap properties = initialProperties();
+    properties.insert(routeProperties());
+
     QObject *rootObject = m_component.createWithInitialProperties(properties);
     if (!rootObject) {
         qCritical().noquote() << "Celestina could not create its" << m_componentName
@@ -256,7 +309,11 @@ QWindow *OverlayController::createWindow()
         &QQuickWindow::frameSwapped,
         this,
         [this, tracked]() {
+            // `isOpen` and not merely adoption: a parked carrier is still the
+            // surface's window and no longer retiring, and its frames must
+            // not spend the reveal gate before the next open re-arms it.
             if (!tracked || m_surface->window() != tracked
+                || !m_surface->isOpen()
                 || tracked->property("celestinaRetiring").toBool()) {
                 return;
             }
@@ -307,7 +364,8 @@ void OverlayController::revealPresentedWindow(QWindow *window)
 void OverlayController::overlayGlassRegionsChanged()
 {
     auto *const window = qobject_cast<QWindow *>(sender());
-    if (!window || m_surface->window() != window || m_readyWindow == window
+    if (!window || m_surface->window() != window || !m_surface->isOpen()
+        || m_readyWindow == window
         || window->property("celestinaRetiring").toBool()) {
         return;
     }
@@ -373,9 +431,28 @@ void OverlayController::open()
     const QPointF carrierOrigin = attachedFromPanel
         ? panelCarrierOriginOnOutput(m_openerPanel) : QPointF();
 
-    QWindow *const overlay = createWindow();
-    if (!overlay)
-        return;
+    // A parked carrier on this same output resumes instead of remapping —
+    // the scene change the park exists to avoid. A carrier parked on another
+    // output cannot move, because the screen is map-time state; that open
+    // pays the one remap.
+    QWindow *overlay = nullptr;
+    bool reused = false;
+    if (m_surface->isParked()) {
+        QWindow *const parked = m_surface->window();
+        if (parked && parked->handle() && parked->screen() == screen) {
+            overlay = parked;
+            reused = true;
+        } else {
+            m_surface->close();
+        }
+    }
+    if (reused) {
+        reviveWindowForReuse(overlay);
+    } else {
+        overlay = createWindow();
+        if (!overlay)
+            return;
+    }
 
     // The output is only known here for a keybind route, which names no click
     // and follows the pointer. `createWindow` already divided any opener
@@ -394,6 +471,15 @@ void OverlayController::open()
     // incomplete region, and a quick outside click reached whatever was
     // behind it. The size connections keep the region true across the
     // configures that follow.
+    // The size-following mask connections below live on the window, which now
+    // outlives the open that made them: a reused carrier would stack a second
+    // pair per open, and a stale pair from a previous panel route would keep
+    // re-masking a keybind open on resize. The surface's own size connections
+    // name a different receiver, so this removes exactly the mask followers.
+    if (reused) {
+        QObject::disconnect(overlay, &QWindow::widthChanged, overlay, nullptr);
+        QObject::disconnect(overlay, &QWindow::heightChanged, overlay, nullptr);
+    }
     if (attachedFromPanel) {
         const QPointer<QWindow> tracked(overlay);
         const QPointer<QWindow> bar = m_openerPanel;
@@ -422,7 +508,10 @@ void OverlayController::open()
             OverlaySurface::Placement::Centered,
             qRound(carrierOrigin.y())
         )) {
-        delete overlay;
+        // A refused resume leaves the surface parked and its window adopted;
+        // only a fresh window this controller still owns is deleted here.
+        if (!reused)
+            delete overlay;
         return;
     }
 
@@ -460,7 +549,19 @@ void OverlayController::closeNow(QWindow *expectedWindow)
     if (expectedWindow && m_surface->window() != expectedWindow)
         return;
 
-    m_surface->close();
+    // The retirement beat has completed; what follows is a rest, not a
+    // departure, so the terminal property comes down before the park — a
+    // parked carrier is reused, and `park` itself refuses a retiring window.
+    // A carrier that cannot park (its platform window is already gone) takes
+    // the hard close it always took; `close` re-marks the retirement itself.
+    QWindow *const window = m_surface->window();
+    if (window && m_surface->isOpen()) {
+        window->setProperty("celestinaRetiring", false);
+        if (!m_surface->park())
+            m_surface->close();
+    } else {
+        m_surface->close();
+    }
     m_attachmentLease.release();
     m_openCarrierOriginOnOutput = QPointF();
     m_revealIssuedWindow.clear();

@@ -80,6 +80,7 @@ private slots:
     void readinessWaitsForTheFrameAfterGlassAndDiesOnRetirement();
     void aNewOverlayRetiresItsPredecessorOnlyAfterFirstGlass();
     void closeIsOneIdempotentSoftRetirement();
+    void aClosedOverlayParksItsCarrierAndTheNextOpenReusesIt();
     void aPropertyTheComponentDoesNotDeclareIsVisibleAsAFailure();
     void aComponentThisShellDoesNotHaveNamesNoBridge();
     void aPanelOpenedOverlayFollowsOnlyItsButton();
@@ -466,6 +467,79 @@ void OverlayContractTest::closeIsOneIdempotentSoftRetirement()
     QVERIFY(overlay.isOpen());
     QCOMPARE(surface->window(), window.data());
     QTRY_VERIFY(!overlay.isOpen());
+}
+
+// SURF-1: the retirement beat still plays in full, but what follows it is a
+// rest rather than a destruction — the carrier stays mapped and the next open
+// arrives on the same window with its input, paint and reveal gate restored.
+void OverlayContractTest::aClosedOverlayParksItsCarrierAndTheNextOpenReusesIt()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+    QObject source;
+    source.setProperty("providers", QVariantMap());
+
+    OverlayController overlay(
+        &engine, QStringLiteral("LauncherOverlay"), &source);
+    QVERIFY(overlay.isEnabled());
+    overlay.open();
+    auto *const surface = overlay.findChild<OverlaySurface *>();
+    QVERIFY(surface);
+    QPointer<QWindow> first(surface->window());
+    QVERIFY(first);
+    first->setProperty("reducedMotion", true);
+    QVERIFY(QTest::qWaitForWindowExposed(first));
+
+    overlay.close();
+    QTRY_VERIFY(!overlay.isOpen());
+    // Parked, not destroyed: same mapped window, no longer retiring, one
+    // pixel of input, and no zone occupancy claimed while it rests.
+    QVERIFY(surface->isParked());
+    QVERIFY(first);
+    QVERIFY(first->isVisible());
+    QVERIFY(!first->property("celestinaRetiring").toBool());
+    QVERIFY(first->property("celestinaParked").toBool());
+    QCOMPARE(first->mask(), QRegion(0, 0, 1, 1));
+    QVERIFY(overlay.openCardRectOnOutput(first->screen()).isEmpty());
+
+    overlay.open();
+    QVERIFY(overlay.isOpen());
+    QCOMPARE(surface->window(), first.data());
+    QVERIFY(!first->property("celestinaParked").toBool());
+    QCOMPARE(first->mask(), QRegion());
+
+    // The field came back from its completed retirement for a fresh reveal,
+    // and the content item the soft close faded paints again.
+    QObject *const field = first->findChild<QObject *>(
+        QStringLiteral("celestina-soft-menu-field"));
+    QVERIFY(field);
+    QVERIFY(!field->property("retiring").toBool());
+    QCOMPARE(field->property("retireOpacity").toReal(), 1.0);
+    QVERIFY(!field->property("revealed").toBool());
+    auto *const quick = qobject_cast<QQuickWindow *>(first.data());
+    QVERIFY(quick);
+    QCOMPARE(quick->contentItem()->opacity(), 1.0);
+
+    // Readiness is earned again on this same window: a fresh glass
+    // publication plus its following swapped frame, exactly as a fresh map.
+    QSignalSpy ready(&overlay, &OverlayController::contextualSurfaceOpened);
+    QVERIFY(ready.isValid());
+    const QVariantList paintedGlass {
+        QVariantMap {
+            {QStringLiteral("rect"), QRectF(20, 20, 120, 80)},
+            {QStringLiteral("radius"), 16},
+        },
+    };
+    field->setProperty("glassRegions", paintedGlass);
+    QCOMPARE(ready.count(), 0);
+    QMetaObject::invokeMethod(first, "frameSwapped");
+    QTRY_COMPARE(ready.count(), 1);
+
+    // The second cycle behaves like the first: the same carrier parks again.
+    overlay.close();
+    QTRY_VERIFY(!overlay.isOpen());
+    QVERIFY(surface->isParked());
+    QCOMPARE(surface->window(), first.data());
 }
 
 void OverlayContractTest::everyPanelOpenedOverlayUsesTheSamePlacement()
