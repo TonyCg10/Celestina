@@ -1,6 +1,9 @@
 #pragma once
 
 #include <QPointer>
+
+#include <functional>
+#include <memory>
 #include <QQuickItem>
 
 #include "denseglass.h"
@@ -51,25 +54,42 @@ inline void reviveSoftClosedWindow(QWindow *window)
         QMetaObject::invokeMethod(field, "reviveForReuse");
 }
 
-// The resumed route's reveal, deferred one turn so the attachment lease's
-// zero-delay republication lands first — the same head start a fresh map's
-// configure round-trip used to give it — with the presented-frame gate
-// inside `reveal` adding the frame after that.
+// The resumed route's reveal, issued only once the attachment is really
+// re-established. One deferred turn was not enough: the lease republishes
+// the anchor through its own asynchronous refresh, and a reveal that beat it
+// woke the field with the anchor still empty — it believed itself a floating
+// card and published the full settled rectangle for a beat, the tall-then-
+// small `blur.armed` pairs on every resumed open (2026-08-21 14:22). So the
+// reveal now waits for the anchor an anchored route owes, in short beats
+// with a bounded patience: a route that is genuinely floating — no panel,
+// an ambiguous source, a lease that failed — reveals when the patience runs
+// out, exactly as the floating contract always has.
 inline void revealResumedWindow(QWindow *window)
 {
     if (!window)
         return;
     const QPointer<QWindow> tracked(window);
-    QTimer::singleShot(0, window, [tracked]() {
+    auto attempt = std::make_shared<std::function<void(int)>>();
+    *attempt = [tracked, attempt](int remaining) {
         if (!tracked || tracked->property("celestinaParked").toBool()
             || tracked->property("celestinaRetiring").toBool()) {
+            return;
+        }
+        const bool anchorPending =
+            tracked->property("anchoredFromPanel").toBool()
+            && tracked->property("attachmentAnchorRect").toRectF().isEmpty();
+        if (anchorPending && remaining > 0) {
+            QTimer::singleShot(16, tracked.data(), [attempt, remaining]() {
+                (*attempt)(remaining - 1);
+            });
             return;
         }
         const auto fields = tracked->findChildren<QQuickItem *>(
             QStringLiteral("celestina-soft-menu-field"));
         for (QQuickItem *const field : fields)
             QMetaObject::invokeMethod(field, "reveal");
-    });
+    };
+    QTimer::singleShot(0, window, [attempt]() { (*attempt)(12); });
 }
 
 inline void softCloseWindow(QWindow *window, std::function<void()> finish)

@@ -1452,6 +1452,16 @@ void PanelMenuController::close()
         if (auto *quick = qobject_cast<QQuickWindow *>(window)) {
             if (QQuickItem *const content = quick->contentItem())
                 content->setOpacity(0.0);
+            // The fields retire too, not merely the paint: a field left
+            // revealed keeps publishing its glass and its dense sections
+            // from every late callback, and one publication landing after
+            // the withdrawal below re-armed the companion with the settled
+            // card — the standing blue slab the author filmed. The revive
+            // clears this again on the next resume.
+            const auto fields = quick->findChildren<QQuickItem *>(
+                QStringLiteral("celestina-soft-menu-field"));
+            for (QQuickItem *const field : fields)
+                QMetaObject::invokeMethod(field, "retire");
         }
         DenseGlassAggregator::instance().withdraw(window);
         withdrawBlur(window);

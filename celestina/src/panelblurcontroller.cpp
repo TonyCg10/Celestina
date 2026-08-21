@@ -506,6 +506,7 @@ void PanelBlurController::probe()
             }
         }
         m_state = State::Enabled;
+        m_outageLogged = false;
         setAvailable(true);
         scheduleProbe(enabledProbeDelayMs);
         return;
@@ -539,7 +540,8 @@ void PanelBlurController::probe()
         return;
     }
 
-    if (m_state != State::Fallback) {
+    if (m_state != State::Fallback && !m_outageLogged) {
+        m_outageLogged = true;
         qInfo() << "Celestina compositor blur unavailable on"
                 << m_window->objectName() << "(using opaque fallback)";
         // Which precondition failed, per surface, and therefore per output.

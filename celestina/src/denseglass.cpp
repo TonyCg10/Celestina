@@ -127,7 +127,23 @@ void walkSections(QQuickItem *item, QList<DenseGlassShape> *found)
         // join the instant the reveal starts, under paint already forming.
         if (child->objectName() == QLatin1String("celestina-soft-menu-field")
             && (!child->property("revealed").toBool()
-                || child->opacity() <= 0.0)) {
+                || child->opacity() <= 0.0
+                // A retiring or fully faded field keeps its sections out the
+                // same way an unrevealed one does. The same-icon close parks
+                // the carrier without the soft retirement, so the field stays
+                // revealed while its paint is already gone — and a late
+                // publication collected through that state re-armed the
+                // companion with the settled card's sections: the author's
+                // standing blue slab (2026-08-21 14:22).
+                || child->property("retiring").toBool()
+                || [child]() {
+                       // Valid-and-zero, not merely zero: a harness field
+                       // without the property must keep the collector's old
+                       // answer.
+                       const QVariant presented =
+                           child->property("presentationOpacity");
+                       return presented.isValid() && presented.toReal() <= 0.0;
+                   }())) {
             continue;
         }
         if (child->objectName() == QLatin1String("celestina-menu-section")

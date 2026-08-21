@@ -83,5 +83,11 @@ private:
     QSize m_armedSize;
     QRegion m_armedRegion;
     State m_state = State::Pending;
+    // One `blur.unavailable` record per outage, not one per probe cycle: the
+    // resting OSD twins re-enter the probe on every provider tick, and the
+    // transition guard alone let two surfaces write the same record every
+    // two seconds for as long as the session rested — the journal
+    // amplification class measured at gigabytes per day.
+    bool m_outageLogged = false;
     int m_fastAttemptsRemaining = 0;
 };
