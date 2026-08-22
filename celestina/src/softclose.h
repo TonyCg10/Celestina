@@ -29,10 +29,26 @@
 // content item the fade took to zero paints again, and every field clears
 // its terminal edge for a fresh reveal. The caller owns everything else —
 // route properties, readiness trackers and the surface's own resume.
+// The beat's fade is findable so an interrupted beat can be stopped: a fade
+// still ticking after a park or a revive keeps rewriting the content opacity
+// its owner already chose — the parked carrier painting a ghost of its card
+// for the fade's remainder, or a revived one fading back out from under the
+// person who just reopened it.
+inline void stopSoftCloseFade(QWindow *window)
+{
+    if (!window)
+        return;
+    const auto fades = window->findChildren<QVariantAnimation *>(
+        QStringLiteral("celestina-soft-close-fade"));
+    for (QVariantAnimation *const fade : fades)
+        fade->stop();
+}
+
 inline void reviveSoftClosedWindow(QWindow *window)
 {
     if (!window)
         return;
+    stopSoftCloseFade(window);
     window->setProperty("celestinaRetiring", false);
     if (auto *quick = qobject_cast<QQuickWindow *>(window)) {
         if (QQuickItem *const content = quick->contentItem())
@@ -155,6 +171,7 @@ inline void softCloseWindow(QWindow *window, std::function<void()> finish)
             content->setOpacity(0.0);
         } else {
             auto *fade = new QVariantAnimation(quick);
+            fade->setObjectName(QStringLiteral("celestina-soft-close-fade"));
             fade->setStartValue(content->opacity());
             fade->setEndValue(0.0);
             fade->setDuration(fadeMs);

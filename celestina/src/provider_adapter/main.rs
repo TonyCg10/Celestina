@@ -41,6 +41,7 @@ mod melibea;
 mod nightlight;
 mod notifications;
 mod portal_settings;
+mod recorder;
 mod session;
 mod sessionholds;
 mod settings;
@@ -98,6 +99,7 @@ fn perform(command: &Command, runtime: &Mutex<ProviderRuntime>) -> Result<(), St
             Ok(())
         }
         brightness::NAME => brightness::action(&command.verb, &command.options),
+        recorder::NAME => recorder::action(&command.verb, &command.options),
         session::POWER if command.verb == "cycle" => {
             session::cycle_power_profile(runtime, &command.provider)
         }
@@ -255,6 +257,14 @@ impl Drop for HeldStates {
     }
 }
 
+/// Waits for a worker that a session may not have started at all — DDC held
+/// back by the environment, a provider whose own initialization declined.
+fn join_if_started(worker: Option<worker::Worker>) {
+    if let Some(worker) = worker {
+        worker.join();
+    }
+}
+
 fn run() -> io::Result<()> {
     let writer: HelperWriter = Arc::new(SharedWriter::new(BufWriter::new(io::stdout())));
     // One process, one generation. A host that sees a new generation clears
@@ -312,6 +322,7 @@ fn run() -> io::Result<()> {
     weather::spawn(&runtime)?;
     wallpaper::spawn(&runtime)?;
     portal_settings::spawn(&runtime)?;
+    let recorder_worker = recorder::spawn(&runtime, &shutdown)?;
     // Offered, never applied: the author references these or does not.
     generated::write_all();
 
@@ -378,19 +389,18 @@ fn run() -> io::Result<()> {
     // ownership chain.
     journal::record(Event::new(Level::Critical, "helper.shutdown.start"));
     shutdown.store(true, Ordering::Release);
-    if let Some(brightness_worker) = brightness_worker {
-        brightness_worker.join();
-    }
+    join_if_started(brightness_worker);
     worker.join();
     // The holds thread stops before its holds are given back, so it cannot take
     // one after the release. `_released_on_exit` performs that release as this
     // function returns, by whichever path it returns.
-    if let Some(holds_worker) = holds_worker {
-        holds_worker.join();
-    }
-    if let Some(nightlight_worker) = nightlight_worker {
-        nightlight_worker.join();
-    }
+    join_if_started(holds_worker);
+    join_if_started(nightlight_worker);
+    join_if_started(recorder_worker);
+    // After its reaper has been joined, so nothing is watching for the exit
+    // this asks for: a session that ends mid-recording still gets a file it
+    // can play.
+    recorder::stop_for_shutdown();
     melibea_worker.join();
     journal::record(Event::new(Level::Critical, "helper.shutdown.end"));
     Ok(())

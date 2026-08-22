@@ -194,11 +194,19 @@ pub fn action(
     let level_target;
     let args: Vec<&str> = match request {
         SessionRequest::Volume(change) => {
-            // The level the device is at is the only thing a step can be
-            // relative to, and it is also what the panel will show next.
-            let current = level(SINK)
-                .ok_or_else(|| "wpctl reports no readable default audio device".to_owned())?;
-            level_target = unit_fraction(change.applied_to(current.percent));
+            // A step is relative, so it has to ask the device where it is
+            // first. A dragged slider is not: it already names the level, and
+            // asking anyway spent one `wpctl` child per move of the drag on an
+            // answer the request itself carried — on the one worker every
+            // provider's commands queue behind.
+            let target = if let Some(level) = change.absolute() {
+                level
+            } else {
+                let current = level(SINK)
+                    .ok_or_else(|| "wpctl reports no readable default audio device".to_owned())?;
+                change.applied_to(current.percent)
+            };
+            level_target = unit_fraction(target);
             vec!["set-volume", SINK, &level_target, "-l", VOLUME_CEILING]
         }
         SessionRequest::Mute(which, state) => vec![

@@ -34,7 +34,14 @@ AnchoredMenu {
     // popup's own aboutToShow, as they always have.
     function reopenForReuse() {
         root.parkingForReuse = false;
-        Qt.callLater(function() { root.menu.open(); });
+        // The same fire-time re-check as the first open's `onReady`: a park
+        // landing between this queue and its tick raises the flag again, and
+        // an open that ignored it stranded a visible popup on a resting
+        // carrier — whose next replay then had no aboutToShow to reveal with.
+        Qt.callLater(function() {
+            if (!root.parkingForReuse)
+                root.menu.open();
+        });
     }
 
     property bool compositorBlurAvailable: false

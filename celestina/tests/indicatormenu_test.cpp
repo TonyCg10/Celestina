@@ -151,6 +151,7 @@ private slots:
     void aBluetoothFailureCanBeDismissed();
     void aNetworkResultLeavesBluetoothAlone();
     void theControlCentreStopsAskingWhenTheHelperAccepts();
+    void aParkThatRacesTheQueuedOpenLeavesNoStrandedPopup();
 
 private:
     // The kinds `PanelManager` can forward, which is the set the list must
@@ -223,8 +224,7 @@ private:
             {QStringLiteral("outputName"), QStringLiteral("test-output")},
             {QStringLiteral("shellScale"), shellScale},
         };
-        if (kind != QStringLiteral("capture")
-                && kind != QStringLiteral("calendar")) {
+        if (kind != QStringLiteral("calendar")) {
             initialProperties.insert(
                 QStringLiteral("providerSource"),
                 QVariant::fromValue<QObject *>(nullptr)
@@ -326,8 +326,7 @@ void IndicatorMenuTest::eachMenuDeclaresExactlyWhatTheHostHandsIt()
             {QStringLiteral("attachmentAnchorRect"), QRect(905, 11, 18, 18)},
             {QStringLiteral("attachmentStartY"), 40},
         };
-        if (kind == QStringLiteral("capture")
-                || kind == QStringLiteral("calendar"))
+        if (kind == QStringLiteral("calendar"))
             initialProperties.remove(QStringLiteral("providerSource"));
         QObject *const root = menu.createWithInitialProperties(initialProperties);
         qInstallMessageHandler(previous);
@@ -704,8 +703,6 @@ void IndicatorMenuTest::eachPanelIndicatorMenuSpansItsOuterVeilAndTargetsTheIcon
             {QStringLiteral("attachmentAnchorRect"), attachmentAnchor},
             {QStringLiteral("attachmentStartY"), attachmentStartY},
         };
-        if (kind == QStringLiteral("capture"))
-            properties.remove(QStringLiteral("providerSource"));
 
         std::unique_ptr<QObject> owner(menu.createWithInitialProperties(properties));
         auto *const window = qobject_cast<QQuickWindow *>(owner.get());
@@ -1626,7 +1623,7 @@ void IndicatorMenuTest::theControlCentreStopsAskingWhenTheHelperAccepts()
     );
     QCOMPARE(centreGlass.size(), 1);
     QCOMPARE(centreWindow->property("cardWidth").toInt(), 530);
-    QCOMPARE(centreWindow->property("cardHeight").toInt(), 732);
+    QCOMPARE(centreWindow->property("cardHeight").toInt(), 805);
     revealAllFields(centreWindow);
     QTRY_COMPARE(centreWindow->property("glassRegions").toList().size(), 1);
     const QVariantMap centreShape = centreWindow->property("glassRegions")
@@ -1691,6 +1688,43 @@ void IndicatorMenuTest::theControlCentreStopsAskingWhenTheHelperAccepts()
     QVERIFY(bridge.requests()->isPending(
         QStringLiteral("network"), QStringLiteral("refresh")
     ));
+}
+
+// The persistent ghost of the fast toggle (2026-08-22): both the fresh open
+// and the resume replay defer `menu.open()` by one tick, and a park landing
+// inside that tick used to be ignored — the popup opened inside the resting
+// scene, the next resume's replay found it already open and got no
+// `aboutToShow`, and the carrier came back mapped and input-live with nothing
+// painted. The queued open now re-checks the park flag at fire time.
+void IndicatorMenuTest::aParkThatRacesTheQueuedOpenLeavesNoStrandedPopup()
+{
+    QQmlEngine engine;
+    engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
+    std::unique_ptr<QObject> owner;
+    QQuickWindow *window = openMenu(engine, QStringLiteral("capture"), owner);
+    QVERIFY(window);
+
+    QObject *const menu = window->property("menu").value<QObject *>();
+    QVERIFY(menu);
+    QTRY_VERIFY(menu->property("visible").toBool());
+
+    // The host parks: the popup closes silently, without a dismissal.
+    QVERIFY(QMetaObject::invokeMethod(window, "prepareForPark"));
+    QTRY_VERIFY(!menu->property("visible").toBool());
+
+    // A resume queues the replay — and a park races it before the tick.
+    QVERIFY(QMetaObject::invokeMethod(window, "reopenForReuse"));
+    QVERIFY(QMetaObject::invokeMethod(window, "prepareForPark"));
+    QTest::qWait(50);
+    QVERIFY2(
+        !menu->property("visible").toBool(),
+        "a queued open must not land inside the resting scene"
+    );
+
+    // And the next honest resume still opens: the skipped replay left no
+    // already-visible popup to swallow this one's aboutToShow.
+    QVERIFY(QMetaObject::invokeMethod(window, "reopenForReuse"));
+    QTRY_VERIFY(menu->property("visible").toBool());
 }
 
 QTEST_MAIN(IndicatorMenuTest)

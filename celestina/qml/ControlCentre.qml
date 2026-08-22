@@ -39,7 +39,7 @@ Window {
     // The selected Velo composition is intentionally a roomy control surface,
     // not the old compact context menu stretched over more providers.
     readonly property int cardWidth: 530
-    readonly property int cardHeight: 732
+    readonly property int cardHeight: 805
     readonly property real cardX: placement.x
     readonly property real cardY: placement.y
 
@@ -60,6 +60,20 @@ Window {
     readonly property int levelStep: centre.settings && centre.settings.levelStep !== undefined
                                      ? centre.settings.levelStep : 5
 
+    // The night light's warmth, and the range the helper will actually accept.
+    // A helper that publishes no range is an older one, so the control keeps
+    // the range the protocol has always had rather than refusing to draw.
+    readonly property bool nightLightKelvinKnown: centre.nightLight !== undefined
+                                                  && centre.nightLight.kelvin !== undefined
+    readonly property int nightLightKelvin: centre.nightLightKelvinKnown
+                                            ? centre.nightLight.kelvin : 2700
+    readonly property int nightLightKelvinMinimum: centre.nightLight !== undefined
+                                                   && centre.nightLight.minimumKelvin !== undefined
+                                                   ? centre.nightLight.minimumKelvin : 2000
+    readonly property int nightLightKelvinMaximum: centre.nightLight !== undefined
+                                                   && centre.nightLight.maximumKelvin !== undefined
+                                                   ? centre.nightLight.maximumKelvin : 6500
+    readonly property int nightLightKelvinStep: 100
 
     // How much larger this output needs the shell drawn; see shellscale.h. The
     // host supplies it and divides the geometry it hands this overlay by it, so
@@ -462,7 +476,7 @@ Window {
 
                     objectName: "celestina-control-centre-quick-controls"
                     width: parent.width
-                    implicitHeight: 238
+                    implicitHeight: 311
 
                     MenuSection { ink: backdropInk }
 
@@ -616,6 +630,123 @@ Window {
                                 anchors.bottomMargin: CelestinaTheme.spaceLg
                                 width: CelestinaTheme.borderHairline
                                 color: backdropInk.divider
+                            }
+                        }
+
+                        Rectangle {
+                            x: CelestinaTheme.spaceXl
+                            width: parent.width - CelestinaTheme.spaceXl * 2
+                            height: CelestinaTheme.borderHairline
+                            color: backdropInk.divider
+                        }
+
+                        ControlRow {
+                            id: nightLightWarmthRow
+
+                            objectName: "celestina-night-light-warmth-row"
+                            height: 72
+                            ink: backdropInk
+                            label: qsTr("Temperatura nocturna")
+                            iconName: "sun"
+                            reading: centre.nightLightKelvinKnown
+                                     ? qsTr("%1 K").arg(centre.nightLightKelvin)
+                                     : qsTr("sin proveedor")
+                            provider: "night-light"
+                            verb: "night-light-temperature"
+
+                            // What this row last asked for, so the slider can
+                            // mark it while the helper is still answering. The
+                            // published reading remains the only thing that
+                            // moves the thumb.
+                            property int asked: -1
+
+                            // Once the reading says what was asked, nothing is
+                            // outstanding — and a stale `asked` is worse than
+                            // none: it would refuse a warmth the person asks
+                            // for again after having left it.
+                            readonly property int publishedKelvin:
+                                centre.nightLightKelvin
+                            onPublishedKelvinChanged: {
+                                if (nightLightWarmthRow.asked
+                                    === nightLightWarmthRow.publishedKelvin)
+                                    nightLightWarmthRow.asked = -1;
+                            }
+
+                            // One way in for both gestures. The warmth is
+                            // asked for in whole hundreds of kelvin: that is
+                            // what the control offers, so it is also what a
+                            // dragged pixel and a wheel notch have to land on.
+                            function askKelvin(target) {
+                                const step = centre.nightLightKelvinStep;
+                                const kelvin = Math.max(
+                                    centre.nightLightKelvinMinimum,
+                                    Math.min(centre.nightLightKelvinMaximum,
+                                             Math.round(target / step) * step));
+                                // Nothing to ask for: it is already there, or
+                                // it has already been asked and not answered.
+                                if (kelvin === centre.nightLightKelvin
+                                    || kelvin === nightLightWarmthRow.asked)
+                                    return;
+
+                                nightLightWarmthRow.asked = kelvin;
+                                centre.send("night-light", "night-light-temperature",
+                                            {"kelvin": kelvin});
+                            }
+
+                            // A notch lands on the next whole hundred in the
+                            // direction it turned, so a warmth left on 2750 by
+                            // something else does not carry that fifty for
+                            // ever. Counted from the reading, which is the only
+                            // thing that says where the light actually is.
+                            function nudgeKelvin(direction) {
+                                if (!centre.nightLightKelvinKnown)
+                                    return;
+
+                                const size = centre.nightLightKelvinStep;
+                                const from = centre.nightLightKelvin;
+                                nightLightWarmthRow.askKelvin(
+                                    direction > 0
+                                    ? (Math.floor(from / size) + 1) * size
+                                    : Math.floor((from - 1) / size) * size);
+                            }
+
+                            // The wheel works anywhere on the row, as it does
+                            // on every other level this shell offers.
+                            WheelHandler {
+                                property real steps: 0
+
+                                enabled: centre.nightLightKelvinKnown
+                                acceptedDevices: PointerDevice.Mouse
+                                                 | PointerDevice.TouchPad
+                                onWheel: (event) => {
+                                    steps += event.angleDelta.y / 120;
+                                    while (steps >= 1) {
+                                        steps -= 1;
+                                        nightLightWarmthRow.nudgeKelvin(1);
+                                    }
+                                    while (steps <= -1) {
+                                        steps += 1;
+                                        nightLightWarmthRow.nudgeKelvin(-1);
+                                    }
+                                }
+                            }
+
+                            CelestinaSlider {
+                                id: nightLightWarmthSlider
+                                objectName: "celestina-night-light-temperature"
+
+                                width: 176
+                                enabled: centre.nightLightKelvinKnown
+                                from: centre.nightLightKelvinMinimum
+                                to: centre.nightLightKelvinMaximum
+                                step: centre.nightLightKelvinStep
+                                value: centre.nightLightKelvin
+                                pendingValue: centre.isPending("night-light",
+                                                               "night-light-temperature")
+                                              ? nightLightWarmthRow.asked : -1
+                                Accessible.name: qsTr("Temperatura de la luz nocturna: %1 K")
+                                                 .arg(centre.nightLightKelvin)
+                                onMoved: (target) => nightLightWarmthRow.askKelvin(target)
                             }
                         }
 

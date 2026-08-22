@@ -47,6 +47,27 @@ TestCase {
         compare(chooser.selectedOutputName, "DP-2")
     }
 
+    // The same question serves two reasons: sharing with an application, and
+    // recording to show a bug. The words may change; the window title may
+    // not, because the niri rule that floats this dialog matches on it, and
+    // changing it would leave the dialog tiled instead.
+    function test_the_words_change_but_the_window_title_does_not() {
+        compare(chooser.headline, qsTr("Compartir pantalla"));
+        compare(chooser.confirmText, qsTr("Compartir"));
+        compare(chooser.title, qsTr("Compartir pantalla"));
+
+        chooser.headline = qsTr("Grabar pantalla");
+        chooser.prompt = qsTr("Elige qué salida se grabará.");
+        chooser.confirmText = qsTr("Grabar");
+
+        compare(chooser.title, qsTr("Compartir pantalla"));
+        chooser.headline = qsTr("Compartir pantalla");
+        chooser.prompt = Qt.binding(() => chooser.screens.length > 1
+                                          ? qsTr("Elige qué salida verá la aplicación.")
+                                          : qsTr("Se compartirá esta salida."));
+        chooser.confirmText = qsTr("Compartir");
+    }
+
     function test_reorder_preserves_output_identity() {
         chooser.screens = [screen("HDMI-A-1", 1920),
                            screen("DP-2", 2560),

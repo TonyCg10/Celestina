@@ -220,6 +220,108 @@ TestCase {
         nightSwitch.checkedChanged.disconnect(countCheckedChange);
     }
 
+    // The warmth is a published reading like any other: the slider asks, and
+    // only the next frame moves it. It also takes the range from the helper
+    // rather than restating the protocol's own bounds.
+    function test_night_light_temperature_asks_and_waits_for_the_reading() {
+        const warmth = findChild(centre.contentItem,
+                                 "celestina-night-light-temperature");
+        verify(warmth);
+
+        // A helper that publishes no warmth at all leaves the control drawn
+        // but disabled, rather than parked at a temperature nobody chose.
+        compare(warmth.enabled, false);
+
+        const withWarmth = fakeSource.providers;
+        withWarmth["night-light"] = {
+            "active": true,
+            "kelvin": 3400,
+            "minimumKelvin": 2000,
+            "maximumKelvin": 6500
+        };
+        fakeSource.publish(withWarmth);
+
+        compare(warmth.enabled, true);
+        compare(warmth.value, 3400);
+        compare(warmth.from, 2000);
+        compare(warmth.to, 6500);
+
+        warmth.moved(4237);
+        compare(fakeSource.sent.length, 1);
+        compare(fakeSource.sent[0].provider, "night-light");
+        compare(fakeSource.sent[0].verb, "night-light-temperature");
+        // Asked in whole steps of the range, not in the pixel the drag landed.
+        compare(fakeSource.sent[0].options.kelvin, 4200);
+        // And the thumb has not moved: the reading still says 3400.
+        compare(warmth.value, 3400);
+
+        const confirmed = fakeSource.providers;
+        confirmed["night-light"] = {
+            "active": true,
+            "kelvin": 4200,
+            "minimumKelvin": 2000,
+            "maximumKelvin": 6500
+        };
+        fakeSource.publish(confirmed);
+        compare(warmth.value, 4200);
+    }
+
+    // The wheel over the row asks in whole hundreds of kelvin, and lands on
+    // them: a warmth left on 2750 by something else goes to 2800 and to 2700,
+    // instead of carrying that fifty through every notch.
+    function test_the_wheel_asks_for_whole_hundreds_of_kelvin() {
+        const row = findChild(centre.contentItem,
+                              "celestina-night-light-warmth-row");
+        verify(row);
+
+        const stray = fakeSource.providers;
+        stray["night-light"] = {
+            "active": true,
+            "kelvin": 2750,
+            "minimumKelvin": 2000,
+            "maximumKelvin": 6500
+        };
+        fakeSource.publish(stray);
+
+        row.nudgeKelvin(1);
+        compare(fakeSource.sent.length, 1);
+        compare(fakeSource.sent[0].verb, "night-light-temperature");
+        compare(fakeSource.sent[0].options.kelvin, 2800);
+
+        row.nudgeKelvin(-1);
+        compare(fakeSource.sent.length, 2);
+        compare(fakeSource.sent[1].options.kelvin, 2700);
+
+        // The range is the helper's, and a notch stops at its edge.
+        const cold = fakeSource.providers;
+        cold["night-light"] = {
+            "active": true,
+            "kelvin": 6500,
+            "minimumKelvin": 2000,
+            "maximumKelvin": 6500
+        };
+        fakeSource.publish(cold);
+        row.nudgeKelvin(1);
+        compare(fakeSource.sent.length, 2, "there is nothing colder to ask for");
+    }
+
+    // An older helper publishes no range. The control keeps the bounds the
+    // verb has always accepted instead of collapsing to a dead slider.
+    function test_night_light_temperature_falls_back_to_the_known_range() {
+        const warmth = findChild(centre.contentItem,
+                                 "celestina-night-light-temperature");
+        verify(warmth);
+
+        const older = fakeSource.providers;
+        older["night-light"] = {"active": false, "kelvin": 2700};
+        fakeSource.publish(older);
+
+        compare(warmth.enabled, true);
+        compare(warmth.value, 2700);
+        compare(warmth.from, 2000);
+        compare(warmth.to, 6500);
+    }
+
 
 
 

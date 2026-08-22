@@ -1,6 +1,24 @@
 # Celestina status
 
-- **Updated:** 2026-08-20
+- **Updated:** 2026-08-22
+- **REC-1 (complete, 1.2.0):** screen recording joins the toolbox
+  (`gpu-screen-recorder`, output chosen through the session's existing
+  screen chooser, saved into a `Recordings` folder inside the session's own videos directory); level rows (volume,
+  microphone, per-application, monitor brightness) track a drag continuously
+  and a wheel notch lands on a round multiple of the row's step instead of an
+  arbitrary offset; night-light warmth reapplies to every lit output
+  instantly instead of waiting for the next switch and without its full
+  transition sweep; an unnamed per-monitor spare workspace no longer borrows
+  a named workspace's home from the cross-monitor memory; and every
+  `ddcutil` conversation this suite starts is serialized through one
+  session-wide lease, with a host that could not confirm it is the
+  session's only shell withholding its own automatic DDC probe. See
+  [the archived plan](docs/plans/archive/2026-08-22-screen-recorder-and-hardening.md)
+  and its [delivery evidence](docs/evidence/2026-08-22-screen-recorder-and-hardening.md).
+- **SURF-1-D (done within the active SURF-1 plan):** the popup-backed menu
+  family's park/resume survives a fast toggle — five races in the
+  close/park/revive path, found by a two-agent audit and closed. See
+  [the delivery evidence](docs/evidence/2026-08-22-surf-1-d-fast-toggle-races.md).
 - **Implementation:** R0-R7, R8's departure slice, LVR-1 through LVR-3, the
   static hardening previously drafted as `AUD-1`, `UX-1` and `WSG-1` are
   complete; `BUBBLE-1` is complete and deployed as Celestina 0.32.0.

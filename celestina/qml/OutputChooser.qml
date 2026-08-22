@@ -36,6 +36,19 @@ Window {
     property string chosen: ""
     property bool cancelled: false
 
+    // The words, because the question is the same but the reason is not
+    // always: sharing with an application, or recording to show a bug. The
+    // default still says what it always said.
+    //
+    // The window title is deliberately absent here: the niri rule that
+    // floats this dialog matches on that exact title, and changing it would
+    // leave the dialog tiled instead.
+    property string headline: qsTr("Compartir pantalla")
+    property string prompt: chooser.screens.length > 1
+                            ? qsTr("Elige qué salida verá la aplicación.")
+                            : qsTr("Se compartirá esta salida.")
+    property string confirmText: qsTr("Compartir")
+
     // La tarjeta más alta manda: las demás se alinean a su base.
     readonly property int tileHeight: 148
     readonly property int tileWidth: 236
@@ -136,7 +149,7 @@ Window {
             id: heading
             x: 24
             y: 20
-            text: "Compartir pantalla"
+            text: chooser.headline
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontRowTitle
@@ -148,9 +161,7 @@ Window {
             x: 24
             y: heading.y + heading.height + 2
             width: parent.width - 48
-            text: chooser.screens.length > 1
-                  ? "Elige qué salida verá la aplicación."
-                  : "Se compartirá esta salida."
+            text: chooser.prompt
             color: CelestinaTheme.textMuted
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontCaption
@@ -325,7 +336,7 @@ Window {
             CelestinaButton {
                 id: shareButton
 
-                text: "Compartir"
+                text: chooser.confirmText
                 role: CelestinaButton.Primary
                 enabled: chooser.screens.length > 0
                 KeyNavigation.tab: row

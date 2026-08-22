@@ -182,6 +182,29 @@ impl<'a> OperationBudget<'a> {
 
 static REQUESTS: OnceLock<SyncSender<Request>> = OnceLock::new();
 
+/// What a caller outside the Wayland thread needs to restate the provider's
+/// reading. The worker owns whether the light is on; the warmth is a
+/// remembered setting, so a temperature change has no transition to wait for
+/// and would otherwise leave the last published payload stale.
+struct Surface {
+    runtime: Arc<Mutex<ProviderRuntime>>,
+    id: ProviderId,
+    active: AtomicBool,
+}
+
+static SURFACE: OnceLock<Surface> = OnceLock::new();
+
+/// Set when the chosen warmth has moved and the lit outputs have not caught up
+/// with it yet.
+///
+/// A flag rather than a queued request, because a warmth change is not an
+/// event to replay: the transition reads the setting at the moment it applies
+/// it, so twenty of them dragged across a slider mean exactly one sweep to
+/// wherever the slider ended. Queued instead, they would have serialized at
+/// one 300 ms sweep each and overflowed a four-deep channel — dropping, in the
+/// worst case, the last position the person actually chose.
+static WARMTH_MOVED: AtomicBool = AtomicBool::new(false);
+
 /// Registers the provider and starts the only thread allowed to touch its
 /// Wayland connection.
 pub fn spawn(
@@ -200,6 +223,12 @@ pub fn spawn(
         lock_runtime(runtime).unregister(&id);
         return Ok(None);
     }
+
+    let _ = SURFACE.set(Surface {
+        runtime: Arc::clone(runtime),
+        id: id.clone(),
+        active: AtomicBool::new(false),
+    });
 
     let runtime = Arc::clone(runtime);
     let worker_shutdown = Arc::clone(shutdown);
@@ -221,15 +250,18 @@ pub fn action(verb: &str, options: &Payload) -> Result<(), String> {
         SessionRequest::NightLightTemperature(kelvin) => {
             super::settings::remember(|settings| settings.night_light_kelvin = kelvin)
                 .map_err(|error| format!("cannot remember the night-light warmth: {error}"))?;
+            // The reading carries the warmth, so restate it here: the worker
+            // publishes only when the light itself changes, and a temperature
+            // moved while the light is off changes nothing it would report.
+            republish();
+            // Asking the worker for the light it already has was read as
+            // "already in that state, nothing to do", so the picture only
+            // caught up on the next real switch. What has to be said is that
+            // the warmth moved, which is a different claim from the switch.
+            // A light that is off owes the outputs nothing: turning it on is
+            // what reads the warmth, and it reads whatever is current then.
             if super::settings::current().night_light {
-                if let Some(sender) = REQUESTS.get() {
-                    let (reply, _answer) = sync_channel(1);
-                    let _ = sender.try_send(Request {
-                        switch: Switch::On,
-                        permit: Arc::new(RequestPermit::new(Instant::now() + REQUEST_TIMEOUT)),
-                        reply,
-                    });
-                }
+                WARMTH_MOVED.store(true, Ordering::Release);
             }
             return Ok(());
         }
@@ -273,11 +305,61 @@ pub fn action(verb: &str, options: &Payload) -> Result<(), String> {
 }
 
 fn publish(runtime: &Mutex<ProviderRuntime>, id: &ProviderId, active: bool) {
-    let mut payload = Payload::new();
-    payload.insert("active".to_owned(), Value::from(active));
-    if let Err(error) = lock_runtime(runtime).publish(id, payload) {
+    if let Some(surface) = SURFACE.get() {
+        surface.active.store(active, Ordering::Release);
+    }
+    if let Err(error) = lock_runtime(runtime).publish(id, reading(active)) {
         eprintln!("celestina-provider-adapter: night-light: {error}");
     }
+}
+
+/// Restates the last known state with the warmth as it is now remembered.
+fn republish() {
+    let Some(surface) = SURFACE.get() else {
+        return;
+    };
+    let active = surface.active.load(Ordering::Acquire);
+    if let Err(error) = lock_runtime(&surface.runtime).publish(&surface.id, reading(active)) {
+        eprintln!("celestina-provider-adapter: night-light: {error}");
+    }
+}
+
+/// Whether the light is on, and the warmth it holds while it is — the reading
+/// a temperature control binds to, so it never shows its own asked-for value.
+fn reading(active: bool) -> Payload {
+    let mut payload = Payload::new();
+    payload.insert("active".to_owned(), Value::from(active));
+    payload.insert(
+        "kelvin".to_owned(),
+        Value::from(super::settings::current().night_light_kelvin),
+    );
+    // The range travels with the reading so a control never offers a warmth
+    // this helper would refuse, and never has to restate these constants.
+    payload.insert(
+        "minimumKelvin".to_owned(),
+        Value::from(Whitepoint::MINIMUM_KELVIN),
+    );
+    payload.insert(
+        "maximumKelvin".to_owned(),
+        Value::from(Whitepoint::MAXIMUM_KELVIN),
+    );
+    payload
+}
+
+/// The one way a sweep that the compositor refused ends: say why, put every
+/// output back to neutral as far as it still can, and report the light out.
+/// The caller owns its own `active`, which this cannot reach.
+fn fail_dark(
+    session: &mut GammaSession,
+    runtime: &Mutex<ProviderRuntime>,
+    id: &ProviderId,
+    shutdown: &AtomicBool,
+    error: &str,
+) {
+    eprintln!("celestina-provider-adapter: night-light: {error}");
+    let recovery = OperationBudget::internal(RECOVERY_TIMEOUT, Some(shutdown));
+    session.fail_closed(&recovery);
+    publish(runtime, id, false);
 }
 
 fn remember(active: bool) {
@@ -306,6 +388,68 @@ fn answer_unavailable(receiver: &Receiver<Request>, shutdown: &AtomicBool, reaso
     }
 }
 
+/// Answers one switch request and returns whether the light is on afterwards.
+///
+/// Only the worker calls this, and only from inside its own loop: it is the
+/// same thread and the same connection, named apart because serving a request
+/// is a whole story of its own — commit, publish, persist, and the two ways a
+/// request can end without having changed anything.
+fn serve(
+    session: &mut GammaSession,
+    runtime: &Mutex<ProviderRuntime>,
+    id: &ProviderId,
+    shutdown: &AtomicBool,
+    active: bool,
+    request: &Request,
+) -> bool {
+    let budget = OperationBudget::request(&request.permit, shutdown);
+    let target = requested(request.switch, active);
+    let outcome = if target == active {
+        budget.check()
+    } else {
+        session.set_active(target, &budget)
+    };
+
+    match outcome {
+        Ok(()) if request.permit.try_commit() => {
+            // Claim the request before publishing or persisting. The caller's
+            // timeout uses the inverse CAS, so exactly one side wins and a
+            // timed-out request can never commit late.
+            let _ = request.reply.send(Ok(()));
+            if target == active {
+                return active;
+            }
+            // Lighting up has just dressed every output at the warmth in
+            // force, so no reapplication is owed.
+            if target {
+                WARMTH_MOVED.store(false, Ordering::Release);
+            }
+            publish(runtime, id, target);
+            remember(target);
+            target
+        }
+        Ok(()) => {
+            let restored = session.restore_confirmed(active, shutdown);
+            if restored != active {
+                publish(runtime, id, restored);
+            }
+            let _ = request
+                .reply
+                .send(Err("night-light request expired before commit".to_owned()));
+            restored
+        }
+        Err(error) => {
+            let _ = request.permit.cancel();
+            let restored = session.restore_confirmed(active, shutdown);
+            if restored != active {
+                publish(runtime, id, restored);
+            }
+            let _ = request.reply.send(Err(error));
+            restored
+        }
+    }
+}
+
 fn run(
     runtime: &Mutex<ProviderRuntime>,
     id: &ProviderId,
@@ -321,6 +465,10 @@ fn run(
             return;
         }
     };
+
+    // Whatever was pending belongs to a worker that is no longer running: this
+    // one dresses every output at the warmth in force as it starts.
+    WARMTH_MOVED.store(false, Ordering::Release);
 
     let mut active = false;
     if super::settings::current().night_light && !shutdown.load(Ordering::Acquire) {
@@ -344,58 +492,27 @@ fn run(
             break Some(error);
         }
 
+        // Ordered before reconciliation deliberately: both end in the same
+        // sweep to the chosen whitepoint, and doing the warmth first means a
+        // newly added output is dressed once, at the temperature in force.
+        if active && WARMTH_MOVED.swap(false, Ordering::AcqRel) {
+            let budget = OperationBudget::internal(REQUEST_TIMEOUT, Some(shutdown));
+            if let Err(error) = session.settle_to_chosen(&budget) {
+                fail_dark(&mut session, runtime, id, shutdown, &error);
+                active = false;
+            }
+        }
+
         if active && session.needs_reconciliation() {
             let budget = OperationBudget::internal(REQUEST_TIMEOUT, Some(shutdown));
             if let Err(error) = session.reconcile_active_outputs(&budget) {
-                eprintln!("celestina-provider-adapter: night-light: {error}");
-                let recovery = OperationBudget::internal(RECOVERY_TIMEOUT, Some(shutdown));
-                session.fail_closed(&recovery);
+                fail_dark(&mut session, runtime, id, shutdown, &error);
                 active = false;
-                publish(runtime, id, false);
             }
         }
 
         while let Ok(request) = receiver.try_recv() {
-            let budget = OperationBudget::request(&request.permit, shutdown);
-            let target = requested(request.switch, active);
-            let outcome = if target == active {
-                budget.check()
-            } else {
-                session.set_active(target, &budget)
-            };
-
-            match outcome {
-                Ok(()) if request.permit.try_commit() => {
-                    // Claim the request before publishing or persisting. The
-                    // caller's timeout uses the inverse CAS, so exactly one
-                    // side wins and a timed-out request can never commit late.
-                    let _ = request.reply.send(Ok(()));
-                    if target != active {
-                        active = target;
-                        publish(runtime, id, active);
-                        remember(active);
-                    }
-                }
-                Ok(()) => {
-                    let restored = session.restore_confirmed(active, shutdown);
-                    if restored != active {
-                        active = restored;
-                        publish(runtime, id, active);
-                    }
-                    let _ = request
-                        .reply
-                        .send(Err("night-light request expired before commit".to_owned()));
-                }
-                Err(error) => {
-                    let _ = request.permit.cancel();
-                    let restored = session.restore_confirmed(active, shutdown);
-                    if restored != active {
-                        active = restored;
-                        publish(runtime, id, active);
-                    }
-                    let _ = request.reply.send(Err(error));
-                }
-            }
+            active = serve(&mut session, runtime, id, shutdown, active, &request);
         }
     };
 
@@ -604,6 +721,37 @@ impl WaylandState {
                     .control
                     .as_ref()
                     .map(|control| (*global, nightlight::transition(control.applied, target)))
+            })
+            .collect())
+    }
+
+    /// The plan for arriving at `target` without travelling: one frame, for
+    /// every output that has a controller.
+    ///
+    /// A sweep exists to cover a jump nobody asked for — the whole picture
+    /// going neutral to warm in a single commit. A person dragging a warmth
+    /// control is the source of the motion and is already moving in small
+    /// steps, so animating each of those steps means nineteen gamma tables per
+    /// output for a change of a hundred kelvin, and a compositor that never
+    /// gets to finish one sweep before the next begins.
+    fn settled_plans(
+        &self,
+        target: Whitepoint,
+    ) -> Result<BTreeMap<u32, Vec<TransitionFrame>>, String> {
+        self.validate_controls()?;
+        Ok(self
+            .outputs
+            .iter()
+            .filter_map(|(global, output)| {
+                output.control.as_ref().map(|_| {
+                    (
+                        *global,
+                        vec![TransitionFrame {
+                            offset: Duration::ZERO,
+                            whitepoint: target,
+                        }],
+                    )
+                })
             })
             .collect())
     }
@@ -925,6 +1073,32 @@ impl GammaSession {
         self.state.validate_controls()
     }
 
+    /// Puts every lit output at `target` in one commit, with no sweep.
+    fn settle_to(
+        &mut self,
+        target: Whitepoint,
+        budget: &OperationBudget<'_>,
+    ) -> Result<(), String> {
+        budget.check()?;
+        let plans = self.state.settled_plans(target)?;
+        if plans.is_empty() {
+            return Err("there is no output to settle".to_owned());
+        }
+        self.state.apply_frame(&plans, 0)?;
+        self.queue
+            .flush()
+            .map_err(|error| format!("cannot send the settled gamma table: {error}"))?;
+        self.sync(budget, "cannot confirm the settled gamma table")?;
+        self.state.clear_pending_tables();
+        self.state.validate_controls()
+    }
+
+    /// The lit outputs, moved to the warmth now in force.
+    fn settle_to_chosen(&mut self, budget: &OperationBudget<'_>) -> Result<(), String> {
+        self.ensure_controls(budget)?;
+        self.settle_to(Self::chosen_whitepoint(), budget)
+    }
+
     /// The warmth the person chose, read at the moment it is applied.
     ///
     /// Read here rather than cached so that changing the temperature while the
@@ -1027,6 +1201,52 @@ impl GammaSession {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A slider dragged across its range says the warmth moved many times over.
+    /// The worker owes exactly one sweep for all of them, to wherever the drag
+    /// ended — which is what a flag says and a queue of requests cannot.
+    #[test]
+    fn many_warmth_changes_collapse_into_one_reapplication() {
+        WARMTH_MOVED.store(false, Ordering::Release);
+
+        for _ in 0..20 {
+            WARMTH_MOVED.store(true, Ordering::Release);
+        }
+
+        assert!(
+            WARMTH_MOVED.swap(false, Ordering::AcqRel),
+            "the worker is owed a sweep"
+        );
+        assert!(
+            !WARMTH_MOVED.swap(false, Ordering::AcqRel),
+            "and only one: nothing is replayed once it has been applied"
+        );
+    }
+
+    /// A control that offers a warmth needs both the value and the bounds the
+    /// verb will accept, so neither has to be restated on the other side.
+    #[test]
+    fn the_reading_carries_the_warmth_and_its_range() {
+        let payload = reading(true);
+
+        assert_eq!(payload.get("active").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            payload.get("minimumKelvin").and_then(Value::as_u64),
+            Some(u64::from(Whitepoint::MINIMUM_KELVIN))
+        );
+        assert_eq!(
+            payload.get("maximumKelvin").and_then(Value::as_u64),
+            Some(u64::from(Whitepoint::MAXIMUM_KELVIN))
+        );
+        let kelvin = payload
+            .get("kelvin")
+            .and_then(Value::as_u64)
+            .expect("the reading names a warmth");
+        assert!(
+            (u64::from(Whitepoint::MINIMUM_KELVIN)..=u64::from(Whitepoint::MAXIMUM_KELVIN))
+                .contains(&kelvin)
+        );
+    }
 
     #[test]
     fn cancellation_wins_before_the_worker_can_commit() {

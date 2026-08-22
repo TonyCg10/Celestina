@@ -726,6 +726,39 @@ flicker, that investigation is a new unit. Scope, order, exclusions and exit
 are in [the active SURF-1 plan](docs/plans/active/2026-08-20-persistent-carriers.md);
 the perceptual acceptance is `VAL-SURF-1`.
 
+## REC-1 — Screen recording joins the toolbox, and three live defects close (complete)
+
+**Outcome:** the toolbox records a chosen screen into a `Recordings` folder inside the session's own videos directory
+through `gpu-screen-recorder`, asked for and stopped from any output's bar.
+Alongside it, three defects the author's own use of the session surfaced in
+the same pass are fixed: a dragged level row (volume, microphone,
+per-application, monitor brightness) no longer periodically snaps back to a
+stale reading, and a wheel notch on any of them — plus the control centre's
+night-light warmth — lands on a round multiple of its step rather than an
+arbitrary offset; night-light warmth reapplies to every lit output the
+instant it changes rather than waiting for the next switch, and without its
+full transition sweep; and an unnamed per-monitor spare workspace no longer
+borrows a named workspace's home from the memory that groups monitor strips,
+which had been drawing a foreign group capsule on two of three monitors.
+
+A concurrent audit of two unexplained live freezes found the residual DDC
+overlap window the 2026-08-05 static audit had already named and left open:
+the session's own diagnostics recorded seven provider-helper starts in two
+seconds, several concurrent, each running its own `ddcutil detect`. Every
+`ddcutil` conversation this suite starts is now serialized through one
+session-wide advisory lock, and a host that could not confirm the session bus
+is exclusively its own withholds its provider helper's automatic probe rather
+than risk a second one colliding with a probe from a shell it cannot see.
+
+Scope, exclusions and the full delivery are in
+[the archived REC-1 plan](docs/plans/archive/2026-08-22-screen-recorder-and-hardening.md);
+delivery evidence is
+[here](docs/evidence/2026-08-22-screen-recorder-and-hardening.md). The
+recording tool itself and the DDC lease's behaviour under a second real
+concurrent process are the author's own live use to keep confirming; no
+`VAL-*` checkpoint was opened because both are already-observed live
+behaviour rather than a pending procedure.
+
 ## UX-2 — Shell visual and interaction language (planned)
 
 **Outcome:** the panel, overlays, context menus and future clock/date surface

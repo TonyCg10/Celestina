@@ -76,6 +76,81 @@ Window {
     readonly property var wallpaperGalleryReading:
         panel.provider("wallpaper-gallery")
 
+    // Whether this session is recording, and what it is recording. Every panel
+    // says it, because the recording belongs to the session rather than to the
+    // output whose toolbox happened to start it.
+    readonly property var recorderReading: panel.provider("recorder")
+    readonly property bool recording: panel.recorderReading !== undefined
+                                      && panel.recorderReading.recording === true
+    readonly property string recordingOutput:
+        panel.recording && panel.recorderReading.output !== undefined
+        ? panel.recorderReading.output : ""
+
+    // The session's own "which screen?" surface — the same one the screencast
+    // portal asks with, because it is the same question.
+    //
+    // Built without a parent so it is a real top-level window: a dialog
+    // transient to this panel would be transient to a layer surface, which is
+    // not a window anything can be transient to. Destroyed on either answer,
+    // so nothing outlives the question.
+    property var recordingPicker: null
+
+    // `screens` comes from the host, flattened: `QScreen` publishes a geometry
+    // rectangle and no standalone width or height, so a surface that asks a
+    // screen for its width gets nothing — which lands in a layout as `NaN` and
+    // draws three monitors on top of each other instead of failing.
+    function openRecordingOutputPicker(screens) {
+        if (panel.recordingPicker !== null)
+            return;
+
+        const picker = recordingPickerComponent.createObject(null, {
+            "reducedMotion": panel.reducedMotion,
+            "screens": screens,
+            "headline": qsTr("Grabar pantalla"),
+            "prompt": qsTr("Elige qué salida se grabará."),
+            "confirmText": qsTr("Grabar")
+        });
+        if (picker === null)
+            return;
+
+        panel.recordingPicker = picker;
+    }
+
+    function closeRecordingPicker() {
+        if (panel.recordingPicker === null)
+            return;
+
+        const picker = panel.recordingPicker;
+        panel.recordingPicker = null;
+        picker.destroy();
+    }
+
+    Component {
+        id: recordingPickerComponent
+
+        OutputChooser {
+            id: picker
+
+            reducedMotion: panel.reducedMotion
+            screens: []
+
+            onChosenChanged: {
+                if (picker.chosen.length === 0)
+                    return;
+
+                if (panel.providerSource) {
+                    panel.providerSource.sendCommand(
+                        "recorder", "record-start", {"output": picker.chosen});
+                }
+                panel.closeRecordingPicker();
+            }
+            onCancelledChanged: {
+                if (picker.cancelled)
+                    panel.closeRecordingPicker();
+            }
+        }
+    }
+
     function openWallpaperFolderPicker() {
         if (panel.wallpaperGalleryReading !== undefined
             && panel.wallpaperGalleryReading.folderUrl !== undefined
@@ -313,6 +388,33 @@ Window {
                         }
 
                         target: panel.niriProvider
+                    }
+                }
+
+                // Only while a recording runs: the one shell state that is
+                // invisible by nature — what it records is everything except
+                // itself — so it is said in the bar, and saying it is also how
+                // it is stopped.
+                PanelActionButton {
+                    id: recordingButton
+
+                    objectName: "celestina-recording-button"
+                    barHeight: panel.barHeight
+                    height: CelestinaTheme.controlHeightXs
+                    blurAvailable: panel.compositorBlurAvailable
+                    ownsGlass: false
+                    visible: panel.recording
+                    iconName: "film"
+                    iconSize: CelestinaTheme.iconSm
+                    role: CelestinaButton.Destructive
+                    ink: backdropInk
+                    helpText: qsTr("Detener la grabación de %1")
+                              .arg(panel.recordingOutput)
+                    onClicked: {
+                        if (panel.providerSource) {
+                            panel.providerSource.sendCommand(
+                                "recorder", "record-stop", {});
+                        }
                     }
                 }
 

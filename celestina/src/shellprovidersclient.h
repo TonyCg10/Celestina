@@ -36,7 +36,18 @@ class ShellProvidersClient final : public QObject, public RequestSink
     Q_PROPERTY(RequestLedger *requests READ requests CONSTANT)
 
 public:
-    explicit ShellProvidersClient(QObject *parent = nullptr);
+    // Whether this host may let its helper open DDC conversations on its own.
+    // The host decides, because only the host knows whether it proved itself
+    // alone: a session channel it could not even ask (no bus) may hold any
+    // number of shells that all believe they are the only one, and several
+    // automatic `ddcutil` probes on one I²C bus is the recorded prelude to the
+    // card leaving it. The helper's own lease still serializes what does run.
+    enum class AutomaticDdc { Allowed, Withheld };
+
+    explicit ShellProvidersClient(
+        QObject *parent = nullptr,
+        AutomaticDdc automaticDdc = AutomaticDdc::Allowed
+    );
     ~ShellProvidersClient() override;
 
     bool available() const { return m_available; }
@@ -86,6 +97,7 @@ private:
 
     QProcess m_process;
     QTimer m_restartTimer;
+    QElapsedTimer m_helperAliveSince;
     ProtocolDecoder m_decoder;
     ProviderStates m_states;
     RequestLedger *m_requests;

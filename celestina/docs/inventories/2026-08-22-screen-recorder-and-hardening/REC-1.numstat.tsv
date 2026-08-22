@@ -1,0 +1,77 @@
+# REC-1 exact change inventory
+
+Base revision	892c478e8af973531ea93adb74674720250509c2
+Pathspec	celestina-rs/crates/celestina-shell-core/src/session.rs
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/qml/AudioMenu.qml
+Pathspec	celestina/qml/BrightnessMenu.qml
+Pathspec	celestina/qml/CaptureButton.qml
+Pathspec	celestina/qml/CaptureMenu.qml
+Pathspec	celestina/qml/ControlCentre.qml
+Pathspec	celestina/qml/LevelRow.qml
+Pathspec	celestina/qml/OutputChooser.qml
+Pathspec	celestina/qml/Panel.qml
+Pathspec	celestina/src/main.cpp
+Pathspec	celestina/src/niri_adapter.rs
+Pathspec	celestina/src/outputsnapshot.cpp
+Pathspec	celestina/src/outputsnapshot.h
+Pathspec	celestina/src/provider_adapter/audio.rs
+Pathspec	celestina/src/provider_adapter/brightness.rs
+Pathspec	celestina/src/provider_adapter/main.rs
+Pathspec	celestina/src/provider_adapter/nightlight.rs
+Pathspec	celestina/src/provider_adapter/recorder.rs
+Pathspec	celestina/src/shellprovidersclient.cpp
+Pathspec	celestina/src/shellprovidersclient.h
+Pathspec	celestina/tests/surfacemanager_test.cpp
+Pathspec	celestina/tests/tst_audiomenu.qml
+Pathspec	celestina/tests/tst_capturemenu.qml
+Pathspec	celestina/tests/tst_controlcentre.qml
+Pathspec	celestina/tests/tst_levelrow.qml
+Pathspec	celestina/tests/tst_outputchooser.qml
+Pathspec	celestina/docs/evidence/2026-08-22-screen-recorder-and-hardening.md
+Pathspec	celestina/docs/plans/archive/2026-08-22-screen-recorder-and-hardening.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/Cargo.lock
+Pathspec	docs/version-history.tsv
+Pathspec	scripts/language-baseline.tsv
+Pathspec	celestina/docs/inventories/2026-08-22-screen-recorder-and-hardening/REC-1.numstat.tsv
+
+added	deleted	content	path
+70	2	1bd65cffbccd1b0ee43ae0798d86ccac82d1b6935c74af8e72bc9133c1d83425	celestina-rs/crates/celestina-shell-core/src/session.rs
+7	1	879b57f763a64104c3995f52a7cb5a6320b9cc47aea3c25ae8a72ec52e4af88c	celestina/CMakeLists.txt
+70	26	9e06d340a20ec80827052e3b79c5a3eef463e9e53f172c1af25ecd2cbc7ef3bf	celestina/qml/AudioMenu.qml
+21	8	85ba5f58199e8845de7d739ac6d0d5fb907d6bae9e96ed175165aa0470fcd73f	celestina/qml/BrightnessMenu.qml
+1	0	0e296b9a15d3421c773f5169e48c9d9fbc6aa8116f86db2e1f0d3ad49677158e	celestina/qml/CaptureButton.qml
+111	6	0335260b893f944dad0fd60e0d3c130f868ddeed789e36f0242df56016fbc799	celestina/qml/CaptureMenu.qml
+133	2	f72c85c458b9b3b022936c7ae324e4db777c6d14b86ee6071175aba49b6f1da8	celestina/qml/ControlCentre.qml
+93	11	de59e397a5b1921e81f6b3b18b84428a8ebc5556c388220af23f53ea3010fe1a	celestina/qml/LevelRow.qml
+16	5	8fa0c953c0dc049ded0f1cc87ddfdde0c8378cb861dcc6b839b1551013a2f181	celestina/qml/OutputChooser.qml
+102	0	4e4dd95c0f582638c3a465528c1fc11423fa043d225daa8e364a622d96032cb9	celestina/qml/Panel.qml
+15	16	958955e210931745eecf68e11024565697c3fcf74dc71a0a570790fc1ec8b039	celestina/src/main.cpp
+77	3	024f86d3f2bde42adb33a7f27c28ad07995e0e660765bfc92b84c0fb618174f0	celestina/src/niri_adapter.rs
+21	0	461a36d52416dc7e1583fe3e6e63902ceec55b28164c0268cc91ed99dd11237a	celestina/src/outputsnapshot.cpp
+18	0	a951ff7c99151372efc04cdd69c3cbffeb154a40a22976f8f5ae3a9604778e19	celestina/src/outputsnapshot.h
+13	5	89ff372625ed2b17d565aebc4af80e5c1928fe5b256944151dd6d12879b9dda6	celestina/src/provider_adapter/audio.rs
+149	13	e5906a950e336491a930faa632e2162fde56786e863b852140ea499babafec8d	celestina/src/provider_adapter/brightness.rs
+19	9	07479a645635cafebf5a107db40336723b382869381d03e9c76e96f5b7c3d38e	celestina/src/provider_adapter/main.rs
+275	55	cbf72c2a129a0ee28157429d75dd5b628550ba8f6f92091d4a3259a16089bea9	celestina/src/provider_adapter/nightlight.rs
+457	0	320466471f9d6274384e307911cebb382a7958934af5cb3ca135e0fc05d22fef	celestina/src/provider_adapter/recorder.rs
+26	2	6ddd5b9a712466dc19aba9e54fe0043cd4fd6d26f8757c6cab90c3353f272c50	celestina/src/shellprovidersclient.cpp
+13	1	0181178b539d9374af500bc03d9c736711bee5371ff9c569162878e17fc117da	celestina/src/shellprovidersclient.h
+6	3	130606ba29ba58fe50329424710103b22cdaf77b1d729eb9d12fea584bac4507	celestina/tests/surfacemanager_test.cpp
+102	0	3dc93d116b3ccb070ee266466ad842a3d16e75933c2b048b881abf791b46a716	celestina/tests/tst_audiomenu.qml
+140	4	588971706c56a381cfa5487342a51a39aa657dc500594425c547fdb25a86130c	celestina/tests/tst_capturemenu.qml
+102	0	686e9b1aa98e58497e15690e5c8d394dcb2a4caf390b454157eb063900c44318	celestina/tests/tst_controlcentre.qml
+190	0	689c8e225dd7965e0d132d3632b02fac7540cf41c03d07fe974fed5311009017	celestina/tests/tst_levelrow.qml
+21	0	e8fcdb7eea1e46b9e127f16595e2330801b91601e5b4f13f2c66471db6798973	celestina/tests/tst_outputchooser.qml
+112	0	5f55aba2e0c3ebd88448e3927b9a5c3e324d6abfcc975007c99ed398ec4b6896	celestina/docs/evidence/2026-08-22-screen-recorder-and-hardening.md
+160	0	b6207bf7626c395fef870979ddfe87ac2022d83e150313873fb3a1977cd6a3d2	celestina/docs/plans/archive/2026-08-22-screen-recorder-and-hardening.md
+19	1	3282eae1f240eb647bb696ddf367e2bf30a7cfffd833c6d98990c04450f60f22	celestina/STATUS.md
+33	0	a154299e457e32c36e679390a96eff03f8069cdea206a4c78ea8fe8d2b2fe882	celestina/ROADMAP.md
+1	1	415b013efc205498ed1854967b1e97b99f8f63cefbec8c039045c15c9a216540	celestina/Cargo.toml
+1	1	4567f0989870c5342336c9498982fd8bd5957e598ad3cd2644a40f6a34a2f8f8	celestina/Cargo.lock
+1	0	e3444187c020543931e48f6f255e7e9eb34408df7a14344b8c4ea46ca6785b11	docs/version-history.tsv
+1	1	ae46cadfcd8323ecf46caa1d086b13429370fed1398ff588d76d5a0329f684d4	scripts/language-baseline.tsv
+77	0	self	celestina/docs/inventories/2026-08-22-screen-recorder-and-hardening/REC-1.numstat.tsv

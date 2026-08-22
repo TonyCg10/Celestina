@@ -179,47 +179,91 @@ SoftCard {
         font.weight: CelestinaTheme.weightDemiBold
     }
 
+    // Counted, not listed, and the row reads its own entry.
+    //
+    // A `Repeater` given a JavaScript array rebuilds every delegate when that
+    // array is replaced, and this provider replaces it after each command it
+    // carries out as well as on its own poll. That destroyed the row under the
+    // pointer mid-drag — taking its grab, its drag and everything it had asked
+    // for — and the rebuilt row started again from the reading. The count only
+    // changes when an application actually comes or goes.
     Repeater {
-        model: root.playbackApps
+        model: root.playbackApps.length
 
         delegate: LevelRow {
-            required property var modelData
+            id: playbackRow
 
+            required property int index
+
+            readonly property var app: playbackRow.index < root.playbackApps.length
+                                       ? root.playbackApps[playbackRow.index]
+                                       : null
+
+            objectName: playbackRow.app
+                        ? "celestina-level-row-" + playbackRow.app.id : ""
             width: parent.width
+            visible: playbackRow.app !== null
             ink: root.ink
-            label: modelData.name
-            iconName: modelData.muted ? "media-volume-muted" : "media-volume"
-            level: modelData.volume
-            actionIcon: modelData.muted ? "media-volume-muted" : "media-volume"
-            actionHelpText: modelData.muted ? qsTr("Activar el sonido")
-                                            : qsTr("Silenciar")
-            actionSelected: modelData.muted
-            onMoved: (target) => root.send(
-                "node-volume", {"id": modelData.id, "percent": target})
-            onActionTriggered: root.send(
-                "node-mute-toggle", {"id": modelData.id})
+            label: playbackRow.app ? playbackRow.app.name : ""
+            iconName: playbackRow.app && playbackRow.app.muted
+                      ? "media-volume-muted" : "media-volume"
+            level: playbackRow.app ? playbackRow.app.volume : 0
+            known: playbackRow.app !== null
+            actionIcon: playbackRow.app && playbackRow.app.muted
+                        ? "media-volume-muted" : "media-volume"
+            actionHelpText: playbackRow.app && playbackRow.app.muted
+                            ? qsTr("Activar el sonido") : qsTr("Silenciar")
+            actionSelected: playbackRow.app !== null && playbackRow.app.muted
+            onMoved: (target) => {
+                if (playbackRow.app) {
+                    root.send("node-volume",
+                              {"id": playbackRow.app.id, "percent": target});
+                }
+            }
+            onActionTriggered: {
+                if (playbackRow.app)
+                    root.send("node-mute-toggle", {"id": playbackRow.app.id});
+            }
         }
     }
 
+    // Counted rather than listed, for the reason above.
     Repeater {
-        model: root.captureApps
+        model: root.captureApps.length
 
         delegate: LevelRow {
-            required property var modelData
+            id: captureRow
 
+            required property int index
+
+            readonly property var app: captureRow.index < root.captureApps.length
+                                       ? root.captureApps[captureRow.index]
+                                       : null
+
+            objectName: captureRow.app
+                        ? "celestina-level-row-" + captureRow.app.id : ""
             width: parent.width
+            visible: captureRow.app !== null
             ink: root.ink
-            label: modelData.name
-            iconName: modelData.muted ? "mic-off" : "mic"
-            level: modelData.volume
-            actionIcon: modelData.muted ? "mic-off" : "mic"
-            actionHelpText: modelData.muted ? qsTr("Activar el micrófono")
-                                            : qsTr("Silenciar el micrófono")
-            actionSelected: modelData.muted
-            onMoved: (target) => root.send(
-                "node-volume", {"id": modelData.id, "percent": target})
-            onActionTriggered: root.send(
-                "node-mute-toggle", {"id": modelData.id})
+            label: captureRow.app ? captureRow.app.name : ""
+            iconName: captureRow.app && captureRow.app.muted ? "mic-off" : "mic"
+            level: captureRow.app ? captureRow.app.volume : 0
+            known: captureRow.app !== null
+            actionIcon: captureRow.app && captureRow.app.muted ? "mic-off" : "mic"
+            actionHelpText: captureRow.app && captureRow.app.muted
+                            ? qsTr("Activar el micrófono")
+                            : qsTr("Silenciar el micrófono")
+            actionSelected: captureRow.app !== null && captureRow.app.muted
+            onMoved: (target) => {
+                if (captureRow.app) {
+                    root.send("node-volume",
+                              {"id": captureRow.app.id, "percent": target});
+                }
+            }
+            onActionTriggered: {
+                if (captureRow.app)
+                    root.send("node-mute-toggle", {"id": captureRow.app.id});
+            }
         }
     }
 

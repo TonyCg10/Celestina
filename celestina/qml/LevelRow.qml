@@ -17,8 +17,9 @@ Item {
 
     required property BackdropInk ink
     required property string label
-    // The level as the provider last published it. The slider is never moved
-    // by this file's own click: `moved` asks, and the next reading answers.
+    // The level as the provider last published it — the truth, and never what
+    // this row asked for. What the row *shows* between an ask and its answer
+    // is `shownLevel`, and that distinction is the whole of the pacing below.
     required property int level
     property string iconName: ""
     property string secondaryText: ""
@@ -52,18 +53,99 @@ Item {
                                               + root.secondaryBandHeight
                                             : 0)
 
-    function nudge(direction) {
-        if (!root.enabled || !root.known)
+    // What this row asked for, and how fast it is allowed to ask again.
+    //
+    // These are two separate things, and treating them as one is what made a
+    // dragged slider jump backwards. A level provider answers at its own pace
+    // — `wpctl` costs a process per move, a monitor over DDC takes about a
+    // second — and it also publishes readings nobody asked for: a poll, or the
+    // read-back of a request from before this one. Those arrive *while* a drag
+    // is still moving, and they describe where the device was, not where the
+    // person is putting it.
+    //
+    // So the thumb follows what was asked for, and only a reading that
+    // actually answers the ask — or the settle below, when nothing does — puts
+    // it back under the provider's control. Meanwhile any reading at all is
+    // enough to release the pacing: it means the round trip completed, so the
+    // next position can go now instead of waiting out a timer.
+    property int asked: -1
+    // A request is travelling. One at a time, so a drag paces itself to what
+    // the device can really do rather than queueing every position it crossed.
+    property bool waiting: false
+    // The newest position the drag reached while that request was travelling.
+    property int queued: -1
+
+    readonly property int shownLevel: root.asked >= 0 ? root.asked : root.level
+
+    function ask(target) {
+        const bounded = Math.max(0, Math.min(100, Math.round(target)));
+        if (!root.enabled || !root.known || bounded === root.shownLevel)
             return;
-        const target = Math.max(0, Math.min(100, root.level + direction * root.step));
-        if (target !== root.level)
-            root.moved(target);
+
+        // The thumb goes where the person put it, whether or not the request
+        // can leave yet.
+        root.asked = bounded;
+        settle.restart();
+        if (root.waiting) {
+            root.queued = bounded;
+            return;
+        }
+        root.waiting = true;
+        root.moved(bounded);
+    }
+
+    // The provider published something. That completes the round trip, which
+    // is all the pacing needs; whether it answers what was asked is a
+    // different question, and only an exact answer returns the thumb.
+    function readingArrived() {
+        root.waiting = false;
+        if (root.queued >= 0) {
+            const next = root.queued;
+            root.queued = -1;
+            root.waiting = true;
+            root.moved(next);
+            return;
+        }
+        if (root.asked >= 0 && root.level === root.asked)
+            root.settled();
+    }
+
+    // The provider's reading is the truth again.
+    function settled() {
+        root.asked = -1;
+        root.queued = -1;
+        settle.stop();
+    }
+
+    // A notch lands on a round number rather than on `shown + step`: from 22,
+    // five percent up is 25 and five percent down is 20. The same rule the
+    // session's own step verbs apply, because it is the same gesture — what
+    // the wheel asks for is a level, not an offset.
+    function nudge(direction) {
+        const size = Math.max(1, root.step);
+        const from = root.shownLevel;
+        root.ask(direction > 0
+                 ? (Math.floor(from / size) + 1) * size
+                 : Math.floor((from - 1) / size) * size);
+    }
+
+    onLevelChanged: root.readingArrived()
+
+    // What a device that never confirms the exact ask leaves behind: a ceiling
+    // `wpctl` applied, a monitor that refused the value, a request that was
+    // simply lost. After this long with nothing asked and nothing answered,
+    // whatever the provider says is what is true.
+    Timer {
+        id: settle
+
+        interval: 1500
+        onTriggered: root.settled()
     }
 
     implicitHeight: root.settledHeight
     Accessible.role: Accessible.Slider
     Accessible.name: root.known
-                     ? qsTr("%1: %2 %").arg(root.label).arg(root.level)
+                     ? qsTr("%1: %2 %").arg(root.label).arg(root.shownLevel)
                      : qsTr("%1: %2").arg(root.label).arg(root.unknownText)
     Accessible.onIncreaseAction: root.nudge(1)
     Accessible.onDecreaseAction: root.nudge(-1)
@@ -134,7 +216,7 @@ Item {
 
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                text: root.known ? qsTr("%1 %").arg(root.level) : root.unknownText
+                text: root.known ? qsTr("%1 %").arg(root.shownLevel) : root.unknownText
                 textFormat: Text.PlainText
                 color: root.known ? root.ink.primary : root.ink.faint
                 font.family: CelestinaTheme.sansFamily
@@ -159,8 +241,8 @@ Item {
                 from: 0
                 to: 100
                 step: root.step
-                value: root.known ? root.level : 0
-                onMoved: (target) => root.moved(Math.round(target))
+                value: root.known ? root.shownLevel : 0
+                onMoved: (target) => root.ask(target)
             }
 
             BackdropIconButton {

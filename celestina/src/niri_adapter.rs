@@ -193,6 +193,12 @@ struct WorkspaceSnapshot {
     /// has. Additive: a host that predates this field ignores it and keeps the
     /// snapshot it always had.
     map: MapSnapshot,
+    /// The name the compositor gave it, kept out of the wire: the label above
+    /// always carries something displayable, and this is what may be looked up
+    /// in the homes memory. `None` is niri's unnamed spare, whose index
+    /// fallback must never borrow a named workspace's home.
+    #[serde(skip)]
+    identity: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -676,6 +682,17 @@ fn shell_snapshot(
             let active_window = workspace
                 .active_window_id
                 .and_then(|id| state.windows.windows.get(&id));
+            // The identity, apart from the label. The label below falls back
+            // to the index so a dot can still be spoken, but that fallback is
+            // a *display* name: the homes memory keys on identities, and an
+            // unnamed spare wearing "6" as its label would borrow the home of
+            // a named workspace "6" — which put one monitor's group capsule on
+            // every other monitor's strip.
+            let identity = workspace
+                .name
+                .as_deref()
+                .filter(|name| !name.is_empty())
+                .map(|name| bounded(name, MAX_LABEL_UNITS));
 
             Some(WorkspaceSnapshot {
                 id: workspace.id.to_string(),
@@ -701,6 +718,7 @@ fn shell_snapshot(
                     .and_then(|window| window.title.as_deref())
                     .map(|title| bounded(title, MAX_TITLE_UNITS)),
                 map: folded_map(state, workspace.id),
+                identity,
             })
         })
         .collect::<Vec<_>>();
@@ -722,7 +740,10 @@ fn shell_snapshot(
         .iter()
         .map(|workspace| {
             CoreWorkspace::new(
-                &workspace.label,
+                // The core's contract: an unnamed workspace has an empty label
+                // and is never remembered. The display fallback stays out of
+                // the memory's key space.
+                workspace.identity.as_deref().unwrap_or(""),
                 &workspace.output,
                 workspace.active,
                 workspace.urgent,
@@ -733,8 +754,12 @@ fn shell_snapshot(
     let learned = homes.learn(&observed);
 
     for workspace in &mut workspaces {
-        workspace.home = homes
-            .home_of(&workspace.label)
+        // An unnamed workspace has no identity to look up: it belongs where it
+        // is, which folds it into its own output's group.
+        workspace.home = workspace
+            .identity
+            .as_deref()
+            .and_then(|identity| homes.home_of(identity))
             .unwrap_or(&workspace.output)
             .to_owned();
     }
@@ -1474,6 +1499,55 @@ mod tests {
 
         assert_eq!(home_of(&snapshot, "left"), "HDMI-A-1");
         assert_eq!(home_of(&snapshot, "right"), "HDMI-A-1");
+    }
+
+    /// The session that found this: five named workspaces per monitor plus
+    /// niri's unnamed spare at each monitor's sixth position, and a *named*
+    /// workspace "6" on one of them. The spare's display label is its index —
+    /// also "6" — and looking that label up in the homes memory dressed every
+    /// other monitor's spare in the named workspace's home, which the strip
+    /// then drew as a foreign monitor group.
+    #[test]
+    fn an_unnamed_spare_does_not_borrow_a_named_workspaces_home() {
+        let mut state = EventStreamState::default();
+        apply_json(
+            &mut state,
+            r#"{"WorkspacesChanged":{"workspaces":[
+                {"id":10,"idx":1,"name":"6","output":"DP-1","is_urgent":false,"is_active":true,"is_focused":true,"active_window_id":null},
+                {"id":11,"idx":6,"name":null,"output":"DP-1","is_urgent":false,"is_active":false,"is_focused":false,"active_window_id":null},
+                {"id":20,"idx":1,"name":"11","output":"DP-2","is_urgent":false,"is_active":true,"is_focused":false,"active_window_id":null},
+                {"id":21,"idx":6,"name":null,"output":"DP-2","is_urgent":false,"is_active":false,"is_focused":false,"active_window_id":null}
+            ]}}"#,
+        );
+        apply_json(&mut state, r#"{"WindowsChanged":{"windows":[]}}"#);
+
+        let mut homes = Homes::new();
+        // The person's own declaration, the strongest claim a home can have.
+        homes.declare("6", "DP-1");
+        let (snapshot, _) = shell_snapshot(&state, &mut homes, &HashMap::new());
+
+        // The named "6" answers to its declaration.
+        let named = snapshot
+            .workspaces
+            .iter()
+            .find(|workspace| workspace.label == "6" && workspace.output == "DP-1")
+            .expect("the named workspace is published");
+        assert_eq!(named.home, "DP-1");
+
+        // The spare wearing "6" as its display label belongs where it is.
+        let spare = snapshot
+            .workspaces
+            .iter()
+            .find(|workspace| workspace.label == "6" && workspace.output == "DP-2")
+            .expect("the spare is published");
+        assert_eq!(
+            spare.home, "DP-2",
+            "an index fallback is not an identity the memory may answer for"
+        );
+
+        // And it taught the memory nothing: "6" still means the declaration,
+        // and no spare's sighting was recorded under that label.
+        assert_eq!(homes.home_of("6"), Some("DP-1"));
     }
 
     #[test]

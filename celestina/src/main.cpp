@@ -32,6 +32,7 @@
 #include "shellclient.h"
 #include "shellprovidersclient.h"
 #include "sessionactions.h"
+#include "outputsnapshot.h"
 #include "shellservice.h"
 #include "surfacemanager.h"
 #include "appiconprovider.h"
@@ -45,20 +46,6 @@ bool reducedMotionRequested()
     return qEnvironmentVariableIsSet("CELESTINA_REDUCED_MOTION");
 }
 
-QVariantList outputScreenSnapshot()
-{
-    QVariantList screens;
-    for (QScreen *screen : QGuiApplication::screens()) {
-        const QRect geometry = screen->geometry();
-        screens.append(QVariantMap {
-            {QStringLiteral("name"), screen->name()},
-            {QStringLiteral("width"), geometry.width()},
-            {QStringLiteral("height"), geometry.height()},
-            {QStringLiteral("devicePixelRatio"), screen->devicePixelRatio()},
-        });
-    }
-    return screens;
-}
 }
 
 // The session's "which screen do I share?" dialog.
@@ -283,7 +270,9 @@ int main(int argc, char *argv[])
     // an automatic DDC probe. A session without a bus keeps its panels and
     // loses only the channel — D-Bus degrades the service, never the shell.
     auto *shell = new ShellService(nullptr, &app);
-    switch (shell->attach(QDBusConnection::sessionBus())) {
+    const ShellService::Attachment attachment =
+        shell->attach(QDBusConnection::sessionBus());
+    switch (attachment) {
     case ShellService::Attachment::NameTaken:
         DiagnosticJournal::instance().record(
             CELESTINA_JOURNAL(Critical, "dbus.name.refused")
@@ -317,7 +306,17 @@ int main(int argc, char *argv[])
     auto *phone = new DevicesClient(&app);
     // One helper carries every bar provider; this is the panel's only bridge
     // to it, shared by every output rather than created per widget.
-    auto *providers = new ShellProvidersClient(&app);
+    // A host that could not even ask the bus whether it is alone must not let
+    // its helper probe DDC on its own: during a session-wide failure every
+    // freshly started shell takes this path at once, and their concurrent
+    // `ddcutil` probes on one I²C bus are the recorded prelude to the card
+    // leaving it. Brightness costs the degraded session; the bus survives.
+    auto *providers = new ShellProvidersClient(
+        &app,
+        attachment == ShellService::Attachment::NoBus
+            ? ShellProvidersClient::AutomaticDdc::Withheld
+            : ShellProvidersClient::AutomaticDdc::Allowed
+    );
 
     // The tray host and the provider that draws what it resolved share one
     // cache; the engine owns the provider, so neither of them owns the cache.

@@ -33,7 +33,27 @@ pub enum LevelChange {
 }
 
 impl LevelChange {
+    /// The level this change names by itself, when it names one.
+    ///
+    /// A `Set` carries its whole answer; only a `Step` has to know where the
+    /// device is. A caller that must run a process to find that out asks this
+    /// first, so an absolute request costs no reading at all — which is one
+    /// fewer child per move of a slider that is dragged, not stepped.
+    #[must_use]
+    pub fn absolute(self) -> Option<u8> {
+        match self {
+            Self::Set(level) => Some(level.min(MAX_LEVEL)),
+            Self::Step(_) => None,
+        }
+    }
+
     /// The level this change leaves, given the one the device reports now.
+    ///
+    /// A step lands on a round number rather than `current + step`: from 22, a
+    /// step of five reaches 25 going up and 20 going down. What a person turns
+    /// a wheel for is a level, not an offset, and a device that starts on 22 —
+    /// because something else set it there — otherwise carries that stray 2
+    /// through every step it is ever given.
     ///
     /// Clamped at both ends: a step past either edge stops there rather than
     /// wrapping, and a reading above [`MAX_LEVEL`] is stepped down from where
@@ -44,8 +64,23 @@ impl LevelChange {
             Self::Set(level) => level.min(MAX_LEVEL),
             Self::Step(step) => {
                 let ceiling = i16::from(current).max(i16::from(MAX_LEVEL));
-                let target = i16::from(current).saturating_add(step).clamp(0, ceiling);
-                u8::try_from(target).unwrap_or(MAX_LEVEL)
+                let current = i16::from(current);
+                let size = step.saturating_abs().max(1);
+                let target = if step > 0 {
+                    // The next multiple strictly above where it is.
+                    current
+                        .div_euclid(size)
+                        .saturating_add(1)
+                        .saturating_mul(size)
+                } else {
+                    // And strictly below, which is why this counts from one
+                    // less: a device already on a multiple must move off it.
+                    current
+                        .saturating_sub(1)
+                        .div_euclid(size)
+                        .saturating_mul(size)
+                };
+                u8::try_from(target.clamp(0, ceiling)).unwrap_or(MAX_LEVEL)
             }
         }
     }
@@ -483,6 +518,21 @@ mod tests {
         assert_eq!(LevelChange::Step(10).applied_to(40), 50);
     }
 
+    /// What the wheel is for: the level, not the offset it was given.
+    #[test]
+    fn a_step_lands_on_a_round_number() {
+        assert_eq!(LevelChange::Step(5).applied_to(22), 25);
+        assert_eq!(LevelChange::Step(-5).applied_to(22), 20);
+        // A level already on a multiple still moves a whole step.
+        assert_eq!(LevelChange::Step(5).applied_to(25), 30);
+        assert_eq!(LevelChange::Step(-5).applied_to(25), 20);
+        // And the stray value is spent once, not carried forever.
+        assert_eq!(
+            LevelChange::Step(-5).applied_to(LevelChange::Step(-5).applied_to(22)),
+            15
+        );
+    }
+
     #[test]
     fn a_device_already_above_the_ceiling_is_stepped_from_where_it_is() {
         // An overdriven session reports 150; stepping down must not first snap
@@ -495,6 +545,24 @@ mod tests {
     fn a_set_never_asks_for_more_than_the_nominal_maximum() {
         assert_eq!(LevelChange::Set(100).applied_to(150), 100);
         assert_eq!(LevelChange::Set(0).applied_to(60), 0);
+    }
+
+    /// The distinction a provider pays for in processes: a `set` can be carried
+    /// out without asking the device anything, a `step` cannot.
+    #[test]
+    fn only_a_step_has_to_know_where_the_device_is() {
+        assert_eq!(LevelChange::Set(40).absolute(), Some(40));
+        assert_eq!(LevelChange::Set(150).absolute(), Some(MAX_LEVEL));
+        assert_eq!(LevelChange::Step(-5).absolute(), None);
+
+        // And when it does name a level, it is the same level `applied_to`
+        // would have reached from anywhere at all.
+        for current in [0, 37, MAX_LEVEL, 150] {
+            assert_eq!(
+                LevelChange::Set(40).absolute(),
+                Some(LevelChange::Set(40).applied_to(current))
+            );
+        }
     }
 
     #[test]

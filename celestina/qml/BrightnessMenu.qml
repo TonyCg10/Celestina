@@ -69,23 +69,36 @@ SoftCard {
               : qsTr("Ningún monitor responde a DDC")
     iconName: "sun"
 
+    // Counted rather than listed: a `Repeater` handed a JavaScript array
+    // rebuilds every delegate when that array is replaced, and this provider
+    // publishes a new one on every reading. A monitor takes about a second to
+    // answer over DDC, so a row rebuilt mid-drag is not a rare race — it is
+    // most of them. The count changes only when a monitor comes or goes.
     Repeater {
-        model: root.connectors
+        model: root.connectors.length
 
         delegate: LevelRow {
-            required property var modelData
+            id: monitorRow
 
-            readonly property string connector: modelData
+            required property int index
 
+            readonly property string connector:
+                monitorRow.index < root.connectors.length
+                ? root.connectors[monitorRow.index] : ""
+
+            objectName: monitorRow.connector.length > 0
+                        ? "celestina-level-row-" + monitorRow.connector : ""
             width: parent.width
+            visible: monitorRow.connector.length > 0
             ink: root.ink
-            label: connector
+            label: monitorRow.connector
             iconName: "monitor"
-            secondaryText: connector === root.outputName
+            secondaryText: monitorRow.connector === root.outputName
                            ? qsTr("Esta pantalla") : ""
-            level: Math.max(0, root.levelOf(connector))
-            known: root.answered(connector)
-            onMoved: (target) => root.setLevel(connector, target)
+            level: Math.max(0, root.levelOf(monitorRow.connector))
+            known: monitorRow.connector.length > 0
+                   && root.answered(monitorRow.connector)
+            onMoved: (target) => root.setLevel(monitorRow.connector, target)
         }
     }
 

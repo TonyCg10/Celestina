@@ -28,6 +28,8 @@ use celestina_shell_core::session::{self, LevelChange, SessionRequest};
 use celestina_shell_core::snapshot::{Payload, ProviderId};
 use serde_json::Value;
 
+use rustix::fs::{flock, FlockOperation};
+
 use super::tools::{lock_runtime, run_bounded_with_cancel};
 use super::worker::Worker;
 
@@ -182,6 +184,103 @@ pub fn action(verb: &str, options: &Payload) -> Result<(), String> {
 /// destroy the record that the overlap happened.
 static DDC_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
+/// How long an operation waits for the session's DDC lease before refusing.
+///
+/// Longer than [`DDC_TIMEOUT`] on purpose: the likeliest holder is another
+/// process's own bounded conversation, so waiting one full conversation out is
+/// the normal case, not the pathological one.
+const DDC_LEASE_PATIENCE: Duration = Duration::from_secs(25);
+
+/// The session-wide DDC lease. `DDC_IN_FLIGHT` above measures the one-worker
+/// claim inside this process; this enforces it across processes, which the
+/// instrument cannot.
+///
+/// The retained GPU losses were both preceded by concurrent `ddcutil` children
+/// on one I²C bus, and this session's diagnostics have now recorded the exact
+/// shape that produces them with nobody misbehaving: several freshly started
+/// shells — a restart storm during a freeze, or the development nest beside
+/// the real session — each running its own startup detect at once. An
+/// advisory `flock` on one runtime file serializes every conversation this
+/// suite starts, whoever starts it.
+///
+/// Residual and stated: a helper killed with SIGKILL releases the lease (the
+/// kernel closes the descriptor) while its abandoned `ddcutil` child may still
+/// be finishing. That window already has its own answer — the host spaces the
+/// replacement by the abandoned child's lifetime — and a lease held by the
+/// helper cannot close it without handing the descriptor to the child, which
+/// would let every concurrently spawned process inherit and pin it.
+struct DdcLease {
+    _file: std::fs::File,
+}
+
+fn ddc_lease_path() -> std::path::PathBuf {
+    let mut base = std::env::var_os("XDG_RUNTIME_DIR")
+        .map_or_else(std::env::temp_dir, std::path::PathBuf::from);
+    base.push("celestina-ddc.lock");
+    base
+}
+
+/// The lease, or `None` for an operation that must not run: another process
+/// kept the bus for longer than a whole conversation, or shutdown was asked
+/// for while waiting.
+fn acquire_ddc_lease(shutdown: &AtomicBool) -> Option<DdcLease> {
+    let path = ddc_lease_path();
+    let file = match std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&path)
+    {
+        Ok(file) => file,
+        Err(error) => {
+            // No file means no serialization, and unserialized DDC is the
+            // thing that kills the card: refuse the operation, not the rule.
+            journal::record_from(
+                "ddc",
+                Event::new(Level::Critical, "ddc.lease.unavailable")
+                    .with_text("error", &error.to_string()),
+            );
+            return None;
+        }
+    };
+
+    let deadline = Instant::now() + DDC_LEASE_PATIENCE;
+    let mut waited = false;
+    loop {
+        match flock(&file, FlockOperation::NonBlockingLockExclusive) {
+            Ok(()) => {
+                if waited {
+                    journal::record_from(
+                        "ddc",
+                        Event::new(Level::Critical, "ddc.lease.acquired-after-wait"),
+                    );
+                }
+                return Some(DdcLease { _file: file });
+            }
+            Err(rustix::io::Errno::WOULDBLOCK) => {}
+            Err(error) => {
+                journal::record_from(
+                    "ddc",
+                    Event::new(Level::Critical, "ddc.lease.unavailable")
+                        .with_text("error", &error.to_string()),
+                );
+                return None;
+            }
+        }
+        if !waited {
+            waited = true;
+            // Another process of this suite is mid-conversation. That this
+            // line exists at all is the point: the overlap used to happen.
+            journal::record_from("ddc", Event::new(Level::Critical, "ddc.lease.wait"));
+        }
+        if shutdown.load(Ordering::Acquire) || Instant::now() >= deadline {
+            journal::record_from("ddc", Event::new(Level::Critical, "ddc.lease.refused"));
+            return None;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+}
+
 /// Runs one DDC operation, recorded from both ends.
 ///
 /// These are `Critical` and therefore flushed: `ddcutil` is the one thing this
@@ -192,8 +291,9 @@ fn ddc_operation<T>(
     operation: &str,
     output: Option<&str>,
     number: Option<u8>,
+    shutdown: &AtomicBool,
     run: impl FnOnce() -> T,
-) -> T {
+) -> Option<T> {
     let describe = |name: &str| {
         let mut event = Event::new(Level::Critical, name).with_text("operation", operation);
         if let Some(output) = output {
@@ -204,6 +304,12 @@ fn ddc_operation<T>(
         }
         event
     };
+
+    // The session-wide lease first: an operation another process would overlap
+    // does not run at all. This one is a refusal where `DDC_IN_FLIGHT` is an
+    // instrument, because the cross-process overlap is the recorded prelude to
+    // losing the card from the bus, and no reading is worth that.
+    let _lease = acquire_ddc_lease(shutdown)?;
 
     if DDC_IN_FLIGHT.swap(true, Ordering::AcqRel) {
         // Not a refusal: the operation still runs, because refusing here would
@@ -221,7 +327,7 @@ fn ddc_operation<T>(
         "ddc",
         describe("ddc.end").with("elapsed_ms", Field::Millis(elapsed)),
     );
-    answer
+    Some(answer)
 }
 
 fn detect(shutdown: &AtomicBool) -> Vec<DdcDisplay> {
@@ -233,7 +339,7 @@ fn detect(shutdown: &AtomicBool) -> Vec<DdcDisplay> {
         return Vec::new();
     }
 
-    let displays = ddc_operation("detect", None, None, || {
+    let displays = ddc_operation("detect", None, None, shutdown, || {
         run_bounded_with_cancel(
             "ddcutil",
             &["detect", "--brief"],
@@ -242,7 +348,10 @@ fn detect(shutdown: &AtomicBool) -> Vec<DdcDisplay> {
         )
         .map(|listing| brightness::parse_detect(&listing))
         .unwrap_or_default()
-    });
+    })
+    // A refused lease reads as no monitors this round; the schedule and the
+    // redetect requests ask again, on a bus that is no longer contended.
+    .unwrap_or_default();
 
     // The technical inventory the buses were found as — connector and display
     // number only. `ddcutil detect` also prints EDID, serial numbers and the
@@ -266,6 +375,7 @@ fn read(display: &DdcDisplay, shutdown: &AtomicBool) -> Option<u8> {
         "read",
         Some(&display.connector),
         Some(display.number),
+        shutdown,
         || {
             run_bounded_with_cancel(
                 "ddcutil",
@@ -276,6 +386,7 @@ fn read(display: &DdcDisplay, shutdown: &AtomicBool) -> Option<u8> {
             .and_then(|reading| brightness::parse_brightness(&reading))
         },
     )
+    .flatten()
 }
 
 fn write(display: &DdcDisplay, value: u8, shutdown: &AtomicBool) -> bool {
@@ -285,6 +396,7 @@ fn write(display: &DdcDisplay, value: u8, shutdown: &AtomicBool) -> bool {
         "write",
         Some(&display.connector),
         Some(display.number),
+        shutdown,
         || {
             run_bounded_with_cancel(
                 "ddcutil",
@@ -295,6 +407,9 @@ fn write(display: &DdcDisplay, value: u8, shutdown: &AtomicBool) -> bool {
             .is_some()
         },
     )
+    // A refused lease is a failed write; the pending target survives in the
+    // worker's own retry shape, the same as a monitor that did not answer.
+    .unwrap_or(false)
 }
 
 /// Publishes one entry per monitor that speaks DDC. A monitor that speaks it
@@ -399,7 +514,10 @@ fn run(runtime: &Mutex<ProviderRuntime>, id: &ProviderId, shutdown: &AtomicBool)
 mod tests {
     use super::{ddc_operation, ddc_requested, request_redetect, REDETECT_REQUESTED};
 
-    use std::sync::{atomic::Ordering, Mutex};
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    };
 
     // Both cases deliberately exercise the process-global flag. Rust runs unit
     // tests in parallel, so they take one test-only lock rather than making
@@ -446,8 +564,9 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         // How the one worker actually behaves: one after another.
-        ddc_operation("read", Some("DDC-FIXTURE-A"), Some(1), || ());
-        ddc_operation("read", Some("DDC-FIXTURE-A"), Some(1), || ());
+        let live = AtomicBool::new(false);
+        assert!(ddc_operation("read", Some("DDC-FIXTURE-A"), Some(1), &live, || ()).is_some());
+        assert!(ddc_operation("read", Some("DDC-FIXTURE-A"), Some(1), &live, || ()).is_some());
         let overlaps = |connector: &str| {
             test_journal_lines()
                 .into_iter()
@@ -457,11 +576,26 @@ mod tests {
         };
         assert_eq!(overlaps("DDC-FIXTURE-A"), 0);
 
-        // And what a second owner would look like if one ever appeared.
-        ddc_operation("read", Some("DDC-FIXTURE-B"), Some(2), || {
-            ddc_operation("write", Some("DDC-FIXTURE-B"), Some(2), || ());
+        // And what a second owner meets now: the session lease. The nested
+        // operation is the overlap shape — it contends on the same lock file
+        // through its own descriptor, exactly as another process would — and
+        // it is refused rather than run. `raised` stands in for that process's
+        // shutdown so the refusal is immediate instead of a real wait.
+        let raised = AtomicBool::new(true);
+        let inner = ddc_operation("read", Some("DDC-FIXTURE-B"), Some(2), &live, || {
+            ddc_operation("write", Some("DDC-FIXTURE-B"), Some(2), &raised, || ())
         });
-        assert_eq!(overlaps("DDC-FIXTURE-B"), 1);
+        assert!(inner.expect("the outer operation runs").is_none());
+        assert_eq!(
+            overlaps("DDC-FIXTURE-B"),
+            0,
+            "a refused operation is exactly the overlap that never happened"
+        );
+        let refusals = test_journal_lines()
+            .into_iter()
+            .filter(|line| line["event"] == "ddc.lease.refused")
+            .count();
+        assert!(refusals >= 1, "and the refusal itself is on the record");
 
         // Both ends of every operation are on the disk, which is what makes
         // "started and never finished" readable after a freeze.
@@ -483,8 +617,10 @@ mod tests {
                     .is_some_and(|o| o.starts_with("DDC-FIXTURE"))
             })
             .count();
-        assert_eq!(starts, 4);
-        assert_eq!(ends, 4);
+        // Three, not four: the refused operation never started, so it owes
+        // the journal no bracket.
+        assert_eq!(starts, 3);
+        assert_eq!(ends, 3);
     }
 
     /// Requests coalesce and are consumed exactly once.

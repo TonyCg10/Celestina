@@ -377,9 +377,17 @@ void DenseGlassAggregator::retire(QWindow *source)
     collapse->setDuration(80);
     collapse->setEasingCurve(QEasingCurve::OutCubic);
     connect(collapse, &QVariantAnimation::valueChanged, this,
-            [this, tracked, resting](const QVariant &value) {
+            [this, tracked, resting, collapse](const QVariant &value) {
                 if (!tracked)
                     return;
+                // The collapse belongs to the retirement. A park or a revive
+                // ends that retirement early, and a collapse that kept going
+                // overwrote the reopened menu's live shapes with these
+                // shrinking ones — then withdrew them outright at `finished`.
+                if (!tracked->property("celestinaRetiring").toBool()) {
+                    collapse->stop();
+                    return;
+                }
                 const qreal keep = value.toReal();
                 QList<DenseGlassShape> scaled;
                 scaled.reserve(resting.size());
@@ -409,7 +417,10 @@ void DenseGlassAggregator::retire(QWindow *source)
             });
     connect(collapse, &QVariantAnimation::finished, this,
             [this, tracked]() {
-                if (tracked)
+                // Only a retirement that is still in force ends in withdrawal;
+                // an interrupted one already had its shapes withdrawn (a park)
+                // or republished live (a revive) by whoever interrupted it.
+                if (tracked && tracked->property("celestinaRetiring").toBool())
                     withdraw(tracked.data());
             });
     collapse->start(QAbstractAnimation::DeleteWhenStopped);

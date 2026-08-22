@@ -187,6 +187,9 @@ private slots:
     // native folder chooser. The menu is closed first so destroying its
     // carrier cannot also destroy the dialog that will answer later.
     void chooseWallpaperFolder();
+    // The toolbox asks which screen to record. Same seam and same reason as
+    // the folder chooser above: the question outlives the menu that raised it.
+    void chooseRecordingOutput();
     // A menu item is the same request a click on the strip makes.
     void activate(const QString &output, int index);
     void activateWindow(const QString &windowId);
@@ -252,6 +255,11 @@ private:
     // longer tells a stale beat from a live one — the generation does:
     // advanced by every open, captured by every scheduled close.
     quint64 m_openGeneration = 0;
+    // The tray child's own beat counter, for the same reason the parent has
+    // one: its carrier window can be replaced fast enough for the allocator
+    // to hand the successor the retired child's address, and a finish guarded
+    // by the pointer alone then closes a menu the person just opened.
+    quint64 m_trayChildGeneration = 0;
     // The panel that opened the tray inventory. Retained only while that menu
     // is current so a right click can place the chosen item's own asynchronously
     // loaded D-Bus menu beside it on the same output.

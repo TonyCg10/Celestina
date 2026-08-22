@@ -42,7 +42,7 @@
 4	celestina-style/scripts/smoke-production.sh
 16	celestina-style/scripts/sync-phosphor-shapes.sh
 18	celestina-style/tests/tst_icongradient.qml
-31	celestina/qml/OutputChooser.qml
+29	celestina/qml/OutputChooser.qml
 1	celestina/scripts/activate-production.sh
 2	celestina/scripts/qmllint-production.sh
 1	celestina/scripts/run.sh

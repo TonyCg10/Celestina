@@ -63,7 +63,16 @@ AnchoredCard {
     // suppressed for attached routes, and the surface moves as one thing.
     // Nothing has been drawn yet either way: the deferral resolves before
     // the first frame.
-    onReady: Qt.callLater(function() { menu.open(); })
+    //
+    // Re-checked at fire time: between the queue and the tick the host can
+    // park this carrier — a fast second click — and an open that lands then
+    // leaves the popup visible inside the resting scene. The next resume's
+    // replay finds it already open, gets no aboutToShow, and the carrier
+    // comes back mapped and input-live with nothing painted.
+    onReady: Qt.callLater(function() {
+        if (!root.parkingForReuse)
+            menu.open();
+    })
 
     GlassContextMenu {
         id: menu

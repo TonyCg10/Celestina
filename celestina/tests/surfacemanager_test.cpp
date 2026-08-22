@@ -945,12 +945,15 @@ void SurfaceManagerTest::aPopupBackedMenuParksAndReplaysItsPopup()
     engine.addImportPath(QCoreApplication::applicationDirPath());
     engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
     PanelMenuController controller(&engine, nullptr, nullptr);
+    // The toolbox reads a provider of its own now — whether this session is
+    // recording — so it is handed one like every other provider-backed menu.
+    FakeTrayProviderSource providers;
     QWindow *const panel = makePanel();
     const QRectF opener(700, 6, 28, 28);
     const QRectF anchor(706, 11, 18, 18);
 
     controller.toggleIndicatorMenu(
-        panel, opener, anchor, QStringLiteral("capture"), nullptr);
+        panel, opener, anchor, QStringLiteral("capture"), &providers);
     auto *const surface = controller.findChild<PanelMenuSurface *>();
     QVERIFY(surface);
     QVERIFY(surface->isOpen());
@@ -965,7 +968,7 @@ void SurfaceManagerTest::aPopupBackedMenuParksAndReplaysItsPopup()
     // the silent close announced no dismissal that could start a second
     // retirement against the window being put away.
     controller.toggleIndicatorMenu(
-        panel, opener, anchor, QStringLiteral("capture"), nullptr);
+        panel, opener, anchor, QStringLiteral("capture"), &providers);
     QTRY_VERIFY(surface->isParked());
     QCOMPARE(surface->window(), window.data());
     QTRY_VERIFY(!popup->property("visible").toBool());
@@ -973,7 +976,7 @@ void SurfaceManagerTest::aPopupBackedMenuParksAndReplaysItsPopup()
     // The reopen resumes the same window and replays the popup: rows,
     // reveal and glass return through the family's own lifecycle.
     controller.toggleIndicatorMenu(
-        panel, opener, anchor, QStringLiteral("capture"), nullptr);
+        panel, opener, anchor, QStringLiteral("capture"), &providers);
     QVERIFY(surface->isOpen());
     QCOMPARE(surface->window(), window.data());
     QTRY_VERIFY(popup->property("visible").toBool());

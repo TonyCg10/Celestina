@@ -1,0 +1,27 @@
+# SURF-1-D exact change inventory
+
+Base revision	892c478e8af973531ea93adb74674720250509c2
+Pathspec	celestina/qml/AnchoredMenu.qml
+Pathspec	celestina/qml/SoftMenu.qml
+Pathspec	celestina/src/softclose.h
+Pathspec	celestina/src/panelmenucontroller.cpp
+Pathspec	celestina/src/panelmenucontroller.h
+Pathspec	celestina/src/denseglass.cpp
+Pathspec	celestina/src/panelblurcontroller.cpp
+Pathspec	celestina/tests/indicatormenu_test.cpp
+Pathspec	celestina/docs/evidence/2026-08-22-surf-1-d-fast-toggle-races.md
+Pathspec	celestina/docs/plans/active/2026-08-20-persistent-carriers.md
+Pathspec	celestina/docs/inventories/2026-08-20-persistent-carriers/SURF-1-D.numstat.tsv
+
+added	deleted	content	path
+10	1	23de2f1ffe43084c06470d85bf2e224419c8f7fa8ba91093fe46ed94cb201abf	celestina/qml/AnchoredMenu.qml
+8	1	eb1a7caddb5d0ffa2896ccb6ea26ac012cceac8c393da5a81f337655ebd90ab9	celestina/qml/SoftMenu.qml
+17	0	036b204f4f4d25077f0332156a7ba44eb840be976f7e9b8bce47fdfcff828f1f	celestina/src/softclose.h
+60	5	6d33aae5bec068f67d3dfcf18ed3fb72aff6acf913c79f9e9c50e58b50920ffa	celestina/src/panelmenucontroller.cpp
+8	0	b440a5f232719a5096fff4661ba1303d87de6ef2733473523d78390eacad7a56	celestina/src/panelmenucontroller.h
+13	2	626dd2cd1152e905793268167c0cd8e127620cee4924a90a94dd4c37a8297abb	celestina/src/denseglass.cpp
+7	0	a40f831d5952904f66bd41f0b9f05274783626d4b500e197e1f5735a0d739667	celestina/src/panelblurcontroller.cpp
+41	7	1e5795733ddd29e81428750082e7954f1a1d15372ecfd4d5769125869d22b165	celestina/tests/indicatormenu_test.cpp
+104	0	3ac1887150b36b0e6632dbe2d95beea137ed15b0b418b318b9ccf0378fab15c4	celestina/docs/evidence/2026-08-22-surf-1-d-fast-toggle-races.md
+1	1	c64b1e5d00106b3df752a3376aab0eb7aa92598f774d64af561d276bf2268f6e	celestina/docs/plans/active/2026-08-20-persistent-carriers.md
+27	0	self	celestina/docs/inventories/2026-08-20-persistent-carriers/SURF-1-D.numstat.tsv

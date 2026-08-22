@@ -358,6 +358,13 @@ void PanelBlurController::publishDenseSections()
     // resting shapes over that retirement.
     if (quick->property("celestinaRetiring").toBool())
         return;
+    // And a parked carrier is deliberately dark. The park clears the retiring
+    // mark on its way in, so this is a state of its own, not a subset of the
+    // one above: a queued reveal landing after the park published the settled
+    // sections onto the companions, which stood as a bare slab over an output
+    // whose menu was resting.
+    if (quick->property("celestinaParked").toBool())
+        return;
     auto *layer = LayerShellQt::Window::get(quick);
     if (!layer)
         return;

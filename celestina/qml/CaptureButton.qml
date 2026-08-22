@@ -20,6 +20,7 @@ PanelActionButton {
         failureHold.restart();
     }
 
+    objectName: "celestina-toolbox-button"
     iconName: "toolbox"
     iconSize: CelestinaTheme.iconSm
     role: failed ? CelestinaButton.Destructive : CelestinaButton.Ghost

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 1.1.1 LANGUAGES C CXX)
+project(celestina VERSION 1.2.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -220,6 +220,8 @@ qt_add_executable(celestina
     src/panelmanager.cpp
     src/shellscale.h
     src/shellscale.cpp
+    src/outputsnapshot.h
+    src/outputsnapshot.cpp
     src/wallpapermanager.h
     src/wallpapermanager.cpp
     src/wallpaperidentity.h
@@ -717,6 +719,8 @@ if(BUILD_TESTING)
         src/denseglass.cpp
         src/panelmenucontroller.h
         src/panelmenucontroller.cpp
+        src/outputsnapshot.h
+        src/outputsnapshot.cpp
         src/shellscale.h
         src/shellscale.cpp
         src/panelattachmentlease.h
@@ -819,6 +823,8 @@ if(BUILD_TESTING)
         src/requestledger.cpp
         src/panelmenucontroller.h
         src/panelmenucontroller.cpp
+        src/outputsnapshot.h
+        src/outputsnapshot.cpp
         src/quietplacement.h
         src/quietplacement.cpp
         src/shellscale.h

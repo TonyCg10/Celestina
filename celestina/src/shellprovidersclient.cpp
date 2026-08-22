@@ -24,9 +24,12 @@ constexpr qsizetype helperLineLimitBytes = 4 * 1024;
 // shutdown left no one holding that bound, so this is how long the host stays
 // away from starting a replacement that would immediately detect displays.
 constexpr int abandonedChildLifetimeMs = 20 * 1000;
+// How long a helper must stay up before its restart backoff is trusted again.
+// A helper can emit one valid frame and still be dying with its session.
+constexpr qint64 helperStableMs = 30 * 1000;
 } // namespace
 
-ShellProvidersClient::ShellProvidersClient(QObject *parent)
+ShellProvidersClient::ShellProvidersClient(QObject *parent, AutomaticDdc automaticDdc)
     : QObject(parent)
     , m_requests(new RequestLedger(this, this))
 {
@@ -34,6 +37,18 @@ ShellProvidersClient::ShellProvidersClient(QObject *parent)
         "CELESTINA_PROVIDER_ADAPTER_PATH",
         QStringLiteral(CELESTINA_PROVIDER_ADAPTER)
     ));
+    if (automaticDdc == AutomaticDdc::Withheld) {
+        // Stronger than the person's own CELESTINA_DDC on purpose: that
+        // variable turns a working feature off, while this withholds a probe
+        // the host cannot prove is the session's only one.
+        QProcessEnvironment environment =
+            QProcessEnvironment::systemEnvironment();
+        environment.insert(QStringLiteral("CELESTINA_DDC"), QStringLiteral("0"));
+        m_process.setProcessEnvironment(environment);
+        DiagnosticJournal::instance().record(
+            CELESTINA_JOURNAL(Critical, "provider-helper.ddc-withheld")
+        );
+    }
     m_process.setProcessChannelMode(QProcess::SeparateChannels);
 
     connect(
@@ -114,6 +129,7 @@ void ShellProvidersClient::startHelper()
     // A new instance, and therefore not the one any pending escalation was
     // armed against.
     ++m_helperGeneration;
+    m_helperAliveSince.start();
     DiagnosticJournal::instance().record(
         CELESTINA_JOURNAL(Critical, "provider-helper.spawn")
             .unsigned_number(QStringLiteral("generation"), m_helperGeneration)
@@ -301,7 +317,15 @@ void ShellProvidersClient::applyLine(const QByteArray &line)
 
     const bool becameAvailable = !m_available;
     m_available = true;
-    m_restartDelayMs = initialRestartDelayMs;
+    // The backoff only resets once the helper has stayed up for a while. It
+    // used to reset on this first valid frame, and a helper whose Wayland or
+    // display was dying could produce one — so the restart loop span at the
+    // initial delay, each turn running a fresh automatic DDC probe into a
+    // failing session. The diagnostics of 2026-08-22 hold exactly that storm.
+    if (m_helperAliveSince.isValid()
+        && m_helperAliveSince.hasExpired(helperStableMs)) {
+        m_restartDelayMs = initialRestartDelayMs;
+    }
     const bool stateChanged = m_states.apply(message);
     if (tracing && stateChanged) {
         qInfo().noquote() << "Celestina provider frame"

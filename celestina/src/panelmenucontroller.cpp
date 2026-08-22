@@ -1,5 +1,7 @@
 #include "panelmenucontroller.h"
 
+#include "outputsnapshot.h"
+
 #include "quietplacement.h"
 
 #include "diagnosticjournal.h"
@@ -554,8 +556,9 @@ void PanelMenuController::toggleIndicatorMenu(
     QObject *providerSource
 )
 {
-    const bool needsProvider = kind != QStringLiteral("capture")
-        && kind != QStringLiteral("calendar");
+    // The toolbox reads a provider now: recording is a state the session is in,
+    // not a request it forgets making. Only the calendar answers to nothing.
+    const bool needsProvider = kind != QStringLiteral("calendar");
     if (!m_enabled || !panel || (needsProvider && !providerSource)) {
         DiagnosticJournal::instance().record(
             DiagnosticJournal::Record(
@@ -578,7 +581,15 @@ void PanelMenuController::toggleIndicatorMenu(
     // answers it first — but a host that reopened here would resurrect the
     // defect where the first click did nothing visible and only the second
     // closed the menu.
-    const bool sameAgain = (m_openMenuKind == kind);
+    // A carrier already inside its closing beat is closed as far as the
+    // person is concerned: `m_openMenuKind` merely has not been cleared yet
+    // (the beat's finish does that). Counting it as "the same menu, so put it
+    // away" swallowed every reopen clicked during those 170 ms — the first
+    // click did nothing and only the second worked, the exact defect the
+    // comment below exists to prevent, resurrected through the beat.
+    const bool retiringNow = m_surface->window()
+        && m_surface->window()->property("celestinaRetiring").toBool();
+    const bool sameAgain = (m_openMenuKind == kind) && !retiringNow;
     // The opener rectangle travels into the record because "the menu opened
     // disconnected at the left edge" has already happened and the journal
     // could not say what geometry the gesture actually delivered. An empty
@@ -718,6 +729,12 @@ void PanelMenuController::toggleIndicatorMenu(
                 this,
                 SLOT(captureScreenshot())
             );
+            connect(
+                window,
+                SIGNAL(recordRequested()),
+                this,
+                SLOT(chooseRecordingOutput())
+            );
         } else if (kind == QStringLiteral("wallpaper")) {
             connect(
                 window,
@@ -800,6 +817,32 @@ void PanelMenuController::captureScreenshot()
         m_niri->requestScreenshot();
     if (!requestPopupDismissal(m_surface->window()))
         close();
+}
+
+void PanelMenuController::chooseRecordingOutput()
+{
+    if (sender() != m_surface->window()
+        || m_openMenuKind != QStringLiteral("capture")
+        || !m_openIndicatorPanel) {
+        return;
+    }
+
+    const QPointer<QWindow> panel = m_openIndicatorPanel;
+    close();
+    // The outputs travel with the question rather than being read by the
+    // surface that asks it: what a screen measures is the host's to say, and
+    // a `QScreen` answers a binding for its own width with nothing at all.
+    // Read here, at the moment of asking, so a monitor plugged in since this
+    // shell started is in the list.
+    QTimer::singleShot(0, panel, [panel]() {
+        if (panel) {
+            QMetaObject::invokeMethod(
+                panel,
+                "openRecordingOutputPicker",
+                Q_ARG(QVariant, QVariant::fromValue(outputScreenSnapshot()))
+            );
+        }
+    });
 }
 
 void PanelMenuController::chooseWallpaperFolder()
@@ -1308,6 +1351,7 @@ void PanelMenuController::trayMenuReady(
         return;
     }
 
+    ++m_trayChildGeneration;
     m_openService = service;
     m_openPath = path;
     m_openParentMenu = keepTrayItems ? parentMenu : nullptr;
@@ -1351,9 +1395,15 @@ void PanelMenuController::menuDismissed()
     );
     if (sender() == m_trayChildSurface->window()) {
         QWindow *const window = m_trayChildSurface->window();
-        softCloseWindow(window, [this, window]() {
-            if (m_trayChildSurface->window() == window)
+        const quint64 generation = m_trayChildGeneration;
+        softCloseWindow(window, [this, window, generation]() {
+            // Pointer and generation both, as the parent's beat learned: a
+            // fast row-to-row hover can retire this child and open the next
+            // at the recycled address before this finish fires.
+            if (m_trayChildSurface->window() == window
+                && generation == m_trayChildGeneration) {
                 closeTrayChild(true);
+            }
         });
         return;
     }
@@ -1482,6 +1532,11 @@ void PanelMenuController::close()
         // a floating menu detached from the bar, still blurred, inviting
         // the clicks the author recorded (2026-08-20).
         if (auto *quick = qobject_cast<QQuickWindow *>(window)) {
+            // A closing beat interrupted by this park may still be fading;
+            // left running, its next ticks lift the opacity this park just
+            // zeroed and the resting carrier paints its card's ghost for the
+            // fade's remainder.
+            stopSoftCloseFade(window);
             if (QQuickItem *const content = quick->contentItem())
                 content->setOpacity(0.0);
             // A popup-backed carrier closes its popup first, silently: the
