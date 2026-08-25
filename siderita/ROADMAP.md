@@ -2,8 +2,9 @@
 
 - **Status:** active
 - **Active implementation checkpoint:** SID-A4
-- **Related author validation:** `VAL-SID-G7`, `VAL-SID-04` and `VAL-SID-07` in
-  [VALIDATION.md](VALIDATION.md); none of them blocks implementation
+- **Related author validation:** `VAL-SID-G7`, `VAL-SID-04`, `VAL-SID-07` and
+  `VAL-SID-11` in [VALIDATION.md](VALIDATION.md); none of them blocks
+  implementation
 
 `SID-M1` remains the next settled checkpoint after `SID-G7` and `SID-A1`, and
 has no active execution plan.

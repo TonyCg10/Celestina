@@ -137,22 +137,22 @@ Item {
     // Back undoes wherever you are, in the order you got there: a search
     // bows out first, then the Trash location, and only then does history
     // move. Trash is a place you can be but not a folder in history.
+    // `loading` holds back only the history move, the one step that races a
+    // scan; leaving a location cancels its reading instead of waiting for it,
+    // and gating that on `loading` locked the person inside a slow one.
     readonly property bool canGoBackOrLeave:
-            !controller.loading
-            && (topBar.searchText.length > 0 || controller.searchActive
-                || controller.trashActive || controller.recentActive
-                || controller.canGoBack)
+            topBar.searchText.length > 0 || controller.searchActive
+            || controller.trashActive || controller.recentActive
+            || (!controller.loading && controller.canGoBack)
 
     function goBackOrLeave() {
-        if (controller.loading)
-            return
         if (topBar.searchText.length > 0 || controller.searchActive)
             clearSearch()
         else if (controller.trashActive)
             controller.closeTrash()
         else if (controller.recentActive)
             controller.closeRecent()
-        else if (controller.canGoBack)
+        else if (!controller.loading && controller.canGoBack)
             controller.goBack()
     }
 

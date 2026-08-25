@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// One entry of the desktop's recently-used list: where it is and when it was
 /// last touched (the raw ISO-8601 stamp the file carries — it sorts correctly
@@ -16,6 +16,8 @@ pub struct RecentItem {
 /// This is interop, not an index: the file is the desktop's, written by every
 /// application that opens something, and Siderita only reads it. Anything it
 /// cannot parse is skipped rather than guessed at.
+///
+/// Blocking, and deliberately so — its caller reads it on a worker thread.
 pub fn load(limit: usize) -> Vec<RecentItem> {
     let Some(path) = celestina_core::xdg::data_home().map(|dir| dir.join("recently-used.xbel"))
     else {
@@ -24,7 +26,24 @@ pub fn load(limit: usize) -> Vec<RecentItem> {
     let Ok(content) = std::fs::read_to_string(&path) else {
         return Vec::new();
     };
-    let mut items = parse(&content);
+    newest_existing(parse(&content), limit, |path| path.exists())
+}
+
+/// The newest `limit` entries that still exist, newest first.
+///
+/// `exists` is a parameter because the cost of this function *is* how often it
+/// is called: one filesystem round trip each, against a list that records
+/// everything the desktop has ever opened — including files on a phone or a
+/// share that has since stopped answering, where a single question can block
+/// for as long as that filesystem takes to give up. Asking about every entry
+/// and then throwing all but the newest `limit` away paid that price for
+/// answers nobody would read, so the list is ordered first and asked about one
+/// entry at a time until it is full.
+fn newest_existing(
+    mut items: Vec<RecentItem>,
+    limit: usize,
+    mut exists: impl FnMut(&Path) -> bool,
+) -> Vec<RecentItem> {
     // Newest first, and the name breaks ties so the order never wobbles between
     // two entries written in the same instant.
     items.sort_by(|left, right| {
@@ -33,9 +52,16 @@ pub fn load(limit: usize) -> Vec<RecentItem> {
             .cmp(&left.stamp)
             .then_with(|| left.name.cmp(&right.name))
     });
-    items.retain(|item| item.path.exists());
-    items.truncate(limit);
-    items
+    let mut kept = Vec::with_capacity(limit.min(items.len()));
+    for item in items {
+        if kept.len() == limit {
+            break;
+        }
+        if exists(&item.path) {
+            kept.push(item);
+        }
+    }
+    kept
 }
 
 /// Pulls the `href` and the most recent timestamp out of every `<bookmark>` tag.
@@ -183,6 +209,67 @@ mod tests {
         assert_eq!(super::unescape("&amp;amp;"), "&amp;");
         assert_eq!(super::unescape("100 &euro; & more"), "100 &euro; & more");
         assert_eq!(super::unescape("nothing to do"), "nothing to do");
+    }
+
+    /// Builds `count` entries, newest first by stamp, named `0.txt`, `1.txt`, …
+    fn stamped(count: usize) -> Vec<RecentItem> {
+        (0..count)
+            .map(|index| RecentItem {
+                path: PathBuf::from(format!("/tmp/{index}.txt")),
+                name: format!("{index}.txt"),
+                // Zero-padded and descending, because the stamp is compared as
+                // text: an unpadded number would order 99 above 500.
+                stamp: format!("2026-01-01T00:00:00.{:04}Z", count - index),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn it_stops_asking_the_filesystem_once_the_list_is_full() {
+        let mut asked = 0;
+        let kept = super::newest_existing(stamped(500), 100, |_| {
+            asked += 1;
+            true
+        });
+        assert_eq!(kept.len(), 100);
+        assert_eq!(
+            asked, 100,
+            "a full list must not cost a question per recorded entry"
+        );
+        assert_eq!(kept[0].name, "0.txt", "still newest first");
+    }
+
+    #[test]
+    fn it_keeps_asking_past_entries_that_are_gone() {
+        let mut asked = 0;
+        // Only every third entry still exists, so filling a list of two takes
+        // six questions — the cost follows what is missing, never the whole file.
+        let kept = super::newest_existing(stamped(30), 2, |_| {
+            asked += 1;
+            asked % 3 == 0
+        });
+        assert_eq!(kept.len(), 2);
+        assert_eq!(asked, 6);
+        assert_eq!(kept[0].name, "2.txt");
+        assert_eq!(kept[1].name, "5.txt");
+    }
+
+    #[test]
+    fn a_limit_of_nothing_asks_nothing() {
+        let mut asked = 0;
+        let kept = super::newest_existing(stamped(10), 0, |_| {
+            asked += 1;
+            true
+        });
+        assert!(kept.is_empty());
+        assert_eq!(asked, 0);
+    }
+
+    #[test]
+    fn a_short_list_is_returned_whole_and_ordered() {
+        let kept = super::newest_existing(stamped(3), 100, |_| true);
+        let names: Vec<&str> = kept.iter().map(|item| item.name.as_str()).collect();
+        assert_eq!(names, ["0.txt", "1.txt", "2.txt"]);
     }
 
     #[test]

@@ -1,13 +1,33 @@
 # Siderita status
 
-- **Updated:** 2026-08-18
+- **Updated:** 2026-08-24
 - **Implementation:** the registered product version and CP0-CP7 behaviour are
-  present; `SID-G7` (shared reading surface) and `SID-A1` (archives) are the
-  active checkpoints and the portal-parenting one remains planned
+  present; `SID-A4` (what the window costs, and what it shows) is the active
+  checkpoint and the portal-parenting one remains planned
 - **Author validation:** mixed; current manual queue is in
   [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
+
+- Delivered as `1.5.2`: `SID-A4-B`, the freeze the author reported on
+  opening Recientes or the Papelera. Both are locations that are *listed*
+  rather than scanned, and both did their reading on the Qt thread: the Trash
+  asks every mounted volume whether it holds a trash of its own — 80 `stat`
+  calls and 25 ms here with everything healthy, before a single `.trashinfo` is
+  read — and the recently-used list names files that may live on a phone or a
+  share. One mount that has stopped answering held the window for as long as it
+  took to give up. They read on a worker now and publish only if the person is
+  still in the location; leaving is what cancels them, and it is no longer
+  gated on `loading`, which used to hold back the very way out of the location
+  being read. Four questions per row became one, and the recently-used list
+  stops probing once it has the hundred it will show. Formatted, Clippy-clean,
+  122 unit tests, 90 QML tests, qmllint and the offscreen smoke, and nothing
+  tried by hand: that is `VAL-SID-11`. The release binary was built at `1.5.2`
+  but **not** verified or deployed: `verify-production.sh` runs the shared
+  architecture guard, whose `celestina-style` visual rule fails on another
+  unit's uncommitted `celestina/qml/MenuSection.qml`. The author's normal test
+  prefix therefore still holds `1.5.1`; re-run
+  `siderita/scripts/complete-production.sh` once that file is settled.
 
 - Uncommitted in the checkout: `SID-A1`, compressing and extracting. A new pure
   crate, `siderita-archive`, identifies a container by its bytes, lists it,

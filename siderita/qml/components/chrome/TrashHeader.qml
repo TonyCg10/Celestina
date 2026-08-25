@@ -26,8 +26,11 @@ Item {
         iconName: "user-trash"
         iconFallback: "user-trash"
         maxWidth: root.width - trashHeaderControls.width - 10
+        // "Empty" is an answer, not the absence of one: while the Trash is
+        // still being read there is no count yet, and the pill says nothing.
         text: "Papelera" + (root.controller.trashNames.length > 0
-                            ? "  ·  " + root.controller.trashNames.length : "  ·  vacía")
+                            ? "  ·  " + root.controller.trashNames.length
+                            : root.controller.loading ? "" : "  ·  vacía")
     }
 
     // Los botones flotan directamente sobre la lista y no viven dentro de

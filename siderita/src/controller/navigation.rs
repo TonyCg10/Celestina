@@ -69,12 +69,11 @@ impl qobject::SideritaController {
     /// itself instead.
     pub fn refresh(mut self: Pin<&mut Self>) {
         if self.rust().recent_active {
-            self.as_mut().open_recent();
+            self.as_mut().load_recent();
             return;
         }
         if self.rust().trash_active {
             self.as_mut().load_trash();
-            self.as_mut().publish_trash();
             return;
         }
         if let Some(location) = self.rust().history.current().map(Path::to_path_buf) {

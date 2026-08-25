@@ -4,6 +4,29 @@ This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md). Each failed row keeps its result and opens a new
 corrective implementation unit.
 
+## VAL-SID-11 — Papelera and Recientes with a volume that is not answering
+
+- **Status:** pending
+- **Related implementation:** `SID-A4`
+- **Requires:** a verified Siderita artifact on the real session, a phone
+  mounted through Magnetita and then put to sleep or taken out of range (a
+  `sshfs` mount that no longer answers is the reproduction; an unplugged network
+  share does as well)
+- **Procedure:** with that mount unresponsive, open the Papelera from the
+  sidebar and try to scroll, switch tab and press Back while it is reading; do
+  the same with Recientes; then wake the phone and open both again; finally
+  restore and permanently delete one entry from the Papelera and watch the list
+  refresh
+- **Pass condition:** the window never stops responding — scrolling, tabs and
+  Back all work while the location is still reading — Back leaves at once
+  instead of waiting, the listing appears when the mount answers or stays empty
+  if it never does, the pill never calls the Trash empty before the count
+  exists, and no listing arriving late drags the window back into a location
+  already left
+- **Result:** not run by hand
+- **Evidence:** which mount was made unresponsive, how long the listing took to
+  appear, and any failure text
+
 ## VAL-SID-10 — A quiet folder, and a heading with three states
 
 - **Status:** pending

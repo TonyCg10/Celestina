@@ -1,0 +1,32 @@
+# SID-A4-B exact change inventory
+
+Base revision	7175df087e4f2c7dda33e6ca3dfc05d0e3926ce9
+Pathspec	docs/version-history.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/ROADMAP.md
+Pathspec	siderita/STATUS.md
+Pathspec	siderita/VALIDATION.md
+Pathspec	siderita/qml/
+Pathspec	siderita/src/
+Pathspec	siderita/docs/plans/active/2026-08-20-what-the-window-costs-and-shows.md
+Pathspec	siderita/docs/evidence/2026-08-24-listed-locations-off-the-qt-thread.md
+Pathspec	siderita/docs/inventories/2026-08-20-what-the-window-costs-and-shows/SID-A4-B.numstat.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	d0349217a8d4682147f3f9627a12e2ed21ac406c339aa1e8f7a403ef0ddac487	docs/version-history.tsv
+1	1	6fb6999f8431a1e37f3e3b53b42bc2b3d2e1004c183df8a30dd01ce495af4be9	siderita/Cargo.lock
+1	1	629a879c8fb37e02f3c47ef8534d918ec648a0678c8d4d6570d2839e1419133c	siderita/Cargo.toml
+3	2	e63c252b112a7e8c60ed9cc22ed713e71c3dc295b81647c26b407e0906dbc18f	siderita/ROADMAP.md
+23	3	0237a7c2dc123c2128ca7f79535409c1f766b09095e0878a78f6043e3f262348	siderita/STATUS.md
+23	0	0dbe0eff085a109aaca26df4a4c4d5d4ef4257cbef33d9b9ccb8fd4f55e12c54	siderita/VALIDATION.md
+107	0	d1bce7d407dcfa25d8b4ea22eaddc46b0abb7020a89188242205635c76604324	siderita/docs/evidence/2026-08-24-listed-locations-off-the-qt-thread.md
+32	0	self	siderita/docs/inventories/2026-08-20-what-the-window-costs-and-shows/SID-A4-B.numstat.tsv
+11	1	ef76b76f9de77fa38163fce33c283fb25ea4bf61604241017f2bf1ea07642cfc	siderita/docs/plans/active/2026-08-20-what-the-window-costs-and-shows.md
+4	1	ef2c6d723848c9264b0e456c58a49a9f8ef94d12807663a03257cf365f106d0b	siderita/qml/components/chrome/TrashHeader.qml
+7	7	deffabba31b8c92b25bba67685299ebeaa07d6f0f373d4b88ea17c8cb5730d71	siderita/qml/views/FolderView.qml
+1	2	e5d58dfa1f6a02a1316de65d24bf10a5e392dd2988ea0f5e22027180d17bab26	siderita/src/controller/navigation.rs
+254	166	2aa772faa98b3f0e3cd43142469da615fca27c73da6e0c9c812abc0c5f925260	siderita/src/controller/trash.rs
+92	5	d1d8e9edbcede4990f4fab17ae47d7597c01fffcd6cd2274fb51d4b7ee1e0b81	siderita/src/recent.rs

@@ -31,6 +31,8 @@ three states the author asked for, and the path bar names the folder on screen.
 - The heading's three states, their gestures, and the media button that has to
   survive the heading retiring.
 - Boxes that share an edge share the distance to it and the corner it takes.
+- The two locations that are listed rather than scanned read off the Qt
+  thread, and leaving one is never gated on the reading.
 
 ## Exclusions
 
@@ -80,12 +82,19 @@ to project. The cost was `beginResetModel`, which drops every delegate.
 - **The heading.** Three states were needed and two were built; the threshold
   went on the wrong transition; `mapToItem` placed the media button once and
   never again.
+- **Papelera and Recientes froze the window.** Reported by the author after the
+  unit above landed, and the one cost this checkpoint had not measured: both
+  locations did all their filesystem reading on the Qt thread, including the two
+  `stat` calls per mount that ask every volume whether it holds a trash of its
+  own. One mount that has stopped answering — a sleeping phone, a share, an
+  unplugged drive — held the whole window for as long as it took to give up.
 
 ## Implementation exit
 
 Close `SID-A4` when a quiet watched folder costs single-digit milliseconds per
 change, the crumbs follow the published folder, the three heading states each
-have their gesture, and `scripts/complete-production.sh` deploys those bytes.
+have their gesture, opening Papelera or Recientes never holds the window, and
+`scripts/complete-production.sh` deploys those bytes.
 
 ## Change and commit ledger
 
@@ -97,6 +106,7 @@ own atomic commit rather than inside this unit.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | SID-A4-A | `siderita:` | done | [inventory](../../inventories/2026-08-20-what-the-window-costs-and-shows/SID-A4-A.numstat.tsv) | 36 files, +1501/-233 | The audit's fixes and the defects found checking them: quiet rescans, cached icons, one watch per folder, `Ctrl+V` everywhere, crumbs from the published location, three heading states, aligned boxes | [evidence](../../evidence/2026-08-20-what-the-window-costs-and-shows.md) | `VAL-SID-10` |
+| SID-A4-B | `siderita:` | done | [inventory](../../inventories/2026-08-20-what-the-window-costs-and-shows/SID-A4-B.numstat.tsv) | 14 files, +560/-189 | Papelera and Recientes list on a worker and publish only if the person is still there; one filesystem question per row instead of four; the recently-used list stops probing once it is full; leaving a location is never gated on `loading` | [evidence](../../evidence/2026-08-24-listed-locations-off-the-qt-thread.md) | `VAL-SID-11` |
 
 Like every plan in this repository, this one records intent and grants no
 authority.

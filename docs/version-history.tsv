@@ -110,3 +110,4 @@ fluorita	1.3.1	bug	F7-C	Add a trigger to keeping a frame and to capturing frame 
 celestina	1.1.0	milestone	SURF-1-A	Bump to v1.1.0 for persistent carriers
 celestina	1.1.1	bug	SURF-1-D	Bump to v1.1.1 for the resumed menus
 celestina	1.2.0	milestone	REC-1	Add screen recording and harden sliders, night light, workspace identity and DDC safety
+siderita	1.5.2	bug	SID-A4-B	Read the Trash and the recent list off the Qt thread
