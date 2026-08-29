@@ -128,10 +128,29 @@ blur {
 // Only the wallpaper stays outside this visual-language unit.
 //
 layer-rule {
-    match namespace="^celestina-(panel|panel-menu|panel-child-menu|overlay|toasts|osd|polkit-prompt)$"
+    match namespace="^celestina-(panel-menu|panel-child-menu|overlay|toasts|osd|polkit-prompt)$"
 
     background-effect {
         xray false
+    }
+}
+
+// SIMPLE-1 (2026-08-27): the bar's pills are mica cards like every menu
+// section, and the panel arms its own blur with exactly those capsule
+// regions — so its namespace takes the same strong colour-summary profile
+// the dense companions get, instead of the weak veil profile it kept while
+// the whole strip was one sample. Stock niri rejects the strength keys and
+// dev-session.sh strips them from this rule the same way it strips the
+// companions'.
+layer-rule {
+    match namespace="^celestina-panel$"
+
+    background-effect {
+        xray false
+        passes 4
+        offset 6
+        noise 0.02
+        saturation 1.25
     }
 }
 

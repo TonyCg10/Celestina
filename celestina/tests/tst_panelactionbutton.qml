@@ -73,7 +73,7 @@ TestCase {
 
     function material(item) {
         function visit(node) {
-            if (node.objectName === "celestina-panel-pill-material")
+            if (node.objectName === "celestina-panel-tint")
                 return node;
             for (let index = 0; index < node.children.length; ++index) {
                 const found = visit(node.children[index]);
@@ -108,29 +108,28 @@ TestCase {
     function test_owned_and_delegated_buttons_keep_distinct_material_visibility() {
         compare(button.ownsGlass, true);
         const standaloneRegions = testCase.glassRegions(button);
-        compare(standaloneRegions.length, 0);
+        // SIMPLE-1: an owned pill publishes its capsule region — the bar's
+        // shared veil it used to lean on is gone.
+        compare(standaloneRegions.length, 1);
+        // SIMPLE-1: the pill's material is the MenuSection card — a flat
+        // mica tint, no ornamented glass surface left.
         const standaloneMaterial = testCase.material(button);
         verify(standaloneMaterial);
         verify(standaloneMaterial.visible);
-        compare(standaloneMaterial.backdropMode,
-                GlassSurface.ExternalBackdrop);
-        compare(standaloneMaterial.captureActive, false);
-        compare(standaloneMaterial.materialRole,
-                GlassSurface.ContentSurface);
-        compare(standaloneMaterial.materialTint,
-                testInk.contentMaterialTint);
-        compare(standaloneMaterial.elevation, 0);
-        verify(!standaloneMaterial.usesSilhouette);
-        compare(standaloneMaterial.silhouettePath, "");
-        compare(standaloneMaterial.silhouetteEdgePath, "");
-        verify(standaloneMaterial.materialEdgesVisible);
+        compare(standaloneMaterial.radius, CelestinaTheme.radiusPill);
+        compare(standaloneMaterial.color,
+                Qt.rgba(CelestinaTheme.elevated.r, CelestinaTheme.elevated.g,
+                        CelestinaTheme.elevated.b, 0.55));
 
         compare(groupedButton.ownsGlass, false);
+        // The delegated button's pill still carries its capsule marker, but
+        // hidden with the pill: the panel's collector skips invisible
+        // markers, so nothing is published for it.
         const groupedRegions = testCase.glassRegions(groupedButton);
-        compare(groupedRegions.length, 0);
+        compare(groupedRegions.length, 1);
+        compare(groupedRegions[0].visible, false);
         const groupedMaterial = testCase.material(groupedButton);
         verify(groupedMaterial);
         verify(!groupedMaterial.visible);
-        compare(groupedMaterial.captureActive, false);
     }
 }

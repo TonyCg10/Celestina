@@ -7,6 +7,7 @@
 #include <QDebug>
 #include <QScreen>
 
+#include "softclose.h"
 #include "surfacemanager.h"
 #include "panelblurcontroller.h"
 
@@ -284,9 +285,13 @@ bool OverlaySurface::open(
     }
 
     if (content->metaObject()->indexOfProperty("glassRects") >= 0) {
-        auto *blur = new PanelBlurController(content, content);
+        auto *blur = new PanelBlurController(content, content, false);
         blur->start();
     }
+
+    // The opening fade needs frames to play at all; the weak blur's arming
+    // used to provide them by accident (see panelmenusurface.cpp).
+    pumpWindowPresentation(content, 700);
 
     m_mappedPlacement = placement;
     return true;

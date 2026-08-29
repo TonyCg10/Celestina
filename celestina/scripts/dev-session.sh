@@ -275,19 +275,23 @@ if ! "$niri_binary" validate -c "$generated_config" >/dev/null 2>&1; then
         python3 - "$generated_config" <<'STRIP'
 import re, sys
 
-# Only inside the dense-glass rule: the global `blur` block names the very
-# same words and every niri accepts them there.
+# Only inside the strong-profile rules: the global `blur` block names the
+# very same words and every niri accepts them there. The panel joined the
+# dense companions when its pills became the glass (SIMPLE-1).
 path = sys.argv[1]
 text = open(path).read()
-marker = 'match namespace="^celestina-dense-glass$"'
-at = text.find(marker)
-if at >= 0:
+for marker in ('match namespace="^celestina-dense-glass$"',
+               'match namespace="^celestina-panel$"'):
+    at = text.find(marker)
+    if at < 0:
+        continue
     end = text.find("\n}", at)
     end = len(text) if end < 0 else end
     head, rule, tail = text[:at], text[at:end], text[end:]
     rule = re.sub(r"^[ \t]*(passes|offset|noise|saturation)[ \t]+[0-9.]+[ \t]*\n",
                   "", rule, flags=re.M)
-    open(path, "w").write(head + rule + tail)
+    text = head + rule + tail
+open(path, "w").write(text)
 STRIP
     fi
     if "$niri_binary" validate -c "$generated_config" >/dev/null 2>&1; then

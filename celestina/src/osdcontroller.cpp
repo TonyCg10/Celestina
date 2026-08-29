@@ -33,7 +33,11 @@ constexpr qint64 visibleMs = 1800;
 // `motionNormal` (200 ms, pinned by the style tests); the controller waits a
 // little longer so the next card's entry visibly starts after the departure
 // has finished, never on top of it.
-constexpr int transitionMs = 260;
+// The universal departure (`motionExit`, 150) plus a breath: the moment a
+// receding card has visually finished and its pending replacement may enter.
+// At the old 260 the exit had been over for more than a beat's worth of dead
+// air before the next card moved.
+constexpr int transitionMs = 170;
 const char componentName[] = "SessionOsd";
 
 // The card the QML draws, in shell units. Pinned by `tst_sessionosd.qml`
@@ -297,8 +301,8 @@ bool OsdController::resolveAttachment(
     *opener = onOutputInShellUnits(anchor.opener, outputOrigin, shellScale);
     *icon = onOutputInShellUnits(anchor.icon, outputOrigin, shellScale);
     *barHeight = shellScale > 0
-        ? qMax(0, panel->height()) / shellScale
-        : qMax(0, panel->height());
+        ? panelBarBottomDevice(panel) / shellScale
+        : panelBarBottomDevice(panel);
     return true;
 }
 

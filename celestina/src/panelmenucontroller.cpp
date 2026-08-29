@@ -90,16 +90,18 @@ PanelCarrierGeometry panelCarrierGeometry(
 )
 {
     PanelCarrierGeometry geometry;
-    geometry.outputPosition = QPoint(0, qMax(0, panel ? panel->height() : 0));
+    // The carrier begins at the OUTPUT's top edge: macOS's regional dim
+    // visibly darkens the bar above an open menu (the author's side-by-side
+    // screenshots), and a window that started at the seam could paint
+    // nothing above itself. The seam still rules everything interactive —
+    // it rides in `attachmentStartY` so the card hangs below the bar, and
+    // the input mask leaves the strip to the panel.
+    geometry.outputPosition = QPoint(0, 0);
+    geometry.attachmentStartY =
+        panel ? int(panelBarBottomDevice(panel)) : 0;
 
-    const QPointF translation(-geometry.outputPosition.x(),
-                              -geometry.outputPosition.y());
-    const QRectF outputOpener = openerOnOutput(panel, globalOpener);
-    if (!outputOpener.isEmpty())
-        geometry.opener = outputOpener.translated(translation);
-    const QRectF outputAnchor = openerOnOutput(panel, globalAttachmentAnchor);
-    if (!outputAnchor.isEmpty())
-        geometry.attachmentAnchor = outputAnchor.translated(translation);
+    geometry.opener = openerOnOutput(panel, globalOpener);
+    geometry.attachmentAnchor = openerOnOutput(panel, globalAttachmentAnchor);
     return geometry;
 }
 
@@ -779,6 +781,10 @@ void PanelMenuController::toggleIndicatorMenu(
     m_parkedMenuKind.clear();
     ++m_openGeneration;
     m_openMenuKind = kind;
+    // The presentation pump (see softclose.h): without the blur region's
+    // accidental first-frame, a transparent whole-output carrier never earns
+    // its exposure and the reveal never paints.
+    pumpWindowPresentation(window);
     emit contextualSurfaceOpened();
     m_openIndicatorPanel = panel;
     const bool leased = m_attachmentLease.acquire(
@@ -1519,10 +1525,18 @@ void PanelMenuController::close()
     m_openMenuKind.clear();
     m_openPanel = nullptr;
     m_openIndicatorPanel = nullptr;
+    // SIMPLE-1 retired the park (SURF-1) for these carriers too: on this
+    // compositor a parked window never repaints — its zeroed-opacity commit
+    // never presents — so every park left the menu's LAST PAINTED FRAME
+    // standing on screen, and the author's recording shows those ghosts
+    // accumulating with each different menu opened and closed. A fresh map
+    // per open costs one configure round-trip on a surface whose geometry no
+    // longer animates.
+    const bool parkRetired = true;
     if (m_surface->isParked()) {
         // A repeated close finds the carrier already resting; putting it
         // away now would be exactly the unmap the park exists to avoid.
-    } else if (parkable) {
+    } else if (parkable && !parkRetired) {
         // The hard close used to destroy the window, and destruction took
         // the painted card with it. A park keeps the window, so the card
         // must leave this same instant: paint down to zero — the fields'
@@ -1557,6 +1571,11 @@ void PanelMenuController::close()
             for (QQuickItem *const field : fields)
                 QMetaObject::invokeMethod(field, "retire");
         }
+        // And the frozen lists come down with the paint: parked with the
+        // settled regions still published, the resume's first probe armed
+        // the compositor with the old card before any reveal — the
+        // settled-glass flash on every fast reopen.
+        restWindowGlassForPark(window);
         DenseGlassAggregator::instance().withdraw(window);
         withdrawBlur(window);
         window->setProperty("celestinaRetiring", false);
@@ -1591,11 +1610,13 @@ void PanelMenuController::passPanelStripThrough(QWindow *content, QWindow *panel
         // would not stay closed.
         if (tracked->property("celestinaParked").toBool())
             return;
-        // This window already begins below the bar. Its local seam is zero, so
-        // the complete carrier remains the outside-click barrier while the
-        // panel is physically outside the surface and receives its own input.
+        // The carrier covers the whole output so the regional dim can
+        // reach the bar; the bar's strip is carved OUT of the input region,
+        // so the panel keeps its own clicks and an outside click below the
+        // seam still dismisses.
         tracked->setMask(panelPopupInputRegion(
-            tracked->width(), tracked->height(), 0));
+            tracked->width(), tracked->height(),
+            int(panelBarBottomDevice(bar.data()))));
     };
     apply();
     // The compositor sizes this surface, so its real extent arrives after the

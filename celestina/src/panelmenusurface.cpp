@@ -9,6 +9,7 @@
 #include <QScreen>
 #include <QSize>
 
+#include "softclose.h"
 #include "surfacemanager.h"
 #include "panelblurcontroller.h"
 
@@ -148,9 +149,15 @@ bool PanelMenuSurface::open(
     }
 
     if (content->metaObject()->indexOfProperty("glassRects") >= 0) {
-        auto *blur = new PanelBlurController(content, content);
+        auto *blur = new PanelBlurController(content, content, false);
         blur->start();
     }
+
+    // The opening fade needs frames to play at all. The weak blur's arming
+    // used to damage the surface into presenting as a side effect; with the
+    // dense-only channel (SIMPLE-1) nothing else commits, and a freshly
+    // mapped menu sat at opacity zero — published shapes, invisible card.
+    pumpWindowPresentation(content, 700);
 
     m_mappedCoverage = coverage;
     return true;

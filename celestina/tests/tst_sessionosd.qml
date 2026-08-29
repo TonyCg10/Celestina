@@ -145,50 +145,43 @@ TestCase {
     // one contextual veil over a compositor sample, carrying one denser
     // content section. A surface that published no region is exactly the bug
     // that made it read as a solid rectangle over the desktop.
-    function test_it_is_the_same_glass_as_the_bar_and_its_menus() {
-        // Only a mapped surface has a region to publish: the collector skips
-        // geometry nobody is looking at.
+    // SIMPLE-1: the display is the same solid card as every other surface,
+    // and it publishes no glass at all.
+    function test_it_is_the_same_solid_card_as_the_menus() {
         osd.visible = true;
         const field = testCase.fields()[0];
         verify(field);
         field.reveal();
-        tryVerify(function() {
-            return osd.glassRegions.length === 1;
-        });
-
-        const body = findChild(field, "celestina-menu-body-tint");
-        verify(body);
-        compare(body.backdropMode, GlassSurface.ExternalBackdrop);
-        compare(body.captureActive, false);
-        compare(body.materialRole, GlassSurface.ContextualVeil);
-        compare(body.elevation, 0);
+        tryCompare(field, "revealed", true);
 
         const section = findChild(field, "celestina-menu-section");
         verify(section);
-        compare(section.materialRole, GlassSurface.ContentSurface);
-        verify(body.materialStrength < section.materialStrength);
+        const tint = findChild(section, "celestina-panel-tint");
+        verify(tint);
+        fuzzyCompare(tint.color.r, CelestinaTheme.elevated.r, 0.01);
+        fuzzyCompare(tint.color.a, 0.55, 0.01);
+        tryVerify(function() { return osd.glassRegions.length === 1; });
         osd.visible = false;
     }
 
-    function test_bottom_entry_waits_for_reveal_before_moving_or_glass() {
+    // SIMPLE-1: no ride any more — what the reveal gate holds is the paint.
+    function test_bottom_entry_waits_for_reveal_before_painting() {
         const field = testCase.prepareBottomField();
         verify(field.transform.length > 0);
         const ride = field.transform[0];
-        const offscreen = osd.cardHeight + CelestinaTheme.spaceLg;
 
         compare(field.revealed, false);
-        compare(ride.y, offscreen);
-        compare(osd.glassRegions.length, 0);
+        compare(ride.y, 0);
+        compare(field.presentationOpacity, 0);
         // Longer than SoftMenuField's offscreen reveal fallback: resetting the
-        // reusable field must have cancelled both presentation and movement.
+        // reusable field must have cancelled the presentation.
         wait(70);
         compare(field.revealed, false);
-        compare(ride.y, offscreen);
-        compare(osd.glassRegions.length, 0);
+        compare(field.presentationOpacity, 0);
 
         field.revealNow();
-        tryVerify(function() { return ride.y < offscreen; });
-        tryVerify(function() { return osd.glassRegions.length === 1; });
+        tryVerify(function() { return field.presentationOpacity === 1; });
+        compare(osd.glassRegions.length, 0);
     }
 
     function test_hidden_persistent_carrier_waits_to_spend_its_reveal() {
@@ -210,42 +203,34 @@ TestCase {
         // animate a delegate that its persistent QWindow has not shown yet.
         wait(70);
         compare(field.revealed, false);
-        compare(osd.glassRegions.length, 0);
+        compare(field.presentationOpacity, 0);
 
         osd.visible = true;
         tryCompare(field, "revealed", true);
-        tryVerify(function() { return osd.glassRegions.length === 1; });
+        tryVerify(function() { return field.presentationOpacity === 1; });
     }
 
-    function test_bottom_glass_follows_the_real_entry_transform() {
+    // SIMPLE-1: the bottom entry is the one fade — the card sits at rest and
+    // only its paint moves, through a real intermediate frame.
+    function test_bottom_entry_is_the_one_fade() {
         const field = testCase.prepareBottomField();
         const ride = field.transform[0];
-        const offscreen = osd.cardHeight + CelestinaTheme.spaceLg;
+        const content = findChild(field, "celestina-soft-menu-content");
+        verify(content);
         field.revealNow();
 
-        let sawMovingRegion = false;
+        compare(ride.y, 0);
+        let sawMidFade = false;
         for (let step = 0; step < 24; ++step) {
             wait(8);
-            if (ride.y <= 1 || ride.y >= offscreen - 1
-                    || osd.glassRegions.length === 0)
-                continue;
-            const moving = osd.glassRegions[0].rect;
-            // The animation may advance once between the deferred collector
-            // and this sample. A token-sized bound still rejects either old
-            // failure: a stationary landed or fully offscreen footprint.
-            verify(Math.abs(moving.y - ride.y) < CelestinaTheme.spaceSm,
-                   "glass y " + moving.y + " did not follow bottom ride y "
-                   + ride.y + " at step " + step);
-            sawMovingRegion = true;
-            break;
+            if (content.opacity > 0.05 && content.opacity < 0.95) {
+                sawMidFade = true;
+                break;
+            }
         }
-        verify(sawMovingRegion, "no transformed entry region was observed");
-
-        tryVerify(function() { return Math.abs(ride.y) < 0.01; });
-        tryVerify(function() {
-            return osd.glassRegions.length === 1
-                    && Math.abs(osd.glassRegions[0].rect.y) < 0.01;
-        });
+        verify(sawMidFade, "no intermediate fade frame was observed");
+        tryVerify(function() { return content.opacity === 1; });
+        compare(ride.y, 0);
     }
 
     // The display attaches to the bar exactly as a menu does: handed the
@@ -277,7 +262,9 @@ TestCase {
         verify(field.y > osd.attachmentStartY);
         compare(field.surfacePosition.x, osd.surfaceOriginX + field.x);
         compare(field.surfacePosition.y, field.y);
-        verify(field.edgeShapeActive);
+        // SIMPLE-1: the membrane silhouette is gone; the attachment inputs
+        // place the card and nothing more.
+        verify(!field.edgeShapeActive);
 
         osd.anchoredFromPanel = false;
         osd.attachmentStartY = -1;
@@ -406,37 +393,29 @@ TestCase {
         tryVerify(function() { return testCase.fields().length === 0; });
     }
 
-    function test_bottom_glass_shrinks_with_departing_paint() {
+    // SIMPLE-1: leaving is the one fade — a departing card passes through a
+    // real intermediate opacity and its row is swept once the beat has been
+    // seen. There is no glass to follow any more.
+    function test_bottom_departure_is_the_one_fade() {
         const leaving = testCase.prepareBottomField();
-        const ride = leaving.transform[0];
         leaving.revealNow();
-        tryVerify(function() { return Math.abs(ride.y) < 0.01; });
-        tryVerify(function() { return osd.glassRegions.length === 1; });
-        const resting = osd.glassRegions[0].rect;
+        tryCompare(leaving, "revealed", true);
 
         osd.readings = [];
         compare(osd.departingKinds.length, 1);
-        let faded = null;
+        let sawMidFade = false;
         for (let step = 0; step < 28; ++step) {
             wait(8);
             if (testCase.fields().indexOf(leaving) < 0)
                 break;
-            if (leaving.opacity < 0.35 && osd.glassRegions.length === 1) {
-                faded = osd.glassRegions[0].rect;
+            if (leaving.opacity > 0.05 && leaving.opacity < 0.95) {
+                sawMidFade = true;
                 break;
             }
         }
-        verify(faded !== null,
-               "no glass region accompanied the nearly exhausted paint");
-        verify(faded.width < resting.width - 1);
-        verify(faded.height < resting.height - 1);
-        verify(Math.abs((faded.x + faded.width / 2)
-                        - (resting.x + resting.width / 2)) < 1);
-        verify(Math.abs((faded.y + faded.height / 2)
-                        - (resting.y + resting.height / 2)) < 1);
-
+        verify(sawMidFade, "no intermediate fade frame was observed");
         tryVerify(function() { return testCase.fields().length === 0; });
-        tryVerify(function() { return osd.glassRegions.length === 0; });
+        compare(osd.glassRegions.length, 0);
     }
 
     function test_only_the_presenting_twin_can_receive_a_card_file() {

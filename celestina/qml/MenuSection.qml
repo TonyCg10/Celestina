@@ -1,30 +1,50 @@
-// PANEL-1. A denser division inside one compositor-backed menu card.
+// SIMPLE-2 (final form). The section IS the glass — see DRAWING.md.
 //
-// This is deliberately not another compositor region. The complete menu owns
-// one blur sample; sections only establish hierarchy above that shared glass,
-// so a menu reads as one object instead of a stack of independent pills.
+// The author's contract: menus have NO containing backdrop. The visible
+// material lives entirely in these content cards — each one a piece of
+// Samsung's colour-summary glass under the elevated tint — and the menu's
+// only background is the block's soft shadow, drawn by the field behind
+// the group. A containing panel was tried and rejected on sight.
 pragma ComponentBehavior: Bound
 
 import CelestinaStyle
 import QtQuick
 
-GlassSurface {
+Item {
     id: section
 
     required property BackdropInk ink
     property real radius: CelestinaTheme.radiusSm
 
+    // The dense collector reads this pair for the strong-blur shape.
+    readonly property real cornerRadius: section.radius
+
     objectName: "celestina-menu-section"
     anchors.fill: parent
     z: -1
-    backdropMode: GlassSurface.ExternalBackdrop
-    // SoftMenuField always supplies either one compositor sample or its own
-    // readable fallback below every section. This means the external backdrop
-    // is materially ready even when KWindowEffects itself is unavailable.
-    externalBackdropReady: true
-    captureEnabled: false
-    materialRole: GlassSurface.ContentSurface
-    materialTint: ink.contentMaterialTint
-    cornerRadius: radius
-    elevation: 0
+
+    // The region marker, inset two units: the compositor region's rounded
+    // corners are integer scanline steps nothing can antialias, and flush
+    // with the card they saw-toothed around the tint's smooth corner.
+    Item {
+        objectName: "celestina-compositor-glass-region"
+
+        anchors.fill: parent
+        anchors.margins: 2
+        readonly property real radius: section.radius
+        readonly property var polygon: []
+    }
+
+    Rectangle {
+        objectName: "celestina-panel-tint"
+
+        anchors.fill: parent
+        radius: section.radius
+        antialiasing: true
+        // The One UI balance: roughly half tint, half colour summary.
+        color: Qt.rgba(CelestinaTheme.elevated.r, CelestinaTheme.elevated.g,
+                       CelestinaTheme.elevated.b, 0.55)
+        border.width: 1
+        border.color: CelestinaTheme.divider
+    }
 }

@@ -123,24 +123,15 @@ TestCase {
         verify(findChild(menu, "celestina-wallpaper-previous-page") !== null);
         verify(findChild(menu, "celestina-wallpaper-next-page") !== null);
         tryVerify(function() {
-            return menu.glassRegions.length === 1;
+            return menu.glassRegions.length >= 1;
         });
+        // The sections are the glass cards, each with the shared tint.
         const section = findChild(menu, "celestina-menu-section");
         verify(section);
-        compare(section.backdropMode, GlassSurface.ExternalBackdrop);
-        compare(section.externalBackdropReady, true);
-        compare(section.captureActive, false);
-        compare(section.materialRole, GlassSurface.ContentSurface);
-        compare(section.materialStrength,
-                CelestinaTheme.glassContentSurfaceStrength);
-        compare(section.elevation, 0);
-        const body = findChild(menu, "celestina-menu-body-tint");
-        verify(body);
-        compare(body.materialRole, GlassSurface.ContextualVeil);
-        compare(body.materialStrength,
-                CelestinaTheme.glassContextualVeilStrength);
-        verify(body.materialStrength < section.materialStrength);
-        compare(body.elevation, 0);
+        const tint = findChild(section, "celestina-panel-tint");
+        verify(tint);
+        fuzzyCompare(tint.color.r, CelestinaTheme.elevated.r, 0.01);
+        fuzzyCompare(tint.color.a, 0.55, 0.01);
     }
 
     function test_the_folder_action_hands_selection_to_the_permanent_panel() {

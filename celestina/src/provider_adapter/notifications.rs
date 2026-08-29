@@ -419,20 +419,36 @@ pub fn action(
 }
 
 fn run(runtime: &Arc<Mutex<ProviderRuntime>>, id: &ProviderId) {
-    match serve(runtime, id) {
-        Claim::Owned => {}
-        Claim::Taken => {
-            eprintln!(
-                "celestina-provider-adapter: notifications: another server owns {BUS_NAME}; \
-                 this shell is not serving notifications this session"
-            );
-            lock_runtime(runtime).withdraw(id);
-            return;
-        }
-        Claim::Failed(error) => {
-            eprintln!("celestina-provider-adapter: notifications: {error}");
-            lock_runtime(runtime).withdraw(id);
-            return;
+    // A taken name gets a short, bounded second look. A shell replacing its
+    // predecessor — every dev-loop restart, every crash recovery — races the
+    // old adapter's release of the name, and a single DoNotQueue ask decided
+    // that whole session in the loser's favour: the fresh shell then ran with
+    // no notification server at all. Re-asking for a few seconds covers the
+    // handover window; a server that still holds the name after it is a real
+    // owner, and this shell steps aside exactly as before. Still no queueing
+    // and no ReplaceExisting: the asks are discrete, and nothing is ever
+    // taken from a live owner.
+    let mut attempts_left = 10;
+    loop {
+        match serve(runtime, id) {
+            Claim::Owned => break,
+            Claim::Taken if attempts_left > 0 => {
+                attempts_left -= 1;
+                thread::sleep(Duration::from_millis(500));
+            }
+            Claim::Taken => {
+                eprintln!(
+                    "celestina-provider-adapter: notifications: another server owns {BUS_NAME}; \
+                     this shell is not serving notifications this session"
+                );
+                lock_runtime(runtime).withdraw(id);
+                return;
+            }
+            Claim::Failed(error) => {
+                eprintln!("celestina-provider-adapter: notifications: {error}");
+                lock_runtime(runtime).withdraw(id);
+                return;
+            }
         }
     }
 

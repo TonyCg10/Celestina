@@ -1,5 +1,6 @@
 #include "panelmanager.h"
 
+#include "quietplacement.h"
 #include "shellscale.h"
 
 #include "diagnosticjournal.h"
@@ -7,6 +8,8 @@
 
 #include <QDebug>
 #include <QGuiApplication>
+#include <QQuickItem>
+#include <QQuickWindow>
 #include <QQmlEngine>
 #include <QPoint>
 #include <QRect>
@@ -160,6 +163,83 @@ QRectF PanelManager::bubbleAnchorFor(const QString &outputName) const
         return rect.isValid() ? rect : QRectF();
     }
     return {};
+}
+
+bool PanelManager::requestIndicatorMenu(const QString &kind, QScreen *screen)
+{
+    if (kind.isEmpty())
+        return false;
+
+    // The control names itself after its kind, and a hidden indicator is a
+    // menu nobody could have clicked: a withdrawn provider must refuse here
+    // exactly as it offers no control on the bar. The visual tree, not the
+    // QObject tree — `findChild` walks straight past repeater children.
+    QQuickItem *const control = quietFindVisibleItem(
+        panelWindowFor(screen),
+        QStringLiteral("celestina-%1-indicator").arg(kind));
+    if (!control)
+        return false;
+    return QMetaObject::invokeMethod(control, "requestMenu");
+}
+
+QVariantMap PanelManager::barState() const
+{
+    QVariantMap state;
+    QVariantList panels;
+    for (const QPointer<QWindow> &panel : m_panels) {
+        if (!panel)
+            continue;
+        QVariantMap entry;
+        entry.insert(QStringLiteral("output"),
+                     panel->property("outputName").toString());
+        QVariantList rects;
+        const QVariantList published =
+            panel->property("glassRects").toList();
+        for (const QVariant &value : published) {
+            const QRectF rect = value.toRectF();
+            QVariantMap r;
+            r.insert(QStringLiteral("x"), rect.x());
+            r.insert(QStringLiteral("y"), rect.y());
+            r.insert(QStringLiteral("width"), rect.width());
+            r.insert(QStringLiteral("height"), rect.height());
+            rects.append(r);
+        }
+        entry.insert(QStringLiteral("glassRects"), rects);
+        // The live markers, mapped fresh: where the capsules ARE right now,
+        // as opposed to where the published regions say they were.
+        QVariantList markers;
+        if (auto *quick = qobject_cast<QQuickWindow *>(panel.data())) {
+            std::function<void(QQuickItem *)> walk =
+                [&](QQuickItem *item) {
+                    const auto children = item->childItems();
+                    for (QQuickItem *const child : children) {
+                        if (child->objectName()
+                                == QLatin1String(
+                                    "celestina-compositor-glass-region")
+                            && child->isVisible()
+                            && child->width() > 0 && child->height() > 0) {
+                            const QRectF mapped = child->mapRectToScene(
+                                QRectF(0, 0, child->width(),
+                                       child->height()));
+                            QVariantMap m;
+                            m.insert(QStringLiteral("x"), mapped.x());
+                            m.insert(QStringLiteral("y"), mapped.y());
+                            m.insert(QStringLiteral("width"),
+                                     mapped.width());
+                            m.insert(QStringLiteral("height"),
+                                     mapped.height());
+                            markers.append(m);
+                        }
+                        walk(child);
+                    }
+                };
+            walk(quick->contentItem());
+        }
+        entry.insert(QStringLiteral("markers"), markers);
+        panels.append(entry);
+    }
+    state.insert(QStringLiteral("panels"), panels);
+    return state;
 }
 
 void PanelManager::setBubbleSelector(OverlayController *selector)

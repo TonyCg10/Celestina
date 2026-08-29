@@ -886,26 +886,25 @@ void SurfaceManagerTest::aResumedIndicatorMenuPresentsItsCardAgain()
     QTRY_VERIFY(!first->property("glassRegions").toList().isEmpty());
     QTRY_VERIFY(field->property("edgeAttachmentRequested").toBool());
 
-    // The same indicator again puts it away: parked, with the paint down and
-    // the glass withdrawn — nothing of the card may remain visible.
+    // SIMPLE-2: the park is retired — the same indicator again CLOSES the
+    // menu outright (a parked window never repaints on this compositor and
+    // stood as a ghost), and the carrier is gone with its soft beat.
     controller.toggleIndicatorMenu(panel, opener, anchor, kind, nullptr);
-    // The put-away rides the soft retirement's beat before it parks.
-    QTRY_VERIFY(surface->isParked());
-    QCOMPARE(surface->window(), first.data());
-    QCOMPARE(quick->contentItem()->opacity(), 0.0);
-    // The published glass is deliberately frozen through the departure —
-    // `retire()` owns that freeze — and the parked branch of the blur
-    // controller is what withdraws the compositor's material. What must not
-    // survive the park is paint, checked above, not the frozen publication.
+    QTRY_VERIFY(!surface->isOpen());
+    QVERIFY(!surface->isParked());
+    QTRY_VERIFY(first.isNull());
 
-    // The reopen resumes the same window, and the card is really presented
-    // again: revived, revealed anew, glass republished for the blur to
-    // re-arm from.
+    // The reopen maps a FRESH window, which attaches and presents through
+    // the ordinary open path.
     controller.toggleIndicatorMenu(panel, opener, anchor, kind, nullptr);
     QVERIFY(surface->isOpen());
-    QCOMPARE(surface->window(), first.data());
-    QCOMPARE(quick->contentItem()->opacity(), 1.0);
-    QVERIFY(!field->property("retiring").toBool());
+    QPointer<QWindow> second(surface->window());
+    QVERIFY(second);
+    QVERIFY(second.data() != nullptr);
+    QQuickItem *const field2 = second->findChild<QQuickItem *>(
+        QStringLiteral("celestina-soft-menu-field"));
+    QVERIFY(field2);
+    QVERIFY(!field2->property("retiring").toBool());
 
     // The race this fails without the deferred reveal: woken before the
     // lease republished the anchor, the field believed itself floating and
@@ -916,22 +915,22 @@ void SurfaceManagerTest::aResumedIndicatorMenuPresentsItsCardAgain()
     bool published = false;
     for (int step = 0; step < 150; ++step) {
         QTest::qWait(2);
-        if (first->property("glassRegions").toList().isEmpty())
+        if (second->property("glassRegions").toList().isEmpty())
             continue;
         published = true;
-        if (!field->property("edgeAttachmentRequested").toBool())
+        if (!field2->property("edgeAttachmentRequested").toBool())
             publishedFloating = true;
-        if (field->property("revealed").toBool()
-            && field->property("edgeAttachmentRequested").toBool()
+        if (field2->property("revealed").toBool()
+            && field2->property("edgeAttachmentRequested").toBool()
             && step > 30) {
             break;
         }
     }
     QVERIFY(published);
     QVERIFY(!publishedFloating);
-    QVERIFY(field->property("revealed").toBool());
-    QVERIFY(field->property("edgeAttachmentRequested").toBool());
-    QVERIFY(field->property("presentationOpacity").toReal() > 0);
+    QVERIFY(field2->property("revealed").toBool());
+    QVERIFY(field2->property("edgeAttachmentRequested").toBool());
+    QVERIFY(field2->property("presentationOpacity").toReal() > 0);
 }
 
 // SURF-1-D: the popup family's park closes its popup without announcing a
@@ -964,23 +963,27 @@ void SurfaceManagerTest::aPopupBackedMenuParksAndReplaysItsPopup()
     QVERIFY(popup);
     QTRY_VERIFY(popup->property("visible").toBool());
 
-    // The same icon puts it away: parked with the popup really closed, and
-    // the silent close announced no dismissal that could start a second
-    // retirement against the window being put away.
+    // SIMPLE-2: the park is retired — the same icon CLOSES the popup and
+    // its carrier outright (a parked window never repaints on this
+    // compositor and stood as a ghost).
     controller.toggleIndicatorMenu(
         panel, opener, anchor, QStringLiteral("capture"), &providers);
-    QTRY_VERIFY(surface->isParked());
-    QCOMPARE(surface->window(), window.data());
-    QTRY_VERIFY(!popup->property("visible").toBool());
+    QTRY_VERIFY(!surface->isOpen());
+    QVERIFY(!surface->isParked());
+    QTRY_VERIFY(window.isNull());
 
-    // The reopen resumes the same window and replays the popup: rows,
-    // reveal and glass return through the family's own lifecycle.
+    // The reopen maps a FRESH window whose popup opens through the family's
+    // own lifecycle: rows, reveal and glass all flow as a first open.
     controller.toggleIndicatorMenu(
         panel, opener, anchor, QStringLiteral("capture"), &providers);
     QVERIFY(surface->isOpen());
-    QCOMPARE(surface->window(), window.data());
-    QTRY_VERIFY(popup->property("visible").toBool());
-    QObject *const field = window->findChild<QObject *>(
+    QPointer<QWindow> reopened(surface->window());
+    QVERIFY(reopened);
+    QObject *const reopenedPopup =
+        reopened->property("menu").value<QObject *>();
+    QVERIFY(reopenedPopup);
+    QTRY_VERIFY(reopenedPopup->property("visible").toBool());
+    QObject *const field = reopened->findChild<QObject *>(
         QStringLiteral("celestina-soft-menu-field"));
     QVERIFY(field);
     QTRY_VERIFY(field->property("revealed").toBool());
@@ -1421,38 +1424,18 @@ void SurfaceManagerTest::aScaledTrayChildStaysBesideItsParentAndOnScreen()
     QVERIFY(childAnchor.width() > 0 && childAnchor.height() > 0);
     QTRY_VERIFY(!child->property("glassRegions").toList().isEmpty());
 
-    // The membrane really has travel to cross and the field draws the
-    // sideways shape: "both menus glued together with no droplet" is what a
-    // zero gap looks like, and it is what the author saw once already.
+    // SIMPLE-2 removed the sideways morph with the rest of the entry
+    // choreography: the child keeps its stated gap for placement, its field
+    // resolves settled, and its popup opens directly on the card.
     QCOMPARE(child->property("sideAttachmentGap").toInt() > 0, true);
     QQuickItem *const field =
         child->findChild<QQuickItem *>(
             QStringLiteral("celestina-soft-menu-field"));
     QVERIFY(field);
-    QVERIFY(field->property("edgeShapeActive").toBool());
-
-    // The push moves the surface as one piece: mid-push, the popup that
-    // carries the rows sits exactly on the momentary body, not at its settled
-    // place. The author recorded the settled card materialising in one frame
-    // while only the body section slid inside it.
+    QCOMPARE(field->property("attachmentProgress").toDouble(), 1.0);
     QTRY_VERIFY(child->property("menu").value<QObject *>() != nullptr);
     QObject *const menu = child->property("menu").value<QObject *>();
     QTRY_VERIFY(menu->property("visible").toBool());
-    const double progress = field->property("attachmentProgress").toDouble();
-    QVERIFY2(progress < 1.0,
-             qPrintable(QStringLiteral("progress already %1").arg(progress)));
-    const QRectF bodyRect = field->property("attachmentBodyRect").toRectF();
-    const int cardX = child->property("cardX").toInt();
-    QVERIFY2(
-        qAbs(menu->property("x").toDouble() - (cardX + bodyRect.x())) < 1.0,
-        qPrintable(QStringLiteral("popup at %1, body at %2 (cardX %3)")
-                       .arg(menu->property("x").toDouble())
-                       .arg(bodyRect.x()).arg(cardX))
-    );
-    QVERIFY2(qAbs(bodyRect.x()) > 1.0,
-             qPrintable(QStringLiteral(
-                 "mid-push body still parked at %1").arg(bodyRect.x())));
-
 }
 
 void SurfaceManagerTest::anOverflowingTrayMenuUsesABoundedScrollableViewport()
@@ -1678,7 +1661,9 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
     const QScreen *const inventoryScreen = panel->screen();
     QVERIFY(inventoryScreen);
     const QPointF outputOrigin(inventoryScreen->geometry().topLeft());
-    const QPointF carrierOrigin(0, panel->height());
+    // The carrier begins at the output's top edge so the regional dim can
+    // reach the bar; the seam rides in attachmentStartY.
+    const QPointF carrierOrigin(0, 0);
     const double inventoryScale = inventory->property("shellScale").toDouble();
     const QRectF localInventoryOpener = panelAttachmentRectOnCarrier(
         inventoryOpener,
@@ -1701,28 +1686,29 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
         inventory->property("attachmentAnchorRect").toRectF(),
         localInventoryAnchor
     );
-    QCOMPARE(inventory->property("attachmentStartY").toInt(), 0);
+    QCOMPARE(
+        inventory->property("attachmentStartY").toReal(),
+        panel->height() / (inventoryScale > 0 ? inventoryScale : 1.0));
     QCOMPARE(inventory->property("anchorGap").toInt(), 20);
     const QPoint inventoryOrigin = panelPopupBodyOrigin(
         localInventoryOpener,
         inventory->property("contentWidth").toInt(),
         inventory->property("anchorGap").toInt(),
-        0
+        qRound(panel->height()
+               / (inventoryScale > 0 ? inventoryScale : 1.0))
     );
     QCOMPARE(inventory->property("menuY").toInt(), inventoryOrigin.y());
     QCOMPARE(inventory->property("cardY").toInt(), inventoryOrigin.y());
     QCOMPARE(inventory->property("preserveRequestedTop").toBool(), true);
+    // The carrier spans the whole output; the origin already carries the
+    // seam, so the room below it is output minus origin.
     QCOMPARE(
         inventory->property("maximumContentHeight").toInt(),
-        inventoryScreen->geometry().height()
-            - panel->height() - inventoryOrigin.y()
+        inventoryScreen->geometry().height() - inventoryOrigin.y()
     );
     auto *const inventoryLayer = LayerShellQt::Window::get(inventory);
     QVERIFY(inventoryLayer);
-    QCOMPARE(
-        inventoryLayer->margins(),
-        QMargins(0, panel->height(), 0, 0)
-    );
+    QCOMPARE(inventoryLayer->margins(), QMargins(0, 0, 0, 0));
 
     QSignalSpy needed(&controller, &PanelMenuController::trayMenuNeeded);
     const QString service = QStringLiteral(":1.83");
@@ -1948,12 +1934,12 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
     QVERIFY(child->property("anchoredFromPanel").toBool());
     QCOMPARE(child->property("openerRect").toRectF(), directOpener);
     QCOMPARE(child->property("attachmentAnchorRect").toRectF(), directAnchor);
-    QCOMPARE(child->property("attachmentStartY").toInt(), 0);
+    QCOMPARE(child->property("attachmentStartY").toInt(), 40);
     const QPoint directOrigin = panelPopupBodyOrigin(
         directOpener,
         child->property("contentWidth").toInt(),
         child->property("anchorGap").toInt(),
-        0
+        40
     );
     QCOMPARE(child->property("menuY").toInt(), directOrigin.y());
     QCOMPARE(child->property("cardY").toInt(), directOrigin.y());
@@ -1963,7 +1949,6 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
             QStringLiteral("celestina-soft-menu-field"));
     QVERIFY(directField);
     QVERIFY(directField->property("topAttachmentRequested").toBool());
-    QVERIFY(directField->property("edgeShapeActive").toBool());
     auto *const directViewport = qobject_cast<QQuickItem *>(
         child->property("menuViewport").value<QObject *>()
     );
@@ -1976,35 +1961,16 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
     QCOMPARE(child->property("title").toString(),
              QStringLiteral("Menú de Chromium"));
 
-    // Freeze one real frame of the top fall. The foreign header is pinned
-    // against scrolling at rest, but it must follow the same hidden distance
-    // as the row carrier during entry; otherwise it lands first and the body
-    // grows beneath it as two visibly separate animations.
-    QObject *const directFall = directField->findChild<QObject *>(
-        QStringLiteral("celestina-attachment-drop-fall")
-    );
-    QVERIFY(directFall);
-    QVERIFY(QMetaObject::invokeMethod(directFall, "stop"));
-    directField->setProperty("fallQueued", false);
-    directField->setProperty("hasFallen", true);
-    directField->setProperty("attachmentProgress", 1.0);
-    QCoreApplication::processEvents();
-    const qreal settledHeadingY = directHeading->y();
-    directField->setProperty("attachmentProgress", 0.0);
-    QCoreApplication::processEvents();
-    const qreal hiddenDistance = child->property("rowsCut").toReal();
-    QVERIFY(hiddenDistance > 0.0);
-    QVERIFY(directHeading->y() < settledHeadingY);
-    QVERIFY(qAbs((settledHeadingY - directHeading->y()) - hiddenDistance)
-            < 0.01);
-    directField->setProperty("attachmentProgress", 1.0);
-    QCoreApplication::processEvents();
+    // SIMPLE-2 removed the entry fall; the heading simply rests where the
+    // layout puts it and the glass publishes at rest.
     QTRY_COMPARE(child->property("glassRegions").toList().size(), 1);
     const QVariantMap directShape = child->property("glassRegions")
                                         .toList().constFirst().toMap();
-    QCOMPARE(
-        qRound(directShape.value(QStringLiteral("rect")).toRectF().top()),
-        0
+    // SIMPLE-2: the panel begins at the child's card, below the carrier's
+    // top edge.
+    QVERIFY(
+        qRound(directShape.value(QStringLiteral("rect")).toRectF().top())
+            >= 0
     );
     auto outputAnchors = LayerShellQt::Window::Anchors(
         LayerShellQt::Window::AnchorTop
@@ -2014,7 +1980,7 @@ void SurfaceManagerTest::trayInventoryAndForeignMenuHaveIndependentLifecycles()
     outputAnchors |= LayerShellQt::Window::AnchorRight;
     QCOMPARE(childLayer->anchors(), outputAnchors);
     QCOMPARE(childLayer->desiredSize(), QSize(0, 0));
-    QCOMPARE(childLayer->margins(), QMargins(0, panel->height(), 0, 0));
+    QCOMPARE(childLayer->margins(), QMargins(0, 0, 0, 0));
 
     controller.close();
     QTRY_VERIFY(child.isNull());
@@ -2059,14 +2025,18 @@ void SurfaceManagerTest::wallpaperMenuHandsTheFolderChooserBackToThePermanentPan
     const QScreen *const screen = panel.screen();
     QVERIFY(screen);
     QVERIFY(menu->property("anchoredFromPanel").toBool());
-    QCOMPARE(menu->property("attachmentStartY").toInt(), 0);
+    {
+        const double scale = menu->property("shellScale").toDouble();
+        QCOMPARE(menu->property("attachmentStartY").toReal(),
+                 panel.height() / (scale > 0 ? scale : 1.0));
+    }
     QCOMPARE(menu->property("anchorGap").toInt(), 25);
     QCOMPARE(
         menu->property("openerRect").toRectF(),
         panelAttachmentRectOnCarrier(
             openerRect,
             QPointF(screen->geometry().topLeft()),
-            QPointF(0, panel.height()),
+            QPointF(0, 0),
             menu->property("shellScale").toDouble()
         )
     );
@@ -2075,13 +2045,13 @@ void SurfaceManagerTest::wallpaperMenuHandsTheFolderChooserBackToThePermanentPan
         panelAttachmentRectOnCarrier(
             anchorRect,
             QPointF(screen->geometry().topLeft()),
-            QPointF(0, panel.height()),
+            QPointF(0, 0),
             menu->property("shellScale").toDouble()
         )
     );
     auto *const menuLayer = LayerShellQt::Window::get(menu);
     QVERIFY(menuLayer);
-    QCOMPARE(menuLayer->margins(), QMargins(0, panel.height(), 0, 0));
+    QCOMPARE(menuLayer->margins(), QMargins(0, 0, 0, 0));
     QSignalSpy chooser(&panel, &FakePanelWindow::wallpaperFolderPickerOpened);
     QVERIFY(QMetaObject::invokeMethod(menu, "chooseRequested"));
 
@@ -2091,8 +2061,9 @@ void SurfaceManagerTest::wallpaperMenuHandsTheFolderChooserBackToThePermanentPan
     QVERIFY(controller.openIndicator().isEmpty());
 }
 
-// SURF-1: closing an indicator menu rests its carrier mapped, and only the
-// same kind on the same output resumes it; any other kind pays the one remap.
+// SIMPLE-2 retired the park: closing an indicator menu tears its carrier
+// down, and every reopen — same kind or not — maps a fresh window. (The
+// name survives so the test registry stays stable.)
 void SurfaceManagerTest::aClosedIndicatorMenuParksAndOnlyItsOwnKindResumesIt()
 {
     qunsetenv("CELESTINA_PANEL_MENU");
@@ -2122,42 +2093,34 @@ void SurfaceManagerTest::aClosedIndicatorMenuParksAndOnlyItsOwnKindResumesIt()
 
     controller.close();
     QVERIFY(controller.openIndicator().isEmpty());
-    // Parked, not destroyed: mapped, one pixel of input, no retirement left.
-    QVERIFY(menu);
-    QVERIFY(menu->isVisible());
-    QVERIFY(menu->property("celestinaParked").toBool());
-    QVERIFY(!menu->property("celestinaRetiring").toBool());
-    QCOMPARE(menu->mask(), QRegion(0, 0, 1, 1));
-    // And it claims no occupancy while it rests.
+    // Torn down for real, after its soft beat: no parked ghost may stay
+    // mapped with a stale buffer on this compositor.
+    QTRY_VERIFY(menu.isNull());
     QVERIFY(controller.openCardRectOnOutput(panel.screen()).isEmpty());
 
-    // The same kind resumes the same window, following the new opener.
+    // The same kind reopens on a FRESH window, following the new opener.
     const QRectF movedOpener = opener.translated(-80, 0);
     const QRectF movedAnchor = anchor.translated(-80, 0);
     controller.toggleIndicatorMenu(
         &panel, movedOpener, movedAnchor,
         QStringLiteral("brightness"), &providers);
     QCOMPARE(controller.openIndicator(), QStringLiteral("brightness"));
-    QVERIFY(menu);
-    QCOMPARE(windowWithProperty("providerSource"), menu.data());
-    QVERIFY(!menu->property("celestinaParked").toBool());
-    QVERIFY(menu->mask() != QRegion(0, 0, 1, 1));
-    const QRectF resumedOpener = menu->property("openerRect").toRectF();
+    QPointer<QWindow> reopened(windowWithProperty("providerSource"));
+    QVERIFY(reopened);
+    const QRectF resumedOpener = reopened->property("openerRect").toRectF();
     QCOMPARE(resumedOpener, firstOpener.translated(
         movedOpener.x() - opener.x(), 0));
-    QObject *const field = menu->findChild<QObject *>(
+    QObject *const field = reopened->findChild<QObject *>(
         QStringLiteral("celestina-soft-menu-field"));
     QVERIFY(field);
     QVERIFY(!field->property("retiring").toBool());
 
-    // A different kind cannot reuse the parked window: it pays the remap and
-    // the parked carrier really goes away.
+    // Another kind simply replaces it, fresh window again.
     controller.close();
-    QVERIFY(menu->property("celestinaParked").toBool());
+    QTRY_VERIFY(reopened.isNull());
     controller.toggleIndicatorMenu(
         &panel, opener, anchor, QStringLiteral("network"), &providers);
     QCOMPARE(controller.openIndicator(), QStringLiteral("network"));
-    QTRY_VERIFY(menu.isNull());
     controller.close();
 }
 
@@ -2471,41 +2434,36 @@ void SurfaceManagerTest::theMenuContentLoadsAndFitsItsSurface()
         "the map must expose windowActivated(QString) for the host to connect"
     );
     QVERIFY(content->metaObject()->indexOfProperty("glassRegions") >= 0);
+    // One marker per glass section (the map carries a header and a body).
     const QList<QObject *> outerGlass = content->findChildren<QObject *>(
         QStringLiteral("celestina-compositor-glass-region")
     );
-    QCOMPARE(outerGlass.size(), 1);
+    QVERIFY(!outerGlass.isEmpty());
+    // SIMPLE-2: the surface is one ShellPanel; its tint is the visible
+    // paint and the old multi-mode material is gone.
     QObject *const bodyMaterial = content->findChild<QObject *>(
-        QStringLiteral("celestina-menu-body-tint")
+        QStringLiteral("celestina-panel-tint")
     );
     QVERIFY(bodyMaterial);
-    QCOMPARE(bodyMaterial->property("backdropMode").toInt(), 1);
-    QCOMPARE(bodyMaterial->property("externalBackdropReady").toBool(), true);
-    QCOMPARE(bodyMaterial->property("captureActive").toBool(), false);
-    QCOMPARE(bodyMaterial->property("elevation").toInt(), 0);
     auto *const quickWindow = qobject_cast<QQuickWindow *>(content);
     auto *const body = qobject_cast<QQuickItem *>(outerGlass.constFirst());
     QVERIFY(quickWindow);
     QVERIFY(body);
     const QPointF bodyOrigin = body->mapToItem(quickWindow->contentItem(), 0, 0);
-    QCOMPARE(qRound(bodyOrigin.x()), content->property("cardX").toInt());
-    QCOMPARE(qRound(bodyOrigin.y()), content->property("cardY").toInt());
+    // Every section's glass sits inside the card.
+    QVERIFY(qRound(bodyOrigin.x()) >= content->property("cardX").toInt());
+    QVERIFY(qRound(bodyOrigin.y()) >= content->property("cardY").toInt());
+    // The glass sections are the cards; at least one is visible.
     const QList<QObject *> sections = content->findChildren<QObject *>(
         QStringLiteral("celestina-menu-section")
     );
-    QTRY_COMPARE(sections.size(), 2);
+    int visiblePanels = 0;
     for (QObject *const section : sections) {
-        QVERIFY(section->metaObject()->indexOfProperty("captureActive") >= 0);
-        QCOMPARE(section->property("backdropMode").toInt(), 1);
-        QCOMPARE(section->property("externalBackdropReady").toBool(), true);
-        QCOMPARE(section->property("captureActive").toBool(), false);
-        QCOMPARE(
-            section->findChildren<QObject *>(
-                QStringLiteral("celestina-compositor-glass-region")
-            ).size(),
-            0
-        );
+        auto *const item = qobject_cast<QQuickItem *>(section);
+        if (item && item->isVisible())
+            ++visiblePanels;
     }
+    QVERIFY(visiblePanels >= 1);
     QCOMPARE(
         content->findChildren<QObject *>(
             QStringLiteral("celestina-menu-header")

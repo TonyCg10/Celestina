@@ -59,6 +59,20 @@ public:
         return m_panels.value(screen).data();
     }
 
+    // Opens or closes one indicator's menu exactly as a click on its panel
+    // control would: by invoking the control's own `requestMenu`, so the
+    // opener geometry, the toggle-on-second-ask rule and the surface sweep
+    // are all the click's real path. Exists for the shell service: a test
+    // session drives menus over D-Bus because injecting input is off the
+    // table there. Returns false when this output has no panel or the panel
+    // shows no such indicator.
+    bool requestIndicatorMenu(const QString &kind, QScreen *screen);
+
+    // The bar's published glass and its capsule markers, for get-state:
+    // whether the frost sits under the pills is a rectangle comparison a
+    // nested session can make over the bus.
+    QVariantMap barState() const;
+
     // M7 — where this output's bubbles currently sit, in the compositor's output-local
     // logical coordinates, or an empty rectangle when that output has no mapped panel.
     //

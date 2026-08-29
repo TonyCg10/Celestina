@@ -5,6 +5,7 @@
 #include <QSizeF>
 #include <QString>
 
+class QQuickItem;
 class QScreen;
 class QWindow;
 
@@ -39,6 +40,20 @@ struct QuietAnchor
 // source. No click is involved: a reading changes without one, so the host
 // asks the panel for the geometry a click would have reported.
 QuietAnchor quietAnchorForIcon(QWindow *panel, const QString &iconObjectName);
+
+// The bar's visible strip, in the panel window's own device pixels. The
+// window is taller than the bar by its shadow apron (SIMPLE-1), so every
+// surface that hangs from the bar's lower seam must measure the QML's own
+// stated `barHeight` — never the window height, which once pushed every
+// attached menu a whole apron below the bar. Falls back to the window
+// height for a window that does not state one (harness panels).
+qreal panelBarBottomDevice(QWindow *panel);
+
+// The visible item named `objectName` in a window's visual tree, or null.
+// The visual tree, not the QObject tree: items born of repeaters and inline
+// components hang from `parentItem`, and `QObject::findChild` walks past
+// them — measured with the panel's own indicators.
+QQuickItem *quietFindVisibleItem(QWindow *window, const QString &objectName);
 
 // The window and card geometry for one attached quiet surface, all in
 // output-local shell units. The card centres on the opener exactly as

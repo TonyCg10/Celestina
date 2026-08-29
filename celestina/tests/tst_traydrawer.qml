@@ -612,11 +612,11 @@ TestCase {
         compare(connectivityCluster.spacing, CelestinaTheme.spaceMd);
         compare(levelCluster.spacing, CelestinaTheme.spaceMd);
         compare(utilityCluster.spacing, CelestinaTheme.spaceXs);
-        // The clusters paint denser material only; the real Panel supplies one
-        // continuous edge-to-edge compositor region behind every cluster.
-        compare(testCase.visibleGlassRegions(connectivityCluster).length, 0);
-        compare(testCase.visibleGlassRegions(levelCluster).length, 0);
-        compare(testCase.visibleGlassRegions(utilityCluster).length, 0);
+        // SIMPLE-2: each cluster's capsule is its own ShellPanel with one
+        // region; the bar's continuous veil is gone.
+        compare(testCase.visibleGlassRegions(connectivityCluster).length, 1);
+        compare(testCase.visibleGlassRegions(levelCluster).length, 1);
+        compare(testCase.visibleGlassRegions(utilityCluster).length, 1);
         verify(!launcherButton.ownsGlass);
         verify(!controlCentreButton.ownsGlass);
         verify(!clipboardButton.ownsGlass);

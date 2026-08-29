@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina-style VERSION 1.7.0 LANGUAGES CXX)
+project(celestina-style VERSION 1.8.0 LANGUAGES CXX)
 
 include(CTest)
 
@@ -35,6 +35,7 @@ qt_add_qml_module(celestina-style
         CelestinaSurface.qml
         CelestinaBackdrop.qml
         CelestinaButton.qml
+        CelestinaShadow.qml
         CelestinaIconButton.qml
         CelestinaIcon.qml
         CelestinaSectionLabel.qml

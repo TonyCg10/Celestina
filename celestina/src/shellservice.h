@@ -10,6 +10,8 @@
 #include <QElapsedTimer>
 #include <QVariantMap>
 
+#include <functional>
+
 #include "sessionrequests.h"
 
 class NiriClient;
@@ -17,6 +19,7 @@ class LockController;
 class OverlayController;
 class ShellProvidersClient;
 class BubbleAnchorSource;
+class QScreen;
 class QDBusConnection;
 
 // The session's one way in.
@@ -83,9 +86,24 @@ public:
     // Wired in after construction, like the overlay controllers. Only the anchor for a
     // minimize needs it; a shell without one still minimizes, with Niri's ordinary motion.
     void setBubbleAnchorSource(BubbleAnchorSource *anchors);
+    // Opens one indicator's menu on one screen, or refuses — the bar's own
+    // door, offered over the bus because a nested test session cannot click.
+    // A function rather than the panel manager, exactly as the quiet-state
+    // probe below: this service never learns the bar's type, and the tests
+    // that link this file alone stay linkable.
+    void setIndicatorMenuProbe(
+        std::function<bool(const QString &, QScreen *)> probe);
+    // What the toast stack currently measures, for `get-state`: a nested test
+    // session reads the live geometry instead of guessing it from pixels. A
+    // function rather than the controller, so this service never learns the
+    // quiet surfaces' types.
+    void setQuietStateProbe(std::function<QVariantMap()> probe);
+    void setPanelStateProbe(std::function<QVariantMap()> probe);
 
 private:
     qulonglong toggleBubbleSelector(const QString &verb);
+    qulonglong toggleIndicatorMenu(const QVariantMap &options);
+    qulonglong dismissNotification(const QVariantMap &options);
     QVariantMap minimizeTransition() const;
     qulonglong minimizeWindow(const QVariantMap &options);
     void reportProviderAction(
@@ -194,6 +212,9 @@ private:
     QPointer<OverlayController> m_sessionMenu;
     QPointer<LockController> m_lock;
     QPointer<ShellProvidersClient> m_providers;
+    std::function<bool(const QString &, QScreen *)> m_indicatorMenuProbe;
+    std::function<QVariantMap()> m_quietStateProbe;
+    std::function<QVariantMap()> m_panelStateProbe;
     // Not a QPointer: the interface is not a QObject. Its implementation outlives this
     // service, both being owned by main() for the session.
     BubbleAnchorSource *m_anchors = nullptr;

@@ -1,11 +1,15 @@
 #include "toastcontroller.h"
 
 #include <QCursor>
+#include <QDateTime>
 #include <QDebug>
 #include <QGuiApplication>
 #include <QQmlEngine>
+#include <QQuickItem>
 #include <QQuickWindow>
+#include <QVariantList>
 #include <QPointer>
+#include <QMargins>
 #include <QRegion>
 #include <QScreen>
 #include <QVariantMap>
@@ -31,6 +35,20 @@ constexpr qreal cardInset = 8;
 // Upper bound for the connector gap plus the drop's overshoot; the QML
 // computes the exact proportional gap from its theme tokens.
 constexpr qreal connectorSlack = 96;
+// The server shows at most this many toasts at once (MAX_VISIBLE); the
+// window is sized for that whole pile from the very first mapping, exactly
+// as the display's windows are sized for their whole card file. A layer
+// surface that grew with the animated column reconfigured — fresh buffer,
+// blur re-arm and all — on every frame of every growth, which is the
+// recorded stutter, and the configure storm it caused is what wedged the
+// bottom-centre pile with its content still below the screen's edge.
+constexpr int stackDepth = 5;
+constexpr qreal stackSpacing = 8;
+constexpr qreal columnPadding = 24;
+constexpr qreal edgeBreath = 16;
+constexpr qreal runwayColumnHeight =
+    stackDepth * cardSize.height() + (stackDepth - 1) * stackSpacing
+    + columnPadding;
 
 QRectF onOutputInShellUnits(
     const QRectF &globalRect,
@@ -45,6 +63,17 @@ QRectF onOutputInShellUnits(
         : onOutput;
 }
 } // namespace
+
+// Every content change can start up to one full beat of motion, plus the
+// sweep that follows a fold; the pump outlives the longest of them and dies
+// on its deadline. Restarted freely: a burst of arrivals just moves the
+// deadline out.
+void ToastController::pumpAnimations()
+{
+    m_pumpDeadline = QDateTime::currentMSecsSinceEpoch() + 700;
+    if (!m_animationPump.isActive())
+        m_animationPump.start();
+}
 
 namespace {
 void quietKickRender(QWindow *window)
@@ -89,6 +118,32 @@ ToastController::ToastController(
     m_closeTimer.setInterval(260);
     connect(&m_closeTimer, &QTimer::timeout, this, &ToastController::hide);
 
+    // One forced frame per tick while a toast animation can be in flight.
+    //
+    // The entry ride's very first frame holds the whole column outside the
+    // canvas, so the buffer this window commits is fully transparent — and a
+    // compositor that culls an invisible surface stops feeding it frame
+    // callbacks, which freezes the render-driven animation on that same
+    // first frame forever: the compositor's material stands at its final
+    // place while the content hangs half off the screen, exactly what the
+    // author recorded twice. Forced updates advance the scene without
+    // waiting for callbacks — measured: three kicks moved a stalled growth
+    // by three frames — so a 60 Hz pump for the bounded span of the motion
+    // plays it whole, and the moment pixels reach the canvas the callbacks
+    // resume on their own. The display's cards never commit an all-clear
+    // buffer, which is why its triple kick has always been enough there.
+    m_animationPump.setInterval(16);
+    connect(&m_animationPump, &QTimer::timeout, this, [this]() {
+        if (QDateTime::currentMSecsSinceEpoch() > m_pumpDeadline) {
+            m_animationPump.stop();
+            return;
+        }
+        if (auto *quick = qobject_cast<QQuickWindow *>(m_surface->window()))
+            quick->requestUpdate();
+        else
+            m_animationPump.stop();
+    });
+
     if (m_providers) {
         connect(
             m_providers,
@@ -109,6 +164,112 @@ QRectF ToastController::openCardRectOnOutput(QScreen *screen) const
     if (!m_surface->isOpen() || !screen || m_openScreen.data() != screen)
         return QRectF();
     return m_openCard;
+}
+
+namespace {
+void collectToastCards(QQuickItem *item, QVariantList &cards)
+{
+    if (!item)
+        return;
+    for (QQuickItem *const child : item->childItems()) {
+        if (child->objectName().startsWith(
+                QStringLiteral("celestina-toast-card-"))) {
+            QVariantMap card;
+            card.insert(QStringLiteral("name"), child->objectName());
+            // In the window's own physical pixels, transforms included —
+            // the coordinates a screenshot of the buffer would measure.
+            const QPointF top = child->mapToScene(QPointF(0, 0));
+            const QPointF bottom =
+                child->mapToScene(QPointF(0, child->height()));
+            card.insert(QStringLiteral("sceneY"), top.y());
+            card.insert(QStringLiteral("sceneBottom"), bottom.y());
+            card.insert(QStringLiteral("height"), child->height());
+            card.insert(QStringLiteral("opacity"), child->opacity());
+            card.insert(
+                QStringLiteral("leaving"),
+                child->property("leaving"));
+            card.insert(
+                QStringLiteral("hatching"),
+                child->property("hatching"));
+            cards.append(card);
+        }
+        collectToastCards(child, cards);
+    }
+}
+} // namespace
+
+QVariantMap ToastController::stackState() const
+{
+    QVariantMap state;
+    state.insert(QStringLiteral("open"), m_surface->isOpen());
+    state.insert(QStringLiteral("parked"), m_surface->isParked());
+    QWindow *const window = m_surface->window();
+    if (!window)
+        return state;
+
+    state.insert(QStringLiteral("windowWidth"), window->width());
+    state.insert(QStringLiteral("windowHeight"), window->height());
+    state.insert(QStringLiteral("framesSwapped"), m_framesSwapped);
+    for (const char *property :
+         {"runwayHeight", "canvasHeight", "neededHeight", "entersFromBottom",
+          "anchoredFromPanel", "shellScale"}) {
+        state.insert(
+            QString::fromLatin1(property), window->property(property));
+    }
+
+    QQuickItem *const field = quietFindVisibleItem(
+        window, QStringLiteral("celestina-soft-menu-field"));
+    if (field) {
+        QVariantMap measured;
+        measured.insert(QStringLiteral("y"), field->y());
+        measured.insert(QStringLiteral("height"), field->height());
+        for (const char *property :
+             {"targetHeight", "blockEntryProgress", "revealed", "departing"}) {
+            measured.insert(
+                QString::fromLatin1(property), field->property(property));
+        }
+        measured.insert(QStringLiteral("opacity"), field->opacity());
+        measured.insert(QStringLiteral("scale"), field->scale());
+        const QPointF top = field->mapToScene(QPointF(0, 0));
+        const QPointF bottom = field->mapToScene(QPointF(0, field->height()));
+        measured.insert(QStringLiteral("sceneY"), top.y());
+        measured.insert(QStringLiteral("sceneBottom"), bottom.y());
+        state.insert(QStringLiteral("field"), measured);
+
+        QVariantList cards;
+        collectToastCards(field, cards);
+        state.insert(QStringLiteral("cards"), cards);
+
+        if (QQuickItem *const rows = quietFindVisibleItem(
+                window, QStringLiteral("celestina-toast-rows"))) {
+            QVariantMap column;
+            column.insert(QStringLiteral("y"), rows->y());
+            column.insert(QStringLiteral("height"), rows->height());
+            column.insert(
+                QStringLiteral("implicitHeight"), rows->implicitHeight());
+            column.insert(
+                QStringLiteral("sceneY"),
+                rows->mapToScene(QPointF(0, 0)).y());
+            state.insert(QStringLiteral("rows"), column);
+        }
+    }
+
+    // Flattened by hand: a QRectF nested in a list crosses D-Bus as null,
+    // and a probe that answers null is a probe nobody can assert against.
+    const QVariantList regions = window->property("glassRegions").toList();
+    QVariantList rects;
+    for (const QVariant &each : regions) {
+        const QRectF rect =
+            each.toMap().value(QStringLiteral("rect")).toRectF();
+        rects.append(QVariantMap {
+            {QStringLiteral("x"), rect.x()},
+            {QStringLiteral("y"), rect.y()},
+            {QStringLiteral("width"), rect.width()},
+            {QStringLiteral("height"), rect.height()},
+        });
+    }
+    state.insert(QStringLiteral("glassRects"), rects);
+    return state;
 }
 
 void ToastController::yieldParkedCarrier(const QStringList &fullscreenOutputs)
@@ -149,6 +310,7 @@ void ToastController::providersChanged()
             if (m_surface->window() != shown)
                 return;
             quietKickRender(shown);
+            pumpAnimations();
             if (!m_closeTimer.isActive())
                 m_closeTimer.start();
         } else {
@@ -201,27 +363,37 @@ QWindow *ToastController::createWindow(
     return window;
 }
 
-// An attached stack's window begins at the panel's physical lower seam. The
-// cards remain interactive and the complete local carrier is safe input: no
-// mask can accidentally put this window back over the bell or its neighbours.
+// The runway is taller than what it shows, on every route, so input belongs
+// to the cards alone: the mask is the union of the glass the QML publishes,
+// grown a breath so a dismiss cross at a card's edge never lands on a dead
+// pixel. Before the first card has published — or between piles — it is one
+// pixel, exactly as the park keeps it.
 void ToastController::applyInputMask(QWindow *window)
 {
     if (!window)
         return;
 
-    // The park owns a resting carrier's one-pixel mask; a late size change
-    // arriving through the persistent height connection must not widen it.
+    // The park owns a resting carrier's one-pixel mask; a late glass change
+    // arriving through the persistent connection must not widen it.
     if (window->property("celestinaParked").toBool())
         return;
 
-    if (!m_openAttached) {
-        window->setMask(QRegion());
-        return;
+    const QVariantList rects = window->property("glassRects").toList();
+    QRegion region;
+    for (const QVariant &each : rects) {
+        const QRect rect = each.toRectF().toAlignedRect();
+        if (rect.isEmpty())
+            continue;
+        region += rect.marginsAdded(QMargins(4, 4, 4, 4));
     }
+    if (region.isEmpty())
+        region = QRegion(0, 0, 1, 1);
+    window->setMask(region);
+}
 
-    window->setMask(QRegion(
-        0, 0, qMax(1, window->width()), qMax(1, window->height())
-    ));
+void ToastController::toastGlassChanged()
+{
+    applyInputMask(m_surface->window());
 }
 
 void ToastController::show(const QVariantList &toasts, const QVariantList &actions)
@@ -239,6 +411,14 @@ void ToastController::show(const QVariantList &toasts, const QVariantList &actio
         shown->setProperty("actions", actions);
         shown->setProperty("toasts", toasts);
         applyInputMask(shown);
+        // The same kick the mapping and the emptying already get. A layer
+        // window the compositor has stopped feeding frame callbacks holds
+        // every animation where it stands — measured on the nested session:
+        // a card joining an open stack grew the model but not the field, and
+        // the newcomer painted below the glass until any other surface
+        // dirtied the scene.
+        quietKickRender(shown);
+        pumpAnimations();
         return;
     }
 
@@ -269,14 +449,16 @@ void ToastController::show(const QVariantList &toasts, const QVariantList &actio
             opener = onOutputInShellUnits(anchor.opener, outputOrigin, shellScale);
             icon = onOutputInShellUnits(anchor.icon, outputOrigin, shellScale);
             barHeight = shellScale > 0
-                ? qMax(0, panel->height()) / shellScale
-                : qMax(0, panel->height());
+                ? panelBarBottomDevice(panel) / shellScale
+                : panelBarBottomDevice(panel);
+            // Sized for the whole pile from the start, like the display's
+            // file: the runway maps once and the column grows inside it.
             geometry = attachedQuietGeometry(
                 outputSize,
                 barHeight,
                 opener,
                 icon,
-                cardSize,
+                QSizeF(cardSize.width(), runwayColumnHeight),
                 cardInset,
                 connectorSlack
             );
@@ -293,10 +475,17 @@ void ToastController::show(const QVariantList &toasts, const QVariantList &actio
     OverlaySurface::Placement placement = OverlaySurface::Placement::Corner;
     QVariantMap placementProperties {
         {QStringLiteral("shellScale"), shellScale},
+        // The whole pile's room, decided here once: the QML never asks the
+        // compositor to follow its column again.
+        {QStringLiteral("runwayHeight"), runwayColumnHeight},
     };
     if (occupied) {
         placement = OverlaySurface::Placement::BottomCentre;
         placementProperties.insert(QStringLiteral("entersFromBottom"), true);
+        // The bottom pile keeps its breathing room between the block and the
+        // physical edge inside the same fixed canvas.
+        placementProperties.insert(
+            QStringLiteral("runwayHeight"), runwayColumnHeight + edgeBreath);
     } else if (geometry.valid) {
         placement = OverlaySurface::Placement::AttachedTopRight;
         const QRectF localOpener = geometry.onSurface(opener);
@@ -311,6 +500,10 @@ void ToastController::show(const QVariantList &toasts, const QVariantList &actio
             QStringLiteral("surfaceWidth"), geometry.surface.width());
         placementProperties.insert(
             QStringLiteral("surfaceHeight"), geometry.surface.height());
+        // Attached, the geometry already spans the connector and the whole
+        // pile; that height is this route's runway.
+        placementProperties.insert(
+            QStringLiteral("runwayHeight"), geometry.surface.height());
     }
 
     const int topInset = placement == OverlaySurface::Placement::AttachedTopRight
@@ -335,6 +528,7 @@ void ToastController::show(const QVariantList &toasts, const QVariantList &actio
             parked->setProperty("surfaceWidth", cardSize.width());
             parked->setProperty("surfaceHeight", 0);
             parked->setProperty("entersFromBottom", false);
+            parked->setProperty("runwayHeight", 0);
             for (auto it = placementProperties.constBegin();
                  it != placementProperties.constEnd(); ++it) {
                 parked->setProperty(it.key().toUtf8().constData(), it.value());
@@ -369,13 +563,21 @@ void ToastController::show(const QVariantList &toasts, const QVariantList &actio
             return;
         }
 
-        // The stack grows as toasts arrive. Its full local input region
-        // follows that height while the QWindow's physical top remains fixed
-        // at the seam, leaving the panel outside the carrier whatever the
-        // column becomes.
-        connect(stack, &QWindow::heightChanged, this, [this]() {
-            applyInputMask(m_surface->window());
-        });
+        // The input region follows the cards, not the canvas: each glass
+        // publication redraws the mask over the fixed runway. Connected once
+        // per window, like the departure signal; a reused carrier keeps it.
+        connect(
+            stack,
+            SIGNAL(glassRegionsChanged()),
+            this,
+            SLOT(toastGlassChanged())
+        );
+
+        if (auto *quick = qobject_cast<QQuickWindow *>(stack)) {
+            connect(quick, &QQuickWindow::frameSwapped, this, [this]() {
+                ++m_framesSwapped;
+            });
+        }
     }
 
     // A nested session's console is unreachable from outside it; where a
@@ -394,7 +596,6 @@ void ToastController::show(const QVariantList &toasts, const QVariantList &actio
             .flag(QStringLiteral("reused"), reused)
     );
 
-    m_openAttached = placement == OverlaySurface::Placement::AttachedTopRight;
     m_openScreen = screen;
     m_openCard = prospectiveCard;
     applyInputMask(stack);
@@ -406,6 +607,7 @@ void ToastController::show(const QVariantList &toasts, const QVariantList &actio
     // animation can tick either. A surface that lives under two seconds died
     // unpainted. Kicking one update right after mapping starts the chain.
     quietKickRender(stack);
+    pumpAnimations();
 
 }
 
@@ -420,23 +622,15 @@ void ToastController::toastDepartureFinished()
 void ToastController::hide()
 {
     m_closeTimer.stop();
-    // Rest rather than unmap (SURF-1): the emptied stack keeps its mapped
-    // carrier, one pixel of input and all, and the next burst resumes it in
-    // place. The lists are emptied so the parked scene carries nothing — a
-    // parked window is visible, and a stale card on it would simply show. A
-    // carrier already resting is left so; only a window that cannot park
-    // takes the unmap it always took.
-    if (m_surface->isOpen()) {
-        if (QWindow *const shown = m_surface->window()) {
-            shown->setProperty("actions", QVariantList());
-            shown->setProperty("toasts", QVariantList());
-        }
-        if (!m_surface->park())
-            m_surface->close();
-    } else if (!m_surface->isParked()) {
-        m_surface->close();
-    }
+    // SIMPLE-1 retired the toast park (SURF-1). A resumed carrier on this
+    // compositor never regains its exposure: Qt's render loop then skips
+    // every update — heartbeat included — and the next pile's paint stays a
+    // stale buffer under freshly armed frost, which is the milky slab the
+    // author kept recording. Fresh opens have never shown the defect, and
+    // the remap they cost is one configure round-trip on a surface whose
+    // geometry no longer animates. The park existed to avoid scene churn a
+    // simpler shell no longer has.
+    m_surface->close();
     m_openCard = QRectF();
     m_openScreen.clear();
-    m_openAttached = false;
 }

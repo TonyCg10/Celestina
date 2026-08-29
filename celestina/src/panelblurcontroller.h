@@ -50,7 +50,18 @@ class PanelBlurController final : public QObject
     Q_OBJECT
 
 public:
-    explicit PanelBlurController(QWindow *window, QObject *parent = nullptr);
+    // SIMPLE-1: `weakArm` distinguishes the two glass channels. The panel's
+    // continuous veil keeps the weak per-window blur; every card carrier
+    // passes false — its sections want only the strong colour-summary the
+    // dense companions provide, and the see-through weak blur on top of it
+    // was exactly the "too transparent" glass the author rejected. A
+    // controller with weakArm false still probes and still publishes the
+    // dense sections on every region beat; it just never arms the window's
+    // own blur.
+    explicit PanelBlurController(
+        QWindow *window,
+        QObject *parent = nullptr,
+        bool weakArm = true);
 
     void start();
 
@@ -89,5 +100,6 @@ private:
     // two seconds for as long as the session rested — the journal
     // amplification class measured at gigabytes per day.
     bool m_outageLogged = false;
+    bool m_weakArm = true;
     int m_fastAttemptsRemaining = 0;
 };

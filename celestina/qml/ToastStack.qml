@@ -78,6 +78,9 @@ Window {
         id: backdropInk
     }
 
+    // The carrier's pulse lives in the shared SoftMenuField now, so every
+    // surface family beats without having to remember to.
+
     // The same placement rule every panel-opened surface uses, fed in this
     // carrier's own coordinates. The host translates the opener and icon into
     // that space and gives an attached carrier a local seam of zero because
@@ -131,10 +134,21 @@ Window {
     // pile grows upward — newest at the edge, the rest riding above it.
     property bool entersFromBottom: false
 
-    // The window is as tall as what it holds: attached, the connector and the
-    // whole column begin at the carrier-local seam; floating, it is the column
-    // alone. The stack grows as toasts arrive and the compositor is asked to
-    // follow without moving that physical top edge.
+    // The whole column's runway, stated by the host once per open: room for
+    // every toast the server may show at once, exactly as the display's
+    // windows are sized for the whole card file from the start. The column
+    // grows and folds INSIDE this fixed canvas. It used to be the other way
+    // round — the window followed the animated column — and every tick of a
+    // growth or a fold asked the compositor for a layer reconfigure and a
+    // fresh buffer: measured on the nested session as one `blur.armed` per
+    // frame with a different window height each time, the stutter the author
+    // recorded twice, and, mid-storm, the wedged configure pipeline that
+    // painted the compositor's material with the content still off screen.
+    property real runwayHeight: 0
+
+    // The measured fallback, for a stack brought up without a stated runway
+    // (the offscreen tests): the column plus its breathing room, which was
+    // this window's whole size before the runway existed.
     readonly property real neededHeight: stack.anchoredFromPanel
             ? Math.max(stack.surfaceHeight,
                        placement.y + field.targetHeight
@@ -142,8 +156,11 @@ Window {
             : field.targetHeight
               + (stack.entersFromBottom ? CelestinaTheme.spaceLg : 0)
 
+    readonly property real canvasHeight: stack.runwayHeight > 0
+            ? stack.runwayHeight : stack.neededHeight
+
     width: Math.round(stack.surfaceWidth * stack.shellScale)
-    height: Math.round(stack.neededHeight * stack.shellScale)
+    height: Math.round(stack.canvasHeight * stack.shellScale)
     color: CelestinaTheme.clear
     title: qsTr("Notificaciones de Celestina")
 
@@ -193,9 +210,8 @@ Window {
     }
 
     // The sweep that removes rows whose collapse has had its full beat: a
-    // toast that leaves while others stay is covered rather than cut — its
-    // section fades and folds shut underneath while the survivors slide over
-    // its place, on both routes.
+    // toast that leaves while others stay folds shut and fades where it
+    // stands while the column reflows around it, on both routes.
     Timer {
         id: rowSweep
 
@@ -211,11 +227,9 @@ Window {
 
     function finishDeparture() {
         blockDeparture.stop();
-        blockEntry.stop();
         rowSweep.stop();
         toastModel.clear();
         field.departing = false;
-        field.blockEntryProgress = 0;
         field.resetForReuse();
         stack.collectGlass();
         stack.departureFinished();
@@ -257,11 +271,17 @@ Window {
             field.departing = false;
         }
 
-        // The bottom pile mirrors the top one: new sections are born away
-        // from the screen's edge — upward — so the oldest sits at the edge
-        // and the survivors slide down over it when it leaves.
+        // The newest notification is born at the column's origin — the seam
+        // under the bell up top, the screen's edge down below — and the pile
+        // it joins is pushed away from that origin. It used to be the
+        // inverse, with each new toast born at the far end falling out of
+        // the previous one and the survivors sliding back to cover an
+        // expired card's place, which the author rejected on video. The
+        // server publishes newest last; the top routes lay out from the
+        // origin down, so they take the list reversed, and the bottom pile
+        // is anchored at the edge, so it takes it as published.
         const desired = stack.entersFromBottom
-            ? list.slice().reverse() : list.slice();
+            ? list.slice() : list.slice().reverse();
 
         for (let stale = toastModel.count - 1; stale >= 0; --stale) {
             let present = false;
@@ -338,7 +358,7 @@ Window {
         id: scene
 
         width: stack.surfaceWidth
-        height: stack.neededHeight
+        height: stack.canvasHeight
         transformOrigin: Item.TopLeft
         scale: stack.shellScale
 
@@ -350,6 +370,10 @@ Window {
     SoftMenuField {
         id: field
 
+        // A notification is a glance, never a takeover: no backdrop scrim.
+        dimsBackdrop: false
+
+
         x: Math.round(placement.x)
         // Attached, under the seam; flush at the bottom, pinned by its lower
         // edge — the breathing room stays between the block and the screen's
@@ -359,27 +383,28 @@ Window {
         // lower edge, so no transient binding state can place this block in a
         // buffer that covers the bar.
         y: stack.entersFromBottom
-           ? stack.neededHeight - CelestinaTheme.spaceLg - field.height
+           ? stack.canvasHeight - CelestinaTheme.spaceLg - field.height
            : Math.max(stack.anchoredFromPanel ? Math.round(placement.y) : 0,
                       Math.max(0, stack.attachmentStartY))
         width: stack.cardWidth
-        // As tall as everything it holds; the growth is a movement of its
-        // own, synchronized with the arriving section's slide by sharing its
-        // duration and curve.
+        // As tall as everything it holds, on the very frame it holds it. The
+        // column's own height already animates — each hatching or folding
+        // card moves it per frame on its own 200 ms curve — so the field
+        // follows it directly and the veil's edge rides the card's edge in
+        // lockstep. A Behavior here was a second clock chasing the first:
+        // re-targeted every frame of the growth, it trailed the card by up
+        // to forty units and settled asymptotically half a beat later — the
+        // stack desynchronisation the author recorded.
         readonly property real targetHeight:
             rows.implicitHeight + CelestinaTheme.spaceMd * 2
         height: field.targetHeight
-        Behavior on height {
-            enabled: !stack.reducedMotion
-            NumberAnimation {
-                duration: CelestinaTheme.motionNormal
-                easing.type: CelestinaTheme.easeStandard
-            }
-        }
         // The compositor region follows the growing edge per frame, as every
         // falling route already does: a field whose blur waited at the final
-        // size would show the expansion over a bare backdrop.
-        onHeightChanged: field.collectGlass()
+        // size would show the expansion over a bare backdrop. Scheduled, not
+        // synchronous: a fold moves the height, the ride and the column in
+        // the same tick, and `Qt.callLater` folds those into one walk per
+        // frame instead of three.
+        onHeightChanged: field.scheduleGlassCollection()
         visible: toastModel.count > 0
 
         // Leaving is one block on every route: rows, field and compositor
@@ -391,46 +416,25 @@ Window {
         // this component's handler runs; deriving the ride from a progress
         // that starts at zero guarantees that collection sees the offscreen
         // footprint, never the final card.
-        property real blockEntryProgress: 0
+        // SIMPLE-1: entries and exits are the field's own fade; the block no
+        // longer rides in from the edge nor shrinks away. The progress and
+        // the transform remain as inert API for the host's placement and the
+        // tests that read them.
+        property real blockEntryProgress: 1
         opacity: field.departing ? 0 : 1
-        scale: field.departing ? 0.88 : 1
         transformOrigin: Item.Center
         Behavior on opacity {
             enabled: !stack.reducedMotion
             NumberAnimation {
-                duration: CelestinaTheme.motionNormal
-                easing.type: CelestinaTheme.easeExit
-            }
-        }
-        Behavior on scale {
-            enabled: !stack.reducedMotion
-            NumberAnimation {
-                duration: CelestinaTheme.motionNormal
-                easing.type: CelestinaTheme.easeExit
+                duration: CelestinaTheme.motionExit
+                easing.type: CelestinaTheme.easeStandard
             }
         }
 
-        // The bottom entry: the whole block out of the screen's edge at
-        // speed, braking into place, no recoil — the display's own arrival.
         transform: Translate {
             id: blockRide
 
-            y: stack.entersFromBottom
-               ? (1 - field.blockEntryProgress)
-                 * (field.targetHeight + CelestinaTheme.spaceLg)
-               : 0
-            onYChanged: field.collectGlass()
-        }
-
-        NumberAnimation {
-            id: blockEntry
-
-            target: field
-            property: "blockEntryProgress"
-            from: 0
-            to: 1
-            duration: CelestinaTheme.motionNormal
-            easing.type: CelestinaTheme.easeStandard
+            y: 0
         }
         ink: backdropInk
         reducedMotion: stack.reducedMotion
@@ -440,19 +444,10 @@ Window {
         attachmentAnchorRect: stack.attachmentAnchorRect
         attachmentStartY: stack.attachmentStartY
         surfacePosition: Qt.point(stack.surfaceOriginX + field.x, field.y)
-        onScaleChanged: field.collectGlass()
+        onScaleChanged: field.scheduleGlassCollection()
         onGlassRegionsChanged: stack.collectGlass()
-        onRevealedChanged: {
-            if (!field.revealed || !stack.entersFromBottom || field.departing)
-                return;
-            blockEntry.stop();
-            if (stack.reducedMotion) {
-                field.blockEntryProgress = 1;
-                field.collectGlass();
-            } else {
-                blockEntry.restart();
-            }
-        }
+        // SIMPLE-1: no ride to start — the reveal's own fade is the entry on
+        // every route.
         Component.onCompleted: {
             if (toastModel.count > 0)
                 field.reveal();
@@ -461,13 +456,21 @@ Window {
         Column {
             id: rows
 
+            objectName: "celestina-toast-rows"
+
             anchors.left: parent.left
             anchors.right: parent.right
-            // Downward from the bar, upward from the edge: bottom-anchored,
-            // the newest section sits nearest the screen's edge and the rest
-            // of the pile rides above it.
-            anchors.top: stack.entersFromBottom ? undefined : parent.top
-            anchors.bottom: stack.entersFromBottom ? parent.bottom : undefined
+            // Always anchored to the field's top, on every route. The bottom
+            // pile still reads bottom-up because the FIELD is what hugs the
+            // screen's edge and its top is what the growth moves; the column
+            // inside never needs to re-anchor. It used to flip between top
+            // and bottom with the route, and re-anchoring a live positioner
+            // when a parked carrier resumed left every card laid out below
+            // the field — the "only the material came out" state the author
+            // recorded: the column reported its full implicit height while
+            // its children sat where a zero-tall, bottom-anchored column
+            // would have put them.
+            anchors.top: parent.top
             anchors.margins: CelestinaTheme.spaceMd
             spacing: stack.cardSpacing
 
@@ -505,66 +508,68 @@ Window {
                 // sums implicit heights, and a row that stated only `height`
                 // summed to a zero-tall column — a window nobody could see.
                 implicitHeight: body.implicitHeight + CelestinaTheme.spaceMd * 2
-                // Leaving is being covered: the section folds shut and fades
-                // underneath while the survivors slide over its place — the
-                // column reflows with the fold, frame by frame, so the two
-                // movements are one.
-                height: card.leaving ? 0 : card.implicitHeight
-                opacity: card.leaving ? 0 : 1
-                clip: card.leaving
+                // Birth and death are the same fold, played in opposite
+                // directions. A section joining a block that is already up
+                // starts shut at the column's origin and grows open in
+                // place, pushing the rest of the pile away from the seam or
+                // the edge on the same curve; a leaving section folds shut
+                // and fades where it stands, and the column reflows with the
+                // fold, frame by frame, so the two movements are one.
+                property bool hatching: false
+                // Behaviors stay quiet until the hatch is armed, so the
+                // newborn snaps shut without playing its own closing first.
+                property bool motionReady: false
+                height: card.leaving || card.hatching ? 0 : card.implicitHeight
+                opacity: card.leaving || card.hatching ? 0 : 1
+                clip: card.leaving || card.hatching
                 Behavior on height {
-                    enabled: !stack.reducedMotion
+                    enabled: card.motionReady && !stack.reducedMotion
                     NumberAnimation {
                         duration: CelestinaTheme.motionNormal
                         easing.type: CelestinaTheme.easeStandard
                     }
                 }
                 Behavior on opacity {
-                    enabled: !stack.reducedMotion
+                    enabled: card.motionReady && !stack.reducedMotion
                     NumberAnimation {
                         duration: CelestinaTheme.motionNormal
-                        easing.type: CelestinaTheme.easeExit
+                        // The standard curve, in both directions: this one
+                        // Behavior plays the hatch's fade-in as well as the
+                        // fold's fade-out, and the exit curve made a newborn
+                        // invisible for most of its growth before snapping
+                        // in at the end — content arriving on a different
+                        // clock from its own card.
+                        easing.type: CelestinaTheme.easeStandard
                     }
                 }
-                // Age above youth while arriving — the section before must
-                // paint on top for the whole ride — and a leaving section
-                // drops under everything, because the survivors move over it.
-                z: card.leaving ? -toastModel.count - 1
-                   : stack.entersFromBottom ? card.index : -card.index
+                // Nothing overlaps any more — sections reposition through
+                // the column's reflow rather than riding over each other —
+                // so a folding section merely stays under the field's edge.
+                z: card.leaving ? -1 : 0
                 Accessible.role: Accessible.Notification
                 Accessible.name: card.spokenText
 
-                // Emerging from behind its neighbour: downward from behind
-                // the one above on the bar route, upward from behind the one
-                // below on the edge route — braking, no recoil, while the
-                // shared field's edge grows to meet it on the same curve.
-                transform: Translate {
-                    id: arrivalRide
-
-                    y: 0
-                }
-
-                NumberAnimation {
-                    id: arrival
-
-                    target: arrivalRide
-                    property: "y"
-                    from: (stack.entersFromBottom ? 1 : -1)
-                          * (card.implicitHeight + stack.cardSpacing)
-                    to: 0
-                    duration: CelestinaTheme.motionNormal
-                    easing.type: CelestinaTheme.easeStandard
-                }
-
                 Component.onCompleted: {
-                    // A section joining a block that is already up; the first
-                    // one rides in with the block itself.
-                    if (toastModel.count > 1 && !stack.reducedMotion)
-                        arrival.start();
+                    // A section joining a block that is already up; the ones
+                    // arriving with the block ride in on its own reveal. The
+                    // flag flips on the next dispatch so the shut state has
+                    // been applied without animation before the growth
+                    // starts.
+                    if (toastModel.count > 1 && field.revealed
+                            && !stack.reducedMotion) {
+                        card.hatching = true;
+                        card.motionReady = true;
+                        Qt.callLater(function() {
+                            card.hatching = false;
+                        });
+                    } else {
+                        card.motionReady = true;
+                    }
                 }
 
                 MenuSection {
                     ink: backdropInk
+                    radius: CelestinaTheme.radiusMd
                 }
 
                 // A critical notification is the one case where the surface

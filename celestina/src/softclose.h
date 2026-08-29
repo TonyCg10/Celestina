@@ -44,6 +44,54 @@ inline void stopSoftCloseFade(QWindow *window)
         fade->stop();
 }
 
+// The park's companion to the closing beat: a window about to rest keeps its
+// mapped surface, so the glass lists its fields' retirements froze must come
+// down with the paint — left standing, the resumed surface's first probe
+// armed the compositor with the settled card before any reveal, and the fall
+// that followed played its rows over bare wallpaper while that stale arm and
+// the real per-frame regions fought. Called only on the park path; a closing
+// window is destroyed and its frozen lists die with it, which is the freeze's
+// whole purpose.
+// One forced frame per tick for the bounded span an opening can last.
+//
+// SIMPLE-1 removed the compositor blur, and with it the accidental crutch
+// that had been waking these carriers: the armed blur region gave the
+// compositor something to show on an otherwise fully transparent first
+// buffer, which earned the surface its frame callbacks, which let the reveal
+// paint. Without it a whole-output menu carrier mapped, stayed unexposed,
+// and its reveal never reached the screen — an open menu nobody could see.
+// The quiet surfaces already solved this class with the toast's pump and the
+// display's heartbeat; this is that same pump for the interactive carriers,
+// alive just long enough for the reveal's fade to land and the callbacks to
+// take over.
+inline void pumpWindowPresentation(QWindow *window, int forMs = 700)
+{
+    if (!window)
+        return;
+    auto *pump = new QTimer(window);
+    pump->setInterval(16);
+    const QPointer<QWindow> tracked(window);
+    QObject::connect(pump, &QTimer::timeout, window, [tracked]() {
+        if (auto *quick = qobject_cast<QQuickWindow *>(tracked.data()))
+            quick->requestUpdate();
+    });
+    QTimer::singleShot(forMs, pump, [pump]() {
+        pump->stop();
+        pump->deleteLater();
+    });
+    pump->start();
+}
+
+inline void restWindowGlassForPark(QWindow *window)
+{
+    if (!window)
+        return;
+    const auto fields = window->findChildren<QQuickItem *>(
+        QStringLiteral("celestina-soft-menu-field"));
+    for (QQuickItem *const field : fields)
+        QMetaObject::invokeMethod(field, "restPublishedGlass");
+}
+
 inline void reviveSoftClosedWindow(QWindow *window)
 {
     if (!window)
@@ -135,8 +183,8 @@ inline void softCloseWindow(QWindow *window, std::function<void()> finish)
     // the close lands with the fade's last frame. Withdrawing at the start
     // was tried and inverted the author's complaint: the background left
     // first, through still-opaque cards.
-    // `motionFast` in the theme; the QML retire animations below run at that
-    // token, and this fade must not outlive them nor cut them short.
+    // `motionExit` in the theme; the QML retire animations run at that token,
+    // and these two constants must not outlive them nor cut them short.
     constexpr int fadeMs = 150;
     constexpr int closeDelayMs = 170;
     const bool reducedMotion = window->property("reducedMotion").toBool();
@@ -149,6 +197,14 @@ inline void softCloseWindow(QWindow *window, std::function<void()> finish)
     // already ran on `aboutToHide`. Invoked here so the card overlays, the
     // panel menus and the prompt all leave the same way, glass and content as
     // one block, instead of only fading.
+    //
+    // The field's own retirement is the ONE fade. This function used to run
+    // a second, window-wide fade on top of it — 150 ms OutCubic multiplied
+    // under the field's 100 ms InCubic — and the product was a close that
+    // matched no other surface's beat, which the author read as every menu
+    // shutting differently from the displays. The window fade survives only
+    // as the fallback for a carrier without any field aboard.
+    bool fieldsRetiring = false;
     if (content) {
         // From the window, not its contentItem: the field is a QObject
         // descendant of the window, and a search rooted at the contentItem
@@ -157,6 +213,7 @@ inline void softCloseWindow(QWindow *window, std::function<void()> finish)
             QStringLiteral("celestina-soft-menu-field"));
         for (QQuickItem *const field : fields)
             QMetaObject::invokeMethod(field, "retire");
+        fieldsRetiring = !fields.isEmpty();
     }
 
     // The strong sample collapses toward its own centres for the length of
@@ -169,7 +226,7 @@ inline void softCloseWindow(QWindow *window, std::function<void()> finish)
     if (content) {
         if (reducedMotion) {
             content->setOpacity(0.0);
-        } else {
+        } else if (!fieldsRetiring) {
             auto *fade = new QVariantAnimation(quick);
             fade->setObjectName(QStringLiteral("celestina-soft-close-fade"));
             fade->setStartValue(content->opacity());
@@ -208,6 +265,13 @@ inline void softCloseWindow(QWindow *window, std::function<void()> finish)
     } else if (content) {
         withdrawBlur(window);
     }
+
+    // The closing fade needs frames exactly as the opening one does: a
+    // carrier the compositor stopped feeding froze mid-fade and then
+    // vanished in one cut when the close landed — the author's "delay, then
+    // gone at once" recording. The pump covers the whole beat plus a breath.
+    if (content && !reducedMotion)
+        pumpWindowPresentation(window, closeDelayMs + 80);
 
     // Parented to the window: a window hard-closed mid-beat takes the timer
     // with it, and the late `finish` never fires on a corpse.

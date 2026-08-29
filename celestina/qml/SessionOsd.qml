@@ -441,57 +441,24 @@ Window {
                 // at creation.
                 Accessible.description: card.cardSpokenText
 
-                // Leaving is moving away: the card shrinks toward its own
-                // centre and fades, and the row is removed only after this
-                // has had its beat.
+                // SIMPLE-1: leaving is the one fade, exactly as every other
+                // surface; the row is removed only after the beat has been
+                // seen. No shrink, no bottom ride — the reveal's fade is the
+                // entry on every route.
                 opacity: card.departing ? 0 : 1
-                scale: card.departing ? 0.88 : 1
                 transformOrigin: Item.Center
                 Behavior on opacity {
                     enabled: !osd.reducedMotion
                     NumberAnimation {
-                        duration: CelestinaTheme.motionNormal
-                        easing.type: CelestinaTheme.easeExit
+                        duration: CelestinaTheme.motionExit
+                        easing.type: CelestinaTheme.easeStandard
                     }
                 }
-                Behavior on scale {
-                    enabled: !osd.reducedMotion
-                    NumberAnimation {
-                        duration: CelestinaTheme.motionNormal
-                        easing.type: CelestinaTheme.easeExit
-                    }
-                }
-                // The field maps through this delegate's complete transform,
-                // so asking it to recollect makes glass shrink with the
-                // departing paint instead of leaving a resting-size footprint
-                // behind it.
-                onScaleChanged: card.scheduleGlassCollection()
 
-                // The bottom entry: out of the screen's edge at speed, braking
-                // into place, no recoil — an arrival rather than a landing.
                 transform: Translate {
                     id: bottomRide
 
-                    // Stay beyond the carrier from construction until the
-                    // shared reveal gate opens. `SoftMenuField` may collect in
-                    // its own revealed-change dispatch before this delegate's
-                    // handler runs; an offscreen starting transform makes that
-                    // ordering safe instead of briefly publishing the landed
-                    // footprint ahead of paint.
-                    y: osd.entersFromBottom
-                       ? osd.cardHeight + CelestinaTheme.spaceLg : 0
-                    onYChanged: card.scheduleGlassCollection()
-                }
-
-                NumberAnimation {
-                    id: bottomEntry
-
-                    target: bottomRide
-                    property: "y"
-                    from: osd.cardHeight + CelestinaTheme.spaceLg
-                    to: 0
-                    duration: CelestinaTheme.motionNormal
-                    easing.type: CelestinaTheme.easeStandard
+                    y: 0
                 }
 
                 Component.onCompleted: {
@@ -500,16 +467,6 @@ Window {
                     // window-visible handler above owns that transition.
                     if (osd.visible)
                         card.reveal();
-                }
-                onRevealedChanged: {
-                    if (!card.revealed || !osd.entersFromBottom)
-                        return;
-                    if (osd.reducedMotion) {
-                        bottomRide.y = 0;
-                        card.collectGlass();
-                    } else {
-                        bottomEntry.start();
-                    }
                 }
                 onGlassRegionsChanged: osd.collectGlass()
 

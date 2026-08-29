@@ -171,8 +171,6 @@ Window {
     // PANEL-1 — the surface is exactly the visible bar. There is no
     // transparent shadow canvas below it.
     readonly property int barHeight: 40
-    // The reserved strip is the bar at this output's size, so a taller bar on a
-    // denser monitor keeps windows clear of it.
     height: Math.round(panel.barHeight * panel.shellScale)
     visible: false
     // The bar has one nearly transparent, shadowless contextual backdrop from
@@ -219,9 +217,23 @@ Window {
             }
         };
         walk(panel.contentItem);
+        // Publish only real movement. The tracker below asks every beat, and
+        // republishing identical lists would wake the blur controller for
+        // nothing on each one. Spelled out by hand: a QML rect value
+        // stringifies as "{}", so JSON of the list was one constant — the
+        // beat ran and never spoke, and the badge growing the bell's capsule
+        // kept the old frost beside it.
+        const fingerprint = foundRects.map(function(r) {
+            return Math.round(r.x) + "," + Math.round(r.y) + ","
+                   + Math.round(r.width) + "," + Math.round(r.height);
+        }).join(";");
+        if (fingerprint === panel.publishedGlassFingerprint)
+            return;
+        panel.publishedGlassFingerprint = fingerprint;
         panel.glassRects = foundRects;
         panel.glassRegions = foundRegions;
     }
+    property string publishedGlassFingerprint: ""
 
     function scheduleGlassCollection() {
         glassSettle.restart();
@@ -234,6 +246,21 @@ Window {
 
         interval: 120
         repeat: false
+        onTriggered: panel.collectGlass()
+    }
+
+    // The capsules are the glass now, and capsules MOVE: a provider arriving
+    // grows its reading, the flank re-lays every neighbour out, and no signal
+    // exists for "an ancestor shifted this marker". The one arm made at
+    // startup therefore drifted off the pills — the author photographed the
+    // right flank's frost floating beside its capsules. This tracker re-walks
+    // the markers on a steady beat and republishes only when a rectangle
+    // actually changed, so the material follows the bar's layout for the
+    // whole session instead of remembering its first frame.
+    Timer {
+        interval: 500
+        repeat: true
+        running: panel.visible
         onTriggered: panel.collectGlass()
     }
 
@@ -264,32 +291,6 @@ Window {
             readonly property var materialSilhouette:
                     EdgeAttachedGeometry.openBottomRectangle(width, height)
 
-            CompositorGlassRegion {
-                id: barBackdropRegion
-
-                anchors.fill: parent
-                blurAvailable: panel.compositorBlurAvailable
-                fallbackColor: CelestinaTheme.glassTint
-                radius: CelestinaTheme.radiusNone
-                onBlurRegionChanged: panel.scheduleGlassCollection()
-
-                GlassSurface {
-                    anchors.fill: parent
-                    objectName: "celestina-panel-backdrop-material"
-                    backdropMode: GlassSurface.ExternalBackdrop
-                    // Exactly as in a contextual menu, either the compositor or
-                    // CompositorGlassRegion's declared fallback supplies the
-                    // external sample beneath this very light material.
-                    externalBackdropReady: true
-                    captureEnabled: false
-                    materialRole: GlassSurface.ContextualVeil
-                    materialTint: backdropInk.materialTint
-                    cornerRadius: CelestinaTheme.radiusNone
-                    silhouettePath: bar.materialSilhouette.path
-                    silhouetteEdgePath: bar.materialSilhouette.edgePath
-                    elevation: 0
-                }
-            }
 
             // A contextual surface covers the output so a click anywhere else
             // retires it — but it deliberately leaves this strip out of its
@@ -470,10 +471,6 @@ Window {
             PanelPill {
                 barHeight: panel.barHeight
                 blurAvailable: panel.compositorBlurAvailable
-                // The clock is the one reading with open space either side of it,
-                // so it is the one that can be held by a visibly elastic skin
-                // without running into a neighbour.
-                elasticWeld: true
                 ink: backdropInk
             }
 

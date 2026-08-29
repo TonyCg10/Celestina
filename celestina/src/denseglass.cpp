@@ -356,6 +356,20 @@ void DenseGlassAggregator::publish(
                 [this, source]() { withdraw(source); });
     }
 
+    // A nested session's console is unreachable; whether the dense channel
+    // is being fed at all — and with how many shapes — is the bounded fact
+    // every "the cards look opaque" hunt needs first.
+    DiagnosticJournal::instance().record(
+        DiagnosticJournal::Record(
+            DiagnosticJournal::Level::Info,
+            QStringLiteral("glass.dense.published"))
+            .text(QStringLiteral("source"),
+                  source->objectName().isEmpty()
+                      ? QString::fromLatin1(source->metaObject()->className())
+                      : source->objectName())
+            .number(QStringLiteral("shapes"), shapes.size())
+    );
+
     refresh(source->screen());
     if (previous && previous != source->screen())
         refresh(previous);
@@ -374,7 +388,11 @@ void DenseGlassAggregator::retire(QWindow *source)
     auto *collapse = new QVariantAnimation(this);
     collapse->setStartValue(1.0);
     collapse->setEndValue(0.0);
-    collapse->setDuration(80);
+    // The universal departure's length (`motionExit` in the theme, mirrored
+    // in softclose.h): the strong sample shrinks for exactly as long as the
+    // paint above it fades, so the two read as one leaving block instead of
+    // the material vanishing half a beat early.
+    collapse->setDuration(150);
     collapse->setEasingCurve(QEasingCurve::OutCubic);
     connect(collapse, &QVariantAnimation::valueChanged, this,
             [this, tracked, resting, collapse](const QVariant &value) {

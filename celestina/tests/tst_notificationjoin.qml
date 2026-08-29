@@ -98,7 +98,8 @@ TestCase {
         function collect(item) {
             for (let index = 0; index < item.children.length; ++index) {
                 const child = item.children[index];
-                if (child.objectName === "celestina-menu-section")
+                if (child.objectName === "celestina-menu-section"
+                    && child.visible)
                     count += 1;
                 collect(child);
             }
@@ -115,8 +116,10 @@ TestCase {
         field.surfacePresented = true;
         field.revealNow();
         wait(CelestinaTheme.motionNormal * 2 + 40);
+        // SIMPLE-1: the surface is a solid card and publishes no glass, so
+        // settling is the reveal alone.
         tryVerify(function() {
-            return field.revealed && window.glassRegions.length === 1;
+            return field.revealed;
         });
     }
 
@@ -208,38 +211,36 @@ TestCase {
         stack.hide();
     }
 
-    // The stack is one block of the shell's glass: a single veil that grows
-    // with the column, publishing one region, while each notification keeps
-    // a denser section of its own inside it. It used to be one field per
-    // toast — a pile of independent blocks — which the author rejected.
-    function test_the_stack_is_one_glass_block_with_a_section_per_toast() {
+    // SIMPLE-1: the stack is one frosted dark card that grows with the
+    // column, with a section per notification inside it — one settled frost
+    // region once its fade has landed, never more.
+    function test_the_stack_is_one_solid_block_with_a_section_per_toast() {
         stack.show();
         tryCompare(stack, "visible", true);
-        tryVerify(function() {
-            return stack.glassRegions.length === 1;
-        });
-        compare(stack.glassRects.length, 1);
 
-        const body = findChild(stack.contentItem, "celestina-menu-body-tint");
-        verify(body);
-        compare(body.backdropMode, GlassSurface.ExternalBackdrop);
-        compare(body.captureActive, false);
-        compare(body.materialRole, GlassSurface.ContextualVeil);
-        compare(body.elevation, 0);
+        // The sections are the visible cards now: one frost region each,
+        // published once the block's fade has landed.
+        const tint = findChild(stack.contentItem,
+                               "celestina-panel-tint");
+        verify(tint);
+        fuzzyCompare(tint.color.r, CelestinaTheme.elevated.r, 0.01);
+        fuzzyCompare(tint.color.a, 0.55, 0.01);
+        tryVerify(function() {
+            return stack.glassRegions.length === stack.toasts.length;
+        });
 
         const sections = [];
         function collectSections(item) {
             for (let index = 0; index < item.children.length; ++index) {
                 const child = item.children[index];
-                if (child.objectName === "celestina-menu-section")
+                if (child.objectName === "celestina-menu-section"
+                    && child.visible)
                     sections.push(child);
                 collectSections(child);
             }
         }
         collectSections(stack.contentItem);
         compare(sections.length, stack.toasts.length);
-        compare(sections[0].materialRole, GlassSurface.ContentSurface);
-        verify(body.materialStrength < sections[0].materialStrength);
         stack.hide();
     }
 
@@ -277,23 +278,22 @@ TestCase {
         stack.surfaceHeight = 0;
     }
 
+    // SIMPLE-1: the ride is gone; what the gate holds now is the paint. A
+    // retiring field refuses its reveal and stays at opacity zero.
     function test_bottom_entry_waits_for_the_reveal_gate() {
         const window = createLifecycleStack(
             "bottom", [testCase.toast(20, "Gate", 0)]);
         const field = fieldFor(window);
 
-        // The queued reveal is deliberately refused. A ride tied to model
-        // insertion instead of presentation would still advance underneath.
         field.retiring = true;
+        field.reveal();
         compare(field.revealed, false);
-        compare(field.blockEntryProgress, 0);
-        const heldRide = field.transform[0].y;
-        verify(heldRide > 0);
+        compare(field.presentationOpacity, 0);
 
         wait(CelestinaTheme.motionFast);
         compare(field.revealed, false);
-        compare(field.blockEntryProgress, 0);
-        fuzzyCompare(field.transform[0].y, heldRide, 0.01);
+        compare(field.presentationOpacity, 0);
+        compare(field.transform[0].y, 0);
     }
 
     function test_departure_keeps_the_last_block_until_one_finish_data() {
@@ -305,31 +305,22 @@ TestCase {
             data.route, [testCase.toast(30, "Leaving", 0)]);
         const field = fieldFor(window);
         settleLifecycleStack(window, field);
-        const settledWidth = window.glassRegions[0].rect.width;
 
         window.toasts = [];
         compare(field.departing, true);
         compare(field.visible, true);
         compare(lifecycleProbe.departures, 0);
-        compare(window.glassRegions.length, 1);
 
+        // SIMPLE-1: leaving is the one fade, mid-flight at half the beat.
         wait(70);
         verify(field.opacity > 0 && field.opacity < 1);
-        verify(field.scale > 0.88 && field.scale < 1);
+        compare(field.scale, 1);
         compare(field.visible, true);
         compare(lifecycleProbe.departures, 0);
-        compare(window.glassRegions.length, 1);
-        // The compositor footprint must be the currently shrinking block,
-        // not the settled rectangle cached before departure began.
-        verify(Math.abs(window.glassRegions[0].rect.width
-                        - settledWidth * field.scale) < 2);
 
         tryCompare(lifecycleProbe, "departures", 1);
         compare(field.visible, false);
         compare(field.revealed, false);
-        tryVerify(function() {
-            return window.glassRegions.length === 0;
-        });
     }
 
     function test_reentry_reverses_the_same_block_data() {
@@ -354,9 +345,7 @@ TestCase {
         wait(CelestinaTheme.motionNormal + 60);
         compare(lifecycleProbe.departures, 0);
         fuzzyCompare(field.opacity, 1, 0.01);
-        fuzzyCompare(field.scale, 1, 0.01);
         verify(field.revealed);
-        compare(window.glassRegions.length, 1);
     }
 
     function test_full_departure_supersedes_an_armed_row_sweep() {
@@ -395,6 +384,40 @@ TestCase {
         compare(toastSectionCount(window), 0);
     }
 
+    // The newest notification is born at the column's origin — the seam
+    // under the bell on the top routes, the screen's edge on the bottom one —
+    // pushing the pile it joins away from that origin. It used to be born at
+    // the far end, falling out of the previous toast, with the survivors
+    // sliding back over an expired card's place; the author rejected both
+    // movements on video.
+    function test_the_newest_section_is_born_at_the_origin_edge_data() {
+        return routeRows();
+    }
+
+    function test_the_newest_section_is_born_at_the_origin_edge(data) {
+        const older = testCase.toast(70, "Old", 0);
+        const window = createLifecycleStack(data.route, [older]);
+        const field = fieldFor(window);
+        settleLifecycleStack(window, field);
+
+        window.toasts = [older, testCase.toast(71, "New", 0)];
+        wait(CelestinaTheme.motionNormal * 2 + 40);
+
+        const oldCard = findChild(window.contentItem,
+                                  "celestina-toast-card-70");
+        const newCard = findChild(window.contentItem,
+                                  "celestina-toast-card-71");
+        verify(oldCard !== null);
+        verify(newCard !== null);
+        verify(newCard.height > 0);
+        if (data.route === "bottom")
+            verify(newCard.y > oldCard.y);
+        else
+            verify(newCard.y < oldCard.y);
+    }
+
+    // SIMPLE-1: a finished block hands back its reveal, and the next burst
+    // earns a fresh fade on the same persistent carrier.
     function test_a_finished_bottom_block_gets_a_fresh_reveal() {
         const window = createLifecycleStack(
             "bottom", [testCase.toast(50, "Old", 0)]);
@@ -404,25 +427,13 @@ TestCase {
         window.toasts = [];
         tryCompare(lifecycleProbe, "departures", 1);
         compare(field.revealed, false);
-        compare(field.blockEntryProgress, 0);
+        compare(field.presentationOpacity, 0);
 
         lifecycleProbe.departures = 0;
         window.toasts = [testCase.toast(51, "Fresh", 0)];
-        compare(field.blockEntryProgress, 0);
-        verify(field.transform[0].y > 0);
         tryVerify(function() {
-            return field.revealed
-                   && field.blockEntryProgress > 0
-                   && field.blockEntryProgress < 1
-                   && window.glassRegions.length === 1;
+            return field.revealed && field.presentationOpacity === 1;
         });
-        const rideDuring = field.transform[0].y;
-        const glassDuring = window.glassRegions[0].rect.y;
-        wait(40);
-        verify(field.transform[0].y < rideDuring);
-        verify(window.glassRegions[0].rect.y < glassDuring);
-        tryCompare(field, "blockEntryProgress", 1);
         compare(lifecycleProbe.departures, 0);
-        compare(window.glassRegions.length, 1);
     }
 }

@@ -157,7 +157,7 @@ Item {
     // L2 drop shadow, behind the body and outside its clip. RectangularShadow is
     // an analytic SDF (Qt 6.9+) — far cheaper than a MultiEffect shadow and it
     // extends past the rect, which is why the root must not clip.
-    RectangularShadow {
+    CelestinaShadow {
         objectName: "celestina-glass-shadow"
         anchors.fill: body
         // A shaped pane has no analytic rectangular shadow. Current shell edge
@@ -165,10 +165,6 @@ Item {
         // shaped-elevation job needs its own bounded vector shadow contract.
         visible: root.elevation > 0 && !root.usesSilhouette
         radius: root.cornerRadius
-        blur: CelestinaTheme.shadowBlur
-        spread: CelestinaTheme.shadowSpread
-        offset.y: CelestinaTheme.shadowOffsetY
-        color: CelestinaTheme.shadow
     }
 
     // The glass itself, clipped to the rounded rectangle. Everything visible

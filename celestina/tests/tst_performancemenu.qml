@@ -120,73 +120,8 @@ TestCase {
         compare(performanceMenu.menu.opacity, 1);
     }
 
-    function test_attached_rows_move_inside_a_fixed_scaled_viewport() {
-        const attached = attachedMenuComponent.createObject(testCase);
-        verify(attached);
-        // Component completion initially asks for the card-sized carrier. A
-        // real layer configure replaces that with the output extent before it
-        // presents; model that configure before the queued popup open runs.
-        attached.width = 800;
-        attached.height = 600;
-        attached.menuX = 420;
-        attached.menuY = 40;
-        tryCompare(attached.menu, "opened", true);
-
-        const field = findChild(attached, "celestina-soft-menu-field");
-        verify(field);
-        verify(attached.rowsViewport);
-        verify(attached.rowsContent);
-        verify(attached.rowsViewport.clip);
-
-        // Freeze a real entry geometry without touching the close lifecycle.
-        // Put the moving rows halfway through the panel strip: the old code
-        // moved the viewport and its clip there too, so this is the frame that
-        // visibly painted over the bar.
-        const fall = findChild(field, "celestina-attachment-drop-fall");
-        verify(fall);
-        field.revealNow();
-        field.fallQueued = false;
-        field.hasFallen = true;
-        fall.stop();
-        const targetRideY = attached.attachmentStartY / 2;
-        const progress = 1
-                + (targetRideY - attached.cardY) / field.entryTravel;
-        verify(progress > 0 && progress < 1);
-        field.attachmentProgress = progress;
-        wait(0);
-        verify(attached.rowsCut > 0);
-
-        const viewportDuring = attached.rowsViewport.mapToItem(
-                    attached.contentItem, 0, 0).y;
-        const rowsDuring = attached.rowsContent.mapToItem(
-                    attached.rowsViewport, 0, 0).y;
-        // The Popup viewport itself starts at or below the panel seam in the
-        // window's scaled coordinates. Only its internal rows move upward.
-        verify(viewportDuring
-               >= attached.attachmentStartY * attached.shellScale - 0.5);
-
-        const shot = grabImage(attached.contentItem);
-        const seamPixels = Math.floor(
-                    attached.attachmentStartY * attached.shellScale);
-        for (let y = 0; y < seamPixels - 1; ++y) {
-            for (let x = 0; x < attached.width; ++x) {
-                verify((shot.pixel(x, y) & 0xFF000000) === 0,
-                       "popup painted above the seam at " + x + "," + y);
-            }
-        }
-
-        const cut = attached.rowsCut;
-        field.attachmentProgress = 1;
-        wait(0);
-        const viewportSettled = attached.rowsViewport.mapToItem(
-                    attached.contentItem, 0, 0).y;
-        const rowsSettled = attached.rowsContent.mapToItem(
-                    attached.rowsViewport, 0, 0).y;
-
-        verify(viewportSettled >= viewportDuring);
-        fuzzyCompare(rowsSettled - rowsDuring, cut, 0.01);
-        attached.destroy();
-    }
+// SIMPLE-2 removed the entry viewport with the rest of the fall
+    // machinery; the one fade needs no clip to keep rows off the bar.
 
     function test_cpu_and_memory_follow_the_live_provider_revision() {
         verify(performanceMenu.hasReading);

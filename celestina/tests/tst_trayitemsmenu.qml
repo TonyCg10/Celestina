@@ -175,25 +175,15 @@ TestCase {
         compare(trayMenu.headerBodyGap, CelestinaTheme.spaceMd);
         compare(trayMenu.menu.count, 2);
         verify(findChild(trayMenu, "celestina-menu-header"));
-        tryVerify(function() {
-            return trayMenu.glassRegions.length === 1;
-        });
+        // SIMPLE-1: the sections are the frosted cards; each publishes its
+        // region once the fade has landed.
+        tryVerify(function() { return trayMenu.glassRegions.length >= 1; });
         const section = findChild(trayMenu, "celestina-menu-section");
         verify(section);
-        compare(section.backdropMode, GlassSurface.ExternalBackdrop);
-        compare(section.externalBackdropReady, true);
-        compare(section.captureActive, false);
-        compare(section.materialRole, GlassSurface.ContentSurface);
-        compare(section.materialStrength,
-                CelestinaTheme.glassContentSurfaceStrength);
-        compare(section.elevation, 0);
-        const body = findChild(trayMenu, "celestina-menu-body-tint");
-        verify(body);
-        compare(body.materialRole, GlassSurface.ContextualVeil);
-        compare(body.materialStrength,
-                CelestinaTheme.glassContextualVeilStrength);
-        verify(body.materialStrength < section.materialStrength);
-        compare(body.elevation, 0);
+        const tint = findChild(section, "celestina-panel-tint");
+        verify(tint);
+        fuzzyCompare(tint.color.r, CelestinaTheme.elevated.r, 0.01);
+        fuzzyCompare(tint.color.a, 0.55, 0.01);
 
         const header = trayMenu.menu.itemAt(0);
         const inventory = trayMenu.menu.itemAt(1);

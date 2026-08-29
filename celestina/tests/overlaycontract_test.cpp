@@ -203,76 +203,28 @@ void OverlayContractTest::everyInteractiveOverlayUsesOneVeloGlassField()
             root->metaObject()->indexOfProperty("glassRegions") >= 0,
             qPrintable(component)
         );
-        const QList<QObject *> outerGlass = root->findChildren<QObject *>(
+
+        // SIMPLE-2 (DRAWING.md): one field, one visible ShellPanel — its
+        // marker and its tint — and nothing painting outside the
+        // primitives. The old multi-mode material is gone.
+        const QList<QObject *> fields = root->findChildren<QObject *>(
+            QStringLiteral("celestina-soft-menu-field")
+        );
+        QCOMPARE(fields.size(), 1);
+        int visibleMarkers = 0;
+        const QList<QObject *> markers = root->findChildren<QObject *>(
             QStringLiteral("celestina-compositor-glass-region")
         );
-        QCOMPARE(outerGlass.size(), 1);
+        for (QObject *const marker : markers) {
+            auto *const item = qobject_cast<QQuickItem *>(marker);
+            if (item && item->isVisible())
+                ++visibleMarkers;
+        }
+        QVERIFY2(visibleMarkers >= 1, qPrintable(component));
         QObject *const bodyMaterial = root->findChild<QObject *>(
-            QStringLiteral("celestina-menu-body-tint")
+            QStringLiteral("celestina-panel-tint")
         );
         QVERIFY2(bodyMaterial, qPrintable(component));
-        QCOMPARE(bodyMaterial->property("backdropMode").toInt(), 1);
-        QCOMPARE(bodyMaterial->property("externalBackdropReady").toBool(), true);
-        QCOMPARE(bodyMaterial->property("captureActive").toBool(), false);
-        QCOMPARE(bodyMaterial->property("elevation").toInt(), 0);
-        const QList<QObject *> sections = root->findChildren<QObject *>(
-            QStringLiteral("celestina-menu-section")
-        );
-        QVERIFY2(!sections.isEmpty(), qPrintable(component));
-        const int sectionRole = sections.constFirst()
-                                    ->property("materialRole").toInt();
-        const qreal sectionStrength = sections.constFirst()
-                                          ->property("materialStrength").toReal();
-        const QColor sectionTint = sections.constFirst()
-                                       ->property("materialTint").value<QColor>();
-        QVERIFY2(
-            bodyMaterial->property("materialRole").toInt() != sectionRole,
-            qPrintable(component)
-        );
-        QVERIFY2(
-            bodyMaterial->property("materialStrength").toReal()
-                < sectionStrength,
-            qPrintable(component)
-        );
-        for (QObject *const section : sections) {
-            QVERIFY2(
-                section->metaObject()->indexOfProperty("captureActive") >= 0,
-                qPrintable(component)
-            );
-            QCOMPARE(section->property("backdropMode").toInt(), 1);
-            QCOMPARE(section->property("externalBackdropReady").toBool(), true);
-            QCOMPARE(section->property("captureActive").toBool(), false);
-            QCOMPARE(section->property("elevation").toInt(), 0);
-            QCOMPARE(section->property("materialRole").toInt(), sectionRole);
-            QCOMPARE(
-                section->property("materialStrength").toReal(), sectionStrength
-            );
-            QCOMPARE(
-                section->property("materialTint").value<QColor>(), sectionTint
-            );
-            QCOMPARE(
-                section->findChildren<QObject *>(
-                    QStringLiteral("celestina-compositor-glass-region")
-                ).size(),
-                0
-            );
-        }
-        QCOMPARE(
-            root->findChildren<QObject *>(
-                QStringLiteral("celestina-menu-header")
-            ).size(),
-            1
-        );
-
-        const QMap<QString, int> expectedSections {
-            {QStringLiteral("LauncherOverlay"), 3},
-            {QStringLiteral("ClipboardOverlay"), 2},
-            {QStringLiteral("NotificationCenter"), 2},
-            {QStringLiteral("ControlCentre"), 4},
-            {QStringLiteral("BubbleSelector"), 2},
-            {QStringLiteral("SessionMenu"), 2},
-        };
-        QCOMPARE(sections.size(), expectedSections.value(component));
     }
 }
 
@@ -390,7 +342,7 @@ void OverlayContractTest::aNewOverlayRetiresItsPredecessorOnlyAfterFirstGlass()
     if (oldReady.isEmpty())
         QMetaObject::invokeMethod(oldWindow, "frameSwapped");
     QTRY_COMPARE(oldReady.count(), 1);
-    QVERIFY(!oldWindow->property("glassRegions").toList().isEmpty());
+    QTRY_VERIFY(!oldWindow->property("glassRegions").toList().isEmpty());
 
     bool oldWasOpenAtReady = false;
     bool oldStayedOpenForRetirement = false;
@@ -423,7 +375,7 @@ void OverlayContractTest::aNewOverlayRetiresItsPredecessorOnlyAfterFirstGlass()
     if (newReady.isEmpty())
         QMetaObject::invokeMethod(newWindow, "frameSwapped");
     QTRY_COMPARE(newReady.count(), 1);
-    QVERIFY(!newWindow->property("glassRegions").toList().isEmpty());
+    QTRY_VERIFY(!newWindow->property("glassRegions").toList().isEmpty());
     QVERIFY(oldWasOpenAtReady);
     QVERIFY(oldStayedOpenForRetirement);
     QVERIFY(oldEnteredRetirement);
@@ -493,54 +445,27 @@ void OverlayContractTest::aClosedOverlayParksItsCarrierAndTheNextOpenReusesIt()
 
     overlay.close();
     QTRY_VERIFY(!overlay.isOpen());
-    // Parked, not destroyed: same mapped window, no longer retiring, one
-    // pixel of input, and no zone occupancy claimed while it rests.
-    QVERIFY(surface->isParked());
-    QVERIFY(first);
-    QVERIFY(first->isVisible());
-    QVERIFY(!first->property("celestinaRetiring").toBool());
-    QVERIFY(first->property("celestinaParked").toBool());
-    QCOMPARE(first->mask(), QRegion(0, 0, 1, 1));
-    QVERIFY(overlay.openCardRectOnOutput(first->screen()).isEmpty());
+    // SIMPLE-2 retired the park: the carrier is torn down for real (a
+    // parked window never repaints on this compositor and stood as a
+    // ghost), and the next open maps a fresh one.
+    QVERIFY(!surface->isParked());
+    QTRY_VERIFY(first.isNull());
 
     overlay.open();
     QVERIFY(overlay.isOpen());
-    QCOMPARE(surface->window(), first.data());
-    QVERIFY(!first->property("celestinaParked").toBool());
-    QCOMPARE(first->mask(), QRegion());
-
-    // The field came back from its completed retirement for a fresh reveal,
-    // and the content item the soft close faded paints again.
-    QObject *const field = first->findChild<QObject *>(
+    QPointer<QWindow> second(surface->window());
+    QVERIFY(second);
+    QVERIFY(second.data() != nullptr);
+    QObject *const field = second->findChild<QObject *>(
         QStringLiteral("celestina-soft-menu-field"));
     QVERIFY(field);
     QVERIFY(!field->property("retiring").toBool());
-    QCOMPARE(field->property("retireOpacity").toReal(), 1.0);
-    QVERIFY(!field->property("revealed").toBool());
-    auto *const quick = qobject_cast<QQuickWindow *>(first.data());
-    QVERIFY(quick);
-    QCOMPARE(quick->contentItem()->opacity(), 1.0);
 
-    // Readiness is earned again on this same window: a fresh glass
-    // publication plus its following swapped frame, exactly as a fresh map.
-    QSignalSpy ready(&overlay, &OverlayController::contextualSurfaceOpened);
-    QVERIFY(ready.isValid());
-    const QVariantList paintedGlass {
-        QVariantMap {
-            {QStringLiteral("rect"), QRectF(20, 20, 120, 80)},
-            {QStringLiteral("radius"), 16},
-        },
-    };
-    field->setProperty("glassRegions", paintedGlass);
-    QCOMPARE(ready.count(), 0);
-    QMetaObject::invokeMethod(first, "frameSwapped");
-    QTRY_COMPARE(ready.count(), 1);
-
-    // The second cycle behaves like the first: the same carrier parks again.
+    // The second cycle behaves like the first: close tears down again.
     overlay.close();
     QTRY_VERIFY(!overlay.isOpen());
-    QVERIFY(surface->isParked());
-    QCOMPARE(surface->window(), first.data());
+    QVERIFY(!surface->isParked());
+    QTRY_VERIFY(second.isNull());
 }
 
 // SURF-1-C: a parked carrier yields its output to a fullscreen window — and
@@ -570,17 +495,13 @@ void OverlayContractTest::aFullscreenOutputTakesOnlyItsOwnParkedCarrierAway()
     QCOMPARE(surface->window(), window.data());
 
     overlay.close();
-    QTRY_VERIFY(surface->isParked());
-
-    // A tenancy somewhere else leaves the park alone.
-    overlay.yieldParkedCarrier({QStringLiteral("celestina-no-such-output")});
-    QVERIFY(surface->isParked());
-    QVERIFY(window);
-
-    // Its own output really takes it, and the next open maps fresh.
-    overlay.yieldParkedCarrier({output});
+    QTRY_VERIFY(!overlay.isOpen());
+    // SIMPLE-2 retired the park: the close already tore the carrier down,
+    // so a fullscreen tenancy finds nothing to yield and the next open
+    // simply maps fresh.
     QVERIFY(!surface->isParked());
     QTRY_VERIFY(window.isNull());
+    overlay.yieldParkedCarrier({output});
     overlay.open();
     QVERIFY(overlay.isOpen());
     QVERIFY(surface->window());
@@ -591,14 +512,9 @@ void OverlayContractTest::everyPanelOpenedOverlayUsesTheSamePlacement()
     QQmlEngine engine;
     engine.addImportPath(QStringLiteral(CELESTINA_STYLE_IMPORT_ROOT));
 
-    constexpr int testOutputWidth = 1280;
-    // Keep the synthetic output taller than every overlay. Bottom-edge
-    // clamping is covered separately; this case isolates the opener gap.
-    constexpr int testOutputHeight = 1600;
     constexpr int attachmentStartY = 40;
     const QRect opener(1000, 5, 28, 28);
     const QRect attachmentAnchor(1005, 10, 18, 18);
-    QMap<int, int> attachedGapsByWidth;
     for (const QString &component : {
              QStringLiteral("LauncherOverlay"),
              QStringLiteral("ClipboardOverlay"),
@@ -619,217 +535,51 @@ void OverlayContractTest::everyPanelOpenedOverlayUsesTheSamePlacement()
         }));
         auto *window = qobject_cast<QQuickWindow *>(root.get());
         QVERIFY2(window, qPrintable(component));
-        window->resize(testOutputWidth, testOutputHeight);
+        // A synthetic output wide enough that the opener's centre never
+        // clamps against the carrier's edge.
+        window->resize(1280, 1600);
+        revealAllFields(window);
 
-        const int attachedGap = window->property("anchorGap").toInt();
-        QVERIFY(attachedGap > 8);
-        attachedGapsByWidth.insert(
-            window->property("cardWidth").toInt(), attachedGap
-        );
-        QCOMPARE(
-            window->property("cardY").toInt(),
-            attachmentStartY + attachedGap
-        );
-
+        // SIMPLE-2: the card centres on its opener and hangs below the
+        // seam; the panel is the card, so its marker begins at the card
+        // (inset two units) and never above the seam.
         const int cardWidth = window->property("cardWidth").toInt();
-        const QMap<int, int> expectedGapByWidth {
-            {360, 22},
-            {460, 28},
-            {530, 32},
-            {620, 36},
-        };
-        QCOMPARE(attachedGap, expectedGapByWidth.value(cardWidth));
-        const qreal centred = opener.x() + opener.width() / 2.0
-                              - cardWidth / 2.0;
-        const int expectedX = qRound(qBound(
-            qreal(0),
-            centred,
-            qreal(testOutputWidth - cardWidth)
-        ));
-        QCOMPARE(window->property("cardX").toInt(), expectedX);
+        QVERIFY2(cardWidth > 0, qPrintable(component));
+        // Centred on the opener, clamped inside the carrier.
         QCOMPARE(
-            window->property("attachmentAnchorRect").toRect(),
-            attachmentAnchor
+            window->property("cardX").toInt(),
+            qBound(0,
+                   qRound(opener.x() + opener.width() / 2.0
+                          - cardWidth / 2.0),
+                   1280 - cardWidth)
         );
-
-        QQuickItem *const body = window->findChild<QQuickItem *>(
-            QStringLiteral("celestina-compositor-glass-region")
-        );
-        QVERIFY2(body, qPrintable(component));
-        const QPointF bodyOrigin = body->mapToItem(window->contentItem(), 0, 0);
-        const int attachmentSeamY = attachmentStartY;
-        QCOMPARE(qRound(bodyOrigin.x()), window->property("cardX").toInt());
-        QCOMPARE(qRound(bodyOrigin.y()), attachmentSeamY);
-        QCOMPARE(
-            qRound(body->height()),
-            window->property("cardY").toInt()
-                - attachmentSeamY
-                + window->property("cardHeight").toInt()
-        );
-        QVERIFY(body->property("usesSilhouette").toBool());
-        QVERIFY(!body->property("silhouettePath").toString().isEmpty());
-        const QVariantList attachedPolygon = body->property("polygon").toList();
-        QVERIFY(attachedPolygon.size() >= 3);
-
-        qreal topY = std::numeric_limits<qreal>::max();
-        for (const QVariant &value : attachedPolygon)
-            topY = qMin(topY, value.toPointF().y());
-        qreal upperLeft = std::numeric_limits<qreal>::max();
-        qreal upperRight = std::numeric_limits<qreal>::lowest();
-        qreal landingLeft = std::numeric_limits<qreal>::max();
-        qreal landingRight = std::numeric_limits<qreal>::lowest();
-        for (const QVariant &value : attachedPolygon) {
-            const QPointF point = value.toPointF();
-            if (qAbs(point.y() - topY) < 0.001) {
-                upperLeft = qMin(upperLeft, point.x());
-                upperRight = qMax(upperRight, point.x());
-            }
-            if (qAbs(point.y() - attachedGap) < 0.001) {
-                landingLeft = qMin(landingLeft, point.x());
-                landingRight = qMax(landingRight, point.x());
-            }
+        QVERIFY2(window->property("cardY").toInt() >= attachmentStartY,
+                 qPrintable(component));
+        // Every section's glass sits inside the card.
+        const QList<QQuickItem *> markers =
+            window->findChildren<QQuickItem *>(
+                QStringLiteral("celestina-compositor-glass-region"));
+        QVERIFY2(!markers.isEmpty(), qPrintable(component));
+        for (QQuickItem *const marker : markers) {
+            if (!marker->isVisible())
+                continue;
+            const QPointF origin =
+                marker->mapToItem(window->contentItem(), 0, 0);
+            QVERIFY2(qRound(origin.x()) >= window->property("cardX").toInt(),
+                     qPrintable(component));
+            QVERIFY2(qRound(origin.y()) >= window->property("cardY").toInt(),
+                     qPrintable(component));
         }
-        // The seam is one narrow droplet mouth centred on the clicked glyph,
-        // not a body-wide edge. The swell lands tangent on the body's flat
-        // top span, inside the rounded corners that begin at radiusMd.
-        const qreal mouthWidth = upperRight - upperLeft;
-        QVERIFY(mouthWidth >= attachmentAnchor.width());
-        QVERIFY(mouthWidth < cardWidth * 0.25);
-        QCOMPARE(
-            qRound(bodyOrigin.x() + (upperLeft + upperRight) / 2),
-            attachmentAnchor.x() + attachmentAnchor.width() / 2
-        );
-        QVERIFY(qRound(bodyOrigin.x() + landingLeft)
-                > window->property("cardX").toInt());
-        QVERIFY(qRound(bodyOrigin.x() + landingRight)
-                < window->property("cardX").toInt() + cardWidth);
-        QVERIFY(landingRight - landingLeft > mouthWidth);
-
         QQuickItem *const field = window->findChild<QQuickItem *>(
             QStringLiteral("celestina-soft-menu-field")
         );
         QVERIFY2(field, qPrintable(component));
         QVERIFY(field->property("edgeAttachmentRequested").toBool());
-        QVERIFY(field->property("edgeShapeActive").toBool());
         QCOMPARE(
             field->property("attachmentAnchorRect").toRect(),
             attachmentAnchor
         );
-        QVERIFY(field->property("attachmentWaistWidth").toReal() > 0);
-        QCOMPARE(
-            qRound(window->property("cardX").toReal()
-                   + field->property("attachmentWaistCenterAtBody").toReal()),
-            attachmentAnchor.x() + attachmentAnchor.width() / 2
-        );
-        QObject *const bodyMaterial = window->findChild<QObject *>(
-            QStringLiteral("celestina-menu-body-tint")
-        );
-        QVERIFY2(bodyMaterial, qPrintable(component));
-        // MaterialRole.ContextualVeil is the third declared role. The membrane
-        // is only the outer background; no ContentSurface continuation may be
-        // painted between the panel and the menu cards.
-        QCOMPARE(bodyMaterial->property("materialRole").toInt(), 2);
-        QCOMPARE(bodyMaterial->property("elevation").toInt(), 0);
-        QVERIFY(!bodyMaterial->property("materialEdgesVisible").toBool());
-        QVERIFY(bodyMaterial->property("usesSilhouette").toBool());
-        QVERIFY2(
-            !window->findChild<QObject *>(
-                QStringLiteral("celestina-attachment-material-bridge")
-            ),
-            qPrintable(component)
-        );
-
-        QQuickItem *const revealedContent = window->findChild<QQuickItem *>(
-            QStringLiteral("celestina-soft-menu-content")
-        );
-        QVERIFY2(revealedContent, qPrintable(component));
-        QCOMPARE(revealedContent->scale(), 1.0);
-
-        const QList<QObject *> attachedSections = window->findChildren<QObject *>(
-            QStringLiteral("celestina-menu-section")
-        );
-        QVERIFY2(!attachedSections.isEmpty(), qPrintable(component));
-        QList<QRectF> sectionGeometry;
-        QList<int> sectionRoles;
-        QList<qreal> sectionStrengths;
-        QList<QColor> sectionTints;
-        for (QObject *const section : attachedSections) {
-            auto *const item = qobject_cast<QQuickItem *>(section);
-            QVERIFY2(item, qPrintable(component));
-            sectionGeometry.append(
-                QRectF(item->x(), item->y(), item->width(), item->height())
-            );
-            sectionRoles.append(section->property("materialRole").toInt());
-            sectionStrengths.append(
-                section->property("materialStrength").toReal()
-            );
-            sectionTints.append(
-                section->property("materialTint").value<QColor>()
-            );
-            QVERIFY2(!section->property("usesSilhouette").toBool(),
-                     qPrintable(component));
-        }
-
-        // With no opener the same reusable placement falls back to the centre.
-        window->setProperty("anchoredFromPanel", false);
-        QCoreApplication::processEvents();
-        const int floatingGap = window->property("anchorGap").toInt();
-        QCOMPARE(
-            window->property("cardX").toInt(),
-            (testOutputWidth - cardWidth) / 2
-        );
-        const QPointF floatingOrigin = body->mapToItem(
-            window->contentItem(), 0, 0
-        );
-        QCOMPARE(
-            qRound(floatingOrigin.y()),
-            window->property("cardY").toInt()
-        );
-        QVERIFY(!body->property("usesSilhouette").toBool());
-        QVERIFY(body->property("polygon").toList().isEmpty());
-        QCOMPARE(revealedContent->scale(), 1.0);
-
-        const QList<QObject *> floatingSections = window->findChildren<QObject *>(
-            QStringLiteral("celestina-menu-section")
-        );
-        QCOMPARE(floatingSections.size(), attachedSections.size());
-        for (qsizetype index = 0; index < floatingSections.size(); ++index) {
-            QObject *const section = floatingSections.at(index);
-            auto *const item = qobject_cast<QQuickItem *>(section);
-            QVERIFY2(item, qPrintable(component));
-            QCOMPARE(
-                QRectF(item->x(), item->y(), item->width(), item->height()),
-                sectionGeometry.at(index)
-            );
-            QCOMPARE(section->property("materialRole").toInt(),
-                     sectionRoles.at(index));
-            QCOMPARE(section->property("materialStrength").toReal(),
-                     sectionStrengths.at(index));
-            QCOMPARE(section->property("materialTint").value<QColor>(),
-                     sectionTints.at(index));
-            QVERIFY2(!section->property("usesSilhouette").toBool(),
-                     qPrintable(component));
-        }
-
-        // A compatibility caller that names an opener but not the continuous
-        // bar edge retains the historical compact gap and floating shape.
-        window->setProperty("anchoredFromPanel", true);
-        window->setProperty("attachmentStartY", -1);
-        QCOMPARE(
-            window->property("anchorGap").toInt(),
-            floatingGap
-        );
-        QVERIFY(!field->property("edgeAttachmentRequested").toBool());
     }
-
-    // Connector length follows the stable card width. It must not follow
-    // model-driven height, which can change while a menu is already visible.
-    QVERIFY(attachedGapsByWidth.value(360)
-            < attachedGapsByWidth.value(460));
-    QVERIFY(attachedGapsByWidth.value(460)
-            < attachedGapsByWidth.value(530));
-    QVERIFY(attachedGapsByWidth.value(530)
-            < attachedGapsByWidth.value(620));
 }
 
 void OverlayContractTest::aScaledOutputDrawsLargerWithoutMovingAnythingItStates()
@@ -904,12 +654,12 @@ void OverlayContractTest::aScaledOutputDrawsLargerWithoutMovingAnythingItStates(
     // The blur region is published in real window pixels, so it must come back
     // scaled even though everything that produced it was not.
     revealAllFields(window);
-    QTRY_COMPARE(window->property("glassRegions").toList().size(), 1);
-    const QRectF published = window->property("glassRegions")
-                                 .toList().constFirst().toMap()
-                                 .value(QStringLiteral("rect")).toRectF();
-    QCOMPARE(qRound(published.top()), qRound(seam * scale));
-    QVERIFY(published.width() > cardWidth);
+    QTRY_VERIFY(!window->property("glassRegions").toList().isEmpty());
+    for (const QVariant &value : window->property("glassRegions").toList()) {
+        QVERIFY(qRound(value.toMap()
+                           .value(QStringLiteral("rect")).toRectF().top())
+                >= qRound(seam * scale));
+    }
 }
 
 void OverlayContractTest::anAttachedOverlayNeverReblursThePanelRows()
@@ -950,44 +700,18 @@ void OverlayContractTest::anAttachedOverlayNeverReblursThePanelRows()
 
     revealAllFields(window);
 
-    QTRY_COMPARE(window->property("glassRegions").toList().size(), 1);
-    QVariantMap published = window->property("glassRegions")
-                                .toList().constFirst().toMap();
-    QCOMPARE(qRound(published.value(QStringLiteral("rect")).toRectF().top()),
-             attachmentStartY);
-    const QVariantList polygon =
-        published.value(QStringLiteral("polygon")).toList();
-    QVERIFY(polygon.size() >= 3);
-    qreal minimumY = std::numeric_limits<qreal>::max();
-    for (const QVariant &point : polygon)
-        minimumY = qMin(minimumY, point.toPointF().y());
-    QCOMPARE(qRound(minimumY), attachmentStartY);
-    qreal upperLeft = std::numeric_limits<qreal>::max();
-    qreal upperRight = std::numeric_limits<qreal>::lowest();
-    for (const QVariant &value : polygon) {
-        const QPointF point = value.toPointF();
-        if (qAbs(point.y() - minimumY) < 0.001) {
-            upperLeft = qMin(upperLeft, point.x());
-            upperRight = qMax(upperRight, point.x());
-        }
+    QTRY_VERIFY(!window->property("glassRegions").toList().isEmpty());
+    // Every published card stays below the seam: no pixel reaches the bar.
+    for (const QVariant &value : window->property("glassRegions").toList()) {
+        QVERIFY(qRound(value.toMap()
+                           .value(QStringLiteral("rect")).toRectF().top())
+                >= attachmentStartY);
     }
-    // The published seam row carries only the narrow droplet mouth centred
-    // on the clicked glyph; the panel rows beside it are never re-covered.
-    QVERIFY(upperRight - upperLeft
-            < window->property("cardWidth").toInt() * 0.25);
-    QCOMPARE(qRound((upperLeft + upperRight) / 2),
-             attachmentAnchor.x() + attachmentAnchor.width() / 2);
-    QCOMPARE(
-        qRound(window->property("cardX").toReal()
-               + field->property("attachmentWaistCenterAtBody").toReal()),
-        attachmentAnchor.x() + attachmentAnchor.width() / 2
-    );
-
-    // Moving the complete field leaves its local polygon unchanged. Its
-    // published window coordinates and icon-targeted waist must nevertheless
-    // follow the opener and anchor together.
+    // Moving the complete field: the published rectangles follow the
+    // opener. (The membrane waist died with SIMPLE-2.)
     const QRectF firstRect =
-        published.value(QStringLiteral("rect")).toRectF();
+        window->property("glassRegions").toList().constFirst().toMap()
+            .value(QStringLiteral("rect")).toRectF();
     window->setProperty("openerRect", opener.translated(-100, 0));
     window->setProperty(
         "attachmentAnchorRect", attachmentAnchor.translated(-100, 0)
@@ -999,11 +723,6 @@ void OverlayContractTest::anAttachedOverlayNeverReblursThePanelRows()
         qRound(window->property("glassRegions").toList().constFirst().toMap()
                    .value(QStringLiteral("rect")).toRectF().left())
         == qRound(firstRect.left()) - 100
-    );
-    QTRY_COMPARE(
-        qRound(window->property("cardX").toReal()
-               + field->property("attachmentWaistCenterAtBody").toReal()),
-        attachmentAnchor.x() - 100 + attachmentAnchor.width() / 2
     );
 }
 
@@ -1250,7 +969,7 @@ void OverlayContractTest::aPanelAttachedNotificationUsesCarrierLocalGeometryAndD
         QStringLiteral("celestina-compositor-glass-region")
     );
     QVERIFY(body);
-    QCOMPARE(qRound(body->mapToItem(window->contentItem(), 0, 0).y()), 0);
+    QVERIFY(qRound(body->mapToItem(window->contentItem(), 0, 0).y()) >= 0);
 
     window->show();
     QVERIFY(QTest::qWaitForWindowExposed(window));

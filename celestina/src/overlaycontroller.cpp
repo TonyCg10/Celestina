@@ -23,7 +23,12 @@
 namespace {
 QPointF panelCarrierOriginOnOutput(QWindow *panel)
 {
-    return panel ? QPointF(0, qMax(0, panel->height())) : QPointF();
+    // The carrier begins at the OUTPUT's top edge: macOS's regional dim
+    // visibly darkens the bar above an open surface, and a window that
+    // started at the seam could paint nothing above itself. The seam rides
+    // in `attachmentStartY`; the input mask leaves the strip to the panel.
+    Q_UNUSED(panel);
+    return QPointF(0, 0);
 }
 } // namespace
 
@@ -220,11 +225,13 @@ QVariantMap OverlayController::routeProperties() const
                 shellScale
             )
         );
-        // The QWindow begins at the panel's physical lower edge. That edge is
-        // the attachment seam, so it is exactly zero in the local scene.
+        // The carrier spans the output; the bar's lower seam arrives in
+        // the scene's unscaled units so the card hangs below the strip.
         properties.insert(
             QStringLiteral("attachmentStartY"),
-            0
+            shellScale > 0
+                ? panelBarBottomDevice(m_openerPanel) / shellScale
+                : panelBarBottomDevice(m_openerPanel)
         );
     }
 
@@ -317,22 +324,16 @@ QWindow *OverlayController::createWindow()
                 || tracked->property("celestinaRetiring").toBool()) {
                 return;
             }
-            if (!tracked->isExposed()) {
+            // SIMPLE-1: the reveal no longer waits for `isExposed()`. On
+            // this stack that flag never turns true for these carriers —
+            // measured on the toasts long before the reset — and the old
+            // gate survived only because the armed blur region used to buy
+            // the surface its exposure; without blur the wait became an
+            // overlay that never painted at all, spinning on its own
+            // requestUpdate. The first swap reveals; the fade starting from
+            // zero makes any discarded bootstrap buffer invisible anyway.
+            if (!tracked->isExposed())
                 tracked->requestUpdate();
-                return;
-            }
-
-            // A non-empty glass publication describes the next render, not
-            // the frame whose swap first opened the reveal gate. Retire the
-            // predecessor only after that painted buffer itself has swapped.
-            if (m_glassAwaitingFrameWindow == tracked) {
-                m_glassAwaitingFrameWindow.clear();
-                if (m_readyWindow != tracked) {
-                    m_readyWindow = tracked;
-                    emit contextualSurfaceOpened();
-                }
-                return;
-            }
 
             if (m_revealIssuedWindow != tracked)
                 revealPresentedWindow(tracked);
@@ -352,6 +353,16 @@ void OverlayController::revealPresentedWindow(QWindow *window)
     m_revealIssuedWindow = window;
     const auto fields = window->findChildren<QQuickItem *>(
         QStringLiteral("celestina-soft-menu-field"));
+    // Which overlays actually reached their reveal, for the invisible-
+    // surface hunts: a toggle with no matching reveal names the frame gate.
+    DiagnosticJournal::instance().record(
+        DiagnosticJournal::Record(
+            DiagnosticJournal::Level::Info,
+            QStringLiteral("ctx.overlay_revealed"))
+            .text(QStringLiteral("overlay"), m_componentName)
+            .number(QStringLiteral("fields"), fields.size())
+            .flag(QStringLiteral("exposed"), window->isExposed())
+    );
     if (fields.isEmpty()) {
         qCritical() << "Celestina's" << m_componentName
                     << "overlay has no shared presentation field.";
@@ -359,6 +370,14 @@ void OverlayController::revealPresentedWindow(QWindow *window)
     }
     for (QQuickItem *const field : fields)
         QMetaObject::invokeMethod(field, "revealNow");
+
+    // SIMPLE-1: readiness used to wait for the glass publication that
+    // followed the reveal; a solid card publishes none, so the reveal
+    // itself is the open.
+    if (m_readyWindow != window) {
+        m_readyWindow = window;
+        emit contextualSurfaceOpened();
+    }
 }
 
 void OverlayController::overlayGlassRegionsChanged()
@@ -505,7 +524,8 @@ void OverlayController::open()
             if (tracked->property("celestinaParked").toBool())
                 return;
             tracked->setMask(panelPopupInputRegion(
-                tracked->width(), tracked->height(), 0));
+                tracked->width(), tracked->height(),
+                int(panelBarBottomDevice(bar.data()))));
         };
         apply();
         connect(overlay, &QWindow::widthChanged, overlay, apply);
@@ -537,6 +557,9 @@ void OverlayController::open()
     // previous open dies against this count.
     ++m_openGeneration;
     m_openCarrierOriginOnOutput = carrierOrigin;
+    // The presentation pump (see softclose.h): a transparent carrier with no
+    // blur region never earns its exposure on its own.
+    pumpWindowPresentation(overlay);
     if (!m_attachmentLease.acquire(
             m_openerPanel,
             overlay,
@@ -593,14 +616,11 @@ void OverlayController::closeNow(
     // parked carrier is reused, and `park` itself refuses a retiring window.
     // A carrier that cannot park (its platform window is already gone) takes
     // the hard close it always took; `close` re-marks the retirement itself.
-    QWindow *const window = m_surface->window();
-    if (window && m_surface->isOpen()) {
-        window->setProperty("celestinaRetiring", false);
-        if (!m_surface->park())
-            m_surface->close();
-    } else if (!m_surface->isParked()) {
-        m_surface->close();
-    }
+    // SIMPLE-1 retired the park (SURF-1): a parked window never repaints on
+    // this compositor, so its last painted frame stood on screen as a ghost
+    // — one per overlay ever opened, accumulating, exactly as the author
+    // recorded. Every close unmaps; every open maps fresh.
+    m_surface->close();
     m_attachmentLease.release();
     m_openCarrierOriginOnOutput = QPointF();
     m_revealIssuedWindow.clear();

@@ -1,6 +1,9 @@
 #include "panelblurcontroller.h"
 
 #include "diagnosticjournal.h"
+#include "quietplacement.h"
+
+#include <QQuickItem>
 
 #include <QEvent>
 
@@ -192,9 +195,14 @@ bool blurProbeCanUseEffect(
         && (surfaceExposed || alreadyArmed);
 }
 
-PanelBlurController::PanelBlurController(QWindow *window, QObject *parent)
+PanelBlurController::PanelBlurController(
+    QWindow *window,
+    QObject *parent,
+    bool weakArm
+)
     : QObject(parent)
     , m_window(window)
+    , m_weakArm(weakArm)
 {
     m_probeTimer.setSingleShot(true);
     QObject::connect(&m_probeTimer, &QTimer::timeout, this, [this] { probe(); });
@@ -393,6 +401,15 @@ void PanelBlurController::probe()
     if (!m_window)
         return;
 
+    // Dense-only carriers never arm their own weak blur (SIMPLE-1): their
+    // sections live off the strong colour-summary companions alone, and this
+    // controller's remaining job for them is triggering the dense
+    // publication on every region beat.
+    if (!m_weakArm) {
+        setAvailable(false);
+        return;
+    }
+
     // A live `QWindow` is not a live Wayland surface. Qt destroys the platform
     // window — and with it the `wl_surface` — the moment a window hides, while
     // the C++ object survives for as long as anything holds it. `QPointer`
@@ -509,6 +526,21 @@ void PanelBlurController::probe()
                                 m_armedSize.width())
                         .number(QStringLiteral("window_height"),
                                 m_armedSize.height())
+                        // The field's presentation state at arm time, for the
+                        // ghost hunts: a region armed while nothing is
+                        // revealed names its own writer.
+                        .flag(QStringLiteral("retiring"),
+                              m_window->property("celestinaRetiring").toBool())
+                        .flag(QStringLiteral("field_revealed"),
+                              [this]() {
+                                  QQuickItem *const field =
+                                      quietFindVisibleItem(
+                                          m_window.data(),
+                                          QStringLiteral(
+                                              "celestina-soft-menu-field"));
+                                  return field
+                                      && field->property("revealed").toBool();
+                              }())
                 );
             }
         }
@@ -574,6 +606,18 @@ void PanelBlurController::probe()
                 .flag(QStringLiteral("has_glass"), !glass.isEmpty())
                 .number(QStringLiteral("window_width"), m_window->width())
                 .number(QStringLiteral("window_height"), m_window->height())
+                // The field's presentation state, for the invisible-surface
+                // hunts: a mapped carrier whose field never revealed names
+                // the reveal chain; one that revealed but shows nothing
+                // names the compositor.
+                .flag(QStringLiteral("field_revealed"),
+                      [this]() {
+                          QQuickItem *const field = quietFindVisibleItem(
+                              m_window.data(),
+                              QStringLiteral("celestina-soft-menu-field"));
+                          return field
+                              && field->property("revealed").toBool();
+                      }())
         );
     }
     m_state = State::Fallback;

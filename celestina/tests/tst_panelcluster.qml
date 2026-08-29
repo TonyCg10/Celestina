@@ -93,7 +93,7 @@ TestCase {
         const found = [];
 
         function visit(node) {
-            if (node.objectName === "celestina-panel-pill-material")
+            if (node.objectName === "celestina-panel-tint")
                 found.push(node);
 
             for (let index = 0; index < node.children.length; ++index)
@@ -109,8 +109,10 @@ TestCase {
         compare(cluster.spacing, CelestinaTheme.spaceXs);
         compare(firstButton.ownsGlass, false);
         compare(secondButton.ownsGlass, false);
-        compare(testCase.glassRegions(cluster).length, 0);
-        compare(testCase.visibleGlassRegions(cluster).length, 0);
+        // SIMPLE-1: the bar's continuous veil is gone; each visible pill
+        // publishes its own capsule region for the strong colour summary.
+        compare(testCase.glassRegions(cluster).length, 3);
+        compare(testCase.visibleGlassRegions(cluster).length, 1);
         const pillMaterials = testCase.materials(cluster);
         compare(pillMaterials.length, 3);
         let visibleMaterials = 0;
@@ -118,18 +120,17 @@ TestCase {
             const material = pillMaterials[index];
             if (material.visible)
                 visibleMaterials += 1;
-            compare(material.backdropMode, GlassSurface.ExternalBackdrop);
-            compare(material.captureActive, false);
-            compare(material.materialRole, GlassSurface.ContentSurface);
-            compare(material.materialStrength,
-                    CelestinaTheme.glassContentSurfaceStrength);
-            compare(material.materialTint, testInk.contentMaterialTint);
-            compare(material.elevation, 0);
-            verify(!material.usesSilhouette);
-            compare(material.silhouettePath, "");
-            compare(material.silhouetteEdgePath, "");
-            compare(material.parent.height, CelestinaTheme.controlHeightXs);
-            compare(material.parent.horizontalOverhang,
+            // SIMPLE-1: the pill's material is the MenuSection card — a
+            // flat mica tint, no ornamented glass surface left.
+            compare(material.radius, CelestinaTheme.radiusPill);
+            compare(material.color,
+                    Qt.rgba(CelestinaTheme.elevated.r,
+                            CelestinaTheme.elevated.g,
+                            CelestinaTheme.elevated.b, 0.55));
+            // The tint sits inside the ShellPanel, which fills the pill.
+            compare(material.parent.parent.height,
+                    CelestinaTheme.controlHeightXs);
+            compare(material.parent.parent.horizontalOverhang,
                     CelestinaTheme.spaceSm);
         }
         compare(visibleMaterials, 1);
@@ -165,7 +166,7 @@ TestCase {
                                       firstButton.width, firstButton.height);
         const secondGeometry = Qt.rect(secondButton.x, secondButton.y,
                                        secondButton.width, secondButton.height);
-        const cornerRadius = material.cornerRadius;
+        const cornerRadius = material.radius;
 
         firstButtonRequests.clear();
         firstButton.requestMenu();
@@ -185,12 +186,7 @@ TestCase {
 
         compare(Qt.rect(pill.x, pill.y, pill.width, pill.height), pillGeometry);
         compare(pill.height, CelestinaTheme.controlHeightXs);
-        verify(!material.usesSilhouette);
-        verify(material.materialEdgesVisible);
-        compare(material.silhouettePath, "");
-        compare(material.silhouetteEdgePath, "");
-        compare(material.cornerRadius, cornerRadius);
-        compare(material.materialRole, GlassSurface.ContentSurface);
+        compare(material.radius, cornerRadius);
         compare(Qt.rect(firstButton.x, firstButton.y,
                         firstButton.width, firstButton.height), firstGeometry);
         compare(Qt.rect(secondButton.x, secondButton.y,
@@ -203,10 +199,12 @@ TestCase {
         tryCompare(firstButton.background, "color", testInk.controlFill);
         compare(secondButton.background.color, CelestinaTheme.clear);
         compare(Qt.rect(pill.x, pill.y, pill.width, pill.height), pillGeometry);
-        compare(material.cornerRadius, cornerRadius);
-        compare(material.materialRole, GlassSurface.ContentSurface);
-        compare(material.materialTint, testInk.contentMaterialTint);
-        verify(!material.usesSilhouette);
+        // SIMPLE-1: the pill's material is the MenuSection card — a flat
+        // mica tint, no ornamented glass surface left.
+        compare(material.radius, cornerRadius);
+        compare(material.color,
+                Qt.rgba(CelestinaTheme.elevated.r, CelestinaTheme.elevated.g,
+                        CelestinaTheme.elevated.b, 0.55));
         firstButton.menuOpen = false;
     }
 

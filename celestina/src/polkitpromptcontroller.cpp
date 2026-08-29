@@ -211,7 +211,7 @@ void PolkitPromptController::requested(const QString &cookie,
     // companions. Skipped silently before, which left the prompt the one
     // surface in this shell drawn with no material at all.
     if (window->metaObject()->indexOfProperty("glassRects") >= 0) {
-        auto *blur = new PanelBlurController(window, window);
+        auto *blur = new PanelBlurController(window, window, false);
         blur->start();
     }
 

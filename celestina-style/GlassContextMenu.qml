@@ -29,73 +29,54 @@ Menu {
     // instead of letting Qt inject a platform-looking proxy row.
     delegate: GlassMenuItem { }
 
-    background: GlassSurface {
-        id: glassBackground
-        backdropSource: root.backdropSource
-        captureEnabled: root.visible
-        // A menu is a floating layer (L2) — give it the drop shadow so it reads
-        // as hovering over the content instead of pasted onto it.
-        elevation: 2
-        // The content behind a menu keeps moving while it is open — the wheel
-        // still scrolls the view, thumbnails arrive, rows light up under the
-        // cursor. A one-shot capture froze all of that, so the menu wore a
-        // blurred screenshot of the instant it opened instead of real glass.
-        liveCapture: true
+    // SIMPLE-2 (DRAWING.md): the same panel recipe as every surface — the
+    // two-layer shadow and the elevated tint — drawn inline because this
+    // file lives in the style module, below the shell's ShellPanel. It
+    // carries the dense collector's name so the colour summary lands under
+    // it exactly as under a menu.
+    background: Item {
+        objectName: "celestina-menu-section"
+        readonly property real cornerRadius: CelestinaTheme.radiusLg
+
+        CelestinaShadow {
+            anchors.fill: parent
+            radius: CelestinaTheme.radiusLg
+        }
+
+        Rectangle {
+            objectName: "celestina-panel-tint"
+
+            anchors.fill: parent
+            radius: CelestinaTheme.radiusLg
+            antialiasing: true
+            color: Qt.rgba(CelestinaTheme.elevated.r,
+                           CelestinaTheme.elevated.g,
+                           CelestinaTheme.elevated.b, 0.55)
+            border.width: 1
+            border.color: CelestinaTheme.divider
+        }
     }
 
+    // SIMPLE-1 (2026-08-22): one animation for every surface — a plain fade
+    // on the shared exit token, in and out. The entry pop and the exit
+    // shrink left with the rest of the choreography reset.
     enter: Transition {
-        ParallelAnimation {
-            NumberAnimation {
-                property: "opacity"
-                from: 0
-                to: 1
-                duration: CelestinaTheme.motionFast
-                easing.type: CelestinaTheme.easeStandard
-            }
-            NumberAnimation {
-                property: "scale"
-                from: CelestinaTheme.reducedMotion ? 1 : 0.96
-                to: 1
-                duration: CelestinaTheme.reducedMotion
-                          ? 0 : CelestinaTheme.motionNormal
-                easing.type: CelestinaTheme.easeEmphasized
-                easing.overshoot: CelestinaTheme.overshoot
-            }
+        NumberAnimation {
+            property: "opacity"
+            from: 0
+            to: 1
+            duration: CelestinaTheme.reducedMotion ? 0 : CelestinaTheme.motionExit
+            easing.type: CelestinaTheme.easeStandard
         }
     }
 
     exit: Transition {
-        ParallelAnimation {
-            NumberAnimation {
-                property: "opacity"
-                from: 1
-                to: 0
-                duration: CelestinaTheme.motionFast
-                easing.type: CelestinaTheme.easeExit
-            }
-            NumberAnimation {
-                property: "scale"
-                from: 1
-                to: CelestinaTheme.reducedMotion ? 1 : 0.98
-                duration: CelestinaTheme.reducedMotion
-                          ? 0 : CelestinaTheme.motionFast
-                easing.type: CelestinaTheme.easeExit
-            }
+        NumberAnimation {
+            property: "opacity"
+            from: 1
+            to: 0
+            duration: CelestinaTheme.reducedMotion ? 0 : CelestinaTheme.motionExit
+            easing.type: CelestinaTheme.easeStandard
         }
     }
-
-    onAboutToShow: Qt.callLater(function() {
-        glassBackground.refreshBackdrop()
-    })
-    // Re-sample once the menu has its final position (aboutToShow fires before
-    // x/y are set), so the blur matches what is actually behind it — not a
-    // stale region captured at the origin.
-    onOpened: Qt.callLater(function() {
-        glassBackground.refreshBackdrop()
-    })
-    // …and again whenever the overlay moves the menu to keep it on screen. The
-    // surface itself re-samples on a size change; only its position is news
-    // that has to come from here.
-    onXChanged: glassBackground.refreshBackdrop()
-    onYChanged: glassBackground.refreshBackdrop()
 }

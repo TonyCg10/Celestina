@@ -13,6 +13,7 @@ singleton CelestinaIcons 1.0 CelestinaIcons.qml
 CelestinaSurface 1.0 CelestinaSurface.qml
 CelestinaBackdrop 1.0 CelestinaBackdrop.qml
 CelestinaButton 1.0 CelestinaButton.qml
+CelestinaShadow 1.0 CelestinaShadow.qml
 CelestinaIconButton 1.0 CelestinaIconButton.qml
 CelestinaIcon 1.0 CelestinaIcon.qml
 CelestinaSectionLabel 1.0 CelestinaSectionLabel.qml

@@ -490,7 +490,7 @@ QtObject {
         glassBorder: "#24ffffff"
         glassHighlight: "#2effffff"
         glassOutline: "#4d000000"
-        shadow: "#78000000"
+        shadow: "#a6000000"
     }
 
     // The active scheme — the single switch point. Bindings re-evaluate once if
@@ -743,6 +743,17 @@ QtObject {
     readonly property int motionNormal: 200
     readonly property int motionSlow: 350
     readonly property int motionCeiling: 500
+    // The universal departure. Every surface leaves the same way — shrinking
+    // into the screen while it fades, on this one clock with `easeStandard`
+    // and this one depth — whether it is a menu closing, a display's card
+    // receding or the toast block retiring. The value mirrors the host's
+    // closing beat in softclose.h (which deliberately has no engine in
+    // reach); change them together. Before these tokens each family had its
+    // own exit — the menus at 100 ms to 0.92 under a second 150 ms window
+    // fade, the quiet surfaces at 200 ms to 0.88 — and the author read the
+    // drift as every close looking subtly unlike the others.
+    readonly property int motionExit: 150
+    readonly property real exitShrink: 0.9
     // How long a drag must rest on a folder before it springs open. Long enough
     // that crossing one on the way somewhere else never opens it, short enough
     // that deliberately waiting does not feel broken.
@@ -803,9 +814,31 @@ QtObject {
     // The L2 drop shadow (RectangularShadow) under floating layers. Soft, large
     // blur, low opacity, little offset — "must not suggest 3D depth" (§2). The
     // colour is `shadow` in the scheme; on near-black the shadow is a faint halo.
-    readonly property int shadowBlur: 28
+    readonly property int shadowBlur: 48
     readonly property int shadowSpread: 0
-    readonly property int shadowOffsetY: 4
+    readonly property int shadowOffsetY: 8
+    // The L2 shadow is TWO layers, the way macOS draws its control centre:
+    // a tight contact shadow that seats the card, and a wide ambient wash
+    // so faint it only reads as depth — never as a dark frame, whatever the
+    // wallpaper's luminance. One heavy layer could not do both: strong
+    // enough to seat the card on white it framed everything in smoke.
+    // Measured off the author's own macOS screenshots (control centre open
+    // vs closed, same scene): the "shadow" macOS radiates is NOT a drop
+    // shadow at all — the sky far from the panel darkens exactly as much
+    // as the pixels beside it. It is a FULL-SCREEN scrim of ~20 % black
+    // (`backdropDim` below, drawn by the surface field), and the cards
+    // themselves cast almost nothing. These two layers are that almost
+    // nothing: a contact line and a whisper of ambient.
+    readonly property int shadowContactBlur: 3
+    readonly property int shadowContactOffsetY: 1
+    readonly property color shadowContact: "#66000000"
+    readonly property int shadowAmbientBlur: 24
+    readonly property int shadowAmbientOffsetY: 8
+    readonly property int shadowAmbientSpread: 0
+    readonly property color shadowAmbient: "#2e000000"
+    // The scrim an open contextual surface lays over the whole output,
+    // bar included.
+    readonly property color backdropDim: "#33000000"
 
     // ── Component knobs (comp.*) ───────────────────────────────────────────────
     // Stable component anatomy belongs here; page placement and responsive

@@ -13,6 +13,10 @@
 
 #include <QMetaType>
 #include <QRectF>
+#include <QCursor>
+#include <QGuiApplication>
+#include <QScreen>
+
 #include "niriclient.h"
 #include "lockcontroller.h"
 #include "bubbleanchorsource.h"
@@ -254,6 +258,14 @@ QVariantMap ShellService::GetState()
         QStringLiteral("workspaces"),
         m_niri ? m_niri->workspaces() : QVariantList()
     );
+    // The live toast stack's own measurements, so a nested test session can
+    // assert geometry over the bus instead of guessing it from screenshots.
+    if (m_quietStateProbe)
+        state.insert(QStringLiteral("toasts"), m_quietStateProbe());
+    // And the bar's own glass, for the same reason: whether the frost is
+    // under the capsules is a rectangle comparison, not a screenshot debate.
+    if (m_panelStateProbe)
+        state.insert(QStringLiteral("panel"), m_panelStateProbe());
     return state;
 }
 
@@ -295,6 +307,22 @@ void ShellService::setSessionMenuController(OverlayController *controller)
 void ShellService::setBubbleAnchorSource(BubbleAnchorSource *anchors)
 {
     m_anchors = anchors;
+}
+
+void ShellService::setIndicatorMenuProbe(
+    std::function<bool(const QString &, QScreen *)> probe)
+{
+    m_indicatorMenuProbe = std::move(probe);
+}
+
+void ShellService::setPanelStateProbe(std::function<QVariantMap()> probe)
+{
+    m_panelStateProbe = std::move(probe);
+}
+
+void ShellService::setQuietStateProbe(std::function<QVariantMap()> probe)
+{
+    m_quietStateProbe = std::move(probe);
 }
 
 // The presentation hint for a minimize triggered with no surface of its own.
@@ -433,6 +461,10 @@ qulonglong ShellService::Command(const QString &verb, const QVariantMap &options
         return minimizeWindow(options);
     if (verb == QStringLiteral("session-menu-toggle"))
         return toggleOverlay(m_sessionMenu, verb);
+    if (verb == QStringLiteral("indicator-menu-toggle"))
+        return toggleIndicatorMenu(options);
+    if (verb == QStringLiteral("notification-dismiss"))
+        return dismissNotification(options);
     if (const auto expectation = sessionExpectation(verb, options))
         return requestSession(verb, options, *expectation);
     if (verb == QStringLiteral("displays-off"))
@@ -549,6 +581,111 @@ qulonglong ShellService::toggleOverlay(OverlayController *controller, const QStr
     details.insert(QStringLiteral("verb"), verb);
     // A toggle either opened or closed the overlay before this line runs —
     // there is nothing pending to report later, unlike a compositor request.
+    emit CommandResult(requestId, QStringLiteral("confirmed"), details);
+    return requestId;
+}
+
+// The same door a click on the bar's own control opens, offered over the bus
+// because the one place this shell is tested end to end — the nested session —
+// is also the one place injecting input is off the table. The kind names the
+// indicator ("bluetooth", "network", "phone"); `output` picks a screen by
+// name, and without it the pointer's screen answers, exactly as the quiet
+// surfaces choose theirs.
+qulonglong ShellService::toggleIndicatorMenu(const QVariantMap &options)
+{
+    const QString verb = QStringLiteral("indicator-menu-toggle");
+    if (!m_indicatorMenuProbe) {
+        return refuse(
+            QDBusError::Failed,
+            QStringLiteral("this shell has no panel to ask")
+        );
+    }
+    const QString kind = options.value(QStringLiteral("kind")).toString();
+    if (kind.isEmpty()) {
+        return refuse(
+            QDBusError::InvalidArgs,
+            QStringLiteral("indicator-menu-toggle needs kind=<indicator>")
+        );
+    }
+
+    const QString outputName =
+        options.value(QStringLiteral("output")).toString();
+    QScreen *screen = nullptr;
+    if (!outputName.isEmpty()) {
+        for (QScreen *const candidate : QGuiApplication::screens()) {
+            if (candidate->name() == outputName)
+                screen = candidate;
+        }
+        if (!screen) {
+            return refuse(
+                QDBusError::InvalidArgs,
+                QStringLiteral("no output is named '%1'")
+                    .arg(echoed(outputName))
+            );
+        }
+    } else {
+        screen = QGuiApplication::screenAt(QCursor::pos());
+        if (!screen)
+            screen = QGuiApplication::primaryScreen();
+    }
+
+    if (!m_indicatorMenuProbe(kind, screen)) {
+        return refuse(
+            QDBusError::Failed,
+            QStringLiteral("no visible '%1' indicator on that panel")
+                .arg(echoed(kind))
+        );
+    }
+
+    const qulonglong requestId = ++m_lastRequestId;
+    QVariantMap details;
+    details.insert(QStringLiteral("version"), shellStateVersion);
+    details.insert(QStringLiteral("verb"), verb);
+    details.insert(QStringLiteral("kind"), kind);
+    // The control's own toggle ran before this line, opening or closing as a
+    // second click would; like the overlay toggles, nothing stays pending.
+    emit CommandResult(requestId, QStringLiteral("confirmed"), details);
+    return requestId;
+}
+
+// Ends one notification as its toast's dismiss button would, so a test can
+// retire the middle of a pile without a pointer. Acceptance is not arrival:
+// what the dismissal did shows up in the notification provider's next value.
+qulonglong ShellService::dismissNotification(const QVariantMap &options)
+{
+    if (!m_providers) {
+        return refuse(
+            QDBusError::Failed,
+            QStringLiteral("this shell has no provider bridge")
+        );
+    }
+    bool numeric = false;
+    const qulonglong id =
+        options.value(QStringLiteral("id")).toULongLong(&numeric);
+    if (!numeric || id == 0) {
+        return refuse(
+            QDBusError::InvalidArgs,
+            QStringLiteral("notification-dismiss needs id=<notification>")
+        );
+    }
+
+    const qulonglong sent = m_providers->sendCommand(
+        QStringLiteral("notifications"),
+        QStringLiteral("dismiss"),
+        QVariantMap {{QStringLiteral("id"), id}}
+    );
+    if (sent == 0) {
+        return refuse(
+            QDBusError::Failed,
+            QStringLiteral("the notification provider is unreachable")
+        );
+    }
+
+    const qulonglong requestId = ++m_lastRequestId;
+    QVariantMap details;
+    details.insert(QStringLiteral("version"), shellStateVersion);
+    details.insert(QStringLiteral("verb"), QStringLiteral("notification-dismiss"));
+    details.insert(QStringLiteral("id"), id);
     emit CommandResult(requestId, QStringLiteral("confirmed"), details);
     return requestId;
 }

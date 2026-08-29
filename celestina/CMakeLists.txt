@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina VERSION 1.2.0 LANGUAGES C CXX)
+project(celestina VERSION 1.3.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -328,6 +328,7 @@ qt_add_qml_module(celestina
         qml/PanelPopupPlacement.qml
         qml/PanelMenuButton.qml
         qml/MenuSection.qml
+        qml/ShellPanel.qml
         qml/MenuHeader.qml
         qml/PanelActionButton.qml
         qml/SysMon.qml
@@ -547,6 +548,8 @@ if(BUILD_TESTING)
         src/surfacemanager.cpp
         src/shellscale.h
         src/shellscale.cpp
+        src/quietplacement.h
+        src/quietplacement.cpp
         src/panelblurcontroller.h
         src/panelblurcontroller.cpp
         src/denseglass.h

@@ -154,6 +154,18 @@ int main(int argc, char *argv[])
         return runShellMessage(app.arguments().mid(2));
     }
 
+    // SIMPLE-1 (2026-08-27): the threaded render loop skips every update
+    // request for a window it believes unexposed, and on this compositor a
+    // freshly mapped or resumed layer surface intermittently never regains
+    // that exposure — a menu that published its glass shapes while painting
+    // nothing, a toast pile frozen mid-reflow, a parked carrier's stale
+    // buffer standing as a ghost. Measured: under the basic loop the same
+    // sequences paint four out of four. A shell's scenes are small and its
+    // windows many, which is exactly the trade the basic loop is right for.
+    // The environment still wins, so a session can experiment.
+    if (!qEnvironmentVariableIsSet("QSG_RENDER_LOOP"))
+        qputenv("QSG_RENDER_LOOP", "basic");
+
     // A folder choice belongs to the session's standard portal route. Respect
     // an explicit platform theme, but otherwise give Qt's dialog backend that
     // route before the GUI application chooses its platform integrations.
@@ -640,6 +652,15 @@ int main(int argc, char *argv[])
     // A minimize asked for by keybind has no surface of its own, so the service reads the
     // bubble anchor off the mapped panel for whichever output holds focus.
     shell->setBubbleAnchorSource(&panels);
+    // The verbs that drive the bar's own controls — the nested session's way
+    // of opening a panel menu without injecting input.
+    shell->setIndicatorMenuProbe([&panels](const QString &kind, QScreen *screen) {
+        return panels.requestIndicatorMenu(kind, screen);
+    });
+    // And the toast stack's live measurements for `get-state`, so that same
+    // session asserts geometry over the bus instead of reading pixels.
+    shell->setQuietStateProbe([toasts]() { return toasts->stackState(); });
+    shell->setPanelStateProbe([&panels]() { return panels.barState(); });
 
     // And one contextual surface at a time. Whichever opened last says so and
     // every other retires — after the new one is up, never before it, because

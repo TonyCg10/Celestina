@@ -840,7 +840,24 @@ fn parse_shell_event(line: &str) -> io::Result<Option<Event>> {
         // event stream.
         return Ok(None);
     }
-    serde_json::from_value(value).map(Some).map_err(protocol_io)
+    match serde_json::from_value(value) {
+        Ok(event) => Ok(Some(event)),
+        // A compositor newer than this adapter emits events it has never
+        // heard of — `BindingModeChanged` on the patched 26.04 killed the
+        // whole stream and the shell's workspaces flickered on a
+        // four-second reconnect loop, because an unknown *variant* ended
+        // the session as if the protocol itself had broken. A foreign
+        // event is not a broken stream: skip it and keep reading. A known
+        // event that fails to decode still errors, because that is real
+        // corruption this adapter must not paper over.
+        Err(error)
+            if error.is_data()
+                && error.to_string().starts_with("unknown variant") =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(protocol_io(error)),
+    }
 }
 
 fn stream_session(
@@ -1258,6 +1275,15 @@ mod tests {
             parse_shell_event(r#"{"WindowFocusChanged":{"id":42}}"#),
             Ok(Some(Event::WindowFocusChanged { id: Some(42) }))
         ));
+        // A compositor newer than this adapter: foreign events are skipped,
+        // never a stream-ending error (the 26.04 `BindingModeChanged` loop).
+        assert!(
+            parse_shell_event(r#"{"BindingModeChanged":{"name":"resize"}}"#)
+                .expect("foreign event tolerated")
+                .is_none()
+        );
+        // A known event that fails to decode is still real corruption.
+        assert!(parse_shell_event(r#"{"WindowFocusChanged":"not-an-object"}"#).is_err());
     }
 
     /// A snapshot taken against a memory that knows nothing, which is what every

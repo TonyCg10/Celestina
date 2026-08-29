@@ -71,6 +71,11 @@ public:
     // Where the open stack's cards sit, for the display's own probe.
     QRectF openCardRectOnOutput(QScreen *screen) const;
 
+    // What the live stack currently measures — window, field and cards — for
+    // `get-state`. Read-only: a nested test session asserts geometry over the
+    // bus because pixels lie there and input injection is off the table.
+    QVariantMap stackState() const;
+
     // A fullscreen window took these outputs (SURF-1-C): a carrier parked on
     // one of them unmaps so the game keeps its direct scanout. A stack that
     // is actually showing toasts is left alone. Wired from the Niri client
@@ -81,6 +86,8 @@ private slots:
     // QML owns the presentation clock. Only the currently adopted stack may
     // close its carrier when that clock reaches the end of departure.
     void toastDepartureFinished();
+    // Each glass publication redraws the input mask over the fixed runway.
+    void toastGlassChanged();
 
 private:
     void providersChanged();
@@ -101,10 +108,18 @@ private:
     std::function<bool()> m_centreProbe;
     QRectF m_openCard;
     QPointer<QScreen> m_openScreen;
-    bool m_openAttached = false;
     // A watchdog, not the presentation clock: QML emits `departureFinished`
     // after its own exit beat. This closes only if a broken or unpresented
     // scene never delivers that edge; reentry stops it and reclaims the block.
     QTimer m_closeTimer;
+    // The animation pump: one forced frame per tick, for the bounded span an
+    // entry, growth or fold can last. See `pumpAnimations`.
+    QTimer m_animationPump;
+    qint64 m_pumpDeadline = 0;
+    void pumpAnimations();
+    // How many frames the stack's window has really presented, for
+    // `get-state`: the one number that says whether a stalled pile is the
+    // client not swapping or the compositor not showing what it swapped.
+    quint64 m_framesSwapped = 0;
     bool m_enabled;
 };

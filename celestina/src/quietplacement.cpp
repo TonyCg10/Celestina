@@ -48,6 +48,27 @@ int QuietSurfaceGeometry::topInsetInOutputUnits(double shellScale) const
     return qMax(0, qRound(surface.y() * shellScale));
 }
 
+QQuickItem *quietFindVisibleItem(QWindow *window, const QString &objectName)
+{
+    auto *quickWindow = qobject_cast<QQuickWindow *>(window);
+    if (!quickWindow || !quickWindow->isVisible() || objectName.isEmpty())
+        return nullptr;
+    return findVisibleByObjectName(quickWindow->contentItem(), objectName);
+}
+
+qreal panelBarBottomDevice(QWindow *panel)
+{
+    if (!panel)
+        return 0;
+    const QVariant stated = panel->property("barHeight");
+    bool numeric = false;
+    const qreal bar = stated.toReal(&numeric);
+    if (!stated.isValid() || !numeric || bar <= 0)
+        return qMax(0, panel->height());
+    const qreal scale = panel->property("shellScale").toReal();
+    return qRound(bar * (scale > 0 ? scale : 1.0));
+}
+
 QuietAnchor quietAnchorForIcon(QWindow *panel, const QString &iconObjectName)
 {
     auto *quickPanel = qobject_cast<QQuickWindow *>(panel);

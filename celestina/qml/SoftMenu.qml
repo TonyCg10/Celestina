@@ -86,18 +86,6 @@ AnchoredMenu {
         value: root.preferredWidth
     }
 
-    Binding {
-        target: root.menu.background
-        property: "captureEnabled"
-        value: false
-    }
-
-    Binding {
-        target: root.menu.background
-        property: "elevation"
-        value: 0
-    }
-
     // A real Menu keeps its rows in its own popup, not in the field's content
     // layer, so the field's internal ride cannot reach them. The body keeps
     // its complete size at every frame now and only its distance from the
@@ -226,7 +214,10 @@ AnchoredMenu {
         id: departureHold
 
         PauseAnimation {
-            duration: root.reducedMotion ? 0 : CelestinaTheme.motionFast
+            // The popup must outlive the field's whole fade: killed earlier,
+            // the rows vanished while the card was still fading — content
+            // first, background after, the exact split the reset abolishes.
+            duration: root.reducedMotion ? 0 : CelestinaTheme.motionExit
         }
     }
 
