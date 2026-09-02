@@ -258,10 +258,13 @@ ApplicationWindow {
 
     // Reading a document as another encoding. `Ctrl + E` because the two
     // conventional ones are taken: the compositor claims `Alt`, and every
-    // `StandardKey` an editor uses is already bound above.
+    // `StandardKey` an editor uses is already bound above. Gated exactly as
+    // the footer's button is, so the key never silently does nothing where
+    // the button is visibly disabled.
     Shortcut {
         sequences: ["Ctrl+E"]
-        onActivated: window.chooseEncoding()
+        onActivated: if (activeView && activeView.encodingChoosable)
+                         window.chooseEncoding()
     }
 
     TabStrip {

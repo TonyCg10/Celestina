@@ -16,6 +16,12 @@ import org.celestina.grafita 1.0
 // an ordinary property; `xFor(index)` only ever *reads* those already-settled
 // widths, never recomputes one — the read/write split is what keeps this from
 // becoming a binding loop.
+//
+// The row lives in a horizontal Flickable. Enough documents and the tabs are
+// wider than the window; without a viewport the later ones — and the "+"
+// button after them — sat past the window edge with no way to reach them.
+// The button stays outside the viewport, pinned to the right edge once the
+// tabs overflow, so it is always the same click away.
 Item {
     id: root
 
@@ -38,7 +44,7 @@ Item {
     // outside the model — a document's name arrives after its file opens.
     property int revision: 0
 
-    implicitHeight: strip.height + CelestinaTheme.spaceSm
+    implicitHeight: viewport.height + CelestinaTheme.spaceSm
 
     Rectangle {
         anchors.fill: parent
@@ -47,7 +53,9 @@ Item {
         border.color: CelestinaTheme.divider
     }
 
-    readonly property real closeButtonWidth: CelestinaTheme.controlHeight
+    // The close button is the Compact icon button, so the room a tab reserves
+    // for it is exactly that button's height, not the Regular one's.
+    readonly property real closeButtonWidth: CelestinaTheme.controlHeightXs
 
     // The already-settled width of tab `index`, or 0 while it has not been
     // created yet. Never computes anything itself — only reads what that
@@ -88,144 +96,211 @@ Item {
         return target
     }
 
-    Item {
-        id: strip
+    // Scrolls the viewport so tab `index` is wholly on screen. Selecting a tab
+    // that the viewport had scrolled away from must show it, or the window's
+    // title changes while the strip appears to point at something else.
+    function revealTab(index) {
+        const left = root.xFor(index)
+        const right = left + root.widthFor(index)
+        if (left < viewport.contentX)
+            viewport.contentX = left
+        else if (right > viewport.contentX + viewport.width)
+            viewport.contentX = right - viewport.width
+        viewport.clampScroll()
+    }
+
+    // Deferred: the delegate for a tab that was just appended may not have
+    // measured itself by the time `current` moves onto it.
+    onCurrentChanged: Qt.callLater(function() { root.revealTab(root.current) })
+
+    Flickable {
+        id: viewport
         anchors.left: parent.left
         anchors.leftMargin: CelestinaTheme.spaceSm
+        // Ends where the "+" button starts: exactly the tabs' width while they
+        // fit, and everything up to the pinned button once they do not.
+        anchors.right: newTabButton.left
+        anchors.rightMargin: CelestinaTheme.spaceXs
         anchors.verticalCenter: parent.verticalCenter
-        width: root.totalWidth() + CelestinaTheme.spaceXs + newTabButton.width
         height: CelestinaTheme.controlHeight
+        clip: true
+        contentWidth: strip.width
+        contentHeight: height
+        flickableDirection: Flickable.HorizontalFlick
+        boundsBehavior: Flickable.StopAtBounds
 
-        Repeater {
-            id: tabRepeater
-            model: root.tabs
+        // Closing a tab can leave the viewport scrolled past the end of the
+        // content that remains; pull it back so the last tab stays flush.
+        function clampScroll() {
+            viewport.contentX = Math.max(0, Math.min(viewport.contentX,
+                                                     viewport.contentWidth - viewport.width))
+        }
+        onContentWidthChanged: viewport.clampScroll()
+        onWidthChanged: viewport.clampScroll()
 
-            delegate: Rectangle {
-                id: tab
-                required property int index
-
-                readonly property bool active: index === root.current
-                readonly property bool dragging: dragArea.drag.active
-                // `revision` is read so this re-evaluates when a document
-                // finishes opening and finally has a name.
-                readonly property string label: {
-                    root.revision
-                    return root.titleFor(index)
-                }
-                readonly property bool dirty: {
-                    root.revision
-                    return root.dirtyFor(index)
-                }
-                readonly property string displayText: tab.dirty ? tab.label + " •" : tab.label
-
-                y: 0
-                z: tab.dragging ? 10 : 0
-                x: root.xFor(tab.index)
-                // Own measurement, own width: nothing here reads or writes a
-                // property shared with any other tab, which is what keeps
-                // dragging one from disturbing how the rest lay themselves out.
-                width: labelMetrics.width + root.closeButtonWidth + CelestinaTheme.space2xl
-                height: CelestinaTheme.controlHeight
-                radius: CelestinaTheme.radiusSm
-                // An idle tab shows the strip behind it rather than a colour of
-                // its own; `withAlpha` at zero is the theme's way of saying that
-                // without writing a literal.
-                color: tab.active ? CelestinaTheme.surfaceSelected
-                                  : (hover.hovered
-                                     ? CelestinaTheme.surfaceHover
-                                     : CelestinaTheme.withAlpha(CelestinaTheme.surface, 0))
-
-                TextMetrics {
-                    id: labelMetrics
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontCaption
-                    text: tab.displayText
-                }
-
-                // Sliding into a slot a drag vacated or filled — never while
-                // being dragged, where the pointer decides `x` directly, and
-                // never with reduced motion, honouring the shared preference.
-                Behavior on x {
-                    enabled: !tab.dragging && !CelestinaTheme.reducedMotion
-                    NumberAnimation {
-                        duration: CelestinaTheme.motionFast
-                        easing.type: CelestinaTheme.easeStandard
-                    }
-                }
-
-                Accessible.role: Accessible.PageTab
-                Accessible.name: tab.dirty ? tab.label + ", sin guardar" : tab.label
-                Accessible.selected: tab.active
-
-                HoverHandler { id: hover }
-
-                MouseArea {
-                    id: dragArea
-                    anchors.fill: parent
-                    // Middle click closes, the way every tabbed thing does. A
-                    // drag that never crossed the threshold still reaches
-                    // onClicked — that disambiguation is what `drag.target`
-                    // already does, so no separate click/drag bookkeeping here.
-                    acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-                    drag.target: tab
-                    drag.axis: Drag.XAxis
-                    drag.minimumX: 0
-                    drag.maximumX: Math.max(0, root.totalWidth() - tab.width)
-
-                    onClicked: function(mouse) {
-                        if (mouse.button === Qt.MiddleButton)
-                            root.closeRequested(tab.index)
-                        else
-                            root.selected(tab.index)
-                    }
-
-                    onPositionChanged: {
-                        if (!drag.active)
-                            return
-                        const target = root.targetIndexFor(tab.index, tab.x + tab.width / 2)
-                        if (target !== tab.index)
-                            root.reorderRequested(tab.index, target)
-                    }
-
-                    onReleased: {
-                        // The drag broke the binding by assigning `x` directly;
-                        // put it back so the tab returns to laid-out behaviour.
-                        tab.x = Qt.binding(function() { return root.xFor(tab.index) })
-                    }
-                }
-
-                Text {
-                    anchors.left: parent.left
-                    anchors.leftMargin: CelestinaTheme.spaceSm
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: tab.displayText
-                    elide: Text.ElideMiddle
-                    color: tab.active ? CelestinaTheme.text : CelestinaTheme.textMuted
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontCaption
-                }
-
-                CelestinaIconButton {
-                    id: closeButton
-                    anchors.right: parent.right
-                    anchors.rightMargin: CelestinaTheme.spaceXs
-                    anchors.verticalCenter: parent.verticalCenter
-                    iconName: "x"
-                    Accessible.role: Accessible.Button
-                    Accessible.name: "Cerrar " + tab.label
-                    onClicked: root.closeRequested(tab.index)
-                }
+        // A mouse wheel has no horizontal axis on most devices; its vertical
+        // notches scroll the row sideways, the way every tab bar reads them.
+        WheelHandler {
+            onWheel: function(event) {
+                const delta = event.angleDelta.x !== 0 ? event.angleDelta.x
+                                                       : event.angleDelta.y
+                viewport.contentX -= delta
+                viewport.clampScroll()
             }
         }
 
-        CelestinaIconButton {
-            id: newTabButton
-            x: root.totalWidth() + CelestinaTheme.spaceXs
-            anchors.verticalCenter: parent.verticalCenter
-            iconName: "plus"
-            Accessible.role: Accessible.Button
-            Accessible.name: "Pestaña nueva"
-            onClicked: root.newRequested()
+        Item {
+            id: strip
+            width: root.totalWidth()
+            height: viewport.height
+
+            Repeater {
+                id: tabRepeater
+                model: root.tabs
+
+                delegate: Rectangle {
+                    id: tab
+                    required property int index
+
+                    readonly property bool active: index === root.current
+                    readonly property bool dragging: dragArea.drag.active
+                    // `revision` is read so this re-evaluates when a document
+                    // finishes opening and finally has a name.
+                    readonly property string label: {
+                        root.revision
+                        return root.titleFor(index)
+                    }
+                    readonly property bool dirty: {
+                        root.revision
+                        return root.dirtyFor(index)
+                    }
+                    readonly property string displayText: tab.dirty ? tab.label + " •" : tab.label
+
+                    y: 0
+                    z: tab.dragging ? 10 : 0
+                    x: root.xFor(tab.index)
+                    // Own measurement, own width: nothing here reads or writes a
+                    // property shared with any other tab, which is what keeps
+                    // dragging one from disturbing how the rest lay themselves out.
+                    width: labelMetrics.width + root.closeButtonWidth + CelestinaTheme.space2xl
+                    height: CelestinaTheme.controlHeight
+                    radius: CelestinaTheme.radiusSm
+                    // An idle tab shows the strip behind it rather than a colour of
+                    // its own; `withAlpha` at zero is the theme's way of saying that
+                    // without writing a literal. A held tab darkens like any pressed
+                    // control, so the click reads before the tab switches.
+                    color: dragArea.pressed ? CelestinaTheme.surfaceStrong
+                           : tab.active ? CelestinaTheme.surfaceSelected
+                           : (hover.hovered
+                              ? CelestinaTheme.surfaceHover
+                              : CelestinaTheme.withAlpha(CelestinaTheme.surface, 0))
+
+                    TextMetrics {
+                        id: labelMetrics
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: CelestinaTheme.fontCaption
+                        text: tab.displayText
+                    }
+
+                    // Sliding into a slot a drag vacated or filled — never while
+                    // being dragged, where the pointer decides `x` directly, and
+                    // never with reduced motion, honouring the shared preference.
+                    Behavior on x {
+                        enabled: !tab.dragging && !CelestinaTheme.reducedMotion
+                        NumberAnimation {
+                            duration: CelestinaTheme.motionFast
+                            easing.type: CelestinaTheme.easeStandard
+                        }
+                    }
+
+                    Accessible.role: Accessible.PageTab
+                    Accessible.name: tab.dirty ? tab.label + ", sin guardar" : tab.label
+                    Accessible.selected: tab.active
+
+                    HoverHandler { id: hover }
+
+                    MouseArea {
+                        id: dragArea
+                        anchors.fill: parent
+                        // Middle click closes, the way every tabbed thing does. A
+                        // drag that never crossed the threshold still reaches
+                        // onClicked — that disambiguation is what `drag.target`
+                        // already does, so no separate click/drag bookkeeping here.
+                        acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+                        cursorShape: Qt.PointingHandCursor
+                        // The viewport is a Flickable, and a Flickable takes
+                        // over any horizontal drag it sees unless told not to:
+                        // a reorder would turn into a scroll after eight
+                        // pixels. The tab keeps its press; empty strip space
+                        // still flicks.
+                        preventStealing: true
+                        drag.target: tab
+                        drag.axis: Drag.XAxis
+                        drag.minimumX: 0
+                        // Bounded by the row's own width, not the window's: a
+                        // tab can only be dropped where the row actually ends.
+                        drag.maximumX: Math.max(0, strip.width - tab.width)
+
+                        onClicked: function(mouse) {
+                            if (mouse.button === Qt.MiddleButton)
+                                root.closeRequested(tab.index)
+                            else
+                                root.selected(tab.index)
+                        }
+
+                        onPositionChanged: {
+                            if (!drag.active)
+                                return
+                            const target = root.targetIndexFor(tab.index, tab.x + tab.width / 2)
+                            if (target !== tab.index)
+                                root.reorderRequested(tab.index, target)
+                        }
+
+                        onReleased: {
+                            // The drag broke the binding by assigning `x` directly;
+                            // put it back so the tab returns to laid-out behaviour.
+                            tab.x = Qt.binding(function() { return root.xFor(tab.index) })
+                        }
+                    }
+
+                    Text {
+                        anchors.left: parent.left
+                        anchors.leftMargin: CelestinaTheme.spaceSm
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: tab.displayText
+                        elide: Text.ElideMiddle
+                        color: tab.active ? CelestinaTheme.text : CelestinaTheme.textMuted
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: CelestinaTheme.fontCaption
+                    }
+
+                    CelestinaIconButton {
+                        id: closeButton
+                        anchors.right: parent.right
+                        anchors.rightMargin: CelestinaTheme.spaceXs
+                        anchors.verticalCenter: parent.verticalCenter
+                        iconName: "x"
+                        Accessible.role: Accessible.Button
+                        Accessible.name: "Cerrar " + tab.label
+                        onClicked: root.closeRequested(tab.index)
+                    }
+                }
+            }
         }
+    }
+
+    // Outside the viewport, so it can never scroll away: right after the last
+    // tab while the row fits, and pinned to the strip's right edge once the
+    // tabs are wider than the space before it.
+    CelestinaIconButton {
+        id: newTabButton
+        readonly property real pinnedX: root.width - CelestinaTheme.spaceSm - width
+        x: Math.min(CelestinaTheme.spaceSm + root.totalWidth() + CelestinaTheme.spaceXs,
+                    newTabButton.pinnedX)
+        anchors.verticalCenter: parent.verticalCenter
+        iconName: "plus"
+        Accessible.role: Accessible.Button
+        Accessible.name: "Pestaña nueva"
+        onClicked: root.newRequested()
     }
 }

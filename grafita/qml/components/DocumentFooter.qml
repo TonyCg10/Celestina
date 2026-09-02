@@ -11,6 +11,17 @@ Item {
 
     implicitHeight: actions.height + CelestinaTheme.space2xl
 
+    // Whether the document may be re-read as another encoding right now. One
+    // owner for the rule: the button below and the window's Ctrl+E both read
+    // it, so the shortcut can never do what the button refuses.
+    //
+    // A document with unsaved work cannot be re-read without losing them, so
+    // the action is not offered rather than offered and refused. An imported
+    // document has no encoding to choose either: it says what container it
+    // came out of and stops there.
+    readonly property bool encodingChoosable: !root.session.dirty && !root.session.busy
+                                              && !root.session.imported
+
     // The caret's position, which is what a person quotes when they talk about
     // a place in a file. Both numbers come from the document rather than from
     // the widget: the column counts characters, so an accented letter is one
@@ -69,12 +80,7 @@ Item {
         anchors.rightMargin: CelestinaTheme.spaceSm
         anchors.verticalCenter: actions.verticalCenter
         visible: root.session.active || root.session.encodingRetry.length > 0
-        // A document with unsaved work cannot be re-read without losing them,
-        // so the action is not offered rather than offered and refused. An
-        // imported document has no encoding to choose either: it says what
-        // container it came out of and stops there.
-        enabled: !root.session.dirty && !root.session.busy
-                 && !root.session.imported
+        enabled: root.encodingChoosable
         text: {
             if (root.session.imported)
                 return root.session.containerLabel

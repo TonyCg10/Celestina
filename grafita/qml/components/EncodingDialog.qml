@@ -76,17 +76,23 @@ CelestinaModalLayer {
                 required property string modelData
 
                 width: list.width
-                height: label.implicitHeight + CelestinaTheme.spaceMd
+                // Never shorter than the smallest control: a row is a target.
+                height: Math.max(CelestinaTheme.controlHeightXs,
+                                 label.implicitHeight + CelestinaTheme.spaceMd)
 
                 id: row
 
-                // Shown rather than tinted to nothing: the selected row is the
-                // only one that carries a surface at all.
+                HoverHandler { id: rowHover }
+
+                // Shown rather than tinted to nothing: only the selected row
+                // and the one under the pointer carry a surface at all, and
+                // the selected one carries the stronger of the two.
                 Rectangle {
                     anchors.fill: row
-                    visible: row.ListView.isCurrentItem
+                    visible: row.ListView.isCurrentItem || rowHover.hovered
                     radius: CelestinaTheme.radiusSm
-                    color: CelestinaTheme.surfaceHover
+                    color: row.ListView.isCurrentItem ? CelestinaTheme.surfaceHover
+                                                      : CelestinaTheme.controlFill
                 }
 
                 Text {

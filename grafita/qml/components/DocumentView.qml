@@ -22,6 +22,10 @@ Item {
     // document happens to be in front.
     required property var reading
 
+    // The footer owns whether the encoding may be chosen; the window's
+    // shortcut reads it through here so both gates are the same rule.
+    readonly property alias encodingChoosable: footer.encodingChoosable
+
     // Called by the window when the document's text moved underneath the widget.
     function adopt(text, caret) {
         body.text = text
@@ -85,6 +89,22 @@ Item {
         // the signal CelestinaTextField uses to tell Tab from a click. A ring
         // here could only be one that also fires on every click. On an editing
         // surface the caret is the focus affordance.
+
+        // The whole box is the editor, not only the painted lines. A click in
+        // the margin or on the gutter lands here, under everything else, and
+        // focuses the surface: on the gutter the caret goes to the start of
+        // the line beside the pointer, anywhere else to the end of the text.
+        // Clicks on the text itself never reach this — the widget takes them.
+        MouseArea {
+            anchors.fill: parent
+            onClicked: function(mouse) {
+                const inGutter = mouse.x < gutter.x + gutter.width
+                const point = body.mapFromItem(page, mouse.x, mouse.y)
+                body.cursorPosition = inGutter ? body.positionAt(0, point.y)
+                                               : body.length
+                body.forceActiveFocus()
+            }
+        }
 
         // The numbers sit outside the Flickable, not inside it. With wrapping
         // off the content scrolls sideways, and a gutter that travelled with it
@@ -171,6 +191,19 @@ Item {
                 radius: CelestinaTheme.radiusXs
             }
 
+            // The viewport below a short document. It is inside the Flickable
+            // rather than behind it because a scrollable Flickable takes every
+            // press it receives, so nothing under it would ever see the click.
+            // Behind the widget: a click on a line still belongs to the text.
+            MouseArea {
+                width: Math.max(scroller.width, scroller.contentWidth)
+                height: Math.max(scroller.height, scroller.contentHeight)
+                onClicked: {
+                    body.cursorPosition = body.length
+                    body.forceActiveFocus()
+                }
+            }
+
             TextEdit {
                 id: body
                 // Wrapped, the surface is exactly the viewport. Unwrapped, it
@@ -200,6 +233,20 @@ Item {
                 // The widget knows where its caret is as a UTF-16 offset; only
                 // the document can say which line and column that is.
                 onCursorPositionChanged: root.session.setCaret(cursorPosition)
+
+                // The editing verbs, on the right button. The widget itself
+                // ignores that button, so the handler sees every press; the
+                // menu opens on release, the way every menu in the suite does,
+                // so the press that opened it can never also pick an item.
+                TapHandler {
+                    acceptedButtons: Qt.RightButton
+                    onTapped: function(eventPoint) {
+                        body.forceActiveFocus()
+                        const point = body.mapToItem(root, eventPoint.position.x,
+                                                     eventPoint.position.y)
+                        editMenu.popup(root, point)
+                    }
+                }
 
                 // Colour without touching the text. A QSyntaxHighlighter applies
                 // formats to the document's blocks and leaves the characters
@@ -236,6 +283,35 @@ Item {
             anchors.left: scroller.left
             anchors.right: scroller.right
             anchors.bottom: scroller.bottom
+        }
+    }
+
+    // The editing surface's context menu. Cut and copy need a selection and
+    // paste needs a clipboard with text in it; the widget knows both, so the
+    // items enable themselves from it rather than from a guess.
+    GlassContextMenu {
+        id: editMenu
+        backdropSource: page
+
+        GlassMenuItem {
+            text: qsTr("Cortar")
+            enabled: body.selectedText.length > 0
+            onTriggered: body.cut()
+        }
+        GlassMenuItem {
+            text: qsTr("Copiar")
+            enabled: body.selectedText.length > 0
+            onTriggered: body.copy()
+        }
+        GlassMenuItem {
+            text: qsTr("Pegar")
+            enabled: body.canPaste
+            onTriggered: body.paste()
+        }
+        GlassMenuItem {
+            text: qsTr("Seleccionar todo")
+            enabled: body.length > 0
+            onTriggered: body.selectAll()
         }
     }
 
@@ -354,35 +430,35 @@ Item {
             Repeater {
                 model: root.recentPaths
 
-                delegate: Rectangle {
+                // The shared button rather than a hand-rolled row: it brings
+                // Tab focus, Return and Space, the focus ring and the pressed
+                // fill that a plain rectangle with a MouseArea had none of.
+                // Ghost, so at rest it is the bare text the row always was.
+                delegate: CelestinaButton {
                     id: entry
                     required property string modelData
 
                     width: parent.width
                     height: CelestinaTheme.controlHeight
-                    radius: CelestinaTheme.radiusSm
-                    color: hover.hovered ? CelestinaTheme.surfaceHover
-                                         : CelestinaTheme.withAlpha(CelestinaTheme.surface, 0)
+                    role: CelestinaButton.Ghost
+                    leftPadding: CelestinaTheme.spaceSm
+                    rightPadding: CelestinaTheme.spaceLg
+                    // The name reads first; the folder is there to tell two
+                    // files of the same name apart.
+                    text: root.baseName(entry.modelData)
+                    onClicked: root.session.openPath(entry.modelData)
 
-                    Accessible.role: Accessible.Button
                     Accessible.name: "Abrir " + root.baseName(entry.modelData)
                     Accessible.description: entry.modelData
 
-                    HoverHandler { id: hover }
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: root.session.openPath(entry.modelData)
-                    }
+                    HoverHandler { cursorShape: Qt.PointingHandCursor }
 
-                    Text {
-                        anchors.left: parent.left
-                        anchors.leftMargin: CelestinaTheme.spaceSm
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - CelestinaTheme.space2xl
+                    contentItem: Text {
+                        text: entry.text
+                        textFormat: Text.PlainText
                         elide: Text.ElideMiddle
-                        // The name reads first; the folder is there to tell two
-                        // files of the same name apart.
-                        text: root.baseName(entry.modelData)
+                        horizontalAlignment: Text.AlignLeft
+                        verticalAlignment: Text.AlignVCenter
                         color: CelestinaTheme.text
                         font.family: CelestinaTheme.sansFamily
                         font.pixelSize: CelestinaTheme.fontCaption

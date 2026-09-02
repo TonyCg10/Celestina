@@ -23,6 +23,10 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaModalLayer.qml",
     "qml/GlassSurface.qml",
     "qml/GlassCard.qml",
+    // The editor's right-click menu wears the suite's glass menu, registered
+    // the same way Fluorita and Siderita publish it.
+    "qml/GlassContextMenu.qml",
+    "qml/GlassMenuItem.qml",
     // Grafita's own composition: Main owns the window, the components own one
     // region each.
     "qml/components/DocumentView.qml",
