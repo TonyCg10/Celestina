@@ -117,3 +117,4 @@ celestina-style	1.8.1	bug	CLICK-1-STY	Fix the hover, hit and fade contracts the 
 siderita	1.5.3	bug	CLICK-1-SID	Fix the dialogs, rows and floating buttons a pointer could not reach or fell through
 fluorita	1.3.2	bug	CLICK-1-FLU	Fix the annotations, bars and shortcuts the viewer left unreachable or leaking
 grafita	1.2.1	bug	CLICK-1-GRA	Fix the tab strip, editor clicks and recent rows the pointer could not use
+magnetita	1.2.1	bug	CLICK-1-MAG	Fix the settings page, plugin rows and device cards the pointer could not reach

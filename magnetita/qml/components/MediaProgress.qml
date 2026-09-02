@@ -1,6 +1,10 @@
 import QtQuick
 import org.celestina.magnetita 1.0
 
+// Where playback is, as a plain bar. Not a slider: the daemon's D-Bus
+// contract has no seek verb (`MediaAction` carries only transport words), so
+// a thumb here promised a drag nothing could honour. When a seek command
+// exists, this becomes a `CelestinaSlider` gated on `mediaCanSeek`.
 Item {
     id: root
 
@@ -33,18 +37,6 @@ Item {
         height: track.height
         radius: height / 2
         color: CelestinaTheme.mediaProgress
-        Accessible.ignored: true
-    }
-
-    Rectangle {
-        width: CelestinaTheme.compSliderHandleSize
-        height: width
-        radius: height / 2
-        x: Math.max(0, Math.min(root.width - width,
-                                root.width * root.normalizedValue - width / 2))
-        anchors.verticalCenter: parent.verticalCenter
-        color: CelestinaTheme.mediaProgress
-        visible: root.normalizedValue > 0
         Accessible.ignored: true
     }
 }

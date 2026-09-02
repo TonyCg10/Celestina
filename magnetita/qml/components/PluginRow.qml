@@ -1,6 +1,9 @@
 import QtQuick
 import org.celestina.magnetita 1.0
 
+// A labelled toggle. The whole row is the target, not only the switch: a
+// label beside a switch reads as part of the control, and a click on it that
+// did nothing was the most common dead click on the settings page.
 Item {
     id: root
 
@@ -9,6 +12,27 @@ Item {
     signal toggleRequested
 
     height: 46
+
+    // Lit under the pointer so the row reads as one control. The switch's
+    // own tint is the shared control's business, not this row's.
+    Rectangle {
+        anchors.fill: parent
+        radius: CelestinaTheme.radiusSm
+        color: rowArea.pressed ? CelestinaTheme.surfaceStrong
+               : rowArea.containsMouse ? CelestinaTheme.surfaceHover
+               : CelestinaTheme.clear
+        Accessible.ignored: true
+    }
+
+    // Behind the switch, so a press on the switch itself still belongs to
+    // the switch — its keyboard and focus behaviour stay exactly as they are.
+    MouseArea {
+        id: rowArea
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onClicked: root.toggleRequested()
+    }
 
     Text {
         anchors.left: parent.left
@@ -32,7 +56,10 @@ Item {
         Accessible.name: root.label
 
         // A click is only a request. Re-bind immediately so the switch keeps
-        // showing the daemon's confirmed state instead of an optimistic one.
+        // showing the daemon's confirmed state instead of an optimistic one:
+        // Magnetita reflects only snapshots `org.celestina.Devices1` confirms,
+        // and a toggle that painted itself on before the daemon agreed would
+        // be a second truth the local contract forbids.
         onClicked: {
             checked = Qt.binding(function() { return root.enabledFlag })
             root.toggleRequested()

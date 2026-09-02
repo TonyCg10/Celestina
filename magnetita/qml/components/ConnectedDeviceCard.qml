@@ -12,6 +12,10 @@ CelestinaSurface {
     required property string batteryText
     required property bool charging
 
+    // Every card can open its own files: the action row below serves only
+    // the first device, and a second phone's mount was otherwise unreachable.
+    signal openMountRequested
+
     readonly property bool mounted: mountPath.length > 0
     readonly property string batteryPercent: {
         const match = batteryText.match(/([0-9]+)/)
@@ -51,7 +55,7 @@ CelestinaSurface {
     Column {
         anchors.left: deviceTile.right
         anchors.leftMargin: 14
-        anchors.right: batteryBadge.left
+        anchors.right: mountButton.visible ? mountButton.left : batteryBadge.left
         anchors.rightMargin: 14
         anchors.verticalCenter: parent.verticalCenter
         spacing: 2
@@ -104,19 +108,38 @@ CelestinaSurface {
             elide: Text.ElideMiddle
         }
 
-        Text {
+        // A read-only text surface rather than a label, so the code can be
+        // selected and copied to compare against the phone's.
+        TextEdit {
             // Peer-supplied text: never interpreted as markup.
-            textFormat: Text.PlainText
+            textFormat: TextEdit.PlainText
             visible: root.verificationKey.length > 0
             width: parent.width
+            height: visible ? implicitHeight : 0
+            clip: true
+            readOnly: true
+            selectByMouse: true
+            wrapMode: TextEdit.NoWrap
             text: "Verifica en ambos dispositivos · " + root.verificationKey
             color: CelestinaTheme.accent
+            selectionColor: CelestinaTheme.accent
+            selectedTextColor: CelestinaTheme.accentInk
             font.family: CelestinaTheme.monoFamily
             font.pixelSize: CelestinaTheme.fontMini
-            elide: Text.ElideRight
             Accessible.role: Accessible.StaticText
             Accessible.name: "Código de verificación " + root.verificationKey
         }
+    }
+
+    QuietIconButton {
+        id: mountButton
+        anchors.right: batteryBadge.left
+        anchors.rightMargin: CelestinaTheme.spaceSm
+        anchors.verticalCenter: parent.verticalCenter
+        visible: root.mounted
+        iconName: "folder-open"
+        helpText: qsTr("Abrir los archivos del móvil")
+        onClicked: root.openMountRequested()
     }
 
     Rectangle {

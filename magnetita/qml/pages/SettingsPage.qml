@@ -1,7 +1,10 @@
 import QtQuick
 import org.celestina.magnetita 1.0
 
-Column {
+// Scrolls like the devices page: a few paired phones and the plugin card
+// already run past the window's minimum height, and rows past the bottom
+// edge were rows nothing could click.
+ScrollPage {
     id: root
 
     required property DevicesModel devices

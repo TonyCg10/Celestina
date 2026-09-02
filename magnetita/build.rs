@@ -28,6 +28,8 @@ const QML_FILES: &[&str] = &[
     "qml/components/ActivityLog.qml",
     "qml/components/PairedDeviceRow.qml",
     "qml/components/PluginRow.qml",
+    // The scrolling page both pages are built on.
+    "qml/components/ScrollPage.qml",
     "qml/pages/DevicesPage.qml",
     "qml/pages/SettingsPage.qml",
     "qml/Main.qml",
