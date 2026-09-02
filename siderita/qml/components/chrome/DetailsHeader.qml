@@ -56,6 +56,19 @@ Item {
                 Layout.preferredWidth: modelData.w < 0 ? 60 : modelData.w
                 Layout.fillHeight: true
 
+                // The hover fill its sibling lists have: a title that can be
+                // pressed says so before it is.
+                Rectangle {
+                    anchors.fill: parent
+                    radius: CelestinaTheme.radiusSm
+                    color: hcellMouse.containsMouse
+                           ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
+
+                    Behavior on color {
+                        ColorAnimation { duration: CelestinaTheme.motionFast }
+                    }
+                }
+
                 Row {
                     anchors.left: hcell.modelData.align === Text.AlignLeft
                                   ? parent.left : undefined
@@ -88,6 +101,7 @@ Item {
                 }
 
                 MouseArea {
+                    id: hcellMouse
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor

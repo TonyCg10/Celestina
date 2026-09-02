@@ -55,6 +55,11 @@ Item {
     // dock's parent and under the dock, so it covers the folder without
     // covering the rings — a person closing one callout by pressing another
     // ring must still reach that ring.
+    //
+    // A MouseArea, not a TapHandler: a handler only takes a passive grab, so
+    // the press that closed the callout went on to the row under the pointer
+    // and selected, opened or dragged it. The area accepts every button and
+    // hover, so nothing of that press — or of the cursor — reaches the folder.
     Item {
         id: outsideCatcher
         parent: dock.parent
@@ -62,8 +67,12 @@ Item {
         z: dock.z - 1
         visible: dock.openId.length > 0
 
-        TapHandler {
-            onTapped: dock.openId = ""
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+            hoverEnabled: true
+            preventStealing: true
+            onPressed: dock.openId = ""
         }
     }
 

@@ -128,12 +128,14 @@ Item {
                 elide: Text.ElideRight
             }
 
+            // A 30 px target: the glyph is the same size, and a ghost button
+            // paints nothing at rest, so only the hit area grew.
             CelestinaIconButton {
                 id: closeButton
                 anchors.verticalCenter: parent.verticalCenter
-                x: parent.width - width - 5
-                width: 24
-                height: 24
+                x: parent.width - width - 3
+                width: CelestinaTheme.controlHeightXs
+                height: CelestinaTheme.controlHeightXs
                 role: CelestinaButton.Ghost
                 density: CelestinaButton.Compact
                 iconName: ""

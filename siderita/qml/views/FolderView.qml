@@ -134,11 +134,10 @@ Item {
         controller.closeSearch()
     }
 
-    // Back undoes wherever you are, in the order you got there: a search
-    // bows out first, then the Trash location, and only then does history
-    // move. Trash is a place you can be but not a folder in history.
-    // `loading` holds back only the history move, the one step that races a
-    // scan; leaving a location cancels its reading instead of waiting for it,
+    // Back undoes wherever you are, in the order you got there: a search bows
+    // out first, then the Trash location (a place, not a folder in history),
+    // and only then does history move. `loading` holds back only that last
+    // step, the one that races a scan; leaving a location cancels its reading,
     // and gating that on `loading` locked the person inside a slow one.
     readonly property bool canGoBackOrLeave:
             topBar.searchText.length > 0 || controller.searchActive
@@ -379,11 +378,10 @@ Item {
         }
         // Begin dragging an entry. The drag is Drag.Automatic (so it can also
         // land in other apps as a uri-list), which hands the visual to the
-        // compositor — a manually-positioned QML ghost can't follow the
-        // cursor under a native drag and just strands itself at 0,0. So we
-        // grab the entry's icon into Drag.imageSource and let the platform
-        // render it at the pointer, hot-spotted on the icon's centre. If the
-        // grab can't start we still activate, so the drag never fails to run.
+        // compositor — a QML ghost can't follow a native drag and strands
+        // itself at 0,0 — so the entry's icon goes into Drag.imageSource and
+        // the platform renders it at the pointer, hot-spotted on its centre.
+        // If the grab can't start we still activate, so the drag never fails.
         function startEntryDrag(entryPath, entryLabel, entryIsDir, glyphItem, handler) {
             root.ghost.beginEntryDrag(entryPath, entryLabel, entryIsDir)
             var started = glyphItem.grabToImage(function(result) {
@@ -723,6 +721,8 @@ Item {
 
     FolderActions {
         id: folderActions
+        // Above the chrome siblings (9, 10): `z` orders siblings only.
+        z: 30
         anchors.fill: parent
         controller: tabController
         owner: root

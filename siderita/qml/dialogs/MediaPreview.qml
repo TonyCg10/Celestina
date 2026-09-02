@@ -137,6 +137,9 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             width: parent.width - CelestinaTheme.controlHeight - 90 - volumeGroup.width
                    - CelestinaTheme.spaceMd * 3
+            // The shared track is 16 px tall by default; a seek bar is grabbed
+            // in passing, so it gets the 30 px floor. The track stays centred.
+            height: CelestinaTheme.controlHeightXs
             enabled: preview.player.durationMs > 0
             value: preview.player.positionMs
             to: preview.player.durationMs
@@ -197,6 +200,7 @@ Item {
             CelestinaSlider {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 64
+                height: CelestinaTheme.controlHeightXs
                 value: preview.player.volumePercent
                 to: 100
                 step: 5

@@ -86,7 +86,13 @@ Item {
         MouseArea {
             id: trailingMouse
             anchors.fill: parent
-            anchors.margins: -CelestinaTheme.spaceXs
+            // The text is a caption; the target is the header's full 30 px.
+            anchors.leftMargin: -CelestinaTheme.spaceXs
+            anchors.rightMargin: -CelestinaTheme.spaceXs
+            anchors.topMargin: -Math.max(0, Math.round(
+                (CelestinaTheme.controlHeightXs - parent.height) / 2))
+            anchors.bottomMargin: -Math.max(0, Math.round(
+                (CelestinaTheme.controlHeightXs - parent.height) / 2))
             enabled: root.interactive
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor

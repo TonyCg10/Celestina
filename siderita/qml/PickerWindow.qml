@@ -441,34 +441,40 @@ Window {
     HistoryMouseArea {
         anchors.fill: parent
         z: 9999
-        blocked: controller.loading
+        // The overwrite prompt is modal: Back/Forward must not navigate the
+        // folder it is asking about.
+        blocked: controller.loading || overwritePrompt.visible
         canGoBack: controller.canGoBack
         canGoForward: controller.canGoForward
         onBackRequested: controller.goBack()
         onForwardRequested: controller.goForward()
     }
 
+    // Every window shortcut yields to the overwrite prompt: a `Shortcut`
+    // resolves before the prompt's own `Keys` handler, so Escape here would
+    // cancel the whole request instead of the question, and Ctrl+H/L/F would
+    // change the folder behind the modal. The prompt closes itself on Escape.
     Shortcut {
         sequence: "Escape"
-        enabled: !picker.answered
+        enabled: !picker.answered && !overwritePrompt.visible
         onActivated: picker.cancel()
     }
 
     Shortcut {
         sequence: "Ctrl+H"
-        enabled: !picker.answered
+        enabled: !picker.answered && !overwritePrompt.visible
         onActivated: picker.toggleHidden()
     }
 
     Shortcut {
         sequence: "Ctrl+L"
-        enabled: !picker.answered
+        enabled: !picker.answered && !overwritePrompt.visible
         onActivated: pickerChrome.beginEditing()
     }
 
     Shortcut {
         sequence: "Ctrl+F"
-        enabled: !picker.answered
+        enabled: !picker.answered && !overwritePrompt.visible
         onActivated: pickerChrome.focusSearch()
     }
 

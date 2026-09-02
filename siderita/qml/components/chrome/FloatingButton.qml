@@ -33,8 +33,11 @@ Button {
 
     // The button already owns its click — a swallowing MouseArea would be
     // delivered before it — but hover and drag still leak through to the
-    // delegate underneath unless something claims them.
+    // delegate underneath unless something claims them. The shield's blocking
+    // hover also takes the hover from this Button, so the fill below reads the
+    // shield's `hovered` instead of `control.hovered`, which would never rise.
     CelestinaInputShield {
+        id: shield
         swallowClicks: false
     }
 
@@ -59,11 +62,11 @@ Button {
         fill: control.role === FloatingButton.Primary
               ? (!control.enabled ? CelestinaTheme.accentDisabledFill
                  : control.down ? CelestinaTheme.accentPressed
-                 : control.hovered ? CelestinaTheme.accentHover
+                 : shield.hovered ? CelestinaTheme.accentHover
                  : CelestinaTheme.accent)
               : (!control.enabled ? CelestinaTheme.controlFill
                  : control.down ? CelestinaTheme.surfaceStrong
-                 : control.hovered || control.active ? CelestinaTheme.surfaceHover
+                 : shield.hovered || control.active ? CelestinaTheme.surfaceHover
                  : CelestinaTheme.controlFill)
         border.width: control.role === FloatingButton.Primary && !control.enabled
                         ? CelestinaTheme.borderHairline

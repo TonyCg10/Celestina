@@ -16,15 +16,40 @@ Item {
                                                        ? hostWindow.activeController.markedKey : "")
 
     height: hostWindow.sidebarRowHeight
+    // The same keyboard path the phone rows have: Tab reaches the row and
+    // Return opens it. A missing favourite has nothing to open.
+    activeFocusOnTab: !root.missing
+    Accessible.role: Accessible.Button
+    Accessible.name: root.entry.name
+    Accessible.onPressAction: root.activate()
+
+    function activate() {
+        const controller = root.hostWindow.activeController
+        if (!controller || root.missing)
+            return
+        if (root.entry.kind === "directory")
+            controller.openKey(root.entry.path)
+        else
+            controller.revealPath(root.entry.path)
+    }
+
+    Keys.onPressed: function(event) {
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+            root.activate()
+            event.accepted = true
+        }
+    }
 
     Rectangle {
         anchors.fill: parent
         anchors.leftMargin: 2
         anchors.rightMargin: 2
         radius: CelestinaTheme.radiusSm
+        border.width: root.activeFocus ? CelestinaTheme.borderFocus : 0
+        border.color: CelestinaTheme.focusRing
         color: root.current
                ? CelestinaTheme.badgeAccentFill
-               : rowMouse.containsMouse
+               : (rowMouse.containsMouse && !root.missing)
                  ? CelestinaTheme.surfaceHover
                  : CelestinaTheme.clear
 
@@ -66,22 +91,25 @@ Item {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
         hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
+        // A missing favourite is not dead: its menu is where "Quitar de
+        // favoritos" lives, so the right button stays live and only the
+        // opening gestures — and the hand that promises them — are withheld.
+        cursorShape: root.missing ? Qt.ArrowCursor : Qt.PointingHandCursor
         onClicked: function(mouse) {
             const controller = root.hostWindow.activeController
-            if (!controller || root.missing)
+            if (!controller)
                 return
 
             if (mouse.button === Qt.RightButton) {
                 const point = root.mapToItem(root.overlayParent, mouse.x, mouse.y)
                 root.contextMenuRequested(root.entry.path, point.x, point.y)
-            } else if (root.entry.kind === "directory") {
-                if (mouse.button === Qt.MiddleButton)
-                    root.hostWindow.openTab(root.entry.path, false)
-                else
-                    controller.openKey(root.entry.path)
+            } else if (root.missing) {
+                return
+            } else if (mouse.button === Qt.MiddleButton
+                       && root.entry.kind === "directory") {
+                root.hostWindow.openTab(root.entry.path, false)
             } else {
-                controller.revealPath(root.entry.path)
+                root.activate()
             }
         }
     }

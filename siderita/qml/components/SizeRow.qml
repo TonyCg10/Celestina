@@ -38,6 +38,8 @@ Item {
         anchors.right: sizeRowValue.left
         anchors.rightMargin: 10
         anchors.verticalCenter: parent.verticalCenter
+        // The track is 4 px and the handle 15; the target is the row's 30.
+        height: CelestinaTheme.controlHeightXs
         from: sizeRow.minValue
         to: sizeRow.maxValue
         stepSize: 0.1

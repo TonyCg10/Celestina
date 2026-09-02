@@ -7,13 +7,21 @@ import org.celestina.siderita 1.0
 // Anchored to the bar rather than positioned from a computed point. The first
 // attempt used `mapToItem`, which is evaluated once and never again, so the
 // button was drawn in the corner and stayed there while the bar moved.
-PhoneMediaButton {
+//
+// The button floats directly over the listing, and a disabled item is dropped
+// from pointer delivery together with everything inside it: a disconnected
+// phone's dimmed button was a hole through which the press selected, opened
+// or dragged the row behind. The shield therefore lives on this wrapper, which
+// is never disabled — the same floor the Trash and Recientes headers stand on.
+Item {
     id: root
 
     // Typed loosely on purpose would cost the checker its knowledge of
     // `searchCentreFromRight`; this is the bar that publishes it.
     required property TopBar bar
     required property var heading
+
+    signal clicked
 
     z: root.bar.z
     width: 32
@@ -23,5 +31,12 @@ PhoneMediaButton {
     anchors.top: root.bar.bottom
     anchors.topMargin: CelestinaTheme.spaceSm
     visible: root.heading.retiredProgress > 0.5 && root.heading.phoneLocation
-    connected: root.heading.phoneConnected
+
+    CelestinaInputShield { }
+
+    PhoneMediaButton {
+        anchors.fill: parent
+        connected: root.heading.phoneConnected
+        onClicked: root.clicked()
+    }
 }

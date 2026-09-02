@@ -38,6 +38,18 @@ Item {
 
     implicitWidth: 40
     implicitHeight: 40
+    // It is a button, so the keyboard reaches it too: Tab lands here and
+    // Return or Space opens the callout, exactly as a press does.
+    activeFocusOnTab: true
+    Accessible.onPressAction: ring.clicked()
+
+    Keys.onPressed: function(event) {
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+                || event.key === Qt.Key_Space) {
+            ring.clicked()
+            event.accepted = true
+        }
+    }
 
     // The track the arc runs on, always fully drawn so the ring reads as a
     // control rather than as a fragment.
@@ -136,6 +148,12 @@ Item {
                 color: CelestinaTheme.textMuted
             }
         }
+    }
+
+    CelestinaFocusRing {
+        target: ring
+        cornerRadius: ring.width / 2
+        shown: ring.activeFocus
     }
 
     HoverHandler {

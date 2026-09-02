@@ -99,6 +99,7 @@ TestCase {
         contentMiddleClicks = 0
         contentDragged = false
         hoverLeaked = false
+        phoneMediaClicks = 0
         mouseMove(testCase, 10, 380)
     }
 
@@ -225,5 +226,42 @@ TestCase {
         mouseClick(tabStrip, 250, 18, Qt.LeftButton)
         compare(hostWindowStub.currentTabIndex, 1,
                 "la pestaña dejó de poder seleccionarse")
+    }
+
+    // The phone's media button hanging under the bar with the phone
+    // disconnected: a disabled control drops out of pointer delivery together
+    // with everything inside it, so its shield has to live outside it or the
+    // dimmed button was a hole down to the row.
+    QtObject {
+        id: headingStub
+        property real retiredProgress: 1
+        property bool phoneLocation: true
+        property bool phoneConnected: false
+        property int phoneIndex: 0
+    }
+
+    property int phoneMediaClicks: 0
+
+    PhoneMediaUnderBar {
+        id: phoneUnderBar
+        bar: topBar
+        heading: headingStub
+        onClicked: testCase.phoneMediaClicks++
+    }
+
+    function test_disabled_phone_media_button_owns_its_pointer() {
+        verify(phoneUnderBar.visible)
+        pokeAt(phoneUnderBar, phoneUnderBar.width / 2, phoneUnderBar.height / 2)
+        verifyContentUntouched("PhoneMediaUnderBar (disconnected)")
+        compare(phoneMediaClicks, 0, "a disabled button emitted clicked")
+    }
+
+    function test_connected_phone_media_button_still_clicks() {
+        headingStub.phoneConnected = true
+        mouseClick(phoneUnderBar, phoneUnderBar.width / 2, phoneUnderBar.height / 2,
+                   Qt.LeftButton)
+        headingStub.phoneConnected = false
+        compare(phoneMediaClicks, 1, "the connected button no longer clicks")
+        compare(contentClicks, 0, "the click also reached the content")
     }
 }

@@ -33,6 +33,37 @@ Item {
 
     height: hostWindow.sidebarRowHeight
     z: dragging ? 2 : 0
+    // The same keyboard path the phone rows have: Tab reaches the row and
+    // Return opens it. Not while renaming — the field owns the keys then.
+    activeFocusOnTab: !root.editing
+    Accessible.role: Accessible.Button
+    Accessible.name: root.bookmarkName
+    Accessible.onPressAction: root.activate()
+
+    function activate() {
+        if (root.hostWindow.activeController)
+            root.hostWindow.activeController.openKey(root.bookmarkPath)
+    }
+
+    Keys.onPressed: function(event) {
+        // The rename field's own Return travels up this chain too; only a key
+        // pressed on the focused row is an activation.
+        if (!root.activeFocus)
+            return
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+            root.activate()
+            event.accepted = true
+        }
+    }
+
+    // A single click opens the bookmark, but only once the double-click window
+    // has passed: the second click of a double click is the rename gesture, and
+    // opening on the first one navigated away before the field ever appeared.
+    Timer {
+        id: singleClick
+        interval: Application.styleHints.mouseDoubleClickInterval
+        onTriggered: root.activate()
+    }
 
     Rectangle {
         z: 3
@@ -66,6 +97,8 @@ Item {
             anchors.leftMargin: 2
             anchors.rightMargin: 2
             radius: CelestinaTheme.radiusSm
+            border.width: root.activeFocus ? CelestinaTheme.borderFocus : 0
+            border.color: CelestinaTheme.focusRing
             color: root.dragging
                    ? CelestinaTheme.surfaceStrong
                    : root.current
@@ -134,7 +167,11 @@ Item {
             anchors.fill: parent
             acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
             hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
+            // Declared after the rename field, so it sits on top of it: while
+            // editing it steps aside entirely, or a click meant to place the
+            // caret opened the bookmark and a right click brought its menu.
+            enabled: !root.editing
+            cursorShape: root.editing ? Qt.ArrowCursor : Qt.PointingHandCursor
             drag.target: root.editing ? null : rowContent
             drag.axis: Drag.YAxis
             drag.smoothed: false
@@ -187,12 +224,17 @@ Item {
                     const point = root.mapToItem(root.overlayParent, mouse.x, mouse.y)
                     root.contextMenuRequested(root.rowIndex, root.bookmarkPath,
                                               point.x, point.y)
-                } else if (root.hostWindow.activeController) {
-                    root.hostWindow.activeController.openKey(root.bookmarkPath)
+                } else {
+                    singleClick.restart()
                 }
             }
 
-            onDoubleClicked: root.editRequested(root.rowIndex)
+            onDoubleClicked: function(mouse) {
+                if (mouse.button !== Qt.LeftButton)
+                    return
+                singleClick.stop()
+                root.editRequested(root.rowIndex)
+            }
         }
     }
 }

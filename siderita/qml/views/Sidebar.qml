@@ -211,10 +211,20 @@ Item {
                         width: placesList.width
                         height: root.hostWindow.sidebarRowHeight
                         z: dragging ? 2 : 0
+                        // The same keyboard path the phone rows have: Tab
+                        // reaches the row and Return opens it.
+                        activeFocusOnTab: true
 
                         Accessible.role: Accessible.Button
                         Accessible.name: def.name
                         Accessible.onPressAction: placeRow.activate()
+
+                        Keys.onPressed: function(event) {
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                placeRow.activate()
+                                event.accepted = true
+                            }
+                        }
 
                         function activate() {
                             const ac = root.hostWindow.activeController
@@ -266,6 +276,9 @@ Item {
                                 anchors.leftMargin: 2
                                 anchors.rightMargin: 2
                                 radius: CelestinaTheme.radiusSm
+                                border.width: placeRow.activeFocus
+                                              ? CelestinaTheme.borderFocus : 0
+                                border.color: CelestinaTheme.focusRing
                                 color: placeRow.dragging
                                        ? CelestinaTheme.surfaceStrong
                                        : placeRow.current
@@ -453,15 +466,34 @@ Item {
 
                         width: placesColumn.width
                         height: root.hostWindow.sidebarRowHeight
+                        // The same keyboard path the phone rows have: Tab
+                        // reaches the row and Return opens it.
+                        activeFocusOnTab: true
                         Accessible.role: Accessible.Button
                         Accessible.name: volumeRow.modelData
                                          + (volumeRow.mounted ? ", montado" : ", sin montar")
+                        Accessible.onPressAction: volumeRow.activate()
+
+                        function activate() {
+                            if (root.hostWindow.activeController)
+                                root.hostWindow.activeController.openVolume(volumeRow.index)
+                        }
+
+                        Keys.onPressed: function(event) {
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                volumeRow.activate()
+                                event.accepted = true
+                            }
+                        }
 
                         Rectangle {
                             anchors.fill: parent
                             anchors.leftMargin: 2
                             anchors.rightMargin: 2
                             radius: CelestinaTheme.radiusSm
+                            border.width: volumeRow.activeFocus
+                                          ? CelestinaTheme.borderFocus : 0
+                            border.color: CelestinaTheme.focusRing
                             color: volumeRow.current
                                    ? CelestinaTheme.badgeAccentFill
                                    : volumeMouse.containsMouse
@@ -524,7 +556,10 @@ Item {
                             MouseArea {
                                 id: ejectMouse
                                 anchors.fill: parent
-                                anchors.margins: -4
+                                // Grown to the 30 px floor around an 18 px glyph;
+                                // the icon itself stays its size.
+                                anchors.margins: -Math.max(0, Math.round(
+                                    (CelestinaTheme.controlHeightXs - parent.width) / 2))
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
@@ -561,7 +596,7 @@ Item {
                                         root.hostWindow.openTab(volumeRow.mountPoint,
                                                                 false)
                                 } else {
-                                    root.hostWindow.activeController.openVolume(volumeRow.index)
+                                    volumeRow.activate()
                                 }
                             }
                         }

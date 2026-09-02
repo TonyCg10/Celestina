@@ -87,8 +87,23 @@ CelestinaModalLayer {
                 required property string modelData
                 width: iconGrid.cellWidth
                 height: iconGrid.cellHeight
+                // Cells were pointer-only: Tab now reaches them and Return or
+                // Space chooses, with the shared ring marking the focused one.
+                activeFocusOnTab: true
+                Accessible.role: Accessible.Button
+                Accessible.name: iconOpt.modelData
+                Accessible.onPressAction: iconPicker.choose(iconOpt.modelData)
+
+                Keys.onPressed: function(event) {
+                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+                            || event.key === Qt.Key_Space) {
+                        iconPicker.choose(iconOpt.modelData)
+                        event.accepted = true
+                    }
+                }
 
                 Rectangle {
+                    id: iconOptFrame
                     anchors.fill: parent
                     anchors.margins: 4
                     radius: CelestinaTheme.radiusSm
@@ -114,6 +129,12 @@ CelestinaModalLayer {
                               ? CelestinaIcon.Folder : CelestinaIcon.File
                         tintOverride: panel.icons.iconTint(iconPicker.targetPath)
                     }
+                }
+
+                CelestinaFocusRing {
+                    target: iconOptFrame
+                    cornerRadius: iconOptFrame.radius
+                    shown: iconOpt.activeFocus
                 }
 
                 MouseArea {

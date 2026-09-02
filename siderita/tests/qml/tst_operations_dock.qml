@@ -16,6 +16,8 @@ TestCase {
 
     property var cancelled: []
     property var toggled: []
+    property int contentPresses: 0
+    property bool contentHovered: contentMouse.containsMouse
 
     QtObject {
         id: controllerStub
@@ -41,11 +43,23 @@ TestCase {
         height: 400
     }
 
+    // What lies under the dock in the folder: a row delegate's three-button
+    // MouseArea with hover. The catcher is reparented beside the dock at one
+    // z below it, so the dock is lifted to 1 for the catcher to sit above this.
+    MouseArea {
+        id: contentMouse
+        anchors.fill: parent
+        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+        hoverEnabled: true
+        onPressed: testCase.contentPresses++
+    }
+
     OperationsDock {
         id: dock
         controller: controllerStub
         backdrop: backdropStub
         y: 200
+        z: 1
     }
 
     function init() {
@@ -61,6 +75,8 @@ TestCase {
         controllerStub.opSteps = []
         controllerStub.opRunning = false
         dock.openId = ""
+        testCase.contentPresses = 0
+        mouseMove(testCase, 590, 390)
     }
 
     function load(jobs) {
@@ -178,6 +194,25 @@ TestCase {
         // Away from the dock entirely: the catcher covers the folder behind it.
         mouseClick(testCase, 40, 40)
         compare(dock.openId, "")
+    }
+
+    // The press that closes the callout ends there: it used to go on to the
+    // row under the pointer and select, open or drag it. Hover stops too.
+    function test_dc_the_closing_press_never_reaches_the_folder() {
+        load([extracting("8")])
+        waitForRendering(dock)
+        findChild(dock, "operationRing-8").clicked()
+        compare(dock.openId, "8")
+
+        mouseMove(testCase, 40, 40)
+        verify(!contentHovered, "the cursor lit the row under the catcher")
+        mouseClick(testCase, 40, 40, Qt.RightButton)
+        compare(dock.openId, "")
+        compare(contentPresses, 0, "the closing press reached the folder")
+
+        // With no callout open there is no catcher: the folder is its own again.
+        mouseClick(testCase, 40, 40, Qt.LeftButton)
+        compare(contentPresses, 1, "the catcher stayed after the callout closed")
     }
 
     // Held is a state a person must be able to see and undo from the same

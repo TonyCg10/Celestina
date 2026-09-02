@@ -140,6 +140,7 @@ CelestinaModalLayer {
                     id: appRowMouse
                     anchors.fill: parent
                     hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
                     onClicked: openWithView.selected = appRow.index
                     onDoubleClicked: controller.openWithApp(appRow.index, false)
                 }

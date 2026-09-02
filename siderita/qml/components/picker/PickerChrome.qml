@@ -52,28 +52,39 @@ Item {
             onViewFocusRequested: root.viewFocusRequested()
         }
 
-        CelestinaTextField {
-            id: nameField
+        // The field floats over the grid like every other pill, so it needs
+        // the same input floor: without one the cell under the pointer lit up
+        // through the field, and a right or middle press — which a text input
+        // does not take — opened that cell's menu. The field is delivered
+        // first and keeps its caret, selection and left click.
+        Item {
             visible: root.saving
             width: parent.width
             height: CelestinaTheme.controlHeight
             y: topBar.height + CelestinaTheme.compFloatingGap
-            placeholderText: "Nombre del archivo"
-            color: CelestinaTheme.text
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontBody
-            leftPadding: CelestinaTheme.compButtonPaddingHorizontal
-            rightPadding: CelestinaTheme.compButtonPaddingHorizontal
-            onAccepted: if (root.canAccept) root.acceptRequested()
-            background: GlassPill {
-                inputShield: false
-                radius: CelestinaTheme.radiusSm
-                backdrop: root.backdropView
-                floating: root.gridScrolls
-                fill: CelestinaTheme.inputFill
-                border.width: CelestinaTheme.borderHairline
-                border.color: nameField.activeFocus
-                              ? CelestinaTheme.focusRing : CelestinaTheme.clear
+
+            CelestinaInputShield { }
+
+            CelestinaTextField {
+                id: nameField
+                anchors.fill: parent
+                placeholderText: "Nombre del archivo"
+                color: CelestinaTheme.text
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: CelestinaTheme.fontBody
+                leftPadding: CelestinaTheme.compButtonPaddingHorizontal
+                rightPadding: CelestinaTheme.compButtonPaddingHorizontal
+                onAccepted: if (root.canAccept) root.acceptRequested()
+                background: GlassPill {
+                    inputShield: false
+                    radius: CelestinaTheme.radiusSm
+                    backdrop: root.backdropView
+                    floating: root.gridScrolls
+                    fill: CelestinaTheme.inputFill
+                    border.width: CelestinaTheme.borderHairline
+                    border.color: nameField.activeFocus
+                                  ? CelestinaTheme.focusRing : CelestinaTheme.clear
+                }
             }
         }
     }
@@ -138,27 +149,41 @@ Item {
             elide: Text.ElideRight
         }
 
-        Row {
+        // The accept button is disabled until there is something to accept,
+        // and a disabled item is dropped from pointer delivery together with
+        // its own shield: the greyed "Abrir/Guardar" was a hole through which
+        // the press selected the cell behind it. The floor lives on this
+        // wrapper, which is never disabled — the pattern the Trash and
+        // Recientes headers use.
+        Item {
             id: actionRow
 
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 10
+            width: actionButtons.width
+            height: actionButtons.height
 
-            FloatingButton {
-                text: "Cancelar"
-                backdrop: root.backdropView
-                floating: root.gridScrolls
-                onClicked: root.cancelRequested()
-            }
+            CelestinaInputShield { }
 
-            FloatingButton {
-                text: root.acceptText
-                role: FloatingButton.Primary
-                backdrop: root.backdropView
-                floating: root.gridScrolls
-                enabled: root.canAccept
-                onClicked: root.acceptRequested()
+            Row {
+                id: actionButtons
+                spacing: 10
+
+                FloatingButton {
+                    text: "Cancelar"
+                    backdrop: root.backdropView
+                    floating: root.gridScrolls
+                    onClicked: root.cancelRequested()
+                }
+
+                FloatingButton {
+                    text: root.acceptText
+                    role: FloatingButton.Primary
+                    backdrop: root.backdropView
+                    floating: root.gridScrolls
+                    enabled: root.canAccept
+                    onClicked: root.acceptRequested()
+                }
             }
         }
     }
