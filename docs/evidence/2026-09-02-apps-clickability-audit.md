@@ -399,7 +399,24 @@ content.
 
 ## Follow-up
 
-None registered. Each project owns its rows: `siderita:` for SID-*,
+**2026-09-02, later the same day.** The author authorized fixing every
+finding. Five deliveries followed, one per owner, each with its own PATCH
+bump and history row: `celestina-style-bug` (426c1f7, STY-M1 to STY-L4,
+with new tests for the slider, the menu item, the shield's `blockHover` and
+the modal exit fade), `siderita-bug` (a6e9e1a, SID-C1 to SID-L3, with
+`tst_sidebar_rows.qml` and extended floating-surface and operations-dock
+tests), `fluorita-bug` (0383921, FLU-C1 to FLU-L3), `grafita-bug` (53f048d,
+GRA-H1 to GRA-L3) and `magnetita-bug` (7583a93, MAG-H1 to MAG-L2). Two
+findings closed narrower than proposed: MAG-M1 is a plain progress bar, not
+a seek control, because the daemon has no seek verb; MAG-M2 keeps the
+switch on the daemon's confirmed state rather than an optimistic one, per
+Magnetita's local contract. The slider's wheel is opt-in (`wheelEnabled`)
+so hosts with their own wheel rounding keep it. None of it ran: the
+environment has no Qt, so every fix and test is written from Qt 6 delivery
+rules and awaits the author's `qml-tests.sh` and each consumer's
+`complete-production.sh`.
+
+Originally recorded as: None registered. Each project owns its rows: `siderita:` for SID-*,
 `fluorita:` for FLU-*, `grafita:` for GRA-*, `magnetita:` for MAG-*, and
 `celestina-style:` for STY-* (with a `complete-production.sh` run for every
 affected consumer once STY-M1, STY-M2 or STY-L4 lands). A remediation unit
