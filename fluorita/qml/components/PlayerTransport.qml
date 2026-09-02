@@ -77,7 +77,7 @@ RowLayout {
             || transport.timed
         iconName: "settings"
         helpText: qsTr("Audio, subtítulos y velocidad")
-        checked: streams.visible
+        role: streams.visible ? CelestinaButton.Selected : CelestinaButton.Tonal
         onClicked: streams.popup(streamsButton, 0, -streams.height)
     }
 

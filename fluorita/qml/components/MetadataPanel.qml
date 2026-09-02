@@ -20,6 +20,10 @@ CelestinaModalLayer {
 
     anchors.fill: parent
     shown: panel.metadata.open
+    // "Cerrar" is held back while a write runs; the scrim and Escape are the
+    // same request and wait with it.
+    dismissOnOutsideClick: !panel.metadata.busy
+    dismissOnEscape: !panel.metadata.busy
     onDismissRequested: panel.metadata.close()
 
     GlassCard {

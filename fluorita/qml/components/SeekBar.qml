@@ -10,6 +10,10 @@ import org.celestina.fluorita 1.0
 CelestinaSlider {
     id: bar
 
+    // The wheel seeks: reaching for it while watching is not a request to
+    // first find and focus the bar.
+    wheelEnabled: true
+
     required property real position
     required property real duration
     // Una búsqueda pedida y no confirmada. El relleno se queda donde el motor
@@ -18,6 +22,11 @@ CelestinaSlider {
     property real pendingPosition: -1
 
     signal seekRequested(real seconds)
+
+    // The shared slider centres its track in whatever height it is given: a
+    // control the height of a button is hit by the pointer, the bare 16 px
+    // track is not.
+    implicitHeight: CelestinaTheme.controlHeightXs
 
     value: bar.position
     to: bar.duration

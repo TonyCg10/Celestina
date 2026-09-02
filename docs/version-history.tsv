@@ -115,3 +115,4 @@ celestina-style	1.8.0	milestone	SIMPLE-2	Rebuild the shell's drawing system on o
 celestina	1.3.0	milestone	SIMPLE-2	Rebuild the shell's drawing system on one glass contract
 celestina-style	1.8.1	bug	CLICK-1-STY	Fix the hover, hit and fade contracts the shared controls owed
 siderita	1.5.3	bug	CLICK-1-SID	Fix the dialogs, rows and floating buttons a pointer could not reach or fell through
+fluorita	1.3.2	bug	CLICK-1-FLU	Fix the annotations, bars and shortcuts the viewer left unreachable or leaking

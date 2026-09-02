@@ -58,6 +58,19 @@ Item {
         cornerRadius: CelestinaTheme.radiusPill
     }
 
+    // The pill owns its box. Without this a click in a gap between two icons
+    // fell through to the canvas and, with a tool armed, started a shape on the
+    // picture panned underneath.
+    CelestinaInputShield { }
+
+    // The shield leaves the wheel to the content by contract; here the content
+    // is the picture, and Ctrl+wheel over the toolbar zoomed it at the pointer.
+    WheelHandler {
+        acceptedModifiers: Qt.ControlModifier
+        target: null
+        onWheel: function(event) { event.accepted = true }
+    }
+
     RowLayout {
         id: row
 
@@ -155,7 +168,7 @@ Item {
             iconName: "search"
             helpText: bar.zoomed ? qsTr("Ver la imagen entera")
                                  : qsTr("Acercar")
-            checked: bar.zoomed
+            role: bar.zoomed ? CelestinaButton.Selected : CelestinaButton.Tonal
             onClicked: bar.zoomToggled()
         }
 

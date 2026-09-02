@@ -226,7 +226,15 @@ Item {
 
             onPressed: function(event) {
                 if (surface.tool === "none") {
+                    // Selecting, not drawing. The press is handed on rather
+                    // than swallowed: this area sits over the object layer,
+                    // and the `TapHandler` on each object beneath it is the
+                    // only path to a non-zero selection. Clearing first means
+                    // a click on empty canvas ends with nothing selected, and
+                    // a click on an object ends with that one — the tap
+                    // arrives after this and overrides the clear.
                     surface.editor.selectObject(0)
+                    event.accepted = false
                     return
                 }
                 drag.active = true
@@ -430,9 +438,26 @@ Item {
 
     // Writing is not instant on a large photograph, and a surface that looks
     // idle while it happens invites a second click.
-    CelestinaInputShield {
+    //
+    // Raised above the toolbar and the canvas: the shield stacks itself at
+    // `z: -1` inside its parent, so as a bare sibling it only covered the
+    // empty backdrop while the magnifier, the swatches and the pan kept
+    // acting through a save. The wheel, which the shield leaves alone by
+    // contract, is held here too — a zoom during a write is not content
+    // scrolling under chrome.
+    Item {
         anchors.fill: parent
-        active: surface.editor.saving
+        z: 1
+
+        CelestinaInputShield {
+            active: surface.editor.saving
+        }
+
+        WheelHandler {
+            enabled: surface.editor.saving
+            target: null
+            onWheel: function(event) { event.accepted = true }
+        }
     }
 
     // The words for a text annotation, asked for before they are placed.

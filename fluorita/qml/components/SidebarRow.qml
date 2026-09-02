@@ -99,4 +99,23 @@ Item {
             row.activated();
         }
     }
+
+    // A row that stands on its own in the tab chain — the add-folder row — is
+    // activated from the keyboard the way a list activates its current row.
+    // Inside a list the view holds the focus and these never fire.
+    Keys.onPressed: function(event) {
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+                || event.key === Qt.Key_Space) {
+            row.activated();
+            event.accepted = true;
+        }
+    }
+
+    // The pointer never gives a row focus, so the ring only ever answers the
+    // keyboard.
+    CelestinaFocusRing {
+        target: row
+        cornerRadius: CelestinaTheme.radiusSm
+        shown: row.activeFocus
+    }
 }

@@ -42,20 +42,23 @@ Item {
     // Nothing to navigate to but the item you are already on.
     visible: dock.navigator.navigable
 
-    Item {
+    // A focus scope, so Tab lands on the filmstrip inside it: the view is what
+    // carries Left/Right and Enter, and focusing the wrapper alone revealed a
+    // strip the keyboard could not then walk.
+    FocusScope {
         id: strip
 
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.bottom: parent.bottom
         height: dock.stripHeight
         activeFocusOnTab: true
 
         opacity: dock.revealed ? 1 : 0
         // Slides down out of the way rather than only fading, so a strip that
-        // is on its way out cannot take a click on the picture behind it.
-        y: dock.revealed ? 0 : dock.stripHeight
-        enabled: dock.revealed
+        // is on its way out cannot take a click on the picture behind it. It
+        // rests on the dock's bottom edge and leaves through it; the frame it
+        // lives in clips whatever has gone below.
+        y: dock.revealed ? dock.height - dock.stripHeight : dock.height
 
         // The reveal is a deliberate arrival, not a blink. It runs on the same
         // clock as the slide so the strip fades in *while* it rises instead of
@@ -85,6 +88,10 @@ Item {
 
             anchors.fill: parent
             anchors.margins: CelestinaTheme.spaceSm
+            // Where the scope's focus goes. Disabling the strip while hidden
+            // would take it out of the tab chain, so the reveal is what the
+            // scope's focus produces rather than what it waits for.
+            focus: true
             orientation: ListView.Horizontal
             clip: true
             spacing: CelestinaTheme.spaceSm
@@ -168,8 +175,33 @@ Item {
                     fallbackName: "file"
                 }
 
-                MouseArea {
+                // Under the pointer and under the press, in the same fills
+                // the sidebar rows use, over the picture rather than as a card
+                // around it.
+                Rectangle {
                     anchors.fill: parent
+                    radius: CelestinaTheme.radiusSm
+                    color: pointer.pressed
+                        ? CelestinaTheme.surfaceStrong
+                        : pointer.containsMouse
+                          ? CelestinaTheme.surfaceHover
+                          : CelestinaTheme.clear
+
+                    Behavior on color {
+                        ColorAnimation {
+                            duration: CelestinaTheme.reducedMotion
+                                ? 0 : CelestinaTheme.motionFast
+                        }
+                    }
+                }
+
+                MouseArea {
+                    id: pointer
+
+                    anchors.fill: parent
+                    // Only while the strip is really there: one on its way out
+                    // must not take a click meant for the picture behind it.
+                    enabled: dock.revealed
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: dock.activated(frame.modelData.key, frame.modelData.name,

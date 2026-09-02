@@ -100,6 +100,8 @@ ListView {
                                                  "audio")
 
         CelestinaSurface {
+            id: card
+
             anchors.fill: parent
             role: list.currentIndex === row.index
                 ? CelestinaSurface.Selected
@@ -140,11 +142,31 @@ ListView {
             }
         }
 
+        // Under the pointer and under the press, as the sidebar rows are.
+        Rectangle {
+            anchors.fill: card
+            radius: card.radius
+            color: pointer.pressed
+                ? CelestinaTheme.surfaceStrong
+                : pointer.containsMouse
+                  ? CelestinaTheme.surfaceHover
+                  : CelestinaTheme.clear
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: CelestinaTheme.reducedMotion
+                        ? 0 : CelestinaTheme.motionFast
+                }
+            }
+        }
+
         // One click plays it, for the same reason the grid opens on one click,
         // and through a MouseArea stacked above the surface for the same reason
         // the grid uses one: a `Pane` filling the row swallows the press that a
         // parent's TapHandler would need.
         MouseArea {
+            id: pointer
+
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor

@@ -377,7 +377,8 @@ ApplicationWindow {
                 iconName: "search"
                 helpText: playerSurface.imageZoom.zoomed ? qsTr("Ver la imagen entera")
                                                          : qsTr("Acercar")
-                checked: playerSurface.imageZoom.zoomed
+                role: playerSurface.imageZoom.zoomed
+                    ? CelestinaButton.Selected : CelestinaButton.Tonal
                 onClicked: playerSurface.imageZoom.toggle()
             }
 
@@ -410,7 +411,12 @@ ApplicationWindow {
 
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: CelestinaTheme.spaceXl
+        // Above the band the transport and the batch bar sit in, not on it:
+        // the pill lets clicks through, but a notice that lands on the seek
+        // bar still hides the control it lets them reach. Both bars are one
+        // control row with the pill's own padding, inset by the same margin.
+        anchors.bottomMargin: CelestinaTheme.spaceLg + CelestinaTheme.controlHeightXs
+            + CelestinaTheme.spaceMd * 2 + CelestinaTheme.spaceMd
         width: notice.implicitWidth + CelestinaTheme.spaceLg * 2
         height: notice.implicitHeight + CelestinaTheme.spaceMd * 2
         visible: refusal.opacity > 0
@@ -501,9 +507,15 @@ ApplicationWindow {
         onActivated: mediaPlayer.writePacingReport()
     }
 
+    // A `Shortcut` resolves before the focused item ever sees the key, so the
+    // ones that share a key with an overlay stand down while it is open: the
+    // editor's Escape leaves a tool before it leaves the editor and its text
+    // prompt cancels on it; the metadata fields take Space as a letter.
+    readonly property bool overlayOpen: mediaEditor.open || mediaMetadata.open
+
     Shortcut {
         sequence: "Space"
-        enabled: window.playing
+        enabled: window.playing && !window.overlayOpen
         onActivated: mediaPlayer.toggle()
     }
     // Seeking everywhere in the window, for the same reason volume already is:
@@ -535,12 +547,12 @@ ApplicationWindow {
     // playhead instead of the level a person actually meant to change.
     Shortcut {
         sequence: "Up"
-        enabled: window.playing
+        enabled: window.playing && !window.overlayOpen
         onActivated: mediaPlayer.setVolume(Math.min(1, mediaPlayer.volumeLevel + 0.05))
     }
     Shortcut {
         sequence: "Down"
-        enabled: window.playing
+        enabled: window.playing && !window.overlayOpen
         onActivated: mediaPlayer.setVolume(Math.max(0, mediaPlayer.volumeLevel - 0.05))
     }
     // Generate the missing thumbnails without depending on the pointer or on
@@ -561,7 +573,7 @@ ApplicationWindow {
     // content, without leaving the application.
     Shortcut {
         sequence: "Escape"
-        enabled: window.playing
+        enabled: window.playing && !window.overlayOpen
         onActivated: window.backToLibrary()
     }
     Shortcut {

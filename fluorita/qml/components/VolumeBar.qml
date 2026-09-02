@@ -33,6 +33,10 @@ RowLayout {
         id: slider
 
         Layout.preferredWidth: 96
+        // A control's height rather than the track's own: the track centres
+        // in it and the pointer hits it.
+        Layout.preferredHeight: CelestinaTheme.controlHeightXs
+        wheelEnabled: true
         value: bar.level
         to: 1
         // Un paso que se nota sin perder matices: veinte pasos de un extremo

@@ -31,6 +31,11 @@ Item {
         cornerRadius: CelestinaTheme.radiusPill
     }
 
+    // The pill floats over the grid, whose cards take hover and every button:
+    // without this a click on the count or a divider opened the card beneath,
+    // and resting on the pill over a film started its preview.
+    CelestinaInputShield { }
+
     RowLayout {
         id: row
 

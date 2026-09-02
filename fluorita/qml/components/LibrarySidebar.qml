@@ -37,6 +37,10 @@ Item {
     // Rebuilt once per publication rather than bound to the three lists: they
     // are published one at a time, and a binding on them would re-run halfway
     // through with the names of one scan beside the paths of another.
+    //
+    // The whole library is the first row, with the library's own -1 as its
+    // source. A header outside the model was a row the arrow keys could never
+    // reach; as a row it is walked, activated and marked current like the rest.
     property var rows: []
 
     Connections {
@@ -53,7 +57,7 @@ Item {
         // Defensive: a short column would mean a publication error, and fewer
         // rows are better than rows with undefined fields.
         var count = Math.min(ids.length, names.length, locations.length);
-        var woven = [];
+        var woven = [{ source: -1, name: qsTr("Todo"), location: "" }];
         for (var index = 0; index < count; ++index) {
             woven.push({
                 source: parseInt(ids[index], 10),
@@ -65,7 +69,7 @@ Item {
     }
 
     // Where the selected root sits among the rows, so the keyboard starts from
-    // what is on screen. -1 is the header row, which the view keeps separate.
+    // what is on screen. The whole-library row answers for -1.
     function indexOfSelection() {
         for (var index = 0; index < sidebar.rows.length; ++index) {
             if (sidebar.rows[index].source === sidebar.library.selectedSource)
@@ -108,31 +112,28 @@ Item {
             Accessible.role: Accessible.List
             Accessible.name: qsTr("Carpetas mapeadas")
 
-            // The whole library, above the folders, so one arrow key walks from
-            // it into them.
-            header: SidebarRow {
-                width: ListView.view.width
-                height: sidebar.rowHeight
-                label: qsTr("Todo")
-                iconName: "files"
-                current: sidebar.library.selectedSource === -1
-                onActivated: sidebar.sourceSelected(-1)
-            }
-
+            // The whole library is the first row rather than a header, so one
+            // arrow key walks from it into the folders and back.
             delegate: SidebarRow {
                 id: folderRow
 
                 required property var modelData
                 required property int index
 
+                readonly property bool whole: folderRow.modelData.source === -1
+
                 width: ListView.view.width
                 height: sidebar.rowHeight
                 label: folderRow.modelData.name
                 description: folderRow.modelData.location
-                iconName: "folder"
+                iconName: folderRow.whole ? "files" : "folder"
                 current: sidebar.library.selectedSource === folderRow.modelData.source
                 onActivated: sidebar.sourceSelected(folderRow.modelData.source)
+                // Only a mapped folder can be unmapped; the whole library has
+                // no menu.
                 onMenuRequested: function(x, y) {
+                    if (folderRow.whole)
+                        return;
                     const point = folderRow.mapToItem(sidebar.overlayParent, x, y);
                     rowMenu.targetName = folderRow.modelData.name;
                     rowMenu.targetSource = folderRow.modelData.source;
@@ -152,7 +153,8 @@ Item {
             }
 
             function removeCurrent() {
-                if (list.currentIndex >= 0 && list.currentIndex < sidebar.rows.length)
+                if (list.currentIndex >= 0 && list.currentIndex < sidebar.rows.length
+                        && sidebar.rows[list.currentIndex].source !== -1)
                     sidebar.folderRemoved(sidebar.rows[list.currentIndex].source);
             }
         }
@@ -187,6 +189,8 @@ Item {
             height: sidebar.rowHeight
             anchors.bottom: parent.bottom
             anchors.bottomMargin: CelestinaTheme.spaceSm
+            // Outside the list, so it joins the tab chain on its own.
+            activeFocusOnTab: enabled
             iconName: "folder-plus"
             // Honest state: the desktop's chooser can stay open for as long as
             // the person needs, and a row that still said "Add folder…" would

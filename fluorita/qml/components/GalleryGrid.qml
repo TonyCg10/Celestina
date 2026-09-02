@@ -162,6 +162,8 @@ GridView {
         }
 
         CelestinaSurface {
+            id: card
+
             anchors.fill: parent
             anchors.margins: CelestinaTheme.spaceXs
             role: grid.currentIndex === cell.index
@@ -209,6 +211,26 @@ GridView {
             }
         }
 
+        // Under the pointer and under the press: the same fills the sidebar
+        // rows use, washed over the card so the selection's own surface stays
+        // what it is.
+        Rectangle {
+            anchors.fill: card
+            radius: card.radius
+            color: pointer.pressed
+                ? CelestinaTheme.surfaceStrong
+                : pointer.containsMouse
+                  ? CelestinaTheme.surfaceHover
+                  : CelestinaTheme.clear
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: CelestinaTheme.reducedMotion
+                        ? 0 : CelestinaTheme.motionFast
+                }
+            }
+        }
+
         // One click opens it. Selecting on the first click and opening only on
         // the second made the library read as if activation were broken: the
         // card visibly responded and then nothing happened. A double click
@@ -220,6 +242,8 @@ GridView {
         // takes the press before a parent's TapHandler ever sees it — which is
         // why clicking a card did nothing at all while the keyboard worked.
         MouseArea {
+            id: pointer
+
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
