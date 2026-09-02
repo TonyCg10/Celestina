@@ -301,10 +301,10 @@ compatibility policy changes that contract.
 | `CelestinaSectionLabel` | Semantic section heading with shared type/spacing, not product navigation state |
 | `CelestinaFocusRing` | Reusable 2 px exterior ring shown for `visualFocus`, never merely for pointer focus |
 | `CelestinaTextField` | Radius-22 search/input anatomy, clear focus/error/disabled states and accessible naming |
-| `CelestinaSlider` | Shared track/fill/focus/keyboard anatomy plus a separate requested-but-unconfirmed mark |
+| `CelestinaSlider` | Shared track/fill/thumb/focus/keyboard/wheel anatomy with hover and pressed states, plus a separate requested-but-unconfirmed mark |
 | `CelestinaSwitch` | Desktop-tuned 44×26 pill, shared inset/thumb/track tokens, white thumb and accent track when on |
 | `ListSection` | Grouped-card list anatomy; row data/actions remain with the host |
-| `CelestinaInputShield` | Floating surface owns pointer hover/buttons/drag over its own box; wheel deliberately remains available to content unless the host overrides it |
+| `CelestinaInputShield` | Floating surface owns pointer hover/buttons/drag over its own box; wheel deliberately remains available to content unless the host overrides it; a hover-enabled host control opts out of the hover block or reads the shield's own `hovered` |
 | `CelestinaModalLayer` | Scrim, input shielding, focus containment/restoration and modal accessibility floor |
 | `CelestinaFolderIcon` | Filled in-tree folder shape with semantic tone and contrast-safe internal ink |
 | `CelestinaFileIcon` | Filled semantic file-type shape with stroke fallback |

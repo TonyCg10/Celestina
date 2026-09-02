@@ -17,6 +17,15 @@ import QtQuick
 // handles its own press (a Button) or a layer with its own dismissal MouseArea
 // wants `swallowClicks: false` — their press handling lives on the item *below*
 // these children, so a swallowing MouseArea here would eat the click first.
+//
+// A third knob for the hover of that same host. Qt delivers hover leaf-first
+// and a blocking HoverHandler stops it on the way *up* as much as on the way
+// down: a hover-enabled Button whose direct child is this shield never sees
+// its own `hovered`. Such a host either sets `blockHover: false` — and accepts
+// that hover then also reaches what the button covers, because a Control
+// ignores hover events rather than blocking them — or keeps the block and
+// paints its hover state from `hovered` here, which is exactly the hover the
+// handler took from it.
 // ──────────────────────────────────────────────────────────────────────────────
 Item {
     id: shield
@@ -24,17 +33,22 @@ Item {
     // A surface that is hidden or not painting shields nothing.
     property bool active: true
     property bool swallowClicks: true
+    property bool blockHover: true
+    // Whether the pointer is over this surface, whichever knob is set.
+    readonly property alias hovered: hoverGuard.hovered
 
     anchors.fill: parent
     z: -1
     enabled: shield.active
 
     HoverHandler {
+        id: hoverGuard
+
         // Stops the row or control underneath from lighting up under a cursor
         // that is really over this surface. `enabled` is explicit: disabling the
         // item does not by itself disarm its handlers.
         enabled: shield.active
-        blocking: true
+        blocking: shield.blockHover
     }
 
     DragHandler {

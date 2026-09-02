@@ -10,6 +10,12 @@ CelestinaButton {
     property string fallbackIcon: iconName
     property int iconSize: CelestinaTheme.iconSm
 
+    // Square by default, at the density's control height. Nothing here pins a
+    // consumer to that size in either direction: the background is the shared
+    // button's and always fills the control, and Ghost paints nothing at rest,
+    // so a consumer that wants a smaller *visual* keeps the control — and its
+    // hit box — at the `controlHeightXs` floor and shrinks `iconSize` alone,
+    // rather than shrinking the control under the floor.
     implicitWidth: implicitHeight
     leftPadding: 0
     rightPadding: 0

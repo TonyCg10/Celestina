@@ -252,4 +252,30 @@ TestCase {
         compare(dismissed, false)
         tryCompare(modal, "visible", false)
     }
+
+    // The other side of the fade: the dialog's own controls are done the moment
+    // it starts leaving. A primary button that answered a second click during
+    // the 100 ms fade sent its request twice.
+    function test_exit_fade_blocks_the_layer_content() {
+        CelestinaTheme.reducedMotion = false
+        openWithConsumerFocus()
+        tryCompare(modal, "opacity", 1)
+
+        mouseClick(lastButton, lastButton.width / 2,
+                   lastButton.height / 2, Qt.LeftButton)
+        compare(modalClicks, 1)
+
+        modal.shown = false
+        compare(modal.visible, true)
+        verify(!lastButton.enabled, "the layer's content stays enabled while fading")
+        mouseClick(lastButton, lastButton.width / 2,
+                   lastButton.height / 2, Qt.LeftButton)
+        mouseClick(lastButton, lastButton.width / 2,
+                   lastButton.height / 2, Qt.LeftButton)
+        compare(modalClicks, 1)
+        // ...and those clicks did not reach the surface below either.
+        compare(lowerClicks, 0)
+        compare(dismissed, false)
+        tryCompare(modal, "visible", false)
+    }
 }

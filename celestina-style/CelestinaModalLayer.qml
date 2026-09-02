@@ -3,8 +3,17 @@ import QtQuick.Window
 
 // Shared L3 interaction layer: scrim, fade, focus and dismissal semantics.
 // Dialog-specific size, content and controller actions stay with the app.
+//
+// The consumer's children land in `contentHost`, not in the layer itself, so
+// the layer can disable them the moment `shown` drops while the scrim and the
+// shield below stay armed through the exit fade. Two different things: a
+// dialog that is fading out must neither be pokeable itself — a double click
+// on its primary button was sending the request twice — nor let the surface
+// under it be poked through the still-painted scrim.
 FocusScope {
     id: layer
+
+    default property alias content: contentHost.data
 
     property bool shown: false
     property bool dismissOnOutsideClick: true
@@ -161,6 +170,19 @@ FocusScope {
             if (layer.shown)
                 layer.keepFocusInside()
         }
+    }
+
+    // Where the dialog's own content lives. Its `parent` chain still passes
+    // through the layer, so `ownsItem` and the focus walk see nothing new; it
+    // only adds the one switch a fading dialog needs. A disabled item is
+    // skipped for pointer delivery, so a click during the fade falls through
+    // to the scrim's MouseArea below, which already declines to act once
+    // `shown` is false.
+    Item {
+        id: contentHost
+
+        anchors.fill: parent
+        enabled: layer.shown
     }
 
     // ── Input shield ─────────────────────────────────────────────────────

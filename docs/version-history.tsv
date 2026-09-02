@@ -113,3 +113,4 @@ celestina	1.2.0	milestone	REC-1	Add screen recording and harden sliders, night l
 siderita	1.5.2	bug	SID-A4-B	Read the Trash and the recent list off the Qt thread
 celestina-style	1.8.0	milestone	SIMPLE-2	Rebuild the shell's drawing system on one glass contract
 celestina	1.3.0	milestone	SIMPLE-2	Rebuild the shell's drawing system on one glass contract
+celestina-style	1.8.1	bug	CLICK-1-STY	Fix the hover, hit and fade contracts the shared controls owed

@@ -25,6 +25,11 @@ Item {
     property real step: 1
     // Un valor pedido y aún sin confirmar, o negativo para no dibujarlo.
     property real pendingValue: -1
+    // A wheel notch over the control moves one `step`. Off by default: a host
+    // whose row already answers the wheel with its own rounding would otherwise
+    // see the slider answer first with a different one. A media bar that wants
+    // the wheel turns it on.
+    property bool wheelEnabled: false
 
     signal moved(real value)
 
@@ -66,20 +71,42 @@ Item {
     // Qt dice por qué llegó el foco; un clic no debe levantar el anillo.
     property int focusReason: Qt.OtherFocusReason
 
-    implicitHeight: CelestinaTheme.spaceLg
+    // Whether the pointer is over the control. The hover state of the track
+    // and thumb below reads it; a consumer that needs its own treatment can
+    // too.
+    readonly property alias hovered: pointer.containsMouse
+    readonly property int handleSize: CelestinaTheme.compSliderHandleSize
+
+    // As tall as the other compact controls, so the strip that answers a press
+    // is the one the other controls answer in; the track stays a hairline
+    // centred inside it.
+    implicitHeight: CelestinaTheme.controlHeightXs
     activeFocusOnTab: control.enabled
 
     Accessible.role: Accessible.Slider
     Accessible.focusable: control.enabled
 
+    // The track is inset by half a thumb on each side so the thumb at either
+    // end still sits inside the control's box — a slider laid out beside a
+    // button must not paint over it. `dragTo` maps the pointer against this
+    // same inset, so the thumb lands under the pointer end to end.
     Rectangle {
         id: track
 
         anchors.verticalCenter: parent.verticalCenter
-        width: parent.width
+        x: control.handleSize / 2
+        width: Math.max(0, parent.width - control.handleSize)
         height: CelestinaTheme.spaceXs
         radius: CelestinaTheme.radiusPill
-        color: CelestinaTheme.divider
+        color: control.enabled && (control.hovered || control.dragging)
+               ? CelestinaTheme.inputBorder : CelestinaTheme.divider
+
+        Behavior on color {
+            ColorAnimation {
+                duration: CelestinaTheme.reducedMotion
+                          ? 0 : CelestinaTheme.motionFast
+            }
+        }
 
         Rectangle {
             width: track.width * control.displayFraction
@@ -98,6 +125,39 @@ Item {
             radius: CelestinaTheme.radiusPill
             color: CelestinaTheme.textMuted
         }
+
+        // The thumb: where the value is, and the thing a pointer reaches for.
+        // It rides `displayFraction` so it follows the cursor during a drag
+        // exactly as the fill does. Hover lifts its colour one step, a drag
+        // lifts it further and grows it slightly, the way a grabbed handle
+        // does — the same accent derivations `CelestinaButton` uses for its
+        // hover and pressed fills, never a local mix.
+        Rectangle {
+            id: thumb
+            objectName: "sliderThumb"
+
+            x: track.width * control.displayFraction - width / 2
+            anchors.verticalCenter: track.verticalCenter
+            width: control.handleSize
+            height: control.handleSize
+            radius: CelestinaTheme.radiusPill
+            scale: control.dragging ? 1.15 : 1
+            color: !control.enabled ? CelestinaTheme.textFaint
+                 : control.dragging ? CelestinaTheme.accentLink
+                 : control.hovered ? CelestinaTheme.accentHover
+                 : CelestinaTheme.accent
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: CelestinaTheme.reducedMotion
+                              ? 0 : CelestinaTheme.motionFast
+                }
+            }
+            Behavior on scale {
+                enabled: !CelestinaTheme.reducedMotion
+                NumberAnimation { duration: CelestinaTheme.motionFast }
+            }
+        }
     }
 
     CelestinaFocusRing {
@@ -106,15 +166,37 @@ Item {
         shown: control.activeFocus && control.focusReason !== Qt.MouseFocusReason
     }
 
+    // A wheel notch is one keyboard step, in the same units. Discrete notches
+    // are 120 units; a touchpad's finer deltas accumulate until they add up to
+    // one, so a flick does not spray a burst of requests.
+    WheelHandler {
+        property real notches: 0
+
+        enabled: control.enabled && control.wheelEnabled
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        onWheel: function(event) {
+            notches += event.angleDelta.y / 120
+            while (notches >= 1) {
+                notches -= 1
+                control.moveTo(control.value + control.step)
+            }
+            while (notches <= -1) {
+                notches += 1
+                control.moveTo(control.value - control.step)
+            }
+        }
+    }
+
     MouseArea {
+        id: pointer
+
         anchors.fill: parent
         enabled: control.enabled
-        // A click alone only jumped once; nothing followed the cursor while
-        // the button stayed down. `onPositionChanged` on a `MouseArea` with
-        // `hoverEnabled` false (the default, unset here) only fires while a
-        // button is held, which is exactly a drag — so the same math runs on
-        // press and on every move, both driving the local drag position and
-        // asking the consumer to move there for real.
+        // Hover is wanted here for the track and thumb treatment, which means
+        // `onPositionChanged` now fires for every move, not only while a
+        // button is held — so the drag math runs only while `dragging`, which
+        // is exactly the span between press and release.
+        hoverEnabled: true
         onPressed: function(mouse) {
             control.focusReason = Qt.MouseFocusReason
             control.forceActiveFocus(Qt.MouseFocusReason)
@@ -125,7 +207,8 @@ Item {
             control.flushDrag()
         }
         onPositionChanged: function(mouse) {
-            control.dragTo(mouse.x)
+            if (control.dragging)
+                control.dragTo(mouse.x)
         }
         onReleased: {
             control.dragging = false
@@ -162,7 +245,7 @@ Item {
     function dragTo(x) {
         if (!control.enabled || control.span <= 0)
             return
-        control.dragFraction = Math.max(0, Math.min(1, x / Math.max(1, control.width)))
+        control.dragFraction = Math.max(0, Math.min(1, (x - track.x) / Math.max(1, track.width)))
         control.dragTarget = control.from + control.dragFraction * control.span
         control.dragTargetPending = true
     }

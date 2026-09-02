@@ -24,6 +24,11 @@ Item {
 
     readonly property int restingThickness: CelestinaTheme.spaceXs
     readonly property int activeThickness: CelestinaTheme.spaceSm
+    // How far from the edge the pointer already counts as being at the bar.
+    // Paint and reach are two different widths: a hairline that only thickens
+    // once the pointer is inside the hairline is not an affordance, so the hover
+    // envelope extends over the content the bar is attached to.
+    readonly property int hoverThickness: CelestinaTheme.spaceLg
     // Short enough to stay out of the way, long enough to still be grabbed in
     // a document where the visible fraction rounds to nothing.
     readonly property int minimumHandle: CelestinaTheme.space2xl
@@ -123,9 +128,20 @@ Item {
     // One area over the whole track, not one over the moving handle: a grab
     // measured against something that moves as you drag it feeds back into
     // itself and stutters. Track coordinates hold still.
+    //
+    // The area reaches `hoverThickness` towards the content — consumers anchor
+    // the bar to the right or bottom edge, so that is the only side there is —
+    // and thickens the bar before the pointer arrives. Only hover reaches that
+    // far: a press outside the bar's own box is left to the content, so the
+    // strip beside a document still places the caret instead of jumping the
+    // handle.
     MouseArea {
         id: track
         anchors.fill: parent
+        anchors.leftMargin: root.horizontal
+                            ? 0 : -Math.max(0, root.hoverThickness - root.width)
+        anchors.topMargin: root.horizontal
+                           ? -Math.max(0, root.hoverThickness - root.height) : 0
         hoverEnabled: true
         preventStealing: true
 
@@ -137,7 +153,17 @@ Item {
             return root.horizontal ? mouse.x : mouse.y
         }
 
+        function withinBar(mouse) {
+            return root.horizontal
+                ? mouse.y >= track.height - root.height
+                : mouse.x >= track.width - root.width
+        }
+
         onPressed: function(mouse) {
+            if (!track.withinBar(mouse)) {
+                mouse.accepted = false
+                return
+            }
             const point = track.pointOf(mouse)
             const start = root.handleOffset
             if (point >= start && point <= start + root.handleLength) {

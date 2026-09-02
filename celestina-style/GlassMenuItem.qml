@@ -151,9 +151,16 @@ MenuItem {
 
     background: Rectangle {
         radius: CelestinaTheme.radiusSm
-        color: control.highlighted || control.current
+        // Two different states, two different fills. `current` is a selection
+        // and wears the accent wash of `CelestinaButton.Selected`; `highlighted`
+        // is the pointer or keyboard cursor and wears the neutral hover. The
+        // cursor wins when both apply, so it stays visible while it passes over
+        // the current row instead of vanishing into it.
+        color: control.highlighted
                ? CelestinaTheme.surfaceHover
-               : CelestinaTheme.clear
+               : control.current
+                 ? CelestinaTheme.badgeAccentFill
+                 : CelestinaTheme.clear
 
         Behavior on color {
             ColorAnimation {
