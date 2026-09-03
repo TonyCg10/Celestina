@@ -25,6 +25,9 @@ const QML_FILES: &[&str] = &[
     "qml/GlassCard.qml",
     // The editor's right-click menu wears the suite's glass menu, registered
     // the same way Fluorita and Siderita publish it.
+    // The one elevation shadow every glass surface casts; the menu draws it
+    // inline, so the app's module must publish it too.
+    "qml/CelestinaShadow.qml",
     "qml/GlassContextMenu.qml",
     "qml/GlassMenuItem.qml",
     // Grafita's own composition: Main owns the window, the components own one

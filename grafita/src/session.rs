@@ -85,6 +85,12 @@ pub mod qobject {
         #[qproperty(i32, search_matches)]
         #[qproperty(i32, search_index)]
         #[qproperty(i32, line_count)]
+        // lineRevision — bumped on every publication, so the gutter can
+        // re-place its numbers *after* the document has absorbed the edit the
+        // widget just reported, instead of racing it on the widget's own
+        // textChanged (GRA-P1: the gutter used to re-read and re-scan the
+        // whole text per keystroke to learn what the document already knew).
+        #[qproperty(i32, line_revision)]
         #[qproperty(QString, indentation_label)]
         // caretLine / caretColumn — where the widget's caret is, counted from
         //                           1, the column in characters
@@ -182,6 +188,13 @@ pub mod qobject {
         #[qinvokable]
         fn recent_documents(self: &GrafitaSession) -> QStringList;
 
+        /// The UTF-16 offset of `line`'s first character — what the gutter
+        /// hands the widget's `positionToRectangle`. Answered from the
+        /// document's line map in constant time; a line past the end answers
+        /// just past the last line rather than failing.
+        #[qinvokable]
+        fn line_start_utf16(self: &GrafitaSession, line: i32) -> i32;
+
         /// Starts a document that belongs to no file yet.
         #[qinvokable]
         fn new_document(self: Pin<&mut GrafitaSession>);
@@ -272,6 +285,7 @@ pub struct GrafitaSessionRust {
     search_matches: i32,
     search_index: i32,
     line_count: i32,
+    line_revision: i32,
     indentation_label: QString,
     caret_line: i32,
     caret_column: i32,
@@ -315,6 +329,7 @@ impl Default for GrafitaSessionRust {
             search_matches: 0,
             search_index: -1,
             line_count: 0,
+            line_revision: 0,
             indentation_label: QString::default(),
             caret_line: 1,
             caret_column: 1,
@@ -368,6 +383,11 @@ impl qobject::GrafitaSession {
             .set_caret_line(i32::try_from(location.line).unwrap_or(i32::MAX));
         self.as_mut()
             .set_caret_column(i32::try_from(location.column).unwrap_or(i32::MAX));
+    }
+
+    pub fn line_start_utf16(&self, line: i32) -> i32 {
+        let line = usize::try_from(line).unwrap_or(0);
+        i32::try_from(self.rust().session.line_start_utf16(line)).unwrap_or(i32::MAX)
     }
 
     pub fn recent_documents(&self) -> cxx_qt_lib::QStringList {
@@ -768,6 +788,11 @@ impl qobject::GrafitaSession {
         let lines = self.rust().session.line_count();
         self.as_mut()
             .set_line_count(i32::try_from(lines).unwrap_or(i32::MAX));
+        // Unconditional: an edit that keeps the line count still moves every
+        // start offset after it, and the property's change signal is the one
+        // beat the gutter re-places its numbers on.
+        let beat = self.line_revision().wrapping_add(1);
+        self.as_mut().set_line_revision(beat);
         let indentation = self.rust().session.indentation().map(indentation_label);
         self.as_mut()
             .set_indentation_label(QString::from(indentation.unwrap_or("")));

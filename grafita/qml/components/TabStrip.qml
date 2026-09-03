@@ -1,3 +1,8 @@
+// The tab delegates reach the strip's `root` and `tabRepeater` ids, which a
+// delegate may only do under bound component behaviour; each declares the
+// `index` it takes from the model.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import org.celestina.grafita 1.0
 

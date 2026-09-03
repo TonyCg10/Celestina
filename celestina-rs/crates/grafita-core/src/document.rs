@@ -11,8 +11,8 @@ use std::path::PathBuf;
 
 use celestina_core::Generation;
 
-use crate::buffer::{Fragment, TextBuffer};
-use crate::display;
+use crate::buffer::{Fragment, Replacement, TextBuffer};
+use crate::display::{self, LineMap};
 use crate::encoding::{EncodeError, Encoding};
 use crate::highlight::{self, Language, LineState, Span as HighlightSpan};
 use crate::history::{History, Revision};
@@ -119,6 +119,11 @@ pub struct Document {
     /// [`Document::apply_display_text`] recognise the document's own projection
     /// coming back and treat it as no edit at all.
     projection: String,
+    /// Where each line starts in that projection, kept in step by the same
+    /// splice that keeps the projection. It is what turns every caret and
+    /// offset question from a walk of the document into a walk of one line
+    /// (GRA-P1, docs/evidence/2026-09-02-apps-performance-audit.md).
+    map: LineMap,
 }
 
 impl Document {
@@ -130,6 +135,7 @@ impl Document {
             undone_group: None,
             redone_group: None,
             projection: display::project(&buffer),
+            map: LineMap::of(&buffer),
             buffer,
             history: History::default(),
             target: Some(opened.target),
@@ -155,6 +161,7 @@ impl Document {
         let buffer = TextBuffer::from_text("");
         Self {
             projection: display::project(&buffer),
+            map: LineMap::of(&buffer),
             buffer,
             history: History::default(),
             target: None,
@@ -268,6 +275,49 @@ impl Document {
         self.encoding.encode(&self.buffer.to_text())
     }
 
+    /// Applies one replacement to the buffer and keeps the projection and the
+    /// line map in step by splicing exactly the lines the edit touched.
+    ///
+    /// This is the only way any text mutation reaches the buffer — the edits,
+    /// the undo and the redo all pass through here — because a projection or a
+    /// map updated on most paths is a projection that lies on the others.
+    /// Rebuilding both per keystroke instead was the O(document) cost recorded
+    /// as GRA-P1 in `docs/evidence/2026-09-02-apps-performance-audit.md`.
+    fn apply_to_buffer(
+        &mut self,
+        span: Span,
+        fragment: &Fragment,
+    ) -> Result<Replacement, PositionError> {
+        let start = span.start();
+        let end = span.end();
+        // The splice bounds must be read off the map *before* the buffer
+        // moves. A span the buffer will refuse never mutates anything, so the
+        // guard only has to keep the map lookups in bounds and can leave the
+        // refusal itself to the buffer's own validation.
+        let lines = self.buffer.line_count();
+        let bounds = if start.line < lines && end.line < lines {
+            Some((self.map.byte_start(start.line), self.map.byte_end(end.line)))
+        } else {
+            None
+        };
+        let replacement = self.buffer.replace(span, fragment)?;
+        let (byte_from, byte_to) =
+            bounds.expect("the buffer accepted a span past its own last line");
+        self.map.splice(
+            &self.buffer,
+            start.line,
+            end.line - start.line + 1,
+            replacement.inserted_end.line - start.line + 1,
+        );
+        let patch: Vec<&str> = self.buffer.lines()[start.line..=replacement.inserted_end.line]
+            .iter()
+            .map(crate::buffer::Line::text)
+            .collect();
+        self.projection
+            .replace_range(byte_from..byte_to, &patch.join("\n"));
+        Ok(replacement)
+    }
+
     /// Replaces `span` with `text`, recording an undoable change.
     ///
     /// The buffer is validated before anything moves, so an invalid span leaves
@@ -279,7 +329,7 @@ impl Document {
         caret_before: Position,
     ) -> Result<EditOutcome, PositionError> {
         let inserted = Fragment::inserted(text, self.buffer.dominant_newline());
-        let replacement = self.buffer.replace(span, &inserted)?;
+        let replacement = self.apply_to_buffer(span, &inserted)?;
         self.history.record(
             span,
             replacement.removed,
@@ -288,7 +338,6 @@ impl Document {
             caret_before,
         );
         self.revision = self.revision.next();
-        self.projection = display::project(&self.buffer);
         Ok(EditOutcome {
             caret: replacement.inserted_end,
             revision: self.revision,
@@ -435,14 +484,22 @@ impl Document {
     /// units Qt's text widgets use for a cursor.
     #[must_use]
     pub fn caret_utf16(&self, position: Position) -> usize {
-        display::utf16_offset_at(&self.buffer, position)
+        self.map.utf16_offset_at(&self.buffer, position)
     }
 
     /// Where a widget's caret is, worded for a status line: line and character
     /// column, both counted from one.
     #[must_use]
     pub fn caret_location(&self, utf16_offset: usize) -> Location {
-        display::location_at_utf16(&self.buffer, utf16_offset)
+        self.map.location_at_utf16(&self.buffer, utf16_offset)
+    }
+
+    /// The UTF-16 offset of `line`'s first character in the projection — the
+    /// offset a widget's `positionToRectangle` accepts. A line past the end
+    /// answers just past the last line, so a stale ask cannot panic.
+    #[must_use]
+    pub fn line_start_utf16(&self, line: usize) -> usize {
+        self.map.utf16_start(line)
     }
 
     /// Takes the whole text a widget now holds and applies the one difference
@@ -497,12 +554,11 @@ impl Document {
             return Ok(None);
         };
         self.undone_group = change.group();
-        match self.buffer.replace(change.span_after(), change.removed()) {
+        match self.apply_to_buffer(change.span_after(), change.removed()) {
             Ok(_) => {
                 let caret = change.caret_before();
                 self.history.finish_undo(change);
                 self.revision = self.revision.next();
-                self.projection = display::project(&self.buffer);
                 Ok(Some(EditOutcome {
                     caret,
                     revision: self.revision,
@@ -536,11 +592,10 @@ impl Document {
             return Ok(None);
         };
         self.redone_group = change.group();
-        match self.buffer.replace(change.span_before(), change.inserted()) {
+        match self.apply_to_buffer(change.span_before(), change.inserted()) {
             Ok(replacement) => {
                 self.history.finish_redo(change);
                 self.revision = self.revision.next();
-                self.projection = display::project(&self.buffer);
                 Ok(Some(EditOutcome {
                     caret: replacement.inserted_end,
                     revision: self.revision,
@@ -625,6 +680,7 @@ impl Document {
         }
         self.buffer = TextBuffer::from_text(&opened.text);
         self.projection = display::project(&self.buffer);
+        self.map = LineMap::of(&self.buffer);
         self.history = History::default();
         self.target = Some(opened.target);
         self.encoding = opened.encoding;

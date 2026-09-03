@@ -332,6 +332,16 @@ impl DocumentSession {
         self.document.as_ref().map_or(0, Document::line_count)
     }
 
+    /// The UTF-16 offset of `line`'s first character — what a gutter feeds a
+    /// widget's `positionToRectangle` to place a number beside the line. Zero
+    /// with no document open, for the same reason the caret answers first.
+    #[must_use]
+    pub fn line_start_utf16(&self, line: usize) -> usize {
+        self.document
+            .as_ref()
+            .map_or(0, |document| document.line_start_utf16(line))
+    }
+
     /// Where a widget's caret is, for a status line. With no document open the
     /// answer is the first position, which is where a caret would be if there
     /// were one — a host should hide the readout rather than ask.

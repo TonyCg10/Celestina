@@ -208,9 +208,144 @@ fn common_suffix(left: &str, right: &str, limit: usize) -> usize {
     count
 }
 
+/// Per-line offsets of the projection, kept in step with the buffer.
+///
+/// [`utf16_offset_at`], [`location_at_utf16`] and [`offset_at`] walk the
+/// buffer from the top, which is correct and O(caret) — and was being paid on
+/// every caret move and every keystroke, where it compounds to the per-
+/// keystroke O(document) cost recorded as GRA-P1 in
+/// `docs/evidence/2026-09-02-apps-performance-audit.md`. This map holds each
+/// line's measured lengths so those questions become one binary search plus a
+/// walk of a single line, and so an edit can splice the projection instead of
+/// rebuilding it.
+///
+/// After an edit only the touched lines are re-measured; the prefix sums are
+/// re-added in whole, which is integer work proportional to the line count,
+/// not to the document's bytes. The walking functions above stay as they are:
+/// they are the oracle the tests compare this map against.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LineMap {
+    /// Per line: the UTF-8 byte length and UTF-16 unit count of its text.
+    lens: Vec<(usize, usize)>,
+    /// Per line: the projection offset of its first character, in the same
+    /// two units. Entry 0 is (0, 0); each next start adds one projected `\n`.
+    starts: Vec<(usize, usize)>,
+}
+
+fn measure(line: &crate::buffer::Line) -> (usize, usize) {
+    (line.text().len(), line.text().encode_utf16().count())
+}
+
+impl LineMap {
+    #[must_use]
+    pub fn of(buffer: &TextBuffer) -> Self {
+        let mut map = Self {
+            lens: buffer.lines().iter().map(measure).collect(),
+            starts: Vec::new(),
+        };
+        map.rebuild_starts();
+        map
+    }
+
+    fn rebuild_starts(&mut self) {
+        self.starts.clear();
+        self.starts.reserve(self.lens.len());
+        let mut bytes = 0;
+        let mut units = 0;
+        for &(byte_length, unit_count) in &self.lens {
+            self.starts.push((bytes, units));
+            bytes += byte_length + 1;
+            units += unit_count + 1;
+        }
+    }
+
+    /// Re-measures exactly the lines an applied replacement touched.
+    ///
+    /// `first` is the first line of the edited span; `removed` how many lines
+    /// the span covered before the edit; `inserted` how many stand in their
+    /// place in `buffer` now. The caller has already applied the replacement,
+    /// so `buffer` is the new text.
+    pub fn splice(&mut self, buffer: &TextBuffer, first: usize, removed: usize, inserted: usize) {
+        let fresh: Vec<(usize, usize)> = buffer.lines()[first..first + inserted]
+            .iter()
+            .map(measure)
+            .collect();
+        self.lens.splice(first..first + removed, fresh);
+        self.rebuild_starts();
+    }
+
+    #[must_use]
+    pub fn line_count(&self) -> usize {
+        self.lens.len()
+    }
+
+    /// The projection byte offset of `line`'s first character.
+    #[must_use]
+    pub fn byte_start(&self, line: usize) -> usize {
+        self.starts[line].0
+    }
+
+    /// The projection byte offset just past `line`'s last character — its
+    /// projected `\n`, or the end of the document for the last line.
+    #[must_use]
+    pub fn byte_end(&self, line: usize) -> usize {
+        self.starts[line].0 + self.lens[line].0
+    }
+
+    /// The UTF-16 offset of `line`'s first character. A line past the end
+    /// answers just past the last line, the same clamp the walk performs.
+    #[must_use]
+    pub fn utf16_start(&self, line: usize) -> usize {
+        match self.starts.get(line) {
+            Some(&(_, units)) => units,
+            None => {
+                let last = self.lens.len() - 1;
+                self.starts[last].1 + self.lens[last].1 + 1
+            }
+        }
+    }
+
+    /// [`utf16_offset_at`], answered from the map.
+    #[must_use]
+    pub fn utf16_offset_at(&self, buffer: &TextBuffer, position: Position) -> usize {
+        let Some(line) = buffer.lines().get(position.line) else {
+            return self.utf16_start(position.line);
+        };
+        let column = position.column.min(line.text().len());
+        self.starts[position.line].1 + line.text()[..column].encode_utf16().count()
+    }
+
+    /// [`location_at_utf16`], answered from the map: a binary search for the
+    /// line, then a walk of that one line for the character column.
+    #[must_use]
+    pub fn location_at_utf16(&self, buffer: &TextBuffer, offset: usize) -> Location {
+        let line = self
+            .starts
+            .partition_point(|&(_, units)| units <= offset)
+            .saturating_sub(1);
+        let into_line = offset - self.starts[line].1;
+        let text = buffer.lines()[line].text();
+        let mut units_seen = 0;
+        let mut characters = 0;
+        for character in text.chars() {
+            if units_seen >= into_line {
+                break;
+            }
+            units_seen += character.len_utf16();
+            characters += 1;
+        }
+        Location {
+            line: line + 1,
+            column: characters + 1,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{location_at_utf16, offset_at, position_at, project, reconcile, utf16_offset_at};
+    use super::{
+        location_at_utf16, offset_at, position_at, project, reconcile, utf16_offset_at, LineMap,
+    };
     use crate::buffer::{Fragment, TextBuffer};
     use crate::position::{Position, Span};
 
@@ -411,5 +546,83 @@ mod tests {
             .expect("apply");
 
         assert_eq!(buffer.to_text(), "uno\r\ndos\r\npartido\r\n");
+    }
+
+    /// Applies one widget-reported text to a buffer, keeping a map and a
+    /// projection in step the way `Document::replace` does, and then checks
+    /// every map answer against the walking oracles.
+    fn check_map_against_oracles(buffer: &TextBuffer, map: &LineMap, projection: &str) {
+        assert_eq!(projection, project(buffer), "projection diverged");
+        assert_eq!(map.line_count(), buffer.lines().len());
+        let mut probe_offsets = vec![0, projection.encode_utf16().count() + 3];
+        for line in 0..buffer.lines().len() {
+            let start = Position::new(line, 0);
+            let end = Position::new(line, buffer.lines()[line].text().len());
+            assert_eq!(
+                map.utf16_offset_at(buffer, start),
+                utf16_offset_at(buffer, start)
+            );
+            assert_eq!(
+                map.utf16_offset_at(buffer, end),
+                utf16_offset_at(buffer, end)
+            );
+            assert_eq!(map.byte_start(line), offset_at(buffer, start));
+            assert_eq!(map.byte_end(line), offset_at(buffer, end));
+            probe_offsets.push(utf16_offset_at(buffer, start));
+            probe_offsets.push(utf16_offset_at(buffer, end));
+            probe_offsets.push(utf16_offset_at(buffer, end) + 1);
+        }
+        for offset in probe_offsets {
+            assert_eq!(
+                map.location_at_utf16(buffer, offset),
+                location_at_utf16(buffer, offset),
+                "location diverged at offset {offset}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_line_map_matches_the_walking_oracles_through_a_battery_of_edits() {
+        let mut buffer = buffer("uno\r\ndqs 🎸\rtres\n");
+        let mut map = LineMap::of(&buffer);
+        let mut projection = project(&buffer);
+        check_map_against_oracles(&buffer, &map, &projection);
+
+        // In projection terms: a multi-line insert, an edit inside one line
+        // with non-ASCII on it, a deletion across lines, an append at the very
+        // end, and an edit of the first character.
+        let states = [
+            "uno\ndqs 🎸\nnuevo\ncuarto\ntres\n",
+            "uno\ndqs ✏️ 🎸\nnuevo\ncuarto\ntres\n",
+            "uno\ncuarto\ntres\n",
+            "uno\ncuarto\ntres\nfinal",
+            "Xno\ncuarto\ntres\nfinal",
+            "",
+        ];
+        for proposed in states {
+            let edit = reconcile(&buffer, &projection, proposed).expect("an edit");
+            let span_start = edit.span.start();
+            let span_end = edit.span.end();
+            let byte_from = map.byte_start(span_start.line);
+            let byte_to = map.byte_end(span_end.line);
+            let replacement = buffer
+                .replace(
+                    edit.span,
+                    &Fragment::inserted(&edit.text, buffer.dominant_newline()),
+                )
+                .expect("apply");
+            map.splice(
+                &buffer,
+                span_start.line,
+                span_end.line - span_start.line + 1,
+                replacement.inserted_end.line - span_start.line + 1,
+            );
+            let patch: Vec<&str> = buffer.lines()[span_start.line..=replacement.inserted_end.line]
+                .iter()
+                .map(crate::buffer::Line::text)
+                .collect();
+            projection.replace_range(byte_from..byte_to, &patch.join("\n"));
+            check_map_against_oracles(&buffer, &map, &projection);
+        }
     }
 }

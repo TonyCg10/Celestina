@@ -935,3 +935,60 @@ fn a_multi_byte_file_opens_named_and_saves_back_identically() {
 
     let _ = fs::remove_dir_all(root);
 }
+
+// ─── The spliced projection ──────────────────────────────────────────────────
+// The document keeps its display projection by splicing the edited lines
+// rather than rebuilding the whole text per keystroke. The full rebuild is
+// the oracle: after every kind of mutation — edit, undo, redo, reload — the
+// two must be byte-identical, because `apply_display_text` recognising an
+// echo depends on it.
+
+#[test]
+fn the_spliced_projection_matches_a_full_rebuild_through_edits_and_history() {
+    let root = scratch("spliced-projection");
+    let path = root.join("mixto.txt");
+    fs::write(&path, b"uno\r\nd\xc3\xb3s\rtres\n").expect("write");
+    let mut document = document_at(&path);
+
+    let checks = |document: &Document| {
+        assert_eq!(
+            document.display_text(),
+            grafita_core::display::project(document.buffer()),
+            "the spliced projection diverged from the rebuilt one"
+        );
+    };
+    checks(&document);
+
+    // A multi-line replacement in the middle, an insert at the end, and a
+    // deletion back across a terminator boundary.
+    document
+        .replace(
+            Span::ordered(Position::new(0, 3), Position::new(1, 1)),
+            " y\nmedio ",
+            Position::new(0, 3),
+        )
+        .expect("edit");
+    checks(&document);
+    let end = document.buffer().end_position();
+    document
+        .replace(Span::empty(end), "\ncola", end)
+        .expect("append");
+    checks(&document);
+    document
+        .replace(
+            Span::ordered(Position::new(0, 0), Position::new(1, 0)),
+            "",
+            Position::new(0, 0),
+        )
+        .expect("delete");
+    checks(&document);
+
+    while document.can_undo() {
+        document.undo().expect("undo");
+        checks(&document);
+    }
+    while document.can_redo() {
+        document.redo().expect("redo");
+        checks(&document);
+    }
+}

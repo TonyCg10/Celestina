@@ -1,3 +1,7 @@
+// The recent-file delegates reach the view's `root` id, which a delegate may
+// only do under bound component behaviour; each declares its own model row.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Dialogs
 import org.celestina.grafita 1.0
@@ -121,6 +125,10 @@ Item {
             anchors.topMargin: CelestinaTheme.spaceMd
             anchors.bottomMargin: CelestinaTheme.spaceMd
             surface: body
+            // The session already indexed every line while absorbing the last
+            // edit; handing it over stops the gutter re-reading and
+            // re-scanning the whole document per keystroke (GRA-P1).
+            lineSource: root.session
             viewportY: scroller.contentY
             viewportHeight: scroller.height
         }

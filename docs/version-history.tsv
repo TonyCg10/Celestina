@@ -120,3 +120,4 @@ grafita	1.2.1	bug	CLICK-1-GRA	Fix the tab strip, editor clicks and recent rows t
 magnetita	1.2.1	bug	CLICK-1-MAG	Fix the settings page, plugin rows and device cards the pointer could not reach
 celestina-style	1.8.2	bug	PERF-1-STY	Fix the gutter's per-keystroke rescan, the panel tint recipe and the frozen test samples
 siderita	1.5.4	bug	RCLICK-1-SID	Fix the rename a right click cancelled and the shadow the dialogs lost
+grafita	1.2.2	bug	PERF-1-GRA	Fix the per-keystroke document walks and the shadow the menus lost
