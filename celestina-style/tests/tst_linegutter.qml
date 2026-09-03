@@ -16,8 +16,10 @@ TestCase {
     visible: true
     when: windowShown
 
+    // Not `surface`: naming the id after the property it fills makes an
+    // `x: x` auto-binding, which the architecture scanner refuses at depth.
     TextEdit {
-        id: surface
+        id: sheet
 
         width: 160
         height: 120
@@ -48,7 +50,7 @@ TestCase {
     CelestinaLineGutter {
         id: scanning
 
-        surface: surface
+        surface: sheet
         viewportY: 0
         viewportHeight: surface.height
     }
@@ -56,7 +58,7 @@ TestCase {
     CelestinaLineGutter {
         id: sourced
 
-        surface: surface
+        surface: sheet
         lineSource: stubSource
         viewportY: 0
         viewportHeight: surface.height
@@ -93,7 +95,7 @@ TestCase {
     }
 
     function test_d_editing_the_text_does_not_make_a_sourced_gutter_rescan() {
-        surface.text = "uno\ndos\ntres\ncuatro\ncinco"
+        sheet.text = "uno\ndos\ntres\ncuatro\ncinco"
         // The widget's own textChanged fired; a sourced gutter leaves the
         // scan alone and keeps answering from the source.
         compare(sourced.lineStarts.length, 1)
