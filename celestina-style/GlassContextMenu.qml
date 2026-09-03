@@ -49,10 +49,8 @@ Menu {
             anchors.fill: parent
             radius: CelestinaTheme.radiusLg
             antialiasing: true
-            color: Qt.rgba(CelestinaTheme.elevated.r,
-                           CelestinaTheme.elevated.g,
-                           CelestinaTheme.elevated.b, 0.55)
-            border.width: 1
+            color: CelestinaTheme.panelTint
+            border.width: CelestinaTheme.borderHairline
             border.color: CelestinaTheme.divider
         }
     }

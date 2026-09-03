@@ -218,6 +218,11 @@ QtObject {
     readonly property real accentSoftBorderOpacity: 0.18
     readonly property real accentDisabledInkOpacity: 0.75
 
+    // The panel body's balance: roughly half elevated tint, half of whatever
+    // the surface sits on. One dial for every panel, menu section and context
+    // menu — they held three identical copies of it before.
+    readonly property real panelTintOpacity: 0.55
+
     // ══ ref.* — primitive colour ramps ═══════════════════════════════════════
     // Every neutral keeps a subtle cool cast (never pure grey); the accent is the
     // One UI blue. Named by ramp position, not by role — roles live in the scheme.
@@ -361,6 +366,11 @@ QtObject {
         required property color gradientEnd
         // Glass: regular floating tint, stronger modal tint, a lighter tint for
         // compositor-owned blur, restrained lit edge and a dark outline.
+        // The opaque panel body every surface fills with: the elevated role at
+        // the One UI balance — roughly half tint, half colour summary. It is a
+        // scheme role rather than a per-file Qt.rgba so the balance is dialled
+        // in one place; three surfaces used to carry their own copy of it.
+        required property color panelTint
         required property color glassTint
         required property color glassTintStrong
         required property color compositorGlassTint
@@ -480,6 +490,7 @@ QtObject {
         // Dense enough for desktop text, but translucent enough for the
         // reference's pink/green backdrop colour to remain visible through the
         // blur. Strong is reserved for modal readability.
+        panelTint: theme.withAlpha(theme.ref.elevated, theme.panelTintOpacity)
         glassTint: "#991a1e25"
         glassTintStrong: "#bd1a1e25"
         // Wallpaper is untrusted visual input. Even with compositor blur the
@@ -576,6 +587,7 @@ QtObject {
     readonly property color gradientStart: scheme.gradientStart
     readonly property color gradientMid: scheme.gradientMid
     readonly property color gradientEnd: scheme.gradientEnd
+    readonly property color panelTint: scheme.panelTint
     readonly property color glassTint: scheme.glassTint
     readonly property color glassTintStrong: scheme.glassTintStrong
     readonly property color compositorGlassTint: scheme.compositorGlassTint

@@ -32,6 +32,23 @@ Item {
     required property real viewportY
     required property real viewportHeight
 
+    // Optional: a host whose document core already knows the logical lines
+    // hands them over here, and the gutter stops re-reading and re-scanning
+    // the whole text on every keystroke — the per-keystroke O(document) cost
+    // recorded as GRA-P1 in the 2026-09-02 performance audit. The object must
+    // expose `lineCount` (int), `lineStartUtf16(line) -> int` (UTF-16, the
+    // units `positionToRectangle` takes) and a `lineRevision` int property
+    // bumped after each text change — *after*, which is the second point of
+    // the contract: the core has absorbed the edit by the time the beat
+    // arrives, where the widget's own textChanged still races it. Null keeps
+    // the self-scanning path for a host without a core (a read-only preview).
+    property var lineSource: null
+
+    // How many logical lines there are, whichever side is counting them.
+    readonly property int lineCount: root.lineSource
+                                     ? root.lineSource.lineCount
+                                     : root.lineStarts.length
+
     clip: true
 
     // A layout so wrong that the walk below never leaves the viewport still
@@ -49,7 +66,10 @@ Item {
     implicitWidth: widest.implicitWidth
 
     function offsetOf(line) {
-        return root.lineStarts[Math.max(0, Math.min(line, root.lineStarts.length - 1))]
+        const clamped = Math.max(0, Math.min(line, root.lineCount - 1))
+        return root.lineSource
+               ? root.lineSource.lineStartUtf16(clamped)
+               : root.lineStarts[clamped]
     }
 
     // Where the given logical line starts, vertically, in surface coordinates.
@@ -61,7 +81,7 @@ Item {
     // number, so the window can be found without touching the lines above it.
     function lineAt(y) {
         let low = 0
-        let high = root.lineStarts.length - 1
+        let high = root.lineCount - 1
         while (low < high) {
             const middle = Math.floor((low + high + 1) / 2)
             if (root.topOf(middle) <= y)
@@ -82,7 +102,7 @@ Item {
         const limit = root.viewportY + root.viewportHeight
         let count = 0
         let line = root.firstLine
-        while (line < root.lineStarts.length && count < root.windowLimit
+        while (line < root.lineCount && count < root.windowLimit
                && root.topOf(line) < limit) {
             count += 1
             line += 1
@@ -122,12 +142,26 @@ Item {
         root.layoutRevision += 1
     }
 
-    Component.onCompleted: root.reindex()
+    Component.onCompleted: if (!root.lineSource) root.reindex()
+
+    // With a lineSource, the relayout beat is the source's revision: it fires
+    // once the document has the edit, so the numbers are never placed from
+    // offsets the keystroke just moved. `ignoreUnknownSignals` keeps a partial
+    // source (no revision yet during construction) from being an error.
+    Connections {
+        target: root.lineSource
+        ignoreUnknownSignals: true
+
+        function onLineRevisionChanged() { root.layoutRevision += 1 }
+    }
 
     Connections {
         target: root.surface
 
-        function onTextChanged() { root.reindex() }
+        function onTextChanged() {
+            if (!root.lineSource)
+                root.reindex()
+        }
         // A different wrap width or a different text size re-lays the document
         // out without changing a character, so the numbers must be re-placed.
         function onWidthChanged() { root.layoutRevision += 1 }
@@ -139,7 +173,7 @@ Item {
     Text {
         id: widest
         visible: false
-        text: "0".repeat(String(root.lineStarts.length).length)
+        text: "0".repeat(String(root.lineCount).length)
         font.family: root.surface.font.family
         font.pixelSize: root.surface.font.pixelSize
     }

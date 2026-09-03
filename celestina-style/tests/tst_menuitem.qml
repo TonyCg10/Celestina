@@ -33,18 +33,27 @@ TestCase {
         wait(0)
     }
 
+    // Reading a colour property hands JavaScript a live reference to it, not a
+    // snapshot: a `const` taken before the state changes reads back the *new*
+    // colour afterwards, and every comparison against it trivially succeeds.
+    // Sampling through `String()` freezes the value, which is the only reason
+    // these tests can tell two fills apart at all.
+    function sample(value) {
+        return String(value)
+    }
+
     function test_current_and_highlighted_differ() {
-        const resting = item.background.color
+        const resting = sample(item.background.color)
 
         item.current = true
         wait(0)
-        const current = item.background.color
+        const current = sample(item.background.color)
         verify(!Qt.colorEqual(current, resting), "current paints nothing")
 
         item.current = false
         item.highlighted = true
         wait(0)
-        const highlighted = item.background.color
+        const highlighted = sample(item.background.color)
         verify(!Qt.colorEqual(highlighted, resting), "highlight paints nothing")
         verify(!Qt.colorEqual(highlighted, current),
                "the cursor and the current value wear the same fill")
@@ -53,9 +62,10 @@ TestCase {
     function test_the_cursor_wins_over_the_current_row() {
         item.highlighted = true
         wait(0)
-        const highlighted = item.background.color
+        const highlighted = sample(item.background.color)
         item.current = true
         wait(0)
-        compare(item.background.color, highlighted)
+        verify(Qt.colorEqual(item.background.color, highlighted),
+               "the current row overrode the cursor's fill")
     }
 }

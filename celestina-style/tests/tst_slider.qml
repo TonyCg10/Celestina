@@ -45,7 +45,14 @@ TestCase {
         tryCompare(testWindow, "active", true)
         slider.enabled = true
         lastMoved = -1
-        mouseMove(testWindow, 5, 110)
+        // Park the pointer away from the control. It takes two moves: a
+        // synthetic move that merely lands somewhere else inside the window
+        // delivers no leave, so the pointer is walked onto the slider first and
+        // then out of the window, which does. Without the leave the control
+        // stays hovered from the previous function and a "resting" sample is
+        // really the hover colour.
+        mouseMove(testWindow, slider.x + 5, slider.y + 5)
+        mouseMove(testWindow, -10, -10)
         wait(0)
     }
 
@@ -69,17 +76,23 @@ TestCase {
 
     function test_hover_and_press_are_distinct_states() {
         const handle = thumb()
-        const resting = handle.color
+        // The resting sample is only worth anything if the pointer really is
+        // away: state the precondition rather than trusting the parking move.
+        tryCompare(slider, "hovered", false)
+        // A colour read into a `const` stays a live reference to the property,
+        // so it must be frozen with `String()` before the state moves — an
+        // unfrozen sample compares equal to whatever the thumb paints next.
+        const resting = String(handle.color)
 
         mouseMove(slider, slider.width / 2, slider.height / 2)
         tryCompare(slider, "hovered", true)
-        const hovering = handle.color
+        const hovering = String(handle.color)
         verify(!Qt.colorEqual(hovering, resting),
                "the thumb does not change under the pointer")
 
         mousePress(slider, slider.width / 2, slider.height / 2, Qt.LeftButton)
         tryCompare(slider, "dragging", true)
-        const pressed = handle.color
+        const pressed = String(handle.color)
         verify(!Qt.colorEqual(pressed, hovering),
                "the thumb does not change while dragged")
         verify(!Qt.colorEqual(pressed, resting))
