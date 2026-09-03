@@ -850,10 +850,7 @@ fn parse_shell_event(line: &str) -> io::Result<Option<Event>> {
         // event is not a broken stream: skip it and keep reading. A known
         // event that fails to decode still errors, because that is real
         // corruption this adapter must not paper over.
-        Err(error)
-            if error.is_data()
-                && error.to_string().starts_with("unknown variant") =>
-        {
+        Err(error) if error.is_data() && error.to_string().starts_with("unknown variant") => {
             Ok(None)
         }
         Err(error) => Err(protocol_io(error)),

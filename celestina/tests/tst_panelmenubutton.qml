@@ -91,7 +91,10 @@ TestCase {
         mouseMove(button, button.width / 2, button.height / 2);
         tryCompare(button, "hovered", true);
         tryCompare(button.background, "color", testInk.controlFill);
-        const hoverColor = button.background.color;
+        // Frozen with `String()`: a plain read keeps a live reference to the
+        // property, so the later comparison would pass against whatever the
+        // button happens to be painting by then rather than against the hover.
+        const hoverColor = String(button.background.color);
         const hoverRadius = button.background.radius;
         const restingWidth = button.width;
         const restingHeight = button.height;
@@ -101,7 +104,7 @@ TestCase {
         tryCompare(button.background, "color", CelestinaTheme.clear);
 
         button.menuOpen = true;
-        tryCompare(button.background, "color", hoverColor);
+        tryVerify(() => Qt.colorEqual(button.background.color, hoverColor));
         compare(button.background.radius, hoverRadius);
         compare(button.width, restingWidth);
         compare(button.height, restingHeight);

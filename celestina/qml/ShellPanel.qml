@@ -50,9 +50,8 @@ Item {
         radius: panel.radius
         antialiasing: true
         // The One UI balance: roughly half tint, half colour summary.
-        color: Qt.rgba(CelestinaTheme.elevated.r, CelestinaTheme.elevated.g,
-                       CelestinaTheme.elevated.b, 0.55)
-        border.width: 1
+        color: CelestinaTheme.panelTint
+        border.width: CelestinaTheme.borderHairline
         border.color: CelestinaTheme.divider
     }
 }
