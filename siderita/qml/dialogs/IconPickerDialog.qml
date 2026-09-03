@@ -1,3 +1,7 @@
+// The grid delegate reaches the dialog's own ids, which a delegate may only
+// do under bound component behaviour; it declares its `modelData`.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

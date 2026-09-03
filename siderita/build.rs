@@ -24,6 +24,9 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaFileIcon.qml",
     "qml/CelestinaModalLayer.qml",
     "qml/GlassCard.qml",
+    // The one elevation shadow every glass surface casts; the menu draws it
+    // inline, so the app's module must publish it too.
+    "qml/CelestinaShadow.qml",
     "qml/GlassContextMenu.qml",
     "qml/GlassMenuItem.qml",
     // Componentes de presentación de Siderita.

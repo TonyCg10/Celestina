@@ -160,6 +160,17 @@ Item {
                     event.accepted = true
                 }
             }
+
+            // A right button inside the field is not something the text input
+            // accepts, so without this it fell past the field to the scene,
+            // took its focus with it, and `onActiveFocusChanged` cancelled the
+            // rename the person was in the middle of. Swallow it here and hold
+            // the caret where it was.
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.RightButton
+                onPressed: editField.forceActiveFocus()
+            }
         }
 
         MouseArea {

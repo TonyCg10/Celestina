@@ -1,3 +1,8 @@
+// The sidebar's list and bookmark delegates reach ids from the enclosing
+// view, which a delegate may only do under bound component behaviour; each
+// declares the `index`/`modelData` it takes from its model.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import org.celestina.siderita 1.0
