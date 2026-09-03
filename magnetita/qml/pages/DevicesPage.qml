@@ -1,3 +1,8 @@
+// The delegates below reach the page's `root` id, which a delegate may only
+// do under bound component behaviour; each one already declares the
+// `index`/`modelData` it takes from the model.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import org.celestina.magnetita 1.0
 
