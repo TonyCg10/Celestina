@@ -12,6 +12,9 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaModalLayer.qml",
     "qml/CelestinaTextField.qml",
     "qml/GlassCard.qml",
+    // The one elevation shadow every glass surface casts; the menu draws it
+    // inline, so the app's module must publish it too.
+    "qml/CelestinaShadow.qml",
     "qml/GlassContextMenu.qml",
     "qml/GlassMenuItem.qml",
     "qml/GlassSurface.qml",

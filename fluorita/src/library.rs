@@ -41,6 +41,7 @@
 //! where rebuilding these lists on every change starts to show — that is the
 //! moment to write it, with the numbers in hand.
 
+use std::sync::Arc;
 use std::thread::JoinHandle;
 
 use celestina_core::CancellationToken;
@@ -54,7 +55,7 @@ mod work;
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
-use project::{project, project_matching, LibrarySnapshot};
+use project::{census, project, project_matching, LibrarySnapshot};
 use work::{run_artwork, run_folder_choice, run_scan, run_trash};
 
 use fluorita_core::{Catalogue, Query, SourceId, SourceScope, SourceSet};
@@ -288,14 +289,23 @@ pub struct LibraryRust {
     /// object dies, which is a deadlock on the GUI thread.
     cancellation: CancellationToken,
     /// The catalogue as last published, so an artwork pass and a change of
-    /// selection both work from it without walking anything again.
-    catalogue: Catalogue,
+    /// selection both work from it without walking anything again. Shared
+    /// rather than owned: the search worker and the artwork pass each take a
+    /// handle, and cloning fifty thousand records to hand one out was part of
+    /// the per-keystroke cost recorded as FLU-P1.
+    catalogue: Arc<Catalogue>,
     /// The configuration as last published, so an add or a remove is applied to
     /// what the user is looking at.
     configured: SourceSet,
     /// The trash move in flight, if any. One at a time: two answers racing to
     /// change the same catalogue would publish whichever finished last.
     trash_worker: Option<JoinHandle<()>>,
+    /// Whether a search worker is projecting right now, and the query typed
+    /// while it was. One in flight at a time; the pending one always holds
+    /// only the newest text, so a burst of keystrokes projects twice, not
+    /// once per keystroke.
+    search_in_flight: bool,
+    search_pending: Option<String>,
     /// The folder chooser in flight, if any. One at a time: a second dialog
     /// would let two answers race to configure the same library.
     folder_worker: Option<JoinHandle<()>>,
@@ -352,8 +362,10 @@ impl Default for LibraryRust {
             music_thumbnails: QStringList::default(),
             worker: None,
             cancellation: CancellationToken::new(),
-            catalogue: Catalogue::new(),
+            catalogue: Arc::new(Catalogue::new()),
             configured: SourceSet::new(),
+            search_in_flight: false,
+            search_pending: None,
             folder_worker: None,
             trash_worker: None,
             artwork_worker: None,
@@ -571,7 +583,9 @@ impl qobject::FluoritaLibrary {
             .find_by_path(&moved)
             .map(|record| record.id().clone());
         if let Some(id) = id {
-            self.as_mut().rust_mut().catalogue.forget(&id);
+            // `make_mut` clones only while a worker still holds the previous
+            // snapshot — the ordinary case mutates in place as before.
+            Catalogue::forget(Arc::make_mut(&mut self.as_mut().rust_mut().catalogue), &id);
         }
         // The panel may be describing the very item that just left. Compared by
         // bytes, not by the label the panel is showing.
@@ -587,20 +601,73 @@ impl qobject::FluoritaLibrary {
 
     /// Shows only what matches `text`, or everything again when it is empty.
     ///
-    /// Re-projects from the catalogue already in memory: no scan, no disk, no
-    /// worker. The surface debounces the keystrokes; this does the filtering,
-    /// because what matches is a rule the domain owns.
+    /// Re-projects from the catalogue already in memory: no scan, no disk. The
+    /// projection itself runs on a worker, because resolving a thumbnail per
+    /// item is a `stat()` per item and this used to do it — twice — on the GUI
+    /// thread on every keystroke pause (FLU-P1,
+    /// docs/evidence/2026-09-02-apps-performance-audit.md). The surface
+    /// debounces the keystrokes; this does the filtering, because what matches
+    /// is a rule the domain owns.
     pub fn search(mut self: core::pin::Pin<&mut Self>, text: &QString) {
-        let query = Query::new(&text.to_string());
         self.as_mut().set_query(text.clone());
+        let text = text.to_string();
+        if self.rust().search_in_flight {
+            // Superseded before it ran: the newest text wins and the older
+            // pending one is simply never projected.
+            self.as_mut().rust_mut().search_pending = Some(text);
+            return;
+        }
+        self.start_search(text);
+    }
 
+    fn start_search(mut self: core::pin::Pin<&mut Self>, text: String) {
+        self.as_mut().rust_mut().search_in_flight = true;
         let catalogue = self.rust().catalogue.clone();
         let configured = self.rust().configured.clone();
         let scope = self.rust().scope();
         let truncated = *self.truncated();
-        let everything = project(&catalogue, &configured, scope, truncated, "ready");
-        let total = everything.gallery.len() + everything.music.len();
-        let matching = project_matching(&catalogue, &configured, scope, truncated, "ready", &query);
+        // What the worker projected is only valid against the publication it
+        // read. The revision says which one that was.
+        let expected = *self.revision();
+        let qt_thread = self.qt_thread();
+        let worker = std::thread::Builder::new()
+            .name("fluorita-search".to_owned())
+            .spawn(move || {
+                let query = Query::new(&text);
+                let matching =
+                    project_matching(&catalogue, &configured, scope, truncated, "ready", &query);
+                let total = census(&catalogue, scope);
+                let _ = qt_thread.queue(move |library| {
+                    library.finish_search(expected, matching, total);
+                });
+            });
+        if worker.is_err() {
+            // The projection already on screen stays; only the filter did not
+            // run. The stored query still says what the person asked for.
+            self.as_mut().rust_mut().search_in_flight = false;
+        }
+    }
+
+    /// Publishes a finished search on the Qt thread — unless it is already
+    /// stale, in which case the current state is projected again instead:
+    /// a newer query was typed, or a scan or artwork pass republished the
+    /// catalogue while the worker read the old one.
+    fn finish_search(
+        mut self: core::pin::Pin<&mut Self>,
+        expected: i32,
+        matching: LibrarySnapshot,
+        total: usize,
+    ) {
+        self.as_mut().rust_mut().search_in_flight = false;
+        if let Some(next) = self.as_mut().rust_mut().search_pending.take() {
+            self.start_search(next);
+            return;
+        }
+        if *self.revision() != expected {
+            let text = self.query().to_string();
+            self.start_search(text);
+            return;
+        }
         let shown = matching.gallery.len() + matching.music.len();
         self.as_mut()
             .set_hidden_by_query(i32::try_from(total.saturating_sub(shown)).unwrap_or(0));
@@ -720,7 +787,7 @@ impl qobject::FluoritaLibrary {
         self.as_mut().set_music_thumbnails(music[5].clone());
 
         self.as_mut().set_artwork_pending(snapshot.artwork_pending);
-        self.as_mut().rust_mut().catalogue = snapshot.catalogue;
+        self.as_mut().rust_mut().catalogue = Arc::new(snapshot.catalogue);
         self.as_mut().rust_mut().configured = snapshot.configured;
         // A selection whose root is gone would scope the content to nothing
         // while the sidebar shows no row selected.

@@ -244,6 +244,30 @@ pub(super) fn cached_thumbnail(cache_root: Option<&Path>, source: &Path) -> Stri
     fluorita_core::file_uri(&entry).unwrap_or_default()
 }
 
+/// How many items the scope holds before any query — the number
+/// `hidden_by_query` is counted against. Deliberately resolves no thumbnails
+/// and touches no filesystem: a count needs neither, and the projection that
+/// used to be computed just to take its length performed a `stat()` per item
+/// (FLU-P1, docs/evidence/2026-09-02-apps-performance-audit.md).
+#[must_use]
+pub(super) fn census(catalogue: &Catalogue, scope: SourceScope) -> usize {
+    let items = gallery(
+        catalogue,
+        scope,
+        GalleryFilter::All,
+        GalleryOrder::NewestFirst,
+    )
+    .len();
+    let music = MusicLibrary::project(catalogue, scope);
+    let tracks: usize = music
+        .artists
+        .iter()
+        .flat_map(|artist| artist.albums.iter())
+        .map(|album| album.tracks.len())
+        .sum();
+    items + tracks
+}
+
 /// `1`/`0` rather than a word: QML reads it as a flag, and a translated string
 /// in a data column would be a translation nobody asked for.
 pub(super) fn flag(value: bool) -> String {
@@ -424,6 +448,20 @@ mod tests {
             identity,
         ));
         (catalogue, configured, picture, track)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_census_counts_what_the_projection_would_show() {
+        use fluorita_core::SourceScope;
+
+        let (catalogue, configured, _, _) = catalogue_with_a_name_that_is_not_utf8();
+        let snapshot = project(&catalogue, &configured, SourceScope::All, false, "ready");
+        assert_eq!(
+            super::census(&catalogue, SourceScope::All),
+            snapshot.gallery.len() + snapshot.music.len(),
+            "the census and the projection disagree about the same catalogue"
+        );
     }
 
     #[cfg(unix)]

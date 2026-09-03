@@ -121,3 +121,4 @@ magnetita	1.2.1	bug	CLICK-1-MAG	Fix the settings page, plugin rows and device ca
 celestina-style	1.8.2	bug	PERF-1-STY	Fix the gutter's per-keystroke rescan, the panel tint recipe and the frozen test samples
 siderita	1.5.4	bug	RCLICK-1-SID	Fix the rename a right click cancelled and the shadow the dialogs lost
 grafita	1.2.2	bug	PERF-1-GRA	Fix the per-keystroke document walks and the shadow the menus lost
+fluorita	1.3.3	bug	PERF-1-FLU	Fix the search that projected the library twice on the GUI thread
