@@ -128,3 +128,4 @@ fluorita	1.3.4	bug	FEEDBACK-1-FLU	Fix the invisible arrows and the dock clicks a
 magnetita	1.2.2	bug	FEEDBACK-1-MAG	Fix the plugin row lighting twice and turn forget and pair into icons
 celestina-style	1.8.4	bug	FEEDBACK-1-STY	Fix the flat press, the square glyph fill and the click the shield stole, and publish the capsule and row fill
 siderita	1.5.5	bug	FEEDBACK-1-SID	Fix the pills that lost clicks and looked alike and spell the actions in icons
+celestina-style	1.8.5	bug	FEEDBACK-2-STY	Remove the hover tooltip the suite had deleted from every surface

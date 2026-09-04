@@ -2,17 +2,17 @@ import QtQuick
 import QtQuick.Controls
 
 // ─── CelestinaButton ──────────────────────────────────────────────────────────
-// El botón del suite, con un papel cerrado: tonal, principal, destructivo,
-// seleccionado o transparente. Un enum impide combinaciones contradictorias
-// como principal + peligro. El destructivo no es rojo por decoración — es lo
-// único que distingue "Vaciar
-// papelera" de "Cancelar" cuando se lee deprisa. `helpText` cuelga una ayuda
-// emergente para los botones sin texto suficiente.
+// The suite's button, with a closed set of roles: tonal, primary, destructive,
+// selected or ghost. An enum forbids contradictory combinations such as
+// primary + danger. Destructive is not red for decoration — it is the only
+// thing that tells "empty the trash" from "cancel" when both are read in a
+// hurry. `helpText` names the button for assistive technology when its text is
+// not name enough; it never paints anything.
 //
-// Vive en celestina-style para que las dos apps compartan un solo botón en vez
-// de reimplementar cada una el relleno hover/press y el acento primario. Un
-// botón que flota sobre contenido desplazable (el selector del portal) es una
-// especialización aparte: se queda con su fondo de cristal.
+// It lives in celestina-style so the applications share one button instead of
+// each reimplementing the hover/press fill and the primary accent. A button
+// floating over scrollable content (the portal's chooser) is a separate
+// specialization: it keeps its glass background.
 //
 // Three states share one vocabulary here so no consumer has to invent them:
 // hover tints the fill, a press darkens it *and* sinks the whole button by
@@ -39,6 +39,12 @@ Button {
 
     property int role: CelestinaButton.Tonal
     property int density: CelestinaButton.Compact
+    // The name a screen reader hears, and on an icon-only button the only one
+    // there is. It is not a hover card: this suite does not paint tooltips.
+    // A label that floats over the window a second after the pointer lands
+    // covers the very row being acted on, and the author removed it from every
+    // surface that had one — which is why two consumers had grown wrappers
+    // whose whole body was `ToolTip.visible: false`.
     property string helpText: ""
 
     // The corner of the fill. Density decides it; the icon button rounds it
@@ -68,8 +74,7 @@ Button {
     font.pixelSize: CelestinaTheme.fontRowSecondary
     font.weight: CelestinaTheme.weightMedium
 
-    ToolTip.visible: helpText.length > 0 && hovered
-    ToolTip.text: helpText
+    Accessible.name: helpText.length > 0 ? helpText : text
 
     // Fast in, slow out: the sink is immediate, the return is felt. Read when
     // the Behavior starts, so `down` is the state being entered.

@@ -31,7 +31,6 @@
 3	celestina-rs/crates/magnetitad/src/main.rs
 1	celestina-rs/crates/magnetitad/src/payload_handlers.rs
 6	celestina-rs/crates/magnetitad/src/runtime.rs
-6	celestina-style/CelestinaButton.qml
 12	celestina-style/CelestinaFileIcon.qml
 16	celestina-style/CelestinaFolderIcon.qml
 4	celestina-style/CelestinaIconShapes.qml

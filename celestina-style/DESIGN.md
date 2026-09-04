@@ -170,7 +170,7 @@ and its own accepted checkpoint.
 |---|---|---|
 | L0 | Window canvas | Opaque `canvas` and the canonical subtle `CelestinaBackdrop` gradient |
 | L1 | Grouped/content card | Opaque semantic surface, whitespace and one quiet outline; no shadow |
-| L2 | Menu, tooltip, tab pills, toast | Regular glass plus soft shadow |
+| L2 | Menu, tab pills, toast | Regular glass plus soft shadow |
 | L3 | Dialog/modal | Strong glass plus scrim; no simultaneous depth shadow |
 | Shell content card / panel capsule | Layer-shell surface | One host-owned compositor blur region, or one region shared by the complete menu, with dense shadowless `ContentSurface` material |
 | Contextual menu carrier | Layer-shell surface | The same single host-owned compositor blur region with a nearly transparent `ContextualVeil`; no shadow, outline, lit edge or apparent edge halo, plus a readable fallback |
@@ -295,8 +295,8 @@ compatibility policy changes that contract.
 | `CelestinaIconShapes` | Stable filled content-shape catalogue; consumers do not call its path data directly |
 | `CelestinaSurface` | L0/L1 semantic container; role owns fill/ink/radius/outline |
 | `CelestinaBackdrop` | Canonical quiet window background; no product state |
-| `CelestinaButton` | Tonal, filled-accent, destructive, selected and ghost emphasis; compact/regular/prominent density; keyboard focus ring; press recoil on fill and content, never on the hit box; a checked `checkable` button paints as Selected |
-| `CelestinaIconButton` | Icon-only action with the same emphasis, tooltip/name and focus requirements as a button; its fill is always a circle, the one hover shape behind every glyph |
+| `CelestinaButton` | Tonal, filled-accent, destructive, selected and ghost emphasis; compact/regular/prominent density; keyboard focus ring; press recoil on fill and content, never on the hit box; a checked `checkable` button paints as Selected; `helpText` is its accessible name and paints nothing |
+| `CelestinaIconButton` | Icon-only action with the same emphasis, name and focus requirements as a button; its fill is always a circle, the one hover shape behind every glyph |
 | `CelestinaCapsule` | Pill surface grouping a few Ghost icon actions into one control-shaped control; owns surface and spacing only |
 | `CelestinaRowHighlight` | The one hover/press/selected/drag fill behind list rows, grid cells and column titles; the host reports states, it paints them and holds no pointer |
 | `CelestinaIcon` | One name/fallback/tone API for Lucide-style UI glyphs |
@@ -331,7 +331,7 @@ consumer evidence in the same checkpoint.
 | `CelestinaDialog` | Centred, approximately 360 px wide, radius 26, modal scrim, contained/restored focus and explicit primary/cancel semantics |
 | `TabPills` | Floating pill strip for peer destinations; not a substitute for document-tab lifecycle |
 | `Toast` | Brief non-modal status, readable without focus theft and announced when semantically important |
-| `Tooltip` | Delayed pointer/keyboard label for an existing control; never the only source of required instructions |
+| `Tooltip` | Not part of the language. A label that floats over the window after the pointer lands covers the control it describes; a glyph carries its name through `helpText` for assistive technology and through the shape itself for everyone else. Removed by the author from every surface that had one |
 
 ## 7. States and accessibility
 
