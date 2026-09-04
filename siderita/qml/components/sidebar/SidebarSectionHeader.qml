@@ -40,6 +40,18 @@ Item {
         color: CelestinaTheme.divider
     }
 
+    // The header is a row like any other: it lights under the pointer and
+    // darkens under the press, but not while the pointer is on the trailing
+    // action, which paints its own state.
+    CelestinaRowHighlight {
+        anchors.fill: parent
+        anchors.leftMargin: CelestinaTheme.spaceXs / 2
+        anchors.rightMargin: CelestinaTheme.spaceXs / 2
+        visible: root.interactive
+        hovered: headerMouse.containsMouse && !trailingMouse.containsMouse
+        pressed: headerMouse.pressed
+    }
+
     SidebarChevron {
         id: chevron
         x: CelestinaTheme.spaceMd
@@ -55,7 +67,7 @@ Item {
            + CelestinaTheme.spaceSm + CelestinaTheme.spaceXs / 2
         anchors.verticalCenter: parent.verticalCenter
         width: trailingLabel.visible
-               ? trailingLabel.x - x - CelestinaTheme.spaceSm
+               ? trailingIcon.x - x - CelestinaTheme.spaceSm
                : parent.width - x - CelestinaTheme.spaceMd
         text: root.title
         textScale: root.textScale
@@ -63,11 +75,29 @@ Item {
     }
 
     MouseArea {
+        id: headerMouse
         anchors.fill: parent
         enabled: root.interactive
         hoverEnabled: true
         cursorShape: root.interactive ? Qt.PointingHandCursor : Qt.ArrowCursor
         onClicked: root.activated()
+    }
+
+    // The count of hidden entries, glyph first: the eye says what the number
+    // brings back.
+    CelestinaIcon {
+        id: trailingIcon
+        z: 2
+        anchors.right: trailingLabel.left
+        anchors.rightMargin: CelestinaTheme.spaceXs
+        anchors.verticalCenter: parent.verticalCenter
+        visible: trailingLabel.visible
+        width: Math.round(CelestinaTheme.iconSm * root.iconScale)
+        height: width
+        name: "eye"
+        fallbackName: "eye"
+        tone: trailingMouse.containsMouse ? CelestinaIcon.Accent
+                                          : CelestinaIcon.Secondary
     }
 
     Text {
@@ -86,8 +116,9 @@ Item {
         MouseArea {
             id: trailingMouse
             anchors.fill: parent
-            // The text is a caption; the target is the header's full 30 px.
-            anchors.leftMargin: -CelestinaTheme.spaceXs
+            // The text is a caption; the target is the header's full 30 px,
+            // and it reaches back over the eye glyph.
+            anchors.leftMargin: -(CelestinaTheme.spaceXs * 2 + trailingIcon.width)
             anchors.rightMargin: -CelestinaTheme.spaceXs
             anchors.topMargin: -Math.max(0, Math.round(
                 (CelestinaTheme.controlHeightXs - parent.height) / 2))

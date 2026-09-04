@@ -4,6 +4,31 @@ This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md). Each failed row keeps its result and opens a new
 corrective implementation unit.
 
+## VAL-SID-12 — Pills, rows and glyphs answer the pointer
+
+- **Status:** pending
+- **Related implementation:** `FEEDBACK-1-SID` (1.5.5), recorded in
+  [the suite evidence](../docs/evidence/2026-09-03-apps-feedback-and-icon-first.md)
+- **Requires:** the deployed Siderita on the real session at the author's
+  scale, a folder with enough rows to scroll, two tabs, the Papelera with
+  something in it, a mounted volume
+- **Procedure:** repeat the 2026-09-03 recording: hover, press and release
+  "Ocultos", the sort direction, the three view glyphs and the size glyph;
+  hold a press and drift a few pixels before releasing; open the size popover
+  and click its glyph again; in the Papelera press the trash glyph, read the
+  warning, then press the check; click each breadcrumb and the gap between
+  two; expand search and watch the magnifier; click a bookmark once; hover the
+  eject glyph of the volume; drag a tab
+- **Pass condition:** every glyph shows one circle on hover and sinks on
+  press; open and hovered pills differ; a drifting click acts; the popover
+  closes on the second click and stays closed; nothing moves under the
+  pointer in the trash header; no breadcrumb click opens the path editor; the
+  magnifier does not move; the bookmark opens at once; the row stays lit
+  while the eject glyph is hovered; a tab drag never drags the file behind it
+- **Result:** not run by hand
+- **Evidence:** which control, if any, still misses a click, shows two
+  highlights or moves under the pointer
+
 ## VAL-SID-11 — Papelera and Recientes with a volume that is not answering
 
 - **Status:** pending

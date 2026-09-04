@@ -126,10 +126,10 @@ Item {
                 anchors.right: parent.right
                 spacing: 8
 
-                CelestinaButton {
+                CelestinaIconButton {
                     objectName: "calloutPause"
-                    height: 28
-                    text: callout.paused ? qsTr("Reanudar") : qsTr("Pausar")
+                    iconName: callout.paused ? "media-play" : "media-pause"
+                    helpText: callout.paused ? qsTr("Reanudar") : qsTr("Pausar")
                     Accessible.name: (callout.paused ? qsTr("Reanudar %1") : qsTr("Pausar %1"))
                         .arg(callout.at(callout.controller.opLabels, callout.jobIndex))
                     // Pausing leaves the callout open: a person who holds a copy
@@ -138,10 +138,10 @@ Item {
                                    parseFloat(callout.jobId))
                 }
 
-                CelestinaButton {
+                CelestinaIconButton {
                     objectName: "calloutCancel"
-                    height: 28
-                    text: qsTr("Cancelar")
+                    iconName: "x"
+                    helpText: qsTr("Cancelar")
                     Accessible.name: qsTr("Cancelar %1").arg(
                         callout.at(callout.controller.opLabels, callout.jobIndex))
                     onClicked: {

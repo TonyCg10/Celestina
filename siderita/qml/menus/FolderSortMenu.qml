@@ -15,6 +15,8 @@ GlassContextMenu {
 
     GlassMenuItem {
         text: "Nombre"
+        icon.name: "type"
+        icon.source: CelestinaTheme.fallbackIcon("type")
         choice: true
         current: root.controller.sortField === 0
         onTriggered: root.controller.changeSortField(0)
@@ -22,6 +24,8 @@ GlassContextMenu {
 
     GlassMenuItem {
         text: "Tamaño"
+        icon.name: "hard-drive"
+        icon.source: CelestinaTheme.fallbackIcon("hard-drive")
         choice: true
         current: root.controller.sortField === 1
         onTriggered: root.controller.changeSortField(1)
@@ -29,6 +33,8 @@ GlassContextMenu {
 
     GlassMenuItem {
         text: "Fecha de modificación"
+        icon.name: "clock-arrow-up"
+        icon.source: CelestinaTheme.fallbackIcon("clock-arrow-up")
         choice: true
         current: root.controller.sortField === 2
         onTriggered: root.controller.changeSortField(2)
@@ -36,6 +42,8 @@ GlassContextMenu {
 
     GlassMenuItem {
         text: "Tipo"
+        icon.name: "files"
+        icon.source: CelestinaTheme.fallbackIcon("files")
         choice: true
         current: root.controller.sortField === 3
         onTriggered: root.controller.changeSortField(3)

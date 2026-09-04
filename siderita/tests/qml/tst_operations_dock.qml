@@ -229,7 +229,7 @@ TestCase {
         waitForRendering(dock)
         const pause = findChild(dock, "calloutPause")
         verify(pause !== null)
-        compare(pause.text, "Reanudar")
+        compare(pause.helpText, "Reanudar")
 
         pause.clicked()
         compare(testCase.toggled.length, 1)
@@ -240,7 +240,7 @@ TestCase {
 
         controllerStub.opPaused = ["0"]
         compare(ring.paused, false)
-        compare(pause.text, "Pausar")
+        compare(pause.helpText, "Pausar")
     }
 
     function test_e_the_callouts_cancel_names_that_job() {

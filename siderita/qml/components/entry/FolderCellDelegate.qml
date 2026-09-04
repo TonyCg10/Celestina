@@ -52,24 +52,16 @@ Item {
 
     // The selection square keeps its natural size and centres in the
     // (stretched-to-fill) cell, rather than ballooning to the full column width.
-    Rectangle {
+    CelestinaRowHighlight {
         anchors.centerIn: parent
         width: root.panel.gridCellWidth - 10
         height: parent.height - 10
-        radius: CelestinaTheme.radiusSm
-        color: root.selected
-               ? CelestinaTheme.surfaceSelected
-               : cellMouse.containsMouse
-                 ? CelestinaTheme.surfaceHover
-                 : CelestinaTheme.clear
+        selectedFill: CelestinaTheme.surfaceSelected
+        selected: root.selected
+        hovered: cellMouse.containsMouse
+        pressed: cellMouse.pressed
         border.width: root.selected ? CelestinaTheme.borderHairline : 0
         border.color: CelestinaTheme.dividerStrong
-
-        Behavior on color {
-            ColorAnimation {
-                duration: CelestinaTheme.motionFast
-            }
-        }
     }
 
     // Drop onto this cell when it is a folder (external file URLs or an

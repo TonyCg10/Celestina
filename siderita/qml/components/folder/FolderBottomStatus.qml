@@ -149,17 +149,20 @@ Item {
         x: root.contentFrame.x + root.contentFrame.width
            - width - root.panel.floatingChromeInset
         y: root.bottomBar.y + (root.bottomBar.height - height) / 2
-        text: "Tamaño"
+        iconName: "zoom-in"
+        helpText: "Ajustar tamaños"
         backdrop: root.bottomView
         // Always floating: the dock sits over the content by definition, and
         // switching the glass off at the end of the list left it flat and
         // opaque.
         floating: true
         active: sizePopup.opened
-        Accessible.name: "Ajustar tamaños"
-        onClicked: sizePopup.opened ? sizePopup.close() : sizePopup.open()
-        font.pixelSize: Math.round(CelestinaTheme.fontCaption
-                                   * root.hostWindow.interfaceTextScale)
+        // The popup closes itself on the press that lands outside it — this
+        // button included — so by `clicked` it is already closed and a naive
+        // toggle reopens it. Decide at press time instead.
+        property bool willOpen: false
+        onPressedChanged: if (pressed) willOpen = !sizePopup.opened
+        onClicked: willOpen ? sizePopup.open() : sizePopup.close()
 
         SizePopup {
             id: sizePopup

@@ -57,24 +57,13 @@ Item {
     Accessible.name: name
     Accessible.selected: selected
 
-    Rectangle {
+    CelestinaRowHighlight {
         anchors.fill: parent
         anchors.leftMargin: 4
         anchors.rightMargin: 4
-        radius: CelestinaTheme.radiusSm
-        color: root.selected
-               ? CelestinaTheme.badgeAccentFill
-               : pointer.containsMouse
-                 ? CelestinaTheme.surfaceHover
-                 : CelestinaTheme.clear
-        border.width: 0
-        border.color: CelestinaTheme.divider
-
-        Behavior on color {
-            ColorAnimation {
-                duration: CelestinaTheme.motionFast
-            }
-        }
+        selected: root.selected
+        hovered: pointer.containsMouse
+        pressed: pointer.pressed
     }
 
     Rectangle {

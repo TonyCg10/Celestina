@@ -59,8 +59,10 @@ Item {
                 backdrop: root.backdrop
                 text: "¿Vaciar? No se puede deshacer"
             }
-            CelestinaButton {
-                text: root.confirmingEmpty ? "Vaciar definitivamente" : "Vaciar"
+            CelestinaIconButton {
+                iconName: root.confirmingEmpty ? "check" : "user-trash"
+                helpText: root.confirmingEmpty ? "Vaciar definitivamente"
+                                               : "Vaciar la papelera"
                 role: CelestinaButton.Destructive
                 visible: root.controller.trashNames.length > 0
                 onClicked: {
@@ -72,13 +74,18 @@ Item {
                     }
                 }
             }
-            CelestinaButton {
-                text: "Restaurar todo"
-                visible: root.controller.trashNames.length > 0 && !root.confirmingEmpty
+            // Stays in place while the confirmation is up: hiding it slid the
+            // back button under the pointer that was about to press it.
+            CelestinaIconButton {
+                iconName: "rotate-ccw"
+                helpText: "Restaurar todo"
+                visible: root.controller.trashNames.length > 0
+                enabled: !root.confirmingEmpty
                 onClicked: root.controller.restoreAllTrash()
             }
-            CelestinaButton {
-                text: "Volver"
+            CelestinaIconButton {
+                iconName: "go-previous"
+                helpText: "Volver"
                 role: CelestinaButton.Primary
                 onClicked: root.controller.closeTrash()
             }

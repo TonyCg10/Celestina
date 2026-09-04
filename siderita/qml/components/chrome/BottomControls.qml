@@ -79,9 +79,9 @@ RowLayout {
                 fallbackIcon: root.controller.sortAscending
                               ? "view-sort-ascending"
                               : "view-sort-descending"
-                Accessible.name: root.controller.sortAscending
-                                 ? "Orden ascendente"
-                                 : "Orden descendente"
+                helpText: root.controller.sortAscending
+                          ? "Orden ascendente"
+                          : "Orden descendente"
                 onClicked: root.controller.toggleSortDirection()
             }
         }
@@ -111,12 +111,12 @@ RowLayout {
                     required property var modelData
                     width: viewGroup.height - 4
                     height: width
-                    role: root.panel.viewMode === modelData.mode
-                          ? CelestinaButton.Selected : CelestinaButton.Ghost
+                    role: CelestinaButton.Ghost
+                    checkable: true
+                    checked: root.panel.viewMode === modelData.mode
                     density: CelestinaButton.Compact
-                    iconName: ""
-                    fallbackIcon: modelData.fallback
-                    Accessible.name: "Vista " + modelData.label
+                    iconName: modelData.fallback
+                    helpText: "Vista " + modelData.label
                     onClicked: {
                         root.panel.viewMode = modelData.mode
                         root.panel.persist()

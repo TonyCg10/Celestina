@@ -1,6 +1,6 @@
 # Siderita status
 
-- **Updated:** 2026-08-24
+- **Updated:** 2026-09-03
 - **Implementation:** the registered product version and CP0-CP7 behaviour are
   present; `SID-A4` (what the window costs, and what it shows) is the active
   checkpoint and the portal-parenting one remains planned
@@ -9,6 +9,21 @@
 
 ## Current checkout truth
 
+- Delivered as `1.5.5`: `FEEDBACK-1-SID`, the recording the author made of
+  the bottom pills. The size pill painted hover and open in the same colour, a
+  click whose pointer drifted a pixel was lost — the floating pill's input
+  shield took the grab on the first pixel — and the popover closed and
+  reopened on the same click. `FloatingButton` now reads rest, hover, active
+  and press as four fills, sinks by the suite recoil, yields the drag to its
+  own press and carries a glyph; the popover decides at press time. Every
+  floating action is a glyph with the words in its tooltip ("Ocultos",
+  the size pill, the trash, recents and search headers, the operation
+  callout), the trash header no longer slides "Volver" under the pointer,
+  the breadcrumbs are one hit target each at the pill's height, the search
+  glyph stays put when the pill expands, bookmarks open on the first click,
+  the eject glyph keeps its row lit, and every row and cell paints the shared
+  `CelestinaRowHighlight` — with a pressed state none of them had. 102 QML
+  tests; the hand check is `VAL-SID-12`.
 - Delivered as `1.5.2`: `SID-A4-B`, the freeze the author reported on
   opening Recientes or the Papelera. Both are locations that are *listed*
   rather than scanned, and both did their reading on the Qt thread: the Trash

@@ -121,20 +121,13 @@ Item {
                                 root.pickerController.openKey(placePath)
                         }
 
-                        Rectangle {
+                        CelestinaRowHighlight {
                             anchors.fill: parent
                             anchors.leftMargin: 2
                             anchors.rightMargin: 2
-                            radius: CelestinaTheme.radiusSm
-                            color: placeRow.current
-                                   ? CelestinaTheme.badgeAccentFill
-                                   : placeMouse.containsMouse
-                                     ? CelestinaTheme.surfaceHover
-                                     : CelestinaTheme.clear
-
-                            Behavior on color {
-                                ColorAnimation { duration: CelestinaTheme.motionFast }
-                            }
+                            selected: placeRow.current
+                            hovered: placeMouse.containsMouse
+                            pressed: placeMouse.pressed
                         }
 
                         Rectangle {
@@ -211,15 +204,13 @@ Item {
                         Accessible.role: Accessible.Button
                         Accessible.name: volumeRow.modelData
 
-                        Rectangle {
+                        CelestinaRowHighlight {
                             anchors.fill: parent
                             anchors.leftMargin: 2
                             anchors.rightMargin: 2
-                            radius: CelestinaTheme.radiusSm
-                            color: volumeRow.current
-                                   ? CelestinaTheme.badgeAccentFill
-                                   : volumeMouse.containsMouse
-                                     ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
+                            selected: volumeRow.current
+                            hovered: volumeMouse.containsMouse
+                            pressed: volumeMouse.pressed
                         }
 
                         CelestinaIcon {
@@ -345,15 +336,13 @@ Item {
                         width: bookmarksList.width
                         height: root.rowHeight
 
-                        Rectangle {
+                        CelestinaRowHighlight {
                             anchors.fill: parent
                             anchors.leftMargin: 2
                             anchors.rightMargin: 2
-                            radius: CelestinaTheme.radiusSm
-                            color: bookmarkRow.current
-                                   ? CelestinaTheme.badgeAccentFill
-                                   : bookmarkMouse.containsMouse
-                                     ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
+                            selected: bookmarkRow.current
+                            hovered: bookmarkMouse.containsMouse
+                            pressed: bookmarkMouse.pressed
                         }
 
                         CelestinaIcon {

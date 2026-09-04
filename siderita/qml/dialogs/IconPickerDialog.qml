@@ -106,13 +106,12 @@ CelestinaModalLayer {
                     }
                 }
 
-                Rectangle {
+                CelestinaRowHighlight {
                     id: iconOptFrame
                     anchors.fill: parent
                     anchors.margins: 4
-                    radius: CelestinaTheme.radiusSm
-                    color: iconOptMouse.containsMouse
-                           ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
+                    hovered: iconOptMouse.containsMouse
+                    pressed: iconOptMouse.pressed
                     border.width: panel.icons.customIcon(iconPicker.targetPath)
                                   === iconOpt.modelData
                                   ? CelestinaTheme.borderHairline : 0

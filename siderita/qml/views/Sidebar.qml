@@ -276,25 +276,15 @@ Item {
                                 }
                             }
 
-                            Rectangle {
+                            CelestinaRowHighlight {
                                 anchors.fill: parent
                                 anchors.leftMargin: 2
                                 anchors.rightMargin: 2
-                                radius: CelestinaTheme.radiusSm
-                                border.width: placeRow.activeFocus
-                                              ? CelestinaTheme.borderFocus : 0
-                                border.color: CelestinaTheme.focusRing
-                                color: placeRow.dragging
-                                       ? CelestinaTheme.surfaceStrong
-                                       : placeRow.current
-                                         ? CelestinaTheme.badgeAccentFill
-                                         : placeMouse.containsMouse
-                                           ? CelestinaTheme.surfaceHover
-                                           : CelestinaTheme.clear
-
-                                Behavior on color {
-                                    ColorAnimation { duration: CelestinaTheme.motionFast }
-                                }
+                                focused: placeRow.activeFocus
+                                dragging: placeRow.dragging
+                                selected: placeRow.current
+                                hovered: placeMouse.containsMouse
+                                pressed: placeMouse.pressed
                             }
 
                             Rectangle {
@@ -410,8 +400,28 @@ Item {
                     visible: hidden > 0 && !sidebar.placesCollapsed
                     height: visible ? root.hostWindow.sidebarRowHeight : 0
 
+                    CelestinaRowHighlight {
+                        anchors.fill: parent
+                        anchors.leftMargin: 2
+                        anchors.rightMargin: 2
+                        hovered: unhidePlacesMouse.containsMouse
+                        pressed: unhidePlacesMouse.pressed
+                    }
+
+                    CelestinaIcon {
+                        id: unhidePlacesIcon
+                        x: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.round(CelestinaTheme.iconSm * root.hostWindow.sidebarIconScale)
+                        height: width
+                        name: "eye"
+                        fallbackName: "eye"
+                        tone: unhidePlacesMouse.containsMouse ? CelestinaIcon.Accent
+                                                              : CelestinaIcon.Secondary
+                    }
+
                     Text {
-                        x: 12 + Math.round(CelestinaTheme.iconSm * root.hostWindow.sidebarIconScale) + 10
+                        x: unhidePlacesIcon.x + unhidePlacesIcon.width + 10
                         anchors.verticalCenter: parent.verticalCenter
                         text: "Mostrar " + parent.hidden + " ocultos"
                         color: unhidePlacesMouse.containsMouse ? CelestinaTheme.accent
@@ -491,18 +501,16 @@ Item {
                             }
                         }
 
-                        Rectangle {
+                        // The eject glyph is part of the row: the fill holds
+                        // while the pointer sits on it.
+                        CelestinaRowHighlight {
                             anchors.fill: parent
                             anchors.leftMargin: 2
                             anchors.rightMargin: 2
-                            radius: CelestinaTheme.radiusSm
-                            border.width: volumeRow.activeFocus
-                                          ? CelestinaTheme.borderFocus : 0
-                            border.color: CelestinaTheme.focusRing
-                            color: volumeRow.current
-                                   ? CelestinaTheme.badgeAccentFill
-                                   : volumeMouse.containsMouse
-                                     ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
+                            focused: volumeRow.activeFocus
+                            selected: volumeRow.current
+                            hovered: volumeMouse.containsMouse || ejectButton.hovered
+                            pressed: volumeMouse.pressed
                         }
 
                         Rectangle {
@@ -539,39 +547,27 @@ Item {
                             elide: Text.ElideRight
                         }
 
-                        // Eject (unmount) when mounted; hidden otherwise.
-                        CelestinaIcon {
+                        // Eject (unmount) when mounted; hidden otherwise. A ghost
+                        // icon button at the 30 px floor: the glyph keeps its size,
+                        // the hover circle and press recoil come with the button.
+                        CelestinaIconButton {
                             id: ejectButton
                             z: 3   // above the full-row open handler below
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.right: parent.right
-                            anchors.rightMargin: 10
-                            width: Math.round(CelestinaTheme.iconSm * root.hostWindow.sidebarIconScale)
-                            height: Math.round(CelestinaTheme.iconSm * root.hostWindow.sidebarIconScale)
+                            anchors.rightMargin: 4
+                            width: CelestinaTheme.controlHeightXs
+                            height: CelestinaTheme.controlHeightXs
+                            iconSize: Math.round(CelestinaTheme.iconSm * root.hostWindow.sidebarIconScale)
                             visible: volumeRow.mounted
-                            name: "media-eject"
-                            fallbackName: "media-eject"
-                            tone: ejectMouse.containsMouse
-                                  ? CelestinaIcon.Accent : CelestinaIcon.Secondary
-                            opacity: ejectMouse.containsMouse
-                                     ? 1 : CelestinaTheme.decorationOpacitySoft
-                            Accessible.role: Accessible.Button
-                            Accessible.name: "Expulsar " + volumeRow.modelData
-
-                            MouseArea {
-                                id: ejectMouse
-                                anchors.fill: parent
-                                // Grown to the 30 px floor around an 18 px glyph;
-                                // the icon itself stays its size.
-                                anchors.margins: -Math.max(0, Math.round(
-                                    (CelestinaTheme.controlHeightXs - parent.width) / 2))
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    if (root.hostWindow.activeController)
-                                        root.hostWindow.activeController.unmountVolume(
-                                            volumeRow.index)
-                                }
+                            role: CelestinaButton.Ghost
+                            density: CelestinaButton.Compact
+                            iconName: "media-eject"
+                            helpText: "Expulsar " + volumeRow.modelData
+                            onClicked: {
+                                if (root.hostWindow.activeController)
+                                    root.hostWindow.activeController.unmountVolume(
+                                        volumeRow.index)
                             }
                         }
 

@@ -46,13 +46,15 @@ Item {
             id: searchBarControlsRow
             spacing: 8
 
-            CelestinaButton {
-                text: "Detener"
+            CelestinaIconButton {
+                iconName: "circle-stop"
+                helpText: qsTr("Detener la búsqueda")
                 visible: root.controller.searchRunning
                 onClicked: root.controller.cancelSearch()
             }
-            CelestinaButton {
-                text: "Cerrar"
+            CelestinaIconButton {
+                iconName: "x"
+                helpText: qsTr("Cerrar la búsqueda")
                 onClicked: root.controller.closeSearch()
             }
         }

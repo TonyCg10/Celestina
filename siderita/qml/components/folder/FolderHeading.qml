@@ -220,8 +220,20 @@ Item {
         anchors.rightMargin: 12
         anchors.verticalCenter: parent.verticalCenter
         // Present in both heading states — expanded and compact — and handed
-        // over to the path bar only once the heading itself is gone.
-        visible: root.phoneLocation && root.retiredProgress < 0.5
+        // over to the path bar only once the heading itself is gone. It fades
+        // with the heading instead of vanishing under the pointer mid-scroll.
+        // Handed over halfway through the retirement, in both directions.
+        readonly property bool carried: root.retiredProgress < 0.5
+        visible: root.phoneLocation
+        enabled: root.phoneLocation && carried
+        opacity: carried ? 1 : 0
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: CelestinaTheme.reducedMotion ? 0 : CelestinaTheme.motionFast
+                easing.type: CelestinaTheme.easeStandard
+            }
+        }
         connected: root.phoneConnected
         onClicked: root.phoneMediaRequested(root.phoneIndex)
     }

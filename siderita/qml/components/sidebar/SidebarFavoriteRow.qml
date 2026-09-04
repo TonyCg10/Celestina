@@ -40,22 +40,14 @@ Item {
         }
     }
 
-    Rectangle {
+    CelestinaRowHighlight {
         anchors.fill: parent
         anchors.leftMargin: 2
         anchors.rightMargin: 2
-        radius: CelestinaTheme.radiusSm
-        border.width: root.activeFocus ? CelestinaTheme.borderFocus : 0
-        border.color: CelestinaTheme.focusRing
-        color: root.current
-               ? CelestinaTheme.badgeAccentFill
-               : (rowMouse.containsMouse && !root.missing)
-                 ? CelestinaTheme.surfaceHover
-                 : CelestinaTheme.clear
-
-        Behavior on color {
-            ColorAnimation { duration: CelestinaTheme.motionFast }
-        }
+        focused: root.activeFocus
+        selected: root.current
+        hovered: rowMouse.containsMouse && !root.missing
+        pressed: rowMouse.pressed && !root.missing
     }
 
     CelestinaIcon {

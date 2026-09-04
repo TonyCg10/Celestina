@@ -102,13 +102,11 @@ CelestinaModalLayer {
                 Accessible.name: appRow.modelData
                 Accessible.selected: openWithView.selected === appRow.index
 
-                Rectangle {
+                CelestinaRowHighlight {
                     anchors.fill: parent
-                    radius: CelestinaTheme.radiusSm
-                    color: openWithView.selected === appRow.index
-                           ? CelestinaTheme.badgeAccentFill
-                           : appRowMouse.containsMouse
-                             ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
+                    selected: openWithView.selected === appRow.index
+                    hovered: appRowMouse.containsMouse
+                    pressed: appRowMouse.pressed
                 }
 
                 Text {

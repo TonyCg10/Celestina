@@ -3,9 +3,10 @@ import QtTest 1.3
 import org.celestina.siderita 1.0
 
 // The sidebar's bookmark and favourite rows: what each mouse button does, and
-// what it does not. A bookmark is renamed by double click, so the first click
-// can no longer navigate on its own — and while it is being edited the field
-// owns keyboard and mouse, not the MouseArea that used to cover it. A
+// what it does not. A single click opens the bookmark at once — waiting out
+// the double-click window read as a lost click — and a double click still
+// renames it; while it is being edited the field owns keyboard and mouse, not
+// the MouseArea that used to cover it. A
 // favourite that no longer exists opens nothing, but its menu (the only place
 // it can be removed from) still comes up on the right button.
 TestCase {
@@ -112,20 +113,24 @@ TestCase {
 
     // ── Bookmarks ──────────────────────────────────────────────────────────
 
-    function test_a_single_click_opens_the_bookmark_after_the_double_click_window() {
+    function test_a_single_click_opens_the_bookmark_at_once() {
         mouseClick(bookmark, 100, 17, Qt.LeftButton)
-        // Not yet: the second click of a double click may be on its way.
-        compare(controllerStub.opens, 0, "the first click navigated without waiting")
-        tryCompare(controllerStub, "opens", 1, doubleClickWindow * 2)
+        // Immediately: a click that waits for the double-click window reads
+        // as a click that was not taken.
+        compare(controllerStub.opens, 1, "the first click did not navigate")
         compare(controllerStub.lastOpened, "/home/toni/CODIGO")
+        wait(doubleClickWindow)
+        compare(controllerStub.opens, 1, "the click navigated twice")
     }
 
-    function test_b_double_click_renames_without_navigating() {
+    function test_b_double_click_still_renames() {
         mouseDoubleClickSequence(bookmark, 100, 17, Qt.LeftButton)
         compare(editRequests, 1, "the double click did not ask to rename")
         compare(editIndex, 0)
+        // Its first click opened the bookmark, as any single click does; the
+        // rename field then appears over the row that is now current.
         wait(doubleClickWindow)
-        compare(controllerStub.opens, 0, "the double click navigated as well")
+        compare(controllerStub.opens, 1, "the double click's first click did not navigate")
     }
 
     function test_c_middle_and_right_click_stay_immediate() {

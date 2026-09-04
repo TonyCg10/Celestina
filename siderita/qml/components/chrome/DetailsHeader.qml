@@ -58,15 +58,10 @@ Item {
 
                 // The hover fill its sibling lists have: a title that can be
                 // pressed says so before it is.
-                Rectangle {
+                CelestinaRowHighlight {
                     anchors.fill: parent
-                    radius: CelestinaTheme.radiusSm
-                    color: hcellMouse.containsMouse
-                           ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
-
-                    Behavior on color {
-                        ColorAnimation { duration: CelestinaTheme.motionFast }
-                    }
+                    hovered: hcellMouse.containsMouse
+                    pressed: hcellMouse.pressed
                 }
 
                 Row {
@@ -92,7 +87,10 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         width: Math.round(CelestinaTheme.iconSm * root.textScale)
                         height: width
-                        visible: hcell.activeSort
+                        // Always laid out: the arrow only appears on the sorted
+                        // column, but its width is reserved on every one so the
+                        // label does not jump when the sort moves here.
+                        opacity: hcell.activeSort ? 1 : 0
                         name: root.controller.sortAscending
                               ? "view-sort-ascending" : "view-sort-descending"
                         fallbackName: "arrow-down"

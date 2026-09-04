@@ -66,7 +66,7 @@ Item {
             // Every tab is an opaque box over the listing. `chipMouse` only
             // takes left and middle: without this floor a right click opened
             // the menu of the file behind it and a sweep dragged that file.
-            CelestinaInputShield { }
+            CelestinaInputShield { yieldsToHost: true }
 
             GlassSurface {
                 id: chipGlass
@@ -85,19 +85,16 @@ Item {
                                            Qt.callLater(chipGlass.refreshBackdrop)
             }
 
-            Rectangle {
+            // The close glyph is part of the chip: the highlight holds while
+            // the pointer crosses onto it instead of dropping mid-chip.
+            CelestinaRowHighlight {
                 anchors.fill: parent
                 radius: CelestinaTheme.radiusPill
-                color: chip.activeTab ? CelestinaTheme.badgeAccentFill
-                                      : chipMouse.containsMouse
-                                        ? CelestinaTheme.surfaceHover
-                                        : CelestinaTheme.clear
+                hovered: chipMouse.containsMouse || closeButton.hovered
+                pressed: chipMouse.pressed
+                selected: chip.activeTab
                 border.width: chip.activeTab ? CelestinaTheme.borderHairline : 0
                 border.color: CelestinaTheme.dividerStrong
-
-                Behavior on color {
-                    ColorAnimation { duration: CelestinaTheme.motionFast }
-                }
             }
 
             CelestinaIcon {
@@ -151,6 +148,10 @@ Item {
                 acceptedButtons: Qt.LeftButton | Qt.MiddleButton
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
+                // The shield under this chip yields the drag to its host, so
+                // this area must keep its grab itself: without it a sweep
+                // starting on the tab dragged the file the chip covers.
+                preventStealing: true
                 onClicked: function(mouse) {
                     if (mouse.button === Qt.MiddleButton)
                         root.hostWindow.closeTab(chip.index)
@@ -170,7 +171,7 @@ Item {
         width: parent.height
         height: width
 
-        CelestinaInputShield { }
+        CelestinaInputShield { yieldsToHost: true }
 
         GlassSurface {
             id: newTabGlass

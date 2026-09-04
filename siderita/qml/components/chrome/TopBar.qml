@@ -183,7 +183,9 @@ Item {
             anchors.rightMargin: 13
             anchors.verticalCenter: parent.verticalCenter
             visible: !pathPill.editing
-            spacing: 3
+            // Each crumb carries its own chevron gap, so the row has none:
+            // there is no seam between crumbs for a click to fall through.
+            spacing: 0
 
             Repeater {
                 id: crumbRepeater
@@ -191,17 +193,25 @@ Item {
                 // dependency with, and nothing for a compiler to drop.
                 model: pathPill.splitCrumbs(root.controller.pathCrumbs)
 
-                delegate: Row {
+                delegate: Item {
                     id: crumb
 
                     required property var modelData
                     required property int index
 
-                    spacing: 3
+                    readonly property int gap: 3
+                    // The whole crumb — chevron, gap and label — is one hit
+                    // target the height of the pill's usable band, so no click
+                    // between two crumbs lands on the pill and opens editing.
+                    width: (crumb.index > 0 ? crumbChevron.width + crumb.gap * 2 : 0)
+                           + crumbHit.width
+                    height: pathPill.height - 2 * CelestinaTheme.spaceXs
                     anchors.verticalCenter: parent.verticalCenter
 
                     CelestinaIcon {
+                        id: crumbChevron
                         visible: crumb.index > 0
+                        x: crumb.gap
                         anchors.verticalCenter: parent.verticalCenter
                         width: Math.round(CelestinaTheme.iconSm
                                           * root.hostWindow.interfaceIconScale)
@@ -211,14 +221,14 @@ Item {
                         tone: CelestinaIcon.Secondary
                     }
 
-                    Rectangle {
-                        anchors.verticalCenter: parent.verticalCenter
+                    CelestinaRowHighlight {
+                        id: crumbHit
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
                         width: crumbText.implicitWidth + 12
-                        height: 24
-                        radius: CelestinaTheme.radiusSm
-                        color: crumbMouse.containsMouse
-                               ? CelestinaTheme.surfaceHover
-                               : CelestinaTheme.clear
+                        hovered: crumbMouse.containsMouse
+                        pressed: crumbMouse.pressed
 
                         Text {
                             id: crumbText
@@ -240,19 +250,16 @@ Item {
                                          ? CelestinaTheme.weightDemiBold
                                          : CelestinaTheme.weightRegular
                             font.pixelSize: Math.round(CelestinaTheme.fontRowSecondary * root.hostWindow.interfaceTextScale)
-                            Behavior on font.pixelSize {
-                                NumberAnimation { duration: CelestinaTheme.motionFast }
-                            }
                         }
+                    }
 
-                        MouseArea {
-                            id: crumbMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.controller.openKey(
-                                           crumb.modelData.key)
-                        }
+                    MouseArea {
+                        id: crumbMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.controller.openKey(
+                                       crumb.modelData.key)
                     }
                 }
             }
@@ -352,9 +359,12 @@ Item {
             }
         }
 
+        // Pinned to the right edge, where the collapsed pill's only glyph
+        // sits: expanding grows the pill leftwards and the magnifier stays
+        // put under the pointer that just clicked it.
         CelestinaIconButton {
             id: searchButton
-            x: 5
+            x: parent.width - width - 5
             anchors.verticalCenter: parent.verticalCenter
             width: 32
             height: 32
@@ -371,8 +381,8 @@ Item {
 
         CelestinaTextField {
             id: searchField
-            x: searchButton.x + searchButton.width + 2
-            width: Math.max(0, clearSearchButton.x - x - 2)
+            x: clearSearchButton.x + clearSearchButton.width + 2
+            width: Math.max(0, searchButton.x - x - 2)
             height: parent.height
             anchors.verticalCenter: parent.verticalCenter
             visible: opacity > 0.01
@@ -437,11 +447,14 @@ Item {
 
         CelestinaIconButton {
             id: clearSearchButton
-            x: parent.width - width - 5
+            x: 5
             anchors.verticalCenter: parent.verticalCenter
             width: 32
             height: 32
             visible: opacity > 0.01
+            // A ghost at 2 % opacity still took clicks; it only acts once it
+            // can be seen.
+            enabled: opacity > 0.5
             opacity: root.searchExpanded ? 1 : 0
             role: CelestinaButton.Ghost
             density: CelestinaButton.Compact

@@ -10,7 +10,8 @@ FloatingButton {
 
     signal toggleRequested
 
-    text: "Ocultos"
+    // Icon-only: the eye says it, the tooltip spells it out.
+    iconName: toggleChecked ? "eye" : "eye-off"
     helpText: toggleChecked
               ? "Ocultar elementos ocultos"
               : "Mostrar elementos ocultos"

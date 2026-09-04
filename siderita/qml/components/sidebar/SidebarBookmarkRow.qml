@@ -56,15 +56,6 @@ Item {
         }
     }
 
-    // A single click opens the bookmark, but only once the double-click window
-    // has passed: the second click of a double click is the rename gesture, and
-    // opening on the first one navigated away before the field ever appeared.
-    Timer {
-        id: singleClick
-        interval: Application.styleHints.mouseDoubleClickInterval
-        onTriggered: root.activate()
-    }
-
     Rectangle {
         z: 3
         visible: root.listDragIndex >= 0
@@ -92,24 +83,15 @@ Item {
             }
         }
 
-        Rectangle {
+        CelestinaRowHighlight {
             anchors.fill: parent
             anchors.leftMargin: 2
             anchors.rightMargin: 2
-            radius: CelestinaTheme.radiusSm
-            border.width: root.activeFocus ? CelestinaTheme.borderFocus : 0
-            border.color: CelestinaTheme.focusRing
-            color: root.dragging
-                   ? CelestinaTheme.surfaceStrong
-                   : root.current
-                     ? CelestinaTheme.badgeAccentFill
-                     : rowMouse.containsMouse
-                       ? CelestinaTheme.surfaceHover
-                       : CelestinaTheme.clear
-
-            Behavior on color {
-                ColorAnimation { duration: CelestinaTheme.motionFast }
-            }
+            focused: root.activeFocus
+            dragging: root.dragging
+            selected: root.current
+            hovered: rowMouse.containsMouse
+            pressed: rowMouse.pressed
         }
 
         CelestinaIcon {
@@ -236,14 +218,17 @@ Item {
                     root.contextMenuRequested(root.rowIndex, root.bookmarkPath,
                                               point.x, point.y)
                 } else {
-                    singleClick.restart()
+                    // Immediate: a click that waits for the double-click
+                    // window reads as a lost click. The second click of a
+                    // double click still reaches `onDoubleClicked` and opens
+                    // the rename field over the row that is now current.
+                    root.activate()
                 }
             }
 
             onDoubleClicked: function(mouse) {
                 if (mouse.button !== Qt.LeftButton)
                     return
-                singleClick.stop()
                 root.editRequested(root.rowIndex)
             }
         }

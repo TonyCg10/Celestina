@@ -44,8 +44,9 @@ Item {
             id: recentHeaderControlsRow
             spacing: 8
 
-            CelestinaButton {
-                text: "Volver"
+            CelestinaIconButton {
+                iconName: "go-previous"
+                helpText: "Volver"
                 role: CelestinaButton.Primary
                 onClicked: root.controller.closeRecent()
             }
