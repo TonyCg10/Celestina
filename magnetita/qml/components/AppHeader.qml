@@ -47,7 +47,7 @@ Item {
         }
     }
 
-    QuietIconButton {
+    CelestinaIconButton {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         density: CelestinaButton.Regular

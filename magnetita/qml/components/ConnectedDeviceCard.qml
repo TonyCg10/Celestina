@@ -131,7 +131,7 @@ CelestinaSurface {
         }
     }
 
-    QuietIconButton {
+    CelestinaIconButton {
         id: mountButton
         anchors.right: batteryBadge.left
         anchors.rightMargin: CelestinaTheme.spaceSm

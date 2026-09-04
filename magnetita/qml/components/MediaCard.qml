@@ -232,7 +232,7 @@ CelestinaSurface {
         anchors.bottomMargin: 13
         spacing: 5
 
-        QuietIconButton {
+        CelestinaIconButton {
             density: CelestinaButton.Regular
             iconName: "media-skip-backward"
             fallbackIcon: "media-skip-back"
@@ -241,7 +241,7 @@ CelestinaSurface {
             onClicked: root.previousRequested()
         }
 
-        QuietIconButton {
+        CelestinaIconButton {
             density: CelestinaButton.Regular
             role: CelestinaButton.Primary
             iconName: root.playing ? "media-playback-pause"
@@ -253,7 +253,7 @@ CelestinaSurface {
             onClicked: root.playPauseRequested()
         }
 
-        QuietIconButton {
+        CelestinaIconButton {
             density: CelestinaButton.Regular
             iconName: "media-skip-forward"
             fallbackIcon: "media-skip-forward"

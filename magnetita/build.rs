@@ -24,7 +24,6 @@ const QML_FILES: &[&str] = &[
     "qml/components/MediaProgress.qml",
     "qml/components/MediaCard.qml",
     "qml/components/DeviceControls.qml",
-    "qml/components/QuietIconButton.qml",
     "qml/components/MirrorChoiceRow.qml",
     "qml/components/MirrorSettingsSheet.qml",
     "qml/components/ActivityLog.qml",

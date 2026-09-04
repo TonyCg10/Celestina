@@ -83,7 +83,7 @@ Item {
             onTriggered: root.devices.reloadMirror()
         }
 
-        QuietIconButton {
+        CelestinaIconButton {
             iconName: "folder-open"
             density: CelestinaButton.Prominent
             visible: root.mounted
@@ -92,7 +92,7 @@ Item {
             onClicked: root.devices.openMount(root.primaryIndex)
         }
 
-        QuietIconButton {
+        CelestinaIconButton {
             iconName: "key"
             density: CelestinaButton.Prominent
             visible: !root.paired
@@ -101,7 +101,7 @@ Item {
             onClicked: root.devices.pairDevice(root.primaryIndex)
         }
 
-        QuietIconButton {
+        CelestinaIconButton {
             iconName: "bell"
             density: CelestinaButton.Prominent
             visible: root.paired
@@ -109,7 +109,7 @@ Item {
             onClicked: root.devices.ringDevice(root.primaryIndex)
         }
 
-        QuietIconButton {
+        CelestinaIconButton {
             iconName: "unplug"
             density: CelestinaButton.Prominent
             visible: root.paired
@@ -119,7 +119,7 @@ Item {
 
         Item { Layout.fillWidth: true }
 
-        QuietIconButton {
+        CelestinaIconButton {
             id: mirrorButton
             iconName: "monitor"
             density: CelestinaButton.Prominent
@@ -141,7 +141,7 @@ Item {
             }
         }
 
-        QuietIconButton {
+        CelestinaIconButton {
             iconName: "settings"
             density: CelestinaButton.Prominent
             enabled: root.devices.mirrorAvailable
@@ -202,7 +202,7 @@ Item {
             onAccepted: pairButton.clicked()
         }
 
-        QuietIconButton {
+        CelestinaIconButton {
             id: pairButton
             iconName: "link"
             role: CelestinaButton.Primary

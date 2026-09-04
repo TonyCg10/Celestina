@@ -60,7 +60,7 @@ Item {
     // Icon-first: forgetting is the one action a paired row offers, so it is
     // a glyph with the suite's hover circle, painted Destructive because it
     // discards a trust the phone will have to grant again.
-    QuietIconButton {
+    CelestinaIconButton {
         id: forget
         anchors.right: parent.right
         anchors.rightMargin: 14
