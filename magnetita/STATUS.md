@@ -1,6 +1,6 @@
 # Magnetita status
 
-- **Updated:** 2026-08-19
+- **Updated:** 2026-09-03
 - **Implementation:** `MAG-S1` (hostile network input) and `MAG-R1` (the
   one-button wireless mirror) are delivered, committed and deployed. `MAG-R2`
   (the mirror without discovery) is committed but **not deployed**. `MAG-M1`
@@ -13,6 +13,15 @@
 
 ## Current checkout truth
 
+- Delivered as `1.2.2`: `FEEDBACK-1-MAG`. A plugin row and its switch lit at
+  the same time whenever the pointer was on the switch; the row now paints the
+  shared `CelestinaRowHighlight` and yields its hover to the switch. "Olvidar"
+  and "Vincular" are the `unlink` and `link` glyphs with the words in their
+  accessible names; the mirror start, the mirror settings and the mirror
+  choice segments are `checkable` — re-binding `checked` on click, as the
+  plugin switch does, so the button still shows only what the daemon
+  confirms. The choice labels stay words because they are the values. Hand
+  check: `VAL-MAG-10`.
 - The checkout is clean of Magnetita work: `MAG-S1`, `MAG-R1` and `MAG-R2` are
   all committed.
 - The installed daemon carries `MAG-S1`, `MAG-R1` and `MAG-R2`'s port pinning

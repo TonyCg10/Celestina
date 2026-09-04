@@ -124,22 +124,37 @@ Item {
             iconName: "monitor"
             density: CelestinaButton.Prominent
             enabled: root.devices.mirrorAvailable
-            role: root.devices.mirrorActive ? CelestinaButton.Tonal
-                                            : CelestinaButton.Primary
+            role: CelestinaButton.Primary
+            // A true toggle: the shared button paints a checked one Selected.
+            checkable: true
+            checked: root.devices.mirrorActive
             helpText: root.devices.mirrorActive
                       ? qsTr("Detener el espejo") : qsTr("Reflejar la pantalla del móvil")
-            onClicked: root.devices.mirrorActive ? root.devices.stopMirror()
-                                                 : root.devices.startMirror()
+            // A checkable Button flips `checked` on click; re-bind so the glyph
+            // keeps showing the daemon's confirmed state, not an optimistic one.
+            onClicked: {
+                checked = Qt.binding(function() { return root.devices.mirrorActive })
+                if (root.devices.mirrorActive)
+                    root.devices.stopMirror()
+                else
+                    root.devices.startMirror()
+            }
         }
 
         QuietIconButton {
             iconName: "settings"
             density: CelestinaButton.Prominent
             enabled: root.devices.mirrorAvailable
-            role: mirrorSettings.visible ? CelestinaButton.Selected
-                                         : CelestinaButton.Ghost
+            role: CelestinaButton.Ghost
+            checkable: true
+            checked: mirrorSettings.visible
             helpText: qsTr("Ajustes del espejo")
-            onClicked: mirrorSettings.visible = !mirrorSettings.visible
+            // The sheet is the single truth; re-bind after the click so the
+            // button never holds a `checked` of its own.
+            onClicked: {
+                checked = Qt.binding(function() { return mirrorSettings.visible })
+                mirrorSettings.visible = !mirrorSettings.visible
+            }
         }
     }
 
@@ -187,10 +202,11 @@ Item {
             onAccepted: pairButton.clicked()
         }
 
-        CelestinaButton {
+        QuietIconButton {
             id: pairButton
-            text: qsTr("Vincular")
+            iconName: "link"
             role: CelestinaButton.Primary
+            helpText: qsTr("Vincular")
             enabled: codeField.text.length === 6
             onClicked: {
                 root.devices.pairMirror(codeField.text)

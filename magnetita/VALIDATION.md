@@ -3,6 +3,24 @@
 This manual lane requires the real phone, LAN, mounts or Wayland session. It
 does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
 
+## VAL-MAG-10 — One highlight per row, glyphs for forget and pair
+
+- **Status:** pending
+- **Related implementation:** `FEEDBACK-1-MAG` (1.2.2), recorded in
+  [the suite evidence](../docs/evidence/2026-09-03-apps-feedback-and-icon-first.md)
+- **Requires:** the deployed Magnetita and daemon, the paired phone
+- **Procedure:** on the settings page move the pointer along a plugin row
+  onto its switch and back; press the switch; on the device card hover the
+  forget glyph and read its name; type five and then six digits into the pair
+  field and watch the link glyph; toggle the mirror settings
+- **Pass condition:** only one fill lights at a time on the row; the switch
+  shows the daemon's state and nothing optimistic; the forget glyph reads as
+  destructive; the link glyph enables only at six digits; the settings glyph
+  reads Selected while open
+- **Result:** not run by hand
+- **Evidence:** any row that lights twice, or any glyph whose meaning was not
+  clear
+
 ## VAL-MAG-01 — Hardened pairing from both initiators
 
 - **Status:** pending

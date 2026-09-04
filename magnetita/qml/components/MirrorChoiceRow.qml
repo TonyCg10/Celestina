@@ -45,14 +45,25 @@ Item {
         Repeater {
             model: root.options.length
 
+            // Text, not glyphs: the labels are the values themselves ("1080",
+            // "60 fps", "4 Mb/s") and no icon would carry them.
             delegate: CelestinaButton {
                 required property int index
 
                 Layout.fillWidth: true
                 text: root.labels[index]
-                role: root.options[index] === root.current
-                      ? CelestinaButton.Selected : CelestinaButton.Ghost
-                onClicked: root.chosen(root.options[index])
+                role: CelestinaButton.Ghost
+                // Radio-like among peers: the checked one wears Selected.
+                checkable: true
+                checked: root.options[index] === root.current
+                // A checkable Button flips `checked` on click; re-bind so the
+                // row only ever shows the daemon's confirmed value.
+                onClicked: {
+                    checked = Qt.binding(function() {
+                        return root.options[index] === root.current
+                    })
+                    root.chosen(root.options[index])
+                }
             }
         }
     }

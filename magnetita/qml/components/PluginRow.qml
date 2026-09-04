@@ -13,14 +13,18 @@ Item {
 
     height: 46
 
-    // Lit under the pointer so the row reads as one control. The switch's
-    // own tint is the shared control's business, not this row's.
-    Rectangle {
+    // Lit under the pointer so the row reads as one control — except while
+    // the pointer is on the switch itself, whose own tint is the shared
+    // control's business: two fills lighting at once read as two controls.
+    //
+    // Stacking dependency: `toggle` is declared after `rowArea` and so sits
+    // above it. The switch consumes its own press, so `rowArea.pressed` is
+    // only ever true for a press on the label side, while `containsMouse`
+    // stays true across the whole row and is masked here by `toggle.hovered`.
+    CelestinaRowHighlight {
         anchors.fill: parent
-        radius: CelestinaTheme.radiusSm
-        color: rowArea.pressed ? CelestinaTheme.surfaceStrong
-               : rowArea.containsMouse ? CelestinaTheme.surfaceHover
-               : CelestinaTheme.clear
+        hovered: rowArea.containsMouse && !toggle.hovered
+        pressed: rowArea.pressed
         Accessible.ignored: true
     }
 

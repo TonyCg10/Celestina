@@ -57,13 +57,17 @@ Item {
         }
     }
 
-    CelestinaButton {
+    // Icon-first: forgetting is the one action a paired row offers, so it is
+    // a glyph with the suite's hover circle, painted Destructive because it
+    // discards a trust the phone will have to grant again.
+    QuietIconButton {
         id: forget
         anchors.right: parent.right
         anchors.rightMargin: 14
         anchors.verticalCenter: parent.verticalCenter
-        width: 100
-        text: "Olvidar"
+        iconName: "unlink"
+        role: CelestinaButton.Destructive
+        helpText: "Olvidar este dispositivo"
         onClicked: root.forgetRequested()
     }
 }
