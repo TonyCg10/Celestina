@@ -16,7 +16,7 @@
   glyphs (`undo`/`redo` in one capsule, `save`, `x`, `case-sensitive`,
   `whole-word`, `chevron-up`/`chevron-down`, `replace`, `replace-all`,
   `corner-down-left`) with the words and the bound shortcuts in their
-  tooltips; the two search modifiers are `checkable` instead of swapping
+  accessible names; the two search modifiers are `checkable` instead of swapping
   roles; the replace toggle is square both ways so the bar no longer resizes
   under the pointer. The encoding button and the empty page's two verbs keep
   their words behind a leading glyph. The encoding chooser's current row and

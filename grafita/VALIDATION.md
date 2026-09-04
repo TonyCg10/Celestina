@@ -12,12 +12,12 @@ This manual lane does not contain implementation and does not block
 - **Procedure:** hover a tab and cross onto its close glyph; press and hold a
   tab; open find (Ctrl+F), toggle case and whole word, step with the chevrons,
   open and close replace with its glyph and with Ctrl+H; undo, redo, save and
-  close from the footer, reading each tooltip; open the encoding chooser and
+  close from the footer; open the encoding chooser and
   hover a row that is not the current one
 - **Pass condition:** the close glyph paints nothing at rest and one circle
   on hover while the tab stays lit; a held tab darkens and sinks; toggles read
   as Selected while on; the bar does not resize when replace opens; every
-  glyph's tooltip names the action and its shortcut; the current and hovered
+  glyph is legible without a label and none paints a hover card; the current and hovered
   encoding rows are two different fills
 - **Result:** not run by hand
 - **Evidence:** any glyph whose meaning was not clear from the glyph alone
