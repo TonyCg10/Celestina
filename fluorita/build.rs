@@ -23,6 +23,8 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaFocusRing.qml",
     "qml/CelestinaButton.qml",
     "qml/CelestinaIconButton.qml",
+    "qml/CelestinaCapsule.qml",
+    "qml/CelestinaRowHighlight.qml",
     // Fluorita's own composition: the window hosts, each component owns one
     // region.
     "qml/components/AmbientLight.qml",

@@ -48,7 +48,12 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             activeFocusOnTab: arrows.navigator.hasPrevious
             visible: arrows.navigator.navigable && arrows.navigator.hasPrevious
-            enabled: visible
+            // Only once it can be seen. `visible` alone left a fully
+            // transparent button taking clicks meant for the picture; the
+            // reveal is the approach hover (or focus), and the button's own
+            // hover fill on top of it is the second, legitimate state — so it
+            // stays Tonal rather than Ghost.
+            enabled: visible && opacity > 0.5
             iconName: "go-previous"
             fallbackIcon: "chevron-left"
             iconSize: CelestinaTheme.iconMd
@@ -86,7 +91,8 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             activeFocusOnTab: arrows.navigator.hasNext
             visible: arrows.navigator.navigable && arrows.navigator.hasNext
-            enabled: visible
+            // See `previous`: clickable only once it is at least half shown.
+            enabled: visible && opacity > 0.5
             iconName: "go-next"
             fallbackIcon: "chevron-right"
             iconSize: CelestinaTheme.iconMd

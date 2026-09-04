@@ -148,8 +148,12 @@ Item {
                 iconName: modelData.icon
                 helpText: modelData.label
                 enabled: !bar.editor.saving
-                role: bar.tool === modelData.tool
-                    ? CelestinaButton.Selected : CelestinaButton.Ghost
+                // A toggle: `checkable` paints Selected while it is armed. The
+                // truth stays in the surface — the click re-evaluates `checked`
+                // through `bar.tool`, never the other way round.
+                role: CelestinaButton.Ghost
+                checkable: true
+                checked: bar.tool === modelData.tool
                 // Arming the tool that is already armed disarms it, so leaving
                 // a tool never means finding another one to pick.
                 onClicked: bar.toolPicked(bar.tool === modelData.tool ? "none" : modelData.tool)
@@ -168,7 +172,8 @@ Item {
             iconName: "search"
             helpText: bar.zoomed ? qsTr("Ver la imagen entera")
                                  : qsTr("Acercar")
-            role: bar.zoomed ? CelestinaButton.Selected : CelestinaButton.Tonal
+            checkable: true
+            checked: bar.zoomed
             onClicked: bar.zoomToggled()
         }
 
@@ -203,6 +208,26 @@ Item {
                     Accessible.checked: swatch.current
                     Accessible.onPressAction: bar.inkPicked(swatch.modelData)
 
+                    // The same hover circle every icon action wears, so a
+                    // swatch answers the pointer the way the glyphs beside it
+                    // do instead of sitting inert until it is clicked.
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: CelestinaTheme.radiusPill
+                        color: tap.pressed
+                            ? CelestinaTheme.surfaceStrong
+                            : hover.hovered
+                              ? CelestinaTheme.surfaceHover
+                              : CelestinaTheme.clear
+
+                        Behavior on color {
+                            ColorAnimation {
+                                duration: CelestinaTheme.reducedMotion
+                                    ? 0 : CelestinaTheme.motionFast
+                            }
+                        }
+                    }
+
                     Rectangle {
                         anchors.centerIn: parent
                         width: swatch.current ? CelestinaTheme.iconSm
@@ -212,6 +237,10 @@ Item {
                         color: swatch.modelData
                         border.width: CelestinaTheme.borderHairline
                         border.color: CelestinaTheme.dividerStrong
+                        // Sinks under the finger by the suite's recoil, so the
+                        // press is seen before the colour changes.
+                        scale: tap.pressed ? CelestinaTheme.pressRecoilScale : 1
+                        transformOrigin: Item.Center
 
                         Behavior on width {
                             NumberAnimation {
@@ -220,6 +249,18 @@ Item {
                                 easing.type: CelestinaTheme.easeStandard
                             }
                         }
+
+                        Behavior on scale {
+                            NumberAnimation {
+                                duration: CelestinaTheme.reducedMotion
+                                    ? 0 : CelestinaTheme.motionFast
+                                easing.type: CelestinaTheme.easeStandard
+                            }
+                        }
+                    }
+
+                    HoverHandler {
+                        id: hover
                     }
 
                     CelestinaFocusRing {
@@ -229,6 +270,8 @@ Item {
                     }
 
                     TapHandler {
+                        id: tap
+
                         onTapped: bar.inkPicked(swatch.modelData)
                     }
 
@@ -251,19 +294,20 @@ Item {
             color: CelestinaTheme.divider
         }
 
-        Row {
-            spacing: 0
-
+        // Undo and redo: one idea with two directions, so one capsule.
+        CelestinaCapsule {
             CelestinaIconButton {
-                iconName: "go-previous"
+                iconName: "undo"
                 helpText: qsTr("Deshacer")
+                role: CelestinaButton.Ghost
                 enabled: bar.editor.canUndo && !bar.editor.saving
                 onClicked: bar.editor.undo()
             }
 
             CelestinaIconButton {
-                iconName: "go-next"
+                iconName: "redo"
                 helpText: qsTr("Rehacer")
+                role: CelestinaButton.Ghost
                 enabled: bar.editor.canRedo && !bar.editor.saving
                 onClicked: bar.editor.redo()
             }

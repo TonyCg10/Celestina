@@ -175,24 +175,13 @@ Item {
                     fallbackName: "file"
                 }
 
-                // Under the pointer and under the press, in the same fills
-                // the sidebar rows use, over the picture rather than as a card
-                // around it.
-                Rectangle {
+                // Under the pointer and under the press, in the one recipe
+                // every row in the suite paints, over the picture rather than
+                // as a card around it.
+                CelestinaRowHighlight {
                     anchors.fill: parent
-                    radius: CelestinaTheme.radiusSm
-                    color: pointer.pressed
-                        ? CelestinaTheme.surfaceStrong
-                        : pointer.containsMouse
-                          ? CelestinaTheme.surfaceHover
-                          : CelestinaTheme.clear
-
-                    Behavior on color {
-                        ColorAnimation {
-                            duration: CelestinaTheme.reducedMotion
-                                ? 0 : CelestinaTheme.motionFast
-                        }
-                    }
+                    hovered: pointer.containsMouse
+                    pressed: pointer.pressed
                 }
 
                 MouseArea {
@@ -201,7 +190,13 @@ Item {
                     anchors.fill: parent
                     // Only while the strip is really there: one on its way out
                     // must not take a click meant for the picture behind it.
-                    enabled: dock.revealed
+                    // Tied to the strip's opacity rather than to `revealed`:
+                    // the pointer leaving the approach band flips `revealed`
+                    // while the strip is still under it, and a hover that
+                    // began on a frame lost its click mid-animation. Half
+                    // shown is the line — and the strip is the pointer's
+                    // ancestor, so a hover on a frame keeps it revealed anyway.
+                    enabled: strip.opacity > 0.5
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: dock.activated(frame.modelData.key, frame.modelData.name,

@@ -114,14 +114,14 @@ CelestinaModalLayer {
                 Accessible.name: text
             }
 
-            CelestinaButton {
+            CelestinaIconButton {
                 id: closeAction
 
                 Layout.alignment: Qt.AlignRight
                 activeFocusOnTab: true
                 role: CelestinaButton.Primary
-                text: qsTr("Cerrar")
-                Accessible.name: text
+                iconName: "x"
+                helpText: qsTr("Cerrar")
                 onClicked: panel.library.closeDetail()
             }
         }

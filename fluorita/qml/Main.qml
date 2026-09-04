@@ -377,8 +377,8 @@ ApplicationWindow {
                 iconName: "search"
                 helpText: playerSurface.imageZoom.zoomed ? qsTr("Ver la imagen entera")
                                                          : qsTr("Acercar")
-                role: playerSurface.imageZoom.zoomed
-                    ? CelestinaButton.Selected : CelestinaButton.Tonal
+                checkable: true
+                checked: playerSurface.imageZoom.zoomed
                 onClicked: playerSurface.imageZoom.toggle()
             }
 

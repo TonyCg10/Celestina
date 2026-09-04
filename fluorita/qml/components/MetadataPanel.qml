@@ -155,33 +155,38 @@ CelestinaModalLayer {
 
             // The cover is chosen through the desktop's own picker, so the
             // panel offers the ask and nothing else.
-            CelestinaButton {
+            CelestinaIconButton {
                 visible: panel.metadata.coverable
                 enabled: !panel.metadata.busy
-                text: qsTr("Elegir portada…")
+                iconName: "image"
+                helpText: qsTr("Elegir portada")
                 onClicked: panel.metadata.chooseCover(true)
             }
 
-            // The same two outcomes, in the same order, as the editor's.
+            // The same two outcomes, in the same order and the same glyphs, as
+            // the editor's toolbar: icon-first, the name in the tooltip.
             Row {
                 anchors.right: parent.right
                 spacing: CelestinaTheme.spaceSm
 
-                CelestinaButton {
-                    text: qsTr("Guardar una copia")
+                CelestinaIconButton {
+                    iconName: "copy"
+                    helpText: qsTr("Guardar una copia")
                     role: CelestinaButton.Primary
                     enabled: !panel.metadata.busy && values.actionable
                     onClicked: values.commit(false)
                 }
 
-                CelestinaButton {
-                    text: qsTr("Reemplazar")
+                CelestinaIconButton {
+                    iconName: "check"
+                    helpText: qsTr("Reemplazar")
                     enabled: !panel.metadata.busy && values.actionable
                     onClicked: values.commit(true)
                 }
 
-                CelestinaButton {
-                    text: qsTr("Cerrar")
+                CelestinaIconButton {
+                    iconName: "x"
+                    helpText: qsTr("Cerrar")
                     enabled: !panel.metadata.busy
                     onClicked: panel.metadata.close()
                 }

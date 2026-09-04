@@ -77,7 +77,10 @@ RowLayout {
             || transport.timed
         iconName: "settings"
         helpText: qsTr("Audio, subtítulos y velocidad")
-        role: streams.visible ? CelestinaButton.Selected : CelestinaButton.Tonal
+        // Reads as pressed while its menu is open; the menu's visibility is
+        // the truth and `checked` follows it.
+        checkable: true
+        checked: streams.visible
         onClicked: streams.popup(streamsButton, 0, -streams.height)
     }
 

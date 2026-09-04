@@ -3,6 +3,26 @@
 This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md).
 
+## VAL-FLU-FEEDBACK — Arrows, dock and panel verbs
+
+- **Status:** pending
+- **Related implementation:** `FEEDBACK-1-FLU` (1.3.4), recorded in
+  [the suite evidence](../docs/evidence/2026-09-03-apps-feedback-and-icon-first.md)
+- **Requires:** the deployed Fluorita on the real session, a folder with a
+  few videos and a track, an image with metadata
+- **Procedure:** while a video plays, click near the left and right edges
+  without approaching first; approach an edge and click the arrow; approach
+  the bottom and click a frame while the strip is still rising; open the
+  metadata panel and read the four glyph tooltips; edit an image, pick a
+  swatch, undo and redo
+- **Pass condition:** an edge click with no visible arrow does nothing; a
+  visible arrow steps; a frame clicked mid-rise opens; every glyph tooltip
+  names the verb; the swatch shows a circle on hover and sinks on press;
+  undo/redo sit in one capsule
+- **Result:** not run by hand
+- **Evidence:** any click that acted with no visible control, or any control
+  that did not
+
 ## VAL-FLU-BYTES — a file whose name is not UTF-8, in a real window
 
 - **Status:** pending

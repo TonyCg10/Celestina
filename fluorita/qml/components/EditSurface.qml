@@ -524,11 +524,12 @@ Item {
                     onAccepted: textPrompt.confirm()
                 }
 
-                CelestinaButton {
+                CelestinaIconButton {
                     id: confirm
 
                     anchors.right: parent.right
-                    text: qsTr("Colocar")
+                    iconName: "check"
+                    helpText: qsTr("Colocar el texto")
                     role: CelestinaButton.Primary
                     onClicked: textPrompt.confirm()
                 }

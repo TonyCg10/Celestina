@@ -1,6 +1,6 @@
 # Fluorita status
 
-- **Updated:** 2026-08-20
+- **Updated:** 2026-09-03
 - **Implementation:** checkpoints F0-F15 are closed and delivered; no
   checkpoint is active
 - **Author validation:** the version-1 playback and interaction pass is closed;
@@ -10,6 +10,17 @@
 
 ## Current checkout truth
 
+- Delivered as `1.3.4`: `FEEDBACK-1-FLU`. The edge arrows were clickable at
+  zero opacity and the filmstrip's frames lost their pointer while the strip
+  was still sliding in; both now act only once at least half visible. The
+  metadata panel's four verbs, the detail panel's close and the text tool's
+  "Colocar" are the same glyphs the edit toolbar already used (`image`,
+  `copy`, `check`, `x`); undo and redo share one capsule with the `undo`/`redo`
+  glyphs; the tool and zoom toggles are `checkable` instead of swapping roles;
+  the colour swatches gained the suite's hover circle and press sink; the
+  frames paint the shared `CelestinaRowHighlight`. The artwork button keeps
+  its words because the count is the information. Hand check:
+  `VAL-FLU-FEEDBACK`.
 - `F7` is delivered at version `1.3.0`, committed as `F7-A`, verified and
   installed in `~/.local`. That single commit carried the whole of `F8-F15`
   with it, which is why the roadmap describes nine sections against one ledger
