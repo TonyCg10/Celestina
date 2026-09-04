@@ -13,11 +13,11 @@ This manual lane does not contain implementation and does not block
 - **Procedure:** while a video plays, click near the left and right edges
   without approaching first; approach an edge and click the arrow; approach
   the bottom and click a frame while the strip is still rising; open the
-  metadata panel and read the four glyph tooltips; edit an image, pick a
+  metadata panel and read the four glyphs; edit an image, pick a
   swatch, undo and redo
 - **Pass condition:** an edge click with no visible arrow does nothing; a
-  visible arrow steps; a frame clicked mid-rise opens; every glyph tooltip
-  names the verb; the swatch shows a circle on hover and sinks on press;
+  visible arrow steps; a frame clicked mid-rise opens; no glyph paints a
+  hover card; the swatch shows a circle on hover and sinks on press;
   undo/redo sit in one capsule
 - **Result:** not run by hand
 - **Evidence:** any click that acted with no visible control, or any control
