@@ -4,6 +4,28 @@ This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md). Each failed row keeps its result and opens a new
 corrective implementation unit.
 
+## VAL-SID-13 — One password opens the archives that share it
+
+- **Status:** pending
+- **Related implementation:** `FEEDBACK-3-SID` (1.5.7), recorded in
+  [the evidence](docs/evidence/2026-09-04-one-password-for-a-batch.md)
+- **Requires:** the deployed Siderita, and in one folder: three encrypted
+  archives protected with the same password, one encrypted with a different
+  password, and one archive with no password at all
+- **Procedure:** select all five and extract. Answer the first question with
+  the shared password. Let the batch run to the end and answer the second
+  question — the one about the odd archive — with its own password. Then repeat
+  the whole selection and, at the first question, press Cancelar instead
+- **Pass condition:** exactly two password questions for the five archives, not
+  five; the second one reads as a wrong password rather than as a first
+  request, and names the odd archive;
+  all five end up extracted, each in its own folder; the unencrypted one is
+  never asked about. On the cancelled run, the archive that asked is reported
+  as needing a password and the rest still extract
+- **Result:** not run by hand
+- **Evidence:** how many modals appeared, which archive each named, and whether
+  every extraction landed
+
 ## VAL-SID-12 — Pills, rows and glyphs answer the pointer
 
 - **Status:** pending

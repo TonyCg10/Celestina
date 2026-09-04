@@ -1,6 +1,6 @@
 # Siderita status
 
-- **Updated:** 2026-09-03
+- **Updated:** 2026-09-04
 - **Implementation:** the registered product version and CP0-CP7 behaviour are
   present; `SID-A4` (what the window costs, and what it shows) is the active
   checkpoint and the portal-parenting one remains planned
@@ -9,6 +9,20 @@
 
 ## Current checkout truth
 
+- Delivered as `1.5.7`: `FEEDBACK-3-SID`, the password a batch of archives kept
+  asking for. Extracting several encrypted archives protected with the same key
+  asked once per archive, because the worker cleared the password after the one
+  the question was about — a real guarantee (a person's key must not reach a
+  file they were never asked about) charged entirely to the common case. The
+  key is now carried through the batch as a *second* attempt and never as the
+  first: every following archive is opened with no password, and the carried
+  one is offered only to an archive that answers it needs one. So an
+  unencrypted archive still never sees it, and `extract` clearing its
+  destination when it refuses is what makes the retry land on a clean folder.
+  When the carried key does not fit, the modal appears already saying
+  the wrong-password heading rather than the protected-archive one, and
+  the new answer becomes the batch's key. 122 unit
+  tests, 13 domain tests, 102 QML tests; the hand check is `VAL-SID-13`.
 - Delivered as `1.5.5`: `FEEDBACK-1-SID`, the recording the author made of
   the bottom pills. The size pill painted hover and open in the same colour, a
   click whose pointer drifted a pixel was lost — the floating pill's input

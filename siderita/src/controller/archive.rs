@@ -186,10 +186,13 @@ impl qobject::SideritaController {
     /// exactly like a paste: the two would otherwise share one Cancel button and
     /// one progress state between two writers.
     ///
-    /// `password` applies to the *first* archive left in `state` and to no
-    /// other: it is the answer to the question that stopped this very batch, and
-    /// assuming it opens the next archive too would send a person's password
-    /// into a file they were not asked about.
+    /// `password` is the answer to the question that stopped this very batch, so
+    /// it opens the *first* archive left in `state`. From there it is carried to
+    /// the rest of the batch as a second attempt and never as the first one:
+    /// every following archive is opened with no password at all, and the
+    /// carried one is offered only to an archive that answered it needs one. So
+    /// a person who protected several archives with the same key is asked once,
+    /// and an archive that is not encrypted never sees their password.
     fn spawn_extract(mut self: Pin<&mut Self>, state: Pending, password: Option<String>) {
         if state.archives.is_empty() {
             let Pending {
@@ -224,32 +227,43 @@ impl qobject::SideritaController {
                 mut done,
                 total,
             } = state;
-            let mut password = password;
+            // The key a person has already given in this batch. The first
+            // archive is the one they were asked about, so it is tried on that
+            // one outright; from then on it is only a fallback for an archive
+            // that says it needs a password.
+            let carried = password;
+            let mut answered = carried.is_some();
 
             for (index, archive) in archives.iter().enumerate() {
                 if token.is_cancelled() {
                     break;
                 }
                 announce(&qt, job, done.min(i32::MAX as usize) as i32, archive);
-                let zone = LocalZone;
-                let mut options = siderita_archive::ExtractOptions::new(&zone, "extraído");
-                if let Some(secret) = password.as_deref() {
-                    options = options.with_password(secret);
+                // First attempt: the answer for the archive that asked, and
+                // nothing at all for every other one.
+                let opening = if answered { carried.as_deref() } else { None };
+                answered = false;
+                let mut tried = opening.is_some();
+                let mut outcome = attempt(&qt, job, archive, &into, opening, &token);
+                // Second and last attempt, silent: the key that already opened an
+                // archive of this batch, offered only because this one asked for
+                // a password. Nothing of the refused attempt survives — `extract`
+                // clears its destination when it refuses — so this starts clean.
+                if !tried && outcome.as_ref().is_err_and(ArchiveError::needs_password) {
+                    if let Some(secret) = carried.as_deref() {
+                        tried = true;
+                        outcome = attempt(&qt, job, archive, &into, Some(secret), &token);
+                    }
                 }
-                // Asked before the work starts, from the archive's own index:
-                // one cheap pass over headers, and the difference between a ring
-                // that turns and one that fills.
-                let expected = siderita_archive::measure(archive, &options).unwrap_or(0);
-                let mut on_progress = throttled(&qt, job, "extraídos", expected);
-                match siderita_archive::extract(archive, &into, &options, &token, &mut on_progress)
-                {
+                match outcome {
                     Ok(extracted) => skipped.extend(extracted.skipped),
                     Err(error) if error.is_cancelled() => break,
                     Err(error) if error.needs_password() => {
                         // Stop here and hand the question to the Qt thread: what
                         // is left of the batch travels with it, so answering
-                        // resumes exactly where this stopped.
-                        let retry = password.is_some();
+                        // resumes exactly where this stopped. `tried` is what the
+                        // dialog says: a password was offered and refused, rather
+                        // than none having been given yet.
                         let waiting = Pending {
                             job: Some(job),
                             archives: archives[index..].to_vec(),
@@ -261,14 +275,12 @@ impl qobject::SideritaController {
                         };
                         let name = display_name(archive);
                         let _ = qt.queue(move |controller| {
-                            controller.ask_for_password(waiting, name, retry);
+                            controller.ask_for_password(waiting, name, tried);
                         });
                         return;
                     }
                     Err(error) => failures.push(report(archive, &error)),
                 }
-                // Only the archive the question was asked about carries it.
-                password = None;
                 done += 1;
             }
 
@@ -414,6 +426,32 @@ impl qobject::SideritaController {
                 .set_status_text(QString::from("Operación cancelada"));
         }
     }
+}
+
+/// One extraction of one archive, weighed and reported like any other.
+///
+/// Split out because an archive is opened up to twice — once with no password,
+/// once with the key the batch already carries — and both attempts have to
+/// measure and report identically for the ring to mean the same thing.
+fn attempt(
+    qt: &cxx_qt::CxxQtThread<qobject::SideritaController>,
+    job: u64,
+    archive: &Path,
+    into: &Path,
+    password: Option<&str>,
+    token: &celestina_core::CancellationToken,
+) -> Result<siderita_archive::Extracted, ArchiveError> {
+    let zone = LocalZone;
+    let mut options = siderita_archive::ExtractOptions::new(&zone, "extraído");
+    if let Some(secret) = password {
+        options = options.with_password(secret);
+    }
+    // Asked before the work starts, from the archive's own index: one cheap pass
+    // over headers, and the difference between a ring that turns and one that
+    // fills.
+    let expected = siderita_archive::measure(archive, &options).unwrap_or(0);
+    let mut on_progress = throttled(qt, job, "extraídos", expected);
+    siderita_archive::extract(archive, into, &options, token, &mut on_progress)
 }
 
 /// Publishes which entry the operation reached, on the Qt thread.

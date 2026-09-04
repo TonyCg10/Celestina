@@ -131,3 +131,4 @@ siderita	1.5.5	bug	FEEDBACK-1-SID	Fix the pills that lost clicks and looked alik
 celestina-style	1.8.5	bug	FEEDBACK-2-STY	Remove the hover tooltip the suite had deleted from every surface
 siderita	1.5.6	bug	FEEDBACK-2-SID	Remove the hover tooltip the floating pill had grown
 magnetita	1.2.3	bug	FEEDBACK-2-MAG	Drop the wrapper whose only body was silencing the tooltip
+siderita	1.5.7	bug	FEEDBACK-3-SID	Reuse one password across the archives of a batch that share it
