@@ -3,6 +3,25 @@
 This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md).
 
+## VAL-GRA-FEEDBACK — Tabs, footer and find bar as glyphs
+
+- **Status:** pending
+- **Related implementation:** `FEEDBACK-1-GRA` (1.2.3), recorded in
+  [the suite evidence](../docs/evidence/2026-09-03-apps-feedback-and-icon-first.md)
+- **Requires:** the deployed Grafita on the real session, two documents open
+- **Procedure:** hover a tab and cross onto its close glyph; press and hold a
+  tab; open find (Ctrl+F), toggle case and whole word, step with the chevrons,
+  open and close replace with its glyph and with Ctrl+H; undo, redo, save and
+  close from the footer, reading each tooltip; open the encoding chooser and
+  hover a row that is not the current one
+- **Pass condition:** the close glyph paints nothing at rest and one circle
+  on hover while the tab stays lit; a held tab darkens and sinks; toggles read
+  as Selected while on; the bar does not resize when replace opens; every
+  glyph's tooltip names the action and its shortcut; the current and hovered
+  encoding rows are two different fills
+- **Result:** not run by hand
+- **Evidence:** any glyph whose meaning was not clear from the glyph alone
+
 ## VAL-G7 — Numbered surface and remembered text size
 
 - **Status:** pending

@@ -13,6 +13,10 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaSectionLabel.qml",
     "qml/CelestinaFocusRing.qml",
     "qml/CelestinaTextField.qml",
+    // The pill that groups a pair of icon actions (undo/redo, previous/next)
+    // and the one row-fill recipe the tabs and the encoding list paint.
+    "qml/CelestinaCapsule.qml",
+    "qml/CelestinaRowHighlight.qml",
     // The editing surface's two shared affordances: a second consumer
     // (Siderita's quick look) moved them out of Grafita and into the style.
     "qml/CelestinaScrollBar.qml",

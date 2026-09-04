@@ -1,6 +1,6 @@
 # Grafita status
 
-- **Updated:** 2026-08-19
+- **Updated:** 2026-09-03
 - **Implementation:** checkpoints G0-G13 are present and delivered; no
   checkpoint is active
 - **Author validation:** the version-1 interaction pass is closed; `VAL-G7`,
@@ -9,6 +9,18 @@
 
 ## Current checkout truth
 
+- Delivered as `1.2.3`: `FEEDBACK-1-GRA`. The tab's close button had no role
+  and so painted a filled box at rest inside every tab, over the tab's own
+  hover; it is Ghost now and the tab paints the shared `CelestinaRowHighlight`
+  with a pressed state. The footer's four verbs and the whole find bar are
+  glyphs (`undo`/`redo` in one capsule, `save`, `x`, `case-sensitive`,
+  `whole-word`, `chevron-up`/`chevron-down`, `replace`, `replace-all`,
+  `corner-down-left`) with the words and the bound shortcuts in their
+  tooltips; the two search modifiers are `checkable` instead of swapping
+  roles; the replace toggle is square both ways so the bar no longer resizes
+  under the pointer. The encoding button and the empty page's two verbs keep
+  their words behind a leading glyph. The encoding chooser's current row and
+  hovered row now differ. Hand check: `VAL-GRA-FEEDBACK`.
 - Grafita is 1.2.0 and installed; Siderita carries the same verified core.
 - `G8-A` touches `siderita/src/editor.rs`, because a new `SaveRefusal` variant
   stops the other host compiling until it presents it. The author chose two

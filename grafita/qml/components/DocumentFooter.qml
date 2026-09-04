@@ -91,6 +91,27 @@ Item {
 
         Accessible.role: Accessible.Button
         Accessible.name: "Read this document as another encoding"
+
+        // The encoding name is the information, so the label stays; the glyph
+        // in front says what kind of thing it names.
+        contentItem: Row {
+            spacing: CelestinaTheme.spaceXs
+
+            CelestinaIcon {
+                anchors.verticalCenter: parent.verticalCenter
+                name: "binary"
+                tone: encodingButton.enabled ? CelestinaIcon.Primary
+                                             : CelestinaIcon.Secondary
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: encodingButton.text
+                textFormat: Text.PlainText
+                font: encodingButton.font
+                color: encodingButton.enabled ? CelestinaTheme.text
+                                              : CelestinaTheme.textMuted
+            }
+        }
     }
 
     Row {
@@ -102,23 +123,37 @@ Item {
         spacing: CelestinaTheme.spaceSm
         visible: root.session.active
 
-        CelestinaButton {
-            text: "Deshacer"
-            enabled: root.session.canUndo
-            onClicked: root.session.undo()
+        // Undo and redo are one pair, so they share one capsule; the shortcuts
+        // named in the tooltips are the ones Main.qml binds.
+        CelestinaCapsule {
+            anchors.verticalCenter: parent.verticalCenter
+
+            CelestinaIconButton {
+                iconName: "undo"
+                role: CelestinaButton.Ghost
+                helpText: "Deshacer (Ctrl+Z)"
+                enabled: root.session.canUndo
+                onClicked: root.session.undo()
+            }
+            CelestinaIconButton {
+                iconName: "redo"
+                role: CelestinaButton.Ghost
+                helpText: "Rehacer (Ctrl+Shift+Z)"
+                enabled: root.session.canRedo
+                onClicked: root.session.redo()
+            }
         }
-        CelestinaButton {
-            text: "Rehacer"
-            enabled: root.session.canRedo
-            onClicked: root.session.redo()
-        }
-        CelestinaButton {
-            text: "Cerrar"
+        CelestinaIconButton {
+            anchors.verticalCenter: parent.verticalCenter
+            iconName: "x"
+            helpText: "Cerrar (Ctrl+W)"
             onClicked: root.session.requestClose()
         }
-        CelestinaButton {
-            text: "Guardar"
+        CelestinaIconButton {
+            anchors.verticalCenter: parent.verticalCenter
+            iconName: "save"
             role: CelestinaButton.Primary
+            helpText: "Guardar (Ctrl+S)"
             enabled: root.session.dirty && !root.session.busy
             onClicked: root.session.save()
         }

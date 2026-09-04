@@ -189,16 +189,19 @@ Item {
                     // dragging one from disturbing how the rest lay themselves out.
                     width: labelMetrics.width + root.closeButtonWidth + CelestinaTheme.space2xl
                     height: CelestinaTheme.controlHeight
-                    radius: CelestinaTheme.radiusSm
-                    // An idle tab shows the strip behind it rather than a colour of
-                    // its own; `withAlpha` at zero is the theme's way of saying that
-                    // without writing a literal. A held tab darkens like any pressed
-                    // control, so the click reads before the tab switches.
-                    color: dragArea.pressed ? CelestinaTheme.surfaceStrong
-                           : tab.active ? CelestinaTheme.surfaceSelected
-                           : (hover.hovered
-                              ? CelestinaTheme.surfaceHover
-                              : CelestinaTheme.withAlpha(CelestinaTheme.surface, 0))
+                    // The tab paints nothing itself: its fill is the suite's one
+                    // row recipe below, so an idle tab shows the strip behind it,
+                    // a hovered one lights, a held one darkens like any pressed
+                    // control and the current one wears the selected surface.
+                    color: CelestinaTheme.clear
+
+                    CelestinaRowHighlight {
+                        anchors.fill: parent
+                        hovered: hover.hovered
+                        pressed: dragArea.pressed
+                        selected: tab.active
+                        selectedFill: CelestinaTheme.surfaceSelected
+                    }
 
                     TextMetrics {
                         id: labelMetrics
@@ -222,6 +225,8 @@ Item {
                     Accessible.name: tab.dirty ? tab.label + ", sin guardar" : tab.label
                     Accessible.selected: tab.active
 
+                    // Non-blocking, so the pointer over the close glyph still
+                    // counts as over the tab and the row stays lit beneath it.
                     HoverHandler { id: hover }
 
                     MouseArea {
@@ -285,6 +290,11 @@ Item {
                         anchors.rightMargin: CelestinaTheme.spaceXs
                         anchors.verticalCenter: parent.verticalCenter
                         iconName: "x"
+                        // Ghost: at rest the glyph sits bare on the tab. A tonal
+                        // fill here painted a rectangle inside every tab and a
+                        // second hover surface on top of the tab's own.
+                        role: CelestinaButton.Ghost
+                        density: CelestinaButton.Compact
                         Accessible.role: Accessible.Button
                         Accessible.name: "Cerrar " + tab.label
                         onClicked: root.closeRequested(tab.index)

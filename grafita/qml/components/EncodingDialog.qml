@@ -84,15 +84,14 @@ CelestinaModalLayer {
 
                 HoverHandler { id: rowHover }
 
-                // Shown rather than tinted to nothing: only the selected row
-                // and the one under the pointer carry a surface at all, and
-                // the selected one carries the stronger of the two.
-                Rectangle {
+                // The suite's one row recipe: the current row wears the
+                // accent badge, the row under the pointer the quieter hover
+                // surface, and a held row darkens so the click reads.
+                CelestinaRowHighlight {
                     anchors.fill: row
-                    visible: row.ListView.isCurrentItem || rowHover.hovered
-                    radius: CelestinaTheme.radiusSm
-                    color: row.ListView.isCurrentItem ? CelestinaTheme.surfaceHover
-                                                      : CelestinaTheme.controlFill
+                    hovered: rowHover.hovered
+                    pressed: rowPress.pressed
+                    selected: row.ListView.isCurrentItem
                 }
 
                 Text {
@@ -115,6 +114,7 @@ CelestinaModalLayer {
                 }
 
                 MouseArea {
+                    id: rowPress
                     anchors.fill: row
                     onClicked: {
                         list.currentIndex = row.index

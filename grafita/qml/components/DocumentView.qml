@@ -99,8 +99,15 @@ Item {
         // focuses the surface: on the gutter the caret goes to the start of
         // the line beside the pointer, anywhere else to the end of the text.
         // Clicks on the text itself never reach this — the widget takes them.
+        //
+        // Stacking order this relies on: declared first, so it sits under the
+        // gutter, the Flickable and the TextEdit; a press lands on the topmost
+        // item that accepts it, so only the frame outside the Flickable reaches
+        // here. Composed events are not propagated: whatever this area takes,
+        // it keeps — the default, made explicit.
         MouseArea {
             anchors.fill: parent
+            propagateComposedEvents: false
             onClicked: function(mouse) {
                 const inGutter = mouse.x < gutter.x + gutter.width
                 const point = body.mapFromItem(page, mouse.x, mouse.y)
@@ -203,6 +210,8 @@ Item {
             // rather than behind it because a scrollable Flickable takes every
             // press it receives, so nothing under it would ever see the click.
             // Behind the widget: a click on a line still belongs to the text.
+            // Stacking order this relies on: declared before `body`, so the
+            // TextEdit is above it and takes every press on painted lines.
             MouseArea {
                 width: Math.max(scroller.width, scroller.contentWidth)
                 height: Math.max(scroller.height, scroller.contentHeight)
@@ -303,21 +312,29 @@ Item {
 
         GlassMenuItem {
             text: qsTr("Cortar")
+            icon.name: "scissors"
+            icon.source: CelestinaTheme.fallbackIcon("scissors")
             enabled: body.selectedText.length > 0
             onTriggered: body.cut()
         }
         GlassMenuItem {
             text: qsTr("Copiar")
+            icon.name: "copy"
+            icon.source: CelestinaTheme.fallbackIcon("copy")
             enabled: body.selectedText.length > 0
             onTriggered: body.copy()
         }
         GlassMenuItem {
             text: qsTr("Pegar")
+            icon.name: "clipboard-paste"
+            icon.source: CelestinaTheme.fallbackIcon("clipboard-paste")
             enabled: body.canPaste
             onTriggered: body.paste()
         }
         GlassMenuItem {
             text: qsTr("Seleccionar todo")
+            icon.name: "files"
+            icon.source: CelestinaTheme.fallbackIcon("files")
             enabled: body.length > 0
             onTriggered: body.selectAll()
         }
@@ -377,6 +394,31 @@ Item {
         return cut >= 0 ? path.substring(cut + 1) : path
     }
 
+    // A button label with a leading glyph, inked like the shared button's own
+    // text so the two empty-state verbs read as the same control with an icon.
+    component VerbLabel: Row {
+        id: verb
+        required property CelestinaButton owner
+        required property string glyph
+        readonly property bool onAccent: verb.owner.role === CelestinaButton.Primary
+        spacing: CelestinaTheme.spaceXs
+
+        CelestinaIcon {
+            anchors.verticalCenter: parent.verticalCenter
+            name: verb.glyph
+            tone: !verb.owner.enabled ? CelestinaIcon.Secondary
+                  : verb.onAccent ? CelestinaIcon.OnAccent : CelestinaIcon.Primary
+        }
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: verb.owner.text
+            textFormat: Text.PlainText
+            font: verb.owner.font
+            color: !verb.owner.enabled ? CelestinaTheme.textMuted
+                   : verb.onAccent ? CelestinaTheme.accentInk : CelestinaTheme.text
+        }
+    }
+
     // Nothing open: say so, offer the way in, and say what went wrong if
     // something did. An editor with no document and no button is a dead end.
     Column {
@@ -406,18 +448,23 @@ Item {
                 anchors.horizontalCenter: parent.horizontalCenter
                 spacing: CelestinaTheme.spaceSm
 
+                // The page's two verbs keep their words: a glyph in front says
+                // what each opens, the text says it in the user's language.
                 CelestinaButton {
                     id: openButton
                     text: "Abrir archivo…"
                     role: CelestinaButton.Primary
                     enabled: !root.session.busy
                     onClicked: openDialog.open()
+                    contentItem: VerbLabel { owner: openButton; glyph: "folder-open" }
                 }
 
                 CelestinaButton {
+                    id: newButton
                     text: "Documento nuevo"
                     enabled: !root.session.busy
                     onClicked: root.session.newDocument()
+                    contentItem: VerbLabel { owner: newButton; glyph: "file-plus" }
                 }
             }
         }
@@ -459,6 +506,9 @@ Item {
                     Accessible.name: "Abrir " + root.baseName(entry.modelData)
                     Accessible.description: entry.modelData
 
+                    // Only for the cursor: a Control has no `cursorShape`, so
+                    // this handler is the one way to get the hand. It reads
+                    // nothing else — the hover fill is the button's own.
                     HoverHandler { cursorShape: Qt.PointingHandCursor }
 
                     contentItem: Text {

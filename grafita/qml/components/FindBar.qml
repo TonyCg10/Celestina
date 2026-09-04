@@ -29,7 +29,7 @@ Item {
     }
 
     function refreshSearch() {
-        root.session.setSearch(patternField.text, caseToggle.on, wordToggle.on)
+        root.session.setSearch(patternField.text, caseToggle.checked, wordToggle.checked)
     }
 
     onShownChanged: if (!shown) root.session.setSearch("", false, false)
@@ -77,43 +77,53 @@ Item {
                 Accessible.name: "Buscar"
             }
 
-            CelestinaButton {
+            // The two search modifiers are toggles: the shared button wears
+            // Selected while checked, and the state is said in words to
+            // assistive technology.
+            CelestinaIconButton {
                 id: caseToggle
-                // A plain toggle: the shared button carries no checked state, so
-                // the pressed look is expressed through its role and the state
-                // is said in words to assistive technology.
-                property bool on: false
-                text: "Aa"
-                role: caseToggle.on ? CelestinaButton.Primary : CelestinaButton.Tonal
-                onClicked: { caseToggle.on = !caseToggle.on; root.refreshSearch() }
+                anchors.verticalCenter: parent.verticalCenter
+                iconName: "case-sensitive"
+                checkable: true
+                helpText: qsTr("Distinguir mayúsculas")
+                onToggled: root.refreshSearch()
 
                 Accessible.role: Accessible.CheckBox
                 Accessible.name: "Distinguir mayúsculas"
-                Accessible.checked: caseToggle.on
+                Accessible.checked: caseToggle.checked
             }
 
-            CelestinaButton {
+            CelestinaIconButton {
                 id: wordToggle
-                property bool on: false
-                text: "|ab|"
-                role: wordToggle.on ? CelestinaButton.Primary : CelestinaButton.Tonal
-                onClicked: { wordToggle.on = !wordToggle.on; root.refreshSearch() }
+                anchors.verticalCenter: parent.verticalCenter
+                iconName: "whole-word"
+                checkable: true
+                helpText: "Solo palabras completas"
+                onToggled: root.refreshSearch()
 
                 Accessible.role: Accessible.CheckBox
                 Accessible.name: "Solo palabras completas"
-                Accessible.checked: wordToggle.on
+                Accessible.checked: wordToggle.checked
             }
 
-            CelestinaButton {
-                text: "Anterior"
-                enabled: root.session.searchMatches > 0
-                onClicked: root.session.findPrevious()
-            }
+            CelestinaCapsule {
+                anchors.verticalCenter: parent.verticalCenter
 
-            CelestinaButton {
-                text: "Siguiente"
-                enabled: root.session.searchMatches > 0
-                onClicked: root.session.findNext()
+                CelestinaIconButton {
+                    iconName: "chevron-up"
+                    role: CelestinaButton.Ghost
+                    helpText: "Anterior (Shift+F3)"
+                    enabled: root.session.searchMatches > 0
+                    onClicked: root.session.findPrevious()
+                }
+
+                CelestinaIconButton {
+                    iconName: "chevron-down"
+                    role: CelestinaButton.Ghost
+                    helpText: "Siguiente (F3)"
+                    enabled: root.session.searchMatches > 0
+                    onClicked: root.session.findNext()
+                }
             }
 
             Text {
@@ -139,9 +149,21 @@ Item {
                 Accessible.ignored: tally.text.length === 0
             }
 
-            CelestinaButton {
-                text: root.replacing ? "Menos" : "Reemplazar…"
-                onClicked: root.replacing = !root.replacing
+            // Square whichever way it is toggled, so the bar never resizes
+            // under the pointer that just clicked it. The window may also
+            // open the replace row (Ctrl+H), so the state is bound both ways.
+            CelestinaIconButton {
+                id: replaceToggle
+                anchors.verticalCenter: parent.verticalCenter
+                iconName: "replace"
+                checkable: true
+                checked: root.replacing
+                helpText: root.replacing ? "Ocultar reemplazo" : "Mostrar reemplazo"
+                onToggled: root.replacing = replaceToggle.checked
+
+                Accessible.role: Accessible.CheckBox
+                Accessible.name: "Mostrar reemplazo"
+                Accessible.checked: root.replacing
             }
         }
 
@@ -159,14 +181,18 @@ Item {
                 Accessible.name: "Reemplazar por"
             }
 
-            CelestinaButton {
-                text: "Reemplazar"
+            CelestinaIconButton {
+                anchors.verticalCenter: parent.verticalCenter
+                iconName: "replace"
+                helpText: "Reemplazar esta coincidencia"
                 enabled: root.session.searchIndex >= 0
                 onClicked: root.session.replaceCurrent(replacementField.text)
             }
 
-            CelestinaButton {
-                text: "Reemplazar todo"
+            CelestinaIconButton {
+                anchors.verticalCenter: parent.verticalCenter
+                iconName: "replace-all"
+                helpText: "Reemplazar todas"
                 enabled: root.session.searchMatches > 0
                 onClicked: root.session.replaceAll(replacementField.text)
             }
@@ -182,8 +208,10 @@ Item {
                 Accessible.name: "Ir a la línea"
             }
 
-            CelestinaButton {
-                text: "Ir"
+            CelestinaIconButton {
+                anchors.verticalCenter: parent.verticalCenter
+                iconName: "corner-down-left"
+                helpText: qsTr("Ir a la línea")
                 enabled: lineField.text.length > 0
                 onClicked: root.goToTypedLine()
             }
