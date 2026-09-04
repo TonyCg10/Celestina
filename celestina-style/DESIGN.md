@@ -295,8 +295,10 @@ compatibility policy changes that contract.
 | `CelestinaIconShapes` | Stable filled content-shape catalogue; consumers do not call its path data directly |
 | `CelestinaSurface` | L0/L1 semantic container; role owns fill/ink/radius/outline |
 | `CelestinaBackdrop` | Canonical quiet window background; no product state |
-| `CelestinaButton` | Tonal, filled-accent, destructive, selected and ghost emphasis; compact/regular/prominent density; keyboard focus ring and recoil |
-| `CelestinaIconButton` | Icon-only action with the same emphasis, tooltip/name and focus requirements as a button |
+| `CelestinaButton` | Tonal, filled-accent, destructive, selected and ghost emphasis; compact/regular/prominent density; keyboard focus ring; press recoil on fill and content, never on the hit box; a checked `checkable` button paints as Selected |
+| `CelestinaIconButton` | Icon-only action with the same emphasis, tooltip/name and focus requirements as a button; its fill is always a circle, the one hover shape behind every glyph |
+| `CelestinaCapsule` | Pill surface grouping a few Ghost icon actions into one control-shaped control; owns surface and spacing only |
+| `CelestinaRowHighlight` | The one hover/press/selected/drag fill behind list rows, grid cells and column titles; the host reports states, it paints them and holds no pointer |
 | `CelestinaIcon` | One name/fallback/tone API for Lucide-style UI glyphs |
 | `CelestinaSectionLabel` | Semantic section heading with shared type/spacing, not product navigation state |
 | `CelestinaFocusRing` | Reusable 2 px exterior ring shown for `visualFocus`, never merely for pointer focus |
@@ -334,7 +336,9 @@ consumer evidence in the same checkpoint.
 ## 7. States and accessibility
 
 Every interactive component defines `hover`, `pressed`, `selected`, `disabled`
-and `focusVisible` when those states apply. Disabled uses a dedicated semantic
+and `focusVisible` when those states apply. `pressed` is visible as a darker
+fill and, on buttons, as the §2 recoil; a control that only lights under the
+pointer and never answers the press is a defect. Disabled uses a dedicated semantic
 token, not arbitrary opacity. Selection uses an accent-derived treatment and
 keyboard focus uses the exterior focus ring.
 

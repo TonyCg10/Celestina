@@ -15,6 +15,8 @@ CelestinaBackdrop 1.0 CelestinaBackdrop.qml
 CelestinaButton 1.0 CelestinaButton.qml
 CelestinaShadow 1.0 CelestinaShadow.qml
 CelestinaIconButton 1.0 CelestinaIconButton.qml
+CelestinaCapsule 1.0 CelestinaCapsule.qml
+CelestinaRowHighlight 1.0 CelestinaRowHighlight.qml
 CelestinaIcon 1.0 CelestinaIcon.qml
 CelestinaSectionLabel 1.0 CelestinaSectionLabel.qml
 CelestinaFocusRing 1.0 CelestinaFocusRing.qml

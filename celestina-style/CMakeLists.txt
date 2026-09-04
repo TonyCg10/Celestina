@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina-style VERSION 1.8.3 LANGUAGES CXX)
+project(celestina-style VERSION 1.8.4 LANGUAGES CXX)
 
 include(CTest)
 
@@ -37,6 +37,8 @@ qt_add_qml_module(celestina-style
         CelestinaButton.qml
         CelestinaShadow.qml
         CelestinaIconButton.qml
+        CelestinaCapsule.qml
+        CelestinaRowHighlight.qml
         CelestinaIcon.qml
         CelestinaSectionLabel.qml
         CelestinaFocusRing.qml
@@ -157,6 +159,20 @@ qt_add_qml_module(celestina-style
         icons/unplug.svg
         icons/wifi.svg
         icons/zap.svg
+        icons/case-sensitive.svg
+        icons/chevron-left.svg
+        icons/chevron-up.svg
+        icons/circle-stop.svg
+        icons/corner-down-left.svg
+        icons/link.svg
+        icons/redo.svg
+        icons/replace.svg
+        icons/replace-all.svg
+        icons/save.svg
+        icons/undo.svg
+        icons/unlink.svg
+        icons/whole-word.svg
+        icons/zoom-in.svg
         icons/glass-noise.png
         fonts/InterVariable.ttf
 )

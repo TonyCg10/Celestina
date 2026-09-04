@@ -4,6 +4,26 @@ This queue contains only checks that need the author's real compositor,
 perception, input devices or assistive-technology stack. It does not block
 [ROADMAP.md](ROADMAP.md).
 
+## VAL-STYLE-05 — Press recoil and the one hover circle
+
+- **Status:** pending
+- **Related implementation:** the 2026-09-03 feedback delivery (`FEEDBACK-1`)
+- **Requires:** any verified consumer on the real session (Siderita's bottom
+  pills are the reference, since the recording that opened this came from
+  them), a pointer, and `CELESTINA_REDUCED_MOTION` off and then on
+- **Procedure:** hover, press and release the sort direction, the view-mode
+  glyphs, "Ocultos" and the size glyph; hold a press and drift the pointer a
+  few pixels before releasing; open the size popover and click its glyph again;
+  repeat with reduced motion on
+- **Pass condition:** every glyph shows the same circle on hover; the press
+  reads as a slight sink that settles back on release, and the hit box never
+  moves; a drifting click still acts; the popover closes on the second click
+  and does not reopen; with reduced motion on the sink is instant and nothing
+  else changes
+- **Result:** not run by hand
+- **Evidence:** the output and scale used, and which control, if any, still
+  misses a click or shows two highlights at once
+
 ## VAL-STYLE-01 — Compositor glass and content-icon review
 
 - **Status:** pending

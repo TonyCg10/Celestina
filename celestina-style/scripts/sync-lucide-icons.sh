@@ -41,6 +41,8 @@ icons=(
     view-grid:layout-grid view-list:list view-refresh:refresh-cw
     view-sort-ascending:arrow-up-narrow-wide
     view-sort-descending:arrow-down-wide-narrow x:x
+    # Icon-first actions (2026-09): the verbs the apps used to spell out.
+    case-sensitive:case-sensitive chevron-left:chevron-left chevron-up:chevron-up circle-stop:circle-stop corner-down-left:corner-down-left link:link redo:redo-2 replace:replace replace-all:replace-all save:save undo:undo-2 unlink:unlink whole-word:whole-word zoom-in:zoom-in
 )
 
 for mapping in "${icons[@]}"; do

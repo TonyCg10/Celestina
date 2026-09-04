@@ -755,6 +755,11 @@ QtObject {
     readonly property int motionNormal: 200
     readonly property int motionSlow: 350
     readonly property int motionCeiling: 500
+    // Press recoil (DESIGN §2): the control sinks to this scale on press in
+    // `motionFast` and settles back in `motionSlow`. A consumer applies it to a
+    // control's fill and content, never to the hit box, so the pointer's
+    // target does not shrink under the finger that is on it.
+    readonly property real pressRecoilScale: 0.96
     // The universal departure. Every surface leaves the same way — shrinking
     // into the screen while it fades, on this one clock with `easeStandard`
     // and this one depth — whether it is a menu closing, a display's card

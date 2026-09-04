@@ -165,6 +165,71 @@ Window {
                         onClicked: modalSpecimen.shown = true
                     }
                 }
+                // Icon-first actions: a checkable glyph reads as Selected while
+                // it is on, a capsule groups a few glyphs into one control-shaped
+                // surface, and every one of them sinks on press.
+                Row {
+                    spacing: 14
+                    CelestinaIconButton {
+                        checkable: true
+                        checked: true
+                        iconName: "eye"
+                        helpText: "Conmutador activo"
+                    }
+                    CelestinaIconButton {
+                        checkable: true
+                        role: CelestinaButton.Ghost
+                        iconName: "eye-off"
+                        helpText: "Conmutador en reposo"
+                    }
+                    CelestinaCapsule {
+                        CelestinaIconButton { role: CelestinaButton.Ghost; iconName: "view-sort-ascending"; helpText: "Ascendente" }
+                        CelestinaIconButton { role: CelestinaButton.Ghost; iconName: "view-sort-descending"; helpText: "Descendente" }
+                    }
+                    CelestinaCapsule {
+                        CelestinaIconButton { role: CelestinaButton.Ghost; iconName: "view-grid"; checkable: true; checked: true; helpText: qsTr("Cuadrícula") }
+                        CelestinaIconButton { role: CelestinaButton.Ghost; iconName: "view-list"; checkable: true; helpText: "Lista" }
+                        CelestinaIconButton { role: CelestinaButton.Ghost; iconName: "view-details"; checkable: true; helpText: "Detalles" }
+                    }
+                    CelestinaIconButton {
+                        role: CelestinaButton.Destructive
+                        iconName: "user-trash"
+                        helpText: "Vaciar"
+                    }
+                }
+                // The one row fill every list in the suite paints.
+                Column {
+                    width: 260
+                    spacing: 2
+                    Repeater {
+                        model: [
+                            { label: "Fila en reposo", h: false, p: false, s: false },
+                            { label: "Fila bajo el puntero", h: true, p: false, s: false },
+                            { label: "Fila pulsada", h: true, p: true, s: false },
+                            { label: "Fila seleccionada", h: false, p: false, s: true }
+                        ]
+                        delegate: Item {
+                            required property var modelData
+                            width: 260
+                            height: CelestinaTheme.controlHeightSm
+                            CelestinaRowHighlight {
+                                anchors.fill: parent
+                                hovered: parent.modelData.h
+                                pressed: parent.modelData.p
+                                selected: parent.modelData.s
+                            }
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: CelestinaTheme.spaceMd
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: parent.modelData.label
+                                color: CelestinaTheme.text
+                                font.family: win.sans
+                                font.pixelSize: CelestinaTheme.fontBody
+                            }
+                        }
+                    }
+                }
             }
 
             // ── Text field ─────────────────────────────────────────────────

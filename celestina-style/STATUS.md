@@ -1,6 +1,6 @@
 # CelestinaStyle status
 
-- **Updated:** 2026-08-12
+- **Updated:** 2026-09-03
 - **Implementation:** the shared source contract has a 1.5.0 milestone
   prototype with the two reading controls, demonstrated shell glyphs, additive
   `GlassSurface.ExternalBackdrop` mode, compatible opt-in `ContentSurface` and
@@ -13,6 +13,22 @@
 
 ## Current checkout truth
 
+- The 2026-09-03 delivery answers the author's recording of Siderita's pills:
+  hover and open state painted the same colour, a click that drifted a pixel
+  was lost, and the apps spelled their actions out in words. `CelestinaButton`
+  now sinks its fill and content by `pressRecoilScale` while down (the §2
+  recoil, never applied to the hit box) and paints a checked `checkable` button
+  as Selected, so a toggle no longer switches its role by hand;
+  `CelestinaIconButton` is a circle at every density; two components are
+  published for what every app had hand-rolled — `CelestinaCapsule` for a
+  group of glyph actions and `CelestinaRowHighlight` for the one row fill,
+  with a pressed state Siderita's rows had never had. `CelestinaInputShield`
+  gains `yieldsToHost`: under a Button its zero-threshold drag handler took the
+  grab on the first pixel and the Button lost its click. Fourteen Lucide
+  glyphs join the catalogue for the verbs the apps used to write (`undo`,
+  `redo`, `save`, `replace`, `zoom-in`, `circle-stop`, `link`, `unlink`…), at
+  the catalogue's 2.5 stroke. Gallery and Qt Quick tests cover recoil, the
+  circle, the toggle and the drifting click.
 - `CelestinaScrollBar` and `CelestinaLineGutter` are published: a scroll
   position built from primitives so its whole anatomy comes from tokens, and
   line numbers that build only the delegates a viewport shows. Grafita's window

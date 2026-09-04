@@ -34,6 +34,16 @@ Item {
     property bool active: true
     property bool swallowClicks: true
     property bool blockHover: true
+    // For a host control that owns its own press — a Button with this shield
+    // as its child. A handler on a child is visited before its parent item, so
+    // this shield's drag handler held a passive grab under the Button's
+    // exclusive one, and a zero threshold plus `CanTakeOverFromItems` made it
+    // take that grab on the first pixel of movement: the Button lost its press
+    // and the click never came — the "sometimes it does not respond" of every
+    // floating pill. Such a host already keeps the pointer from what is below,
+    // so it yields the drag; a layer that must out-grab its *own* dismissal
+    // MouseArea on the way out (the modal) keeps the default.
+    property bool yieldsToHost: false
     // Whether the pointer is over this surface, whichever knob is set.
     readonly property alias hovered: hoverGuard.hovered
 
@@ -61,8 +71,12 @@ Item {
         // content — from ever reaching that handler. Controls keep what is
         // theirs: a text field holds its own grab while it selects.
         dragThreshold: 0
-        grabPermissions: PointerHandler.CanTakeOverFromAnything
-                         | PointerHandler.ApprovesTakeOverByAnything
+        grabPermissions: shield.yieldsToHost
+                         ? PointerHandler.CanTakeOverFromHandlersOfSameType
+                           | PointerHandler.CanTakeOverFromHandlersOfDifferentType
+                           | PointerHandler.ApprovesTakeOverByAnything
+                         : PointerHandler.CanTakeOverFromAnything
+                           | PointerHandler.ApprovesTakeOverByAnything
     }
 
     MouseArea {

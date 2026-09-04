@@ -126,3 +126,4 @@ celestina-style	1.8.3	bug	GLASS-1-STY	Fix the glass the drawing milestone stripp
 grafita	1.2.3	bug	FEEDBACK-1-GRA	Fix the tab close fill and turn the footer and find bar into icon actions
 fluorita	1.3.4	bug	FEEDBACK-1-FLU	Fix the invisible arrows and the dock clicks and turn the panel verbs into icons
 magnetita	1.2.2	bug	FEEDBACK-1-MAG	Fix the plugin row lighting twice and turn forget and pair into icons
+celestina-style	1.8.4	bug	FEEDBACK-1-STY	Fix the flat press, the square glyph fill and the click the shield stole, and publish the capsule and row fill

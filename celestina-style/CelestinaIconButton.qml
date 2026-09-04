@@ -17,6 +17,10 @@ CelestinaButton {
     // hit box — at the `controlHeightXs` floor and shrinks `iconSize` alone,
     // rather than shrinking the control under the floor.
     implicitWidth: implicitHeight
+    // One circle behind every glyph, the same diameter wherever it sits: the
+    // suite's icon actions share that hover shape, and a glyph in a rounded
+    // rectangle beside a glyph in a circle reads as two different controls.
+    backgroundRadius: Math.min(width, height) / 2
     leftPadding: 0
     rightPadding: 0
     topPadding: 0
@@ -52,10 +56,12 @@ CelestinaButton {
             anchors.centerIn: parent
             tone: !control.enabled
                   ? CelestinaIcon.Secondary
-                  : control.role === CelestinaButton.Primary
+                  : control.effectiveRole === CelestinaButton.Primary
                     ? CelestinaIcon.OnAccent
-                  : control.role === CelestinaButton.Selected
+                  : control.effectiveRole === CelestinaButton.Selected
                     ? CelestinaIcon.Accent
+                  : control.effectiveRole === CelestinaButton.Destructive
+                    ? CelestinaIcon.Danger
                     : CelestinaIcon.Primary
         }
     }

@@ -13,6 +13,12 @@ import QtQuick.Controls
 // de reimplementar cada una el relleno hover/press y el acento primario. Un
 // botón que flota sobre contenido desplazable (el selector del portal) es una
 // especialización aparte: se queda con su fondo de cristal.
+//
+// Three states share one vocabulary here so no consumer has to invent them:
+// hover tints the fill, a press darkens it *and* sinks the whole button by
+// `pressRecoilScale` — the recoil DESIGN §2 specifies — and a checkable button
+// that is checked wears the Selected fill whatever role it has at rest, so a
+// toggle is `checkable: true` and nothing else.
 // ──────────────────────────────────────────────────────────────────────────────
 Button {
     id: control
@@ -35,6 +41,21 @@ Button {
     property int density: CelestinaButton.Compact
     property string helpText: ""
 
+    // The corner of the fill. Density decides it; the icon button rounds it
+    // into the suite's one hover circle.
+    property real backgroundRadius: density === CelestinaButton.Prominent
+                                    || density === CelestinaButton.Regular
+                                    ? CelestinaTheme.radiusButton
+                                    : CelestinaTheme.radiusSm
+
+    // The role the fill and ink actually paint: a checked toggle is Selected.
+    readonly property int effectiveRole: checkable && checked
+                                         ? CelestinaButton.Selected : role
+
+    // Sink on press, settle on release. Applied to fill and content, never to
+    // the control: the hit box stays where the pointer found it.
+    readonly property real recoil: down ? CelestinaTheme.pressRecoilScale : 1
+
     hoverEnabled: true
     implicitHeight: density === CelestinaButton.Prominent
                     ? CelestinaTheme.controlHeightXl
@@ -50,6 +71,12 @@ Button {
     ToolTip.visible: helpText.length > 0 && hovered
     ToolTip.text: helpText
 
+    // Fast in, slow out: the sink is immediate, the return is felt. Read when
+    // the Behavior starts, so `down` is the state being entered.
+    readonly property int recoilDuration: CelestinaTheme.reducedMotion
+                                          ? 0 : down ? CelestinaTheme.motionFast
+                                                     : CelestinaTheme.motionSlow
+
     contentItem: Text {
         text: control.text
         // A label is text, never markup. These controls carry strings their
@@ -62,23 +89,31 @@ Button {
         font: control.font
         color: !control.enabled
                ? CelestinaTheme.textMuted
-               : control.role === CelestinaButton.Primary ? CelestinaTheme.accentInk
-               : control.role === CelestinaButton.Destructive
+               : control.effectiveRole === CelestinaButton.Primary ? CelestinaTheme.accentInk
+               : control.effectiveRole === CelestinaButton.Destructive
                  ? (control.down ? CelestinaTheme.dangerInk
                                  : CelestinaTheme.dangerFillInk)
-               : control.role === CelestinaButton.Selected ? CelestinaTheme.accentLink
+               : control.effectiveRole === CelestinaButton.Selected ? CelestinaTheme.accentLink
                : CelestinaTheme.text
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight
+        scale: control.recoil
+        transformOrigin: Item.Center
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: control.recoilDuration
+                easing.type: CelestinaTheme.easeStandard
+            }
+        }
     }
 
     background: Rectangle {
-        radius: control.density === CelestinaButton.Prominent
-                || control.density === CelestinaButton.Regular
-                ? CelestinaTheme.radiusButton
-                : CelestinaTheme.radiusSm
+        radius: control.backgroundRadius
         opacity: control.enabled ? 1 : CelestinaTheme.disabledOpacity
+        scale: control.recoil
+        transformOrigin: Item.Center
         color: {
             // A disabled primary keeps its accent wash: `accentDisabledFill`
             // exists for exactly that, and without it the one screen action
@@ -92,22 +127,22 @@ Button {
             // same fill. The remaining roles have no disabled token of their
             // own, so a disabled destructive still loses its red.
             if (!control.enabled)
-                return control.role === CelestinaButton.Primary
+                return control.effectiveRole === CelestinaButton.Primary
                      ? CelestinaTheme.accentDisabledFill
                      : CelestinaTheme.controlFill
-            if (control.role === CelestinaButton.Primary)
+            if (control.effectiveRole === CelestinaButton.Primary)
                 return control.down ? CelestinaTheme.accentPressed
                      : control.hovered ? CelestinaTheme.accentHover
                      : CelestinaTheme.accent
-            if (control.role === CelestinaButton.Destructive)
+            if (control.effectiveRole === CelestinaButton.Destructive)
                 return control.down ? CelestinaTheme.danger
                      : control.hovered ? CelestinaTheme.dangerBorder
                      : CelestinaTheme.dangerFill
-            if (control.role === CelestinaButton.Selected)
+            if (control.effectiveRole === CelestinaButton.Selected)
                 return control.down ? CelestinaTheme.surfaceSelected
                      : control.hovered ? CelestinaTheme.accentSoft
                      : CelestinaTheme.badgeAccentFill
-            if (control.role === CelestinaButton.Ghost)
+            if (control.effectiveRole === CelestinaButton.Ghost)
                 return control.down ? CelestinaTheme.surfaceStrong
                      : control.hovered ? CelestinaTheme.controlFill
                      : CelestinaTheme.clear
@@ -127,6 +162,13 @@ Button {
             ColorAnimation {
                 duration: CelestinaTheme.reducedMotion
                           ? 0 : CelestinaTheme.motionFast
+            }
+        }
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: control.recoilDuration
+                easing.type: CelestinaTheme.easeStandard
             }
         }
     }

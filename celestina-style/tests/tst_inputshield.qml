@@ -43,6 +43,26 @@ TestCase {
                 swallowClicks: false
             }
         }
+
+        // A pill that yields the drag to its own press: the shape every
+        // floating button in Siderita has.
+        Button {
+            id: drifter
+            x: 200
+            y: 120
+            width: 100
+            height: 40
+            text: "pill"
+            hoverEnabled: true
+
+            property int clicks: 0
+            onClicked: clicks += 1
+
+            CelestinaInputShield {
+                swallowClicks: false
+                yieldsToHost: true
+            }
+        }
     }
 
     function init() {
@@ -64,5 +84,20 @@ TestCase {
         mouseMove(host, host.width / 2, host.height / 2)
         tryCompare(host, "hovered", true)
         compare(shield.hovered, true)
+    }
+
+    // The drag handler on the shield claims the press with a zero threshold.
+    // Under a host that owns its own press it must never take that press
+    // away: a click whose pointer drifts a pixel between press and release is
+    // still a click, and the pill under it used to lose exactly those.
+    function test_a_drifting_click_still_reaches_a_yielding_host() {
+        drifter.clicks = 0
+        const x = drifter.width / 2
+        const y = drifter.height / 2
+        mousePress(drifter, x, y)
+        mouseMove(drifter, x + 3, y + 2)
+        mouseMove(drifter, x + 5, y + 3)
+        mouseRelease(drifter, x + 5, y + 3)
+        tryCompare(drifter, "clicks", 1)
     }
 }

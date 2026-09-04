@@ -22,7 +22,7 @@ the shell.
 | `CelestinaIcons.qml`, `CelestinaIconShapes.qml` | Closed Lucide UI names and generated Phosphor content shapes |
 | `CelestinaSurface.qml`, `CelestinaBackdrop.qml` | Canonical opaque L0/L1 composition |
 | `Glass*.qml` | Canonical floating/modal material over an explicit in-scene capture or compositor backdrop, with opt-in dense-content and contextual-veil roles |
-| `CelestinaButton.qml`, `CelestinaIconButton.qml`, `CelestinaTextField.qml`, `CelestinaSlider.qml`, `CelestinaSwitch.qml` | Shared interactive controls and focus/accessibility contracts |
+| `CelestinaButton.qml`, `CelestinaIconButton.qml`, `CelestinaCapsule.qml`, `CelestinaRowHighlight.qml`, `CelestinaTextField.qml`, `CelestinaSlider.qml`, `CelestinaSwitch.qml` | Shared interactive controls, the grouped-glyph capsule, the shared row fill and their focus/accessibility contracts |
 | `CelestinaModalLayer.qml`, `CelestinaInputShield.qml`, `CelestinaFocusRing.qml` | Modal lifecycle, pointer floor and keyboard-focus presentation |
 | `CelestinaFolderIcon.qml`, `CelestinaFileIcon.qml` | Token-derived filled content icons |
 | `qmldir`, `CMakeLists.txt` | Matching public source and compiled-module inventories |

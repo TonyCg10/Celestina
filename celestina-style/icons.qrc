@@ -99,6 +99,20 @@
     <file alias="unplug.svg">icons/unplug.svg</file>
     <file alias="wifi.svg">icons/wifi.svg</file>
     <file alias="zap.svg">icons/zap.svg</file>
+    <file alias="case-sensitive.svg">icons/case-sensitive.svg</file>
+    <file alias="chevron-left.svg">icons/chevron-left.svg</file>
+    <file alias="chevron-up.svg">icons/chevron-up.svg</file>
+    <file alias="circle-stop.svg">icons/circle-stop.svg</file>
+    <file alias="corner-down-left.svg">icons/corner-down-left.svg</file>
+    <file alias="link.svg">icons/link.svg</file>
+    <file alias="redo.svg">icons/redo.svg</file>
+    <file alias="replace.svg">icons/replace.svg</file>
+    <file alias="replace-all.svg">icons/replace-all.svg</file>
+    <file alias="save.svg">icons/save.svg</file>
+    <file alias="undo.svg">icons/undo.svg</file>
+    <file alias="unlink.svg">icons/unlink.svg</file>
+    <file alias="whole-word.svg">icons/whole-word.svg</file>
+    <file alias="zoom-in.svg">icons/zoom-in.svg</file>
     <file alias="glass-noise.png">icons/glass-noise.png</file>
   </qresource>
 </RCC>
