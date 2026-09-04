@@ -16,9 +16,10 @@
   reopened on the same click. `FloatingButton` now reads rest, hover, active
   and press as four fills, sinks by the suite recoil, yields the drag to its
   own press and carries a glyph; the popover decides at press time. Every
-  floating action is a glyph with the words in its tooltip ("Ocultos",
-  the size pill, the trash, recents and search headers, the operation
-  callout), the trash header no longer slides "Volver" under the pointer,
+  floating action is a glyph whose words live in its accessible name — the
+  hidden-files toggle, the size pill, the trash, recents and search headers,
+  the operation callout — and none of them paints a hover card. The trash
+  header no longer slides the back button under the pointer,
   the breadcrumbs are one hit target each at the pill's height, the search
   glyph stays put when the pill expands, bookmarks open on the first click,
   the eject glyph keeps its row lit, and every row and cell paints the shared

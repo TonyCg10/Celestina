@@ -45,8 +45,6 @@ Button {
     font.weight: CelestinaTheme.weightMedium
 
     Accessible.name: helpText.length > 0 ? helpText : text
-    ToolTip.visible: helpText.length > 0 && shield.hovered
-    ToolTip.text: helpText
 
     // The button already owns its click — a swallowing MouseArea would be
     // delivered before it — but hover and drag still leak through to the
