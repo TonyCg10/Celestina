@@ -1,6 +1,6 @@
 # Grafita status
 
-- **Updated:** 2026-09-03
+- **Updated:** 2026-09-07
 - **Implementation:** checkpoints G0-G13 are present and delivered; no
   checkpoint is active
 - **Author validation:** the version-1 interaction pass is closed; `VAL-G7`,
@@ -8,6 +8,11 @@
   excluded coverage is recorded in [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
+
+- Delivered as `1.2.4`: `FEEDBACK-4-GRA`. The encoding chooser's rows paint
+  the shared plate in its Content family; the tabs keep the Control family and
+  gain the sink. See
+  [the record](../docs/evidence/2026-09-07-two-families-and-a-path-editor.md).
 
 - Delivered as `1.2.3`: `FEEDBACK-1-GRA`. The tab's close button had no role
   and so painted a filled box at rest inside every tab, over the tab's own

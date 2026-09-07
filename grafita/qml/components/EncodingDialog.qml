@@ -89,6 +89,7 @@ CelestinaModalLayer {
                 // surface, and a held row darkens so the click reads.
                 CelestinaRowHighlight {
                     anchors.fill: row
+                    family: CelestinaRowHighlight.Content
                     hovered: rowHover.hovered
                     pressed: rowPress.pressed
                     selected: row.ListView.isCurrentItem
