@@ -147,11 +147,16 @@ Button {
                 return control.down ? CelestinaTheme.surfaceSelected
                      : control.hovered ? CelestinaTheme.accentSoft
                      : CelestinaTheme.badgeAccentFill
+            // Neutral roles lift grey under the pointer and take the accent's
+            // pressed wash under the finger, with the sink: the same three
+            // steps a Control-family row makes, so a button and the sidebar
+            // row beside it answer the hand in one language. A darker grey on
+            // press was the old vocabulary, and it read as nothing happening.
             if (control.effectiveRole === CelestinaButton.Ghost)
-                return control.down ? CelestinaTheme.surfaceStrong
+                return control.down ? CelestinaTheme.pressedWash
                      : control.hovered ? CelestinaTheme.controlFill
                      : CelestinaTheme.clear
-            return control.down ? CelestinaTheme.surfaceStrong
+            return control.down ? CelestinaTheme.pressedWash
                  : control.hovered ? CelestinaTheme.surfaceHover
                  : CelestinaTheme.controlFill
         }

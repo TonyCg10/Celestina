@@ -21,7 +21,9 @@ perception, input devices or assistive-technology stack. It does not block
   held and returns on release, and in the grid the icon and name sink with
   it; the sidebar row lifts grey under the pointer, takes the blue wash only
   while held, and sinks; pressing a selected row deepens and settles back;
-  with reduced motion the sink is instant and the colours are unchanged
+  with reduced motion the sink is instant and the colours are unchanged;
+  pressing a tonal button or a floating pill shows the same blue wash as
+  pressing a row, never a darker grey
 - **Result:** not run by hand
 - **Evidence:** the output and scale, and whether 7 % reads as "soft" and
   26 % as "pressed" on this panel, or which value should move

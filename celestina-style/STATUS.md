@@ -13,6 +13,12 @@
 
 ## Current checkout truth
 
+- Delivered as `1.8.7`: `FEEDBACK-5-STY`. The Tonal and Ghost button roles
+  press in `pressedWash` like the row plate, instead of the darker grey that
+  read as nothing happening; a button and the sidebar row beside it now answer
+  the finger in one language. See
+  [the record](../docs/evidence/2026-09-07-the-press-that-stayed-grey.md).
+
 - Delivered as `1.8.6`: `FEEDBACK-4-STY`. `CelestinaRowHighlight` has two
   families — `Control`, the neutral lift of a sidebar row or a tab, and
   `Content`, the accent's own hue at 7 % under the pointer — and both sink on
