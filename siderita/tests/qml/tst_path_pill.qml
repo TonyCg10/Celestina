@@ -62,7 +62,12 @@ TestCase {
         controllerStub.openedKeys = []
         controllerStub.openedLocations = []
         keyClick(Qt.Key_Escape)
+        // Escape closes the editor but leaves the field focused, as the real
+        // window would then move focus to the list; take it away here so each
+        // test starts with a pill nobody is in.
+        testCase.forceActiveFocus()
         wait(0)
+        tryCompare(pathPill, "editing", false)
     }
 
     function test_a_press_on_empty_pill_edits_at_the_pointer_and_a_sweep_selects() {
@@ -96,6 +101,36 @@ TestCase {
         wait(0)
         compare(controllerStub.openedKeys, ["/home"])
         compare(pathPill.editing, false)
+    }
+
+    // Focus reaches the field uninvited too: when the search field collapses
+    // it is disabled and Qt hands its focus on, which turned the crumbs off and
+    // left a blank pill until the next navigation. Only a keyboard arrival is
+    // an intent to edit; every other reason is sent back.
+    function test_focus_arriving_for_another_reason_does_not_edit() {
+        field().forceActiveFocus(Qt.OtherFocusReason)
+        wait(0)
+        compare(pathPill.editing, false, "an uninvited focus opened the editor")
+        verify(crumb(2).visible)
+    }
+
+    function test_focus_arriving_by_tab_edits_the_whole_path() {
+        field().forceActiveFocus(Qt.TabFocusReason)
+        tryCompare(pathPill, "editing", true)
+        compare(field().selectedText, "/home/prueba")
+    }
+
+    function test_a_click_on_the_search_glass_focuses_the_search() {
+        const search = findChild(topBar, "searchField")
+        verify(!topBar.searchExpanded)
+        // The collapsed pill is the glyph's width; press its top-left corner,
+        // off the glyph itself.
+        const pill = search.parent
+        mouseClick(pill, 4, 4, Qt.LeftButton)
+        tryCompare(topBar, "searchExpanded", true)
+        tryVerify(function() { return search.activeFocus })
+        topBar.searchExpanded = false
+        wait(0)
     }
 
     function test_escape_puts_the_crumbs_back() {

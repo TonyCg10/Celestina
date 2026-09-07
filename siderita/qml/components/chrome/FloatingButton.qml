@@ -122,17 +122,20 @@ Button {
         floating: control.floating
         scale: control.recoil
         transformOrigin: Item.Center
-        // Three distinct states: rest, hover, active — and press darkest. An
-        // active pill that merely looked hovered gave no clue it was on.
+        // Four distinct states in the Control family's vocabulary: rest,
+        // the grey lift under the pointer, the accent wash under the finger
+        // (with the sink), and the selection blue while the pill is on. An
+        // active pill that merely looked hovered gave no clue it was on, and
+        // a press that only went darker grey gave no clue it was taken.
         fill: control.role === FloatingButton.Primary
               ? (!control.enabled ? CelestinaTheme.accentDisabledFill
                  : control.down ? CelestinaTheme.accentPressed
                  : shield.hovered ? CelestinaTheme.accentHover
                  : CelestinaTheme.accent)
               : (!control.enabled ? CelestinaTheme.controlFill
-                 : control.down ? CelestinaTheme.surfaceStrong
-                 : shield.hovered ? CelestinaTheme.surfaceHover
+                 : control.down ? CelestinaTheme.pressedWash
                  : control.active ? CelestinaTheme.badgeAccentFill
+                 : shield.hovered ? CelestinaTheme.surfaceHover
                  : CelestinaTheme.controlFill)
         border.width: control.role === FloatingButton.Primary && !control.enabled
                         ? CelestinaTheme.borderHairline

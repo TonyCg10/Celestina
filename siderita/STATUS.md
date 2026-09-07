@@ -9,6 +9,14 @@
 
 ## Current checkout truth
 
+- Delivered as `1.5.9`: `FEEDBACK-5-SID`. The floating pills press in the
+  accent wash with the sink and show the selection blue while on; the path
+  field opens only for a keyboard arrival, so the focus a collapsing search
+  hands on no longer leaves a blank pill; a click anywhere on the search glass
+  focuses the search; the sidebar's eight plates run the Content ramp. Three
+  new interaction tests, 111 in all. See
+  [the record](../docs/evidence/2026-09-07-the-press-that-stayed-grey.md).
+
 - Delivered as `1.5.8`: `FEEDBACK-4-SID`. The path pill is an editor with
   crumbs on top: a press on empty pill places the caret under the pointer and
   a sweep selects, the current folder's crumb opens the editor with that name

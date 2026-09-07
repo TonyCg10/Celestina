@@ -45,10 +45,13 @@ corrective implementation unit.
   opens the editor with exactly its own name selected so typing replaces it
   and Enter navigates to the sibling; an ancestor navigates and never opens
   the editor; Tab and Ctrl+L select the whole path; Escape and clicking away
-  put the crumbs back without navigating
+  put the crumbs back without navigating; after expanding the search and
+  clicking into the content, the crumbs are still there and the pill is not
+  in editing mode; a click on the search glass beside the magnifier focuses
+  the search
 - **Result:** not run by hand
-- **Evidence:** any state in which the caret landed away from the pointer or
-  a sweep failed to select
+- **Evidence:** any state in which the caret landed away from the pointer, a
+  sweep failed to select, or the pill went blank
 
 ## VAL-SID-12 — Pills, rows and glyphs answer the pointer
 

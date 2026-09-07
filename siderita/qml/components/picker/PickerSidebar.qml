@@ -125,6 +125,7 @@ Item {
                             anchors.fill: parent
                             anchors.leftMargin: 2
                             anchors.rightMargin: 2
+                            family: CelestinaRowHighlight.Content
                             selected: placeRow.current
                             hovered: placeMouse.containsMouse
                             pressed: placeMouse.pressed
@@ -208,6 +209,7 @@ Item {
                             anchors.fill: parent
                             anchors.leftMargin: 2
                             anchors.rightMargin: 2
+                            family: CelestinaRowHighlight.Content
                             selected: volumeRow.current
                             hovered: volumeMouse.containsMouse
                             pressed: volumeMouse.pressed
@@ -340,6 +342,7 @@ Item {
                             anchors.fill: parent
                             anchors.leftMargin: 2
                             anchors.rightMargin: 2
+                            family: CelestinaRowHighlight.Content
                             selected: bookmarkRow.current
                             hovered: bookmarkMouse.containsMouse
                             pressed: bookmarkMouse.pressed

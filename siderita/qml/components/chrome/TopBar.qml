@@ -329,10 +329,23 @@ Item {
             Accessible.name: "Ubicación"
 
             onActiveFocusChanged: {
-                if (!activeFocus && pathPill.editing)
+                if (!activeFocus && pathPill.editing) {
                     pathPill.editing = false
-                else if (activeFocus && !pathPill.editing)
-                    pathPill.beginEditing()
+                } else if (activeFocus && !pathPill.editing) {
+                    // Only a deliberate arrival opens the editor. Focus also
+                    // lands here uninvited: when the search field collapses
+                    // it is disabled, and Qt hands its focus to the next
+                    // focusable item in the scope, which is this one. That
+                    // arrival turned the crumbs off and left a blank pill
+                    // until the next navigation. Anything but the keyboard
+                    // is sent back to the list.
+                    if (focusReason === Qt.TabFocusReason
+                        || focusReason === Qt.BacktabFocusReason
+                        || focusReason === Qt.ShortcutFocusReason)
+                        pathPill.beginEditing()
+                    else
+                        root.viewFocusRequested()
+                }
             }
 
             onAccepted: {
@@ -393,6 +406,15 @@ Item {
         // y lo que sobra es contenido que no debe recibir puntero.
         CelestinaInputShield { }
 
+        // The pill is a field, so any of it is a place to start typing: a
+        // click on the glass beside the glyph or the text focuses the search
+        // rather than being swallowed by the shield. The I-beam says so.
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.IBeamCursor
+            onClicked: root.focusSearch()
+        }
+
         GlassSurface {
             id: searchGlass
             anchors.fill: parent
@@ -431,6 +453,7 @@ Item {
 
         CelestinaTextField {
             id: searchField
+            objectName: "searchField"
             x: clearSearchButton.x + clearSearchButton.width + 2
             width: Math.max(0, searchButton.x - x - 2)
             height: parent.height

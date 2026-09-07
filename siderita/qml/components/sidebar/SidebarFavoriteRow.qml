@@ -44,6 +44,7 @@ Item {
         anchors.fill: parent
         anchors.leftMargin: 2
         anchors.rightMargin: 2
+        family: CelestinaRowHighlight.Content
         focused: root.activeFocus
         selected: root.current
         hovered: rowMouse.containsMouse && !root.missing

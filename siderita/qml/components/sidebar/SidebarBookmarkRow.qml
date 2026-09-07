@@ -87,6 +87,7 @@ Item {
             anchors.fill: parent
             anchors.leftMargin: 2
             anchors.rightMargin: 2
+            family: CelestinaRowHighlight.Content
             focused: root.activeFocus
             dragging: root.dragging
             selected: root.current

@@ -280,6 +280,7 @@ Item {
                                 anchors.fill: parent
                                 anchors.leftMargin: 2
                                 anchors.rightMargin: 2
+                                family: CelestinaRowHighlight.Content
                                 focused: placeRow.activeFocus
                                 dragging: placeRow.dragging
                                 selected: placeRow.current
@@ -404,6 +405,7 @@ Item {
                         anchors.fill: parent
                         anchors.leftMargin: 2
                         anchors.rightMargin: 2
+                        family: CelestinaRowHighlight.Content
                         hovered: unhidePlacesMouse.containsMouse
                         pressed: unhidePlacesMouse.pressed
                     }
@@ -507,6 +509,7 @@ Item {
                             anchors.fill: parent
                             anchors.leftMargin: 2
                             anchors.rightMargin: 2
+                            family: CelestinaRowHighlight.Content
                             focused: volumeRow.activeFocus
                             selected: volumeRow.current
                             hovered: volumeMouse.containsMouse || ejectButton.hovered
