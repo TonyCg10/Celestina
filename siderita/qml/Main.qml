@@ -555,11 +555,16 @@ ApplicationWindow {
     }
 
     // Back/Forward are window actions: they work over the sidebar, the file
-    // view and floating chrome alike. Popup.Item overlays remain above this
-    // content layer, and local modal state disables it explicitly.
+    // view and floating chrome alike. It sits *under* the content, not over
+    // it: a MouseArea always imposes a cursor, and on top of the window at
+    // z 1000 that was an arrow over every I-beam and every hand in the
+    // application — the path editor never showed its I-beam. Underneath, it
+    // still receives every Back/Forward press, because nothing above accepts
+    // those buttons and a refused press falls through. Local modal state
+    // disables it explicitly.
     HistoryMouseArea {
         anchors.fill: parent
-        z: 1000
+        z: -1
         blocked: !window.activeDocument
                  || window.activeDocument.navigationBlocked
         canGoBack: window.activeDocument

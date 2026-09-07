@@ -48,10 +48,12 @@ corrective implementation unit.
   put the crumbs back without navigating; after expanding the search and
   clicking into the content, the crumbs are still there and the pill is not
   in editing mode; a click on the search glass beside the magnifier focuses
-  the search
+  the search; the pointer is an I-beam over the pill and a hand over an
+  ancestor crumb *before* any click; with the search open and empty, one
+  click on the magnifier closes it and it stays closed
 - **Result:** not run by hand
 - **Evidence:** any state in which the caret landed away from the pointer, a
-  sweep failed to select, or the pill went blank
+  sweep failed to select, the pill went blank, or the pointer stayed an arrow
 
 ## VAL-SID-12 — Pills, rows and glyphs answer the pointer
 

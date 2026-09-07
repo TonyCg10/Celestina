@@ -104,7 +104,7 @@
 3	siderita/qml/components/chrome/RecentHeader.qml
 2	siderita/qml/components/chrome/SearchBar.qml
 1	siderita/qml/components/chrome/TabStrip.qml
-13	siderita/qml/components/chrome/TopBar.qml
+12	siderita/qml/components/chrome/TopBar.qml
 6	siderita/qml/components/chrome/TrashHeader.qml
 2	siderita/qml/components/entry/DragScrollEdge.qml
 15	siderita/qml/components/entry/EntryGlyph.qml

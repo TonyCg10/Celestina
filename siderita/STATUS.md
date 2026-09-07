@@ -9,6 +9,15 @@
 
 ## Current checkout truth
 
+- Delivered as `1.5.10`: `FEEDBACK-6-SID`. The two window-level history
+  mouse areas sat above everything and, as every `MouseArea` does, imposed
+  their arrow cursor: no I-beam over the path pill, no hand over the crumbs,
+  ever. They sit under the content now and still receive the Back/Forward
+  presses nothing above accepts. The search glyphs take no focus, so the
+  magnifier no longer closes and reopens the search in one click; it is a
+  toggle. See
+  [the record](../docs/evidence/2026-09-07-the-cursor-that-was-always-an-arrow.md).
+
 - Delivered as `1.5.9`: `FEEDBACK-5-SID`. The floating pills press in the
   accent wash with the sink and show the selection blue while on; the path
   field opens only for a keyboard arrival, so the focus a collapsing search

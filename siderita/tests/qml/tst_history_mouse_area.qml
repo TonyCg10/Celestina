@@ -33,6 +33,44 @@ TestCase {
         onForwardRequested: testCase.forwardRequests++
     }
 
+    // The real arrangement: the history area lies *under* the content, and the
+    // content above it takes only the ordinary buttons. A Back press that
+    // content refuses must fall through to it.
+    Item {
+        id: underneathScene
+        x: 0
+        y: 120
+        width: 240
+        height: 40
+        // Above the window-wide area of the other tests, so this scene owns
+        // the presses inside it.
+        z: 2
+
+        HistoryMouseArea {
+            id: underneath
+            anchors.fill: parent
+            z: -1
+            canGoBack: true
+            canGoForward: true
+            onBackRequested: testCase.underneathBacks++
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+            hoverEnabled: true
+            cursorShape: Qt.IBeamCursor
+        }
+    }
+    property int underneathBacks: 0
+
+    function test_back_falls_through_content_to_the_area_underneath() {
+        underneathBacks = 0
+        mouseClick(underneathScene, 120, 20, Qt.BackButton)
+        compare(underneathBacks, 1)
+        compare(backRequests, 0, "the press leaked past the scene")
+    }
+
     function init() {
         backRequests = 0
         forwardRequests = 0

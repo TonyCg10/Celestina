@@ -89,6 +89,7 @@ Item {
 
     Rectangle {
         id: pathPill
+        objectName: "pathPill"
 
         property bool editing: false
 
@@ -318,6 +319,14 @@ Item {
             opacity: pathPill.editing ? 1 : 0
             Accessible.ignored: !pathPill.editing
             selectByMouse: true
+            // The I-beam over the editor, stated rather than assumed: the
+            // field's own cursor depends on Qt's text-input defaults, and a
+            // bar that edits must look like one the moment the pointer is on
+            // it, in both states.
+            HoverHandler {
+                enabled: pathPill.editing
+                cursorShape: Qt.IBeamCursor
+            }
             leftPadding: CelestinaTheme.compTextFieldPaddingHorizontal
             rightPadding: CelestinaTheme.compTextFieldPaddingHorizontal
             color: CelestinaTheme.text
@@ -436,6 +445,7 @@ Item {
         // put under the pointer that just clicked it.
         CelestinaIconButton {
             id: searchButton
+            objectName: "searchButton"
             x: parent.width - width - 5
             anchors.verticalCenter: parent.verticalCenter
             width: 32
@@ -447,8 +457,27 @@ Item {
             // bitmap turns it into an opaque disc instead of a magnifier.
             iconName: ""
             fallbackIcon: "search"
-            Accessible.name: root.searchExpanded ? "Enfocar búsqueda" : "Buscar"
-            onClicked: root.focusSearch()
+            // The glyph must not take the field's focus on the press: a Button
+            // does by default, the emptied field then collapsed the pill on
+            // focus loss, and `focusSearch` reopened it in the same click —
+            // the pill closed and opened at once. With no focus of its own the
+            // glyph is a plain toggle: it opens the search, and on an open,
+            // empty search it closes it again.
+            focusPolicy: Qt.NoFocus
+            Accessible.name: root.searchExpanded
+                             ? (searchField.text.length > 0 ? qsTr("Enfocar búsqueda")
+                                                            : qsTr("Cerrar búsqueda"))
+                             : qsTr("Buscar")
+            onClicked: {
+                if (root.searchExpanded && searchField.text.length === 0
+                    && !root.controller.searchActive
+                    && !root.controller.searchRunning) {
+                    root.searchExpanded = false
+                    root.viewFocusRequested()
+                } else {
+                    root.focusSearch()
+                }
+            }
         }
 
         CelestinaTextField {
@@ -531,6 +560,9 @@ Item {
             opacity: root.searchExpanded ? 1 : 0
             role: CelestinaButton.Ghost
             density: CelestinaButton.Compact
+            // Same reason as the magnifier: clearing must not first collapse
+            // the pill by stealing the field's focus.
+            focusPolicy: Qt.NoFocus
             iconName: ""
             fallbackIcon: "x"
             Accessible.name: searchField.text.length > 0
