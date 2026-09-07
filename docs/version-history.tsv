@@ -134,3 +134,4 @@ magnetita	1.2.3	bug	FEEDBACK-2-MAG	Drop the wrapper whose only body was silencin
 siderita	1.5.7	bug	FEEDBACK-3-SID	Reuse one password across the archives of a batch that share it
 celestina-style	1.8.6	bug	FEEDBACK-4-STY	Split the row plate into control and content families and make every press sink
 siderita	1.5.8	bug	FEEDBACK-4-SID	Make the path pill a real editor and give the centre its own hover ramp
+fluorita	1.3.5	bug	FEEDBACK-4-FLU	Update the cards and frames to the content hover ramp

@@ -211,24 +211,15 @@ GridView {
             }
         }
 
-        // Under the pointer and under the press: the same fills the sidebar
-        // rows use, washed over the card so the selection's own surface stays
-        // what it is.
-        Rectangle {
+        // Under the pointer and under the press, in the Content family: the
+        // accent's own hue at its faintest, deepening on the press, washed over
+        // the card so the selection's own surface stays what it is.
+        CelestinaRowHighlight {
             anchors.fill: card
             radius: card.radius
-            color: pointer.pressed
-                ? CelestinaTheme.surfaceStrong
-                : pointer.containsMouse
-                  ? CelestinaTheme.surfaceHover
-                  : CelestinaTheme.clear
-
-            Behavior on color {
-                ColorAnimation {
-                    duration: CelestinaTheme.reducedMotion
-                        ? 0 : CelestinaTheme.motionFast
-                }
-            }
+            family: CelestinaRowHighlight.Content
+            hovered: pointer.containsMouse
+            pressed: pointer.pressed
         }
 
         // One click opens it. Selecting on the first click and opening only on

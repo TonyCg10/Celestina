@@ -180,6 +180,7 @@ Item {
                 // as a card around it.
                 CelestinaRowHighlight {
                     anchors.fill: parent
+                    family: CelestinaRowHighlight.Content
                     hovered: pointer.containsMouse
                     pressed: pointer.pressed
                 }

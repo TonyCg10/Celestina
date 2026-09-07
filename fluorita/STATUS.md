@@ -1,6 +1,6 @@
 # Fluorita status
 
-- **Updated:** 2026-09-03
+- **Updated:** 2026-09-07
 - **Implementation:** checkpoints F0-F15 are closed and delivered; no
   checkpoint is active
 - **Author validation:** the version-1 playback and interaction pass is closed;
@@ -9,6 +9,12 @@
   added have never been seen on a display — see [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
+
+- Delivered as `1.3.5`: `FEEDBACK-4-FLU`. Gallery cards, music rows and the
+  filmstrip frames paint the shared plate in its Content family — the accent
+  at 7 % under the pointer, 26 % and a sink under the finger — replacing two
+  hand-rolled grey plates. See
+  [the record](../docs/evidence/2026-09-07-two-families-and-a-path-editor.md).
 
 - Delivered as `1.3.4`: `FEEDBACK-1-FLU`. The edge arrows were clickable at
   zero opacity and the filmstrip's frames lost their pointer while the strip
