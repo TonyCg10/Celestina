@@ -92,11 +92,28 @@ Item {
 
         property bool editing: false
 
-        function beginEditing() {
+        // The pill is an editor that happens to show crumbs at rest. Ctrl+L
+        // selects the whole path, as an address bar does; a press on the pill
+        // only turns the editor on and leaves the caret and the drag to the
+        // field itself, which is what makes selecting by sweeping work.
+        function beginEditing(selectAll) {
             editing = true
             locationField.text = root.controller.currentPath
             locationField.forceActiveFocus()
-            locationField.selectAll()
+            if (selectAll === undefined || selectAll)
+                locationField.selectAll()
+        }
+
+        // A click on the folder you are already in has nowhere to navigate,
+        // so it offers the one thing that name can still do: be replaced.
+        // The editor opens with exactly that last segment selected; typing
+        // overwrites it, Home and End reach the rest.
+        function beginEditingOnName() {
+            beginEditing(false)
+            const path = locationField.text
+            const trimmed = path.replace(/\/+$/, "")
+            const cut = trimmed.lastIndexOf("/")
+            locationField.select(cut + 1, trimmed.length)
         }
 
         function cancelEditing() {
@@ -157,8 +174,15 @@ Item {
             }
         }
 
+        // The field sits under the crumbs and the pill's own MouseArea, live
+        // but transparent while the crumbs are shown. A left press on empty
+        // pill turns editing on and is then *refused* here, so Qt carries the
+        // same press down to the field: the caret lands where the pointer is
+        // and a sweep from there selects, exactly as in any editor. Nothing is
+        // re-dispatched or simulated; the one press is simply not eaten.
         MouseArea {
             id: pathMouse
+            z: 1
             anchors.fill: parent
             visible: !pathPill.editing
             acceptedButtons: root.pathMenu
@@ -166,19 +190,24 @@ Item {
                              : Qt.LeftButton
             cursorShape: Qt.IBeamCursor
             Accessible.name: "Editar ubicación"
+            onPressed: function(mouse) {
+                if (mouse.button !== Qt.LeftButton)
+                    return
+                pathPill.beginEditing(false)
+                mouse.accepted = false
+            }
             onClicked: function(mouse) {
                 if (mouse.button === Qt.RightButton && root.pathMenu) {
                     const point = pathMouse.mapToItem(
                                     root.overlayParent, mouse.x, mouse.y)
                     root.pathMenu.popup(root.overlayParent, point)
-                } else {
-                    pathPill.beginEditing()
                 }
             }
         }
 
         Row {
             id: crumbRow
+            z: 1
             anchors.right: parent.right
             anchors.rightMargin: 13
             anchors.verticalCenter: parent.verticalCenter
@@ -199,7 +228,12 @@ Item {
                     required property var modelData
                     required property int index
 
+                    objectName: "crumb-" + index
+
                     readonly property int gap: 3
+                    // The folder you are in: not a link, an editable name.
+                    readonly property bool current:
+                            crumb.index === crumbRepeater.count - 1
                     // The whole crumb — chevron, gap and label — is one hit
                     // target the height of the pill's usable band, so no click
                     // between two crumbs lands on the pill and opens editing.
@@ -233,16 +267,14 @@ Item {
                         Text {
                             id: crumbText
                             anchors.centerIn: parent
-                            readonly property bool current:
-                                    crumb.index === crumbRepeater.count - 1
                             // Only the folder you are in takes the accent, and
                             // only once the heading is gone.
                             readonly property bool accented:
-                                    crumbText.current && root.headingRetired > 0.5
+                                    crumb.current && root.headingRetired > 0.5
                             text: crumbText.accented
                                   ? crumb.modelData.name.toLocaleUpperCase()
                                   : crumb.modelData.name
-                            color: crumbText.current
+                            color: crumb.current
                                    ? CelestinaTheme.text
                                    : CelestinaTheme.textMuted
                             font.family: CelestinaTheme.sansFamily
@@ -253,13 +285,21 @@ Item {
                         }
                     }
 
+                    // Ancestors are links and take the hand; the current
+                    // folder is text and takes the I-beam, so the cursor says
+                    // which of the two a click will do before it is made.
                     MouseArea {
                         id: crumbMouse
                         anchors.fill: parent
                         hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.controller.openKey(
-                                       crumb.modelData.key)
+                        cursorShape: crumb.current ? Qt.IBeamCursor
+                                                   : Qt.PointingHandCursor
+                        onClicked: {
+                            if (crumb.current)
+                                pathPill.beginEditingOnName()
+                            else
+                                root.controller.openKey(crumb.modelData.key)
+                        }
                     }
                 }
             }
@@ -268,8 +308,16 @@ Item {
         CelestinaTextField {
             id: locationField
 
+            objectName: "locationField"
             anchors.fill: parent
-            visible: pathPill.editing
+            // Present under the crumbs at all times so a refused press can
+            // reach it; only its paint follows `editing`. Assistive technology
+            // sees it only while it is really the editor; Tab reaching it *is*
+            // one way in, and turns the editor on with the whole path selected,
+            // the way Ctrl+L does.
+            opacity: pathPill.editing ? 1 : 0
+            Accessible.ignored: !pathPill.editing
+            selectByMouse: true
             leftPadding: CelestinaTheme.compTextFieldPaddingHorizontal
             rightPadding: CelestinaTheme.compTextFieldPaddingHorizontal
             color: CelestinaTheme.text
@@ -283,6 +331,8 @@ Item {
             onActiveFocusChanged: {
                 if (!activeFocus && pathPill.editing)
                     pathPill.editing = false
+                else if (activeFocus && !pathPill.editing)
+                    pathPill.beginEditing()
             }
 
             onAccepted: {

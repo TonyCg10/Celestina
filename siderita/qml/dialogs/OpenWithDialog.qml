@@ -103,6 +103,7 @@ CelestinaModalLayer {
                 Accessible.selected: openWithView.selected === appRow.index
 
                 CelestinaRowHighlight {
+                    family: CelestinaRowHighlight.Content
                     anchors.fill: parent
                     selected: openWithView.selected === appRow.index
                     hovered: appRowMouse.containsMouse

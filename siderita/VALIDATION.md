@@ -26,6 +26,30 @@ corrective implementation unit.
 - **Evidence:** how many modals appeared, which archive each named, and whether
   every extraction landed
 
+## VAL-SID-14 — The path pill edits like a text field
+
+- **Status:** pending
+- **Related implementation:** `FEEDBACK-4-SID` (1.5.8), recorded in
+  [the suite evidence](../docs/evidence/2026-09-07-two-families-and-a-path-editor.md)
+- **Requires:** the deployed Siderita on the real session, a folder three or
+  more levels deep, the heading scrolled away so the last crumb is set in caps
+- **Procedure:** press on empty pill and release; press on empty pill and
+  sweep right, then left; double-click a word of the path while editing;
+  click the last crumb and type a sibling folder's name and Enter; click an
+  ancestor crumb; press Tab from the list until the pill takes focus; press
+  Ctrl+L; press Escape in each state; click elsewhere while editing
+- **Pass condition:** the cursor is an I-beam over empty pill and over the last
+  crumb, a hand over ancestors; a plain press places the caret where the
+  pointer is and selects nothing; a sweep selects the swept range and the
+  pill shows it in the accent; a double-click selects a word; the last crumb
+  opens the editor with exactly its own name selected so typing replaces it
+  and Enter navigates to the sibling; an ancestor navigates and never opens
+  the editor; Tab and Ctrl+L select the whole path; Escape and clicking away
+  put the crumbs back without navigating
+- **Result:** not run by hand
+- **Evidence:** any state in which the caret landed away from the pointer or
+  a sweep failed to select
+
 ## VAL-SID-12 — Pills, rows and glyphs answer the pointer
 
 - **Status:** pending

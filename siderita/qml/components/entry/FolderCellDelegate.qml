@@ -53,9 +53,11 @@ Item {
     // The selection square keeps its natural size and centres in the
     // (stretched-to-fill) cell, rather than ballooning to the full column width.
     CelestinaRowHighlight {
+        id: cellPlate
         anchors.centerIn: parent
         width: root.panel.gridCellWidth - 10
         height: parent.height - 10
+        family: CelestinaRowHighlight.Content
         selectedFill: CelestinaTheme.surfaceSelected
         selected: root.selected
         hovered: cellMouse.containsMouse
@@ -111,6 +113,18 @@ Item {
     Column {
         anchors.centerIn: parent
         spacing: 8
+        // The icon and its name sink with the plate: a cell is one object.
+        scale: cellPlate.recoil
+        transformOrigin: Item.Center
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: CelestinaTheme.reducedMotion
+                          ? 0 : cellPlate.pressed ? CelestinaTheme.motionFast
+                                                  : CelestinaTheme.motionSlow
+                easing.type: CelestinaTheme.easeStandard
+            }
+        }
 
         Rectangle {
             id: cellGlyph

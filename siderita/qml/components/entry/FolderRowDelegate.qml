@@ -61,6 +61,7 @@ Item {
         anchors.fill: parent
         anchors.leftMargin: 4
         anchors.rightMargin: 4
+        family: CelestinaRowHighlight.Content
         selected: root.selected
         hovered: pointer.containsMouse
         pressed: pointer.pressed

@@ -107,6 +107,7 @@ CelestinaModalLayer {
                 }
 
                 CelestinaRowHighlight {
+                    family: CelestinaRowHighlight.Content
                     id: iconOptFrame
                     anchors.fill: parent
                     anchors.margins: 4

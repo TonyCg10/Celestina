@@ -68,30 +68,24 @@ Item {
     Accessible.focused: currentItem && focusVisible
     Accessible.onPressAction: if (root.interactive) root.cellActivated()
 
-    Rectangle {
+    // Draw the current row even when it cannot be chosen. A folder is not a
+    // valid answer to an ordinary file request, so otherwise clicking it
+    // appeared to do nothing. Chosen and current remain distinct: the former
+    // is the selection, the latter reads as the hover of the Content family.
+    CelestinaRowHighlight {
         anchors.fill: parent
         anchors.topMargin: 1
         anchors.bottomMargin: 1
-        radius: CelestinaTheme.radiusSm
-        // Draw the current row even when it cannot be chosen. A folder is not
-        // a valid answer to an ordinary file request, so otherwise clicking it
-        // appeared to do nothing. Chosen and current remain distinct: the
-        // former uses selection fill, the latter the hover tone.
-        color: root.chosen ? CelestinaTheme.surfaceSelected
-               : (root.interactive
-                  && (cellMouse.containsMouse || root.currentItem))
-                 ? CelestinaTheme.surfaceHover : CelestinaTheme.clear
+        family: CelestinaRowHighlight.Content
+        selectedFill: CelestinaTheme.surfaceSelected
+        selected: root.chosen
+        hovered: root.interactive && (cellMouse.containsMouse || root.currentItem)
+        pressed: root.interactive && cellMouse.pressed
+        focused: root.focusVisible
         border.width: root.focusVisible ? CelestinaTheme.borderFocus
                       : root.chosen ? CelestinaTheme.borderHairline : 0
         border.color: root.focusVisible ? CelestinaTheme.focusRing
                                         : CelestinaTheme.dividerStrong
-
-        Behavior on color {
-            ColorAnimation {
-                duration: CelestinaTheme.reducedMotion
-                          ? 0 : CelestinaTheme.motionFast
-            }
-        }
     }
 
     Rectangle {

@@ -1,6 +1,6 @@
 # Siderita status
 
-- **Updated:** 2026-09-04
+- **Updated:** 2026-09-07
 - **Implementation:** the registered product version and CP0-CP7 behaviour are
   present; `SID-A4` (what the window costs, and what it shows) is the active
   checkpoint and the portal-parenting one remains planned
@@ -8,6 +8,16 @@
   [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
+
+- Delivered as `1.5.8`: `FEEDBACK-4-SID`. The path pill is an editor with
+  crumbs on top: a press on empty pill places the caret under the pointer and
+  a sweep selects, the current folder's crumb opens the editor with that name
+  selected, ancestors stay links, Tab and Ctrl+L select the whole path. Files
+  as rows and cells, the picker cells and the chooser rows paint the Content
+  family — accent at 7 % under the pointer, 26 % under the finger, the grid
+  cell's icon sinking with its plate — while the sidebar, tabs and titles keep
+  the neutral lift and sink. Four new interaction tests, 108 in all. See
+  [the record](../docs/evidence/2026-09-07-two-families-and-a-path-editor.md).
 
 - Delivered as `1.5.7`: `FEEDBACK-3-SID`, the password a batch of archives kept
   asking for. Extracting several encrypted archives protected with the same key
