@@ -1,6 +1,6 @@
 # CelestinaStyle status
 
-- **Updated:** 2026-09-03
+- **Updated:** 2026-09-07
 - **Implementation:** the shared source contract has a 1.5.0 milestone
   prototype with the two reading controls, demonstrated shell glyphs, additive
   `GlassSurface.ExternalBackdrop` mode, compatible opt-in `ContentSurface` and
@@ -12,6 +12,15 @@
   follow-ups pending in [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
+
+- Delivered as `1.8.6`: `FEEDBACK-4-STY`. `CelestinaRowHighlight` has two
+  families — `Control`, the neutral lift of a sidebar row or a tab, and
+  `Content`, the accent's own hue at 7 % under the pointer — and both sink on
+  press by `rowRecoilScale` and take the 26 % `pressedWash`, so hover, press
+  and selected are three depths of one colour in the middle of a window and
+  nothing goes grey → blue on the release. `DESIGN.md` §7 names the two
+  families. See
+  [the record](../docs/evidence/2026-09-07-two-families-and-a-path-editor.md).
 
 - The 2026-09-03 delivery answers the author's recording of Siderita's pills:
   hover and open state painted the same colour, a click that drifted a pixel

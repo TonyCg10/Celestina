@@ -197,35 +197,55 @@ Window {
                         helpText: "Vaciar"
                     }
                 }
-                // The one row fill every list in the suite paints.
-                Column {
-                    width: 260
-                    spacing: 2
+                // The one row plate every list in the suite paints, in its two
+                // families: control rows lift grey and sink; content rows run
+                // the accent's own ramp from hover through press to selected.
+                Row {
+                    spacing: 24
                     Repeater {
                         model: [
-                            { label: "Fila en reposo", h: false, p: false, s: false },
-                            { label: "Fila bajo el puntero", h: true, p: false, s: false },
-                            { label: "Fila pulsada", h: true, p: true, s: false },
-                            { label: "Fila seleccionada", h: false, p: false, s: true }
+                            { title: "Control (sidebar, tabs)", fam: CelestinaRowHighlight.Control },
+                            { title: "Content (files, cards)", fam: CelestinaRowHighlight.Content }
                         ]
-                        delegate: Item {
+                        delegate: Column {
+                            id: familyColumn
                             required property var modelData
                             width: 260
-                            height: CelestinaTheme.controlHeightSm
-                            CelestinaRowHighlight {
-                                anchors.fill: parent
-                                hovered: parent.modelData.h
-                                pressed: parent.modelData.p
-                                selected: parent.modelData.s
-                            }
+                            spacing: 2
                             Text {
-                                anchors.left: parent.left
-                                anchors.leftMargin: CelestinaTheme.spaceMd
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: parent.modelData.label
-                                color: CelestinaTheme.text
+                                text: familyColumn.modelData.title
+                                color: CelestinaTheme.textMuted
                                 font.family: win.sans
-                                font.pixelSize: CelestinaTheme.fontBody
+                                font.pixelSize: CelestinaTheme.fontCaption
+                            }
+                            Repeater {
+                                model: [
+                                    { label: "Fila en reposo", h: false, p: false, s: false },
+                                    { label: "Fila bajo el puntero", h: true, p: false, s: false },
+                                    { label: "Fila pulsada", h: true, p: true, s: false },
+                                    { label: "Fila seleccionada", h: false, p: false, s: true }
+                                ]
+                                delegate: Item {
+                                    required property var modelData
+                                    width: 260
+                                    height: CelestinaTheme.controlHeightSm
+                                    CelestinaRowHighlight {
+                                        anchors.fill: parent
+                                        family: familyColumn.modelData.fam
+                                        hovered: parent.modelData.h
+                                        pressed: parent.modelData.p
+                                        selected: parent.modelData.s
+                                    }
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: CelestinaTheme.spaceMd
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: parent.modelData.label
+                                        color: CelestinaTheme.text
+                                        font.family: win.sans
+                                        font.pixelSize: CelestinaTheme.fontBody
+                                    }
+                                }
                             }
                         }
                     }

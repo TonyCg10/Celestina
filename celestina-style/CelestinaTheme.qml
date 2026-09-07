@@ -216,6 +216,12 @@ QtObject {
     readonly property real accentBadgeOpacity: 0.15
     readonly property real accentSoftOpacity: 0.14
     readonly property real accentSoftBorderOpacity: 0.18
+    // The two interaction washes a row or cell paints in the accent's own hue,
+    // so hover → press → selected is one ramp of one colour rather than a grey
+    // that turns blue on the click. Hover sits below the selected wash and the
+    // press above it: the release is felt as a settle, not a jump.
+    readonly property real accentContentHoverOpacity: 0.07
+    readonly property real accentPressedWashOpacity: 0.26
     readonly property real accentDisabledInkOpacity: 0.75
 
     // The panel body's balance: roughly half elevated tint, half of whatever
@@ -312,6 +318,8 @@ QtObject {
         required property color surfaceStrong
         required property color surfaceHover
         required property color surfaceSelected
+        required property color contentHover
+        required property color pressedWash
         required property color selectionMarquee
         required property color inputFill
         required property color inputFillFocus
@@ -422,6 +430,10 @@ QtObject {
         surface: "#d914171c"
         surfaceStrong: "#f01a1e25"
         surfaceHover: "#0dffffff"
+        contentHover: theme.withAlpha(theme.ref.accent,
+                                      theme.accentContentHoverOpacity)
+        pressedWash: theme.withAlpha(theme.ref.accent,
+                                     theme.accentPressedWashOpacity)
         // Selection reads as a soft accent wash — the One UI "selected" language.
         surfaceSelected: theme.withAlpha(theme.ref.accent,
                                          theme.accentSelectedOpacity)
@@ -543,6 +555,8 @@ QtObject {
     readonly property color surface: scheme.surface
     readonly property color surfaceStrong: scheme.surfaceStrong
     readonly property color surfaceHover: scheme.surfaceHover
+    readonly property color contentHover: scheme.contentHover
+    readonly property color pressedWash: scheme.pressedWash
     readonly property color surfaceSelected: scheme.surfaceSelected
     readonly property color selectionMarquee: scheme.selectionMarquee
     readonly property color inputFill: scheme.inputFill
@@ -760,6 +774,9 @@ QtObject {
     // control's fill and content, never to the hit box, so the pointer's
     // target does not shrink under the finger that is on it.
     readonly property real pressRecoilScale: 0.96
+    // A row or cell is wide and sits among its siblings; the full button
+    // recoil would make it lurch. Its plate sinks by less.
+    readonly property real rowRecoilScale: 0.985
     // The universal departure. Every surface leaves the same way — shrinking
     // into the screen while it fades, on this one clock with `easeStandard`
     // and this one depth — whether it is a menu closing, a display's card

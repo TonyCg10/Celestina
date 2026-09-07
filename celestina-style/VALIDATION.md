@@ -4,6 +4,28 @@ This queue contains only checks that need the author's real compositor,
 perception, input devices or assistive-technology stack. It does not block
 [ROADMAP.md](ROADMAP.md).
 
+## VAL-STYLE-06 — Two families of plate, one hue in the middle
+
+- **Status:** pending
+- **Related implementation:** the 2026-09-07 feedback delivery (`FEEDBACK-4`),
+  recorded in
+  [the suite evidence](../docs/evidence/2026-09-07-two-families-and-a-path-editor.md)
+- **Requires:** the deployed Siderita and Fluorita on the real session at the
+  author's scale, a folder with rows and a grid, a library with cards
+- **Procedure:** hover a file row, press it, hold, release; do the same on a
+  grid cell, a gallery card and a sidebar row; press a selected row; repeat
+  with `CELESTINA_REDUCED_MOTION` on
+- **Pass condition:** in the middle of the window the row is a faint blue
+  under the pointer, a deeper blue while held, and settles to the selection
+  blue on release — never grey at any point; the plate visibly sinks while
+  held and returns on release, and in the grid the icon and name sink with
+  it; the sidebar row lifts grey under the pointer, takes the blue wash only
+  while held, and sinks; pressing a selected row deepens and settles back;
+  with reduced motion the sink is instant and the colours are unchanged
+- **Result:** not run by hand
+- **Evidence:** the output and scale, and whether 7 % reads as "soft" and
+  26 % as "pressed" on this panel, or which value should move
+
 ## VAL-STYLE-05 — Press recoil and the one hover circle
 
 - **Status:** pending

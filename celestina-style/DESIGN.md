@@ -336,11 +336,21 @@ consumer evidence in the same checkpoint.
 ## 7. States and accessibility
 
 Every interactive component defines `hover`, `pressed`, `selected`, `disabled`
-and `focusVisible` when those states apply. `pressed` is visible as a darker
-fill and, on buttons, as the §2 recoil; a control that only lights under the
-pointer and never answers the press is a defect. Disabled uses a dedicated semantic
+and `focusVisible` when those states apply. A press is always seen as a sink —
+the §2 recoil on buttons, `rowRecoilScale` on the plate behind a row or cell —
+together with a change of fill; a control that only lights under the pointer
+and never answers the press is a defect. Disabled uses a dedicated semantic
 token, not arbitrary opacity. Selection uses an accent-derived treatment and
 keyboard focus uses the exterior focus ring.
+
+Interactive things fall in two families, and `CelestinaRowHighlight` names
+them. **Controls** — buttons, pills, sidebar rows, tabs, column titles — lift
+in the neutral `surfaceHover` under the pointer and sink on press. **Content**
+— the files, cards and choices in the middle of a window — never turns grey:
+its hover is the accent at `contentHover`, its press the accent at
+`pressedWash`, and its selection settles between the two, so hover, press and
+selected are three depths of one hue. A grey plate that turns blue on the
+click is the transition this rule exists to forbid.
 
 Normal text meets at least 4.5:1 and large text 3:1 in every state. Meaningful
 non-text shapes meet 3:1 against their actual surface. Static contrast checks
