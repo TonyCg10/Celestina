@@ -9,6 +9,13 @@
 
 ## Current checkout truth
 
+- Delivered as `1.5.11`: `FEEDBACK-7-SID`. The path editor's sweep never
+  selected: the pill's input shield took the drag from the text input on the
+  first pixel. While editing, the pill's own handler claims the sweep and grows
+  the field's selection from the caret; the search pill does the same. The
+  rows behind still never see it. See
+  [the record](../docs/evidence/2026-09-07-the-sweep-the-shield-took.md).
+
 - Delivered as `1.5.10`: `FEEDBACK-6-SID`. The two window-level history
   mouse areas sat above everything and, as every `MouseArea` does, imposed
   their arrow cursor: no I-beam over the path pill, no hand over the crumbs,

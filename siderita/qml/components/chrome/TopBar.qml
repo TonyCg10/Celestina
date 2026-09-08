@@ -157,7 +157,38 @@ Item {
         // La pastilla flota sobre la lista: su MouseArea sólo cubría izquierdo y
         // derecho, así que el hover, el botón central y el arrastre seguían
         // llegando a la fila de detrás.
-        CelestinaInputShield { }
+        //
+        // While the editor is open the shield yields the drag: its zero-
+        // threshold handler took a sweep from the text input on the first
+        // pixel, so a selection never grew past the caret. Yielding alone is
+        // not enough — the file rows behind the pill hold passive grabs of
+        // their own and would take the sweep at eight pixels and drag a file
+        // — so the pill's own handler below claims the sweep first and turns
+        // it into the field's selection.
+        CelestinaInputShield { yieldsToHost: pathPill.editing }
+
+        // The editor's sweep. A press lands in the field and places the caret;
+        // from the first pixel of movement this handler owns the pointer and
+        // extends the selection from that caret to the character under it,
+        // exactly what the text input would have done had nothing below it
+        // been able to steal the drag.
+        DragHandler {
+            id: pathSweep
+            enabled: pathPill.editing
+            target: null
+            dragThreshold: 0
+            acceptedButtons: Qt.LeftButton
+            grabPermissions: PointerHandler.CanTakeOverFromAnything
+            property int anchor: 0
+            onActiveChanged: if (active) pathSweep.anchor = locationField.cursorPosition
+            onCentroidChanged: {
+                if (!active)
+                    return
+                const p = locationField.mapFromItem(pathPill, centroid.position.x,
+                                                    centroid.position.y)
+                locationField.select(pathSweep.anchor, locationField.positionAt(p.x, p.y))
+            }
+        }
 
         GlassSurface {
             id: pathGlass
@@ -412,8 +443,27 @@ Item {
         }
 
         // Igual que la de ruta: el campo y los dos botones no llenan la pastilla,
-        // y lo que sobra es contenido que no debe recibir puntero.
-        CelestinaInputShield { }
+        // y lo que sobra es contenido que no debe recibir puntero. And, as
+        // there, an open search's sweep is the pill's and becomes a selection.
+        CelestinaInputShield { yieldsToHost: root.searchExpanded }
+
+        DragHandler {
+            id: searchSweep
+            enabled: root.searchExpanded
+            target: null
+            dragThreshold: 0
+            acceptedButtons: Qt.LeftButton
+            grabPermissions: PointerHandler.CanTakeOverFromAnything
+            property int anchor: 0
+            onActiveChanged: if (active) searchSweep.anchor = searchField.cursorPosition
+            onCentroidChanged: {
+                if (!active)
+                    return
+                const p = searchField.mapFromItem(searchPill, centroid.position.x,
+                                                  centroid.position.y)
+                searchField.select(searchSweep.anchor, searchField.positionAt(p.x, p.y))
+            }
+        }
 
         // The pill is a field, so any of it is a place to start typing: a
         // click on the glass beside the glyph or the text focuses the search

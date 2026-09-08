@@ -133,6 +133,22 @@ TestCase {
         wait(0)
     }
 
+    // The recording of 2026-09-07 20:10: the editor was open, the author swept
+    // over its text, and the crumbs came back instead of a selection.
+    function test_a_sweep_inside_the_open_editor_selects_and_stays_open() {
+        const y = pathPill.height / 2
+        mouseClick(pathPill, 40, y, Qt.LeftButton)
+        tryCompare(pathPill, "editing", true)
+        wait(50)
+        mousePress(pathPill, 30, y, Qt.LeftButton)
+        compare(pathPill.editing, true, "the press inside the editor closed it")
+        mouseMove(pathPill, 60, y)
+        mouseMove(pathPill, 120, y)
+        mouseRelease(pathPill, 120, y, Qt.LeftButton)
+        compare(pathPill.editing, true, "the sweep inside the editor closed it")
+        verify(field().selectedText.length > 0, "the sweep selected nothing")
+    }
+
     function test_escape_puts_the_crumbs_back() {
         mousePress(pathPill, 40, pathPill.height / 2, Qt.LeftButton)
         mouseRelease(pathPill, 40, pathPill.height / 2, Qt.LeftButton)
