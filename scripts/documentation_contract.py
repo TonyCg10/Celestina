@@ -328,6 +328,10 @@ class DocumentationContract:
             str, list[tuple[str, Path, str, dict[str, str]]]
         ] = {}
         self.anchor_cache: dict[Path, set[str]] = {}
+        # Archive transitions are judged only after every plan has registered
+        # its historical inventories: the unit that claims a move usually lives
+        # in the successor's plan, which may sort after the archived one.
+        self.pending_archive_transitions: list[tuple[Path, str]] = []
         self._is_git_root: bool | None = None
 
     def relative(self, path: Path) -> str:
@@ -1476,7 +1480,7 @@ class DocumentationContract:
             ledger_line = normalized.get("change and commit ledger")
             if ledger_line is not None:
                 self.check_ledger(path, text, ledger_line, owner_id, require_done=True)
-                self.check_archived_plan_transition(path, owner_id)
+                self.pending_archive_transitions.append((path, owner_id))
             if re.search(r"PENDING FINAL|pending final split|0 files, \+0/-0", text, re.IGNORECASE):
                 self.error(path, "archived plan retains closing placeholders")
 
@@ -2630,6 +2634,8 @@ class DocumentationContract:
             self.check_discussions()
             self.check_evidence()
             self.check_active_plans()
+            for path, owner_id in self.pending_archive_transitions:
+                self.check_archived_plan_transition(path, owner_id)
             self.check_inventory_claims()
             self.check_roadmap_plan_links()
         return self.partition_errata(sorted(set(self.errors)))

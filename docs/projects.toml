@@ -206,8 +206,8 @@ roadmap = "magnetita/ROADMAP.md"
 validation = "magnetita/VALIDATION.md"
 active_plans = "magnetita/docs/plans/active"
 context_documents = ["celestina-style/DESIGN.md"]
-source_roots = ["magnetita/src", "magnetita/qml", "celestina-rs/crates/magnetita-core", "celestina-rs/crates/magnetita-net", "celestina-rs/crates/magnetitad"]
-commit_roots = ["magnetita/", "celestina-rs/crates/magnetita-core/", "celestina-rs/crates/magnetita-net/", "celestina-rs/crates/magnetitad/"]
+source_roots = ["magnetita/src", "magnetita/qml", "celestina-rs/crates/magnetita-core", "celestina-rs/crates/magnetita-net", "celestina-rs/crates/magnetitad", "celestina-rs/crates/magnetita-proto"]
+commit_roots = ["magnetita/", "celestina-rs/crates/magnetita-core/", "celestina-rs/crates/magnetita-net/", "celestina-rs/crates/magnetitad/", "celestina-rs/crates/magnetita-proto/"]
 include_workspace_manifests = true
 production_role = "desktop-application-and-user-daemon"
 deployable = true
@@ -223,6 +223,7 @@ verification_inputs = ["magnetita/scripts/smoke.sh", "celestina-rs/rust-toolchai
 component_commit_scopes = [
   { prefix = "magnetita-core", roots = ["celestina-rs/crates/magnetita-core/"], include_workspace_manifests = true },
   { prefix = "magnetita-net", roots = ["celestina-rs/crates/magnetita-net/"], include_workspace_manifests = true },
+  { prefix = "magnetita-proto", roots = ["celestina-rs/crates/magnetita-proto/"], include_workspace_manifests = true },
   { prefix = "magnetitad", roots = ["celestina-rs/crates/magnetitad/"], include_workspace_manifests = true },
 ]
 

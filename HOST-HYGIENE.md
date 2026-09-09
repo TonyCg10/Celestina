@@ -713,7 +713,7 @@ the proposals.
 
 The author installed these on 2026-09-08 so the `MAG-P0` spikes of the
 own-protocol program could run the shared Rust core on the phone; see
-[the spike plan](magnetita/docs/plans/active/2026-09-07-own-protocol-spikes.md).
+[the spike plan](magnetita/docs/plans/archive/2026-09-07-own-protocol-spikes.md).
 They are chosen tools, recorded here so a later audit does not read them as
 orphans.
 
