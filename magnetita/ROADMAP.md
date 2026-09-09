@@ -432,9 +432,9 @@ project's own build script.
 
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
-| MAG-P3-A | active | MAG-P2 | `magnetita-mobile` UniFFI crate and the Gradle scaffold building it | `cargo test -p magnetita-mobile`, `./gradlew assembleDebug` |
-| MAG-P3-B | planned | MAG-P3-A | Foreground service holding a session; discovery; trust | JVM unit tests, Rust tests |
-| MAG-P3-C | planned | MAG-P3-B | Pairing screens, device screen, battery, ping, find | JVM tests, `qmllint`-equivalent Android lint |
+| MAG-P3-A | done | MAG-P2 | `magnetita-mobile` UniFFI crate and the Gradle scaffold building it | `cargo test -p magnetita-mobile`, `./gradlew assembleDebug` |
+| MAG-P3-B | done | MAG-P3-A | Foreground service holding a session; discovery; trust | JVM unit tests, Rust tests |
+| MAG-P3-C | done | MAG-P3-B | Pairing screens, device screen, battery, ping, find | JVM tests, `qmllint`-equivalent Android lint |
 | MAG-P3-D | planned | MAG-P3-C | Registered project with scripts, signed artifact, docs set | documentation contract, `verify-production.sh` |
 
 ## Implementation exit

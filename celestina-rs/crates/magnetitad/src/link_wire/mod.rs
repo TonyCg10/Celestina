@@ -515,6 +515,9 @@ impl Wire {
         loop {
             tokio::select! {
                 envelope = session.recv() => match envelope {
+                    Ok(env) if env.capability == capability::PAIRING && env.kind == pair_kind::QR_PROOF => {
+                        self.prove_again(&session, &name, &env.body).await;
+                    }
                     Ok(env) => self.handle(&device_id, &name, env),
                     Err(e) => {
                         log("link", &format!("{name}: {e}"));
@@ -539,6 +542,35 @@ impl Wire {
                     }
                 }
             }
+        }
+    }
+
+    /// A phone that forgot this desktop while the desktop still pins it is
+    /// admitted as trusted, yet it sends a QR proof: answer it from the armed
+    /// window so the phone can pin again, and keep the session.
+    async fn prove_again(&self, session: &Session, name: &str, proof: &[u8]) {
+        let Some(secret) = self.pairing.take_live() else {
+            log(
+                "link",
+                &format!("{name}: proof without an armed pairing; ignored"),
+            );
+            return;
+        };
+        let mut pairing =
+            QrPairing::desktop(secret, self.my_fingerprint, session.peer_fingerprint());
+        let reply = match pairing.accept_proof(proof) {
+            Ok((reply, _)) => reply,
+            Err(e) => {
+                log("link", &format!("{name}: pairing again refused: {e}"));
+                return;
+            }
+        };
+        match session
+            .send_message(capability::PAIRING, pair_kind::QR_REPLY, reply)
+            .await
+        {
+            Ok(_) => ui_log(&self.daemon, name, "emparejado de nuevo", false),
+            Err(e) => log("link", &format!("{name}: pairing reply: {e}")),
         }
     }
 
@@ -646,6 +678,99 @@ mod tests {
             until: Instant::now() - Duration::from_secs(1),
         });
         assert!(arm.take_live().is_none(), "an expired window admits nobody");
+    }
+
+    /// The phone half of the QR path: connect to the QR's address, prove, accept the reply.
+    async fn prove(phone: &Endpoint, phone_fp: Fingerprint, uri: &str) -> (Session, Fingerprint) {
+        let scanned = QrPayload::parse_uri(uri).unwrap();
+        let target: SocketAddr = scanned.addresses[0].parse().unwrap();
+        let (session, _hello) = phone
+            .connect(target, PeerExpect::Fingerprint(scanned.fingerprint))
+            .await
+            .unwrap();
+        let mut pairing = QrPairing::phone(&scanned, phone_fp, session.peer_fingerprint()).unwrap();
+        session
+            .send_message(
+                capability::PAIRING,
+                pair_kind::QR_PROOF,
+                pairing.proof_to_send().unwrap(),
+            )
+            .await
+            .unwrap();
+        let reply = tokio::time::timeout(Duration::from_secs(5), session.recv())
+            .await
+            .expect("a reply within the budget")
+            .unwrap();
+        let pinned = pairing.accept_reply(&reply.body).unwrap();
+        (session, pinned.peer_fingerprint)
+    }
+
+    #[test]
+    fn a_phone_that_forgot_the_desktop_pairs_again_while_still_pinned() {
+        let cert = DeviceCert::generate("desktop");
+        let daemon = test_daemon(&cert);
+        let arm = PairingArm::default();
+        let (wire, addr) = spawn(
+            Arc::clone(&daemon),
+            cert.clone(),
+            "desktop".into(),
+            arm.clone(),
+            "127.0.0.1:0".parse().unwrap(),
+            false,
+        )
+        .unwrap();
+        let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (phone, phone_fp) = rt.block_on(async { phone("phone2") });
+
+        // First pairing, then the phone drops its session (and, in life, its pin).
+        let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
+        let (first, fp) = rt.block_on(prove(&phone, phone_fp, &uri));
+        assert_eq!(fp, desktop_fp);
+        first.close("phone forgets");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while daemon.devices.lock_ok().contains_key("phone2") {
+            assert!(Instant::now() < deadline, "the first session never left");
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert!(
+            daemon.trust.lock_ok().is_trusted("phone2"),
+            "the desktop still pins it"
+        );
+
+        // A new QR: the daemon admits the phone as trusted, yet answers its proof.
+        let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
+        let (second, fp) = rt.block_on(prove(&phone, phone_fp, &uri));
+        assert_eq!(fp, desktop_fp);
+        rt.block_on(async {
+            second
+                .send_message(
+                    capability::BATTERY,
+                    BatteryStatus::KIND,
+                    BatteryStatus {
+                        level: 20,
+                        charging: false,
+                        low: false,
+                    }
+                    .encode(),
+                )
+                .await
+                .unwrap();
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let entry = daemon.devices.lock_ok().get("phone2").cloned();
+            if entry.filter(|e| e.battery == 20).is_some() {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the second session never carried the battery"
+            );
+            thread::sleep(Duration::from_millis(50));
+        }
+        second.close("done");
+        drop(wire);
     }
 
     #[test]

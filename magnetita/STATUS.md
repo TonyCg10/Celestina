@@ -27,6 +27,10 @@
 
 ## Current checkout truth
 
+- The S25U pairs with the daemon by scanning its QR, holds the session
+  through screen off, app switch and Wi-Fi toggle, and rings on `Ring`;
+  the daemon answers a QR proof from a phone it still pins, so a phone
+  that forgot it can pair again (`MAG-P3-C`).
 - Delivered as `1.2.2`: `FEEDBACK-1-MAG`. A plugin row and its switch lit at
   the same time whenever the pointer was on the switch; the row now paints the
   shared `CelestinaRowHighlight` and yields its hover to the switch. "Olvidar"

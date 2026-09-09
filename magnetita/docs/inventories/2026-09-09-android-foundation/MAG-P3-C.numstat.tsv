@@ -1,0 +1,19 @@
+# MAG-P3-C exact change inventory
+
+Base revision	bd106d4b1a18b677997bb411d98961546e5f3315
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/docs/evidence/2026-09-09-phone-pairs-again.md
+Pathspec	magnetita/docs/inventories/2026-09-09-android-foundation/MAG-P3-C.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-android-foundation.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+125	0	b5b0a0f0e39923711a04f6f064ba4f6aba65ad5951afe039c0b497b18e99b4dc	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+3	3	c4a28725861eac452f20b566b2f47281e488714656786dadf7915316ac0a68a0	magnetita/ROADMAP.md
+4	0	a79cc6f0332e20a01e3543134245d83352e0d5994a38282bfedf195c9a8caf58	magnetita/STATUS.md
+60	0	38943a08bc3fde8ab513522d653ce8a953e16251c6eb0cbd3e3a30d2714eeec9	magnetita/docs/evidence/2026-09-09-phone-pairs-again.md
+19	0	self	magnetita/docs/inventories/2026-09-09-android-foundation/MAG-P3-C.numstat.tsv
+1	1	009b3564c21af4badf8dcd1d3c6f80a70cbf35caefbda9a8b8e014684f8a2586	magnetita/docs/plans/active/2026-09-09-android-foundation.md
