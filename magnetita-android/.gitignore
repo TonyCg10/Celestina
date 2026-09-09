@@ -1,0 +1,9 @@
+# Build outputs, IDE state and the machine's SDK location stay out.
+/.gradle/
+/build/
+/app/build/
+/.idea/
+/local.properties
+/.kotlin/
+*.iml
+/captures/

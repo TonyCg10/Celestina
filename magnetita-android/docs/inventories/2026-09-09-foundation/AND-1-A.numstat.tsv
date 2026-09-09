@@ -1,0 +1,119 @@
+# AND-1-A exact change inventory
+
+Base revision	fc423833575c6c8b2ce29f99964ede3b79d44a0d
+Pathspec	magnetita-android/.gitignore
+Pathspec	magnetita-android/AGENTS.md
+Pathspec	magnetita-android/DESIGN.md
+Pathspec	magnetita-android/README.md
+Pathspec	magnetita-android/ROADMAP.md
+Pathspec	magnetita-android/STATUS.md
+Pathspec	magnetita-android/VALIDATION.md
+Pathspec	magnetita-android/app/.gitignore
+Pathspec	magnetita-android/app/build.gradle.kts
+Pathspec	magnetita-android/app/src/main/AndroidManifest.xml
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/MainActivity.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/core/Core.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/components/OneUi.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/theme/Color.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/theme/Theme.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/theme/Type.kt
+Pathspec	magnetita-android/app/src/main/res/drawable/ic_launcher_background.xml
+Pathspec	magnetita-android/app/src/main/res/drawable/ic_launcher_foreground.xml
+Pathspec	magnetita-android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+Pathspec	magnetita-android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+Pathspec	magnetita-android/app/src/main/res/mipmap-hdpi/ic_launcher.webp
+Pathspec	magnetita-android/app/src/main/res/mipmap-hdpi/ic_launcher_round.webp
+Pathspec	magnetita-android/app/src/main/res/mipmap-mdpi/ic_launcher.webp
+Pathspec	magnetita-android/app/src/main/res/mipmap-mdpi/ic_launcher_round.webp
+Pathspec	magnetita-android/app/src/main/res/mipmap-xhdpi/ic_launcher.webp
+Pathspec	magnetita-android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.webp
+Pathspec	magnetita-android/app/src/main/res/mipmap-xxhdpi/ic_launcher.webp
+Pathspec	magnetita-android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.webp
+Pathspec	magnetita-android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp
+Pathspec	magnetita-android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.webp
+Pathspec	magnetita-android/app/src/main/res/values/colors.xml
+Pathspec	magnetita-android/app/src/main/res/values/strings.xml
+Pathspec	magnetita-android/app/src/main/res/values/themes.xml
+Pathspec	magnetita-android/app/src/main/res/xml/backup_rules.xml
+Pathspec	magnetita-android/app/src/main/res/xml/data_extraction_rules.xml
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/ThemeTest.kt
+Pathspec	magnetita-android/build.gradle.kts
+Pathspec	magnetita-android/docs/evidence/2026-09-09-foundation-scaffold.md
+Pathspec	magnetita-android/docs/evidence/README.md
+Pathspec	magnetita-android/docs/inventories/2026-09-09-foundation/AND-1-A.numstat.tsv
+Pathspec	magnetita-android/docs/inventories/README.md
+Pathspec	magnetita-android/docs/plans/active/2026-09-09-foundation.md
+Pathspec	magnetita-android/docs/plans/active/README.md
+Pathspec	magnetita-android/docs/plans/archive/README.md
+Pathspec	magnetita-android/gradle.properties
+Pathspec	magnetita-android/gradle/gradle-daemon-jvm.properties
+Pathspec	magnetita-android/gradle/libs.versions.toml
+Pathspec	magnetita-android/gradle/wrapper/gradle-wrapper.jar
+Pathspec	magnetita-android/gradle/wrapper/gradle-wrapper.properties
+Pathspec	magnetita-android/gradlew
+Pathspec	magnetita-android/gradlew.bat
+Pathspec	magnetita-android/scripts/build-native.sh
+Pathspec	magnetita-android/scripts/build-production.sh
+Pathspec	magnetita-android/scripts/status-production.sh
+Pathspec	magnetita-android/scripts/verify-production.sh
+Pathspec	magnetita-android/settings.gradle.kts
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+9	0	c7fdb4adc198156fbd1d8672dcaaea7ed0f86b45c68238658831e05016320d64	magnetita-android/.gitignore
+39	0	90d6caac5fe013734f06ef8be87362191e94a0759cd1a66f03a845b0d18ad0c8	magnetita-android/AGENTS.md
+79	0	ca8575b779d05b9c028c2c5583f2f07123973282c34bf6eaa44edb8f2677e67e	magnetita-android/DESIGN.md
+46	0	cec7f8243410068fb12fd538f01ed89a7c9f57d566a2550877dd6c60e2b19e12	magnetita-android/README.md
+59	0	8c66b313582cc46bd20b247dbfde12e782c473ab31ee06bd52449243e67e7fbb	magnetita-android/ROADMAP.md
+29	0	e020ca3e84c374a9ddb916d577b269c02548a91cb14f2a851b1763d24ba1d00d	magnetita-android/STATUS.md
+6	0	6152afbfb7b8fb6e1df569388ae4882171975de205913118593b609924c39166	magnetita-android/VALIDATION.md
+1	0	5c3174b74edc6f2b9e0743594b8bd3c7f31e4f4405758cc9872b3fe1de1d28b4	magnetita-android/app/.gitignore
+75	0	6fba7affad37f0d2ad1ae1aadc2ccb8cc99d6f3ad63d4adc1e93b53a83e6b246	magnetita-android/app/build.gradle.kts
+29	0	19d2195559af7f706d7ae780b3d87661b3d9953f2b05e0f7155d960af4c39bc7	magnetita-android/app/src/main/AndroidManifest.xml
+107	0	b906dce07532a3d28d7150ac8db27136bce9463c727b7fce0352ffea66b87570	magnetita-android/app/src/main/java/org/celestina/magnetita/MainActivity.kt
+27	0	0c90a77316e8732f82998df01fda2cac40ff8dc7cb17eb54a4c3dc95bd58d799	magnetita-android/app/src/main/java/org/celestina/magnetita/core/Core.kt
+161	0	ac5d51c3d5d359028a4e261931db817c25b664add6e948c74d7cb5034d6ef594	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/components/OneUi.kt
+36	0	f67a9260c6e96f49719b6ddccff12ccb21c4e29e8da19d7e0e73ba8cda196789	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/theme/Color.kt
+72	0	70c0dce0fdb8b5a698d8b7fffdeb7fc96af23374e3cae0bee1af118f664413cd	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/theme/Theme.kt
+57	0	28b36990af8ed285d65a0d1b189285f56ccf8fb432c28151d57e30ef74c4a808	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/theme/Type.kt
+170	0	ed423c73a6f40a4d2909f0901e60527b3a807cd59e1b5593bcaae1808b1c6321	magnetita-android/app/src/main/res/drawable/ic_launcher_background.xml
+30	0	01d1a6a6c1234eb7fe270d097eb283d72b9c95ae5118886f1b6573aad280f1f7	magnetita-android/app/src/main/res/drawable/ic_launcher_foreground.xml
+6	0	88f7653499ef524126ea5018a99baf9cc3269e7e584d6205dfdd76db39f39cc0	magnetita-android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+6	0	88f7653499ef524126ea5018a99baf9cc3269e7e584d6205dfdd76db39f39cc0	magnetita-android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+-	-	dd00996198640ed28fbc09cdcd7a3807cf8707f3eb255b659634da3ca6a6ff01	magnetita-android/app/src/main/res/mipmap-hdpi/ic_launcher.webp
+-	-	1ed73f5341a69d3b41c7e02e126803f50cc8c3284adf4bbb737f0c93577aef07	magnetita-android/app/src/main/res/mipmap-hdpi/ic_launcher_round.webp
+-	-	846219e6f72fe9a6c104ca8919cbee36a101e7d2ff8da9da67b689a5888f060d	magnetita-android/app/src/main/res/mipmap-mdpi/ic_launcher.webp
+-	-	4e2c58b91de01130e6479e00cbbaaf6e77cd961dd2c8e303cf13cd077fa92632	magnetita-android/app/src/main/res/mipmap-mdpi/ic_launcher_round.webp
+-	-	398340dad816fc9a6338cb151a8cf1e45b926f9bfb70628b24c4bd2523cc94d4	magnetita-android/app/src/main/res/mipmap-xhdpi/ic_launcher.webp
+-	-	91b490aef86574901137f0a252272e1f1add99c1ad709e0696ed68929b88d261	magnetita-android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.webp
+-	-	58ae87fa0c5b5d1562d27fd648d2c061553fe20e3ed570bde588162d01ea7a27	magnetita-android/app/src/main/res/mipmap-xxhdpi/ic_launcher.webp
+-	-	3009fad079f5772f30ecd767f98924367fbe0f81c30048d672d4fda2d5ca7d12	magnetita-android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.webp
+-	-	f98fef5bc3bfe5b65692c40ad1cbae2bec4faf9f1b249c397626740db71b62d8	magnetita-android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp
+-	-	5faf033745c8c882c43bb1b372d4e4a5890caec63d9892a2e756c954108b85dc	magnetita-android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.webp
+4	0	b54bc246c11f5e12b46926eef269f08b67cf612cc8e9a9580f86d95820b1a2b1	magnetita-android/app/src/main/res/values/colors.xml
+13	0	e3a7ddcff239232e9e7ce69d94ed4ae6dd308ae29747244a1f787f2e31e8a081	magnetita-android/app/src/main/res/values/strings.xml
+9	0	b0da59e910a38e360d153a95246c8c82a9d999750247bcd55239bf852275ba17	magnetita-android/app/src/main/res/values/themes.xml
+13	0	6cf1a27e6807b1d24e41d3fbe7ddc1bfe1f42226027964f6eaf477d71b43b283	magnetita-android/app/src/main/res/xml/backup_rules.xml
+19	0	cb1fc47ab4a984530ed60e0e6ee638929c3038290e7e7e0b4b03a3a30fbe7381	magnetita-android/app/src/main/res/xml/data_extraction_rules.xml
+28	0	12fa6f649e5824ddef5678570b9899e17f4a6f59e5286f04db650856140be1bd	magnetita-android/app/src/test/java/org/celestina/magnetita/ThemeTest.kt
+5	0	be7dbfa1841b18b020f744e203b995d3dac5709c2a6b8e310fbcfaed0364919a	magnetita-android/build.gradle.kts
+60	0	1c6911511eb69961440649cd657c6f3affc89755306af75bc84b2cc3c8ef09e6	magnetita-android/docs/evidence/2026-09-09-foundation-scaffold.md
+9	0	6b68ca8516f62525557cbfed6ebd42c19313881142d15cffc80887717abd968a	magnetita-android/docs/evidence/README.md
+119	0	self	magnetita-android/docs/inventories/2026-09-09-foundation/AND-1-A.numstat.tsv
+4	0	f868f76d1474b74ff68aeaed0eed4d6530b7608d66ead65f641c5b8021688c4f	magnetita-android/docs/inventories/README.md
+58	0	26496dbeaae701dfb6a5de337a6d181ecfb2a6c910060ad516422af105392487	magnetita-android/docs/plans/active/2026-09-09-foundation.md
+9	0	deec6d70f800365b10963d2533aa32f2aec98206f32f9de0155c4afdf252b3ba	magnetita-android/docs/plans/active/README.md
+6	0	9067c3afac03a8b329057219bd3416a7e9bb72bede92b3fe40e04afb1f1c84bc	magnetita-android/docs/plans/archive/README.md
+4	0	678c35a27eeda302d6a960484179d118d08fb1edf05c1b40745bc7aed6e88f03	magnetita-android/gradle.properties
+12	0	6c13aa5ba36690ccfbbb25a8807d01d98c15833e446d7ae82ddc726472cb8ef7	magnetita-android/gradle/gradle-daemon-jvm.properties
+34	0	3fe5bd623fa4bc81c41876aa47b071f7e7816242ec0924fecc0b9811c170696b	magnetita-android/gradle/libs.versions.toml
+-	-	76805e32c009c0cf0dd5d206bddc9fb22ea42e84db904b764f3047de095493f3	magnetita-android/gradle/wrapper/gradle-wrapper.jar
+9	0	9b28fdd858254a9170dba887e2f954fda2ed196a7f75fd14d642d04af4156efe	magnetita-android/gradle/wrapper/gradle-wrapper.properties
+251	0	3238afb2aed5cb16eb7d6718077e7138059108f007b54179e9cc157c5a6e0e89	magnetita-android/gradlew
+94	0	1d297e00bd21de3ace22b4d7f2de1f9dfa858883d66bbf7c1ccbecccec8f4f3b	magnetita-android/gradlew.bat
+41	0	7bb2c5d599673f4931e79424a7f1959051b13c21eaaeb6d5578a57471ef7a8e9	magnetita-android/scripts/build-native.sh
+9	0	5db12c02585cc2d547cd1b37322748dc28f6f30ffe6e0ea21afe22baab274a4a	magnetita-android/scripts/build-production.sh
+15	0	dff8d6f61004e9499c05bfe6750572a6dd4925ba02a989b40c07a6b02c1855fd	magnetita-android/scripts/status-production.sh
+11	0	5b1ed4fb1d833dc324c30028ac911532e024c8627cb99ce54d2fe6738489c2a7	magnetita-android/scripts/verify-production.sh
+26	0	08707a0fa93a1b8d693d2d17016760b894dd0e59b27555cf7ad94253068e4881	magnetita-android/settings.gradle.kts

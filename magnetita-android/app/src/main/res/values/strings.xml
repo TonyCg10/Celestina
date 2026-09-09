@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Product copy is Spanish: everything a person reads lives here. -->
+<resources>
+    <string name="app_name">Magnetita</string>
+    <string name="title_device">Este teléfono</string>
+    <string name="subtitle_identity">Identidad</string>
+    <string name="label_device_id">Identificador</string>
+    <string name="label_fingerprint">Huella del certificado</string>
+    <string name="label_desktops">Escritorios emparejados</string>
+    <string name="state_no_desktop">Ninguno todavía</string>
+    <string name="hint_pair">Escanea el código del escritorio para emparejar</string>
+    <string name="error_core">El núcleo no pudo abrirse</string>
+</resources>
