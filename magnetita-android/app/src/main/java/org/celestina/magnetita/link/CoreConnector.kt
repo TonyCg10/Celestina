@@ -23,8 +23,11 @@ private class CoreSession(private val inner: MobileSession) : LiveSession {
     override fun reportBattery(level: Int, charging: Boolean): Boolean =
         runCatching { inner.reportBattery(level.coerceIn(0, 100).toUByte(), charging) }.isSuccess
 
+    override fun sendClipboard(text: String): Boolean =
+        runCatching { inner.sendClipboard(text) }.isSuccess
+
     override suspend fun next(timeoutMs: Long): LinkEvent? = withContext(Dispatchers.IO) {
-        inner.next(timeoutMs.toULong())?.let { LinkEvent(it.capability.toInt(), it.kind.toInt(), it.description) }
+        inner.next(timeoutMs.toULong())?.let { LinkEvent(it.capability.toInt(), it.kind.toInt(), it.description, it.text) }
     }
 
     override fun close(reason: String) = inner.close(reason)

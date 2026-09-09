@@ -32,4 +32,11 @@
     <string name="scan_not_magnetita">Ese código no es de Magnetita</string>
     <string name="action_back">Atrás</string>
     <string name="label_pairing">Emparejado</string>
+    <string name="label_clipboard">Portapapeles</string>
+    <string name="detail_clipboard">Se comparte con la app delante; desde el azulejo o Compartir en cualquier momento</string>
+    <string name="clipboard_sent">Portapapeles enviado al escritorio</string>
+    <string name="clipboard_received">Portapapeles recibido del escritorio</string>
+    <string name="clipboard_empty">No hay texto copiado</string>
+    <string name="tile_send_clipboard">Enviar portapapeles</string>
+    <string name="share_target">Al escritorio</string>
 </resources>

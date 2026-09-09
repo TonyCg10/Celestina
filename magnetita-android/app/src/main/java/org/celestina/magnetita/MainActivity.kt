@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
                 var core by remember { mutableStateOf(FromCore(null, emptyList(), false)) }
                 val link by LinkService.state.collectAsState()
                 val ringing by LinkService.ringing.collectAsState()
+                val clipboardNote by LinkService.clipboardNote.collectAsState()
                 // Pins change on pair and forget; both show in the link state.
                 LaunchedEffect(link::class) { core = readCore() }
                 BackHandler(enabled = scanning) { scanning = false }
@@ -53,7 +54,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     val battery = readBattery()
                     DeviceScreen(
-                        shown = DeviceShown(core.identity, core.pinned, core.failed, link, battery.first, battery.second, ringing),
+                        shown = DeviceShown(core.identity, core.pinned, core.failed, link, battery.first, battery.second, ringing, clipboardNote),
                         onScan = { scanning = true },
                         onForget = { id -> LinkService.forget(this, id) },
                         onStopRinging = { LinkService.stopRinging(this) },
@@ -61,6 +62,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) LinkService.focused(this)
     }
 
     override fun onNewIntent(intent: Intent) {

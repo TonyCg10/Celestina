@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `AND-1-D` of
-  [`../plans/active/2026-09-09-foundation.md`](../plans/active/2026-09-09-foundation.md):
+  [`../plans/archive/2026-09-09-foundation.md`](../plans/archive/2026-09-09-foundation.md):
   `app/build.gradle.kts`, `app/lint.xml`, `scripts/`, `.gitignore`, the
   resources lint named, this record; and, in the suite, the version
   contract's new Gradle source kind with the project's baseline row

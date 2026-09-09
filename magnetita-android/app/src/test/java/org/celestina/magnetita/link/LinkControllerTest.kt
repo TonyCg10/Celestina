@@ -19,6 +19,8 @@ class LinkControllerTest {
         var closed: String? = null
         val incoming = ArrayDeque<LinkEvent>()
         override fun reportBattery(level: Int, charging: Boolean): Boolean { reports += level to charging; return alive }
+        val clips = mutableListOf<String>()
+        override fun sendClipboard(text: String): Boolean { clips += text; return alive }
         override suspend fun next(timeoutMs: Long): LinkEvent? {
             if (!alive) throw IllegalStateException("connection lost")
             incoming.removeFirstOrNull()?.let { return it }
@@ -131,6 +133,26 @@ class LinkControllerTest {
         advanceTimeBy(200)
         assertEquals("forgotten", session.closed)
         assertTrue(controller.state.value is LinkState.Waiting)
+        job.cancel()
+    }
+
+    @Test
+    fun aClipboardHandedToTheLoopGoesOutOnTheNextPollAndSignalsArriveDecoded() = runTest {
+        val session = FakeSession("desk", "Celestina")
+        val connector = FakeConnector(listOf("desk"), ArrayDeque(listOf(session)))
+        val controller = LinkController(connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 30 to false }, io = coroutineContext, pollMs = 100)
+        val seen = mutableListOf<DesktopSignal>()
+        val job = launch { controller.run() }
+        val watcher = launch { controller.signals.collect { seen += it } }
+        advanceTimeBy(200)
+        controller.sendClipboard("copied on the phone")
+        advanceTimeBy(200)
+        assertEquals(listOf("copied on the phone"), session.clips)
+        session.incoming += LinkEvent(2, 1, "clipboard: 5 bytes", "hello")
+        session.incoming += LinkEvent(2, 2, "clipboard: requested")
+        advanceTimeBy(300)
+        assertEquals(listOf<DesktopSignal>(DesktopSignal.ClipboardText("hello"), DesktopSignal.ClipboardRequested), seen)
+        watcher.cancel()
         job.cancel()
     }
 

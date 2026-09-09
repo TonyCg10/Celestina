@@ -5,6 +5,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -34,6 +36,12 @@ class LinkService : LifecycleService() {
     private var loop: Job? = null
     private var controller: LinkController? = null
     private val ringer by lazy { Ringer(applicationContext) }
+    private val clipboardPolicy = ClipboardPolicy()
+    private val clipboard by lazy { getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager }
+
+    // Fires only while this app has the focus: the in-front half of the
+    // outbound clipboard. The tile and the share target cover the rest.
+    private val clipListener = ClipboardManager.OnPrimaryClipChangedListener { offerClipboard() }
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -45,6 +53,7 @@ class LinkService : LifecycleService() {
         super.onCreate()
         startForeground(NOTIFICATION_ID, notification(getString(R.string.state_searching)), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        clipboard.addPrimaryClipChangedListener(clipListener)
         val phone = Core.phone(applicationContext)
         val c = LinkController(
             connector = CoreConnector(phone),
@@ -60,6 +69,8 @@ class LinkService : LifecycleService() {
                     when (signal) {
                         DesktopSignal.Ring -> { ringer.start(); _ringing.value = true }
                         DesktopSignal.StopRinging -> { ringer.stop(); _ringing.value = false }
+                        is DesktopSignal.ClipboardText -> receiveClipboard(signal.text)
+                        DesktopSignal.ClipboardRequested -> offerClipboard()
                         else -> {}
                     }
                 }
@@ -73,6 +84,8 @@ class LinkService : LifecycleService() {
         intent?.getStringExtra(EXTRA_PAIR_URI)?.let { controller?.pair(it) }
         when (intent?.action) {
             ACTION_STOP_RINGING -> { ringer.stop(); _ringing.value = false }
+            ACTION_SEND_CLIPBOARD -> offerClipboard(intent.getStringExtra(EXTRA_TEXT))
+            ACTION_FOCUS -> offerClipboard()
             ACTION_FORGET -> intent.getStringExtra(EXTRA_DEVICE_ID)?.let { id ->
                 lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                     runCatching { Core.forget(applicationContext, id) }
@@ -85,11 +98,31 @@ class LinkService : LifecycleService() {
 
     override fun onDestroy() {
         loop?.cancel()
+        runCatching { clipboard.removePrimaryClipChangedListener(clipListener) }
         ringer.stop()
         _ringing.value = false
         runCatching { unregisterReceiver(batteryReceiver) }
         _state.value = LinkState.NeedsPairing
         super.onDestroy()
+    }
+
+    /** The desktop's clipboard arrived: it becomes this phone's, once. */
+    private fun receiveClipboard(text: String) {
+        clipboardPolicy.received(text)
+        runCatching { clipboard.setPrimaryClip(ClipData.newPlainText("Magnetita", text)) }
+        _clipboardNote.value = getString(R.string.clipboard_received)
+    }
+
+    /**
+     * Sends `text`, or the primary clip when null; the read yields nothing
+     * unless this app is in front, which is Android's rule, not ours.
+     */
+    private fun offerClipboard(text: String? = null) {
+        val value = text ?: runCatching { clipboard.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString() }.getOrNull()
+        if (clipboardPolicy.offer(value)) {
+            controller?.sendClipboard(value!!)
+            _clipboardNote.value = getString(R.string.clipboard_sent)
+        }
     }
 
     private fun readBattery(): Pair<Int, Boolean> {
@@ -140,6 +173,24 @@ class LinkService : LifecycleService() {
         private const val EXTRA_DEVICE_ID = "device_id"
         private const val ACTION_STOP_RINGING = "org.celestina.magnetita.STOP_RINGING"
         private const val ACTION_FORGET = "org.celestina.magnetita.FORGET"
+        private const val ACTION_SEND_CLIPBOARD = "org.celestina.magnetita.SEND_CLIPBOARD"
+        private const val ACTION_FOCUS = "org.celestina.magnetita.FOCUS"
+        private const val EXTRA_TEXT = "text"
+
+        private val _clipboardNote = MutableStateFlow("")
+
+        /** The last clipboard exchange, in the person's words, for the screen. */
+        val clipboardNote: StateFlow<String> = _clipboardNote.asStateFlow()
+
+        /** Sends `text` as this phone's clipboard, from the tile or a share. */
+        fun sendClipboard(context: Context, text: String) {
+            context.startForegroundService(Intent(context, LinkService::class.java).setAction(ACTION_SEND_CLIPBOARD).putExtra(EXTRA_TEXT, text))
+        }
+
+        /** The app came to the front: the clipboard may be read now. */
+        fun focused(context: Context) {
+            context.startForegroundService(Intent(context, LinkService::class.java).setAction(ACTION_FOCUS))
+        }
 
         private val _ringing = MutableStateFlow(false)
 

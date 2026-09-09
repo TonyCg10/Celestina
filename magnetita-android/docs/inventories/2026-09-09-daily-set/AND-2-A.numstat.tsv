@@ -1,0 +1,67 @@
+# AND-2-A exact change inventory
+
+Base revision	6c60ccb0e6c725695ada88a61a96cc20a6542669
+Pathspec	magnetita-android/ROADMAP.md
+Pathspec	magnetita-android/STATUS.md
+Pathspec	magnetita-android/app/src/main/AndroidManifest.xml
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/MainActivity.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/clipboard/ClipboardTile.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/clipboard/SendClipboardActivity.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/clipboard/ShareActivity.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/ClipboardPolicy.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/CoreConnector.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/DesktopSignal.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkController.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkService.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/Ports.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/screens/DeviceScreen.kt
+Pathspec	magnetita-android/app/src/main/res/values/strings.xml
+Pathspec	magnetita-android/app/src/main/res/values/themes.xml
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/link/ClipboardPolicyTest.kt
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/link/DesktopSignalTest.kt
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/link/LinkControllerTest.kt
+Pathspec	magnetita-android/docs/evidence/2026-09-09-daily-clipboard.md
+Pathspec	magnetita-android/docs/evidence/2026-09-09-foundation-link.md
+Pathspec	magnetita-android/docs/evidence/2026-09-09-foundation-release.md
+Pathspec	magnetita-android/docs/evidence/2026-09-09-foundation-scaffold.md
+Pathspec	magnetita-android/docs/evidence/2026-09-09-foundation-screens.md
+Pathspec	magnetita-android/docs/inventories/2026-09-09-daily-set/AND-2-A.numstat.tsv
+Pathspec	magnetita-android/docs/plans/active/2026-09-09-daily-set.md
+Pathspec	magnetita-android/docs/plans/active/2026-09-09-foundation.md
+Pathspec	magnetita-android/docs/plans/active/README.md
+Pathspec	magnetita-android/docs/plans/archive/2026-09-09-foundation.md
+Pathspec	magnetita-android/docs/plans/archive/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+52	3	0ac2b927daf10b59100ab395859ff2b11f4ce892cf90c08c660a9a13a994a4f0	magnetita-android/ROADMAP.md
+9	3	da71d80cf0440986503de23e4daeab740135e0a8251a0088b47eae5f76f7fbaf	magnetita-android/STATUS.md
+31	1	c79bdc9e9529b84d5dc9b457b43e148af6b43f7b75565dcf2537d005cd8bfa32	magnetita-android/app/src/main/AndroidManifest.xml
+7	1	bfc564c729a6ecaf93e5dbc99daed4fdea11d9137db542f6394da5110eb0db20	magnetita-android/app/src/main/java/org/celestina/magnetita/MainActivity.kt
+26	0	e3fe6e07b620380bf4f9a5cc33d3f901b4c4565b7377157b66c8b897fa91331a	magnetita-android/app/src/main/java/org/celestina/magnetita/clipboard/ClipboardTile.kt
+32	0	4f27df1a6b1fa1bccc2b8453f1892d60c66e49720a8194a754e08f3ae1c02290	magnetita-android/app/src/main/java/org/celestina/magnetita/clipboard/SendClipboardActivity.kt
+23	0	c13e87b88cbeb6e9e0b22dd505877854107fb183be39dc4294409278d2111b36	magnetita-android/app/src/main/java/org/celestina/magnetita/clipboard/ShareActivity.kt
+31	0	b04893a5e748a062a304f69946308d1d432fbd95fdf7ea63253325366efcdac6	magnetita-android/app/src/main/java/org/celestina/magnetita/link/ClipboardPolicy.kt
+4	1	129c218b7a670aa4a6334609395e5e585cf129ea45a8dbee708cf2bb3d50c57b	magnetita-android/app/src/main/java/org/celestina/magnetita/link/CoreConnector.kt
+12	0	b1c800943ef980cf3dee1a616dce7254e44eddd217010586453a7bbf3ef0d920	magnetita-android/app/src/main/java/org/celestina/magnetita/link/DesktopSignal.kt
+10	0	86ca00ae504ac651a855f84f73c2274446cafd9b321211d36fd4128351027963	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkController.kt
+51	0	69120556e0b3b52b9d516f7a3984ecd2c7c437713c51fd28ff797acf77d61619	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkService.kt
+8	2	f2f817393bc30e7ad68b91563d2fb7737e596c071cd0e63a5251a5e7b89f2f02	magnetita-android/app/src/main/java/org/celestina/magnetita/link/Ports.kt
+5	0	8649aa3e637ae0ea39e6d41bd6c48a5c4996ac4516a4842f6a7ff511ef1ca977	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/screens/DeviceScreen.kt
+7	0	30c08791f449f5886a835b1ddb002f1265d8bbe948e18506a849ff009648cb5b	magnetita-android/app/src/main/res/values/strings.xml
+9	0	1b7e7f1966bec284957088753296fbd596fbf981cb9f90398ad251aaec2c39e3	magnetita-android/app/src/main/res/values/themes.xml
+29	0	15d65c03dc6c80d7f6c81d3016058808164808dfe61b2f76ee55c121dd59963f	magnetita-android/app/src/test/java/org/celestina/magnetita/link/ClipboardPolicyTest.kt
+4	1	af9a595999c1798e98423ac01fa766455fd06be87e2158ba012e064b560112cf	magnetita-android/app/src/test/java/org/celestina/magnetita/link/DesktopSignalTest.kt
+22	0	e1420c6edb6b0af8b956a496f6c7246a811711c90396e37568d31d470db50153	magnetita-android/app/src/test/java/org/celestina/magnetita/link/LinkControllerTest.kt
+56	0	feddbf17afb49b31abc60b42bb28ebb7196c828d487803cf286bfb667aa6f356	magnetita-android/docs/evidence/2026-09-09-daily-clipboard.md
+1	1	f61b10c06104306af23dcab2bd9f5d4d9bfd025e8059d40babaaaacc9e34d579	magnetita-android/docs/evidence/2026-09-09-foundation-link.md
+1	1	a556992c724d3fef3191c32463897e579492a16603cf19ecd6991ecb57a5f3bc	magnetita-android/docs/evidence/2026-09-09-foundation-release.md
+1	1	758639314a51ae401bded94cc3704a4e7b818e65b6d1b046dcdb17a7d5cfa358	magnetita-android/docs/evidence/2026-09-09-foundation-scaffold.md
+1	1	33e43e0134fafcea62401f842d6c3cedde9810dfc95589b2ebb1a1253b64a907	magnetita-android/docs/evidence/2026-09-09-foundation-screens.md
+67	0	self	magnetita-android/docs/inventories/2026-09-09-daily-set/AND-2-A.numstat.tsv
+62	0	b212527dbf1cf2324ab63191a77aa79d19606672e543784557e49931e9f768ad	magnetita-android/docs/plans/active/2026-09-09-daily-set.md
+0	58	deleted	magnetita-android/docs/plans/active/2026-09-09-foundation.md
+1	1	852992e5a59cfee73b79c75f7d3cf329a478ae89a8e0f744029dea94f907645b	magnetita-android/docs/plans/active/README.md
+60	0	d97b88f7f05cdd52ec626f1d4d802bc806d49567eaa0c75202acc3ee58729f7b	magnetita-android/docs/plans/archive/2026-09-09-foundation.md
+2	0	6d05b3eb5727a3d1b843ee77559c696a6f3e55af29c91fbf4efea92e12a03670	magnetita-android/docs/plans/archive/README.md

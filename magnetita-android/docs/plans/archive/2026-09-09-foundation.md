@@ -1,14 +1,16 @@
 # AND-1 — The application foundation
 
 - **Opened:** 2026-09-09
+- **Closed:** 2026-09-09
 - **Plan ID:** foundation
-- **Status:** active
+- **Status:** done
 - **Authorization:** the author said "abre MAG-P3 y empieza" on 2026-09-09
   and asked for MilaHub's design philosophy in Samsung blue
 - **Scope:** magnetita-android
 - **Implementation checkpoint:** AND-1
 - **Author-validation checkpoint:** `VAL-MAG-11` in Magnetita's
   [`../../../../magnetita/VALIDATION.md`](../../../../magnetita/VALIDATION.md)
+- **Successor:** AND-2
 
 ## Hypothesis
 

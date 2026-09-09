@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `AND-1-B` of
-  [`../plans/active/2026-09-09-foundation.md`](../plans/active/2026-09-09-foundation.md):
+  [`../plans/archive/2026-09-09-foundation.md`](../plans/archive/2026-09-09-foundation.md):
   `app/src/main/java/org/celestina/magnetita/link/`, the service entry in
   the manifest, the link row of the identity screen, the controller tests
 - **Environment:** as `AND-1-A`; the live `magnetitad` at `10.0.0.134`

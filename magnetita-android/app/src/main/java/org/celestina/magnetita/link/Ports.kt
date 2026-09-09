@@ -25,6 +25,9 @@ interface LiveSession {
     /** Sends a battery report; false when the session is gone. */
     fun reportBattery(level: Int, charging: Boolean): Boolean
 
+    /** Sends this phone's clipboard text; false when the session is gone. */
+    fun sendClipboard(text: String): Boolean
+
     /**
      * Waits up to `timeoutMs` for the next envelope: a short description, or
      * null on timeout. Throws when the session is gone. Suspends, so the
@@ -35,8 +38,11 @@ interface LiveSession {
     fun close(reason: String)
 }
 
-/** An envelope the desktop sent, described for a log and carried for a handler. */
-data class LinkEvent(val capability: Int, val kind: Int, val description: String)
+/**
+ * An envelope the desktop sent, described for a log and carried for a
+ * handler; `text` is the clipboard text the core already decoded.
+ */
+data class LinkEvent(val capability: Int, val kind: Int, val description: String, val text: String? = null)
 
 /** Where a desktop is advertising, one entry per (id, address). */
 data class Advertised(val deviceId: String, val address: String)

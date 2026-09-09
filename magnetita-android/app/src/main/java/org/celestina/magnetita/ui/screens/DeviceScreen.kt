@@ -40,6 +40,7 @@ data class DeviceShown(
     val batteryLevel: Int,
     val batteryCharging: Boolean,
     val ringing: Boolean,
+    val clipboardNote: String = "",
 )
 
 /**
@@ -91,6 +92,10 @@ fun DeviceScreen(shown: DeviceShown, onScan: () -> Unit, onForget: (String) -> U
                 if (link is LinkState.Connected) {
                     GroupRow(title = stringResource(R.string.label_address), detail = link.address)
                 }
+                GroupRow(
+                    title = stringResource(R.string.label_clipboard),
+                    detail = shown.clipboardNote.ifBlank { stringResource(R.string.detail_clipboard) },
+                )
                 GroupRow(
                     title = stringResource(R.string.label_phone_battery),
                     detail = stringResource(R.string.detail_battery_shared),

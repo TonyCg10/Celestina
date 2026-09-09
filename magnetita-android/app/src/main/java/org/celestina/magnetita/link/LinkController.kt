@@ -45,6 +45,12 @@ class LinkController(
     val signals: SharedFlow<DesktopSignal> = _signals.asSharedFlow()
 
     private val dropRequested = MutableStateFlow(false)
+    private val outboundClipboard = MutableStateFlow<String?>(null)
+
+    /** Hand the loop a clipboard text; the session sends it on the next poll. */
+    fun sendClipboard(text: String) {
+        outboundClipboard.value = text
+    }
 
     /** Ends the current session (after a forget); the loop decides what follows. */
     fun disconnect() {
@@ -137,6 +143,10 @@ class LinkController(
                 if (dropRequested.value) {
                     withContext(io) { live.close("forgotten") }
                     break
+                }
+                outboundClipboard.value?.let { text ->
+                    outboundClipboard.value = null
+                    if (!withContext(io) { live.sendClipboard(text) }) return@launch
                 }
                 val now = batteryChanged.value
                 if (now != seen) {

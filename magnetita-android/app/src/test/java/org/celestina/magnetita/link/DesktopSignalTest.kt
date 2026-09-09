@@ -12,7 +12,10 @@ class DesktopSignalTest {
         assertEquals(DesktopSignal.Ring, DesktopSignal.of(LinkEvent(4, 1, "find: ring")))
         assertEquals(DesktopSignal.StopRinging, DesktopSignal.of(LinkEvent(4, 2, "find: stop")))
         assertEquals(DesktopSignal.BatteryRequested, DesktopSignal.of(LinkEvent(1, 2, "battery: requested")))
-        assertEquals(DesktopSignal.Other(2, 1), DesktopSignal.of(LinkEvent(2, 1, "clipboard")))
+        assertEquals(DesktopSignal.ClipboardText("hello"), DesktopSignal.of(LinkEvent(2, 1, "clipboard: 5 bytes", "hello")))
+        assertEquals(DesktopSignal.Other(2, 1), DesktopSignal.of(LinkEvent(2, 1, "clipboard: undecodable")))
+        assertEquals(DesktopSignal.ClipboardRequested, DesktopSignal.of(LinkEvent(2, 2, "clipboard: requested")))
+        assertEquals(DesktopSignal.Other(3, 1), DesktopSignal.of(LinkEvent(3, 1, "notification")))
     }
 
     @Test

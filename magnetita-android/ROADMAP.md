@@ -1,14 +1,63 @@
 # Magnetita Android implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** AND-1
-- **Related author validation:** `VAL-MAG-11` in Magnetita's
-  [VALIDATION.md](../magnetita/VALIDATION.md); does not block
+- **Active implementation checkpoint:** AND-2
+- **Related author validation:** `VAL-MAG-11` and `VAL-MAG-12` in
+  Magnetita's [VALIDATION.md](../magnetita/VALIDATION.md); they do not
+  block
 
 This roadmap is the application half of Magnetita's own-protocol program;
 the Rust half and the desktop are in
 [Magnetita's roadmap](../magnetita/ROADMAP.md) (`MAG-P3` onwards). Each
 `AND-` checkpoint pairs with a `MAG-P` one.
+
+## AND-2 — The daily set
+
+## Hypothesis and tangible outcome
+
+Each daily capability is one Kotlin adapter over the core: the platform
+service that Android gives (clipboard manager, notification listener,
+storage access, media session, contacts and SMS providers, telecom) and
+nothing else. The tangible outcome is the author's daily set on the phone
+without the stock client: clipboard, notifications, files, media,
+contacts, SMS and calls.
+
+## Scope
+
+- Clipboard both ways: the application in front, a quick-settings tile and
+  a share target for the rest, the Android limit stated on the screen.
+- Notifications through `NotificationListenerService`, with actions and
+  inline replies.
+- File share both ways through the storage access framework.
+- Media through `MediaSession` both ways.
+- Contacts, SMS and telephony through their providers and `TelecomManager`.
+
+## Exclusions
+
+- Commands, input and mirror: `AND-3` onwards.
+- Any third-party SDK.
+
+## Build order
+
+| Unit | Status | Dependency | Implementation result | Agent evidence |
+|---|---|---|---|---|
+| AND-2-A | done | MAG-P4-A | Clipboard both ways: in front, tile, share target | JVM tests, lint |
+| AND-2-B | planned | MAG-P4-B | Notifications with actions and replies | JVM tests |
+| AND-2-C | planned | MAG-P4-C | File share both ways | JVM tests |
+| AND-2-D | planned | MAG-P4-D | Media control both ways | JVM tests |
+| AND-2-E | planned | MAG-P4-E | Contacts sync | JVM tests |
+| AND-2-F | planned | MAG-P4-F | SMS send and receive, MMS attachments | JVM tests |
+| AND-2-G | planned | MAG-P4-G | Call state, mute, answer, hang up | JVM tests |
+
+## Implementation exit
+
+Close `AND-2` when every adapter has its JVM tests, the release build passes
+lint, and `MAG-P4`'s exit is met. `VAL-MAG-12` carries the author's daily
+use.
+
+## Closed evidence
+
+- `AND-2-A`: [clipboard](docs/evidence/2026-09-09-daily-clipboard.md)
 
 ## AND-1 — The application foundation
 

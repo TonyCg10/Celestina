@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `AND-1-A` of
-  [`../plans/active/2026-09-09-foundation.md`](../plans/active/2026-09-09-foundation.md):
+  [`../plans/archive/2026-09-09-foundation.md`](../plans/archive/2026-09-09-foundation.md):
   the whole of `magnetita-android/` as first committed — Gradle files,
   `scripts/`, `app/src/main/`, `app/src/test/`, and the document set
 - **Environment:** the author's Android Studio Flatpak SDK (platform 36,

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `AND-1-C` of
-  [`../plans/active/2026-09-09-foundation.md`](../plans/active/2026-09-09-foundation.md):
+  [`../plans/archive/2026-09-09-foundation.md`](../plans/archive/2026-09-09-foundation.md):
   `app/src/main/java/org/celestina/magnetita/ui/screens/`, the signals,
   the ringer and the service actions in `link/`, `MainActivity`, the
   strings, the camera dependencies, and the three production scripts

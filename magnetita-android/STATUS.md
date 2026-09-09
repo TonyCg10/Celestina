@@ -1,14 +1,19 @@
 # Magnetita Android status
 
 - **Updated:** 2026-09-09
-- **Implementation:** `AND-1`, the application foundation, is the active
-  checkpoint since 2026-09-09, opened with Magnetita's `MAG-P3`
+- **Implementation:** `AND-2`, the daily set, is the active checkpoint
+  since 2026-09-09, paired with Magnetita's `MAG-P4`; its clipboard unit
+  is done. `AND-1`, the foundation, has its four units done and waits for
+  `VAL-MAG-11`
 - **Author validation:** `VAL-MAG-11` in Magnetita's
   [VALIDATION.md](../magnetita/VALIDATION.md) covers the first pairing on
   the S25U; this project's own lane starts empty
 
 ## Current checkout truth
 
+- The clipboard travels both ways: the desktop's text becomes the phone's;
+  the phone's goes out in front, from the quick-settings tile and from the
+  share target (`AND-2-A`).
 - The project is the author's Android Studio scaffold moved into the
   repository under the package `org.celestina.magnetita`, `minSdk 31`,
   Kotlin 2.2, Compose Material 3, AGP 9.
@@ -40,5 +45,6 @@ None. The SDK and NDK are the author's, outside the repository.
 ## Records
 
 - [Implementation roadmap](ROADMAP.md)
-- [Active plan AND-1](docs/plans/active/2026-09-09-foundation.md)
+- [Active plan AND-2](docs/plans/active/2026-09-09-daily-set.md)
+- [Archived plan AND-1](docs/plans/archive/2026-09-09-foundation.md)
 - [Registry entry](../docs/projects.toml)
