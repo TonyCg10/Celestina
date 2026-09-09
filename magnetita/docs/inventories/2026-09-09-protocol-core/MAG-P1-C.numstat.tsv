@@ -1,0 +1,37 @@
+# MAG-P1-C exact change inventory
+
+Base revision	07e70c4d79053b1ab698317e7ed5cf4e7d960cae
+Pathspec	celestina-rs/crates/magnetita-proto/src/bound.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/codec.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/daily/battery.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/daily/clipboard.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/daily/find.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/daily/media.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/daily/mod.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/daily/notifications.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/daily/share.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/lib.rs
+Pathspec	magnetita/README.md
+Pathspec	magnetita/docs/evidence/2026-09-09-protocol-daily-catalog.md
+Pathspec	magnetita/docs/inventories/2026-09-09-protocol-core/MAG-P1-C.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-protocol-core.md
+Pathspec	magnetita/docs/protocol.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+23	0	3baba92efa80b2e2becfa8b8a291311a901d2b7e516e5c9eed0fc8738ac13dd8	celestina-rs/crates/magnetita-proto/src/bound.rs
+178	0	a7038a9d0657cf9942f13505647c21fa41846f5983033ecfcd8ea955486f239f	celestina-rs/crates/magnetita-proto/src/codec.rs
+111	0	75edd9626f17ff426fa172b0bf749bccfff444e0d522a18ea5029b233afffc81	celestina-rs/crates/magnetita-proto/src/daily/battery.rs
+84	0	382321e4f0d86baec29f4be3cb4e1ad59e226172434b9e1e420dbb000d47a51f	celestina-rs/crates/magnetita-proto/src/daily/clipboard.rs
+54	0	72411f73a456d0fb070e316f0c30753defdfbc8c37fef6104e3b2bf2acd4dda8	celestina-rs/crates/magnetita-proto/src/daily/find.rs
+284	0	f31acc0d8efb0187844f0329a7f5b6c314c05a3f8d9debe5a5646f51e22b4726	celestina-rs/crates/magnetita-proto/src/daily/media.rs
+9	0	5b0335dab934e782c6bc4cc4019491ac5a298be51f4d453c863cde8d00dfd6c3	celestina-rs/crates/magnetita-proto/src/daily/mod.rs
+285	0	258c96a93a50b6ef8371832d9dfa11e77e69f68742788164fbdb1948a473603b	celestina-rs/crates/magnetita-proto/src/daily/notifications.rs
+249	0	504a519191834ac237ab8efbd948283e16f39a422de4399f7cdcae46cc481d51	celestina-rs/crates/magnetita-proto/src/daily/share.rs
+5	0	2f25a87fcb9897ad5ede60fb4c91ede906937463095ec5c1e9f5bed91140877b	celestina-rs/crates/magnetita-proto/src/lib.rs
+1	0	bc98896e84f19a98cc088b07bbb3e9ce6a1e6c3eee3f504006169f9669902c9f	magnetita/README.md
+49	0	413d62714f94a6a3a8f11a94c9d8804882e288cc54e64f7501b1f089f916ba73	magnetita/docs/evidence/2026-09-09-protocol-daily-catalog.md
+37	0	self	magnetita/docs/inventories/2026-09-09-protocol-core/MAG-P1-C.numstat.tsv
+3	3	ea1aa7dca4a6f1d71b5392ab548b5a8e78c8333d935d5e843ef2ed717af28bd5	magnetita/docs/plans/active/2026-09-09-protocol-core.md
+107	0	e6ec90685cc09a4f002e2c10b254e85bcf1e47feb3755e23d9575cfef2f23f68	magnetita/docs/protocol.md

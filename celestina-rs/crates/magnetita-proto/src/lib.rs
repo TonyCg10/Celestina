@@ -27,10 +27,15 @@
 //! outright.
 
 pub mod bound;
+mod codec;
+pub mod control;
+pub mod daily;
 pub mod envelope;
 pub mod error;
 pub mod hello;
+pub mod mirror;
 pub mod pair;
+pub mod phone;
 
 pub use envelope::{Envelope, PROTOCOL_VERSION};
 pub use error::DecodeError;

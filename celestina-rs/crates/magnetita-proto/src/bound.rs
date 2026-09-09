@@ -18,6 +18,14 @@ pub const MAX_IDENT: usize = 128;
 pub const MAX_LIST: usize = 256;
 /// Largest byte string one field may carry: a thumbnail, a proof, a chunk.
 pub const MAX_BYTES: usize = 1 << 20;
+/// Longest clipboard text; a pasted document, not a novel.
+pub const MAX_CLIPBOARD: usize = 256 * 1024;
+/// Largest notification icon, PNG bytes.
+pub const MAX_ICON: usize = 64 * 1024;
+/// Longest file name offered for transfer, in bytes.
+pub const MAX_FILENAME: usize = 255;
+/// Longest vCard one contact may carry.
+pub const MAX_VCARD: usize = 16 * 1024;
 /// Largest encoded message the link will hand to this crate at all.
 pub const MAX_MESSAGE: usize = MAX_BYTES + 4096;
 
@@ -104,6 +112,21 @@ pub fn u16(d: &mut Decoder<'_>, what: &'static str) -> Result<u16, DecodeError> 
 /// Reads a `u32` field, refusing anything wider.
 pub fn u32(d: &mut Decoder<'_>, what: &'static str) -> Result<u32, DecodeError> {
     d.u32().map_err(|_| DecodeError::OutOfRange(what))
+}
+
+/// Reads a `u64` field.
+pub fn u64(d: &mut Decoder<'_>, what: &'static str) -> Result<u64, DecodeError> {
+    d.u64().map_err(|_| DecodeError::OutOfRange(what))
+}
+
+/// Reads an `i16` field, refusing anything wider.
+pub fn i16(d: &mut Decoder<'_>, what: &'static str) -> Result<i16, DecodeError> {
+    d.i16().map_err(|_| DecodeError::OutOfRange(what))
+}
+
+/// Reads a boolean.
+pub fn bool(d: &mut Decoder<'_>, what: &'static str) -> Result<bool, DecodeError> {
+    d.bool().map_err(|_| DecodeError::Malformed(what))
 }
 
 /// Skips one value of any shape — the way an unknown key is tolerated.

@@ -66,6 +66,6 @@ document lists every capability, kind and bound.
 |---|---|---|---|---|---|---|---|
 | MAG-P1-A | `magnetita:` | done | [inventory](../../inventories/2026-09-09-protocol-core/MAG-P1-A.numstat.tsv) | 23 files, +1332/-130 | Envelope, hello, negotiation, bounds, golden vectors; `MAG-P0` archived and `MAG-P1` opened | [record](../../evidence/2026-09-09-protocol-envelope-and-hello.md) | None |
 | MAG-P1-B | `magnetita:` | done | [inventory](../../inventories/2026-09-09-protocol-core/MAG-P1-B.numstat.tsv) | 4 files, +943/-0 | Pairing state machines, both roles, both paths | [record](../../evidence/2026-09-09-protocol-pairing.md) | None |
-| MAG-P1-C | `magnetita:` | planned | `src/daily/`, `docs/protocol.md` | — | Daily-set catalog and the wire document | `cargo test -p magnetita-proto` | None |
-| MAG-P1-D | `magnetita:` | planned | `src/control/`, `src/mirror.rs` | — | `commands`, `input`, `mirror` | `cargo test -p magnetita-proto` | None |
-| MAG-P1-E | `magnetita:` | planned | `src/phone/` | — | `sms`, `contacts`, `telephony` | `cargo test -p magnetita-proto` | None |
+| MAG-P1-C | `magnetita:` | done | [inventory](../../inventories/2026-09-09-protocol-core/MAG-P1-C.numstat.tsv) | 15 files, +1479/-3 | Daily-set catalog, the shared codec and bounds, and the wire document | [record](../../evidence/2026-09-09-protocol-daily-catalog.md) | None |
+| MAG-P1-D | `magnetita:` | done | [inventory](../../inventories/2026-09-09-protocol-core/MAG-P1-D.numstat.tsv) | 7 files, +921/-3 | `commands`, `input` and `mirror` messages | [record](../../evidence/2026-09-09-protocol-control-and-mirror.md) | None |
+| MAG-P1-E | `magnetita:` | done | [inventory](../../inventories/2026-09-09-protocol-core/MAG-P1-E.numstat.tsv) | 7 files, +833/-3 | `sms`, `contacts` and `telephony` messages | [record](../../evidence/2026-09-09-protocol-phone-surface.md) | None |

@@ -1,0 +1,21 @@
+# MAG-P1-E exact change inventory
+
+Base revision	07e70c4d79053b1ab698317e7ed5cf4e7d960cae
+Pathspec	celestina-rs/crates/magnetita-proto/src/phone/contacts.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/phone/mod.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/phone/sms.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/phone/telephony.rs
+Pathspec	magnetita/docs/evidence/2026-09-09-protocol-phone-surface.md
+Pathspec	magnetita/docs/inventories/2026-09-09-protocol-core/MAG-P1-E.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-protocol-core.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+175	0	e46401b27af180e052f272b151efbc18eaf85063dbfb8d34ce44cca4004dd452	celestina-rs/crates/magnetita-proto/src/phone/contacts.rs
+6	0	280f7145665188f6b8e6f2682f0b8aa7aea2fa69b6a1ca3bd400bd3f9f0151e8	celestina-rs/crates/magnetita-proto/src/phone/mod.rs
+408	0	9c262527c94758cec7ce7f1fda31630b66a5fb954e590deb4aec2f850a035373	celestina-rs/crates/magnetita-proto/src/phone/sms.rs
+175	0	e02a2e21609550e7e761366ab4e13a66a79f075cc3dbbfb2d29bbe31d9282401	celestina-rs/crates/magnetita-proto/src/phone/telephony.rs
+45	0	0db764191df3222f08727bae41c9c6eec2b4b7482b783098881a16ef8619a73c	magnetita/docs/evidence/2026-09-09-protocol-phone-surface.md
+21	0	self	magnetita/docs/inventories/2026-09-09-protocol-core/MAG-P1-E.numstat.tsv
+3	3	ea1aa7dca4a6f1d71b5392ab548b5a8e78c8333d935d5e843ef2ed717af28bd5	magnetita/docs/plans/active/2026-09-09-protocol-core.md

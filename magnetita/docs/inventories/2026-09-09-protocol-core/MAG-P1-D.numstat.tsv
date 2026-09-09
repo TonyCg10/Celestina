@@ -1,0 +1,21 @@
+# MAG-P1-D exact change inventory
+
+Base revision	07e70c4d79053b1ab698317e7ed5cf4e7d960cae
+Pathspec	celestina-rs/crates/magnetita-proto/src/control/commands.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/control/input.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/control/mod.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/mirror.rs
+Pathspec	magnetita/docs/evidence/2026-09-09-protocol-control-and-mirror.md
+Pathspec	magnetita/docs/inventories/2026-09-09-protocol-core/MAG-P1-D.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-protocol-core.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+198	0	fb91049315147fe553674c3f0d8bf29e298f39208a95cc52d1522efac890cf96	celestina-rs/crates/magnetita-proto/src/control/commands.rs
+224	0	eb90716b7c1ba07460801eb5e5d0d74c10351de19674f40d0ec7e3e0095b8586	celestina-rs/crates/magnetita-proto/src/control/input.rs
+5	0	2aa0734ef4faad042eeb9a5340fcf60f186f16ad1625f93dc2cd6d9b65859a2c	celestina-rs/crates/magnetita-proto/src/control/mod.rs
+423	0	081dc7b39b58c49a8219794b01f1b22d23b157577f214aea8505c370b9a836e8	celestina-rs/crates/magnetita-proto/src/mirror.rs
+47	0	2c906a82cb3c05f9db536c6831bc2ce53106efe812f97728e059b5649d4eec67	magnetita/docs/evidence/2026-09-09-protocol-control-and-mirror.md
+21	0	self	magnetita/docs/inventories/2026-09-09-protocol-core/MAG-P1-D.numstat.tsv
+3	3	ea1aa7dca4a6f1d71b5392ab548b5a8e78c8333d935d5e843ef2ed717af28bd5	magnetita/docs/plans/active/2026-09-09-protocol-core.md

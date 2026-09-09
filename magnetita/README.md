@@ -68,4 +68,5 @@ settings; the daemon continues to provide devices while the window is closed.
 - [Implementation roadmap](ROADMAP.md)
 - [Author validation](VALIDATION.md)
 - [Local agent delta](AGENTS.md)
+- [The Magnetita wire](docs/protocol.md), the own protocol as `magnetita-proto` implements it
 - [Roadmap history through 2026-08-03](docs/history/roadmap-through-2026-08-03.md)
