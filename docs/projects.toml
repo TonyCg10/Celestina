@@ -254,7 +254,7 @@ deployable = false
 build_script = "magnetita-android/scripts/build-production.sh"
 verify_script = "magnetita-android/scripts/verify-production.sh"
 status_script = "magnetita-android/scripts/status-production.sh"
-artifact_manifest = "magnetita-android/app/build/outputs/apk/debug/output-metadata.json"
+artifact_manifest = "magnetita-android/app/build/production-manifest.toml"
 artifact_paths = ["magnetita-android/app/build/outputs/apk/debug/app-debug.apk"]
 
 [[projects]]
