@@ -275,6 +275,11 @@ pub(crate) fn install_artwork_entry(
 /// writes) and the served interface (which reads).
 pub type Registry = Arc<Mutex<BTreeMap<String, DeviceEntry>>>;
 
+/// How the served interface arms the own wire's pairing: the QR text for
+/// one phone, valid for two minutes. Carried as a closure so this module
+/// stays ignorant of the wire.
+pub type OwnPairing = Arc<dyn Fn() -> String + Send + Sync>;
+
 /// One connection-log entry — the app's answer to "why won't it connect".
 #[derive(Clone, Debug)]
 pub struct LogEntry {
@@ -438,6 +443,8 @@ pub struct Devices {
     settings: Arc<Mutex<Settings>>,
     /// Where those toggles persist.
     settings_path: PathBuf,
+    /// The own wire's pairing window, armed by `StartPairing`.
+    pairing: OwnPairing,
 }
 
 impl Devices {
@@ -458,7 +465,15 @@ impl Devices {
             revocations,
             settings,
             settings_path,
+            pairing: Arc::new(String::new),
         }
+    }
+
+    /// Wires `StartPairing` to the own wire; without it the method returns
+    /// an empty text, which the app reads as "no own wire".
+    pub fn with_own_pairing(mut self, pairing: OwnPairing) -> Devices {
+        self.pairing = pairing;
+        self
     }
 
     /// Forwards a command to the device's link thread, if it is connected.
@@ -640,6 +655,12 @@ impl Devices {
         self.revoke(&device_id)
     }
 
+    /// Arms the own wire's pairing window and returns the text the QR must
+    /// show; empty when the own wire is not running. One phone per call.
+    fn start_pairing(&self) -> String {
+        (self.pairing)()
+    }
+
     /// The per-plugin toggles, as a `name → enabled` dict (the app's switches).
     fn plugin_settings(&self) -> HashMap<String, bool> {
         self.settings
@@ -661,6 +682,25 @@ impl Devices {
             Err(error) => Err(zbus::fdo::Error::IOError(error.to_string())),
         }
     }
+}
+
+/// Start serving the daemon's two session-bus contracts under one name:
+/// `org.celestina.Devices1`, the phone link, and `org.celestina.Mirror1`, the
+/// wireless screen mirror. They are siblings rather than one interface because
+/// mirroring rides on Android debugging, not KDE Connect, and the consumers of
+/// the device contract have no use for it.
+pub(crate) fn serve(
+    devices: Devices,
+    mirror: crate::mirror::Mirror,
+) -> zbus::Result<zbus::blocking::Connection> {
+    zbus::blocking::connection::Builder::session()?
+        .name(BUS_NAME)?
+        .serve_at(
+            crate::mirror::OBJECT_PATH,
+            crate::mirror::MirrorInterface::new(mirror),
+        )?
+        .serve_at(OBJECT_PATH, devices)?
+        .build()
 }
 
 #[cfg(test)]

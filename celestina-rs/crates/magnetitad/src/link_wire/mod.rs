@@ -1,0 +1,776 @@
+//! The own protocol inside the daemon: one runtime thread that listens,
+//! dials, pairs and runs sessions, publishing each phone into the same
+//! registry the KDE Connect links publish into.
+//!
+//! The daemon stays thread-based; QUIC needs an async runtime, so this module
+//! owns exactly one, on one thread, and everything the link does happens
+//! there. What crosses to the rest of the daemon is what already crosses for
+//! a KDE Connect link: a [`DeviceEntry`] in the registry, a command channel,
+//! a [`SessionRegistration`] whose drop cleans up, and the revocation
+//! barrier — `Forget` on `org.celestina.Devices1` forgets the pin in the
+//! shared trust store, and this thread closes the session and acknowledges
+//! the generation, exactly as the KDE Connect thread does.
+//!
+//! Pairing is armed from the app: [`PairingArm::arm`] draws a one-time
+//! secret and returns the QR text; for two minutes an unpinned phone may
+//! connect, and it is admitted only under the certificate it presents and
+//! only until it proves the secret. Everything else unpinned is refused
+//! before its first envelope.
+
+use std::net::{IpAddr, SocketAddr, UdpSocket};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
+
+use magnetita_link::endpoint::Expect;
+use magnetita_link::trust::fingerprint_text;
+use magnetita_link::{
+    Backoff, DeviceCert, Endpoint, EndpointConfig, LinkError, Session, TrustStore, TrustedPeer,
+};
+use magnetita_proto::daily::battery::BatteryStatus;
+use magnetita_proto::daily::find::FindRing;
+use magnetita_proto::pair::{kind as pair_kind, Fingerprint, QrPairing, QrPayload};
+use magnetita_proto::{capability, CapabilityVersion, DeviceKind, Hello};
+use rand_core::{OsRng, RngCore};
+
+use crate::devices::{command_channel, Command, DeviceEntry};
+pub(crate) mod discovery;
+
+use crate::lock::LockOk;
+use crate::runtime::log;
+use crate::session_registration::SessionRegistration;
+use crate::{ui_log, Daemon};
+use discovery::Advertisement;
+
+/// How long an armed pairing stays open.
+const PAIRING_WINDOW: Duration = Duration::from_secs(120);
+/// How often the dialer asks Avahi who is around.
+const BROWSE_INTERVAL: Duration = Duration::from_secs(5);
+/// How often a session checks the revocation barrier and its command queue.
+const TICK: Duration = Duration::from_secs(1);
+
+struct Armed {
+    secret: [u8; 32],
+    until: Instant,
+}
+
+/// The pairing window, shared between the served interface (which arms it)
+/// and the link thread (which consumes it).
+#[derive(Clone, Default)]
+pub(crate) struct PairingArm(Arc<Mutex<Option<Armed>>>);
+
+impl PairingArm {
+    /// Draws a fresh secret and returns the text the QR shows.
+    pub(crate) fn arm(
+        &self,
+        device_id: &str,
+        fingerprint: Fingerprint,
+        addresses: Vec<String>,
+    ) -> String {
+        let mut secret = [0u8; 32];
+        OsRng.fill_bytes(&mut secret);
+        *self.0.lock_ok() = Some(Armed {
+            secret,
+            until: Instant::now() + PAIRING_WINDOW,
+        });
+        QrPayload {
+            device_id: device_id.to_owned(),
+            fingerprint,
+            secret,
+            addresses,
+        }
+        .to_uri()
+    }
+
+    /// The secret, if a window is open; taking it closes the window, so one
+    /// QR admits one phone.
+    fn take_live(&self) -> Option<[u8; 32]> {
+        let mut g = self.0.lock_ok();
+        match g.take() {
+            Some(a) if a.until > Instant::now() => Some(a.secret),
+            _ => None,
+        }
+    }
+
+    #[cfg(test)]
+    fn is_armed(&self) -> bool {
+        self.0
+            .lock_ok()
+            .as_ref()
+            .is_some_and(|a| a.until > Instant::now())
+    }
+}
+
+/// The running wire: stop it and join it.
+pub(crate) struct LinkWire {
+    stopping: Arc<AtomicBool>,
+    join: Option<JoinHandle<()>>,
+}
+
+impl Drop for LinkWire {
+    fn drop(&mut self) {
+        self.stopping.store(true, Ordering::Relaxed);
+        if let Some(join) = self.join.take() {
+            let _ = join.join();
+        }
+    }
+}
+
+/// What this daemon offers on the own wire today.
+fn hello(device_id: &str) -> Hello {
+    Hello {
+        device_id: device_id.to_owned(),
+        device_name: "Celestina".into(),
+        device_kind: DeviceKind::Desktop,
+        capabilities: vec![
+            CapabilityVersion {
+                capability: capability::BATTERY,
+                version: 1,
+            },
+            CapabilityVersion {
+                capability: capability::FIND,
+                version: 1,
+            },
+        ],
+    }
+}
+
+/// The address a phone on this LAN would reach us at, for the QR. Best
+/// effort: the mDNS advertisement carries the rest.
+pub(crate) fn lan_address() -> Option<IpAddr> {
+    let probe = UdpSocket::bind("0.0.0.0:0").ok()?;
+    probe.connect("10.255.255.255:1").ok()?;
+    let ip = probe.local_addr().ok()?.ip();
+    (!ip.is_loopback() && !ip.is_unspecified()).then_some(ip)
+}
+
+/// A copy of the pins for one gate check, so no std lock is held across an
+/// await and a `Forget` in between is seen by the next check.
+fn trust_snapshot(trust: &Mutex<TrustStore>) -> TrustStore {
+    let mut snapshot = TrustStore::in_memory();
+    for peer in trust.lock_ok().peers() {
+        let _ = snapshot.pin(peer);
+    }
+    snapshot
+}
+
+/// The `StartPairing` implementation for the served interface: arms the
+/// window with this daemon's identity and the address a phone would dial.
+pub(crate) fn own_pairing(
+    pairing: &PairingArm,
+    device_id: &str,
+    cert: &DeviceCert,
+) -> Result<crate::devices::OwnPairing, LinkError> {
+    let pairing = pairing.clone();
+    let device_id = device_id.to_owned();
+    let fingerprint = magnetita_link::fingerprint_of(&cert.chain()?[0]);
+    Ok(Arc::new(move || {
+        let addresses = lan_address()
+            .map(|ip| vec![SocketAddr::new(ip, magnetita_link::PORT).to_string()])
+            .unwrap_or_default();
+        pairing.arm(&device_id, fingerprint, addresses)
+    }))
+}
+
+/// The daemon's own wire on its port, advertised; `None` with a log line
+/// when it cannot start, because the KDE Connect wire must not die with it.
+pub(crate) fn install(
+    daemon: Arc<Daemon>,
+    cert: DeviceCert,
+    device_id: String,
+    pairing: PairingArm,
+) -> Option<LinkWire> {
+    match spawn(
+        daemon,
+        cert,
+        device_id,
+        pairing,
+        SocketAddr::from(([0, 0, 0, 0], magnetita_link::PORT)),
+        true,
+    ) {
+        Ok((wire, addr)) => {
+            log("link", &format!("own wire listening on {addr}"));
+            Some(wire)
+        }
+        Err(e) => {
+            log("link", &format!("own wire unavailable: {e}"));
+            None
+        }
+    }
+}
+
+/// Starts the wire on its own thread. `bind` is `0.0.0.0:1760` in the
+/// daemon and a loopback port in tests; `advertise` publishes on Avahi.
+pub(crate) fn spawn(
+    daemon: Arc<Daemon>,
+    cert: DeviceCert,
+    device_id: String,
+    pairing: PairingArm,
+    bind: SocketAddr,
+    advertise: bool,
+) -> Result<(LinkWire, SocketAddr), LinkError> {
+    let stopping = Arc::new(AtomicBool::new(false));
+    let stop = Arc::clone(&stopping);
+    let my_fingerprint = magnetita_link::fingerprint_of(&cert.chain()?[0]);
+    // quinn binds only inside a runtime, so the thread binds and reports back.
+    let (bound_tx, bound_rx) = std::sync::mpsc::channel::<Result<SocketAddr, LinkError>>();
+    let join = thread::Builder::new()
+        .name("magnetita-link".into())
+        .spawn(move || {
+            let runtime = match tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+            {
+                Ok(rt) => rt,
+                Err(e) => {
+                    let _ = bound_tx.send(Err(LinkError::Io(e)));
+                    return;
+                }
+            };
+            let endpoint = match runtime.block_on(async {
+                Endpoint::bind(
+                    EndpointConfig {
+                        cert,
+                        hello: hello(&device_id),
+                    },
+                    bind,
+                )
+            }) {
+                Ok(ep) => ep,
+                Err(e) => {
+                    let _ = bound_tx.send(Err(e));
+                    return;
+                }
+            };
+            let local = match endpoint.local_addr() {
+                Ok(a) => a,
+                Err(e) => {
+                    let _ = bound_tx.send(Err(e));
+                    return;
+                }
+            };
+            let _ = bound_tx.send(Ok(local));
+            let _advertisement = advertise
+                .then(|| Advertisement::publish(&device_id, "Celestina", local.port()).ok())
+                .flatten();
+            let wire = Arc::new(Wire {
+                daemon,
+                endpoint,
+                my_fingerprint,
+                pairing,
+                stop,
+            });
+            runtime.block_on(wire.run());
+            wire.endpoint.close();
+            runtime.block_on(wire.endpoint.wait_idle());
+        })
+        .map_err(LinkError::Io)?;
+    let local = bound_rx.recv().unwrap_or_else(|_| {
+        Err(LinkError::Connection(
+            "the link thread ended before binding".into(),
+        ))
+    })?;
+    Ok((
+        LinkWire {
+            stopping,
+            join: Some(join),
+        },
+        local,
+    ))
+}
+
+struct Wire {
+    daemon: Arc<Daemon>,
+    endpoint: Endpoint,
+    my_fingerprint: Fingerprint,
+    pairing: PairingArm,
+    stop: Arc<AtomicBool>,
+}
+
+impl Wire {
+    async fn run(self: &Arc<Self>) {
+        let accepter = Arc::clone(self);
+        let dialer = Arc::clone(self);
+        tokio::join!(accepter.accept_loop(), dialer.dial_loop());
+    }
+
+    async fn accept_loop(self: Arc<Self>) {
+        loop {
+            let next = tokio::select! {
+                incoming = self.endpoint.accept() => incoming,
+                _ = self.stopped() => return,
+            };
+            let Some(incoming) = next else { return };
+            let incoming = match incoming {
+                Ok(i) => i,
+                Err(e) => {
+                    log("link", &format!("accept: {e}"));
+                    continue;
+                }
+            };
+            let wire = Arc::clone(&self);
+            tokio::spawn(async move { wire.admit(incoming).await });
+        }
+    }
+
+    async fn admit(&self, incoming: magnetita_link::Incoming) {
+        let fp = incoming.peer_fingerprint();
+        let address = incoming.remote_address();
+        let snapshot = trust_snapshot(&self.daemon.trust);
+        let pinned = magnetita_link::Trust(&snapshot)
+            .peer_by_fingerprint(&fp)
+            .is_some();
+        if pinned {
+            match self
+                .endpoint
+                .admit(incoming, Expect::Trusted(&snapshot))
+                .await
+            {
+                Ok((session, hello)) => self.run_session(session, hello, "accepted").await,
+                Err(e) => log("link", &format!("{address}: {e}")),
+            }
+            return;
+        }
+        let Some(secret) = self.pairing.take_live() else {
+            log(
+                "link",
+                &format!("{address}: unpinned and no pairing armed; refused"),
+            );
+            incoming.refuse();
+            return;
+        };
+        match self.endpoint.admit(incoming, Expect::Fingerprint(fp)).await {
+            Ok((session, hello)) => self.pair_then_run(session, hello, secret, fp).await,
+            Err(e) => log("link", &format!("{address}: pairing admit: {e}")),
+        }
+    }
+
+    /// The desktop half of the QR path over a fresh session; on success the
+    /// phone is pinned and the session continues as a trusted one.
+    async fn pair_then_run(
+        &self,
+        session: Session,
+        hello: Hello,
+        secret: [u8; 32],
+        fp: Fingerprint,
+    ) {
+        let mut pairing = QrPairing::desktop(secret, self.my_fingerprint, fp);
+        let proof =
+            match tokio::time::timeout(magnetita_link::HANDSHAKE_BUDGET, session.recv()).await {
+                Ok(Ok(env))
+                    if env.capability == capability::PAIRING && env.kind == pair_kind::QR_PROOF =>
+                {
+                    env
+                }
+                other => {
+                    log(
+                        "link",
+                        &format!("{}: pairing: no proof ({other:?})", hello.device_name),
+                    );
+                    session.close("no proof");
+                    return;
+                }
+            };
+        let (reply, pinned) = match pairing.accept_proof(&proof.body) {
+            Ok(r) => r,
+            Err(e) => {
+                log(
+                    "link",
+                    &format!("{}: pairing refused: {e}", hello.device_name),
+                );
+                ui_log(
+                    &self.daemon,
+                    &hello.device_name,
+                    "emparejamiento rechazado",
+                    true,
+                );
+                session.close("wrong proof");
+                return;
+            }
+        };
+        let peer = TrustedPeer {
+            device_id: hello.device_id.clone(),
+            device_name: hello.device_name.clone(),
+            fingerprint: fingerprint_text(&pinned.peer_fingerprint),
+        };
+        if let Err(e) = self.daemon.trust.lock_ok().pin(peer) {
+            log(
+                "link",
+                &format!("{}: cannot persist the pin: {e}", hello.device_name),
+            );
+            session.close("cannot pin");
+            return;
+        }
+        if let Err(e) = session
+            .send_message(capability::PAIRING, pair_kind::QR_REPLY, reply)
+            .await
+        {
+            log(
+                "link",
+                &format!("{}: pairing reply: {e}", hello.device_name),
+            );
+            return;
+        }
+        ui_log(&self.daemon, &hello.device_name, "emparejado", false);
+        self.run_session(session, hello, "paired").await;
+    }
+
+    async fn dial_loop(self: Arc<Self>) {
+        let mut backoff = Backoff::new();
+        loop {
+            tokio::select! {
+                _ = tokio::time::sleep(BROWSE_INTERVAL) => {}
+                _ = self.stopped() => return,
+            }
+            let stop = Arc::clone(&self.stop);
+            let peers = match tokio::task::spawn_blocking(move || discovery::browse(&stop)).await {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+            let mut dialled = false;
+            for peer in peers {
+                let known = self.daemon.trust.lock_ok().is_trusted(&peer.device_id);
+                let connected = self.daemon.devices.lock_ok().contains_key(&peer.device_id);
+                if !known || connected {
+                    continue;
+                }
+                dialled = true;
+                let snapshot = trust_snapshot(&self.daemon.trust);
+                match self
+                    .endpoint
+                    .connect(peer.address, Expect::Trusted(&snapshot))
+                    .await
+                {
+                    Ok((session, hello)) => {
+                        backoff.reset();
+                        let wire = Arc::clone(&self);
+                        tokio::spawn(
+                            async move { wire.run_session(session, hello, "dialled").await },
+                        );
+                    }
+                    Err(e) => {
+                        log(
+                            "link",
+                            &format!("{} at {}: {e}", peer.device_id, peer.address),
+                        );
+                        let delay = backoff.next_delay();
+                        tokio::time::sleep(delay).await;
+                    }
+                }
+            }
+            if !dialled {
+                backoff.reset();
+            }
+        }
+    }
+
+    async fn stopped(&self) {
+        while !self.stop.load(Ordering::Relaxed) {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    }
+
+    /// One pinned session, from publication to cleanup.
+    async fn run_session(&self, session: Session, hello: Hello, how: &str) {
+        let daemon = &self.daemon;
+        let device_id = hello.device_id.clone();
+        let name = hello.device_name.clone();
+        let device_type = match hello.device_kind {
+            DeviceKind::Phone => "phone",
+            DeviceKind::Desktop => "desktop",
+        };
+        let (sender, commands) = command_channel();
+        {
+            let mut devices = daemon.devices.lock_ok();
+            if devices.contains_key(&device_id) {
+                log(
+                    "link",
+                    &format!("{name}: already connected; dropping the second session"),
+                );
+                session.close("duplicate");
+                return;
+            }
+            daemon.commands.lock_ok().insert(device_id.clone(), sender);
+            let mut entry = DeviceEntry::connected(
+                device_id.clone(),
+                name.clone(),
+                device_type.into(),
+                fingerprint_text(&session.peer_fingerprint()),
+            );
+            entry.paired = true;
+            devices.insert(device_id.clone(), entry);
+        }
+        let _registration =
+            SessionRegistration::new(Arc::clone(daemon), device_id.clone(), name.clone());
+        daemon.notify_change();
+        log(
+            how,
+            &format!("{name} at {} on the own wire", session.remote_address()),
+        );
+        ui_log(daemon, &name, "conectado y cifrado", false);
+
+        let mut tick = tokio::time::interval(TICK);
+        loop {
+            tokio::select! {
+                envelope = session.recv() => match envelope {
+                    Ok(env) => self.handle(&device_id, &name, env),
+                    Err(e) => {
+                        log("link", &format!("{name}: {e}"));
+                        break;
+                    }
+                },
+                _ = tick.tick() => {
+                    if let Some(generation) = daemon.revocations.current(&device_id) {
+                        session.close("forgotten");
+                        daemon.revocations.acknowledge(&device_id, generation);
+                        log("link", &format!("{name}: forgotten; session closed"));
+                        break;
+                    }
+                    while let Ok(command) = commands.try_recv() {
+                        if let Err(e) = self.command(&session, command).await {
+                            log("link", &format!("{name}: command: {e}"));
+                        }
+                    }
+                    if self.stop.load(Ordering::Relaxed) {
+                        session.close("daemon stopping");
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    fn handle(&self, device_id: &str, name: &str, env: magnetita_proto::Envelope) {
+        match (env.capability, env.kind) {
+            (capability::BATTERY, BatteryStatus::KIND) => match BatteryStatus::decode(&env.body) {
+                Ok(status) => {
+                    self.daemon
+                        .set_battery(device_id, i32::from(status.level), status.charging);
+                    self.daemon.notify_change();
+                }
+                Err(e) => log("link", &format!("{name}: battery: {e}")),
+            },
+            (cap, kind) => log(
+                "link",
+                &format!("{name}: unhandled capability {cap} kind {kind}"),
+            ),
+        }
+    }
+
+    async fn command(&self, session: &Session, command: Command) -> Result<(), LinkError> {
+        match command {
+            Command::Ring => {
+                session
+                    .send_message(capability::FIND, FindRing::KIND, FindRing.encode())
+                    .await?;
+            }
+            Command::RequestPair { .. } => {}
+            Command::SendFile(_) | Command::Media(_) => {
+                log(
+                    "link",
+                    "file and media commands reach the own wire in MAG-P4",
+                );
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::devices::{Commands, Log, Registry};
+    use crate::revocation::Revocations;
+    use crate::settings::Settings;
+    use magnetita_core::Identity;
+    use magnetita_link::endpoint::Expect as PeerExpect;
+    use magnetita_net::TlsConfigs;
+    use std::collections::{BTreeMap, HashMap, VecDeque};
+
+    fn test_daemon(cert: &DeviceCert) -> Arc<Daemon> {
+        Arc::new(Daemon {
+            identity: Identity::desktop("desktop", "Celestina"),
+            tls: TlsConfigs::build(cert).unwrap(),
+            trust: Arc::new(Mutex::new(TrustStore::in_memory())),
+            settings: Arc::new(Mutex::new(Settings::default())),
+            devices: Registry::new(Mutex::new(BTreeMap::new())),
+            log: Log::new(Mutex::new(VecDeque::new())),
+            commands: Commands::new(Mutex::new(HashMap::new())),
+            pending_clipboards: Default::default(),
+            artwork_completions: Default::default(),
+            revocations: Arc::new(Revocations::new()),
+            generation_clock: Mutex::new(Default::default()),
+            admission: Arc::new(crate::admission::Admission::new()),
+            payloads: crate::PayloadLimiter::new(),
+            dbus: None,
+            notifications: Default::default(),
+            last_clipboard: Mutex::new(String::new()),
+        })
+    }
+
+    fn phone(name: &str) -> (Endpoint, Fingerprint) {
+        let cert = DeviceCert::generate(name);
+        let fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
+        let hello = Hello {
+            device_id: name.into(),
+            device_name: name.into(),
+            device_kind: DeviceKind::Phone,
+            capabilities: vec![CapabilityVersion {
+                capability: capability::BATTERY,
+                version: 1,
+            }],
+        };
+        (
+            Endpoint::bind(
+                EndpointConfig { cert, hello },
+                "127.0.0.1:0".parse().unwrap(),
+            )
+            .unwrap(),
+            fp,
+        )
+    }
+
+    #[test]
+    fn a_pairing_window_admits_one_phone_and_expires() {
+        let arm = PairingArm::default();
+        assert!(arm.take_live().is_none());
+        let uri = arm.arm("desk", [1u8; 32], vec!["10.0.0.1:1760".into()]);
+        assert!(uri.starts_with("magnetita://pair?v=1&id=desk&fp=0101"));
+        assert!(arm.is_armed());
+        assert!(arm.take_live().is_some());
+        assert!(arm.take_live().is_none(), "one QR admits one phone");
+        *arm.0.lock_ok() = Some(Armed {
+            secret: [0; 32],
+            until: Instant::now() - Duration::from_secs(1),
+        });
+        assert!(arm.take_live().is_none(), "an expired window admits nobody");
+    }
+
+    #[test]
+    fn a_phone_pairs_by_qr_reports_battery_and_is_cut_by_forget() {
+        let cert = DeviceCert::generate("desktop");
+        let daemon = test_daemon(&cert);
+        let arm = PairingArm::default();
+        let (wire, addr) = spawn(
+            Arc::clone(&daemon),
+            cert.clone(),
+            "desktop".into(),
+            arm.clone(),
+            "127.0.0.1:0".parse().unwrap(),
+            false,
+        )
+        .unwrap();
+        let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
+        let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (phone, phone_fp) = rt.block_on(async { phone("phone1") });
+        let session = rt.block_on(async {
+            let scanned = QrPayload::parse_uri(&uri).unwrap();
+            let target: SocketAddr = scanned.addresses[0].parse().unwrap();
+            let (session, hello) = phone
+                .connect(target, PeerExpect::Fingerprint(scanned.fingerprint))
+                .await
+                .unwrap();
+            assert_eq!(hello.device_id, "desktop");
+            let mut pairing =
+                QrPairing::phone(&scanned, phone_fp, session.peer_fingerprint()).unwrap();
+            session
+                .send_message(
+                    capability::PAIRING,
+                    pair_kind::QR_PROOF,
+                    pairing.proof_to_send().unwrap(),
+                )
+                .await
+                .unwrap();
+            let reply = session.recv().await.unwrap();
+            assert_eq!(
+                pairing.accept_reply(&reply.body).unwrap().peer_fingerprint,
+                desktop_fp
+            );
+            session
+                .send_message(
+                    capability::BATTERY,
+                    BatteryStatus::KIND,
+                    BatteryStatus {
+                        level: 61,
+                        charging: true,
+                        low: false,
+                    }
+                    .encode(),
+                )
+                .await
+                .unwrap();
+            session
+        });
+
+        // The pin is durable in the shared store, the entry is published, the battery lands.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let entry = daemon.devices.lock_ok().get("phone1").cloned();
+            if let Some(e) = entry.filter(|e| e.battery == 61) {
+                assert!(e.paired && e.connected && e.charging);
+                assert_eq!(e.fingerprint, fingerprint_text(&phone_fp));
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the phone never appeared with its battery"
+            );
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert!(daemon.trust.lock_ok().is_trusted("phone1"));
+
+        // A Ring command reaches the phone as a FindRing envelope.
+        daemon
+            .commands
+            .lock_ok()
+            .get("phone1")
+            .unwrap()
+            .try_send(Command::Ring)
+            .unwrap();
+        let ring = rt.block_on(session.recv()).unwrap();
+        assert_eq!(
+            (ring.capability, ring.kind),
+            (capability::FIND, FindRing::KIND)
+        );
+
+        // Forget: the trust is gone and the session is cut within the tick.
+        daemon
+            .revocations
+            .request_if_and_apply(
+                "phone1",
+                || true,
+                || daemon.trust.lock_ok().forget("phone1"),
+            )
+            .unwrap();
+        let closed = rt
+            .block_on(async { tokio::time::timeout(Duration::from_secs(5), session.recv()).await });
+        assert!(
+            matches!(closed, Ok(Err(_))),
+            "the daemon closes the session on Forget"
+        );
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while daemon.devices.lock_ok().contains_key("phone1") {
+            assert!(
+                Instant::now() < deadline,
+                "the entry never left the registry"
+            );
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert!(!daemon.trust.lock_ok().is_trusted("phone1"));
+
+        // Once forgotten, the same certificate is refused: no window is armed.
+        let refused = rt.block_on(async {
+            let snapshot = TrustStore::in_memory();
+            phone
+                .connect(addr, PeerExpect::Trusted(&snapshot))
+                .await
+                .map(|_| ())
+        });
+        assert!(refused.is_err());
+        drop(wire);
+    }
+}

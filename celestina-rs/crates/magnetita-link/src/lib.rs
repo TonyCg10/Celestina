@@ -24,6 +24,7 @@
 //! follows; running it is the daemon's, so that it stays one owned thread.
 
 pub mod backoff;
+pub mod discovery;
 pub mod endpoint;
 pub mod error;
 pub mod session;
@@ -31,6 +32,7 @@ pub mod tls;
 pub mod trust;
 
 pub use backoff::Backoff;
+pub use discovery::{Peer, PORT, SERVICE_TYPE};
 pub use endpoint::{Endpoint, EndpointConfig, Incoming};
 pub use error::LinkError;
 pub use magnetita_net::cert::DeviceCert;

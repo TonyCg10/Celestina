@@ -16,6 +16,7 @@ members = [
     "crates/magnetita-net",
     "crates/magnetita-proto",
     "crates/magnetita-link",
+    "crates/magnetita-peer",
     "crates/magnetitad",
 ]
 resolver = "2"

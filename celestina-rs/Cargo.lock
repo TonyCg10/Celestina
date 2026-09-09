@@ -833,6 +833,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "magnetita-peer"
+version = "0.1.0"
+dependencies = [
+ "magnetita-link",
+ "magnetita-net",
+ "magnetita-proto",
+ "tokio",
+]
+
+[[package]]
 name = "magnetita-proto"
 version = "0.1.0"
 dependencies = [
@@ -848,10 +858,14 @@ version = "1.0.0"
 dependencies = [
  "celestina-core",
  "magnetita-core",
+ "magnetita-link",
  "magnetita-net",
+ "magnetita-proto",
+ "rand_core 0.6.4",
  "rustix",
  "serde",
  "serde_json",
+ "tokio",
  "zbus",
 ]
 

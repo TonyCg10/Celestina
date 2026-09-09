@@ -1,0 +1,21 @@
+# MAG-P2-B exact change inventory
+
+Base revision	735a8866ae138fb5d997392edd20c2ebc781610b
+Pathspec	celestina-rs/crates/magnetita-link/src/discovery.rs
+Pathspec	celestina-rs/crates/magnetita-link/src/lib.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/discovery.rs
+Pathspec	celestina-rs/crates/magnetitad/src/mirror_discovery.rs
+Pathspec	magnetita/docs/evidence/2026-09-09-link-discovery.md
+Pathspec	magnetita/docs/inventories/2026-09-09-link/MAG-P2-B.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-link.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+168	0	baaf297292b056d553808ecf95cca9c315a704b5bd5669f668d61e16d5deec10	celestina-rs/crates/magnetita-link/src/discovery.rs
+2	0	739aedfcb48c4994c24a73e608576f865cfe576e455e25fb05be6a1b9432985f	celestina-rs/crates/magnetita-link/src/lib.rs
+62	0	2c928ab9317c44ea51cc2064e6c54e8a29b6c6bd6fb54e19aca27ac2659df9b8	celestina-rs/crates/magnetitad/src/link_wire/discovery.rs
+8	40	fe7277c627ba11fa0e5ea43869ab91be292e4cfe3f5a93d24c570d044b27e723	celestina-rs/crates/magnetitad/src/mirror_discovery.rs
+56	0	31ca30383ef66d81c9aa8b16dec94dd1aff2459924f1c671cdbcdccfe317b75b	magnetita/docs/evidence/2026-09-09-link-discovery.md
+21	0	self	magnetita/docs/inventories/2026-09-09-link/MAG-P2-B.numstat.tsv
+3	3	c03732475de3426133f7b71d9c2318ca00c1267fb35cd41d029531f7ca1a3d48	magnetita/docs/plans/active/2026-09-09-link.md

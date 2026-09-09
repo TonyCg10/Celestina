@@ -1,0 +1,25 @@
+# MAG-P2-C exact change inventory
+
+Base revision	735a8866ae138fb5d997392edd20c2ebc781610b
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/crates/magnetitad/Cargo.toml
+Pathspec	celestina-rs/crates/magnetitad/src/devices.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+Pathspec	celestina-rs/crates/magnetitad/src/main.rs
+Pathspec	magnetita/docs/evidence/2026-09-09-daemon-own-wire.md
+Pathspec	magnetita/docs/inventories/2026-09-09-link/MAG-P2-C.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-link.md
+Pathspec	scripts/architecture-baseline.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+14	0	0264669dbfa602c3e9a16c0c0416123ff906aa2e92eb07599ac1c43325ed423e	celestina-rs/Cargo.lock
+6	0	2f90d6c5ac26bf8eeb12b8955e613fba9b1aabbd4b90f3a5a6d68752f6e80894	celestina-rs/crates/magnetitad/Cargo.toml
+40	0	e21dfd17d3f201fad6980f062756d41169e8010c92cc11bb2e035b0b52665dfa	celestina-rs/crates/magnetitad/src/devices.rs
+776	0	12100be4b6a6f5bafaed5755f03258648c7fb964183e3961bef6090c145245b0	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+13	18	24ea7b3b600847c760918b6d5a5d8dcd93903cd927430b99d36fedab561b166c	celestina-rs/crates/magnetitad/src/main.rs
+71	0	0274856cfb36945638dc42e7b644e65721badb3f7b79c410a3b0b55318f8e500	magnetita/docs/evidence/2026-09-09-daemon-own-wire.md
+25	0	self	magnetita/docs/inventories/2026-09-09-link/MAG-P2-C.numstat.tsv
+3	3	c03732475de3426133f7b71d9c2318ca00c1267fb35cd41d029531f7ca1a3d48	magnetita/docs/plans/active/2026-09-09-link.md
+1	1	04de7d53e61e95b72b92090e3ed3f55a69a03dd577c54a9aa4a7fc87a066f74b	scripts/architecture-baseline.tsv

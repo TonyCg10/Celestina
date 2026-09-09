@@ -4,7 +4,7 @@
 # Values match the checkout. When debt decreases, lower this baseline. It is not
 # a universal size limit and cannot justify new debt. Never raise it.
 # Legacy daemon coordinator: delegate more responsibilities before it grows.
-lines	celestina-rs/crates/magnetitad/src/main.rs	927
+lines	celestina-rs/crates/magnetitad/src/main.rs	922
 # QML coordinator with mixed responsibilities: its next change must extract.
 lines	siderita/qml/views/FolderView.qml	745
 # CXX-Qt contract concentrated by the macro; logic remains in submodules.

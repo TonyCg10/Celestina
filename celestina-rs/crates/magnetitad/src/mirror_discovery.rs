@@ -94,34 +94,18 @@ pub(crate) fn parse_browse(output: &str, expected: AdbService) -> Vec<Advertisem
 /// One `=` line, or `None` for anything that is not a well-formed resolution of
 /// the service we asked for.
 fn parse_resolved_line(line: &str, expected: AdbService) -> Option<Advertisement> {
-    // `=;iface;proto;name;type;domain;host;address;port;txt`
-    let mut fields = line.split(';');
-    if fields.next()? != "=" {
+    let resolved = magnetita_link::discovery::parse_resolved(line)?;
+    if AdbService::from_service_type(resolved.service_type)? != expected {
         return None;
     }
-    let _interface = fields.next()?;
-    let _protocol = fields.next()?;
-    let name = fields.next()?;
-    let service_type = fields.next()?;
-    let _domain = fields.next()?;
-    let _host = fields.next()?;
-    let address = fields.next()?;
-    let port = fields.next()?;
-
-    // The type must be the one asked for: a browse is per-type, but the field
-    // is text from the network and is what tells pairing from connecting.
-    if AdbService::from_service_type(service_type)? != expected {
+    if !valid_service_name(resolved.name) {
         return None;
     }
-    if !valid_service_name(name) {
-        return None;
-    }
-    let port: u32 = port.parse().ok()?;
-    let endpoint = MirrorEndpoint::parse(address, port).ok()?;
-
+    let port: u32 = resolved.port.parse().ok()?;
+    let endpoint = MirrorEndpoint::parse(resolved.address, port).ok()?;
     Some(Advertisement {
         service: expected,
-        name: name.to_owned(),
+        name: resolved.name.to_owned(),
         endpoint,
     })
 }
@@ -135,24 +119,8 @@ fn parse_resolved_line(line: &str, expected: AdbService) -> Option<Advertisement
 /// the interface index to be usable at all. Of the rest, IPv4 is preferred:
 /// Android's wireless debugging is reached over IPv4 in practice, and it is the
 /// family the author's working script used.
-fn reachability_rank(host: IpAddr) -> Option<u8> {
-    match host {
-        IpAddr::V4(v4) => {
-            if v4.is_loopback() || v4.is_link_local() || v4.is_unspecified() {
-                None
-            } else {
-                Some(0)
-            }
-        }
-        IpAddr::V6(v6) => {
-            let link_local = (v6.segments()[0] & 0xffc0) == 0xfe80;
-            if v6.is_loopback() || v6.is_unspecified() || link_local {
-                None
-            } else {
-                Some(1)
-            }
-        }
-    }
+fn reachability_rank(address: IpAddr) -> Option<u8> {
+    magnetita_link::discovery::reachability_rank(address)
 }
 
 #[cfg(test)]

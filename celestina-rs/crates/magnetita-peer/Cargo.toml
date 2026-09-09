@@ -1,0 +1,19 @@
+[package]
+name = "magnetita-peer"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "GPL-3.0-or-later"
+
+[[bin]]
+name = "magnetita-peer"
+path = "src/main.rs"
+
+[dependencies]
+magnetita-proto = { path = "../magnetita-proto" }
+magnetita-link = { path = "../magnetita-link" }
+magnetita-net = { path = "../magnetita-net" }
+tokio = { workspace = true, features = ["rt-multi-thread", "time", "macros", "io-util"] }
+
+[lints]
+workspace = true

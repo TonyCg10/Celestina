@@ -1,0 +1,21 @@
+# MAG-P2-D exact change inventory
+
+Base revision	735a8866ae138fb5d997392edd20c2ebc781610b
+Pathspec	celestina-rs/Cargo.toml
+Pathspec	celestina-rs/crates/magnetita-peer/Cargo.toml
+Pathspec	celestina-rs/crates/magnetita-peer/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/main.rs
+Pathspec	magnetita/docs/evidence/2026-09-09-headless-peer.md
+Pathspec	magnetita/docs/inventories/2026-09-09-link/MAG-P2-D.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-link.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	1948ec48bf5239cf3f9d197cc0341b0e055b50e5714ea39e5ebdb9a99ef5cbc9	celestina-rs/Cargo.toml
+19	0	74f1b33b9ceb1972a58de5738317ffc12788d9d0fbfa790779de81221baa18fa	celestina-rs/crates/magnetita-peer/Cargo.toml
+300	0	3e0701702470a9f6ed4a0c8950611d8c7db4e9da8edd7afc77ea3a4af96488fd	celestina-rs/crates/magnetita-peer/src/lib.rs
+118	0	c7a7fba265c39364ff582894a24cb0f1bf5eacf601f7fa5ba2bae661752fd2d7	celestina-rs/crates/magnetita-peer/src/main.rs
+54	0	dd65617f93c3fd0a400600cff27ecd6c3a63aa807f7e5d71eae6f93af2e8eda6	magnetita/docs/evidence/2026-09-09-headless-peer.md
+21	0	self	magnetita/docs/inventories/2026-09-09-link/MAG-P2-D.numstat.tsv
+3	3	c03732475de3426133f7b71d9c2318ca00c1267fb35cd41d029531f7ca1a3d48	magnetita/docs/plans/active/2026-09-09-link.md

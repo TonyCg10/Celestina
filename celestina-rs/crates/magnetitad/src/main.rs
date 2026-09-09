@@ -44,6 +44,7 @@ mod device_identity;
 mod devices;
 mod incoming_file;
 mod link_commands;
+mod link_wire;
 mod lock;
 mod media;
 mod mirror;
@@ -150,7 +151,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     // Owned here so it is joined at exit: a scrcpy this daemon started must never outlive it.
     let (mirror_handle, _mirror_worker) =
         mirror::start(dir.join("mirror.json"), dir.join("mirror-endpoint"));
-    let dbus = match serve_devices(
+    let pairing = link_wire::PairingArm::default();
+    let dbus = match devices::serve(
         Devices::new(
             Arc::clone(&registry),
             Arc::clone(&event_log),
@@ -159,7 +161,8 @@ fn run() -> Result<(), Box<dyn Error>> {
             Arc::clone(&revocations),
             Arc::clone(&settings),
             settings_path,
-        ),
+        )
+        .with_own_pairing(link_wire::own_pairing(&pairing, &device_id, &cert)?),
         mirror_handle,
     ) {
         Ok(connection) => {
@@ -213,6 +216,14 @@ fn run() -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], PORT)))
         .map_err(|e| format!("cannot bind TCP {PORT} ({e}) — is Valent or kdeconnectd running?"))?;
     spawn_accepter(listener, Arc::clone(&daemon));
+
+    // The own wire, next to the KDE Connect one, on its single runtime thread.
+    let _own_wire = link_wire::install(
+        Arc::clone(&daemon),
+        cert.clone(),
+        device_id.clone(),
+        pairing,
+    );
 
     // Hear + dial (this thread): a phone we hear and are not linked to, we dial.
     log(
@@ -884,22 +895,6 @@ impl Daemon {
             );
         }
     }
-}
-
-/// Start serving the daemon's two session-bus contracts under one name:
-/// `org.celestina.Devices1`, the phone link, and `org.celestina.Mirror1`, the
-/// wireless screen mirror. They are siblings rather than one interface because
-/// mirroring rides on Android debugging, not KDE Connect, and the consumers of
-/// the device contract have no use for it.
-fn serve_devices(
-    devices: Devices,
-    mirror: mirror::Mirror,
-) -> zbus::Result<zbus::blocking::Connection> {
-    zbus::blocking::connection::Builder::session()?
-        .name(devices::BUS_NAME)?
-        .serve_at(mirror::OBJECT_PATH, mirror::MirrorInterface::new(mirror))?
-        .serve_at(devices::OBJECT_PATH, devices)?
-        .build()
 }
 
 /// Record a connection-log line for the app, and signal that a new entry landed.

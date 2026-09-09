@@ -12,6 +12,12 @@ path = "src/main.rs"
 [dependencies]
 magnetita-core = { path = "../magnetita-core" }
 magnetita-net = { path = "../magnetita-net" }
+# The own wire (ADR 0001): the protocol and the QUIC link, on one owned
+# runtime thread next to the KDE Connect threads.
+magnetita-proto = { path = "../magnetita-proto" }
+magnetita-link = { path = "../magnetita-link" }
+tokio = { workspace = true, features = ["rt-multi-thread", "time", "sync", "macros"] }
+rand_core = { workspace = true, features = ["getrandom"] }
 celestina-core.workspace = true
 # The device contract (org.celestina.Devices1) on the session bus — the same
 # zbus the suite's portal backend uses. Its blocking API keeps the daemon
