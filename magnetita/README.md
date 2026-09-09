@@ -7,6 +7,10 @@ service plus a thin native device/settings application.
 
 - Pair with the stock KDE Connect Android application over the local network,
   keep trusted devices available and explain connection failures in the app.
+  Under [ADR 0001](docs/decisions/0001-own-protocol-and-android-app.md) this
+  wire is being replaced by Magnetita's own QUIC protocol and its own
+  Android application (`MAG-P0` through `MAG-P7`); the KDE Connect wire is
+  removed in `MAG-P7`, and until then both are served.
 - Mount phone storage under the owned runtime path so Siderita browses it as an
   ordinary filesystem; expose identity, connection, battery, media and actions
   through the versioned `org.celestina.Devices1` contract.
@@ -15,8 +19,10 @@ service plus a thin native device/settings application.
   with persisted per-plugin settings.
 - The phone→desktop clipboard path remains manual because Android prevents the
   stock background client from reading ordinary clipboard changes reliably.
-- Magnetita is not an Android app, private protocol, cloud service or feature-
-  parity clone of every KDE Connect plugin.
+- The own protocol carries battery, clipboard, notifications, find, share,
+  media, commands, trackpad and keyboard, the screen mirror, SMS, contacts,
+  telephony and, last, storage. Magnetita is not a cloud service, a drawing
+  tablet, a presenter, or a feature-parity clone of every KDE Connect plugin.
 
 ## Architecture
 

@@ -1,10 +1,13 @@
 # Magnetita status
 
-- **Updated:** 2026-09-03
-- **Implementation:** `MAG-S1` (hostile network input) and `MAG-R1` (the
-  one-button wireless mirror) are delivered, committed and deployed. `MAG-R2`
-  (the mirror without discovery) is committed but **not deployed**. `MAG-M1`
-  remains planned and unimplemented
+- **Updated:** 2026-09-07
+- **Implementation:** `MAG-P0`, the own-protocol program's spikes, is the
+  active checkpoint since 2026-09-07. `MAG-S1` (hostile network input) and
+  `MAG-R1` (the one-button wireless mirror) are delivered, committed and
+  deployed; `MAG-S1`'s plan is archived with its canonical production exit
+  still pending as a deployment action. `MAG-R2` (the mirror without
+  discovery) is committed but **not deployed**. `MAG-M1` remains planned and
+  unimplemented
 - **Author validation:** the original 1.0 daily set passed on the real phone,
   before the 2026-07-29 hardening. **Every one of `VAL-MAG-01` through
   `VAL-MAG-04` and `VAL-MAG-06` through `VAL-MAG-09` is still pending**, so no
@@ -68,13 +71,22 @@
   deterministic join without regressing burst coalescing (`MAG-M1`).
 - Keep packaging and resource diagnostics aligned with the canonical production
   artifact workflow. Service activation remains deploy-only.
-- SMS, contacts, remote input, mDNS and newer protocol work stay conditional on
-  a demonstrated need or reference-client requirement; they are not active.
+- The own-protocol program (`MAG-P0` through `MAG-P7`, accepted in
+  [ADR 0001](docs/decisions/0001-own-protocol-and-android-app.md) on
+  2026-09-04) is planned and not started: a private QUIC protocol shared by
+  both ends through one Rust crate, a Kotlin/Compose Android application,
+  remote input, SMS, contacts and telephony, and the mirror as a capability
+  of the link. Its [five discussions](docs/discussions/README.md) are
+  concluded and applied; the `MAG-P0` spikes verify them. The KDE Connect
+  wire and the `adb`/`scrcpy` mirror are removed in `MAG-P7`. The drawing
+  tablet and presenter stay out by the author's choice.
 
 ## Blockers
 
-`MAG-S1` cannot close until the author requests the canonical production exit;
-that is a pending authorization, not a technical blocker. No other
+`MAG-S1`'s canonical production exit (`scripts/complete-production.sh` and
+the shell's, because `magnetita-core` changed) is still unrequested; it is a
+pending deployment action, not a technical blocker. `MAG-P0`'s phone-side
+spikes need host tooling the author must install (see the active plan). No other
 implementation blocker is recorded. The real phone/network is required only
 for the independent validation queue.
 
@@ -102,6 +114,7 @@ its refusals are proven, the delivery of a file to a phone is not. See the
 ## Records
 
 - [Implementation roadmap](ROADMAP.md)
-- [Active plan MAG-S1](docs/plans/active/2026-08-05-network-input-hardening.md)
+- [Active plan MAG-P0](docs/plans/active/2026-09-07-own-protocol-spikes.md)
+- [Archived plan MAG-S1](docs/plans/archive/2026-08-05-network-input-hardening.md)
 - [Author validation](VALIDATION.md)
 - [Registry entry](../docs/projects.toml)

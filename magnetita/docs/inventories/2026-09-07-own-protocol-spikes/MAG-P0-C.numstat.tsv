@@ -1,0 +1,13 @@
+# MAG-P0-C exact change inventory
+
+Base revision	e7b714be46d1c0578d4730f1d5456b6693032ef1
+Pathspec	magnetita/docs/evidence/2026-09-09-accessibility-input-latency.md
+Pathspec	magnetita/docs/inventories/2026-09-07-own-protocol-spikes/MAG-P0-C.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-07-own-protocol-spikes.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+85	0	21ee8358431d50702ddb38bcefc20fdd956c13c5ab393edb0bd7c1df2b4e39d8	magnetita/docs/evidence/2026-09-09-accessibility-input-latency.md
+13	0	self	magnetita/docs/inventories/2026-09-07-own-protocol-spikes/MAG-P0-C.numstat.tsv
+95	0	3b5acffc64d5267429bfeb40aa22403c44bdfb55d912d19fa7e38474f7f93d7c	magnetita/docs/plans/active/2026-09-07-own-protocol-spikes.md

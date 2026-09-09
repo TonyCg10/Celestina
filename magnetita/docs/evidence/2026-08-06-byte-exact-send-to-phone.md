@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-06
 - **Scope:** `MAG-S1-B`; plan
-  [network-input-hardening](../plans/active/2026-08-05-network-input-hardening.md);
+  [network-input-hardening](../plans/archive/2026-08-05-network-input-hardening.md);
   the `send_to_phone` item of stage 3 in the
   [light monorepo audit](../../../docs/evidence/2026-08-06-light-monorepo-audit.md),
   applying [ADR 0008](../../../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md)

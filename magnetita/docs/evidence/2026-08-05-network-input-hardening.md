@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-05
 - **Scope:** `MAG-S1-A` (the checkpoint's five build-order steps) of
-  [`../plans/active/2026-08-05-network-input-hardening.md`](../plans/active/2026-08-05-network-input-hardening.md),
+  [`../plans/archive/2026-08-05-network-input-hardening.md`](../plans/archive/2026-08-05-network-input-hardening.md),
   covering `magnetita/qml/components/` and
   `celestina-rs/crates/{magnetita-core,magnetita-net,magnetitad}`
 - **Environment:** `rustc 1.97.1`, `cargo 1.97.1`, `qmllint 1.0`, Linux

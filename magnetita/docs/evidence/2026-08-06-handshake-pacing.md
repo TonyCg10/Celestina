@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-06
 - **Scope:** `MAG-S1-C`; plan
-  [network-input-hardening](../plans/active/2026-08-05-network-input-hardening.md);
+  [network-input-hardening](../plans/archive/2026-08-05-network-input-hardening.md);
   a low finding of the
   [light monorepo audit](../../../docs/evidence/2026-08-06-light-monorepo-audit.md)
 - **Environment:** source correction with compilation, lint and unit tests. No

@@ -1,0 +1,39 @@
+# MAG-P0-F exact change inventory
+
+Base revision	e7b714be46d1c0578d4730f1d5456b6693032ef1
+Pathspec	magnetita/README.md
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/docs/decisions/0001-own-protocol-and-android-app.md
+Pathspec	magnetita/docs/decisions/README.md
+Pathspec	magnetita/docs/discussions/2026-09-04-kde-connect-compatibility.md
+Pathspec	magnetita/docs/discussions/README.md
+Pathspec	magnetita/docs/evidence/2026-08-05-network-input-hardening.md
+Pathspec	magnetita/docs/evidence/2026-08-06-byte-exact-send-to-phone.md
+Pathspec	magnetita/docs/evidence/2026-08-06-handshake-pacing.md
+Pathspec	magnetita/docs/evidence/2026-09-09-spike-program-bookkeeping.md
+Pathspec	magnetita/docs/inventories/2026-09-07-own-protocol-spikes/MAG-P0-F.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-08-05-network-input-hardening.md
+Pathspec	magnetita/docs/plans/active/2026-09-07-own-protocol-spikes.md
+Pathspec	magnetita/docs/plans/active/README.md
+Pathspec	magnetita/docs/plans/archive/2026-08-05-network-input-hardening.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+8	2	6c9c60808465af95b50bf65fa0d969a41753253e7db93fab4d8f91c98e1a0486	magnetita/README.md
+396	4	2c7e7c89229836da6635ecefe74d175b26b9d194f13ca046f68b40bf38502c23	magnetita/ROADMAP.md
+23	10	01ef2061040065bc385f5eec8ebf6da8df544b9e8cc13dcec1eb9c9759b411dc	magnetita/STATUS.md
+182	0	d8aed20b03f2d133d589e2d83fc8330edf3a6621c956e668ee7691fdd3753ca9	magnetita/docs/decisions/0001-own-protocol-and-android-app.md
+9	0	de30da6203caf9089a51e0c40c1cf07eeb82f9175d408aa6774b0c01bbe8f9ce	magnetita/docs/decisions/README.md
+61	0	8c4fd54f20a03b1fd232decae2b8e0c0167e4a7636da2b198dfa7be07a7b76a4	magnetita/docs/discussions/2026-09-04-kde-connect-compatibility.md
+15	0	bdfb7df57e2a3908536a3b7c88faac5f131d1f9ad7e431c176c0e7ffd2741b70	magnetita/docs/discussions/README.md
+1	1	2d71d9e87094c5a7693e09e89b59cf97f7f5b6b6bc5f5b83e0e9f631688de740	magnetita/docs/evidence/2026-08-05-network-input-hardening.md
+1	1	2017f8dff0d7f93d093e36e7782d3bc545c273bd84e5f00193c807452dcff972	magnetita/docs/evidence/2026-08-06-byte-exact-send-to-phone.md
+1	1	36e0669cac8262120ce0c3bcd85881c905e287415ecba64f6d7440ebe7736146	magnetita/docs/evidence/2026-08-06-handshake-pacing.md
+37	0	af152f3e1bfcbd66b695f985172ae72b5ad0291db3de61801536fb93b547224c	magnetita/docs/evidence/2026-09-09-spike-program-bookkeeping.md
+39	0	self	magnetita/docs/inventories/2026-09-07-own-protocol-spikes/MAG-P0-F.numstat.tsv
+0	128	deleted	magnetita/docs/plans/active/2026-08-05-network-input-hardening.md
+95	0	3b5acffc64d5267429bfeb40aa22403c44bdfb55d912d19fa7e38474f7f93d7c	magnetita/docs/plans/active/2026-09-07-own-protocol-spikes.md
+4	2	131977b8dbc3f1fbf7fef24c20325525751058635472b8ab2402c2b8a9a8350d	magnetita/docs/plans/active/README.md
+135	0	7754113c11cce44921ca8985eaf187161bf14f4eca19e07623697eb8cbff2d81	magnetita/docs/plans/archive/2026-08-05-network-input-hardening.md

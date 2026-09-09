@@ -1,13 +1,16 @@
 # Magnetita implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** MAG-S1
+- **Active implementation checkpoint:** MAG-P0
 - **Related author validation:** `VAL-MAG-01` through `VAL-MAG-08` in
   [VALIDATION.md](VALIDATION.md); they do not block implementation
 
-`MAG-S1` is executing under
-[its plan](docs/plans/active/2026-08-05-network-input-hardening.md). `MAG-M1`
-remains the next settled reliability checkpoint and has no execution plan.
+`MAG-P0` is executing under
+[its plan](docs/plans/active/2026-09-07-own-protocol-spikes.md). `MAG-S1`'s
+units are all done and committed under
+[its archived plan](docs/plans/archive/2026-08-05-network-input-hardening.md);
+its canonical production exit is still a pending deployment action recorded in
+[STATUS.md](STATUS.md). `MAG-M1` remains settled and has no execution plan.
 
 ## MAG-S1 — Hostile network input at the daemon's boundaries
 
@@ -217,6 +220,395 @@ the author's own acceptance across a phone reboot, which no test can stand in
 for.
 
 Plan: [mirror without discovery](docs/plans/archive/2026-08-19-mirror-without-discovery.md).
+
+## The own-protocol program — MAG-P0 through MAG-P7
+
+[ADR 0001](docs/decisions/0001-own-protocol-and-android-app.md) (accepted
+2026-09-04) turns Magnetita from a KDE Connect client into its own protocol
+with its own Android application. The program is eight checkpoints in
+dependency order. `MAG-P0` opened on 2026-09-07 under
+[its plan](docs/plans/active/2026-09-07-own-protocol-spikes.md). The
+[discussions](docs/discussions/README.md) are concluded and applied; `MAG-P0`
+verifies their choices.
+
+## MAG-P0 — Spikes that verify the accepted choices
+
+## Hypothesis and tangible outcome
+
+Every material choice in ADR 0001 has one measurement that verifies it, and
+each can be taken in isolation before any product code exists. The tangible
+outcome is five dated evidence records with numbers that either confirm the
+accepted choices or trigger the ADR's named *Revisit when* fallbacks —
+cheaply, before a crate exists.
+
+## Scope
+
+- Build `quinn` + `rustls`/`ring` for `aarch64-linux-android` with
+  `cargo-ndk`, wrap a hello in UniFFI, exchange it with a throwaway daemon
+  peer over the author's LAN; measure small-message latency under a bulk
+  stream and survival of a Wi-Fi toggle.
+- A throwaway Kotlin activity: `MediaProjection` → `MediaCodec` HEVC → QUIC →
+  a throwaway desktop decoder; glass-to-glass latency at 1080p60.
+- A throwaway accessibility service: tap and drag latency from a desktop
+  event to the gesture landing.
+- `/dev/uinput` under a udev rule on the author's host, injecting into the
+  development nest only; presence of a RemoteDesktop portal on the session.
+- QR pairing on the S25U and typed pairing against a headless peer.
+
+## Exclusions
+
+- Any code under `celestina-rs/crates/magnetita-*` or `magnetita/`; spikes
+  live in a scratch directory and are deleted, their numbers kept.
+- Touching the installed daemon, the live session or the paired trust.
+- Deciding anything the numbers do not decide.
+
+## Build order
+
+| Unit | Status | Dependency | Implementation result | Agent evidence |
+|---|---|---|---|---|
+| MAG-P0-A | planned | none | Rust QUIC core runs on the phone through UniFFI; latency and migration measured | dated evidence record |
+| MAG-P0-B | planned | MAG-P0-A | Own-app mirror latency measured on the S25U | dated evidence record |
+| MAG-P0-C | planned | none | Accessibility-service input latency measured | dated evidence record |
+| MAG-P0-D | planned | none | `uinput` and portal availability on the host, tested in the nest | dated evidence record |
+| MAG-P0-E | planned | MAG-P0-A | QR and typed pairing each pair once with no other input | dated evidence record |
+| MAG-P0-F | planned | A–E | Each evidence record cited from its discussion; any triggered fallback applied to the ADR | documentation contract |
+
+## Implementation exit
+
+Close `MAG-P0` when every evidence record carries its measurement, each
+discussion's conclusion cites its record, and any fallback the numbers
+trigger is applied to ADR 0001. The author judges the mirror and input
+numbers; nothing else in this checkpoint needs the author.
+
+## MAG-P1 — The protocol core, `magnetita-proto`
+
+## Hypothesis and tangible outcome
+
+One pure crate can own the envelope, the message catalog, capability
+negotiation, pairing state machines and every hostile-input bound, and be the
+single implementation both ends link. The tangible outcome is a crate with no
+I/O whose tests encode the wire: golden CBOR vectors for every message, a
+pairing state machine driven from both roles, and a decoder that refuses
+every oversized, malformed or out-of-capability input with a typed reason.
+
+## Scope
+
+- Envelope `{version, capability, kind, id, body}` in CBOR with integer keys;
+  unknown keys ignored, unknown capabilities declined in hello.
+- Hello and capability negotiation with per-capability versions.
+- Pairing: QR payload, one-time secret, possession proof over both
+  fingerprints; the typed-code path per the concluded discussion.
+- Message catalog for `battery`, `clipboard`, `notifications` (post, dismiss,
+  reply, actions), `find`, `share` (offer, accept, stream id, resume offset),
+  `media` (both directions), `commands` (desktop-registered ids only),
+  `input` (typed pointer, scroll, key and text events), `mirror` (session
+  offer, codec, resolution, stream ids, consent state), `sms` (conversation
+  list, thread page, send request, received message, MMS attachment as a
+  `share` stream), `contacts` (vCard 4.0 sync with a per-contact version so
+  only changes travel), `telephony` (ringing, answered, missed, ended;
+  mute, answer, hang up).
+- Bounds on every string, list, size and count, tested at the boundary.
+- A wire document in `docs/` of this project describing the catalog, the
+  vectors and the versioning rule.
+
+## Exclusions
+
+- Sockets, TLS, discovery and time: `magnetita-link`.
+- `storage`: `MAG-P7`.
+- Removing anything from `magnetita-core` or `magnetita-net`.
+
+## Build order
+
+| Unit | Status | Dependency | Implementation result | Agent evidence |
+|---|---|---|---|---|
+| MAG-P1-A | planned | MAG-P0 | Envelope, hello, negotiation and the bound rule with golden vectors | `cargo test -p magnetita-proto` |
+| MAG-P1-B | planned | MAG-P1-A | Pairing state machines for both roles, both paths | `cargo test -p magnetita-proto` |
+| MAG-P1-C | planned | MAG-P1-A | The daily-set catalog and the wire document | `cargo test -p magnetita-proto` |
+| MAG-P1-D | planned | MAG-P1-C | `commands`, `input` and `mirror` messages | `cargo test -p magnetita-proto` |
+| MAG-P1-E | planned | MAG-P1-C | `sms`, `contacts` and `telephony` messages with bounded bodies, names and numbers | `cargo test -p magnetita-proto` |
+
+## Implementation exit
+
+Close `MAG-P1` when the crate passes format, Clippy and its tests with every
+message round-tripping through a committed vector, and the architecture
+contract records it as a pure crate with no adapter dependency.
+
+## MAG-P2 — The link, the daemon's second wire and a headless peer
+
+## Hypothesis and tangible outcome
+
+`magnetita-link` can carry the protocol over QUIC with pinned mutual
+certificates on one runtime thread inside the thread-based daemon, and a
+headless peer built from the same crates can stand in for the phone in every
+daemon test. The tangible outcome is `magnetitad` accepting and dialling own
+protocol sessions next to KDE Connect ones, publishing them on
+`org.celestina.Devices1` unchanged, and a `magnetita-peer` binary that pairs,
+connects and exercises every capability from a shell — the same headless
+observation the author prefers for Siderita.
+
+## Scope
+
+- `magnetita-link`: certificate generation (reusing `magnetita-net::cert`
+  where the recipe is the same), trust store, QUIC endpoint, stream
+  allocation per capability, reconnection with backoff, connection migration,
+  the absolute handshake deadline from `MAG-S1`.
+- Avahi advertise and browse of `_magnetita._udp` through the existing `zbus`
+  mirror-discovery module, generalised only if the semantics are the same.
+- The daemon: one owned runtime thread for the link; typed events into the
+  existing device registry; pairing acceptance through the app; the existing
+  `Forget` barrier covering the new trust store.
+- `magnetita-peer`: a headless peer for loopback and LAN tests.
+
+## Exclusions
+
+- Any Kotlin.
+- Changing `org.celestina.Devices1` beyond additive `a{sv}` keys.
+
+## Build order
+
+| Unit | Status | Dependency | Implementation result | Agent evidence |
+|---|---|---|---|---|
+| MAG-P2-A | planned | MAG-P1 | Endpoint, trust, handshake deadline, streams, loopback tests | `cargo test -p magnetita-link` |
+| MAG-P2-B | planned | MAG-P2-A | Discovery both ways through Avahi | producer/consumer tests |
+| MAG-P2-C | planned | MAG-P2-B | The daemon hosts both wires; devices publish unchanged | daemon tests, `scripts/complete-production.sh` |
+| MAG-P2-D | planned | MAG-P2-C | `magnetita-peer` pairs, reconnects, migrates | loopback and LAN evidence |
+
+## Implementation exit
+
+Close `MAG-P2` when the peer pairs with the daemon on loopback and over the
+LAN from another host, a Forget revokes it durably, a migration keeps the
+session, and the KDE Connect phone still pairs and mounts as before under
+`scripts/complete-production.sh`.
+
+## MAG-P3 — The Android application foundation
+
+## Hypothesis and tangible outcome
+
+A Kotlin application that links `magnetita-mobile` through UniFFI can hold a
+paired session in a foreground service across Doze, app switches and Wi-Fi
+changes, with all protocol truth in Rust and only platform adapters in
+Kotlin. The tangible outcome is the registered `magnetita-android/` project:
+discovery, QR pairing, a device screen with battery and ping, reconnection
+without touching the phone, and a signed release APK produced by the
+project's own build script.
+
+## Scope
+
+- Project scaffold: Gradle KTS, version catalog, Kotlin 2.x, Compose Material
+  3, coroutines/`Flow`, `DataStore`, `minSdk 31`; `cargo-ndk` and UniFFI
+  bindings generated in the build; Spanish product copy per ADR 0007.
+- Foreground service with `connectedDevice` type owning the link; multicast
+  lock for discovery; persistent trust in app storage.
+- QR scan (CameraX + ML Kit barcode) and the typed path.
+- Device screen: name, connection state, battery both ways, ping, find.
+- Registry entry, README/STATUS/ROADMAP/VALIDATION, build/verify/deploy
+  scripts (deploy installs by `adb` to the paired phone only when the author
+  asks), signing key outside the repository.
+
+## Exclusions
+
+- The daily set, commands, input and mirror.
+- Google Play, any cloud, any analytics, any third-party SDK beyond
+  AndroidX, Material and the barcode scanner.
+
+## Build order
+
+| Unit | Status | Dependency | Implementation result | Agent evidence |
+|---|---|---|---|---|
+| MAG-P3-A | planned | MAG-P2 | `magnetita-mobile` UniFFI crate and the Gradle scaffold building it | `./gradlew assembleRelease` |
+| MAG-P3-B | planned | MAG-P3-A | Foreground service holding a session; discovery; trust | JVM unit tests, Rust tests |
+| MAG-P3-C | planned | MAG-P3-B | Pairing screens, device screen, battery, ping, find | JVM tests, `qmllint`-equivalent Android lint |
+| MAG-P3-D | planned | MAG-P3-C | Registered project with scripts, signed artifact, docs set | documentation contract, `verify-production.sh` |
+
+## Implementation exit
+
+Close `MAG-P3` when the release build passes lint and tests, the app pairs
+with `magnetita-peer` on an emulator and with the daemon on the LAN, and a
+session survives screen off, app switch and Wi-Fi toggle in an instrumented
+test. `VAL-MAG-11` carries the author's first pairing on the S25U.
+
+## MAG-P4 — The daily set on the own wire
+
+## Hypothesis and tangible outcome
+
+The daemon's existing plugin modules keep their domain and gain the second
+wire, and the phone side delivers what the stock client could not: automatic
+phone-to-desktop clipboard while the app is in the foreground or via its
+quick-settings tile and share target, notification actions and replies, and
+resumable file transfers on their own streams. The tangible outcome is the
+author's daily set working end to end without the stock KDE Connect client.
+
+## Scope
+
+- Clipboard both ways, with the Android background limit stated in the UI
+  rather than hidden.
+- Notifications through `NotificationListenerService`: post, update,
+  dismiss, actions, inline reply, app icon; desktop rendering as plain text.
+- File share both ways on dedicated streams with resume and the existing
+  revocation barrier.
+- Media control both ways: desktop MPRIS to the phone, phone
+  `MediaSession` to the desktop's existing `org.mpris` projection.
+- Battery and find-my-phone already from `MAG-P3`.
+- Contacts: one-way vCard 4.0 sync from the phone, kept in the daemon's
+  memory for the session; names resolve numbers for the two capabilities
+  below.
+- SMS: conversation list and thread pages on the desktop app, send by
+  conversation id, received messages as notifications with inline reply,
+  MMS attachments as `share` streams; nothing at rest on the desktop unless
+  the author enables it per capability.
+- Telephony: ringing and missed-call notifications with the resolved name,
+  mute the ringer, answer and hang up through `TelecomManager`; call state
+  published additively on `org.celestina.Devices1` so the shell's phone menu
+  can show it.
+
+## Exclusions
+
+- RCS, call audio on the desktop, presenter, drawing tablet, storage.
+
+## Build order
+
+| Unit | Status | Dependency | Implementation result | Agent evidence |
+|---|---|---|---|---|
+| MAG-P4-A | planned | MAG-P3 | Clipboard both ways with the tile and share target | peer tests, JVM tests |
+| MAG-P4-B | planned | MAG-P3 | Notifications with actions and replies | peer tests, JVM tests |
+| MAG-P4-C | planned | MAG-P3 | Resumable file share both ways under revocation | peer tests |
+| MAG-P4-D | planned | MAG-P3 | Media control both ways | peer tests, MPRIS consumer tests |
+| MAG-P4-E | planned | MAG-P1-E | Contacts sync and name resolution | peer tests, JVM tests |
+| MAG-P4-F | planned | MAG-P4-E | SMS conversations, send, receive, MMS attachments | peer tests, JVM tests |
+| MAG-P4-G | planned | MAG-P4-E | Call state, mute, answer, hang up; shell phone menu shows the call | peer tests, shell consumer tests |
+
+## Implementation exit
+
+Close `MAG-P4` when `magnetita-peer` exercises every capability against the
+daemon in tests, the app's JVM tests cover each adapter, and
+`scripts/complete-production.sh` passes with both wires. `VAL-MAG-12` carries
+the author's daily use.
+
+## MAG-P5 — Commands, trackpad and keyboard
+
+## Hypothesis and tangible outcome
+
+Remote control can be added without a single peer-chosen string reaching a
+shell or the compositor: the phone triggers desktop-registered command ids,
+and typed input events become virtual-device input through the path
+`MAG-P0-D` settled. The tangible outcome is a trackpad and keyboard screen on
+the phone that moves the desktop pointer and types into the nest, and a
+commands screen that runs the author's registered scripts.
+
+## Scope
+
+- Commands: registered in the desktop app's settings (name, program,
+  arguments as a typed vector), published to the phone as ids, executed by
+  the daemon's bounded subprocess discipline.
+- Input: relative motion, scroll, buttons, tap gestures, key codes and text
+  through `uinput` (or the portal), owned and destroyed by the daemon.
+- Rate and size bounds on input; input rejected from an untrusted or
+  revoked source at the decode boundary.
+
+## Exclusions
+
+- Presenter mode, absolute-position tablet, gamepad.
+- Any test against the author's live session.
+
+## Build order
+
+| Unit | Status | Dependency | Implementation result | Agent evidence |
+|---|---|---|---|---|
+| MAG-P5-A | planned | MAG-P4 | Registered commands, published and executed by id | peer tests, subprocess tests |
+| MAG-P5-B | planned | MAG-P0-D | Virtual pointer and keyboard in the daemon, nest-only tests | daemon tests, nest evidence |
+| MAG-P5-C | planned | MAG-P5-B | Trackpad and keyboard screens on the phone | JVM tests |
+
+## Implementation exit
+
+Close `MAG-P5` when the peer's synthetic input moves the nest's pointer and
+types a sentence observed through the nest's own IPC, commands run only by
+registered id, and the host change (`uinput` udev rule) is recorded in
+`HOST-HYGIENE.md`. `VAL-MAG-13` carries the author's hand use.
+
+## MAG-P6 — The mirror as a capability of the link
+
+## Hypothesis and tangible outcome
+
+If `MAG-P0-B` and `MAG-P0-C` satisfied the author, the mirror moves onto the
+paired link: capture and encode on the phone, decode and present in a
+daemon-owned window on the desktop, input back through the accessibility
+service, consent on the phone. The tangible outcome is a Mirror control that
+works after a phone reboot with nothing enabled by hand and no `adb`.
+
+## Scope
+
+- Phone: `MediaProjection` foreground service, `MediaCodec` HEVC/H.264,
+  `AudioPlaybackCapture`, an accessibility service for gestures, global
+  actions and text.
+- Desktop: decoder and window (the seam chosen in the concluded discussion),
+  `org.celestina.Mirror1` extended additively, the existing options
+  (resolution, bit rate, audio) mapped onto the new session.
+- The `adb`/`scrcpy` path untouched during this checkpoint.
+
+## Exclusions
+
+- Recording, OTG, secure-surface capture, screen-off mirroring, which an
+  unprivileged app cannot do.
+- Retiring the `adb` path: `MAG-P7`, after `VAL-MAG-14`.
+
+## Build order
+
+| Unit | Status | Dependency | Implementation result | Agent evidence |
+|---|---|---|---|---|
+| MAG-P6-A | planned | MAG-P0-B | Capture, encode and stream on the phone | JVM tests, peer decode test |
+| MAG-P6-B | planned | MAG-P6-A | Desktop decoder window and `Mirror1` extension | daemon tests, consumer tests |
+| MAG-P6-C | planned | MAG-P0-C | Input back through the accessibility service | peer tests |
+| MAG-P6-D | planned | MAG-P6-B | The Mirror control chooses the link mirror | `qmllint`, app lifecycle test |
+
+## Implementation exit
+
+Close `MAG-P6` when the peer decodes a synthetic stream the phone build
+produced, `scripts/complete-production.sh` passes, and the mirror is
+observed after a phone reboot on the S25U as `VAL-MAG-14` — this checkpoint,
+like `MAG-R1`, closes on the author's observation because no test can see
+the phone reboot.
+
+## MAG-P7 — Storage over the own wire and retiring the second path
+
+## Hypothesis and tangible outcome
+
+With the daily set, control and mirror on the own link, the last two KDE
+Connect dependencies — the `sshfs` mount Siderita browses and the wire
+itself — can be replaced by a `storage` capability and removed, leaving one
+trust store, one discovery and one wire. The tangible outcome is Siderita
+browsing the phone through the daemon without `sshfs`, and a daemon that
+opens no KDE Connect port, as the concluded discussion directs.
+
+## Scope
+
+- `storage`: list, stat, read ranges, write, rename, delete over dedicated
+  streams, with the Android `MediaStore`/SAF limits stated.
+- The daemon's mount replaced by a FUSE or a Siderita-facing D-Bus surface,
+  decided by a discussion opened at `MAG-P7`'s start.
+- Removal of `magnetita-net`'s KDE Connect wire, the pairing v8 path and the
+  mount subprocess, as the concluded discussion directs.
+- Removal of the `adb`/`scrcpy` mirror path (`MAG-R1`/`MAG-R2`) once
+  `VAL-MAG-14` has observed the own mirror after a phone reboot.
+
+## Exclusions
+
+- Keeping any second path: the concluded discussions rule out a frozen KDE
+  Connect wire and a precision-mode `scrcpy`.
+
+## Build order
+
+| Unit | Status | Dependency | Implementation result | Agent evidence |
+|---|---|---|---|---|
+| MAG-P7-A | planned | MAG-P6 | `storage` capability both ends | peer tests, JVM tests |
+| MAG-P7-B | planned | MAG-P7-A | Siderita browses the phone without `sshfs` | Siderita consumer tests |
+| MAG-P7-C | planned | MAG-P7-B | The KDE Connect wire, pairing v8 and the mount removed | workspace tests, `scripts/complete-production.sh` |
+| MAG-P7-D | planned | VAL-MAG-14 | The `adb`/`scrcpy` mirror path removed; `Mirror1` keeps its methods | daemon tests, `scripts/complete-production.sh` |
+
+## Implementation exit
+
+Close `MAG-P7` when Siderita's phone browsing tests pass against the peer,
+the daemon binds only the own protocol's port, spawns neither `sshfs` nor
+`adb` nor `scrcpy`, and the architecture contract records the removed crates.
 
 ## Closed evidence
 

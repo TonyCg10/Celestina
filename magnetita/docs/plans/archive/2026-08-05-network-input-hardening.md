@@ -1,8 +1,9 @@
 # MAG-S1 — hostile network input at the daemon's boundaries
 
 - **Opened:** 2026-08-05
+- **Closed:** 2026-09-07
 - **Plan ID:** network-input-hardening
-- **Status:** active
+- **Status:** done
 - **Authorization:** the author requested the Magnetita corrections raised by
   the read-only static suite audit be implemented, and explicitly excluded
   commit, production build, deployment and any change to the live service
@@ -10,6 +11,12 @@
 - **Implementation checkpoint:** MAG-S1
 - **Author-validation checkpoint:** `VAL-MAG-06` in
   [`../../../VALIDATION.md`](../../../VALIDATION.md)
+- **Successor:** MAG-P0, the own-protocol program's first checkpoint. Every
+  unit was `done` and committed; the canonical production exit the plan
+  reserved for the author's request had still not been requested when the
+  author started `MAG-P0` on 2026-09-07 and the roadmap's single active
+  checkpoint moved. That exit stays a pending deployment action in
+  `STATUS.md`, not an open unit
 
 ## Hypothesis
 
