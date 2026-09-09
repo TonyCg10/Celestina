@@ -46,10 +46,20 @@ scripts/verify-production.sh && scripts/status-production.sh
   - `verify-production.sh` runs the core's tests and the app's unit tests
     and checks the artifact; `status-production.sh` reports it current.
 
-## Limits
+### On the S25U, 14:27
 
-- Not yet run on the S25U: the phone was unplugged when the build
-  finished; the screenshot of the identity screen is owed to this record.
+Installed with `adb install -r` and launched: the activity started
+(`Status: ok`), no runtime error in `logcat`, and the identity screen
+rendered as designed — the black canvas with the blue glow from the
+top-left, the large title (the "this phone" copy) with the model `SM-S938U` in
+the accent as subtitle, the group card tinted toward blue with its
+hairlines, the mint "OK" chip once the Rust core answered, the device id
+`4eb6f9984054dd25` and the colon-hex fingerprint read through UniFFI, the
+empty paired-desktops group and the pairing hint. The core
+therefore opens under the app's files directory, generates and persists a
+certificate, and derives the id from it, all on the phone.
+
+## Limits
 - No foreground service, discovery, pairing screen or session yet:
   `AND-1-B` and `-C`.
 - `lintDebug` is not part of the verify script yet; it needs the SDK's
