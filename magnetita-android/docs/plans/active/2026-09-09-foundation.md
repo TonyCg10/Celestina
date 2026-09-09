@@ -54,5 +54,5 @@ holds a session through screen off, app switch and Wi-Fi toggle.
 |---|---|---|---|---|---|---|---|
 | AND-1-A | `magnetita-android:` | done | [inventory](../../inventories/2026-09-09-foundation/AND-1-A.numstat.tsv) | 56 files, +1906/-0 | Scaffold building the core from Gradle, the theme, the identity screen, the document set | [record](../../evidence/2026-09-09-foundation-scaffold.md) | None |
 | AND-1-B | `magnetita-android:` | done | [inventory](../../inventories/2026-09-09-foundation/AND-1-B.numstat.tsv) | 18 files, +799/-7 | Foreground service, discovery, pins, reconnection, the pairing link | [record](../../evidence/2026-09-09-foundation-link.md) | None |
-| AND-1-C | `magnetita-android:` | planned | `app/src/main/java/org/celestina/magnetita/ui/` | — | Pairing and device screens | JVM tests, lint | None |
-| AND-1-D | `magnetita-android:` | planned | `scripts/` | — | Verify, deploy, version, signing | documentation contract | None |
+| AND-1-C | `magnetita-android:` | done | [inventory](../../inventories/2026-09-09-foundation/AND-1-C.numstat.tsv) | 22 files, +744/-132 | Scan and device screens, find ringer, forget, the production scripts on the runner | [record](../../evidence/2026-09-09-foundation-screens.md) | None |
+| AND-1-D | `magnetita-android:` | planned | `scripts/`, `app/build.gradle.kts` | — | Lint baseline, version reading, signing | documentation contract, lint | None |

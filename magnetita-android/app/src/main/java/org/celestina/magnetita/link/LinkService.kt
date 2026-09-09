@@ -33,6 +33,7 @@ import org.celestina.magnetita.core.Core
 class LinkService : LifecycleService() {
     private var loop: Job? = null
     private var controller: LinkController? = null
+    private val ringer by lazy { Ringer(applicationContext) }
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -54,6 +55,15 @@ class LinkService : LifecycleService() {
         controller = c
         loop = lifecycleScope.launch {
             launch { c.state.collect { s -> _state.value = s; update(notification(describe(s))) } }
+            launch {
+                c.signals.collect { signal ->
+                    when (signal) {
+                        DesktopSignal.Ring -> { ringer.start(); _ringing.value = true }
+                        DesktopSignal.StopRinging -> { ringer.stop(); _ringing.value = false }
+                        else -> {}
+                    }
+                }
+            }
             c.run()
         }
     }
@@ -61,11 +71,22 @@ class LinkService : LifecycleService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         intent?.getStringExtra(EXTRA_PAIR_URI)?.let { controller?.pair(it) }
+        when (intent?.action) {
+            ACTION_STOP_RINGING -> { ringer.stop(); _ringing.value = false }
+            ACTION_FORGET -> intent.getStringExtra(EXTRA_DEVICE_ID)?.let { id ->
+                lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching { Core.forget(applicationContext, id) }
+                    controller?.disconnect()
+                }
+            }
+        }
         return START_STICKY
     }
 
     override fun onDestroy() {
         loop?.cancel()
+        ringer.stop()
+        _ringing.value = false
         runCatching { unregisterReceiver(batteryReceiver) }
         _state.value = LinkState.NeedsPairing
         super.onDestroy()
@@ -116,6 +137,23 @@ class LinkService : LifecycleService() {
         val state: StateFlow<LinkState> = _state.asStateFlow()
 
         private const val EXTRA_PAIR_URI = "pair_uri"
+        private const val EXTRA_DEVICE_ID = "device_id"
+        private const val ACTION_STOP_RINGING = "org.celestina.magnetita.STOP_RINGING"
+        private const val ACTION_FORGET = "org.celestina.magnetita.FORGET"
+
+        private val _ringing = MutableStateFlow(false)
+
+        /** True while the find sound plays. */
+        val ringing: StateFlow<Boolean> = _ringing.asStateFlow()
+
+        fun stopRinging(context: Context) {
+            context.startForegroundService(Intent(context, LinkService::class.java).setAction(ACTION_STOP_RINGING))
+        }
+
+        /** Drops the pin and the session of one desktop. */
+        fun forget(context: Context, deviceId: String) {
+            context.startForegroundService(Intent(context, LinkService::class.java).setAction(ACTION_FORGET).putExtra(EXTRA_DEVICE_ID, deviceId))
+        }
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, LinkService::class.java))

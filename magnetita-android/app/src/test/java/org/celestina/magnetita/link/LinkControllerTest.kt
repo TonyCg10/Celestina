@@ -17,9 +17,11 @@ class LinkControllerTest {
         val reports = mutableListOf<Pair<Int, Boolean>>()
         var alive = true
         var closed: String? = null
+        val incoming = ArrayDeque<LinkEvent>()
         override fun reportBattery(level: Int, charging: Boolean): Boolean { reports += level to charging; return alive }
         override suspend fun next(timeoutMs: Long): LinkEvent? {
             if (!alive) throw IllegalStateException("connection lost")
+            incoming.removeFirstOrNull()?.let { return it }
             delay(timeoutMs)
             if (!alive) throw IllegalStateException("connection lost")
             return null
@@ -51,10 +53,10 @@ class LinkControllerTest {
         val job = launch { controller.run() }
         advanceTimeBy(150)
         assertEquals(LinkState.NeedsPairing, controller.state.value)
-        controller.pair("magnetita://pair?v=1&id=desk")
+        controller.pair("magnetita://pair?v=1&id=desk&addr=10.0.0.1:1760")
         advanceTimeBy(300)
-        assertEquals(listOf("magnetita://pair?v=1&id=desk"), connector.paired)
-        assertEquals(LinkState.Connected("desk", "Celestina", "pairing"), controller.state.value)
+        assertEquals(listOf("magnetita://pair?v=1&id=desk&addr=10.0.0.1:1760"), connector.paired)
+        assertEquals(LinkState.Connected("desk", "Celestina", "10.0.0.1:1760"), controller.state.value)
         first.alive = false
         advanceTimeBy(1_000)
         assertEquals(listOf("10.0.0.1:1760"), connector.dialled)
@@ -112,6 +114,23 @@ class LinkControllerTest {
         advanceTimeBy(Backoff.FIRST_MS + 100)
         val again = controller.state.first { it is LinkState.Waiting } as LinkState.Waiting
         assertEquals(Backoff.FIRST_MS * 2, again.retryMs)
+        job.cancel()
+    }
+
+    @Test
+    fun aBatteryRequestIsAnsweredAndAForgetClosesTheSession() = runTest {
+        val session = FakeSession("desk", "Celestina")
+        val connector = FakeConnector(listOf("desk"), ArrayDeque(listOf(session)))
+        val controller = LinkController(connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 30 to false }, io = coroutineContext, pollMs = 100)
+        val job = launch { controller.run() }
+        advanceTimeBy(200)
+        session.incoming += LinkEvent(1, 2, "battery: requested")
+        advanceTimeBy(200)
+        assertEquals(listOf(30 to false, 30 to false), session.reports)
+        controller.disconnect()
+        advanceTimeBy(200)
+        assertEquals("forgotten", session.closed)
+        assertTrue(controller.state.value is LinkState.Waiting)
         job.cancel()
     }
 

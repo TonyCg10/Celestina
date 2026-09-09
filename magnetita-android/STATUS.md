@@ -23,6 +23,11 @@
   desktops, reports the battery, and reconnects on a schedule. A
   `magnetita://pair` link pairs. On the S25U the session survived screen
   off, an app switch and a Wi-Fi toggle against the live daemon.
+- The device screen shows the desktop, the link, the address and the
+  battery sent; the scan screen reads the desktop's QR with CameraX and
+  ML Kit; the phone rings on find until stopped; forget drops the pin.
+  The production scripts run through the suite's runner. The six-digit
+  code screen waits for the wire, and lint's baseline for `AND-1-D`.
 
 ## Blockers
 

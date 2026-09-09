@@ -1,0 +1,51 @@
+# AND-1-C exact change inventory
+
+Base revision	8a6e1237385101a6bc9ede20ab2d590ac766cd31
+Pathspec	magnetita-android/ROADMAP.md
+Pathspec	magnetita-android/STATUS.md
+Pathspec	magnetita-android/app/build.gradle.kts
+Pathspec	magnetita-android/app/src/main/AndroidManifest.xml
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/MainActivity.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/core/Core.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/DesktopSignal.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkController.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkService.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/Ringer.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/screens/DeviceScreen.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/screens/ScanScreen.kt
+Pathspec	magnetita-android/app/src/main/res/values/strings.xml
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/link/DesktopSignalTest.kt
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/link/LinkControllerTest.kt
+Pathspec	magnetita-android/docs/evidence/2026-09-09-foundation-screens.md
+Pathspec	magnetita-android/docs/inventories/2026-09-09-foundation/AND-1-C.numstat.tsv
+Pathspec	magnetita-android/docs/plans/active/2026-09-09-foundation.md
+Pathspec	magnetita-android/gradle/libs.versions.toml
+Pathspec	magnetita-android/scripts/build-production.sh
+Pathspec	magnetita-android/scripts/status-production.sh
+Pathspec	magnetita-android/scripts/verify-production.sh
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+2	1	ab8b0f1a848a04e04758886b71cde81a3b74d9a58fc200eda92337d535bd71d9	magnetita-android/ROADMAP.md
+5	0	a2b08848afcd2c29d246b119558727d80b819a154f7ba72e49f3a7a69bedcf30	magnetita-android/STATUS.md
+6	0	f52502db817b355555c838d9060a33c906782490cdaf7a1cac6b40832e3be0ee	magnetita-android/app/build.gradle.kts
+4	0	9cb0c373bb977a21810629cacb00ef50263c9f56fdd9d311a5e7910cebeec3af	magnetita-android/app/src/main/AndroidManifest.xml
+43	95	41cfe81904128efddc6faabb33ee3fea52263c8a68fdf9762dad9244cd4bcfbe	magnetita-android/app/src/main/java/org/celestina/magnetita/MainActivity.kt
+2	0	451ce6807551c85f3519ce7ffa6b227272e0d845d9c518523ae339012e8b05ed	magnetita-android/app/src/main/java/org/celestina/magnetita/core/Core.kt
+36	0	322607e285a2226a94119b59bb3faa47e0491c6112260d3896e2c75360c788d2	magnetita-android/app/src/main/java/org/celestina/magnetita/link/DesktopSignal.kt
+31	6	2c96fcd899b8f4375aaf2c8203a06e79128311fe9aae360991a0b755930b2272	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkController.kt
+38	0	c4bab58e2388a342a8061c3fd78571c9b4d9f4ff3fcb803e9140aeaef17d1f64	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkService.kt
+59	0	59efadeb4199ecc085ccdf801f6194d77e4470fe0184bbf61dec7bfaeaf75707	magnetita-android/app/src/main/java/org/celestina/magnetita/link/Ringer.kt
+138	0	f5def4d5a3dde40d22f852ce5addca2bb0e1cc7b2da412fb2169c81a5eeda624	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/screens/DeviceScreen.kt
+117	0	2676fb9de185ff0314b2d290049e48beddbb9af9e9484810448ac40439d1b37a	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/screens/ScanScreen.kt
+18	0	fbd099a6ea601edd50c57b6440c10f1f96ea607a9fa8ffaad51fee2219d891f5	magnetita-android/app/src/main/res/values/strings.xml
+25	0	71e64a52ccaa0413bef727af31f9776ccd0fdb37048a50c3ada4e28e19eacaa9	magnetita-android/app/src/test/java/org/celestina/magnetita/link/DesktopSignalTest.kt
+22	3	581854ee6dc1a61cab7e3d476e7b0b4b8bd142991ec4b632d91e111691e88e78	magnetita-android/app/src/test/java/org/celestina/magnetita/link/LinkControllerTest.kt
+88	0	cee393b25de32972e52afb950542cf4bc320b52ced0b4e7ac6df444ce6aa764f	magnetita-android/docs/evidence/2026-09-09-foundation-screens.md
+51	0	self	magnetita-android/docs/inventories/2026-09-09-foundation/AND-1-C.numstat.tsv
+2	2	cf1c3ffb5fdeadfb1771a5caffe22f874c214e47ed23d6ba13a2af16c68756bc	magnetita-android/docs/plans/active/2026-09-09-foundation.md
+10	0	9d5719ea589006603ddea4fd2e4b259f2ae87b0c97158d776cf2dcae9daf7563	magnetita-android/gradle/libs.versions.toml
+20	6	a5bb63478ee76f1c56b55423cddb7e637f0aee214c9e34ba1269f755b1bd4630	magnetita-android/scripts/build-production.sh
+8	13	eae92e2ace38149694a3f5d77416e586ae6ff264eaa569b421618037f8f76045	magnetita-android/scripts/status-production.sh
+19	6	21ae4ec334750624742aadce2b467a111a5d31590972c0571a4fac52b3f6d29a	magnetita-android/scripts/verify-production.sh

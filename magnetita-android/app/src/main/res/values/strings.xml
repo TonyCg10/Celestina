@@ -19,4 +19,22 @@
     <string name="label_link">Enlace</string>
     <string name="chip_connected">Conectado</string>
     <string name="chip_pair">Emparejar</string>
+    <string name="title_desktop_none">Magnetita</string>
+    <string name="subtitle_link">Enlace</string>
+    <string name="label_address">Dirección</string>
+    <string name="label_phone_battery">Batería de este teléfono</string>
+    <string name="battery_charging">%1$d %% · cargando</string>
+    <string name="battery_level">%1$d %%</string>
+    <string name="detail_battery_shared">Se envía al escritorio</string>
+    <string name="action_scan">Escanear el código del escritorio</string>
+    <string name="action_forget">Olvidar este escritorio</string>
+    <string name="action_stop_ringing">Dejar de sonar</string>
+    <string name="ringing_title">El escritorio te busca</string>
+    <string name="title_scan">Emparejar</string>
+    <string name="scan_hint">Apunta al código que muestra el escritorio</string>
+    <string name="scan_no_camera">Sin permiso de cámara</string>
+    <string name="action_allow_camera">Permitir la cámara</string>
+    <string name="scan_not_magnetita">Ese código no es de Magnetita</string>
+    <string name="action_back">Atrás</string>
+    <string name="label_pairing">Emparejado</string>
 </resources>

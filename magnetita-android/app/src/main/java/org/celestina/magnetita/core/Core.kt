@@ -23,5 +23,7 @@ object Core {
 
     fun pinned(context: Context): List<PinnedDesktop> = phone(context).pinned()
 
+    fun forget(context: Context, deviceId: String) = phone(context).forget(deviceId)
+
     private fun deviceName(): String = android.os.Build.MODEL.ifBlank { "Android" }
 }

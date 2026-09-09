@@ -4,7 +4,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
@@ -36,10 +39,17 @@ class LinkController(
     private val _state = MutableStateFlow<LinkState>(LinkState.NeedsPairing)
     val state: StateFlow<LinkState> = _state.asStateFlow()
 
-    private val _events = MutableStateFlow<LinkEvent?>(null)
+    private val _signals = MutableSharedFlow<DesktopSignal>(extraBufferCapacity = 16)
 
-    /** The last envelope the desktop sent; the screens react to it. */
-    val lastEvent: StateFlow<LinkEvent?> = _events.asStateFlow()
+    /** What the desktop asked, one per envelope; the service reacts to it. */
+    val signals: SharedFlow<DesktopSignal> = _signals.asSharedFlow()
+
+    private val dropRequested = MutableStateFlow(false)
+
+    /** Ends the current session (after a forget); the loop decides what follows. */
+    fun disconnect() {
+        dropRequested.value = true
+    }
 
     private val batteryChanged = MutableStateFlow(0)
     private val pairRequest = MutableStateFlow<String?>(null)
@@ -54,6 +64,10 @@ class LinkController(
         batteryChanged.value += 1
     }
 
+    /** The first address a pairing link names, for the screen; the core parses the rest. */
+    private fun pairAddress(uri: String): String =
+        uri.substringAfter("addr=", "").substringBefore('&').substringBefore(',').ifBlank { "pairing" }
+
     /** Runs until cancelled. */
     suspend fun run() = coroutineScope {
         val backoff = Backoff()
@@ -61,11 +75,12 @@ class LinkController(
             val uri = pairRequest.value
             if (uri != null) {
                 pairRequest.value = null
-                _state.value = LinkState.Connecting("pairing")
+                val address = pairAddress(uri)
+                _state.value = LinkState.Connecting(address)
                 val paired = withContext(io) { connector.pair(uri) }
                 paired.onSuccess { live ->
                     backoff.reset()
-                    _state.value = LinkState.Connected(live.desktopId, live.desktopName, "pairing")
+                    _state.value = LinkState.Connected(live.desktopId, live.desktopName, address)
                     val reason = hold(live)
                     _state.value = LinkState.Waiting(reason, pollMs)
                     delay(pollMs)
@@ -115,9 +130,14 @@ class LinkController(
         val (level, charging) = battery.read()
         withContext(io) { live.reportBattery(level, charging) }
         var seen = batteryChanged.value
+        dropRequested.value = false
         val reporter = launch {
             while (isActive) {
                 delay(pollMs)
+                if (dropRequested.value) {
+                    withContext(io) { live.close("forgotten") }
+                    break
+                }
                 val now = batteryChanged.value
                 if (now != seen) {
                     seen = now
@@ -129,8 +149,13 @@ class LinkController(
         val reason = try {
             while (isActive) {
                 val event = live.next(pollMs) ?: continue
-                _events.value = event
                 log("desktop: ${event.description}")
+                val signal = DesktopSignal.of(event)
+                if (signal == DesktopSignal.BatteryRequested) {
+                    val (l, c) = battery.read()
+                    withContext(io) { live.reportBattery(l, c) }
+                }
+                _signals.tryEmit(signal)
             }
             "cancelled"
         } catch (e: CancellationException) {
