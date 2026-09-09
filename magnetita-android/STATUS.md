@@ -16,7 +16,13 @@
   `magnetita-mobile` for arm64 with `cargo-ndk` and generates the Kotlin
   bindings with the crate's own `uniffi-bindgen`, both into `app/build/`.
 - The theme carries the One UI tokens of [DESIGN.md](DESIGN.md) in Samsung
-  blue; the first screen shows the device's identity read from the Rust core.
+  blue; the first screen shows the device's identity read from the Rust core
+  and the state of the link.
+- A foreground service of type `connectedDevice` holds the session: it
+  browses `_magnetita._udp` through `NsdManager`, dials only pinned
+  desktops, reports the battery, and reconnects on a schedule. A
+  `magnetita://pair` link pairs. On the S25U the session survived screen
+  off, an app switch and a Wi-Fi toggle against the live daemon.
 
 ## Blockers
 

@@ -1,0 +1,43 @@
+# AND-1-B exact change inventory
+
+Base revision	22fa58c16e8e092d3b667768c691c28f68001a2e
+Pathspec	magnetita-android/ROADMAP.md
+Pathspec	magnetita-android/STATUS.md
+Pathspec	magnetita-android/app/build.gradle.kts
+Pathspec	magnetita-android/app/src/main/AndroidManifest.xml
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/MainActivity.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/Backoff.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/CoreConnector.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkController.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkService.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkState.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/NsdDiscovery.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/Ports.kt
+Pathspec	magnetita-android/app/src/main/res/values/strings.xml
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/link/LinkControllerTest.kt
+Pathspec	magnetita-android/docs/evidence/2026-09-09-foundation-link.md
+Pathspec	magnetita-android/docs/inventories/2026-09-09-foundation/AND-1-B.numstat.tsv
+Pathspec	magnetita-android/docs/plans/active/2026-09-09-foundation.md
+Pathspec	magnetita-android/gradle/libs.versions.toml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+4	3	7265ded0b9d3ece539eda53099e79eeccf2c09c8f26b415cd93cc6b94d8ac145	magnetita-android/ROADMAP.md
+7	1	d0a7d4d8dbeca22ee6da1caf9d228d832c042a7ebf867ce9456d0cae6407dca2	magnetita-android/STATUS.md
+3	0	3edd773cdf55b41834162ba0c5a18ac232a3231175d4d4d19c25930e193ea1d6	magnetita-android/app/build.gradle.kts
+15	0	8c9757d900ec65f9034ae49e84c56bd515b27f8710d659ac431223c091f63328	magnetita-android/app/src/main/AndroidManifest.xml
+39	2	ffd4245be97f608972a6186715a0d756e1557a5772125cd25065eb0a5072500b	magnetita-android/app/src/main/java/org/celestina/magnetita/MainActivity.kt
+25	0	38432133a3ebe81862b300541d8e66315d59cf49c8eaf994d7af4ca16f4dd4a9	magnetita-android/app/src/main/java/org/celestina/magnetita/link/Backoff.kt
+31	0	e0c8f539f01be7c7e327d689cae1572540a5437efd2091bf1c736caf1d68cd10	magnetita-android/app/src/main/java/org/celestina/magnetita/link/CoreConnector.kt
+146	0	348581db9f290df946934b7d1dd9ff2bc03cac8d5cb3ad4cd2cb5bec43867d8f	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkController.kt
+129	0	3eac6d9b49dd4ca2a0d7c7f4d6e96c70461b1c57f6b6dd76907a60b6f7cdb229	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkService.kt
+19	0	f88f457430a5d4c1e639c1074e7681e9f02be1d99e420fd4d9494b0b0583a855	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkState.kt
+64	0	8e0643b15d83eea3fe5ba4c698161cd9f84794a8982bf7c239b608339b15c4de	magnetita-android/app/src/main/java/org/celestina/magnetita/link/NsdDiscovery.kt
+52	0	7ea7854217d5bab83a34c07d9384da78d9a6212c256b7d11ced9c35599ca77b1	magnetita-android/app/src/main/java/org/celestina/magnetita/link/Ports.kt
+9	0	3cb541eed0a76a24d379de5f9d48a14a7522764d448daba362b025b71c0a2927	magnetita-android/app/src/main/res/values/strings.xml
+127	0	cfd4b982343599c37f8d79b692715ae5fe3461b52cf91464cf3816fd4f2de18c	magnetita-android/app/src/test/java/org/celestina/magnetita/link/LinkControllerTest.kt
+80	0	d4dee408ca9dd54e535e7b2de8e43622badd35abf94a40c7aed00fa254da8d24	magnetita-android/docs/evidence/2026-09-09-foundation-link.md
+43	0	self	magnetita-android/docs/inventories/2026-09-09-foundation/AND-1-B.numstat.tsv
+1	1	af8176d6ab353a01848f9416968a1281bd8cbc6514a7594fa1f2caa67763844b	magnetita-android/docs/plans/active/2026-09-09-foundation.md
+5	0	6551f5cefe62cf8e630c0b9973971e10cab356d5b4f515f0639d71ced950bc1e	magnetita-android/gradle/libs.versions.toml

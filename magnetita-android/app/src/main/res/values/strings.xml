@@ -10,4 +10,13 @@
     <string name="state_no_desktop">Ninguno todavía</string>
     <string name="hint_pair">Escanea el código del escritorio para emparejar</string>
     <string name="error_core">El núcleo no pudo abrirse</string>
+    <string name="channel_link">Enlace con el escritorio</string>
+    <string name="state_needs_pairing">Sin escritorio emparejado</string>
+    <string name="state_searching">Buscando el escritorio</string>
+    <string name="state_connecting">Conectando</string>
+    <string name="state_connected_to">Conectado a %1$s</string>
+    <string name="state_waiting">Esperando al escritorio</string>
+    <string name="label_link">Enlace</string>
+    <string name="chip_connected">Conectado</string>
+    <string name="chip_pair">Emparejar</string>
 </resources>

@@ -70,6 +70,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     // UniFFI bindings call the native library through JNA.
     implementation(libs.jna) { artifact { type = "aar" } }
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.lifecycle.service)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

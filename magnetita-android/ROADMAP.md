@@ -42,8 +42,8 @@ without touching the phone.
 
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
-| AND-1-A | active | MAG-P3-A | The scaffold builds the Rust core from Gradle; the theme and the identity screen | `./gradlew assembleDebug` |
-| AND-1-B | planned | AND-1-A | Foreground service holding a session; discovery; pins | JVM tests |
+| AND-1-A | done | MAG-P3-A | The scaffold builds the Rust core from Gradle; the theme and the identity screen | `./gradlew assembleDebug` |
+| AND-1-B | done | AND-1-A | Foreground service holding a session; discovery; pins | JVM tests |
 | AND-1-C | planned | AND-1-B | Pairing screens (QR and code), device screen, battery, ping, find | JVM tests, lint |
 | AND-1-D | planned | AND-1-C | Verify and deploy scripts; version reading; signed build | documentation contract |
 
@@ -56,4 +56,5 @@ test. `VAL-MAG-11` carries the author's first pairing on the S25U.
 
 ## Closed evidence
 
-None yet.
+- `AND-1-A`: [scaffold](docs/evidence/2026-09-09-foundation-scaffold.md)
+- `AND-1-B`: [link service](docs/evidence/2026-09-09-foundation-link.md)

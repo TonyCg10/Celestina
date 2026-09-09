@@ -1,5 +1,6 @@
 package org.celestina.magnetita
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,6 +26,9 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.celestina.magnetita.core.Core
+import org.celestina.magnetita.link.LinkService
+import org.celestina.magnetita.link.LinkState
+import androidx.compose.runtime.collectAsState
 import org.celestina.magnetita.ui.components.Canvas
 import org.celestina.magnetita.ui.components.ChipTone
 import org.celestina.magnetita.ui.components.Group
@@ -42,6 +46,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        LinkService.start(this)
+        offerPairing(intent)
         setContent {
             MagnetitaTheme {
                 var shown by remember { mutableStateOf(Shown(null, emptyList(), false)) }
@@ -51,14 +57,28 @@ class MainActivity : ComponentActivity() {
                             .getOrElse { Shown(null, emptyList(), true) }
                     }
                 }
-                IdentityScreen(shown)
+                val link by LinkService.state.collectAsState()
+                IdentityScreen(shown, link)
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        offerPairing(intent)
+    }
+
+    /** A `magnetita://pair` link, from the system camera or a test, pairs. */
+    private fun offerPairing(intent: Intent?) {
+        val data = intent?.data ?: return
+        if (intent.action == Intent.ACTION_VIEW && data.scheme == "magnetita" && data.host == "pair") {
+            LinkService.pair(this, data.toString())
         }
     }
 }
 
 @Composable
-private fun IdentityScreen(shown: Shown) {
+private fun IdentityScreen(shown: Shown, link: LinkState) {
     val scroll = rememberScrollState()
     val progress = (1f - scroll.value / 300f).coerceIn(0f, 1f)
     Canvas {
@@ -86,6 +106,23 @@ private fun IdentityScreen(shown: Shown) {
             }
             Spacer(Modifier.height(16.dp))
             Group {
+                GroupRow(
+                    title = stringResource(R.string.label_link),
+                    detail = when (link) {
+                        LinkState.NeedsPairing -> stringResource(R.string.state_needs_pairing)
+                        LinkState.Searching -> stringResource(R.string.state_searching)
+                        is LinkState.Connecting -> stringResource(R.string.state_connecting)
+                        is LinkState.Connected -> stringResource(R.string.state_connected_to, link.desktopName)
+                        is LinkState.Waiting -> stringResource(R.string.state_waiting)
+                    },
+                    trailing = {
+                        when (link) {
+                            is LinkState.Connected -> StateChip(stringResource(R.string.chip_connected), ChipTone.Alive)
+                            LinkState.NeedsPairing -> StateChip(stringResource(R.string.chip_pair), ChipTone.Waiting)
+                            else -> StateChip("…", ChipTone.Waiting)
+                        }
+                    },
+                )
                 if (shown.pinned.isEmpty()) {
                     GroupRow(title = stringResource(R.string.label_desktops), detail = stringResource(R.string.state_no_desktop), last = true)
                 } else {
