@@ -323,17 +323,18 @@ every oversized, malformed or out-of-capability input with a typed reason.
 
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
-| MAG-P1-A | active | MAG-P0 | Envelope, hello, negotiation and the bound rule with golden vectors | `cargo test -p magnetita-proto` |
-| MAG-P1-B | planned | MAG-P1-A | Pairing state machines for both roles, both paths | `cargo test -p magnetita-proto` |
-| MAG-P1-C | planned | MAG-P1-A | The daily-set catalog and the wire document | `cargo test -p magnetita-proto` |
-| MAG-P1-D | planned | MAG-P1-C | `commands`, `input` and `mirror` messages | `cargo test -p magnetita-proto` |
-| MAG-P1-E | planned | MAG-P1-C | `sms`, `contacts` and `telephony` messages with bounded bodies, names and numbers | `cargo test -p magnetita-proto` |
+| MAG-P1-A | done | MAG-P0 | Envelope, hello, negotiation and the bound rule with golden vectors | [record](docs/evidence/2026-09-09-protocol-envelope-and-hello.md) |
+| MAG-P1-B | done | MAG-P1-A | Pairing state machines for both roles, both paths | [record](docs/evidence/2026-09-09-protocol-pairing.md) |
+| MAG-P1-C | done | MAG-P1-A | The daily-set catalog and the wire document | [record](docs/evidence/2026-09-09-protocol-daily-catalog.md) |
+| MAG-P1-D | done | MAG-P1-C | `commands`, `input` and `mirror` messages | [record](docs/evidence/2026-09-09-protocol-control-and-mirror.md) |
+| MAG-P1-E | done | MAG-P1-C | `sms`, `contacts` and `telephony` messages with bounded bodies, names and numbers | [record](docs/evidence/2026-09-09-protocol-phone-surface.md) |
 
 ## Implementation exit
 
-Close `MAG-P1` when the crate passes format, Clippy and its tests with every
-message round-tripping through a committed vector, and the architecture
-contract records it as a pure crate with no adapter dependency.
+Met on 2026-09-09: 63 tests with every message pinned by a committed vector,
+Clippy, format and the architecture contract all pass, and
+[the wire document](docs/protocol.md) maps the catalog. The plan stays active
+until `MAG-P2` opens and takes the checkpoint.
 
 ## MAG-P2 — The link, the daemon's second wire and a headless peer
 

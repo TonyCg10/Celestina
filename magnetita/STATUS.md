@@ -1,9 +1,12 @@
 # Magnetita status
 
 - **Updated:** 2026-09-09
-- **Implementation:** `MAG-P1`, the own protocol's pure core crate, is the
-  active checkpoint since 2026-09-09; `MAG-P0`'s spikes are measured, closed
-  and committed (`ad26b3e`). `MAG-S1` (hostile network input) and
+- **Implementation:** `MAG-P1`, the own protocol's pure core crate, is
+  complete since 2026-09-09 (`07e70c4`, `a071e39`): `magnetita-proto` holds
+  the envelope, hello, pairing and the catalog of twelve capabilities, 63
+  tests, with [the wire document](docs/protocol.md). It stays the active
+  checkpoint until the author opens `MAG-P2`, the link. `MAG-P0`'s spikes
+  are measured, closed and committed (`ad26b3e`). `MAG-S1` (hostile network input) and
   `MAG-R1` (the one-button wireless mirror) are delivered, committed and
   deployed; `MAG-S1`'s plan is archived with its canonical production exit
   still pending as a deployment action. `MAG-R2` (the mirror without
