@@ -277,7 +277,7 @@ fn spawn_announcer(discovery: &Discovery, daemon: Arc<Daemon>) {
                 .devices
                 .lock_ok()
                 .values()
-                .any(|device| device.paired)
+                .any(|device| device.connected)
             {
                 let _ = announcer.announce(&daemon.identity, millis());
             }
