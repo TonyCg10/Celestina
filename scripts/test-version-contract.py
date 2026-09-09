@@ -254,6 +254,30 @@ class StaticAndSourceTests(unittest.TestCase):
             with self.subTest(kind=kind):
                 self.assertEqual(current.bumped(kind), version)
 
+    def test_reads_and_rewrites_the_gradle_version_name(self) -> None:
+        gradle = contract.SourceSpec("gradle-version-name", "app/build.gradle.kts", "org.example.app")
+        raw = (
+            "android {\n    defaultConfig {\n"
+            '        applicationId = "org.example.app"\n'
+            "        versionCode = 1\n"
+            '        versionName = "0.1.0"\n'
+            "    }\n}\n"
+        ).encode()
+        self.assertEqual(
+            contract.read_source_version(gradle, raw, "gradle"), contract.SemVer(0, 1, 0)
+        )
+        bumped = mutation_tool.replace_source_version(
+            gradle, raw, contract.SemVer(0, 1, 0), contract.SemVer(0, 2, 0), "gradle"
+        )
+        self.assertIn(b'versionName = "0.2.0"', bumped)
+        self.assertEqual(
+            contract.read_source_version(gradle, bumped, "gradle"), contract.SemVer(0, 2, 0)
+        )
+        with self.assertRaises(contract.VersionSourceError):
+            contract.read_source_version(
+                gradle, raw.replace(b"org.example.app", b"org.other.app"), "gradle"
+            )
+
     def test_reads_cargo_package_lock_and_only_cmake_project_version(self) -> None:
         package = contract.SourceSpec("cargo-package", "Cargo.toml", "alpha")
         lock = contract.SourceSpec("cargo-lock", "Cargo.lock", "alpha")

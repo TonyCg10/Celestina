@@ -20,7 +20,15 @@ VERSION_KINDS = frozenset({"baseline", "bug", "milestone", "release"})
 DELIVERY_KINDS = frozenset({"bug", "milestone", "release"})
 COMMIT_KINDS = DELIVERY_KINDS | {"maintenance"}
 NON_REPLAY_WRAPPERS = frozenset({"fixup", "squash", "amend"})
-SOURCE_KINDS = frozenset({"cargo-package", "cargo-lock", "cmake-project"})
+SOURCE_KINDS = frozenset(
+    {"cargo-package", "cargo-lock", "cmake-project", "gradle-version-name"}
+)
+GRADLE_VERSION_RE = re.compile(
+    r'(?m)^[ \t]*versionName[ \t]*=[ \t]*"(?P<version>[^"]+)"[ \t]*(?://.*)?$'
+)
+GRADLE_APPLICATION_RE = re.compile(
+    r'(?m)^[ \t]*applicationId[ \t]*=[ \t]*"(?P<name>[^"]+)"[ \t]*(?://.*)?$'
+)
 SEMVER_RE = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)")
 PROJECT_CALL_RE = re.compile(
     r"^[ \t]*project[ \t]*\([ \t]*(?P<name>[A-Za-z0-9_.+\-]+)(?P<body>.*?)\)",
@@ -171,7 +179,12 @@ def parse_source_spec(raw: object, label: str) -> SourceSpec:
         known = ", ".join(sorted(SOURCE_KINDS))
         raise VersionRegistryError(f"{label}.kind must be one of: {known}")
     path = _normalized_path(raw.get("path"), f"{label}.path")
-    selector = "project" if kind == "cmake-project" else "package"
+    if kind == "cmake-project":
+        selector = "project"
+    elif kind == "gradle-version-name":
+        selector = "application"
+    else:
+        selector = "package"
     name = _required_string(raw.get(selector), f"{label}.{selector}")
     return SourceSpec(str(kind), path, name)
 
@@ -353,6 +366,20 @@ def read_source_version(spec: SourceSpec, raw: bytes | str, label: str) -> SemVe
         return SemVer.parse(
             matches[0].get("version"), f'{label} package "{spec.name}" version'
         )
+
+    if spec.kind == "gradle-version-name":
+        applications = GRADLE_APPLICATION_RE.findall(text)
+        if applications != [spec.name]:
+            raise VersionSourceError(
+                f'{label}: expected exactly one applicationId "{spec.name}", '
+                f"found {applications}"
+            )
+        versions = GRADLE_VERSION_RE.findall(text)
+        if len(versions) != 1:
+            raise VersionSourceError(
+                f"{label}: expected exactly one versionName assignment, found {len(versions)}"
+            )
+        return SemVer.parse(versions[0], f"{label} versionName")
 
     calls: list[tuple[re.Match[str], re.Match[str]]] = []
     for call in PROJECT_CALL_RE.finditer(text):

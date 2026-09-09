@@ -15,6 +15,7 @@ import tomllib
 if __package__:
     from .version_contract import (
         DELIVERY_KINDS,
+        GRADLE_VERSION_RE,
         HistoryRow,
         SemVer,
         SourceSpec,
@@ -31,6 +32,7 @@ if __package__:
 else:
     from version_contract import (
         DELIVERY_KINDS,
+        GRADLE_VERSION_RE,
         HistoryRow,
         SemVer,
         SourceSpec,
@@ -108,6 +110,15 @@ def replace_source_version(
         start = section.start() + match.start("version")
         end = section.start() + match.end("version")
         return (text[:start] + replacement + text[end:]).encode("utf-8")
+
+    if spec.kind == "gradle-version-name":
+        matches = list(GRADLE_VERSION_RE.finditer(text))
+        if len(matches) != 1:
+            raise VersionSourceError(f"{label}: expected one versionName assignment")
+        match = matches[0]
+        return (
+            text[: match.start("version")] + replacement + text[match.end("version") :]
+        ).encode("utf-8")
 
     if spec.kind == "cargo-lock":
         block_starts = [

@@ -608,12 +608,22 @@ class DocumentationContract:
                         )
                         continue
                     kind = source.get("kind")
-                    if kind not in {"cargo-package", "cargo-lock", "cmake-project"}:
+                    if kind not in {
+                        "cargo-package",
+                        "cargo-lock",
+                        "cmake-project",
+                        "gradle-version-name",
+                    }:
                         self.error(
                             "docs/projects.toml",
                             f"{source_label}.kind is invalid",
                         )
-                    selector = "project" if kind == "cmake-project" else "package"
+                    if kind == "cmake-project":
+                        selector = "project"
+                    elif kind == "gradle-version-name":
+                        selector = "application"
+                    else:
+                        selector = "package"
                     if not isinstance(source.get(selector), str) or not source.get(selector):
                         self.error(
                             "docs/projects.toml",
