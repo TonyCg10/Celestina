@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P2-A` of
-  [`../plans/active/2026-09-09-link.md`](../plans/active/2026-09-09-link.md):
+  [`../plans/archive/2026-09-09-link.md`](../plans/archive/2026-09-09-link.md):
   `celestina-rs/crates/magnetita-link` (`Cargo.toml`, `src/lib.rs`,
   `src/tls.rs`, `src/endpoint.rs`, `src/session.rs`, `src/trust.rs`,
   `src/backoff.rs`, `src/error.rs`), the workspace manifest and lock, the

@@ -3,6 +3,21 @@
 This manual lane requires the real phone, LAN, mounts or Wayland session. It
 does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
 
+## VAL-MAG-11 — The own application pairs the S25U and holds a session
+
+- **Status:** pending
+- **Related implementation:** `MAG-P3` / `AND-1`
+- **Requires:** the deployed daemon with the own wire, the `magnetita-android`
+  debug build installed on the S25U by hand
+- **Procedure:** open the desktop app, start a pairing, scan the QR with the
+  phone application; then switch the screen off, switch apps, and toggle the
+  phone's Wi-Fi off and on
+- **Pass condition:** the phone appears in the desktop app as paired with its
+  battery; the session survives screen off and the app switch, and returns
+  after the Wi-Fi toggle without touching the phone
+- **Result:** not run
+- **Evidence:** the desktop app's device card and the daemon's log lines
+
 ## VAL-MAG-10 — One highlight per row, glyphs for forget and pair
 
 - **Status:** pending

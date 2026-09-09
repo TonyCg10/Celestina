@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** the implementation exit of `MAG-P2` in
-  [`../plans/active/2026-09-09-link.md`](../plans/active/2026-09-09-link.md),
+  [`../plans/archive/2026-09-09-link.md`](../plans/archive/2026-09-09-link.md),
   run on the author's request after `MAG-P2-A` to `-D` closed
 - **Environment:** the author's host, `magnetitad` deployed by
   `magnetita/scripts/complete-production.sh` at 13:35:59 from the tree at

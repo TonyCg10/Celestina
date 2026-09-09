@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P2-C` of
-  [`../plans/active/2026-09-09-link.md`](../plans/active/2026-09-09-link.md):
+  [`../plans/archive/2026-09-09-link.md`](../plans/archive/2026-09-09-link.md):
   `celestina-rs/crates/magnetitad/src/link_wire/mod.rs`, the
   `StartPairing` method and `serve` in `devices.rs`, the four lines that
   wire it in `main.rs`, the daemon's manifest, and the architecture

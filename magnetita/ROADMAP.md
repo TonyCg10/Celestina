@@ -1,12 +1,14 @@
 # Magnetita implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** MAG-P2
+- **Active implementation checkpoint:** MAG-P3
 - **Related author validation:** `VAL-MAG-01` through `VAL-MAG-08` in
   [VALIDATION.md](VALIDATION.md); they do not block implementation
 
-`MAG-P2` is executing under
-[its plan](docs/plans/active/2026-09-09-link.md). `MAG-P1` is complete under
+`MAG-P3` is executing under
+[its plan](docs/plans/active/2026-09-09-android-foundation.md), paired with
+the `magnetita-android` project's own `AND-1`. `MAG-P2` is closed under
+[its archived plan](docs/plans/archive/2026-09-09-link.md), `MAG-P1` under
 [its archived plan](docs/plans/archive/2026-09-09-protocol-core.md), `MAG-P0`
 under [its own](docs/plans/archive/2026-09-07-own-protocol-spikes.md).
 `MAG-S1`'s
@@ -390,8 +392,8 @@ on the real interface — see
 author ruled the same day that there is no other host — Magnetita links one
 desktop and one phone — so the "another host" clause is met by the phone
 itself in `MAG-P3`, and the migration stays proven by the loopback test until
-the phone toggles its Wi-Fi in `MAG-P3`. `MAG-P2` is closed; its plan stays
-active until `MAG-P3` takes the checkpoint.
+the phone toggles its Wi-Fi in `MAG-P3`. `MAG-P2` is closed; `MAG-P3` took the
+checkpoint the same day.
 
 ## MAG-P3 — The Android application foundation
 
@@ -416,7 +418,9 @@ project's own build script.
 - Device screen: name, connection state, battery both ways, ping, find.
 - Registry entry, README/STATUS/ROADMAP/VALIDATION, build/verify/deploy
   scripts (deploy installs by `adb` to the paired phone only when the author
-  asks), signing key outside the repository.
+  asks), signing key outside the repository. The application is the
+  registered project `magnetita-android` with its own checkpoint `AND-1`;
+  this checkpoint owns the Rust side and the pairing of the two.
 
 ## Exclusions
 
@@ -428,7 +432,7 @@ project's own build script.
 
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
-| MAG-P3-A | planned | MAG-P2 | `magnetita-mobile` UniFFI crate and the Gradle scaffold building it | `./gradlew assembleRelease` |
+| MAG-P3-A | active | MAG-P2 | `magnetita-mobile` UniFFI crate and the Gradle scaffold building it | `cargo test -p magnetita-mobile`, `./gradlew assembleDebug` |
 | MAG-P3-B | planned | MAG-P3-A | Foreground service holding a session; discovery; trust | JVM unit tests, Rust tests |
 | MAG-P3-C | planned | MAG-P3-B | Pairing screens, device screen, battery, ping, find | JVM tests, `qmllint`-equivalent Android lint |
 | MAG-P3-D | planned | MAG-P3-C | Registered project with scripts, signed artifact, docs set | documentation contract, `verify-production.sh` |

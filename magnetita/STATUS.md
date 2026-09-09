@@ -1,8 +1,9 @@
 # Magnetita status
 
 - **Updated:** 2026-09-09
-- **Implementation:** `MAG-P2`, the link, is the active checkpoint since
-  2026-09-09 and every unit is implemented (`4011e53`, `95a4cc8`):
+- **Implementation:** `MAG-P3`, the Android application foundation, is the
+  active checkpoint since 2026-09-09, paired with `magnetita-android`'s
+  `AND-1`. `MAG-P2`, the link, is closed (`4011e53`, `95a4cc8`):
   `magnetita-link` carries `magnetita-proto` over QUIC with pinned
   certificates, `magnetitad` hosts the own wire next to KDE Connect on one
   runtime thread with `StartPairing` on `Devices1`, and `magnetita-peer`
@@ -124,7 +125,8 @@ its refusals are proven, the delivery of a file to a phone is not. See the
 ## Records
 
 - [Implementation roadmap](ROADMAP.md)
-- [Active plan MAG-P2](docs/plans/active/2026-09-09-link.md)
+- [Active plan MAG-P3](docs/plans/active/2026-09-09-android-foundation.md)
+- [Archived plan MAG-P2](docs/plans/archive/2026-09-09-link.md)
 - [Archived plan MAG-P1](docs/plans/archive/2026-09-09-protocol-core.md)
 - [Archived plan MAG-P0](docs/plans/archive/2026-09-07-own-protocol-spikes.md)
 - [Archived plan MAG-S1](docs/plans/archive/2026-08-05-network-input-hardening.md)

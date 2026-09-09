@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P2-D` of
-  [`../plans/active/2026-09-09-link.md`](../plans/active/2026-09-09-link.md):
+  [`../plans/archive/2026-09-09-link.md`](../plans/archive/2026-09-09-link.md):
   `celestina-rs/crates/magnetita-peer` (`Cargo.toml`, `src/lib.rs`,
   `src/main.rs`) and the crate's registration
 - **Environment:** as in [the link record](2026-09-09-link-endpoint.md)

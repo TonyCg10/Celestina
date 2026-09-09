@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P2-B` of
-  [`../plans/active/2026-09-09-link.md`](../plans/active/2026-09-09-link.md):
+  [`../plans/archive/2026-09-09-link.md`](../plans/archive/2026-09-09-link.md):
   `celestina-rs/crates/magnetita-link/src/discovery.rs` (the one parser),
   `celestina-rs/crates/magnetitad/src/link_wire/discovery.rs` (the
   daemon's advertise and browse), and `mirror_discovery.rs` now reading

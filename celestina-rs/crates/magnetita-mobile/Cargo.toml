@@ -1,19 +1,23 @@
 [package]
-name = "magnetita-peer"
+name = "magnetita-mobile"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license = "GPL-3.0-or-later"
 
+[lib]
+name = "magnetita_mobile"
+crate-type = ["cdylib", "rlib"]
+
 [[bin]]
-name = "magnetita-peer"
-path = "src/main.rs"
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
 
 [dependencies]
 magnetita-proto = { path = "../magnetita-proto" }
 magnetita-link = { path = "../magnetita-link" }
-magnetita-mobile = { path = "../magnetita-mobile" }
 magnetita-net = { path = "../magnetita-net" }
+uniffi = { workspace = true, features = ["cli"] }
 tokio = { workspace = true, features = ["rt-multi-thread", "time", "macros", "io-util"] }
 
 [lints]

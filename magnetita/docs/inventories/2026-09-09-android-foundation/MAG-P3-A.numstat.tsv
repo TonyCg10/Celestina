@@ -1,0 +1,55 @@
+# MAG-P3-A exact change inventory
+
+Base revision	af5f4524c52c89225cad73624cca26b98d49332a
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/Cargo.toml
+Pathspec	celestina-rs/crates/magnetita-mobile/Cargo.toml
+Pathspec	celestina-rs/crates/magnetita-mobile/src/bin/uniffi-bindgen.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/mobile.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/phone.rs
+Pathspec	celestina-rs/crates/magnetita-peer/Cargo.toml
+Pathspec	celestina-rs/crates/magnetita-peer/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/main.rs
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/VALIDATION.md
+Pathspec	magnetita/docs/evidence/2026-09-09-daemon-own-wire.md
+Pathspec	magnetita/docs/evidence/2026-09-09-headless-peer.md
+Pathspec	magnetita/docs/evidence/2026-09-09-link-discovery.md
+Pathspec	magnetita/docs/evidence/2026-09-09-link-endpoint.md
+Pathspec	magnetita/docs/evidence/2026-09-09-mobile-crate.md
+Pathspec	magnetita/docs/evidence/2026-09-09-own-wire-deployed.md
+Pathspec	magnetita/docs/inventories/2026-09-09-android-foundation/MAG-P3-A.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-android-foundation.md
+Pathspec	magnetita/docs/plans/active/2026-09-09-link.md
+Pathspec	magnetita/docs/plans/active/README.md
+Pathspec	magnetita/docs/plans/archive/2026-09-09-link.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+417	6	710b8b7185fb754d916d587b3c9840ba95646e2550d9061e58ee9bb18135fdef	celestina-rs/Cargo.lock
+4	0	327b77d9787a537b6f8a1c9e6a2d4de6b4a23a65d4517185d6d0f37e248523b3	celestina-rs/Cargo.toml
+24	0	e5f259411d3a2cffa1ecb22555633e3e911d27fc688b5c365df54500fd672bd2	celestina-rs/crates/magnetita-mobile/Cargo.toml
+5	0	332383c9f6166fa5e6920ee52f0aa3844c47b47206e24e78104471d685e7b631	celestina-rs/crates/magnetita-mobile/src/bin/uniffi-bindgen.rs
+19	0	c3ef76e429e24a10171c81b3b3392f5e316ed8f5a2057bfc937b263343523fda	celestina-rs/crates/magnetita-mobile/src/lib.rs
+171	0	67d30f9638939c12ace18fd4bab09d714053c4c4e588427a849aaae24ad4073d	celestina-rs/crates/magnetita-mobile/src/mobile.rs
+219	0	de60ecb1ecc348dec21f22eb7768e1e0078d04d0d3440e9d6f830323b184eada	celestina-rs/crates/magnetita-mobile/src/phone.rs
+1	0	b624b6a16ed57edc40fbb622d44f3a1666e80f9ac0a8edecba4d427a617fe887	celestina-rs/crates/magnetita-peer/Cargo.toml
+42	212	a9ba64a3d48b5d52bfa69133083b82fb1f593d8cd05ea69a434115b7fa8f2536	celestina-rs/crates/magnetita-peer/src/lib.rs
+81	75	82d766cbb709c0ccc1b93dab6b43206c8b28c731daef9dee58ced9a3027832ce	celestina-rs/crates/magnetita-peer/src/main.rs
+11	7	45eee6ab1abcb0352df5d2d593bc33ee39701963d3806be1f19a9c055a598060	magnetita/ROADMAP.md
+5	3	f6ff059b4b46b391958eb3665276f6ead9004ca45f5f7c750db887262d6c9134	magnetita/STATUS.md
+15	0	31988f7631946b6a7aedac8d4bc5208fbb98691de0cd3f3564808f67cb1e0f79	magnetita/VALIDATION.md
+1	1	486ddf9de404c32a9d24bd4bbe7f1d3821cedd12da84746ba7121ac8bd87d358	magnetita/docs/evidence/2026-09-09-daemon-own-wire.md
+1	1	df516dea564f1c49fb527677b7086a9390cbeeb4583ebc2f1600126838049e13	magnetita/docs/evidence/2026-09-09-headless-peer.md
+1	1	0259753a077bd2e4b796a731be570917e64f1cdf09956d808c20021b0cff4e6e	magnetita/docs/evidence/2026-09-09-link-discovery.md
+1	1	9bbd6f21a4983a5e26afa5cf51cf1704f26e9f925a5e7aa2c70422b9b21a694d	magnetita/docs/evidence/2026-09-09-link-endpoint.md
+53	0	29370f949ea5f11f43cb179ae136b28a3ec1c049ef7828b2b750294d617c00f3	magnetita/docs/evidence/2026-09-09-mobile-crate.md
+1	1	c92f16d639a7e9634c3788672147e3d6f9fd30ff2868facd0760b02cd89f6cc1	magnetita/docs/evidence/2026-09-09-own-wire-deployed.md
+55	0	self	magnetita/docs/inventories/2026-09-09-android-foundation/MAG-P3-A.numstat.tsv
+58	0	60a001681faf9f499b895cea195165bbf2490b9894dcf832c743e12b39dcddda	magnetita/docs/plans/active/2026-09-09-android-foundation.md
+0	74	deleted	magnetita/docs/plans/active/2026-09-09-link.md
+6	3	739bd2f1ccf142cad76662adc9cf5f3436c6506c066769f6140b1faffeb1e5e0	magnetita/docs/plans/active/README.md
+76	0	157d550393d43f21f31a1b481f3951a95f95008c99c9db7a6f452789376183fc	magnetita/docs/plans/archive/2026-09-09-link.md

@@ -17,6 +17,7 @@ members = [
     "crates/magnetita-proto",
     "crates/magnetita-link",
     "crates/magnetita-peer",
+    "crates/magnetita-mobile",
     "crates/magnetitad",
 ]
 resolver = "2"
@@ -43,6 +44,9 @@ rand_core = { version = "0.6", default-features = false }
 # The link is QUIC: quinn on the rustls/ring stack magnetita-net already pins,
 # measured on the phone in MAG-P0 (magnetita-link). tokio is the runtime quinn
 # needs; the daemon hosts it on one owned thread.
+# The phone side reaches Kotlin through UniFFI; the crate carries its own
+# bindgen binary, as UniFFI 0.29 intends (magnetita-mobile).
+uniffi = "0.29"
 quinn = { version = "0.11", default-features = false, features = ["rustls-ring", "runtime-tokio", "log"] }
 tokio = { version = "1", default-features = false }
 
