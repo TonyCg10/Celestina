@@ -708,3 +708,85 @@ Decision: pending
 
 Every item remains `pending`. This audit grants no authority to execute any of
 the proposals.
+
+## Host change record — 2026-09-08, Android toolchain for Magnetita
+
+The author installed these on 2026-09-08 so the `MAG-P0` spikes of the
+own-protocol program could run the shared Rust core on the phone; see
+[the spike plan](magnetita/docs/plans/active/2026-09-07-own-protocol-spikes.md).
+They are chosen tools, recorded here so a later audit does not read them as
+orphans.
+
+Component: `rustup` 1.29.1 (replaces the distribution `rust` package) with
+the `stable` toolchain, the `aarch64-linux-android` target, and the pinned
+`1.97.1` toolchain that `celestina-rs/rust-toolchain.toml` selects inside the
+repository
+
+Observed role: The only way to cross-compile the `magnetita-mobile` core for
+the phone; the repository's own builds keep using the pinned toolchain.
+
+Installed because: Requested by the `MAG-P0-A` spike; `pacman` removed the
+conflicting `rust` package on install.
+
+Native dependency closure: Toolchains under `~/.rustup`; `cargo` home is
+`~/.local/share/cargo`.
+
+Session authority: None; developer tooling only.
+
+Flatpak containment: Not applicable.
+
+Current consumers: `celestina-rs` builds, the future `magnetita-android`
+project.
+
+Classification: Chosen tool.
+
+Decision: accepted by the author on 2026-09-08.
+
+Component: `cargo-ndk` 4.1.2 in `~/.local/share/cargo/bin`
+
+Observed role: Drives `cargo` with the NDK's clang for Android targets and
+copies the resulting `.so` into an Android project's `jniLibs`.
+
+Installed because: Requested by the `MAG-P0-A` spike. `uniffi-bindgen` is
+not a host tool: each crate carries its own binary.
+
+Native dependency closure: None beyond `cargo`.
+
+Session authority: None.
+
+Flatpak containment: Not applicable.
+
+Current consumers: The future `magnetita-android` build scripts.
+
+Classification: Chosen tool.
+
+Decision: accepted by the author on 2026-09-08.
+
+Component: Android Studio 2026.1.3 as the Flatpak
+`com.google.AndroidStudio`, with its SDK at
+`~/.var/app/com.google.AndroidStudio/data/Android/Sdk` (platforms 35 and
+36.1, build-tools 34 to 37, platform-tools) and NDK 30.0.16248370 added
+through its SDK manager
+
+Observed role: The Android SDK, NDK and Gradle host for the phone side of
+Magnetita; `cargo-ndk` runs outside the sandbox and reads the same SDK
+directory, so the repository's scripts point `ANDROID_HOME` and
+`ANDROID_NDK_HOME` there.
+
+Installed because: The author already used it for other Android projects;
+the NDK was added for `MAG-P0`.
+
+Native dependency closure: Flatpak runtime; the SDK lives in the app's data
+directory, outside the host package manager.
+
+Session authority: None while closed.
+
+Flatpak containment: Standard Android Studio Flatpak permissions; the SDK
+directory is readable from the host, which is what the build relies on.
+
+Current consumers: The scratch spike project during `MAG-P0`, deleted on
+2026-09-09; the future `magnetita-android` project.
+
+Classification: Chosen application.
+
+Decision: accepted by the author on 2026-09-08.
