@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P1-B` of
-  [`../plans/active/2026-09-09-protocol-core.md`](../plans/active/2026-09-09-protocol-core.md):
+  [`../plans/archive/2026-09-09-protocol-core.md`](../plans/archive/2026-09-09-protocol-core.md):
   `celestina-rs/crates/magnetita-proto/src/pair.rs`, the `PAIRING`
   capability id, and the crate's `ring`, `spake2` and `rand_core`
   dependencies

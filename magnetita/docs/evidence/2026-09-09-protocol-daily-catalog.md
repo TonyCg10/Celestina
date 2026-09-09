@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P1-C` of
-  [`../plans/active/2026-09-09-protocol-core.md`](../plans/active/2026-09-09-protocol-core.md): `src/codec.rs`, the new bounds in `src/bound.rs`, `src/lib.rs`, `src/daily/`, [the wire document](../protocol.md) and its README link
+  [`../plans/archive/2026-09-09-protocol-core.md`](../plans/archive/2026-09-09-protocol-core.md): `src/codec.rs`, the new bounds in `src/bound.rs`, `src/lib.rs`, `src/daily/`, [the wire document](../protocol.md) and its README link
 - **Environment:** as in
   [the envelope record](2026-09-09-protocol-envelope-and-hello.md); no new
   dependency

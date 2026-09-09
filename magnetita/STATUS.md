@@ -1,11 +1,11 @@
 # Magnetita status
 
 - **Updated:** 2026-09-09
-- **Implementation:** `MAG-P1`, the own protocol's pure core crate, is
-  complete since 2026-09-09 (`07e70c4`, `a071e39`): `magnetita-proto` holds
-  the envelope, hello, pairing and the catalog of twelve capabilities, 63
-  tests, with [the wire document](docs/protocol.md). It stays the active
-  checkpoint until the author opens `MAG-P2`, the link. `MAG-P0`'s spikes
+- **Implementation:** `MAG-P2`, the link, is the active checkpoint since
+  2026-09-09: `magnetita-link` carries `magnetita-proto` over QUIC with
+  pinned certificates. `MAG-P1` is complete (`07e70c4`, `a071e39`):
+  `magnetita-proto` holds the envelope, hello, pairing and the catalog of
+  twelve capabilities, 63 tests, with [the wire document](docs/protocol.md). `MAG-P0`'s spikes
   are measured, closed and committed (`ad26b3e`). `MAG-S1` (hostile network input) and
   `MAG-R1` (the one-button wireless mirror) are delivered, committed and
   deployed; `MAG-S1`'s plan is archived with its canonical production exit
@@ -118,7 +118,8 @@ its refusals are proven, the delivery of a file to a phone is not. See the
 ## Records
 
 - [Implementation roadmap](ROADMAP.md)
-- [Active plan MAG-P1](docs/plans/active/2026-09-09-protocol-core.md)
+- [Active plan MAG-P2](docs/plans/active/2026-09-09-link.md)
+- [Archived plan MAG-P1](docs/plans/archive/2026-09-09-protocol-core.md)
 - [Archived plan MAG-P0](docs/plans/archive/2026-09-07-own-protocol-spikes.md)
 - [Archived plan MAG-S1](docs/plans/archive/2026-08-05-network-input-hardening.md)
 - [Author validation](VALIDATION.md)

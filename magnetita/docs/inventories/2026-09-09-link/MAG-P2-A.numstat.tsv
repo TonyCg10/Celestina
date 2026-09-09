@@ -1,0 +1,53 @@
+# MAG-P2-A exact change inventory
+
+Base revision	2abbe603dc90b26d5dbc756f2564dec28aeb586d
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/Cargo.toml
+Pathspec	celestina-rs/crates/magnetita-link/Cargo.toml
+Pathspec	celestina-rs/crates/magnetita-link/src/backoff.rs
+Pathspec	celestina-rs/crates/magnetita-link/src/endpoint.rs
+Pathspec	celestina-rs/crates/magnetita-link/src/error.rs
+Pathspec	celestina-rs/crates/magnetita-link/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-link/src/session.rs
+Pathspec	celestina-rs/crates/magnetita-link/src/tls.rs
+Pathspec	celestina-rs/crates/magnetita-link/src/trust.rs
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/docs/evidence/2026-09-09-link-endpoint.md
+Pathspec	magnetita/docs/evidence/2026-09-09-protocol-control-and-mirror.md
+Pathspec	magnetita/docs/evidence/2026-09-09-protocol-daily-catalog.md
+Pathspec	magnetita/docs/evidence/2026-09-09-protocol-envelope-and-hello.md
+Pathspec	magnetita/docs/evidence/2026-09-09-protocol-pairing.md
+Pathspec	magnetita/docs/evidence/2026-09-09-protocol-phone-surface.md
+Pathspec	magnetita/docs/inventories/2026-09-09-link/MAG-P2-A.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-link.md
+Pathspec	magnetita/docs/plans/active/2026-09-09-protocol-core.md
+Pathspec	magnetita/docs/plans/active/README.md
+Pathspec	magnetita/docs/plans/archive/2026-09-09-protocol-core.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+216	7	cb83e4930c3ce20122868c722327133cf7cfd002b460574e70421306a2bfd77c	celestina-rs/Cargo.lock
+6	0	d3c6fac8c6f49fed2c99d9dc76af36d2e2c83a2e6213daec95ca36ff3c379718	celestina-rs/Cargo.toml
+19	0	7bf48b74df588b8720268c4f09541a5944dc51777553e1ac8237b5d517c3ef1d	celestina-rs/crates/magnetita-link/Cargo.toml
+58	0	023eb2f131e48398b9c0aab08312ff7463031980e9636d6ac9e6ebeeb2c0f91d	celestina-rs/crates/magnetita-link/src/backoff.rs
+476	0	3dfd03acda7ca3978f9f9e0607435f574b5736f188ebc251a98244b60a07b66c	celestina-rs/crates/magnetita-link/src/endpoint.rs
+92	0	b8e6183a25536fa894ca3b1891813d44583cbdb900fb3f398204068737961911	celestina-rs/crates/magnetita-link/src/error.rs
+39	0	14e6bf0c065ad2362dde6678c69c3ed5cc005868222c00eccb27707ed39e132a	celestina-rs/crates/magnetita-link/src/lib.rs
+159	0	cdae990aa572dc301cac5adb79fc9ae419153e2bc877c3b1019d8a57caf0e6b6	celestina-rs/crates/magnetita-link/src/session.rs
+142	0	e263b31f8b241f264589098afd9519d84926dbab54c8e863efb9095e22b095a7	celestina-rs/crates/magnetita-link/src/tls.rs
+72	0	a2b77b01d10ed1be06ada01e23992265fdb097345a5cdbbf9cc44965180063d2	celestina-rs/crates/magnetita-link/src/trust.rs
+8	7	0f3ddddeee759b3f4edba501222743b196547d2fbc87a1ede40431ec9453388d	magnetita/ROADMAP.md
+7	6	562e32b06bc4be6ae795a04841d9d28f4223f1dc5f56f7f391fc68506846bff2	magnetita/STATUS.md
+66	0	e6d66d8d84bb04896a8b9eab947b8e909cb4c20c242ef00691a248e22e207f73	magnetita/docs/evidence/2026-09-09-link-endpoint.md
+1	1	62a8b4039a3db0d1be7a894b7cfc4407c28446ebe5cd2e433a240fcd9ece1fc5	magnetita/docs/evidence/2026-09-09-protocol-control-and-mirror.md
+1	1	795d5e812f6517029a1ae3cb9afc6ac04e882fb68e92692f60852833666086a9	magnetita/docs/evidence/2026-09-09-protocol-daily-catalog.md
+1	1	3c523cf107c9b710ecd2541736de490a651b506ac437260b19e19165e5fcae4e	magnetita/docs/evidence/2026-09-09-protocol-envelope-and-hello.md
+1	1	2716f8961d6354197dd4dc9a1950847687cd39483e7d7198225c28daf75e4164	magnetita/docs/evidence/2026-09-09-protocol-pairing.md
+1	1	0a324c0eff821c8cb044de2c218c09efb2f8d89c255d69e604569b29c3599a4c	magnetita/docs/evidence/2026-09-09-protocol-phone-surface.md
+53	0	self	magnetita/docs/inventories/2026-09-09-link/MAG-P2-A.numstat.tsv
+70	0	997071dfa14b8048d56d141df40f8354371144c63e98f28e4e31a205b7bc8bc6	magnetita/docs/plans/active/2026-09-09-link.md
+0	71	deleted	magnetita/docs/plans/active/2026-09-09-protocol-core.md
+6	5	bbb576b31d3bb6b4a41081a84317681cb12dd58c9c52aa593a69ddd852f6790d	magnetita/docs/plans/active/README.md
+73	0	76c06c751d5d07f88a5e591685b037498da43cbc76ac6ce1bd5af962064104d7	magnetita/docs/plans/archive/2026-09-09-protocol-core.md

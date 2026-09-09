@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P1-D` of
-  [`../plans/active/2026-09-09-protocol-core.md`](../plans/active/2026-09-09-protocol-core.md): `src/control/` and `src/mirror.rs`
+  [`../plans/archive/2026-09-09-protocol-core.md`](../plans/archive/2026-09-09-protocol-core.md): `src/control/` and `src/mirror.rs`
 - **Environment:** as in
   [the envelope record](2026-09-09-protocol-envelope-and-hello.md); no new
   dependency

@@ -1,13 +1,14 @@
 # Magnetita implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** MAG-P1
+- **Active implementation checkpoint:** MAG-P2
 - **Related author validation:** `VAL-MAG-01` through `VAL-MAG-08` in
   [VALIDATION.md](VALIDATION.md); they do not block implementation
 
-`MAG-P1` is executing under
-[its plan](docs/plans/active/2026-09-09-protocol-core.md). `MAG-P0` is done
-under [its archived plan](docs/plans/archive/2026-09-07-own-protocol-spikes.md).
+`MAG-P2` is executing under
+[its plan](docs/plans/active/2026-09-09-link.md). `MAG-P1` is complete under
+[its archived plan](docs/plans/archive/2026-09-09-protocol-core.md), `MAG-P0`
+under [its own](docs/plans/archive/2026-09-07-own-protocol-spikes.md).
 `MAG-S1`'s
 units are all done and committed under
 [its archived plan](docs/plans/archive/2026-08-05-network-input-hardening.md);
@@ -333,8 +334,8 @@ every oversized, malformed or out-of-capability input with a typed reason.
 
 Met on 2026-09-09: 63 tests with every message pinned by a committed vector,
 Clippy, format and the architecture contract all pass, and
-[the wire document](docs/protocol.md) maps the catalog. The plan stays active
-until `MAG-P2` opens and takes the checkpoint.
+[the wire document](docs/protocol.md) maps the catalog. `MAG-P2` took the
+checkpoint the same day.
 
 ## MAG-P2 — The link, the daemon's second wire and a headless peer
 
@@ -371,7 +372,7 @@ observation the author prefers for Siderita.
 
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
-| MAG-P2-A | planned | MAG-P1 | Endpoint, trust, handshake deadline, streams, loopback tests | `cargo test -p magnetita-link` |
+| MAG-P2-A | active | MAG-P1 | Endpoint, trust, handshake deadline, streams, loopback tests | `cargo test -p magnetita-link` |
 | MAG-P2-B | planned | MAG-P2-A | Discovery both ways through Avahi | producer/consumer tests |
 | MAG-P2-C | planned | MAG-P2-B | The daemon hosts both wires; devices publish unchanged | daemon tests, `scripts/complete-production.sh` |
 | MAG-P2-D | planned | MAG-P2-C | `magnetita-peer` pairs, reconnects, migrates | loopback and LAN evidence |

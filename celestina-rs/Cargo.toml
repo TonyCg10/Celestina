@@ -15,6 +15,7 @@ members = [
     "crates/magnetita-core",
     "crates/magnetita-net",
     "crates/magnetita-proto",
+    "crates/magnetita-link",
     "crates/magnetitad",
 ]
 resolver = "2"
@@ -38,6 +39,11 @@ minicbor = { version = "2.3", default-features = false, features = ["std"] }
 # from its caller so the pure protocol crate stays deterministic under test.
 spake2 = { version = "0.4", default-features = false, features = ["std"] }
 rand_core = { version = "0.6", default-features = false }
+# The link is QUIC: quinn on the rustls/ring stack magnetita-net already pins,
+# measured on the phone in MAG-P0 (magnetita-link). tokio is the runtime quinn
+# needs; the daemon hosts it on one owned thread.
+quinn = { version = "0.11", default-features = false, features = ["rustls-ring", "runtime-tokio", "log"] }
+tokio = { version = "1", default-features = false }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

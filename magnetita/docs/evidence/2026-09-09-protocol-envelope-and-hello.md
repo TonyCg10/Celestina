@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P1-A` of
-  [`../plans/active/2026-09-09-protocol-core.md`](../plans/active/2026-09-09-protocol-core.md):
+  [`../plans/archive/2026-09-09-protocol-core.md`](../plans/archive/2026-09-09-protocol-core.md):
   `celestina-rs/crates/magnetita-proto` (`Cargo.toml`, `src/lib.rs`,
   `src/bound.rs`, `src/envelope.rs`, `src/error.rs`, `src/hello.rs`), the
   workspace manifest and lock, and the crate's registration in

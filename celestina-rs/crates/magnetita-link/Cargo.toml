@@ -1,0 +1,19 @@
+[package]
+name = "magnetita-link"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "GPL-3.0-or-later"
+
+[dependencies]
+magnetita-proto = { path = "../magnetita-proto" }
+# The device certificate and the trust store: the same recipe as the KDE
+# Connect wire, one owner, until MAG-P7 removes that wire and they move here.
+magnetita-net = { path = "../magnetita-net" }
+quinn.workspace = true
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "time", "net", "io-util", "sync", "macros"] }
+rand_core = { workspace = true, features = ["getrandom"] }
+
+[lints]
+workspace = true

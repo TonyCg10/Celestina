@@ -1,14 +1,16 @@
 # MAG-P1 — The protocol core, `magnetita-proto`
 
 - **Opened:** 2026-09-09
+- **Closed:** 2026-09-09
 - **Plan ID:** protocol-core
-- **Status:** active
+- **Status:** done
 - **Authorization:** the author said "abre MAG-P1 y empieza" on 2026-09-09
   after `MAG-P0` closed with every choice of
   [ADR 0001](../../decisions/0001-own-protocol-and-android-app.md) verified
 - **Scope:** magnetita, magnetita-proto
 - **Implementation checkpoint:** MAG-P1
 - **Author-validation checkpoint:** none
+- **Successor:** MAG-P2
 
 ## Hypothesis
 
