@@ -240,6 +240,7 @@ class StaticAndSourceTests(unittest.TestCase):
                 "magnetita",
                 "grafita",
                 "fluorita",
+                "magnetita-android",
             },
         )
 

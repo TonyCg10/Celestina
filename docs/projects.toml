@@ -236,9 +236,7 @@ name = "Magnetita Android"
 path = "magnetita-android"
 kind = "android-application"
 commit_prefix = "magnetita-android"
-# Gradle declares the version; the version tool does not read Gradle yet, so
-# the project is registered unversioned until AND-1-D adds that reading.
-versioned = false
+version_source = { kind = "gradle-version-name", path = "magnetita-android/app/build.gradle.kts", application = "org.celestina.magnetita" }
 agents = "magnetita-android/AGENTS.md"
 readme = "magnetita-android/README.md"
 status = "magnetita-android/STATUS.md"
@@ -255,7 +253,7 @@ build_script = "magnetita-android/scripts/build-production.sh"
 verify_script = "magnetita-android/scripts/verify-production.sh"
 status_script = "magnetita-android/scripts/status-production.sh"
 artifact_manifest = "magnetita-android/app/build/production-manifest.toml"
-artifact_paths = ["magnetita-android/app/build/outputs/apk/debug/app-debug.apk"]
+artifact_paths = ["magnetita-android/app/build/outputs/apk/release/app-release.apk"]
 
 [[projects]]
 id = "grafita"
