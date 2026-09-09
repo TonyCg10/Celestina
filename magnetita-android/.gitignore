@@ -7,3 +7,7 @@
 /.kotlin/
 *.iml
 /captures/
+# The author's signing key and the properties that name it.
+/keystore.properties
+*.jks
+*.keystore

@@ -3,11 +3,8 @@
 <resources>
     <string name="app_name">Magnetita</string>
     <string name="title_device">Este teléfono</string>
-    <string name="subtitle_identity">Identidad</string>
     <string name="label_device_id">Identificador</string>
     <string name="label_fingerprint">Huella del certificado</string>
-    <string name="label_desktops">Escritorios emparejados</string>
-    <string name="state_no_desktop">Ninguno todavía</string>
     <string name="hint_pair">Escanea el código del escritorio para emparejar</string>
     <string name="error_core">El núcleo no pudo abrirse</string>
     <string name="channel_link">Enlace con el escritorio</string>
@@ -16,7 +13,6 @@
     <string name="state_connecting">Conectando</string>
     <string name="state_connected_to">Conectado a %1$s</string>
     <string name="state_waiting">Esperando al escritorio</string>
-    <string name="label_link">Enlace</string>
     <string name="chip_connected">Conectado</string>
     <string name="chip_pair">Emparejar</string>
     <string name="title_desktop_none">Magnetita</string>
@@ -29,7 +25,6 @@
     <string name="action_scan">Escanear el código del escritorio</string>
     <string name="action_forget">Olvidar este escritorio</string>
     <string name="action_stop_ringing">Dejar de sonar</string>
-    <string name="ringing_title">El escritorio te busca</string>
     <string name="title_scan">Emparejar</string>
     <string name="scan_hint">Apunta al código que muestra el escritorio</string>
     <string name="scan_no_camera">Sin permiso de cámara</string>

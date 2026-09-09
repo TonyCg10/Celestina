@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lint's exceptions, each scoped to the path that earns it. -->
+<lint>
+    <!-- The UniFFI bindings pick java.lang.ref.Cleaner (API 33) behind a
+         Class.forName check and fall back to JNA's cleaner below it. -->
+    <issue id="NewApi">
+        <ignore path="build/native/kotlin" />
+    </issue>
+</lint>

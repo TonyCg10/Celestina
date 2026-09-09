@@ -1,6 +1,15 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+// The author's signing key lives outside the repository: keystore.properties
+// at the project root (gitignored) names it. Without it the release build is
+// signed with the debug key, so the artifact always exists under one name.
+val keystoreProperties = rootProject.file("keystore.properties").takeIf { it.isFile }?.let { file ->
+    Properties().apply { file.inputStream().use { load(it) } }
 }
 
 // The Rust core: cross-compiled and bound by scripts/build-native.sh into
@@ -32,12 +41,33 @@ android {
         ndk { abiFilters += listOf("arm64-v8a") }
     }
 
+    signingConfigs {
+        if (keystoreProperties != null) {
+            create("author") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             optimization {
                 enable = false
             }
+            signingConfig = if (keystoreProperties != null) signingConfigs.getByName("author") else signingConfigs.getByName("debug")
         }
+    }
+
+    lint {
+        // The generated UniFFI bindings choose java.lang.ref.Cleaner behind a
+        // runtime check lint cannot follow; lint.xml scopes that finding to them.
+        lintConfig = file("lint.xml")
+        abortOnError = true
+        warningsAsErrors = false
+        checkReleaseBuilds = true
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

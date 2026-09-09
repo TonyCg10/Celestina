@@ -1,5 +1,5 @@
 #!/bin/sh
-# Reports the sealed debug artifact against the tree, through the suite's
+# Reports the sealed release artifact against the tree, through the suite's
 # runner. Nothing is installed on the host: the APK goes to the phone.
 set -eu
 

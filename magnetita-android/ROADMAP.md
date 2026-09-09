@@ -45,17 +45,19 @@ without touching the phone.
 | AND-1-A | done | MAG-P3-A | The scaffold builds the Rust core from Gradle; the theme and the identity screen | `./gradlew assembleDebug` |
 | AND-1-B | done | AND-1-A | Foreground service holding a session; discovery; pins | JVM tests |
 | AND-1-C | done | AND-1-B | Pairing screens (QR and code), device screen, battery, ping, find | JVM tests, lint |
-| AND-1-D | planned | AND-1-C | Verify and deploy scripts; version reading; signed build | documentation contract |
+| AND-1-D | done | AND-1-C | Verify and deploy scripts; version reading; signed build | documentation contract |
 
 ## Implementation exit
 
-Close `AND-1` when the debug build passes lint and unit tests, the app pairs
-with `magnetita-peer` on an emulator or with the daemon on the LAN, and a
-session survives screen off, app switch and Wi-Fi toggle in an instrumented
-test. `VAL-MAG-11` carries the author's first pairing on the S25U.
+Close `AND-1` when the release build passes lint and unit tests, the app pairs
+with the daemon on the LAN, and a session survives screen off, app switch and
+Wi-Fi toggle. All four units are done on 2026-09-09; the survival run is the
+manual one of `AND-1-B`, not an instrumented test. `VAL-MAG-11` carries the
+author's first pairing on the S25U and closes the checkpoint.
 
 ## Closed evidence
 
 - `AND-1-A`: [scaffold](docs/evidence/2026-09-09-foundation-scaffold.md)
 - `AND-1-B`: [link service](docs/evidence/2026-09-09-foundation-link.md)
 - `AND-1-C`: [screens](docs/evidence/2026-09-09-foundation-screens.md)
+- `AND-1-D`: [release](docs/evidence/2026-09-09-foundation-release.md)

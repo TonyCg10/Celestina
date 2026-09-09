@@ -1,0 +1,47 @@
+# AND-1-D exact change inventory
+
+Base revision	26a1f4f39815b03cbfc2ba469d13b6e713eed00a
+Pathspec	magnetita-android/.gitignore
+Pathspec	magnetita-android/README.md
+Pathspec	magnetita-android/ROADMAP.md
+Pathspec	magnetita-android/STATUS.md
+Pathspec	magnetita-android/app/build.gradle.kts
+Pathspec	magnetita-android/app/lint.xml
+Pathspec	magnetita-android/app/src/main/AndroidManifest.xml
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/screens/DeviceScreen.kt
+Pathspec	magnetita-android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+Pathspec	magnetita-android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+Pathspec	magnetita-android/app/src/main/res/mipmap-anydpi/ic_launcher.xml
+Pathspec	magnetita-android/app/src/main/res/mipmap-anydpi/ic_launcher_round.xml
+Pathspec	magnetita-android/app/src/main/res/values/colors.xml
+Pathspec	magnetita-android/app/src/main/res/values/strings.xml
+Pathspec	magnetita-android/docs/evidence/2026-09-09-foundation-release.md
+Pathspec	magnetita-android/docs/inventories/2026-09-09-foundation/AND-1-D.numstat.tsv
+Pathspec	magnetita-android/docs/plans/active/2026-09-09-foundation.md
+Pathspec	magnetita-android/scripts/build-production.sh
+Pathspec	magnetita-android/scripts/status-production.sh
+Pathspec	magnetita-android/scripts/verify-production.sh
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+4	0	5279e84b6d19cb515670e72147e28b6736ddbe9f0f0cf51adbce8ca1c706e080	magnetita-android/.gitignore
+1	1	b09d434b73be78af5763e1bdd54f65a6c6239550831dba4b38b2f40629dbfd71	magnetita-android/README.md
+7	5	e8bc95d0ad1bb677753f8ab066d5dd395c267e65095efde5d7e19776fde97c60	magnetita-android/ROADMAP.md
+5	1	0099cd98c001cec119205641e325e5cfdaa314e851d624d78117463502c695a7	magnetita-android/STATUS.md
+30	0	86834fecb39a83d302a437eef752532fe717543aea6ca951cc1ddfb6b821e61a	magnetita-android/app/build.gradle.kts
+9	0	8e4c02badc2eeca26e653600f8e77e8d03f3382d09f60afdbe89344808413248	magnetita-android/app/lint.xml
+0	1	6a519e0a41d8b131370e563ac0f743da2659a023de63cd024450273d123391d6	magnetita-android/app/src/main/AndroidManifest.xml
+4	1	d815f72c8c36ad9502bc79d2532928d325ccdca457e173b1a74a960edfa44652	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/screens/DeviceScreen.kt
+0	6	deleted	magnetita-android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+0	6	deleted	magnetita-android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+6	0	88f7653499ef524126ea5018a99baf9cc3269e7e584d6205dfdd76db39f39cc0	magnetita-android/app/src/main/res/mipmap-anydpi/ic_launcher.xml
+6	0	88f7653499ef524126ea5018a99baf9cc3269e7e584d6205dfdd76db39f39cc0	magnetita-android/app/src/main/res/mipmap-anydpi/ic_launcher_round.xml
+0	4	deleted	magnetita-android/app/src/main/res/values/colors.xml
+0	5	12406712a5fa4b2a5df00229bf9f211aa975b8fa9d583d510c18df249f2fa8a7	magnetita-android/app/src/main/res/values/strings.xml
+70	0	ae62d42bf940d149329144b7ac1296bf7dec1c625a56ceb6e0003429c0819193	magnetita-android/docs/evidence/2026-09-09-foundation-release.md
+47	0	self	magnetita-android/docs/inventories/2026-09-09-foundation/AND-1-D.numstat.tsv
+1	1	ea63e7e57a0faf3919074e03bfd4be83a19c267a636638cdeebe6e67de26a048	magnetita-android/docs/plans/active/2026-09-09-foundation.md
+6	6	3438c1873b1c6f8f36278eac3c018f977769942199e700bbdd2086aa370cde5f	magnetita-android/scripts/build-production.sh
+1	1	4c1491471b21feac20ef0d0c61f9a6b3d32a34d6eb2d551bcb2cfeac0aa2aba3	magnetita-android/scripts/status-production.sh
+5	5	89b791e695868c3bf7325eaac0fa28cf4b57843c95b9009db6f29e2d9c8b2306	magnetita-android/scripts/verify-production.sh

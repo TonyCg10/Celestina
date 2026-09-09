@@ -30,7 +30,7 @@ daemon links, reached through UniFFI.
 
 ```sh
 ./gradlew assembleDebug          # runs scripts/build-native.sh first
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
 Requires `rustup` with the `aarch64-linux-android` target, `cargo-ndk`, and

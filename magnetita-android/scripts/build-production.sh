@@ -1,8 +1,8 @@
 #!/bin/sh
-# Builds the debug APK with the Rust core compiled by Gradle's native task,
-# sealed by the suite's production runner like every other project. A
-# signed release build is AND-1-D's; until then the debug build is the
-# artifact the author installs by hand.
+# Builds the release APK with the Rust core compiled by Gradle's native task,
+# sealed by the suite's production runner like every other project. The
+# release is signed with the author's key when keystore.properties names it,
+# and with the debug key otherwise; the artifact goes to the phone by hand.
 set -eu
 
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -18,6 +18,6 @@ if [ "$#" -ne 1 ] || [ "$1" != "--production-runner-internal" ] || \
     exit 2
 fi
 
-(cd "$project_root" && ./gradlew --no-daemon -q assembleDebug)
+(cd "$project_root" && ./gradlew --no-daemon -q assembleRelease)
 
-echo ">> Magnetita Android debug build completed (not installed)"
+echo ">> Magnetita Android release build completed (not installed)"

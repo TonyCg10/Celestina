@@ -14,6 +14,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -48,7 +51,7 @@ data class DeviceShown(
 @Composable
 fun DeviceScreen(shown: DeviceShown, onScan: () -> Unit, onForget: (String) -> Unit, onStopRinging: () -> Unit) {
     val scroll = rememberScrollState()
-    val progress = (1f - scroll.value / 300f).coerceIn(0f, 1f)
+    val progress by remember { derivedStateOf { (1f - scroll.value / 300f).coerceIn(0f, 1f) } }
     val desktop = shown.pinned.firstOrNull()
     val link = shown.link
     Canvas {

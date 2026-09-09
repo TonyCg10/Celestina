@@ -27,7 +27,11 @@
   battery sent; the scan screen reads the desktop's QR with CameraX and
   ML Kit; the phone rings on find until stopped; forget drops the pin.
   The production scripts run through the suite's runner. The six-digit
-  code screen waits for the wire, and lint's baseline for `AND-1-D`.
+  code screen waits for the wire.
+- The artifact is the release APK, signed with the author's key when
+  `keystore.properties` names it; lint runs in the verification; the
+  suite reads the version from Gradle, so the project is versioned at
+  `0.1.0`. `AND-1`'s four units are done; `VAL-MAG-11` closes it.
 
 ## Blockers
 
