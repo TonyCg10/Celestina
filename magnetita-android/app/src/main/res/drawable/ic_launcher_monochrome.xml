@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The themed-icon layer: the octahedron's silhouette with its ridges, one ink. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M54.00,24.07L26.26,52.58L54.00,83.92L81.74,52.58Z" />
+    <path android:pathData="M26.26,52.58L54.00,63.59L81.74,52.58L54.00,24.07Z M54.00,63.59L54.00,83.92" android:strokeColor="#FF000000" android:strokeWidth="1.4" android:strokeLineJoin="round" />
+</vector>
