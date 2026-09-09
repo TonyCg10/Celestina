@@ -386,8 +386,12 @@ session, and the KDE Connect phone still pairs and mounts as before under
 (`95a4cc8`), the daemon was deployed by `scripts/complete-production.sh` and
 the headless peer paired, reported, was rung and was forgotten against it
 on the real interface — see
-[the deployed record](docs/evidence/2026-09-09-own-wire-deployed.md). What
-is still owed is the run from another host with a migration observed.
+[the deployed record](docs/evidence/2026-09-09-own-wire-deployed.md). The
+author ruled the same day that there is no other host — Magnetita links one
+desktop and one phone — so the "another host" clause is met by the phone
+itself in `MAG-P3`, and the migration stays proven by the loopback test until
+the phone toggles its Wi-Fi in `MAG-P3`. `MAG-P2` is closed; its plan stays
+active until `MAG-P3` takes the checkpoint.
 
 ## MAG-P3 — The Android application foundation
 

@@ -7,8 +7,8 @@
   certificates, `magnetitad` hosts the own wire next to KDE Connect on one
   runtime thread with `StartPairing` on `Devices1`, and `magnetita-peer`
   drives it from a shell. Deployed on 2026-09-09 and exercised end to
-  end by the peer against the live daemon; only the run from another host
-  is owed. `MAG-S1`'s pending production exit was carried by the same
+  end by the peer against the live daemon; closed, the author having ruled
+  that the only other host is the phone of `MAG-P3`. `MAG-S1`'s pending production exit was carried by the same
   deployment. `MAG-P1` is complete (`07e70c4`, `a071e39`):
   `magnetita-proto` holds the envelope, hello, pairing and the catalog of
   twelve capabilities, 63 tests, with [the wire document](docs/protocol.md). `MAG-P0`'s spikes
