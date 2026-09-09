@@ -91,6 +91,12 @@ pub mod qobject {
         #[qproperty(QString, mirror_audio)]
         #[qproperty(bool, mirror_screen_off)]
         #[qproperty(bool, mirror_stay_awake)]
+        // The QR the phone scans: rows of `#`/`.`, empty while no window is
+        // open; the name of the phone once it arrived, for the confirmation.
+        #[qproperty(QString, pairing_matrix)]
+        #[qproperty(bool, pairing_active)]
+        #[qproperty(QString, pairing_arrived)]
+        #[qproperty(i32, pairing_window)]
         type DevicesModel = super::DevicesModelRust;
 
         /// Re-read the devices Magnetita reports.
@@ -158,6 +164,14 @@ pub mod qobject {
         /// Change one mirror option, by the daemon's contract names.
         #[qinvokable]
         fn set_mirror_option(self: Pin<&mut DevicesModel>, key: QString, value: QString);
+
+        /// Open the daemon's pairing window and show its QR.
+        #[qinvokable]
+        fn start_pairing(self: Pin<&mut DevicesModel>);
+
+        /// Hide the QR; the daemon's window expires on its own.
+        #[qinvokable]
+        fn dismiss_pairing(self: Pin<&mut DevicesModel>);
     }
 
     impl cxx_qt::Threading for DevicesModel {}
@@ -209,6 +223,11 @@ pub struct DevicesModelRust {
     mirror_audio: QString,
     mirror_screen_off: bool,
     mirror_stay_awake: bool,
+    pairing_matrix: QString,
+    pairing_active: bool,
+    pairing_arrived: QString,
+    pairing_window: i32,
+    pairing_watch: Option<crate::pairing::Watch>,
     watch_started: bool,
     event_watch_started: bool,
     device_reload_in_flight: bool,
@@ -345,6 +364,7 @@ impl qobject::DevicesModel {
     ) {
         match result {
             Ok(devices) => {
+                self.as_mut().notice_pairing_arrival(&devices);
                 self.as_mut().apply_devices(devices);
                 self.as_mut().set_devices_available(true);
             }
@@ -841,6 +861,63 @@ impl qobject::DevicesModel {
         }
         self.as_mut()
             .enqueue_command(ClientCommand::MirrorPair(code));
+    }
+
+    pub fn start_pairing(mut self: Pin<&mut Self>) {
+        let known: Vec<String> = self
+            .rust()
+            .devices
+            .iter()
+            .filter(|device| device.paired)
+            .map(|device| device.id.clone())
+            .collect();
+        let qt = self.as_mut().qt_thread();
+        std::thread::spawn(move || {
+            let shown =
+                crate::devices::start_pairing().and_then(|uri| crate::pairing::matrix(&uri));
+            let _ = qt.queue(
+                move |mut model: Pin<&mut qobject::DevicesModel>| match shown {
+                    Ok(matrix) => {
+                        model.as_mut().rust_mut().pairing_watch = Some(
+                            crate::pairing::Watch::open(known.iter().map(String::as_str)),
+                        );
+                        model.as_mut().set_pairing_arrived(QString::default());
+                        model
+                            .as_mut()
+                            .set_pairing_window(crate::pairing::WINDOW_SECONDS);
+                        model.as_mut().set_pairing_matrix(QString::from(&matrix));
+                        model.as_mut().set_pairing_active(true);
+                    }
+                    Err(error) => eprintln!("magnetita: pairing window unavailable: {error}"),
+                },
+            );
+        });
+    }
+
+    pub fn dismiss_pairing(mut self: Pin<&mut Self>) {
+        self.as_mut().rust_mut().pairing_watch = None;
+        self.as_mut().set_pairing_active(false);
+        self.as_mut().set_pairing_matrix(QString::default());
+        self.as_mut().set_pairing_arrived(QString::default());
+    }
+
+    /// While a QR is up, the first newly paired device is the phone that
+    /// scanned it: the surface swaps the code for a confirmation.
+    fn notice_pairing_arrival(mut self: Pin<&mut Self>, devices: &[crate::devices::Device]) {
+        let Some(watch) = self.rust().pairing_watch.clone() else {
+            return;
+        };
+        let arrived = watch.arrived(
+            devices
+                .iter()
+                .filter(|device| device.paired)
+                .map(|device| (device.id.as_str(), device.name.as_str())),
+        );
+        if let Some(name) = arrived {
+            self.as_mut().rust_mut().pairing_watch = None;
+            self.as_mut().set_pairing_matrix(QString::default());
+            self.as_mut().set_pairing_arrived(QString::from(&name));
+        }
     }
 
     pub fn open_mount(self: Pin<&mut Self>, index: i32) {

@@ -27,6 +27,10 @@
 
 ## Current checkout truth
 
+- The desktop app shows the pairing QR: its pairing action arms the
+  daemon's window, draws the code, counts the two minutes down and names
+  the phone once it arrives (`MAG-P3-B`). A paired, connected own-wire
+  phone reads as connected, not connecting.
 - The S25U pairs with the daemon by scanning its QR, holds the session
   through screen off, app switch and Wi-Fi toggle, and rings on `Ring`;
   the daemon answers a QR proof from a phone it still pins, so a phone

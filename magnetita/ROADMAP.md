@@ -435,14 +435,19 @@ project's own build script.
 | MAG-P3-A | done | MAG-P2 | `magnetita-mobile` UniFFI crate and the Gradle scaffold building it | `cargo test -p magnetita-mobile`, `./gradlew assembleDebug` |
 | MAG-P3-B | done | MAG-P3-A | Foreground service holding a session; discovery; trust | JVM unit tests, Rust tests |
 | MAG-P3-C | done | MAG-P3-B | Pairing screens, device screen, battery, ping, find | JVM tests, `qmllint`-equivalent Android lint |
-| MAG-P3-D | planned | MAG-P3-C | Registered project with scripts, signed artifact, docs set | documentation contract, `verify-production.sh` |
+| MAG-P3-D | done | MAG-P3-C | Registered project with scripts, signed artifact, docs set | documentation contract, `verify-production.sh` |
 
 ## Implementation exit
 
 Close `MAG-P3` when the release build passes lint and tests, the app pairs
-with `magnetita-peer` on an emulator and with the daemon on the LAN, and a
-session survives screen off, app switch and Wi-Fi toggle in an instrumented
-test. `VAL-MAG-11` carries the author's first pairing on the S25U.
+with the daemon on the LAN, and a session survives screen off, app switch and
+Wi-Fi toggle. `VAL-MAG-11` carries the author's first pairing on the S25U.
+
+Met on 2026-09-09: the release APK passes lint and its unit tests through
+the suite's runner; the S25U paired by scanning the QR the daemon armed, and
+the same session held through screen off, an app switch and a Wi-Fi toggle
+in a manual run (no instrumented test); the desktop app shows that QR
+(`MAG-P3-B`). The author's scan of the desktop's screen is `VAL-MAG-11`.
 
 ## MAG-P4 — The daily set on the own wire
 

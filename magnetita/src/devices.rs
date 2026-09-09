@@ -205,6 +205,16 @@ pub fn request_pair(device_id: &str) -> Result<(), String> {
     call_method("RequestPair", device_id)
 }
 
+/// Arm the own wire's pairing window and get the text the QR shows.
+pub fn start_pairing() -> Result<String, String> {
+    let connection = Connection::session().map_err(|error| error.to_string())?;
+    let proxy =
+        Proxy::new(&connection, SERVICE, OBJECT, INTERFACE).map_err(|error| error.to_string())?;
+    proxy
+        .call("StartPairing", &())
+        .map_err(|error| error.to_string())
+}
+
 /// Ask Magnetita to drop the pairing (best-effort).
 pub fn unpair(device_id: &str) -> Result<(), String> {
     call_method("Unpair", device_id)

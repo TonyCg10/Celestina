@@ -84,7 +84,7 @@
 3	magnetita/qml/components/ConnectedDeviceCard.qml
 4	magnetita/qml/components/MediaCard.qml
 1	magnetita/qml/components/MediaProgress.qml
-2	magnetita/qml/pages/DevicesPage.qml
+1	magnetita/qml/pages/DevicesPage.qml
 2	magnetita/qml/pages/SettingsPage.qml
 3	magnetita/scripts/run.sh
 1	magnetita/scripts/smoke.sh

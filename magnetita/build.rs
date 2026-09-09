@@ -26,6 +26,7 @@ const QML_FILES: &[&str] = &[
     "qml/components/DeviceControls.qml",
     "qml/components/MirrorChoiceRow.qml",
     "qml/components/MirrorSettingsSheet.qml",
+    "qml/components/PairingSheet.qml",
     "qml/components/ActivityLog.qml",
     "qml/components/PairedDeviceRow.qml",
     "qml/components/PluginRow.qml",

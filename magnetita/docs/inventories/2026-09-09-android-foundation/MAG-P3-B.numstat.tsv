@@ -1,0 +1,39 @@
+# MAG-P3-B exact change inventory
+
+Base revision	04152cafb43d1ac777e6ad0c00eb4f87f0b464a0
+Pathspec	magnetita/Cargo.lock
+Pathspec	magnetita/Cargo.toml
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/build.rs
+Pathspec	magnetita/docs/evidence/2026-09-09-desktop-qr.md
+Pathspec	magnetita/docs/inventories/2026-09-09-android-foundation/MAG-P3-B.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-android-foundation.md
+Pathspec	magnetita/qml/components/PairingSheet.qml
+Pathspec	magnetita/qml/pages/DevicesPage.qml
+Pathspec	magnetita/src/controller.rs
+Pathspec	magnetita/src/devices.rs
+Pathspec	magnetita/src/main.rs
+Pathspec	magnetita/src/pairing.rs
+Pathspec	magnetita/src/projection.rs
+Pathspec	scripts/language-baseline.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+7	0	9f17508b74dd1b09649e3fcfd5e3c4154df1526ff1cc9c3ba9caca91d4f6ec73	magnetita/Cargo.lock
+1	0	7c7ba5645951f2af4725da5078b95d8f05cb5116920652678b248b21171d4896	magnetita/Cargo.toml
+9	4	9d0ba828d7aee88ba0a17475c13c76b2412bb1a0758afdffb81956e5280793d2	magnetita/ROADMAP.md
+4	0	c650637ca29e4cb5371f413b8cc1d0f73a6a060996b4f294284d30b5aabe56ec	magnetita/STATUS.md
+1	0	1ca826c7b2d3d1fd79ebffbfbcdc5bc1b16a32910017dc372d29884de17d7dfe	magnetita/build.rs
+66	0	13984a8d25691cb9b3bb0a49a6529c1891bbb6c548d53cdeb86e5de765151582	magnetita/docs/evidence/2026-09-09-desktop-qr.md
+39	0	self	magnetita/docs/inventories/2026-09-09-android-foundation/MAG-P3-B.numstat.tsv
+1	1	b7c693773cd9b5fee8d6d673e80ace49b433bcb60ed1a59916ec2629093f5a1d	magnetita/docs/plans/active/2026-09-09-android-foundation.md
+147	0	7860ac65854bc6c6399c59e060ea1565612a649e4da7664f2f8031d2b4703c6f	magnetita/qml/components/PairingSheet.qml
+38	4	68fa714c09f1d12116ad871b1f3dcdc51b507ff391f57a171151955f95b75cce	magnetita/qml/pages/DevicesPage.qml
+77	0	105bb83b14d0daf3ab0b152d9853bc175f403b9cf249f7a139d155ee90a15f89	magnetita/src/controller.rs
+10	0	034965ce06534377f2bfed3ec9accabc746eee6e91b5bd35d4748be4e5f218b2	magnetita/src/devices.rs
+1	0	0d69a08f0d8df2faa4d54c8483dbe866093e0581c6f68daa5ef1210ffed4eab7	magnetita/src/main.rs
+90	0	19c5f80e280225b88a3a738775b8c0899565f8905ee5bb819efa8c334c75cf4f	magnetita/src/pairing.rs
+4	0	48a2688445c030c86296718c0aa49906ce5c249e6b4dbd399e24363886059ed2	magnetita/src/projection.rs
+1	1	33fe59c109ca3bd48f88e3360072aa0fff59468a9e0235ef0637ab2086d59a25	scripts/language-baseline.tsv

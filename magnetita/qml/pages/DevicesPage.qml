@@ -4,6 +4,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Layouts
 import org.celestina.magnetita 1.0
 
 ScrollPage {
@@ -16,13 +17,46 @@ ScrollPage {
 
     spacing: 10
 
+    // Pairing over the own wire starts here, with or without a phone in the
+    // list: the QR is the way in, and the same action re-pairs a phone that
+    // forgot this desktop.
+    RowLayout {
+        width: parent.width
+        visible: root.devices.devicesAvailable && !root.devices.pairingActive
+        spacing: CelestinaTheme.spaceSm
+
+        Text {
+            Layout.fillWidth: true
+            visible: root.devices.deviceNames.length === 0
+            text: qsTr("Sin ningún teléfono. Vincula uno con su código.")
+            color: CelestinaTheme.textMuted
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: CelestinaTheme.fontRowTitle
+            wrapMode: Text.WordWrap
+        }
+
+        Item { Layout.fillWidth: true; visible: root.devices.deviceNames.length > 0 }
+
+        CelestinaIconButton {
+            iconName: "link"
+            density: CelestinaButton.Prominent
+            role: CelestinaButton.Primary
+            helpText: qsTr("Vincular un teléfono")
+            onClicked: root.devices.startPairing()
+        }
+    }
+
+    PairingSheet {
+        width: parent.width
+        visible: root.devices.pairingActive
+        devices: root.devices
+        onDismissRequested: root.devices.dismissPairing()
+    }
+
     Text {
         width: parent.width
         visible: !root.devices.devicesAvailable
-                 || root.devices.deviceNames.length === 0
-        text: root.devices.devicesAvailable
-              ? "Abre KDE Connect en tu móvil y empareja.\nEl servicio (magnetitad) mantiene la conexión."
-              : "El servicio Magnetita no está disponible."
+        text: "El servicio Magnetita no está disponible."
         color: CelestinaTheme.textMuted
         font.family: CelestinaTheme.sansFamily
         font.pixelSize: CelestinaTheme.fontRowTitle

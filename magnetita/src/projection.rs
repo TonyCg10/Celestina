@@ -56,9 +56,13 @@ pub(crate) fn next_toggle_value(confirmed: bool, pending: Option<bool>) -> bool 
     !pending.unwrap_or(confirmed)
 }
 
+/// The mount is the KDE Connect wire's last step; the own wire has none, so
+/// a paired, connected phone is simply connected.
 pub(crate) fn state_label(device: &Device) -> &'static str {
     if device.mounted {
         "montado"
+    } else if device.connected && device.paired {
+        "conectado"
     } else if device.connected {
         "conectando…"
     } else {

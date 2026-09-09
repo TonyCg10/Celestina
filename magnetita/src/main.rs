@@ -1,5 +1,6 @@
 mod controller;
 mod devices;
+mod pairing;
 mod projection;
 
 use cxx_qt_lib::{
