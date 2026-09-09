@@ -372,17 +372,20 @@ observation the author prefers for Siderita.
 
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
-| MAG-P2-A | active | MAG-P1 | Endpoint, trust, handshake deadline, streams, loopback tests | `cargo test -p magnetita-link` |
-| MAG-P2-B | planned | MAG-P2-A | Discovery both ways through Avahi | producer/consumer tests |
-| MAG-P2-C | planned | MAG-P2-B | The daemon hosts both wires; devices publish unchanged | daemon tests, `scripts/complete-production.sh` |
-| MAG-P2-D | planned | MAG-P2-C | `magnetita-peer` pairs, reconnects, migrates | loopback and LAN evidence |
+| MAG-P2-A | done | MAG-P1 | Endpoint, trust, handshake deadline, streams, loopback tests | [record](docs/evidence/2026-09-09-link-endpoint.md) |
+| MAG-P2-B | done | MAG-P2-A | Discovery both ways through Avahi | [record](docs/evidence/2026-09-09-link-discovery.md) |
+| MAG-P2-C | done | MAG-P2-B | The daemon hosts both wires; devices publish unchanged | [record](docs/evidence/2026-09-09-daemon-own-wire.md) |
+| MAG-P2-D | done | MAG-P2-C | `magnetita-peer` pairs, reconnects, migrates | [record](docs/evidence/2026-09-09-headless-peer.md) |
 
 ## Implementation exit
 
 Close `MAG-P2` when the peer pairs with the daemon on loopback and over the
 LAN from another host, a Forget revokes it durably, a migration keeps the
 session, and the KDE Connect phone still pairs and mounts as before under
-`scripts/complete-production.sh`.
+`scripts/complete-production.sh`. On 2026-09-09 every unit is implemented
+and the loopback half is proven in tests (`95a4cc8`); the LAN half and the
+production exit wait for the author to request the deployment, which the
+installed daemon has not received since `MAG-S1`.
 
 ## MAG-P3 — The Android application foundation
 

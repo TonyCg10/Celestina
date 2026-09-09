@@ -2,8 +2,12 @@
 
 - **Updated:** 2026-09-09
 - **Implementation:** `MAG-P2`, the link, is the active checkpoint since
-  2026-09-09: `magnetita-link` carries `magnetita-proto` over QUIC with
-  pinned certificates. `MAG-P1` is complete (`07e70c4`, `a071e39`):
+  2026-09-09 and every unit is implemented (`4011e53`, `95a4cc8`):
+  `magnetita-link` carries `magnetita-proto` over QUIC with pinned
+  certificates, `magnetitad` hosts the own wire next to KDE Connect on one
+  runtime thread with `StartPairing` on `Devices1`, and `magnetita-peer`
+  drives it from a shell. The checkpoint's LAN exit and the production
+  deployment wait for the author's request. `MAG-P1` is complete (`07e70c4`, `a071e39`):
   `magnetita-proto` holds the envelope, hello, pairing and the catalog of
   twelve capabilities, 63 tests, with [the wire document](docs/protocol.md). `MAG-P0`'s spikes
   are measured, closed and committed (`ad26b3e`). `MAG-S1` (hostile network input) and
