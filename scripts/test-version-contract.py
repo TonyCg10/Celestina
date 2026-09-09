@@ -456,6 +456,24 @@ class StagedTransitionTests(unittest.TestCase):
             "Register the Gamma version baseline",
         )
 
+    def test_suite_maintenance_accepts_an_unversioned_owner_adopting_a_baseline(self) -> None:
+        fixture = TransitionFixture()
+        fixture.index_registry["projects"][2]["versioned"] = True
+        fixture.index_registry["projects"][2]["version_source"] = {
+            "kind": "cargo-package",
+            "path": "library/Cargo.toml",
+            "package": "library",
+        }
+        fixture.blobs["HEAD"]["library/Cargo.toml"] = cargo_package("library", "0.1.0")
+        fixture.blobs["INDEX"]["library/Cargo.toml"] = cargo_package("library", "0.1.0")
+        fixture.changed_paths.add("docs/projects.toml")
+        with self.subTest(case="without a baseline"):
+            with self.assertRaises(contract.VersionContractError):
+                fixture.validate("suite-maintenance", "maintenance", "Adopt the library version")
+        fixture.append_history("library", contract.SemVer(0, 1, 0), "baseline", "ADOPT-L", "Adopt the Library version")
+        with self.subTest(case="with its baseline"):
+            fixture.validate("suite-maintenance", "maintenance", "Adopt the library version")
+
     def test_rejects_policy_or_existing_owner_config_self_change(self) -> None:
         fixture = TransitionFixture()
         fixture.index_registry["version_policy"]["history_file"] = "docs/other-history.tsv"

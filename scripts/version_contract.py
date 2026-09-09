@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import PurePosixPath
 import re
 import tomllib
@@ -625,12 +625,25 @@ def _validate_policy_addition(
         )
     head_owners = head.owner_map()
     index_owners = index.owner_map()
+    adopted: list[OwnerConfig] = []
     for owner, config in head_owners.items():
-        if index_owners.get(owner) != config:
+        after_config = index_owners.get(owner)
+        if after_config == config:
+            continue
+        # An unversioned owner may adopt a version: the only change is the
+        # source it now declares, and it needs a baseline like a new owner.
+        adopts = (
+            after_config is not None
+            and not config.versioned
+            and after_config.versioned
+            and replace(after_config, versioned=False, source=None, mirrors=()) == config
+        )
+        if not adopts:
             raise VersionRegistryError(
                 f'suite-maintenance cannot change or remove existing owner config "{owner}"'
             )
-    added = [owner for owner in index.owners if owner.owner not in head_owners]
+        adopted.append(after_config)
+    added = [owner for owner in index.owners if owner.owner not in head_owners] + adopted
     if not added:
         _validate_no_delta(head, index, before, after)
         return
