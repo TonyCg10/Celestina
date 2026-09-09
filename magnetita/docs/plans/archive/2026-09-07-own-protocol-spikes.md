@@ -1,8 +1,9 @@
 # MAG-P0 — Spikes that verify the accepted choices
 
 - **Opened:** 2026-09-07
+- **Closed:** 2026-09-09
 - **Plan ID:** own-protocol-spikes
-- **Status:** active
+- **Status:** done
 - **Authorization:** the author accepted
   [ADR 0001](../../decisions/0001-own-protocol-and-android-app.md) on
   2026-09-04 and said "inicia" on 2026-09-07, which moved the roadmap's single
@@ -10,6 +11,11 @@
 - **Scope:** magnetita
 - **Implementation checkpoint:** MAG-P0
 - **Author-validation checkpoint:** none
+- **Successor:** MAG-P1. The nest half of `MAG-P0-D` — pointer motion and a
+  typed sentence injected through `uinput` into the development nest — was
+  not measured because no nest was open during the checkpoint; it is the
+  exact proof `MAG-P5-B` requires and is delivered there, not as a dangling
+  unit here
 
 ## Hypothesis
 
@@ -75,8 +81,8 @@ the ADR's named *Revisit when* fallback before `MAG-P1` opens.
 ## Implementation exit
 
 Every evidence record carries its measurement, each discussion's conclusion
-cites its record, any fallback the numbers trigger is applied to ADR 0001,
-and `MAG-P0-G` has injected into the nest. The author judges the mirror and input numbers by reading them;
+cites its record, and any fallback the numbers trigger is applied to ADR 0001. Met on
+2026-09-09: no fallback was triggered. The author judges the mirror and input numbers by reading them;
 no `VAL-MAG` entry is opened because nothing here is installed or shipped.
 
 ## Change and commit ledger
@@ -89,7 +95,6 @@ no `VAL-MAG` entry is opened because nothing here is installed or shipped.
 | MAG-P0-D | `magnetita:` | done | [inventory](../../inventories/2026-09-07-own-protocol-spikes/MAG-P0-D.numstat.tsv) | 4 files, +240/-0 | `uinput` access, portal presence, device create/destroy | [record](../../evidence/2026-09-07-uinput-and-portal.md) | None |
 | MAG-P0-E | `magnetita:` | done | [inventory](../../inventories/2026-09-07-own-protocol-spikes/MAG-P0-E.numstat.tsv) | 4 files, +259/-0 | QR and typed pairing each pair once | [record](../../evidence/2026-09-08-qr-and-code-pairing.md) | None |
 | MAG-P0-F | `magnetita:` | done | [inventory](../../inventories/2026-09-07-own-protocol-spikes/MAG-P0-F.numstat.tsv) | 16 files, +1007/-149 | Conclusions cite records; no fallback triggered; program records pass the guards | [record](../../evidence/2026-09-09-spike-program-bookkeeping.md) | None |
-| MAG-P0-G | `magnetita:` | planned | `docs/evidence/` record | — | Pointer motion and a typed sentence injected through `uinput` into the development nest, never the live session | evidence record | None |
 
 `MAG-P0-A` through `-F` were measured on 2026-09-07 to 2026-09-09 and closed
-in one batch; `MAG-P0-G` waits for a running development nest.
+in one batch (`ad26b3e`).

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P0-B` of
-  [`../plans/active/2026-09-07-own-protocol-spikes.md`](../plans/active/2026-09-07-own-protocol-spikes.md);
+  [`../plans/archive/2026-09-07-own-protocol-spikes.md`](../plans/archive/2026-09-07-own-protocol-spikes.md);
   verifies the [mirror discussion](../discussions/2026-09-04-mirror-capture-path.md)
 - **Environment:** the phone, Wi-Fi and toolchain of
   [the QUIC phone record](2026-09-08-quic-on-the-phone.md). Phone: a

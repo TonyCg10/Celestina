@@ -1,12 +1,14 @@
 # Magnetita implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** MAG-P0
+- **Active implementation checkpoint:** MAG-P1
 - **Related author validation:** `VAL-MAG-01` through `VAL-MAG-08` in
   [VALIDATION.md](VALIDATION.md); they do not block implementation
 
-`MAG-P0` is executing under
-[its plan](docs/plans/active/2026-09-07-own-protocol-spikes.md). `MAG-S1`'s
+`MAG-P1` is executing under
+[its plan](docs/plans/active/2026-09-09-protocol-core.md). `MAG-P0` is done
+under [its archived plan](docs/plans/archive/2026-09-07-own-protocol-spikes.md).
+`MAG-S1`'s
 units are all done and committed under
 [its archived plan](docs/plans/archive/2026-08-05-network-input-hardening.md);
 its canonical production exit is still a pending deployment action recorded in
@@ -226,10 +228,10 @@ Plan: [mirror without discovery](docs/plans/archive/2026-08-19-mirror-without-di
 [ADR 0001](docs/decisions/0001-own-protocol-and-android-app.md) (accepted
 2026-09-04) turns Magnetita from a KDE Connect client into its own protocol
 with its own Android application. The program is eight checkpoints in
-dependency order. `MAG-P0` opened on 2026-09-07 under
-[its plan](docs/plans/active/2026-09-07-own-protocol-spikes.md). The
-[discussions](docs/discussions/README.md) are concluded and applied; `MAG-P0`
-verifies their choices.
+dependency order. `MAG-P0` ran from 2026-09-07 to 2026-09-09 under
+[its archived plan](docs/plans/archive/2026-09-07-own-protocol-spikes.md) and
+verified every choice the [discussions](docs/discussions/README.md) had
+concluded; no fallback was triggered. `MAG-P1` opened on 2026-09-09.
 
 ## MAG-P0 — Spikes that verify the accepted choices
 
@@ -266,19 +268,19 @@ cheaply, before a crate exists.
 
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
-| MAG-P0-A | planned | none | Rust QUIC core runs on the phone through UniFFI; latency and migration measured | dated evidence record |
-| MAG-P0-B | planned | MAG-P0-A | Own-app mirror latency measured on the S25U | dated evidence record |
-| MAG-P0-C | planned | none | Accessibility-service input latency measured | dated evidence record |
-| MAG-P0-D | planned | none | `uinput` and portal availability on the host, tested in the nest | dated evidence record |
-| MAG-P0-E | planned | MAG-P0-A | QR and typed pairing each pair once with no other input | dated evidence record |
-| MAG-P0-F | planned | A–E | Each evidence record cited from its discussion; any triggered fallback applied to the ADR | documentation contract |
+| MAG-P0-A | done | none | Rust QUIC core runs on the phone through UniFFI; latency and migration measured | [loopback](docs/evidence/2026-09-07-quic-loopback-latency.md), [phone](docs/evidence/2026-09-08-quic-on-the-phone.md) |
+| MAG-P0-B | done | MAG-P0-A | Own-app mirror latency measured on the S25U | [record](docs/evidence/2026-09-09-own-mirror-latency.md) |
+| MAG-P0-C | done | none | Accessibility-service input latency measured | [record](docs/evidence/2026-09-09-accessibility-input-latency.md) |
+| MAG-P0-D | done | none | `uinput` and portal availability on the host; nest injection deferred to `MAG-P5-B` | [record](docs/evidence/2026-09-07-uinput-and-portal.md) |
+| MAG-P0-E | done | MAG-P0-A | QR and typed pairing each pair once with no other input | [record](docs/evidence/2026-09-08-qr-and-code-pairing.md) |
+| MAG-P0-F | done | A–E | Each evidence record cited from its discussion; no fallback triggered | [record](docs/evidence/2026-09-09-spike-program-bookkeeping.md) |
 
 ## Implementation exit
 
-Close `MAG-P0` when every evidence record carries its measurement, each
-discussion's conclusion cites its record, and any fallback the numbers
-trigger is applied to ADR 0001. The author judges the mirror and input
-numbers; nothing else in this checkpoint needs the author.
+Closed on 2026-09-09: every record carries its measurement, every conclusion
+cites it, no fallback was triggered, and the author judged the mirror latency
+usable. The nest half of `MAG-P0-D` is delivered by `MAG-P5-B`, which needs
+exactly that proof.
 
 ## MAG-P1 — The protocol core, `magnetita-proto`
 
@@ -321,7 +323,7 @@ every oversized, malformed or out-of-capability input with a typed reason.
 
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
-| MAG-P1-A | planned | MAG-P0 | Envelope, hello, negotiation and the bound rule with golden vectors | `cargo test -p magnetita-proto` |
+| MAG-P1-A | active | MAG-P0 | Envelope, hello, negotiation and the bound rule with golden vectors | `cargo test -p magnetita-proto` |
 | MAG-P1-B | planned | MAG-P1-A | Pairing state machines for both roles, both paths | `cargo test -p magnetita-proto` |
 | MAG-P1-C | planned | MAG-P1-A | The daily-set catalog and the wire document | `cargo test -p magnetita-proto` |
 | MAG-P1-D | planned | MAG-P1-C | `commands`, `input` and `mirror` messages | `cargo test -p magnetita-proto` |

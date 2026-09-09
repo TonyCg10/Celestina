@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-07
 - **Scope:** `MAG-P0-D` of
-  [`../plans/active/2026-09-07-own-protocol-spikes.md`](../plans/active/2026-09-07-own-protocol-spikes.md);
+  [`../plans/archive/2026-09-07-own-protocol-spikes.md`](../plans/archive/2026-09-07-own-protocol-spikes.md);
   verifies the [input discussion](../discussions/2026-09-04-remote-input-on-wayland.md)
 - **Environment:** CachyOS, Linux 7.2.3, niri 26.04 (`8ed0da4`) as the live
   session, `xdg-desktop-portal` with the author's `portals.conf`; scratch

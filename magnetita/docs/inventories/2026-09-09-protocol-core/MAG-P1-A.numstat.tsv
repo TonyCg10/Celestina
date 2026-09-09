@@ -1,0 +1,53 @@
+# MAG-P1-A exact change inventory
+
+Base revision	5e2e22b94fcf2307ea1c92dea133be1d1b9df714
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/Cargo.toml
+Pathspec	celestina-rs/crates/magnetita-proto/Cargo.toml
+Pathspec	celestina-rs/crates/magnetita-proto/src/bound.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/envelope.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/error.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/hello.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/lib.rs
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/docs/evidence/2026-09-07-quic-loopback-latency.md
+Pathspec	magnetita/docs/evidence/2026-09-07-uinput-and-portal.md
+Pathspec	magnetita/docs/evidence/2026-09-08-qr-and-code-pairing.md
+Pathspec	magnetita/docs/evidence/2026-09-08-quic-on-the-phone.md
+Pathspec	magnetita/docs/evidence/2026-09-09-accessibility-input-latency.md
+Pathspec	magnetita/docs/evidence/2026-09-09-own-mirror-latency.md
+Pathspec	magnetita/docs/evidence/2026-09-09-protocol-envelope-and-hello.md
+Pathspec	magnetita/docs/evidence/2026-09-09-spike-program-bookkeeping.md
+Pathspec	magnetita/docs/inventories/2026-09-09-protocol-core/MAG-P1-A.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-07-own-protocol-spikes.md
+Pathspec	magnetita/docs/plans/active/2026-09-09-protocol-core.md
+Pathspec	magnetita/docs/plans/active/README.md
+Pathspec	magnetita/docs/plans/archive/2026-09-07-own-protocol-spikes.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+101	0	6c1f0671f5cd8443d76a7dd6af09e9f873202b6eaa6b779cc6a8133b42a0ebe7	celestina-rs/Cargo.lock
+9	0	baff97656f005b33c8430851a5096277ebc2ce30c1eee219532ba97ca30928af	celestina-rs/Cargo.toml
+17	0	e5cfbfc63d72e28b45b326fe055505b013c7415f92677558231fcb936c9bcc23	celestina-rs/crates/magnetita-proto/Cargo.toml
+192	0	9e1ebc08d5c6d611e3c0875209d4668e79874c00ad20504a59e4f2f70b83420e	celestina-rs/crates/magnetita-proto/src/bound.rs
+254	0	8f43302c669957b999d05f77bc203ff9e659f3118632bdee7b03d9faf306b751	celestina-rs/crates/magnetita-proto/src/envelope.rs
+62	0	984f04db421fe10609257aa8235c1874c84f735eca6fffdd3bc624695198d41e	celestina-rs/crates/magnetita-proto/src/error.rs
+332	0	e52ae586919aab4fdf73751c3934b60bc7df055fd7b598243ead8656b41c32c7	celestina-rs/crates/magnetita-proto/src/hello.rs
+38	0	df43887796ac6d25b827a5a06bd407e8bd167534fdd991fc7331fd074d3a5289	celestina-rs/crates/magnetita-proto/src/lib.rs
+20	18	588f28a635df9c700ccebba8657e2ebd3337739eaee5f48606796899b2e5372c	magnetita/ROADMAP.md
+8	6	5700034439f6779f2a9dcc8f1564e8d5803105ad6a5f2b616a020062b4310b9a	magnetita/STATUS.md
+1	1	a526f8dfc16d6da8caaceab9062d7098ba5cb038f70c3407a13ff61559f86e9f	magnetita/docs/evidence/2026-09-07-quic-loopback-latency.md
+1	1	c4d049846f8d261b6b70ebb159fe5b865839054c05fbcd0e0fc4c5a68bbb28a8	magnetita/docs/evidence/2026-09-07-uinput-and-portal.md
+1	1	9e5b4566e775352126745615dcdcd861d17f278534993744e5900f995ffeb052	magnetita/docs/evidence/2026-09-08-qr-and-code-pairing.md
+1	1	871a385bb7e7cc2ebe3460151fd8b825b8b20ccda96cf9540e009b4fe505397e	magnetita/docs/evidence/2026-09-08-quic-on-the-phone.md
+1	1	bce6fedf7aa73ddf433cb570e9e3edc804a4e9048229cb77f79acb4df20467d3	magnetita/docs/evidence/2026-09-09-accessibility-input-latency.md
+1	1	77799faa2fac6b80921b365254206c53203dff7eeabf11c84882692930d57d17	magnetita/docs/evidence/2026-09-09-own-mirror-latency.md
+63	0	3e6acd5c182a4bdf634cca47e1640799bc5dc0d5c2832f24145059ac215cdf5a	magnetita/docs/evidence/2026-09-09-protocol-envelope-and-hello.md
+1	1	21dfab703f95edd4f09324c7f9df01b1dbdcfef9a0aa59897c68d84848e27d97	magnetita/docs/evidence/2026-09-09-spike-program-bookkeeping.md
+53	0	self	magnetita/docs/inventories/2026-09-09-protocol-core/MAG-P1-A.numstat.tsv
+0	95	deleted	magnetita/docs/plans/active/2026-09-07-own-protocol-spikes.md
+71	0	58cb7a67ff8c0b2bcdf93d2bcc73754a0a057998ab0f285a485c155dc9d9ebd9	magnetita/docs/plans/active/2026-09-09-protocol-core.md
+5	4	1fb44ff5bd55fcd9b6437e61e27a9b4c01a9e14c11af23bd165d009609d9641a	magnetita/docs/plans/active/README.md
+100	0	d316276e2fd64d9304a5d91f6327264ad29f553acea9d382f61e919c32e1f233	magnetita/docs/plans/archive/2026-09-07-own-protocol-spikes.md

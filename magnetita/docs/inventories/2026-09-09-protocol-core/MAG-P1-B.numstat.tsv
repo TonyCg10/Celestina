@@ -1,0 +1,15 @@
+# MAG-P1-B exact change inventory
+
+Base revision	5e2e22b94fcf2307ea1c92dea133be1d1b9df714
+Pathspec	celestina-rs/crates/magnetita-proto/src/pair.rs
+Pathspec	magnetita/docs/evidence/2026-09-09-protocol-pairing.md
+Pathspec	magnetita/docs/inventories/2026-09-09-protocol-core/MAG-P1-B.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-protocol-core.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+791	0	a16b515f8f817a5ad75768ea25ed6381b3637e2c7c6ba1dae8f12cbd2b0e5e98	celestina-rs/crates/magnetita-proto/src/pair.rs
+66	0	01548fe75128e19a30e37c40d117a2bf69958c76a0654282a149956fc4d80d2b	magnetita/docs/evidence/2026-09-09-protocol-pairing.md
+15	0	self	magnetita/docs/inventories/2026-09-09-protocol-core/MAG-P1-B.numstat.tsv
+71	0	58cb7a67ff8c0b2bcdf93d2bcc73754a0a057998ab0f285a485c155dc9d9ebd9	magnetita/docs/plans/active/2026-09-09-protocol-core.md

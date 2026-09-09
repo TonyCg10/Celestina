@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P0-F` of
-  [`../plans/active/2026-09-07-own-protocol-spikes.md`](../plans/active/2026-09-07-own-protocol-spikes.md):
+  [`../plans/archive/2026-09-07-own-protocol-spikes.md`](../plans/archive/2026-09-07-own-protocol-spikes.md):
   ADR 0001, its five discussions, the roadmap checkpoints `MAG-P0`–`MAG-P7`,
   the archived `MAG-S1` plan, and the README/STATUS rewrite
 - **Environment:** the repository at the base revision of this unit's

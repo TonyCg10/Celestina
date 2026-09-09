@@ -1,0 +1,17 @@
+[package]
+name = "magnetita-proto"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "GPL-3.0-or-later"
+
+[dependencies]
+minicbor.workspace = true
+# HMAC-SHA256 for the pairing proofs and SHA-256 fingerprints, from the same
+# backend the link already pins (magnetita-net).
+ring = "0.17"
+spake2.workspace = true
+rand_core.workspace = true
+
+[lints]
+workspace = true

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-08
 - **Scope:** `MAG-P0-A` of
-  [`../plans/active/2026-09-07-own-protocol-spikes.md`](../plans/active/2026-09-07-own-protocol-spikes.md);
+  [`../plans/archive/2026-09-07-own-protocol-spikes.md`](../plans/archive/2026-09-07-own-protocol-spikes.md);
   verifies the [transport discussion](../discussions/2026-09-04-transport-quic-or-tcp.md)
   and the desktop half in
   [the loopback record](2026-09-07-quic-loopback-latency.md)

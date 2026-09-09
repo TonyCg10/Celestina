@@ -1,8 +1,9 @@
 # Magnetita status
 
-- **Updated:** 2026-09-07
-- **Implementation:** `MAG-P0`, the own-protocol program's spikes, is the
-  active checkpoint since 2026-09-07. `MAG-S1` (hostile network input) and
+- **Updated:** 2026-09-09
+- **Implementation:** `MAG-P1`, the own protocol's pure core crate, is the
+  active checkpoint since 2026-09-09; `MAG-P0`'s spikes are measured, closed
+  and committed (`ad26b3e`). `MAG-S1` (hostile network input) and
   `MAG-R1` (the one-button wireless mirror) are delivered, committed and
   deployed; `MAG-S1`'s plan is archived with its canonical production exit
   still pending as a deployment action. `MAG-R2` (the mirror without
@@ -85,8 +86,8 @@
 
 `MAG-S1`'s canonical production exit (`scripts/complete-production.sh` and
 the shell's, because `magnetita-core` changed) is still unrequested; it is a
-pending deployment action, not a technical blocker. `MAG-P0`'s phone-side
-spikes need host tooling the author must install (see the active plan). No other
+pending deployment action, not a technical blocker. `MAG-P1` has no
+external blocker. No other
 implementation blocker is recorded. The real phone/network is required only
 for the independent validation queue.
 
@@ -114,7 +115,8 @@ its refusals are proven, the delivery of a file to a phone is not. See the
 ## Records
 
 - [Implementation roadmap](ROADMAP.md)
-- [Active plan MAG-P0](docs/plans/active/2026-09-07-own-protocol-spikes.md)
+- [Active plan MAG-P1](docs/plans/active/2026-09-09-protocol-core.md)
+- [Archived plan MAG-P0](docs/plans/archive/2026-09-07-own-protocol-spikes.md)
 - [Archived plan MAG-S1](docs/plans/archive/2026-08-05-network-input-hardening.md)
 - [Author validation](VALIDATION.md)
 - [Registry entry](../docs/projects.toml)

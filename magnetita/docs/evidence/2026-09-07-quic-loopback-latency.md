@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-07
 - **Scope:** `MAG-P0-A` of
-  [`../plans/active/2026-09-07-own-protocol-spikes.md`](../plans/active/2026-09-07-own-protocol-spikes.md);
+  [`../plans/archive/2026-09-07-own-protocol-spikes.md`](../plans/archive/2026-09-07-own-protocol-spikes.md);
   verifies the [transport discussion](../discussions/2026-09-04-transport-quic-or-tcp.md)
 - **Environment:** CachyOS, Linux 7.2.3, distro `rust 1.98.1`; scratch crate
   in the session scratch directory (deleted with the session): `quinn 0.11.11`

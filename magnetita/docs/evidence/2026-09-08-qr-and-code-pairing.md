@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-08
 - **Scope:** `MAG-P0-E` of
-  [`../plans/active/2026-09-07-own-protocol-spikes.md`](../plans/active/2026-09-07-own-protocol-spikes.md);
+  [`../plans/archive/2026-09-07-own-protocol-spikes.md`](../plans/archive/2026-09-07-own-protocol-spikes.md);
   verifies the [pairing discussion](../discussions/2026-09-04-pairing-qr-or-code.md)
 - **Environment:** the phone and toolchain of
   [the QUIC phone record](2026-09-08-quic-on-the-phone.md); scratch desktop
