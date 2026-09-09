@@ -206,8 +206,8 @@ roadmap = "magnetita/ROADMAP.md"
 validation = "magnetita/VALIDATION.md"
 active_plans = "magnetita/docs/plans/active"
 context_documents = ["celestina-style/DESIGN.md"]
-source_roots = ["magnetita/src", "magnetita/qml", "celestina-rs/crates/magnetita-core", "celestina-rs/crates/magnetita-net", "celestina-rs/crates/magnetitad", "celestina-rs/crates/magnetita-proto", "celestina-rs/crates/magnetita-link", "celestina-rs/crates/magnetita-peer"]
-commit_roots = ["magnetita/", "celestina-rs/crates/magnetita-core/", "celestina-rs/crates/magnetita-net/", "celestina-rs/crates/magnetitad/", "celestina-rs/crates/magnetita-proto/", "celestina-rs/crates/magnetita-link/", "celestina-rs/crates/magnetita-peer/"]
+source_roots = ["magnetita/src", "magnetita/qml", "celestina-rs/crates/magnetita-core", "celestina-rs/crates/magnetita-net", "celestina-rs/crates/magnetitad", "celestina-rs/crates/magnetita-proto", "celestina-rs/crates/magnetita-link", "celestina-rs/crates/magnetita-peer", "celestina-rs/crates/magnetita-mobile"]
+commit_roots = ["magnetita/", "celestina-rs/crates/magnetita-core/", "celestina-rs/crates/magnetita-net/", "celestina-rs/crates/magnetitad/", "celestina-rs/crates/magnetita-proto/", "celestina-rs/crates/magnetita-link/", "celestina-rs/crates/magnetita-peer/", "celestina-rs/crates/magnetita-mobile/"]
 include_workspace_manifests = true
 production_role = "desktop-application-and-user-daemon"
 deployable = true
@@ -226,8 +226,36 @@ component_commit_scopes = [
   { prefix = "magnetita-proto", roots = ["celestina-rs/crates/magnetita-proto/"], include_workspace_manifests = true },
   { prefix = "magnetita-link", roots = ["celestina-rs/crates/magnetita-link/"], include_workspace_manifests = true },
   { prefix = "magnetita-peer", roots = ["celestina-rs/crates/magnetita-peer/"], include_workspace_manifests = true },
+  { prefix = "magnetita-mobile", roots = ["celestina-rs/crates/magnetita-mobile/"], include_workspace_manifests = true },
   { prefix = "magnetitad", roots = ["celestina-rs/crates/magnetitad/"], include_workspace_manifests = true },
 ]
+
+[[projects]]
+id = "magnetita-android"
+name = "Magnetita Android"
+path = "magnetita-android"
+kind = "android-application"
+commit_prefix = "magnetita-android"
+# Gradle declares the version; the version tool does not read Gradle yet, so
+# the project is registered unversioned until AND-1-D adds that reading.
+versioned = false
+agents = "magnetita-android/AGENTS.md"
+readme = "magnetita-android/README.md"
+status = "magnetita-android/STATUS.md"
+roadmap = "magnetita-android/ROADMAP.md"
+validation = "magnetita-android/VALIDATION.md"
+active_plans = "magnetita-android/docs/plans/active"
+context_documents = ["magnetita-android/DESIGN.md", "magnetita/docs/protocol.md"]
+source_roots = ["magnetita-android/app/src", "magnetita-android/scripts"]
+commit_roots = ["magnetita-android/"]
+include_workspace_manifests = false
+production_role = "android-application"
+deployable = false
+build_script = "magnetita-android/scripts/build-production.sh"
+verify_script = "magnetita-android/scripts/verify-production.sh"
+status_script = "magnetita-android/scripts/status-production.sh"
+artifact_manifest = "magnetita-android/app/build/outputs/apk/debug/output-metadata.json"
+artifact_paths = ["magnetita-android/app/build/outputs/apk/debug/app-debug.apk"]
 
 [[projects]]
 id = "grafita"

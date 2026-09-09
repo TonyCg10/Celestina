@@ -718,9 +718,10 @@ They are chosen tools, recorded here so a later audit does not read them as
 orphans.
 
 Component: `rustup` 1.29.1 (replaces the distribution `rust` package) with
-the `stable` toolchain, the `aarch64-linux-android` target, and the pinned
-`1.97.1` toolchain that `celestina-rs/rust-toolchain.toml` selects inside the
-repository
+the `stable` toolchain, the `aarch64-linux-android` target on both `stable`
+and the pinned `1.97.1` toolchain that `celestina-rs/rust-toolchain.toml`
+selects inside the repository (the target was added to `1.97.1` on
+2026-09-09 so `cargo ndk` works from inside the workspace)
 
 Observed role: The only way to cross-compile the `magnetita-mobile` core for
 the phone; the repository's own builds keep using the pinned toolchain.
