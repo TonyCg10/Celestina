@@ -383,9 +383,11 @@ Close `MAG-P2` when the peer pairs with the daemon on loopback and over the
 LAN from another host, a Forget revokes it durably, a migration keeps the
 session, and the KDE Connect phone still pairs and mounts as before under
 `scripts/complete-production.sh`. On 2026-09-09 every unit is implemented
-and the loopback half is proven in tests (`95a4cc8`); the LAN half and the
-production exit wait for the author to request the deployment, which the
-installed daemon has not received since `MAG-S1`.
+(`95a4cc8`), the daemon was deployed by `scripts/complete-production.sh` and
+the headless peer paired, reported, was rung and was forgotten against it
+on the real interface — see
+[the deployed record](docs/evidence/2026-09-09-own-wire-deployed.md). What
+is still owed is the run from another host with a migration observed.
 
 ## MAG-P3 — The Android application foundation
 

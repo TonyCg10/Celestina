@@ -6,8 +6,10 @@
   `magnetita-link` carries `magnetita-proto` over QUIC with pinned
   certificates, `magnetitad` hosts the own wire next to KDE Connect on one
   runtime thread with `StartPairing` on `Devices1`, and `magnetita-peer`
-  drives it from a shell. The checkpoint's LAN exit and the production
-  deployment wait for the author's request. `MAG-P1` is complete (`07e70c4`, `a071e39`):
+  drives it from a shell. Deployed on 2026-09-09 and exercised end to
+  end by the peer against the live daemon; only the run from another host
+  is owed. `MAG-S1`'s pending production exit was carried by the same
+  deployment. `MAG-P1` is complete (`07e70c4`, `a071e39`):
   `magnetita-proto` holds the envelope, hello, pairing and the catalog of
   twelve capabilities, 63 tests, with [the wire document](docs/protocol.md). `MAG-P0`'s spikes
   are measured, closed and committed (`ad26b3e`). `MAG-S1` (hostile network input) and
@@ -91,10 +93,10 @@
 
 ## Blockers
 
-`MAG-S1`'s canonical production exit (`scripts/complete-production.sh` and
-the shell's, because `magnetita-core` changed) is still unrequested; it is a
-pending deployment action, not a technical blocker. `MAG-P1` has no
-external blocker. No other
+No implementation blocker is recorded. The installed daemon carries
+everything committed through `3419cff`; `celestina/scripts/complete-production.sh`
+is still owed for the shell bundle's copy of `magnetita-core`, unchanged since
+`MAG-S1`. No other
 implementation blocker is recorded. The real phone/network is required only
 for the independent validation queue.
 
