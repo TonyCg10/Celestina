@@ -140,3 +140,4 @@ celestina-style	1.8.7	bug	FEEDBACK-5-STY	Fix the press that went darker grey ins
 siderita	1.5.9	bug	FEEDBACK-5-SID	Fix the blank path pill after search and put the sidebar on the accent ramp
 siderita	1.5.10	bug	FEEDBACK-6-SID	Fix the arrow cursor over every editor and the search glyph that closed and reopened
 siderita	1.5.11	bug	FEEDBACK-7-SID	Fix the path editor whose sweep never selected
+siderita	1.5.12	bug	FEEDBACK-8-SID	Fix the mouse side buttons that stopped navigating

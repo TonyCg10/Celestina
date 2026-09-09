@@ -50,7 +50,9 @@ corrective implementation unit.
   in editing mode; a click on the search glass beside the magnifier focuses
   the search; the pointer is an I-beam over the pill and a hand over an
   ancestor crumb *before* any click; with the search open and empty, one
-  click on the magnifier closes it and it stays closed
+  click on the magnifier closes it and it stays closed; the mouse's side
+  buttons navigate Back and Forward over the file view, over the sidebar and
+  over the floating chrome, in the main window and in the file chooser
 - **Result:** not run by hand
 - **Evidence:** any state in which the caret landed away from the pointer, a
   sweep failed to select, the pill went blank, or the pointer stayed an arrow

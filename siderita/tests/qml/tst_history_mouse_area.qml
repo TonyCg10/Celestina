@@ -33,42 +33,51 @@ TestCase {
         onForwardRequested: testCase.forwardRequests++
     }
 
-    // The real arrangement: the history area lies *under* the content, and the
-    // content above it takes only the ordinary buttons. A Back press that
-    // content refuses must fall through to it.
+    // The real arrangement: the history area lies *above* the content, which
+    // takes only the ordinary buttons. Both halves matter — Back must reach
+    // the area, and an ordinary click must still reach the content under it.
+    // Sinking the area below the content instead looks equivalent and is not:
+    // in the real window it then received no Back press at all.
     Item {
-        id: underneathScene
+        id: layeredScene
         x: 0
         y: 120
         width: 240
         height: 40
-        // Above the window-wide area of the other tests, so this scene owns
-        // the presses inside it.
         z: 2
 
-        HistoryMouseArea {
-            id: underneath
-            anchors.fill: parent
-            z: -1
-            canGoBack: true
-            canGoForward: true
-            onBackRequested: testCase.underneathBacks++
-        }
-
         MouseArea {
+            id: layeredContent
             anchors.fill: parent
             acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
             hoverEnabled: true
             cursorShape: Qt.IBeamCursor
+            onClicked: testCase.layeredContentClicks++
+        }
+
+        HistoryMouseArea {
+            id: onTop
+            anchors.fill: parent
+            z: 1000
+            canGoBack: true
+            canGoForward: true
+            onBackRequested: testCase.layeredBacks++
         }
     }
-    property int underneathBacks: 0
+    property int layeredBacks: 0
+    property int layeredContentClicks: 0
 
-    function test_back_falls_through_content_to_the_area_underneath() {
-        underneathBacks = 0
-        mouseClick(underneathScene, 120, 20, Qt.BackButton)
-        compare(underneathBacks, 1)
+    function test_back_reaches_an_area_above_the_content() {
+        layeredBacks = 0
+        mouseClick(layeredScene, 120, 20, Qt.BackButton)
+        compare(layeredBacks, 1)
         compare(backRequests, 0, "the press leaked past the scene")
+    }
+
+    function test_an_ordinary_click_still_reaches_the_content_below_it() {
+        layeredContentClicks = 0
+        mouseClick(layeredScene, 120, 20, Qt.LeftButton)
+        compare(layeredContentClicks, 1)
     }
 
     function init() {

@@ -9,6 +9,16 @@
 
 ## Current checkout truth
 
+- Delivered as `1.5.12`: `FEEDBACK-8-SID`, the mouse's Back and Forward
+  buttons, which `FEEDBACK-6` had broken by sinking the window-wide history
+  area under the content on two mistaken beliefs: that a `MouseArea` always
+  imposes a cursor (it owns one only when `cursorShape` is assigned, and this
+  one never assigns it) and that a press nothing accepts falls through to it
+  (measured: at `z: -1` it received no Back press at all). Both areas are back
+  on top, the comments record the measurement, and the test that had guarded
+  the defect is replaced by one mirroring the real window. See
+  [the record](../docs/evidence/2026-09-08-the-side-buttons-that-stopped-navigating.md).
+
 - Delivered as `1.5.11`: `FEEDBACK-7-SID`. The path editor's sweep never
   selected: the pill's input shield took the drag from the text input on the
   first pixel. While editing, the pill's own handler claims the sweep and grows

@@ -438,12 +438,11 @@ Window {
     // Los botones laterales del ratón navegan, igual que en la ventana
     // principal: un diálogo de archivos se recorre con la mano en el ratón, y
     // el gesto ya existe en el resto de la aplicación.
-    // Under the content, as in the main window: on top, its default arrow
-    // cursor hid every I-beam and hand; underneath, it still receives the
-    // Back/Forward presses nothing above accepts.
+    // On top, as in the main window, and for the reason recorded there: an
+    // area sunk under the content never receives the presses at all.
     HistoryMouseArea {
         anchors.fill: parent
-        z: -1
+        z: 9999
         // The overwrite prompt is modal: Back/Forward must not navigate the
         // folder it is asking about.
         blocked: controller.loading || overwritePrompt.visible

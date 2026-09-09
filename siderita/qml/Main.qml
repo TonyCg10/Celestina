@@ -555,16 +555,21 @@ ApplicationWindow {
     }
 
     // Back/Forward are window actions: they work over the sidebar, the file
-    // view and floating chrome alike. It sits *under* the content, not over
-    // it: a MouseArea always imposes a cursor, and on top of the window at
-    // z 1000 that was an arrow over every I-beam and every hand in the
-    // application — the path editor never showed its I-beam. Underneath, it
-    // still receives every Back/Forward press, because nothing above accepts
-    // those buttons and a refused press falls through. Local modal state
-    // disables it explicitly.
+    // view and floating chrome alike, so this sits above all of it. Popup.Item
+    // overlays remain above this content layer, and local modal state disables
+    // it explicitly.
+    //
+    // It must stay on top. Sinking it under the content on the theory that a
+    // press no item accepts falls through to it does not hold in this window:
+    // driven with real Back presses over the file view and over the sidebar,
+    // an area at `z: -1` received neither and navigation by mouse died. Being
+    // on top costs nothing — it takes only Back and Forward, so every ordinary
+    // click still reaches the controls below, and it owns no cursor, because a
+    // MouseArea takes one only when `cursorShape` is assigned and this never
+    // assigns it, so it cannot hide the I-beam of a field beneath it.
     HistoryMouseArea {
         anchors.fill: parent
-        z: -1
+        z: 1000
         blocked: !window.activeDocument
                  || window.activeDocument.navigationBlocked
         canGoBack: window.activeDocument
