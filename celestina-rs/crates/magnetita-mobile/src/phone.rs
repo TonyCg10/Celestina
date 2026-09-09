@@ -12,6 +12,7 @@ use magnetita_link::{
     TrustedPeer,
 };
 use magnetita_proto::daily::battery::BatteryStatus;
+use magnetita_proto::daily::clipboard::ClipboardText;
 use magnetita_proto::pair::{kind as pair_kind, Fingerprint, Pinned, QrPairing, QrPayload};
 use magnetita_proto::{capability, CapabilityVersion, DeviceKind, Envelope, Hello};
 
@@ -195,6 +196,21 @@ impl PhoneSession {
         Ok(())
     }
 
+    /// Sends the phone's clipboard text; the desktop writes it to its own.
+    pub async fn send_clipboard(&self, text: &str) -> Result<(), LinkError> {
+        self.session
+            .send_message(
+                capability::CLIPBOARD,
+                ClipboardText::KIND,
+                ClipboardText {
+                    text: text.to_owned(),
+                }
+                .encode(),
+            )
+            .await?;
+        Ok(())
+    }
+
     /// Waits for the next envelope, up to `timeout`; `None` on timeout.
     pub async fn next(&self, timeout: Duration) -> Result<Option<Envelope>, LinkError> {
         match tokio::time::timeout(timeout, self.session.recv()).await {
@@ -208,12 +224,23 @@ impl PhoneSession {
     }
 }
 
+/// The text a clipboard envelope carries, once decoded by the protocol crate.
+pub fn clipboard_text(env: &Envelope) -> Option<String> {
+    if env.capability == capability::CLIPBOARD && env.kind == ClipboardText::KIND {
+        ClipboardText::decode(&env.body).ok().map(|c| c.text)
+    } else {
+        None
+    }
+}
+
 /// One line per envelope, for a shell or a log.
 pub fn describe(env: &Envelope) -> String {
     match (env.capability, env.kind) {
         (capability::FIND, 1) => "find: ring".into(),
         (capability::FIND, 2) => "find: stop".into(),
         (capability::BATTERY, 2) => "battery: requested".into(),
+        (capability::CLIPBOARD, 1) => format!("clipboard: {} bytes", env.body.len()),
+        (capability::CLIPBOARD, 2) => "clipboard: requested".into(),
         (cap, kind) => format!("capability {cap} kind {kind}, {} bytes", env.body.len()),
     }
 }

@@ -1,0 +1,45 @@
+# MAG-P4-A exact change inventory
+
+Base revision	b6180b7ee26efd5447c5aecc5aed44ee03164710
+Pathspec	celestina-rs/crates/magnetita-mobile/src/mobile.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/phone.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/main.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_commands.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/VALIDATION.md
+Pathspec	magnetita/docs/evidence/2026-09-09-clipboard-own-wire.md
+Pathspec	magnetita/docs/evidence/2026-09-09-desktop-qr.md
+Pathspec	magnetita/docs/evidence/2026-09-09-mobile-crate.md
+Pathspec	magnetita/docs/evidence/2026-09-09-phone-pairs-again.md
+Pathspec	magnetita/docs/inventories/2026-09-09-daily-set/MAG-P4-A.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-android-foundation.md
+Pathspec	magnetita/docs/plans/active/2026-09-09-daily-set.md
+Pathspec	magnetita/docs/plans/active/README.md
+Pathspec	magnetita/docs/plans/archive/2026-09-09-android-foundation.md
+Pathspec	magnetita/docs/plans/archive/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+9	1	17297819c58a707ba1b39194a797eb479e2e77e8bf6baf1637fbb00e5ac45d4f	celestina-rs/crates/magnetita-mobile/src/mobile.rs
+27	0	cbc0d5d0fe45c0737dd26c27d90c0b55cb6e9db3e0145462b45d50870ae533cd	celestina-rs/crates/magnetita-mobile/src/phone.rs
+1	1	57bba7bfcedbb0c74aabc749deca0030f8bea01b7fc0ee47cfd7f5a976e6dbfb	celestina-rs/crates/magnetita-peer/src/lib.rs
+11	4	3a6254b61315042da6795df3dfc856e8eefe4761dd2667b522611bba2564bfe7	celestina-rs/crates/magnetita-peer/src/main.rs
+1	1	c27e9a34d7b2caf250281b5a5b70db9d643148d6d97659869c7e619f4389b9dc	celestina-rs/crates/magnetitad/src/link_commands.rs
+159	5	572ec9630facca47ceeba42c531341275b5cc0652e727a3ce98d052c527596d5	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+7	5	f1d8723a7fc6787e6304216b4f770e74d08691c3301f2315fbb01d898f6e249a	magnetita/ROADMAP.md
+10	3	272a7ee0e33d72ce235303a7f1c43afae285f7d11940a3d9c149661436e7ecf8	magnetita/STATUS.md
+16	0	e3b84eaabc356103ea6161fb821d83dafc1593cbc1ae72de00f1c652e8730b52	magnetita/VALIDATION.md
+62	0	191262ca838f2ed5cf9381fd7910730bc40ac38cffd95a2858700699f046ecdc	magnetita/docs/evidence/2026-09-09-clipboard-own-wire.md
+1	1	b7e6cf6c76896b754076566266281eb88420d1342de5c3ffed4d7de22469df10	magnetita/docs/evidence/2026-09-09-desktop-qr.md
+1	1	1a1642d38073e2029329933c344ec6055ddb80479d83d3a721cc5e902ab124c0	magnetita/docs/evidence/2026-09-09-mobile-crate.md
+1	1	4640c856c60eb04b4774795ed550ee961ebd5485434412aa9c3ab9ea8625364e	magnetita/docs/evidence/2026-09-09-phone-pairs-again.md
+45	0	self	magnetita/docs/inventories/2026-09-09-daily-set/MAG-P4-A.numstat.tsv
+0	58	deleted	magnetita/docs/plans/active/2026-09-09-android-foundation.md
+65	0	412169e3fb9df91ee82ceb168059fdb1459aa19ccd189ec342576ae60a31323d	magnetita/docs/plans/active/2026-09-09-daily-set.md
+4	2	7befb1773077f8640c23c0d50eafcbcf4a6ee28668ac7febbe3837f4769754cc	magnetita/docs/plans/active/README.md
+60	0	0b83817e06f2eb70c51566793f1f7df736177519fbda14ef35d14b224c278be9	magnetita/docs/plans/archive/2026-09-09-android-foundation.md
+1	0	954e4a7c91ba4eabaf525189890f9ed6425f32293efc07da3c4cb3e20164f032	magnetita/docs/plans/archive/README.md

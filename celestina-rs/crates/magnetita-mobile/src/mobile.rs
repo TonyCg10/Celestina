@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use magnetita_link::trust::fingerprint_text;
 
-use crate::phone::{describe, Phone, PhoneSession};
+use crate::phone::{clipboard_text, describe, Phone, PhoneSession};
 
 /// Why a call failed, as Kotlin sees it.
 #[derive(Debug, uniffi::Error)]
@@ -60,6 +60,8 @@ pub struct Event {
     pub kind: u16,
     pub description: String,
     pub body: Vec<u8>,
+    /// The clipboard text, decoded here so Kotlin never reads the wire.
+    pub text: Option<String>,
 }
 
 /// The phone, held by the application's service for its lifetime.
@@ -152,6 +154,11 @@ impl MobileSession {
             .block_on(self.inner.report_battery(level, charging))?)
     }
 
+    /// Sends the phone's clipboard text.
+    pub fn send_clipboard(&self, text: String) -> Result<(), MobileError> {
+        Ok(self.handle.block_on(self.inner.send_clipboard(&text))?)
+    }
+
     /// Blocks up to `timeout_ms` for the next envelope; `None` on timeout.
     pub fn next(&self, timeout_ms: u64) -> Result<Option<Event>, MobileError> {
         let env = self
@@ -161,6 +168,7 @@ impl MobileSession {
             capability: e.capability,
             kind: e.kind,
             description: describe(&e),
+            text: clipboard_text(&e),
             body: e.body,
         }))
     }

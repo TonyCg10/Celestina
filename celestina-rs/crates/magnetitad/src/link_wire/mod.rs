@@ -29,6 +29,7 @@ use magnetita_link::{
     Backoff, DeviceCert, Endpoint, EndpointConfig, LinkError, Session, TrustStore, TrustedPeer,
 };
 use magnetita_proto::daily::battery::BatteryStatus;
+use magnetita_proto::daily::clipboard::{ClipboardRequest, ClipboardText};
 use magnetita_proto::daily::find::FindRing;
 use magnetita_proto::pair::{kind as pair_kind, Fingerprint, QrPairing, QrPayload};
 use magnetita_proto::{capability, CapabilityVersion, DeviceKind, Hello};
@@ -132,9 +133,17 @@ fn hello(device_id: &str) -> Hello {
                 capability: capability::FIND,
                 version: 1,
             },
+            CapabilityVersion {
+                capability: capability::CLIPBOARD,
+                version: 1,
+            },
         ],
     }
 }
+
+/// Where a phone's clipboard text lands: the Wayland adapter in the daemon,
+/// a recorder in tests, so a test never writes the author's clipboard.
+pub(crate) type ClipboardSink = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
 /// The address a phone on this LAN would reach us at, for the QR. Best
 /// effort: the mDNS advertisement carries the rest.
@@ -188,6 +197,7 @@ pub(crate) fn install(
         pairing,
         SocketAddr::from(([0, 0, 0, 0], magnetita_link::PORT)),
         true,
+        Arc::new(crate::clipboard::write),
     ) {
         Ok((wire, addr)) => {
             log("link", &format!("own wire listening on {addr}"));
@@ -209,6 +219,7 @@ pub(crate) fn spawn(
     pairing: PairingArm,
     bind: SocketAddr,
     advertise: bool,
+    clipboard_sink: ClipboardSink,
 ) -> Result<(LinkWire, SocketAddr), LinkError> {
     let stopping = Arc::new(AtomicBool::new(false));
     let stop = Arc::clone(&stopping);
@@ -260,6 +271,7 @@ pub(crate) fn spawn(
                 endpoint,
                 my_fingerprint,
                 pairing,
+                clipboard_sink,
                 stop,
             });
             runtime.block_on(wire.run());
@@ -286,6 +298,7 @@ struct Wire {
     endpoint: Endpoint,
     my_fingerprint: Fingerprint,
     pairing: PairingArm,
+    clipboard_sink: ClipboardSink,
     stop: Arc<AtomicBool>,
 }
 
@@ -510,6 +523,19 @@ impl Wire {
             &format!("{name} at {} on the own wire", session.remote_address()),
         );
         ui_log(daemon, &name, "conectado y cifrado", false);
+        if daemon.settings.lock_ok().clipboard {
+            // The phone answers only while its application is in front.
+            if let Err(e) = session
+                .send_message(
+                    capability::CLIPBOARD,
+                    ClipboardRequest::KIND,
+                    ClipboardRequest.encode(),
+                )
+                .await
+            {
+                log("link", &format!("{name}: clipboard request: {e}"));
+            }
+        }
 
         let mut tick = tokio::time::interval(TICK);
         loop {
@@ -525,6 +551,20 @@ impl Wire {
                     }
                 },
                 _ = tick.tick() => {
+                    // The desktop's clipboard changes land in the shared slot
+                    // for every device; this wire drains its own entry here.
+                    if let Some(text) = daemon.pending_clipboards.take(&device_id) {
+                        if let Err(e) = session
+                            .send_message(
+                                capability::CLIPBOARD,
+                                ClipboardText::KIND,
+                                ClipboardText { text }.encode(),
+                            )
+                            .await
+                        {
+                            log("link", &format!("{name}: clipboard: {e}"));
+                        }
+                    }
                     if let Some(generation) = daemon.revocations.current(&device_id) {
                         session.close("forgotten");
                         daemon.revocations.acknowledge(&device_id, generation);
@@ -543,6 +583,7 @@ impl Wire {
                 }
             }
         }
+        daemon.pending_clipboards.clear(&device_id);
     }
 
     /// A phone that forgot this desktop while the desktop still pins it is
@@ -584,6 +625,22 @@ impl Wire {
                 }
                 Err(e) => log("link", &format!("{name}: battery: {e}")),
             },
+            (capability::CLIPBOARD, ClipboardText::KIND) => {
+                if !self.daemon.settings.lock_ok().clipboard {
+                    return;
+                }
+                match ClipboardText::decode(&env.body) {
+                    Ok(clip) if magnetita_core::clipboard::is_syncable(&clip.text) => {
+                        // Record before writing so the watcher does not echo it back.
+                        *self.daemon.last_clipboard.lock_ok() = clip.text.clone();
+                        if (self.clipboard_sink)(&clip.text) {
+                            ui_log(&self.daemon, name, "portapapeles recibido", false);
+                        }
+                    }
+                    Ok(_) => log("link", &format!("{name}: clipboard: not syncable")),
+                    Err(e) => log("link", &format!("{name}: clipboard: {e}")),
+                }
+            }
             (cap, kind) => log(
                 "link",
                 &format!("{name}: unhandled capability {cap} kind {kind}"),
@@ -697,12 +754,100 @@ mod tests {
             )
             .await
             .unwrap();
-        let reply = tokio::time::timeout(Duration::from_secs(5), session.recv())
-            .await
-            .expect("a reply within the budget")
-            .unwrap();
+        // A trusted session may greet with a clipboard request before the
+        // pairing reply; only the pairing envelope is the reply.
+        let reply = loop {
+            let env = tokio::time::timeout(Duration::from_secs(5), session.recv())
+                .await
+                .expect("a reply within the budget")
+                .unwrap();
+            if env.capability == capability::PAIRING {
+                break env;
+            }
+        };
         let pinned = pairing.accept_reply(&reply.body).unwrap();
         (session, pinned.peer_fingerprint)
+    }
+
+    #[test]
+    fn the_clipboard_flows_both_ways_on_the_own_wire() {
+        let cert = DeviceCert::generate("desktop");
+        let daemon = test_daemon(&cert);
+        let arm = PairingArm::default();
+        let received: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&received);
+        let (wire, addr) = spawn(
+            Arc::clone(&daemon),
+            cert.clone(),
+            "desktop".into(),
+            arm.clone(),
+            "127.0.0.1:0".parse().unwrap(),
+            false,
+            Arc::new(move |text: &str| {
+                sink.lock_ok().push(text.to_owned());
+                true
+            }),
+        )
+        .unwrap();
+        let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (phone, phone_fp) = rt.block_on(async { phone("phone3") });
+        let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
+        let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
+
+        // The desktop asks for the phone's clipboard as the session opens.
+        let first = rt
+            .block_on(async { tokio::time::timeout(Duration::from_secs(5), session.recv()).await })
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (first.capability, first.kind),
+            (capability::CLIPBOARD, ClipboardRequest::KIND)
+        );
+
+        // Phone to desktop: the text lands in the sink, recorded as last synced.
+        rt.block_on(async {
+            session
+                .send_message(
+                    capability::CLIPBOARD,
+                    ClipboardText::KIND,
+                    ClipboardText {
+                        text: "copied on the phone".into(),
+                    }
+                    .encode(),
+                )
+                .await
+                .unwrap();
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while received.lock_ok().is_empty() {
+            assert!(
+                Instant::now() < deadline,
+                "the phone's clipboard never landed"
+            );
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert_eq!(received.lock_ok().as_slice(), ["copied on the phone"]);
+        assert_eq!(*daemon.last_clipboard.lock_ok(), "copied on the phone");
+
+        // Desktop to phone: the shared slot drains into this session.
+        daemon
+            .pending_clipboards
+            .replace_for(["phone3".to_owned()], "copied on the desk".into());
+        let env = rt
+            .block_on(async { tokio::time::timeout(Duration::from_secs(5), session.recv()).await })
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (env.capability, env.kind),
+            (capability::CLIPBOARD, ClipboardText::KIND)
+        );
+        assert_eq!(
+            ClipboardText::decode(&env.body).unwrap().text,
+            "copied on the desk"
+        );
+        session.close("done");
+        drop(wire);
     }
 
     #[test]
@@ -717,6 +862,7 @@ mod tests {
             arm.clone(),
             "127.0.0.1:0".parse().unwrap(),
             false,
+            Arc::new(|_: &str| true),
         )
         .unwrap();
         let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
@@ -785,6 +931,7 @@ mod tests {
             arm.clone(),
             "127.0.0.1:0".parse().unwrap(),
             false,
+            Arc::new(|_: &str| true),
         )
         .unwrap();
         let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
@@ -856,7 +1003,14 @@ mod tests {
             .unwrap()
             .try_send(Command::Ring)
             .unwrap();
-        let ring = rt.block_on(session.recv()).unwrap();
+        let ring = rt.block_on(async {
+            loop {
+                let env = session.recv().await.unwrap();
+                if env.capability != capability::CLIPBOARD {
+                    break env;
+                }
+            }
+        });
         assert_eq!(
             (ring.capability, ring.kind),
             (capability::FIND, FindRing::KIND)

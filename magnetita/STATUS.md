@@ -1,9 +1,11 @@
 # Magnetita status
 
 - **Updated:** 2026-09-09
-- **Implementation:** `MAG-P3`, the Android application foundation, is the
+- **Implementation:** `MAG-P4`, the daily set on the own wire, is the
   active checkpoint since 2026-09-09, paired with `magnetita-android`'s
-  `AND-1`. `MAG-P2`, the link, is closed (`4011e53`, `95a4cc8`):
+  `AND-2`; its first unit, the clipboard both ways, is done. `MAG-P3`, the
+  Android application foundation, met its exit on 2026-09-09 and is
+  archived, paired with `AND-1`. `MAG-P2`, the link, is closed (`4011e53`, `95a4cc8`):
   `magnetita-link` carries `magnetita-proto` over QUIC with pinned
   certificates, `magnetitad` hosts the own wire next to KDE Connect on one
   runtime thread with `StartPairing` on `Devices1`, and `magnetita-peer`
@@ -27,6 +29,10 @@
 
 ## Current checkout truth
 
+- The clipboard travels both ways on the own wire: the desktop's changes
+  drain into the phone's session, the phone's text is written through the
+  Wayland adapter, and the daemon asks for the phone's clipboard when a
+  session opens (`MAG-P4-A`).
 - The desktop app shows the pairing QR: its pairing action arms the
   daemon's window, draws the code, counts the two minutes down and names
   the phone once it arrives (`MAG-P3-B`). A paired, connected own-wire
@@ -133,7 +139,8 @@ its refusals are proven, the delivery of a file to a phone is not. See the
 ## Records
 
 - [Implementation roadmap](ROADMAP.md)
-- [Active plan MAG-P3](docs/plans/active/2026-09-09-android-foundation.md)
+- [Active plan MAG-P4](docs/plans/active/2026-09-09-daily-set.md)
+- [Archived plan MAG-P3](docs/plans/archive/2026-09-09-android-foundation.md)
 - [Archived plan MAG-P2](docs/plans/archive/2026-09-09-link.md)
 - [Archived plan MAG-P1](docs/plans/archive/2026-09-09-protocol-core.md)
 - [Archived plan MAG-P0](docs/plans/archive/2026-09-07-own-protocol-spikes.md)

@@ -32,7 +32,7 @@ impl PendingClipboards {
         }
     }
 
-    fn take(&self, device_id: &str) -> Option<String> {
+    pub(super) fn take(&self, device_id: &str) -> Option<String> {
         self.values.lock_ok().remove(device_id)
     }
 

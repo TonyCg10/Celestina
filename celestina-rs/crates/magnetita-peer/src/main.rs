@@ -3,7 +3,7 @@
 //! ```text
 //! magnetita-peer identity                    who this peer is
 //! magnetita-peer pair 'magnetita://pair?…'   scan a QR by pasting it
-//! magnetita-peer connect IP:PORT [--battery N] [--hold SECONDS]
+//! magnetita-peer connect IP:PORT [--battery N] [--clipboard TEXT] [--hold SECONDS]
 //! magnetita-peer browse                      who Avahi sees
 //! ```
 //!
@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use magnetita_link::trust::fingerprint_text;
 use magnetita_link::LinkError;
-use magnetita_peer::{browse, describe, dir_default, Phone};
+use magnetita_peer::{browse, clipboard_text, describe, dir_default, Phone};
 
 fn dir() -> PathBuf {
     std::env::var_os("MAGNETITA_PEER_DIR")
@@ -23,7 +23,7 @@ fn dir() -> PathBuf {
 }
 
 fn usage() -> std::process::ExitCode {
-    eprintln!("usage: magnetita-peer identity | pair URI | connect IP:PORT [--battery N] [--hold SECONDS] | browse");
+    eprintln!("usage: magnetita-peer identity | pair URI | connect IP:PORT [--battery N] [--clipboard TEXT] [--hold SECONDS] | browse");
     std::process::ExitCode::from(2)
 }
 
@@ -82,10 +82,17 @@ async fn run(args: &[String]) -> Result<(), LinkError> {
                 session.report_battery(level, false).await?;
                 println!("battery {level} reported");
             }
+            if let Some(text) = flag(args, "--clipboard") {
+                session.send_clipboard(text).await?;
+                println!("clipboard sent ({} bytes)", text.len());
+            }
             let until = tokio::time::Instant::now() + Duration::from_secs(hold);
             while tokio::time::Instant::now() < until {
                 match session.next(until - tokio::time::Instant::now()).await? {
-                    Some(env) => println!("{}", describe(&env)),
+                    Some(env) => match clipboard_text(&env) {
+                        Some(text) => println!("clipboard: {text}"),
+                        None => println!("{}", describe(&env)),
+                    },
                     None => break,
                 }
             }

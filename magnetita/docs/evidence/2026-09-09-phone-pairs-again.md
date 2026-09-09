@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P3-C` of
-  [`../plans/active/2026-09-09-android-foundation.md`](../plans/active/2026-09-09-android-foundation.md):
+  [`../plans/archive/2026-09-09-android-foundation.md`](../plans/archive/2026-09-09-android-foundation.md):
   `celestina-rs/crates/magnetitad/src/link_wire/mod.rs`, this record
 - **Environment:** the live `magnetitad` on the desktop (`10.0.0.134`),
   the S25U at `10.0.0.16` running the Android application of `AND-1-B`

@@ -1,8 +1,9 @@
 # MAG-P3 — The Android application foundation, Rust side
 
 - **Opened:** 2026-09-09
+- **Closed:** 2026-09-09
 - **Plan ID:** android-foundation
-- **Status:** active
+- **Status:** done
 - **Authorization:** the author said "abre MAG-P3 y empieza" on 2026-09-09,
   asking for the design philosophy of their MilaHub project — One UI
   tokens and components — in Samsung blue, adapted rather than copied
@@ -10,6 +11,7 @@
 - **Implementation checkpoint:** MAG-P3
 - **Author-validation checkpoint:** `VAL-MAG-11` in
   [`../../../VALIDATION.md`](../../../VALIDATION.md)
+- **Successor:** MAG-P4
 
 ## Hypothesis
 

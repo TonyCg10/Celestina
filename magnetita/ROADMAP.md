@@ -1,13 +1,15 @@
 # Magnetita implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** MAG-P3
+- **Active implementation checkpoint:** MAG-P4
 - **Related author validation:** `VAL-MAG-01` through `VAL-MAG-08` in
   [VALIDATION.md](VALIDATION.md); they do not block implementation
 
-`MAG-P3` is executing under
-[its plan](docs/plans/active/2026-09-09-android-foundation.md), paired with
-the `magnetita-android` project's own `AND-1`. `MAG-P2` is closed under
+`MAG-P4` is executing under
+[its plan](docs/plans/active/2026-09-09-daily-set.md), paired with the
+`magnetita-android` project's own `AND-2`. `MAG-P3` is closed under
+[its archived plan](docs/plans/archive/2026-09-09-android-foundation.md),
+paired with `AND-1`. `MAG-P2` is closed under
 [its archived plan](docs/plans/archive/2026-09-09-link.md), `MAG-P1` under
 [its archived plan](docs/plans/archive/2026-09-09-protocol-core.md), `MAG-P0`
 under [its own](docs/plans/archive/2026-09-07-own-protocol-spikes.md).
@@ -491,7 +493,7 @@ author's daily set working end to end without the stock KDE Connect client.
 
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
-| MAG-P4-A | planned | MAG-P3 | Clipboard both ways with the tile and share target | peer tests, JVM tests |
+| MAG-P4-A | done | MAG-P3 | Clipboard both ways with the tile and share target | peer tests, JVM tests |
 | MAG-P4-B | planned | MAG-P3 | Notifications with actions and replies | peer tests, JVM tests |
 | MAG-P4-C | planned | MAG-P3 | Resumable file share both ways under revocation | peer tests |
 | MAG-P4-D | planned | MAG-P3 | Media control both ways | peer tests, MPRIS consumer tests |

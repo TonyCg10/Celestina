@@ -3,6 +3,22 @@
 This manual lane requires the real phone, LAN, mounts or Wayland session. It
 does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
 
+## VAL-MAG-12 — The daily set on the own wire
+
+- **Status:** pending
+- **Related implementation:** `MAG-P4` / `AND-2`
+- **Requires:** the deployed daemon, the release build of
+  `magnetita-android` on the S25U, the phone paired over the own wire
+- **Procedure:** copy a line on the desktop and paste on the phone; open
+  the phone application, copy a line there and paste on the desktop; with
+  the application closed, copy a line and tap the "Enviar portapapeles"
+  quick-settings tile; share a text from another application to Magnetita
+- **Pass condition:** each text arrives on the other side once, the tile
+  and the share work without opening the application, and nothing is
+  sent back and forth by itself
+- **Result:** not run
+- **Evidence:** the daemon's UI log lines and the phone's clipboard row
+
 ## VAL-MAG-11 — The own application pairs the S25U and holds a session
 
 - **Status:** pending

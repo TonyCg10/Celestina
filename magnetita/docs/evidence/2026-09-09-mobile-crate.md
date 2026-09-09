@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P3-A` of
-  [`../plans/active/2026-09-09-android-foundation.md`](../plans/active/2026-09-09-android-foundation.md):
+  [`../plans/archive/2026-09-09-android-foundation.md`](../plans/archive/2026-09-09-android-foundation.md):
   `celestina-rs/crates/magnetita-mobile` (`Cargo.toml`, `src/lib.rs`,
   `src/phone.rs`, `src/mobile.rs`, `src/bin/uniffi-bindgen.rs`),
   `magnetita-peer` now a shell over it, the workspace manifests, and the

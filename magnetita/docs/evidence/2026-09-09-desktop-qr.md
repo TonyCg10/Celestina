@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P3-B` of
-  [`../plans/active/2026-09-09-android-foundation.md`](../plans/active/2026-09-09-android-foundation.md):
+  [`../plans/archive/2026-09-09-android-foundation.md`](../plans/archive/2026-09-09-android-foundation.md):
   `src/pairing.rs`, `src/devices.rs`, `src/controller.rs`,
   `src/projection.rs`, `src/main.rs`, `build.rs`, `Cargo.toml`,
   `Cargo.lock`, `qml/components/PairingSheet.qml`,
