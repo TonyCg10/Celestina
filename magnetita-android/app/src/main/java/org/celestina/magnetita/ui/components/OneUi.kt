@@ -25,6 +25,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 
 // The One UI pieces of DESIGN.md: the glow, the collapsing header, the
@@ -40,72 +43,108 @@ fun Canvas(content: @Composable () -> Unit) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .background(
+                // The light: one spot in the middle of the screen, as MilaHub.
                 Brush.radialGradient(
                     colors = listOf(accent.copy(alpha = 0.35f), Color.Transparent),
-                    center = androidx.compose.ui.geometry.Offset(0f, 0f),
-                    radius = 1400f,
+                    radius = 1100f,
                 ),
             ),
     ) { content() }
 }
 
 /**
- * The large title that collapses into a toolbar. `progress` is 1 when the
- * page is at the top and 0 when scrolled; the caller drives it.
+ * The large title that collapses into a toolbar, MilaHub's `OneUIHeader`
+ * token for token: 280 dp open, 110 dp closed; the large title at 32 sp,
+ * medium weight, letter spacing -1.5, scaling 0.82..1 and sliding away to
+ * the left and up; the small title bold at the toolbar's start with the
+ * subtitle in the accent. `progress` is 1 at the top and 0 scrolled.
  */
 @Composable
 fun Header(
+    progress: Float,
     title: String,
     subtitle: String? = null,
-    progress: Float,
-    maxHeight: Dp = 168.dp,
-    minHeight: Dp = 64.dp,
-    actions: (@Composable () -> Unit)? = null,
+    maxHeight: Dp = HEADER_MAX,
+    minHeight: Dp = HEADER_MIN,
+    actions: (@Composable BoxScope.() -> Unit)? = null,
 ) {
-    val height = minHeight + (maxHeight - minHeight) * progress
-    val largeAlpha = ((progress - 0.35f) / 0.65f).coerceIn(0f, 1f)
-    val smallAlpha = (1f - progress / 0.35f).coerceIn(0f, 1f)
-    Box(modifier = Modifier.fillMaxWidth().height(height)) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(minHeight + 48.dp)
-                .graphicsLayer { alpha = smallAlpha }
-                .background(Brush.verticalGradient(listOf(MaterialTheme.colorScheme.background, Color.Transparent))),
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer { alpha = largeAlpha; scaleX = 0.85f + 0.15f * progress; scaleY = scaleX }
-                .padding(horizontal = 24.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(title, style = MaterialTheme.typography.displayMedium, color = MaterialTheme.colorScheme.onBackground)
-                if (subtitle != null) {
-                    Text(subtitle, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.primary)
+    val density = LocalDensity.current
+    val currentHeight = minHeight + (maxHeight - minHeight) * progress
+    Surface(
+        modifier = Modifier.fillMaxWidth().height(currentHeight),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = (1f - progress * 0.02f).coerceIn(0.98f, 1f)),
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            val titleAlphaLarge = ((progress - 0.35f) / 0.65f).coerceIn(0f, 1f)
+            val titleAlphaSmall = (1f - (progress / 0.35f)).coerceIn(0f, 1f)
+            val titleScale = 0.82f + (progress * 0.18f)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        alpha = titleAlphaLarge
+                        scaleX = titleScale
+                        scaleY = titleScale
+                        translationX = -(1f - progress) * with(density) { 90.dp.toPx() }
+                        translationY = (1f - progress) * with(density) { -24.dp.toPx() }
+                    }
+                    .padding(horizontal = 24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.displayMedium.copy(
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 32.sp,
+                        letterSpacing = (-1.5).sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    ),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(horizontal = 24.dp)
+                    .graphicsLayer {
+                        alpha = titleAlphaSmall
+                        translationX = progress * with(density) { 24.dp.toPx() }
+                        translationY = progress * with(density) { 12.dp.toPx() }
+                    },
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface),
+                    )
+                    if (!subtitle.isNullOrEmpty()) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary),
+                        )
+                    }
                 }
             }
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(top = 8.dp, start = 24.dp, end = 16.dp)
-                .graphicsLayer { alpha = smallAlpha },
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.align(Alignment.TopStart)) {
-                Text(title, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground)
-                if (subtitle != null) {
-                    Spacer(Modifier.width(6.dp))
-                    Text(subtitle, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.primary)
-                }
+            if (actions != null) {
+                Box(
+                    modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.CenterEnd,
+                ) { actions() }
             }
-        }
-        if (actions != null) {
-            Box(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(top = 8.dp, end = 12.dp), contentAlignment = Alignment.TopEnd) { actions() }
         }
     }
+}
+
+/** The header's two heights, MilaHub's. */
+val HEADER_MAX: Dp = 280.dp
+val HEADER_MIN: Dp = 110.dp
+
+/** The header's collapse for a scroll position, 1 at the top and 0 once the range is scrolled. */
+fun headerProgress(scrollPx: Float, density: androidx.compose.ui.unit.Density): Float {
+    val range = with(density) { (HEADER_MAX - HEADER_MIN).toPx() }
+    return (1f - scrollPx / range).coerceIn(0f, 1f)
 }
 
 /** A grouped card: 26 dp radius in `surface`, rows separated by hairlines. */

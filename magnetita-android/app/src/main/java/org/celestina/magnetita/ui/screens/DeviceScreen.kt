@@ -1,6 +1,7 @@
 package org.celestina.magnetita.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,7 +31,9 @@ import org.celestina.magnetita.ui.components.Canvas
 import org.celestina.magnetita.ui.components.ChipTone
 import org.celestina.magnetita.ui.components.Group
 import org.celestina.magnetita.ui.components.GroupRow
+import org.celestina.magnetita.ui.components.HEADER_MAX
 import org.celestina.magnetita.ui.components.Header
+import org.celestina.magnetita.ui.components.headerProgress
 import org.celestina.magnetita.ui.components.StateChip
 import uniffi.magnetita_mobile.Identity
 import uniffi.magnetita_mobile.PinnedDesktop
@@ -77,17 +80,14 @@ fun DeviceScreen(
     onControl: () -> Unit = {},
 ) {
     val scroll = rememberScrollState()
-    val progress by remember { derivedStateOf { (1f - scroll.value / 300f).coerceIn(0f, 1f) } }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val progress by remember { derivedStateOf { headerProgress(scroll.value.toFloat(), density) } }
     val desktop = shown.pinned.firstOrNull()
     val link = shown.link
     Canvas {
+        Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().verticalScroll(scroll)) {
-            Header(
-                title = desktop?.name ?: stringResource(R.string.title_desktop_none),
-                subtitle = if (desktop != null) stringResource(R.string.label_pairing) else shown.identity?.name,
-                progress = progress,
-            )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(HEADER_MAX))
             if (shown.ringing) {
                 Button(
                     onClick = onStopRinging,
@@ -238,6 +238,12 @@ fun DeviceScreen(
                 GroupRow(title = stringResource(R.string.label_fingerprint), detail = shown.identity?.fingerprint ?: "", last = true)
             }
             Spacer(Modifier.height(120.dp))
+        }
+        Header(
+            progress = progress,
+            title = desktop?.name ?: stringResource(R.string.title_desktop_none),
+            subtitle = if (desktop != null) stringResource(R.string.label_pairing) else shown.identity?.name,
+        )
         }
     }
 }
