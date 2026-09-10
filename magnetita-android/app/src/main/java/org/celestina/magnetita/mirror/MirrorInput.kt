@@ -14,7 +14,9 @@ import android.view.accessibility.AccessibilityEvent
  *
  * A finger is a stroke continued segment by segment: `down` opens it,
  * each `move` extends it from the last point, `up` closes it. Key events
- * cannot be injected this way; only back, home and recents are honoured.
+ * cannot be injected this way, so a key becomes text set on the focused
+ * field (a character appended, Backspace removing one, Enter the field's
+ * action), and back, home and recents are the global actions.
  */
 class MirrorInput : AccessibilityService() {
     private data class Finger(var x: Float, var y: Float, var stroke: GestureDescription.StrokeDescription?)
@@ -61,6 +63,28 @@ class MirrorInput : AccessibilityService() {
         }
     }
 
+    /** An Android key code on the focused field, the way accessibility allows. */
+    fun key(keycode: Int, pressed: Boolean) {
+        if (!pressed) return
+        val focused = rootInActiveWindow?.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT) ?: return
+        if (!focused.isEditable) return
+        val current = focused.text?.toString() ?: ""
+        val next = when (keycode) {
+            KEYCODE_DEL -> if (current.isEmpty()) return else current.dropLast(1)
+            KEYCODE_ENTER -> {
+                if (!focused.performAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)) {
+                    focused.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)
+                }
+                return
+            }
+            else -> current + (character(keycode) ?: return)
+        }
+        val arguments = android.os.Bundle().apply {
+            putCharSequence(android.view.accessibility.AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, next)
+        }
+        focused.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
+    }
+
     /** 0 back, 1 home, 2 recents. */
     fun global(action: Int) {
         val which = when (action) {
@@ -79,6 +103,26 @@ class MirrorInput : AccessibilityService() {
 
     companion object {
         private const val SEGMENT_MS = 16L
+        private const val KEYCODE_ENTER = 66
+        private const val KEYCODE_DEL = 67
+
+        /** The printable character of a key code, or null. */
+        fun character(keycode: Int): Char? = when (keycode) {
+            in 7..16 -> '0' + (keycode - 7)
+            in 29..54 -> 'a' + (keycode - 29)
+            62 -> ' '
+            55 -> ','
+            56 -> '.'
+            69 -> '-'
+            70 -> '='
+            71 -> '['
+            72 -> ']'
+            73 -> '\\'
+            74 -> ';'
+            75 -> '\''
+            76 -> '/'
+            else -> null
+        }
 
         @Volatile var instance: MirrorInput? = null
             private set

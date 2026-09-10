@@ -34,3 +34,13 @@ class MirrorGeometryTest {
         assertEquals(DesktopSignal.Other(9, 2), DesktopSignal.of(LinkEvent(9, 2, "")))
     }
 }
+
+class MirrorKeysTest {
+    @org.junit.Test
+    fun key_codes_become_the_characters_the_field_gets() {
+        org.junit.Assert.assertEquals('a', MirrorInput.character(29))
+        org.junit.Assert.assertEquals('9', MirrorInput.character(16))
+        org.junit.Assert.assertEquals(' ', MirrorInput.character(62))
+        org.junit.Assert.assertNull(MirrorInput.character(19))
+    }
+}

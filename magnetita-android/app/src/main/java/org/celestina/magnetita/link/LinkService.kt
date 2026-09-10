@@ -108,7 +108,7 @@ class LinkService : LifecycleService() {
                         DesktopSignal.MirrorStop -> org.celestina.magnetita.mirror.MirrorService.stop(this@LinkService)
                         is DesktopSignal.MirrorTouched -> org.celestina.magnetita.mirror.MirrorService.touch(signal.touch.phase, signal.touch.x, signal.touch.y, signal.touch.pointer)
                         is DesktopSignal.MirrorGlobal -> org.celestina.magnetita.mirror.MirrorInput.instance?.global(signal.action)
-                        is DesktopSignal.MirrorKey -> {}
+                        is DesktopSignal.MirrorKey -> org.celestina.magnetita.mirror.MirrorInput.instance?.key(signal.keycode, signal.pressed)
                         is DesktopSignal.Storage -> {
                             val live = controllerRef?.live
                             if (live != null) storageExecutor.execute { storage.answer(signal.request, live) }

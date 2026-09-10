@@ -20,6 +20,13 @@ import org.celestina.magnetita.link.MirrorStreams
  * stream. The encoder writes on its own thread; a blocking write stalls
  * the encoder rather than piling frames up, which is the pacing the
  * desktop wants (`MAG-P6`).
+ *
+ * The encoder is tuned the way scrcpy tunes its own: a key frame every
+ * ten seconds, the last frame repeated every 100 ms while the screen is
+ * still, at most the asked frame rate. Every access unit is followed by
+ * an access unit delimiter, so the desktop's parser emits the frame the
+ * moment it ends instead of waiting for the next one. A rotation restarts
+ * the capture at the new size and tells the desktop again.
  */
 class ScreenMirror(
     private val context: Context,
@@ -42,8 +49,38 @@ class ScreenMirror(
     var picture: Pair<Int, Int> = 0 to 0
         private set
 
+    private val displayManager by lazy { context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager }
+    private val rotationListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) {}
+        override fun onDisplayRemoved(displayId: Int) {}
+        override fun onDisplayChanged(displayId: Int) {
+            if (displayId != android.view.Display.DEFAULT_DISPLAY || !open) return
+            val bounds = (context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).maximumWindowMetrics.bounds
+            val now = bounds.width() to bounds.height()
+            if (now != screen) restart()
+        }
+    }
+
+    /** The screen turned: the capture starts again at the new size. */
+    private fun restart() {
+        if (!open) return
+        open = false
+        runCatching { display?.release() }
+        runCatching { codec?.stop() }
+        runCatching { codec?.release() }
+        runCatching { surface?.release() }
+        live.closeStream(MirrorStreams.VIDEO)
+        if (!begin()) stop("could not restart after rotation")
+    }
+
     /** Starts, and tells the desktop the shape; false when nothing could start. */
     fun start(): Boolean {
+        if (!begin()) return false
+        displayManager.registerDisplayListener(rotationListener, Handler(thread.looper))
+        return true
+    }
+
+    private fun begin(): Boolean {
         val metrics = context.resources.displayMetrics
         val bounds = (context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).maximumWindowMetrics.bounds
         screen = bounds.width() to bounds.height()
@@ -53,12 +90,15 @@ class ScreenMirror(
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
             setInteger(MediaFormat.KEY_BIT_RATE, options.bitrateKbps * 1000)
             setInteger(MediaFormat.KEY_FRAME_RATE, options.fps.coerceIn(10, 120))
-            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 10)
             setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0)
             setInteger(MediaFormat.KEY_PRIORITY, 0)
             setInteger(MediaFormat.KEY_LATENCY, 1)
             setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
+            setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, REPEAT_FRAME_US)
+            setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, options.fps.coerceIn(10, 120).toFloat())
         }
+        val delimiter = if (options.codec == 1) AUD_H264 else AUD_HEVC
         val encoder = runCatching { MediaCodec.createEncoderByType(mime) }.getOrNull() ?: return false
         val handler = Handler(thread.looper)
         encoder.setCallback(object : MediaCodec.Callback() {
@@ -68,9 +108,11 @@ class ScreenMirror(
             override fun onOutputBufferAvailable(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo) {
                 val buffer = runCatching { codec.getOutputBuffer(index) }.getOrNull()
                 if (buffer != null && info.size > 0 && open) {
-                    val bytes = ByteArray(info.size)
+                    val config = info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0
+                    val bytes = ByteArray(info.size + if (config) 0 else delimiter.size)
                     buffer.position(info.offset)
-                    buffer.get(bytes)
+                    buffer.get(bytes, 0, info.size)
+                    if (!config) delimiter.copyInto(bytes, info.size)
                     if (!live.writeTransfer(MirrorStreams.VIDEO, bytes)) {
                         stop("stream closed")
                         return
@@ -99,7 +141,6 @@ class ScreenMirror(
             live.sendMirrorStarted(picture.first, picture.second, options.codec, false)
         }.onFailure {
             runCatching { encoder.release() }
-            thread.quitSafely()
         }.isSuccess
     }
 
@@ -107,6 +148,7 @@ class ScreenMirror(
     fun stop(reason: String) {
         if (!open) return
         open = false
+        runCatching { displayManager.unregisterDisplayListener(rotationListener) }
         runCatching { display?.release() }
         runCatching { codec?.stop() }
         runCatching { codec?.release() }
@@ -115,5 +157,14 @@ class ScreenMirror(
         live.closeStream(MirrorStreams.VIDEO)
         thread.quitSafely()
         onStopped(reason)
+    }
+
+    companion object {
+        /** scrcpy's value: a still screen still yields ten frames a second. */
+        private const val REPEAT_FRAME_US = 100_000L
+
+        /** Access unit delimiters, Annex B: HEVC NAL type 35, H.264 NAL type 9. */
+        private val AUD_HEVC = byteArrayOf(0, 0, 0, 1, 0x46, 0x01, 0x50)
+        private val AUD_H264 = byteArrayOf(0, 0, 0, 1, 0x09, 0xF0.toByte())
     }
 }
