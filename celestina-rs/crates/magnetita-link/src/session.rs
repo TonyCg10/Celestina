@@ -19,6 +19,30 @@ use crate::error::LinkError;
 /// must finish within this, measured from before the first byte.
 pub const HANDSHAKE_BUDGET: Duration = Duration::from_secs(10);
 
+/// The bulk-stream half of a session, cloneable and owned by the task that
+/// moves the bytes. Dropping it does not close the connection.
+#[derive(Clone)]
+pub struct Transfers {
+    conn: quinn::Connection,
+}
+
+impl Transfers {
+    /// Opens a unidirectional stream prefixed by `transfer`.
+    pub async fn open(&self, transfer: u32) -> Result<quinn::SendStream, LinkError> {
+        let mut s = self.conn.open_uni().await?;
+        s.write_all(&transfer.to_be_bytes()).await?;
+        Ok(s)
+    }
+
+    /// Accepts the next bulk stream and reads its transfer id.
+    pub async fn accept(&self) -> Result<(u32, quinn::RecvStream), LinkError> {
+        let mut r = self.conn.accept_uni().await?;
+        let mut id = [0u8; 4];
+        r.read_exact(&mut id).await?;
+        Ok((u32::from_be_bytes(id), r))
+    }
+}
+
 /// An open, pinned connection. Dropping it closes the connection.
 pub struct Session {
     conn: quinn::Connection,
@@ -115,17 +139,21 @@ impl Session {
     /// mirror's video). The first thing written must be the transfer id the
     /// control stream announced, so the receiver knows which it is.
     pub async fn open_transfer(&self, transfer: u32) -> Result<quinn::SendStream, LinkError> {
-        let mut s = self.conn.open_uni().await?;
-        s.write_all(&transfer.to_be_bytes()).await?;
-        Ok(s)
+        self.transfers().open(transfer).await
     }
 
     /// Accepts the next bulk stream and reads its transfer id.
     pub async fn accept_transfer(&self) -> Result<(u32, quinn::RecvStream), LinkError> {
-        let mut r = self.conn.accept_uni().await?;
-        let mut id = [0u8; 4];
-        r.read_exact(&mut id).await?;
-        Ok((u32::from_be_bytes(id), r))
+        self.transfers().accept().await
+    }
+
+    /// A handle for bulk streams that a task may own apart from the session:
+    /// the connection is shared, so a transfer can run while the control
+    /// stream keeps being read elsewhere.
+    pub fn transfers(&self) -> Transfers {
+        Transfers {
+            conn: self.conn.clone(),
+        }
     }
 
     /// Sends a small message unreliably: pointer motion where a late sample

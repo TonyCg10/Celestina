@@ -1,0 +1,37 @@
+# MAG-P4-C exact change inventory
+
+Base revision	011812cf406a6f85409ee9ca5382fa07177f7452
+Pathspec	celestina-rs/crates/magnetita-link/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-link/src/session.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/Cargo.toml
+Pathspec	celestina-rs/crates/magnetita-mobile/src/mobile.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/phone.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/main.rs
+Pathspec	celestina-rs/crates/magnetitad/Cargo.toml
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/share.rs
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/docs/evidence/2026-09-09-share-own-wire.md
+Pathspec	magnetita/docs/inventories/2026-09-09-daily-set/MAG-P4-C.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-daily-set.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+2	1	4cefb87b7173c70ce01411504877d6bdf3f37f8a4a68848d798ec8a887d19e6d	celestina-rs/crates/magnetita-link/src/lib.rs
+35	7	30524d8d849d19e2d80b652545615a279d8647f8fcb73c9f84627b62dbc27e09	celestina-rs/crates/magnetita-link/src/session.rs
+1	1	0b1afefc0b3bb557430aa562410455490eb9eea5ce8a2c040746c7f2620a8493	celestina-rs/crates/magnetita-mobile/Cargo.toml
+91	11	095ade05f97b1f9bff88a3a335f1891584ae6c1642f467dfde86d2d5f0df2865	celestina-rs/crates/magnetita-mobile/src/mobile.rs
+367	16	b4e95b3ac812257abd1f5d1261044351525144318d7dfe6667af47548637d24a	celestina-rs/crates/magnetita-mobile/src/phone.rs
+5	2	8a0598510164f73be89ccb87e80dda76cca9e2572769e13e438e1fabd12e150f	celestina-rs/crates/magnetita-peer/src/lib.rs
+59	7	c205f91c15c15955349a73bd20e8e215ec8631be68ac797b7fcd75151851abb5	celestina-rs/crates/magnetita-peer/src/main.rs
+1	1	add159023061823f63ed19f014fceb969d1046b7bc372f9ed5b74ced4e27d261	celestina-rs/crates/magnetitad/Cargo.toml
+239	7	6bc7ed68a9fd28fa023b093788519c16f1eaf3a961610e4820e24e15075d0753	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+450	0	ea17064b7e1a869d61e724c8619dedcdd84343fc15285192c0d18a25d78a8c42	celestina-rs/crates/magnetitad/src/link_wire/share.rs
+1	1	d4fa8e808a77c4ade46ada83ff5fe451fd46198d7eee20ee7276629db2edcad6	magnetita/ROADMAP.md
+5	2	1ad9df81cefbac6cce09e4d646feece142b68cf2d8aa5d792acc354fd0a940df	magnetita/STATUS.md
+72	0	5cb1e832496db9dfe73d1ad0287b9c9ca7278915395f9af13efb10dd9e5f137c	magnetita/docs/evidence/2026-09-09-share-own-wire.md
+37	0	self	magnetita/docs/inventories/2026-09-09-daily-set/MAG-P4-C.numstat.tsv
+1	1	bcca757579c86ec83586503ac71738e746083323bc3634155cd0abd808469177	magnetita/docs/plans/active/2026-09-09-daily-set.md

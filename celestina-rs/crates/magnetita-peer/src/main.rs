@@ -3,7 +3,7 @@
 //! ```text
 //! magnetita-peer identity                    who this peer is
 //! magnetita-peer pair 'magnetita://pair?…'   scan a QR by pasting it
-//! magnetita-peer connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--hold SECONDS]
+//! magnetita-peer connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--hold SECONDS]
 //! magnetita-peer browse                      who Avahi sees
 //! ```
 //!
@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use magnetita_link::trust::fingerprint_text;
 use magnetita_link::LinkError;
-use magnetita_peer::{browse, clipboard_text, describe, dir_default, Phone};
+use magnetita_peer::{browse, clipboard_text, describe, dir_default, Incoming, Phone};
 use magnetita_proto::daily::notifications::{Action, NotificationPosted};
 
 fn dir() -> PathBuf {
@@ -24,7 +24,7 @@ fn dir() -> PathBuf {
 }
 
 fn usage() -> std::process::ExitCode {
-    eprintln!("usage: magnetita-peer identity | pair URI | connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--hold SECONDS] | browse");
+    eprintln!("usage: magnetita-peer identity | pair URI | connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--hold SECONDS] | browse");
     std::process::ExitCode::from(2)
 }
 
@@ -107,13 +107,65 @@ async fn run(args: &[String]) -> Result<(), LinkError> {
                     .await?;
                 println!("notification sent");
             }
+            let sending = match flag(args, "--send-file") {
+                Some(path) => {
+                    let path = PathBuf::from(path);
+                    let size = std::fs::metadata(&path)?.len();
+                    let name = path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("file")
+                        .to_owned();
+                    let id = session.offer_file(&name, size, "").await?;
+                    println!("offered {name} ({size} bytes) as transfer {id}");
+                    Some((id, path))
+                }
+                None => None,
+            };
+            let downloads = dir().join("downloads");
             let until = tokio::time::Instant::now() + Duration::from_secs(hold);
             while tokio::time::Instant::now() < until {
                 match session.next(until - tokio::time::Instant::now()).await? {
-                    Some(env) => match clipboard_text(&env) {
-                        Some(text) => println!("clipboard: {text}"),
-                        None => println!("{}", describe(&env)),
-                    },
+                    Some(Incoming::Envelope(env)) => {
+                        let share = magnetita_peer::share_fields(&env);
+                        let offset = share.offset;
+                        match (env.capability, env.kind, share.transfer) {
+                            (5, 1, Some(id)) => {
+                                session
+                                    .accept_file(id, downloads.clone())
+                                    .await
+                                    .map(tokio::spawn)?;
+                                println!("accepted transfer {id} into {}", downloads.display());
+                            }
+                            (5, 2, Some(id))
+                                if sending.as_ref().is_some_and(|(mine, _)| *mine == id) =>
+                            {
+                                let (_, path) = sending.as_ref().unwrap();
+                                let offset = offset.unwrap_or(0);
+                                let bytes = std::fs::read(path)?;
+                                for chunk in bytes[offset.min(bytes.len() as u64) as usize..]
+                                    .chunks(64 * 1024)
+                                {
+                                    session.write_transfer(id, chunk).await?;
+                                }
+                                session.finish_transfer(id).await?;
+                                println!("sent from offset {offset}");
+                            }
+                            _ => match clipboard_text(&env) {
+                                Some(text) => println!("clipboard: {text}"),
+                                None => println!("{}", describe(&env)),
+                            },
+                        }
+                    }
+                    Some(Incoming::FileReceived {
+                        transfer,
+                        path,
+                        complete,
+                    }) => println!(
+                        "transfer {transfer} {}: {}",
+                        if complete { "complete" } else { "interrupted" },
+                        path.display()
+                    ),
                     None => break,
                 }
             }

@@ -37,5 +37,6 @@ pub use endpoint::{Endpoint, EndpointConfig, Incoming};
 pub use error::LinkError;
 pub use magnetita_net::cert::DeviceCert;
 pub use magnetita_net::trust::{TrustCheck, TrustStore, TrustedPeer};
-pub use session::{Session, HANDSHAKE_BUDGET};
+pub use quinn::{RecvStream, SendStream, VarInt};
+pub use session::{Session, Transfers, HANDSHAKE_BUDGET};
 pub use trust::{fingerprint_of, fingerprint_text, Trust};

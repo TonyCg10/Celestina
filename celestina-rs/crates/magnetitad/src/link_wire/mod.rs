@@ -41,6 +41,7 @@ use rand_core::{OsRng, RngCore};
 use crate::devices::{command_channel, Command, DeviceEntry};
 pub(crate) mod discovery;
 pub(crate) mod notifications;
+pub(crate) mod share;
 
 use crate::lock::LockOk;
 use crate::runtime::log;
@@ -145,6 +146,10 @@ fn hello(device_id: &str) -> Hello {
                 capability: capability::NOTIFICATIONS,
                 version: 1,
             },
+            CapabilityVersion {
+                capability: capability::SHARE,
+                version: 1,
+            },
         ],
     }
 }
@@ -162,6 +167,9 @@ pub(crate) struct Adapters {
     pub(crate) clipboard_sink: ClipboardSink,
     pub(crate) notification_server: NotificationServer,
     pub(crate) notifications: Arc<notifications::Bridge>,
+    /// Where received files land; partials of broken transfers stay here.
+    pub(crate) download_dir: std::path::PathBuf,
+    pub(crate) shares: Arc<share::ShareStore>,
 }
 
 /// The address a phone on this LAN would reach us at, for the QR. Best
@@ -226,6 +234,8 @@ pub(crate) fn install(
             clipboard_sink: Arc::new(crate::clipboard::write),
             notification_server: server,
             notifications: bridge,
+            download_dir: crate::incoming_file::download_dir(),
+            shares: Arc::new(share::ShareStore::default()),
         },
     ) {
         Ok((wire, addr)) => {
@@ -566,6 +576,40 @@ impl Wire {
             }
         }
 
+        let (outbox, mut outbox_rx) =
+            tokio::sync::mpsc::unbounded_channel::<magnetita_proto::Envelope>();
+        let shares = share::SessionShare::new(
+            Arc::clone(daemon),
+            &device_id,
+            &name,
+            session.transfers(),
+            Arc::clone(&self.adapters.shares),
+            self.adapters.download_dir.clone(),
+            outbox,
+        );
+        // Bulk streams are accepted by their own task: `select!` drops the
+        // future of a branch that loses the race, and a dropped half-accepted
+        // stream is a lost transfer. A channel receive is cancel-safe.
+        let (streams_tx, mut streams_rx) = tokio::sync::mpsc::unbounded_channel();
+        let acceptor = {
+            let transfers = session.transfers();
+            let name = name.clone();
+            tokio::spawn(async move {
+                loop {
+                    match transfers.accept().await {
+                        Ok(stream) => {
+                            if streams_tx.send(stream).is_err() {
+                                break;
+                            }
+                        }
+                        Err(e) => {
+                            log("link", &format!("{name}: bulk stream: {e}"));
+                            break;
+                        }
+                    }
+                }
+            })
+        };
         let mut tick = tokio::time::interval(TICK);
         loop {
             tokio::select! {
@@ -573,12 +617,25 @@ impl Wire {
                     Ok(env) if env.capability == capability::PAIRING && env.kind == pair_kind::QR_PROOF => {
                         self.prove_again(&session, &name, &env.body).await;
                     }
+                    Ok(env) if env.capability == capability::SHARE => {
+                        if let Some(reply) = shares.handle(&env) {
+                            if let Err(e) = session.send_message(reply.capability, reply.kind, reply.body).await {
+                                log("link", &format!("{name}: share: {e}"));
+                            }
+                        }
+                    }
                     Ok(env) => self.handle(&device_id, &name, env),
                     Err(e) => {
                         log("link", &format!("{name}: {e}"));
                         break;
                     }
                 },
+                Some((transfer, stream)) = streams_rx.recv() => shares.stream_arrived(transfer, stream),
+                Some(reply) = outbox_rx.recv() => {
+                    if let Err(e) = session.send_message(reply.capability, reply.kind, reply.body).await {
+                        log("link", &format!("{name}: share: {e}"));
+                    }
+                }
                 _ = tick.tick() => {
                     // The desktop's clipboard changes land in the shared slot
                     // for every device; this wire drains its own entry here.
@@ -601,7 +658,7 @@ impl Wire {
                         break;
                     }
                     while let Ok(command) = commands.try_recv() {
-                        if let Err(e) = self.command(&session, command).await {
+                        if let Err(e) = self.command(&session, &shares, command).await {
                             log("link", &format!("{name}: command: {e}"));
                         }
                     }
@@ -612,6 +669,7 @@ impl Wire {
                 }
             }
         }
+        acceptor.abort();
         daemon.pending_clipboards.clear(&device_id);
         self.adapters.notifications.forget_device(&device_id);
     }
@@ -706,8 +764,21 @@ impl Wire {
         }
     }
 
-    async fn command(&self, session: &Session, command: Command) -> Result<(), LinkError> {
+    async fn command(
+        &self,
+        session: &Session,
+        shares: &Arc<share::SessionShare>,
+        command: Command,
+    ) -> Result<(), LinkError> {
         match command {
+            Command::SendFile(path) => match shares.offer(path) {
+                Ok(offer) => {
+                    session
+                        .send_message(offer.capability, offer.kind, offer.body)
+                        .await?;
+                }
+                Err(e) => log("link", &format!("share: {e}")),
+            },
             Command::Ring => {
                 session
                     .send_message(capability::FIND, FindRing::KIND, FindRing.encode())
@@ -741,11 +812,8 @@ impl Wire {
                     )
                     .await?;
             }
-            Command::SendFile(_) | Command::Media(_) => {
-                log(
-                    "link",
-                    "file and media commands reach the own wire in MAG-P4",
-                );
+            Command::Media(_) => {
+                log("link", "media commands reach the own wire in MAG-P4-D");
             }
         }
         Ok(())
@@ -875,6 +943,8 @@ mod tests {
                 }),
                 notification_server: Arc::new(notifications::NoServer),
                 notifications: Arc::new(notifications::Bridge::default()),
+                download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
+                shares: Arc::new(share::ShareStore::default()),
             },
         )
         .unwrap();
@@ -958,6 +1028,8 @@ mod tests {
                 clipboard_sink: Arc::new(|_: &str| true),
                 notification_server: recorder.clone(),
                 notifications: Arc::clone(&bridge),
+                download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
+                shares: Arc::new(share::ShareStore::default()),
             },
         )
         .unwrap();
@@ -1068,6 +1140,162 @@ mod tests {
     }
 
     #[test]
+    fn a_file_resumes_after_a_broken_stream_and_flows_both_ways() {
+        use magnetita_proto::daily::share::{ShareAccept, ShareDone, ShareOffer};
+        use std::io::Write;
+        let cert = DeviceCert::generate("desktop");
+        let daemon = test_daemon(&cert);
+        let arm = PairingArm::default();
+        let downloads =
+            std::env::temp_dir().join(format!("magnetita-share-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&downloads);
+        let (wire, addr) = spawn(
+            Arc::clone(&daemon),
+            cert.clone(),
+            "desktop".into(),
+            arm.clone(),
+            "127.0.0.1:0".parse().unwrap(),
+            false,
+            Adapters {
+                clipboard_sink: Arc::new(|_: &str| true),
+                notification_server: Arc::new(notifications::NoServer),
+                notifications: Arc::new(notifications::Bridge::default()),
+                download_dir: downloads.clone(),
+                shares: Arc::new(share::ShareStore::default()),
+            },
+        )
+        .unwrap();
+        let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (phone, phone_fp) = rt.block_on(async { phone("phone5") });
+        let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
+        let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
+        let payload: Vec<u8> = (0..300_000u32).map(|i| (i % 251) as u8).collect();
+        let next_share = |session: &Session| {
+            rt.block_on(async {
+                loop {
+                    let env = tokio::time::timeout(Duration::from_secs(5), session.recv())
+                        .await
+                        .expect("a share envelope in time")
+                        .unwrap();
+                    if env.capability == capability::SHARE {
+                        break env;
+                    }
+                }
+            })
+        };
+
+        // Phone to desktop, first attempt: half the bytes, then the stream breaks.
+        let offer = ShareOffer {
+            transfer: 7,
+            name: "photo.bin".into(),
+            size: payload.len() as u64,
+            mime: "application/octet-stream".into(),
+        };
+        rt.block_on(session.send_message(capability::SHARE, ShareOffer::KIND, offer.encode()))
+            .unwrap();
+        let accept = ShareAccept::decode(&next_share(&session).body).unwrap();
+        assert_eq!((accept.transfer, accept.offset), (7, 0));
+        // The stream stays open (dropping it would reset it and discard the
+        // bytes); the link itself dies, as it does when Wi-Fi goes.
+        let half = rt.block_on(async {
+            let mut stream = session.open_transfer(7).await.unwrap();
+            stream.write_all(&payload[..150_000]).await.unwrap();
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            stream
+        });
+        session.close("wifi dropped");
+        drop(half);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while daemon.devices.lock_ok().contains_key("phone5") {
+            assert!(Instant::now() < deadline, "the broken session never left");
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert!(daemon
+            .log
+            .lock_ok()
+            .iter()
+            .any(|e| e.message.contains("transferencia interrumpida")));
+
+        // A new session, the same offer: the desktop asks for the rest only.
+        let (session, _hello) = rt
+            .block_on(phone.connect(addr, PeerExpect::Fingerprint(desktop_fp)))
+            .unwrap();
+        rt.block_on(session.send_message(capability::SHARE, ShareOffer::KIND, offer.encode()))
+            .unwrap();
+        let accept = ShareAccept::decode(&next_share(&session).body).unwrap();
+        assert!(
+            accept.offset > 0 && accept.offset < payload.len() as u64,
+            "resumes from the bytes it holds: {}",
+            accept.offset
+        );
+        rt.block_on(async {
+            let mut stream = session.open_transfer(7).await.unwrap();
+            stream
+                .write_all(&payload[accept.offset as usize..])
+                .await
+                .unwrap();
+            stream.finish().unwrap();
+            let _ = stream.stopped().await;
+        });
+        let done = ShareDone::decode(&next_share(&session).body).unwrap();
+        assert!(done.complete);
+        let received = std::fs::read(downloads.join("photo.bin")).unwrap();
+        assert_eq!(received, payload);
+        assert!(daemon
+            .log
+            .lock_ok()
+            .iter()
+            .any(|e| e.message.contains("archivo recibido")));
+
+        // Desktop to phone: SendFile offers, the phone accepts and drains the stream.
+        let outgoing = downloads.join("from-desk.bin");
+        std::fs::File::create(&outgoing)
+            .unwrap()
+            .write_all(&payload[..100_000])
+            .unwrap();
+        daemon
+            .commands
+            .lock_ok()
+            .get("phone5")
+            .unwrap()
+            .try_send(Command::SendFile(outgoing.clone()))
+            .unwrap();
+        let offer = ShareOffer::decode(&next_share(&session).body).unwrap();
+        assert_eq!(
+            (offer.name.as_str(), offer.size),
+            ("from-desk.bin", 100_000)
+        );
+        rt.block_on(
+            session.send_message(
+                capability::SHARE,
+                ShareAccept::KIND,
+                ShareAccept {
+                    transfer: offer.transfer,
+                    offset: 0,
+                }
+                .encode(),
+            ),
+        )
+        .unwrap();
+        let got = rt.block_on(async {
+            let (id, mut stream) =
+                tokio::time::timeout(Duration::from_secs(5), session.accept_transfer())
+                    .await
+                    .unwrap()
+                    .unwrap();
+            assert_eq!(id, offer.transfer);
+            stream.read_to_end(1 << 20).await.unwrap()
+        });
+        assert_eq!(got, &payload[..100_000]);
+        let done = ShareDone::decode(&next_share(&session).body).unwrap();
+        assert!(done.complete);
+        session.close("done");
+        drop(wire);
+        let _ = std::fs::remove_dir_all(&downloads);
+    }
+
+    #[test]
     fn a_phone_that_forgot_the_desktop_pairs_again_while_still_pinned() {
         let cert = DeviceCert::generate("desktop");
         let daemon = test_daemon(&cert);
@@ -1083,6 +1311,8 @@ mod tests {
                 clipboard_sink: Arc::new(|_: &str| true),
                 notification_server: Arc::new(notifications::NoServer),
                 notifications: Arc::new(notifications::Bridge::default()),
+                download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
+                shares: Arc::new(share::ShareStore::default()),
             },
         )
         .unwrap();
@@ -1156,6 +1386,8 @@ mod tests {
                 clipboard_sink: Arc::new(|_: &str| true),
                 notification_server: Arc::new(notifications::NoServer),
                 notifications: Arc::new(notifications::Bridge::default()),
+                download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
+                shares: Arc::new(share::ShareStore::default()),
             },
         )
         .unwrap();

@@ -11,7 +11,7 @@ use std::process::Command;
 
 use magnetita_link::discovery::{parse_peers, Peer as Advertised, SERVICE_TYPE};
 
-pub use magnetita_mobile::phone::{clipboard_text, describe};
+pub use magnetita_mobile::phone::{clipboard_text, describe, share_fields, Incoming};
 pub use magnetita_mobile::{Phone, PhoneSession};
 
 /// The Magnetita desktops Avahi sees right now.
@@ -110,7 +110,10 @@ mod tests {
             let (pinned, session) = phone.pair(&uri).await.unwrap();
             assert_eq!(session.desktop.device_id, "desktop");
             session.report_battery(33, false).await.unwrap();
-            let ring = session.next(Duration::from_secs(5)).await.unwrap().unwrap();
+            let ring = match session.next(Duration::from_secs(5)).await.unwrap().unwrap() {
+                Incoming::Envelope(env) => env,
+                other => panic!("expected an envelope, got {other:?}"),
+            };
             assert_eq!(describe(&ring), "find: ring");
             pinned
         };

@@ -11,7 +11,9 @@ use std::time::Duration;
 
 use magnetita_link::trust::fingerprint_text;
 
-use crate::phone::{clipboard_text, describe, notification_fields, Phone, PhoneSession};
+use crate::phone::{
+    clipboard_text, describe, notification_fields, share_fields, Incoming, Phone, PhoneSession,
+};
 use magnetita_proto::daily::notifications::{Action, NotificationPosted};
 
 /// Why a call failed, as Kotlin sees it.
@@ -68,7 +70,21 @@ pub struct Event {
     pub key: Option<String>,
     /// The button index of a notification action.
     pub action: Option<u16>,
+    /// The transfer a share message names.
+    pub transfer: Option<u32>,
+    /// An offered file's size.
+    pub size: Option<u64>,
+    /// The offset an acceptance asks to send from.
+    pub offset: Option<u64>,
+    /// Whether a finished transfer carried every byte.
+    pub complete: Option<bool>,
+    /// Where a received file landed on this phone.
+    pub path: Option<String>,
 }
+
+/// The kind [`MobileSession::next`] uses for a file this phone finished
+/// receiving; not a wire kind, so it cannot collide with one.
+pub const FILE_RECEIVED_KIND: u16 = 100;
 
 /// One of the phone's notifications, as the listener sees it.
 #[derive(uniffi::Record)]
@@ -207,22 +223,86 @@ impl MobileSession {
             .block_on(self.inner.send_notification_gone(&key))?)
     }
 
+    /// Offers a file; wait for the accepted event before writing.
+    pub fn offer_file(&self, name: String, size: u64, mime: String) -> Result<u32, MobileError> {
+        Ok(self
+            .handle
+            .block_on(self.inner.offer_file(&name, size, &mime))?)
+    }
+
+    /// Writes the next bytes of an accepted transfer.
+    pub fn write_transfer(&self, transfer: u32, bytes: Vec<u8>) -> Result<(), MobileError> {
+        Ok(self
+            .handle
+            .block_on(self.inner.write_transfer(transfer, &bytes))?)
+    }
+
+    /// Ends an accepted transfer.
+    pub fn finish_transfer(&self, transfer: u32) -> Result<(), MobileError> {
+        Ok(self.handle.block_on(self.inner.finish_transfer(transfer))?)
+    }
+
+    /// Accepts an offered file into `dir`; its end arrives as an event of
+    /// kind [`FILE_RECEIVED_KIND`] with the path.
+    pub fn accept_file(&self, transfer: u32, dir: String) -> Result<(), MobileError> {
+        let task = self
+            .handle
+            .block_on(self.inner.accept_file(transfer, PathBuf::from(dir)))?;
+        self.handle.spawn(task);
+        Ok(())
+    }
+
+    pub fn reject_file(&self, transfer: u32) -> Result<(), MobileError> {
+        Ok(self.handle.block_on(self.inner.reject_file(transfer))?)
+    }
+
+    /// Shares a URL or a snippet with the desktop.
+    pub fn send_text(&self, text: String) -> Result<(), MobileError> {
+        Ok(self.handle.block_on(self.inner.send_text(&text))?)
+    }
+
     /// Blocks up to `timeout_ms` for the next envelope; `None` on timeout.
     pub fn next(&self, timeout_ms: u64) -> Result<Option<Event>, MobileError> {
         let env = self
             .handle
             .block_on(self.inner.next(Duration::from_millis(timeout_ms)))?;
-        Ok(env.map(|e| {
-            let (key, action, reply) = notification_fields(&e);
-            Event {
-                capability: e.capability,
-                kind: e.kind,
-                description: describe(&e),
-                text: clipboard_text(&e).or(reply),
-                key,
-                action,
-                body: e.body,
+        Ok(env.map(|incoming| match incoming {
+            Incoming::Envelope(e) => {
+                let (key, action, reply) = notification_fields(&e);
+                let share = share_fields(&e);
+                Event {
+                    capability: e.capability,
+                    kind: e.kind,
+                    description: describe(&e),
+                    text: clipboard_text(&e).or(reply).or(share.text),
+                    key,
+                    action,
+                    transfer: share.transfer,
+                    size: share.size,
+                    offset: share.offset,
+                    complete: share.complete,
+                    path: None,
+                    body: e.body,
+                }
             }
+            Incoming::FileReceived {
+                transfer,
+                path,
+                complete,
+            } => Event {
+                capability: magnetita_proto::capability::SHARE,
+                kind: FILE_RECEIVED_KIND,
+                description: format!("share: received {}", path.display()),
+                text: None,
+                key: None,
+                action: None,
+                transfer: Some(transfer),
+                size: None,
+                offset: None,
+                complete: Some(complete),
+                path: Some(path.to_string_lossy().into_owned()),
+                body: Vec::new(),
+            },
         }))
     }
 

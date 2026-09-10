@@ -18,7 +18,7 @@ magnetita-proto = { path = "../magnetita-proto" }
 magnetita-link = { path = "../magnetita-link" }
 magnetita-net = { path = "../magnetita-net" }
 uniffi = { workspace = true, features = ["cli"] }
-tokio = { workspace = true, features = ["rt-multi-thread", "time", "macros", "io-util"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "time", "macros", "io-util", "fs", "sync"] }
 
 [lints]
 workspace = true

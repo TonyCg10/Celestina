@@ -3,8 +3,8 @@
 - **Updated:** 2026-09-09
 - **Implementation:** `MAG-P4`, the daily set on the own wire, is the
   active checkpoint since 2026-09-09, paired with `magnetita-android`'s
-  `AND-2`; the clipboard both ways and the notifications with actions
-  and replies are done. `MAG-P3`, the
+  `AND-2`; the clipboard both ways, the notifications with actions and
+  replies, and the resumable file share are done. `MAG-P3`, the
   Android application foundation, met its exit on 2026-09-09 and is
   archived, paired with `AND-1`. `MAG-P2`, the link, is closed (`4011e53`, `95a4cc8`):
   `magnetita-link` carries `magnetita-proto` over QUIC with pinned
@@ -30,6 +30,9 @@
 
 ## Current checkout truth
 
+- Files travel both ways on the own wire on their own streams and resume
+  after a broken link; received files are published in the downloads
+  directory only while the device is still paired (`MAG-P4-C`).
 - The phone's notifications show on the desktop over the own wire with
   their buttons; the desktop's presses, replies and dismissals go back,
   also through `Devices1.NotificationAction`, `ReplyNotification` and
