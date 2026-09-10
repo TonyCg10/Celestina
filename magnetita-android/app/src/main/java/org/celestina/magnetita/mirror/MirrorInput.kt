@@ -13,13 +13,22 @@ import android.view.accessibility.AccessibilityEvent
  * system settings; the device screen offers the shortcut.
  *
  * A finger is a stroke continued segment by segment: `down` opens it,
- * each `move` extends it from the last point, `up` closes it. Key events
+ * each `move` extends it from the last point, `up` closes it. A segment
+ * is dispatched only when the previous one completed, to the latest point
+ * the desktop named meanwhile, so a fast drag lands where the pointer is
+ * and not where it was. Key events
  * cannot be injected this way, so a key becomes text set on the focused
  * field (a character appended, Backspace removing one, Enter the field's
  * action), and back, home and recents are the global actions.
  */
 class MirrorInput : AccessibilityService() {
-    private data class Finger(var x: Float, var y: Float, var stroke: GestureDescription.StrokeDescription?)
+    private class Finger(var x: Float, var y: Float, var stroke: GestureDescription.StrokeDescription?) {
+        /** A segment is playing; the next waits for its end. */
+        var busy = false
+        /** Where the finger should be next, and whether it lifts there. */
+        var pending: Pair<Float, Float>? = null
+        var lift = false
+    }
 
     private val fingers = HashMap<Int, Finger>()
 
@@ -40,27 +49,52 @@ class MirrorInput : AccessibilityService() {
         when (phase) {
             0 -> {
                 val path = Path().apply { moveTo(x, y) }
-                val stroke = GestureDescription.StrokeDescription(path, 0, SEGMENT_MS, true)
-                fingers[pointer] = Finger(x, y, stroke)
-                dispatch(stroke)
+                val stroke = GestureDescription.StrokeDescription(path, 0, DOWN_MS, true)
+                val finger = Finger(x, y, stroke)
+                fingers[pointer] = finger
+                play(pointer, finger, stroke)
             }
             1 -> {
                 val finger = fingers[pointer] ?: return
-                val previous = finger.stroke ?: return
-                val path = Path().apply { moveTo(finger.x, finger.y); lineTo(x, y) }
-                val stroke = previous.continueStroke(path, 0, SEGMENT_MS, true)
-                finger.x = x
-                finger.y = y
-                finger.stroke = stroke
-                dispatch(stroke)
+                finger.pending = x to y
+                if (!finger.busy) advance(pointer, finger)
             }
             else -> {
-                val finger = fingers.remove(pointer) ?: return
-                val previous = finger.stroke ?: return
-                val path = Path().apply { moveTo(finger.x, finger.y); lineTo(x, y) }
-                dispatch(previous.continueStroke(path, 0, SEGMENT_MS, false))
+                val finger = fingers[pointer] ?: return
+                finger.pending = x to y
+                finger.lift = true
+                if (!finger.busy) advance(pointer, finger)
             }
         }
+    }
+
+    /** The next segment of a finger, from where it is to where it is wanted. */
+    private fun advance(pointer: Int, finger: Finger) {
+        val (x, y) = finger.pending ?: return
+        finger.pending = null
+        val previous = finger.stroke ?: return
+        val path = Path().apply { moveTo(finger.x, finger.y); lineTo(x, y) }
+        val stroke = previous.continueStroke(path, 0, SEGMENT_MS, !finger.lift)
+        finger.x = x
+        finger.y = y
+        finger.stroke = stroke
+        if (finger.lift) fingers.remove(pointer)
+        play(pointer, finger, stroke)
+    }
+
+    private fun play(pointer: Int, finger: Finger, stroke: GestureDescription.StrokeDescription) {
+        finger.busy = true
+        val gesture = GestureDescription.Builder().addStroke(stroke).build()
+        val done = object : GestureResultCallback() {
+            override fun onCompleted(gestureDescription: GestureDescription?) { finished(pointer, finger) }
+            override fun onCancelled(gestureDescription: GestureDescription?) { finished(pointer, finger) }
+        }
+        if (!dispatchGesture(gesture, done, null)) finished(pointer, finger)
+    }
+
+    private fun finished(pointer: Int, finger: Finger) {
+        finger.busy = false
+        if (finger.pending != null && fingers[pointer] === finger) advance(pointer, finger)
     }
 
     /** An Android key code on the focused field, the way accessibility allows. */
@@ -96,13 +130,11 @@ class MirrorInput : AccessibilityService() {
         performGlobalAction(which)
     }
 
-    private fun dispatch(stroke: GestureDescription.StrokeDescription) {
-        val gesture = GestureDescription.Builder().addStroke(stroke).build()
-        dispatchGesture(gesture, null, null)
-    }
-
     companion object {
-        private const val SEGMENT_MS = 16L
+        /** A segment plays this long; the finger catches up in one. */
+        private const val SEGMENT_MS = 8L
+        /** A press before any move: long enough to register, short enough to tap. */
+        private const val DOWN_MS = 1L
         private const val KEYCODE_ENTER = 66
         private const val KEYCODE_DEL = 67
 
