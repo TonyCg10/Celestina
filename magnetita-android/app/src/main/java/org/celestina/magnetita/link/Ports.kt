@@ -49,6 +49,12 @@ interface LiveSession {
     fun rejectFile(transfer: Int): Boolean
 
     /** Reports one of this phone's players; an empty player name clears it. */
+    /** Opens a bulk stream of a fixed id (the mirror's video) for [writeTransfer]. */
+    fun openStream(id: Int): Boolean
+    fun closeStream(id: Int)
+    fun sendMirrorStarted(width: Int, height: Int, codec: Int, audio: Boolean): Boolean
+    fun sendMirrorStop(): Boolean
+
     fun sendMediaState(state: MediaState): Boolean
 
     /** Drives one of the desktop's players. */
@@ -120,7 +126,25 @@ data class LinkEvent(
     val commands: List<Pair<Int, String>>? = null,
     val commandId: Int? = null,
     val commandOk: Boolean? = null,
+    val mirrorStart: MirrorOptions? = null,
+    val mirrorStop: Boolean = false,
+    val mirrorTouch: MirrorTouch? = null,
+    val mirrorKey: Int? = null,
+    val mirrorKeyPressed: Boolean? = null,
+    val mirrorGlobal: Int? = null,
 )
+
+/** What the desktop asks the mirror to be; `codec` 0 HEVC, 1 H.264. */
+data class MirrorOptions(val maxSize: Int, val fps: Int, val bitrateKbps: Int, val codec: Int, val audio: Boolean)
+
+/** A touch on the mirrored picture: `phase` 0 down, 1 move, 2 up. */
+data class MirrorTouch(val phase: Int, val x: Int, val y: Int, val pointer: Int)
+
+/** The transfer ids the mirror's streams carry (`magnetita/docs/protocol.md`). */
+object MirrorStreams {
+    const val VIDEO: Int = 0xFFFF0001.toInt()
+    const val AUDIO: Int = 0xFFFF0002.toInt()
+}
 
 /** One contact as its vCard, versioned by the phone's last update. */
 data class PhoneContact(val id: Long, val version: Long, val vcard: String)

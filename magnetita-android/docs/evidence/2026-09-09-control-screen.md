@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `AND-3-A` of
-  [`../plans/active/2026-09-09-remote-control.md`](../plans/active/2026-09-09-remote-control.md):
+  [`../plans/archive/2026-09-09-remote-control.md`](../plans/archive/2026-09-09-remote-control.md):
   `app/src/main/java/org/celestina/magnetita/control/TrackpadMath.kt`,
   `ui/screens/ControlScreen.kt`, the input ports, the fast path and the
   command signals in `link/`, the device screen's entry, strings, the

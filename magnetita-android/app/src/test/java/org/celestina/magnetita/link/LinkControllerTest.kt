@@ -34,6 +34,10 @@ class LinkControllerTest {
         override fun acceptFile(transfer: Int, dir: String): Boolean { accepted += transfer to dir; return alive }
         override fun rejectFile(transfer: Int): Boolean = alive
         val media = mutableListOf<String>()
+        override fun openStream(id: Int): Boolean = alive
+        override fun closeStream(id: Int) {}
+        override fun sendMirrorStarted(width: Int, height: Int, codec: Int, audio: Boolean): Boolean = alive
+        override fun sendMirrorStop(): Boolean = alive
         override fun sendMediaState(state: MediaState): Boolean { media += "state:" + state.player; return alive }
         override fun sendMediaCommand(player: String, button: Int?, seekMs: Long?, volume: Int?): Boolean { media += "cmd:$player:$button"; return alive }
         override fun requestMedia(): Boolean { media += "request"; return alive }

@@ -1,15 +1,57 @@
 # Magnetita Android implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** AND-3
-- **Related author validation:** `VAL-MAG-11`, `VAL-MAG-12` and
-  `VAL-MAG-13` in Magnetita's [VALIDATION.md](../magnetita/VALIDATION.md);
-  they do not block
+- **Active implementation checkpoint:** AND-4
+- **Related author validation:** `VAL-MAG-11` through `VAL-MAG-14` in
+  Magnetita's [VALIDATION.md](../magnetita/VALIDATION.md); they do not
+  block
 
 This roadmap is the application half of Magnetita's own-protocol program;
 the Rust half and the desktop are in
 [Magnetita's roadmap](../magnetita/ROADMAP.md) (`MAG-P3` onwards). Each
 `AND-` checkpoint pairs with a `MAG-P` one.
+
+## AND-4 — The mirror over the link
+
+## Hypothesis and tangible outcome
+
+The screen as a `MediaProjection` into a surface encoder whose output goes
+down the link's video stream, consent through the system's dialog, touches
+back through an accessibility service: the desktop's Mirror control with
+no cable and nothing to re-enable after a reboot beyond two grants.
+
+## Scope
+
+- The consent activity, the `mediaProjection` foreground service, the
+  encoder into the fixed video stream, the desktop's mirror signals.
+- The accessibility service for touches and the three global actions; its
+  grant row on the device screen.
+
+## Exclusions
+
+- Audio capture, key injection, secure surfaces, screen-off capture.
+
+## Build order
+
+| Unit | Status | Dependency | Implementation result | Agent evidence |
+|---|---|---|---|---|
+| AND-4-A | done | MAG-P6-A | Capture, encode and stream on consent | JVM tests, lint |
+| AND-4-B | done | AND-4-A | Touches and navigation through the accessibility service | JVM tests, lint |
+
+## Implementation exit
+
+Close `AND-4` when the geometry and the signals have JVM tests,
+`lintRelease` passes and the release build is on the S25U; the mirror after
+a reboot is `VAL-MAG-14`.
+
+Met on 2026-09-09 as far as this project can meet it: 23 JVM tests and
+lint pass, the build is on the S25U; the picture and the touches are the
+author's observation.
+
+## Closed evidence
+
+- `AND-4-A`: [capture](docs/evidence/2026-09-09-mirror-capture.md)
+- `AND-4-B`: [touch](docs/evidence/2026-09-09-mirror-touch.md)
 
 ## AND-3 — Remote control
 

@@ -1,14 +1,16 @@
 # AND-3 — Remote control
 
 - **Opened:** 2026-09-09
+- **Closed:** 2026-09-09
 - **Plan ID:** remote-control
-- **Status:** active
+- **Status:** done
 - **Authorization:** the author said "sigue con todo" on 2026-09-09 with
   `AND-2`'s exit met
 - **Scope:** magnetita-android
 - **Implementation checkpoint:** AND-3
 - **Author-validation checkpoint:** `VAL-MAG-13` in Magnetita's
   [`../../../../magnetita/VALIDATION.md`](../../../../magnetita/VALIDATION.md)
+- **Successor:** AND-4
 
 ## Hypothesis
 
@@ -38,6 +40,10 @@ The phone as trackpad, keyboard and command deck for the desktop.
 
 The screen's arithmetic and signals have JVM tests, `lintRelease` passes,
 and the author moves the desktop's pointer from the phone (`VAL-MAG-13`).
+
+Met on 2026-09-09 as far as this project can meet it: 20 JVM tests and
+`lintRelease` pass and the release build is on the S25U; the pointer's
+motion is the author's `VAL-MAG-13`.
 
 ## Change and commit ledger
 

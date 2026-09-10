@@ -65,6 +65,12 @@ private class CoreSession(private val inner: MobileSession) : LiveSession {
     override fun rejectFile(transfer: Int): Boolean =
         runCatching { inner.rejectFile(transfer.toUInt()) }.isSuccess
 
+    override fun openStream(id: Int): Boolean = runCatching { inner.openStream(id.toUInt()) }.isSuccess
+    override fun closeStream(id: Int) { runCatching { inner.closeStream(id.toUInt()) } }
+    override fun sendMirrorStarted(width: Int, height: Int, codec: Int, audio: Boolean): Boolean =
+        runCatching { inner.sendMirrorStarted(width.toUShort(), height.toUShort(), codec.toUByte(), audio) }.isSuccess
+    override fun sendMirrorStop(): Boolean = runCatching { inner.sendMirrorStop() }.isSuccess
+
     override fun sendMediaState(state: MediaState): Boolean = runCatching {
         inner.sendMediaState(
             MobileMediaState(
@@ -118,6 +124,10 @@ private class CoreSession(private val inner: MobileSession) : LiveSession {
             it.mediaCommand?.let { c -> MediaCommand(c.player, c.button?.toInt(), c.seekMs?.toLong(), c.volume?.toInt()) },
             it.contactsSince?.toLong(), it.conversationsWanted, it.thread?.toLong(), it.beforeMs?.toLong(), it.limit?.toInt(), it.smsSend, it.callAction?.toInt(),
             it.commands?.map { c -> c.id.toInt() to c.name }, it.commandId?.toInt(), it.commandOk,
+            it.mirrorStart?.let { m -> MirrorOptions(m.maxSize.toInt(), m.fps.toInt(), m.bitrateKbps.toInt(), m.codec.toInt(), m.audio) },
+            it.mirrorStop,
+            it.mirrorTouch?.let { t -> MirrorTouch(t.phase.toInt(), t.x.toInt(), t.y.toInt(), t.pointer.toInt()) },
+            it.mirrorKey?.toInt(), it.mirrorKeyPressed, it.mirrorGlobal?.toInt(),
         ) }
     }
 

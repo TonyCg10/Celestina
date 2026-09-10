@@ -1,0 +1,17 @@
+# AND-4-B exact change inventory
+
+Base revision	ed1d48b2dbfe1e6a8d60d531774790cadd340248
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/mirror/MirrorInput.kt
+Pathspec	magnetita-android/app/src/main/res/xml/mirror_input.xml
+Pathspec	magnetita-android/docs/evidence/2026-09-09-mirror-touch.md
+Pathspec	magnetita-android/docs/inventories/2026-09-09-link-mirror/AND-4-B.numstat.tsv
+Pathspec	magnetita-android/docs/plans/active/2026-09-09-link-mirror.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+90	0	809dcbefb311b9a61b18530a8e75d9805445348b004cc02fa19f578f72c77453	magnetita-android/app/src/main/java/org/celestina/magnetita/mirror/MirrorInput.kt
+8	0	30515fe0336361f8b8efcc03cfff164c55a3768a2dc92f510c1271bb590228ab	magnetita-android/app/src/main/res/xml/mirror_input.xml
+38	0	4f5ec4656b53e11b82afa3664242f2ab0aea914f4ca9c245f9439dec0a13dab7	magnetita-android/docs/evidence/2026-09-09-mirror-touch.md
+17	0	self	magnetita-android/docs/inventories/2026-09-09-link-mirror/AND-4-B.numstat.tsv
+57	0	4db11320d87a5e6e0bb3639dcc899863fb019d93a07c1fdf086d73f904e134cb	magnetita-android/docs/plans/active/2026-09-09-link-mirror.md

@@ -95,6 +95,11 @@ class LinkService : LifecycleService() {
                         is DesktopSignal.Commands -> _commands.value = signal.list
                         is DesktopSignal.CommandResult -> _commandNote.value = getString(if (signal.ok) R.string.command_ok else R.string.command_failed)
                         is DesktopSignal.ShareText -> receiveClipboard(signal.text)
+                        is DesktopSignal.MirrorStart -> askMirror(signal.options)
+                        DesktopSignal.MirrorStop -> org.celestina.magnetita.mirror.MirrorService.stop(this@LinkService)
+                        is DesktopSignal.MirrorTouched -> org.celestina.magnetita.mirror.MirrorService.touch(signal.touch.phase, signal.touch.x, signal.touch.y, signal.touch.pointer)
+                        is DesktopSignal.MirrorGlobal -> org.celestina.magnetita.mirror.MirrorInput.instance?.global(signal.action)
+                        is DesktopSignal.MirrorKey -> {}
                         else -> {}
                     }
                 }
@@ -112,7 +117,8 @@ class LinkService : LifecycleService() {
             ACTION_OUTBOUND -> { while (true) { val op = pending.pollFirst() ?: break; controller?.send(op) } }
             ACTION_CALL_ENDED -> calls.restoreRinger()
             ACTION_PHONE_GRANTED -> offMain { book.send(0); messages.sendConversations() }
-            ACTION_FOCUS -> offerClipboard()
+            ACTION_FOCUS -> { inFront = true; offerClipboard() }
+            ACTION_BLUR -> inFront = false
             ACTION_FORGET -> intent.getStringExtra(EXTRA_DEVICE_ID)?.let { id ->
                 lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                     runCatching { Core.forget(applicationContext, id) }
@@ -135,6 +141,29 @@ class LinkService : LifecycleService() {
     }
 
     /** The desktop's clipboard arrived: it becomes this phone's, once. */
+    /**
+     * The desktop wants the screen: the consent activity opens straight
+     * away when this app is in front, else a notification offers it; a
+     * service may not raise an activity from the background.
+     */
+    private fun askMirror(options: org.celestina.magnetita.link.MirrorOptions) {
+        val consent = org.celestina.magnetita.mirror.MirrorConsentActivity.intent(this, options)
+        if (inFront) {
+            runCatching { startActivity(consent) }.onSuccess { return }
+        }
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(NotificationChannel(MIRROR_CHANNEL, getString(R.string.channel_mirror_ask), NotificationManager.IMPORTANCE_HIGH))
+        val open = PendingIntent.getActivity(this, 2, consent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        manager.notify(MIRROR_ASK_ID, Notification.Builder(this, MIRROR_CHANNEL)
+            .setSmallIcon(R.drawable.ic_launcher_monochrome)
+            .setContentTitle(getString(R.string.mirror_ask_title))
+            .setContentText(getString(R.string.mirror_ask_text))
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .setTimeoutAfter(60_000)
+            .build())
+    }
+
     private fun receiveClipboard(text: String) {
         clipboardPolicy.received(text)
         runCatching { clipboard.setPrimaryClip(ClipData.newPlainText("Magnetita", text)) }
@@ -290,6 +319,19 @@ class LinkService : LifecycleService() {
         fun focused(context: Context) {
             context.startForegroundService(Intent(context, LinkService::class.java).setAction(ACTION_FOCUS))
         }
+
+        /** The app left the front. */
+        fun blurred(context: Context) {
+            context.startForegroundService(Intent(context, LinkService::class.java).setAction(ACTION_BLUR))
+        }
+
+        @Volatile private var inFront = false
+        private const val ACTION_BLUR = "org.celestina.magnetita.BLUR"
+        private const val MIRROR_CHANNEL = "mirror-ask"
+        private const val MIRROR_ASK_ID = 4
+
+        /** The held session, for the mirror's own writer thread; null when down. */
+        fun liveSession(): LiveSession? = controllerRef?.live
 
         private val _ringing = MutableStateFlow(false)
 

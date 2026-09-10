@@ -65,4 +65,15 @@
         <item quantity="one">Enviando %d archivo al escritorio</item>
         <item quantity="other">Enviando %d archivos al escritorio</item>
     </plurals>
+    <string name="channel_mirror">Pantalla en el escritorio</string>
+    <string name="channel_mirror_ask">Peticiones de pantalla</string>
+    <string name="mirror_streaming">La pantalla se ve en el escritorio</string>
+    <string name="mirror_stop">Dejar de mostrar</string>
+    <string name="mirror_ask_title">El escritorio quiere ver la pantalla</string>
+    <string name="mirror_ask_text">Toca para permitirlo</string>
+    <string name="mirror_input">Control de la pantalla desde el escritorio</string>
+    <string name="mirror_input_summary">Deja que el escritorio toque y navegue la pantalla mientras la ve</string>
+    <string name="label_mirror_input">Control de pantalla</string>
+    <string name="detail_mirror_input_on">El escritorio puede tocar la pantalla mientras la ve</string>
+    <string name="detail_mirror_input_off">Permite el acceso para tocar la pantalla desde el escritorio</string>
 </resources>

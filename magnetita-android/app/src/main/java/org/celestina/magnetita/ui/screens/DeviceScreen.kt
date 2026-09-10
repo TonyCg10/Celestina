@@ -48,6 +48,8 @@ data class DeviceShown(
     val notificationsEnabled: Boolean = false,
     val desktopMedia: MediaState? = null,
     val phoneGranted: Boolean = false,
+    /** Whether the desktop may touch the mirrored screen. */
+    val mirrorInputEnabled: Boolean = false,
 )
 
 /**
@@ -65,6 +67,7 @@ fun DeviceScreen(
     onNotificationAccess: () -> Unit = {},
     onMedia: (button: Int) -> Unit = {},
     onPhoneAccess: () -> Unit = {},
+    onMirrorInput: () -> Unit = {},
     onControl: () -> Unit = {},
 ) {
     val scroll = rememberScrollState()
@@ -131,6 +134,17 @@ fun DeviceScreen(
                             StateChip(stringResource(R.string.chip_on), ChipTone.Alive)
                         } else {
                             TextButton(onClick = onPhoneAccess) { Text(stringResource(R.string.action_allow)) }
+                        }
+                    },
+                )
+                GroupRow(
+                    title = stringResource(R.string.label_mirror_input),
+                    detail = stringResource(if (shown.mirrorInputEnabled) R.string.detail_mirror_input_on else R.string.detail_mirror_input_off),
+                    trailing = {
+                        if (shown.mirrorInputEnabled) {
+                            StateChip(stringResource(R.string.chip_on), ChipTone.Alive)
+                        } else {
+                            TextButton(onClick = onMirrorInput) { Text(stringResource(R.string.action_allow)) }
                         }
                     },
                 )

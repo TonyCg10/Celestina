@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
                 val clipboardNote by LinkService.clipboardNote.collectAsState()
                 val desktopMedia by LinkService.desktopMedia.collectAsState()
                 var phoneGranted by remember { mutableStateOf(PhonePermissions.allGranted(this)) }
+                val mirrorInput = remember(link, phoneGranted) { org.celestina.magnetita.mirror.MirrorInput.enabled(this) }
                 val askPhone = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
                     phoneGranted = PhonePermissions.allGranted(this)
                     if (phoneGranted) LinkService.phoneGranted(this)
@@ -93,12 +94,13 @@ class MainActivity : ComponentActivity() {
                 } else {
                     val battery = readBattery()
                     DeviceScreen(
-                        shown = DeviceShown(core.identity, core.pinned, core.failed, link, battery.first, battery.second, ringing, clipboardNote, notificationsEnabled(link), desktopMedia, phoneGranted),
+                        shown = DeviceShown(core.identity, core.pinned, core.failed, link, battery.first, battery.second, ringing, clipboardNote, notificationsEnabled(link), desktopMedia, phoneGranted, mirrorInput),
                         onScan = { scanning = true },
                         onForget = { id -> LinkService.forget(this, id) },
                         onStopRinging = { LinkService.stopRinging(this) },
                         onNotificationAccess = { startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
                         onPhoneAccess = { askPhone.launch(PhonePermissions.ALL) },
+                        onMirrorInput = { startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
                         onControl = { page = 1 },
                         onMedia = { button -> desktopMedia?.let { LinkService.send(this, Outbound.MediaControl(MediaCommand(it.player, button, null, null))) } },
                     )
@@ -109,7 +111,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) LinkService.focused(this)
+        if (hasFocus) LinkService.focused(this) else LinkService.blurred(this)
     }
 
     override fun onNewIntent(intent: Intent) {
