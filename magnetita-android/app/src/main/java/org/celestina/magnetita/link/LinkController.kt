@@ -196,6 +196,9 @@ class LinkController(
                                 if (id != null) offered[id] = op
                                 id != null
                             }
+                            is Outbound.Media -> live.sendMediaState(op.state)
+                            is Outbound.MediaControl -> live.sendMediaCommand(op.command.player, op.command.button, op.command.seekMs, op.command.volume)
+                            Outbound.MediaWanted -> live.requestMedia()
                         }
                     }
                     if (!sent) return@launch

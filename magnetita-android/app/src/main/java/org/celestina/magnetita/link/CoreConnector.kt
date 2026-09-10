@@ -2,6 +2,8 @@ package org.celestina.magnetita.link
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import uniffi.magnetita_mobile.MobileMediaCommand
+import uniffi.magnetita_mobile.MobileMediaState
 import uniffi.magnetita_mobile.MobileNotification
 import uniffi.magnetita_mobile.MobilePhone
 import uniffi.magnetita_mobile.MobileSession
@@ -60,10 +62,28 @@ private class CoreSession(private val inner: MobileSession) : LiveSession {
     override fun rejectFile(transfer: Int): Boolean =
         runCatching { inner.rejectFile(transfer.toUInt()) }.isSuccess
 
+    override fun sendMediaState(state: MediaState): Boolean = runCatching {
+        inner.sendMediaState(
+            MobileMediaState(
+                state.player, state.title, state.artist, state.album, state.playing,
+                state.positionMs.coerceAtLeast(0).toULong(), state.lengthMs.coerceAtLeast(0).toULong(),
+                state.canSeek, state.canNext, state.canPrevious, state.volume.coerceIn(0, 100).toUByte(),
+            ),
+        )
+    }.isSuccess
+
+    override fun sendMediaCommand(player: String, button: Int?, seekMs: Long?, volume: Int?): Boolean = runCatching {
+        inner.sendMediaCommand(MobileMediaCommand(player, button?.toUByte(), seekMs?.toULong(), volume?.coerceIn(0, 100)?.toUByte()))
+    }.isSuccess
+
+    override fun requestMedia(): Boolean = runCatching { inner.requestMedia() }.isSuccess
+
     override suspend fun next(timeoutMs: Long): LinkEvent? = withContext(Dispatchers.IO) {
         inner.next(timeoutMs.toULong())?.let { LinkEvent(
             it.capability.toInt(), it.kind.toInt(), it.description, it.text, it.key, it.action?.toInt(),
             it.transfer?.toInt(), it.size?.toLong(), it.offset?.toLong(), it.complete, it.path,
+            it.media?.let { m -> MediaState(m.player, m.title, m.artist, m.album, m.playing, m.positionMs.toLong(), m.lengthMs.toLong(), m.canSeek, m.canNext, m.canPrevious, m.volume.toInt()) },
+            it.mediaCommand?.let { c -> MediaCommand(c.player, c.button?.toInt(), c.seekMs?.toLong(), c.volume?.toInt()) },
         ) }
     }
 

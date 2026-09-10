@@ -1,6 +1,8 @@
 package org.celestina.magnetita.ui.screens
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +15,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -22,6 +25,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.celestina.magnetita.R
 import org.celestina.magnetita.link.LinkState
+import org.celestina.magnetita.link.MediaState
 import org.celestina.magnetita.ui.components.Canvas
 import org.celestina.magnetita.ui.components.ChipTone
 import org.celestina.magnetita.ui.components.Group
@@ -42,6 +46,7 @@ data class DeviceShown(
     val ringing: Boolean,
     val clipboardNote: String = "",
     val notificationsEnabled: Boolean = false,
+    val desktopMedia: MediaState? = null,
 )
 
 /**
@@ -57,6 +62,7 @@ fun DeviceScreen(
     onForget: (String) -> Unit,
     onStopRinging: () -> Unit,
     onNotificationAccess: () -> Unit = {},
+    onMedia: (button: Int) -> Unit = {},
 ) {
     val scroll = rememberScrollState()
     val progress by remember { derivedStateOf { (1f - scroll.value / 300f).coerceIn(0f, 1f) } }
@@ -125,6 +131,24 @@ fun DeviceScreen(
                 )
             }
             Spacer(Modifier.height(16.dp))
+            val media = shown.desktopMedia
+            if (media != null) {
+                Group {
+                    GroupRow(
+                        title = media.title.ifBlank { media.player },
+                        detail = listOf(media.artist, media.album).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { media.player },
+                        last = true,
+                        trailing = {
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                MediaButton("⏮", media.canPrevious) { onMedia(4) }
+                                MediaButton(if (media.playing) "⏸" else "▶", true) { onMedia(2) }
+                                MediaButton("⏭", media.canNext) { onMedia(3) }
+                            }
+                        },
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+            }
             if (desktop == null) {
                 Button(onClick = onScan, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) { Text(stringResource(R.string.action_scan)) }
                 Spacer(Modifier.height(8.dp))
@@ -161,4 +185,10 @@ fun DeviceScreen(
             Spacer(Modifier.height(120.dp))
         }
     }
+}
+
+/** One transport glyph; disabled when the player cannot do it. */
+@Composable
+private fun MediaButton(glyph: String, enabled: Boolean, onClick: () -> Unit) {
+    FilledTonalButton(onClick = onClick, enabled = enabled) { Text(glyph) }
 }

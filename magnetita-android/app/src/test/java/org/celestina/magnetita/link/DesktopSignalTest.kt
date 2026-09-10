@@ -22,6 +22,10 @@ class DesktopSignalTest {
         assertEquals(DesktopSignal.ShareEnded(4, true), DesktopSignal.of(LinkEvent(5, 4, "share: done", transfer = 4, complete = true)))
         assertEquals(DesktopSignal.FileReceived(4, "/x/a.jpg", true), DesktopSignal.of(LinkEvent(5, 100, "share: received", transfer = 4, complete = true, path = "/x/a.jpg")))
         assertEquals(DesktopSignal.ShareText("https://example.org"), DesktopSignal.of(LinkEvent(5, 5, "share: text", text = "https://example.org")))
+        val state = MediaState("mpv", "T", "A", "", true, 1, 2, true, true, false, 30)
+        assertEquals(DesktopSignal.DesktopMedia(state), DesktopSignal.of(LinkEvent(6, 1, "media: state", media = state)))
+        assertEquals(DesktopSignal.MediaControl(MediaCommand("YT", 2, null, null)), DesktopSignal.of(LinkEvent(6, 2, "media: command", mediaCommand = MediaCommand("YT", 2, null, null))))
+        assertEquals(DesktopSignal.MediaRequested, DesktopSignal.of(LinkEvent(6, 3, "media: requested")))
     }
 
     @Test

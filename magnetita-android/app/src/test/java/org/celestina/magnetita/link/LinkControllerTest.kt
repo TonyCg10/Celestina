@@ -33,6 +33,10 @@ class LinkControllerTest {
         override fun finishTransfer(transfer: Int): Boolean { finished = true; return alive }
         override fun acceptFile(transfer: Int, dir: String): Boolean { accepted += transfer to dir; return alive }
         override fun rejectFile(transfer: Int): Boolean = alive
+        val media = mutableListOf<String>()
+        override fun sendMediaState(state: MediaState): Boolean { media += "state:" + state.player; return alive }
+        override fun sendMediaCommand(player: String, button: Int?, seekMs: Long?, volume: Int?): Boolean { media += "cmd:$player:$button"; return alive }
+        override fun requestMedia(): Boolean { media += "request"; return alive }
         override suspend fun next(timeoutMs: Long): LinkEvent? {
             if (!alive) throw IllegalStateException("connection lost")
             incoming.removeFirstOrNull()?.let { return it }
@@ -162,8 +166,12 @@ class LinkControllerTest {
         assertEquals(listOf("copied on the phone"), session.clips)
         controller.send(Outbound.Notification(PhoneNotification("k1", "Messages", "Ana", "hi", 1, true, listOf("Mark read"))))
         controller.send(Outbound.NotificationGone("k1"))
+        controller.send(Outbound.Media(MediaState("YT", "Song", "Band", "", true, 0, 0, false, true, true, 50)))
+        controller.send(Outbound.MediaControl(MediaCommand("mpv", 3, null, null)))
+        controller.send(Outbound.MediaWanted)
         advanceTimeBy(200)
         assertEquals(listOf("post:k1", "gone:k1"), session.notes)
+        assertEquals(listOf("state:YT", "cmd:mpv:3", "request"), session.media)
         session.incoming += LinkEvent(2, 1, "clipboard: 5 bytes", "hello")
         session.incoming += LinkEvent(2, 2, "clipboard: requested")
         session.incoming += LinkEvent(3, 3, "notification: action", key = "k1", action = 0)

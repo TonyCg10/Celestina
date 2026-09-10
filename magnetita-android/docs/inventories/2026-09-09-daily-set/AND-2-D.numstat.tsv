@@ -1,0 +1,39 @@
+# AND-2-D exact change inventory
+
+Base revision	a9cfdbb482d66cca40d3958d9ed58a416c74bee7
+Pathspec	magnetita-android/ROADMAP.md
+Pathspec	magnetita-android/STATUS.md
+Pathspec	magnetita-android/app/src/main/AndroidManifest.xml
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/MainActivity.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/CoreConnector.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/DesktopSignal.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkController.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkService.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/Ports.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/media/PhoneMedia.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/screens/DeviceScreen.kt
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/link/DesktopSignalTest.kt
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/link/LinkControllerTest.kt
+Pathspec	magnetita-android/docs/evidence/2026-09-09-daily-media.md
+Pathspec	magnetita-android/docs/inventories/2026-09-09-daily-set/AND-2-D.numstat.tsv
+Pathspec	magnetita-android/docs/plans/active/2026-09-09-daily-set.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+2	1	3933c6968f396e99ca4881f0f2c41282547f5358bd15070a4e5e4426d05b6b55	magnetita-android/ROADMAP.md
+4	1	13d105ff07b50e180f36f16f14050ea7580a6ad4293de7259d9a79dcb7b041c3	magnetita-android/STATUS.md
+9	0	775b58dad22649d5a2db4a83c503b6e899443adb89a7166969eb8d86a004523b	magnetita-android/app/src/main/AndroidManifest.xml
+14	1	bc5fe36ef21e2d7f8ff01a5a2681653ff5db4ec047429389a7adcf5a418314b5	magnetita-android/app/src/main/java/org/celestina/magnetita/MainActivity.kt
+20	0	0ab187ff118650525687850ca798c819dc57ee2b78d7136701788b4d37a6e1ef	magnetita-android/app/src/main/java/org/celestina/magnetita/link/CoreConnector.kt
+18	0	dd8184cc64e98c8ab3ab25a6d1747af1960984f87d486ab49aac8f66aabbac4a	magnetita-android/app/src/main/java/org/celestina/magnetita/link/DesktopSignal.kt
+3	0	b44804b698f9207d7b38fe5b621a0d9848a140d562b2f7d864af1c07bf846969	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkController.kt
+11	0	a0dc387c5214fc24a493e96dd48e6493515e34bcd70498a127709afa5227d7a2	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkService.kt
+38	0	55d6611b2c7495df7fedda8cc96bb91586f3d7e1244313d592cca241d9a22255	magnetita-android/app/src/main/java/org/celestina/magnetita/link/Ports.kt
+129	0	0a7bbd324df09d8a441a6092dc7202b95e961102fde9d408b518e415d968d3e9	magnetita-android/app/src/main/java/org/celestina/magnetita/media/PhoneMedia.kt
+30	0	20d9b1c702e4f4bcb6d9dfb5dbc458e2f8deb74a62e4435ff0d36dd1f0657dcf	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/screens/DeviceScreen.kt
+4	0	3815ab30fe1368d8bf783ec5288395058f35ec7a81cfbae8d441c1a46d1fe705	magnetita-android/app/src/test/java/org/celestina/magnetita/link/DesktopSignalTest.kt
+8	0	e0bca72b6a7fb38a34d949b453b14ac502181406e291a103db77d22571326088	magnetita-android/app/src/test/java/org/celestina/magnetita/link/LinkControllerTest.kt
+53	0	cdb31c911292b1cc6d1cc170fcd97b8aef78f0aeff004e26af69cd185a02d0c1	magnetita-android/docs/evidence/2026-09-09-daily-media.md
+39	0	self	magnetita-android/docs/inventories/2026-09-09-daily-set/AND-2-D.numstat.tsv
+1	1	60c0d6ff10108147c4e63d8eda22df5b84a2fb5764aff57078f09f0a1cf574ca	magnetita-android/docs/plans/active/2026-09-09-daily-set.md

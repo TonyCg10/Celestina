@@ -44,7 +44,7 @@ contacts, SMS and calls.
 | AND-2-A | done | MAG-P4-A | Clipboard both ways: in front, tile, share target | JVM tests, lint |
 | AND-2-B | done | MAG-P4-B | Notifications with actions and replies | JVM tests |
 | AND-2-C | done | MAG-P4-C | File share both ways | JVM tests |
-| AND-2-D | planned | MAG-P4-D | Media control both ways | JVM tests |
+| AND-2-D | done | MAG-P4-D | Media control both ways | JVM tests |
 | AND-2-E | planned | MAG-P4-E | Contacts sync | JVM tests |
 | AND-2-F | planned | MAG-P4-F | SMS send and receive, MMS attachments | JVM tests |
 | AND-2-G | planned | MAG-P4-G | Call state, mute, answer, hang up | JVM tests |
@@ -60,6 +60,7 @@ use.
 - `AND-2-A`: [clipboard](docs/evidence/2026-09-09-daily-clipboard.md)
 - `AND-2-B`: [notifications](docs/evidence/2026-09-09-daily-notifications.md)
 - `AND-2-C`: [share](docs/evidence/2026-09-09-daily-share.md)
+- `AND-2-D`: [media](docs/evidence/2026-09-09-daily-media.md)
 
 ## AND-1 — The application foundation
 

@@ -38,6 +38,7 @@ class LinkService : LifecycleService() {
     private var controller: LinkController? = null
     private val ringer by lazy { Ringer(applicationContext) }
     private val clipboardPolicy = ClipboardPolicy()
+    private val media by lazy { org.celestina.magnetita.media.PhoneMedia(applicationContext) }
     private val clipboard by lazy { getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager }
 
     // Fires only while this app has the focus: the in-front half of the
@@ -55,6 +56,7 @@ class LinkService : LifecycleService() {
         startForeground(NOTIFICATION_ID, notification(getString(R.string.state_searching)), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         clipboard.addPrimaryClipChangedListener(clipListener)
+        media.start()
         val phone = Core.phone(applicationContext)
         val c = LinkController(
             connector = CoreConnector(phone),
@@ -78,6 +80,9 @@ class LinkService : LifecycleService() {
                         is DesktopSignal.NotificationAction -> PhoneNotifications.instance?.press(signal.key, signal.action)
                         is DesktopSignal.NotificationReply -> PhoneNotifications.instance?.reply(signal.key, signal.text)
                         is DesktopSignal.FileReceived -> if (signal.complete) publishReceived(signal.path)
+                        is DesktopSignal.DesktopMedia -> _desktopMedia.value = signal.state.takeIf { it.player.isNotEmpty() } ?: (if (_desktopMedia.value?.player == signal.state.player) null else _desktopMedia.value)
+                        is DesktopSignal.MediaControl -> media.drive(signal.command)
+                        DesktopSignal.MediaRequested -> media.report()
                         is DesktopSignal.ShareText -> receiveClipboard(signal.text)
                         else -> {}
                     }
@@ -108,6 +113,7 @@ class LinkService : LifecycleService() {
     override fun onDestroy() {
         loop?.cancel()
         runCatching { clipboard.removePrimaryClipChangedListener(clipListener) }
+        media.stop()
         ringer.stop()
         _ringing.value = false
         runCatching { unregisterReceiver(batteryReceiver) }
@@ -206,6 +212,11 @@ class LinkService : LifecycleService() {
         private const val EXTRA_TEXT = "text"
 
         private val _clipboardNote = MutableStateFlow("")
+
+        private val _desktopMedia = MutableStateFlow<MediaState?>(null)
+
+        /** The desktop's player the screen shows, or null when none. */
+        val desktopMedia: StateFlow<MediaState?> = _desktopMedia.asStateFlow()
 
         /** The last clipboard exchange, in the person's words, for the screen. */
         val clipboardNote: StateFlow<String> = _clipboardNote.asStateFlow()

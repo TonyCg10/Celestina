@@ -40,6 +40,15 @@ sealed interface DesktopSignal {
 
     /** The desktop shared a URL or a snippet. */
     data class ShareText(val text: String) : DesktopSignal
+
+    /** One of the desktop's players; an empty player name means it left. */
+    data class DesktopMedia(val state: MediaState) : DesktopSignal
+
+    /** The desktop drives one of this phone's players. */
+    data class MediaControl(val command: MediaCommand) : DesktopSignal
+
+    /** The desktop asks for this phone's players. */
+    data object MediaRequested : DesktopSignal
     data class Other(val capability: Int, val kind: Int) : DesktopSignal
 
     companion object {
@@ -48,6 +57,10 @@ sealed interface DesktopSignal {
         const val CAPABILITY_NOTIFICATIONS = 3
         const val CAPABILITY_FIND = 4
         const val CAPABILITY_SHARE = 5
+        const val CAPABILITY_MEDIA = 6
+        const val KIND_MEDIA_STATE = 1
+        const val KIND_MEDIA_COMMAND = 2
+        const val KIND_MEDIA_REQUEST = 3
         const val KIND_SHARE_OFFER = 1
         const val KIND_SHARE_ACCEPT = 2
         const val KIND_SHARE_REJECT = 3
@@ -89,6 +102,11 @@ sealed interface DesktopSignal {
                 if (event.transfer != null && event.path != null) FileReceived(event.transfer, event.path, event.complete ?: false) else Other(event.capability, event.kind)
             CAPABILITY_SHARE to KIND_SHARE_TEXT ->
                 event.text?.let { ShareText(it) } ?: Other(event.capability, event.kind)
+            CAPABILITY_MEDIA to KIND_MEDIA_STATE ->
+                event.media?.let { DesktopMedia(it) } ?: Other(event.capability, event.kind)
+            CAPABILITY_MEDIA to KIND_MEDIA_COMMAND ->
+                event.mediaCommand?.let { MediaControl(it) } ?: Other(event.capability, event.kind)
+            CAPABILITY_MEDIA to KIND_MEDIA_REQUEST -> MediaRequested
             else -> Other(event.capability, event.kind)
         }
     }

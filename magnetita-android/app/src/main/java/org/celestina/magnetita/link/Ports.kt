@@ -48,6 +48,15 @@ interface LiveSession {
 
     fun rejectFile(transfer: Int): Boolean
 
+    /** Reports one of this phone's players; an empty player name clears it. */
+    fun sendMediaState(state: MediaState): Boolean
+
+    /** Drives one of the desktop's players. */
+    fun sendMediaCommand(player: String, button: Int?, seekMs: Long?, volume: Int?): Boolean
+
+    /** Asks the desktop for its players' states. */
+    fun requestMedia(): Boolean
+
     /**
      * Waits up to `timeoutMs` for the next envelope: a short description, or
      * null on timeout. Throws when the session is gone. Suspends, so the
@@ -74,7 +83,27 @@ data class LinkEvent(
     val offset: Long? = null,
     val complete: Boolean? = null,
     val path: String? = null,
+    val media: MediaState? = null,
+    val mediaCommand: MediaCommand? = null,
 )
+
+/** One player's state, either side's. */
+data class MediaState(
+    val player: String,
+    val title: String,
+    val artist: String,
+    val album: String,
+    val playing: Boolean,
+    val positionMs: Long,
+    val lengthMs: Long,
+    val canSeek: Boolean,
+    val canNext: Boolean,
+    val canPrevious: Boolean,
+    val volume: Int,
+)
+
+/** A button (0 play, 1 pause, 2 play/pause, 3 next, 4 previous, 5 stop), a seek or a volume. */
+data class MediaCommand(val player: String, val button: Int?, val seekMs: Long?, val volume: Int?)
 
 /** One of this phone's notifications, as the wire carries it. */
 data class PhoneNotification(
@@ -96,6 +125,15 @@ sealed interface Outbound {
 
     /** A file to offer: what the content resolver knows about it. */
     data class File(val uri: String, val name: String, val size: Long, val mime: String) : Outbound
+
+    /** One of this phone's players changed. */
+    data class Media(val state: MediaState) : Outbound
+
+    /** A button, seek or volume for one of the desktop's players. */
+    data class MediaControl(val command: MediaCommand) : Outbound
+
+    /** The desktop's players are wanted now. */
+    data object MediaWanted : Outbound
 }
 
 /** Where a desktop is advertising, one entry per (id, address). */
