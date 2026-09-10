@@ -791,3 +791,13 @@ Current consumers: The scratch spike project during `MAG-P0`, deleted on
 Classification: Chosen application.
 
 Decision: accepted by the author on 2026-09-08.
+
+## Virtual input device for Magnetita (2026-09-09)
+
+`magnetitad` creates one `uinput` device ("Magnetita phone") for the
+phone's trackpad and keyboard. It needs write access to `/dev/uinput`,
+which this host grants through the `uaccess` udev rule Solaar installed
+(`/dev/uinput` tagged `uaccess`, so the seat's user gets an ACL). Without
+that rule, add one: `KERNEL=="uinput", TAG+="uaccess"` in
+`/etc/udev/rules.d/`. The daemon logs `input: /dev/uinput unavailable`
+once and drops input when the grant is missing.
