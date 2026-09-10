@@ -26,11 +26,18 @@ use crate::lock::LockOk;
 
 /// How long one request may take before the file system gives up on it.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
-/// How long the kernel may trust an attribute or a lookup.
-const TTL: Duration = Duration::from_secs(2);
-/// Bytes per read message: well under the wire's bound, large enough that
-/// the kernel's 128 KiB reads need one round trip.
-const READ_CHUNK: u32 = 512 * 1024;
+/// How long the kernel, and this side, may trust an attribute, a lookup or
+/// a listing. The phone is one person's, changed from the desktop through
+/// this very mount or from the phone's own hand; a quarter of a minute of
+/// staleness is the price of a browse that does not pay a round trip per
+/// entry.
+const TTL: Duration = Duration::from_secs(15);
+/// Bytes per read message: the wire's bound, so a file arrives in as few
+/// round trips as the wire allows and the kernel's 128 KiB reads are served
+/// from the window already fetched.
+const READ_CHUNK: u32 = magnetita_proto::bound::MAX_BYTES as u32;
+/// How long a fetched read window stays good for the next kernel read.
+const WINDOW_TTL: Duration = Duration::from_secs(5);
 
 /// The clients by device id, for the file systems and the tests.
 static CLIENTS: LazyLock<Mutex<HashMap<String, Arc<StorageClient>>>> =
@@ -270,6 +277,13 @@ fn join(parent: &str, name: &OsStr) -> Option<String> {
     })
 }
 
+/// One fetched read window of a file: where it starts, its bytes, when.
+struct Window {
+    start: u64,
+    bytes: Vec<u8>,
+    at: Instant,
+}
+
 /// The phone as a file system. Every operation is one round trip on the
 /// link, blocking the FUSE thread and nothing else.
 pub(crate) struct PhoneFs {
@@ -277,6 +291,12 @@ pub(crate) struct PhoneFs {
     handle: tokio::runtime::Handle,
     inodes: Mutex<Inodes>,
     attrs: Mutex<HashMap<u64, (Entry, Instant)>>,
+    /// Listings by directory inode, so a browse asks the phone once and the
+    /// lookups the kernel makes for every entry are answered here.
+    dirs: Mutex<HashMap<u64, (Vec<Entry>, Instant)>>,
+    /// The last window read per file inode: the kernel asks in 128 KiB
+    /// pieces, the phone answers in 1 MiB ones.
+    windows: Mutex<HashMap<u64, Window>>,
     uid: u32,
     gid: u32,
 }
@@ -288,6 +308,8 @@ impl PhoneFs {
             handle,
             inodes: Mutex::new(Inodes::new()),
             attrs: Mutex::new(HashMap::new()),
+            dirs: Mutex::new(HashMap::new()),
+            windows: Mutex::new(HashMap::new()),
             uid: rustix::process::getuid().as_raw(),
             gid: rustix::process::getgid().as_raw(),
         }
@@ -325,6 +347,64 @@ impl PhoneFs {
 
     fn forget_attr(&self, ino: u64) {
         self.attrs.lock_ok().remove(&ino);
+        self.windows.lock_ok().remove(&ino);
+    }
+
+    /// A directory changed under this side's hand: its listing is stale.
+    fn forget_dir(&self, ino: u64) {
+        self.dirs.lock_ok().remove(&ino);
+        self.attrs.lock_ok().remove(&ino);
+    }
+
+    /// The listing of a directory: the cache when fresh, else the phone.
+    fn listing_of(&self, ino: u64, path: &str) -> Result<Vec<Entry>, String> {
+        if let Some((entries, at)) = self.dirs.lock_ok().get(&ino) {
+            if at.elapsed() < TTL {
+                return Ok(entries.clone());
+            }
+        }
+        let entries = self.handle.block_on(self.client.list(path))?;
+        for entry in &entries {
+            if let Some(child) = join(path, OsStr::new(&entry.name)) {
+                let child_ino = self.inodes.lock_ok().get_or_insert(&child);
+                self.remember(child_ino, entry.clone());
+            }
+        }
+        self.dirs
+            .lock_ok()
+            .insert(ino, (entries.clone(), Instant::now()));
+        Ok(entries)
+    }
+
+    /// `size` bytes at `offset`: from the last window when it covers them,
+    /// else one wire-sized fetch from `offset` that becomes the window.
+    fn read_window(&self, ino: u64, path: &str, offset: u64, size: u32) -> Result<Vec<u8>, String> {
+        let wanted = size as usize;
+        if let Some(window) = self.windows.lock_ok().get(&ino) {
+            let end = window.start + window.bytes.len() as u64;
+            let short = window.bytes.len() < READ_CHUNK as usize;
+            if window.at.elapsed() < WINDOW_TTL
+                && offset >= window.start
+                && (offset + wanted as u64 <= end || (short && offset <= end))
+            {
+                let from = (offset - window.start) as usize;
+                let to = (from + wanted).min(window.bytes.len());
+                return Ok(window.bytes[from..to].to_vec());
+            }
+        }
+        let bytes = self
+            .handle
+            .block_on(self.client.read(path, offset, READ_CHUNK))?;
+        let out = bytes[..wanted.min(bytes.len())].to_vec();
+        self.windows.lock_ok().insert(
+            ino,
+            Window {
+                start: offset,
+                bytes,
+                at: Instant::now(),
+            },
+        );
+        Ok(out)
     }
 
     fn path_of(&self, ino: u64) -> Option<String> {
@@ -374,13 +454,34 @@ impl PhoneFs {
 
 impl Filesystem for PhoneFs {
     fn lookup(&self, _req: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEntry) {
-        let Some(parent) = self.path_of(parent.0) else {
+        let parent_ino = parent.0;
+        let Some(parent) = self.path_of(parent_ino) else {
             return reply.error(fuser::Errno::ENOENT);
         };
         let Some(path) = join(&parent, name) else {
             return reply.error(fuser::Errno::ENOENT);
         };
-        self.entry_reply(&path, reply);
+        let listed = self
+            .dirs
+            .lock_ok()
+            .get(&parent_ino)
+            .filter(|(_, at)| at.elapsed() < TTL)
+            .map(|(entries, _)| {
+                entries
+                    .iter()
+                    .find(|e| e.name.as_bytes() == name.as_encoded_bytes())
+                    .cloned()
+            });
+        match listed {
+            Some(Some(entry)) => {
+                let ino = self.inodes.lock_ok().get_or_insert(&path);
+                let attr = self.attr(ino, &entry);
+                self.remember(ino, entry);
+                reply.entry(&TTL, &attr, Generation(0));
+            }
+            Some(None) => reply.error(fuser::Errno::ENOENT),
+            None => self.entry_reply(&path, reply),
+        }
     }
 
     fn getattr(
@@ -451,7 +552,7 @@ impl Filesystem for PhoneFs {
         if self.handle.block_on(self.client.mkdir(&path)).is_err() {
             return reply.error(fuser::Errno::EIO);
         }
-        self.forget_attr(parent.0);
+        self.forget_dir(parent.0);
         self.entry_reply(&path, reply);
     }
 
@@ -469,7 +570,7 @@ impl Filesystem for PhoneFs {
                 if let Some(ino) = ino {
                     self.forget_attr(ino);
                 }
-                self.forget_attr(parent.0);
+                self.forget_dir(parent.0);
                 reply.ok();
             }
             Err(_) => reply.error(fuser::Errno::EIO),
@@ -496,6 +597,8 @@ impl Filesystem for PhoneFs {
             Ok(()) => {
                 self.inodes.lock_ok().moved(&from, &to);
                 self.attrs.lock_ok().clear();
+                self.dirs.lock_ok().clear();
+                self.windows.lock_ok().clear();
                 reply.ok();
             }
             Err(_) => reply.error(fuser::Errno::EIO),
@@ -527,19 +630,10 @@ impl Filesystem for PhoneFs {
         let Some(path) = self.path_of(ino.0) else {
             return reply.error(fuser::Errno::ENOENT);
         };
-        let mut out = Vec::with_capacity(size as usize);
-        while (out.len() as u32) < size {
-            let want = size - out.len() as u32;
-            match self
-                .handle
-                .block_on(self.client.read(&path, offset + out.len() as u64, want))
-            {
-                Ok(bytes) if bytes.is_empty() => break,
-                Ok(bytes) => out.extend(bytes),
-                Err(_) => return reply.error(fuser::Errno::EIO),
-            }
+        match self.read_window(ino.0, &path, offset, size) {
+            Ok(bytes) => reply.data(&bytes),
+            Err(_) => reply.error(fuser::Errno::EIO),
         }
-        reply.data(&out);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -598,7 +692,7 @@ impl Filesystem for PhoneFs {
         let Some(path) = self.path_of(ino.0) else {
             return reply.error(fuser::Errno::ENOENT);
         };
-        let entries = match self.handle.block_on(self.client.list(&path)) {
+        let entries = match self.listing_of(ino.0, &path) {
             Ok(entries) => entries,
             Err(_) => return reply.error(fuser::Errno::EIO),
         };
@@ -616,8 +710,7 @@ impl Filesystem for PhoneFs {
             } else {
                 FileType::RegularFile
             };
-            all.push((child_ino, kind, entry.name.clone()));
-            self.remember(child_ino, entry);
+            all.push((child_ino, kind, entry.name));
         }
         for (i, (child_ino, kind, name)) in all.into_iter().enumerate().skip(offset as usize) {
             if reply.add(INodeNo(child_ino), (i + 1) as u64, kind, name) {
@@ -648,7 +741,7 @@ impl Filesystem for PhoneFs {
         {
             return reply.error(fuser::Errno::EIO);
         }
-        self.forget_attr(parent.0);
+        self.forget_dir(parent.0);
         let entry = Entry {
             name: name.to_string_lossy().into_owned(),
             dir: false,

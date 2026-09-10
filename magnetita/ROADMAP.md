@@ -653,6 +653,7 @@ opens no KDE Connect port, as the concluded discussion directs.
 | MAG-P7-A | done | MAG-P6 | `storage` capability both ends (`AND-5-A` on the phone) | peer tests, JVM tests |
 | MAG-P7-B | done | MAG-P7-A | Siderita browses the phone without `sshfs`: a FUSE mount at the same path | daemon mount test, Siderita unchanged |
 | MAG-P7-C | done | MAG-P7-B | The KDE Connect wire, pairing v8 and the mount removed | workspace tests, `scripts/complete-production.sh` |
+| MAG-P7-E | done | MAG-P7-B | The mount's listing, attribute and read-window caches | daemon mount test |
 | MAG-P7-D | planned | VAL-MAG-14 | The `adb`/`scrcpy` mirror path removed; `Mirror1` keeps its methods | daemon tests, `scripts/complete-production.sh` |
 
 ## Implementation exit

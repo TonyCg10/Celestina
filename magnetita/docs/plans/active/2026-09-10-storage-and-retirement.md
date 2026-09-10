@@ -40,6 +40,9 @@ only what both ends share.
   discovery, TLS session and payload sockets, `magnetita-core`'s packets,
   pairing and session, the daemon's link threads, admission, payload
   handlers and the `sshfs` mount; the service unit renamed.
+- `MAG-P7-E` — the mount's caches: listings and attributes answered
+  once per browse, reads fetched by the wire's megabyte and served to the
+  kernel's smaller reads from that window.
 - `MAG-P7-D` — the `adb`/`scrcpy` mirror path removed once `VAL-MAG-14`
   has observed the own mirror after a reboot; `Mirror1` keeps its methods.
 
@@ -51,7 +54,7 @@ only what both ends share.
 
 ## Build order
 
-1. `MAG-P7-A`, `-B`, `-C`; `-D` after `VAL-MAG-14`.
+1. `MAG-P7-A`, `-B`, `-C`, `-E`; `-D` after `VAL-MAG-14`.
 
 ## Implementation exit
 
@@ -68,4 +71,5 @@ the shrunk daemon.
 | MAG-P7-A | `magnetita:` | done | [inventory](../../inventories/2026-09-10-storage-and-retirement/MAG-P7-A.numstat.tsv) | 14 files, +1380/-3 | The `storage` capability, the core's events and replies, the peer's directory | [record](../../evidence/2026-09-10-storage-wire.md) | `VAL-MAG-15` |
 | MAG-P7-B | `magnetita:` | done | [inventory](../../inventories/2026-09-10-storage-and-retirement/MAG-P7-B.numstat.tsv) | 19 files, +1508/-126 | The daemon's storage client and FUSE mount; `MAG-P6` archived and `MAG-P7` opened | [record](../../evidence/2026-09-10-phone-mount.md) | `VAL-MAG-15` |
 | MAG-P7-C | `magnetita:` | done | [inventory](../../inventories/2026-09-10-storage-and-retirement/MAG-P7-C.numstat.tsv) | 45 files, +342/-8045 | The KDE Connect wire, pairing v8 and the `sshfs` mount removed | [record](../../evidence/2026-09-10-kde-wire-removed.md) | `VAL-MAG-15` |
+| MAG-P7-E | `magnetita:` | done | [inventory](../../inventories/2026-09-10-storage-and-retirement/MAG-P7-E.numstat.tsv) | 5 files, +178/-26 | The mount's listing, attribute and read-window caches | [record](../../evidence/2026-09-10-mount-caches.md) | `VAL-MAG-15` |
 | MAG-P7-D | `magnetita:` | planned | `celestina-rs/crates/magnetitad/src/mirror.rs`, `mirror_discovery.rs`, `src/devices.rs` | — | The `adb`/`scrcpy` mirror path removed after `VAL-MAG-14` | record | `VAL-MAG-14` |
