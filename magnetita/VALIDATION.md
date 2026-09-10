@@ -21,6 +21,8 @@ does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
 ## VAL-MAG-14 — The mirror over the link after a phone reboot
 
 - **Status:** pending
+- **Note:** the window controls the phone since 2026-09-10 (pointer,
+  wheel, keys, right button Back, middle button Home, F1/F2/F3)
 - **Related implementation:** `MAG-P6` / `AND-4`
 - **Requires:** the deployed daemon, the release build on the S25U with
   "Control de pantalla" allowed in the accessibility settings, the phone

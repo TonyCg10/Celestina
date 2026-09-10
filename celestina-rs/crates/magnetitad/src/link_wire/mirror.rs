@@ -43,16 +43,18 @@ pub(crate) trait VideoSink: Send {
     fn close(&mut self);
 }
 
-/// `ffmpeg` on stdin, remuxing raw HEVC or H.264 into NUT for `mpv`, whose
-/// window is the mirror. Both are one process group, killed together.
+/// `mpv` on stdin, reading the raw HEVC or H.264 with the least delay its
+/// demuxer allows; its window is the mirror and its log carries the
+/// pointer, wheel and keys the window's script reports, which a thread of
+/// this side turns into the wire's touches and keys.
 pub(crate) struct DesktopPlayer {
     pub(crate) display_env: Vec<(String, String)>,
 }
 
 struct Children {
-    ffmpeg: Child,
     mpv: Child,
     tx: SyncSender<Vec<u8>>,
+    script: std::path::PathBuf,
 }
 
 impl MirrorPlayer for DesktopPlayer {
@@ -68,55 +70,68 @@ impl MirrorPlayer for DesktopPlayer {
             Codec::Hevc => "hevc",
             Codec::H264 => "h264",
         };
-        let mut ffmpeg = std::process::Command::new("ffmpeg")
-            .args([
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-f",
-                format,
-                "-c:v",
-                format,
-                "-i",
-                "pipe:0",
-                "-c",
-                "copy",
-                "-f",
-                "nut",
-                "pipe:1",
-            ])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .ok()?;
-        let remuxed = ffmpeg.stdout.take()?;
+        let script = std::env::var_os("XDG_RUNTIME_DIR")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir)
+            .join("magnetita")
+            .join("touch.lua");
+        if let Some(dir) = script.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        if let Err(e) = std::fs::write(&script, super::mirror_window::script()) {
+            log("mirror", &format!("window script: {e}"));
+            return None;
+        }
         let mut mpv = std::process::Command::new("mpv");
         mpv.args([
             "--profile=low-latency",
             "--untimed",
             "--no-cache",
-            "--no-terminal",
+            "--demuxer=lavf",
+            &format!("--demuxer-lavf-format={format}"),
+            "--demuxer-lavf-o=fflags=+nobuffer,flags=+low_delay",
+            "--demuxer-lavf-probesize=32",
+            "--demuxer-lavf-analyzeduration=0",
+            "--vd-lavc-threads=1",
+            "--vd-lavc-o=flags=+low_delay",
+            "--video-latency-hacks=yes",
+            "--framedrop=vo",
+            "--hwdec=auto-safe",
             "--container-fps-override=60",
+            "--input-default-bindings=no",
+            "--osc=no",
+            "--osd-level=0",
+            "--cursor-autohide=no",
+            "--terminal=yes",
+            "--no-input-terminal",
+            "--msg-level=all=no,touch=info",
             "--title=Magnetita",
             "--wayland-app-id=org.celestina.Magnetita",
-            "-",
         ])
-        .stdin(Stdio::from(remuxed))
-        .stdout(Stdio::null())
+        .arg(format!("--script={}", script.display()))
+        .arg("-")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
         .stderr(Stdio::null());
         for (key, value) in &self.display_env {
             mpv.env(key, value);
         }
-        let mpv = match mpv.spawn() {
+        let mut mpv = match mpv.spawn() {
             Ok(child) => child,
             Err(e) => {
-                let _ = ffmpeg.kill();
                 log("mirror", &format!("mpv: {e}"));
                 return None;
             }
         };
-        let mut stdin = ffmpeg.stdin.take()?;
+        let mut stdin = mpv.stdin.take()?;
+        let reports = mpv.stdout.take()?;
+        let translator = super::mirror_window::Translator::new(started.width, started.height);
+        std::thread::Builder::new()
+            .name("magnetita-mirror-input".into())
+            .spawn(move || {
+                super::mirror_window::pump(reports, translator, |env| own().queue_input(env));
+            })
+            .ok()?;
         let (tx, rx) = sync_channel::<Vec<u8>>(QUEUE_CHUNKS);
         std::thread::Builder::new()
             .name("magnetita-mirror-feed".into())
@@ -128,7 +143,7 @@ impl MirrorPlayer for DesktopPlayer {
                 }
             })
             .ok()?;
-        Some(Box::new(Children { ffmpeg, mpv, tx }))
+        Some(Box::new(Children { mpv, tx, script }))
     }
 }
 
@@ -142,10 +157,9 @@ impl VideoSink for Children {
     }
 
     fn close(&mut self) {
-        let _ = self.ffmpeg.kill();
         let _ = self.mpv.kill();
-        let _ = self.ffmpeg.wait();
         let _ = self.mpv.wait();
+        let _ = std::fs::remove_file(&self.script);
     }
 }
 

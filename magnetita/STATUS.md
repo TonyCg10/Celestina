@@ -1,6 +1,12 @@
 # Magnetita status
 
 - **Updated:** 2026-09-10
+- **Mirror window:** the link mirror's `mpv` window controls the phone
+  since 2026-09-10: left button and drag are touches, the wheel a swipe,
+  right button Back, middle button Home, F1/F2/F3 Back/Home/Recents, the
+  letters, digits, arrows, Enter, Backspace and the media keys forwarded
+  as Android keys; `mpv` reads the stream directly with its low-latency
+  demuxer options and no `ffmpeg` in between (`link_wire/mirror_window.rs`).
 - **Implementation:** `MAG-M1`, the app's deterministic read/watch
   lifecycle, is the active checkpoint since 2026-09-10 and its three units
   are done: every thread the app spawns answers to one owner per model,
