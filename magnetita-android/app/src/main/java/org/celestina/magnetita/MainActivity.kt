@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -97,12 +98,17 @@ class MainActivity : ComponentActivity() {
                     )
                 } else {
                     BackHandler(enabled = page != 0) { page = 0 }
+                    @Suppress("UnusedMaterial3ScaffoldPaddingParameter") // the page runs under the pill on purpose
                     androidx.compose.material3.Scaffold(
                         containerColor = MaterialTheme.colorScheme.surface,
                         bottomBar = { org.celestina.magnetita.ui.components.BottomTabs(page) { page = it } },
                         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
-                    ) { inner ->
-                        androidx.compose.foundation.layout.Box(Modifier.padding(inner)) {
+                    ) { _ ->
+                        // As MilaHub: the page runs under the pill, and a blurred
+                        // veil of the surface rises from the bottom edge so the
+                        // pill floats on glass rather than on a cut.
+                        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
+                            androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
                             if (page == 2) {
                                 SettingsScreen(mediaNotifications) { on ->
                                     preferences.mediaNotifications = on
@@ -136,6 +142,8 @@ class MainActivity : ComponentActivity() {
                         onMedia = { button -> desktopMedia?.let { LinkService.send(this@MainActivity, Outbound.MediaControl(MediaCommand(it.player, button, null, null))) } },
                     )
                             }
+                            }
+                            org.celestina.magnetita.ui.components.GlassVeil(Modifier.align(androidx.compose.ui.Alignment.BottomCenter))
                         }
                     }
                 }

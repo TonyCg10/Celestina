@@ -27,6 +27,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.background
 import androidx.compose.ui.unit.dp
 import org.celestina.magnetita.R
 
@@ -81,4 +84,27 @@ fun BottomTabs(selected: Int, onSelect: (Int) -> Unit) {
             }
         }
     }
+}
+
+/**
+ * The glass under the pill: the surface rising from the bottom edge as a
+ * blurred gradient, so the page fades into it instead of ending at a line.
+ */
+@Composable
+fun GlassVeil(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(110.dp)
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                        MaterialTheme.colorScheme.surface,
+                    ),
+                ),
+            )
+            .blur(8.dp),
+    )
 }
