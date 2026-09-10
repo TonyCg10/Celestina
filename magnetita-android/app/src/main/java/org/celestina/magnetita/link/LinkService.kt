@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import org.celestina.magnetita.MainActivity
 import org.celestina.magnetita.R
 import org.celestina.magnetita.core.Core
+import org.celestina.magnetita.notifications.PhoneNotifications
 
 /**
  * The session lives here, in a foreground service of the `connectedDevice`
@@ -71,6 +72,9 @@ class LinkService : LifecycleService() {
                         DesktopSignal.StopRinging -> { ringer.stop(); _ringing.value = false }
                         is DesktopSignal.ClipboardText -> receiveClipboard(signal.text)
                         DesktopSignal.ClipboardRequested -> offerClipboard()
+                        is DesktopSignal.NotificationDismiss -> PhoneNotifications.instance?.dismiss(signal.key)
+                        is DesktopSignal.NotificationAction -> PhoneNotifications.instance?.press(signal.key, signal.action)
+                        is DesktopSignal.NotificationReply -> PhoneNotifications.instance?.reply(signal.key, signal.text)
                         else -> {}
                     }
                 }
@@ -85,6 +89,7 @@ class LinkService : LifecycleService() {
         when (intent?.action) {
             ACTION_STOP_RINGING -> { ringer.stop(); _ringing.value = false }
             ACTION_SEND_CLIPBOARD -> offerClipboard(intent.getStringExtra(EXTRA_TEXT))
+            ACTION_OUTBOUND -> { while (true) { val op = pending.pollFirst() ?: break; controller?.send(op) } }
             ACTION_FOCUS -> offerClipboard()
             ACTION_FORGET -> intent.getStringExtra(EXTRA_DEVICE_ID)?.let { id ->
                 lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -181,6 +186,18 @@ class LinkService : LifecycleService() {
 
         /** The last clipboard exchange, in the person's words, for the screen. */
         val clipboardNote: StateFlow<String> = _clipboardNote.asStateFlow()
+
+        // Notifications are objects, not intent extras: the listener drops them
+        // here and pokes the service, which hands them to the loop in order.
+        private const val ACTION_OUTBOUND = "org.celestina.magnetita.OUTBOUND"
+        private val pending = java.util.concurrent.ConcurrentLinkedDeque<Outbound>()
+
+        /** Queue anything for the desktop from another component. */
+        fun send(context: Context, op: Outbound) {
+            pending.addLast(op)
+            while (pending.size > 64) pending.pollFirst()
+            context.startForegroundService(Intent(context, LinkService::class.java).setAction(ACTION_OUTBOUND))
+        }
 
         /** Sends `text` as this phone's clipboard, from the tile or a share. */
         fun sendClipboard(context: Context, text: String) {

@@ -47,6 +47,15 @@
             </intent-filter>
         </activity>
         <service
+            android:name=".notifications.PhoneNotifications"
+            android:exported="true"
+            android:label="@string/notification_listener"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+        <service
             android:name=".clipboard.ClipboardTile"
             android:exported="true"
             android:icon="@drawable/ic_launcher_monochrome"

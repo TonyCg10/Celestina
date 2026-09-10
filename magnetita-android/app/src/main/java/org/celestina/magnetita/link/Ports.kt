@@ -28,6 +28,12 @@ interface LiveSession {
     /** Sends this phone's clipboard text; false when the session is gone. */
     fun sendClipboard(text: String): Boolean
 
+    /** A notification appeared or changed on this phone. */
+    fun sendNotification(note: PhoneNotification): Boolean
+
+    /** A notification left this phone. */
+    fun sendNotificationGone(key: String): Boolean
+
     /**
      * Waits up to `timeoutMs` for the next envelope: a short description, or
      * null on timeout. Throws when the session is gone. Suspends, so the
@@ -42,7 +48,33 @@ interface LiveSession {
  * An envelope the desktop sent, described for a log and carried for a
  * handler; `text` is the clipboard text the core already decoded.
  */
-data class LinkEvent(val capability: Int, val kind: Int, val description: String, val text: String? = null)
+data class LinkEvent(
+    val capability: Int,
+    val kind: Int,
+    val description: String,
+    val text: String? = null,
+    val key: String? = null,
+    val action: Int? = null,
+)
+
+/** One of this phone's notifications, as the wire carries it. */
+data class PhoneNotification(
+    val key: String,
+    val appName: String,
+    val title: String,
+    val body: String,
+    val timestampMs: Long,
+    val replyable: Boolean,
+    val actions: List<String>,
+    val icon: ByteArray? = null,
+)
+
+/** Something this phone wants to tell the desktop, in order. */
+sealed interface Outbound {
+    data class Clipboard(val text: String) : Outbound
+    data class Notification(val note: PhoneNotification) : Outbound
+    data class NotificationGone(val key: String) : Outbound
+}
 
 /** Where a desktop is advertising, one entry per (id, address). */
 data class Advertised(val deviceId: String, val address: String)

@@ -1,6 +1,8 @@
 package org.celestina.magnetita.link
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -45,11 +47,16 @@ class LinkController(
     val signals: SharedFlow<DesktopSignal> = _signals.asSharedFlow()
 
     private val dropRequested = MutableStateFlow(false)
-    private val outboundClipboard = MutableStateFlow<String?>(null)
+    private val outbound = Channel<Outbound>(capacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
     /** Hand the loop a clipboard text; the session sends it on the next poll. */
     fun sendClipboard(text: String) {
-        outboundClipboard.value = text
+        outbound.trySend(Outbound.Clipboard(text))
+    }
+
+    /** Queue anything for the desktop; the session drains in order on each poll. */
+    fun send(op: Outbound) {
+        outbound.trySend(op)
     }
 
     /** Ends the current session (after a forget); the loop decides what follows. */
@@ -144,9 +151,16 @@ class LinkController(
                     withContext(io) { live.close("forgotten") }
                     break
                 }
-                outboundClipboard.value?.let { text ->
-                    outboundClipboard.value = null
-                    if (!withContext(io) { live.sendClipboard(text) }) return@launch
+                while (true) {
+                    val op = outbound.tryReceive().getOrNull() ?: break
+                    val sent = withContext(io) {
+                        when (op) {
+                            is Outbound.Clipboard -> live.sendClipboard(op.text)
+                            is Outbound.Notification -> live.sendNotification(op.note)
+                            is Outbound.NotificationGone -> live.sendNotificationGone(op.key)
+                        }
+                    }
+                    if (!sent) return@launch
                 }
                 val now = batteryChanged.value
                 if (now != seen) {

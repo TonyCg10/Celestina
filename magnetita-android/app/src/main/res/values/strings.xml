@@ -39,4 +39,10 @@
     <string name="clipboard_empty">No hay texto copiado</string>
     <string name="tile_send_clipboard">Enviar portapapeles</string>
     <string name="share_target">Al escritorio</string>
+    <string name="label_notifications">Notificaciones</string>
+    <string name="detail_notifications_on">Se muestran en el escritorio, con sus botones y respuesta</string>
+    <string name="detail_notifications_off">Permite el acceso a notificaciones para verlas en el escritorio</string>
+    <string name="chip_on">Activo</string>
+    <string name="action_allow">Permitir</string>
+    <string name="notification_listener">Notificaciones en el escritorio</string>
 </resources>

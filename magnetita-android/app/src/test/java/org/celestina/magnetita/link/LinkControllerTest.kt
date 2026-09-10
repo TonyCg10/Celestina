@@ -21,6 +21,9 @@ class LinkControllerTest {
         override fun reportBattery(level: Int, charging: Boolean): Boolean { reports += level to charging; return alive }
         val clips = mutableListOf<String>()
         override fun sendClipboard(text: String): Boolean { clips += text; return alive }
+        val notes = mutableListOf<String>()
+        override fun sendNotification(note: PhoneNotification): Boolean { notes += "post:" + note.key; return alive }
+        override fun sendNotificationGone(key: String): Boolean { notes += "gone:$key"; return alive }
         override suspend fun next(timeoutMs: Long): LinkEvent? {
             if (!alive) throw IllegalStateException("connection lost")
             incoming.removeFirstOrNull()?.let { return it }
@@ -148,10 +151,26 @@ class LinkControllerTest {
         controller.sendClipboard("copied on the phone")
         advanceTimeBy(200)
         assertEquals(listOf("copied on the phone"), session.clips)
+        controller.send(Outbound.Notification(PhoneNotification("k1", "Messages", "Ana", "hi", 1, true, listOf("Mark read"))))
+        controller.send(Outbound.NotificationGone("k1"))
+        advanceTimeBy(200)
+        assertEquals(listOf("post:k1", "gone:k1"), session.notes)
         session.incoming += LinkEvent(2, 1, "clipboard: 5 bytes", "hello")
         session.incoming += LinkEvent(2, 2, "clipboard: requested")
-        advanceTimeBy(300)
-        assertEquals(listOf<DesktopSignal>(DesktopSignal.ClipboardText("hello"), DesktopSignal.ClipboardRequested), seen)
+        session.incoming += LinkEvent(3, 3, "notification: action", key = "k1", action = 0)
+        session.incoming += LinkEvent(3, 4, "notification: reply", text = "on my way", key = "k1")
+        session.incoming += LinkEvent(3, 2, "notification: dismiss", key = "k1")
+        advanceTimeBy(600)
+        assertEquals(
+            listOf<DesktopSignal>(
+                DesktopSignal.ClipboardText("hello"),
+                DesktopSignal.ClipboardRequested,
+                DesktopSignal.NotificationAction("k1", 0),
+                DesktopSignal.NotificationReply("k1", "on my way"),
+                DesktopSignal.NotificationDismiss("k1"),
+            ),
+            seen,
+        )
         watcher.cancel()
         job.cancel()
     }

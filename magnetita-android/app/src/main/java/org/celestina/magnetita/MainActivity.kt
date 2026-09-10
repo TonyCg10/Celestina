@@ -20,6 +20,7 @@ import kotlinx.coroutines.withContext
 import org.celestina.magnetita.core.Core
 import org.celestina.magnetita.link.LinkService
 import org.celestina.magnetita.link.LinkState
+import org.celestina.magnetita.notifications.PhoneNotifications
 import org.celestina.magnetita.ui.screens.DeviceScreen
 import org.celestina.magnetita.ui.screens.DeviceShown
 import org.celestina.magnetita.ui.screens.ScanScreen
@@ -54,10 +55,11 @@ class MainActivity : ComponentActivity() {
                 } else {
                     val battery = readBattery()
                     DeviceScreen(
-                        shown = DeviceShown(core.identity, core.pinned, core.failed, link, battery.first, battery.second, ringing, clipboardNote),
+                        shown = DeviceShown(core.identity, core.pinned, core.failed, link, battery.first, battery.second, ringing, clipboardNote, notificationsEnabled(link)),
                         onScan = { scanning = true },
                         onForget = { id -> LinkService.forget(this, id) },
                         onStopRinging = { LinkService.stopRinging(this) },
+                        onNotificationAccess = { startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
                     )
                 }
             }
@@ -78,6 +80,11 @@ class MainActivity : ComponentActivity() {
         runCatching { FromCore(Core.identity(applicationContext), Core.pinned(applicationContext), false) }
             .getOrElse { FromCore(null, emptyList(), true) }
     }
+
+    /** Re-read on every link change, which is also when the person comes back from Settings. */
+    @Composable
+    private fun notificationsEnabled(@Suppress("UNUSED_PARAMETER") link: LinkState): Boolean =
+        PhoneNotifications.enabled(applicationContext)
 
     @Composable
     private fun readBattery(): Pair<Int, Boolean> {

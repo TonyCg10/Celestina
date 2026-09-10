@@ -2,6 +2,7 @@ package org.celestina.magnetita.link
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import uniffi.magnetita_mobile.MobileNotification
 import uniffi.magnetita_mobile.MobilePhone
 import uniffi.magnetita_mobile.MobileSession
 
@@ -26,8 +27,26 @@ private class CoreSession(private val inner: MobileSession) : LiveSession {
     override fun sendClipboard(text: String): Boolean =
         runCatching { inner.sendClipboard(text) }.isSuccess
 
+    override fun sendNotification(note: PhoneNotification): Boolean = runCatching {
+        inner.sendNotification(
+            MobileNotification(
+                key = note.key,
+                appName = note.appName,
+                title = note.title,
+                body = note.body,
+                timestampMs = note.timestampMs.toULong(),
+                replyable = note.replyable,
+                actions = note.actions,
+                icon = note.icon,
+            ),
+        )
+    }.isSuccess
+
+    override fun sendNotificationGone(key: String): Boolean =
+        runCatching { inner.sendNotificationGone(key) }.isSuccess
+
     override suspend fun next(timeoutMs: Long): LinkEvent? = withContext(Dispatchers.IO) {
-        inner.next(timeoutMs.toULong())?.let { LinkEvent(it.capability.toInt(), it.kind.toInt(), it.description, it.text) }
+        inner.next(timeoutMs.toULong())?.let { LinkEvent(it.capability.toInt(), it.kind.toInt(), it.description, it.text, it.key, it.action?.toInt()) }
     }
 
     override fun close(reason: String) = inner.close(reason)

@@ -41,6 +41,7 @@ data class DeviceShown(
     val batteryCharging: Boolean,
     val ringing: Boolean,
     val clipboardNote: String = "",
+    val notificationsEnabled: Boolean = false,
 )
 
 /**
@@ -50,7 +51,13 @@ data class DeviceShown(
  * scan. While the desktop is finding the phone the stop action leads.
  */
 @Composable
-fun DeviceScreen(shown: DeviceShown, onScan: () -> Unit, onForget: (String) -> Unit, onStopRinging: () -> Unit) {
+fun DeviceScreen(
+    shown: DeviceShown,
+    onScan: () -> Unit,
+    onForget: (String) -> Unit,
+    onStopRinging: () -> Unit,
+    onNotificationAccess: () -> Unit = {},
+) {
     val scroll = rememberScrollState()
     val progress by remember { derivedStateOf { (1f - scroll.value / 300f).coerceIn(0f, 1f) } }
     val desktop = shown.pinned.firstOrNull()
@@ -95,6 +102,17 @@ fun DeviceScreen(shown: DeviceShown, onScan: () -> Unit, onForget: (String) -> U
                 GroupRow(
                     title = stringResource(R.string.label_clipboard),
                     detail = shown.clipboardNote.ifBlank { stringResource(R.string.detail_clipboard) },
+                )
+                GroupRow(
+                    title = stringResource(R.string.label_notifications),
+                    detail = stringResource(if (shown.notificationsEnabled) R.string.detail_notifications_on else R.string.detail_notifications_off),
+                    trailing = {
+                        if (shown.notificationsEnabled) {
+                            StateChip(stringResource(R.string.chip_on), ChipTone.Alive)
+                        } else {
+                            TextButton(onClick = onNotificationAccess) { Text(stringResource(R.string.action_allow)) }
+                        }
+                    },
                 )
                 GroupRow(
                     title = stringResource(R.string.label_phone_battery),
