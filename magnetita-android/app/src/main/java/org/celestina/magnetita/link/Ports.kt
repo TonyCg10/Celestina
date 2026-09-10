@@ -57,6 +57,14 @@ interface LiveSession {
     /** Asks the desktop for its players' states. */
     fun requestMedia(): Boolean
 
+    fun sendContacts(version: Long, contacts: List<PhoneContact>, removed: List<Long>, complete: Boolean): Boolean
+    fun sendSmsConversations(list: List<SmsConversation>): Boolean
+    fun sendSmsThread(thread: Long, messages: List<SmsMessage>): Boolean
+    fun sendSmsReceived(thread: Long, message: SmsMessage): Boolean
+
+    /** 0 ringing, 1 answered, 2 missed, 3 ended. */
+    fun sendCallEvent(state: Int, number: String, name: String?, timestampMs: Long): Boolean
+
     /**
      * Waits up to `timeoutMs` for the next envelope: a short description, or
      * null on timeout. Throws when the session is gone. Suspends, so the
@@ -85,7 +93,21 @@ data class LinkEvent(
     val path: String? = null,
     val media: MediaState? = null,
     val mediaCommand: MediaCommand? = null,
+    val contactsSince: Long? = null,
+    val conversationsWanted: Boolean = false,
+    val thread: Long? = null,
+    val beforeMs: Long? = null,
+    val limit: Int? = null,
+    val smsSend: Boolean = false,
+    val callAction: Int? = null,
 )
+
+/** One contact as its vCard, versioned by the phone's last update. */
+data class PhoneContact(val id: Long, val version: Long, val vcard: String)
+
+data class SmsConversation(val thread: Long, val addresses: List<String>, val snippet: String, val timestampMs: Long, val unread: Int)
+
+data class SmsMessage(val id: Long, val fromMe: Boolean, val address: String, val body: String, val timestampMs: Long, val attachmentMimes: List<String> = emptyList())
 
 /** One player's state, either side's. */
 data class MediaState(
@@ -134,6 +156,14 @@ sealed interface Outbound {
 
     /** The desktop's players are wanted now. */
     data object MediaWanted : Outbound
+
+    data class Contacts(val version: Long, val contacts: List<PhoneContact>, val removed: List<Long>, val complete: Boolean) : Outbound
+    data class Conversations(val list: List<SmsConversation>) : Outbound
+    data class Thread(val thread: Long, val messages: List<SmsMessage>) : Outbound
+    data class Received(val thread: Long, val message: SmsMessage) : Outbound
+
+    /** A call changed: 0 ringing, 1 answered, 2 missed, 3 ended. */
+    data class Call(val state: Int, val number: String, val name: String?, val timestampMs: Long) : Outbound
 }
 
 /** Where a desktop is advertising, one entry per (id, address). */

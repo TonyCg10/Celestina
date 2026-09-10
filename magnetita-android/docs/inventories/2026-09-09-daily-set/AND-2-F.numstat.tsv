@@ -1,0 +1,15 @@
+# AND-2-F exact change inventory
+
+Base revision	e59703f5b5455399eccf404cd34aaf3668fe737f
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/phone/Messages.kt
+Pathspec	magnetita-android/docs/evidence/2026-09-09-daily-sms.md
+Pathspec	magnetita-android/docs/inventories/2026-09-09-daily-set/AND-2-F.numstat.tsv
+Pathspec	magnetita-android/docs/plans/active/2026-09-09-daily-set.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+98	0	ab0c4399ceca096edc817993fb86ad6c2b839cf8e14420b01fec93be4238de43	magnetita-android/app/src/main/java/org/celestina/magnetita/phone/Messages.kt
+42	0	327edd94ec1bae0cae59d421d8de9ade8c30c6875599eaff307a9fda95d3fe7a	magnetita-android/docs/evidence/2026-09-09-daily-sms.md
+15	0	self	magnetita-android/docs/inventories/2026-09-09-daily-set/AND-2-F.numstat.tsv
+3	3	a79514fc0123372c897a43ebb87674ecc520167f8296a18b9851d940d291305f	magnetita-android/docs/plans/active/2026-09-09-daily-set.md

@@ -23,6 +23,9 @@ import org.celestina.magnetita.link.LinkState
 import org.celestina.magnetita.link.MediaCommand
 import org.celestina.magnetita.link.Outbound
 import org.celestina.magnetita.notifications.PhoneNotifications
+import org.celestina.magnetita.phone.PhonePermissions
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import org.celestina.magnetita.ui.screens.DeviceScreen
 import org.celestina.magnetita.ui.screens.DeviceShown
 import org.celestina.magnetita.ui.screens.ScanScreen
@@ -47,6 +50,11 @@ class MainActivity : ComponentActivity() {
                 val ringing by LinkService.ringing.collectAsState()
                 val clipboardNote by LinkService.clipboardNote.collectAsState()
                 val desktopMedia by LinkService.desktopMedia.collectAsState()
+                var phoneGranted by remember { mutableStateOf(PhonePermissions.allGranted(this)) }
+                val askPhone = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+                    phoneGranted = PhonePermissions.allGranted(this)
+                    if (phoneGranted) LinkService.phoneGranted(this)
+                }
                 // While the screen is in front, the desktop's players are wanted.
                 LaunchedEffect(link) {
                     if (link is LinkState.Connected) {
@@ -67,11 +75,12 @@ class MainActivity : ComponentActivity() {
                 } else {
                     val battery = readBattery()
                     DeviceScreen(
-                        shown = DeviceShown(core.identity, core.pinned, core.failed, link, battery.first, battery.second, ringing, clipboardNote, notificationsEnabled(link), desktopMedia),
+                        shown = DeviceShown(core.identity, core.pinned, core.failed, link, battery.first, battery.second, ringing, clipboardNote, notificationsEnabled(link), desktopMedia, phoneGranted),
                         onScan = { scanning = true },
                         onForget = { id -> LinkService.forget(this, id) },
                         onStopRinging = { LinkService.stopRinging(this) },
                         onNotificationAccess = { startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
+                        onPhoneAccess = { askPhone.launch(PhonePermissions.ALL) },
                         onMedia = { button -> desktopMedia?.let { LinkService.send(this, Outbound.MediaControl(MediaCommand(it.player, button, null, null))) } },
                     )
                 }

@@ -39,6 +39,9 @@ class LinkService : LifecycleService() {
     private val ringer by lazy { Ringer(applicationContext) }
     private val clipboardPolicy = ClipboardPolicy()
     private val media by lazy { org.celestina.magnetita.media.PhoneMedia(applicationContext) }
+    private val book by lazy { org.celestina.magnetita.phone.PhoneBook(applicationContext) }
+    private val messages by lazy { org.celestina.magnetita.phone.Messages(applicationContext) }
+    private val calls by lazy { org.celestina.magnetita.phone.Calls(applicationContext) }
     private val clipboard by lazy { getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager }
 
     // Fires only while this app has the focus: the in-front half of the
@@ -83,6 +86,11 @@ class LinkService : LifecycleService() {
                         is DesktopSignal.DesktopMedia -> _desktopMedia.value = signal.state.takeIf { it.player.isNotEmpty() } ?: (if (_desktopMedia.value?.player == signal.state.player) null else _desktopMedia.value)
                         is DesktopSignal.MediaControl -> media.drive(signal.command)
                         DesktopSignal.MediaRequested -> media.report()
+                        is DesktopSignal.ContactsRequested -> offMain { book.send(signal.since) }
+                        DesktopSignal.ConversationsRequested -> offMain { messages.sendConversations() }
+                        is DesktopSignal.ThreadRequested -> offMain { messages.sendThread(signal.thread, signal.beforeMs, signal.limit) }
+                        is DesktopSignal.SmsSendRequested -> offMain { messages.send(signal.thread, signal.body) }
+                        is DesktopSignal.CallCommand -> calls.act(signal.action)
                         is DesktopSignal.ShareText -> receiveClipboard(signal.text)
                         else -> {}
                     }
@@ -99,6 +107,8 @@ class LinkService : LifecycleService() {
             ACTION_STOP_RINGING -> { ringer.stop(); _ringing.value = false }
             ACTION_SEND_CLIPBOARD -> offerClipboard(intent.getStringExtra(EXTRA_TEXT))
             ACTION_OUTBOUND -> { while (true) { val op = pending.pollFirst() ?: break; controller?.send(op) } }
+            ACTION_CALL_ENDED -> calls.restoreRinger()
+            ACTION_PHONE_GRANTED -> offMain { book.send(0); messages.sendConversations() }
             ACTION_FOCUS -> offerClipboard()
             ACTION_FORGET -> intent.getStringExtra(EXTRA_DEVICE_ID)?.let { id ->
                 lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -138,6 +148,11 @@ class LinkService : LifecycleService() {
             controller?.sendClipboard(value!!)
             _clipboardNote.value = getString(R.string.clipboard_sent)
         }
+    }
+
+    /** Provider reads and sends never run on the main thread. */
+    private fun offMain(work: () -> Unit) {
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) { runCatching(work).onFailure { android.util.Log.w(TAG, "phone adapter: $it") } }
     }
 
     /** A complete file in the cache becomes a public download, then a notification. */
@@ -210,6 +225,18 @@ class LinkService : LifecycleService() {
         private const val ACTION_SEND_CLIPBOARD = "org.celestina.magnetita.SEND_CLIPBOARD"
         private const val ACTION_FOCUS = "org.celestina.magnetita.FOCUS"
         private const val EXTRA_TEXT = "text"
+        private const val ACTION_CALL_ENDED = "org.celestina.magnetita.CALL_ENDED"
+        private const val ACTION_PHONE_GRANTED = "org.celestina.magnetita.PHONE_GRANTED"
+
+        /** A call ended: undo a mute the desktop asked for. */
+        fun callEnded(context: Context) {
+            context.startForegroundService(Intent(context, LinkService::class.java).setAction(ACTION_CALL_ENDED))
+        }
+
+        /** The phone grants arrived: contacts and conversations go out now. */
+        fun phoneGranted(context: Context) {
+            context.startForegroundService(Intent(context, LinkService::class.java).setAction(ACTION_PHONE_GRANTED))
+        }
 
         private val _clipboardNote = MutableStateFlow("")
 

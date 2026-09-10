@@ -37,6 +37,12 @@ class LinkControllerTest {
         override fun sendMediaState(state: MediaState): Boolean { media += "state:" + state.player; return alive }
         override fun sendMediaCommand(player: String, button: Int?, seekMs: Long?, volume: Int?): Boolean { media += "cmd:$player:$button"; return alive }
         override fun requestMedia(): Boolean { media += "request"; return alive }
+        val phone = mutableListOf<String>()
+        override fun sendContacts(version: Long, contacts: List<PhoneContact>, removed: List<Long>, complete: Boolean): Boolean { phone += "contacts:${contacts.size}:$complete"; return alive }
+        override fun sendSmsConversations(list: List<SmsConversation>): Boolean { phone += "conversations:${list.size}"; return alive }
+        override fun sendSmsThread(thread: Long, messages: List<SmsMessage>): Boolean { phone += "thread:$thread:${messages.size}"; return alive }
+        override fun sendSmsReceived(thread: Long, message: SmsMessage): Boolean { phone += "received:$thread"; return alive }
+        override fun sendCallEvent(state: Int, number: String, name: String?, timestampMs: Long): Boolean { phone += "call:$state:$number"; return alive }
         override suspend fun next(timeoutMs: Long): LinkEvent? {
             if (!alive) throw IllegalStateException("connection lost")
             incoming.removeFirstOrNull()?.let { return it }
@@ -169,7 +175,11 @@ class LinkControllerTest {
         controller.send(Outbound.Media(MediaState("YT", "Song", "Band", "", true, 0, 0, false, true, true, 50)))
         controller.send(Outbound.MediaControl(MediaCommand("mpv", 3, null, null)))
         controller.send(Outbound.MediaWanted)
+        controller.send(Outbound.Contacts(1, listOf(PhoneContact(1, 1, "BEGIN:VCARD")), emptyList(), true))
+        controller.send(Outbound.Received(9, SmsMessage(1, false, "600", "hi", 1)))
+        controller.send(Outbound.Call(0, "600", null, 1))
         advanceTimeBy(200)
+        assertEquals(listOf("contacts:1:true", "received:9", "call:0:600"), session.phone)
         assertEquals(listOf("post:k1", "gone:k1"), session.notes)
         assertEquals(listOf("state:YT", "cmd:mpv:3", "request"), session.media)
         session.incoming += LinkEvent(2, 1, "clipboard: 5 bytes", "hello")

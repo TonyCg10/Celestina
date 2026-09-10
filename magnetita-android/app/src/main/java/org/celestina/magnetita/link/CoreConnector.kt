@@ -2,7 +2,10 @@ package org.celestina.magnetita.link
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import uniffi.magnetita_mobile.MobileContact
+import uniffi.magnetita_mobile.MobileConversation
 import uniffi.magnetita_mobile.MobileMediaCommand
+import uniffi.magnetita_mobile.MobileSmsMessage
 import uniffi.magnetita_mobile.MobileMediaState
 import uniffi.magnetita_mobile.MobileNotification
 import uniffi.magnetita_mobile.MobilePhone
@@ -78,12 +81,35 @@ private class CoreSession(private val inner: MobileSession) : LiveSession {
 
     override fun requestMedia(): Boolean = runCatching { inner.requestMedia() }.isSuccess
 
+    override fun sendContacts(version: Long, contacts: List<PhoneContact>, removed: List<Long>, complete: Boolean): Boolean = runCatching {
+        inner.sendContacts(version.toULong(), contacts.map { MobileContact(it.id.toULong(), it.version.toULong(), it.vcard) }, removed.map { it.toULong() }, complete)
+    }.isSuccess
+
+    override fun sendSmsConversations(list: List<SmsConversation>): Boolean = runCatching {
+        inner.sendSmsConversations(list.map { MobileConversation(it.thread.toULong(), it.addresses, it.snippet, it.timestampMs.toULong(), it.unread.coerceIn(0, 65535).toUShort()) })
+    }.isSuccess
+
+    override fun sendSmsThread(thread: Long, messages: List<SmsMessage>): Boolean = runCatching {
+        inner.sendSmsThread(thread.toULong(), messages.map { it.toMobile() })
+    }.isSuccess
+
+    override fun sendSmsReceived(thread: Long, message: SmsMessage): Boolean = runCatching {
+        inner.sendSmsReceived(thread.toULong(), message.toMobile())
+    }.isSuccess
+
+    override fun sendCallEvent(state: Int, number: String, name: String?, timestampMs: Long): Boolean = runCatching {
+        inner.sendCallEvent(state.toUByte(), number, name, timestampMs.toULong())
+    }.isSuccess
+
+    private fun SmsMessage.toMobile() = MobileSmsMessage(id.toULong(), fromMe, address, body, timestampMs.toULong(), attachmentMimes)
+
     override suspend fun next(timeoutMs: Long): LinkEvent? = withContext(Dispatchers.IO) {
         inner.next(timeoutMs.toULong())?.let { LinkEvent(
             it.capability.toInt(), it.kind.toInt(), it.description, it.text, it.key, it.action?.toInt(),
             it.transfer?.toInt(), it.size?.toLong(), it.offset?.toLong(), it.complete, it.path,
             it.media?.let { m -> MediaState(m.player, m.title, m.artist, m.album, m.playing, m.positionMs.toLong(), m.lengthMs.toLong(), m.canSeek, m.canNext, m.canPrevious, m.volume.toInt()) },
             it.mediaCommand?.let { c -> MediaCommand(c.player, c.button?.toInt(), c.seekMs?.toLong(), c.volume?.toInt()) },
+            it.contactsSince?.toLong(), it.conversationsWanted, it.thread?.toLong(), it.beforeMs?.toLong(), it.limit?.toInt(), it.smsSend, it.callAction?.toInt(),
         ) }
     }
 

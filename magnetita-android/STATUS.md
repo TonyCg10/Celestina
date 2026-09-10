@@ -2,8 +2,8 @@
 
 - **Updated:** 2026-09-09
 - **Implementation:** `AND-2`, the daily set, is the active checkpoint
-  since 2026-09-09, paired with Magnetita's `MAG-P4`; the clipboard, the
-  notifications, the file share and the media control are done. `AND-1`, the foundation, has its four units done and waits for
+  since 2026-09-09, paired with Magnetita's `MAG-P4`; its seven units are
+  done and its exit is met; `VAL-MAG-12` closes it. `AND-1`, the foundation, has its four units done and waits for
   `VAL-MAG-11`
 - **Author validation:** `VAL-MAG-11` in Magnetita's
   [VALIDATION.md](../magnetita/VALIDATION.md) covers the first pairing on
@@ -11,6 +11,10 @@
 
 ## Current checkout truth
 
+- With the phone grants, contacts go to the desktop as vCards, the SMS
+  list and threads on request, incoming SMS as they arrive, sends from the
+  desktop through the SMS manager, and calls with mute, answer and hang
+  up from the desktop (`AND-2-E`, `-F`, `-G`).
 - The phone's active player goes to the desktop and its buttons come
   back; the desktop's player shows on the device screen with previous,
   play/pause and next (`AND-2-D`).

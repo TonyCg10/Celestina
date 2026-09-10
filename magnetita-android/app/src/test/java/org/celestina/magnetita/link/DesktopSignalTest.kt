@@ -26,6 +26,11 @@ class DesktopSignalTest {
         assertEquals(DesktopSignal.DesktopMedia(state), DesktopSignal.of(LinkEvent(6, 1, "media: state", media = state)))
         assertEquals(DesktopSignal.MediaControl(MediaCommand("YT", 2, null, null)), DesktopSignal.of(LinkEvent(6, 2, "media: command", mediaCommand = MediaCommand("YT", 2, null, null))))
         assertEquals(DesktopSignal.MediaRequested, DesktopSignal.of(LinkEvent(6, 3, "media: requested")))
+        assertEquals(DesktopSignal.ContactsRequested(7), DesktopSignal.of(LinkEvent(11, 1, "contacts: requested", contactsSince = 7)))
+        assertEquals(DesktopSignal.ConversationsRequested, DesktopSignal.of(LinkEvent(10, 1, "sms: conversations requested", conversationsWanted = true)))
+        assertEquals(DesktopSignal.ThreadRequested(4, null, 50), DesktopSignal.of(LinkEvent(10, 2, "sms: thread requested", thread = 4, limit = 50)))
+        assertEquals(DesktopSignal.SmsSendRequested(4, "hi"), DesktopSignal.of(LinkEvent(10, 4, "sms: send", text = "hi", thread = 4, smsSend = true)))
+        assertEquals(DesktopSignal.CallCommand(2), DesktopSignal.of(LinkEvent(12, 2, "call: command", callAction = 2)))
     }
 
     @Test

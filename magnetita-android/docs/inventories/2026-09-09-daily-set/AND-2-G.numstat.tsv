@@ -1,0 +1,17 @@
+# AND-2-G exact change inventory
+
+Base revision	e59703f5b5455399eccf404cd34aaf3668fe737f
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/phone/Calls.kt
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/phone/PhoneTest.kt
+Pathspec	magnetita-android/docs/evidence/2026-09-09-daily-telephony.md
+Pathspec	magnetita-android/docs/inventories/2026-09-09-daily-set/AND-2-G.numstat.tsv
+Pathspec	magnetita-android/docs/plans/active/2026-09-09-daily-set.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+95	0	07430373cf4568637a0e6d19c8ce34bfb715e0524393d9d40f99ef5e84d1264e	magnetita-android/app/src/main/java/org/celestina/magnetita/phone/Calls.kt
+24	0	ebc8b6b1cc610186a0c82101a1da8f6aaad1003b29efe07d914eca01648bbe6c	magnetita-android/app/src/test/java/org/celestina/magnetita/phone/PhoneTest.kt
+40	0	d00905d31b070210801bc229b29bc460509587aa808881e7902490e7c7617487	magnetita-android/docs/evidence/2026-09-09-daily-telephony.md
+17	0	self	magnetita-android/docs/inventories/2026-09-09-daily-set/AND-2-G.numstat.tsv
+3	3	a79514fc0123372c897a43ebb87674ecc520167f8296a18b9851d940d291305f	magnetita-android/docs/plans/active/2026-09-09-daily-set.md

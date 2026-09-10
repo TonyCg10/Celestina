@@ -46,6 +46,9 @@
     <string name="action_allow">Permitir</string>
     <string name="notification_listener">Notificaciones en el escritorio</string>
     <string name="channel_files">Archivos recibidos</string>
+    <string name="label_phone_access">Contactos, SMS y llamadas</string>
+    <string name="detail_phone_on">Los nombres, las conversaciones y las llamadas llegan al escritorio</string>
+    <string name="detail_phone_off">Permite el acceso para ver contactos, SMS y llamadas en el escritorio</string>
     <string name="file_received_title">Archivo recibido del escritorio</string>
     <string name="file_received">Recibido en Descargas/Magnetita: %1$s</string>
     <string name="file_failed">No se pudo guardar el archivo recibido</string>

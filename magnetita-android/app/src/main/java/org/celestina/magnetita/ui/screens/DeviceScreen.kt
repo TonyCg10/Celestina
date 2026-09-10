@@ -47,6 +47,7 @@ data class DeviceShown(
     val clipboardNote: String = "",
     val notificationsEnabled: Boolean = false,
     val desktopMedia: MediaState? = null,
+    val phoneGranted: Boolean = false,
 )
 
 /**
@@ -63,6 +64,7 @@ fun DeviceScreen(
     onStopRinging: () -> Unit,
     onNotificationAccess: () -> Unit = {},
     onMedia: (button: Int) -> Unit = {},
+    onPhoneAccess: () -> Unit = {},
 ) {
     val scroll = rememberScrollState()
     val progress by remember { derivedStateOf { (1f - scroll.value / 300f).coerceIn(0f, 1f) } }
@@ -117,6 +119,17 @@ fun DeviceScreen(
                             StateChip(stringResource(R.string.chip_on), ChipTone.Alive)
                         } else {
                             TextButton(onClick = onNotificationAccess) { Text(stringResource(R.string.action_allow)) }
+                        }
+                    },
+                )
+                GroupRow(
+                    title = stringResource(R.string.label_phone_access),
+                    detail = stringResource(if (shown.phoneGranted) R.string.detail_phone_on else R.string.detail_phone_off),
+                    trailing = {
+                        if (shown.phoneGranted) {
+                            StateChip(stringResource(R.string.chip_on), ChipTone.Alive)
+                        } else {
+                            TextButton(onClick = onPhoneAccess) { Text(stringResource(R.string.action_allow)) }
                         }
                     },
                 )

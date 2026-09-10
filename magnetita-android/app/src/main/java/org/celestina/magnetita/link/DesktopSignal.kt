@@ -49,6 +49,15 @@ sealed interface DesktopSignal {
 
     /** The desktop asks for this phone's players. */
     data object MediaRequested : DesktopSignal
+
+    /** Contacts changed since `since` are wanted (0 for all). */
+    data class ContactsRequested(val since: Long) : DesktopSignal
+    data object ConversationsRequested : DesktopSignal
+    data class ThreadRequested(val thread: Long, val beforeMs: Long?, val limit: Int) : DesktopSignal
+    data class SmsSendRequested(val thread: Long, val body: String) : DesktopSignal
+
+    /** 0 mute, 1 answer, 2 hang up. */
+    data class CallCommand(val action: Int) : DesktopSignal
     data class Other(val capability: Int, val kind: Int) : DesktopSignal
 
     companion object {
@@ -58,6 +67,9 @@ sealed interface DesktopSignal {
         const val CAPABILITY_FIND = 4
         const val CAPABILITY_SHARE = 5
         const val CAPABILITY_MEDIA = 6
+        const val CAPABILITY_SMS = 10
+        const val CAPABILITY_CONTACTS = 11
+        const val CAPABILITY_TELEPHONY = 12
         const val KIND_MEDIA_STATE = 1
         const val KIND_MEDIA_COMMAND = 2
         const val KIND_MEDIA_REQUEST = 3
@@ -107,6 +119,13 @@ sealed interface DesktopSignal {
             CAPABILITY_MEDIA to KIND_MEDIA_COMMAND ->
                 event.mediaCommand?.let { MediaControl(it) } ?: Other(event.capability, event.kind)
             CAPABILITY_MEDIA to KIND_MEDIA_REQUEST -> MediaRequested
+            CAPABILITY_CONTACTS to 1 -> ContactsRequested(event.contactsSince ?: 0)
+            CAPABILITY_SMS to 1 -> if (event.conversationsWanted) ConversationsRequested else Other(event.capability, event.kind)
+            CAPABILITY_SMS to 2 ->
+                if (event.thread != null) ThreadRequested(event.thread, event.beforeMs, event.limit ?: 50) else Other(event.capability, event.kind)
+            CAPABILITY_SMS to 4 ->
+                if (event.smsSend && event.thread != null && event.text != null) SmsSendRequested(event.thread, event.text) else Other(event.capability, event.kind)
+            CAPABILITY_TELEPHONY to 2 -> event.callAction?.let { CallCommand(it) } ?: Other(event.capability, event.kind)
             else -> Other(event.capability, event.kind)
         }
     }

@@ -199,6 +199,11 @@ class LinkController(
                             is Outbound.Media -> live.sendMediaState(op.state)
                             is Outbound.MediaControl -> live.sendMediaCommand(op.command.player, op.command.button, op.command.seekMs, op.command.volume)
                             Outbound.MediaWanted -> live.requestMedia()
+                            is Outbound.Contacts -> live.sendContacts(op.version, op.contacts, op.removed, op.complete)
+                            is Outbound.Conversations -> live.sendSmsConversations(op.list)
+                            is Outbound.Thread -> live.sendSmsThread(op.thread, op.messages)
+                            is Outbound.Received -> live.sendSmsReceived(op.thread, op.message)
+                            is Outbound.Call -> live.sendCallEvent(op.state, op.number, op.name, op.timestampMs)
                         }
                     }
                     if (!sent) return@launch

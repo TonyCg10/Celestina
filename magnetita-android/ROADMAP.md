@@ -45,9 +45,9 @@ contacts, SMS and calls.
 | AND-2-B | done | MAG-P4-B | Notifications with actions and replies | JVM tests |
 | AND-2-C | done | MAG-P4-C | File share both ways | JVM tests |
 | AND-2-D | done | MAG-P4-D | Media control both ways | JVM tests |
-| AND-2-E | planned | MAG-P4-E | Contacts sync | JVM tests |
-| AND-2-F | planned | MAG-P4-F | SMS send and receive, MMS attachments | JVM tests |
-| AND-2-G | planned | MAG-P4-G | Call state, mute, answer, hang up | JVM tests |
+| AND-2-E | done | MAG-P4-E | Contacts sync | JVM tests |
+| AND-2-F | done | MAG-P4-F | SMS send and receive, MMS attachments | JVM tests |
+| AND-2-G | done | MAG-P4-G | Call state, mute, answer, hang up | JVM tests |
 
 ## Implementation exit
 
@@ -55,12 +55,18 @@ Close `AND-2` when every adapter has its JVM tests, the release build passes
 lint, and `MAG-P4`'s exit is met. `VAL-MAG-12` carries the author's daily
 use.
 
+Met on 2026-09-09: seven adapters with their JVM tests, `lintRelease` clean,
+`MAG-P4`'s exit met the same day. `VAL-MAG-12` closes the checkpoint.
+
 ## Closed evidence
 
 - `AND-2-A`: [clipboard](docs/evidence/2026-09-09-daily-clipboard.md)
 - `AND-2-B`: [notifications](docs/evidence/2026-09-09-daily-notifications.md)
 - `AND-2-C`: [share](docs/evidence/2026-09-09-daily-share.md)
 - `AND-2-D`: [media](docs/evidence/2026-09-09-daily-media.md)
+- `AND-2-E`: [contacts](docs/evidence/2026-09-09-daily-contacts.md)
+- `AND-2-F`: [SMS](docs/evidence/2026-09-09-daily-sms.md)
+- `AND-2-G`: [telephony](docs/evidence/2026-09-09-daily-telephony.md)
 
 ## AND-1 — The application foundation
 
