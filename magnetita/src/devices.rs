@@ -434,26 +434,40 @@ pub fn mirror_snapshot() -> Result<MirrorSnapshot, String> {
         "Magnetita unavailable",
         Proxy::new(&connection, SERVICE, MIRROR_OBJECT, MIRROR_INTERFACE),
     )?;
+    let link = proxy
+        .get_property::<String>("LinkState")
+        .unwrap_or_default();
+    let state: String = confirmed("State read failed", proxy.get_property("State"))?;
+    // The link mirror, when up, is the mirror the card shows.
+    let state = match link.as_str() {
+        "streaming" => "mirroring".to_owned(),
+        "starting" => "connecting".to_owned(),
+        _ => state,
+    };
     Ok(MirrorSnapshot {
-        state: confirmed("State read failed", proxy.get_property("State"))?,
+        state,
         can_pair: confirmed("CanPair read failed", proxy.get_property("CanPair"))?,
         reason: confirmed("Reason read failed", proxy.get_property("Reason"))?,
         options: confirmed("Options read failed", proxy.get_property("Options"))?,
     })
 }
 
-/// Start mirroring, and keep mirroring across the phone's port changes.
+/// Start mirroring: over the paired phone's own link when the daemon
+/// offers it, else the `adb` path that keeps mirroring across the phone's
+/// port changes.
 pub fn mirror_start() -> Result<(), String> {
-    mirror_proxy()?
-        .call("Start", &())
-        .map_err(|error| error.to_string())
+    let proxy = mirror_proxy()?;
+    if proxy.call::<_, _, ()>("StartLink", &()).is_ok() {
+        return Ok(());
+    }
+    proxy.call("Start", &()).map_err(|error| error.to_string())
 }
 
-/// Stop mirroring and stop reconnecting.
+/// Stop mirroring on whichever path is up, and stop reconnecting.
 pub fn mirror_stop() -> Result<(), String> {
-    mirror_proxy()?
-        .call("Stop", &())
-        .map_err(|error| error.to_string())
+    let proxy = mirror_proxy()?;
+    let _: Result<(), zbus::Error> = proxy.call("StopLink", &());
+    proxy.call("Stop", &()).map_err(|error| error.to_string())
 }
 
 /// Change one mirror option. The daemon refuses a value outside its contract,

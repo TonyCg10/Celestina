@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P5-B` of
-  [`../plans/active/2026-09-09-remote-control.md`](../plans/active/2026-09-09-remote-control.md):
+  [`../plans/archive/2026-09-09-remote-control.md`](../plans/archive/2026-09-09-remote-control.md):
   `celestina-rs/crates/magnetitad/src/link_wire/input.rs`, the session's
   input and datagram branches in `link_wire/mod.rs`, the `evdev`
   dependency, the core's input sends and command decoding, the peer's

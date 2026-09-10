@@ -83,7 +83,11 @@ An SMS `message` is `{0 id u64, 1 from_me, 2 address, 3 body, 4
 timestamp_ms, 5 attachments [{0 transfer u32, 1 mime}]}`; an attachment's
 bytes arrive on the `share` transfer of that id. The mirror's video and
 audio, and every `share` transfer, travel on their own QUIC streams as raw
-bytes; the messages above open, describe and close those streams.
+bytes; the messages above open, describe and close those streams. The
+mirror's streams carry fixed transfer ids no share ever uses: video on
+`0xFFFF0001`, audio on `0xFFFF0002`; the video is the encoder's raw Annex B
+output (HEVC or H.264 as `started` says) with its parameter sets first,
+and closing the stream is the picture's end.
 
 ## Pairing
 

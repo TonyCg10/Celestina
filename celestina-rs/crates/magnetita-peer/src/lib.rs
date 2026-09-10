@@ -11,6 +11,7 @@ use std::process::Command;
 
 use magnetita_link::discovery::{parse_peers, Peer as Advertised, SERVICE_TYPE};
 
+pub use magnetita_mobile::mobile::MIRROR_VIDEO_STREAM;
 pub use magnetita_mobile::phone::{
     clipboard_text, command_fields, describe, media_fields, phone_fields, share_fields, Incoming,
 };

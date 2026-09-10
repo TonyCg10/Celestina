@@ -1,14 +1,16 @@
 # MAG-P5 — Commands, trackpad and keyboard
 
 - **Opened:** 2026-09-09
+- **Closed:** 2026-09-09
 - **Plan ID:** remote-control
-- **Status:** active
+- **Status:** done
 - **Authorization:** the author said "sigue con todo" on 2026-09-09 with
   `MAG-P4`'s exit met
 - **Scope:** magnetita, magnetitad, magnetita-mobile, magnetita-peer
 - **Implementation checkpoint:** MAG-P5
 - **Author-validation checkpoint:** `VAL-MAG-13` in
   [`../../../VALIDATION.md`](../../../VALIDATION.md)
+- **Successor:** MAG-P6
 
 ## Hypothesis
 
@@ -47,10 +49,16 @@ The peer's synthetic input reaches the daemon's sink in the loopback test
 and the virtual device opens on this host; commands run only by registered
 id; the `uinput` grant is recorded in `HOST-HYGIENE.md`.
 
+Met on 2026-09-09: the loopback test finds the peer's key, text and
+datagram motion in the recorder, the ignored test opens the device on
+this host, commands run by id only, and the rule is in `HOST-HYGIENE.md`.
+The phone's control screen shipped as `AND-3-A`; `VAL-MAG-13` is the
+author's hand.
+
 ## Change and commit ledger
 
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | MAG-P5-A | `magnetita:` | done | [inventory](../../inventories/2026-09-09-remote-control/MAG-P5-A.numstat.tsv) | 15 files, +727/-5 | Registered commands published and run by id; the settings section | [record](../../evidence/2026-09-09-commands-own-wire.md) | `VAL-MAG-13` |
 | MAG-P5-B | `magnetita:` | done | [inventory](../../inventories/2026-09-09-remote-control/MAG-P5-B.numstat.tsv) | 25 files, +1149/-89 | The virtual pointer and keyboard; `MAG-P4` archived and `MAG-P5` opened | [record](../../evidence/2026-09-09-input-own-wire.md) | `VAL-MAG-13` |
-| MAG-P5-C | `magnetita:` | planned | `docs/` | — | The phone's control screen paired with `AND-3-A` | record | `VAL-MAG-13` |
+| MAG-P5-C | `magnetita:` | done | [inventory](../../inventories/2026-09-09-remote-control/MAG-P5-C.numstat.tsv) | 7 files, +119/-58 | The phone's control screen paired with `AND-3-A`; `MAG-P5` archived | [record](../../evidence/2026-09-09-control-pairing.md) | `VAL-MAG-13` |

@@ -3,7 +3,7 @@
 //! ```text
 //! magnetita-peer identity                    who this peer is
 //! magnetita-peer pair 'magnetita://pair?…'   scan a QR by pasting it
-//! magnetita-peer connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--media PLAYER|TITLE|ARTIST] [--contact NAME|TEL] [--sms ADDRESS|BODY] [--call NUMBER] [--run ID] [--type TEXT] [--hold SECONDS]
+//! magnetita-peer connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--media PLAYER|TITLE|ARTIST] [--contact NAME|TEL] [--sms ADDRESS|BODY] [--call NUMBER] [--run ID] [--type TEXT] [--mirror-file PATH.hevc] [--hold SECONDS]
 //! magnetita-peer browse                      who Avahi sees
 //! ```
 //!
@@ -17,6 +17,7 @@ use magnetita_link::LinkError;
 use magnetita_peer::{browse, clipboard_text, describe, dir_default, Incoming, Phone};
 use magnetita_proto::daily::media::MediaState;
 use magnetita_proto::daily::notifications::{Action, NotificationPosted};
+use magnetita_proto::mirror::{Codec, MirrorStarted};
 use magnetita_proto::phone::contacts::{Contact, ContactsSync};
 use magnetita_proto::phone::sms::{SmsMessage, SmsReceived};
 use magnetita_proto::phone::telephony::{CallEvent, CallState};
@@ -28,7 +29,7 @@ fn dir() -> PathBuf {
 }
 
 fn usage() -> std::process::ExitCode {
-    eprintln!("usage: magnetita-peer identity | pair URI | connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--media PLAYER|TITLE|ARTIST] [--contact NAME|TEL] [--sms ADDRESS|BODY] [--call NUMBER] [--run ID] [--type TEXT] [--hold SECONDS] | browse");
+    eprintln!("usage: magnetita-peer identity | pair URI | connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--media PLAYER|TITLE|ARTIST] [--contact NAME|TEL] [--sms ADDRESS|BODY] [--call NUMBER] [--run ID] [--type TEXT] [--mirror-file PATH.hevc] [--hold SECONDS] | browse");
     std::process::ExitCode::from(2)
 }
 
@@ -190,6 +191,7 @@ async fn run(args: &[String]) -> Result<(), LinkError> {
                     text.chars().count()
                 );
             }
+            let mirror_file = flag(args, "--mirror-file").map(PathBuf::from);
             let sending = match flag(args, "--send-file") {
                 Some(path) => {
                     let path = PathBuf::from(path);
@@ -255,6 +257,36 @@ async fn run(args: &[String]) -> Result<(), LinkError> {
                                     println!("sms send: thread {} {:?}", send.thread, send.body);
                                 }
                             }
+                            (9, 1, _) if mirror_file.is_some() => {
+                                // Answer the desktop with a fixed shape and pace
+                                // the file's bytes as the phone would its frames.
+                                let path = mirror_file.clone().unwrap();
+                                session
+                                    .send_mirror_started(&MirrorStarted {
+                                        width: 1080,
+                                        height: 2340,
+                                        codec: Codec::Hevc,
+                                        audio: false,
+                                    })
+                                    .await?;
+                                session
+                                    .open_stream(magnetita_peer::MIRROR_VIDEO_STREAM)
+                                    .await?;
+                                let bytes = std::fs::read(&path)?;
+                                println!("mirror: streaming {} bytes", bytes.len());
+                                for chunk in bytes.chunks(32 * 1024) {
+                                    session
+                                        .write_transfer(magnetita_peer::MIRROR_VIDEO_STREAM, chunk)
+                                        .await?;
+                                    tokio::time::sleep(Duration::from_millis(8)).await;
+                                }
+                                session
+                                    .close_stream(magnetita_peer::MIRROR_VIDEO_STREAM)
+                                    .await;
+                                println!("mirror: stream ended");
+                            }
+                            (9, 3, _) => println!("mirror: stop"),
+                            (9, 4, _) => println!("mirror: touch"),
                             (7, 1, _) => {
                                 let c = magnetita_peer::command_fields(&env);
                                 for (id, name) in c.list.unwrap_or_default() {

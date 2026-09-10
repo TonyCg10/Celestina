@@ -1,13 +1,15 @@
 # Magnetita implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** MAG-P5
+- **Active implementation checkpoint:** MAG-P6
 - **Related author validation:** `VAL-MAG-01` through `VAL-MAG-08` in
   [VALIDATION.md](VALIDATION.md); they do not block implementation
 
-`MAG-P5` is executing under
-[its plan](docs/plans/active/2026-09-09-remote-control.md), paired with the
-`magnetita-android` project's own `AND-3`. `MAG-P4` is closed under
+`MAG-P6` is executing under
+[its plan](docs/plans/active/2026-09-09-link-mirror.md), paired with the
+`magnetita-android` project's own `AND-4`. `MAG-P5` is closed under
+[its archived plan](docs/plans/archive/2026-09-09-remote-control.md), paired
+with `AND-3`. `MAG-P4` is closed under
 [its archived plan](docs/plans/archive/2026-09-09-daily-set.md), paired with
 `AND-2`. `MAG-P3` is closed under
 [its archived plan](docs/plans/archive/2026-09-09-android-foundation.md),
@@ -549,7 +551,7 @@ commands screen that runs the author's registered scripts.
 |---|---|---|---|---|
 | MAG-P5-A | done | MAG-P4 | Registered commands, published and executed by id | peer tests, subprocess tests |
 | MAG-P5-B | done | MAG-P0-D | Virtual pointer and keyboard in the daemon, nest-only tests | daemon tests, nest evidence |
-| MAG-P5-C | planned | MAG-P5-B | Trackpad and keyboard screens on the phone | JVM tests |
+| MAG-P5-C | done | MAG-P5-B | Trackpad and keyboard screens on the phone (`AND-3-A`) | JVM tests |
 
 ## Implementation exit
 
@@ -557,6 +559,13 @@ Close `MAG-P5` when the peer's synthetic input moves the nest's pointer and
 types a sentence observed through the nest's own IPC, commands run only by
 registered id, and the host change (`uinput` udev rule) is recorded in
 `HOST-HYGIENE.md`. `VAL-MAG-13` carries the author's hand use.
+
+Met on 2026-09-09 as far as the records allow: the loopback test finds the
+peer's key, text and motion in the recorder, the device opens on this host,
+commands run by id only, the rule is recorded, and the phone's screen
+shipped as `AND-3-A`. The nest's IPC was not consulted: even the nest
+cannot be targeted exclusively by a `uinput` device, so no event was
+emitted from here; the pointer's motion is the author's `VAL-MAG-13`.
 
 ## MAG-P6 — The mirror as a capability of the link
 
@@ -588,10 +597,10 @@ works after a phone reboot with nothing enabled by hand and no `adb`.
 
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
-| MAG-P6-A | planned | MAG-P0-B | Capture, encode and stream on the phone | JVM tests, peer decode test |
-| MAG-P6-B | planned | MAG-P6-A | Desktop decoder window and `Mirror1` extension | daemon tests, consumer tests |
-| MAG-P6-C | planned | MAG-P0-C | Input back through the accessibility service | peer tests |
-| MAG-P6-D | planned | MAG-P6-B | The Mirror control chooses the link mirror | `qmllint`, app lifecycle test |
+| MAG-P6-A | done | MAG-P0-B | Capture, encode and stream on the phone (`AND-4-A`); the core's stream and the peer's file | JVM tests, peer decode test |
+| MAG-P6-B | done | MAG-P6-A | Desktop decoder window and `Mirror1` extension | daemon tests, consumer tests |
+| MAG-P6-C | done | MAG-P0-C | Input back through the accessibility service (`AND-4-B`) | peer tests |
+| MAG-P6-D | done | MAG-P6-B | The Mirror control chooses the link mirror | `qmllint`, app lifecycle test |
 
 ## Implementation exit
 
@@ -600,6 +609,11 @@ produced, `scripts/complete-production.sh` passes, and the mirror is
 observed after a phone reboot on the S25U as `VAL-MAG-14` — this checkpoint,
 like `MAG-R1`, closes on the author's observation because no test can see
 the phone reboot.
+
+Implemented on 2026-09-09: the loopback test streams into the recording
+window and carries a touch back, a synthetic HEVC stream survives the
+daemon's remux, and `complete-production.sh` passed. The checkpoint stays
+open on `VAL-MAG-14`.
 
 ## MAG-P7 — Storage over the own wire and retiring the second path
 

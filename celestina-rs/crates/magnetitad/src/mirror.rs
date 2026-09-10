@@ -591,7 +591,7 @@ fn state_label(state: MirrorState) -> &'static str {
 ///
 /// Empty means there is no graphical session to draw on, which is a state to
 /// report rather than a failure to retry.
-fn session_display_env() -> Vec<(String, String)> {
+pub(crate) fn session_display_env() -> Vec<(String, String)> {
     let mut resolved = Vec::new();
     for key in ["WAYLAND_DISPLAY", "DISPLAY"] {
         if let Some(value) = std::env::var_os(key).and_then(|value| value.into_string().ok()) {
@@ -726,6 +726,83 @@ impl MirrorInterface {
     #[zbus(property)]
     fn options(&self) -> std::collections::HashMap<String, String> {
         self.mirror.snapshot().options.into_iter().collect()
+    }
+
+    /// Start the mirror over the paired phone's own link, with the same
+    /// options mapped onto the wire. The window opens when the phone
+    /// answers; `LinkState` says where it stands.
+    fn start_link(&self) -> zbus::fdo::Result<()> {
+        let options = self.mirror.snapshot().options.into_iter().collect();
+        crate::link_wire::mirror::own()
+            .request_start(crate::link_wire::mirror::start_from_options(&options));
+        Ok(())
+    }
+
+    /// Stop the link mirror and close its window.
+    fn stop_link(&self) -> zbus::fdo::Result<()> {
+        crate::link_wire::mirror::own().request_stop();
+        Ok(())
+    }
+
+    /// One of `idle`, `starting`, `streaming`, `failed`.
+    #[zbus(property)]
+    fn link_state(&self) -> String {
+        crate::link_wire::mirror::state_word(&crate::link_wire::mirror::own().state()).to_owned()
+    }
+
+    /// A touch on the mirrored phone: `action` 0 down, 1 move, 2 up, in the
+    /// phone's native pixels, `pointer` the finger index.
+    fn link_touch(&self, action: u8, x: u16, y: u16, pointer: u8) -> zbus::fdo::Result<()> {
+        use magnetita_proto::mirror::{MirrorTouch, TouchAction};
+        let action = match action {
+            0 => TouchAction::Down,
+            1 => TouchAction::Move,
+            2 => TouchAction::Up,
+            _ => return Err(zbus::fdo::Error::InvalidArgs("action".into())),
+        };
+        crate::link_wire::mirror::own().queue_input(magnetita_proto::Envelope {
+            capability: magnetita_proto::capability::MIRROR,
+            kind: MirrorTouch::KIND,
+            id: 0,
+            body: MirrorTouch {
+                action,
+                x,
+                y,
+                pointer,
+            }
+            .encode(),
+        });
+        Ok(())
+    }
+
+    /// An Android key code, down or up, on the mirrored phone.
+    fn link_key(&self, keycode: u16, pressed: bool) -> zbus::fdo::Result<()> {
+        use magnetita_proto::mirror::MirrorKey;
+        crate::link_wire::mirror::own().queue_input(magnetita_proto::Envelope {
+            capability: magnetita_proto::capability::MIRROR,
+            kind: MirrorKey::KIND,
+            id: 0,
+            body: MirrorKey { keycode, pressed }.encode(),
+        });
+        Ok(())
+    }
+
+    /// "Back", "Home" or "Recents" on the mirrored phone.
+    fn link_global(&self, action: String) -> zbus::fdo::Result<()> {
+        use magnetita_proto::mirror::{GlobalAction, MirrorGlobal};
+        let action = match action.as_str() {
+            "Back" => GlobalAction::Back,
+            "Home" => GlobalAction::Home,
+            "Recents" => GlobalAction::Recents,
+            _ => return Err(zbus::fdo::Error::InvalidArgs("action".into())),
+        };
+        crate::link_wire::mirror::own().queue_input(magnetita_proto::Envelope {
+            capability: magnetita_proto::capability::MIRROR,
+            kind: MirrorGlobal::KIND,
+            id: 0,
+            body: MirrorGlobal { action }.encode(),
+        });
+        Ok(())
     }
 
     /// Change one option. A value outside the contract is refused and the

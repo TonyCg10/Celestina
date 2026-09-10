@@ -1,9 +1,11 @@
 # Magnetita status
 
 - **Updated:** 2026-09-09
-- **Implementation:** `MAG-P5`, commands, trackpad and keyboard, is the
-  active checkpoint since 2026-09-09, paired with `magnetita-android`'s
-  `AND-3`; the registry and the virtual device are done. `MAG-P4`, the
+- **Implementation:** `MAG-P6`, the mirror as a capability of the link, is
+  the active checkpoint since 2026-09-09, paired with `magnetita-android`'s
+  `AND-4`; its four units are implemented and it waits on `VAL-MAG-14`.
+  `MAG-P5`, commands, trackpad and keyboard, met its exit the same day and
+  is archived; `VAL-MAG-13` carries the author's hand. `MAG-P4`, the
   daily set, met its exit the same day and is archived; `VAL-MAG-12`
   carries the author's daily use. `MAG-P3`, the
   Android application foundation, met its exit on 2026-09-09 and is
@@ -31,6 +33,11 @@
 
 ## Current checkout truth
 
+- The mirror runs over the link: `Mirror1`'s `StartLink` asks the phone
+  for its screen, the raw HEVC arrives on a bulk stream of a fixed id and
+  plays in an `mpv` window the daemon owns, and `LinkTouch` and
+  `LinkGlobal` go back; the desktop app's Mirror control prefers it and
+  falls back to `adb` (`MAG-P6-A` through `-D`).
 - Registered commands (name, program, arguments) live in the daemon's
   configuration and reach the phone as ids and names; a run is a bounded
   process group. The phone's trackpad and keyboard drive one virtual
@@ -161,7 +168,8 @@ its refusals are proven, the delivery of a file to a phone is not. See the
 ## Records
 
 - [Implementation roadmap](ROADMAP.md)
-- [Active plan MAG-P5](docs/plans/active/2026-09-09-remote-control.md)
+- [Active plan MAG-P6](docs/plans/active/2026-09-09-link-mirror.md)
+- [Archived plan MAG-P5](docs/plans/archive/2026-09-09-remote-control.md)
 - [Archived plan MAG-P4](docs/plans/archive/2026-09-09-daily-set.md)
 - [Archived plan MAG-P3](docs/plans/archive/2026-09-09-android-foundation.md)
 - [Archived plan MAG-P2](docs/plans/archive/2026-09-09-link.md)

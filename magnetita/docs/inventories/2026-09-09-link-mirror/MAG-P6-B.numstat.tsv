@@ -1,0 +1,25 @@
+# MAG-P6-B exact change inventory
+
+Base revision	1df9ae3f1ddea07b5ee88a97cf77c4a4886b4aaf
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/mirror.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/VALIDATION.md
+Pathspec	magnetita/docs/evidence/2026-09-09-mirror-window.md
+Pathspec	magnetita/docs/inventories/2026-09-09-link-mirror/MAG-P6-B.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-link-mirror.md
+Pathspec	magnetita/docs/plans/active/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+418	0	6d52a2c555495c64de5b97eb939b6f93b0d8d9f47dc038ad8b1965cbc306f756	celestina-rs/crates/magnetitad/src/link_wire/mirror.rs
+199	3	48590c2b0dbef342243f90cf19bb73996bb3c0a12db1454119a09e3d1fbb86ff	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+23	9	80684af9209f2b4a2610cf06ff73aabe6964d37996d88409ced40ed6be7023bb	magnetita/ROADMAP.md
+12	4	4b190236034b36cc940e9065bd75899c336309f98f0f6856bbcf9162cad252d8	magnetita/STATUS.md
+19	0	6d0d4dbad2e646ae38cdda182347e2c60b99996db7b636aa029220cf05ebcd18	magnetita/VALIDATION.md
+47	0	637c275e00e275042a0d25d48e93f8d54c6c34548da8073205607cbb0e988bf0	magnetita/docs/evidence/2026-09-09-mirror-window.md
+25	0	self	magnetita/docs/inventories/2026-09-09-link-mirror/MAG-P6-B.numstat.tsv
+67	0	6a7ff991f872102cdf4edec36b6483b7c21d9e6df3dfd2881d112c2a5466e797	magnetita/docs/plans/active/2026-09-09-link-mirror.md
+4	2	4362bba2aa139f89e6721f9e2071f9afe5ec377529f35515c562695591700d0d	magnetita/docs/plans/active/README.md

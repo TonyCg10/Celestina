@@ -3,6 +3,25 @@
 This manual lane requires the real phone, LAN, mounts or Wayland session. It
 does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
 
+## VAL-MAG-14 — The mirror over the link after a phone reboot
+
+- **Status:** pending
+- **Related implementation:** `MAG-P6` / `AND-4`
+- **Requires:** the deployed daemon, the release build on the S25U with
+  "Control de pantalla" allowed in the accessibility settings, the phone
+  connected over the own wire, no `adb`
+- **Procedure:** reboot the phone and wait for the link; press Mirror on
+  the desktop app; allow the capture on the phone (the notification when
+  the application is not in front); tap and drag on the desktop's window;
+  press Back on the window; press Stop
+- **Pass condition:** the phone's screen appears in the daemon's window
+  within a few seconds with no `adb` and no developer setting, the taps and
+  drags land on the phone, Back navigates, and Stop closes the window and
+  ends the capture on the phone
+- **Result:** not run
+- **Evidence:** the daemon's `mirror` log lines, the window, the phone's
+  capture notification
+
 ## VAL-MAG-13 — The phone as trackpad, keyboard and command deck
 
 - **Status:** pending

@@ -1,0 +1,15 @@
+# MAG-P6-D exact change inventory
+
+Base revision	1df9ae3f1ddea07b5ee88a97cf77c4a4886b4aaf
+Pathspec	magnetita/docs/evidence/2026-09-09-mirror-control.md
+Pathspec	magnetita/docs/inventories/2026-09-09-link-mirror/MAG-P6-D.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-link-mirror.md
+Pathspec	magnetita/src/devices.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+30	0	215f9a6640d9e4ad57d44ad477019d9586d64e717b22d4d5617e18b4e81b6980	magnetita/docs/evidence/2026-09-09-mirror-control.md
+15	0	self	magnetita/docs/inventories/2026-09-09-link-mirror/MAG-P6-D.numstat.tsv
+67	0	6a7ff991f872102cdf4edec36b6483b7c21d9e6df3dfd2881d112c2a5466e797	magnetita/docs/plans/active/2026-09-09-link-mirror.md
+23	9	ff9c46d9422faa21a802ac6df96baf306475acbe183b98d14aec2385630fe285	magnetita/src/devices.rs

@@ -23,6 +23,10 @@ use magnetita_proto::daily::notifications::{
     NotificationAction, NotificationDismissed, NotificationPosted, NotificationReply,
 };
 use magnetita_proto::daily::share::{ShareAccept, ShareDone, ShareOffer, ShareReject, ShareText};
+use magnetita_proto::mirror::{
+    GlobalAction, MirrorGlobal, MirrorKey, MirrorStart, MirrorStarted, MirrorStop, MirrorTouch,
+    TouchAction,
+};
 use magnetita_proto::pair::{kind as pair_kind, Fingerprint, Pinned, QrPairing, QrPayload};
 use magnetita_proto::phone::contacts::{ContactsRequest, ContactsSync};
 use magnetita_proto::phone::sms::{
@@ -368,6 +372,37 @@ impl PhoneSession {
             .write_all(bytes)
             .await
             .map_err(|e| LinkError::Connection(e.to_string()))
+    }
+
+    /// Opens a bulk stream of a fixed id (the mirror's video or audio) for
+    /// [`Self::write_transfer`]; [`Self::close_stream`] ends it quietly.
+    pub async fn open_stream(&self, id: u32) -> Result<(), LinkError> {
+        let stream = self.share.transfers.open(id).await?;
+        self.share.sending.lock().await.insert(id, stream);
+        Ok(())
+    }
+
+    /// Ends a stream opened by [`Self::open_stream`] without a share message.
+    pub async fn close_stream(&self, id: u32) {
+        if let Some(mut stream) = self.share.sending.lock().await.remove(&id) {
+            let _ = stream.finish();
+        }
+    }
+
+    /// The mirror is streaming with this shape.
+    pub async fn send_mirror_started(&self, started: &MirrorStarted) -> Result<(), LinkError> {
+        self.session
+            .send_message(capability::MIRROR, MirrorStarted::KIND, started.encode())
+            .await?;
+        Ok(())
+    }
+
+    /// The mirror stopped on this side.
+    pub async fn send_mirror_stop(&self) -> Result<(), LinkError> {
+        self.session
+            .send_message(capability::MIRROR, MirrorStop::KIND, MirrorStop.encode())
+            .await?;
+        Ok(())
     }
 
     /// Ends an accepted transfer and tells the desktop every byte went.
@@ -789,6 +824,62 @@ pub fn button_from_index(index: u8) -> Option<MediaButton> {
     })
 }
 
+/// The mirror messages a desktop envelope carries, for the application.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct MirrorFields {
+    pub start: Option<MirrorStart>,
+    pub stop: bool,
+    pub touch: Option<MirrorTouch>,
+    pub key: Option<MirrorKey>,
+    pub global: Option<GlobalAction>,
+}
+
+pub fn mirror_fields(env: &Envelope) -> MirrorFields {
+    if env.capability != capability::MIRROR {
+        return MirrorFields::default();
+    }
+    match env.kind {
+        MirrorStart::KIND => MirrorFields {
+            start: MirrorStart::decode(&env.body).ok(),
+            ..Default::default()
+        },
+        MirrorStop::KIND => MirrorFields {
+            stop: true,
+            ..Default::default()
+        },
+        MirrorTouch::KIND => MirrorFields {
+            touch: MirrorTouch::decode(&env.body).ok(),
+            ..Default::default()
+        },
+        MirrorKey::KIND => MirrorFields {
+            key: MirrorKey::decode(&env.body).ok(),
+            ..Default::default()
+        },
+        MirrorGlobal::KIND => MirrorFields {
+            global: MirrorGlobal::decode(&env.body).ok().map(|g| g.action),
+            ..Default::default()
+        },
+        _ => MirrorFields::default(),
+    }
+}
+
+/// The wire's touch phases and navigation actions as small integers.
+pub fn touch_index(action: TouchAction) -> u8 {
+    match action {
+        TouchAction::Down => 0,
+        TouchAction::Move => 1,
+        TouchAction::Up => 2,
+    }
+}
+
+pub fn global_index(action: GlobalAction) -> u8 {
+    match action {
+        GlobalAction::Back => 0,
+        GlobalAction::Home => 1,
+        GlobalAction::Recents => 2,
+    }
+}
+
 /// The registered commands a desktop envelope carries, or a run's result.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CommandFields {
@@ -916,6 +1007,11 @@ pub fn describe(env: &Envelope) -> String {
         (capability::SMS, 4) => "sms: send".into(),
         (capability::TELEPHONY, 2) => "call: command".into(),
         (capability::COMMANDS, 1) => "commands: list".into(),
+        (capability::MIRROR, 1) => "mirror: start".into(),
+        (capability::MIRROR, 3) => "mirror: stop".into(),
+        (capability::MIRROR, 4) => "mirror: touch".into(),
+        (capability::MIRROR, 5) => "mirror: key".into(),
+        (capability::MIRROR, 6) => "mirror: global".into(),
         (capability::COMMANDS, 3) => "commands: result".into(),
         (cap, kind) => format!("capability {cap} kind {kind}, {} bytes", env.body.len()),
     }

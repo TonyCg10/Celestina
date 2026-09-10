@@ -12,12 +12,14 @@ use std::time::Duration;
 use magnetita_link::trust::fingerprint_text;
 
 use crate::phone::{
-    button_from_index, button_index, clipboard_text, command_fields, describe, media_fields,
-    notification_fields, phone_fields, share_fields, Incoming, Phone, PhoneSession,
+    button_from_index, button_index, clipboard_text, command_fields, describe, global_index,
+    media_fields, mirror_fields, notification_fields, phone_fields, share_fields, touch_index,
+    Incoming, Phone, PhoneSession,
 };
 use magnetita_proto::control::input::Button;
 use magnetita_proto::daily::media::{MediaCommand, MediaState};
 use magnetita_proto::daily::notifications::{Action, NotificationPosted};
+use magnetita_proto::mirror::{Codec, MirrorStarted};
 use magnetita_proto::phone::contacts::{Contact, ContactsSync};
 use magnetita_proto::phone::sms::{
     Attachment, Conversation, SmsConversations, SmsMessage, SmsReceived, SmsThread,
@@ -109,7 +111,40 @@ pub struct Event {
     /// A run's result: the id and whether it succeeded.
     pub command_id: Option<u32>,
     pub command_ok: Option<bool>,
+    /// The desktop asks for the mirror with these options.
+    pub mirror_start: Option<MobileMirrorStart>,
+    pub mirror_stop: bool,
+    /// A touch on the mirrored screen: phase 0 down, 1 move, 2 up.
+    pub mirror_touch: Option<MobileTouch>,
+    /// An Android key code, with `command_ok` unused; pressed in `mirror_key_pressed`.
+    pub mirror_key: Option<u16>,
+    pub mirror_key_pressed: Option<bool>,
+    /// 0 back, 1 home, 2 recents.
+    pub mirror_global: Option<u8>,
 }
+
+/// What the desktop asks the mirror to be.
+#[derive(uniffi::Record, Clone)]
+pub struct MobileMirrorStart {
+    pub max_size: u16,
+    pub fps: u8,
+    pub bitrate_kbps: u32,
+    /// 0 HEVC, 1 H.264.
+    pub codec: u8,
+    pub audio: bool,
+}
+
+#[derive(uniffi::Record, Clone)]
+pub struct MobileTouch {
+    pub phase: u8,
+    pub x: u16,
+    pub y: u16,
+    pub pointer: u8,
+}
+
+/// The transfer ids the mirror's streams carry.
+pub const MIRROR_VIDEO_STREAM: u32 = 0xFFFF_0001;
+pub const MIRROR_AUDIO_STREAM: u32 = 0xFFFF_0002;
 
 /// One registered command as the phone sees it.
 #[derive(uniffi::Record, Clone)]
@@ -550,6 +585,39 @@ impl MobileSession {
         Ok(self.handle.block_on(self.inner.send_typed_text(&text))?)
     }
 
+    /// Opens the mirror's video (or audio) stream for `write_transfer`.
+    pub fn open_stream(&self, id: u32) -> Result<(), MobileError> {
+        Ok(self.handle.block_on(self.inner.open_stream(id))?)
+    }
+
+    /// Ends a stream opened by `open_stream`.
+    pub fn close_stream(&self, id: u32) {
+        self.handle.block_on(self.inner.close_stream(id));
+    }
+
+    /// The mirror streams with this shape; codec 0 HEVC, 1 H.264.
+    pub fn send_mirror_started(
+        &self,
+        width: u16,
+        height: u16,
+        codec: u8,
+        audio: bool,
+    ) -> Result<(), MobileError> {
+        let started = MirrorStarted {
+            width,
+            height,
+            codec: if codec == 1 { Codec::H264 } else { Codec::Hevc },
+            audio,
+        };
+        Ok(self
+            .handle
+            .block_on(self.inner.send_mirror_started(&started))?)
+    }
+
+    pub fn send_mirror_stop(&self) -> Result<(), MobileError> {
+        Ok(self.handle.block_on(self.inner.send_mirror_stop())?)
+    }
+
     /// Shares a URL or a snippet with the desktop.
     pub fn send_text(&self, text: String) -> Result<(), MobileError> {
         Ok(self.handle.block_on(self.inner.send_text(&text))?)
@@ -567,6 +635,7 @@ impl MobileSession {
                 let media = media_fields(&e);
                 let phone = phone_fields(&e);
                 let commands = command_fields(&e);
+                let mirror = mirror_fields(&e);
                 let text = clipboard_text(&e).or(reply).or(share.text);
                 Event {
                     capability: e.capability,
@@ -604,6 +673,26 @@ impl MobileSession {
                     }),
                     command_id: commands.result.map(|r| r.0),
                     command_ok: commands.result.map(|r| r.1),
+                    mirror_start: mirror.start.map(|m| MobileMirrorStart {
+                        max_size: m.max_size,
+                        fps: m.fps,
+                        bitrate_kbps: m.bitrate_kbps,
+                        codec: match m.codec {
+                            Codec::Hevc => 0,
+                            Codec::H264 => 1,
+                        },
+                        audio: m.audio,
+                    }),
+                    mirror_stop: mirror.stop,
+                    mirror_touch: mirror.touch.map(|t| MobileTouch {
+                        phase: touch_index(t.action),
+                        x: t.x,
+                        y: t.y,
+                        pointer: t.pointer,
+                    }),
+                    mirror_key: mirror.key.map(|k| k.keycode),
+                    mirror_key_pressed: mirror.key.map(|k| k.pressed),
+                    mirror_global: mirror.global.map(global_index),
                     text: text.or(phone.sms_send.map(|s| s.body)),
                     body: e.body,
                 }
@@ -636,6 +725,12 @@ impl MobileSession {
                 commands: None,
                 command_id: None,
                 command_ok: None,
+                mirror_start: None,
+                mirror_stop: false,
+                mirror_touch: None,
+                mirror_key: None,
+                mirror_key_pressed: None,
+                mirror_global: None,
                 body: Vec::new(),
             },
         }))

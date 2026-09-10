@@ -1,0 +1,15 @@
+# MAG-P6-C exact change inventory
+
+Base revision	1df9ae3f1ddea07b5ee88a97cf77c4a4886b4aaf
+Pathspec	celestina-rs/crates/magnetitad/src/mirror.rs
+Pathspec	magnetita/docs/evidence/2026-09-09-mirror-input.md
+Pathspec	magnetita/docs/inventories/2026-09-09-link-mirror/MAG-P6-C.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-link-mirror.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+78	1	3334d0317aaf61f367200cad51df6fa43517da6a193e78decdd7fdb79e000c88	celestina-rs/crates/magnetitad/src/mirror.rs
+34	0	c876cb3751fd56cb7c9622dfe2471cec85b3771fc400de2883b69047fb81101b	magnetita/docs/evidence/2026-09-09-mirror-input.md
+15	0	self	magnetita/docs/inventories/2026-09-09-link-mirror/MAG-P6-C.numstat.tsv
+67	0	6a7ff991f872102cdf4edec36b6483b7c21d9e6df3dfd2881d112c2a5466e797	magnetita/docs/plans/active/2026-09-09-link-mirror.md

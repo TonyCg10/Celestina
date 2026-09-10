@@ -6,3 +6,4 @@ units and links. Exact inventories remain immutable under
 root. A separate archive commit gets a new administrative unit and inventory.
 - [MAG-P3 — The Android application foundation, Rust side](2026-09-09-android-foundation.md)
 - [MAG-P4 — The daily set on the own wire](2026-09-09-daily-set.md)
+- [MAG-P5 — Commands, trackpad and keyboard](2026-09-09-remote-control.md)

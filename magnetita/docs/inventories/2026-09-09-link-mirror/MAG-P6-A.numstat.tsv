@@ -1,0 +1,23 @@
+# MAG-P6-A exact change inventory
+
+Base revision	1df9ae3f1ddea07b5ee88a97cf77c4a4886b4aaf
+Pathspec	celestina-rs/crates/magnetita-mobile/src/mobile.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/phone.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/main.rs
+Pathspec	magnetita/docs/evidence/2026-09-09-mirror-stream.md
+Pathspec	magnetita/docs/inventories/2026-09-09-link-mirror/MAG-P6-A.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-link-mirror.md
+Pathspec	magnetita/docs/protocol.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+97	2	cc7f844d76b64c404edcb37abf5bba2723e47364112933ee56d64e61554f1887	celestina-rs/crates/magnetita-mobile/src/mobile.rs
+96	0	c58937c18ac93ce659272fb4506842bb80c6c47ac36c5a4878320b8e1ba32a26	celestina-rs/crates/magnetita-mobile/src/phone.rs
+1	0	c2d101492f9743c60c7e642942aa638ecb23c0d2d6914b6f7e65888bd7dec287	celestina-rs/crates/magnetita-peer/src/lib.rs
+34	2	caff04908fcbaca135ed462bf0847a5ef45243971eb27a51fd57b59214275f47	celestina-rs/crates/magnetita-peer/src/main.rs
+43	0	d57d45c0df76945a53e23c92767131b1d6c02711acb4f25436e7667c96b42740	magnetita/docs/evidence/2026-09-09-mirror-stream.md
+23	0	self	magnetita/docs/inventories/2026-09-09-link-mirror/MAG-P6-A.numstat.tsv
+67	0	6a7ff991f872102cdf4edec36b6483b7c21d9e6df3dfd2881d112c2a5466e797	magnetita/docs/plans/active/2026-09-09-link-mirror.md
+5	1	6260321fa07c067a41f0a3e2fb2ae9c5bad310d8d65e2ef5ef3883bca3e1389f	magnetita/docs/protocol.md

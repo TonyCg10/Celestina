@@ -37,6 +37,7 @@ use magnetita_proto::daily::notifications::Action;
 use magnetita_proto::daily::notifications::{
     NotificationAction, NotificationDismissed, NotificationPosted, NotificationReply,
 };
+use magnetita_proto::mirror::{MirrorStarted, MirrorStop};
 use magnetita_proto::pair::{kind as pair_kind, Fingerprint, QrPairing, QrPayload};
 use magnetita_proto::phone::contacts::ContactsSync;
 use magnetita_proto::phone::sms::{SmsConversations, SmsReceived, SmsThread};
@@ -49,6 +50,7 @@ pub(crate) mod commands;
 pub(crate) mod discovery;
 pub(crate) mod input;
 pub(crate) mod media;
+pub(crate) mod mirror;
 pub(crate) mod notifications;
 pub(crate) mod phone;
 pub(crate) mod share;
@@ -184,6 +186,10 @@ fn hello(device_id: &str) -> Hello {
                 capability: capability::INPUT,
                 version: 1,
             },
+            CapabilityVersion {
+                capability: capability::MIRROR,
+                version: 1,
+            },
         ],
     }
 }
@@ -206,6 +212,8 @@ pub(crate) struct Adapters {
     pub(crate) shares: Arc<share::ShareStore>,
     /// Where the phone's trackpad and keyboard events go.
     pub(crate) input: Arc<dyn input::InputSink>,
+    /// Where the mirrored picture goes.
+    pub(crate) mirror_player: Arc<dyn mirror::MirrorPlayer>,
 }
 
 /// The address a phone on this LAN would reach us at, for the QR. Best
@@ -273,6 +281,9 @@ pub(crate) fn install(
             download_dir: crate::incoming_file::download_dir(),
             shares: Arc::new(share::ShareStore::default()),
             input: Arc::new(input::LazyUinput::default()),
+            mirror_player: Arc::new(mirror::DesktopPlayer {
+                display_env: crate::mirror::session_display_env(),
+            }),
         },
     ) {
         Ok((wire, addr)) => {
@@ -563,6 +574,11 @@ impl Wire {
 
     /// One pinned session, from publication to cleanup.
     async fn run_session(&self, session: Session, hello: Hello, how: &str) {
+        // Shared with the reader tasks: `select!` drops a losing branch's
+        // future, and a control-stream read dropped mid-frame desynchronises
+        // the stream, so the reads live in tasks of their own and the loop
+        // receives from channels, which is cancel-safe.
+        let session = Arc::new(session);
         let daemon = &self.daemon;
         let device_id = hello.device_id.clone();
         let name = hello.device_name.clone();
@@ -681,16 +697,54 @@ impl Wire {
                 }
             })
         };
+        let (control_tx, mut control_rx) = tokio::sync::mpsc::channel(64);
+        let control_reader = {
+            let session = Arc::clone(&session);
+            tokio::spawn(async move {
+                loop {
+                    let next = session.recv().await;
+                    let failed = next.is_err();
+                    if control_tx.send(next).await.is_err() || failed {
+                        break;
+                    }
+                }
+            })
+        };
+        let (datagram_tx, mut datagram_rx) = tokio::sync::mpsc::channel(256);
+        let datagram_reader = {
+            let session = Arc::clone(&session);
+            tokio::spawn(async move {
+                loop {
+                    let next = session.recv_datagram().await;
+                    let failed = next.is_err();
+                    if datagram_tx.send(next).await.is_err() || failed {
+                        break;
+                    }
+                }
+            })
+        };
         let mut tick = tokio::time::interval(TICK);
         loop {
             tokio::select! {
-                envelope = session.recv() => match envelope {
+                Some(envelope) = control_rx.recv() => match envelope {
                     Ok(env) if env.capability == capability::PAIRING && env.kind == pair_kind::QR_PROOF => {
                         self.prove_again(&session, &name, &env.body).await;
                     }
                     Ok(env) if env.capability == capability::MEDIA => {
                         self.handle_media(&device_id, &name, &media, &env);
                     }
+                    Ok(env) if env.capability == capability::MIRROR && mirror::own().owned_by(&device_id) => match env.kind {
+                        MirrorStarted::KIND => match MirrorStarted::decode(&env.body) {
+                            Ok(started) => {
+                                mirror::own().started(self.adapters.mirror_player.as_ref(), &started);
+                                log("mirror", &format!("{name}: streaming {}x{}", started.width, started.height));
+                            }
+                            Err(e) => log("link", &format!("{name}: mirror: {e}")),
+                        },
+                        MirrorStop::KIND => mirror::own().stopped(),
+                        _ => {}
+                    },
+
                     Ok(env) if matches!(env.capability, capability::CONTACTS | capability::SMS | capability::TELEPHONY) => {
                         self.handle_phone(&device_id, &name, &env);
                     }
@@ -729,9 +783,13 @@ impl Wire {
                         break;
                     }
                 },
-                Some((transfer, stream)) = streams_rx.recv() => shares.stream_arrived(transfer, stream),
+                Some((transfer, stream)) = streams_rx.recv() => match transfer {
+                    mirror::VIDEO_STREAM if mirror::own().owned_by(&device_id) => mirror::own().video_stream(stream),
+                    mirror::VIDEO_STREAM | mirror::AUDIO_STREAM => {}
+                    _ => shares.stream_arrived(transfer, stream),
+                },
                 // Motion may arrive as datagrams: same body, no reliability.
-                datagram = session.recv_datagram() => match datagram {
+                Some(datagram) = datagram_rx.recv() => match datagram {
                     Ok(env) if env.capability == capability::INPUT => {
                         self.handle_input(&name, &governor, env.kind, &env.body);
                     }
@@ -747,6 +805,11 @@ impl Wire {
                     }
                 }
                 _ = tick.tick() => {
+                    for env in mirror::own().tick(&device_id) {
+                        if let Err(e) = session.send_message(env.capability, env.kind, env.body).await {
+                            log("link", &format!("{name}: mirror: {e}"));
+                        }
+                    }
                     media.set_active(daemon.settings.lock_ok().media);
                     for state in media.tick() {
                         if let Err(e) = session.send_message(state.capability, state.kind, state.body).await {
@@ -786,6 +849,11 @@ impl Wire {
             }
         }
         acceptor.abort();
+        control_reader.abort();
+        datagram_reader.abort();
+        if mirror::own().owned_by(&device_id) {
+            mirror::own().stopped();
+        }
         phone::store().forget_device(&device_id);
         daemon.pending_clipboards.clear(&device_id);
         self.adapters.notifications.forget_device(&device_id);
@@ -1313,6 +1381,7 @@ mod tests {
                 download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
                 shares: Arc::new(share::ShareStore::default()),
                 input: Arc::new(input::testing::Recorder::default()),
+                mirror_player: Arc::new(mirror::testing::Recorder::default()),
             },
         )
         .unwrap();
@@ -1407,6 +1476,7 @@ mod tests {
                 download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
                 shares: Arc::new(share::ShareStore::default()),
                 input: Arc::new(input::testing::Recorder::default()),
+                mirror_player: Arc::new(mirror::testing::Recorder::default()),
             },
         )
         .unwrap();
@@ -1540,6 +1610,7 @@ mod tests {
                 download_dir: downloads.clone(),
                 shares: Arc::new(share::ShareStore::default()),
                 input: Arc::new(input::testing::Recorder::default()),
+                mirror_player: Arc::new(mirror::testing::Recorder::default()),
             },
         )
         .unwrap();
@@ -1693,6 +1764,7 @@ mod tests {
                 download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
                 shares: Arc::new(share::ShareStore::default()),
                 input: Arc::new(input::testing::Recorder::default()),
+                mirror_player: Arc::new(mirror::testing::Recorder::default()),
             },
         )
         .unwrap();
@@ -1807,6 +1879,7 @@ mod tests {
                 download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
                 shares: Arc::new(share::ShareStore::default()),
                 input: Arc::new(input::testing::Recorder::default()),
+                mirror_player: Arc::new(mirror::testing::Recorder::default()),
             },
         )
         .unwrap();
@@ -2000,6 +2073,7 @@ mod tests {
                 download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
                 shares: Arc::new(share::ShareStore::default()),
                 input: recorder.clone(),
+                mirror_player: Arc::new(mirror::testing::Recorder::default()),
             },
         )
         .unwrap();
@@ -2116,6 +2190,126 @@ mod tests {
     }
 
     #[test]
+    fn the_link_mirror_starts_streams_into_the_window_and_stops() {
+        use magnetita_proto::mirror::{Codec, MirrorStart, MirrorTouch, TouchAction};
+        let cert = DeviceCert::generate("desktop");
+        let daemon = test_daemon(&cert);
+        let arm = PairingArm::default();
+        let player = Arc::new(mirror::testing::Recorder::default());
+        let (wire, addr) = spawn(
+            Arc::clone(&daemon),
+            cert.clone(),
+            "desktop".into(),
+            arm.clone(),
+            "127.0.0.1:0".parse().unwrap(),
+            false,
+            Adapters {
+                clipboard_sink: Arc::new(|_: &str| true),
+                notification_server: Arc::new(notifications::NoServer),
+                notifications: Arc::new(notifications::Bridge::default()),
+                download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
+                shares: Arc::new(share::ShareStore::default()),
+                input: Arc::new(input::testing::Recorder::default()),
+                mirror_player: player.clone(),
+            },
+        )
+        .unwrap();
+        let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (phone, phone_fp) = rt.block_on(async { phone("phone9") });
+        let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
+        let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
+        let next_of = |cap: u16, kind: u16| {
+            rt.block_on(async {
+                loop {
+                    let env = tokio::time::timeout(Duration::from_secs(5), session.recv())
+                        .await
+                        .expect("an envelope in time")
+                        .unwrap();
+                    if env.capability == cap && env.kind == kind {
+                        break env;
+                    }
+                }
+            })
+        };
+
+        // The desktop wants the mirror: the tick sends the start.
+        mirror::own().request_start_from(
+            "phone9",
+            MirrorStart {
+                max_size: 1440,
+                fps: 60,
+                bitrate_kbps: 6000,
+                codec: Codec::Hevc,
+                audio: false,
+            },
+        );
+        let start =
+            MirrorStart::decode(&next_of(capability::MIRROR, MirrorStart::KIND).body).unwrap();
+        assert_eq!(start.fps, 60);
+
+        // The phone answers and streams; the window receives the bytes.
+        rt.block_on(
+            session.send_message(
+                capability::MIRROR,
+                MirrorStarted::KIND,
+                MirrorStarted {
+                    width: 1080,
+                    height: 2340,
+                    codec: Codec::Hevc,
+                    audio: false,
+                }
+                .encode(),
+            ),
+        )
+        .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while player.opened.lock_ok().is_empty() {
+            assert!(Instant::now() < deadline, "the window never opened");
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert_eq!(player.opened.lock_ok()[0], (1080, 2340));
+        let frame: Vec<u8> = (0..100_000u32).map(|i| (i % 7) as u8).collect();
+        rt.block_on(async {
+            let mut stream = session.open_transfer(mirror::VIDEO_STREAM).await.unwrap();
+            stream.write_all(&frame).await.unwrap();
+            stream.finish().unwrap();
+            let _ = stream.stopped().await;
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while player.bytes.lock_ok().len() < frame.len() {
+            assert!(
+                Instant::now() < deadline,
+                "the picture never reached the window"
+            );
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert_eq!(*player.bytes.lock_ok(), frame);
+
+        // A touch queued by Mirror1 reaches the phone; a stop closes the window.
+        mirror::own().queue_input(magnetita_proto::Envelope {
+            capability: capability::MIRROR,
+            kind: MirrorTouch::KIND,
+            id: 0,
+            body: MirrorTouch {
+                action: TouchAction::Down,
+                x: 10,
+                y: 20,
+                pointer: 0,
+            }
+            .encode(),
+        });
+        let touch =
+            MirrorTouch::decode(&next_of(capability::MIRROR, MirrorTouch::KIND).body).unwrap();
+        assert_eq!((touch.x, touch.y), (10, 20));
+        mirror::own().request_stop();
+        next_of(capability::MIRROR, MirrorStop::KIND);
+        assert_eq!(mirror::own().state(), mirror::LinkState::Idle);
+        session.close("done");
+        drop(wire);
+    }
+
+    #[test]
     fn a_phone_that_forgot_the_desktop_pairs_again_while_still_pinned() {
         let cert = DeviceCert::generate("desktop");
         let daemon = test_daemon(&cert);
@@ -2134,6 +2328,7 @@ mod tests {
                 download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
                 shares: Arc::new(share::ShareStore::default()),
                 input: Arc::new(input::testing::Recorder::default()),
+                mirror_player: Arc::new(mirror::testing::Recorder::default()),
             },
         )
         .unwrap();
@@ -2210,6 +2405,7 @@ mod tests {
                 download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
                 shares: Arc::new(share::ShareStore::default()),
                 input: Arc::new(input::testing::Recorder::default()),
+                mirror_player: Arc::new(mirror::testing::Recorder::default()),
             },
         )
         .unwrap();

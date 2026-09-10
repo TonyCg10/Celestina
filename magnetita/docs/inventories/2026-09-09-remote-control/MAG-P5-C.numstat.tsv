@@ -1,0 +1,21 @@
+# MAG-P5-C exact change inventory
+
+Base revision	1df9ae3f1ddea07b5ee88a97cf77c4a4886b4aaf
+Pathspec	magnetita/docs/evidence/2026-09-09-commands-own-wire.md
+Pathspec	magnetita/docs/evidence/2026-09-09-control-pairing.md
+Pathspec	magnetita/docs/evidence/2026-09-09-input-own-wire.md
+Pathspec	magnetita/docs/inventories/2026-09-09-remote-control/MAG-P5-C.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-remote-control.md
+Pathspec	magnetita/docs/plans/archive/2026-09-09-remote-control.md
+Pathspec	magnetita/docs/plans/archive/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	d9f2be0411aaac93017f2368cc853452271b086472b3037454103efb0cce10f7	magnetita/docs/evidence/2026-09-09-commands-own-wire.md
+31	0	1eddf9c8433420c2c64ee48728063797ef39ddb97c760fc07d3baac24921165d	magnetita/docs/evidence/2026-09-09-control-pairing.md
+1	1	d66eebc1689a66da63ee0a6d5f71b8459208a0e902a26aa518ddda5a06595a52	magnetita/docs/evidence/2026-09-09-input-own-wire.md
+21	0	self	magnetita/docs/inventories/2026-09-09-remote-control/MAG-P5-C.numstat.tsv
+0	56	deleted	magnetita/docs/plans/active/2026-09-09-remote-control.md
+64	0	c0ff3b26a683c57b655477f2787ec7515e20fa58bbfe6dffdb6a3d147bd52fb4	magnetita/docs/plans/archive/2026-09-09-remote-control.md
+1	0	376d01e78f71ccd63b3a92fbe4a07ac4c5b9d929651a29168b5e8e6b59a4da02	magnetita/docs/plans/archive/README.md

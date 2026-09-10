@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P5-A` of
-  [`../plans/active/2026-09-09-remote-control.md`](../plans/active/2026-09-09-remote-control.md):
+  [`../plans/archive/2026-09-09-remote-control.md`](../plans/archive/2026-09-09-remote-control.md):
   `celestina-rs/crates/magnetitad/src/link_wire/commands.rs`, the
   `commands` and `input` settings, `Devices1.ListCommands`, `SetCommand`
   and `RemoveCommand`, the desktop app's `src/commands.rs`,

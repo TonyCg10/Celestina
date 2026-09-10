@@ -1,10 +1,12 @@
 # Active Magnetita plans
 
 The active plan is
-[MAG-P5 commands, trackpad and keyboard](2026-09-09-remote-control.md),
+[MAG-P6 the mirror as a capability of the link](2026-09-09-link-mirror.md),
 which the project roadmap names as its active implementation checkpoint. The
 application's own units run under the `magnetita-android` project's plan,
-`AND-3`. `MAG-P4` moved to
+`AND-4`. `MAG-P5` moved to
+[the archive](../archive/2026-09-09-remote-control.md) on 2026-09-09 with
+its exit met; `MAG-P4` moved to
 [the archive](../archive/2026-09-09-daily-set.md) on 2026-09-09 with its
 exit met; `MAG-P3` moved to
 [the archive](../archive/2026-09-09-android-foundation.md) on 2026-09-09
