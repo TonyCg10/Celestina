@@ -85,8 +85,8 @@ ScrollPage {
             spacing: CelestinaTheme.spaceSm
 
             CelestinaIcon {
-                width: CelestinaTheme.iconMd
-                height: width
+                Layout.preferredWidth: CelestinaTheme.iconMd
+                Layout.preferredHeight: CelestinaTheme.iconMd
                 name: "phone"
                 fallbackName: "phone"
                 tone: CelestinaIcon.Device

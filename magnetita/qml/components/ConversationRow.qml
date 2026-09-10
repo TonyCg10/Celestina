@@ -55,8 +55,8 @@ Item {
 
         Rectangle {
             visible: root.unread !== "0"
-            width: Math.max(height, count.implicitWidth + CelestinaTheme.spaceSm)
-            height: CelestinaTheme.compStatusIndicatorSize * 2
+            Layout.preferredWidth: Math.max(height, count.implicitWidth + CelestinaTheme.spaceSm)
+            Layout.preferredHeight: CelestinaTheme.compStatusIndicatorSize * 2
             radius: height / 2
             color: CelestinaTheme.accent
 
