@@ -13,6 +13,7 @@
 
 pub mod mobile;
 pub mod phone;
+pub mod storage;
 
 pub use phone::{Phone, PhoneSession};
 

@@ -1,36 +1,33 @@
 # Magnetita
 
-Celestina's first-party KDE Connect-compatible phone link: a headless Rust
-service plus a thin native device/settings application.
+Celestina's phone link: a headless Rust service speaking the suite's own
+QUIC protocol to its own Android application, plus a thin native
+device/settings application.
 
 ## User contract
 
-- Pair with the stock KDE Connect Android application over the local network,
-  keep trusted devices available and explain connection failures in the app.
-  Under [ADR 0001](docs/decisions/0001-own-protocol-and-android-app.md) this
-  wire is being replaced by Magnetita's own QUIC protocol and its own
-  Android application (`MAG-P0` through `MAG-P7`); the KDE Connect wire is
-  removed in `MAG-P7`, and until then both are served.
-- Mount phone storage under the owned runtime path so Siderita browses it as an
-  ordinary filesystem; expose identity, connection, battery, media and actions
-  through the versioned `org.celestina.Devices1` contract.
-- Provide the daily plugin set already implemented: battery, notifications,
-  file sharing both ways, find-my-phone, clipboard and MPRIS media integration,
-  with persisted per-plugin settings.
-- The phone→desktop clipboard path remains manual because Android prevents the
-  stock background client from reading ordinary clipboard changes reliably.
-- The own protocol carries battery, clipboard, notifications, find, share,
-  media, commands, trackpad and keyboard, the screen mirror, SMS, contacts,
-  telephony and, last, storage. Magnetita is not a cloud service, a drawing
-  tablet, a presenter, or a feature-parity clone of every KDE Connect plugin.
+- Pair the own Android application by QR over the local network, keep
+  trusted phones available and explain connection failures in the app.
+  [ADR 0001](docs/decisions/0001-own-protocol-and-android-app.md) chose
+  this wire over the KDE Connect one, which `MAG-P7` removed.
+- Present the phone's shared folder under the owned runtime path so Siderita
+  browses it as an ordinary filesystem; expose identity, connection, battery,
+  media, the call and actions through the versioned `org.celestina.Devices1`
+  contract.
+- Carry battery, clipboard, notifications, find, share, media, commands,
+  trackpad and keyboard, the screen mirror, SMS, contacts, telephony and
+  storage, with persisted per-plugin settings. Magnetita is not a cloud
+  service, a drawing tablet, a presenter, or a client of any other protocol.
 
 ## Architecture
 
 | Area | Responsibility |
 |---|---|
-| `../celestina-rs/crates/magnetita-core` | Pure packets, pairing, plugin and MPRIS domain |
-| `../celestina-rs/crates/magnetita-net` | UDP discovery, identity-bound TCP/TLS, trust and payload transport |
-| `../celestina-rs/crates/magnetitad` | Connections, admission/revocation, mounts, plugins, settings and D-Bus service |
+| `../celestina-rs/crates/magnetita-proto` | The wire: envelope, hello, pairing and the capability messages |
+| `../celestina-rs/crates/magnetita-link` | The QUIC link with pinned certificates and mDNS discovery |
+| `../celestina-rs/crates/magnetita-mobile`, `magnetita-peer` | The phone's side of the link (UniFFI for Android) and its shell stand-in |
+| `../celestina-rs/crates/magnetita-core`, `magnetita-net` | What both ends share: clipboard rule, notification and media shapes, the mirror state machine, the certificate, the trust store, the transfer limiter |
+| `../celestina-rs/crates/magnetitad` | Sessions, revocation, the phone's FUSE mount, capabilities, settings and the D-Bus service |
 | `src/controller.rs` | Off-GUI D-Bus coordination and confirmed snapshot application |
 | `src/devices.rs`, `src/projection.rs` | D-Bus decoding and pure UI projection |
 | `qml/Main.qml`, `qml/pages/`, `qml/components/` | Device/settings composition only |
@@ -39,8 +36,9 @@ service plus a thin native device/settings application.
 
 ## Build and use
 
-The service requires the KDE Connect LAN ports and `sshfs`/FUSE for mounted
-storage. The phone remains the stock KDE Connect Android app.
+The service binds the own wire's UDP port (1760) and mounts the phone's
+shared folder through FUSE (`fusermount3`). The phone runs the suite's own
+application, `../magnetita-android`.
 
 ```sh
 scripts/build-production.sh

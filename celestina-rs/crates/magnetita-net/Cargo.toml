@@ -8,7 +8,6 @@ license = "GPL-3.0-or-later"
 [dependencies]
 # Reuses the suite's lossless small-state-file replacement for the trust store.
 celestina-core = { path = "../celestina-core" }
-magnetita-core = { path = "../magnetita-core" }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 # The KDE Connect link is TLS with a self-signed, pinned peer cert (TOFU), not a

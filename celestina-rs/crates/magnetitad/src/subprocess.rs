@@ -214,12 +214,14 @@ pub(crate) fn cancelled(stopping: &AtomicBool, deadline: Instant) -> bool {
 /// *why* rather than only *that* it failed.
 pub(crate) struct InputOutcome {
     pub(crate) succeeded: bool,
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) captured: Vec<u8>,
 }
 
 impl InputOutcome {
     /// The command's own explanation, trimmed, or `fallback` when it gave none
-    /// — which is the case when the deadline, not the command, ended it.
+    /// (the case when the deadline, not the command, ended it).
+    #[cfg(test)]
     pub(crate) fn reason(&self, fallback: &str) -> String {
         let captured = String::from_utf8_lossy(&self.captured);
         let trimmed = captured.trim();

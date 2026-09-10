@@ -15,7 +15,7 @@
 #   systemctl --user disable --now valent-daemon.service
 
 [Unit]
-Description=Magnetita — Celestina phone link (KDE Connect)
+Description=Magnetita, the Celestina phone link
 After=network.target
 
 [Service]

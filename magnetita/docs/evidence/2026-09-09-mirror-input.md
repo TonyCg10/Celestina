@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P6-C` of
-  [`../plans/active/2026-09-09-link-mirror.md`](../plans/active/2026-09-09-link-mirror.md):
+  [`../plans/archive/2026-09-09-link-mirror.md`](../plans/archive/2026-09-09-link-mirror.md):
   `celestina-rs/crates/magnetitad/src/mirror.rs`, this record
 - **Environment:** the workspace's tests
 - **Artifact:** `magnetitad`, deployed

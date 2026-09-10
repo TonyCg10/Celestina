@@ -3,7 +3,7 @@
 //! ```text
 //! magnetita-peer identity                    who this peer is
 //! magnetita-peer pair 'magnetita://pair?…'   scan a QR by pasting it
-//! magnetita-peer connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--media PLAYER|TITLE|ARTIST] [--contact NAME|TEL] [--sms ADDRESS|BODY] [--call NUMBER] [--run ID] [--type TEXT] [--mirror-file PATH.hevc] [--hold SECONDS]
+//! magnetita-peer connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--media PLAYER|TITLE|ARTIST] [--contact NAME|TEL] [--sms ADDRESS|BODY] [--call NUMBER] [--run ID] [--type TEXT] [--mirror-file PATH.hevc] [--serve DIR] [--hold SECONDS]
 //! magnetita-peer browse                      who Avahi sees
 //! ```
 //!
@@ -29,7 +29,7 @@ fn dir() -> PathBuf {
 }
 
 fn usage() -> std::process::ExitCode {
-    eprintln!("usage: magnetita-peer identity | pair URI | connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--media PLAYER|TITLE|ARTIST] [--contact NAME|TEL] [--sms ADDRESS|BODY] [--call NUMBER] [--run ID] [--type TEXT] [--mirror-file PATH.hevc] [--hold SECONDS] | browse");
+    eprintln!("usage: magnetita-peer identity | pair URI | connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--media PLAYER|TITLE|ARTIST] [--contact NAME|TEL] [--sms ADDRESS|BODY] [--call NUMBER] [--run ID] [--type TEXT] [--mirror-file PATH.hevc] [--serve DIR] [--hold SECONDS] | browse");
     std::process::ExitCode::from(2)
 }
 
@@ -192,6 +192,13 @@ async fn run(args: &[String]) -> Result<(), LinkError> {
                 );
             }
             let mirror_file = flag(args, "--mirror-file").map(PathBuf::from);
+            // A directory served as the phone's storage: the desktop mounts it.
+            let serving = flag(args, "--serve").map(PathBuf::from);
+            if serving.is_some() {
+                session
+                    .send_storage(magnetita_peer::storage::state(true))
+                    .await?;
+            }
             let sending = match flag(args, "--send-file") {
                 Some(path) => {
                     let path = PathBuf::from(path);
@@ -284,6 +291,16 @@ async fn run(args: &[String]) -> Result<(), LinkError> {
                                     .close_stream(magnetita_peer::MIRROR_VIDEO_STREAM)
                                     .await;
                                 println!("mirror: stream ended");
+                            }
+                            (13, _, _) if serving.is_some() => {
+                                if let Some(request) = magnetita_peer::StorageRequest::decode(&env)
+                                {
+                                    let reply = magnetita_peer::storage::serve(
+                                        serving.as_deref().unwrap(),
+                                        &request,
+                                    );
+                                    session.send_storage(reply).await?;
+                                }
                             }
                             (9, 3, _) => println!("mirror: stop"),
                             (9, 4, _) => println!("mirror: touch"),

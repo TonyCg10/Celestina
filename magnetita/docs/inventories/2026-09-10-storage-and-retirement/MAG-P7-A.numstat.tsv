@@ -1,0 +1,35 @@
+# MAG-P7-A exact change inventory
+
+Base revision	7bd69c269301d30a91ca8f2f7fb40ed0430f697e
+Pathspec	celestina-rs/crates/magnetita-mobile/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/mobile.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/phone.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/storage.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/main.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/storage.rs
+Pathspec	magnetita/docs/discussions/2026-09-10-storage-mount-or-dbus.md
+Pathspec	magnetita/docs/discussions/README.md
+Pathspec	magnetita/docs/evidence/2026-09-10-storage-wire.md
+Pathspec	magnetita/docs/inventories/2026-09-10-storage-and-retirement/MAG-P7-A.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-10-storage-and-retirement.md
+Pathspec	magnetita/docs/protocol.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	a6ecfdb9030d3336caf8cf105b30171168186297731633d0d657cf8decfd624b	celestina-rs/crates/magnetita-mobile/src/lib.rs
+150	0	52fbf2543beb79160669843a09d629de43a4308a354aa4a92522bb383df0dd8f	celestina-rs/crates/magnetita-mobile/src/mobile.rs
+15	0	d89e3eba4ed84f301ca439aae29225a5c8b2de73705bc707543ecda81cdb2496	celestina-rs/crates/magnetita-mobile/src/phone.rs
+329	0	f07190719f21b1ec16ae432059b3f5acb1bf18dfdcebac3aca27f8ccfbc1d69f	celestina-rs/crates/magnetita-mobile/src/storage.rs
+1	0	e92cef73a71ce58a443274460a0dada0660d708cb15e0430d03fd5429d8e901d	celestina-rs/crates/magnetita-peer/src/lib.rs
+19	2	2badf0c415493746ec46770121298fbb377df43598b68f371991d71f43f33005	celestina-rs/crates/magnetita-peer/src/main.rs
+1	0	0a74315be033e0fabd19b215e4dd5201535379d23da2d0ae16ba442a98f66f39	celestina-rs/crates/magnetita-proto/src/lib.rs
+659	0	3bcf11da035240958fb09cdf1be11ce692de709832d734225e2e366ccb006222	celestina-rs/crates/magnetita-proto/src/storage.rs
+55	0	59486972d6f03cf4ebd4ab381ba72220caca16d4f8142a0b4c7d2bc33c1f1f39	magnetita/docs/discussions/2026-09-10-storage-mount-or-dbus.md
+1	0	4e5cf972b84cb5e92b8edefbea1d25e0978ba8d641f86c5f24eda2fea0bb5054	magnetita/docs/discussions/README.md
+42	0	c1acd307d409a1ecd66361069bd5ff5ba2ea72518bf65a3bd9da09a64263185f	magnetita/docs/evidence/2026-09-10-storage-wire.md
+35	0	self	magnetita/docs/inventories/2026-09-10-storage-and-retirement/MAG-P7-A.numstat.tsv
+71	0	7ecca4fdd24826c98392f99c96e7e9c4d5fb072eeb23df0d9a171a7697461b8d	magnetita/docs/plans/active/2026-09-10-storage-and-retirement.md
+1	1	71c1d4099020f4d5db7330b35b09ea1ff07f0c071100c5afa3570296d2b4e039	magnetita/docs/protocol.md

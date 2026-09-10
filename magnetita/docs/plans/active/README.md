@@ -1,10 +1,12 @@
 # Active Magnetita plans
 
 The active plan is
-[MAG-P6 the mirror as a capability of the link](2026-09-09-link-mirror.md),
+[MAG-P7 storage over the own wire and retiring the second path](2026-09-10-storage-and-retirement.md),
 which the project roadmap names as its active implementation checkpoint. The
 application's own units run under the `magnetita-android` project's plan,
-`AND-4`. `MAG-P5` moved to
+`AND-5`. `MAG-P6` moved to
+[the archive](../archive/2026-09-09-link-mirror.md) on 2026-09-10 with its
+exit met as far as the records allow (`VAL-MAG-14` pending); `MAG-P5` moved to
 [the archive](../archive/2026-09-09-remote-control.md) on 2026-09-09 with
 its exit met; `MAG-P4` moved to
 [the archive](../archive/2026-09-09-daily-set.md) on 2026-09-09 with its

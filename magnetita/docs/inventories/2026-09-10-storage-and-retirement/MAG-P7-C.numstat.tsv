@@ -1,0 +1,97 @@
+# MAG-P7-C exact change inventory
+
+Base revision	7bd69c269301d30a91ca8f2f7fb40ed0430f697e
+Pathspec	celestina-rs/crates/magnetita-core/src/battery.rs
+Pathspec	celestina-rs/crates/magnetita-core/src/clipboard.rs
+Pathspec	celestina-rs/crates/magnetita-core/src/event.rs
+Pathspec	celestina-rs/crates/magnetita-core/src/findmyphone.rs
+Pathspec	celestina-rs/crates/magnetita-core/src/identity.rs
+Pathspec	celestina-rs/crates/magnetita-core/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-core/src/mpris.rs
+Pathspec	celestina-rs/crates/magnetita-core/src/notification.rs
+Pathspec	celestina-rs/crates/magnetita-core/src/packet.rs
+Pathspec	celestina-rs/crates/magnetita-core/src/pair.rs
+Pathspec	celestina-rs/crates/magnetita-core/src/payload.rs
+Pathspec	celestina-rs/crates/magnetita-core/src/ping.rs
+Pathspec	celestina-rs/crates/magnetita-core/src/session.rs
+Pathspec	celestina-rs/crates/magnetita-core/src/sftp.rs
+Pathspec	celestina-rs/crates/magnetita-core/src/share.rs
+Pathspec	celestina-rs/crates/magnetita-net/Cargo.toml
+Pathspec	celestina-rs/crates/magnetita-net/src/cert.rs
+Pathspec	celestina-rs/crates/magnetita-net/src/deadline.rs
+Pathspec	celestina-rs/crates/magnetita-net/src/device.rs
+Pathspec	celestina-rs/crates/magnetita-net/src/discovery.rs
+Pathspec	celestina-rs/crates/magnetita-net/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-net/src/link.rs
+Pathspec	celestina-rs/crates/magnetita-net/src/payload.rs
+Pathspec	celestina-rs/crates/magnetita-net/src/tls.rs
+Pathspec	celestina-rs/crates/magnetitad/src/admission.rs
+Pathspec	celestina-rs/crates/magnetitad/src/artwork.rs
+Pathspec	celestina-rs/crates/magnetitad/src/clipboard.rs
+Pathspec	celestina-rs/crates/magnetitad/src/devices.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_commands.rs
+Pathspec	celestina-rs/crates/magnetitad/src/main.rs
+Pathspec	celestina-rs/crates/magnetitad/src/media.rs
+Pathspec	celestina-rs/crates/magnetitad/src/mount.rs
+Pathspec	celestina-rs/crates/magnetitad/src/notify.rs
+Pathspec	celestina-rs/crates/magnetitad/src/payload_handlers.rs
+Pathspec	celestina-rs/crates/magnetitad/src/remote_media.rs
+Pathspec	celestina-rs/crates/magnetitad/src/revocation.rs
+Pathspec	celestina-rs/crates/magnetitad/src/runtime.rs
+Pathspec	celestina-rs/crates/magnetitad/src/session_registration.rs
+Pathspec	celestina-rs/crates/magnetitad/src/subprocess.rs
+Pathspec	magnetita/docs/evidence/2026-09-10-kde-wire-removed.md
+Pathspec	magnetita/docs/inventories/2026-09-10-storage-and-retirement/MAG-P7-C.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-10-storage-and-retirement.md
+Pathspec	magnetita/magnetitad.service
+Pathspec	scripts/architecture-baseline.tsv
+Pathspec	scripts/language-baseline.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+0	112	deleted	celestina-rs/crates/magnetita-core/src/battery.rs
+3	114	ba7b2f7db90de6f4e418272546220bf48598c09ec7a93749cd41a3af16e84654	celestina-rs/crates/magnetita-core/src/clipboard.rs
+0	55	deleted	celestina-rs/crates/magnetita-core/src/event.rs
+0	29	deleted	celestina-rs/crates/magnetita-core/src/findmyphone.rs
+0	253	deleted	celestina-rs/crates/magnetita-core/src/identity.rs
+7	50	fc1b61fcf8cd8a6ef328bc471c93eeaa4e7ab6fb9725fa98c3e0bd1cab1d5f3b	celestina-rs/crates/magnetita-core/src/lib.rs
+4	434	ae6d88a8589f5004eeeec0c5b6e6142e6c3d52f0a654ca3966c98126f79bf84a	celestina-rs/crates/magnetita-core/src/mpris.rs
+2	143	445fdbb93dcbdecce9b617421d960cd3ad55d469fd14dc65d0a54510da51641f	celestina-rs/crates/magnetita-core/src/notification.rs
+0	111	deleted	celestina-rs/crates/magnetita-core/src/packet.rs
+0	452	deleted	celestina-rs/crates/magnetita-core/src/pair.rs
+0	25	deleted	celestina-rs/crates/magnetita-core/src/payload.rs
+0	31	deleted	celestina-rs/crates/magnetita-core/src/ping.rs
+0	405	deleted	celestina-rs/crates/magnetita-core/src/session.rs
+0	378	deleted	celestina-rs/crates/magnetita-core/src/sftp.rs
+0	142	deleted	celestina-rs/crates/magnetita-core/src/share.rs
+0	1	e31fc72d01e337eb3810c8f14ab07c45c1efd759b795bbfef17b272a431f97be	celestina-rs/crates/magnetita-net/Cargo.toml
+1	126	dc7d2dca29f32fe83c98a6e4c572824b80e8f2115346e1ad67fc9a45e9deaa0a	celestina-rs/crates/magnetita-net/src/cert.rs
+0	70	deleted	celestina-rs/crates/magnetita-net/src/deadline.rs
+0	435	deleted	celestina-rs/crates/magnetita-net/src/device.rs
+0	201	deleted	celestina-rs/crates/magnetita-net/src/discovery.rs
+5	35	86015e38355f6e8772500ec5554bd73e104976fc8b9b0333370f4cb103971445	celestina-rs/crates/magnetita-net/src/lib.rs
+0	852	deleted	celestina-rs/crates/magnetita-net/src/link.rs
+7	531	3c35fa9010f7c77bbb0f2114b2e604e38ee546ec86b47dfedb161812dc627bd4	celestina-rs/crates/magnetita-net/src/payload.rs
+0	266	deleted	celestina-rs/crates/magnetita-net/src/tls.rs
+0	247	deleted	celestina-rs/crates/magnetitad/src/admission.rs
+5	193	8cc5a8479d35d0de5f2c4a569cd2696b22102a603fca19d94c430162a2d07eee	celestina-rs/crates/magnetitad/src/artwork.rs
+29	0	eb790e6ac20bb17242fde87c753634e3ca0cb5b329d58924036d57b9f141819e	celestina-rs/crates/magnetitad/src/clipboard.rs
+10	137	c9dbdb037ecab979787d2ecf7145826d2c5b3a28c0552cd5dda00f35043a66b1	celestina-rs/crates/magnetitad/src/devices.rs
+0	318	deleted	celestina-rs/crates/magnetitad/src/link_commands.rs
+28	702	b9099a8e192c508f2dae4fb22d6532b23336c4d539c4420d5cb0f123ed51b58b	celestina-rs/crates/magnetitad/src/main.rs
+0	11	4dcaab449d63f29b49eb00edd753e33b70cdebd451e0878da6584be7ebd6cd46	celestina-rs/crates/magnetitad/src/media.rs
+17	119	bf12e5489aa46164af12dee45049d37ed4804643f09a2341a5d0f179211f002e	celestina-rs/crates/magnetitad/src/mount.rs
+1	66	74f0229f2c139c88fa6c61ea6e8a5c297c62e268f0102c81606204a016e2850d	celestina-rs/crates/magnetitad/src/notify.rs
+0	444	deleted	celestina-rs/crates/magnetitad/src/payload_handlers.rs
+0	417	deleted	celestina-rs/crates/magnetitad/src/remote_media.rs
+0	63	d3256313cf9c93a27318297473e59366733cc771b99a3e959af0d507d7e17f7b	celestina-rs/crates/magnetitad/src/revocation.rs
+1	68	44e296dce58e7c5bc4735b1ceaee34301912e86cf40eecb35cb6b075f121b192	celestina-rs/crates/magnetitad/src/runtime.rs
+0	1	b6e4e8a2751ecb0b500554c523baa68330154e74754150d5941b2e4d93cb6ccf	celestina-rs/crates/magnetitad/src/session_registration.rs
+3	1	da2015a91462725b08f7dc1939508d19ac49d67187cac5bd7d82dd452a740b20	celestina-rs/crates/magnetitad/src/subprocess.rs
+49	0	be198cb4df4105dc55c57c22c416250207e719fcef59fa9ab1621255334a214d	magnetita/docs/evidence/2026-09-10-kde-wire-removed.md
+97	0	self	magnetita/docs/inventories/2026-09-10-storage-and-retirement/MAG-P7-C.numstat.tsv
+71	0	7ecca4fdd24826c98392f99c96e7e9c4d5fb072eeb23df0d9a171a7697461b8d	magnetita/docs/plans/active/2026-09-10-storage-and-retirement.md
+1	1	757119357b6a1336bc4282fb918569ed2580a96495c7dd4d9c59cf81cb3cec8a	magnetita/magnetitad.service
+1	1	1e2f57dfc658468395e17845ff45844ef654ef7efcd8d87535c0dbe29ffdce8e	scripts/architecture-baseline.tsv
+0	5	71c4d94e123c7dc3c25dd6eb95dbcb2d0a47464000e435e235f8d3be2ae25bf7	scripts/language-baseline.tsv

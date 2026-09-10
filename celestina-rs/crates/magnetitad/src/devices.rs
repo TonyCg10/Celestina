@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use celestina_core::{percent, Generation};
+use celestina_core::percent;
 use magnetita_core::{MediaAction, PlayerState};
 use magnetita_net::TrustStore;
 use zbus::zvariant::{OwnedValue, Value};
@@ -57,9 +57,6 @@ pub struct DeviceEntry {
     /// Whether we trust this device (paired). A connected-but-unpaired device is
     /// waiting on a pairing.
     pub paired: bool,
-    /// Daemon-private authorization epoch. Payloads may publish only into the
-    /// exact pairing generation which started them.
-    pub(crate) pair_generation: Generation,
     /// The local path the device is mounted at, or empty when not mounted.
     pub mount_path: String,
     /// The phone's call, additively: "" when none, else "ringing",
@@ -110,7 +107,6 @@ impl DeviceEntry {
             connected: true,
             mounted: false,
             paired: false,
-            pair_generation: Generation::INITIAL,
             mount_path: String::new(),
             call_state: String::new(),
             call_number: String::new(),
@@ -248,41 +244,6 @@ pub fn set_media(
     stale_artwork
 }
 
-/// Publish a verified local cover only if the device is still showing the
-/// player/source pair that requested it. Returns `None` for a stale transfer;
-/// `Some(previous)` means the URL was installed and the old path may be deleted.
-#[cfg(test)]
-fn install_artwork(
-    registry: &Registry,
-    device_id: &str,
-    player: &str,
-    source_url: &str,
-    local_path: PathBuf,
-    local_url: String,
-) -> Option<Option<PathBuf>> {
-    let mut registry = registry.lock_ok();
-    let entry = registry.get_mut(device_id)?;
-    install_artwork_entry(entry, player, source_url, local_path, local_url)
-}
-
-/// Variant used while a caller already owns the registry entry, so publication
-/// can be serialized with another state boundary without locking recursively.
-pub(crate) fn install_artwork_entry(
-    entry: &mut DeviceEntry,
-    player: &str,
-    source_url: &str,
-    local_path: PathBuf,
-    local_url: String,
-) -> Option<Option<PathBuf>> {
-    if entry.media_player != player || entry.media_artwork_source != source_url {
-        return None;
-    }
-    let previous = std::mem::replace(&mut entry.media_artwork_path, local_path);
-    let previous = (!previous.as_os_str().is_empty()).then_some(previous);
-    entry.media_artwork_url = local_url;
-    Some(previous)
-}
-
 /// The connected devices, keyed by id and shared between the daemon (which
 /// writes) and the served interface (which reads).
 pub type Registry = Arc<Mutex<BTreeMap<String, DeviceEntry>>>;
@@ -336,26 +297,10 @@ pub fn push_log(log: &Log, entry: LogEntry) {
     }
 }
 
-/// Publish or clear the short code for the current live pairing exchange.
-pub fn set_verification_key(registry: &Registry, device_id: &str, key: &str) -> bool {
-    let mut registry = registry.lock_ok();
-    let Some(entry) = registry.get_mut(device_id) else {
-        return false;
-    };
-    if entry.verification_key == key {
-        return false;
-    }
-    entry.verification_key = key.to_owned();
-    true
-}
-
-/// A control action the app asks of a live link — delivered to that link's own
-/// thread, which owns the [`Device`](magnetita_core::Session) and can act on it.
+/// A control action the app asks of a live session, delivered to the task
+/// that holds it.
 #[derive(Clone, Debug)]
 pub enum Command {
-    /// Ask the device to pair, carrying the revocation ordering point observed
-    /// before this command entered the bounded queue.
-    RequestPair { observed: Generation },
     /// Ring the device (find-my-phone).
     Ring,
     /// Send this local file to the device.
@@ -602,10 +547,12 @@ impl Devices {
         self.log.lock_ok().iter().map(LogEntry::to_dict).collect()
     }
 
-    /// Ask the connected device to pair (the app's "Emparejar").
+    /// Pairing on the own wire is by QR (`StartPairing`); this older entry
+    /// point answers with that, so an app still offering it says why.
     fn request_pair(&self, device_id: String) -> zbus::fdo::Result<()> {
-        let observed = self.revocations.observe_pair();
-        self.forward(&device_id, Command::RequestPair { observed })
+        Err(zbus::fdo::Error::NotSupported(format!(
+            "{device_id}: pair by scanning the QR code from StartPairing"
+        )))
     }
 
     /// Drop the pairing with the connected device (the app's "Desvincular").
@@ -865,8 +812,8 @@ pub(crate) fn serve(
 #[cfg(test)]
 mod tests {
     use super::{
-        command_channel, install_artwork, path_for_file_uri, set_media, set_verification_key,
-        Command, DeviceEntry, FileUriError, Registry, COMMAND_QUEUE_CAPACITY,
+        command_channel, path_for_file_uri, set_media, Command, DeviceEntry, FileUriError,
+        Registry, COMMAND_QUEUE_CAPACITY,
     };
     use crate::lock::LockOk;
     use magnetita_core::PlayerState;
@@ -1011,20 +958,6 @@ mod tests {
     }
 
     #[test]
-    fn pairing_code_is_published_and_cleared_without_touching_the_fingerprint() {
-        let registry = registry();
-        assert!(set_verification_key(&registry, "phone", "7C6FA008"));
-        {
-            let guard = registry.lock_ok();
-            let entry = guard.get("phone").unwrap();
-            assert_eq!(entry.verification_key, "7C6FA008");
-            assert_eq!(entry.fingerprint, "fingerprint");
-        }
-        assert!(set_verification_key(&registry, "phone", ""));
-        assert!(!set_verification_key(&registry, "phone", ""));
-    }
-
-    #[test]
     fn a_device_command_burst_has_a_hard_queue_bound() {
         let (commands, _receiver) = command_channel();
         for _ in 0..COMMAND_QUEUE_CAPACITY {
@@ -1034,65 +967,5 @@ mod tests {
             commands.try_send(Command::Ring),
             Err(std::sync::mpsc::TrySendError::Full(_))
         ));
-    }
-
-    #[test]
-    fn artwork_is_installed_only_for_the_current_player_and_source() {
-        let registry = registry();
-        set_media(&registry, "phone", Some(&state("cover-a")));
-        assert_eq!(
-            install_artwork(
-                &registry,
-                "phone",
-                "YouTube",
-                "cover-a",
-                PathBuf::from("/run/user/1000/a.img"),
-                "file:///run/user/1000/a.img".to_owned(),
-            ),
-            Some(None)
-        );
-        assert!(install_artwork(
-            &registry,
-            "phone",
-            "YouTube",
-            "old-cover",
-            PathBuf::from("/run/user/1000/old.img"),
-            "file:///run/user/1000/old.img".to_owned(),
-        )
-        .is_none());
-
-        let stale = set_media(&registry, "phone", Some(&state("cover-b")));
-        assert_eq!(stale, Some(PathBuf::from("/run/user/1000/a.img")));
-        let guard = registry.lock_ok();
-        let entry = guard.get("phone").expect("fixture device exists");
-        assert!(entry.media_artwork_url.is_empty());
-    }
-
-    #[test]
-    fn changing_player_clears_artwork_even_when_the_source_string_is_reused() {
-        let registry = registry();
-        set_media(&registry, "phone", Some(&state("shared-cover")));
-        install_artwork(
-            &registry,
-            "phone",
-            "YouTube",
-            "shared-cover",
-            PathBuf::from("/run/user/1000/shared.img"),
-            "file:///run/user/1000/shared.img".to_owned(),
-        )
-        .expect("current artwork installs");
-
-        let mut next = state("shared-cover");
-        next.player = "Spotify".to_owned();
-        assert_eq!(
-            set_media(&registry, "phone", Some(&next)),
-            Some(PathBuf::from("/run/user/1000/shared.img"))
-        );
-        let guard = registry.lock_ok();
-        assert!(guard
-            .get("phone")
-            .expect("fixture device exists")
-            .media_artwork_url
-            .is_empty());
     }
 }

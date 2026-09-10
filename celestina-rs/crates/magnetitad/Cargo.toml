@@ -27,9 +27,16 @@ zbus = "5"
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 evdev = "0.13"
+# The phone's storage as a FUSE mount, served over the own wire from safe
+# Rust; mounts through fusermount3 (no libfuse binding).
+fuser = { version = "0.18", default-features = false }
 # Safe nonblocking pipes and process-group signals bound every playerctl
 # subprocess tree without adding unsafe code to the daemon.
 rustix = { version = "1.1.4", features = ["fs", "pipe", "process"] }
+
+[dev-dependencies]
+# The phone's directory server, so the loopback tests browse a real tree.
+magnetita-mobile = { path = "../magnetita-mobile" }
 
 [lints]
 workspace = true

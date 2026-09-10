@@ -6,6 +6,10 @@ use std::sync::atomic::AtomicBool;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+use crate::lock::LockOk;
 use crate::subprocess;
 
 /// How long one clipboard tool may take. [`read`] and [`write`] run on the
@@ -129,5 +133,30 @@ mod tests {
         // lossy decode would have carried through into a "text" clipboard.
         let png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00@";
         assert!(decode(png.to_vec()).is_none());
+    }
+}
+
+/// One coalescing clipboard slot per live device. The watcher may outpace a
+/// link, but memory stays bounded and the next send always carries the newest
+/// value instead of an arbitrary earlier queue entry.
+#[derive(Default)]
+pub(crate) struct PendingClipboards {
+    values: Mutex<HashMap<String, String>>,
+}
+
+impl PendingClipboards {
+    pub(crate) fn replace_for(&self, device_ids: impl IntoIterator<Item = String>, text: String) {
+        let mut values = self.values.lock_ok();
+        for device_id in device_ids {
+            values.insert(device_id, text.clone());
+        }
+    }
+
+    pub(crate) fn take(&self, device_id: &str) -> Option<String> {
+        self.values.lock_ok().remove(device_id)
+    }
+
+    pub(crate) fn clear(&self, device_id: &str) {
+        self.values.lock_ok().remove(device_id);
     }
 }

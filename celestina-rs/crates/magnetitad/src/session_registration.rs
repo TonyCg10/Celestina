@@ -38,7 +38,6 @@ impl Drop for SessionRegistration {
             }
             self.daemon.commands.lock_ok().remove(&self.device_id);
             self.daemon.pending_clipboards.clear(&self.device_id);
-            self.daemon.artwork_completions.clear(&self.device_id);
             artwork::clear_device(&self.device_id);
             devices.remove(&self.device_id);
         }

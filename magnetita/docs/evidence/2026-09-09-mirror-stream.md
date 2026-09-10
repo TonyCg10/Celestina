@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P6-A` of
-  [`../plans/active/2026-09-09-link-mirror.md`](../plans/active/2026-09-09-link-mirror.md):
+  [`../plans/archive/2026-09-09-link-mirror.md`](../plans/archive/2026-09-09-link-mirror.md):
   `celestina-rs/crates/magnetita-mobile/src/{phone,mobile}.rs`,
   `celestina-rs/crates/magnetita-peer/src/{lib,main}.rs`,
   `docs/protocol.md`, this record

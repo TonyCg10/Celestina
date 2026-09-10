@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P6-B` of
-  [`../plans/active/2026-09-09-link-mirror.md`](../plans/active/2026-09-09-link-mirror.md):
+  [`../plans/archive/2026-09-09-link-mirror.md`](../plans/archive/2026-09-09-link-mirror.md):
   `celestina-rs/crates/magnetitad/src/link_wire/mirror.rs`, the session's
   mirror branches and reader tasks in `link_wire/mod.rs`, the plan and
   roadmap records that archive `MAG-P5` and open `MAG-P6`, `VAL-MAG-14`,

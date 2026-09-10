@@ -1,9 +1,12 @@
 # Magnetita status
 
-- **Updated:** 2026-09-09
-- **Implementation:** `MAG-P6`, the mirror as a capability of the link, is
-  the active checkpoint since 2026-09-09, paired with `magnetita-android`'s
-  `AND-4`; its four units are implemented and it waits on `VAL-MAG-14`.
+- **Updated:** 2026-09-10
+- **Implementation:** `MAG-P7`, storage over the own wire and the
+  retirement of the second path, is the active checkpoint since 2026-09-10,
+  paired with `magnetita-android`'s `AND-5`; the storage capability, the
+  FUSE mount and the removal of the KDE Connect wire are done, and
+  `MAG-P7-D` (the `adb` mirror path) waits on `VAL-MAG-14`. `MAG-P6`, the
+  mirror as a capability of the link, is implemented and archived.
   `MAG-P5`, commands, trackpad and keyboard, met its exit the same day and
   is archived; `VAL-MAG-13` carries the author's hand. `MAG-P4`, the
   daily set, met its exit the same day and is archived; `VAL-MAG-12`
@@ -11,7 +14,7 @@
   Android application foundation, met its exit on 2026-09-09 and is
   archived, paired with `AND-1`. `MAG-P2`, the link, is closed (`4011e53`, `95a4cc8`):
   `magnetita-link` carries `magnetita-proto` over QUIC with pinned
-  certificates, `magnetitad` hosts the own wire next to KDE Connect on one
+  certificates, `magnetitad` hosted the own wire next to KDE Connect on one
   runtime thread with `StartPairing` on `Devices1`, and `magnetita-peer`
   drives it from a shell. Deployed on 2026-09-09 and exercised end to
   end by the peer against the live daemon; closed, the author having ruled
@@ -33,6 +36,12 @@
 
 ## Current checkout truth
 
+- The daemon speaks one wire, the suite's own: the KDE Connect link,
+  discovery, pairing v8, payload sockets and the `sshfs` mount are gone
+  (`MAG-P7-C`). The phone's files arrive over the `storage` capability
+  from the document tree the person shared and are a FUSE directory at
+  the runtime path Siderita browses, `mounted` and `mountPath` unchanged
+  in `Devices1` (`MAG-P7-A`, `-B`).
 - The mirror runs over the link: `Mirror1`'s `StartLink` asks the phone
   for its screen, the raw HEVC arrives on a bulk stream of a fixed id and
   plays in an `mpv` window the daemon owns, and `LinkTouch` and
@@ -91,7 +100,7 @@
   pairing on six digits alone and pinning to the fixed port. What has never been
   observed is a mirror after a *phone* reboot (`VAL-MAG-09`).
 
-- `magnetitad` implements KDE Connect discovery, TCP/TLS trust, local pairing,
+- Until `MAG-P7-C`, `magnetitad` implemented KDE Connect discovery, TCP/TLS trust, local pairing,
   storage mount, the daily plugins and `org.celestina.Devices1`.
 - Siderita consumes the mount/device/media contract; the Celestina shell
   consumes phone/battery state; the standalone Magnetita app owns pairing,
@@ -168,7 +177,8 @@ its refusals are proven, the delivery of a file to a phone is not. See the
 ## Records
 
 - [Implementation roadmap](ROADMAP.md)
-- [Active plan MAG-P6](docs/plans/active/2026-09-09-link-mirror.md)
+- [Active plan MAG-P7](docs/plans/active/2026-09-10-storage-and-retirement.md)
+- [Archived plan MAG-P6](docs/plans/archive/2026-09-09-link-mirror.md)
 - [Archived plan MAG-P5](docs/plans/archive/2026-09-09-remote-control.md)
 - [Archived plan MAG-P4](docs/plans/archive/2026-09-09-daily-set.md)
 - [Archived plan MAG-P3](docs/plans/archive/2026-09-09-android-foundation.md)

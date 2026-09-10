@@ -16,6 +16,7 @@ use crate::phone::{
     media_fields, mirror_fields, notification_fields, phone_fields, share_fields, touch_index,
     Incoming, Phone, PhoneSession,
 };
+use crate::storage::{self, StorageRequest};
 use magnetita_proto::control::input::Button;
 use magnetita_proto::daily::media::{MediaCommand, MediaState};
 use magnetita_proto::daily::notifications::{Action, NotificationPosted};
@@ -25,6 +26,7 @@ use magnetita_proto::phone::sms::{
     Attachment, Conversation, SmsConversations, SmsMessage, SmsReceived, SmsThread,
 };
 use magnetita_proto::phone::telephony::{CallEvent, CallState};
+use magnetita_proto::storage::Entry;
 
 /// Why a call failed, as Kotlin sees it.
 #[derive(Debug, uniffi::Error)]
@@ -121,6 +123,100 @@ pub struct Event {
     pub mirror_key_pressed: Option<bool>,
     /// 0 back, 1 home, 2 recents.
     pub mirror_global: Option<u8>,
+    /// The desktop browses the shared root.
+    pub storage: Option<MobileStorageRequest>,
+}
+
+/// One storage request: `kind` 0 list, 1 stat, 2 read, 3 write, 4 mkdir,
+/// 5 rename (`to` set), 6 delete. `offset` is the page for a list and the
+/// byte for a read or write; `len` the read's; `bytes` the write's.
+#[derive(uniffi::Record, Clone)]
+pub struct MobileStorageRequest {
+    pub kind: u8,
+    pub request: u32,
+    pub path: String,
+    pub to: String,
+    pub offset: u64,
+    pub len: u32,
+    pub bytes: Vec<u8>,
+    pub truncate: bool,
+}
+
+/// One file or directory as the wire carries it.
+#[derive(uniffi::Record, Clone)]
+pub struct MobileEntry {
+    pub name: String,
+    pub dir: bool,
+    pub size: u64,
+    pub mtime_ms: u64,
+}
+
+fn entry_from(e: MobileEntry) -> Entry {
+    Entry {
+        name: e.name,
+        dir: e.dir,
+        size: e.size,
+        mtime_ms: e.mtime_ms,
+    }
+}
+
+fn storage_record(env: &magnetita_proto::Envelope) -> Option<MobileStorageRequest> {
+    let r = StorageRequest::decode(env)?;
+    let request = r.request();
+    let blank = MobileStorageRequest {
+        kind: 0,
+        request,
+        path: String::new(),
+        to: String::new(),
+        offset: 0,
+        len: 0,
+        bytes: Vec::new(),
+        truncate: false,
+    };
+    Some(match r {
+        StorageRequest::List(m) => MobileStorageRequest {
+            kind: 0,
+            path: m.path,
+            offset: m.offset as u64,
+            ..blank
+        },
+        StorageRequest::Stat(m) => MobileStorageRequest {
+            kind: 1,
+            path: m.path,
+            ..blank
+        },
+        StorageRequest::Read(m) => MobileStorageRequest {
+            kind: 2,
+            path: m.path,
+            offset: m.offset,
+            len: m.len,
+            ..blank
+        },
+        StorageRequest::Write(m) => MobileStorageRequest {
+            kind: 3,
+            path: m.path,
+            offset: m.offset,
+            bytes: m.bytes,
+            truncate: m.truncate,
+            ..blank
+        },
+        StorageRequest::Mkdir(m) => MobileStorageRequest {
+            kind: 4,
+            path: m.path,
+            ..blank
+        },
+        StorageRequest::Rename(m) => MobileStorageRequest {
+            kind: 5,
+            path: m.from,
+            to: m.to,
+            ..blank
+        },
+        StorageRequest::Delete(m) => MobileStorageRequest {
+            kind: 6,
+            path: m.path,
+            ..blank
+        },
+    })
 }
 
 /// What the desktop asks the mirror to be.
@@ -618,6 +714,57 @@ impl MobileSession {
         Ok(self.handle.block_on(self.inner.send_mirror_stop())?)
     }
 
+    /// Whether a root is shared; sent on connect and when the grant changes.
+    pub fn send_storage_state(&self, available: bool) -> Result<(), MobileError> {
+        Ok(self
+            .handle
+            .block_on(self.inner.send_storage(storage::state(available)))?)
+    }
+
+    /// A page of a directory; `error` non-empty when the listing failed.
+    pub fn send_listing(
+        &self,
+        request: u32,
+        entries: Vec<MobileEntry>,
+        more: bool,
+        error: String,
+    ) -> Result<(), MobileError> {
+        let entries = entries.into_iter().map(entry_from).collect();
+        Ok(self.handle.block_on(
+            self.inner
+                .send_storage(storage::listing(request, entries, more, &error)),
+        )?)
+    }
+
+    pub fn send_stat_reply(
+        &self,
+        request: u32,
+        entry: Option<MobileEntry>,
+    ) -> Result<(), MobileError> {
+        Ok(self.handle.block_on(
+            self.inner
+                .send_storage(storage::stat_reply(request, entry.map(entry_from))),
+        )?)
+    }
+
+    pub fn send_data(
+        &self,
+        request: u32,
+        bytes: Vec<u8>,
+        error: String,
+    ) -> Result<(), MobileError> {
+        Ok(self.handle.block_on(
+            self.inner
+                .send_storage(storage::data(request, bytes, &error)),
+        )?)
+    }
+
+    pub fn send_done(&self, request: u32, ok: bool, error: String) -> Result<(), MobileError> {
+        Ok(self
+            .handle
+            .block_on(self.inner.send_storage(storage::done(request, ok, &error)))?)
+    }
+
     /// Shares a URL or a snippet with the desktop.
     pub fn send_text(&self, text: String) -> Result<(), MobileError> {
         Ok(self.handle.block_on(self.inner.send_text(&text))?)
@@ -636,6 +783,7 @@ impl MobileSession {
                 let phone = phone_fields(&e);
                 let commands = command_fields(&e);
                 let mirror = mirror_fields(&e);
+                let storage_request = storage_record(&e);
                 let text = clipboard_text(&e).or(reply).or(share.text);
                 Event {
                     capability: e.capability,
@@ -693,6 +841,7 @@ impl MobileSession {
                     mirror_key: mirror.key.map(|k| k.keycode),
                     mirror_key_pressed: mirror.key.map(|k| k.pressed),
                     mirror_global: mirror.global.map(global_index),
+                    storage: storage_request,
                     text: text.or(phone.sms_send.map(|s| s.body)),
                     body: e.body,
                 }
@@ -731,6 +880,7 @@ impl MobileSession {
                 mirror_key: None,
                 mirror_key_pressed: None,
                 mirror_global: None,
+                storage: None,
                 body: Vec::new(),
             },
         }))

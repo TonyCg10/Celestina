@@ -15,6 +15,7 @@ pub use magnetita_mobile::mobile::MIRROR_VIDEO_STREAM;
 pub use magnetita_mobile::phone::{
     clipboard_text, command_fields, describe, media_fields, phone_fields, share_fields, Incoming,
 };
+pub use magnetita_mobile::storage::{self, StorageRequest};
 pub use magnetita_mobile::{Phone, PhoneSession};
 
 /// The Magnetita desktops Avahi sees right now.

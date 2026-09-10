@@ -37,17 +37,6 @@ pub struct Worker {
     thread: Option<JoinHandle<()>>,
 }
 
-/// Match the worker lifetime to the live plugin state. Deactivation drops and
-/// cancels it synchronously; activation creates at most one owned thread.
-pub fn set_active(worker: &mut Option<Worker>, active: bool) -> io::Result<()> {
-    if active && worker.is_none() {
-        *worker = Some(Worker::new()?);
-    } else if !active {
-        *worker = None;
-    }
-    Ok(())
-}
-
 impl Worker {
     pub fn new() -> io::Result<Self> {
         let (request_tx, request_rx) = mpsc::sync_channel::<MprisRequest>(WORK_QUEUE);

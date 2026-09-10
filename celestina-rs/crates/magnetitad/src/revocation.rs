@@ -12,7 +12,6 @@ use std::sync::{Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use celestina_core::{Generation, GenerationClock, GenerationExhausted};
-use magnetita_core::ConnectionEvent;
 
 #[derive(Clone, Copy, Debug)]
 struct Entry {
@@ -94,36 +93,12 @@ impl Revocations {
         Ok(Some(generation))
     }
 
-    /// Snapshot the ordering point carried by a future queued Pair command.
-    /// A Forget issued after this observation receives a greater generation and
-    /// therefore wins even if the older Pair reaches the link thread later.
-    pub(crate) fn observe_pair(&self) -> Generation {
-        self.lock().clock.current()
-    }
-
     /// The revocation the link must apply, if this device has a tombstone.
     pub(crate) fn current(&self, device_id: &str) -> Option<Generation> {
         self.lock()
             .devices
             .get(device_id)
             .map(|entry| entry.generation)
-    }
-
-    /// The generation which still needs the live link to apply its cleanup.
-    pub(crate) fn pending(&self, device_id: &str) -> Option<Generation> {
-        self.lock()
-            .devices
-            .get(device_id)
-            .filter(|entry| !entry.applied)
-            .map(|entry| entry.generation)
-    }
-
-    pub(crate) fn suppresses(&self, device_id: &str, event: &ConnectionEvent) -> bool {
-        self.current(device_id).is_some()
-            && matches!(
-                event,
-                ConnectionEvent::Pairing | ConnectionEvent::Paired | ConnectionEvent::Pinged
-            )
     }
 
     /// Remove stale state once no live session can re-establish trust.
@@ -146,22 +121,6 @@ impl Revocations {
             self.changed.notify_all();
         }
         removed
-    }
-
-    /// Authorize a Pair only if no newer Forget crossed its D-Bus observation.
-    /// A Pair observed at or after an existing tombstone is the explicit action
-    /// which clears that tombstone; a stale queued Pair can never do so.
-    pub(crate) fn authorize_pair(&self, device_id: &str, observed: Generation) -> bool {
-        let mut state = self.lock();
-        match state.devices.get(device_id) {
-            Some(entry) if entry.generation > observed => false,
-            Some(_) => {
-                state.devices.remove(device_id);
-                self.changed.notify_all();
-                true
-            }
-            None => true,
-        }
     }
 
     /// Run a trust-establishing write only while no revocation can cross it.
@@ -277,27 +236,6 @@ mod tests {
     }
 
     #[test]
-    fn stale_pair_cannot_clear_a_newer_forget() {
-        let revocations = Revocations::new();
-        let observed = revocations.observe_pair();
-        let generation = revocations.request("phone").unwrap();
-
-        assert!(!revocations.authorize_pair("phone", observed));
-        assert_eq!(revocations.current("phone"), Some(generation));
-    }
-
-    #[test]
-    fn pair_observed_after_forget_explicitly_clears_it() {
-        let revocations = Revocations::new();
-        let forgotten = revocations.request("phone").unwrap();
-        let observed = revocations.observe_pair();
-
-        assert!(revocations.authorize_pair("phone", observed));
-        assert!(revocations.current("phone").is_none());
-        assert!(revocations.wait_applied("phone", forgotten, Duration::ZERO));
-    }
-
-    #[test]
     fn newer_applied_forget_satisfies_an_older_waiter() {
         let revocations = Revocations::new();
         let older = revocations.request("phone").unwrap();
@@ -305,7 +243,6 @@ mod tests {
         revocations.acknowledge("phone", newer);
 
         assert!(revocations.wait_applied("phone", older, Duration::ZERO));
-        assert!(revocations.pending("phone").is_none());
     }
 
     #[test]

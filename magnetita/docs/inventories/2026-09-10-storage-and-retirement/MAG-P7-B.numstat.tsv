@@ -1,0 +1,45 @@
+# MAG-P7-B exact change inventory
+
+Base revision	7bd69c269301d30a91ca8f2f7fb40ed0430f697e
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/crates/magnetitad/Cargo.toml
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/storage.rs
+Pathspec	magnetita/README.md
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/VALIDATION.md
+Pathspec	magnetita/docs/evidence/2026-09-09-mirror-control.md
+Pathspec	magnetita/docs/evidence/2026-09-09-mirror-input.md
+Pathspec	magnetita/docs/evidence/2026-09-09-mirror-stream.md
+Pathspec	magnetita/docs/evidence/2026-09-09-mirror-window.md
+Pathspec	magnetita/docs/evidence/2026-09-10-phone-mount.md
+Pathspec	magnetita/docs/inventories/2026-09-10-storage-and-retirement/MAG-P7-B.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-link-mirror.md
+Pathspec	magnetita/docs/plans/active/2026-09-10-storage-and-retirement.md
+Pathspec	magnetita/docs/plans/active/README.md
+Pathspec	magnetita/docs/plans/archive/2026-09-09-link-mirror.md
+Pathspec	magnetita/docs/plans/archive/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+189	2	9a4c52e369d7557aeb3e5f94dd7a0f56e0642949fc05f0c698d5fc3c38a846cb	celestina-rs/Cargo.lock
+7	0	3acf6960bc9578467a180b9e0ea7fed645e73ff6193adbe9637d2f10fe6f51d8	celestina-rs/crates/magnetitad/Cargo.toml
+276	10	ea6bf2332c2b4ae22eebf4d7f17d5105bd1ccdd6e74c0d8c72e7b73058e69705	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+714	0	9ed7544805aefbc6958f614b3253eb699a1ed67b435e3aeeb9109740254214d7	celestina-rs/crates/magnetitad/src/link_wire/storage.rs
+23	25	d42313b28f82351aa87514710c0934d90c64afd39f8d94c2a55dad81c8caeed2	magnetita/README.md
+18	9	a84249207d0c3f9e6f6b540297d44a939609f345ecc272b5337c66c42c3dc77a	magnetita/ROADMAP.md
+17	7	c2a9cf775903160f8650ba23d4cb4e4875d2177e1ec3df363478b2871c7fa37c	magnetita/STATUS.md
+15	0	609d870311ea636cb5e0f95c712d86074f5e888e19d76de3f79d797224eeb18b	magnetita/VALIDATION.md
+1	1	b136878696b9c0914879f032ca890a68c4682e246a0213f686bad2bd28cf4d53	magnetita/docs/evidence/2026-09-09-mirror-control.md
+1	1	870e9da01f178f4dcb3fa9a8c0eedb48fd0b398fc77b0e0b1f58471c6493fb0d	magnetita/docs/evidence/2026-09-09-mirror-input.md
+1	1	b12543e19faf1af874d209b476fe519ebae4f0e3c98504742c13432f627e04fb	magnetita/docs/evidence/2026-09-09-mirror-stream.md
+1	1	ebba9d3940d678b628588956ebeebd2fe72d499386671d9ca990d9b91da8c1ed	magnetita/docs/evidence/2026-09-09-mirror-window.md
+50	0	9fe9bd0dce9427c5f6c0128fc6b9d28dcf18169b6201ca4a2197dee77269491c	magnetita/docs/evidence/2026-09-10-phone-mount.md
+45	0	self	magnetita/docs/inventories/2026-09-10-storage-and-retirement/MAG-P7-B.numstat.tsv
+0	67	deleted	magnetita/docs/plans/active/2026-09-09-link-mirror.md
+71	0	7ecca4fdd24826c98392f99c96e7e9c4d5fb072eeb23df0d9a171a7697461b8d	magnetita/docs/plans/active/2026-09-10-storage-and-retirement.md
+4	2	1e941969c0a05a1e443671fa5603a8d20501620403b67f63c952785d74e1f05e	magnetita/docs/plans/active/README.md
+74	0	78d394edb67a0b41c777c457afeebbd3acc7eb4abf861e209e7e69b9b7863445	magnetita/docs/plans/archive/2026-09-09-link-mirror.md
+1	0	510b959b0c0d7a13e5d83c424b3d76ed75939be0dae1ac5d9b4df0c1c0fff6f5	magnetita/docs/plans/archive/README.md

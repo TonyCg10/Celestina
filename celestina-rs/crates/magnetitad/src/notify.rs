@@ -10,7 +10,6 @@
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
 
-use magnetita_core::Notification;
 use zbus::blocking::{Connection, Proxy};
 use zbus::zvariant::Value;
 
@@ -18,19 +17,7 @@ const SERVICE: &str = "org.freedesktop.Notifications";
 const OBJECT: &str = "/org/freedesktop/Notifications";
 const INTERFACE: &str = "org.freedesktop.Notifications";
 
-/// Post a notification (replacing `replaces_id` if non-zero); returns the
-/// server's id so it can later be replaced or closed.
-pub fn post(
-    connection: &Connection,
-    app_name: &str,
-    replaces_id: u32,
-    summary: &str,
-    body: &str,
-) -> Option<u32> {
-    post_with(connection, app_name, replaces_id, summary, body, &[], false)
-}
-
-/// [`post`] with buttons and, when the phone accepts one, an inline reply:
+/// Post a notification (replacing `replaces_id` if non-zero) with buttons and, when the phone accepts one, an inline reply:
 /// `buttons[i]` is offered under the action key `i`, so `ActionInvoked` hands
 /// back the index the phone expects. The reply hint is KDE's extension; a
 /// server without it shows the buttons and no field.
@@ -81,12 +68,6 @@ pub fn close(connection: &Connection, id: u32) {
     }
 }
 
-/// How many of one device's notifications may be tracked for replacement at
-/// once. A phone with a hundred live notifications is already unusual; past
-/// this the mirror shows new ones without tracking them, rather than letting a
-/// peer decide how much memory the daemon holds.
-const MAX_TRACKED_PER_DEVICE: usize = 128;
-
 /// The phone-id→server-id map behind replace and withdraw.
 ///
 /// Both halves of every key come from the peer, so this owns the bound and the
@@ -98,52 +79,6 @@ pub struct Mirror {
 }
 
 impl Mirror {
-    /// Show, replace or withdraw one phone notification. Returns the line to
-    /// record for the person when something was shown.
-    pub fn apply(
-        &self,
-        connection: &Connection,
-        device_id: &str,
-        device_name: &str,
-        note: &Notification,
-    ) -> Option<String> {
-        let tracking_key = key(device_id, &note.id);
-        if note.is_cancel {
-            if let Some(server_id) = self.lock().remove(&tracking_key) {
-                close(connection, server_id);
-            }
-            return None;
-        }
-        let app = if note.app_name.is_empty() {
-            device_name
-        } else {
-            &note.app_name
-        };
-        let summary = if note.title.is_empty() {
-            app.to_owned()
-        } else {
-            note.title.clone()
-        };
-        let (replaces, tracked) = {
-            let map = self.lock();
-            let prefix = key(device_id, "");
-            (
-                map.get(&tracking_key).copied().unwrap_or(0),
-                map.keys().filter(|held| held.starts_with(&prefix)).count(),
-            )
-        };
-        // A new id past the bound is still shown; it is simply not tracked, so
-        // the peer cannot grow the map without limit.
-        let trackable = replaces != 0 || tracked < MAX_TRACKED_PER_DEVICE;
-        let server_id = post(connection, app, replaces, &summary, &note.text)?;
-        if trackable {
-            self.lock().insert(tracking_key, server_id);
-        }
-        Some(format!("🔔 {app}: {summary}"))
-    }
-
-    /// Drop every mapping of one device. A session that ends takes the keys it
-    /// was given with it.
     pub fn forget_device(&self, device_id: &str) {
         let prefix = key(device_id, "");
         self.lock().retain(|held, _| !held.starts_with(&prefix));

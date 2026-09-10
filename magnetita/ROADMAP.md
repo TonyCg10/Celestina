@@ -1,13 +1,16 @@
 # Magnetita implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** MAG-P6
+- **Active implementation checkpoint:** MAG-P7
 - **Related author validation:** `VAL-MAG-01` through `VAL-MAG-08` in
   [VALIDATION.md](VALIDATION.md); they do not block implementation
 
-`MAG-P6` is executing under
-[its plan](docs/plans/active/2026-09-09-link-mirror.md), paired with the
-`magnetita-android` project's own `AND-4`. `MAG-P5` is closed under
+`MAG-P7` is executing under
+[its plan](docs/plans/active/2026-09-10-storage-and-retirement.md), paired
+with the `magnetita-android` project's own `AND-5`. `MAG-P6` is closed under
+[its archived plan](docs/plans/archive/2026-09-09-link-mirror.md), paired
+with `AND-4`, its last observation the author's `VAL-MAG-14`. `MAG-P5` is
+closed under
 [its archived plan](docs/plans/archive/2026-09-09-remote-control.md), paired
 with `AND-3`. `MAG-P4` is closed under
 [its archived plan](docs/plans/archive/2026-09-09-daily-set.md), paired with
@@ -630,8 +633,9 @@ opens no KDE Connect port, as the concluded discussion directs.
 
 - `storage`: list, stat, read ranges, write, rename, delete over dedicated
   streams, with the Android `MediaStore`/SAF limits stated.
-- The daemon's mount replaced by a FUSE or a Siderita-facing D-Bus surface,
-  decided by a discussion opened at `MAG-P7`'s start.
+- The daemon's mount replaced by a FUSE file system at the same path, as
+  [the discussion](docs/discussions/2026-09-10-storage-mount-or-dbus.md)
+  opened at `MAG-P7`'s start proposes; the author's word closes it.
 - Removal of `magnetita-net`'s KDE Connect wire, the pairing v8 path and the
   mount subprocess, as the concluded discussion directs.
 - Removal of the `adb`/`scrcpy` mirror path (`MAG-R1`/`MAG-R2`) once
@@ -646,9 +650,9 @@ opens no KDE Connect port, as the concluded discussion directs.
 
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
-| MAG-P7-A | planned | MAG-P6 | `storage` capability both ends | peer tests, JVM tests |
-| MAG-P7-B | planned | MAG-P7-A | Siderita browses the phone without `sshfs` | Siderita consumer tests |
-| MAG-P7-C | planned | MAG-P7-B | The KDE Connect wire, pairing v8 and the mount removed | workspace tests, `scripts/complete-production.sh` |
+| MAG-P7-A | done | MAG-P6 | `storage` capability both ends (`AND-5-A` on the phone) | peer tests, JVM tests |
+| MAG-P7-B | done | MAG-P7-A | Siderita browses the phone without `sshfs`: a FUSE mount at the same path | daemon mount test, Siderita unchanged |
+| MAG-P7-C | done | MAG-P7-B | The KDE Connect wire, pairing v8 and the mount removed | workspace tests, `scripts/complete-production.sh` |
 | MAG-P7-D | planned | VAL-MAG-14 | The `adb`/`scrcpy` mirror path removed; `Mirror1` keeps its methods | daemon tests, `scripts/complete-production.sh` |
 
 ## Implementation exit
@@ -656,6 +660,11 @@ opens no KDE Connect port, as the concluded discussion directs.
 Close `MAG-P7` when Siderita's phone browsing tests pass against the peer,
 the daemon binds only the own protocol's port, spawns neither `sshfs` nor
 `adb` nor `scrcpy`, and the architecture contract records the removed crates.
+
+`MAG-P7-A` through `-C` implemented on 2026-09-10: the mount test browses
+the peer's tree through `std::fs`, the daemon binds only the own wire's
+port and spawns no `sshfs`, and the baselines record the shrunk daemon.
+`MAG-P7-D` waits on `VAL-MAG-14`.
 
 ## Closed evidence
 

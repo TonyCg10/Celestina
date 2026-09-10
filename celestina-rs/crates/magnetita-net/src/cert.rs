@@ -122,66 +122,6 @@ pub fn fingerprint_der(der: &CertificateDer<'_>) -> String {
     out
 }
 
-/// KDE Connect's human-comparable code for one active pairing exchange.
-///
-/// Both peers sort the two RFC 5280 SubjectPublicKeyInfo encodings in the same
-/// descending byte order, hash them, and append the request's decimal Unix
-/// timestamp. A restored session has no active timestamp, so it truthfully has
-/// no new code to display, and a peer declaring a protocol below
-/// [`MIN_PROTOCOL_VERSION`] has no code at all: dropping the timestamp is the
-/// downgrade the floor exists to refuse, not a compatibility mode.
-///
-/// [`MIN_PROTOCOL_VERSION`]: magnetita_core::MIN_PROTOCOL_VERSION
-pub fn verification_key(
-    ours: &CertificateDer<'_>,
-    peer: &CertificateDer<'_>,
-    timestamp: Option<i64>,
-    protocol_version: i32,
-) -> io::Result<Option<String>> {
-    let mut a = public_key_der(ours)?;
-    let mut b = public_key_der(peer)?;
-    Ok(verification_key_from_spki(
-        &mut a,
-        &mut b,
-        timestamp,
-        protocol_version,
-    ))
-}
-
-fn verification_key_from_spki(
-    a: &mut Vec<u8>,
-    b: &mut Vec<u8>,
-    timestamp: Option<i64>,
-    protocol_version: i32,
-) -> Option<String> {
-    if a < b {
-        std::mem::swap(a, b);
-    }
-
-    let mut hash = ring::digest::Context::new(&ring::digest::SHA256);
-    hash.update(a);
-    hash.update(b);
-    if protocol_version < magnetita_core::MIN_PROTOCOL_VERSION {
-        return None;
-    }
-    hash.update(timestamp?.to_string().as_bytes());
-    let digest = hash.finish();
-    let code = digest.as_ref()[..4]
-        .iter()
-        .map(|byte| format!("{byte:02X}"))
-        .collect();
-    Some(code)
-}
-
-fn public_key_der(certificate: &CertificateDer<'_>) -> io::Result<Vec<u8>> {
-    let parsed = rustls::server::ParsedCertificate::try_from(certificate)
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-    Ok(parsed.subject_public_key_info().as_ref().to_vec())
-}
-
-/// Create the certificate directory owner-only, so a key written inside it is
-/// unreachable to other local users even for the instant before its own mode
-/// is in force.
 #[cfg(unix)]
 fn create_private_dir(dir: &Path) -> io::Result<()> {
     use std::os::unix::fs::DirBuilderExt;
@@ -237,8 +177,7 @@ fn private_file(path: &Path) -> io::Result<fs::File> {
 
 #[cfg(test)]
 mod tests {
-    use super::{verification_key, verification_key_from_spki, DeviceCert};
-    use rustls::pki_types::CertificateDer;
+    use super::DeviceCert;
 
     #[test]
     fn a_generated_cert_parses_to_a_chain_and_key() {
@@ -301,69 +240,5 @@ mod tests {
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
 
         std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
-    fn the_pairing_code_is_symmetric_and_timestamp_bound() {
-        let a = DeviceCert::generate("a").chain().unwrap().remove(0);
-        let b = DeviceCert::generate("b").chain().unwrap().remove(0);
-        let ab = verification_key(&a, &b, Some(1_700_000_000), 8)
-            .unwrap()
-            .unwrap();
-        let ba = verification_key(&b, &a, Some(1_700_000_000), 8)
-            .unwrap()
-            .unwrap();
-        let later = verification_key(&a, &b, Some(1_700_000_001), 8)
-            .unwrap()
-            .unwrap();
-        assert_eq!(ab, ba);
-        assert_ne!(ab, later);
-        assert_eq!(ab.len(), 8);
-        assert!(ab.chars().all(|character| character.is_ascii_hexdigit()));
-    }
-
-    #[test]
-    fn a_restored_v8_link_does_not_invent_a_pairing_code() {
-        let a = DeviceCert::generate("a").chain().unwrap().remove(0);
-        let b = DeviceCert::generate("b").chain().unwrap().remove(0);
-        assert_eq!(verification_key(&a, &b, None, 8).unwrap(), None);
-    }
-
-    #[test]
-    fn a_protocol_below_the_floor_has_no_code_at_all() {
-        let a = DeviceCert::generate("a").chain().unwrap().remove(0);
-        let b = DeviceCert::generate("b").chain().unwrap().remove(0);
-        assert_eq!(
-            verification_key(
-                &a,
-                &b,
-                Some(1_700_000_000),
-                magnetita_core::MIN_PROTOCOL_VERSION - 1
-            )
-            .unwrap(),
-            None
-        );
-    }
-
-    #[test]
-    fn the_pairing_hash_matches_a_fixed_protocol_vector() {
-        let mut a = b"key-a".to_vec();
-        let mut b = b"key-b".to_vec();
-        assert_eq!(
-            verification_key_from_spki(&mut a, &mut b, Some(1_700_000_000), 8).as_deref(),
-            Some("7C6FA008")
-        );
-    }
-
-    #[test]
-    fn malformed_certificate_der_is_rejected() {
-        let malformed = CertificateDer::from(vec![0x30, 0x01, 0xff]);
-        let valid = DeviceCert::generate("valid").chain().unwrap().remove(0);
-        assert_eq!(
-            verification_key(&malformed, &valid, Some(1_700_000_000), 8)
-                .unwrap_err()
-                .kind(),
-            std::io::ErrorKind::InvalidData
-        );
     }
 }

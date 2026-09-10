@@ -3,6 +3,21 @@
 This manual lane requires the real phone, LAN, mounts or Wayland session. It
 does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
 
+## VAL-MAG-15 — The phone's files in Siderita over the own wire
+
+- **Status:** pending
+- **Related implementation:** `MAG-P7` / `AND-5`
+- **Requires:** the deployed daemon, the release build on the S25U, a
+  folder chosen in the application's "Archivos" row, the phone connected
+- **Procedure:** open Siderita; open the phone in the sidebar; browse into
+  a folder with photos; copy one to the desktop; copy a file from the
+  desktop into the phone's folder; rename it; delete it
+- **Pass condition:** the phone appears without `sshfs` or KDE Connect,
+  the folders and files are the shared tree's, both copies arrive whole,
+  and the rename and the deletion show on the phone
+- **Result:** not run
+- **Evidence:** the daemon's `storage` log lines and the files themselves
+
 ## VAL-MAG-14 — The mirror over the link after a phone reboot
 
 - **Status:** pending

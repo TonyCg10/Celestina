@@ -36,6 +36,7 @@ pub mod hello;
 pub mod mirror;
 pub mod pair;
 pub mod phone;
+pub mod storage;
 
 pub use envelope::{Envelope, PROTOCOL_VERSION};
 pub use error::DecodeError;

@@ -1,14 +1,16 @@
 # MAG-P6 — The mirror as a capability of the link
 
 - **Opened:** 2026-09-09
+- **Closed:** 2026-09-10
 - **Plan ID:** link-mirror
-- **Status:** active
+- **Status:** done
 - **Authorization:** the author said "sigue con todo" on 2026-09-09 with
   `MAG-P5`'s exit met
 - **Scope:** magnetita, magnetitad, magnetita-mobile, magnetita-peer
 - **Implementation checkpoint:** MAG-P6
 - **Author-validation checkpoint:** `VAL-MAG-14` in
   [`../../../VALIDATION.md`](../../../VALIDATION.md)
+- **Successor:** MAG-P7
 
 ## Hypothesis
 
@@ -56,6 +58,11 @@ The loopback test streams bytes on the fixed id into the recording window
 and carries a touch back; a synthetic HEVC stream survives the daemon's
 remux; `scripts/complete-production.sh` passes; the mirror after a phone
 reboot on the S25U is `VAL-MAG-14`.
+
+Met on 2026-09-09 as far as the records allow: the loopback and the
+synthetic stream pass, production deployed, and the S25U received the
+capture request live. The picture on the author's desk after a reboot is
+`VAL-MAG-14`, which stays pending; `MAG-P7-D` waits on it.
 
 ## Change and commit ledger
 

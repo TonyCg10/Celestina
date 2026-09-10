@@ -397,6 +397,14 @@ impl PhoneSession {
         Ok(())
     }
 
+    /// A storage reply (or the state) built by [`crate::storage`].
+    pub async fn send_storage(&self, env: Envelope) -> Result<(), LinkError> {
+        self.session
+            .send_message(env.capability, env.kind, env.body)
+            .await?;
+        Ok(())
+    }
+
     /// The mirror stopped on this side.
     pub async fn send_mirror_stop(&self) -> Result<(), LinkError> {
         self.session
@@ -1012,6 +1020,13 @@ pub fn describe(env: &Envelope) -> String {
         (capability::MIRROR, 4) => "mirror: touch".into(),
         (capability::MIRROR, 5) => "mirror: key".into(),
         (capability::MIRROR, 6) => "mirror: global".into(),
+        (capability::STORAGE, 2) => "storage: list".into(),
+        (capability::STORAGE, 4) => "storage: stat".into(),
+        (capability::STORAGE, 6) => "storage: read".into(),
+        (capability::STORAGE, 8) => "storage: write".into(),
+        (capability::STORAGE, 10) => "storage: mkdir".into(),
+        (capability::STORAGE, 11) => "storage: rename".into(),
+        (capability::STORAGE, 12) => "storage: delete".into(),
         (capability::COMMANDS, 3) => "commands: result".into(),
         (cap, kind) => format!("capability {cap} kind {kind}, {} bytes", env.body.len()),
     }

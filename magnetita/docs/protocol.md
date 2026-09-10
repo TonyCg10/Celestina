@@ -76,7 +76,7 @@ Vector: `a4007030656232316232386165373464353463016a4573637269746f72696f020003828
 | 10 | sms | 1 conversations `{0 [{0 thread u64, 1 addresses [text], 2 snippet, 3 timestamp_ms, 4 unread u16}]}` (an empty list from the desktop asks for the phone's); 2 thread request `{0 thread, 1 before_ms?, 2 limit u16 in 1..=256}`; 3 thread `{0 thread, 1 [message]}`; 4 send `{0 thread, 1 body non-empty}`; 5 received `{0 thread, 1 message}` |
 | 11 | contacts | 1 request `{0 since_version u64}`; 2 sync `{0 version, 1 [{0 id, 1 version, 2 vcard ≤ 16 KiB}], 2 removed [u64], 3 complete}` |
 | 12 | telephony | 1 event `{0 state u8: ringing, answered, missed, ended; 1 number, 2 name?, 3 timestamp_ms}`; 2 command `{0 action u8: mute, answer, hang up}` |
-| 13 | storage | reserved for `MAG-P7` |
+| 13 | storage | 1 state `{0 available}` (phone, on session open and grant change); 2 list `{0 request u32, 1 path, 2 offset u32}`; 3 listing `{0 request, 1 [{0 name, 1 dir, 2 size u64, 3 mtime_ms u64}] ≤ 256, 2 more, 3 error}`; 4 stat `{0 request, 1 path}`; 5 stat reply `{0 request, 1 entry?}`; 6 read `{0 request, 1 path, 2 offset u64, 3 len u32 ≤ 1 MiB}`; 7 data `{0 request, 1 bytes, 2 error}`; 8 write `{0 request, 1 path, 2 offset, 3 bytes ≤ 1 MiB, 4 truncate}`; 9 done `{0 request, 1 ok, 2 error}`; 10 mkdir `{0 request, 1 path}`; 11 rename `{0 request, 1 from, 2 to}`; 12 delete `{0 request, 1 path}`. Paths are relative to the shared root, `/`-separated, no empty, `.` or `..` component; the root is the empty path |
 | 14 | pairing | 1 qr proof `{0 mac 32}`; 2 qr reply `{0 mac 32}`; 3 code exchange `{0 spake2 ≤ 64}`; 4 code confirm `{0 mac 32}` |
 
 An SMS `message` is `{0 id u64, 1 from_me, 2 address, 3 body, 4

@@ -42,6 +42,7 @@ use magnetita_proto::pair::{kind as pair_kind, Fingerprint, QrPairing, QrPayload
 use magnetita_proto::phone::contacts::ContactsSync;
 use magnetita_proto::phone::sms::{SmsConversations, SmsReceived, SmsThread};
 use magnetita_proto::phone::telephony::{CallEvent, CallState};
+use magnetita_proto::storage::StorageState;
 use magnetita_proto::{capability, CapabilityVersion, DeviceKind, Hello};
 use rand_core::{OsRng, RngCore};
 
@@ -54,6 +55,7 @@ pub(crate) mod mirror;
 pub(crate) mod notifications;
 pub(crate) mod phone;
 pub(crate) mod share;
+pub(crate) mod storage;
 
 use crate::lock::LockOk;
 use crate::runtime::log;
@@ -188,6 +190,10 @@ fn hello(device_id: &str) -> Hello {
             },
             CapabilityVersion {
                 capability: capability::MIRROR,
+                version: 1,
+            },
+            CapabilityVersion {
+                capability: capability::STORAGE,
                 version: 1,
             },
         ],
@@ -641,6 +647,13 @@ impl Wire {
             self.adapters.download_dir.clone(),
             outbox,
         );
+        let storage_client = storage::StorageClient::new(shares_outbox.clone());
+        storage::clients()
+            .lock_ok()
+            .insert(device_id.clone(), Arc::clone(&storage_client));
+        // The phone's files, mounted while it shares a root; dropping the
+        // session unmounts, so a lost link never strands the directory.
+        let mut phone_mount: Option<fuser::BackgroundSession> = None;
         let governor = input::Governor::default();
         let media = Arc::new(media::SessionMedia::default());
         if daemon.settings.lock_ok().media {
@@ -748,6 +761,36 @@ impl Wire {
                     Ok(env) if matches!(env.capability, capability::CONTACTS | capability::SMS | capability::TELEPHONY) => {
                         self.handle_phone(&device_id, &name, &env);
                     }
+                    Ok(env) if env.capability == capability::STORAGE && env.kind == StorageState::KIND => {
+                        let available = StorageState::decode(&env.body).map(|s| s.available).unwrap_or(false);
+                        if available && phone_mount.is_none() {
+                            match crate::mount::mountpoint_for(&device_id) {
+                                Ok(mountpoint) => {
+                                    let client = Arc::clone(&storage_client);
+                                    let handle = tokio::runtime::Handle::current();
+                                    let point = mountpoint.clone();
+                                    match tokio::task::spawn_blocking(move || storage::mount(client, handle, &point)).await {
+                                        Ok(Ok(mounted)) => {
+                                            phone_mount = Some(mounted);
+                                            daemon.set_mount(&device_id, Some(&mountpoint));
+                                            daemon.notify_change();
+                                            log("storage", &format!("{name}: mounted at {}", mountpoint.display()));
+                                        }
+                                        Ok(Err(e)) => log("storage", &format!("{name}: mount: {e}")),
+                                        Err(e) => log("storage", &format!("{name}: mount: {e}")),
+                                    }
+                                }
+                                Err(e) => log("storage", &format!("{name}: {e}")),
+                            }
+                        } else if !available {
+                            if let Some(mounted) = phone_mount.take() {
+                                let _ = tokio::task::spawn_blocking(move || drop(mounted)).await;
+                                daemon.set_mount(&device_id, None);
+                                daemon.notify_change();
+                            }
+                        }
+                    }
+                    Ok(env) if env.capability == capability::STORAGE => storage_client.reply(env),
                     Ok(env) if env.capability == capability::INPUT => {
                         self.handle_input(&name, &governor, env.kind, &env.body);
                     }
@@ -857,6 +900,12 @@ impl Wire {
         phone::store().forget_device(&device_id);
         daemon.pending_clipboards.clear(&device_id);
         self.adapters.notifications.forget_device(&device_id);
+        storage::clients().lock_ok().remove(&device_id);
+        if let Some(mounted) = phone_mount.take() {
+            let _ = tokio::task::spawn_blocking(move || drop(mounted)).await;
+            daemon.set_mount(&device_id, None);
+            daemon.notify_change();
+        }
     }
 
     /// Media envelopes from the phone: its player onto the registry's card,
@@ -1222,7 +1271,6 @@ impl Wire {
                     .send_message(capability::FIND, FindRing::KIND, FindRing.encode())
                     .await?;
             }
-            Command::RequestPair { .. } => {}
             Command::NotificationAction { key, action } => {
                 session
                     .send_message(
@@ -1261,26 +1309,19 @@ mod tests {
     use crate::devices::{Commands, Log, Registry};
     use crate::revocation::Revocations;
     use crate::settings::Settings;
-    use magnetita_core::Identity;
     use magnetita_link::endpoint::Expect as PeerExpect;
-    use magnetita_net::TlsConfigs;
     use std::collections::{BTreeMap, HashMap, VecDeque};
 
-    fn test_daemon(cert: &DeviceCert) -> Arc<Daemon> {
+    fn test_daemon(_cert: &DeviceCert) -> Arc<Daemon> {
         Arc::new(Daemon {
-            identity: Identity::desktop("desktop", "Celestina"),
-            tls: TlsConfigs::build(cert).unwrap(),
             trust: Arc::new(Mutex::new(TrustStore::in_memory())),
             settings: Arc::new(Mutex::new(Settings::default())),
             devices: Registry::new(Mutex::new(BTreeMap::new())),
             log: Log::new(Mutex::new(VecDeque::new())),
             commands: Commands::new(Mutex::new(HashMap::new())),
             pending_clipboards: Default::default(),
-            artwork_completions: Default::default(),
             revocations: Arc::new(Revocations::new()),
-            generation_clock: Mutex::new(Default::default()),
-            admission: Arc::new(crate::admission::Admission::new()),
-            payloads: crate::PayloadLimiter::new(),
+            payloads: magnetita_net::PayloadLimiter::new(),
             dbus: None,
             notifications: Default::default(),
             last_clipboard: Mutex::new(String::new()),
@@ -2307,6 +2348,231 @@ mod tests {
         assert_eq!(mirror::own().state(), mirror::LinkState::Idle);
         session.close("done");
         drop(wire);
+    }
+
+    /// A phone endpoint that serves `root` as its storage until the session
+    /// ends; returns when the desktop closes.
+    fn serve_storage(
+        rt: &tokio::runtime::Runtime,
+        session: Arc<magnetita_link::Session>,
+        root: std::path::PathBuf,
+        announce: bool,
+    ) -> tokio::task::JoinHandle<()> {
+        rt.spawn(async move {
+            if announce {
+                let state = magnetita_mobile::storage::state(true);
+                session
+                    .send_message(state.capability, state.kind, state.body)
+                    .await
+                    .unwrap();
+            }
+            while let Ok(env) = session.recv().await {
+                if let Some(request) = magnetita_mobile::storage::StorageRequest::decode(&env) {
+                    let reply = magnetita_mobile::storage::serve(&root, &request);
+                    if session
+                        .send_message(reply.capability, reply.kind, reply.body)
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            }
+        })
+    }
+
+    fn test_adapters() -> Adapters {
+        Adapters {
+            clipboard_sink: Arc::new(|_: &str| true),
+            notification_server: Arc::new(notifications::NoServer),
+            notifications: Arc::new(notifications::Bridge::default()),
+            download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
+            shares: Arc::new(share::ShareStore::default()),
+            input: Arc::new(input::testing::Recorder::default()),
+            mirror_player: Arc::new(mirror::testing::Recorder::default()),
+        }
+    }
+
+    fn storage_root(tag: &str) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!("magnetita-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("DCIM")).unwrap();
+        std::fs::write(root.join("DCIM/one.jpg"), vec![7u8; 300_000]).unwrap();
+        std::fs::write(root.join("notes.txt"), b"phone notes").unwrap();
+        root
+    }
+
+    #[test]
+    fn the_storage_client_browses_the_phone_tree() {
+        let cert = DeviceCert::generate("desktop");
+        let daemon = test_daemon(&cert);
+        let arm = PairingArm::default();
+        let (wire, addr) = spawn(
+            Arc::clone(&daemon),
+            cert.clone(),
+            "desktop".into(),
+            arm.clone(),
+            "127.0.0.1:0".parse().unwrap(),
+            false,
+            test_adapters(),
+        )
+        .unwrap();
+        let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (phone, phone_fp) = rt.block_on(async { phone("phone10") });
+        let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
+        let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
+        let session = Arc::new(session);
+        let root = storage_root("storage");
+        let server = serve_storage(&rt, Arc::clone(&session), root.clone(), false);
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let client = loop {
+            if let Some(c) = storage::clients().lock_ok().get("phone10").cloned() {
+                break c;
+            }
+            assert!(Instant::now() < deadline, "the client never registered");
+            thread::sleep(Duration::from_millis(20));
+        };
+        rt.block_on(async {
+            let mut names: Vec<String> = client
+                .list("")
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|e| e.name)
+                .collect();
+            names.sort();
+            assert_eq!(names, ["DCIM", "notes.txt"]);
+            let entry = client.stat("DCIM/one.jpg").await.unwrap().unwrap();
+            assert_eq!((entry.dir, entry.size), (false, 300_000));
+            assert!(client.stat("nope").await.unwrap().is_none());
+            let bytes = client.read("DCIM/one.jpg", 299_990, 1000).await.unwrap();
+            assert_eq!(bytes.len(), 10);
+            client
+                .write("new.txt", 0, b"from the desktop", true)
+                .await
+                .unwrap();
+            client.mkdir("Music").await.unwrap();
+            client.rename("new.txt", "Music/new.txt").await.unwrap();
+            assert_eq!(
+                std::fs::read(root.join("Music/new.txt")).unwrap(),
+                b"from the desktop"
+            );
+            client.delete("Music/new.txt").await.unwrap();
+            client.delete("Music").await.unwrap();
+            assert!(client.delete("Music").await.is_err());
+            assert!(!root.join("Music").exists());
+        });
+        session.close("done");
+        let _ = rt.block_on(server);
+        drop(wire);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Mounts through the kernel: needs `/dev/fuse` and `fusermount3`.
+    #[test]
+    #[ignore]
+    fn the_phone_is_a_directory_while_it_shares_a_root() {
+        let runtime_dir =
+            std::env::temp_dir().join(format!("magnetita-xdg-{}", std::process::id()));
+        std::fs::create_dir_all(&runtime_dir).unwrap();
+        std::env::set_var("XDG_RUNTIME_DIR", &runtime_dir);
+        let cert = DeviceCert::generate("desktop");
+        let daemon = test_daemon(&cert);
+        let arm = PairingArm::default();
+        let (wire, addr) = spawn(
+            Arc::clone(&daemon),
+            cert.clone(),
+            "desktop".into(),
+            arm.clone(),
+            "127.0.0.1:0".parse().unwrap(),
+            false,
+            test_adapters(),
+        )
+        .unwrap();
+        let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (phone, phone_fp) = rt.block_on(async { phone("phone11") });
+        let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
+        let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
+        let session = Arc::new(session);
+        let root = storage_root("fuse");
+        let server = serve_storage(&rt, Arc::clone(&session), root.clone(), true);
+
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mountpoint = loop {
+            let path = daemon
+                .devices
+                .lock_ok()
+                .get("phone11")
+                .filter(|d| d.mounted)
+                .map(|d| d.mount_path.clone());
+            if let Some(path) = path {
+                break std::path::PathBuf::from(path);
+            }
+            assert!(Instant::now() < deadline, "the phone never mounted");
+            thread::sleep(Duration::from_millis(50));
+        };
+        // Siderita's view: plain std::fs on the mount.
+        let mut names: Vec<String> = std::fs::read_dir(&mountpoint)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        names.sort();
+        assert_eq!(names, ["DCIM", "notes.txt"]);
+        assert_eq!(
+            std::fs::read(mountpoint.join("notes.txt")).unwrap(),
+            b"phone notes"
+        );
+        assert_eq!(
+            std::fs::metadata(mountpoint.join("DCIM/one.jpg"))
+                .unwrap()
+                .len(),
+            300_000
+        );
+        assert_eq!(
+            std::fs::read(mountpoint.join("DCIM/one.jpg"))
+                .unwrap()
+                .len(),
+            300_000
+        );
+        std::fs::write(mountpoint.join("DCIM/copy.txt"), b"written through fuse").unwrap();
+        assert_eq!(
+            std::fs::read(root.join("DCIM/copy.txt")).unwrap(),
+            b"written through fuse"
+        );
+        std::fs::create_dir(mountpoint.join("Music")).unwrap();
+        std::fs::rename(
+            mountpoint.join("DCIM/copy.txt"),
+            mountpoint.join("Music/copy.txt"),
+        )
+        .unwrap();
+        assert!(root.join("Music/copy.txt").exists());
+        std::fs::remove_file(mountpoint.join("Music/copy.txt")).unwrap();
+        std::fs::remove_dir(mountpoint.join("Music")).unwrap();
+        assert!(!root.join("Music").exists());
+
+        session.close("done");
+        let _ = rt.block_on(server);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while daemon
+            .devices
+            .lock_ok()
+            .get("phone11")
+            .is_some_and(|d| d.mounted)
+        {
+            assert!(Instant::now() < deadline, "the mount never released");
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert!(
+            std::fs::read_dir(&mountpoint)
+                .map(|d| d.count())
+                .unwrap_or(0)
+                == 0
+        );
+        drop(wire);
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

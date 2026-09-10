@@ -24,13 +24,8 @@
 2	celestina-rs/crates/grafita-core/src/search.rs
 9	celestina-rs/crates/grafita-core/tests/documents.rs
 1	celestina-rs/crates/magnetita-core/src/clipboard.rs
-2	celestina-rs/crates/magnetita-core/src/notification.rs
 2	celestina-rs/crates/magnetitad/src/clipboard.rs
 7	celestina-rs/crates/magnetitad/src/devices.rs
-2	celestina-rs/crates/magnetitad/src/link_commands.rs
-3	celestina-rs/crates/magnetitad/src/main.rs
-1	celestina-rs/crates/magnetitad/src/payload_handlers.rs
-6	celestina-rs/crates/magnetitad/src/runtime.rs
 12	celestina-style/CelestinaFileIcon.qml
 16	celestina-style/CelestinaFolderIcon.qml
 4	celestina-style/CelestinaIconShapes.qml
