@@ -255,13 +255,36 @@ fn touch(action: TouchAction, x: u16, y: u16) -> Envelope {
     }
 }
 
+/// The least time between two moves sent while a finger is down: the
+/// pointer reports far faster than the phone can play a stroke segment,
+/// and a queue of stale points is a finger that lands late and elsewhere.
+const MOVE_INTERVAL: Duration = Duration::from_millis(8);
+
 /// Reads `mpv`'s log until it closes, handing every translated message to
-/// `deliver` with the pacing a gesture needs.
+/// `deliver` with the pacing a gesture needs. Moves closer together than
+/// [`MOVE_INTERVAL`] fold into the latest one, sent before the next event.
 pub(crate) fn pump(stdout: ChildStdout, translator: Translator, deliver: impl Fn(Envelope)) {
     let reader = BufReader::new(stdout);
+    let mut pending_move: Option<Envelope> = None;
+    let mut last_move = std::time::Instant::now() - MOVE_INTERVAL;
     for line in reader.lines() {
         let Ok(line) = line else { break };
         for (env, pause) in translator.translate(&line) {
+            let is_move = env.kind == MirrorTouch::KIND
+                && MirrorTouch::decode(&env.body).is_ok_and(|t| t.action == TouchAction::Move);
+            if is_move && pause.is_zero() {
+                if last_move.elapsed() < MOVE_INTERVAL {
+                    pending_move = Some(env);
+                    continue;
+                }
+                pending_move = None;
+                last_move = std::time::Instant::now();
+                deliver(env);
+                continue;
+            }
+            if let Some(held) = pending_move.take() {
+                deliver(held);
+            }
             deliver(env);
             if !pause.is_zero() {
                 std::thread::sleep(pause);

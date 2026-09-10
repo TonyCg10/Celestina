@@ -199,6 +199,9 @@ pub(crate) struct OwnMirror {
     /// The session the mirror runs on: the one named by the request, else
     /// the first session to tick after it. Other sessions leave it alone.
     owner: Mutex<Option<String>>,
+    /// The owning session's outbox: input goes straight to the link, not
+    /// through the tick.
+    outbox: Mutex<Option<tokio::sync::mpsc::UnboundedSender<Envelope>>>,
     state: Mutex<Option<LinkState>>,
     sink: Mutex<Option<Box<dyn VideoSink>>>,
     /// Input for the phone, queued by `Mirror1` and drained by the session.
@@ -236,7 +239,16 @@ impl OwnMirror {
         self.state.lock_ok().clone().unwrap_or(LinkState::Idle)
     }
 
+    /// Input for the phone: down the owning session's link at once, or
+    /// queued for the tick to hand over while no session owns the mirror.
     pub(crate) fn queue_input(&self, env: Envelope) {
+        let env = match self.outbox.lock_ok().as_ref() {
+            Some(outbox) => match outbox.send(env) {
+                Ok(()) => return,
+                Err(tokio::sync::mpsc::error::SendError(env)) => env,
+            },
+            None => env,
+        };
         let mut input = self.input.lock_ok();
         if input.len() < 1024 {
             input.push_back(env);
@@ -244,7 +256,12 @@ impl OwnMirror {
     }
 
     /// The session's tick: what to send, if anything, given the intent.
-    pub(crate) fn tick(&self, device_id: &str) -> Vec<Envelope> {
+    /// The owning session leaves its outbox so input skips the tick.
+    pub(crate) fn tick(
+        &self,
+        device_id: &str,
+        outbox: &tokio::sync::mpsc::UnboundedSender<Envelope>,
+    ) -> Vec<Envelope> {
         let mut out = Vec::new();
         let wanted = *self.wanted.lock_ok();
         {
@@ -253,6 +270,12 @@ impl OwnMirror {
                 None if wanted.is_some() => *owner = Some(device_id.to_owned()),
                 Some(id) if id == device_id => {}
                 _ => return out,
+            }
+        }
+        {
+            let mut slot = self.outbox.lock_ok();
+            if slot.is_none() {
+                *slot = Some(outbox.clone());
             }
         }
         let state = self.state();
@@ -305,6 +328,7 @@ impl OwnMirror {
         self.close_window();
         *self.state.lock_ok() = Some(LinkState::Idle);
         *self.wanted.lock_ok() = None;
+        *self.outbox.lock_ok() = None;
         *self.owner.lock_ok() = None;
     }
 
@@ -404,13 +428,20 @@ mod tests {
         );
 
         let mirror = OwnMirror::default();
-        assert!(mirror.tick("phone").is_empty());
+        assert!(mirror
+            .tick("phone", &tokio::sync::mpsc::unbounded_channel().0)
+            .is_empty());
         mirror.request_start(start);
-        let sent = mirror.tick("phone");
+        let sent = mirror.tick("phone", &tokio::sync::mpsc::unbounded_channel().0);
         assert_eq!(sent.len(), 1);
         assert_eq!(sent[0].kind, MirrorStart::KIND);
         assert_eq!(mirror.state(), LinkState::Starting);
-        assert!(mirror.tick("phone").is_empty(), "starting is asked once");
+        assert!(
+            mirror
+                .tick("phone", &tokio::sync::mpsc::unbounded_channel().0)
+                .is_empty(),
+            "starting is asked once"
+        );
         let recorder = testing::Recorder::default();
         mirror.started(
             &recorder,
@@ -429,7 +460,7 @@ mod tests {
             }
         );
         mirror.request_stop();
-        let sent = mirror.tick("phone");
+        let sent = mirror.tick("phone", &tokio::sync::mpsc::unbounded_channel().0);
         assert_eq!(sent[0].kind, MirrorStop::KIND);
         assert_eq!(mirror.state(), LinkState::Idle);
     }

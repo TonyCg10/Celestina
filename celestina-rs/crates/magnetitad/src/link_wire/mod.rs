@@ -849,7 +849,7 @@ impl Wire {
                     }
                 }
                 _ = tick.tick() => {
-                    for env in mirror::own().tick(&device_id) {
+                    for env in mirror::own().tick(&device_id, &shares_outbox) {
                         if let Err(e) = session.send_message(env.capability, env.kind, env.body).await {
                             log("link", &format!("{name}: mirror: {e}"));
                         }
