@@ -97,7 +97,6 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.core)
     // The glass of the tab pill: what scrolls beneath it is blurred through it.
     implementation(libs.haze)
-    implementation(libs.haze.materials)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)

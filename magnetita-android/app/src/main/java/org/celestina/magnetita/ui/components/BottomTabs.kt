@@ -33,8 +33,8 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
 import org.celestina.magnetita.R
 
 /** The three pages: the phone, the control, the settings. */
@@ -51,7 +51,6 @@ private val TABS = listOf(
  * circle-shaped surface over the page, icons only, the selected one on the
  * accent with a soft indicator.
  */
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun BottomTabs(selected: Int, onSelect: (Int) -> Unit, haze: HazeState) {
     Box(
@@ -59,7 +58,17 @@ fun BottomTabs(selected: Int, onSelect: (Int) -> Unit, haze: HazeState) {
         contentAlignment = Alignment.Center,
     ) {
         Surface(
-            modifier = Modifier.hazeEffect(state = haze, style = HazeMaterials.thin(MaterialTheme.colorScheme.background)),
+            // Haze's classic look (its 0.7 defaults): 20 dp of blur, the
+            // background tinted at 70 %, a grain of 0.15.
+            modifier = Modifier.hazeEffect(
+                state = haze,
+                style = HazeStyle(
+                    backgroundColor = MaterialTheme.colorScheme.background,
+                    tints = listOf(HazeTint(MaterialTheme.colorScheme.background.copy(alpha = 0.7f))),
+                    blurRadius = 20.dp,
+                    noiseFactor = 0.15f,
+                ),
+            ),
             shape = CircleShape,
             color = Color.Transparent,
             shadowElevation = 8.dp,
