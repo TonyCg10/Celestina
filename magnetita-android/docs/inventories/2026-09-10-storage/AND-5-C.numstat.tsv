@@ -1,0 +1,17 @@
+# AND-5-C exact change inventory
+
+Base revision	fa130ee6d5b7179abd31d6171743e540d64b6d80
+Pathspec	magnetita-android/ROADMAP.md
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/storage/PhoneStorage.kt
+Pathspec	magnetita-android/docs/evidence/2026-09-10-listing-pages.md
+Pathspec	magnetita-android/docs/inventories/2026-09-10-storage/AND-5-C.numstat.tsv
+Pathspec	magnetita-android/docs/plans/active/2026-09-10-storage.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+2	0	95bca6e96bb280bb35bc93baf963ddfdfd06e22fb1d722d820a12826a4257b4b	magnetita-android/ROADMAP.md
+20	2	d9c4601982a8aa4ba8cea32a25e5f9285fbd963ad199974051b883108d512942	magnetita-android/app/src/main/java/org/celestina/magnetita/storage/PhoneStorage.kt
+33	0	43908fd5e74d336b8e57d3a00e788fabe689c71e2d66367954bd6f18f6dfe6ef	magnetita-android/docs/evidence/2026-09-10-listing-pages.md
+17	0	self	magnetita-android/docs/inventories/2026-09-10-storage/AND-5-C.numstat.tsv
+5	1	c519db5eed175203de0f07eda5dfd8580ae210a1bd427cf75b2988cea2f7d443	magnetita-android/docs/plans/active/2026-09-10-storage.md

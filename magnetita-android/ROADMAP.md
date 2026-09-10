@@ -36,6 +36,7 @@ that folder through the daemon's mount with no `sshfs`.
 |---|---|---|---|---|
 | AND-5-A | done | MAG-P7-A | The storage adapter over the document tree | JVM tests, lint |
 | AND-5-B | done | AND-5-A | The whole phone as the root with the all-files grant | JVM tests, lint |
+| AND-5-C | done | AND-5-B | One walk per directory across the desktop's pages | JVM tests, lint |
 
 ## Implementation exit
 
@@ -50,6 +51,7 @@ lint pass, the build is on the S25U.
 
 - `AND-5-A`: [storage tree](docs/evidence/2026-09-10-storage-tree.md)
 - `AND-5-B`: [whole phone](docs/evidence/2026-09-10-storage-whole-phone.md)
+- `AND-5-C`: [listing pages](docs/evidence/2026-09-10-listing-pages.md)
 
 ## AND-4 — The mirror over the link
 

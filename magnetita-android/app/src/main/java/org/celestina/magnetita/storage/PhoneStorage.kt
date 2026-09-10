@@ -40,6 +40,17 @@ class PhoneStorage(private val context: Context) {
         prefs.edit().putString(KEY_TREE, tree.toString()).apply()
     }
 
+    /** The last listing, kept so the desktop's pages of one directory cost one walk. */
+    private var lastListing: Triple<String, List<StorageEntry>, Long>? = null
+
+    private fun listed(path: String, walk: () -> List<StorageEntry>): List<StorageEntry> {
+        val now = android.os.SystemClock.elapsedRealtime()
+        lastListing?.let { (p, entries, at) -> if (p == path && now - at < LISTING_MS) return entries }
+        val entries = walk()
+        lastListing = Triple(path, entries, now)
+        return entries
+    }
+
     /** Answers one request on `live`. */
     fun answer(request: StorageRequest, live: LiveSession) {
         if (wholePhone()) {
@@ -61,7 +72,7 @@ class PhoneStorage(private val context: Context) {
         runCatching {
             when (request.kind) {
                 StorageRequest.LIST -> {
-                    val all = list(tree, id)
+                    val all = listed("tree:" + request.path) { list(tree, id) }
                     val page = all.drop(request.offset.toInt()).take(PAGE)
                     live.sendListing(request.request, page, all.size > request.offset.toInt() + PAGE, "")
                 }
@@ -99,7 +110,9 @@ class PhoneStorage(private val context: Context) {
         runCatching {
             when (request.kind) {
                 StorageRequest.LIST -> {
-                    val all = (file.listFiles() ?: error("not a directory")).map { entryOf(it) }.sortedBy { it.name }
+                    val all = listed("files:" + request.path) {
+                        (file.listFiles() ?: error("not a directory")).map { entryOf(it) }.sortedBy { it.name }
+                    }
                     val page = all.drop(request.offset.toInt()).take(PAGE)
                     live.sendListing(request.request, page, all.size > request.offset.toInt() + PAGE, "")
                 }
@@ -116,6 +129,7 @@ class PhoneStorage(private val context: Context) {
                     live.sendData(request.request, buffer.copyOf(filled), "")
                 }
                 StorageRequest.WRITE -> {
+                    if (!file.exists()) lastListing = null
                     RandomAccessFile(file, "rw").use { raf ->
                         raf.seek(request.offset)
                         raf.write(request.bytes)
@@ -124,14 +138,17 @@ class PhoneStorage(private val context: Context) {
                     live.sendDone(request.request, true, "")
                 }
                 StorageRequest.MKDIR -> {
+                    lastListing = null
                     if (!file.mkdir()) error("not created")
                     live.sendDone(request.request, true, "")
                 }
                 StorageRequest.RENAME -> {
+                    lastListing = null
                     if (!file.renameTo(File(root, request.to))) error("not moved")
                     live.sendDone(request.request, true, "")
                 }
                 StorageRequest.DELETE -> {
+                    lastListing = null
                     if (!file.delete()) error("not deleted")
                     live.sendDone(request.request, true, "")
                 }
@@ -232,6 +249,7 @@ class PhoneStorage(private val context: Context) {
     companion object {
         private const val KEY_TREE = "tree"
         private const val PAGE = 256
+        private const val LISTING_MS = 10_000L
         private val COLUMNS = arrayOf(
             DocumentsContract.Document.COLUMN_DOCUMENT_ID,
             DocumentsContract.Document.COLUMN_DISPLAY_NAME,
