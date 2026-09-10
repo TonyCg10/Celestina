@@ -6,3 +6,4 @@ units and links. Exact inventories remain immutable under
 root.
 
 - [AND-1 — The application foundation](2026-09-09-foundation.md)
+- [AND-2 — The daily set](2026-09-09-daily-set.md)

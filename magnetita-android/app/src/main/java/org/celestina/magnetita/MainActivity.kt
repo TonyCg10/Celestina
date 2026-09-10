@@ -26,7 +26,9 @@ import org.celestina.magnetita.notifications.PhoneNotifications
 import org.celestina.magnetita.phone.PhonePermissions
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import org.celestina.magnetita.ui.screens.ControlScreen
 import org.celestina.magnetita.ui.screens.DeviceScreen
+import org.celestina.magnetita.ui.screens.Remote
 import org.celestina.magnetita.ui.screens.DeviceShown
 import org.celestina.magnetita.ui.screens.ScanScreen
 import org.celestina.magnetita.ui.theme.MagnetitaTheme
@@ -45,6 +47,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             MagnetitaTheme {
                 var scanning by remember { mutableStateOf(false) }
+                var page by remember { mutableStateOf(0) }
+                val commands by LinkService.commands.collectAsState()
+                val commandNote by LinkService.commandNote.collectAsState()
                 var core by remember { mutableStateOf(FromCore(null, emptyList(), false)) }
                 val link by LinkService.state.collectAsState()
                 val ringing by LinkService.ringing.collectAsState()
@@ -72,6 +77,19 @@ class MainActivity : ComponentActivity() {
                         onLink = { uri -> LinkService.pair(this, uri); scanning = false },
                         onBack = { scanning = false },
                     )
+                } else if (page == 1) {
+                    BackHandler { page = 0 }
+                    val remote = remember {
+                        object : Remote {
+                            override fun move(dx: Int, dy: Int) = LinkService.input { it.pointerMove(dx, dy) }
+                            override fun button(button: Int, pressed: Boolean) = LinkService.input { it.pointerButton(button, pressed) }
+                            override fun scroll(dx: Int, dy: Int) = LinkService.input { it.scroll(dx, dy) }
+                            override fun key(code: Int, pressed: Boolean) = LinkService.input { it.key(code, pressed) }
+                            override fun type(text: String) = LinkService.input { it.typeText(text) }
+                            override fun run(id: Int) = LinkService.send(this@MainActivity, Outbound.RunCommand(id))
+                        }
+                    }
+                    ControlScreen(remote, commands, commandNote, link is LinkState.Connected)
                 } else {
                     val battery = readBattery()
                     DeviceScreen(
@@ -81,6 +99,7 @@ class MainActivity : ComponentActivity() {
                         onStopRinging = { LinkService.stopRinging(this) },
                         onNotificationAccess = { startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
                         onPhoneAccess = { askPhone.launch(PhonePermissions.ALL) },
+                        onControl = { page = 1 },
                         onMedia = { button -> desktopMedia?.let { LinkService.send(this, Outbound.MediaControl(MediaCommand(it.player, button, null, null))) } },
                     )
                 }

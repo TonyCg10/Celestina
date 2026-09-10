@@ -65,6 +65,7 @@ fun DeviceScreen(
     onNotificationAccess: () -> Unit = {},
     onMedia: (button: Int) -> Unit = {},
     onPhoneAccess: () -> Unit = {},
+    onControl: () -> Unit = {},
 ) {
     val scroll = rememberScrollState()
     val progress by remember { derivedStateOf { (1f - scroll.value / 300f).coerceIn(0f, 1f) } }
@@ -160,6 +161,10 @@ fun DeviceScreen(
                         },
                     )
                 }
+                Spacer(Modifier.height(16.dp))
+            }
+            if (desktop != null && link is LinkState.Connected) {
+                Button(onClick = onControl, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) { Text(stringResource(R.string.action_control)) }
                 Spacer(Modifier.height(16.dp))
             }
             if (desktop == null) {

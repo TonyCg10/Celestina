@@ -31,6 +31,8 @@ class DesktopSignalTest {
         assertEquals(DesktopSignal.ThreadRequested(4, null, 50), DesktopSignal.of(LinkEvent(10, 2, "sms: thread requested", thread = 4, limit = 50)))
         assertEquals(DesktopSignal.SmsSendRequested(4, "hi"), DesktopSignal.of(LinkEvent(10, 4, "sms: send", text = "hi", thread = 4, smsSend = true)))
         assertEquals(DesktopSignal.CallCommand(2), DesktopSignal.of(LinkEvent(12, 2, "call: command", callAction = 2)))
+        assertEquals(DesktopSignal.Commands(listOf(1 to "Lock")), DesktopSignal.of(LinkEvent(7, 1, "commands: list", commands = listOf(1 to "Lock"))))
+        assertEquals(DesktopSignal.CommandResult(1, true), DesktopSignal.of(LinkEvent(7, 3, "commands: result", commandId = 1, commandOk = true)))
     }
 
     @Test

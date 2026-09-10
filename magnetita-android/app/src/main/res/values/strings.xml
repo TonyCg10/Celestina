@@ -47,6 +47,15 @@
     <string name="notification_listener">Notificaciones en el escritorio</string>
     <string name="channel_files">Archivos recibidos</string>
     <string name="label_phone_access">Contactos, SMS y llamadas</string>
+    <string name="title_control">Control</string>
+    <string name="action_control">Trackpad, teclado y órdenes</string>
+    <string name="trackpad_hint">Un dedo mueve · toque clic · dos dedos desplazan · mantener clic derecho</string>
+    <string name="keyboard_hint">Escribe aquí para teclear en el escritorio</string>
+    <string name="label_commands">Órdenes</string>
+    <string name="detail_no_commands">Regístralas en los ajustes de Magnetita en el escritorio</string>
+    <string name="action_run">Ejecutar</string>
+    <string name="command_ok">Orden ejecutada</string>
+    <string name="command_failed">La orden falló</string>
     <string name="detail_phone_on">Los nombres, las conversaciones y las llamadas llegan al escritorio</string>
     <string name="detail_phone_off">Permite el acceso para ver contactos, SMS y llamadas en el escritorio</string>
     <string name="file_received_title">Archivo recibido del escritorio</string>

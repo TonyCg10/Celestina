@@ -58,6 +58,12 @@ sealed interface DesktopSignal {
 
     /** 0 mute, 1 answer, 2 hang up. */
     data class CallCommand(val action: Int) : DesktopSignal
+
+    /** The desktop's registered commands, ids and names. */
+    data class Commands(val list: List<Pair<Int, String>>) : DesktopSignal
+
+    /** How a run ended. */
+    data class CommandResult(val id: Int, val ok: Boolean) : DesktopSignal
     data class Other(val capability: Int, val kind: Int) : DesktopSignal
 
     companion object {
@@ -67,6 +73,7 @@ sealed interface DesktopSignal {
         const val CAPABILITY_FIND = 4
         const val CAPABILITY_SHARE = 5
         const val CAPABILITY_MEDIA = 6
+        const val CAPABILITY_COMMANDS = 7
         const val CAPABILITY_SMS = 10
         const val CAPABILITY_CONTACTS = 11
         const val CAPABILITY_TELEPHONY = 12
@@ -126,6 +133,9 @@ sealed interface DesktopSignal {
             CAPABILITY_SMS to 4 ->
                 if (event.smsSend && event.thread != null && event.text != null) SmsSendRequested(event.thread, event.text) else Other(event.capability, event.kind)
             CAPABILITY_TELEPHONY to 2 -> event.callAction?.let { CallCommand(it) } ?: Other(event.capability, event.kind)
+            CAPABILITY_COMMANDS to 1 -> event.commands?.let { Commands(it) } ?: Other(event.capability, event.kind)
+            CAPABILITY_COMMANDS to 3 ->
+                if (event.commandId != null && event.commandOk != null) CommandResult(event.commandId, event.commandOk) else Other(event.capability, event.kind)
             else -> Other(event.capability, event.kind)
         }
     }

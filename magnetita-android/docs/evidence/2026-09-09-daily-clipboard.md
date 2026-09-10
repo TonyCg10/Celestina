@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `AND-2-A` of
-  [`../plans/active/2026-09-09-daily-set.md`](../plans/active/2026-09-09-daily-set.md):
+  [`../plans/archive/2026-09-09-daily-set.md`](../plans/archive/2026-09-09-daily-set.md):
   `app/src/main/java/org/celestina/magnetita/clipboard/`, the clipboard
   additions in `link/` (`ClipboardPolicy`, the signals, the controller's
   outbound slot, the service), `MainActivity`, the device screen's row,

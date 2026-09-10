@@ -101,6 +101,13 @@ private class CoreSession(private val inner: MobileSession) : LiveSession {
         inner.sendCallEvent(state.toUByte(), number, name, timestampMs.toULong())
     }.isSuccess
 
+    override fun runCommand(id: Int): Boolean = runCatching { inner.runCommand(id.toUInt()) }.isSuccess
+    override fun pointerMove(dx: Int, dy: Int): Boolean = runCatching { inner.pointerMove(dx.coerceIn(-32768, 32767).toShort(), dy.coerceIn(-32768, 32767).toShort()) }.isSuccess
+    override fun pointerButton(button: Int, pressed: Boolean): Boolean = runCatching { inner.pointerButton(button.toUByte(), pressed) }.isSuccess
+    override fun scroll(dx: Int, dy: Int): Boolean = runCatching { inner.scroll(dx.coerceIn(-32768, 32767).toShort(), dy.coerceIn(-32768, 32767).toShort()) }.isSuccess
+    override fun key(code: Int, pressed: Boolean): Boolean = runCatching { inner.key(code.toUShort(), pressed) }.isSuccess
+    override fun typeText(text: String): Boolean = runCatching { inner.typeText(text) }.isSuccess
+
     private fun SmsMessage.toMobile() = MobileSmsMessage(id.toULong(), fromMe, address, body, timestampMs.toULong(), attachmentMimes)
 
     override suspend fun next(timeoutMs: Long): LinkEvent? = withContext(Dispatchers.IO) {
@@ -110,6 +117,7 @@ private class CoreSession(private val inner: MobileSession) : LiveSession {
             it.media?.let { m -> MediaState(m.player, m.title, m.artist, m.album, m.playing, m.positionMs.toLong(), m.lengthMs.toLong(), m.canSeek, m.canNext, m.canPrevious, m.volume.toInt()) },
             it.mediaCommand?.let { c -> MediaCommand(c.player, c.button?.toInt(), c.seekMs?.toLong(), c.volume?.toInt()) },
             it.contactsSince?.toLong(), it.conversationsWanted, it.thread?.toLong(), it.beforeMs?.toLong(), it.limit?.toInt(), it.smsSend, it.callAction?.toInt(),
+            it.commands?.map { c -> c.id.toInt() to c.name }, it.commandId?.toInt(), it.commandOk,
         ) }
     }
 

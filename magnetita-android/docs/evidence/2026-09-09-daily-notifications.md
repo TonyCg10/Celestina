@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `AND-2-B` of
-  [`../plans/active/2026-09-09-daily-set.md`](../plans/active/2026-09-09-daily-set.md):
+  [`../plans/archive/2026-09-09-daily-set.md`](../plans/archive/2026-09-09-daily-set.md):
   `app/src/main/java/org/celestina/magnetita/notifications/`, the
   outbound queue and the notification signals in `link/`, the device
   screen's row, strings, the manifest, the tests

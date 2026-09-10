@@ -70,6 +70,7 @@ class LinkService : LifecycleService() {
         )
         c.receiveDir = java.io.File(cacheDir, "received").absolutePath
         controller = c
+        controllerRef = c
         loop = lifecycleScope.launch {
             launch { c.state.collect { s -> _state.value = s; update(notification(describe(s))) } }
             launch {
@@ -91,6 +92,8 @@ class LinkService : LifecycleService() {
                         is DesktopSignal.ThreadRequested -> offMain { messages.sendThread(signal.thread, signal.beforeMs, signal.limit) }
                         is DesktopSignal.SmsSendRequested -> offMain { messages.send(signal.thread, signal.body) }
                         is DesktopSignal.CallCommand -> calls.act(signal.action)
+                        is DesktopSignal.Commands -> _commands.value = signal.list
+                        is DesktopSignal.CommandResult -> _commandNote.value = getString(if (signal.ok) R.string.command_ok else R.string.command_failed)
                         is DesktopSignal.ShareText -> receiveClipboard(signal.text)
                         else -> {}
                     }
@@ -239,6 +242,24 @@ class LinkService : LifecycleService() {
         }
 
         private val _clipboardNote = MutableStateFlow("")
+
+        private val _commands = MutableStateFlow<List<Pair<Int, String>>>(emptyList())
+
+        /** The desktop's registered commands, ids and names. */
+        val commands: StateFlow<List<Pair<Int, String>>> = _commands.asStateFlow()
+
+        private val _commandNote = MutableStateFlow("")
+        val commandNote: StateFlow<String> = _commandNote.asStateFlow()
+
+        @Volatile private var controllerRef: LinkController? = null
+
+        /** Input that cannot wait for a poll goes straight to the held session, off the main thread. */
+        fun input(work: (org.celestina.magnetita.link.LiveSession) -> Unit) {
+            val live = controllerRef?.live ?: return
+            inputExecutor.execute { runCatching { work(live) } }
+        }
+
+        private val inputExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
 
         private val _desktopMedia = MutableStateFlow<MediaState?>(null)
 

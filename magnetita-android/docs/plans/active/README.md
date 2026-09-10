@@ -1,7 +1,7 @@
 # Active Magnetita Android plans
 
 The active plan is
-[AND-2 the daily set](2026-09-09-daily-set.md), which the
+[AND-3 remote control](2026-09-09-remote-control.md), which the
 project roadmap names as its active implementation checkpoint.
 
 Unit inventories live under

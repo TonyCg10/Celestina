@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `AND-2-C` of
-  [`../plans/active/2026-09-09-daily-set.md`](../plans/active/2026-09-09-daily-set.md):
+  [`../plans/archive/2026-09-09-daily-set.md`](../plans/archive/2026-09-09-daily-set.md):
   `app/src/main/java/org/celestina/magnetita/share/Downloads.kt`, the
   share signals and the transfer pump in `link/`, the share target for
   streams, the service's publication of received files, strings, the

@@ -1,9 +1,10 @@
 # Magnetita Android status
 
 - **Updated:** 2026-09-09
-- **Implementation:** `AND-2`, the daily set, is the active checkpoint
-  since 2026-09-09, paired with Magnetita's `MAG-P4`; its seven units are
-  done and its exit is met; `VAL-MAG-12` closes it. `AND-1`, the foundation, has its four units done and waits for
+- **Implementation:** `AND-3`, remote control, is the active checkpoint
+  since 2026-09-09, paired with Magnetita's `MAG-P5`; its control screen
+  is done. `AND-2`, the daily set, met its exit the same day and is
+  archived; `VAL-MAG-12` closes it. `AND-1`, the foundation, has its four units done and waits for
   `VAL-MAG-11`
 - **Author validation:** `VAL-MAG-11` in Magnetita's
   [VALIDATION.md](../magnetita/VALIDATION.md) covers the first pairing on
@@ -11,6 +12,9 @@
 
 ## Current checkout truth
 
+- The control screen turns the phone into the desktop's trackpad,
+  keyboard and command deck; motion takes a fast path to the held
+  session (`AND-3-A`).
 - With the phone grants, contacts go to the desktop as vCards, the SMS
   list and threads on request, incoming SMS as they arrive, sends from the
   desktop through the SMS manager, and calls with mute, answer and hang
@@ -59,6 +63,7 @@ None. The SDK and NDK are the author's, outside the repository.
 ## Records
 
 - [Implementation roadmap](ROADMAP.md)
-- [Active plan AND-2](docs/plans/active/2026-09-09-daily-set.md)
+- [Active plan AND-3](docs/plans/active/2026-09-09-remote-control.md)
+- [Archived plan AND-2](docs/plans/archive/2026-09-09-daily-set.md)
 - [Archived plan AND-1](docs/plans/archive/2026-09-09-foundation.md)
 - [Registry entry](../docs/projects.toml)

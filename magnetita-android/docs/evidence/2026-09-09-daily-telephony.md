@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `AND-2-G` of
-  [`../plans/active/2026-09-09-daily-set.md`](../plans/active/2026-09-09-daily-set.md):
+  [`../plans/archive/2026-09-09-daily-set.md`](../plans/archive/2026-09-09-daily-set.md):
   `app/src/main/java/org/celestina/magnetita/phone/Calls.kt`, its
   receiver in the manifest, the call signal and outbound in `link/`, the
   tests

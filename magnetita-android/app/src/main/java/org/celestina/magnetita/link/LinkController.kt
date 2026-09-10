@@ -84,6 +84,10 @@ class LinkController(
 
     private val offered = HashMap<Int, Outbound.File>()
 
+    /** The session being held, for input that cannot wait for a poll. */
+    @Volatile var live: LiveSession? = null
+        private set
+
     /** Where offered files are received; null declines every offer. */
     @Volatile var receiveDir: String? = null
 
@@ -173,6 +177,7 @@ class LinkController(
 
     /** Pumps one session until it ends; returns why. */
     private suspend fun hold(live: LiveSession): String = coroutineScope {
+        this@LinkController.live = live
         val (level, charging) = battery.read()
         withContext(io) { live.reportBattery(level, charging) }
         var seen = batteryChanged.value
@@ -204,6 +209,7 @@ class LinkController(
                             is Outbound.Thread -> live.sendSmsThread(op.thread, op.messages)
                             is Outbound.Received -> live.sendSmsReceived(op.thread, op.message)
                             is Outbound.Call -> live.sendCallEvent(op.state, op.number, op.name, op.timestampMs)
+                            is Outbound.RunCommand -> live.runCommand(op.id)
                         }
                     }
                     if (!sent) return@launch
@@ -242,6 +248,7 @@ class LinkController(
         } catch (e: Exception) {
             e.message ?: "session ended"
         } finally {
+            this@LinkController.live = null
             reporter.cancel()
         }
         reason

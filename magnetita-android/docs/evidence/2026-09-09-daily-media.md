@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `AND-2-D` of
-  [`../plans/active/2026-09-09-daily-set.md`](../plans/active/2026-09-09-daily-set.md):
+  [`../plans/archive/2026-09-09-daily-set.md`](../plans/archive/2026-09-09-daily-set.md):
   `app/src/main/java/org/celestina/magnetita/media/PhoneMedia.kt`, the
   media ports and signals in `link/`, the desktop player card on the
   device screen, the package queries in the manifest, the tests

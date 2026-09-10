@@ -1,15 +1,49 @@
 # Magnetita Android implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** AND-2
-- **Related author validation:** `VAL-MAG-11` and `VAL-MAG-12` in
-  Magnetita's [VALIDATION.md](../magnetita/VALIDATION.md); they do not
-  block
+- **Active implementation checkpoint:** AND-3
+- **Related author validation:** `VAL-MAG-11`, `VAL-MAG-12` and
+  `VAL-MAG-13` in Magnetita's [VALIDATION.md](../magnetita/VALIDATION.md);
+  they do not block
 
 This roadmap is the application half of Magnetita's own-protocol program;
 the Rust half and the desktop are in
 [Magnetita's roadmap](../magnetita/ROADMAP.md) (`MAG-P3` onwards). Each
 `AND-` checkpoint pairs with a `MAG-P` one.
+
+## AND-3 — Remote control
+
+## Hypothesis and tangible outcome
+
+The phone as trackpad, keyboard and command deck: one Compose page over the
+core's input and command calls, with the arithmetic pure and tested.
+
+## Scope
+
+- The control screen: trackpad gestures, the typing field and key row, the
+  registered commands by name; a fast path for input.
+
+## Exclusions
+
+- Presenter mode, gamepad, absolute positioning.
+
+## Build order
+
+| Unit | Status | Dependency | Implementation result | Agent evidence |
+|---|---|---|---|---|
+| AND-3-A | done | MAG-P5-B | The control screen: trackpad, keyboard, commands | JVM tests, lint |
+
+## Implementation exit
+
+Close `AND-3` when the screen's arithmetic and signals have JVM tests and
+`lintRelease` passes; `VAL-MAG-13` carries the author's hand.
+
+Met on 2026-09-09 as far as this project can meet it: the tests and lint
+pass; the pointer's motion is the author's observation.
+
+## Closed evidence
+
+- `AND-3-A`: [control screen](docs/evidence/2026-09-09-control-screen.md)
 
 ## AND-2 — The daily set
 

@@ -43,6 +43,12 @@ class LinkControllerTest {
         override fun sendSmsThread(thread: Long, messages: List<SmsMessage>): Boolean { phone += "thread:$thread:${messages.size}"; return alive }
         override fun sendSmsReceived(thread: Long, message: SmsMessage): Boolean { phone += "received:$thread"; return alive }
         override fun sendCallEvent(state: Int, number: String, name: String?, timestampMs: Long): Boolean { phone += "call:$state:$number"; return alive }
+        override fun runCommand(id: Int): Boolean { phone += "run:$id"; return alive }
+        override fun pointerMove(dx: Int, dy: Int): Boolean = alive
+        override fun pointerButton(button: Int, pressed: Boolean): Boolean = alive
+        override fun scroll(dx: Int, dy: Int): Boolean = alive
+        override fun key(code: Int, pressed: Boolean): Boolean = alive
+        override fun typeText(text: String): Boolean = alive
         override suspend fun next(timeoutMs: Long): LinkEvent? {
             if (!alive) throw IllegalStateException("connection lost")
             incoming.removeFirstOrNull()?.let { return it }
@@ -178,8 +184,10 @@ class LinkControllerTest {
         controller.send(Outbound.Contacts(1, listOf(PhoneContact(1, 1, "BEGIN:VCARD")), emptyList(), true))
         controller.send(Outbound.Received(9, SmsMessage(1, false, "600", "hi", 1)))
         controller.send(Outbound.Call(0, "600", null, 1))
+        controller.send(Outbound.RunCommand(4))
         advanceTimeBy(200)
-        assertEquals(listOf("contacts:1:true", "received:9", "call:0:600"), session.phone)
+        assertEquals(listOf("contacts:1:true", "received:9", "call:0:600", "run:4"), session.phone)
+        assertTrue("the held session is exposed for input", controller.live === session)
         assertEquals(listOf("post:k1", "gone:k1"), session.notes)
         assertEquals(listOf("state:YT", "cmd:mpv:3", "request"), session.media)
         session.incoming += LinkEvent(2, 1, "clipboard: 5 bytes", "hello")

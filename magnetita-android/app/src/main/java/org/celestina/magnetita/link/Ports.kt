@@ -65,6 +65,23 @@ interface LiveSession {
     /** 0 ringing, 1 answered, 2 missed, 3 ended. */
     fun sendCallEvent(state: Int, number: String, name: String?, timestampMs: Long): Boolean
 
+    /** Runs the desktop's registered command. */
+    fun runCommand(id: Int): Boolean
+
+    /** Pointer motion, unreliable and cheap; called often, off the main thread. */
+    fun pointerMove(dx: Int, dy: Int): Boolean
+
+    /** 0 left, 1 right, 2 middle. */
+    fun pointerButton(button: Int, pressed: Boolean): Boolean
+
+    /** Scroll in 1/120 wheel steps. */
+    fun scroll(dx: Int, dy: Int): Boolean
+
+    /** A Linux evdev key code, down or up. */
+    fun key(code: Int, pressed: Boolean): Boolean
+
+    fun typeText(text: String): Boolean
+
     /**
      * Waits up to `timeoutMs` for the next envelope: a short description, or
      * null on timeout. Throws when the session is gone. Suspends, so the
@@ -100,6 +117,9 @@ data class LinkEvent(
     val limit: Int? = null,
     val smsSend: Boolean = false,
     val callAction: Int? = null,
+    val commands: List<Pair<Int, String>>? = null,
+    val commandId: Int? = null,
+    val commandOk: Boolean? = null,
 )
 
 /** One contact as its vCard, versioned by the phone's last update. */
@@ -164,6 +184,9 @@ sealed interface Outbound {
 
     /** A call changed: 0 ringing, 1 answered, 2 missed, 3 ended. */
     data class Call(val state: Int, val number: String, val name: String?, val timestampMs: Long) : Outbound
+
+    /** Run the desktop's registered command. */
+    data class RunCommand(val id: Int) : Outbound
 }
 
 /** Where a desktop is advertising, one entry per (id, address). */
