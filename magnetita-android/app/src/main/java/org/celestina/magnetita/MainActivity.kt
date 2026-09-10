@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
+import dev.chrisbanes.haze.hazeSource
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -98,17 +99,18 @@ class MainActivity : ComponentActivity() {
                     )
                 } else {
                     BackHandler(enabled = page != 0) { page = 0 }
+                    val haze = remember { dev.chrisbanes.haze.HazeState() }
                     @Suppress("UnusedMaterial3ScaffoldPaddingParameter") // the page runs under the pill on purpose
                     androidx.compose.material3.Scaffold(
                         containerColor = MaterialTheme.colorScheme.surface,
-                        bottomBar = { org.celestina.magnetita.ui.components.BottomTabs(page) { page = it } },
+                        bottomBar = { org.celestina.magnetita.ui.components.BottomTabs(page, { page = it }, haze) },
                         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
                     ) { _ ->
                         // As MilaHub: the page runs under the pill, and a blurred
                         // veil of the surface rises from the bottom edge so the
                         // pill floats on glass rather than on a cut.
                         androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
-                            androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
+                            androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().hazeSource(haze)) {
                             if (page == 2) {
                                 SettingsScreen(mediaNotifications) { on ->
                                     preferences.mediaNotifications = on

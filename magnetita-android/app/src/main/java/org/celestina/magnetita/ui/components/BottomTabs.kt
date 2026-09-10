@@ -31,6 +31,10 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.background
 import androidx.compose.ui.unit.dp
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
 import org.celestina.magnetita.R
 
 /** The three pages: the phone, the control, the settings. */
@@ -47,13 +51,19 @@ private val TABS = listOf(
  * circle-shaped surface over the page, icons only, the selected one on the
  * accent with a soft indicator.
  */
+@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
-fun BottomTabs(selected: Int, onSelect: (Int) -> Unit) {
+fun BottomTabs(selected: Int, onSelect: (Int) -> Unit, haze: HazeState) {
     Box(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 64.dp).padding(bottom = 24.dp).navigationBarsPadding(),
         contentAlignment = Alignment.Center,
     ) {
-        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.background, tonalElevation = 4.dp, shadowElevation = 8.dp) {
+        Surface(
+            modifier = Modifier.hazeEffect(state = haze, style = HazeMaterials.thin(MaterialTheme.colorScheme.background)),
+            shape = CircleShape,
+            color = Color.Transparent,
+            shadowElevation = 8.dp,
+        ) {
             NavigationBar(
                 containerColor = Color.Transparent,
                 tonalElevation = 0.dp,
